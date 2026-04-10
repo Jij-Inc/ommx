@@ -11,12 +11,14 @@ use std::collections::HashMap;
 ///
 /// Note that this object overloads `==` for creating a constraint, not for equality comparison.
 ///
-/// Example
-/// -------
+/// # Examples
+///
+/// ```python
 /// >>> p = Parameter(1, name="penalty")
 /// >>> x = DecisionVariable.integer(2)
 /// >>> x + p  # Returns Linear expression
 /// Linear(...)
+/// ```
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
@@ -88,13 +90,13 @@ pyo3_stub_gen::inventory::submit! {
 impl Parameter {
     /// Create a new Parameter.
     ///
-    /// Args:
-    ///     id: Unique identifier for the parameter (must be unique within the instance
-    ///         including decision variables)
-    ///     name: Optional name for the parameter
-    ///     subscripts: Optional subscripts for indexing
-    ///     parameters: Optional metadata key-value pairs
-    ///     description: Optional human-readable description
+    /// **Args:**
+    ///
+    /// - `id`: Unique identifier for the parameter (must be unique within the instance including decision variables)
+    /// - `name`: Optional name for the parameter
+    /// - `subscripts`: Optional subscripts for indexing
+    /// - `parameters`: Optional metadata key-value pairs
+    /// - `description`: Optional human-readable description
     #[new]
     #[pyo3(signature = (id, name=None, subscripts=Vec::new(), parameters=HashMap::default(), description=None))]
     pub fn new(

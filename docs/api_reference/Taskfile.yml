@@ -17,7 +17,7 @@ tasks:
   open:
     desc: "Open the API Reference of Python SDK"
     cmds:
-      - uv run python -m webbrowser file:///$(pwd)/_build/html/autoapi/index.html
+      - uv run python -m webbrowser file:///$(pwd)/_build/html/index.html
 
   upgrade:
     desc: "Upgrade dependencies and export requirements.txt for Read the Docs"

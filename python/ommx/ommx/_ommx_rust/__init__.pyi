@@ -236,14 +236,15 @@ class Constraint:
         r"""
         Create a new Constraint.
 
-        Args:
-            function: The constraint function (int, float, DecisionVariable, Linear, Quadratic, Polynomial, or Function)
-            equality: The equality type (EqualToZero or LessThanOrEqualToZero)
-            id: Optional constraint ID (auto-generated if not provided)
-            name: Optional name for the constraint
-            subscripts: Optional subscripts for indexing
-            description: Optional description
-            parameters: Optional key-value parameters
+        **Args:**
+
+        - `function`: The constraint function (int, float, DecisionVariable, Linear, Quadratic, Polynomial, or Function)
+        - `equality`: The equality type (EqualToZero or LessThanOrEqualToZero)
+        - `id`: Optional constraint ID (auto-generated if not provided)
+        - `name`: Optional name for the constraint
+        - `subscripts`: Optional subscripts for indexing
+        - `description`: Optional description
+        - `parameters`: Optional key-value parameters
         """
     @staticmethod
     def from_bytes(bytes: bytes) -> Constraint: ...
@@ -254,12 +255,12 @@ class Constraint:
         r"""
         Evaluate the constraint with the given state.
 
-        Args:
-            state: A State object, dict[int, float], or iterable of (int, float) tuples
-            atol: Optional absolute tolerance for evaluation
+        **Args:**
 
-        Returns:
-            EvaluatedConstraint containing the evaluated value and feasibility
+        - `state`: A State object, dict[int, float], or iterable of (int, float) tuples
+        - `atol`: Optional absolute tolerance for evaluation
+
+        **Returns:** {class}`~ommx.v1.EvaluatedConstraint` containing the evaluated value and feasibility
         """
     def partial_evaluate(
         self, state: ToState, *, atol: typing.Optional[builtins.float] = None
@@ -269,12 +270,12 @@ class Constraint:
 
         This modifies self in-place and returns self for method chaining.
 
-        Args:
-            state: A State object, dict[int, float], or iterable of (int, float) tuples
-            atol: Optional absolute tolerance for evaluation
+        **Args:**
 
-        Returns:
-            Self (modified in-place) for method chaining
+        - `state`: A State object, dict[int, float], or iterable of (int, float) tuples
+        - `atol`: Optional absolute tolerance for evaluation
+
+        **Returns:** Self (modified in-place) for method chaining
         """
     def set_name(self, name: builtins.str) -> Constraint:
         r"""
@@ -364,17 +365,21 @@ class DecisionVariable:
 
     Note that this object overloads `==` for creating a constraint, not for equality comparison.
 
-    Example:
-        >>> x = DecisionVariable.integer(1)
-        >>> x == 1  # Returns Constraint, not bool
-        Constraint(...)
+    # Examples
+
+    ```python
+    >>> x = DecisionVariable.integer(1)
+    >>> x == 1  # Returns Constraint, not bool
+    Constraint(...)
+    ```
 
     For object equality comparison, use the ``equals_to()`` method or compare IDs:
 
-    Example:
-        >>> y = DecisionVariable.integer(2)
-        >>> x.id == y.id
-        False
+    ```python
+    >>> y = DecisionVariable.integer(2)
+    >>> x.id == y.id
+    False
+    ```
     """
 
     BINARY: builtins.int = 1
@@ -646,8 +651,8 @@ class EvaluatedConstraint:
         Calculate the violation (constraint breach) value for this constraint
 
         Returns the amount by which this constraint is violated:
-        - For `f(x) = 0`: returns `|f(x)|`
-        - For `f(x) ≤ 0`: returns `max(0, f(x))`
+        - For $f(x) = 0$: returns $|f(x)|$
+        - For $f(x) \leq 0$: returns $\max(0, f(x))$
 
         Returns 0.0 if the constraint is satisfied.
         """
@@ -885,13 +890,13 @@ class Function:
         r"""
         Reduce binary powers in the function.
 
-        For binary variables, x^n = x for any n >= 1, so we can reduce higher powers to linear terms.
+        For binary variables, $x^n = x$ for any $n \geq 1$, so we can reduce higher powers to linear terms.
 
-        Args:
-            binary_ids: Set of binary variable IDs to reduce powers for
+        **Args:**
 
-        Returns:
-            True if any reduction was performed, False otherwise
+        - `binary_ids`: Set of binary variable IDs to reduce powers for
+
+        **Returns:** `True` if any reduction was performed, `False` otherwise
         """
     def __eq__(self, other: ToFunction) -> Constraint:  # type: ignore[override]
         r"""
@@ -918,11 +923,10 @@ class Instance:
     r"""
     Optimization problem instance.
 
-    Note that this class also contains annotations like :py:attr:`title` which are not contained in protobuf message but stored in OMMX artifact.
+    Note that this class also contains annotations like {attr}`~ommx.v1.Instance.title` which are not contained in protobuf message but stored in OMMX artifact.
     These annotations are loaded from annotations while reading from OMMX artifact.
 
     # Examples
-    =========
 
     Create an instance for KnapSack Problem
 
@@ -971,7 +975,7 @@ class Instance:
         Returns a **copy** of the annotations dictionary.
 
         Mutating the returned dict will **not** update the object.
-        Use :meth:`add_user_annotation` or assign to :attr:`annotations`
+        Use {meth}`add_user_annotation` or assign to {attr}`annotations`
         to modify annotations.
         """
     @annotations.setter
@@ -1106,16 +1110,16 @@ class Instance:
         r"""
         Create an instance from its components.
 
-        Args:
-        - sense: Optimization sense (minimize or maximize)
-        - objective: Objective function
-        - decision_variables: List of decision variables
-        - constraints: List of constraints
-        - named_functions: Optional list of named functions
-        - description: Optional instance description
-        - constraint_hints: Optional constraint hints for solvers
+        **Args:**
+        - `sense`: Optimization sense (minimize or maximize)
+        - `objective`: Objective function
+        - `decision_variables`: List of decision variables
+        - `constraints`: List of constraints
+        - `named_functions`: Optional list of named functions
+        - `description`: Optional instance description
+        - `constraint_hints`: Optional constraint hints for solvers
 
-        Returns:
+        **Returns:**
         A new Instance
         """
     @staticmethod
@@ -1124,7 +1128,6 @@ class Instance:
         Create trivial empty instance of minimization with zero objective, no constraints, and no decision variables.
 
         # Examples
-        =========
 
         ```python
         >>> from ommx.v1 import Instance
@@ -1139,7 +1142,6 @@ class Instance:
         Get the set of decision variable IDs used in the objective and remaining constraints.
 
         # Examples
-        =========
 
         ```python
         >>> from ommx.v1 import Instance, DecisionVariable
@@ -1170,34 +1172,30 @@ class Instance:
 
         This is a **Driver API** for QUBO conversion calling single-purpose methods in order:
 
-        1. Convert the instance to a minimization problem by :py:meth:`as_minimization_problem`.
+        1. Convert the instance to a minimization problem by {meth}`~ommx.v1.Instance.as_minimization_problem`.
         2. Check continuous variables and raise error if exists.
         3. Convert inequality constraints
 
-          * Try :py:meth:`convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.
-          * If failed, :py:meth:`add_integer_slack_to_inequality`
+          * Try {meth}`~ommx.v1.Instance.convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.
+          * If failed, {meth}`~ommx.v1.Instance.add_integer_slack_to_inequality`
 
         4. Convert to QUBO with (uniform) penalty method
 
-          * If ``penalty_weights`` is given (in ``dict[constraint_id, weight]`` form), use :py:meth:`penalty_method` with the given weights.
-          * If ``uniform_penalty_weight`` is given, use :py:meth:`uniform_penalty_method` with the given weight.
+          * If ``penalty_weights`` is given (in ``dict[constraint_id, weight]`` form), use {meth}`~ommx.v1.Instance.penalty_method` with the given weights.
+          * If ``uniform_penalty_weight`` is given, use {meth}`~ommx.v1.Instance.uniform_penalty_method` with the given weight.
           * If both are None, defaults to ``uniform_penalty_weight = 1.0``.
 
-        5. Log-encode integer variables by :py:meth:`log_encode`.
-        6. Finally convert to QUBO format by :py:meth:`as_qubo_format`.
+        5. Log-encode integer variables by {meth}`~ommx.v1.Instance.log_encode`.
+        6. Finally convert to QUBO format by {meth}`~ommx.v1.Instance.as_qubo_format`.
 
         Please see the document of each method for details.
         If you want to customize the conversion, use the methods above manually.
 
         # Examples
-        ========
 
-        Let's consider a maximization problem with two integer variables x0, x1 in [0, 2] subject to an inequality:
+        Let's consider a maximization problem with two integer variables $x_0, x_1 \in [0, 2]$ subject to an inequality:
 
-        ```text
-        max  x0 + x1
-        s.t. x0 + 2*x1 <= 3
-        ```
+        $$\max \; x_0 + x_1 \quad \text{s.t.} \quad x_0 + 2 x_1 \leq 3$$
 
         ```python
         >>> from ommx.v1 import Instance, DecisionVariable
@@ -1241,25 +1239,25 @@ class Instance:
 
         This is a **Driver API** for HUBO conversion calling single-purpose methods in order:
 
-        1. Convert the instance to a minimization problem by :py:meth:`as_minimization_problem`.
+        1. Convert the instance to a minimization problem by {meth}`~ommx.v1.Instance.as_minimization_problem`.
         2. Check continuous variables and raise error if exists.
         3. Convert inequality constraints
 
-          * Try :py:meth:`convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.
-          * If failed, :py:meth:`add_integer_slack_to_inequality`
+          * Try {meth}`~ommx.v1.Instance.convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.
+          * If failed, {meth}`~ommx.v1.Instance.add_integer_slack_to_inequality`
 
         4. Convert to HUBO with (uniform) penalty method
 
-          * If ``penalty_weights`` is given (in ``dict[constraint_id, weight]`` form), use :py:meth:`penalty_method` with the given weights.
-          * If ``uniform_penalty_weight`` is given, use :py:meth:`uniform_penalty_method` with the given weight.
+          * If ``penalty_weights`` is given (in ``dict[constraint_id, weight]`` form), use {meth}`~ommx.v1.Instance.penalty_method` with the given weights.
+          * If ``uniform_penalty_weight`` is given, use {meth}`~ommx.v1.Instance.uniform_penalty_method` with the given weight.
           * If both are None, defaults to ``uniform_penalty_weight = 1.0``.
 
-        5. Log-encode integer variables by :py:meth:`log_encode`.
-        6. Finally convert to HUBO format by :py:meth:`as_hubo_format`.
+        5. Log-encode integer variables by {meth}`~ommx.v1.Instance.log_encode`.
+        6. Finally convert to HUBO format by {meth}`~ommx.v1.Instance.as_hubo_format`.
 
-        Please see the documentation for :py:meth:`to_qubo` for more information, or the
+        Please see the documentation for {meth}`~ommx.v1.Instance.to_qubo` for more information, or the
         documentation for each individual method for additional details. The
-        difference between this and :py:meth:`to_qubo` is that this method isn't
+        difference between this and {meth}`~ommx.v1.Instance.to_qubo` is that this method isn't
         restricted to quadratic or linear problems. If you want to customize the
         conversion, use the individual methods above manually.
         """
@@ -1270,29 +1268,22 @@ class Instance:
 
         Roughly, this converts a constrained problem:
 
-        ```text
-        min_x  f(x)
-        s.t.   g_i(x) = 0   (for all i)
-               h_j(x) <= 0  (for all j)
-        ```
+        $$\min_x f(x) \quad \text{s.t.} \quad g_i(x) = 0 \; (\forall i), \quad h_j(x) \leq 0 \; (\forall j)$$
 
         to an unconstrained problem with parameters:
 
-        ```text
-        min_x  f(x) + sum_i lambda_i * g_i(x)^2 + sum_j rho_j * h_j(x)^2
-        ```
+        $$\min_x f(x) + \sum_i \lambda_i g_i(x)^2 + \sum_j \rho_j h_j(x)^2$$
 
-        where lambda_i and rho_j are the penalty weight parameters for each constraint.
-        If you want to use single weight parameter, use :py:meth:`uniform_penalty_method` instead.
+        where $\lambda_i$ and $\rho_j$ are the penalty weight parameters for each constraint.
+        If you want to use single weight parameter, use {meth}`~ommx.v1.Instance.uniform_penalty_method` instead.
 
-        The removed constraints are stored in :py:attr:`~ParametricInstance.removed_constraints`.
+        The removed constraints are stored in {attr}`~ommx.v1.ParametricInstance.removed_constraints`.
 
-        > Note: This method converts inequality constraints h(x) <= 0 to |h(x)|^2 not to max(0, h(x))^2.
-        > This means the penalty is enforced even for h(x) < 0 cases, and h(x) = 0 is unfairly favored.
-        > This feature is intended to use with :py:meth:`add_integer_slack_to_inequality`.
+        > Note: This method converts inequality constraints $h(x) \leq 0$ to $|h(x)|^2$ not to $\max(0, h(x))^2$.
+        > This means the penalty is enforced even for $h(x) < 0$ cases, and $h(x) = 0$ is unfairly favored.
+        > This feature is intended to use with {meth}`~ommx.v1.Instance.add_integer_slack_to_inequality`.
 
         # Examples
-        =========
 
         ```python
         >>> from ommx.v1 import Instance, DecisionVariable, Constraint
@@ -1327,28 +1318,21 @@ class Instance:
 
         Roughly, this converts a constrained problem:
 
-        ```text
-        min_x  f(x)
-        s.t.   g_i(x) = 0   (for all i)
-               h_j(x) <= 0  (for all j)
-        ```
+        $$\min_x f(x) \quad \text{s.t.} \quad g_i(x) = 0 \; (\forall i), \quad h_j(x) \leq 0 \; (\forall j)$$
 
         to an unconstrained problem with a parameter:
 
-        ```text
-        min_x  f(x) + lambda * (sum_i g_i(x)^2 + sum_j h_j(x)^2)
-        ```
+        $$\min_x f(x) + \lambda \left( \sum_i g_i(x)^2 + \sum_j h_j(x)^2 \right)$$
 
-        where lambda is the uniform penalty weight parameter for all constraints.
+        where $\lambda$ is the uniform penalty weight parameter for all constraints.
 
-        The removed constraints are stored in :py:attr:`~ParametricInstance.removed_constraints`.
+        The removed constraints are stored in {attr}`~ommx.v1.ParametricInstance.removed_constraints`.
 
-        > Note: This method converts inequality constraints h(x) <= 0 to |h(x)|^2 not to max(0, h(x))^2.
-        > This means the penalty is enforced even for h(x) < 0 cases, and h(x) = 0 is unfairly favored.
-        > This feature is intended to use with :py:meth:`add_integer_slack_to_inequality`.
+        > Note: This method converts inequality constraints $h(x) \leq 0$ to $|h(x)|^2$ not to $\max(0, h(x))^2$.
+        > This means the penalty is enforced even for $h(x) < 0$ cases, and $h(x) = 0$ is unfairly favored.
+        > This feature is intended to use with {meth}`~ommx.v1.Instance.add_integer_slack_to_inequality`.
 
         # Examples
-        =========
 
         ```python
         >>> from ommx.v1 import Instance, DecisionVariable
@@ -1391,13 +1375,12 @@ class Instance:
         self, state: ToState, *, atol: typing.Optional[builtins.float] = None
     ) -> Solution:
         r"""
-        Evaluate the given :class:`State` into a :class:`Solution`.
+        Evaluate the given {class}`~ommx.v1.State` into a {class}`~ommx.v1.Solution`.
 
         This method evaluates the problem instance using the provided state (a map from decision variable IDs to their values),
-        and returns a :class:`Solution` object containing objective value, evaluated constraint values, and feasibility information.
+        and returns a {class}`~ommx.v1.Solution` object containing objective value, evaluated constraint values, and feasibility information.
 
         # Examples
-        =========
 
         Create a simple instance with three binary variables and evaluate a solution:
 
@@ -1451,16 +1434,15 @@ class Instance:
         - Incrementally solving a problem by fixing some variables and optimizing the rest
         - Testing specific configurations of a problem
 
-        Args:
-        - state: Maps decision variable IDs to their fixed values.
-          Can be a :class:`~ommx.v1.State` object or a dictionary mapping variable IDs to values.
-        - atol: Absolute tolerance for floating point comparisons. If None, uses the default tolerance.
+        **Args:**
+        - `state`: Maps decision variable IDs to their fixed values.
+          Can be a {class}`~ommx.v1.State` object or a dictionary mapping variable IDs to values.
+        - `atol`: Absolute tolerance for floating point comparisons. If None, uses the default tolerance.
 
-        Returns:
+        **Returns:**
         A new instance with the specified decision variables fixed to their given values.
 
         # Examples
-        =========
 
         ```python
         >>> from ommx.v1 import Instance, DecisionVariable
@@ -1496,15 +1478,14 @@ class Instance:
         objective function or constraints, as determined by decision variable analysis.
         Generated values respect the bounds of each variable type.
 
-        Args:
-        - rng: Random number generator to use for generating the state.
+        **Args:**
+        - `rng`: Random number generator to use for generating the state.
 
-        Returns:
+        **Returns:**
         A randomly generated state that satisfies the variable bounds of this instance.
         Only contains values for variables that are used in the problem.
 
         # Examples
-        =========
 
         Generate random state only for used variables
 
@@ -1551,17 +1532,16 @@ class Instance:
         ``num_different_samples`` groups, where each group shares the same state but has
         different sample IDs.
 
-        Args:
-        - rng: Random number generator
-        - num_different_samples: Number of different states to generate
-        - num_samples: Total number of samples to generate
-        - max_sample_id: Maximum sample ID (default: ``num_samples``)
+        **Args:**
+        - `rng`: Random number generator
+        - `num_different_samples`: Number of different states to generate
+        - `num_samples`: Total number of samples to generate
+        - `max_sample_id`: Maximum sample ID (default: ``num_samples``)
 
-        Returns:
+        **Returns:**
         Samples object
 
         # Examples
-        ========
 
         Generate samples for a simple instance:
 
@@ -1587,15 +1567,14 @@ class Instance:
         r"""
         Remove a constraint from the instance.
 
-        The removed constraint is stored in :py:attr:`~Instance.removed_constraints`, and can be restored by :py:meth:`restore_constraint`.
+        The removed constraint is stored in {attr}`~ommx.v1.Instance.removed_constraints`, and can be restored by {meth}`~ommx.v1.Instance.restore_constraint`.
 
-        Args:
-        - constraint_id: The ID of the constraint to remove.
-        - reason: The reason why the constraint is removed.
-        - parameters: Additional parameters to describe the reason.
+        **Args:**
+        - `constraint_id`: The ID of the constraint to remove.
+        - `reason`: The reason why the constraint is removed.
+        - `parameters`: Additional parameters to describe the reason.
 
         # Examples
-        =========
 
         Relax constraint, and restore it.
 
@@ -1635,20 +1614,17 @@ class Instance:
         r"""
         Log-encode the integer decision variables.
 
-        Log encoding of an integer variable x in [l, u] is to represent by m bits b_i in {0, 1} by:
+        Log encoding of an integer variable $x \in [l, u]$ is to represent by $m$ bits $b_i \in \{0, 1\}$ by:
 
-        ```text
-        x = sum_{i=0}^{m-2} 2^i b_i + (u - l - 2^{m-1} + 1) b_{m-1} + l
-        ```
+        $$x = \sum_{i=0}^{m-2} 2^i b_i + (u - l - 2^{m-1} + 1) b_{m-1} + l$$
 
-        where m = ceil(log2(u - l + 1)).
+        where $m = \lceil \log_2(u - l + 1) \rceil$.
 
-        Args:
-        - decision_variable_ids: The IDs of the integer decision variables to log-encode.
+        **Args:**
+        - `decision_variable_ids`: The IDs of the integer decision variables to log-encode.
           If not specified (or empty), all integer variables are log-encoded.
 
         # Examples
-        =========
 
         Let's consider a simple integer programming problem with three integer variables x0, x1, and x2.
 
@@ -1674,9 +1650,9 @@ class Instance:
         >>> instance.log_encode({0, 2})
         ```
 
-        Integer variable in range [0, 3] can be represented by two binary variables:
+        Integer variable in range $[0, 3]$ can be represented by two binary variables:
 
-        x0 = b_{0,0} + 2 b_{0,1}, x2 = b_{2,0} + 2 b_{2,1}
+        $$x_0 = b_{0,0} + 2 b_{0,1}, \quad x_2 = b_{2,0} + 2 b_{2,1}$$
 
         And these are substituted into the objective and constraint functions.
 
@@ -1689,25 +1665,24 @@ class Instance:
         self, constraint_id: builtins.int, max_integer_range: builtins.int
     ) -> None:
         r"""
-        Convert an inequality constraint f(x) <= 0 to an equality constraint f(x) + s/a = 0 with an integer slack variable s.
+        Convert an inequality constraint $f(x) \leq 0$ to an equality constraint $f(x) + s/a = 0$ with an integer slack variable $s$.
 
-        - Since a is determined as the minimal multiplier to make every coefficient of af(x) integer,
-          a itself and the range of s becomes impractically large. ``max_integer_range`` limits the maximal
-          range of s, and returns error if the range exceeds it.
+        - Since $a$ is determined as the minimal multiplier to make every coefficient of $a f(x)$ integer,
+          $a$ itself and the range of $s$ becomes impractically large. ``max_integer_range`` limits the maximal
+          range of $s$, and returns error if the range exceeds it.
 
-        - Since this method evaluates the bound of f(x), we may find that:
+        - Since this method evaluates the bound of $f(x)$, we may find that:
 
-          - The bound [l, u] is strictly positive, i.e. l > 0:
+          - The bound $[l, u]$ is strictly positive, i.e. $l > 0$:
             this means the instance is infeasible because this constraint never be satisfied,
             and an error is raised.
 
-          - The bound [l, u] is always negative, i.e. u <= 0:
+          - The bound $[l, u]$ is always negative, i.e. $u \leq 0$:
             this means this constraint is trivially satisfied,
-            the constraint is moved to :py:attr:`~Instance.removed_constraints`,
+            the constraint is moved to {attr}`~ommx.v1.Instance.removed_constraints`,
             and this method returns without introducing slack variable or raising an error.
 
         # Examples
-        =========
 
         Let's consider a simple inequality constraint x0 + 2*x1 <= 5.
 
@@ -1744,23 +1719,22 @@ class Instance:
         self, constraint_id: builtins.int, slack_upper_bound: builtins.int
     ) -> typing.Optional[builtins.float]:
         r"""
-        Convert inequality f(x) <= 0 to **inequality** f(x) + b*s <= 0 with an integer slack variable s.
+        Convert inequality $f(x) \leq 0$ to **inequality** $f(x) + b s \leq 0$ with an integer slack variable $s$.
 
-        - This should be used when :meth:`convert_inequality_to_equality_with_integer_slack` is not applicable.
+        - This should be used when {meth}`~ommx.v1.Instance.convert_inequality_to_equality_with_integer_slack` is not applicable.
 
-        - The bound of s will be [0, slack_upper_bound], and the coefficient b is determined from the lower bound of f(x).
+        - The bound of $s$ will be $[0, \text{slack\_upper\_bound}]$, and the coefficient $b$ is determined from the lower bound of $f(x)$.
 
-        - Since the slack variable is integer, the yielded inequality has residual error min_s f(x) + b*s at most b.
-          And thus b is returned to use scaling the penalty weight or other things.
+        - Since the slack variable is integer, the yielded inequality has residual error $\min_s f(x) + b s$ at most $b$.
+          And thus $b$ is returned to use scaling the penalty weight or other things.
 
-          - Larger slack_upper_bound (i.e. fined-grained slack) yields smaller b, and thus smaller the residual error,
+          - Larger slack_upper_bound (i.e. finer-grained slack) yields smaller $b$, and thus smaller the residual error,
             but it needs more bits for the slack variable, and thus the problem size becomes larger.
 
-        Returns:
-        The coefficient b of the slack variable. If the constraint is trivially satisfied, this returns ``None``.
+        **Returns:**
+        The coefficient $b$ of the slack variable. If the constraint is trivially satisfied, this returns ``None``.
 
         # Examples
-        =========
 
         Let's consider a simple inequality constraint x0 + 2*x1 <= 4.
 
@@ -1803,11 +1777,10 @@ class Instance:
         - Usage-based partitioning (used in objective, constraints, fixed, etc.)
         - Variable bounds information
 
-        Returns:
+        **Returns:**
         Analysis object containing detailed information about decision variables
 
         # Examples
-        --------
 
         ```python
         >>> from ommx.v1 import Instance, DecisionVariable
@@ -1834,7 +1807,7 @@ class Instance:
         Returns a dictionary containing counts of decision variables and constraints
         categorized by kind, usage, and status.
 
-        Returns:
+        **Returns:**
         A dictionary with the following structure:
 
         ```json
@@ -1866,7 +1839,6 @@ class Instance:
         ```
 
         # Examples
-        --------
 
         ```python
         >>> from ommx.v1 import Instance
@@ -1886,11 +1858,10 @@ class Instance:
 
         If the instance is already a minimization problem, this does nothing.
 
-        Returns:
+        **Returns:**
         ``True`` if the instance is converted, ``False`` if already a minimization problem.
 
         # Examples
-        =========
 
         ```python
         >>> from ommx.v1 import Instance, DecisionVariable
@@ -1931,11 +1902,10 @@ class Instance:
 
         If the instance is already a maximization problem, this does nothing.
 
-        Returns:
+        **Returns:**
         ``True`` if the instance is converted, ``False`` if already a maximization problem.
 
         # Examples
-        =========
 
         ```python
         >>> from ommx.v1 import Instance, DecisionVariable
@@ -1997,13 +1967,12 @@ class Instance:
         Reduce binary powers in the instance.
 
         This method replaces binary powers in the instance with their equivalent linear expressions.
-        For binary variables, x^n = x for any n >= 1, so we can reduce higher powers to linear terms.
+        For binary variables, $x^n = x$ for any $n \geq 1$, so we can reduce higher powers to linear terms.
 
-        Returns:
+        **Returns:**
         ``True`` if any reduction was performed, ``False`` otherwise.
 
         # Examples
-        =========
 
         Consider an instance with binary variables and quadratic terms:
 
@@ -2060,11 +2029,10 @@ class Instance:
         2. Generate SVG: ``flamegraph.pl profile.txt > memory.svg``
         3. Open memory.svg in a browser
 
-        Returns:
+        **Returns:**
         Folded stack format string that can be visualized with flamegraph tools
 
         # Examples
-        --------
 
         ```python
         >>> from ommx.v1 import Instance, DecisionVariable
@@ -2107,31 +2075,37 @@ class Linear:
     r"""
     Linear function of decision variables.
 
-    A linear function has the form: `c₀ + Σᵢ cᵢ * xᵢ` where `xᵢ` are decision variables
-    and `cᵢ` are coefficients.
+    A linear function has the form: $c_0 + \sum_i c_i x_i$ where $x_i$ are decision variables
+    and $c_i$ are coefficients.
 
-    Example
-    -------
+    # Examples
+
     Create a linear function `f(x₁, x₂) = 2x₁ + 3x₂ + 1`:
 
+    ```python
     >>> f = Linear(terms={1: 2, 2: 3}, constant=1)
+    ```
 
     Or create via DecisionVariable arithmetic:
 
+    ```python
     >>> x1 = DecisionVariable.integer(1)
     >>> x2 = DecisionVariable.integer(2)
     >>> g = 2*x1 + 3*x2 + 1
+    ```
 
     Compare two linear functions with tolerance:
 
+    ```python
     >>> f.almost_equal(g, atol=1e-12)
     True
+    ```
 
     Note that `==` creates an equality Constraint, not a boolean:
 
+    ```python
     >>> constraint = f == g  # Returns Constraint, not bool
-
-    .
+    ```
     """
     @property
     def linear_terms(self) -> builtins.dict[builtins.int, builtins.float]: ...
@@ -2261,13 +2235,14 @@ class NamedFunction:
         r"""
         Create a new NamedFunction.
 
-        Args:
-            id: The unique identifier for this named function
-            function: The function (int, float, DecisionVariable, Linear, Quadratic, Polynomial, or Function)
-            name: Optional name for the function
-            subscripts: Optional subscripts for indexing
-            description: Optional description
-            parameters: Optional key-value parameters
+        **Args:**
+
+        - `id`: The unique identifier for this named function
+        - `function`: The function (int, float, DecisionVariable, Linear, Quadratic, Polynomial, or Function)
+        - `name`: Optional name for the function
+        - `subscripts`: Optional subscripts for indexing
+        - `description`: Optional description
+        - `parameters`: Optional key-value parameters
         """
     @staticmethod
     def from_bytes(bytes: bytes) -> NamedFunction: ...
@@ -2278,12 +2253,12 @@ class NamedFunction:
         r"""
         Evaluate the named function with the given state.
 
-        Args:
-            state: A State object, dict[int, float], or iterable of (int, float) tuples
-            atol: Optional absolute tolerance for evaluation
+        **Args:**
 
-        Returns:
-            EvaluatedNamedFunction containing the evaluated value
+        - `state`: A State object, dict[int, float], or iterable of (int, float) tuples
+        - `atol`: Optional absolute tolerance for evaluation
+
+        **Returns:** {class}`~ommx.v1.EvaluatedNamedFunction` containing the evaluated value
         """
     def partial_evaluate(
         self, state: ToState, *, atol: typing.Optional[builtins.float] = None
@@ -2293,12 +2268,12 @@ class NamedFunction:
 
         This modifies self in-place and returns self for method chaining.
 
-        Args:
-            state: A State object, dict[int, float], or iterable of (int, float) tuples
-            atol: Optional absolute tolerance for evaluation
+        **Args:**
 
-        Returns:
-            Self (modified in-place) for method chaining
+        - `state`: A State object, dict[int, float], or iterable of (int, float) tuples
+        - `atol`: Optional absolute tolerance for evaluation
+
+        **Returns:** Self (modified in-place) for method chaining
         """
     def __add__(self, other: ToFunction) -> Function:
         r"""
@@ -2378,12 +2353,14 @@ class Parameter:
 
     Note that this object overloads `==` for creating a constraint, not for equality comparison.
 
-    Example
-    -------
+    # Examples
+
+    ```python
     >>> p = Parameter(1, name="penalty")
     >>> x = DecisionVariable.integer(2)
     >>> x + p  # Returns Linear expression
     Linear(...)
+    ```
     """
     @property
     def id(self) -> builtins.int: ...
@@ -2450,13 +2427,13 @@ class Parameter:
         r"""
         Create a new Parameter.
 
-        Args:
-            id: Unique identifier for the parameter (must be unique within the instance
-                including decision variables)
-            name: Optional name for the parameter
-            subscripts: Optional subscripts for indexing
-            parameters: Optional metadata key-value pairs
-            description: Optional human-readable description
+        **Args:**
+
+        - `id`: Unique identifier for the parameter (must be unique within the instance including decision variables)
+        - `name`: Optional name for the parameter
+        - `subscripts`: Optional subscripts for indexing
+        - `parameters`: Optional metadata key-value pairs
+        - `description`: Optional human-readable description
         """
     @staticmethod
     def from_bytes(bytes: bytes) -> Parameter: ...
@@ -2495,7 +2472,7 @@ class ParametricInstance:
         Returns a **copy** of the annotations dictionary.
 
         Mutating the returned dict will **not** update the object.
-        Use :meth:`add_user_annotation` or assign to :attr:`annotations`
+        Use {meth}`add_user_annotation` or assign to {attr}`annotations`
         to modify annotations.
         """
     @annotations.setter
@@ -2661,20 +2638,24 @@ class Polynomial:
     r"""
     Polynomial function of decision variables.
 
-    A polynomial function of arbitrary degree with terms of the form `c * x₁^a₁ * x₂^a₂ * ...`
-    where `xᵢ` are decision variables and `c` is a coefficient.
+    A polynomial function of arbitrary degree with terms of the form $c \cdot x_1^{a_1} \cdot x_2^{a_2} \cdots$
+    where $x_i$ are decision variables and $c$ is a coefficient.
 
-    Example
-    -------
+    # Examples
+
     Create via DecisionVariable operations:
 
+    ```python
     >>> x = DecisionVariable.integer(1)
     >>> y = DecisionVariable.integer(2)
     >>> p = x * x * y + x * y * y + 1  # Cubic polynomial
+    ```
 
     Note that `==`, `<=`, `>=` create Constraint objects:
 
+    ```python
     >>> constraint = p == 0  # Returns Constraint
+    ```
     """
     def __add__(
         self,
@@ -2792,22 +2773,24 @@ class Quadratic:
     r"""
     Quadratic function of decision variables.
 
-    A quadratic function has the form: `c₀ + Σᵢ cᵢ * xᵢ + Σᵢⱼ qᵢⱼ * xᵢ * xⱼ`
-    where `xᵢ` are decision variables and `cᵢ`, `qᵢⱼ` are coefficients.
+    A quadratic function has the form: $c_0 + \sum_i c_i x_i + \sum_{ij} q_{ij} x_i x_j$
+    where $x_i$ are decision variables and $c_i$, $q_{ij}$ are coefficients.
 
-    Example
-    -------
+    # Examples
+
     Create via DecisionVariable multiplication:
 
+    ```python
     >>> x = DecisionVariable.integer(1)
     >>> y = DecisionVariable.integer(2)
     >>> q = x * y + 2*x + 3*y + 1
+    ```
 
     Note that `==`, `<=`, `>=` create Constraint objects:
 
+    ```python
     >>> constraint = q <= 10  # Returns Constraint
-
-    .
+    ```
     """
     @property
     def linear_terms(self) -> builtins.dict[builtins.int, builtins.float]: ...
@@ -3044,7 +3027,7 @@ class SampleSet:
         Returns a **copy** of the annotations dictionary.
 
         Mutating the returned dict will **not** update the object.
-        Use :meth:`add_user_annotation` or assign to :attr:`annotations`
+        Use {meth}`add_user_annotation` or assign to {attr}`annotations`
         to modify annotations.
         """
     @annotations.setter
@@ -3500,7 +3483,7 @@ class Solution:
         Returns a **copy** of the annotations dictionary.
 
         Mutating the returned dict will **not** update the object.
-        Use :meth:`add_user_annotation` or assign to :attr:`annotations`
+        Use {meth}`add_user_annotation` or assign to {attr}`annotations`
         to modify annotations.
         """
     @annotations.setter
@@ -3817,16 +3800,16 @@ class Solution:
         Calculate total constraint violation using L1 norm (sum of absolute violations)
 
         Returns the sum of violations across all constraints (including removed constraints):
-        - For equality constraints: `Σ|f(x)|`
-        - For inequality constraints: `Σmax(0, f(x))`
+        - For equality constraints: $\sum |f(x)|$
+        - For inequality constraints: $\sum \max(0, f(x))$
         """
     def total_violation_l2(self) -> builtins.float:
         r"""
         Calculate total constraint violation using L2 norm squared (sum of squared violations)
 
         Returns the sum of squared violations across all constraints (including removed constraints):
-        - For equality constraints: `Σ(f(x))²`
-        - For inequality constraints: `Σ(max(0, f(x)))²`
+        - For equality constraints: $\sum (f(x))^2$
+        - For inequality constraints: $\sum (\max(0, f(x)))^2$
         """
 
 @typing.final

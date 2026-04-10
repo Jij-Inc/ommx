@@ -16,20 +16,24 @@ use std::collections::BTreeMap;
 
 /// Polynomial function of decision variables.
 ///
-/// A polynomial function of arbitrary degree with terms of the form `c * x₁^a₁ * x₂^a₂ * ...`
-/// where `xᵢ` are decision variables and `c` is a coefficient.
+/// A polynomial function of arbitrary degree with terms of the form $c \cdot x_1^{a_1} \cdot x_2^{a_2} \cdots$
+/// where $x_i$ are decision variables and $c$ is a coefficient.
 ///
-/// Example
-/// -------
+/// # Examples
+///
 /// Create via DecisionVariable operations:
 ///
+/// ```python
 /// >>> x = DecisionVariable.integer(1)
 /// >>> y = DecisionVariable.integer(2)
 /// >>> p = x * x * y + x * y * y + 1  # Cubic polynomial
+/// ```
 ///
 /// Note that `==`, `<=`, `>=` create Constraint objects:
 ///
+/// ```python
 /// >>> constraint = p == 0  # Returns Constraint
+/// ```
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]

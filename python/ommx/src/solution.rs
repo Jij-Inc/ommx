@@ -482,8 +482,8 @@ impl Solution {
     /// Calculate total constraint violation using L1 norm (sum of absolute violations)
     ///
     /// Returns the sum of violations across all constraints (including removed constraints):
-    /// - For equality constraints: `Σ|f(x)|`
-    /// - For inequality constraints: `Σmax(0, f(x))`
+    /// - For equality constraints: $\sum |f(x)|$
+    /// - For inequality constraints: $\sum \max(0, f(x))$
     pub fn total_violation_l1(&self) -> f64 {
         self.inner.total_violation_l1()
     }
@@ -491,8 +491,8 @@ impl Solution {
     /// Calculate total constraint violation using L2 norm squared (sum of squared violations)
     ///
     /// Returns the sum of squared violations across all constraints (including removed constraints):
-    /// - For equality constraints: `Σ(f(x))²`
-    /// - For inequality constraints: `Σ(max(0, f(x)))²`
+    /// - For equality constraints: $\sum (f(x))^2$
+    /// - For inequality constraints: $\sum (\max(0, f(x)))^2$
     pub fn total_violation_l2(&self) -> f64 {
         self.inner.total_violation_l2()
     }

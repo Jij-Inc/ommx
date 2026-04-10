@@ -20,26 +20,30 @@ use std::collections::{BTreeMap, BTreeSet};
 /// or polynomial functions. It is used as the objective function and constraint
 /// functions in optimization problems.
 ///
-/// Example
-/// -------
+/// # Examples
+///
 /// Create from various types:
 ///
+/// ```python
 /// >>> f = Function(1.0)  # Constant
 /// >>> f = Function(Linear(terms={1: 2}, constant=1))  # Linear
 /// >>> f = Function(x * y)  # From Quadratic expression
+/// ```
 ///
 /// Access the terms:
 ///
+/// ```python
 /// >>> f = Function(Linear(terms={1: 2.5}, constant=1.0))
 /// >>> f.terms
 /// {(1,): 2.5, (): 1.0}
+/// ```
 ///
 /// Check the degree:
 ///
+/// ```python
 /// >>> f.degree()
 /// 1
-///
-/// .
+/// ```
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct Function(pub ommx::Function);
@@ -448,13 +452,13 @@ impl Function {
 
     /// Reduce binary powers in the function.
     ///
-    /// For binary variables, x^n = x for any n >= 1, so we can reduce higher powers to linear terms.
+    /// For binary variables, $x^n = x$ for any $n \geq 1$, so we can reduce higher powers to linear terms.
     ///
-    /// Args:
-    ///     binary_ids: Set of binary variable IDs to reduce powers for
+    /// **Args:**
     ///
-    /// Returns:
-    ///     True if any reduction was performed, False otherwise
+    /// - `binary_ids`: Set of binary variable IDs to reduce powers for
+    ///
+    /// **Returns:** `True` if any reduction was performed, `False` otherwise
     pub fn reduce_binary_power(&mut self, binary_ids: BTreeSet<u64>) -> bool {
         let variable_id_set: ommx::VariableIDSet =
             binary_ids.into_iter().map(ommx::VariableID::from).collect();

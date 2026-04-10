@@ -15,11 +15,10 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 /// Optimization problem instance.
 ///
-/// Note that this class also contains annotations like :py:attr:`title` which are not contained in protobuf message but stored in OMMX artifact.
+/// Note that this class also contains annotations like {attr}`~ommx.v1.Instance.title` which are not contained in protobuf message but stored in OMMX artifact.
 /// These annotations are loaded from annotations while reading from OMMX artifact.
 ///
 /// # Examples
-/// =========
 ///
 /// Create an instance for KnapSack Problem
 ///
@@ -80,16 +79,16 @@ impl Instance {
 
     /// Create an instance from its components.
     ///
-    /// Args:
-    /// - sense: Optimization sense (minimize or maximize)
-    /// - objective: Objective function
-    /// - decision_variables: List of decision variables
-    /// - constraints: List of constraints
-    /// - named_functions: Optional list of named functions
-    /// - description: Optional instance description
-    /// - constraint_hints: Optional constraint hints for solvers
+    /// **Args:**
+    /// - `sense`: Optimization sense (minimize or maximize)
+    /// - `objective`: Objective function
+    /// - `decision_variables`: List of decision variables
+    /// - `constraints`: List of constraints
+    /// - `named_functions`: Optional list of named functions
+    /// - `description`: Optional instance description
+    /// - `constraint_hints`: Optional constraint hints for solvers
     ///
-    /// Returns:
+    /// **Returns:**
     /// A new Instance
     #[staticmethod]
     #[pyo3(signature = (*, sense, objective, decision_variables, constraints, named_functions=None, description=None, constraint_hints=None))]
@@ -152,7 +151,6 @@ impl Instance {
     /// Create trivial empty instance of minimization with zero objective, no constraints, and no decision variables.
     ///
     /// # Examples
-    /// =========
     ///
     /// ```python
     /// >>> from ommx.v1 import Instance
@@ -291,7 +289,6 @@ impl Instance {
     /// Get the set of decision variable IDs used in the objective and remaining constraints.
     ///
     /// # Examples
-    /// =========
     ///
     /// ```python
     /// >>> from ommx.v1 import Instance, DecisionVariable
@@ -339,34 +336,30 @@ impl Instance {
     ///
     /// This is a **Driver API** for QUBO conversion calling single-purpose methods in order:
     ///
-    /// 1. Convert the instance to a minimization problem by :py:meth:`as_minimization_problem`.
+    /// 1. Convert the instance to a minimization problem by {meth}`~ommx.v1.Instance.as_minimization_problem`.
     /// 2. Check continuous variables and raise error if exists.
     /// 3. Convert inequality constraints
     ///
-    ///   * Try :py:meth:`convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.
-    ///   * If failed, :py:meth:`add_integer_slack_to_inequality`
+    ///   * Try {meth}`~ommx.v1.Instance.convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.
+    ///   * If failed, {meth}`~ommx.v1.Instance.add_integer_slack_to_inequality`
     ///
     /// 4. Convert to QUBO with (uniform) penalty method
     ///
-    ///   * If ``penalty_weights`` is given (in ``dict[constraint_id, weight]`` form), use :py:meth:`penalty_method` with the given weights.
-    ///   * If ``uniform_penalty_weight`` is given, use :py:meth:`uniform_penalty_method` with the given weight.
+    ///   * If ``penalty_weights`` is given (in ``dict[constraint_id, weight]`` form), use {meth}`~ommx.v1.Instance.penalty_method` with the given weights.
+    ///   * If ``uniform_penalty_weight`` is given, use {meth}`~ommx.v1.Instance.uniform_penalty_method` with the given weight.
     ///   * If both are None, defaults to ``uniform_penalty_weight = 1.0``.
     ///
-    /// 5. Log-encode integer variables by :py:meth:`log_encode`.
-    /// 6. Finally convert to QUBO format by :py:meth:`as_qubo_format`.
+    /// 5. Log-encode integer variables by {meth}`~ommx.v1.Instance.log_encode`.
+    /// 6. Finally convert to QUBO format by {meth}`~ommx.v1.Instance.as_qubo_format`.
     ///
     /// Please see the document of each method for details.
     /// If you want to customize the conversion, use the methods above manually.
     ///
     /// # Examples
-    /// ========
     ///
-    /// Let's consider a maximization problem with two integer variables x0, x1 in [0, 2] subject to an inequality:
+    /// Let's consider a maximization problem with two integer variables $x_0, x_1 \in [0, 2]$ subject to an inequality:
     ///
-    /// ```text
-    /// max  x0 + x1
-    /// s.t. x0 + 2*x1 <= 3
-    /// ```
+    /// $$\max \; x_0 + x_1 \quad \text{s.t.} \quad x_0 + 2 x_1 \leq 3$$
     ///
     /// ```python
     /// >>> from ommx.v1 import Instance, DecisionVariable
@@ -422,25 +415,25 @@ impl Instance {
     ///
     /// This is a **Driver API** for HUBO conversion calling single-purpose methods in order:
     ///
-    /// 1. Convert the instance to a minimization problem by :py:meth:`as_minimization_problem`.
+    /// 1. Convert the instance to a minimization problem by {meth}`~ommx.v1.Instance.as_minimization_problem`.
     /// 2. Check continuous variables and raise error if exists.
     /// 3. Convert inequality constraints
     ///
-    ///   * Try :py:meth:`convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.
-    ///   * If failed, :py:meth:`add_integer_slack_to_inequality`
+    ///   * Try {meth}`~ommx.v1.Instance.convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.
+    ///   * If failed, {meth}`~ommx.v1.Instance.add_integer_slack_to_inequality`
     ///
     /// 4. Convert to HUBO with (uniform) penalty method
     ///
-    ///   * If ``penalty_weights`` is given (in ``dict[constraint_id, weight]`` form), use :py:meth:`penalty_method` with the given weights.
-    ///   * If ``uniform_penalty_weight`` is given, use :py:meth:`uniform_penalty_method` with the given weight.
+    ///   * If ``penalty_weights`` is given (in ``dict[constraint_id, weight]`` form), use {meth}`~ommx.v1.Instance.penalty_method` with the given weights.
+    ///   * If ``uniform_penalty_weight`` is given, use {meth}`~ommx.v1.Instance.uniform_penalty_method` with the given weight.
     ///   * If both are None, defaults to ``uniform_penalty_weight = 1.0``.
     ///
-    /// 5. Log-encode integer variables by :py:meth:`log_encode`.
-    /// 6. Finally convert to HUBO format by :py:meth:`as_hubo_format`.
+    /// 5. Log-encode integer variables by {meth}`~ommx.v1.Instance.log_encode`.
+    /// 6. Finally convert to HUBO format by {meth}`~ommx.v1.Instance.as_hubo_format`.
     ///
-    /// Please see the documentation for :py:meth:`to_qubo` for more information, or the
+    /// Please see the documentation for {meth}`~ommx.v1.Instance.to_qubo` for more information, or the
     /// documentation for each individual method for additional details. The
-    /// difference between this and :py:meth:`to_qubo` is that this method isn't
+    /// difference between this and {meth}`~ommx.v1.Instance.to_qubo` is that this method isn't
     /// restricted to quadratic or linear problems. If you want to customize the
     /// conversion, use the individual methods above manually.
     #[pyo3(signature = (*, uniform_penalty_weight=None, penalty_weights=None, inequality_integer_slack_max_range=31))]
@@ -477,29 +470,22 @@ impl Instance {
     ///
     /// Roughly, this converts a constrained problem:
     ///
-    /// ```text
-    /// min_x  f(x)
-    /// s.t.   g_i(x) = 0   (for all i)
-    ///        h_j(x) <= 0  (for all j)
-    /// ```
+    /// $$\min_x f(x) \quad \text{s.t.} \quad g_i(x) = 0 \; (\forall i), \quad h_j(x) \leq 0 \; (\forall j)$$
     ///
     /// to an unconstrained problem with parameters:
     ///
-    /// ```text
-    /// min_x  f(x) + sum_i lambda_i * g_i(x)^2 + sum_j rho_j * h_j(x)^2
-    /// ```
+    /// $$\min_x f(x) + \sum_i \lambda_i g_i(x)^2 + \sum_j \rho_j h_j(x)^2$$
     ///
-    /// where lambda_i and rho_j are the penalty weight parameters for each constraint.
-    /// If you want to use single weight parameter, use :py:meth:`uniform_penalty_method` instead.
+    /// where $\lambda_i$ and $\rho_j$ are the penalty weight parameters for each constraint.
+    /// If you want to use single weight parameter, use {meth}`~ommx.v1.Instance.uniform_penalty_method` instead.
     ///
-    /// The removed constraints are stored in :py:attr:`~ParametricInstance.removed_constraints`.
+    /// The removed constraints are stored in {attr}`~ommx.v1.ParametricInstance.removed_constraints`.
     ///
-    /// > Note: This method converts inequality constraints h(x) <= 0 to |h(x)|^2 not to max(0, h(x))^2.
-    /// > This means the penalty is enforced even for h(x) < 0 cases, and h(x) = 0 is unfairly favored.
-    /// > This feature is intended to use with :py:meth:`add_integer_slack_to_inequality`.
+    /// > Note: This method converts inequality constraints $h(x) \leq 0$ to $|h(x)|^2$ not to $\max(0, h(x))^2$.
+    /// > This means the penalty is enforced even for $h(x) < 0$ cases, and $h(x) = 0$ is unfairly favored.
+    /// > This feature is intended to use with {meth}`~ommx.v1.Instance.add_integer_slack_to_inequality`.
     ///
     /// # Examples
-    /// =========
     ///
     /// ```python
     /// >>> from ommx.v1 import Instance, DecisionVariable, Constraint
@@ -539,28 +525,21 @@ impl Instance {
     ///
     /// Roughly, this converts a constrained problem:
     ///
-    /// ```text
-    /// min_x  f(x)
-    /// s.t.   g_i(x) = 0   (for all i)
-    ///        h_j(x) <= 0  (for all j)
-    /// ```
+    /// $$\min_x f(x) \quad \text{s.t.} \quad g_i(x) = 0 \; (\forall i), \quad h_j(x) \leq 0 \; (\forall j)$$
     ///
     /// to an unconstrained problem with a parameter:
     ///
-    /// ```text
-    /// min_x  f(x) + lambda * (sum_i g_i(x)^2 + sum_j h_j(x)^2)
-    /// ```
+    /// $$\min_x f(x) + \lambda \left( \sum_i g_i(x)^2 + \sum_j h_j(x)^2 \right)$$
     ///
-    /// where lambda is the uniform penalty weight parameter for all constraints.
+    /// where $\lambda$ is the uniform penalty weight parameter for all constraints.
     ///
-    /// The removed constraints are stored in :py:attr:`~ParametricInstance.removed_constraints`.
+    /// The removed constraints are stored in {attr}`~ommx.v1.ParametricInstance.removed_constraints`.
     ///
-    /// > Note: This method converts inequality constraints h(x) <= 0 to |h(x)|^2 not to max(0, h(x))^2.
-    /// > This means the penalty is enforced even for h(x) < 0 cases, and h(x) = 0 is unfairly favored.
-    /// > This feature is intended to use with :py:meth:`add_integer_slack_to_inequality`.
+    /// > Note: This method converts inequality constraints $h(x) \leq 0$ to $|h(x)|^2$ not to $\max(0, h(x))^2$.
+    /// > This means the penalty is enforced even for $h(x) < 0$ cases, and $h(x) = 0$ is unfairly favored.
+    /// > This feature is intended to use with {meth}`~ommx.v1.Instance.add_integer_slack_to_inequality`.
     ///
     /// # Examples
-    /// =========
     ///
     /// ```python
     /// >>> from ommx.v1 import Instance, DecisionVariable
@@ -606,13 +585,12 @@ impl Instance {
         })
     }
 
-    /// Evaluate the given :class:`State` into a :class:`Solution`.
+    /// Evaluate the given {class}`~ommx.v1.State` into a {class}`~ommx.v1.Solution`.
     ///
     /// This method evaluates the problem instance using the provided state (a map from decision variable IDs to their values),
-    /// and returns a :class:`Solution` object containing objective value, evaluated constraint values, and feasibility information.
+    /// and returns a {class}`~ommx.v1.Solution` object containing objective value, evaluated constraint values, and feasibility information.
     ///
     /// # Examples
-    /// =========
     ///
     /// Create a simple instance with three binary variables and evaluate a solution:
     ///
@@ -678,16 +656,15 @@ impl Instance {
     /// - Incrementally solving a problem by fixing some variables and optimizing the rest
     /// - Testing specific configurations of a problem
     ///
-    /// Args:
-    /// - state: Maps decision variable IDs to their fixed values.
-    ///   Can be a :class:`~ommx.v1.State` object or a dictionary mapping variable IDs to values.
-    /// - atol: Absolute tolerance for floating point comparisons. If None, uses the default tolerance.
+    /// **Args:**
+    /// - `state`: Maps decision variable IDs to their fixed values.
+    ///   Can be a {class}`~ommx.v1.State` object or a dictionary mapping variable IDs to values.
+    /// - `atol`: Absolute tolerance for floating point comparisons. If None, uses the default tolerance.
     ///
-    /// Returns:
+    /// **Returns:**
     /// A new instance with the specified decision variables fixed to their given values.
     ///
     /// # Examples
-    /// =========
     ///
     /// ```python
     /// >>> from ommx.v1 import Instance, DecisionVariable
@@ -747,15 +724,14 @@ impl Instance {
     /// objective function or constraints, as determined by decision variable analysis.
     /// Generated values respect the bounds of each variable type.
     ///
-    /// Args:
-    /// - rng: Random number generator to use for generating the state.
+    /// **Args:**
+    /// - `rng`: Random number generator to use for generating the state.
     ///
-    /// Returns:
+    /// **Returns:**
     /// A randomly generated state that satisfies the variable bounds of this instance.
     /// Only contains values for variables that are used in the problem.
     ///
     /// # Examples
-    /// =========
     ///
     /// Generate random state only for used variables
     ///
@@ -801,17 +777,16 @@ impl Instance {
     /// ``num_different_samples`` groups, where each group shares the same state but has
     /// different sample IDs.
     ///
-    /// Args:
-    /// - rng: Random number generator
-    /// - num_different_samples: Number of different states to generate
-    /// - num_samples: Total number of samples to generate
-    /// - max_sample_id: Maximum sample ID (default: ``num_samples``)
+    /// **Args:**
+    /// - `rng`: Random number generator
+    /// - `num_different_samples`: Number of different states to generate
+    /// - `num_samples`: Total number of samples to generate
+    /// - `max_sample_id`: Maximum sample ID (default: ``num_samples``)
     ///
-    /// Returns:
+    /// **Returns:**
     /// Samples object
     ///
     /// # Examples
-    /// ========
     ///
     /// Generate samples for a simple instance:
     ///
@@ -861,15 +836,14 @@ impl Instance {
 
     /// Remove a constraint from the instance.
     ///
-    /// The removed constraint is stored in :py:attr:`~Instance.removed_constraints`, and can be restored by :py:meth:`restore_constraint`.
+    /// The removed constraint is stored in {attr}`~ommx.v1.Instance.removed_constraints`, and can be restored by {meth}`~ommx.v1.Instance.restore_constraint`.
     ///
-    /// Args:
-    /// - constraint_id: The ID of the constraint to remove.
-    /// - reason: The reason why the constraint is removed.
-    /// - parameters: Additional parameters to describe the reason.
+    /// **Args:**
+    /// - `constraint_id`: The ID of the constraint to remove.
+    /// - `reason`: The reason why the constraint is removed.
+    /// - `parameters`: Additional parameters to describe the reason.
     ///
     /// # Examples
-    /// =========
     ///
     /// Relax constraint, and restore it.
     ///
@@ -923,20 +897,17 @@ impl Instance {
 
     /// Log-encode the integer decision variables.
     ///
-    /// Log encoding of an integer variable x in [l, u] is to represent by m bits b_i in {0, 1} by:
+    /// Log encoding of an integer variable $x \in [l, u]$ is to represent by $m$ bits $b_i \in \{0, 1\}$ by:
     ///
-    /// ```text
-    /// x = sum_{i=0}^{m-2} 2^i b_i + (u - l - 2^{m-1} + 1) b_{m-1} + l
-    /// ```
+    /// $$x = \sum_{i=0}^{m-2} 2^i b_i + (u - l - 2^{m-1} + 1) b_{m-1} + l$$
     ///
-    /// where m = ceil(log2(u - l + 1)).
+    /// where $m = \lceil \log_2(u - l + 1) \rceil$.
     ///
-    /// Args:
-    /// - decision_variable_ids: The IDs of the integer decision variables to log-encode.
+    /// **Args:**
+    /// - `decision_variable_ids`: The IDs of the integer decision variables to log-encode.
     ///   If not specified (or empty), all integer variables are log-encoded.
     ///
     /// # Examples
-    /// =========
     ///
     /// Let's consider a simple integer programming problem with three integer variables x0, x1, and x2.
     ///
@@ -962,9 +933,9 @@ impl Instance {
     /// >>> instance.log_encode({0, 2})
     /// ```
     ///
-    /// Integer variable in range [0, 3] can be represented by two binary variables:
+    /// Integer variable in range $[0, 3]$ can be represented by two binary variables:
     ///
-    /// x0 = b_{0,0} + 2 b_{0,1}, x2 = b_{2,0} + 2 b_{2,1}
+    /// $$x_0 = b_{0,0} + 2 b_{0,1}, \quad x_2 = b_{2,0} + 2 b_{2,1}$$
     ///
     /// And these are substituted into the objective and constraint functions.
     ///
@@ -995,25 +966,24 @@ impl Instance {
         Ok(())
     }
 
-    /// Convert an inequality constraint f(x) <= 0 to an equality constraint f(x) + s/a = 0 with an integer slack variable s.
+    /// Convert an inequality constraint $f(x) \leq 0$ to an equality constraint $f(x) + s/a = 0$ with an integer slack variable $s$.
     ///
-    /// - Since a is determined as the minimal multiplier to make every coefficient of af(x) integer,
-    ///   a itself and the range of s becomes impractically large. ``max_integer_range`` limits the maximal
-    ///   range of s, and returns error if the range exceeds it.
+    /// - Since $a$ is determined as the minimal multiplier to make every coefficient of $a f(x)$ integer,
+    ///   $a$ itself and the range of $s$ becomes impractically large. ``max_integer_range`` limits the maximal
+    ///   range of $s$, and returns error if the range exceeds it.
     ///
-    /// - Since this method evaluates the bound of f(x), we may find that:
+    /// - Since this method evaluates the bound of $f(x)$, we may find that:
     ///
-    ///   - The bound [l, u] is strictly positive, i.e. l > 0:
+    ///   - The bound $[l, u]$ is strictly positive, i.e. $l > 0$:
     ///     this means the instance is infeasible because this constraint never be satisfied,
     ///     and an error is raised.
     ///
-    ///   - The bound [l, u] is always negative, i.e. u <= 0:
+    ///   - The bound $[l, u]$ is always negative, i.e. $u \leq 0$:
     ///     this means this constraint is trivially satisfied,
-    ///     the constraint is moved to :py:attr:`~Instance.removed_constraints`,
+    ///     the constraint is moved to {attr}`~ommx.v1.Instance.removed_constraints`,
     ///     and this method returns without introducing slack variable or raising an error.
     ///
     /// # Examples
-    /// =========
     ///
     /// Let's consider a simple inequality constraint x0 + 2*x1 <= 5.
     ///
@@ -1060,23 +1030,22 @@ impl Instance {
         Ok(())
     }
 
-    /// Convert inequality f(x) <= 0 to **inequality** f(x) + b*s <= 0 with an integer slack variable s.
+    /// Convert inequality $f(x) \leq 0$ to **inequality** $f(x) + b s \leq 0$ with an integer slack variable $s$.
     ///
-    /// - This should be used when :meth:`convert_inequality_to_equality_with_integer_slack` is not applicable.
+    /// - This should be used when {meth}`~ommx.v1.Instance.convert_inequality_to_equality_with_integer_slack` is not applicable.
     ///
-    /// - The bound of s will be [0, slack_upper_bound], and the coefficient b is determined from the lower bound of f(x).
+    /// - The bound of $s$ will be $[0, \text{slack\_upper\_bound}]$, and the coefficient $b$ is determined from the lower bound of $f(x)$.
     ///
-    /// - Since the slack variable is integer, the yielded inequality has residual error min_s f(x) + b*s at most b.
-    ///   And thus b is returned to use scaling the penalty weight or other things.
+    /// - Since the slack variable is integer, the yielded inequality has residual error $\min_s f(x) + b s$ at most $b$.
+    ///   And thus $b$ is returned to use scaling the penalty weight or other things.
     ///
-    ///   - Larger slack_upper_bound (i.e. fined-grained slack) yields smaller b, and thus smaller the residual error,
+    ///   - Larger slack_upper_bound (i.e. finer-grained slack) yields smaller $b$, and thus smaller the residual error,
     ///     but it needs more bits for the slack variable, and thus the problem size becomes larger.
     ///
-    /// Returns:
-    /// The coefficient b of the slack variable. If the constraint is trivially satisfied, this returns ``None``.
+    /// **Returns:**
+    /// The coefficient $b$ of the slack variable. If the constraint is trivially satisfied, this returns ``None``.
     ///
     /// # Examples
-    /// =========
     ///
     /// Let's consider a simple inequality constraint x0 + 2*x1 <= 4.
     ///
@@ -1127,11 +1096,10 @@ impl Instance {
     /// - Usage-based partitioning (used in objective, constraints, fixed, etc.)
     /// - Variable bounds information
     ///
-    /// Returns:
+    /// **Returns:**
     /// Analysis object containing detailed information about decision variables
     ///
     /// # Examples
-    /// --------
     ///
     /// ```python
     /// >>> from ommx.v1 import Instance, DecisionVariable
@@ -1159,7 +1127,7 @@ impl Instance {
     /// Returns a dictionary containing counts of decision variables and constraints
     /// categorized by kind, usage, and status.
     ///
-    /// Returns:
+    /// **Returns:**
     /// A dictionary with the following structure:
     ///
     /// ```json
@@ -1191,7 +1159,6 @@ impl Instance {
     /// ```
     ///
     /// # Examples
-    /// --------
     ///
     /// ```python
     /// >>> from ommx.v1 import Instance
@@ -1248,11 +1215,10 @@ impl Instance {
     ///
     /// If the instance is already a minimization problem, this does nothing.
     ///
-    /// Returns:
+    /// **Returns:**
     /// ``True`` if the instance is converted, ``False`` if already a minimization problem.
     ///
     /// # Examples
-    /// =========
     ///
     /// ```python
     /// >>> from ommx.v1 import Instance, DecisionVariable
@@ -1294,11 +1260,10 @@ impl Instance {
     ///
     /// If the instance is already a maximization problem, this does nothing.
     ///
-    /// Returns:
+    /// **Returns:**
     /// ``True`` if the instance is converted, ``False`` if already a maximization problem.
     ///
     /// # Examples
-    /// =========
     ///
     /// ```python
     /// >>> from ommx.v1 import Instance, DecisionVariable
@@ -1387,13 +1352,12 @@ impl Instance {
     /// Reduce binary powers in the instance.
     ///
     /// This method replaces binary powers in the instance with their equivalent linear expressions.
-    /// For binary variables, x^n = x for any n >= 1, so we can reduce higher powers to linear terms.
+    /// For binary variables, $x^n = x$ for any $n \geq 1$, so we can reduce higher powers to linear terms.
     ///
-    /// Returns:
+    /// **Returns:**
     /// ``True`` if any reduction was performed, ``False`` otherwise.
     ///
     /// # Examples
-    /// =========
     ///
     /// Consider an instance with binary variables and quadratic terms:
     ///
@@ -1470,11 +1434,10 @@ impl Instance {
     /// 2. Generate SVG: ``flamegraph.pl profile.txt > memory.svg``
     /// 3. Open memory.svg in a browser
     ///
-    /// Returns:
+    /// **Returns:**
     /// Folded stack format string that can be visualized with flamegraph tools
     ///
     /// # Examples
-    /// --------
     ///
     /// ```python
     /// >>> from ommx.v1 import Instance, DecisionVariable
