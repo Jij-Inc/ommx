@@ -14,7 +14,7 @@ Utilities
 ---------
 
 .. toctree::
-   :maxdepth: 3
+   :maxdepth: 1
 
    autoapi/ommx/adapter/index
    autoapi/ommx/dataset/index
@@ -26,7 +26,7 @@ Adapters
 --------
 
 .. toctree::
-   :maxdepth: 3
+   :maxdepth: 1
 
    autoapi/ommx_python_mip_adapter/index
    autoapi/ommx_pyscipopt_adapter/index
