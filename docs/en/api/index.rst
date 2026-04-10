@@ -1,11 +1,41 @@
 OMMX Python SDK API Reference
-=============================
+==============================
 
-This is the API reference documentation generated from Rust code using `pyo3-stub-gen <https://github.com/Jij-Inc/pyo3-stub-gen>`_.
+Core
+----
 
 .. toctree::
-   :maxdepth: 2
-   :caption: Modules:
+   :maxdepth: 3
 
-   ommx.artifact
    ommx.v1
+   ommx.artifact
+
+Utilities
+---------
+
+.. toctree::
+   :maxdepth: 1
+
+   ../autoapi/ommx/adapter/index
+   ../autoapi/ommx/dataset/index
+   ../autoapi/ommx/testing/index
+   ../autoapi/ommx/mps/index
+   ../autoapi/ommx/qplib/index
+
+Adapters
+--------
+
+.. toctree::
+   :maxdepth: 1
+
+   ../autoapi/ommx_python_mip_adapter/index
+   ../autoapi/ommx_pyscipopt_adapter/index
+   ../autoapi/ommx_highs_adapter/index
+   ../autoapi/ommx_openjij_adapter/index
+
+
+Indices
+-------
+
+* :ref:`genindex`
+* :ref:`modindex`
