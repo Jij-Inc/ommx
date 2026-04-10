@@ -179,9 +179,9 @@ class Artifact:
         r"""
         Look up a layer descriptor by digest.
         """
-    def get_blob(self, digest: builtins.str) -> bytes:
+    def get_blob(self, digest_or_descriptor: typing.Any) -> bytes:
         r"""
-        Get raw bytes of a blob by digest.
+        Get raw bytes of a blob by digest string or Descriptor.
         """
     def get_layer(self, descriptor: Descriptor) -> typing.Any:
         r"""

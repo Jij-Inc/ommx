@@ -191,9 +191,22 @@ impl PyArtifact {
         bail!("Layer {} not found", digest)
     }
 
-    /// Get raw bytes of a blob by digest.
-    pub fn get_blob<'py>(&mut self, py: Python<'py>, digest: &str) -> Result<Bound<'py, PyBytes>> {
-        let blob = self.0.get_blob(digest)?;
+    /// Get raw bytes of a blob by digest string or Descriptor.
+    pub fn get_blob<'py>(
+        &mut self,
+        py: Python<'py>,
+        digest_or_descriptor: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyBytes>> {
+        let digest: String = if let Ok(desc) = digest_or_descriptor.extract::<PyRef<PyDescriptor>>()
+        {
+            desc.digest()
+        } else {
+            digest_or_descriptor.extract::<String>()?
+        };
+        let blob = self
+            .0
+            .get_blob(&digest)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
         Ok(PyBytes::new(py, &blob))
     }
 
@@ -406,9 +419,7 @@ impl PyArtifact {
             .get_blob(&descriptor.digest())
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
         let json = py.import("json")?;
-        let blob_str = std::str::from_utf8(&blob)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-        json.call_method1("loads", (blob_str,))
+        json.call_method1("loads", (PyBytes::new(py, &blob),))
     }
 }
 

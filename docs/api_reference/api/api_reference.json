@@ -13,14 +13,14 @@
           "methods": [
             {
               "name": "get_blob",
-              "doc": "Get raw bytes of a blob by digest.",
+              "doc": "Get raw bytes of a blob by digest string or Descriptor.",
               "signatures": [
                 {
                   "parameters": [
                     {
-                      "name": "digest",
+                      "name": "digest_or_descriptor",
                       "type_": {
-                        "display": "str",
+                        "display": "Any",
                         "link_target": null,
                         "children": []
                       },
