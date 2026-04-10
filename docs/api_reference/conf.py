@@ -55,7 +55,7 @@ html_static_path = []
 add_module_names = False
 python_use_unqualified_type_names = True
 
-# -- AutoAPI settings (adapters only) ----------------------------------------
+# -- AutoAPI settings --------------------------------------------------------
 
 autoapi_dirs = [
     python_root / "ommx",
