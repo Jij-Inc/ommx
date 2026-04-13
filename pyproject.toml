@@ -29,4 +29,5 @@ dev = [
   "syrupy>=4.7.2",
   "tomlkit>=0.13.2",
   "sphinx-book-theme>=1.1.4",
+  "sphinxcontrib-katex>=0.9.11",
 ]

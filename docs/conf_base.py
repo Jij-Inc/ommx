@@ -7,6 +7,7 @@ import os
 extensions = [
     "myst_nb",
     "sphinx.ext.intersphinx",
+    "sphinxcontrib.katex",
 ]
 
 source_suffix = {
@@ -19,6 +20,7 @@ exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 # -- MyST / myst-nb settings ------------------------------------------------
 
 myst_enable_extensions = ["dollarmath"]
+myst_update_mathjax = False
 
 # Allow overriding execution mode via environment variable (e.g. OMMX_NB_EXECUTION=force)
 nb_execution_mode = os.environ.get("OMMX_NB_EXECUTION", "off")
