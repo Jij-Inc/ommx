@@ -1,5 +1,5 @@
 use super::*;
-use crate::{linear, v1, Function, VariableID};
+use crate::{constraint_type::ConstraintCollection, linear, v1, Function, VariableID};
 use anyhow::Result;
 use num::Zero;
 
@@ -58,7 +58,9 @@ impl Instance {
         let mut parameters = BTreeMap::new();
         let mut removed_constraints = BTreeMap::new();
 
-        for (i, (constraint_id, constraint)) in self.constraints.into_iter().enumerate() {
+        let (active_constraints, existing_removed) = self.constraint_collection.into_parts();
+        removed_constraints.extend(existing_removed);
+        for (i, (constraint_id, constraint)) in active_constraints.into_iter().enumerate() {
             let parameter_id = VariableID::from(id_base + i as u64);
             let parameter = v1::Parameter {
                 id: parameter_id.into_inner(),
@@ -100,8 +102,7 @@ impl Instance {
             objective,
             decision_variables: self.decision_variables,
             parameters,
-            constraints: BTreeMap::new(),
-            removed_constraints,
+            constraint_collection: ConstraintCollection::new(BTreeMap::new(), removed_constraints),
             decision_variable_dependency: self.decision_variable_dependency,
             // All constraints are moved to removed_constraints, so all hints are invalidated
             constraint_hints: ConstraintHints::default(),
@@ -146,14 +147,13 @@ impl Instance {
     /// where $\lambda$ is the single penalty parameter.
     pub fn uniform_penalty_method(self) -> Result<ParametricInstance> {
         // Early return if no constraints
-        if self.constraints.is_empty() {
+        if self.constraints().is_empty() {
             return Ok(ParametricInstance {
                 sense: self.sense,
                 objective: self.objective,
                 decision_variables: self.decision_variables,
                 parameters: BTreeMap::new(),
-                constraints: BTreeMap::new(),
-                removed_constraints: BTreeMap::new(),
+                constraint_collection: ConstraintCollection::new(BTreeMap::new(), BTreeMap::new()),
                 decision_variable_dependency: self.decision_variable_dependency,
                 constraint_hints: self.constraint_hints,
                 description: self.description,
@@ -185,8 +185,10 @@ impl Instance {
 
         let mut removed_constraints = BTreeMap::new();
         let mut quad_sum = Function::zero();
+        let (active_constraints, existing_removed) = self.constraint_collection.into_parts();
+        removed_constraints.extend(existing_removed);
 
-        for (constraint_id, constraint) in self.constraints.into_iter() {
+        for (constraint_id, constraint) in active_constraints.into_iter() {
             let f = constraint.function().clone();
             quad_sum += f.clone() * f;
 
@@ -214,8 +216,7 @@ impl Instance {
             objective,
             decision_variables: self.decision_variables,
             parameters,
-            constraints: BTreeMap::new(),
-            removed_constraints,
+            constraint_collection: ConstraintCollection::new(BTreeMap::new(), removed_constraints),
             decision_variable_dependency: self.decision_variable_dependency,
             // All constraints are moved to removed_constraints, so all hints are invalidated
             constraint_hints: ConstraintHints::default(),
@@ -281,9 +282,9 @@ mod tests {
         expected_param_name: &str,
     ) {
         // Check that constraints are removed
-        assert_eq!(parametric_instance.constraints.len(), 0);
+        assert_eq!(parametric_instance.constraints().len(), 0);
         assert_eq!(
-            parametric_instance.removed_constraints.len(),
+            parametric_instance.removed_constraints().len(),
             original_constraint_count
         );
 
@@ -320,14 +321,14 @@ mod tests {
         assert!(substituted
             .objective
             .abs_diff_eq(&original_objective, crate::ATol::default()));
-        assert_eq!(substituted.constraints.len(), 0);
+        assert_eq!(substituted.constraints().len(), 0);
     }
 
     #[test]
     fn test_penalty_method() {
         let instance = create_test_instance_with_constraints();
         let original_objective = instance.objective.clone();
-        let original_constraint_count = instance.constraints.len();
+        let original_constraint_count = instance.constraints().len();
         let parametric_instance = instance.penalty_method().unwrap();
 
         verify_penalty_method_properties(
@@ -343,7 +344,7 @@ mod tests {
     fn test_uniform_penalty_method() {
         let instance = create_test_instance_with_constraints();
         let original_objective = instance.objective.clone();
-        let original_constraint_count = instance.constraints.len();
+        let original_constraint_count = instance.constraints().len();
         let parametric_instance = instance.uniform_penalty_method().unwrap();
 
         verify_penalty_method_properties(
@@ -378,15 +379,15 @@ mod tests {
         // Test penalty_method
         let parametric_instance = instance.clone().penalty_method().unwrap();
         assert_eq!(parametric_instance.parameters.len(), 0);
-        assert_eq!(parametric_instance.constraints.len(), 0);
-        assert_eq!(parametric_instance.removed_constraints.len(), 0);
+        assert_eq!(parametric_instance.constraints().len(), 0);
+        assert_eq!(parametric_instance.removed_constraints().len(), 0);
         assert_eq!(parametric_instance.objective, objective);
 
         // Test uniform_penalty_method
         let parametric_instance = instance.uniform_penalty_method().unwrap();
         assert_eq!(parametric_instance.parameters.len(), 0);
-        assert_eq!(parametric_instance.constraints.len(), 0);
-        assert_eq!(parametric_instance.removed_constraints.len(), 0);
+        assert_eq!(parametric_instance.constraints().len(), 0);
+        assert_eq!(parametric_instance.removed_constraints().len(), 0);
         assert_eq!(parametric_instance.objective, objective);
     }
 

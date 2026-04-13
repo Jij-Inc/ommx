@@ -1,4 +1,5 @@
 use super::*;
+use crate::constraint_type::ConstraintCollection;
 use crate::parse::Parse;
 
 /// Builder for creating [`Instance`] with validation.
@@ -276,9 +277,8 @@ impl InstanceBuilder {
             sense,
             objective,
             decision_variables,
-            constraints,
+            constraint_collection: ConstraintCollection::new(constraints, removed_constraints),
             named_functions: self.named_functions,
-            removed_constraints,
             decision_variable_dependency: self.decision_variable_dependency,
             constraint_hints,
             parameters: self.parameters,

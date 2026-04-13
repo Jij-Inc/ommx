@@ -51,7 +51,11 @@ impl Instance {
         // Validate that all variables in the constraints are defined
         self.validate_required_ids(constraint.required_ids())?;
         use std::collections::btree_map::Entry;
-        if let Entry::Occupied(mut o) = self.removed_constraints.entry(constraint.id) {
+        if let Entry::Occupied(mut o) = self
+            .constraint_collection
+            .removed_mut()
+            .entry(constraint.id)
+        {
             let rc = o.get_mut();
             let old_function = std::mem::replace(&mut rc.stage.function, constraint.stage.function);
             let old_equality = std::mem::replace(&mut rc.equality, constraint.equality);
@@ -66,7 +70,10 @@ impl Instance {
             };
             return Ok(Some(removed));
         }
-        Ok(self.constraints.insert(constraint.id, constraint))
+        Ok(self
+            .constraint_collection
+            .active_mut()
+            .insert(constraint.id, constraint))
     }
 
     /// Insert multiple constraints into the instance with a single validation pass.
@@ -104,7 +111,9 @@ impl Instance {
         for constraint in constraints {
             use std::collections::btree_map::Entry;
             let id = constraint.id;
-            let old = if let Entry::Occupied(mut o) = self.removed_constraints.entry(id) {
+            let old = if let Entry::Occupied(mut o) =
+                self.constraint_collection.removed_mut().entry(id)
+            {
                 let rc = o.get_mut();
                 let old_function =
                     std::mem::replace(&mut rc.stage.function, constraint.stage.function);
@@ -119,7 +128,9 @@ impl Instance {
                     },
                 })
             } else {
-                self.constraints.insert(id, constraint)
+                self.constraint_collection
+                    .active_mut()
+                    .insert(id, constraint)
             };
             if let Some(old_constraint) = old {
                 replaced.insert(id, old_constraint);
@@ -191,9 +202,9 @@ mod tests {
 
         // Should return None since no constraint with ID 10 existed before
         assert!(result.is_none());
-        assert_eq!(instance.constraints.len(), 1);
+        assert_eq!(instance.constraints().len(), 1);
         assert_eq!(
-            instance.constraints.get(&ConstraintID::from(10)),
+            instance.constraints().get(&ConstraintID::from(10)),
             Some(&constraint)
         );
     }
@@ -231,9 +242,9 @@ mod tests {
 
         // Should return the old constraint that was replaced
         assert_eq!(result, Some(original_constraint));
-        assert_eq!(instance.constraints.len(), 1);
+        assert_eq!(instance.constraints().len(), 1);
         assert_eq!(
-            instance.constraints.get(&ConstraintID::from(5)),
+            instance.constraints().get(&ConstraintID::from(5)),
             Some(&new_constraint)
         );
     }
@@ -277,7 +288,7 @@ mod tests {
             "Undefined variable ID is used: VariableID(999)"
         );
         // Ensure no constraint was added
-        assert_eq!(instance.constraints.len(), 0);
+        assert_eq!(instance.constraints().len(), 0);
     }
 
     #[test]
@@ -330,16 +341,16 @@ mod tests {
             .insert_constraint(constraint3.clone())
             .unwrap()
             .is_none());
-        assert_eq!(instance.constraints.len(), 3);
+        assert_eq!(instance.constraints().len(), 3);
 
         // Replace constraint 2 with new one
         let new_constraint2 =
             Constraint::equal_to_zero(ConstraintID::from(2), (linear!(1) + coeff!(1.0)).into());
         let replaced = instance.insert_constraint(new_constraint2.clone()).unwrap();
         assert_eq!(replaced, Some(constraint2));
-        assert_eq!(instance.constraints.len(), 3);
+        assert_eq!(instance.constraints().len(), 3);
         assert_eq!(
-            instance.constraints.get(&ConstraintID::from(2)),
+            instance.constraints().get(&ConstraintID::from(2)),
             Some(&new_constraint2)
         );
     }
@@ -375,7 +386,7 @@ mod tests {
             "Dependent variable cannot be used in objectives or constraints: VariableID(2)"
         );
         // Ensure no constraint was added
-        assert_eq!(instance.constraints.len(), 0);
+        assert_eq!(instance.constraints().len(), 0);
     }
 
     #[test]
@@ -439,8 +450,8 @@ mod tests {
             .unwrap();
 
         // Verify initial state
-        assert_eq!(instance.constraints.len(), 1);
-        assert_eq!(instance.removed_constraints.len(), 1);
+        assert_eq!(instance.constraints().len(), 1);
+        assert_eq!(instance.removed_constraints().len(), 1);
 
         // Insert a new constraint with the same ID as the removed constraint
         let new_constraint = Constraint::equal_to_zero(
@@ -458,10 +469,10 @@ mod tests {
             ))
         );
 
-        assert_eq!(instance.constraints.len(), 1);
-        assert_eq!(instance.removed_constraints.len(), 1);
+        assert_eq!(instance.constraints().len(), 1);
+        assert_eq!(instance.removed_constraints().len(), 1);
         let removed = instance
-            .removed_constraints
+            .removed_constraints()
             .get(&ConstraintID::from(2))
             .unwrap();
         assert_eq!(removed.id, new_constraint.id);
@@ -498,11 +509,11 @@ mod tests {
 
         // No constraints were replaced since none existed before
         assert!(replaced.is_empty());
-        assert_eq!(instance.constraints.len(), 3);
+        assert_eq!(instance.constraints().len(), 3);
 
         // Verify constraints were inserted correctly
         for constraint in &constraints {
-            assert_eq!(instance.constraints.get(&constraint.id), Some(constraint));
+            assert_eq!(instance.constraints().get(&constraint.id), Some(constraint));
         }
     }
 
@@ -538,7 +549,7 @@ mod tests {
             "Undefined variable ID is used: VariableID(999)"
         );
         // Ensure no constraints were added (atomic operation)
-        assert_eq!(instance.constraints.len(), 0);
+        assert_eq!(instance.constraints().len(), 0);
     }
 
     #[test]
@@ -580,7 +591,7 @@ mod tests {
         // Should have replaced constraint 1
         assert_eq!(replaced.len(), 1);
         assert!(replaced.contains_key(&ConstraintID::from(1)));
-        assert_eq!(instance.constraints.len(), 3);
+        assert_eq!(instance.constraints().len(), 3);
     }
 
     #[test]
@@ -609,8 +620,8 @@ mod tests {
         instance
             .relax_constraint(ConstraintID::from(1), "test".to_string(), [])
             .unwrap();
-        assert_eq!(instance.constraints.len(), 0);
-        assert_eq!(instance.removed_constraints.len(), 1);
+        assert_eq!(instance.constraints().len(), 0);
+        assert_eq!(instance.removed_constraints().len(), 1);
 
         // Replace the removed constraint
         let new_constraints = vec![Constraint::equal_to_zero(
@@ -624,7 +635,7 @@ mod tests {
         assert_eq!(replaced.len(), 1);
         assert!(replaced.contains_key(&ConstraintID::from(1)));
         // Constraint is still in removed_constraints (with updated content)
-        assert_eq!(instance.removed_constraints.len(), 1);
+        assert_eq!(instance.removed_constraints().len(), 1);
     }
 
     #[test]
@@ -664,7 +675,7 @@ mod tests {
             "Dependent variable cannot be used in objectives or constraints: VariableID(2)"
         );
         // Ensure no constraints were added (atomic operation)
-        assert_eq!(instance.constraints.len(), 0);
+        assert_eq!(instance.constraints().len(), 0);
     }
 
     #[test]

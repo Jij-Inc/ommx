@@ -1,5 +1,6 @@
 use super::*;
 use crate::{
+    constraint_type::ConstraintCollection,
     parse::{as_variable_id, Parse, ParseError, RawParseError},
     v1::{self},
     Constraint, InstanceError, VariableID,
@@ -173,9 +174,8 @@ impl Parse for v1::Instance {
         Ok(Instance {
             sense,
             objective,
-            constraints,
             decision_variables,
-            removed_constraints,
+            constraint_collection: ConstraintCollection::new(constraints, removed_constraints),
             decision_variable_dependency,
             parameters: self.parameters,
             description: self.description,
@@ -199,17 +199,14 @@ impl From<Instance> for v1::Instance {
             .into_values()
             .map(|dv| dv.into())
             .collect();
-        let constraints = value.constraints.into_values().map(|c| c.into()).collect();
+        let (active, removed) = value.constraint_collection.into_parts();
+        let constraints = active.into_values().map(|c| c.into()).collect();
         let named_functions = value
             .named_functions
             .into_values()
             .map(|nf| nf.into())
             .collect();
-        let removed_constraints = value
-            .removed_constraints
-            .into_values()
-            .map(|rc| rc.into())
-            .collect();
+        let removed_constraints = removed.into_values().map(|rc| rc.into()).collect();
         let decision_variable_dependency = value
             .decision_variable_dependency
             .into_iter()
@@ -340,9 +337,8 @@ impl Parse for v1::ParametricInstance {
             objective,
             decision_variables,
             parameters,
-            constraints,
+            constraint_collection: ConstraintCollection::new(constraints, removed_constraints),
             named_functions,
-            removed_constraints,
             decision_variable_dependency,
             constraint_hints,
             description: self.description,
@@ -357,14 +353,14 @@ impl From<ParametricInstance> for v1::ParametricInstance {
             objective,
             decision_variables,
             parameters,
-            constraints,
-            removed_constraints,
+            constraint_collection,
             decision_variable_dependency,
             constraint_hints,
             description,
             named_functions,
         }: ParametricInstance,
     ) -> Self {
+        let (constraints, removed_constraints) = constraint_collection.into_parts();
         Self {
             description,
             sense: v1::instance::Sense::from(sense) as i32,

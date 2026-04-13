@@ -26,13 +26,23 @@ crate::impl_logical_memory_profile! {
     }
 }
 
+impl LogicalMemoryProfile
+    for crate::constraint_type::ConstraintCollection<crate::constraint_type::Regular>
+{
+    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
+        self.active()
+            .visit_logical_memory(path.with("constraints").as_mut(), visitor);
+        self.removed()
+            .visit_logical_memory(path.with("removed_constraints").as_mut(), visitor);
+    }
+}
+
 crate::impl_logical_memory_profile! {
     Instance {
         sense,
         objective,
         decision_variables,
-        constraints,
-        removed_constraints,
+        constraint_collection,
         decision_variable_dependency,
         constraint_hints,
         parameters,
@@ -54,16 +64,16 @@ mod tests {
         let folded = logical_memory_to_folded(&instance);
         // Empty instance has zero objective
         insta::assert_snapshot!(folded, @r###"
+        Instance.constraint_collection;constraints;BTreeMap[stack] 24
+        Instance.constraint_collection;removed_constraints;BTreeMap[stack] 24
         Instance.constraint_hints;ConstraintHints.one_hot_constraints;Vec[stack] 24
         Instance.constraint_hints;ConstraintHints.sos1_constraints;Vec[stack] 24
-        Instance.constraints;BTreeMap[stack] 24
         Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[stack] 32
         Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
         Instance.decision_variables;BTreeMap[stack] 24
         Instance.description;Option[stack] 96
         Instance.objective;Zero 40
         Instance.parameters;Option[stack] 48
-        Instance.removed_constraints;BTreeMap[stack] 24
         Instance.sense 1
         "###);
     }
@@ -89,9 +99,10 @@ mod tests {
 
         let folded = logical_memory_to_folded(&instance);
         insta::assert_snapshot!(folded, @r###"
+        Instance.constraint_collection;constraints;BTreeMap[stack] 24
+        Instance.constraint_collection;removed_constraints;BTreeMap[stack] 24
         Instance.constraint_hints;ConstraintHints.one_hot_constraints;Vec[stack] 24
         Instance.constraint_hints;ConstraintHints.sos1_constraints;Vec[stack] 24
-        Instance.constraints;BTreeMap[stack] 24
         Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[stack] 32
         Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
         Instance.decision_variables;BTreeMap[key] 16
@@ -107,7 +118,6 @@ mod tests {
         Instance.description;Option[stack] 96
         Instance.objective;Linear;PolynomialBase.terms 80
         Instance.parameters;Option[stack] 48
-        Instance.removed_constraints;BTreeMap[stack] 24
         Instance.sense 1
         "###);
     }
@@ -145,17 +155,18 @@ mod tests {
 
         let folded = logical_memory_to_folded(&instance);
         insta::assert_snapshot!(folded, @r###"
+        Instance.constraint_collection;constraints;BTreeMap[key] 8
+        Instance.constraint_collection;constraints;BTreeMap[stack] 24
+        Instance.constraint_collection;constraints;Constraint.equality 1
+        Instance.constraint_collection;constraints;Constraint.id 8
+        Instance.constraint_collection;constraints;Constraint.metadata;ConstraintMetadata.description;Option[stack] 24
+        Instance.constraint_collection;constraints;Constraint.metadata;ConstraintMetadata.name;Option[stack] 24
+        Instance.constraint_collection;constraints;Constraint.metadata;ConstraintMetadata.parameters;FnvHashMap[stack] 32
+        Instance.constraint_collection;constraints;Constraint.metadata;ConstraintMetadata.subscripts;Vec[stack] 24
+        Instance.constraint_collection;constraints;Constraint.stage;CreatedData.function;Linear;PolynomialBase.terms 80
+        Instance.constraint_collection;removed_constraints;BTreeMap[stack] 24
         Instance.constraint_hints;ConstraintHints.one_hot_constraints;Vec[stack] 24
         Instance.constraint_hints;ConstraintHints.sos1_constraints;Vec[stack] 24
-        Instance.constraints;BTreeMap[key] 8
-        Instance.constraints;BTreeMap[stack] 24
-        Instance.constraints;Constraint.equality 1
-        Instance.constraints;Constraint.id 8
-        Instance.constraints;Constraint.metadata;ConstraintMetadata.description;Option[stack] 24
-        Instance.constraints;Constraint.metadata;ConstraintMetadata.name;Option[stack] 24
-        Instance.constraints;Constraint.metadata;ConstraintMetadata.parameters;FnvHashMap[stack] 32
-        Instance.constraints;Constraint.metadata;ConstraintMetadata.subscripts;Vec[stack] 24
-        Instance.constraints;Constraint.stage;CreatedData.function;Linear;PolynomialBase.terms 80
         Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[stack] 32
         Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
         Instance.decision_variables;BTreeMap[key] 16
@@ -171,7 +182,6 @@ mod tests {
         Instance.description;Option[stack] 96
         Instance.objective;Linear;PolynomialBase.terms 80
         Instance.parameters;Option[stack] 48
-        Instance.removed_constraints;BTreeMap[stack] 24
         Instance.sense 1
         "###);
     }
@@ -204,9 +214,10 @@ mod tests {
         let folded = logical_memory_to_folded(&instance);
         // Note: Same path appears multiple times, flamegraph tools will aggregate them
         insta::assert_snapshot!(folded, @r###"
+        Instance.constraint_collection;constraints;BTreeMap[stack] 24
+        Instance.constraint_collection;removed_constraints;BTreeMap[stack] 24
         Instance.constraint_hints;ConstraintHints.one_hot_constraints;Vec[stack] 24
         Instance.constraint_hints;ConstraintHints.sos1_constraints;Vec[stack] 24
-        Instance.constraints;BTreeMap[stack] 24
         Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[stack] 32
         Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
         Instance.decision_variables;BTreeMap[key] 24
@@ -222,7 +233,6 @@ mod tests {
         Instance.description;Option[stack] 96
         Instance.objective;Zero 40
         Instance.parameters;Option[stack] 48
-        Instance.removed_constraints;BTreeMap[stack] 24
         Instance.sense 1
         "###);
     }
@@ -260,9 +270,10 @@ mod tests {
 
         let folded = logical_memory_to_folded(&instance);
         insta::assert_snapshot!(folded, @r###"
+        Instance.constraint_collection;constraints;BTreeMap[stack] 24
+        Instance.constraint_collection;removed_constraints;BTreeMap[stack] 24
         Instance.constraint_hints;ConstraintHints.one_hot_constraints;Vec[stack] 24
         Instance.constraint_hints;ConstraintHints.sos1_constraints;Vec[stack] 24
-        Instance.constraints;BTreeMap[stack] 24
         Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[stack] 32
         Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
         Instance.decision_variables;BTreeMap[key] 8
@@ -284,7 +295,6 @@ mod tests {
         Instance.parameters;Parameters.entries 16
         Instance.parameters;Parameters.entries;HashMap[key] 16
         Instance.parameters;Parameters.entries;HashMap[stack] 48
-        Instance.removed_constraints;BTreeMap[stack] 24
         Instance.sense 1
         "###);
     }

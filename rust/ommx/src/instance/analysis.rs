@@ -264,7 +264,7 @@ impl Instance {
 
     pub fn used_decision_variable_ids(&self) -> VariableIDSet {
         let mut used = self.objective.required_ids();
-        for constraint in self.constraints.values() {
+        for constraint in self.constraints().values() {
             used.extend(constraint.function().required_ids());
         }
         // Note: named_functions are intentionally excluded from the "used" set.
@@ -310,7 +310,7 @@ impl Instance {
         );
 
         let mut used_in_constraints: BTreeMap<ConstraintID, VariableIDSet> = BTreeMap::default();
-        for constraint in self.constraints.values() {
+        for constraint in self.constraints().values() {
             let required_ids: VariableIDSet =
                 constraint.function().required_ids().into_iter().collect();
             debug_assert!(

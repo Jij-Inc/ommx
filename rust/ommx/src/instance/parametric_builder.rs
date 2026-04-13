@@ -1,4 +1,5 @@
 use super::*;
+use crate::constraint_type::ConstraintCollection;
 use crate::parse::Parse;
 
 /// Builder for creating [`ParametricInstance`] with validation.
@@ -307,9 +308,8 @@ impl ParametricInstanceBuilder {
             objective,
             decision_variables,
             parameters,
-            constraints,
+            constraint_collection: ConstraintCollection::new(constraints, removed_constraints),
             named_functions: self.named_functions,
-            removed_constraints,
             decision_variable_dependency: self.decision_variable_dependency,
             constraint_hints,
             description: self.description,

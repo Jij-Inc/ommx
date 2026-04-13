@@ -14,7 +14,7 @@ impl Instance {
         }
         let mut changed = false;
         changed |= self.objective.reduce_binary_power(&binary_ids);
-        for constraint in self.constraints.values_mut() {
+        for constraint in self.constraint_collection.active_mut().values_mut() {
             changed |= constraint.reduce_binary_power(&binary_ids);
         }
         // Note: We don't need to reduce in removed_constraints since they are not active

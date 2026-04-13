@@ -30,8 +30,11 @@ pub use parametric_builder::*;
 pub use stats::*;
 
 use crate::{
-    constraint_hints::ConstraintHints, named_function::NamedFunctionID, parse::Parse, v1,
-    AcyclicAssignments, Constraint, ConstraintID, DecisionVariable, Evaluate, Function,
+    constraint_hints::ConstraintHints,
+    constraint_type::{ConstraintCollection, Regular},
+    named_function::NamedFunctionID,
+    parse::Parse,
+    v1, AcyclicAssignments, Constraint, ConstraintID, DecisionVariable, Evaluate, Function,
     NamedFunction, RemovedConstraint, VariableID, VariableIDSet,
 };
 use std::collections::BTreeMap;
@@ -72,10 +75,10 @@ pub struct Instance {
     objective: Function,
     #[getset(get = "pub")]
     decision_variables: BTreeMap<VariableID, DecisionVariable>,
-    #[getset(get = "pub")]
-    constraints: BTreeMap<ConstraintID, Constraint>,
-    #[getset(get = "pub")]
-    removed_constraints: BTreeMap<ConstraintID, RemovedConstraint>,
+
+    /// Regular constraints collection (active + removed).
+    constraint_collection: ConstraintCollection<Regular>,
+
     #[getset(get = "pub")]
     decision_variable_dependency: AcyclicAssignments,
     #[getset(get = "pub")]
@@ -94,6 +97,23 @@ pub struct Instance {
     // These fields are public since arbitrary values can be set without validation.
     pub parameters: Option<v1::Parameters>,
     pub description: Option<v1::instance::Description>,
+}
+
+impl Instance {
+    /// Active constraints.
+    pub fn constraints(&self) -> &BTreeMap<ConstraintID, Constraint> {
+        self.constraint_collection.active()
+    }
+
+    /// Removed constraints.
+    pub fn removed_constraints(&self) -> &BTreeMap<ConstraintID, RemovedConstraint> {
+        self.constraint_collection.removed()
+    }
+
+    /// The full constraint collection (active + removed).
+    pub fn constraint_collection(&self) -> &ConstraintCollection<Regular> {
+        &self.constraint_collection
+    }
 }
 
 /// Optimization problem instance with parameters
@@ -126,10 +146,10 @@ pub struct ParametricInstance {
     decision_variables: BTreeMap<VariableID, DecisionVariable>,
     #[getset(get = "pub")]
     parameters: BTreeMap<VariableID, v1::Parameter>,
-    #[getset(get = "pub")]
-    constraints: BTreeMap<ConstraintID, Constraint>,
-    #[getset(get = "pub")]
-    removed_constraints: BTreeMap<ConstraintID, RemovedConstraint>,
+
+    /// Regular constraints collection (active + removed).
+    constraint_collection: ConstraintCollection<Regular>,
+
     #[getset(get = "pub")]
     decision_variable_dependency: AcyclicAssignments,
     #[getset(get = "pub")]
@@ -147,4 +167,16 @@ pub struct ParametricInstance {
     // Optional fields for additional metadata.
     // These fields are public since arbitrary values can be set without validation.
     pub description: Option<v1::instance::Description>,
+}
+
+impl ParametricInstance {
+    /// Active constraints.
+    pub fn constraints(&self) -> &BTreeMap<ConstraintID, Constraint> {
+        self.constraint_collection.active()
+    }
+
+    /// Removed constraints.
+    pub fn removed_constraints(&self) -> &BTreeMap<ConstraintID, RemovedConstraint> {
+        self.constraint_collection.removed()
+    }
 }

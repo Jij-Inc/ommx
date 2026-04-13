@@ -1,4 +1,5 @@
 use super::*;
+use crate::constraint_type::ConstraintCollection;
 use std::ops::Neg;
 
 impl Instance {
@@ -41,8 +42,7 @@ impl From<Instance> for ParametricInstance {
             sense,
             objective,
             decision_variables,
-            constraints,
-            removed_constraints,
+            constraint_collection,
             decision_variable_dependency,
             constraint_hints,
             description,
@@ -55,8 +55,7 @@ impl From<Instance> for ParametricInstance {
             objective,
             decision_variables,
             parameters: BTreeMap::default(),
-            constraints,
-            removed_constraints,
+            constraint_collection,
             decision_variable_dependency,
             constraint_hints,
             description,
@@ -106,7 +105,7 @@ impl ParametricInstance {
         let mut objective = self.objective;
         objective.partial_evaluate(&state, atol)?;
 
-        let mut constraints = self.constraints;
+        let (mut constraints, removed_constraints) = self.constraint_collection.into_parts();
         for (_, constraint) in constraints.iter_mut() {
             constraint.stage.function.partial_evaluate(&state, atol)?;
         }
@@ -120,9 +119,8 @@ impl ParametricInstance {
             sense: self.sense,
             objective,
             decision_variables: self.decision_variables,
-            constraints,
+            constraint_collection: ConstraintCollection::new(constraints, removed_constraints),
             named_functions,
-            removed_constraints: self.removed_constraints,
             decision_variable_dependency: self.decision_variable_dependency,
             constraint_hints: self.constraint_hints,
             parameters: Some(parameters),

@@ -22,7 +22,7 @@ impl Substitute for Instance {
         // Removed constraints are not checked here; they will be substituted
         // when restored via `restore_constraint`. Constraint hints for removed
         // constraints are discarded when the constraint is removed.
-        for (constraint_id, constraint) in &self.constraints {
+        for (constraint_id, constraint) in self.constraint_collection.active() {
             let required_ids = constraint.required_ids();
             if !required_ids.is_disjoint(&substituted_variables) {
                 affected_constraint_ids.insert(*constraint_id);
@@ -36,7 +36,11 @@ impl Substitute for Instance {
         // Removed constraints are not substituted here; they will be substituted
         // when restored via `restore_constraint`.
         for constraint_id in &affected_constraint_ids {
-            if let Some(constraint) = self.constraints.get_mut(constraint_id) {
+            if let Some(constraint) = self
+                .constraint_collection
+                .active_mut()
+                .get_mut(constraint_id)
+            {
                 substitute_acyclic(&mut constraint.stage.function, acyclic)?;
             }
         }
@@ -298,12 +302,15 @@ mod tests {
         // Create objective
         let objective = Function::from(linear!(1) + linear!(2) + linear!(3));
 
-        // Create instance directly since new() only accepts active constraints
-        let mut instance =
-            Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
-
-        // Manually set removed constraints and constraint hints
-        instance.removed_constraints = removed_constraints;
+        // Create instance with both active and removed constraints
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(objective)
+            .decision_variables(decision_variables)
+            .constraints(constraints)
+            .removed_constraints(removed_constraints)
+            .build()
+            .unwrap();
         instance.constraint_hints = constraint_hints;
 
         // Before substitution, verify we have 2 OneHot constraints

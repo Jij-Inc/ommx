@@ -11,10 +11,11 @@ impl Instance {
         parameters: impl IntoIterator<Item = (String, String)>,
     ) -> Result<()> {
         let c = self
-            .constraints
+            .constraint_collection
+            .active_mut()
             .remove(&id)
             .ok_or_else(|| anyhow!("Constraint with ID {:?} not found", id))?;
-        self.removed_constraints.insert(
+        self.constraint_collection.removed_mut().insert(
             id,
             Constraint {
                 id: c.id,
@@ -41,7 +42,8 @@ impl Instance {
 
     pub fn restore_constraint(&mut self, id: ConstraintID) -> Result<()> {
         let rc = self
-            .removed_constraints
+            .constraint_collection
+            .removed()
             .get(&id)
             .ok_or_else(|| anyhow!("Removed constraint with ID {:?} not found", id))?;
 
@@ -79,8 +81,10 @@ impl Instance {
         }
 
         // Only remove from removed_constraints after all transformations succeed
-        self.removed_constraints.remove(&id);
-        self.constraints.insert(id, constraint);
+        self.constraint_collection.removed_mut().remove(&id);
+        self.constraint_collection
+            .active_mut()
+            .insert(id, constraint);
         Ok(())
     }
 }
@@ -137,8 +141,8 @@ mod tests {
             .unwrap();
 
         // Verify constraint is removed
-        assert!(instance.constraints.is_empty());
-        assert_eq!(instance.removed_constraints.len(), 1);
+        assert!(instance.constraints().is_empty());
+        assert_eq!(instance.removed_constraints().len(), 1);
 
         // Fix x1 to 3.0 using partial_evaluate on the instance
         let fix_state = v1::State {
@@ -162,13 +166,13 @@ mod tests {
         instance.restore_constraint(ConstraintID::from(1)).unwrap();
 
         // Verify constraint is restored
-        assert_eq!(instance.constraints.len(), 1);
-        assert!(instance.removed_constraints.is_empty());
+        assert_eq!(instance.constraints().len(), 1);
+        assert!(instance.removed_constraints().is_empty());
 
         // Check the restored constraint has x1 substituted
         // Original: x1 + x2 - 10
         // After substituting x1=3: 3 + x2 - 10 = x2 - 7
-        let restored_constraint = instance.constraints.get(&ConstraintID::from(1)).unwrap();
+        let restored_constraint = instance.constraints().get(&ConstraintID::from(1)).unwrap();
         let required_ids = restored_constraint.required_ids();
 
         // x1 should NOT be in the required IDs (it's been substituted)
@@ -227,8 +231,8 @@ mod tests {
             .unwrap();
 
         // Verify constraint is removed
-        assert!(instance.constraints.is_empty());
-        assert_eq!(instance.removed_constraints.len(), 1);
+        assert!(instance.constraints().is_empty());
+        assert_eq!(instance.removed_constraints().len(), 1);
 
         // Add dependency x3 = x1 + x2 using substitute_one on the instance
         // This will add the dependency to decision_variable_dependency
@@ -248,13 +252,13 @@ mod tests {
         instance.restore_constraint(ConstraintID::from(1)).unwrap();
 
         // Verify constraint is restored
-        assert_eq!(instance.constraints.len(), 1);
-        assert!(instance.removed_constraints.is_empty());
+        assert_eq!(instance.constraints().len(), 1);
+        assert!(instance.removed_constraints().is_empty());
 
         // Check the restored constraint has x3 substituted with x1 + x2
         // Original: x3 - 10
         // After substituting x3 = x1 + x2: x1 + x2 - 10
-        let restored_constraint = instance.constraints.get(&ConstraintID::from(1)).unwrap();
+        let restored_constraint = instance.constraints().get(&ConstraintID::from(1)).unwrap();
         let required_ids = restored_constraint.required_ids();
 
         // x3 should NOT be in the required IDs (it's been substituted)
@@ -339,7 +343,7 @@ mod tests {
         // Original: x3 - 10
         // After x3 = x1 + x2: x1 + x2 - 10
         // After x1 = 3: x2 - 7
-        let restored_constraint = instance.constraints.get(&ConstraintID::from(1)).unwrap();
+        let restored_constraint = instance.constraints().get(&ConstraintID::from(1)).unwrap();
         let required_ids = restored_constraint.required_ids();
 
         // x3 should NOT be in the required IDs (it's been substituted)

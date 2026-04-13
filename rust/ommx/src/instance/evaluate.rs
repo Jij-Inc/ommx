@@ -16,11 +16,11 @@ impl Evaluate for Instance {
         let objective = self.objective.evaluate(&state, atol)?;
 
         let mut evaluated_constraints = BTreeMap::default();
-        for constraint in self.constraints.values() {
+        for constraint in self.constraint_collection.active().values() {
             let evaluated = constraint.evaluate(&state, atol)?;
             evaluated_constraints.insert(*evaluated.id(), evaluated);
         }
-        for constraint in self.removed_constraints.values() {
+        for constraint in self.constraint_collection.removed().values() {
             let evaluated = constraint.evaluate(&state, atol)?;
             evaluated_constraints.insert(*evaluated.id(), evaluated);
         }
@@ -72,7 +72,7 @@ impl Evaluate for Instance {
 
         // Constraints
         let mut constraints = Vec::new();
-        for c in self.constraints.values() {
+        for c in self.constraint_collection.active().values() {
             let evaluated = c.evaluate_samples(&samples, atol)?;
             for sample_id in evaluated.infeasible_ids(atol) {
                 feasible_relaxed.insert(sample_id.into_inner(), false);
@@ -80,7 +80,7 @@ impl Evaluate for Instance {
             constraints.push(evaluated);
         }
         let mut feasible = feasible_relaxed.clone();
-        for c in self.removed_constraints.values() {
+        for c in self.constraint_collection.removed().values() {
             let v = c.evaluate_samples(&samples, atol)?;
             for sample_id in v.infeasible_ids(atol) {
                 feasible.insert(sample_id.into_inner(), false);
@@ -137,7 +137,7 @@ impl Evaluate for Instance {
         // Only partial_evaluate active constraints.
         // Removed constraints are not evaluated here; they will be substituted
         // when restored via `restore_constraint`.
-        for constraint in self.constraints.values_mut() {
+        for constraint in self.constraint_collection.active_mut().values_mut() {
             constraint.partial_evaluate(&updated_state, atol)?;
         }
         for named_function in self.named_functions.values_mut() {
