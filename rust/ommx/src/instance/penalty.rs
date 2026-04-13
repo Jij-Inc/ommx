@@ -67,22 +67,27 @@ impl Instance {
                 ..Default::default()
             };
 
-            let f = constraint.function.clone();
+            let f = constraint.function().clone();
             // Add penalty term: λ * f(x)^2
             let penalty_term = Function::from(linear!(parameter_id)) * f.clone() * f;
             objective += penalty_term;
 
             // Create removed constraint
-            let removed_constraint = RemovedConstraint {
-                constraint: constraint.clone(),
-                removed_reason: "penalty_method".to_string(),
-                removed_reason_parameters: {
-                    let mut map = std::collections::HashMap::default();
-                    map.insert(
-                        "parameter_id".to_string(),
-                        parameter_id.into_inner().to_string(),
-                    );
-                    map
+            let removed_constraint = Constraint {
+                id: constraint.id,
+                equality: constraint.equality,
+                metadata: constraint.metadata.clone(),
+                stage: crate::constraint::RemovedData {
+                    function: constraint.stage.function,
+                    removed_reason: "penalty_method".to_string(),
+                    removed_reason_parameters: {
+                        let mut map = fnv::FnvHashMap::default();
+                        map.insert(
+                            "parameter_id".to_string(),
+                            parameter_id.into_inner().to_string(),
+                        );
+                        map
+                    },
                 },
             };
 
@@ -182,14 +187,19 @@ impl Instance {
         let mut quad_sum = Function::zero();
 
         for (constraint_id, constraint) in self.constraints.into_iter() {
-            let f = constraint.function.clone();
+            let f = constraint.function().clone();
             quad_sum += f.clone() * f;
 
             // Create removed constraint
-            let removed_constraint = RemovedConstraint {
-                constraint: constraint.clone(),
-                removed_reason: "uniform_penalty_method".to_string(),
-                removed_reason_parameters: Default::default(),
+            let removed_constraint = Constraint {
+                id: constraint.id,
+                equality: constraint.equality,
+                metadata: constraint.metadata,
+                stage: crate::constraint::RemovedData {
+                    function: constraint.stage.function,
+                    removed_reason: "uniform_penalty_method".to_string(),
+                    removed_reason_parameters: Default::default(),
+                },
             };
 
             removed_constraints.insert(constraint_id, removed_constraint);
@@ -240,24 +250,22 @@ mod tests {
             ConstraintID::from(1),
             Constraint {
                 id: ConstraintID::from(1),
-                function: Function::from(linear!(1) + linear!(2) + coeff!(-1.0)),
                 equality: Equality::LessThanOrEqualToZero,
-                name: None,
-                subscripts: Vec::new(),
-                parameters: Default::default(),
-                description: None,
+                metadata: crate::constraint::ConstraintMetadata::default(),
+                stage: crate::constraint::CreatedData {
+                    function: Function::from(linear!(1) + linear!(2) + coeff!(-1.0)),
+                },
             },
         );
         constraints.insert(
             ConstraintID::from(2),
             Constraint {
                 id: ConstraintID::from(2),
-                function: Function::from(linear!(1) + coeff!(-1.0) * linear!(2)),
                 equality: Equality::EqualToZero,
-                name: None,
-                subscripts: Vec::new(),
-                parameters: Default::default(),
-                description: None,
+                metadata: crate::constraint::ConstraintMetadata::default(),
+                stage: crate::constraint::CreatedData {
+                    function: Function::from(linear!(1) + coeff!(-1.0) * linear!(2)),
+                },
             },
         );
 

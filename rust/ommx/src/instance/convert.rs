@@ -108,7 +108,7 @@ impl ParametricInstance {
 
         let mut constraints = self.constraints;
         for (_, constraint) in constraints.iter_mut() {
-            constraint.function.partial_evaluate(&state, atol)?;
+            constraint.stage.function.partial_evaluate(&state, atol)?;
         }
 
         let mut named_functions = self.named_functions;

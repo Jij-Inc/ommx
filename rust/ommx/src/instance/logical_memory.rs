@@ -43,6 +43,7 @@ crate::impl_logical_memory_profile! {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::constraint::{ConstraintMetadata, CreatedData};
     use crate::logical_memory::logical_memory_to_folded;
     use crate::{coeff, linear, Constraint, ConstraintID, DecisionVariable, Equality, Function};
     use std::collections::BTreeMap;
@@ -124,12 +125,11 @@ mod tests {
 
         let constraint = Constraint {
             id: ConstraintID::from(1),
-            function: Function::Linear(linear!(1) + linear!(2)),
             equality: Equality::LessThanOrEqualToZero,
-            name: None,
-            subscripts: vec![],
-            parameters: Default::default(),
-            description: None,
+            metadata: ConstraintMetadata::default(),
+            stage: CreatedData {
+                function: Function::Linear(linear!(1) + linear!(2)),
+            },
         };
 
         let mut constraints = BTreeMap::new();
@@ -149,13 +149,13 @@ mod tests {
         Instance.constraint_hints;ConstraintHints.sos1_constraints;Vec[stack] 24
         Instance.constraints;BTreeMap[key] 8
         Instance.constraints;BTreeMap[stack] 24
-        Instance.constraints;Constraint.description;Option[stack] 24
         Instance.constraints;Constraint.equality 1
-        Instance.constraints;Constraint.function;Linear;PolynomialBase.terms 80
         Instance.constraints;Constraint.id 8
-        Instance.constraints;Constraint.name;Option[stack] 24
-        Instance.constraints;Constraint.parameters;FnvHashMap[stack] 32
-        Instance.constraints;Constraint.subscripts;Vec[stack] 24
+        Instance.constraints;Constraint.metadata;ConstraintMetadata.description;Option[stack] 24
+        Instance.constraints;Constraint.metadata;ConstraintMetadata.name;Option[stack] 24
+        Instance.constraints;Constraint.metadata;ConstraintMetadata.parameters;FnvHashMap[stack] 32
+        Instance.constraints;Constraint.metadata;ConstraintMetadata.subscripts;Vec[stack] 24
+        Instance.constraints;Constraint.stage;CreatedData.function;Linear;PolynomialBase.terms 80
         Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[stack] 32
         Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
         Instance.decision_variables;BTreeMap[key] 16

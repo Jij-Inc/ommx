@@ -374,7 +374,11 @@ mod tests {
 
     #[test]
     fn test_parse_discards_hints_referencing_removed_constraints() {
-        use crate::{constraint::Equality, parse::Parse, Function, RemovedConstraint};
+        use crate::{
+            constraint::{ConstraintMetadata, CreatedData, Equality, RemovedData},
+            parse::Parse,
+            Function, RemovedConstraint,
+        };
 
         // Create decision variables
         let mut decision_variables = BTreeMap::new();
@@ -391,12 +395,11 @@ mod tests {
             ConstraintID::from(1),
             Constraint {
                 id: ConstraintID::from(1),
-                function: Function::Zero,
                 equality: Equality::EqualToZero,
-                name: None,
-                subscripts: Vec::new(),
-                parameters: Default::default(),
-                description: None,
+                metadata: ConstraintMetadata::default(),
+                stage: CreatedData {
+                    function: Function::Zero,
+                },
             },
         );
 
@@ -404,17 +407,14 @@ mod tests {
         removed_constraints.insert(
             ConstraintID::from(2),
             RemovedConstraint {
-                constraint: Constraint {
-                    id: ConstraintID::from(2),
+                id: ConstraintID::from(2),
+                equality: Equality::EqualToZero,
+                metadata: ConstraintMetadata::default(),
+                stage: RemovedData {
                     function: Function::Zero,
-                    equality: Equality::EqualToZero,
-                    name: None,
-                    subscripts: Vec::new(),
-                    parameters: Default::default(),
-                    description: None,
+                    removed_reason: "test".to_string(),
+                    removed_reason_parameters: Default::default(),
                 },
-                removed_reason: "test".to_string(),
-                removed_reason_parameters: Default::default(),
             },
         );
 

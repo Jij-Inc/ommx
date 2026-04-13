@@ -18,19 +18,16 @@ impl Arbitrary for Equality {
     }
 }
 
-impl Arbitrary for Constraint {
+impl Arbitrary for Constraint<Created> {
     type Parameters = PolynomialParameters;
     type Strategy = BoxedStrategy<Self>;
     fn arbitrary_with(params: Self::Parameters) -> Self::Strategy {
         (Function::arbitrary_with(params), Equality::arbitrary())
             .prop_map(|(function, equality)| Constraint {
                 id: ConstraintID(0), // Should be replaced with a unique ID, but cannot be generated here
-                function,
                 equality,
-                name: None,
-                subscripts: Vec::new(),
-                parameters: Default::default(),
-                description: None,
+                metadata: ConstraintMetadata::default(),
+                stage: CreatedData { function },
             })
             .boxed()
     }
@@ -67,7 +64,7 @@ impl Default for ConstraintIDParameters {
 pub fn arbitrary_constraints(
     id_parameters: ConstraintIDParameters,
     parameters: PolynomialParameters,
-) -> impl Strategy<Value = BTreeMap<ConstraintID, Constraint>> {
+) -> impl Strategy<Value = BTreeMap<ConstraintID, Constraint<Created>>> {
     let unique_ids_strategy = unique_integers(0, id_parameters.max_id.0, id_parameters.size);
     let constraints_strategy =
         proptest::collection::vec(Constraint::arbitrary_with(parameters), id_parameters.size);

@@ -5,6 +5,7 @@ mod logical_memory;
 mod parse;
 mod reduce_binary_power;
 mod serialize;
+pub(crate) mod stage;
 
 use crate::{
     sampled::UnknownSampleIDError, Function, SampleID, Sampled, VariableID, VariableIDSet,
@@ -13,6 +14,7 @@ pub use arbitrary::*;
 use derive_more::{Deref, From};
 use fnv::{FnvHashMap, FnvHashSet};
 use getset::Getters;
+pub use stage::{Created, CreatedData, Removed, RemovedData, Stage};
 use std::collections::BTreeMap;
 
 /// Constraint equality.
@@ -59,71 +61,97 @@ impl ConstraintID {
     }
 }
 
-/// `ommx.v1.Constraint` with validated, typed fields.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Constraint {
-    pub id: ConstraintID,
-    pub function: Function,
-    pub equality: Equality,
+/// Auxiliary metadata for constraints (excluding essential id and equality)
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ConstraintMetadata {
     pub name: Option<String>,
     pub subscripts: Vec<i64>,
     pub parameters: FnvHashMap<String, String>,
     pub description: Option<String>,
 }
 
-impl Constraint {
+/// A constraint parameterized by its lifecycle stage.
+///
+/// Common fields (`id`, `equality`, `metadata`) are always present.
+/// Stage-specific data (e.g. `function` for [`Created`], evaluation results for `Evaluated`)
+/// is stored in the `stage` field, whose type is determined by `S::Data`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Constraint<S: Stage<Self> = Created> {
+    pub id: ConstraintID,
+    pub equality: Equality,
+    pub metadata: ConstraintMetadata,
+    pub stage: S::Data,
+}
+
+// ===== Created stage (the "definition" form) =====
+
+impl Constraint<Created> {
+    /// Access the constraint function.
+    pub fn function(&self) -> &Function {
+        &self.stage.function
+    }
+
+    /// Mutable access to the constraint function.
+    pub fn function_mut(&mut self) -> &mut Function {
+        &mut self.stage.function
+    }
+
     pub fn equal_to_zero(id: ConstraintID, function: Function) -> Self {
         Self {
             id,
-            function,
             equality: Equality::EqualToZero,
-            name: None,
-            subscripts: Vec::new(),
-            parameters: FnvHashMap::default(),
-            description: None,
+            metadata: ConstraintMetadata::default(),
+            stage: CreatedData { function },
         }
     }
 
     pub fn less_than_or_equal_to_zero(id: ConstraintID, function: Function) -> Self {
         Self {
             id,
-            function,
             equality: Equality::LessThanOrEqualToZero,
-            name: None,
-            subscripts: Vec::new(),
-            parameters: FnvHashMap::default(),
-            description: None,
+            metadata: ConstraintMetadata::default(),
+            stage: CreatedData { function },
         }
     }
 }
 
-impl std::fmt::Display for Constraint {
+impl std::fmt::Display for Constraint<Created> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let equality_symbol = match self.equality {
             Equality::EqualToZero => "==",
             Equality::LessThanOrEqualToZero => "<=",
         };
-        write!(f, "Constraint({} {} 0)", self.function, equality_symbol)
+        write!(
+            f,
+            "Constraint({} {} 0)",
+            self.stage.function, equality_symbol
+        )
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct RemovedConstraint {
-    pub constraint: Constraint,
-    pub removed_reason: String,
-    pub removed_reason_parameters: FnvHashMap<String, String>,
+// ===== Removed stage =====
+
+/// Type alias for a removed constraint.
+pub type RemovedConstraint = Constraint<Removed>;
+
+impl RemovedConstraint {
+    /// Access the constraint function.
+    pub fn function(&self) -> &Function {
+        &self.stage.function
+    }
 }
 
 impl std::fmt::Display for RemovedConstraint {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let equality_symbol = match self.constraint.equality {
+        let equality_symbol = match self.equality {
             Equality::EqualToZero => "==",
             Equality::LessThanOrEqualToZero => "<=",
         };
 
-        let mut reason_str = format!("reason={}", self.removed_reason);
-        if !self.removed_reason_parameters.is_empty() {
+        let mut reason_str = format!("reason={}", self.stage.removed_reason);
+        if !self.stage.removed_reason_parameters.is_empty() {
             let params: Vec<String> = self
+                .stage
                 .removed_reason_parameters
                 .iter()
                 .map(|(k, v)| format!("{k}={v}"))
@@ -134,21 +162,14 @@ impl std::fmt::Display for RemovedConstraint {
         write!(
             f,
             "RemovedConstraint({} {} 0, {})",
-            self.constraint.function, equality_symbol, reason_str
+            self.stage.function, equality_symbol, reason_str
         )
     }
 }
 
-/// Auxiliary metadata for constraints (excluding essential id and equality)
-#[derive(Debug, Clone, PartialEq, Default)]
-pub struct ConstraintMetadata {
-    pub name: Option<String>,
-    pub subscripts: Vec<i64>,
-    pub parameters: FnvHashMap<String, String>,
-    pub description: Option<String>,
-}
+// ===== EvaluatedConstraint (not yet parameterized by Stage) =====
 
-/// Single evaluation result using the new design
+/// Single evaluation result.
 #[derive(Debug, Clone, PartialEq, Getters)]
 pub struct EvaluatedConstraint {
     #[getset(get = "pub")]
@@ -170,7 +191,7 @@ pub struct EvaluatedConstraint {
     pub metadata: ConstraintMetadata,
 }
 
-/// Multiple sample evaluation results with deduplication
+/// Multiple sample evaluation results with deduplication.
 #[derive(Debug, Clone, Getters)]
 pub struct SampledConstraint {
     #[getset(get = "pub")]

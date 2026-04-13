@@ -37,7 +37,7 @@ impl Substitute for Instance {
         // when restored via `restore_constraint`.
         for constraint_id in &affected_constraint_ids {
             if let Some(constraint) = self.constraints.get_mut(constraint_id) {
-                substitute_acyclic(&mut constraint.function, acyclic)?;
+                substitute_acyclic(&mut constraint.stage.function, acyclic)?;
             }
         }
 
@@ -103,12 +103,11 @@ mod tests {
         let mut constraints = BTreeMap::new();
         let constraint = Constraint {
             id: ConstraintID::from(1),
-            function: constraint_function,
             equality: Equality::LessThanOrEqualToZero,
-            name: None,
-            subscripts: Vec::new(),
-            parameters: Default::default(),
-            description: None,
+            metadata: crate::constraint::ConstraintMetadata::default(),
+            stage: crate::constraint::CreatedData {
+                function: constraint_function,
+            },
         };
         constraints.insert(ConstraintID::from(1), constraint);
         let _constraint_hints = ConstraintHints::default();
@@ -152,12 +151,11 @@ mod tests {
         let constraint1_function = Function::from(linear!(1) + linear!(2) + coeff!(-1.0));
         let constraint1 = Constraint {
             id: ConstraintID::from(1),
-            function: constraint1_function,
             equality: Equality::EqualToZero,
-            name: None,
-            subscripts: Vec::new(),
-            parameters: Default::default(),
-            description: None,
+            metadata: crate::constraint::ConstraintMetadata::default(),
+            stage: crate::constraint::CreatedData {
+                function: constraint1_function,
+            },
         };
         constraints.insert(ConstraintID::from(1), constraint1);
 
@@ -165,12 +163,11 @@ mod tests {
         let constraint2_function = Function::from(linear!(2) + linear!(3) + coeff!(-1.0));
         let constraint2 = Constraint {
             id: ConstraintID::from(2),
-            function: constraint2_function,
             equality: Equality::EqualToZero,
-            name: None,
-            subscripts: Vec::new(),
-            parameters: Default::default(),
-            description: None,
+            metadata: crate::constraint::ConstraintMetadata::default(),
+            stage: crate::constraint::CreatedData {
+                function: constraint2_function,
+            },
         };
         constraints.insert(ConstraintID::from(2), constraint2);
 
@@ -256,31 +253,26 @@ mod tests {
         let constraint1_function = Function::from(linear!(1) + linear!(2) + coeff!(-1.0));
         let constraint1 = Constraint {
             id: ConstraintID::from(1),
-            function: constraint1_function,
             equality: Equality::EqualToZero,
-            name: None,
-            subscripts: Vec::new(),
-            parameters: Default::default(),
-            description: None,
+            metadata: crate::constraint::ConstraintMetadata::default(),
+            stage: crate::constraint::CreatedData {
+                function: constraint1_function,
+            },
         };
         constraints.insert(ConstraintID::from(1), constraint1);
 
         // Create removed constraint that depends on x1: x1 + x3 == 1 (constraint_id=2)
         let mut removed_constraints = BTreeMap::new();
         let removed_constraint_function = Function::from(linear!(1) + linear!(3) + coeff!(-1.0));
-        let removed_constraint_inner = Constraint {
-            id: ConstraintID::from(2),
-            function: removed_constraint_function,
-            equality: Equality::EqualToZero,
-            name: None,
-            subscripts: Vec::new(),
-            parameters: Default::default(),
-            description: None,
-        };
         let removed_constraint = RemovedConstraint {
-            constraint: removed_constraint_inner,
-            removed_reason: "test".to_string(),
-            removed_reason_parameters: Default::default(),
+            id: ConstraintID::from(2),
+            equality: Equality::EqualToZero,
+            metadata: crate::constraint::ConstraintMetadata::default(),
+            stage: crate::constraint::RemovedData {
+                function: removed_constraint_function,
+                removed_reason: "test".to_string(),
+                removed_reason_parameters: Default::default(),
+            },
         };
         removed_constraints.insert(ConstraintID::from(2), removed_constraint);
 

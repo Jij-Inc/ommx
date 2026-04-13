@@ -265,7 +265,7 @@ impl Instance {
     pub fn used_decision_variable_ids(&self) -> VariableIDSet {
         let mut used = self.objective.required_ids();
         for constraint in self.constraints.values() {
-            used.extend(constraint.function.required_ids());
+            used.extend(constraint.function().required_ids());
         }
         // Note: named_functions are intentionally excluded from the "used" set.
         // They are auxiliary quantities that can reference fixed/dependent variables.
@@ -312,7 +312,7 @@ impl Instance {
         let mut used_in_constraints: BTreeMap<ConstraintID, VariableIDSet> = BTreeMap::default();
         for constraint in self.constraints.values() {
             let required_ids: VariableIDSet =
-                constraint.function.required_ids().into_iter().collect();
+                constraint.function().required_ids().into_iter().collect();
             debug_assert!(
                 required_ids.is_subset(&all),
                 "Constraints use variables not in the instance"

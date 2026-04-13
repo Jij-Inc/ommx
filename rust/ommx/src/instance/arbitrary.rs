@@ -208,7 +208,7 @@ impl Arbitrary for Instance {
                     let mut unique_ids: FnvHashSet<VariableID> =
                         objective.required_ids().into_iter().collect();
                     for c in constraints.values() {
-                        unique_ids.extend(c.function.required_ids().into_iter());
+                        unique_ids.extend(c.function().required_ids().into_iter());
                     }
                     for nf in named_functions.values() {
                         unique_ids.extend(nf.function.required_ids().into_iter());
@@ -262,7 +262,7 @@ mod tests {
                 }
             }
             for c in instance.constraints.values() {
-                for ids in c.function.keys() {
+                for ids in c.function().keys() {
                     for id in ids {
                         prop_assert!(instance.decision_variables.contains_key(&id));
                     }

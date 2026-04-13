@@ -52,7 +52,18 @@ impl Instance {
         self.validate_required_ids(constraint.required_ids())?;
         use std::collections::btree_map::Entry;
         if let Entry::Occupied(mut o) = self.removed_constraints.entry(constraint.id) {
-            let removed = std::mem::replace(&mut o.get_mut().constraint, constraint);
+            let rc = o.get_mut();
+            let old_function = std::mem::replace(&mut rc.stage.function, constraint.stage.function);
+            let old_equality = std::mem::replace(&mut rc.equality, constraint.equality);
+            let old_metadata = std::mem::replace(&mut rc.metadata, constraint.metadata);
+            let removed = Constraint {
+                id: constraint.id,
+                equality: old_equality,
+                metadata: old_metadata,
+                stage: crate::constraint::CreatedData {
+                    function: old_function,
+                },
+            };
             return Ok(Some(removed));
         }
         Ok(self.constraints.insert(constraint.id, constraint))
@@ -94,7 +105,19 @@ impl Instance {
             use std::collections::btree_map::Entry;
             let id = constraint.id;
             let old = if let Entry::Occupied(mut o) = self.removed_constraints.entry(id) {
-                Some(std::mem::replace(&mut o.get_mut().constraint, constraint))
+                let rc = o.get_mut();
+                let old_function =
+                    std::mem::replace(&mut rc.stage.function, constraint.stage.function);
+                let old_equality = std::mem::replace(&mut rc.equality, constraint.equality);
+                let old_metadata = std::mem::replace(&mut rc.metadata, constraint.metadata);
+                Some(Constraint {
+                    id,
+                    equality: old_equality,
+                    metadata: old_metadata,
+                    stage: crate::constraint::CreatedData {
+                        function: old_function,
+                    },
+                })
             } else {
                 self.constraints.insert(id, constraint)
             };
@@ -437,14 +460,14 @@ mod tests {
 
         assert_eq!(instance.constraints.len(), 1);
         assert_eq!(instance.removed_constraints.len(), 1);
-        assert_eq!(
-            instance
-                .removed_constraints
-                .get(&ConstraintID::from(2))
-                .unwrap()
-                .constraint,
-            new_constraint
-        );
+        let removed = instance
+            .removed_constraints
+            .get(&ConstraintID::from(2))
+            .unwrap();
+        assert_eq!(removed.id, new_constraint.id);
+        assert_eq!(removed.equality, new_constraint.equality);
+        assert_eq!(removed.metadata, new_constraint.metadata);
+        assert_eq!(removed.stage.function, new_constraint.stage.function);
     }
 
     #[test]

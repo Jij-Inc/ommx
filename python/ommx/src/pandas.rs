@@ -264,13 +264,13 @@ impl ToPandasEntry for ommx::Constraint {
         let dict = PyDict::new(py);
         dict.set_item("id", self.id.into_inner())?;
         set_equality(&dict, self.equality)?;
-        set_function_type(&dict, &self.function)?;
-        set_used_ids(&dict, &self.function.required_ids())?;
+        set_function_type(&dict, &self.stage.function)?;
+        set_used_ids(&dict, &self.stage.function.required_ids())?;
         set_metadata(
             &dict,
-            self.name.as_deref(),
-            &self.subscripts,
-            self.description.as_deref(),
+            self.metadata.name.as_deref(),
+            &self.metadata.subscripts,
+            self.metadata.description.as_deref(),
         )?;
         Ok(dict)
     }
@@ -279,18 +279,18 @@ impl ToPandasEntry for ommx::Constraint {
 impl ToPandasEntry for ommx::RemovedConstraint {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let dict = PyDict::new(py);
-        dict.set_item("id", self.constraint.id.into_inner())?;
-        set_equality(&dict, self.constraint.equality)?;
-        set_function_type(&dict, &self.constraint.function)?;
-        set_used_ids(&dict, &self.constraint.function.required_ids())?;
+        dict.set_item("id", self.id.into_inner())?;
+        set_equality(&dict, self.equality)?;
+        set_function_type(&dict, &self.stage.function)?;
+        set_used_ids(&dict, &self.stage.function.required_ids())?;
         set_metadata(
             &dict,
-            self.constraint.name.as_deref(),
-            &self.constraint.subscripts,
-            self.constraint.description.as_deref(),
+            self.metadata.name.as_deref(),
+            &self.metadata.subscripts,
+            self.metadata.description.as_deref(),
         )?;
-        dict.set_item("removed_reason", &self.removed_reason)?;
-        for (key, value) in &self.removed_reason_parameters {
+        dict.set_item("removed_reason", &self.stage.removed_reason)?;
+        for (key, value) in &self.stage.removed_reason_parameters {
             dict.set_item(format!("removed_reason.{key}"), value)?;
         }
         Ok(dict)

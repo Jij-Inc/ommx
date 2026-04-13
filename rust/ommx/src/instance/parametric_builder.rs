@@ -175,10 +175,10 @@ impl ParametricInstanceBuilder {
 
         // Validate that removed constraint map keys match their value's id
         for (key, value) in &self.removed_constraints {
-            if *key != value.constraint.id {
+            if *key != value.id {
                 return Err(InstanceError::InconsistentRemovedConstraintID {
                     key: *key,
-                    value_id: value.constraint.id,
+                    value_id: value.id,
                 }
                 .into());
             }
@@ -221,7 +221,7 @@ impl ParametricInstanceBuilder {
         // Validate that all variable IDs in removed_constraints are defined
         // (removed_constraints may contain fixed or dependent variable IDs)
         for removed in self.removed_constraints.values() {
-            for id in removed.constraint.required_ids() {
+            for id in removed.required_ids() {
                 if !all_variable_ids.contains(&id) {
                     return Err(InstanceError::UndefinedVariableID { id }.into());
                 }

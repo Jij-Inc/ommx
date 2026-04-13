@@ -1,4 +1,7 @@
-use crate::constraint::{Constraint, ConstraintID, Equality, RemovedConstraint};
+use crate::constraint::{
+    Constraint, ConstraintID, ConstraintMetadata, Created, CreatedData, Equality,
+    RemovedConstraint, RemovedData,
+};
 use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
 use std::mem::size_of;
 
@@ -15,10 +18,7 @@ impl LogicalMemoryProfile for Equality {
 }
 
 crate::impl_logical_memory_profile! {
-    Constraint {
-        id,
-        equality,
-        function,
+    ConstraintMetadata {
         name,
         subscripts,
         parameters,
@@ -27,10 +27,45 @@ crate::impl_logical_memory_profile! {
 }
 
 crate::impl_logical_memory_profile! {
-    RemovedConstraint {
-        constraint,
+    CreatedData {
+        function,
+    }
+}
+
+crate::impl_logical_memory_profile! {
+    RemovedData {
+        function,
         removed_reason,
         removed_reason_parameters,
+    }
+}
+
+// Constraint<Created> - manually implemented because generic types
+// cannot be used with the simple ident-based macro form.
+impl LogicalMemoryProfile for Constraint<Created> {
+    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
+        self.id
+            .visit_logical_memory(path.with("Constraint.id").as_mut(), visitor);
+        self.equality
+            .visit_logical_memory(path.with("Constraint.equality").as_mut(), visitor);
+        self.metadata
+            .visit_logical_memory(path.with("Constraint.metadata").as_mut(), visitor);
+        self.stage
+            .visit_logical_memory(path.with("Constraint.stage").as_mut(), visitor);
+    }
+}
+
+// Constraint<Removed> (aka RemovedConstraint)
+impl LogicalMemoryProfile for RemovedConstraint {
+    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
+        self.id
+            .visit_logical_memory(path.with("RemovedConstraint.id").as_mut(), visitor);
+        self.equality
+            .visit_logical_memory(path.with("RemovedConstraint.equality").as_mut(), visitor);
+        self.metadata
+            .visit_logical_memory(path.with("RemovedConstraint.metadata").as_mut(), visitor);
+        self.stage
+            .visit_logical_memory(path.with("RemovedConstraint.stage").as_mut(), visitor);
     }
 }
 
@@ -40,6 +75,7 @@ mod tests {
     use crate::constraint::ConstraintID;
     use crate::logical_memory::logical_memory_to_folded;
     use crate::{coeff, linear, Function};
+    use fnv::FnvHashMap;
 
     #[test]
     fn test_constraint_snapshot() {
@@ -48,15 +84,7 @@ mod tests {
             Function::Linear(coeff!(2.0) * linear!(1) + coeff!(3.0) * linear!(2)),
         );
         let folded = logical_memory_to_folded(&constraint);
-        insta::assert_snapshot!(folded, @r###"
-        Constraint.description;Option[stack] 24
-        Constraint.equality 1
-        Constraint.function;Linear;PolynomialBase.terms 80
-        Constraint.id 8
-        Constraint.name;Option[stack] 24
-        Constraint.parameters;FnvHashMap[stack] 32
-        Constraint.subscripts;Vec[stack] 24
-        "###);
+        insta::assert_snapshot!(folded);
     }
 
     #[test]
@@ -65,22 +93,12 @@ mod tests {
             ConstraintID::from(1),
             Function::Linear(coeff!(2.0) * linear!(1)),
         );
-        constraint.name = Some("test_constraint".to_string());
-        constraint.description = Some("A test constraint".to_string());
-        constraint.subscripts = vec![1, 2, 3];
+        constraint.metadata.name = Some("test_constraint".to_string());
+        constraint.metadata.description = Some("A test constraint".to_string());
+        constraint.metadata.subscripts = vec![1, 2, 3];
 
         let folded = logical_memory_to_folded(&constraint);
-        // Should include function, name, description, and subscripts
-        insta::assert_snapshot!(folded, @r###"
-        Constraint.description 41
-        Constraint.equality 1
-        Constraint.function;Linear;PolynomialBase.terms 56
-        Constraint.id 8
-        Constraint.name 39
-        Constraint.parameters;FnvHashMap[stack] 32
-        Constraint.subscripts 24
-        Constraint.subscripts;Vec[stack] 24
-        "###);
+        insta::assert_snapshot!(folded);
     }
 
     #[test]
@@ -90,22 +108,17 @@ mod tests {
             Function::Linear(coeff!(1.0) * linear!(3)),
         );
         let removed = RemovedConstraint {
-            constraint,
-            removed_reason: "infeasible".to_string(),
-            removed_reason_parameters: Default::default(),
+            id: constraint.id,
+            equality: constraint.equality,
+            metadata: constraint.metadata,
+            stage: RemovedData {
+                function: constraint.stage.function,
+                removed_reason: "infeasible".to_string(),
+                removed_reason_parameters: FnvHashMap::default(),
+            },
         };
 
         let folded = logical_memory_to_folded(&removed);
-        insta::assert_snapshot!(folded, @r###"
-        RemovedConstraint.constraint;Constraint.description;Option[stack] 24
-        RemovedConstraint.constraint;Constraint.equality 1
-        RemovedConstraint.constraint;Constraint.function;Linear;PolynomialBase.terms 56
-        RemovedConstraint.constraint;Constraint.id 8
-        RemovedConstraint.constraint;Constraint.name;Option[stack] 24
-        RemovedConstraint.constraint;Constraint.parameters;FnvHashMap[stack] 32
-        RemovedConstraint.constraint;Constraint.subscripts;Vec[stack] 24
-        RemovedConstraint.removed_reason 34
-        RemovedConstraint.removed_reason_parameters;FnvHashMap[stack] 32
-        "###);
+        insta::assert_snapshot!(folded);
     }
 }

@@ -1,4 +1,5 @@
 use super::*;
+use crate::constraint::RemovedData;
 use crate::ATol;
 use anyhow::{anyhow, Result};
 
@@ -15,10 +16,15 @@ impl Instance {
             .ok_or_else(|| anyhow!("Constraint with ID {:?} not found", id))?;
         self.removed_constraints.insert(
             id,
-            RemovedConstraint {
-                constraint: c,
-                removed_reason,
-                removed_reason_parameters: parameters.into_iter().collect(),
+            Constraint {
+                id: c.id,
+                equality: c.equality,
+                metadata: c.metadata,
+                stage: RemovedData {
+                    function: c.stage.function,
+                    removed_reason,
+                    removed_reason_parameters: parameters.into_iter().collect(),
+                },
             },
         );
 
@@ -40,14 +46,21 @@ impl Instance {
             .ok_or_else(|| anyhow!("Removed constraint with ID {:?} not found", id))?;
 
         // Clone the constraint first to avoid data loss if transformations fail
-        let mut constraint = rc.constraint.clone();
+        let mut constraint: Constraint<crate::constraint::Created> = Constraint {
+            id: rc.id,
+            equality: rc.equality,
+            metadata: rc.metadata.clone(),
+            stage: crate::constraint::CreatedData {
+                function: rc.stage.function.clone(),
+            },
+        };
 
         // 1. Substitute dependent variables first
         //    Dependency expansion may introduce fixed variables (e.g., x3 = x1 + x2 where x1 is fixed),
         //    so this must happen before partial_evaluate.
         if !self.decision_variable_dependency.is_empty() {
             crate::substitute_acyclic(
-                &mut constraint.function,
+                &mut constraint.stage.function,
                 &self.decision_variable_dependency,
             )?;
         }
@@ -105,12 +118,11 @@ mod tests {
         let mut constraints = BTreeMap::new();
         let constraint = Constraint {
             id: ConstraintID::from(1),
-            function: constraint_function,
             equality: Equality::LessThanOrEqualToZero,
-            name: None,
-            subscripts: Vec::new(),
-            parameters: Default::default(),
-            description: None,
+            metadata: crate::constraint::ConstraintMetadata::default(),
+            stage: crate::constraint::CreatedData {
+                function: constraint_function,
+            },
         };
         constraints.insert(ConstraintID::from(1), constraint);
 
@@ -196,12 +208,11 @@ mod tests {
         let mut constraints = BTreeMap::new();
         let constraint = Constraint {
             id: ConstraintID::from(1),
-            function: constraint_function,
             equality: Equality::LessThanOrEqualToZero,
-            name: None,
-            subscripts: Vec::new(),
-            parameters: Default::default(),
-            description: None,
+            metadata: crate::constraint::ConstraintMetadata::default(),
+            stage: crate::constraint::CreatedData {
+                function: constraint_function,
+            },
         };
         constraints.insert(ConstraintID::from(1), constraint);
 
@@ -289,12 +300,11 @@ mod tests {
         let mut constraints = BTreeMap::new();
         let constraint = Constraint {
             id: ConstraintID::from(1),
-            function: constraint_function,
             equality: Equality::LessThanOrEqualToZero,
-            name: None,
-            subscripts: Vec::new(),
-            parameters: Default::default(),
-            description: None,
+            metadata: crate::constraint::ConstraintMetadata::default(),
+            stage: crate::constraint::CreatedData {
+                function: constraint_function,
+            },
         };
         constraints.insert(ConstraintID::from(1), constraint);
         // Create instance

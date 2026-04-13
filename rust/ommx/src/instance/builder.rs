@@ -163,10 +163,10 @@ impl InstanceBuilder {
 
         // Validate that removed constraint map keys match their value's id
         for (key, value) in &self.removed_constraints {
-            if *key != value.constraint.id {
+            if *key != value.id {
                 return Err(InstanceError::InconsistentRemovedConstraintID {
                     key: *key,
-                    value_id: value.constraint.id,
+                    value_id: value.id,
                 }
                 .into());
             }
@@ -191,7 +191,7 @@ impl InstanceBuilder {
         // Validate that all variable IDs in removed_constraints are defined
         // (removed_constraints may contain fixed or dependent variable IDs)
         for removed in self.removed_constraints.values() {
-            for id in removed.constraint.required_ids() {
+            for id in removed.required_ids() {
                 if !variable_ids.contains(&id) {
                     return Err(InstanceError::UndefinedVariableID { id }.into());
                 }
@@ -393,9 +393,14 @@ mod tests {
         let constraint_id = ConstraintID::from(1);
         let constraint = Constraint::equal_to_zero(constraint_id, Function::Zero);
         let removed_constraint = RemovedConstraint {
-            constraint: constraint.clone(),
-            removed_reason: "test".to_string(),
-            removed_reason_parameters: Default::default(),
+            id: constraint_id,
+            equality: constraint.equality,
+            metadata: constraint.metadata.clone(),
+            stage: crate::constraint::RemovedData {
+                function: constraint.stage.function.clone(),
+                removed_reason: "test".to_string(),
+                removed_reason_parameters: Default::default(),
+            },
         };
 
         let err = Instance::builder()
@@ -586,9 +591,14 @@ mod tests {
         let constraint =
             Constraint::equal_to_zero(constraint_id, Function::from(linear!(999) + coeff!(1.0)));
         let removed_constraint = RemovedConstraint {
-            constraint,
-            removed_reason: "test".to_string(),
-            removed_reason_parameters: Default::default(),
+            id: constraint.id,
+            equality: constraint.equality,
+            metadata: constraint.metadata,
+            stage: crate::constraint::RemovedData {
+                function: constraint.stage.function,
+                removed_reason: "test".to_string(),
+                removed_reason_parameters: Default::default(),
+            },
         };
 
         let err = Instance::builder()
