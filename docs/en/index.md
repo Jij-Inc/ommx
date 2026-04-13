@@ -114,6 +114,7 @@ api/index
 :maxdepth: 1
 :hidden:
 
+release_note/ommx-3.0
 release_note/ommx-2.5
 release_note/ommx-2.4
 release_note/ommx-2.3
