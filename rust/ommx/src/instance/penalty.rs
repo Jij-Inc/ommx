@@ -81,14 +81,16 @@ impl Instance {
                 metadata: constraint.metadata.clone(),
                 stage: crate::constraint::RemovedData {
                     function: constraint.stage.function,
-                    removed_reason: "penalty_method".to_string(),
-                    removed_reason_parameters: {
-                        let mut map = fnv::FnvHashMap::default();
-                        map.insert(
-                            "parameter_id".to_string(),
-                            parameter_id.into_inner().to_string(),
-                        );
-                        map
+                    removed_reason: crate::constraint::RemovedReason {
+                        reason: "penalty_method".to_string(),
+                        parameters: {
+                            let mut map = fnv::FnvHashMap::default();
+                            map.insert(
+                                "parameter_id".to_string(),
+                                parameter_id.into_inner().to_string(),
+                            );
+                            map
+                        },
                     },
                 },
             };
@@ -199,8 +201,10 @@ impl Instance {
                 metadata: constraint.metadata,
                 stage: crate::constraint::RemovedData {
                     function: constraint.stage.function,
-                    removed_reason: "uniform_penalty_method".to_string(),
-                    removed_reason_parameters: Default::default(),
+                    removed_reason: crate::constraint::RemovedReason {
+                        reason: "uniform_penalty_method".to_string(),
+                        parameters: Default::default(),
+                    },
                 },
             };
 

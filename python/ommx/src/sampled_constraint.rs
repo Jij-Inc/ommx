@@ -51,7 +51,11 @@ impl SampledConstraint {
     /// Get the removal reason
     #[getter]
     pub fn removed_reason(&self) -> Option<String> {
-        self.0.stage.removed_reason.clone()
+        self.0
+            .stage
+            .removed_reason
+            .as_ref()
+            .map(|r| r.reason.clone())
     }
 
     /// Get the removal reason parameters
@@ -59,10 +63,15 @@ impl SampledConstraint {
     pub fn removed_reason_parameters(&self) -> std::collections::HashMap<String, String> {
         self.0
             .stage
-            .removed_reason_parameters
-            .iter()
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect()
+            .removed_reason
+            .as_ref()
+            .map(|r| {
+                r.parameters
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     /// Get the used decision variable IDs

@@ -1,6 +1,5 @@
 use super::*;
 use crate::{ATol, Evaluate, VariableIDSet};
-use fnv::FnvHashMap;
 
 impl Evaluate for Constraint<Created> {
     type Output = EvaluatedConstraint;
@@ -29,7 +28,6 @@ impl Evaluate for Constraint<Created> {
                 feasible,
                 used_decision_variable_ids,
                 removed_reason: None,
-                removed_reason_parameters: FnvHashMap::default(),
             },
         })
     }
@@ -60,7 +58,6 @@ impl Evaluate for Constraint<Created> {
                 feasible,
                 used_decision_variable_ids: self.stage.function.required_ids(),
                 removed_reason: None,
-                removed_reason_parameters: FnvHashMap::default(),
             },
         })
     }
@@ -101,7 +98,6 @@ impl Evaluate for RemovedConstraint {
                 feasible,
                 used_decision_variable_ids,
                 removed_reason: Some(self.stage.removed_reason.clone()),
-                removed_reason_parameters: self.stage.removed_reason_parameters.clone(),
             },
         })
     }
@@ -132,7 +128,6 @@ impl Evaluate for RemovedConstraint {
                 feasible,
                 used_decision_variable_ids: self.stage.function.required_ids(),
                 removed_reason: Some(self.stage.removed_reason.clone()),
-                removed_reason_parameters: self.stage.removed_reason_parameters.clone(),
             },
         })
     }

@@ -1,6 +1,6 @@
 use crate::constraint::{
     Constraint, ConstraintID, ConstraintMetadata, Created, CreatedData, Equality,
-    RemovedConstraint, RemovedData,
+    RemovedConstraint, RemovedData, RemovedReason,
 };
 use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
 use std::mem::size_of;
@@ -33,10 +33,16 @@ crate::impl_logical_memory_profile! {
 }
 
 crate::impl_logical_memory_profile! {
+    RemovedReason {
+        reason,
+        parameters,
+    }
+}
+
+crate::impl_logical_memory_profile! {
     RemovedData {
         function,
         removed_reason,
-        removed_reason_parameters,
     }
 }
 
@@ -113,8 +119,10 @@ mod tests {
             metadata: constraint.metadata,
             stage: RemovedData {
                 function: constraint.stage.function,
-                removed_reason: "infeasible".to_string(),
-                removed_reason_parameters: FnvHashMap::default(),
+                removed_reason: RemovedReason {
+                    reason: "infeasible".to_string(),
+                    parameters: FnvHashMap::default(),
+                },
             },
         };
 

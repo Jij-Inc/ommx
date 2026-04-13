@@ -20,6 +20,17 @@ pub struct Created;
 #[derive(Debug, Clone, PartialEq)]
 pub struct Removed;
 
+// ===== Common types =====
+
+/// Reason why a constraint was removed/relaxed.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct RemovedReason {
+    /// Short reason (e.g. method or application name that removed the constraint).
+    pub reason: String,
+    /// Arbitrary key-value parameters for debugging.
+    pub parameters: FnvHashMap<String, String>,
+}
+
 // ===== Stage data types for regular Constraint =====
 
 /// Data carried by a regular constraint in the Created stage.
@@ -32,8 +43,7 @@ pub struct CreatedData {
 #[derive(Debug, Clone, PartialEq)]
 pub struct RemovedData {
     pub function: crate::Function,
-    pub removed_reason: String,
-    pub removed_reason_parameters: FnvHashMap<String, String>,
+    pub removed_reason: RemovedReason,
 }
 
 /// The constraint has been evaluated against a single state.
@@ -53,8 +63,7 @@ pub struct EvaluatedData {
     pub feasible: bool,
     pub used_decision_variable_ids: VariableIDSet,
     pub dual_variable: Option<f64>,
-    pub removed_reason: Option<String>,
-    pub removed_reason_parameters: FnvHashMap<String, String>,
+    pub removed_reason: Option<RemovedReason>,
 }
 
 /// Data carried by a constraint in the Sampled stage.
@@ -64,8 +73,7 @@ pub struct SampledData {
     pub feasible: BTreeMap<SampleID, bool>,
     pub used_decision_variable_ids: VariableIDSet,
     pub dual_variables: Option<Sampled<f64>>,
-    pub removed_reason: Option<String>,
-    pub removed_reason_parameters: FnvHashMap<String, String>,
+    pub removed_reason: Option<RemovedReason>,
 }
 
 // ===== Stage implementations for Constraint =====

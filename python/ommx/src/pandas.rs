@@ -289,8 +289,8 @@ impl ToPandasEntry for ommx::RemovedConstraint {
             &self.metadata.subscripts,
             self.metadata.description.as_deref(),
         )?;
-        dict.set_item("removed_reason", &self.stage.removed_reason)?;
-        for (key, value) in &self.stage.removed_reason_parameters {
+        dict.set_item("removed_reason", &self.stage.removed_reason.reason)?;
+        for (key, value) in &self.stage.removed_reason.parameters {
             dict.set_item(format!("removed_reason.{key}"), value)?;
         }
         Ok(dict)
@@ -376,7 +376,7 @@ impl ToPandasEntry for ommx::EvaluatedConstraint {
             None => dict.set_item("dual_variable", &na)?,
         }
         match &self.stage.removed_reason {
-            Some(r) => dict.set_item("removed_reason", r)?,
+            Some(r) => dict.set_item("removed_reason", &r.reason)?,
             None => dict.set_item("removed_reason", &na)?,
         }
         Ok(dict)
@@ -447,16 +447,21 @@ impl<'a> ToPandasEntry for WithSampleIds<'a, ommx::SampledConstraint> {
             sc.metadata.description.as_deref(),
         )?;
         let na = get_na(py)?;
-        match sc.stage.removed_reason.as_deref() {
-            Some(r) => dict.set_item("removed_reason", r)?,
+        match &sc.stage.removed_reason {
+            Some(r) => dict.set_item("removed_reason", &r.reason)?,
             None => dict.set_item("removed_reason", &na)?,
         }
         let rr_params: Vec<String> = sc
             .stage
-            .removed_reason_parameters
-            .iter()
-            .map(|(k, v)| format!("{k}={v}"))
-            .collect();
+            .removed_reason
+            .as_ref()
+            .map(|r| {
+                r.parameters
+                    .iter()
+                    .map(|(k, v)| format!("{k}={v}"))
+                    .collect()
+            })
+            .unwrap_or_default();
         dict.set_item("removed_reason_parameters", rr_params)?;
         for &sample_id in self.sample_ids {
             let value = sc.stage.evaluated_values.get(sample_id).ok().copied();

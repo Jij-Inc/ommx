@@ -73,7 +73,6 @@ impl From<RemovedConstraint> for v1::RemovedConstraint {
         let crate::constraint::RemovedData {
             function,
             removed_reason,
-            removed_reason_parameters,
         } = value.stage;
         let inner = Constraint {
             id: value.id,
@@ -83,8 +82,8 @@ impl From<RemovedConstraint> for v1::RemovedConstraint {
         };
         Self {
             constraint: Some(inner.into()),
-            removed_reason,
-            removed_reason_parameters: removed_reason_parameters.into_iter().collect(),
+            removed_reason: removed_reason.reason,
+            removed_reason_parameters: removed_reason.parameters.into_iter().collect(),
         }
     }
 }
@@ -555,8 +554,10 @@ mod tests {
             metadata: constraint.metadata.clone(),
             stage: crate::constraint::RemovedData {
                 function: constraint.stage.function.clone(),
-                removed_reason: "test".to_string(),
-                removed_reason_parameters: Default::default(),
+                removed_reason: crate::constraint::RemovedReason {
+                    reason: "test".to_string(),
+                    parameters: Default::default(),
+                },
             },
         };
 
@@ -605,8 +606,10 @@ mod tests {
             metadata: constraint.metadata.clone(),
             stage: crate::constraint::RemovedData {
                 function: constraint.stage.function.clone(),
-                removed_reason: "test".to_string(),
-                removed_reason_parameters: Default::default(),
+                removed_reason: crate::constraint::RemovedReason {
+                    reason: "test".to_string(),
+                    parameters: Default::default(),
+                },
             },
         };
 

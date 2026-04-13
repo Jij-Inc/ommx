@@ -412,8 +412,10 @@ mod tests {
                 metadata: ConstraintMetadata::default(),
                 stage: RemovedData {
                     function: Function::Zero,
-                    removed_reason: "test".to_string(),
-                    removed_reason_parameters: Default::default(),
+                    removed_reason: crate::constraint::RemovedReason {
+                        reason: "test".to_string(),
+                        parameters: Default::default(),
+                    },
                 },
             },
         );

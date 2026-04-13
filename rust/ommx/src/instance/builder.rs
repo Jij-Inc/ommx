@@ -398,8 +398,10 @@ mod tests {
             metadata: constraint.metadata.clone(),
             stage: crate::constraint::RemovedData {
                 function: constraint.stage.function.clone(),
-                removed_reason: "test".to_string(),
-                removed_reason_parameters: Default::default(),
+                removed_reason: crate::constraint::RemovedReason {
+                    reason: "test".to_string(),
+                    parameters: Default::default(),
+                },
             },
         };
 
@@ -596,8 +598,10 @@ mod tests {
             metadata: constraint.metadata,
             stage: crate::constraint::RemovedData {
                 function: constraint.stage.function,
-                removed_reason: "test".to_string(),
-                removed_reason_parameters: Default::default(),
+                removed_reason: crate::constraint::RemovedReason {
+                    reason: "test".to_string(),
+                    parameters: Default::default(),
+                },
             },
         };
 

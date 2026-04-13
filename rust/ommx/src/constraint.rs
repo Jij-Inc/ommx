@@ -12,8 +12,8 @@ pub use arbitrary::*;
 use derive_more::{Deref, From};
 use fnv::{FnvHashMap, FnvHashSet};
 pub use stage::{
-    Created, CreatedData, Evaluated, EvaluatedData, Removed, RemovedData, SampledData,
-    SampledStage, Stage,
+    Created, CreatedData, Evaluated, EvaluatedData, Removed, RemovedData, RemovedReason,
+    SampledData, SampledStage, Stage,
 };
 
 /// Constraint equality.
@@ -147,11 +147,12 @@ impl std::fmt::Display for RemovedConstraint {
             Equality::LessThanOrEqualToZero => "<=",
         };
 
-        let mut reason_str = format!("reason={}", self.stage.removed_reason);
-        if !self.stage.removed_reason_parameters.is_empty() {
+        let mut reason_str = format!("reason={}", self.stage.removed_reason.reason);
+        if !self.stage.removed_reason.parameters.is_empty() {
             let params: Vec<String> = self
                 .stage
-                .removed_reason_parameters
+                .removed_reason
+                .parameters
                 .iter()
                 .map(|(k, v)| format!("{k}={v}"))
                 .collect();
@@ -212,8 +213,12 @@ impl From<EvaluatedConstraint> for crate::v1::EvaluatedConstraint {
             name: c.metadata.name,
             description: c.metadata.description,
             dual_variable: c.stage.dual_variable,
-            removed_reason: c.stage.removed_reason,
-            removed_reason_parameters: c.stage.removed_reason_parameters.into_iter().collect(),
+            removed_reason: c.stage.removed_reason.as_ref().map(|r| r.reason.clone()),
+            removed_reason_parameters: c
+                .stage
+                .removed_reason
+                .map(|r| r.parameters.into_iter().collect())
+                .unwrap_or_default(),
         }
     }
 }
@@ -247,7 +252,6 @@ impl SampledConstraint {
                 feasible,
                 used_decision_variable_ids: self.stage.used_decision_variable_ids.clone(),
                 removed_reason: self.stage.removed_reason.clone(),
-                removed_reason_parameters: self.stage.removed_reason_parameters.clone(),
             },
         })
     }
@@ -322,8 +326,12 @@ impl From<SampledConstraint> for crate::v1::SampledConstraint {
             subscripts: c.metadata.subscripts,
             parameters: c.metadata.parameters.into_iter().collect(),
             description: c.metadata.description,
-            removed_reason: c.stage.removed_reason,
-            removed_reason_parameters: c.stage.removed_reason_parameters.into_iter().collect(),
+            removed_reason: c.stage.removed_reason.as_ref().map(|r| r.reason.clone()),
+            removed_reason_parameters: c
+                .stage
+                .removed_reason
+                .map(|r| r.parameters.into_iter().collect())
+                .unwrap_or_default(),
             evaluated_values: Some(evaluated_values),
             used_decision_variable_ids: c
                 .stage

@@ -87,8 +87,10 @@ impl Parse for v1::RemovedConstraint {
             metadata: inner.metadata,
             stage: RemovedData {
                 function: inner.stage.function,
-                removed_reason: self.removed_reason,
-                removed_reason_parameters: self.removed_reason_parameters.into_iter().collect(),
+                removed_reason: RemovedReason {
+                    reason: self.removed_reason,
+                    parameters: self.removed_reason_parameters.into_iter().collect(),
+                },
             },
         })
     }
@@ -172,8 +174,19 @@ impl Parse for v1::EvaluatedConstraint {
                     .into_iter()
                     .map(VariableID::from)
                     .collect(),
-                removed_reason: self.removed_reason,
-                removed_reason_parameters: self.removed_reason_parameters.into_iter().collect(),
+                removed_reason: if self.removed_reason.is_some() {
+                    Some(RemovedReason {
+                        reason: self.removed_reason.unwrap_or_default(),
+                        parameters: self.removed_reason_parameters.into_iter().collect(),
+                    })
+                } else if !self.removed_reason_parameters.is_empty() {
+                    Some(RemovedReason {
+                        reason: String::new(),
+                        parameters: self.removed_reason_parameters.into_iter().collect(),
+                    })
+                } else {
+                    None
+                },
             },
         })
     }
@@ -221,8 +234,19 @@ impl Parse for v1::SampledConstraint {
                     .into_iter()
                     .map(VariableID::from)
                     .collect(),
-                removed_reason: self.removed_reason,
-                removed_reason_parameters: self.removed_reason_parameters.into_iter().collect(),
+                removed_reason: if self.removed_reason.is_some() {
+                    Some(RemovedReason {
+                        reason: self.removed_reason.unwrap_or_default(),
+                        parameters: self.removed_reason_parameters.into_iter().collect(),
+                    })
+                } else if !self.removed_reason_parameters.is_empty() {
+                    Some(RemovedReason {
+                        reason: String::new(),
+                        parameters: self.removed_reason_parameters.into_iter().collect(),
+                    })
+                } else {
+                    None
+                },
             },
         })
     }

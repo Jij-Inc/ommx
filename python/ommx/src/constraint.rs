@@ -318,10 +318,12 @@ impl RemovedConstraint {
             metadata: constraint.0.metadata,
             stage: ommx::RemovedData {
                 function: constraint.0.stage.function,
-                removed_reason,
-                removed_reason_parameters: removed_reason_parameters
-                    .map(|params| params.into_iter().collect::<FnvHashMap<_, _>>())
-                    .unwrap_or_default(),
+                removed_reason: ommx::RemovedReason {
+                    reason: removed_reason,
+                    parameters: removed_reason_parameters
+                        .map(|params| params.into_iter().collect::<FnvHashMap<_, _>>())
+                        .unwrap_or_default(),
+                },
             },
         };
 
@@ -342,14 +344,15 @@ impl RemovedConstraint {
 
     #[getter]
     pub fn removed_reason(&self) -> String {
-        self.0.stage.removed_reason.clone()
+        self.0.stage.removed_reason.reason.clone()
     }
 
     #[getter]
     pub fn removed_reason_parameters(&self) -> HashMap<String, String> {
         self.0
             .stage
-            .removed_reason_parameters
+            .removed_reason
+            .parameters
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect()

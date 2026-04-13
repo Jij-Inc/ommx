@@ -60,7 +60,11 @@ impl EvaluatedConstraint {
     /// Get the removal reason
     #[getter]
     pub fn removed_reason(&self) -> Option<String> {
-        self.0.stage.removed_reason.clone()
+        self.0
+            .stage
+            .removed_reason
+            .as_ref()
+            .map(|r| r.reason.clone())
     }
 
     /// Get the constraint name

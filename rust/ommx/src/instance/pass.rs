@@ -23,8 +23,10 @@ impl Instance {
                 metadata: c.metadata,
                 stage: RemovedData {
                     function: c.stage.function,
-                    removed_reason,
-                    removed_reason_parameters: parameters.into_iter().collect(),
+                    removed_reason: crate::constraint::RemovedReason {
+                        reason: removed_reason,
+                        parameters: parameters.into_iter().collect(),
+                    },
                 },
             },
         );

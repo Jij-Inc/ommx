@@ -274,8 +274,10 @@ mod tests {
             metadata: crate::constraint::ConstraintMetadata::default(),
             stage: crate::constraint::RemovedData {
                 function: removed_constraint_function,
-                removed_reason: "test".to_string(),
-                removed_reason_parameters: Default::default(),
+                removed_reason: crate::constraint::RemovedReason {
+                    reason: "test".to_string(),
+                    parameters: Default::default(),
+                },
             },
         };
         removed_constraints.insert(ConstraintID::from(2), removed_constraint);
