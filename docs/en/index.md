@@ -120,9 +120,9 @@ release_note/ommx-2.3
 release_note/ommx-2.2
 release_note/ommx-2.1
 release_note/ommx-2.0
-release_note/ommx-1.9.0
-release_note/ommx-1.8.0
-release_note/ommx-1.7.0
-release_note/ommx-1.6.0
-release_note/ommx-1.5.0
+release_note/ommx-1.9
+release_note/ommx-1.8
+release_note/ommx-1.7
+release_note/ommx-1.6
+release_note/ommx-1.5
 ```
