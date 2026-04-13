@@ -44,6 +44,15 @@ dev = [
     { name = "syrupy", specifier = ">=4.7.2" },
     { name = "tomlkit", specifier = ">=0.13.2" },
 ]
+docs = [
+    { name = "myst-nb", specifier = ">=1.0.0" },
+    { name = "sphinx", specifier = ">=7.4.7" },
+    { name = "sphinx-autoapi", specifier = ">=3.5.0" },
+    { name = "sphinx-book-theme", specifier = ">=1.1.4" },
+    { name = "sphinx-fontawesome", specifier = ">=0.0.6" },
+    { name = "sphinxcontrib-katex", specifier = ">=0.9.11" },
+    { name = "tomlkit", specifier = ">=0.13.2" },
+]
 
 [[package]]
 name = "accessible-pygments"
