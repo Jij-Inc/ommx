@@ -18,11 +18,11 @@ kernelspec:
 Consider the following knapsack problem.
 
 $$
-\begin{align*}
+\begin{aligned}
 \text{maximize} \quad & \sum_{i=1}^{N} p_i x_i \\
 \text{subject to} \quad & \sum_{i=1}^{N} w_i x_i \leq W \\
 & x_i \in \{0, 1\} \quad (i=1, 2, \ldots, N)
-\end{align*}
+\end{aligned}
 $$
 
 Here, $N$ is the number of items, $p_i$ is the value of item i, $w_i$ is the weight of item i, and $W$ is the knapsack's capacity. The variable $x_i$ is binary and indicates whether item i is included in the knapsack. In `ommx.v1.Instance`, fixed values were used for $p_i$ and $w_i$, but here they are treated as parameters.

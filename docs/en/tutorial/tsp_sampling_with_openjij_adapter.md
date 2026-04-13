@@ -84,11 +84,11 @@ $$
 Combining these, TSP can be formulated as a constrained optimization problem:
 
 $$
-\begin{align*}
+\begin{aligned}
 \min \quad & \sum_{t=0}^{N-1} \sum_{i, j = 0}^{N-1} d(i, j) x_{t, i} x_{(t+1 \% N), j} \\
 \text{s.t.} \quad & \sum_{i=0}^{N-1} x_{t, i} = 1 \quad (\forall t = 0, \ldots, N-1) \\
 \quad & \sum_{t=0}^{N-1} x_{t, i} = 1 \quad (\forall i = 0, \ldots, N-1)
-\end{align*}
+\end{aligned}
 $$
 
 The corresponding `ommx.v1.Instance` can be created as follows:

@@ -3,16 +3,20 @@
 # See https://docs.readthedocs.io/en/stable/config-file/v2.html for details
 
 version: 2
+
+sphinx:
+  configuration: docs/en/conf.py
+
 build:
   os: ubuntu-24.04
   tools:
     python: "3.12"
-    nodejs: "22"
-  commands:
-    # Install jupyter-book only (no ommx packages needed since execution is off by default)
-    - pip install "jupyter-book>=1.0.3,<2"
-    # Build (code execution is off by default, tested in CI)
-    - jupyter-book build docs/en
-    # Move output to RTD expected location
-    - mkdir -p $READTHEDOCS_OUTPUT/html
-    - cp -r docs/en/_build/html/* $READTHEDOCS_OUTPUT/html/
+  jobs:
+    pre_create_environment:
+      - asdf plugin add uv
+      - asdf install uv latest
+      - asdf global uv latest
+    create_environment:
+      - uv venv "${READTHEDOCS_VIRTUALENV_PATH}"
+    install:
+      - UV_PROJECT_ENVIRONMENT="${READTHEDOCS_VIRTUALENV_PATH}" uv sync --frozen --only-group docs

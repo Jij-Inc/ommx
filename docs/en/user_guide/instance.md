@@ -23,11 +23,11 @@ kernelspec:
 For example, let's consider a simple optimization problem:
 
 $$
-\begin{align}
+\begin{aligned}
 \max \quad & x + y \\
 \text{subject to} \quad & x y  = 0 \\
 & x, y \in \{0, 1\}
-\end{align}
+\end{aligned}
 $$
 
 The corresponding `ommx.v1.Instance` is as follows.

@@ -534,11 +534,11 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
 Let's sample from the following optimization problem using our Adapter:
 
 $$
-\begin{align*}
+\begin{aligned}
 \max & \quad x_0 + x_1 \\
 \text{s.t.} & \quad x_0 \cdot x_1 = 1 \\
 & \quad x_0, x_1 \in \{0, 1\}
-\end{align*}
+\end{aligned}
 $$
 
 ```{code-cell} ipython3

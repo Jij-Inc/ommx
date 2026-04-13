@@ -124,12 +124,12 @@ display(instance.constraints)
 挙動を理解するために次の簡単な最適化問題を考えましょう
 
 $$
-\begin{align*}
+\begin{aligned}
     \max &\quad x_0 + x_1 + x_2 \\
     \text{s.t.} &\quad x_0 + x_1 \leq 1 \\
                 &\quad x_1 + x_2 \leq 1 \\
     &\quad x_1, x_2, x_3 \in \{0, 1\}
-\end{align*}
+\end{aligned}
 $$
 
 ```{code-cell} ipython3

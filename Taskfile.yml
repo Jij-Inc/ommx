@@ -3,9 +3,6 @@
 version: "3"
 
 includes:
-  api_reference:
-    taskfile: docs/api_reference/Taskfile.yml
-    dir: docs/api_reference
   book_ja:
     taskfile: docs/ja/Taskfile.yml
     dir: docs/ja

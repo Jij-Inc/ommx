@@ -1,20 +1,24 @@
+"""Shared Sphinx configuration for OMMX documentation (en/ja)."""
+
+import os
 import sys
 from pathlib import Path
 
-import sphinx_rtd_theme
 import tomlkit
 
 # -- Path setup --------------------------------------------------------------
 
-here = Path(__file__).parent
-python_root = here.parent.parent / "python"  # ${REPO_ROOT}/python
+# When exec'd from docs/en/conf.py or docs/ja/conf.py, __file__ points to the caller
+# Path(__file__).parent = docs/en/ or docs/ja/, so .parent gives docs/
+_docs_root = Path(__file__).parent.parent
+python_root = _docs_root.parent / "python"
 
 # Add the API docs directory to Python path for pyo3_stub_gen_ext
-sys.path.insert(0, str(here / "api"))
+sys.path.insert(0, str(_docs_root / "api"))
 
 # -- Project information -----------------------------------------------------
 
-project = "OMMX Python SDK"
+project = "OMMX"
 copyright = "2024, Jij Inc."
 author = "Jij Inc."
 
@@ -25,31 +29,39 @@ release = version
 # -- General configuration ---------------------------------------------------
 
 extensions = [
+    "myst_nb",
     "sphinx.ext.autodoc",
     "sphinx.ext.intersphinx",
-    "sphinx_rtd_theme",
     "sphinx_fontawesome",
-    "myst_parser",
+    "sphinxcontrib.katex",
     "autoapi.extension",
     "pyo3_stub_gen_ext",
 ]
+
 source_suffix = {
     ".rst": "restructuredtext",
-    ".md": "markdown",
 }
 
-myst_enable_extensions = ["dollarmath"]
-
-templates_path = ["_templates"]
-language = "en"
+templates_path = []
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+
+# -- MyST / myst-nb settings ------------------------------------------------
+
+myst_enable_extensions = ["dollarmath"]
+myst_update_mathjax = False
+
+# Allow overriding execution mode via environment variable (e.g. OMMX_NB_EXECUTION=force)
+nb_execution_mode = os.environ.get("OMMX_NB_EXECUTION", "off")
+nb_execution_timeout = 300
+nb_execution_excludepatterns = ["release_note/ommx-1.*.md"]
 
 # -- Options for HTML output -------------------------------------------------
 
-html_theme = "sphinx_rtd_theme"
-html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
+html_theme = "sphinx_book_theme"
 html_show_sourcelink = False
 html_static_path = []
+html_favicon = "../logo.png"
+html_logo = "../logo.png"
 
 # Display class names only, without module prefix
 add_module_names = False

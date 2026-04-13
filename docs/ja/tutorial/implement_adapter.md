@@ -529,11 +529,11 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
 動作確認のため、これを使って次の最適化問題からサンプリングを行ってみましょう
 
 $$
-\begin{align*}
+\begin{aligned}
 \max & \quad x_0 + x_1 \\
 \text{s.t.} & \quad x_0 \cdot x_1 = 1 \\
 & \quad x_0, x_1 \in \{0, 1\}
-\end{align*}
+\end{aligned}
 $$
 
 ```{code-cell} ipython3

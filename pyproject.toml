@@ -5,9 +5,18 @@ ommx = { workspace = true }
 members = ["python/ommx*"]
 
 [dependency-groups]
+docs = [
+  "myst-nb>=1.0.0",
+  "sphinx>=7.4.7",
+  "sphinx-autoapi>=3.5.0",
+  "sphinx-book-theme>=1.1.4",
+  "sphinx-fontawesome>=0.0.6",
+  "sphinxcontrib-katex>=0.9.11",
+  "tomlkit>=0.13.2",
+]
 dev = [
+  { include-group = "docs" },
   "ipython>=8.18.1",
-  "jupyter-book>=1.0.3,<2",
   "jupyter>=1.1.1",
   "jupyterlab>=4.3.5",
   "markdown-code-runner>=2.1.0",
@@ -24,5 +33,4 @@ dev = [
   "ruamel-yaml>=0.18.10",
   "ruff>=0.9.6",
   "syrupy>=4.7.2",
-  "tomlkit>=0.13.2",
 ]

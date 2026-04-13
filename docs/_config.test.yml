@@ -1,9 +1,0 @@
-# Test configuration for Jupyter Book
-# Overrides execute_notebooks to force for CI testing
-# Usage: jupyter-book build --config ../_config.test.yml docs/ja
-
-execute:
-  execute_notebooks: force
-  timeout: 300
-  exclude_patterns:
-    - "release_note/ommx-1.*.md"

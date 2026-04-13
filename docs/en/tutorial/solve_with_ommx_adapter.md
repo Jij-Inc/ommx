@@ -58,11 +58,11 @@ In Step 2, we convert `ommx.v1.Instance` into a PySCIPOpt `Model` object and run
 The 0-1 Knapsack problem is formulated as:
 
 $$
-\begin{align*}
+\begin{aligned}
 \mathrm{maximize} \quad & \sum_{i=0}^{N-1} v_i x_i \\
 \mathrm{s.t.} \quad & \sum_{i=0}^{n-1} w_i x_i - W \leq 0, \\
 & x_{i} \in \{ 0, 1\} 
-\end{align*}
+\end{aligned}
 $$
 
 +++
@@ -187,9 +187,9 @@ solution.constraints_df
 Specifically, the `"value"` is helpful for understanding how much slack remains in each constraint. In this case, item 0 has weight $w_0 = 11$, item 3 has weight $w_3 = 35$, and the knapsack's capacity $W$ is $47$. Therefore, for the weight constraint 
 
 $$
-\begin{align*}
+\begin{aligned}
 \sum_{i=0}^{n-1} w_i x_i - W \leq 0
-\end{align*}
+\end{aligned}
 $$
 
 the left-hand side "value" is $-1$, indicating there is exactly $1$ unit of slack under the capacity.
