@@ -6,7 +6,7 @@
 //! This is a defunctionalization of `Stage → Type` since Rust lacks higher-kinded types.
 
 use crate::{
-    constraint::{ConstraintID, EvaluatedConstraint, RemovedConstraint, SampledConstraint},
+    constraint::{ConstraintID, EvaluatedConstraint, RemovedConstraint, SampledConstraint, Stage},
     v1, ATol, Constraint, Evaluate, VariableIDSet,
 };
 use anyhow::Result;
@@ -35,13 +35,7 @@ pub trait HasConstraintID {
     fn constraint_id(&self) -> ConstraintID;
 }
 
-impl HasConstraintID for EvaluatedConstraint {
-    fn constraint_id(&self) -> ConstraintID {
-        self.id
-    }
-}
-
-impl HasConstraintID for SampledConstraint {
+impl<S: Stage<Constraint<S>>> HasConstraintID for Constraint<S> {
     fn constraint_id(&self) -> ConstraintID {
         self.id
     }
