@@ -37,13 +37,13 @@ pub trait HasConstraintID {
 
 impl HasConstraintID for EvaluatedConstraint {
     fn constraint_id(&self) -> ConstraintID {
-        *self.id()
+        self.id
     }
 }
 
 impl HasConstraintID for SampledConstraint {
     fn constraint_id(&self) -> ConstraintID {
-        *self.id()
+        self.id
     }
 }
 
@@ -210,8 +210,8 @@ mod tests {
         let results = collection.evaluate_all(&state, ATol::default()).unwrap();
 
         assert_eq!(results.len(), 2);
-        assert!(!results[&ConstraintID::from(1)].feasible());
-        assert!(!results[&ConstraintID::from(2)].feasible());
+        assert!(!results[&ConstraintID::from(1)].stage.feasible);
+        assert!(!results[&ConstraintID::from(2)].stage.feasible);
     }
 
     #[test]

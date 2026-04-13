@@ -214,13 +214,13 @@
 //!
 //! // Constraint 1: x1 + x2 - 10 <= 0, evaluated to 3 + 4 - 10 = -3
 //! let constraint1 = &evaluated_constraints[&ConstraintID::from(1)];
-//! assert_eq!(constraint1.evaluated_value(), &-3.0);
-//! assert!(constraint1.feasible()); // -3 <= 0 ✓
+//! assert_eq!(constraint1.stage.evaluated_value, -3.0);
+//! assert!(constraint1.stage.feasible); // -3 <= 0 ✓
 //!
 //! // Constraint 2: -x1 + 1 <= 0, evaluated to -3 + 1 = -2
 //! let constraint2 = &evaluated_constraints[&ConstraintID::from(2)];
-//! assert_eq!(constraint2.evaluated_value(), &-2.0);
-//! assert!(constraint2.feasible()); // -2 <= 0 ✓
+//! assert_eq!(constraint2.stage.evaluated_value, -2.0);
+//! assert!(constraint2.stage.feasible); // -2 <= 0 ✓
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 //!

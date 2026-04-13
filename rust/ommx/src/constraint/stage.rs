@@ -1,4 +1,6 @@
+use crate::{SampleID, Sampled, VariableIDSet};
 use fnv::FnvHashMap;
+use std::collections::BTreeMap;
 
 use super::Constraint;
 
@@ -34,6 +36,38 @@ pub struct RemovedData {
     pub removed_reason_parameters: FnvHashMap<String, String>,
 }
 
+/// The constraint has been evaluated against a single state.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Evaluated;
+
+/// The constraint has been evaluated against multiple samples.
+#[derive(Debug, Clone)]
+pub struct SampledStage;
+
+// ===== Stage data types for Evaluated/Sampled =====
+
+/// Data carried by a constraint in the Evaluated stage.
+#[derive(Debug, Clone, PartialEq)]
+pub struct EvaluatedData {
+    pub evaluated_value: f64,
+    pub feasible: bool,
+    pub used_decision_variable_ids: VariableIDSet,
+    pub dual_variable: Option<f64>,
+    pub removed_reason: Option<String>,
+    pub removed_reason_parameters: FnvHashMap<String, String>,
+}
+
+/// Data carried by a constraint in the Sampled stage.
+#[derive(Debug, Clone)]
+pub struct SampledData {
+    pub evaluated_values: Sampled<f64>,
+    pub feasible: BTreeMap<SampleID, bool>,
+    pub used_decision_variable_ids: VariableIDSet,
+    pub dual_variables: Option<Sampled<f64>>,
+    pub removed_reason: Option<String>,
+    pub removed_reason_parameters: FnvHashMap<String, String>,
+}
+
 // ===== Stage implementations for Constraint =====
 
 impl Stage<Constraint<Created>> for Created {
@@ -42,4 +76,12 @@ impl Stage<Constraint<Created>> for Created {
 
 impl Stage<Constraint<Removed>> for Removed {
     type Data = RemovedData;
+}
+
+impl Stage<Constraint<Evaluated>> for Evaluated {
+    type Data = EvaluatedData;
+}
+
+impl Stage<Constraint<SampledStage>> for SampledStage {
+    type Data = SampledData;
 }

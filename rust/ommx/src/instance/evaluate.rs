@@ -18,11 +18,11 @@ impl Evaluate for Instance {
         let mut evaluated_constraints = BTreeMap::default();
         for constraint in self.constraint_collection.active().values() {
             let evaluated = constraint.evaluate(&state, atol)?;
-            evaluated_constraints.insert(*evaluated.id(), evaluated);
+            evaluated_constraints.insert(evaluated.id, evaluated);
         }
         for constraint in self.constraint_collection.removed().values() {
             let evaluated = constraint.evaluate(&state, atol)?;
-            evaluated_constraints.insert(*evaluated.id(), evaluated);
+            evaluated_constraints.insert(evaluated.id, evaluated);
         }
 
         let mut decision_variables = BTreeMap::default();
@@ -101,7 +101,7 @@ impl Evaluate for Instance {
         // Reconstruct constraint values
         let mut constraints_map = std::collections::BTreeMap::new();
         for constraint in constraints {
-            constraints_map.insert(*constraint.id(), constraint);
+            constraints_map.insert(constraint.id, constraint);
         }
 
         // Reconstruct named function values

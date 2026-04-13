@@ -23,12 +23,14 @@ impl Evaluate for Constraint<Created> {
             id: self.id,
             equality: self.equality,
             metadata: self.metadata.clone(),
-            evaluated_value,
-            dual_variable: None,
-            feasible,
-            used_decision_variable_ids,
-            removed_reason: None,
-            removed_reason_parameters: FnvHashMap::default(),
+            stage: EvaluatedData {
+                evaluated_value,
+                dual_variable: None,
+                feasible,
+                used_decision_variable_ids,
+                removed_reason: None,
+                removed_reason_parameters: FnvHashMap::default(),
+            },
         })
     }
 
@@ -38,8 +40,6 @@ impl Evaluate for Constraint<Created> {
         atol: crate::ATol,
     ) -> anyhow::Result<Self::SampledOutput> {
         let evaluated_values_v1 = self.stage.function.evaluate_samples(samples, atol)?;
-
-        // Convert v1::SampledValues to Sampled<f64>
         let evaluated_values: crate::Sampled<f64> = evaluated_values_v1.try_into()?;
 
         let feasible: std::collections::BTreeMap<crate::SampleID, bool> = evaluated_values
@@ -54,12 +54,14 @@ impl Evaluate for Constraint<Created> {
             id: self.id,
             equality: self.equality,
             metadata: self.metadata.clone(),
-            evaluated_values,
-            dual_variables: None,
-            feasible,
-            used_decision_variable_ids: self.stage.function.required_ids(),
-            removed_reason: None,
-            removed_reason_parameters: FnvHashMap::default(),
+            stage: SampledData {
+                evaluated_values,
+                dual_variables: None,
+                feasible,
+                used_decision_variable_ids: self.stage.function.required_ids(),
+                removed_reason: None,
+                removed_reason_parameters: FnvHashMap::default(),
+            },
         })
     }
 
@@ -93,12 +95,14 @@ impl Evaluate for RemovedConstraint {
             id: self.id,
             equality: self.equality,
             metadata: self.metadata.clone(),
-            evaluated_value,
-            dual_variable: None,
-            feasible,
-            used_decision_variable_ids,
-            removed_reason: Some(self.stage.removed_reason.clone()),
-            removed_reason_parameters: self.stage.removed_reason_parameters.clone(),
+            stage: EvaluatedData {
+                evaluated_value,
+                dual_variable: None,
+                feasible,
+                used_decision_variable_ids,
+                removed_reason: Some(self.stage.removed_reason.clone()),
+                removed_reason_parameters: self.stage.removed_reason_parameters.clone(),
+            },
         })
     }
 
@@ -122,12 +126,14 @@ impl Evaluate for RemovedConstraint {
             id: self.id,
             equality: self.equality,
             metadata: self.metadata.clone(),
-            evaluated_values,
-            dual_variables: None,
-            feasible,
-            used_decision_variable_ids: self.stage.function.required_ids(),
-            removed_reason: Some(self.stage.removed_reason.clone()),
-            removed_reason_parameters: self.stage.removed_reason_parameters.clone(),
+            stage: SampledData {
+                evaluated_values,
+                dual_variables: None,
+                feasible,
+                used_decision_variable_ids: self.stage.function.required_ids(),
+                removed_reason: Some(self.stage.removed_reason.clone()),
+                removed_reason_parameters: self.stage.removed_reason_parameters.clone(),
+            },
         })
     }
 

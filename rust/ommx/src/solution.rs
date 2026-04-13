@@ -186,7 +186,9 @@ impl Solution {
     /// - To check both constraints and decision variables, use [`feasible()`](Self::feasible)
     /// - To check only decision variables, use [`feasible_decision_variables()`](Self::feasible_decision_variables)
     pub fn feasible_constraints(&self) -> bool {
-        self.evaluated_constraints.values().all(|c| *c.feasible())
+        self.evaluated_constraints
+            .values()
+            .all(|c| c.stage.feasible)
     }
 
     /// Check if all constraints and decision variables are feasible
@@ -206,8 +208,8 @@ impl Solution {
     pub fn feasible_constraints_relaxed(&self) -> bool {
         self.evaluated_constraints
             .values()
-            .filter(|c| c.removed_reason().is_none())
-            .all(|c| *c.feasible())
+            .filter(|c| c.stage.removed_reason.is_none())
+            .all(|c| c.stage.feasible)
     }
 
     /// Check if all constraints and decision variables are feasible in the relaxed problem
@@ -391,7 +393,7 @@ impl Solution {
             if result.contains_key(&key) {
                 return Err(SolutionError::DuplicateSubscript { subscripts: key });
             }
-            result.insert(key, *ec.evaluated_value());
+            result.insert(key, ec.stage.evaluated_value);
         }
         Ok(result)
     }
@@ -400,7 +402,7 @@ impl Solution {
     pub fn get_constraint_value(&self, constraint_id: ConstraintID) -> Result<f64, SolutionError> {
         self.evaluated_constraints
             .get(&constraint_id)
-            .map(|c| *c.evaluated_value())
+            .map(|c| c.stage.evaluated_value)
             .ok_or(SolutionError::UnknownConstraintID { id: constraint_id })
     }
 
@@ -411,7 +413,7 @@ impl Solution {
     ) -> Result<Option<f64>, SolutionError> {
         self.evaluated_constraints
             .get(&constraint_id)
-            .map(|c| c.dual_variable)
+            .map(|c| c.stage.dual_variable)
             .ok_or(SolutionError::UnknownConstraintID { id: constraint_id })
     }
 
@@ -422,7 +424,7 @@ impl Solution {
         value: Option<f64>,
     ) -> Result<(), SolutionError> {
         if let Some(constraint) = self.evaluated_constraints.get_mut(&constraint_id) {
-            constraint.dual_variable = value;
+            constraint.stage.dual_variable = value;
             Ok(())
         } else {
             Err(SolutionError::UnknownConstraintID { id: constraint_id })
@@ -645,10 +647,10 @@ impl SolutionBuilder {
 
         // Validate constraint keys match their id
         for (key, value) in &evaluated_constraints {
-            if key != value.id() {
+            if *key != value.id {
                 return Err(SolutionError::InconsistentConstraintID {
                     key: *key,
-                    value_id: *value.id(),
+                    value_id: value.id,
                 }
                 .into());
             }
@@ -667,11 +669,11 @@ impl SolutionBuilder {
 
         // Validate all used_decision_variable_ids are in decision_variables
         for constraint in evaluated_constraints.values() {
-            for var_id in constraint.used_decision_variable_ids() {
+            for var_id in &constraint.stage.used_decision_variable_ids {
                 if !decision_variables.contains_key(var_id) {
                     return Err(SolutionError::UndefinedVariableInConstraint {
                         id: *var_id,
-                        constraint_id: *constraint.id(),
+                        constraint_id: constraint.id,
                     }
                     .into());
                 }

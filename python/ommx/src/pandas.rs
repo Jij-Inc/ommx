@@ -361,21 +361,21 @@ impl ToPandasEntry for ommx::EvaluatedConstraint {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let na = get_na(py)?;
         let dict = PyDict::new(py);
-        dict.set_item("id", self.id().into_inner())?;
-        set_equality(&dict, *self.equality())?;
-        dict.set_item("value", *self.evaluated_value())?;
-        set_used_ids(&dict, self.used_decision_variable_ids())?;
+        dict.set_item("id", self.id.into_inner())?;
+        set_equality(&dict, self.equality)?;
+        dict.set_item("value", self.stage.evaluated_value)?;
+        set_used_ids(&dict, &self.stage.used_decision_variable_ids)?;
         set_metadata(
             &dict,
             self.metadata.name.as_deref(),
             &self.metadata.subscripts,
             self.metadata.description.as_deref(),
         )?;
-        match self.dual_variable {
+        match self.stage.dual_variable {
             Some(v) => dict.set_item("dual_variable", v)?,
             None => dict.set_item("dual_variable", &na)?,
         }
-        match self.removed_reason() {
+        match &self.stage.removed_reason {
             Some(r) => dict.set_item("removed_reason", r)?,
             None => dict.set_item("removed_reason", &na)?,
         }
@@ -437,9 +437,9 @@ impl<'a> ToPandasEntry for WithSampleIds<'a, ommx::SampledConstraint> {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let sc = self.item;
         let dict = PyDict::new(py);
-        dict.set_item("id", sc.id().into_inner())?;
-        set_equality(&dict, *sc.equality())?;
-        set_used_ids(&dict, sc.used_decision_variable_ids())?;
+        dict.set_item("id", sc.id.into_inner())?;
+        set_equality(&dict, sc.equality)?;
+        set_used_ids(&dict, &sc.stage.used_decision_variable_ids)?;
         set_metadata(
             &dict,
             sc.metadata.name.as_deref(),
@@ -447,20 +447,21 @@ impl<'a> ToPandasEntry for WithSampleIds<'a, ommx::SampledConstraint> {
             sc.metadata.description.as_deref(),
         )?;
         let na = get_na(py)?;
-        match sc.removed_reason().as_deref() {
+        match sc.stage.removed_reason.as_deref() {
             Some(r) => dict.set_item("removed_reason", r)?,
             None => dict.set_item("removed_reason", &na)?,
         }
         let rr_params: Vec<String> = sc
-            .removed_reason_parameters()
+            .stage
+            .removed_reason_parameters
             .iter()
             .map(|(k, v)| format!("{k}={v}"))
             .collect();
         dict.set_item("removed_reason_parameters", rr_params)?;
         for &sample_id in self.sample_ids {
-            let value = sc.evaluated_values().get(sample_id).ok().copied();
+            let value = sc.stage.evaluated_values.get(sample_id).ok().copied();
             dict.set_item(format!("value.{}", sample_id.into_inner()), value)?;
-            let feas = sc.feasible().get(&sample_id).copied();
+            let feas = sc.stage.feasible.get(&sample_id).copied();
             dict.set_item(format!("feasible.{}", sample_id.into_inner()), feas)?;
         }
         Ok(dict)
