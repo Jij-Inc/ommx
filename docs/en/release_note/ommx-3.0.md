@@ -8,6 +8,8 @@ This is a pre-release version. APIs may change before the final 3.0.0 release.
 
 The theme of this release is the **complete migration from Python/Protocol Buffers to Rust/PyO3**. In 2.0.0, the core implementation was rewritten in Rust while Python wrapper classes remained for compatibility. In 3.0.0, those Python wrappers are removed entirely — all `ommx.v1` types are now direct re-exports from Rust, and the `protobuf` Python runtime dependency is eliminated.
 
+A migration guide for use with [Claude Code](https://www.anthropic.com/claude-code) and other AI assistants is available in the [Python SDK v2 to v3 Migration Guide](https://github.com/Jij-Inc/ommx/blob/main/PYTHON_SDK_MIGRATION_GUIDE.md).
+
 ### Complete Rust re-export of `ommx.v1` types ([#770](https://github.com/Jij-Inc/ommx/pull/770), [#771](https://github.com/Jij-Inc/ommx/pull/771), [#774](https://github.com/Jij-Inc/ommx/pull/774), [#775](https://github.com/Jij-Inc/ommx/pull/775))
 
 All `ommx.v1` classes — `Linear`, `Quadratic`, `Polynomial`, `Function`, `DecisionVariable`, `Parameter`, `Constraint`, `RemovedConstraint`, `NamedFunction`, `Instance`, `ParametricInstance`, `Solution`, `SampleSet` — are now direct re-exports from the Rust `_ommx_rust` module with no Python wrapper layer. This removes over 4,500 lines of Python code and eliminates the `.raw` attribute that provided access to the underlying protobuf objects.

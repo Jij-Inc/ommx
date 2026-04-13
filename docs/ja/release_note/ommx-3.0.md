@@ -8,6 +8,8 @@
 
 このリリースのテーマは **Python/Protocol BuffersからRust/PyO3への完全な移行** です。2.0.0ではコア実装がRustで書き直されましたが、互換性のためにPythonラッパークラスが残されていました。3.0.0ではそれらのPythonラッパーを完全に削除し、`ommx.v1` の全型がRustからの直接再エクスポートとなり、`protobuf` Pythonランタイム依存も排除されます。
 
+[Claude Code](https://www.anthropic.com/claude-code) などのAIアシスタントでの利用を想定したマイグレーションガイドを [Python SDK v2 to v3 Migration Guide](https://github.com/Jij-Inc/ommx/blob/main/PYTHON_SDK_MIGRATION_GUIDE.md) にまとめてあります。
+
 ### `ommx.v1` 型の完全なRust再エクスポート ([#770](https://github.com/Jij-Inc/ommx/pull/770), [#771](https://github.com/Jij-Inc/ommx/pull/771), [#774](https://github.com/Jij-Inc/ommx/pull/774), [#775](https://github.com/Jij-Inc/ommx/pull/775))
 
 `ommx.v1` の全クラス — `Linear`, `Quadratic`, `Polynomial`, `Function`, `DecisionVariable`, `Parameter`, `Constraint`, `RemovedConstraint`, `NamedFunction`, `Instance`, `ParametricInstance`, `Solution`, `SampleSet` — がRustの `_ommx_rust` モジュールからの直接再エクスポートになりました。Pythonのラッパー層がなくなり、4,500行以上のPythonコードが削除されています。基礎となるprotobufオブジェクトへのアクセスを提供していた `.raw` 属性も廃止されました。
