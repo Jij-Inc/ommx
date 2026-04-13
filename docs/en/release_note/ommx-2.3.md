@@ -20,45 +20,34 @@ New methods for quantifying constraint violations in solutions:
 
 These are useful for analyzing near-feasible solutions and implementing penalty-based methods.
 
-## Patch Releases
+## New Features (2.3.1–2.3.6)
 
-### 2.3.1
+### `NoSolutionObtained` exception (2.3.1, [#688](https://github.com/Jij-Inc/ommx/pull/688))
 
-[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.3.1-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.3.1)
+A new `ommx.adapter.NoSolutionObtained` exception distinguishes the case where a solver times out without finding any feasible solution from `InfeasibleDetected` or `UnboundedDetected`. The PySCIPOpt and Python-MIP adapters have been updated to raise the appropriate exception type.
 
-- Refine timelimit exceptions in adapters ([#688](https://github.com/Jij-Inc/ommx/pull/688))
-- Logical Memory Profiler ([#683](https://github.com/Jij-Inc/ommx/pull/683))
+### Logical Memory Profiler (2.3.1, [#683](https://github.com/Jij-Inc/ommx/pull/683))
 
-### 2.3.2
+A visitor-based logical memory profiling system that outputs flamegraph-compatible folded-stack format. Covers 13+ OMMX types via a declarative macro and is accessible from Python via `instance.logical_memory_profile()`. Useful for understanding the memory footprint of large-scale instances.
 
-[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.3.2-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.3.2)
+### `log_encode` scoped to `used_decision_variables` (2.3.3, [#696](https://github.com/Jij-Inc/ommx/pull/696))
 
-- Update PySCIPOpt dependency ([#691](https://github.com/Jij-Inc/ommx/pull/691))
-- Add quantum adapters ([#690](https://github.com/Jij-Inc/ommx/pull/690))
+`log_encode` now creates variables only for decision variables actually referenced in the objective or constraints. This avoids duplicate variable creation on repeated calls and reduces overhead for instances with many unused variables.
 
-### 2.3.3
+### Other new features
 
-[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.3.3-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.3.3)
+- (2.3.2) Quantum adapters documentation ([#690](https://github.com/Jij-Inc/ommx/pull/690))
+- (2.3.4) OMMXOpenJijAdapter supports Python 3.13 ([#704](https://github.com/Jij-Inc/ommx/pull/704))
 
-- Use only `used_decision_variables` in `log_encode` ([#696](https://github.com/Jij-Inc/ommx/pull/696))
+## Bug Fixes (2.3.1–2.3.6)
 
-### 2.3.4
+### `Function().terms` with non-zero constants (2.3.5, [#714](https://github.com/Jij-Inc/ommx/pull/714))
 
-[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.3.4-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.3.4)
+`Function.terms` was returning a raw `float` instead of a proper dict entry when the function had a non-zero constant term.
 
-- Update timelimit tests ([#695](https://github.com/Jij-Inc/ommx/pull/695))
-- OMMXOpenJijAdapter supports Python 3.13 ([#704](https://github.com/Jij-Inc/ommx/pull/704))
+## Others (2.3.1–2.3.6)
 
-### 2.3.5
-
-[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.3.5-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.3.5)
-
-- Fix: `Function().terms` method in the case of non-zero constants ([#714](https://github.com/Jij-Inc/ommx/pull/714))
-
-### 2.3.6
-
-[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.3.6-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.3.6)
-
-- Migrate Pyodide build from maturin to cibuildwheel ([#708](https://github.com/Jij-Inc/ommx/pull/708))
-- Use Python MIP 1.17 ([#724](https://github.com/Jij-Inc/ommx/pull/724))
-- Add weekly Python dependency update workflow ([#728](https://github.com/Jij-Inc/ommx/pull/728))
+- (2.3.2) Update PySCIPOpt dependency ([#691](https://github.com/Jij-Inc/ommx/pull/691))
+- (2.3.6) Migrate Pyodide build from maturin to cibuildwheel ([#708](https://github.com/Jij-Inc/ommx/pull/708))
+- (2.3.6) Use Python MIP 1.17 ([#724](https://github.com/Jij-Inc/ommx/pull/724))
+- (2.3.6) Add weekly Python dependency update workflow ([#728](https://github.com/Jij-Inc/ommx/pull/728))

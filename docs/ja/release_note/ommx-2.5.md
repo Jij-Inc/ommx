@@ -17,14 +17,12 @@
 - 解とともにドメイン固有のメトリクスを記録
 - 異なるソルバー実行間での補助量の比較
 
-### バグ修正: `extract_decision_variables` がパラメータを無視するように変更 ([#745](https://github.com/Jij-Inc/ommx/pull/745))
+## バグ修正
+
+### `extract_decision_variables` がパラメータを無視するように変更 (2.5.0, [#745](https://github.com/Jij-Inc/ommx/pull/745))
 
 `extract_decision_variables` が変数の識別にパラメータではなく添字のみを使用するように変更しました。従来は同じ添字でもパラメータが異なる変数があると抽出に失敗していました。問題インスタンス間でパラメータが変化しても添字が安定している実用的なケースでの修正です。
 
-## パッチリリース
+### 従属変数評価時のトポロジカルソート (2.5.1, [#753](https://github.com/Jij-Inc/ommx/pull/753))
 
-### 2.5.1
-
-[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.5.1-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.5.1)
-
-- 修正: 従属変数評価時のトポロジカルソート ([#753](https://github.com/Jij-Inc/ommx/pull/753))
+`populate()` が従属変数を `BTreeMap` のID順で評価していたため、低いIDの変数が高いIDの変数に依存している場合に失敗していました。`AcyclicAssignments` を構築してトポロジカル順で評価するように修正しました。

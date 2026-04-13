@@ -17,14 +17,12 @@ This feature is useful for:
 - Recording domain-specific metrics alongside solutions
 - Comparing auxiliary quantities across different solver runs
 
-### Bug fix: `extract_decision_variables` ignores parameters ([#745](https://github.com/Jij-Inc/ommx/pull/745))
+## Bug Fixes
+
+### `extract_decision_variables` ignores parameters (2.5.0, [#745](https://github.com/Jij-Inc/ommx/pull/745))
 
 `extract_decision_variables` now ignores parameters and uses only subscripts for variable identification. Previously, variables with the same subscripts but different parameters would cause extraction failures. This is a fix for practical use cases where parameters vary across problem instances but subscripts remain stable.
 
-## Patch Releases
+### Topological sort for dependent variable evaluation (2.5.1, [#753](https://github.com/Jij-Inc/ommx/pull/753))
 
-### 2.5.1
-
-[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.5.1-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.5.1)
-
-- Fix: Topological sort for dependent variable evaluation ([#753](https://github.com/Jij-Inc/ommx/pull/753))
+`populate()` was evaluating dependent variables in `BTreeMap` (ID) order, which fails when a lower-ID variable depends on a higher-ID one. Fixed by building an `AcyclicAssignments` and using its topological evaluation order.

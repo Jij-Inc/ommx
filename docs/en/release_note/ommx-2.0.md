@@ -62,94 +62,64 @@ Binary packages (wheels) for Linux aarch64 are now provided. This makes it easie
 - IaaS using high-performance ARM CPUs such as AWS Graviton and Ampere, and corresponding PaaS
 - GitHub Actions `ubuntu-24.04-arm` environment
 
-## Patch Releases
+## New Features (2.0.1–2.0.12)
 
-### 2.0.1
+### Rust-idiomatic `ParametricInstance` (2.0.3, [#566](https://github.com/Jij-Inc/ommx/pull/566))
 
-[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.0.1-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.0.1)
+The Python bindings for `ParametricInstance` were migrated from the Protocol Buffers auto-generated `ommx::v1::ParametricInstance` to a new Rust-native `ommx::ParametricInstance` with stricter validation via the `Parse` trait. Previously valid-but-semantically-invalid instances (e.g., referencing undefined variables) are now rejected at parse time with clear error messages.
 
-- Fix: `Instance.decision_variables_df` missing `substituted_value` column ([#542](https://github.com/Jij-Inc/ommx/pull/542))
-- Add `substituted_value` property and reduce binary power ([#537](https://github.com/Jij-Inc/ommx/pull/537), [#540](https://github.com/Jij-Inc/ommx/pull/540))
-- Compare `Bound` by value ([#541](https://github.com/Jij-Inc/ommx/pull/541))
+### `Instance.used_decision_variables` and `penalty_method` (2.0.3, [#572](https://github.com/Jij-Inc/ommx/pull/572), [#553](https://github.com/Jij-Inc/ommx/pull/553))
 
-### 2.0.2
+`Instance.used_decision_variables` exposes the set of decision variables actually referenced in the objective or constraints. `Instance.insert_constraint` and `Instance.penalty_method` allow adding constraints after construction and converting constrained problems to unconstrained penalty formulations.
 
-[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.0.2-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.0.2)
+### Quadratic objective and constraints in MPS format (2.0.5, [#597](https://github.com/Jij-Inc/ommx/pull/597))
 
-- Fix: Fail to restore `ConstraintHints` after relaxing constraints ([#551](https://github.com/Jij-Inc/ommx/pull/551))
-- Direct `from_bytes`/`to_bytes` in Rust SDK ([#549](https://github.com/Jij-Inc/ommx/pull/549))
-- Implement `PartialOrd<u32>` for `Degree` ([#550](https://github.com/Jij-Inc/ommx/pull/550))
+The MPS parser and writer now handle `QUADOBJ` and `QCMATRIX` sections (as used by Gurobi and similar solvers), enabling full roundtrip of quadratic programs through the MPS format.
 
-### 2.0.3
+### Partial evaluate for `ConstraintHints` (2.0.6, [#609](https://github.com/Jij-Inc/ommx/pull/609))
 
-[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.0.3-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.0.3)
+When calling `Instance.partial_evaluate`, `OneHot` and `SOS1` constraint hints now automatically propagate fixed values to dependent variables, iterated to a fixed point. This prevents adapter errors from dangling variable references after partial evaluation.
 
-- Fix: MPS I/O for Instance, handle `f64::INFINITY` in `Bound` ([#562](https://github.com/Jij-Inc/ommx/pull/562), [#577](https://github.com/Jij-Inc/ommx/pull/577))
-- Rust-idiomatic `ParametricInstance` ([#566](https://github.com/Jij-Inc/ommx/pull/566))
-- `Instance.used_decision_variables`, constraint insertion, `penalty_method` ([#572](https://github.com/Jij-Inc/ommx/pull/572), [#553](https://github.com/Jij-Inc/ommx/pull/553))
-- QPLIB parser updates ([#575](https://github.com/Jij-Inc/ommx/pull/575))
+### Configurable default absolute tolerance (2.0.6, [#610](https://github.com/Jij-Inc/ommx/pull/610))
 
-### 2.0.4
+A global absolute tolerance for feasibility checks can now be configured at runtime via `ommx.set_default_atol()` / `ommx.get_default_atol()`, or via the `OMMX_DEFAULT_ATOL` environment variable. The default remains `1e-6`.
 
-[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.0.4-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.0.4)
+### QPLIB as OMMX Artifact (2.0.9, [#640](https://github.com/Jij-Inc/ommx/pull/640))
 
-- Normalize `-0.0` to `0.0` in `Bound` ([#581](https://github.com/Jij-Inc/ommx/pull/581))
-- Set OpenJij version upper bound `<1.0.0` ([#576](https://github.com/Jij-Inc/ommx/pull/576))
+453 QPLIB benchmark instances are now packaged as OMMX Artifacts, mirroring the existing MIPLIB2017 support. Access them via `ommx.dataset.qplib(tag)` and `ommx.dataset.qplib_instance_annotations()` in Python.
 
-### 2.0.5
+### `Instance.stats()` (2.0.11, [#652](https://github.com/Jij-Inc/ommx/pull/652))
 
-[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.0.5-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.0.5)
+A new `Instance.stats()` method returns a hierarchical summary of the instance: counts of decision variables by kind (binary/integer/continuous/semi-continuous/semi-integer) and by usage (objective, constraints, fixed, dependent, irrelevant), plus active vs. removed constraint counts.
 
-- Fix: OpenJij inverted sign in objective for maximization ([#600](https://github.com/Jij-Inc/ommx/pull/600))
-- Quadratic objective/constraints in MPS ([#597](https://github.com/Jij-Inc/ommx/pull/597))
-- TSP QUBO benchmark ([#599](https://github.com/Jij-Inc/ommx/pull/599))
+### Artifact registry functions in Python API (2.0.7–2.0.12, [#622](https://github.com/Jij-Inc/ommx/pull/622), [#623](https://github.com/Jij-Inc/ommx/pull/623), [#625](https://github.com/Jij-Inc/ommx/pull/625), [#662](https://github.com/Jij-Inc/ommx/pull/662))
 
-### 2.0.6
+Local registry management functions (`get_local_registry_root`, `set_local_registry_root`, `get_image_dir`, `get_images`) were incrementally exposed to Python, with aliases added under `ommx.artifact.*` for convenience. All return `pathlib.Path` objects.
 
-[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.0.6-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.0.6)
+### Other new features
 
-- Partial evaluate for `ConstraintHints` ([#609](https://github.com/Jij-Inc/ommx/pull/609))
-- API for default `ATol` ([#610](https://github.com/Jij-Inc/ommx/pull/610))
-- Split `constraint_hints` submodule ([#608](https://github.com/Jij-Inc/ommx/pull/608))
+- (2.0.1) `substituted_value` property and binary power reduction ([#537](https://github.com/Jij-Inc/ommx/pull/537), [#540](https://github.com/Jij-Inc/ommx/pull/540))
+- (2.0.1) Compare `Bound` by value ([#541](https://github.com/Jij-Inc/ommx/pull/541))
+- (2.0.2) Direct `from_bytes`/`to_bytes` in Rust SDK ([#549](https://github.com/Jij-Inc/ommx/pull/549))
+- (2.0.2) `PartialOrd<u32>` for `Degree` ([#550](https://github.com/Jij-Inc/ommx/pull/550))
+- (2.0.3) QPLIB parser updates ([#575](https://github.com/Jij-Inc/ommx/pull/575))
+- (2.0.6) Split `constraint_hints` submodule ([#608](https://github.com/Jij-Inc/ommx/pull/608))
+- (2.0.11) ID allocation methods ([#650](https://github.com/Jij-Inc/ommx/pull/650))
 
-### 2.0.7
+## Bug Fixes (2.0.1–2.0.12)
 
-[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.0.7-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.0.7)
+### OpenJij inverted sign in objective for maximization (2.0.5, [#600](https://github.com/Jij-Inc/ommx/pull/600))
 
-- Expose local registry config functions (`get_local_registry_root`, `set_local_registry_root`) to Python ([#623](https://github.com/Jij-Inc/ommx/pull/623), [#622](https://github.com/Jij-Inc/ommx/pull/622))
+When solving maximization problems, the OpenJij adapter negated the objective to convert to a minimization problem but did not flip it back before recording the solution, causing objective values to have inverted signs.
 
-### 2.0.8
+### `ConstraintHints` not restored after relaxing constraints (2.0.2, [#551](https://github.com/Jij-Inc/ommx/pull/551))
 
-[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.0.8-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.0.8)
+Relaxing and then un-relaxing constraints could leave `ConstraintHints` in an inconsistent state.
 
-- Add alias to OMMX Local Registry APIs in `ommx.artifact.*` ([#625](https://github.com/Jij-Inc/ommx/pull/625))
+### Other bug fixes
 
-### 2.0.9
-
-[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.0.9-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.0.9)
-
-- Redistribute QPLIB as OMMX Artifact ([#640](https://github.com/Jij-Inc/ommx/pull/640))
-- Fix `to_qubo`/`to_hubo` docstrings ([#631](https://github.com/Jij-Inc/ommx/pull/631))
-
-### 2.0.10
-
-[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.0.10-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.0.10)
-
-- Fix: QPLIB annotation key format inconsistency ([#648](https://github.com/Jij-Inc/ommx/pull/648))
-- Simple QUBO example in Rust ([#647](https://github.com/Jij-Inc/ommx/pull/647))
-- Separate QPLIB tutorials ([#644](https://github.com/Jij-Inc/ommx/pull/644))
-
-### 2.0.11
-
-[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.0.11-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.0.11)
-
-- `Instance.stats()` method for Rust/Python ([#652](https://github.com/Jij-Inc/ommx/pull/652))
-- ID allocation methods ([#650](https://github.com/Jij-Inc/ommx/pull/650))
-- Dependent variables example ([#651](https://github.com/Jij-Inc/ommx/pull/651))
-
-### 2.0.12
-
-[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.0.12-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.0.12)
-
-- Expose artifact registry functions in Python API ([#662](https://github.com/Jij-Inc/ommx/pull/662))
-- Remove obsolete `tempdir` dependency with security vulnerability ([#658](https://github.com/Jij-Inc/ommx/pull/658))
+- (2.0.1) `Instance.decision_variables_df` missing `substituted_value` column ([#542](https://github.com/Jij-Inc/ommx/pull/542))
+- (2.0.3) MPS I/O for `Instance`, handle `f64::INFINITY` in `Bound` ([#562](https://github.com/Jij-Inc/ommx/pull/562), [#577](https://github.com/Jij-Inc/ommx/pull/577))
+- (2.0.4) Normalize `-0.0` to `0.0` in `Bound` ([#581](https://github.com/Jij-Inc/ommx/pull/581))
+- (2.0.9) Fix `to_qubo`/`to_hubo` docstrings ([#631](https://github.com/Jij-Inc/ommx/pull/631))
+- (2.0.10) QPLIB annotation key format inconsistency ([#648](https://github.com/Jij-Inc/ommx/pull/648))
