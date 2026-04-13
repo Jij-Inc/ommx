@@ -1,4 +1,4 @@
-# OMMX Python SDK 2.5.0
+# OMMX Python SDK 2.5.x
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.5.0-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.5.0)
 
@@ -20,3 +20,11 @@
 ### バグ修正: `extract_decision_variables` がパラメータを無視するように変更 ([#745](https://github.com/Jij-Inc/ommx/pull/745))
 
 `extract_decision_variables` が変数の識別にパラメータではなく添字のみを使用するように変更しました。従来は同じ添字でもパラメータが異なる変数があると抽出に失敗していました。問題インスタンス間でパラメータが変化しても添字が安定している実用的なケースでの修正です。
+
+## パッチリリース
+
+### 2.5.1
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.5.1-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.5.1)
+
+- 修正: 従属変数評価時のトポロジカルソート ([#753](https://github.com/Jij-Inc/ommx/pull/753))

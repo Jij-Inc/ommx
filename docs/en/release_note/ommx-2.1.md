@@ -1,4 +1,4 @@
-# OMMX Python SDK 2.1.0
+# OMMX Python SDK 2.1.x
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.1.0-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.1.0)
 

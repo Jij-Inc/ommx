@@ -1,4 +1,4 @@
-# OMMX Python SDK 2.0.0
+# OMMX Python SDK 2.0.x
 
 This is the first major version release in about a year since the [OMMX Python SDK 1.0.0](https://github.com/Jij-Inc/ommx/releases/tag/python-1.0.0) release on 2024/7/10. This version includes significant performance improvements, API enhancements with breaking changes, and the addition of new features.
 
@@ -61,3 +61,95 @@ Binary packages (wheels) for Linux aarch64 are now provided. This makes it easie
 - Use on Linux VMs such as Docker on macOS
 - IaaS using high-performance ARM CPUs such as AWS Graviton and Ampere, and corresponding PaaS
 - GitHub Actions `ubuntu-24.04-arm` environment
+
+## Patch Releases
+
+### 2.0.1
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.0.1-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.0.1)
+
+- Fix: `Instance.decision_variables_df` missing `substituted_value` column ([#542](https://github.com/Jij-Inc/ommx/pull/542))
+- Add `substituted_value` property and reduce binary power ([#537](https://github.com/Jij-Inc/ommx/pull/537), [#540](https://github.com/Jij-Inc/ommx/pull/540))
+- Compare `Bound` by value ([#541](https://github.com/Jij-Inc/ommx/pull/541))
+
+### 2.0.2
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.0.2-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.0.2)
+
+- Fix: Fail to restore `ConstraintHints` after relaxing constraints ([#551](https://github.com/Jij-Inc/ommx/pull/551))
+- Direct `from_bytes`/`to_bytes` in Rust SDK ([#549](https://github.com/Jij-Inc/ommx/pull/549))
+- Implement `PartialOrd<u32>` for `Degree` ([#550](https://github.com/Jij-Inc/ommx/pull/550))
+
+### 2.0.3
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.0.3-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.0.3)
+
+- Fix: MPS I/O for Instance, handle `f64::INFINITY` in `Bound` ([#562](https://github.com/Jij-Inc/ommx/pull/562), [#577](https://github.com/Jij-Inc/ommx/pull/577))
+- Rust-idiomatic `ParametricInstance` ([#566](https://github.com/Jij-Inc/ommx/pull/566))
+- `Instance.used_decision_variables`, constraint insertion, `penalty_method` ([#572](https://github.com/Jij-Inc/ommx/pull/572), [#553](https://github.com/Jij-Inc/ommx/pull/553))
+- QPLIB parser updates ([#575](https://github.com/Jij-Inc/ommx/pull/575))
+
+### 2.0.4
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.0.4-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.0.4)
+
+- Normalize `-0.0` to `0.0` in `Bound` ([#581](https://github.com/Jij-Inc/ommx/pull/581))
+- Set OpenJij version upper bound `<1.0.0` ([#576](https://github.com/Jij-Inc/ommx/pull/576))
+
+### 2.0.5
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.0.5-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.0.5)
+
+- Fix: OpenJij inverted sign in objective for maximization ([#600](https://github.com/Jij-Inc/ommx/pull/600))
+- Quadratic objective/constraints in MPS ([#597](https://github.com/Jij-Inc/ommx/pull/597))
+- TSP QUBO benchmark ([#599](https://github.com/Jij-Inc/ommx/pull/599))
+
+### 2.0.6
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.0.6-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.0.6)
+
+- Partial evaluate for `ConstraintHints` ([#609](https://github.com/Jij-Inc/ommx/pull/609))
+- API for default `ATol` ([#610](https://github.com/Jij-Inc/ommx/pull/610))
+- Split `constraint_hints` submodule ([#608](https://github.com/Jij-Inc/ommx/pull/608))
+
+### 2.0.7
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.0.7-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.0.7)
+
+- Expose local registry config functions (`get_local_registry_root`, `set_local_registry_root`) to Python ([#623](https://github.com/Jij-Inc/ommx/pull/623), [#622](https://github.com/Jij-Inc/ommx/pull/622))
+
+### 2.0.8
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.0.8-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.0.8)
+
+- Add alias to OMMX Local Registry APIs in `ommx.artifact.*` ([#625](https://github.com/Jij-Inc/ommx/pull/625))
+
+### 2.0.9
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.0.9-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.0.9)
+
+- Redistribute QPLIB as OMMX Artifact ([#640](https://github.com/Jij-Inc/ommx/pull/640))
+- Fix `to_qubo`/`to_hubo` docstrings ([#631](https://github.com/Jij-Inc/ommx/pull/631))
+
+### 2.0.10
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.0.10-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.0.10)
+
+- Fix: QPLIB annotation key format inconsistency ([#648](https://github.com/Jij-Inc/ommx/pull/648))
+- Simple QUBO example in Rust ([#647](https://github.com/Jij-Inc/ommx/pull/647))
+- Separate QPLIB tutorials ([#644](https://github.com/Jij-Inc/ommx/pull/644))
+
+### 2.0.11
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.0.11-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.0.11)
+
+- `Instance.stats()` method for Rust/Python ([#652](https://github.com/Jij-Inc/ommx/pull/652))
+- ID allocation methods ([#650](https://github.com/Jij-Inc/ommx/pull/650))
+- Dependent variables example ([#651](https://github.com/Jij-Inc/ommx/pull/651))
+
+### 2.0.12
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.0.12-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.0.12)
+
+- Expose artifact registry functions in Python API ([#662](https://github.com/Jij-Inc/ommx/pull/662))
+- Remove obsolete `tempdir` dependency with security vulnerability ([#658](https://github.com/Jij-Inc/ommx/pull/658))

@@ -114,12 +114,12 @@ api/index
 :maxdepth: 1
 :hidden:
 
-release_note/ommx-2.5.0
-release_note/ommx-2.4.0
-release_note/ommx-2.3.0
-release_note/ommx-2.2.0
-release_note/ommx-2.1.0
-release_note/ommx-2.0.0
+release_note/ommx-2.5
+release_note/ommx-2.4
+release_note/ommx-2.3
+release_note/ommx-2.2
+release_note/ommx-2.1
+release_note/ommx-2.0
 release_note/ommx-1.9.0
 release_note/ommx-1.8.0
 release_note/ommx-1.7.0

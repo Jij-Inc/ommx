@@ -1,4 +1,4 @@
-# OMMX Python SDK 2.5.0
+# OMMX Python SDK 2.5.x
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.5.0-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.5.0)
 
@@ -20,3 +20,11 @@ This feature is useful for:
 ### Bug fix: `extract_decision_variables` ignores parameters ([#745](https://github.com/Jij-Inc/ommx/pull/745))
 
 `extract_decision_variables` now ignores parameters and uses only subscripts for variable identification. Previously, variables with the same subscripts but different parameters would cause extraction failures. This is a fix for practical use cases where parameters vary across problem instances but subscripts remain stable.
+
+## Patch Releases
+
+### 2.5.1
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.5.1-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.5.1)
+
+- Fix: Topological sort for dependent variable evaluation ([#753](https://github.com/Jij-Inc/ommx/pull/753))
