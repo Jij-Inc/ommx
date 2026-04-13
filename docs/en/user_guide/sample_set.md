@@ -29,11 +29,11 @@ Creating a SampleSet
 Let's consider a simple optimization problem：
 
 $$
-\begin{align*}
+\begin{aligned}
     \max &\quad x_1 + 2 x_2 + 3 x_3 \\
     \text{s.t.} &\quad x_1 + x_2 + x_3 = 1 \\
     &\quad x_1, x_2, x_3 \in \{0, 1\}
-\end{align*}
+\end{aligned}
 $$
 
 ```{code-cell} ipython3

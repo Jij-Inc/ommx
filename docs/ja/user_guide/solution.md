@@ -25,11 +25,11 @@ OMMXには数理モデルの解を表す構造体がいくつか存在します
 `ommx.v1.Solution` は `ommx.v1.Instance.evaluate` メソッドに `ommx.v1.State` あるいは相当する `dict[int, float]` を渡す事で生成されます。前節で見た簡単な最適化問題
 
 $$
-\begin{align}
+\begin{aligned}
 \max \quad & x + y \\
 \text{subject to} \quad & x y  = 0 \\
 & x, y \in \{0, 1\}
-\end{align}
+\end{aligned}
 $$
 
 をここでも考えましょう。これは明らかに実行可能解 $x = 1, y = 0$ を持ちます。

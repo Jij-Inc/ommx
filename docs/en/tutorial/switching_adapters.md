@@ -17,11 +17,11 @@ Solve with multiple adapters and compare the results
 Since the OMMX Adapter provides a unified API, you can solve the same problem using multiple solvers and compare the results. Let's consider a simple knapsack problem as an example:
 
 $$
-\begin{align*}
+\begin{aligned}
 \mathrm{maximize} \quad & \sum_{i=0}^{N-1} v_i x_i \\
 \mathrm{s.t.} \quad & \sum_{i=0}^{n-1} w_i x_i - W \leq 0, \\
 & x_{i} \in \{ 0, 1\} 
-\end{align*}
+\end{aligned}
 $$
 
 ```{code-cell} ipython3

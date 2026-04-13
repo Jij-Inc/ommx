@@ -23,11 +23,11 @@ kernelspec:
 例えば簡単な最適化問題を考えましょう
 
 $$
-\begin{align}
+\begin{aligned}
 \max \quad & x + y \\
 \text{subject to} \quad & x y  = 0 \\
 & x, y \in \{0, 1\}
-\end{align}
+\end{aligned}
 $$
 
 これに対応する `ommx.v1.Instance` は次のようになります。

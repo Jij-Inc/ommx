@@ -17,11 +17,11 @@ kernelspec:
 OMMX Adapterは共通化されたAPIを持っているので、複数のソルバーを使って同じ問題を解いて結果を比較することができます。まず例として簡単なナップザック問題を考えましょう：
 
 $$
-\begin{align*}
+\begin{aligned}
 \mathrm{maximize} \quad & \sum_{i=0}^{N-1} v_i x_i \\
 \mathrm{s.t.} \quad & \sum_{i=0}^{n-1} w_i x_i - W \leq 0, \\
 & x_{i} \in \{ 0, 1\} 
-\end{align*}
+\end{aligned}
 $$
 
 ```{code-cell} ipython3

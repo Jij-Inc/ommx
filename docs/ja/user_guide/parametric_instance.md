@@ -18,11 +18,11 @@ kernelspec:
 次のナップザック問題を考えましょう。
 
 $$
-\begin{align*}
+\begin{aligned}
 \text{maximize} \quad & \sum_{i=1}^{N} p_i x_i \\
 \text{subject to} \quad & \sum_{i=1}^{N} w_i x_i \leq W \\
 & x_i \in \{0, 1\} \quad (i=1, 2, \ldots, N)
-\end{align*}
+\end{aligned}
 $$
 
 ここで、$N$はアイテムの数、$p_i$はアイテム$i$の価値、$w_i$はアイテム$i$の重さ、$W$はナップザックの容量です。$x_i$はアイテム$i$をナップザックに入れるかどうかを表すバイナリ変数です。`ommx.v1.Instance` では $p_i$ や $w_i$ は固定値を使いましたが、ここではこれらをパラメータとして扱います。
