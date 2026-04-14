@@ -91,12 +91,13 @@ impl Instance {
     /// **Returns:**
     /// A new Instance
     #[staticmethod]
-    #[pyo3(signature = (*, sense, objective, decision_variables, constraints, named_functions=None, description=None, constraint_hints=None))]
+    #[pyo3(signature = (*, sense, objective, decision_variables, constraints, indicator_constraints=None, named_functions=None, description=None, constraint_hints=None))]
     pub fn from_components(
         sense: Sense,
         objective: Function,
         decision_variables: Vec<DecisionVariable>,
         constraints: Vec<Constraint>,
+        indicator_constraints: Option<Vec<crate::IndicatorConstraint>>,
         named_functions: Option<Vec<NamedFunction>>,
         description: Option<InstanceDescription>,
         constraint_hints: Option<ConstraintHints>,
@@ -122,6 +123,17 @@ impl Instance {
             .objective(objective.0)
             .decision_variables(rust_decision_variables)
             .constraints(rust_constraints);
+
+        if let Some(ics) = indicator_constraints {
+            let mut rust_indicator_constraints = BTreeMap::new();
+            for ic in ics {
+                let id = ic.0.id;
+                if rust_indicator_constraints.insert(id, ic.0).is_some() {
+                    anyhow::bail!("Duplicate indicator constraint ID: {}", id.into_inner());
+                }
+            }
+            builder = builder.indicator_constraints(rust_indicator_constraints);
+        }
 
         if let Some(nfs) = named_functions {
             let mut rust_named_functions = BTreeMap::new();
@@ -165,6 +177,7 @@ impl Instance {
             Function(ommx::Function::Zero),
             Vec::new(),
             Vec::new(),
+            None,
             None,
             None,
             None,
@@ -235,6 +248,16 @@ impl Instance {
             .constraints()
             .values()
             .map(|constraint| Constraint(constraint.clone()))
+            .collect()
+    }
+
+    /// List of all indicator constraints in the instance sorted by their IDs.
+    #[getter]
+    pub fn indicator_constraints(&self) -> Vec<crate::IndicatorConstraint> {
+        self.inner
+            .indicator_constraints()
+            .values()
+            .map(|ic| crate::IndicatorConstraint(ic.clone()))
             .collect()
     }
 
