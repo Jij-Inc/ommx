@@ -201,6 +201,7 @@ where
     }
 
     /// Consume the collection and return the active and removed maps.
+    #[allow(clippy::type_complexity)]
     pub fn into_parts(self) -> (BTreeMap<T::ID, T::Created>, BTreeMap<T::ID, T::Removed>) {
         (self.active, self.removed)
     }
