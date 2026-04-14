@@ -31,6 +31,16 @@ impl Evaluate for Instance {
             decision_variables.insert(*evaluated_dv.id(), evaluated_dv);
         }
 
+        let mut evaluated_indicator_constraints = BTreeMap::default();
+        for ic in self.indicator_constraint_collection.active().values() {
+            let evaluated = ic.evaluate(&state, atol)?;
+            evaluated_indicator_constraints.insert(evaluated.id, evaluated);
+        }
+        for ic in self.indicator_constraint_collection.removed().values() {
+            let evaluated = ic.evaluate(&state, atol)?;
+            evaluated_indicator_constraints.insert(evaluated.id, evaluated);
+        }
+
         let mut evaluated_named_functions = BTreeMap::default();
         for (id, named_function) in self.named_functions.iter() {
             let evaluated_named_function = named_function.evaluate(&state, atol)?;
@@ -44,6 +54,7 @@ impl Evaluate for Instance {
             crate::Solution::builder()
                 .objective(objective)
                 .evaluated_constraints(evaluated_constraints)
+                .evaluated_indicator_constraints(evaluated_indicator_constraints)
                 .evaluated_named_functions(evaluated_named_functions)
                 .decision_variables(decision_variables)
                 .sense(sense)

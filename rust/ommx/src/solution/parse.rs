@@ -83,6 +83,7 @@ impl Parse for crate::v1::Solution {
         let solution = Solution {
             objective,
             evaluated_constraints,
+            evaluated_indicator_constraints: BTreeMap::default(),
             evaluated_named_functions,
             decision_variables,
             optimality,

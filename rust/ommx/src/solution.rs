@@ -2,8 +2,8 @@ mod parse;
 mod serialize;
 
 use crate::{
-    ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable, EvaluatedNamedFunction,
-    NamedFunctionID, Sense, VariableID,
+    indicator_constraint::EvaluatedIndicatorConstraint, ConstraintID, EvaluatedConstraint,
+    EvaluatedDecisionVariable, EvaluatedNamedFunction, NamedFunctionID, Sense, VariableID,
 };
 use getset::Getters;
 use std::collections::{BTreeMap, BTreeSet};
@@ -117,6 +117,8 @@ pub struct Solution {
     #[getset(get = "pub")]
     evaluated_constraints: BTreeMap<ConstraintID, EvaluatedConstraint>,
     #[getset(get = "pub")]
+    evaluated_indicator_constraints: BTreeMap<ConstraintID, EvaluatedIndicatorConstraint>,
+    #[getset(get = "pub")]
     evaluated_named_functions: BTreeMap<NamedFunctionID, EvaluatedNamedFunction>,
     #[getset(get = "pub")]
     decision_variables: BTreeMap<VariableID, EvaluatedDecisionVariable>,
@@ -189,6 +191,10 @@ impl Solution {
         self.evaluated_constraints
             .values()
             .all(|c| c.stage.feasible)
+            && self
+                .evaluated_indicator_constraints
+                .values()
+                .all(|c| c.stage.feasible)
     }
 
     /// Check if all constraints and decision variables are feasible
@@ -210,6 +216,11 @@ impl Solution {
             .values()
             .filter(|c| c.stage.removed_reason.is_none())
             .all(|c| c.stage.feasible)
+            && self
+                .evaluated_indicator_constraints
+                .values()
+                .filter(|c| c.stage.removed_reason.is_none())
+                .all(|c| c.stage.feasible)
     }
 
     /// Check if all constraints and decision variables are feasible in the relaxed problem
@@ -540,6 +551,7 @@ impl Solution {
 pub struct SolutionBuilder {
     objective: Option<f64>,
     evaluated_constraints: Option<BTreeMap<ConstraintID, EvaluatedConstraint>>,
+    evaluated_indicator_constraints: BTreeMap<ConstraintID, EvaluatedIndicatorConstraint>,
     evaluated_named_functions: BTreeMap<NamedFunctionID, EvaluatedNamedFunction>,
     decision_variables: Option<BTreeMap<VariableID, EvaluatedDecisionVariable>>,
     sense: Option<Sense>,
@@ -569,6 +581,15 @@ impl SolutionBuilder {
         evaluated_constraints: BTreeMap<ConstraintID, EvaluatedConstraint>,
     ) -> Self {
         self.evaluated_constraints = Some(evaluated_constraints);
+        self
+    }
+
+    /// Sets the evaluated indicator constraints.
+    pub fn evaluated_indicator_constraints(
+        mut self,
+        evaluated_indicator_constraints: BTreeMap<ConstraintID, EvaluatedIndicatorConstraint>,
+    ) -> Self {
+        self.evaluated_indicator_constraints = evaluated_indicator_constraints;
         self
     }
 
@@ -683,6 +704,7 @@ impl SolutionBuilder {
         Ok(Solution {
             objective,
             evaluated_constraints,
+            evaluated_indicator_constraints: self.evaluated_indicator_constraints,
             evaluated_named_functions: self.evaluated_named_functions,
             decision_variables,
             optimality: self.optimality,
@@ -728,6 +750,7 @@ impl SolutionBuilder {
         Ok(Solution {
             objective,
             evaluated_constraints,
+            evaluated_indicator_constraints: self.evaluated_indicator_constraints,
             evaluated_named_functions: self.evaluated_named_functions,
             decision_variables,
             optimality: self.optimality,
