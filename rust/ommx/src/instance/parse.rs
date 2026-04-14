@@ -1,5 +1,6 @@
 use super::*;
 use crate::{
+    constraint_type::ConstraintCollection,
     parse::{as_variable_id, Parse, ParseError, RawParseError},
     v1::{self},
     Constraint, InstanceError, VariableID,
@@ -58,21 +59,31 @@ impl From<Constraint> for v1::Constraint {
         Self {
             id: *value.id,
             equality: value.equality.into(),
-            function: Some(value.function.into()),
-            name: value.name,
-            subscripts: value.subscripts,
-            parameters: value.parameters.into_iter().collect(),
-            description: value.description,
+            function: Some(value.stage.function.into()),
+            name: value.metadata.name,
+            subscripts: value.metadata.subscripts,
+            parameters: value.metadata.parameters.into_iter().collect(),
+            description: value.metadata.description,
         }
     }
 }
 
 impl From<RemovedConstraint> for v1::RemovedConstraint {
     fn from(value: RemovedConstraint) -> Self {
+        let crate::constraint::RemovedData {
+            function,
+            removed_reason,
+        } = value.stage;
+        let inner = Constraint {
+            id: value.id,
+            equality: value.equality,
+            metadata: value.metadata,
+            stage: crate::constraint::CreatedData { function },
+        };
         Self {
-            constraint: Some(value.constraint.into()),
-            removed_reason: value.removed_reason,
-            removed_reason_parameters: value.removed_reason_parameters.into_iter().collect(),
+            constraint: Some(inner.into()),
+            removed_reason: removed_reason.reason,
+            removed_reason_parameters: removed_reason.parameters.into_iter().collect(),
         }
     }
 }
@@ -162,9 +173,8 @@ impl Parse for v1::Instance {
         Ok(Instance {
             sense,
             objective,
-            constraints,
             decision_variables,
-            removed_constraints,
+            constraint_collection: ConstraintCollection::new(constraints, removed_constraints),
             decision_variable_dependency,
             parameters: self.parameters,
             description: self.description,
@@ -188,17 +198,14 @@ impl From<Instance> for v1::Instance {
             .into_values()
             .map(|dv| dv.into())
             .collect();
-        let constraints = value.constraints.into_values().map(|c| c.into()).collect();
+        let (active, removed) = value.constraint_collection.into_parts();
+        let constraints = active.into_values().map(|c| c.into()).collect();
         let named_functions = value
             .named_functions
             .into_values()
             .map(|nf| nf.into())
             .collect();
-        let removed_constraints = value
-            .removed_constraints
-            .into_values()
-            .map(|rc| rc.into())
-            .collect();
+        let removed_constraints = removed.into_values().map(|rc| rc.into()).collect();
         let decision_variable_dependency = value
             .decision_variable_dependency
             .into_iter()
@@ -329,9 +336,8 @@ impl Parse for v1::ParametricInstance {
             objective,
             decision_variables,
             parameters,
-            constraints,
+            constraint_collection: ConstraintCollection::new(constraints, removed_constraints),
             named_functions,
-            removed_constraints,
             decision_variable_dependency,
             constraint_hints,
             description: self.description,
@@ -346,14 +352,14 @@ impl From<ParametricInstance> for v1::ParametricInstance {
             objective,
             decision_variables,
             parameters,
-            constraints,
-            removed_constraints,
+            constraint_collection,
             decision_variable_dependency,
             constraint_hints,
             description,
             named_functions,
         }: ParametricInstance,
     ) -> Self {
+        let (constraints, removed_constraints) = constraint_collection.into_parts();
         Self {
             description,
             sense: v1::instance::Sense::from(sense) as i32,
@@ -543,9 +549,16 @@ mod tests {
             Function::from(linear!(1) + coeff!(1.0)),
         );
         let removed_constraint = RemovedConstraint {
-            constraint: constraint.clone(),
-            removed_reason: "test".to_string(),
-            removed_reason_parameters: Default::default(),
+            id: constraint.id,
+            equality: constraint.equality,
+            metadata: constraint.metadata.clone(),
+            stage: crate::constraint::RemovedData {
+                function: constraint.stage.function.clone(),
+                removed_reason: crate::constraint::RemovedReason {
+                    reason: "test".to_string(),
+                    parameters: Default::default(),
+                },
+            },
         };
 
         let v1_parametric_instance = v1::ParametricInstance {
@@ -588,9 +601,16 @@ mod tests {
             Function::from(linear!(1) + coeff!(1.0)),
         );
         let removed_constraint = RemovedConstraint {
-            constraint: constraint.clone(),
-            removed_reason: "test".to_string(),
-            removed_reason_parameters: Default::default(),
+            id: constraint.id,
+            equality: constraint.equality,
+            metadata: constraint.metadata.clone(),
+            stage: crate::constraint::RemovedData {
+                function: constraint.stage.function.clone(),
+                removed_reason: crate::constraint::RemovedReason {
+                    reason: "test".to_string(),
+                    parameters: Default::default(),
+                },
+            },
         };
 
         let v1_instance = v1::Instance {

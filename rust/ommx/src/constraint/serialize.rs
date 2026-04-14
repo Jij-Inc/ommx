@@ -2,7 +2,7 @@ use super::*;
 use crate::{v1, Message, Parse};
 use anyhow::Result;
 
-impl Constraint {
+impl Constraint<Created> {
     pub fn to_bytes(&self) -> Vec<u8> {
         let v1_constraint = v1::Constraint::from(self.clone());
         v1_constraint.encode_to_vec()

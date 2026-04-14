@@ -100,12 +100,16 @@ impl Constraint {
 
         let constraint = ommx::Constraint {
             id: constraint_id,
-            function: rust_function,
             equality: rust_equality,
-            name,
-            subscripts,
-            parameters: parameters.into_iter().collect(),
-            description,
+            metadata: ommx::ConstraintMetadata {
+                name,
+                subscripts,
+                parameters: parameters.into_iter().collect(),
+                description,
+            },
+            stage: ommx::CreatedData {
+                function: rust_function,
+            },
         };
 
         Ok(Self(constraint))
@@ -118,7 +122,7 @@ impl Constraint {
 
     #[getter]
     pub fn function(&self) -> Function {
-        Function(self.0.function.clone())
+        Function(self.0.stage.function.clone())
     }
 
     #[getter]
@@ -128,22 +132,23 @@ impl Constraint {
 
     #[getter]
     pub fn name(&self) -> Option<String> {
-        self.0.name.clone()
+        self.0.metadata.name.clone()
     }
 
     #[getter]
     pub fn subscripts(&self) -> Vec<i64> {
-        self.0.subscripts.clone()
+        self.0.metadata.subscripts.clone()
     }
 
     #[getter]
     pub fn description(&self) -> Option<String> {
-        self.0.description.clone()
+        self.0.metadata.description.clone()
     }
 
     #[getter]
     pub fn parameters(&self) -> HashMap<String, String> {
         self.0
+            .metadata
             .parameters
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
@@ -152,7 +157,7 @@ impl Constraint {
 
     #[staticmethod]
     pub fn from_bytes(bytes: &Bound<PyBytes>) -> PyResult<Self> {
-        let constraint = ommx::Constraint::from_bytes(bytes.as_bytes())
+        let constraint = <ommx::Constraint>::from_bytes(bytes.as_bytes())
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
         // Update the ID counter to ensure new IDs don't conflict
         update_constraint_id_counter(constraint.id.into_inner());
@@ -211,7 +216,7 @@ impl Constraint {
     /// Set the name of the constraint
     /// Returns self for method chaining
     pub fn set_name(&mut self, name: String) -> Self {
-        self.0.name = Some(name);
+        self.0.metadata.name = Some(name);
         self.clone()
     }
 
@@ -224,14 +229,14 @@ impl Constraint {
     /// Set the subscripts of the constraint
     /// Returns self for method chaining
     pub fn set_subscripts(&mut self, subscripts: Vec<i64>) -> Self {
-        self.0.subscripts = subscripts;
+        self.0.metadata.subscripts = subscripts;
         self.clone()
     }
 
     /// Add subscripts to the constraint
     /// Returns self for method chaining
     pub fn add_subscripts(&mut self, subscripts: Vec<i64>) -> Self {
-        self.0.subscripts.extend(subscripts);
+        self.0.metadata.subscripts.extend(subscripts);
         self.clone()
     }
 
@@ -245,7 +250,7 @@ impl Constraint {
     /// Set the description of the constraint
     /// Returns self for method chaining
     pub fn set_description(&mut self, description: String) -> Self {
-        self.0.description = Some(description);
+        self.0.metadata.description = Some(description);
         self.clone()
     }
 
@@ -258,7 +263,7 @@ impl Constraint {
     /// Set the parameters of the constraint
     /// Returns self for method chaining
     pub fn set_parameters(&mut self, parameters: HashMap<String, String>) -> Self {
-        self.0.parameters = parameters.into_iter().collect();
+        self.0.metadata.parameters = parameters.into_iter().collect();
         self.clone()
     }
 
@@ -271,7 +276,7 @@ impl Constraint {
     /// Add a parameter to the constraint
     /// Returns self for method chaining
     pub fn add_parameter(&mut self, key: String, value: String) -> Self {
-        self.0.parameters.insert(key, value);
+        self.0.metadata.parameters.insert(key, value);
         self.clone()
     }
 
@@ -308,11 +313,18 @@ impl RemovedConstraint {
         removed_reason_parameters: Option<HashMap<String, String>>,
     ) -> Self {
         let removed_constraint = ommx::RemovedConstraint {
-            constraint: constraint.0,
-            removed_reason,
-            removed_reason_parameters: removed_reason_parameters
-                .map(|params| params.into_iter().collect::<FnvHashMap<_, _>>())
-                .unwrap_or_default(),
+            id: constraint.0.id,
+            equality: constraint.0.equality,
+            metadata: constraint.0.metadata,
+            stage: ommx::RemovedData {
+                function: constraint.0.stage.function,
+                removed_reason: ommx::RemovedReason {
+                    reason: removed_reason,
+                    parameters: removed_reason_parameters
+                        .map(|params| params.into_iter().collect::<FnvHashMap<_, _>>())
+                        .unwrap_or_default(),
+                },
+            },
         };
 
         Self(removed_constraint)
@@ -320,18 +332,27 @@ impl RemovedConstraint {
 
     #[getter]
     pub fn constraint(&self) -> Constraint {
-        Constraint(self.0.constraint.clone())
+        Constraint(ommx::Constraint {
+            id: self.0.id,
+            equality: self.0.equality,
+            metadata: self.0.metadata.clone(),
+            stage: ommx::CreatedData {
+                function: self.0.stage.function.clone(),
+            },
+        })
     }
 
     #[getter]
     pub fn removed_reason(&self) -> String {
-        self.0.removed_reason.clone()
+        self.0.stage.removed_reason.reason.clone()
     }
 
     #[getter]
     pub fn removed_reason_parameters(&self) -> HashMap<String, String> {
         self.0
-            .removed_reason_parameters
+            .stage
+            .removed_reason
+            .parameters
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect()
@@ -339,43 +360,43 @@ impl RemovedConstraint {
 
     #[getter]
     pub fn id(&self) -> u64 {
-        self.0.constraint.id.into_inner()
+        self.0.id.into_inner()
     }
 
     #[getter]
     pub fn name(&self) -> Option<String> {
-        self.0.constraint.name.clone()
+        self.0.metadata.name.clone()
     }
 
     /// Get the equality type from the underlying constraint
     #[getter]
     pub fn equality(&self) -> Equality {
-        self.0.constraint.equality.into()
+        self.0.equality.into()
     }
 
     /// Get the function from the underlying constraint
     #[getter]
     pub fn function(&self) -> Function {
-        Function(self.0.constraint.function.clone())
+        Function(self.0.stage.function.clone())
     }
 
     /// Get the description from the underlying constraint
     #[getter]
     pub fn description(&self) -> Option<String> {
-        self.0.constraint.description.clone()
+        self.0.metadata.description.clone()
     }
 
     /// Get the subscripts from the underlying constraint
     #[getter]
     pub fn subscripts(&self) -> Vec<i64> {
-        self.0.constraint.subscripts.clone()
+        self.0.metadata.subscripts.clone()
     }
 
     /// Get the parameters from the underlying constraint
     #[getter]
     pub fn parameters(&self) -> HashMap<String, String> {
         self.0
-            .constraint
+            .metadata
             .parameters
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))

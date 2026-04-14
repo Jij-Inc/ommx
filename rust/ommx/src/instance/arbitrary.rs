@@ -1,6 +1,7 @@
 use super::*;
 use crate::{
     arbitrary_constraints, arbitrary_decision_variables, arbitrary_named_functions,
+    constraint_type::ConstraintCollection,
     random::{arbitrary_samples, SamplesParameters},
     v1::State,
     Bounds, ConstraintIDParameters, Evaluate, KindParameters, NamedFunctionIDParameters,
@@ -208,7 +209,7 @@ impl Arbitrary for Instance {
                     let mut unique_ids: FnvHashSet<VariableID> =
                         objective.required_ids().into_iter().collect();
                     for c in constraints.values() {
-                        unique_ids.extend(c.function.required_ids().into_iter());
+                        unique_ids.extend(c.function().required_ids().into_iter());
                     }
                     for nf in named_functions.values() {
                         unique_ids.extend(nf.function.required_ids().into_iter());
@@ -231,13 +232,15 @@ impl Arbitrary for Instance {
                             )| {
                                 Instance {
                                     objective,
-                                    constraints,
+                                    constraint_collection: ConstraintCollection::new(
+                                        constraints,
+                                        Default::default(),
+                                    ),
                                     named_functions,
                                     sense,
                                     decision_variables,
                                     constraint_hints: Default::default(),
                                     parameters: Default::default(),
-                                    removed_constraints: Default::default(),
                                     decision_variable_dependency: Default::default(),
                                     description: None,
                                 }
@@ -261,8 +264,8 @@ mod tests {
                     prop_assert!(instance.decision_variables.contains_key(&id));
                 }
             }
-            for c in instance.constraints.values() {
-                for ids in c.function.keys() {
+            for c in instance.constraints().values() {
+                for ids in c.function().keys() {
                     for id in ids {
                         prop_assert!(instance.decision_variables.contains_key(&id));
                     }

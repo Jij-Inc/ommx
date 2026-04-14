@@ -388,10 +388,10 @@ impl SampleSetBuilder {
         }
 
         for (key, value) in &constraints {
-            if key != value.id() {
+            if *key != value.id {
                 return Err(SampleSetError::InconsistentConstraintID {
                     key: *key,
-                    value_id: *value.id(),
+                    value_id: value.id,
                 });
             }
         }
@@ -419,12 +419,13 @@ impl SampleSetBuilder {
 
         for sampled_constraint in constraints.values() {
             if !sampled_constraint
-                .evaluated_values()
+                .stage
+                .evaluated_values
                 .has_same_ids(&objective_sample_ids)
             {
                 return Err(SampleSetError::InconsistentSampleIDs {
                     expected: objective_sample_ids.clone(),
-                    found: sampled_constraint.evaluated_values().ids(),
+                    found: sampled_constraint.stage.evaluated_values.ids(),
                 });
             }
         }
@@ -517,7 +518,8 @@ impl SampleSetBuilder {
         for sample_id in sample_ids {
             let is_feasible = constraints.values().all(|constraint| {
                 constraint
-                    .feasible()
+                    .stage
+                    .feasible
                     .get(sample_id)
                     .copied()
                     .unwrap_or(false)
@@ -525,10 +527,11 @@ impl SampleSetBuilder {
 
             let is_feasible_relaxed = constraints
                 .values()
-                .filter(|constraint| constraint.removed_reason().is_none())
+                .filter(|constraint| constraint.stage.removed_reason.is_none())
                 .all(|constraint| {
                     constraint
-                        .feasible()
+                        .stage
+                        .feasible
                         .get(sample_id)
                         .copied()
                         .unwrap_or(false)

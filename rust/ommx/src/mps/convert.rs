@@ -203,7 +203,7 @@ fn convert_constraints(
                     Constraint::less_than_or_equal_to_zero(id, function)
                 }
             };
-            constraint.name = Some(row_name.0.clone());
+            constraint.metadata.name = Some(row_name.0.clone());
             constrs.insert(id, constraint);
         }
     } else {

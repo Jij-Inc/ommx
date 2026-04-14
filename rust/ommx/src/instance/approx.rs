@@ -46,8 +46,8 @@ impl AbsDiffEq for Instance {
 
         // Compare constraints
         // Note that `removed_constraints` are not considered in the comparison
-        for (id, c_self) in &self.constraints {
-            match other.constraints.get(id) {
+        for (id, c_self) in self.constraints() {
+            match other.constraints().get(id) {
                 Some(c_other) => {
                     if !c_self.abs_diff_eq(c_other, epsilon) {
                         return false;

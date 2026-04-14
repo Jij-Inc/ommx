@@ -22,7 +22,7 @@ impl Substitute for Instance {
         // Removed constraints are not checked here; they will be substituted
         // when restored via `restore_constraint`. Constraint hints for removed
         // constraints are discarded when the constraint is removed.
-        for (constraint_id, constraint) in &self.constraints {
+        for (constraint_id, constraint) in self.constraint_collection.active() {
             let required_ids = constraint.required_ids();
             if !required_ids.is_disjoint(&substituted_variables) {
                 affected_constraint_ids.insert(*constraint_id);
@@ -36,8 +36,12 @@ impl Substitute for Instance {
         // Removed constraints are not substituted here; they will be substituted
         // when restored via `restore_constraint`.
         for constraint_id in &affected_constraint_ids {
-            if let Some(constraint) = self.constraints.get_mut(constraint_id) {
-                substitute_acyclic(&mut constraint.function, acyclic)?;
+            if let Some(constraint) = self
+                .constraint_collection
+                .active_mut()
+                .get_mut(constraint_id)
+            {
+                substitute_acyclic(&mut constraint.stage.function, acyclic)?;
             }
         }
 
@@ -103,12 +107,11 @@ mod tests {
         let mut constraints = BTreeMap::new();
         let constraint = Constraint {
             id: ConstraintID::from(1),
-            function: constraint_function,
             equality: Equality::LessThanOrEqualToZero,
-            name: None,
-            subscripts: Vec::new(),
-            parameters: Default::default(),
-            description: None,
+            metadata: crate::constraint::ConstraintMetadata::default(),
+            stage: crate::constraint::CreatedData {
+                function: constraint_function,
+            },
         };
         constraints.insert(ConstraintID::from(1), constraint);
         let _constraint_hints = ConstraintHints::default();
@@ -152,12 +155,11 @@ mod tests {
         let constraint1_function = Function::from(linear!(1) + linear!(2) + coeff!(-1.0));
         let constraint1 = Constraint {
             id: ConstraintID::from(1),
-            function: constraint1_function,
             equality: Equality::EqualToZero,
-            name: None,
-            subscripts: Vec::new(),
-            parameters: Default::default(),
-            description: None,
+            metadata: crate::constraint::ConstraintMetadata::default(),
+            stage: crate::constraint::CreatedData {
+                function: constraint1_function,
+            },
         };
         constraints.insert(ConstraintID::from(1), constraint1);
 
@@ -165,12 +167,11 @@ mod tests {
         let constraint2_function = Function::from(linear!(2) + linear!(3) + coeff!(-1.0));
         let constraint2 = Constraint {
             id: ConstraintID::from(2),
-            function: constraint2_function,
             equality: Equality::EqualToZero,
-            name: None,
-            subscripts: Vec::new(),
-            parameters: Default::default(),
-            description: None,
+            metadata: crate::constraint::ConstraintMetadata::default(),
+            stage: crate::constraint::CreatedData {
+                function: constraint2_function,
+            },
         };
         constraints.insert(ConstraintID::from(2), constraint2);
 
@@ -256,31 +257,28 @@ mod tests {
         let constraint1_function = Function::from(linear!(1) + linear!(2) + coeff!(-1.0));
         let constraint1 = Constraint {
             id: ConstraintID::from(1),
-            function: constraint1_function,
             equality: Equality::EqualToZero,
-            name: None,
-            subscripts: Vec::new(),
-            parameters: Default::default(),
-            description: None,
+            metadata: crate::constraint::ConstraintMetadata::default(),
+            stage: crate::constraint::CreatedData {
+                function: constraint1_function,
+            },
         };
         constraints.insert(ConstraintID::from(1), constraint1);
 
         // Create removed constraint that depends on x1: x1 + x3 == 1 (constraint_id=2)
         let mut removed_constraints = BTreeMap::new();
         let removed_constraint_function = Function::from(linear!(1) + linear!(3) + coeff!(-1.0));
-        let removed_constraint_inner = Constraint {
-            id: ConstraintID::from(2),
-            function: removed_constraint_function,
-            equality: Equality::EqualToZero,
-            name: None,
-            subscripts: Vec::new(),
-            parameters: Default::default(),
-            description: None,
-        };
         let removed_constraint = RemovedConstraint {
-            constraint: removed_constraint_inner,
-            removed_reason: "test".to_string(),
-            removed_reason_parameters: Default::default(),
+            id: ConstraintID::from(2),
+            equality: Equality::EqualToZero,
+            metadata: crate::constraint::ConstraintMetadata::default(),
+            stage: crate::constraint::RemovedData {
+                function: removed_constraint_function,
+                removed_reason: crate::constraint::RemovedReason {
+                    reason: "test".to_string(),
+                    parameters: Default::default(),
+                },
+            },
         };
         removed_constraints.insert(ConstraintID::from(2), removed_constraint);
 
@@ -306,12 +304,15 @@ mod tests {
         // Create objective
         let objective = Function::from(linear!(1) + linear!(2) + linear!(3));
 
-        // Create instance directly since new() only accepts active constraints
-        let mut instance =
-            Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
-
-        // Manually set removed constraints and constraint hints
-        instance.removed_constraints = removed_constraints;
+        // Create instance with both active and removed constraints
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(objective)
+            .decision_variables(decision_variables)
+            .constraints(constraints)
+            .removed_constraints(removed_constraints)
+            .build()
+            .unwrap();
         instance.constraint_hints = constraint_hints;
 
         // Before substitution, verify we have 2 OneHot constraints

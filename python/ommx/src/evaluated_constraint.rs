@@ -24,43 +24,47 @@ impl EvaluatedConstraint {
     /// Get the constraint ID
     #[getter]
     pub fn id(&self) -> u64 {
-        self.0.id().into_inner()
+        self.0.id.into_inner()
     }
 
     /// Get the constraint equality type
     #[getter]
     pub fn equality(&self) -> crate::Equality {
-        (*self.0.equality()).into()
+        self.0.equality.into()
     }
 
     /// Get the evaluated constraint value
     #[getter]
     pub fn evaluated_value(&self) -> f64 {
-        *self.0.evaluated_value()
+        self.0.stage.evaluated_value
     }
 
     /// Get the dual variable value
     #[getter]
     pub fn dual_variable(&self) -> Option<f64> {
-        self.0.dual_variable
+        self.0.stage.dual_variable
     }
 
     /// Set the dual variable value
     #[setter]
     pub fn set_dual_variable(&mut self, value: Option<f64>) {
-        self.0.dual_variable = value;
+        self.0.stage.dual_variable = value;
     }
 
     /// Get the feasibility status
     #[getter]
     pub fn feasible(&self) -> bool {
-        *self.0.feasible()
+        self.0.stage.feasible
     }
 
     /// Get the removal reason
     #[getter]
     pub fn removed_reason(&self) -> Option<String> {
-        self.0.removed_reason().clone()
+        self.0
+            .stage
+            .removed_reason
+            .as_ref()
+            .map(|r| r.reason.clone())
     }
 
     /// Get the constraint name
@@ -96,7 +100,8 @@ impl EvaluatedConstraint {
     #[getter]
     pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
         self.0
-            .used_decision_variable_ids()
+            .stage
+            .used_decision_variable_ids
             .iter()
             .map(|id| id.into_inner())
             .collect()

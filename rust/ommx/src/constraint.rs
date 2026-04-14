@@ -5,15 +5,19 @@ mod logical_memory;
 mod parse;
 mod reduce_binary_power;
 mod serialize;
+pub(crate) mod stage;
 
-use crate::{
-    sampled::UnknownSampleIDError, Function, SampleID, Sampled, VariableID, VariableIDSet,
-};
+use crate::{sampled::UnknownSampleIDError, Function, SampleID, VariableID};
 pub use arbitrary::*;
 use derive_more::{Deref, From};
 use fnv::{FnvHashMap, FnvHashSet};
-use getset::Getters;
-use std::collections::BTreeMap;
+pub use stage::{
+    Created, CreatedData, Evaluated, EvaluatedData, Removed, RemovedData, RemovedReason,
+    SampledData, Stage,
+};
+// Note: stage::Sampled is NOT re-exported here to avoid name collision
+// with crate::Sampled<T> (the sampled values type). Use constraint::stage::Sampled
+// or the SampledConstraint type alias instead.
 
 /// Constraint equality.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -59,86 +63,6 @@ impl ConstraintID {
     }
 }
 
-/// `ommx.v1.Constraint` with validated, typed fields.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Constraint {
-    pub id: ConstraintID,
-    pub function: Function,
-    pub equality: Equality,
-    pub name: Option<String>,
-    pub subscripts: Vec<i64>,
-    pub parameters: FnvHashMap<String, String>,
-    pub description: Option<String>,
-}
-
-impl Constraint {
-    pub fn equal_to_zero(id: ConstraintID, function: Function) -> Self {
-        Self {
-            id,
-            function,
-            equality: Equality::EqualToZero,
-            name: None,
-            subscripts: Vec::new(),
-            parameters: FnvHashMap::default(),
-            description: None,
-        }
-    }
-
-    pub fn less_than_or_equal_to_zero(id: ConstraintID, function: Function) -> Self {
-        Self {
-            id,
-            function,
-            equality: Equality::LessThanOrEqualToZero,
-            name: None,
-            subscripts: Vec::new(),
-            parameters: FnvHashMap::default(),
-            description: None,
-        }
-    }
-}
-
-impl std::fmt::Display for Constraint {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let equality_symbol = match self.equality {
-            Equality::EqualToZero => "==",
-            Equality::LessThanOrEqualToZero => "<=",
-        };
-        write!(f, "Constraint({} {} 0)", self.function, equality_symbol)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct RemovedConstraint {
-    pub constraint: Constraint,
-    pub removed_reason: String,
-    pub removed_reason_parameters: FnvHashMap<String, String>,
-}
-
-impl std::fmt::Display for RemovedConstraint {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let equality_symbol = match self.constraint.equality {
-            Equality::EqualToZero => "==",
-            Equality::LessThanOrEqualToZero => "<=",
-        };
-
-        let mut reason_str = format!("reason={}", self.removed_reason);
-        if !self.removed_reason_parameters.is_empty() {
-            let params: Vec<String> = self
-                .removed_reason_parameters
-                .iter()
-                .map(|(k, v)| format!("{k}={v}"))
-                .collect();
-            reason_str = format!("{}, {}", reason_str, params.join(", "));
-        }
-
-        write!(
-            f,
-            "RemovedConstraint({} {} 0, {})",
-            self.constraint.function, equality_symbol, reason_str
-        )
-    }
-}
-
 /// Auxiliary metadata for constraints (excluding essential id and equality)
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct ConstraintMetadata {
@@ -148,56 +72,115 @@ pub struct ConstraintMetadata {
     pub description: Option<String>,
 }
 
-/// Single evaluation result using the new design
-#[derive(Debug, Clone, PartialEq, Getters)]
-pub struct EvaluatedConstraint {
-    #[getset(get = "pub")]
-    id: ConstraintID,
-    #[getset(get = "pub")]
-    equality: Equality,
-    #[getset(get = "pub")]
-    evaluated_value: f64,
-    #[getset(get = "pub")]
-    feasible: bool,
-    #[getset(get = "pub")]
-    removed_reason: Option<String>,
-    #[getset(get = "pub")]
-    removed_reason_parameters: FnvHashMap<String, String>,
-    #[getset(get = "pub")]
-    used_decision_variable_ids: VariableIDSet,
-
-    pub dual_variable: Option<f64>,
+/// A constraint parameterized by its lifecycle stage.
+///
+/// Common fields (`id`, `equality`, `metadata`) are always present.
+/// Stage-specific data (e.g. `function` for [`Created`], evaluation results for [`Evaluated`])
+/// is stored in the `stage` field, whose type is determined by `S::Data`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Constraint<S: Stage<Self> = Created> {
+    pub id: ConstraintID,
+    pub equality: Equality,
     pub metadata: ConstraintMetadata,
+    pub stage: S::Data,
 }
 
-/// Multiple sample evaluation results with deduplication
-#[derive(Debug, Clone, Getters)]
-pub struct SampledConstraint {
-    #[getset(get = "pub")]
-    id: ConstraintID,
-    #[getset(get = "pub")]
-    equality: Equality,
-    #[getset(get = "pub")]
-    evaluated_values: Sampled<f64>,
-    #[getset(get = "pub")]
-    feasible: BTreeMap<SampleID, bool>,
-    #[getset(get = "pub")]
-    used_decision_variable_ids: VariableIDSet,
-    #[getset(get = "pub")]
-    removed_reason: Option<String>,
-    #[getset(get = "pub")]
-    removed_reason_parameters: FnvHashMap<String, String>,
+// ===== Created stage (the "definition" form) =====
 
-    pub dual_variables: Option<Sampled<f64>>,
-    pub metadata: ConstraintMetadata,
+impl Constraint<Created> {
+    /// Access the constraint function.
+    pub fn function(&self) -> &Function {
+        &self.stage.function
+    }
+
+    /// Mutable access to the constraint function.
+    pub fn function_mut(&mut self) -> &mut Function {
+        &mut self.stage.function
+    }
+
+    pub fn equal_to_zero(id: ConstraintID, function: Function) -> Self {
+        Self {
+            id,
+            equality: Equality::EqualToZero,
+            metadata: ConstraintMetadata::default(),
+            stage: CreatedData { function },
+        }
+    }
+
+    pub fn less_than_or_equal_to_zero(id: ConstraintID, function: Function) -> Self {
+        Self {
+            id,
+            equality: Equality::LessThanOrEqualToZero,
+            metadata: ConstraintMetadata::default(),
+            stage: CreatedData { function },
+        }
+    }
 }
+
+impl std::fmt::Display for Constraint<Created> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let equality_symbol = match self.equality {
+            Equality::EqualToZero => "==",
+            Equality::LessThanOrEqualToZero => "<=",
+        };
+        write!(
+            f,
+            "Constraint({} {} 0)",
+            self.stage.function, equality_symbol
+        )
+    }
+}
+
+// ===== Removed stage =====
+
+/// Type alias for a removed constraint.
+pub type RemovedConstraint = Constraint<Removed>;
+
+impl RemovedConstraint {
+    /// Access the constraint function.
+    pub fn function(&self) -> &Function {
+        &self.stage.function
+    }
+}
+
+impl std::fmt::Display for RemovedConstraint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let equality_symbol = match self.equality {
+            Equality::EqualToZero => "==",
+            Equality::LessThanOrEqualToZero => "<=",
+        };
+
+        let mut reason_str = format!("reason={}", self.stage.removed_reason.reason);
+        if !self.stage.removed_reason.parameters.is_empty() {
+            let params: Vec<String> = self
+                .stage
+                .removed_reason
+                .parameters
+                .iter()
+                .map(|(k, v)| format!("{k}={v}"))
+                .collect();
+            reason_str = format!("{}, {}", reason_str, params.join(", "));
+        }
+
+        write!(
+            f,
+            "RemovedConstraint({} {} 0, {})",
+            self.stage.function, equality_symbol, reason_str
+        )
+    }
+}
+
+// ===== Evaluated stage =====
+
+/// Type alias for an evaluated constraint.
+pub type EvaluatedConstraint = Constraint<Evaluated>;
 
 impl EvaluatedConstraint {
     /// Check if this constraint is feasible given a specific tolerance
     pub fn is_feasible_with_tolerance(&self, atol: crate::ATol) -> bool {
         match self.equality {
-            Equality::EqualToZero => self.evaluated_value.abs() < *atol,
-            Equality::LessThanOrEqualToZero => *self.evaluated_value() < *atol,
+            Equality::EqualToZero => self.stage.evaluated_value.abs() < *atol,
+            Equality::LessThanOrEqualToZero => self.stage.evaluated_value < *atol,
         }
     }
 
@@ -210,62 +193,69 @@ impl EvaluatedConstraint {
     /// Returns 0.0 if the constraint is satisfied.
     pub fn violation(&self) -> f64 {
         match self.equality {
-            Equality::EqualToZero => self.evaluated_value.abs(),
-            Equality::LessThanOrEqualToZero => self.evaluated_value.max(0.0),
+            Equality::EqualToZero => self.stage.evaluated_value.abs(),
+            Equality::LessThanOrEqualToZero => self.stage.evaluated_value.max(0.0),
         }
     }
 }
 
 impl From<EvaluatedConstraint> for crate::v1::EvaluatedConstraint {
-    fn from(constraint: EvaluatedConstraint) -> Self {
-        let id = constraint.id().into_inner();
-        let equality = (*constraint.equality()).into();
-        let evaluated_value = *constraint.evaluated_value();
-        let dual_variable = constraint.dual_variable;
-
+    fn from(c: EvaluatedConstraint) -> Self {
         crate::v1::EvaluatedConstraint {
-            id,
-            equality,
-            evaluated_value,
-            used_decision_variable_ids: constraint
+            id: c.id.into_inner(),
+            equality: c.equality.into(),
+            evaluated_value: c.stage.evaluated_value,
+            used_decision_variable_ids: c
+                .stage
                 .used_decision_variable_ids
                 .into_iter()
                 .map(|id| id.into_inner())
                 .collect(),
-            subscripts: constraint.metadata.subscripts,
-            parameters: constraint.metadata.parameters.into_iter().collect(),
-            name: constraint.metadata.name,
-            description: constraint.metadata.description,
-            dual_variable,
-            removed_reason: constraint.removed_reason,
-            removed_reason_parameters: constraint.removed_reason_parameters.into_iter().collect(),
+            subscripts: c.metadata.subscripts,
+            parameters: c.metadata.parameters.into_iter().collect(),
+            name: c.metadata.name,
+            description: c.metadata.description,
+            dual_variable: c.stage.dual_variable,
+            removed_reason: c.stage.removed_reason.as_ref().map(|r| r.reason.clone()),
+            removed_reason_parameters: c
+                .stage
+                .removed_reason
+                .map(|r| r.parameters.into_iter().collect())
+                .unwrap_or_default(),
         }
     }
 }
 
+// ===== Sampled stage =====
+
+/// Type alias for a sampled constraint.
+pub type SampledConstraint = Constraint<stage::Sampled>;
+
 impl SampledConstraint {
     /// Get an evaluated constraint for a specific sample ID
     pub fn get(&self, sample_id: SampleID) -> Result<EvaluatedConstraint, UnknownSampleIDError> {
-        let evaluated_value = *self.evaluated_values.get(sample_id)?;
+        let evaluated_value = *self.stage.evaluated_values.get(sample_id)?;
 
         let dual_variable = self
+            .stage
             .dual_variables
             .as_ref()
             .and_then(|duals| duals.get(sample_id).ok())
             .copied();
 
-        let feasible = *self.feasible.get(&sample_id).unwrap_or(&false);
+        let feasible = *self.stage.feasible.get(&sample_id).unwrap_or(&false);
 
         Ok(EvaluatedConstraint {
-            id: *self.id(),
-            equality: *self.equality(),
+            id: self.id,
+            equality: self.equality,
             metadata: self.metadata.clone(),
-            evaluated_value,
-            dual_variable,
-            feasible,
-            used_decision_variable_ids: self.used_decision_variable_ids.clone(),
-            removed_reason: self.removed_reason().clone(),
-            removed_reason_parameters: self.removed_reason_parameters().clone(),
+            stage: EvaluatedData {
+                evaluated_value,
+                dual_variable,
+                feasible,
+                used_decision_variable_ids: self.stage.used_decision_variable_ids.clone(),
+                removed_reason: self.stage.removed_reason.clone(),
+            },
         })
     }
 
@@ -275,9 +265,9 @@ impl SampledConstraint {
         sample_id: SampleID,
         atol: crate::ATol,
     ) -> Result<bool, UnknownSampleIDError> {
-        let evaluated_value = *self.evaluated_values.get(sample_id)?;
+        let evaluated_value = *self.stage.evaluated_values.get(sample_id)?;
 
-        Ok(match *self.equality() {
+        Ok(match self.equality {
             Equality::EqualToZero => evaluated_value.abs() < *atol,
             Equality::LessThanOrEqualToZero => evaluated_value < *atol,
         })
@@ -285,10 +275,11 @@ impl SampledConstraint {
 
     /// Get all sample IDs that are feasible
     pub fn feasible_ids(&self, atol: crate::ATol) -> FnvHashSet<SampleID> {
-        self.evaluated_values()
+        self.stage
+            .evaluated_values
             .iter()
             .filter_map(|(sample_id, evaluated_value)| {
-                let feasible = match *self.equality() {
+                let feasible = match self.equality {
                     Equality::EqualToZero => evaluated_value.abs() < *atol,
                     Equality::LessThanOrEqualToZero => *evaluated_value < *atol,
                 };
@@ -303,10 +294,11 @@ impl SampledConstraint {
 
     /// Get all sample IDs that are infeasible
     pub fn infeasible_ids(&self, atol: crate::ATol) -> FnvHashSet<SampleID> {
-        self.evaluated_values()
+        self.stage
+            .evaluated_values
             .iter()
             .filter_map(|(sample_id, evaluated_value)| {
-                let feasible = match *self.equality() {
+                let feasible = match self.equality {
                     Equality::EqualToZero => evaluated_value.abs() < *atol,
                     Equality::LessThanOrEqualToZero => *evaluated_value < *atol,
                 };
@@ -321,30 +313,31 @@ impl SampledConstraint {
 }
 
 impl From<SampledConstraint> for crate::v1::SampledConstraint {
-    fn from(constraint: SampledConstraint) -> Self {
-        // Convert Sampled<f64> to v1::SampledValues
-        let evaluated_values: crate::v1::SampledValues =
-            constraint.evaluated_values().clone().into();
-        let id = constraint.id().into_inner();
-        let equality = (*constraint.equality()).into();
-        let feasible = constraint
-            .feasible()
-            .clone()
+    fn from(c: SampledConstraint) -> Self {
+        let evaluated_values: crate::v1::SampledValues = c.stage.evaluated_values.into();
+        let feasible = c
+            .stage
+            .feasible
             .into_iter()
             .map(|(id, value)| (id.into_inner(), value))
             .collect();
 
         crate::v1::SampledConstraint {
-            id,
-            equality,
-            name: constraint.metadata.name,
-            subscripts: constraint.metadata.subscripts,
-            parameters: constraint.metadata.parameters.into_iter().collect(),
-            description: constraint.metadata.description,
-            removed_reason: constraint.removed_reason,
-            removed_reason_parameters: constraint.removed_reason_parameters.into_iter().collect(),
+            id: c.id.into_inner(),
+            equality: c.equality.into(),
+            name: c.metadata.name,
+            subscripts: c.metadata.subscripts,
+            parameters: c.metadata.parameters.into_iter().collect(),
+            description: c.metadata.description,
+            removed_reason: c.stage.removed_reason.as_ref().map(|r| r.reason.clone()),
+            removed_reason_parameters: c
+                .stage
+                .removed_reason
+                .map(|r| r.parameters.into_iter().collect())
+                .unwrap_or_default(),
             evaluated_values: Some(evaluated_values),
-            used_decision_variable_ids: constraint
+            used_decision_variable_ids: c
+                .stage
                 .used_decision_variable_ids
                 .into_iter()
                 .map(|id| id.into_inner())
@@ -361,12 +354,10 @@ mod tests {
 
     #[test]
     fn test_violation_equality_positive() {
-        // f(x) = 0 constraint with f(x) = 2.5 → violation = |2.5| = 2.5
         let constraint = Constraint::equal_to_zero(
             ConstraintID::from(1),
             Function::Constant(Coefficient::try_from(2.5).unwrap()),
         );
-
         let state = crate::v1::State::default();
         let evaluated = constraint.evaluate(&state, crate::ATol::default()).unwrap();
         assert_eq!(evaluated.violation(), 2.5);
@@ -374,12 +365,10 @@ mod tests {
 
     #[test]
     fn test_violation_equality_negative() {
-        // f(x) = 0 constraint with f(x) = -3.0 → violation = |-3.0| = 3.0
         let constraint = Constraint::equal_to_zero(
             ConstraintID::from(1),
             Function::Constant(Coefficient::try_from(-3.0).unwrap()),
         );
-
         let state = crate::v1::State::default();
         let evaluated = constraint.evaluate(&state, crate::ATol::default()).unwrap();
         assert_eq!(evaluated.violation(), 3.0);
@@ -387,13 +376,10 @@ mod tests {
 
     #[test]
     fn test_violation_equality_near_zero() {
-        // f(x) = 0 constraint with f(x) = 0.0001 → violation = 0.0001
-        // Note: Coefficient cannot be exactly 0.0
         let constraint = Constraint::equal_to_zero(
             ConstraintID::from(1),
             Function::Constant(Coefficient::try_from(0.0001).unwrap()),
         );
-
         let state = crate::v1::State::default();
         let evaluated = constraint.evaluate(&state, crate::ATol::default()).unwrap();
         assert_eq!(evaluated.violation(), 0.0001);
@@ -401,12 +387,10 @@ mod tests {
 
     #[test]
     fn test_violation_inequality_violated() {
-        // f(x) ≤ 0 constraint with f(x) = 1.5 → violation = max(0, 1.5) = 1.5
         let constraint = Constraint::less_than_or_equal_to_zero(
             ConstraintID::from(1),
             Function::Constant(Coefficient::try_from(1.5).unwrap()),
         );
-
         let state = crate::v1::State::default();
         let evaluated = constraint.evaluate(&state, crate::ATol::default()).unwrap();
         assert_eq!(evaluated.violation(), 1.5);
@@ -414,12 +398,10 @@ mod tests {
 
     #[test]
     fn test_violation_inequality_satisfied() {
-        // f(x) ≤ 0 constraint with f(x) = -1.0 → violation = max(0, -1.0) = 0.0
         let constraint = Constraint::less_than_or_equal_to_zero(
             ConstraintID::from(1),
             Function::Constant(Coefficient::try_from(-1.0).unwrap()),
         );
-
         let state = crate::v1::State::default();
         let evaluated = constraint.evaluate(&state, crate::ATol::default()).unwrap();
         assert_eq!(evaluated.violation(), 0.0);
@@ -427,12 +409,10 @@ mod tests {
 
     #[test]
     fn test_violation_inequality_near_boundary() {
-        // f(x) ≤ 0 constraint with f(x) = 0.0001 → violation = max(0, 0.0001) = 0.0001
         let constraint = Constraint::less_than_or_equal_to_zero(
             ConstraintID::from(1),
             Function::Constant(Coefficient::try_from(0.0001).unwrap()),
         );
-
         let state = crate::v1::State::default();
         let evaluated = constraint.evaluate(&state, crate::ATol::default()).unwrap();
         assert_eq!(evaluated.violation(), 0.0001);

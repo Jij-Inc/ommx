@@ -497,12 +497,9 @@ impl Quadratic {
         let id = next_constraint_id();
         Constraint(ommx::Constraint {
             id: ommx::ConstraintID::from(id),
-            function,
             equality: ommx::Equality::EqualToZero,
-            name: None,
-            subscripts: Vec::new(),
-            parameters: Default::default(),
-            description: None,
+            metadata: ommx::ConstraintMetadata::default(),
+            stage: ommx::CreatedData { function },
         })
     }
 
@@ -514,12 +511,9 @@ impl Quadratic {
         let id = next_constraint_id();
         Constraint(ommx::Constraint {
             id: ommx::ConstraintID::from(id),
-            function,
             equality: ommx::Equality::LessThanOrEqualToZero,
-            name: None,
-            subscripts: Vec::new(),
-            parameters: Default::default(),
-            description: None,
+            metadata: ommx::ConstraintMetadata::default(),
+            stage: ommx::CreatedData { function },
         })
     }
 
@@ -530,12 +524,9 @@ impl Quadratic {
         let id = next_constraint_id();
         Constraint(ommx::Constraint {
             id: ommx::ConstraintID::from(id),
-            function,
             equality: ommx::Equality::LessThanOrEqualToZero,
-            name: None,
-            subscripts: Vec::new(),
-            parameters: Default::default(),
-            description: None,
+            metadata: ommx::ConstraintMetadata::default(),
+            stage: ommx::CreatedData { function },
         })
     }
 }

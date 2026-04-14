@@ -40,11 +40,11 @@ ENDATA
     assert_eq!(instance.constraints().len(), 1);
     let (_, constraint) = instance.constraints().iter().next().unwrap();
     assert_abs_diff_eq!(
-        &constraint.function,
+        constraint.function(),
         &Function::from(linear!(var.id()) + coeff!(-5.0))
     );
     assert_eq!(constraint.equality, crate::Equality::LessThanOrEqualToZero);
-    assert_eq!(constraint.name.as_ref().unwrap(), "R1");
+    assert_eq!(constraint.metadata.name.as_ref().unwrap(), "R1");
 }
 
 // Test MPS with RANGES section
@@ -102,32 +102,32 @@ ENDATA
     let r2_range = iter.next().unwrap();
     // x1 + 2*x2 - 10 <= 0
     assert_abs_diff_eq!(
-        &r1.function,
+        r1.function(),
         &Function::from(linear!(x1.id()) + coeff!(2.0) * linear!(x2.id()) + coeff!(-10.0))
     );
     assert_eq!(r1.equality, crate::Equality::LessThanOrEqualToZero);
-    assert_eq!(r1.name.as_ref().unwrap(), "R1");
+    assert_eq!(r1.metadata.name.as_ref().unwrap(), "R1");
     // -x1 - x2 + 5 <= 0
     assert_abs_diff_eq!(
-        &r2.function,
+        r2.function(),
         &Function::from(-linear!(x1.id()) - linear!(x2.id()) + coeff!(5.0))
     );
     assert_eq!(r2.equality, crate::Equality::LessThanOrEqualToZero);
-    assert_eq!(r2.name.as_ref().unwrap(), "R2");
+    assert_eq!(r2.metadata.name.as_ref().unwrap(), "R2");
     // -x1 - 2*x2 + 8 <= 0
     assert_abs_diff_eq!(
-        &r1_range.function,
+        r1_range.function(),
         &Function::from(-linear!(x1.id()) - coeff!(2.0) * linear!(x2.id()) + coeff!(8.0))
     );
     assert_eq!(r1_range.equality, crate::Equality::LessThanOrEqualToZero);
-    assert_eq!(r1_range.name.as_ref().unwrap(), "R1_");
+    assert_eq!(r1_range.metadata.name.as_ref().unwrap(), "R1_");
     // x1 + x2 - 8 <= 0
     assert_abs_diff_eq!(
-        &r2_range.function,
+        r2_range.function(),
         &Function::from(linear!(x1.id()) + linear!(x2.id()) + coeff!(-8.0))
     );
     assert_eq!(r2_range.equality, crate::Equality::LessThanOrEqualToZero);
-    assert_eq!(r2_range.name.as_ref().unwrap(), "R2_");
+    assert_eq!(r2_range.metadata.name.as_ref().unwrap(), "R2_");
 }
 
 // Test integer variables
@@ -188,11 +188,11 @@ ENDATA
     assert_eq!(instance.constraints().len(), 1);
     let (_, constraint) = instance.constraints().iter().next().unwrap();
     assert_abs_diff_eq!(
-        &constraint.function,
+        constraint.function(),
         &Function::from(linear!(x1.id()) + linear!(x2.id()) + linear!(x3.id()) + coeff!(-10.0))
     );
     assert_eq!(constraint.equality, crate::Equality::LessThanOrEqualToZero);
-    assert_eq!(constraint.name.as_ref().unwrap(), "C1");
+    assert_eq!(constraint.metadata.name.as_ref().unwrap(), "C1");
 }
 
 // Test binary variables
@@ -241,11 +241,11 @@ ENDATA
     assert_eq!(instance.constraints().len(), 1);
     let (_, constraint) = instance.constraints().iter().next().unwrap();
     assert_abs_diff_eq!(
-        &constraint.function,
+        constraint.function(),
         &Function::from(linear!(x1.id()) + linear!(x2.id()) + coeff!(-1.0))
     );
     assert_eq!(constraint.equality, crate::Equality::LessThanOrEqualToZero);
-    assert_eq!(constraint.name.as_ref().unwrap(), "C1");
+    assert_eq!(constraint.metadata.name.as_ref().unwrap(), "C1");
 }
 
 // Test free variables
@@ -300,11 +300,11 @@ ENDATA
     assert_eq!(instance.constraints().len(), 1);
     let (_, constraint) = instance.constraints().iter().next().unwrap();
     assert_abs_diff_eq!(
-        &constraint.function,
+        constraint.function(),
         &Function::from(linear!(x1.id()) + coeff!(-1.0) * linear!(x2.id()))
     );
     assert_eq!(constraint.equality, crate::Equality::EqualToZero);
-    assert_eq!(constraint.name.as_ref().unwrap(), "C1");
+    assert_eq!(constraint.metadata.name.as_ref().unwrap(), "C1");
 }
 
 // Test OBJSENSE
@@ -350,11 +350,11 @@ ENDATA
     assert_eq!(instance.constraints().len(), 1);
     let (_, constraint) = instance.constraints().iter().next().unwrap();
     assert_abs_diff_eq!(
-        &constraint.function,
+        constraint.function(),
         &Function::from(linear!(x1.id()) + linear!(x2.id()) + coeff!(-10.0))
     );
     assert_eq!(constraint.equality, crate::Equality::LessThanOrEqualToZero);
-    assert_eq!(constraint.name.as_ref().unwrap(), "C1");
+    assert_eq!(constraint.metadata.name.as_ref().unwrap(), "C1");
 }
 
 // Test complex MPS with all constraint types
@@ -528,7 +528,7 @@ ENDATA
 
     // The constraint should be quadratic
     let (_, constraint) = instance.constraints().iter().next().unwrap();
-    assert_eq!(constraint.function.degree(), 2);
+    assert_eq!(constraint.function().degree(), 2);
 
     // Build expected constraint function: 2*x1 + 4*x2 + 0.5*x1^2 + x1*x2 - 10 <= 0
     // Note: RHS is moved to LHS, so the constant term is -10
@@ -539,7 +539,7 @@ ENDATA
         + coeff!(-10.0);
 
     // Compare the actual and expected constraint functions
-    assert_abs_diff_eq!(&constraint.function, &expected_function.into());
+    assert_abs_diff_eq!(constraint.function(), &expected_function.into());
 
     // Verify it's a less-than-or-equal constraint
     assert_eq!(constraint.equality, crate::Equality::LessThanOrEqualToZero);
