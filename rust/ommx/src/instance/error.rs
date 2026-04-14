@@ -73,4 +73,10 @@ pub enum InstanceError {
         key: NamedFunctionID,
         id: NamedFunctionID,
     },
+
+    #[error("Indicator variable {id:?} must be binary")]
+    IndicatorVariableNotBinary { id: VariableID },
+
+    #[error("Indicator variable {id:?} is not defined in decision_variables")]
+    UndefinedIndicatorVariable { id: VariableID },
 }

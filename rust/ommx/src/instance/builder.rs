@@ -28,6 +28,9 @@ pub struct InstanceBuilder {
     constraints: Option<BTreeMap<ConstraintID, Constraint>>,
     named_functions: BTreeMap<NamedFunctionID, NamedFunction>,
     removed_constraints: BTreeMap<ConstraintID, RemovedConstraint>,
+    indicator_constraints: BTreeMap<ConstraintID, crate::IndicatorConstraint>,
+    removed_indicator_constraints:
+        BTreeMap<ConstraintID, crate::indicator_constraint::RemovedIndicatorConstraint>,
     decision_variable_dependency: AcyclicAssignments,
     constraint_hints: ConstraintHints,
     parameters: Option<v1::Parameters>,
@@ -82,6 +85,27 @@ impl InstanceBuilder {
         removed_constraints: BTreeMap<ConstraintID, RemovedConstraint>,
     ) -> Self {
         self.removed_constraints = removed_constraints;
+        self
+    }
+
+    /// Sets the indicator constraints.
+    pub fn indicator_constraints(
+        mut self,
+        indicator_constraints: BTreeMap<ConstraintID, crate::IndicatorConstraint>,
+    ) -> Self {
+        self.indicator_constraints = indicator_constraints;
+        self
+    }
+
+    /// Sets the removed indicator constraints.
+    pub fn removed_indicator_constraints(
+        mut self,
+        removed_indicator_constraints: BTreeMap<
+            ConstraintID,
+            crate::indicator_constraint::RemovedIndicatorConstraint,
+        >,
+    ) -> Self {
+        self.removed_indicator_constraints = removed_indicator_constraints;
         self
     }
 
@@ -215,6 +239,51 @@ impl InstanceBuilder {
             }
         }
 
+        // Validate indicator constraints
+        for (key, value) in &self.indicator_constraints {
+            if *key != value.id {
+                return Err(InstanceError::InconsistentConstraintID {
+                    key: *key,
+                    value_id: value.id,
+                }
+                .into());
+            }
+            // Check that indicator_variable exists and is binary
+            let indicator_id = value.indicator_variable;
+            let Some(dv) = decision_variables.get(&indicator_id) else {
+                return Err(InstanceError::UndefinedIndicatorVariable { id: indicator_id }.into());
+            };
+            if dv.kind() != crate::decision_variable::Kind::Binary {
+                return Err(InstanceError::IndicatorVariableNotBinary { id: indicator_id }.into());
+            }
+            // Check that all variable IDs in function are defined
+            for id in value.required_ids() {
+                if !variable_ids.contains(&id) {
+                    return Err(InstanceError::UndefinedVariableID { id }.into());
+                }
+            }
+        }
+        for (key, value) in &self.removed_indicator_constraints {
+            if *key != value.id {
+                return Err(InstanceError::InconsistentRemovedConstraintID {
+                    key: *key,
+                    value_id: value.id,
+                }
+                .into());
+            }
+            for id in value.required_ids() {
+                if !variable_ids.contains(&id) {
+                    return Err(InstanceError::UndefinedVariableID { id }.into());
+                }
+            }
+        }
+        // Validate disjointness of indicator active/removed
+        for id in self.removed_indicator_constraints.keys() {
+            if self.indicator_constraints.contains_key(id) {
+                return Err(InstanceError::OverlappingConstraintID { id: *id }.into());
+            }
+        }
+
         // Validate that constraints and removed_constraints keys are disjoint
         for id in self.removed_constraints.keys() {
             if constraints.contains_key(id) {
@@ -238,6 +307,9 @@ impl InstanceBuilder {
         let mut used: VariableIDSet = objective.required_ids().into_iter().collect();
         for constraint in constraints.values() {
             used.extend(constraint.required_ids());
+        }
+        for ic in self.indicator_constraints.values() {
+            used.extend(ic.required_ids());
         }
         let fixed: VariableIDSet = decision_variables
             .values()
@@ -278,7 +350,10 @@ impl InstanceBuilder {
             objective,
             decision_variables,
             constraint_collection: ConstraintCollection::new(constraints, removed_constraints),
-            indicator_constraint_collection: Default::default(),
+            indicator_constraint_collection: ConstraintCollection::new(
+                self.indicator_constraints,
+                self.removed_indicator_constraints,
+            ),
             named_functions: self.named_functions,
             decision_variable_dependency: self.decision_variable_dependency,
             constraint_hints,
