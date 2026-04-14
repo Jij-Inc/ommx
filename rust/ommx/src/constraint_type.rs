@@ -46,7 +46,7 @@ pub trait ConstraintType {
     /// The constraint after evaluation against a single state.
     type Evaluated: EvaluatedConstraintBehavior;
     /// The constraint after evaluation against multiple samples.
-    type Sampled: SampledConstraintBehavior;
+    type Sampled: SampledConstraintBehavior<Evaluated = Self::Evaluated>;
 }
 
 /// Common behavior for an evaluated constraint (single state evaluation result).
@@ -58,9 +58,18 @@ pub trait EvaluatedConstraintBehavior {
 
 /// Common behavior for a sampled constraint (multi-sample evaluation result).
 pub trait SampledConstraintBehavior {
+    /// The evaluated constraint type returned by [`get`](Self::get).
+    type Evaluated;
+
     fn constraint_id(&self) -> ConstraintID;
     fn is_feasible_for(&self, sample_id: SampleID) -> Option<bool>;
     fn is_removed(&self) -> bool;
+
+    /// Extract an evaluated constraint for a specific sample.
+    fn get(
+        &self,
+        sample_id: SampleID,
+    ) -> Result<Self::Evaluated, crate::sampled::UnknownSampleIDError>;
 }
 
 // ===== Blanket-like impls for Constraint<Evaluated> and Constraint<Sampled> =====
@@ -80,6 +89,8 @@ impl EvaluatedConstraintBehavior for EvaluatedConstraint {
 }
 
 impl SampledConstraintBehavior for SampledConstraint {
+    type Evaluated = EvaluatedConstraint;
+
     fn constraint_id(&self) -> ConstraintID {
         self.id
     }
@@ -88,6 +99,13 @@ impl SampledConstraintBehavior for SampledConstraint {
     }
     fn is_removed(&self) -> bool {
         self.stage.removed_reason.is_some()
+    }
+    fn get(
+        &self,
+        sample_id: SampleID,
+    ) -> Result<Self::Evaluated, crate::sampled::UnknownSampleIDError> {
+        // Delegate to the existing get method on Constraint<Sampled>
+        SampledConstraint::get(self, sample_id)
     }
 }
 

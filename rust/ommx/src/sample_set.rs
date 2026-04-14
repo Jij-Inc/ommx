@@ -211,6 +211,14 @@ impl SampleSet {
             evaluated_constraints.insert(*constraint_id, evaluated_constraint);
         }
 
+        // Get evaluated indicator constraints
+        let mut evaluated_indicator_constraints = BTreeMap::default();
+        for (constraint_id, constraint) in self.indicator_constraints.iter() {
+            use crate::constraint_type::SampledConstraintBehavior;
+            let evaluated = constraint.get(sample_id)?;
+            evaluated_indicator_constraints.insert(*constraint_id, evaluated);
+        }
+
         // Get evaluated named functions
         let mut evaluated_named_functions: BTreeMap<NamedFunctionID, EvaluatedNamedFunction> =
             BTreeMap::default();
@@ -226,6 +234,7 @@ impl SampleSet {
             Solution::builder()
                 .objective(objective)
                 .evaluated_constraints(evaluated_constraints)
+                .evaluated_indicator_constraints(evaluated_indicator_constraints)
                 .evaluated_named_functions(evaluated_named_functions)
                 .decision_variables(decision_variables)
                 .sense(sense)
