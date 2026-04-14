@@ -286,7 +286,10 @@ impl ToPandasEntry for ommx::IndicatorConstraint {
         )?;
         set_equality(&dict, self.equality)?;
         set_function_type(&dict, &self.stage.function)?;
-        set_used_ids(&dict, &self.stage.function.required_ids())?;
+        // Include indicator_variable in used_ids
+        let mut used_ids = self.stage.function.required_ids();
+        used_ids.insert(self.indicator_variable);
+        set_used_ids(&dict, &used_ids)?;
         set_metadata(
             &dict,
             self.metadata.name.as_deref(),

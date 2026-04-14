@@ -287,12 +287,14 @@ impl Constraint {
         &self,
         indicator_variable: &crate::DecisionVariable,
     ) -> crate::IndicatorConstraint {
-        crate::IndicatorConstraint(ommx::IndicatorConstraint::new(
+        let mut ic = ommx::IndicatorConstraint::new(
             ommx::IndicatorConstraintID::from(self.0.id.into_inner()),
             indicator_variable.0.id(),
             self.0.equality,
             self.0.stage.function.clone(),
-        ))
+        );
+        ic.metadata = self.0.metadata.clone();
+        crate::IndicatorConstraint(ic)
     }
 
     pub fn __repr__(&self) -> String {

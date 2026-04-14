@@ -49,30 +49,29 @@ impl Evaluate for IndicatorConstraint<Created> {
         let evaluated_values_v1 = self.stage.function.evaluate_samples(samples, atol)?;
         let evaluated_values: crate::Sampled<f64> = evaluated_values_v1.try_into()?;
 
-        let feasible: std::collections::BTreeMap<crate::SampleID, bool> = samples
-            .iter()
-            .map(|(sample_id, state)| {
-                let indicator_on = state
-                    .entries
-                    .get(&self.indicator_variable.into_inner())
-                    .is_some_and(|v| *v > 1.0 - *atol);
+        // Compute feasibility per sample.
+        // We need both the evaluated value and the indicator variable's state,
+        // so we iterate over samples (which provides the state) and look up the evaluated value.
+        let mut feasible = std::collections::BTreeMap::new();
+        for (sample_id, state) in samples.iter() {
+            let sample_id = crate::SampleID::from(*sample_id);
+            let ev = *evaluated_values.get(sample_id)?;
 
-                let ev = evaluated_values
-                    .get(crate::SampleID::from(*sample_id))
-                    .copied()
-                    .unwrap_or(0.0);
+            let indicator_on = state
+                .entries
+                .get(&self.indicator_variable.into_inner())
+                .is_some_and(|v| *v > 1.0 - *atol);
 
-                let f = if indicator_on {
-                    match self.equality {
-                        Equality::EqualToZero => ev.abs() < *atol,
-                        Equality::LessThanOrEqualToZero => ev < *atol,
-                    }
-                } else {
-                    true
-                };
-                (crate::SampleID::from(*sample_id), f)
-            })
-            .collect();
+            let f = if indicator_on {
+                match self.equality {
+                    Equality::EqualToZero => ev.abs() < *atol,
+                    Equality::LessThanOrEqualToZero => ev < *atol,
+                }
+            } else {
+                true
+            };
+            feasible.insert(sample_id, f);
+        }
 
         Ok(IndicatorConstraint {
             id: self.id,
@@ -145,30 +144,26 @@ impl Evaluate for RemovedIndicatorConstraint {
         let evaluated_values_v1 = self.stage.function.evaluate_samples(samples, atol)?;
         let evaluated_values: crate::Sampled<f64> = evaluated_values_v1.try_into()?;
 
-        let feasible: std::collections::BTreeMap<crate::SampleID, bool> = samples
-            .iter()
-            .map(|(sample_id, state)| {
-                let indicator_on = state
-                    .entries
-                    .get(&self.indicator_variable.into_inner())
-                    .is_some_and(|v| *v > 1.0 - *atol);
+        let mut feasible = std::collections::BTreeMap::new();
+        for (sample_id, state) in samples.iter() {
+            let sample_id = crate::SampleID::from(*sample_id);
+            let ev = *evaluated_values.get(sample_id)?;
 
-                let ev = evaluated_values
-                    .get(crate::SampleID::from(*sample_id))
-                    .copied()
-                    .unwrap_or(0.0);
+            let indicator_on = state
+                .entries
+                .get(&self.indicator_variable.into_inner())
+                .is_some_and(|v| *v > 1.0 - *atol);
 
-                let f = if indicator_on {
-                    match self.equality {
-                        Equality::EqualToZero => ev.abs() < *atol,
-                        Equality::LessThanOrEqualToZero => ev < *atol,
-                    }
-                } else {
-                    true
-                };
-                (crate::SampleID::from(*sample_id), f)
-            })
-            .collect();
+            let f = if indicator_on {
+                match self.equality {
+                    Equality::EqualToZero => ev.abs() < *atol,
+                    Equality::LessThanOrEqualToZero => ev < *atol,
+                }
+            } else {
+                true
+            };
+            feasible.insert(sample_id, f);
+        }
 
         Ok(IndicatorConstraint {
             id: self.id,

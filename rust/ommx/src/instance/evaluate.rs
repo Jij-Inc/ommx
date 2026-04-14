@@ -99,6 +99,17 @@ impl Evaluate for Instance {
             constraints.push(v);
         }
 
+        // Indicator constraints
+        let mut indicator_constraints = Vec::new();
+        for ic in self.indicator_constraint_collection.active().values() {
+            let evaluated = ic.evaluate_samples(&samples, atol)?;
+            indicator_constraints.push(evaluated);
+        }
+        for ic in self.indicator_constraint_collection.removed().values() {
+            let v = ic.evaluate_samples(&samples, atol)?;
+            indicator_constraints.push(v);
+        }
+
         // Objective
         let objectives = self.objective().evaluate_samples(&samples, atol)?;
 
@@ -122,10 +133,17 @@ impl Evaluate for Instance {
             named_functions.insert(*id, sampled_named_function);
         }
 
+        // Reconstruct indicator constraint values
+        let mut indicator_constraints_map = std::collections::BTreeMap::new();
+        for ic in indicator_constraints {
+            indicator_constraints_map.insert(ic.id, ic);
+        }
+
         Ok(crate::SampleSet::builder()
             .decision_variables(decision_variables)
             .objectives(objectives.try_into()?)
             .constraints(constraints_map)
+            .indicator_constraints(indicator_constraints_map)
             .named_functions(named_functions)
             .sense(self.sense)
             .build()?)
