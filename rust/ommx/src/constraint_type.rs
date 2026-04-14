@@ -205,10 +205,6 @@ where
         (self.active, self.removed)
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.active.is_empty() && self.removed.is_empty()
-    }
-
     /// Collect required variable IDs from all active constraints.
     pub fn required_ids(&self) -> VariableIDSet {
         let mut ids = VariableIDSet::default();
@@ -369,7 +365,8 @@ mod tests {
     #[test]
     fn empty_collection() {
         let collection = ConstraintCollection::<Constraint>::default();
-        assert!(collection.is_empty());
+        assert!(collection.active().is_empty());
+        assert!(collection.removed().is_empty());
     }
 
     #[test]

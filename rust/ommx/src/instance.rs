@@ -178,19 +178,26 @@ impl Instance {
         &self.indicator_constraint_collection
     }
 
-    /// Returns the set of constraint capabilities required by this instance.
+    /// Returns the set of constraint capabilities required by this instance
+    /// beyond the universally supported [`ConstraintCapability::Standard`].
+    ///
+    /// [`ConstraintCapability::Standard`] is always implicitly supported by all adapters
+    /// and is never included in the returned set.
+    ///
+    /// Only **active** constraints are considered. Removed (relaxed) constraints are excluded
+    /// because they are not passed to solver adapters — adapters only need to handle
+    /// constraint types that are actively part of the problem.
     pub fn required_capabilities(&self) -> fnv::FnvHashSet<ConstraintCapability> {
         let mut caps = fnv::FnvHashSet::default();
-        if !self.constraints().is_empty() || !self.removed_constraints().is_empty() {
-            caps.insert(ConstraintCapability::Standard);
-        }
-        if !self.indicator_constraints().is_empty() {
+        if !self.indicator_constraint_collection.active().is_empty() {
             caps.insert(ConstraintCapability::Indicator);
         }
         caps
     }
 
     /// Check that the given supported capabilities cover all constraint types in this instance.
+    ///
+    /// Only active constraints are checked (see [`Self::required_capabilities`]).
     ///
     /// Returns an error listing unsupported constraint types if any are found.
     pub fn check_capabilities(
