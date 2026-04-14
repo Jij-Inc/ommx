@@ -29,7 +29,10 @@ HintMode = Literal["disabled", "auto", "forced"]
 
 
 class OMMXPySCIPOptAdapter(SolverAdapter):
-    supported_constraints = {ConstraintCapability.Standard, ConstraintCapability.Indicator}
+    supported_constraints = {
+        ConstraintCapability.Standard,
+        ConstraintCapability.Indicator,
+    }
     use_sos1: HintMode
 
     def __init__(

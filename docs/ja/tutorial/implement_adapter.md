@@ -278,9 +278,11 @@ def decode_to_state(model: pyscipopt.Model, instance: Instance) -> State:
 
 ```python
 class SolverAdapter(ABC):
-    @abstractmethod
+    supported_constraints: set[ConstraintCapability] = {ConstraintCapability.Standard}
+
     def __init__(self, ommx_instance: Instance):
-        pass
+        """制約の互換性をチェックする。サブクラスは super().__init__() を呼ぶ必要がある。"""
+        ommx_instance.check_capabilities(self.supported_constraints)
 
     @classmethod
     @abstractmethod
@@ -302,16 +304,34 @@ class SolverAdapter(ABC):
 - バックエンドソルバーのパラメータなどを調整しない場合は、  `solve` クラスメソッドを使う。
 - バックエンドソルバーのパラメータなどを調整する場合は、 `solver_input` を使ってバックエンドソルバーの入力用のデータ構造（今回は `pyscipopt.Model`）を取得し、調整した後にバックエンドソルバーへ入力し、最後にバックエンドソルバーの出力を `decode` で変換する。
 
+#### 制約タイプの Capability 宣言
+
+各アダプターは `supported_constraints` クラス属性で、サポートする制約タイプを宣言する必要があります。基底クラスは `super().__init__()` の呼び出し時に、与えられた `Instance` がサポートされている制約タイプのみを使用していることを自動的にチェックします。利用可能な capability は以下の通りです：
+
+- `ConstraintCapability.Standard`: 通常の制約 (`f(x) = 0` または `f(x) <= 0`)
+- `ConstraintCapability.Indicator`: インジケーター制約 (`binvar = 1 → f(x) <= 0`)
+
+`supported_constraints` をオーバーライドしない場合、デフォルトでは通常の制約のみがサポートされます。`Instance` がサポートされていない制約タイプを含む場合、自動的にエラーが発生します。
+
+```{important}
+サブクラスは `__init__` メソッドで **必ず** `super().__init__(ommx_instance)` を呼び出してください。これにより、制約 capability の自動チェックが有効になります。
+```
+
 ここまでで用意した関数を使って次のように実装することができます：
 
 ```{code-cell} ipython3
 from ommx.adapter import SolverAdapter
+from ommx.v1 import ConstraintCapability
 
 class OMMXPySCIPOptAdapter(SolverAdapter):
+    # PySCIPOptは通常の制約とインジケーター制約の両方をサポート
+    supported_constraints = {ConstraintCapability.Standard, ConstraintCapability.Indicator}
+
     def __init__(
         self,
         ommx_instance: Instance,
     ):
+        super().__init__(ommx_instance)  # 制約 capability のチェック
         self.instance = ommx_instance
         self.model = pyscipopt.Model()
         self.model.hideOutput()
@@ -476,6 +496,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     ommx_instance: Instance
     
     def __init__(self, ommx_instance: Instance):
+        super().__init__(ommx_instance)  # 制約 capability のチェック
         self.ommx_instance = ommx_instance
 
     # サンプリングを行う
@@ -554,11 +575,12 @@ sample_set.summary
 このチュートリアルでは、PySCIPOptと接続するSolver Adapterの実装とOpenJijと接続するSampler Adapterの実装を通して、OMMX Adapterの実装方法について学びました。以下がOMMX Adapterを実装する際の重要なポイントです：
 
 1. OMMX Adapterは `SolverAdapter` または `SamplerAdapter` の抽象基底クラスを継承することで実装します
-2. 実装の主なステップは以下の通りです：
+2. `supported_constraints` でサポートする制約タイプを宣言し、`super().__init__()` を呼び出して自動的な capability チェックを有効にします
+3. 実装の主なステップは以下の通りです：
    - `ommx.v1.Instance` をバックエンドソルバーが理解できる形式に変換する
    - バックエンドソルバーを実行して解を取得する
    - バックエンドソルバーの出力を `ommx.v1.Solution` や `ommx.v1.SampleSet` に変換する
-3. 各バックエンドソルバーの特性や制限を理解し、適切に処理する必要があります
+4. 各バックエンドソルバーの特性や制限を理解し、適切に処理する必要があります
 4. IDの管理や変数の対応付けなど、バックエンドソルバーとOMMXの橋渡しに注意を払う必要があります
 
 独自のバックエンドソルバーをOMMXと接続したい場合は、このチュートリアルを参考に実装すると良いでしょう。このチュートリアルに従ってOMMX Adapterを実装することで、様々なバックエンドソルバーでの最適化を共通化されたAPIで利用できるようになります。
