@@ -1422,6 +1422,11 @@ class Instance:
         DataFrame of constraints
         """
     @property
+    def indicator_constraints_df(self) -> pandas.DataFrame:
+        r"""
+        DataFrame of indicator constraints
+        """
+    @property
     def removed_constraints_df(self) -> pandas.DataFrame:
         r"""
         DataFrame of removed constraints

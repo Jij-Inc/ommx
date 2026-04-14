@@ -9011,6 +9011,17 @@
               "is_readonly": true
             },
             {
+              "name": "indicator_constraints_df",
+              "doc": "DataFrame of indicator constraints",
+              "type_": {
+                "display": "DataFrame",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "license",
               "doc": "",
               "type_": {
