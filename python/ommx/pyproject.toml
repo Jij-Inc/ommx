@@ -55,9 +55,9 @@ config-settings = { build-args = "--no-default-features" }
 generate-init-py = ["ommx.v1", "ommx.artifact"]
 
 [tool.pyo3-stub-gen.doc-gen]
-output-dir = "../../docs/api_reference/api"
+output-dir = "../../docs/api"
 json-output = "api_reference.json"
-index-title = "OMMX Python SDK API Reference"
+generate-index = false
 contents-table = true
 separate-items = true
 
