@@ -30,10 +30,13 @@ pub use parametric_builder::*;
 pub use stats::*;
 
 use crate::{
-    constraint_hints::ConstraintHints, constraint_type::ConstraintCollection,
-    named_function::NamedFunctionID, parse::Parse, v1, AcyclicAssignments, Constraint,
-    ConstraintID, DecisionVariable, Evaluate, Function, NamedFunction, RemovedConstraint,
-    VariableID, VariableIDSet,
+    constraint_hints::ConstraintHints,
+    constraint_type::ConstraintCollection,
+    indicator_constraint::{IndicatorConstraint, RemovedIndicatorConstraint},
+    named_function::NamedFunctionID,
+    parse::Parse,
+    v1, AcyclicAssignments, Constraint, ConstraintID, DecisionVariable, Evaluate, Function,
+    NamedFunction, RemovedConstraint, VariableID, VariableIDSet,
 };
 use std::collections::BTreeMap;
 
@@ -77,6 +80,9 @@ pub struct Instance {
     /// Regular constraints collection (active + removed).
     constraint_collection: ConstraintCollection<Constraint>,
 
+    /// Indicator constraints collection (active + removed).
+    indicator_constraint_collection: ConstraintCollection<IndicatorConstraint>,
+
     #[getset(get = "pub")]
     decision_variable_dependency: AcyclicAssignments,
     #[getset(get = "pub")]
@@ -111,6 +117,23 @@ impl Instance {
     /// The full constraint collection (active + removed).
     pub fn constraint_collection(&self) -> &ConstraintCollection<Constraint> {
         &self.constraint_collection
+    }
+
+    /// Active indicator constraints.
+    pub fn indicator_constraints(&self) -> &BTreeMap<ConstraintID, IndicatorConstraint> {
+        self.indicator_constraint_collection.active()
+    }
+
+    /// Removed indicator constraints.
+    pub fn removed_indicator_constraints(
+        &self,
+    ) -> &BTreeMap<ConstraintID, RemovedIndicatorConstraint> {
+        self.indicator_constraint_collection.removed()
+    }
+
+    /// The full indicator constraint collection (active + removed).
+    pub fn indicator_constraint_collection(&self) -> &ConstraintCollection<IndicatorConstraint> {
+        &self.indicator_constraint_collection
     }
 }
 

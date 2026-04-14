@@ -120,6 +120,7 @@ impl ParametricInstance {
             objective,
             decision_variables: self.decision_variables,
             constraint_collection: ConstraintCollection::new(constraints, removed_constraints),
+            indicator_constraint_collection: Default::default(),
             named_functions,
             decision_variable_dependency: self.decision_variable_dependency,
             constraint_hints: self.constraint_hints,
