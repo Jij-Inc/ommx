@@ -585,6 +585,24 @@ impl SolutionBuilder {
         self
     }
 
+    /// Sets the evaluated constraints from a collection.
+    pub fn evaluated_constraints_collection(
+        mut self,
+        evaluated_constraints: EvaluatedCollection<Constraint>,
+    ) -> Self {
+        self.evaluated_constraints = Some(evaluated_constraints);
+        self
+    }
+
+    /// Sets the evaluated indicator constraints from a collection.
+    pub fn evaluated_indicator_constraints_collection(
+        mut self,
+        evaluated_indicator_constraints: EvaluatedCollection<IndicatorConstraint>,
+    ) -> Self {
+        self.evaluated_indicator_constraints = evaluated_indicator_constraints;
+        self
+    }
+
     /// Sets the evaluated indicator constraints.
     pub fn evaluated_indicator_constraints(
         mut self,

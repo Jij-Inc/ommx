@@ -240,6 +240,51 @@ where
         }
         Ok(())
     }
+
+    /// Evaluate all constraints (active and removed) against multiple samples.
+    pub fn evaluate_samples_all(
+        &self,
+        samples: &v1::Samples,
+        atol: ATol,
+    ) -> Result<BTreeMap<T::ID, T::Sampled>> {
+        let mut results = BTreeMap::new();
+        for constraint in self.active.values() {
+            let evaluated = constraint.evaluate_samples(samples, atol)?;
+            results.insert(evaluated.constraint_id(), evaluated);
+        }
+        for constraint in self.removed.values() {
+            let evaluated = constraint.evaluate_samples(samples, atol)?;
+            results.insert(evaluated.constraint_id(), evaluated);
+        }
+        Ok(results)
+    }
+}
+
+impl<T: ConstraintType> Evaluate for ConstraintCollection<T>
+where
+    T::Created: Clone + std::fmt::Debug + PartialEq,
+    T::Removed: Clone + std::fmt::Debug + PartialEq,
+{
+    type Output = EvaluatedCollection<T>;
+    type SampledOutput = SampledCollection<T>;
+
+    fn evaluate(&self, state: &v1::State, atol: ATol) -> Result<Self::Output> {
+        Ok(EvaluatedCollection::new(self.evaluate_all(state, atol)?))
+    }
+
+    fn evaluate_samples(&self, samples: &v1::Samples, atol: ATol) -> Result<Self::SampledOutput> {
+        Ok(SampledCollection::new(
+            self.evaluate_samples_all(samples, atol)?,
+        ))
+    }
+
+    fn partial_evaluate(&mut self, state: &v1::State, atol: ATol) -> Result<()> {
+        self.partial_evaluate_active(state, atol)
+    }
+
+    fn required_ids(&self) -> VariableIDSet {
+        self.required_ids()
+    }
 }
 
 /// A collection of evaluated constraints of a single type.
