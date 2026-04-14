@@ -360,4 +360,110 @@ mod tests {
             ConstraintID::from(2)
         );
     }
+
+    #[test]
+    fn test_substitute_indicator_function() {
+        // Substituting a variable in the indicator's function should work
+        let mut decision_variables = BTreeMap::new();
+        decision_variables.insert(
+            VariableID::from(1),
+            DecisionVariable::continuous(VariableID::from(1)),
+        );
+        decision_variables.insert(
+            VariableID::from(2),
+            DecisionVariable::continuous(VariableID::from(2)),
+        );
+        decision_variables.insert(
+            VariableID::from(10),
+            DecisionVariable::binary(VariableID::from(10)),
+        );
+
+        let objective = Function::from(linear!(1));
+
+        let mut indicator_constraints = BTreeMap::new();
+        indicator_constraints.insert(
+            crate::IndicatorConstraintID::from(1),
+            crate::IndicatorConstraint::new(
+                crate::IndicatorConstraintID::from(1),
+                VariableID::from(10),
+                Equality::LessThanOrEqualToZero,
+                Function::from(linear!(1) + coeff!(-5.0)),
+            ),
+        );
+
+        let instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(objective)
+            .decision_variables(decision_variables)
+            .constraints(BTreeMap::new())
+            .indicator_constraints(indicator_constraints)
+            .build()
+            .unwrap();
+
+        // Substitute x1 = x2 + 1
+        let assignments = crate::AcyclicAssignments::new(vec![(
+            VariableID::from(1),
+            Function::from(linear!(2) + coeff!(1.0)),
+        )])
+        .unwrap();
+
+        let result = instance.substitute_acyclic(&assignments).unwrap();
+
+        // Indicator constraint should still exist with substituted function
+        assert_eq!(result.indicator_constraints().len(), 1);
+    }
+
+    #[test]
+    fn test_substitute_indicator_variable_fails() {
+        // Substituting the indicator variable itself should fail
+        let mut decision_variables = BTreeMap::new();
+        decision_variables.insert(
+            VariableID::from(1),
+            DecisionVariable::continuous(VariableID::from(1)),
+        );
+        decision_variables.insert(
+            VariableID::from(10),
+            DecisionVariable::binary(VariableID::from(10)),
+        );
+
+        let objective = Function::from(linear!(1));
+
+        let mut indicator_constraints = BTreeMap::new();
+        indicator_constraints.insert(
+            crate::IndicatorConstraintID::from(1),
+            crate::IndicatorConstraint::new(
+                crate::IndicatorConstraintID::from(1),
+                VariableID::from(10),
+                Equality::LessThanOrEqualToZero,
+                Function::from(linear!(1) + coeff!(-5.0)),
+            ),
+        );
+
+        let instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(objective)
+            .decision_variables(decision_variables)
+            .constraints(BTreeMap::new())
+            .indicator_constraints(indicator_constraints)
+            .build()
+            .unwrap();
+
+        // Try to substitute the indicator variable x10
+        let assignments = crate::AcyclicAssignments::new(vec![(
+            VariableID::from(10),
+            Function::from(coeff!(1.0)),
+        )])
+        .unwrap();
+
+        let result = instance.substitute_acyclic(&assignments);
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            SubstitutionError::IndicatorVariableSubstitution {
+                indicator_variable,
+                constraint_id,
+            } if indicator_variable == VariableID::from(10)
+                && constraint_id == crate::IndicatorConstraintID::from(1)
+        ));
+    }
 }
