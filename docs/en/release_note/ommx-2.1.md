@@ -23,4 +23,4 @@ All evaluate methods (`Instance.evaluate`, `Function.evaluate`, `Constraint.eval
 
 ### `DecisionVariableAnalysis` Display and serialization ([#668](https://github.com/Jij-Inc/ommx/pull/668))
 
-`DecisionVariableAnalysis`, which provides kind/usage-based partitioning of decision variables (e.g. identifying dependent variables created through `substitute_acyclic`), now supports `to_dict()` and `__repr__()` in Python, and `Display` trait and `Serialize`/`Deserialize` in Rust.
+`DecisionVariableAnalysis`, which provides kind/usage-based partitioning of decision variables (e.g. identifying dependent variables created through `substitute_acyclic`), now supports `to_dict()` and `__repr__()` for inspection in Python.

@@ -70,7 +70,7 @@ The Python bindings for `ParametricInstance` were migrated from the Protocol Buf
 
 ### `Instance.used_decision_variables` and `penalty_method` (2.0.3, [#572](https://github.com/Jij-Inc/ommx/pull/572), [#553](https://github.com/Jij-Inc/ommx/pull/553))
 
-`Instance.used_decision_variables` exposes the set of decision variables actually referenced in the objective or constraints. `Instance.insert_constraint` and `Instance.penalty_method` allow adding constraints after construction and converting constrained problems to unconstrained penalty formulations.
+`Instance.used_decision_variables` exposes the set of decision variables actually referenced in the objective or constraints. `Instance.penalty_method` converts constrained problems to unconstrained penalty formulations.
 
 ### Quadratic objective and constraints in MPS format (2.0.5, [#597](https://github.com/Jij-Inc/ommx/pull/597))
 
@@ -100,8 +100,7 @@ Local registry management functions (`get_local_registry_root`, `set_local_regis
 
 - (2.0.1) `substituted_value` property and binary power reduction ([#537](https://github.com/Jij-Inc/ommx/pull/537), [#540](https://github.com/Jij-Inc/ommx/pull/540))
 - (2.0.1) Compare `Bound` by value ([#541](https://github.com/Jij-Inc/ommx/pull/541))
-- (2.0.2) Direct `from_bytes`/`to_bytes` in Rust SDK ([#549](https://github.com/Jij-Inc/ommx/pull/549))
-- (2.0.2) `PartialOrd<u32>` for `Degree` ([#550](https://github.com/Jij-Inc/ommx/pull/550))
+- (2.0.2) Direct `from_bytes`/`to_bytes` for messages ([#549](https://github.com/Jij-Inc/ommx/pull/549))
 - (2.0.3) QPLIB parser updates ([#575](https://github.com/Jij-Inc/ommx/pull/575))
 - (2.0.6) Split `constraint_hints` submodule ([#608](https://github.com/Jij-Inc/ommx/pull/608))
 - (2.0.11) ID allocation methods ([#650](https://github.com/Jij-Inc/ommx/pull/650))
