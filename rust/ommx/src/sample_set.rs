@@ -3,10 +3,12 @@ mod parse;
 mod serialize;
 
 use crate::{
-    constraint_type::SampledCollection, indicator_constraint::IndicatorConstraint, Constraint,
-    ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable, EvaluatedNamedFunction,
-    NamedFunctionID, SampleID, SampleIDSet, Sampled, SampledConstraint, SampledDecisionVariable,
-    SampledNamedFunction, Sense, Solution, UnknownSampleIDError, VariableID,
+    constraint_type::{SampledCollection, SampledConstraintBehavior},
+    indicator_constraint::IndicatorConstraint,
+    Constraint, ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable,
+    EvaluatedNamedFunction, NamedFunctionID, SampleID, SampleIDSet, Sampled, SampledConstraint,
+    SampledDecisionVariable, SampledNamedFunction, Sense, Solution, UnknownSampleIDError,
+    VariableID,
 };
 use getset::Getters;
 use std::collections::BTreeMap;

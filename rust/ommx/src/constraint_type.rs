@@ -104,8 +104,28 @@ impl SampledConstraintBehavior for SampledConstraint {
         &self,
         sample_id: SampleID,
     ) -> Result<Self::Evaluated, crate::sampled::UnknownSampleIDError> {
-        // Delegate to the existing get method on Constraint<Sampled>
-        SampledConstraint::get(self, sample_id)
+        use crate::constraint::EvaluatedData;
+        let evaluated_value = *self.stage.evaluated_values.get(sample_id)?;
+        let dual_variable = self
+            .stage
+            .dual_variables
+            .as_ref()
+            .and_then(|duals| duals.get(sample_id).ok())
+            .copied();
+        let feasible = *self.stage.feasible.get(&sample_id).unwrap_or(&false);
+
+        Ok(crate::Constraint {
+            id: self.id,
+            equality: self.equality,
+            metadata: self.metadata.clone(),
+            stage: EvaluatedData {
+                evaluated_value,
+                dual_variable,
+                feasible,
+                used_decision_variable_ids: self.stage.used_decision_variable_ids.clone(),
+                removed_reason: self.stage.removed_reason.clone(),
+            },
+        })
     }
 }
 
