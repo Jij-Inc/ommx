@@ -1,4 +1,4 @@
-use crate::{SampleID, Sampled, VariableIDSet};
+use crate::{SampleID, VariableIDSet};
 use fnv::FnvHashMap;
 use std::collections::BTreeMap;
 
@@ -52,7 +52,7 @@ pub struct Evaluated;
 
 /// The constraint has been evaluated against multiple samples.
 #[derive(Debug, Clone)]
-pub struct SampledStage;
+pub struct Sampled;
 
 // ===== Stage data types for Evaluated/Sampled =====
 
@@ -69,10 +69,10 @@ pub struct EvaluatedData {
 /// Data carried by a constraint in the Sampled stage.
 #[derive(Debug, Clone)]
 pub struct SampledData {
-    pub evaluated_values: Sampled<f64>,
+    pub evaluated_values: crate::Sampled<f64>,
     pub feasible: BTreeMap<SampleID, bool>,
     pub used_decision_variable_ids: VariableIDSet,
-    pub dual_variables: Option<Sampled<f64>>,
+    pub dual_variables: Option<crate::Sampled<f64>>,
     pub removed_reason: Option<RemovedReason>,
 }
 
@@ -90,6 +90,6 @@ impl Stage<Constraint<Evaluated>> for Evaluated {
     type Data = EvaluatedData;
 }
 
-impl Stage<Constraint<SampledStage>> for SampledStage {
+impl Stage<Constraint<Sampled>> for Sampled {
     type Data = SampledData;
 }

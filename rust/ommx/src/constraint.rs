@@ -13,8 +13,11 @@ use derive_more::{Deref, From};
 use fnv::{FnvHashMap, FnvHashSet};
 pub use stage::{
     Created, CreatedData, Evaluated, EvaluatedData, Removed, RemovedData, RemovedReason,
-    SampledData, SampledStage, Stage,
+    SampledData, Stage,
 };
+// Note: stage::Sampled is NOT re-exported here to avoid name collision
+// with crate::Sampled<T> (the sampled values type). Use constraint::stage::Sampled
+// or the SampledConstraint type alias instead.
 
 /// Constraint equality.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -226,7 +229,7 @@ impl From<EvaluatedConstraint> for crate::v1::EvaluatedConstraint {
 // ===== Sampled stage =====
 
 /// Type alias for a sampled constraint.
-pub type SampledConstraint = Constraint<SampledStage>;
+pub type SampledConstraint = Constraint<stage::Sampled>;
 
 impl SampledConstraint {
     /// Get an evaluated constraint for a specific sample ID
