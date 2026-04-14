@@ -13,7 +13,7 @@ impl Evaluate for IndicatorConstraint<Created> {
         let indicator_on = state
             .entries
             .get(&self.indicator_variable.into_inner())
-            .map_or(false, |v| *v > 1.0 - *atol);
+            .is_some_and(|v| *v > 1.0 - *atol);
 
         let feasible = if indicator_on {
             // Indicator ON → check constraint as usual
@@ -55,7 +55,7 @@ impl Evaluate for IndicatorConstraint<Created> {
                 let indicator_on = state
                     .entries
                     .get(&self.indicator_variable.into_inner())
-                    .map_or(false, |v| *v > 1.0 - *atol);
+                    .is_some_and(|v| *v > 1.0 - *atol);
 
                 let ev = evaluated_values
                     .get(crate::SampleID::from(*sample_id))
@@ -111,7 +111,7 @@ impl Evaluate for RemovedIndicatorConstraint {
         let indicator_on = state
             .entries
             .get(&self.indicator_variable.into_inner())
-            .map_or(false, |v| *v > 1.0 - *atol);
+            .is_some_and(|v| *v > 1.0 - *atol);
 
         let feasible = if indicator_on {
             match self.equality {
@@ -151,7 +151,7 @@ impl Evaluate for RemovedIndicatorConstraint {
                 let indicator_on = state
                     .entries
                     .get(&self.indicator_variable.into_inner())
-                    .map_or(false, |v| *v > 1.0 - *atol);
+                    .is_some_and(|v| *v > 1.0 - *atol);
 
                 let ev = evaluated_values
                     .get(crate::SampleID::from(*sample_id))

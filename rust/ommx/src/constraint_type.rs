@@ -23,7 +23,7 @@
 //! [`ConstraintCapability`]: crate::ConstraintCapability
 
 use crate::{
-    constraint::{ConstraintID, EvaluatedConstraint, RemovedConstraint, SampledConstraint, Stage},
+    constraint::{ConstraintID, EvaluatedConstraint, RemovedConstraint, SampledConstraint},
     v1, ATol, Constraint, Evaluate, SampleID, VariableIDSet,
 };
 use anyhow::Result;
