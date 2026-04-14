@@ -261,6 +261,21 @@ impl Instance {
             .collect()
     }
 
+    /// Check that the adapter's supported capabilities cover this instance's requirements.
+    ///
+    /// `supported` is a set of `ConstraintCapability` flags.
+    ///
+    /// Raises an error if the instance uses constraint types not in `supported`.
+    pub fn check_capabilities(
+        &self,
+        supported: std::collections::HashSet<crate::ConstraintCapability>,
+    ) -> anyhow::Result<()> {
+        let rust_supported: fnv::FnvHashSet<ommx::ConstraintCapability> =
+            supported.into_iter().map(|c| c.into()).collect();
+        self.inner.check_capabilities(&rust_supported)?;
+        Ok(())
+    }
+
     /// List of all removed constraints in the instance sorted by their IDs.
     #[getter]
     pub fn removed_constraints(&self) -> Vec<RemovedConstraint> {

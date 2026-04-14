@@ -7,7 +7,6 @@ import math
 
 from ommx.adapter import (
     SolverAdapter,
-    ConstraintCapability,
     InfeasibleDetected,
     UnboundedDetected,
     NoSolutionReturned,
@@ -18,6 +17,7 @@ from ommx.v1 import (
     DecisionVariable,
     Function,
     Constraint,
+    ConstraintCapability,
     State,
     ToState,
 )
@@ -29,7 +29,7 @@ HintMode = Literal["disabled", "auto", "forced"]
 
 
 class OMMXPySCIPOptAdapter(SolverAdapter):
-    supported_constraints = ConstraintCapability.STANDARD | ConstraintCapability.INDICATOR
+    supported_constraints = {ConstraintCapability.Standard, ConstraintCapability.Indicator}
     use_sos1: HintMode
 
     def __init__(

@@ -4,6 +4,7 @@
 from ommx._ommx_rust import (
     Bound,
     Constraint,
+    ConstraintCapability,
     ConstraintHints,
     DecisionVariable,
     DecisionVariableAnalysis,
@@ -12,6 +13,7 @@ from ommx._ommx_rust import (
     EvaluatedDecisionVariable,
     EvaluatedNamedFunction,
     Function,
+    IndicatorConstraint,
     Instance,
     Kind,
     Linear,
@@ -41,6 +43,7 @@ from ommx._ommx_rust import (
 __all__ = [
     "Bound",
     "Constraint",
+    "ConstraintCapability",
     "ConstraintHints",
     "DecisionVariable",
     "DecisionVariableAnalysis",
@@ -49,6 +52,7 @@ __all__ = [
     "EvaluatedDecisionVariable",
     "EvaluatedNamedFunction",
     "Function",
+    "IndicatorConstraint",
     "Instance",
     "Kind",
     "Linear",

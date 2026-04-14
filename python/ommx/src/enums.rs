@@ -1,5 +1,37 @@
 use pyo3::prelude::*;
 
+/// Constraint type capability flag.
+///
+/// Used to declare which constraint types a solver adapter supports.
+/// Use as a set: `{ConstraintCapability.Standard, ConstraintCapability.Indicator}`
+#[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
+#[pyclass(eq, eq_int, hash, frozen)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ConstraintCapability {
+    /// Standard constraints: f(x) = 0 or f(x) <= 0
+    Standard = 1,
+    /// Indicator constraints: binvar = 1 → f(x) <= 0
+    Indicator = 2,
+}
+
+impl From<ommx::ConstraintCapability> for ConstraintCapability {
+    fn from(cap: ommx::ConstraintCapability) -> Self {
+        match cap {
+            ommx::ConstraintCapability::Standard => ConstraintCapability::Standard,
+            ommx::ConstraintCapability::Indicator => ConstraintCapability::Indicator,
+        }
+    }
+}
+
+impl From<ConstraintCapability> for ommx::ConstraintCapability {
+    fn from(cap: ConstraintCapability) -> Self {
+        match cap {
+            ConstraintCapability::Standard => ommx::ConstraintCapability::Standard,
+            ConstraintCapability::Indicator => ommx::ConstraintCapability::Indicator,
+        }
+    }
+}
+
 /// Sense of optimization (minimize or maximize)
 #[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
 #[pyclass(eq, eq_int)]

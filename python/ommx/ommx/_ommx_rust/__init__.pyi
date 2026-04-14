@@ -16,6 +16,7 @@ __all__ = [
     "ArtifactBuilder",
     "Bound",
     "Constraint",
+    "ConstraintCapability",
     "ConstraintHints",
     "DecisionVariable",
     "DecisionVariableAnalysis",
@@ -25,6 +26,7 @@ __all__ = [
     "EvaluatedDecisionVariable",
     "EvaluatedNamedFunction",
     "Function",
+    "IndicatorConstraint",
     "Instance",
     "InstanceDescription",
     "Kind",
@@ -617,6 +619,14 @@ class Constraint:
         Add a parameter to the constraint
         Returns self for method chaining
         """
+    def with_indicator(
+        self, indicator_variable: DecisionVariable
+    ) -> IndicatorConstraint:
+        r"""
+        Create an indicator constraint from this constraint.
+
+        Returns an IndicatorConstraint where `indicator_variable = 1 → this constraint`.
+        """
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> Constraint: ...
     def __deepcopy__(self, _memo: typing.Any) -> Constraint: ...
@@ -1205,6 +1215,64 @@ class Function:
         """
 
 @typing.final
+class IndicatorConstraint:
+    @property
+    def id(self) -> builtins.int: ...
+    @property
+    def indicator_variable_id(self) -> builtins.int: ...
+    @property
+    def function(self) -> Function: ...
+    @property
+    def equality(self) -> Equality: ...
+    @property
+    def name(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]: ...
+    @property
+    def description(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
+    def __new__(
+        cls,
+        *,
+        indicator_variable: DecisionVariable,
+        function: ToFunction,
+        equality: Equality,
+        id: typing.Optional[builtins.int] = None,
+        name: typing.Optional[builtins.str] = None,
+        subscripts: typing.Sequence[builtins.int] = [],
+        description: typing.Optional[builtins.str] = None,
+        parameters: typing.Mapping[builtins.str, builtins.str] = {},
+    ) -> IndicatorConstraint:
+        r"""
+        Create a new indicator constraint.
+
+        An indicator constraint is: `indicator_variable = 1 → f(x) <= 0` (or `f(x) = 0`).
+
+        **Args:**
+
+        - `indicator_variable`: A binary decision variable that activates this constraint
+        - `function`: The constraint function
+        - `equality`: The equality type (EqualToZero or LessThanOrEqualToZero)
+        - `id`: Optional constraint ID (auto-generated if not provided)
+        - `name`: Optional name for the constraint
+        - `subscripts`: Optional subscripts for indexing
+        - `description`: Optional description
+        - `parameters`: Optional key-value parameters
+        """
+    def set_name(self, name: builtins.str) -> IndicatorConstraint:
+        r"""
+        Set the constraint name. Returns a new IndicatorConstraint.
+        """
+    def set_id(self, id: builtins.int) -> IndicatorConstraint:
+        r"""
+        Set the constraint ID. Returns a new IndicatorConstraint.
+        """
+    def __repr__(self) -> builtins.str: ...
+    def __copy__(self) -> IndicatorConstraint: ...
+    def __deepcopy__(self, _memo: typing.Any) -> IndicatorConstraint: ...
+
+@typing.final
 class Instance:
     r"""
     Optimization problem instance.
@@ -1323,6 +1391,11 @@ class Instance:
         List of all constraints in the instance sorted by their IDs.
         """
     @property
+    def indicator_constraints(self) -> builtins.list[IndicatorConstraint]:
+        r"""
+        List of all indicator constraints in the instance sorted by their IDs.
+        """
+    @property
     def removed_constraints(self) -> builtins.list[RemovedConstraint]:
         r"""
         List of all removed constraints in the instance sorted by their IDs.
@@ -1389,6 +1462,9 @@ class Instance:
         objective: ToFunction,
         decision_variables: typing.Sequence[DecisionVariable],
         constraints: typing.Sequence[Constraint],
+        indicator_constraints: typing.Optional[
+            typing.Sequence[IndicatorConstraint]
+        ] = None,
         named_functions: typing.Optional[typing.Sequence[NamedFunction]] = None,
         description: typing.Optional[InstanceDescription] = None,
         constraint_hints: typing.Optional[ConstraintHints] = None,
@@ -1421,6 +1497,14 @@ class Instance:
         >>> instance.sense == Instance.MINIMIZE
         True
         ```
+        """
+    def check_capabilities(self, supported: builtins.set[ConstraintCapability]) -> None:
+        r"""
+        Check that the adapter's supported capabilities cover this instance's requirements.
+
+        `supported` is a set of `ConstraintCapability` flags.
+
+        Raises an error if the instance uses constraint types not in `supported`.
         """
     def to_bytes(self) -> bytes: ...
     def required_ids(self) -> builtins.set[builtins.int]:
@@ -4143,6 +4227,24 @@ class State:
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> State: ...
     def __deepcopy__(self, _memo: typing.Any) -> State: ...
+
+@typing.final
+class ConstraintCapability(enum.Enum):
+    r"""
+    Constraint type capability flag.
+
+    Used to declare which constraint types a solver adapter supports.
+    Use as a set: `{ConstraintCapability.Standard, ConstraintCapability.Indicator}`
+    """
+
+    Standard = ...
+    r"""
+    Standard constraints: f(x) = 0 or f(x) <= 0
+    """
+    Indicator = ...
+    r"""
+    Indicator constraints: binvar = 1 → f(x) <= 0
+    """
 
 @typing.final
 class Equality(enum.Enum):

@@ -40,6 +40,30 @@ use crate::{
 };
 use std::collections::BTreeMap;
 
+/// A constraint type capability flag.
+///
+/// Used to declare which constraint types a solver adapter supports
+/// and to check what an Instance requires.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ConstraintCapability {
+    /// Standard constraints: f(x) = 0 or f(x) <= 0
+    Standard,
+    /// Indicator constraints: binvar = 1 → f(x) <= 0
+    Indicator,
+}
+
+/// Error returned when an Instance contains unsupported constraint types.
+#[derive(Debug, Clone, thiserror::Error)]
+pub struct UnsupportedConstraints {
+    pub unsupported: Vec<ConstraintCapability>,
+}
+
+impl std::fmt::Display for UnsupportedConstraints {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Unsupported constraint types: {:?}", self.unsupported)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub enum Sense {
     #[default]
@@ -134,6 +158,34 @@ impl Instance {
     /// The full indicator constraint collection (active + removed).
     pub fn indicator_constraint_collection(&self) -> &ConstraintCollection<IndicatorConstraint> {
         &self.indicator_constraint_collection
+    }
+
+    /// Returns the set of constraint capabilities required by this instance.
+    pub fn required_capabilities(&self) -> fnv::FnvHashSet<ConstraintCapability> {
+        let mut caps = fnv::FnvHashSet::default();
+        if !self.constraints().is_empty() || !self.removed_constraints().is_empty() {
+            caps.insert(ConstraintCapability::Standard);
+        }
+        if !self.indicator_constraints().is_empty() {
+            caps.insert(ConstraintCapability::Indicator);
+        }
+        caps
+    }
+
+    /// Check that the given supported capabilities cover all constraint types in this instance.
+    ///
+    /// Returns an error listing unsupported constraint types if any are found.
+    pub fn check_capabilities(
+        &self,
+        supported: &fnv::FnvHashSet<ConstraintCapability>,
+    ) -> Result<(), UnsupportedConstraints> {
+        let required = self.required_capabilities();
+        let unsupported: Vec<_> = required.difference(supported).copied().collect();
+        if unsupported.is_empty() {
+            Ok(())
+        } else {
+            Err(UnsupportedConstraints { unsupported })
+        }
     }
 }
 
