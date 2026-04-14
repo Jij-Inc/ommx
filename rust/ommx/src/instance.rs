@@ -73,6 +73,18 @@ pub enum Sense {
 
 /// Instance, represents a mathematical optimization problem.
 ///
+/// # Multi-type constraint architecture
+///
+/// Instance holds multiple [`ConstraintCollection`]s, one per constraint type:
+/// - [`Constraint`]: standard constraints (`f(x) = 0` or `f(x) <= 0`)
+/// - [`IndicatorConstraint`]: indicator constraints (`binvar = 1 → f(x) <= 0`)
+///
+/// Future constraint types (Disjunction, SOS1, OneHot, etc.) follow the same pattern:
+/// add a new `ConstraintCollection<NewType>` field. See [`ConstraintType`] for details.
+///
+/// Each constraint type has its own independent ID space. Adapter compatibility is checked
+/// via [`ConstraintCapability`] and [`Instance::check_capabilities`].
+///
 /// Invariants
 /// -----------
 /// - [`Self::decision_variables`] contains all decision variables used in the problem.

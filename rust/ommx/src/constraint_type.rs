@@ -1,9 +1,26 @@
 //! Type family for constraint types.
 //!
-//! Each constraint type's Created form (e.g. `Constraint`, `IndicatorConstraint`)
+//! Each constraint type's Created form (e.g. [`Constraint`], [`IndicatorConstraint`])
 //! implements [`ConstraintType`], mapping lifecycle stages to concrete types.
 //!
 //! This is a defunctionalization of `Stage → Type` since Rust lacks higher-kinded types.
+//!
+//! # Adding new constraint types
+//!
+//! To add a new constraint type (e.g. Disjunction, SOS1, OneHot):
+//!
+//! 1. Define a new struct `NewConstraint<S: Stage<Self> = Created>` with common fields
+//!    (`id`, `equality`, `metadata`, `stage`) plus type-specific fields.
+//! 2. Implement `Stage<NewConstraint<S>>` for each stage marker (reuse `CreatedData`,
+//!    `RemovedData`, etc. if the stage data is the same as regular constraints).
+//! 3. Implement `ConstraintType for NewConstraint` mapping all four stages.
+//! 4. Implement `Evaluate` for `NewConstraint<Created>` and `NewConstraint<Removed>`.
+//! 5. Add a `ConstraintCollection<NewConstraint>` field to [`Instance`].
+//! 6. Add a variant to [`ConstraintCapability`] and update `Instance::required_capabilities`.
+//!
+//! [`IndicatorConstraint`]: crate::IndicatorConstraint
+//! [`Instance`]: crate::Instance
+//! [`ConstraintCapability`]: crate::ConstraintCapability
 
 use crate::{
     constraint::{ConstraintID, EvaluatedConstraint, RemovedConstraint, SampledConstraint, Stage},
