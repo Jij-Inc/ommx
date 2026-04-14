@@ -4,43 +4,7 @@ README for Developers of OMMX
 Taskfile
 ---------
 This project uses [Taskfile](https://taskfile.dev/#/) to manage development tasks. See https://taskfile.dev/installation/ for installation.
-You can get a list of available tasks by running `task -l` in the root directory of the project like below:
-
-```text
-$ task -l
-task: Available tasks for this project:
-* api_reference:build:                       Build the API Reference of Python SDK
-* api_reference:default:                     Build and Open the API Reference of Python SDK      (aliases: api_reference)
-* api_reference:open:                        Open the API Reference of Python SDK
-* api_reference:pip_compile:                 Compile pyproject.toml into requirements.txt for Read the Docs
-* book_en:build:                             Build the book in docs/en
-* book_en:default:                           Build and open the book in docs/en      (aliases: book_en)
-* book_en:open:                              Open the book in docs/en
-* book_en:watch:                             Watch the book in docs/en
-* book_ja:build:                             Build the book in docs/ja
-* book_ja:default:                           Build and open the book in docs/ja      (aliases: book_ja)
-* book_ja:open:                              Open the book in docs/ja
-* book_ja:watch:                             Watch the book in docs/ja
-* proto:default:                             Generate code from Protobuf definitions      (aliases: proto)
-* proto:rust:                                Generate Rust code from Protobuf definitions
-* python:default:                            Sync and Run tests for all Python projects      (aliases: python)
-* python:doc:                                Build and Open API reference documentation
-* python:format:                             Format Python code
-* python:ommx-openjij-adapter:test:          Run tests for OMMX OpenJij Adapter
-* python:ommx-pyscipopt-adapter:test:        Run tests for OMMX PySCIPOpt Adapter
-* python:ommx-python-mip-adapter:test:       Run tests for OMMX Python-MIP Adapter
-* python:ommx:pyright:                       Type check OMMX Python SDK
-* python:ommx:pytest:                        Run pytest for OMMX Python SDK
-* python:ommx:test:                          Run tests for OMMX Python SDK
-* python:set-version:                        Set the version for all Python projects
-* python:stubgen:                            Generate stubs files for Rust extension
-* python:sync:                               Setup Python development environment, Rebuild Python SDK
-* python:test:                               Run tests for all Python projects
-* rust:check:                                Run check for Rust SDK
-* rust:clippy:                               Run clippy for Rust SDK
-* rust:doc:                                  Generate and Open documentation for Rust SDK
-* rust:test:                                 Run tests for Rust SDK
-```
+You can get a list of available tasks by running `task -l` in the root directory of the project.
 
 > [!NOTE]
 > When you run `task` command, it will automatically detect the `Taskfile.yml` from current directory or parent directories.
@@ -165,21 +129,19 @@ The Python SDK and adapters are released to [PyPI](https://pypi.org/) from the [
 [`docs/`](./docs/)
 -------------------
 
+Documentation is built with [Sphinx](https://www.sphinx-doc.org/) and hosted on GitHub Pages and Read the Docs.
+
 | Directory | Description | GitHub Pages  | Read the Docs |
 |:----------|:------------|:--------------|:--------------|
-| [`docs/en/`](./docs/en/) | English version of Jupyter Book | [![Book/en](https://img.shields.io/badge/Book-English-blue)](https://jij-inc.github.io/ommx/en) | [![RTD](https://readthedocs.org/projects/ommx-en-book/badge/?version=latest)](https://ommx-en-book.readthedocs.io/en/latest/?badge=latest) |
-| [`docs/ja/`](./docs/ja/) | Japanese version of Jupyter Book | [![Book/ja](https://img.shields.io/badge/Book-日本語-blue)](https://jij-inc.github.io/ommx/ja) | [![RTD](https://readthedocs.org/projects/ommx-ja-book/badge/?version=latest)](https://ommx-ja-book.readthedocs.io/ja/latest/?badge=latest) |
-| [`docs/api_reference/`](./docs/api_reference/) | API Reference of Python SDK and adapters | [![API Reference](https://img.shields.io/badge/API%20Reference-main-blue)](https://jij-inc.github.io/ommx/python/ommx/autoapi/index.html) | [![RTD](https://readthedocs.org/projects/ommx/badge/?version=latest)](https://ommx.readthedocs.io/en/latest/?badge=latest) |
+| [`docs/en/`](./docs/en/) | English documentation | [![Book/en](https://img.shields.io/badge/Book-English-blue)](https://jij-inc.github.io/ommx/en) | [![RTD](https://readthedocs.org/projects/ommx-en-book/badge/?version=latest)](https://ommx-en-book.readthedocs.io/en/latest/?badge=latest) |
+| [`docs/ja/`](./docs/ja/) | Japanese documentation | [![Book/ja](https://img.shields.io/badge/Book-日本語-blue)](https://jij-inc.github.io/ommx/ja) | [![RTD](https://readthedocs.org/projects/ommx-ja-book/badge/?version=latest)](https://ommx-ja-book.readthedocs.io/ja/latest/?badge=latest) |
+| [`docs/api/`](./docs/api/) | API Reference (generated by pyo3-stub-gen, shared by en/ja via symlink) | | |
 
-### Build and open the book
+The API reference for PyO3 bindings (`ommx.v1`, `ommx.artifact`) is generated by [pyo3-stub-gen](https://github.com/Jij-Inc/pyo3-stub-gen) into `docs/api/`. Both `docs/en/` and `docs/ja/` include it via a symlink (`docs/en/api -> ../api`). The `docs/api/index.rst` is hand-maintained to include additional autoapi entries for adapters and utilities.
+
+### Build and open the documentation
 
 ```shell
 task book_en
 task book_ja
-```
-
-### Build and open the API Reference
-
-```shell
-task api_reference
 ```
