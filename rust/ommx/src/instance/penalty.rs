@@ -148,14 +148,15 @@ impl Instance {
     ///
     /// where $\lambda$ is the single penalty parameter.
     pub fn uniform_penalty_method(self) -> Result<ParametricInstance> {
-        // Early return if no constraints
+        // Early return if no active constraints (preserve any existing removed constraints)
         if self.constraints().is_empty() {
+            let (_active, existing_removed) = self.constraint_collection.into_parts();
             return Ok(ParametricInstance {
                 sense: self.sense,
                 objective: self.objective,
                 decision_variables: self.decision_variables,
                 parameters: BTreeMap::new(),
-                constraint_collection: ConstraintCollection::new(BTreeMap::new(), BTreeMap::new()),
+                constraint_collection: ConstraintCollection::new(BTreeMap::new(), existing_removed),
                 decision_variable_dependency: self.decision_variable_dependency,
                 constraint_hints: self.constraint_hints,
                 description: self.description,
