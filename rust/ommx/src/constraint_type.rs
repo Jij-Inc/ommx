@@ -24,7 +24,7 @@
 
 use crate::{
     constraint::{ConstraintID, EvaluatedConstraint, RemovedConstraint, SampledConstraint, Stage},
-    v1, ATol, Constraint, Evaluate, VariableIDSet,
+    v1, ATol, Constraint, Evaluate, SampleID, VariableIDSet,
 };
 use anyhow::Result;
 use std::collections::BTreeMap;
@@ -44,19 +44,50 @@ pub trait ConstraintType {
     /// The constraint after being removed/relaxed.
     type Removed: Evaluate<Output = Self::Evaluated, SampledOutput = Self::Sampled>;
     /// The constraint after evaluation against a single state.
-    type Evaluated: HasConstraintID;
+    type Evaluated: EvaluatedConstraintBehavior;
     /// The constraint after evaluation against multiple samples.
-    type Sampled: HasConstraintID;
+    type Sampled: SampledConstraintBehavior;
 }
 
-/// Trait for types that carry a ConstraintID.
-pub trait HasConstraintID {
+/// Common behavior for an evaluated constraint (single state evaluation result).
+pub trait EvaluatedConstraintBehavior {
     fn constraint_id(&self) -> ConstraintID;
+    fn is_feasible(&self) -> bool;
+    fn is_removed(&self) -> bool;
 }
 
-impl<S: Stage<Constraint<S>>> HasConstraintID for Constraint<S> {
+/// Common behavior for a sampled constraint (multi-sample evaluation result).
+pub trait SampledConstraintBehavior {
+    fn constraint_id(&self) -> ConstraintID;
+    fn is_feasible_for(&self, sample_id: SampleID) -> Option<bool>;
+    fn is_removed(&self) -> bool;
+}
+
+// ===== Blanket-like impls for Constraint<Evaluated> and Constraint<Sampled> =====
+// Both Constraint and IndicatorConstraint share EvaluatedData/SampledData in their stage,
+// so the implementations are identical.
+
+impl EvaluatedConstraintBehavior for EvaluatedConstraint {
     fn constraint_id(&self) -> ConstraintID {
         self.id
+    }
+    fn is_feasible(&self) -> bool {
+        self.stage.feasible
+    }
+    fn is_removed(&self) -> bool {
+        self.stage.removed_reason.is_some()
+    }
+}
+
+impl SampledConstraintBehavior for SampledConstraint {
+    fn constraint_id(&self) -> ConstraintID {
+        self.id
+    }
+    fn is_feasible_for(&self, sample_id: SampleID) -> Option<bool> {
+        self.stage.feasible.get(&sample_id).copied()
+    }
+    fn is_removed(&self) -> bool {
+        self.stage.removed_reason.is_some()
     }
 }
 

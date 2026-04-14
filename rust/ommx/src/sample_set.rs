@@ -534,28 +534,30 @@ impl SampleSetBuilder {
         indicator_constraints: &BTreeMap<ConstraintID, SampledIndicatorConstraint>,
         sample_ids: &SampleIDSet,
     ) -> (BTreeMap<SampleID, bool>, BTreeMap<SampleID, bool>) {
+        use crate::constraint_type::SampledConstraintBehavior;
+
+        fn check_all<T: SampledConstraintBehavior>(
+            constraints: &BTreeMap<ConstraintID, T>,
+            sample_id: &SampleID,
+            relaxed: bool,
+        ) -> bool {
+            constraints
+                .values()
+                .filter(|c| !relaxed || !c.is_removed())
+                .all(|c| c.is_feasible_for(*sample_id).unwrap_or(false))
+        }
+
         let mut feasible = BTreeMap::new();
         let mut feasible_relaxed = BTreeMap::new();
 
         for sample_id in sample_ids {
-            let regular_feasible = constraints
-                .values()
-                .all(|c| c.stage.feasible.get(sample_id).copied().unwrap_or(false));
-            let indicator_feasible = indicator_constraints
-                .values()
-                .all(|c| c.stage.feasible.get(sample_id).copied().unwrap_or(false));
+            let f = check_all(constraints, sample_id, false)
+                && check_all(indicator_constraints, sample_id, false);
+            let fr = check_all(constraints, sample_id, true)
+                && check_all(indicator_constraints, sample_id, true);
 
-            let regular_relaxed = constraints
-                .values()
-                .filter(|c| c.stage.removed_reason.is_none())
-                .all(|c| c.stage.feasible.get(sample_id).copied().unwrap_or(false));
-            let indicator_relaxed = indicator_constraints
-                .values()
-                .filter(|c| c.stage.removed_reason.is_none())
-                .all(|c| c.stage.feasible.get(sample_id).copied().unwrap_or(false));
-
-            feasible.insert(*sample_id, regular_feasible && indicator_feasible);
-            feasible_relaxed.insert(*sample_id, regular_relaxed && indicator_relaxed);
+            feasible.insert(*sample_id, f);
+            feasible_relaxed.insert(*sample_id, fr);
         }
 
         (feasible, feasible_relaxed)

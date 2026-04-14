@@ -5,8 +5,8 @@ use crate::{
         stage, ConstraintID, ConstraintMetadata, Created, CreatedData, Equality, Evaluated,
         EvaluatedData, Removed, RemovedData, SampledData, Stage,
     },
-    constraint_type::{ConstraintType, HasConstraintID},
-    Function, VariableID,
+    constraint_type::{ConstraintType, EvaluatedConstraintBehavior, SampledConstraintBehavior},
+    Function, SampleID, VariableID,
 };
 
 /// An indicator constraint: `indicator_variable = 1 → f(x) <= 0` (or `= 0`).
@@ -50,9 +50,27 @@ pub type SampledIndicatorConstraint = IndicatorConstraint<stage::Sampled>;
 
 // ===== HasConstraintID =====
 
-impl<S: Stage<IndicatorConstraint<S>>> HasConstraintID for IndicatorConstraint<S> {
+impl EvaluatedConstraintBehavior for EvaluatedIndicatorConstraint {
     fn constraint_id(&self) -> ConstraintID {
         self.id
+    }
+    fn is_feasible(&self) -> bool {
+        self.stage.feasible
+    }
+    fn is_removed(&self) -> bool {
+        self.stage.removed_reason.is_some()
+    }
+}
+
+impl SampledConstraintBehavior for SampledIndicatorConstraint {
+    fn constraint_id(&self) -> ConstraintID {
+        self.id
+    }
+    fn is_feasible_for(&self, sample_id: SampleID) -> Option<bool> {
+        self.stage.feasible.get(&sample_id).copied()
+    }
+    fn is_removed(&self) -> bool {
+        self.stage.removed_reason.is_some()
     }
 }
 

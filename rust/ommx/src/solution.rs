@@ -188,13 +188,12 @@ impl Solution {
     /// - To check both constraints and decision variables, use [`feasible()`](Self::feasible)
     /// - To check only decision variables, use [`feasible_decision_variables()`](Self::feasible_decision_variables)
     pub fn feasible_constraints(&self) -> bool {
-        self.evaluated_constraints
-            .values()
-            .all(|c| c.stage.feasible)
+        use crate::constraint_type::EvaluatedConstraintBehavior;
+        self.evaluated_constraints.values().all(|c| c.is_feasible())
             && self
                 .evaluated_indicator_constraints
                 .values()
-                .all(|c| c.stage.feasible)
+                .all(|c| c.is_feasible())
     }
 
     /// Check if all constraints and decision variables are feasible
@@ -212,15 +211,16 @@ impl Solution {
     /// - To check both constraints and decision variables, use [`feasible_relaxed()`](Self::feasible_relaxed)
     /// - To check only decision variables, use [`feasible_decision_variables()`](Self::feasible_decision_variables)
     pub fn feasible_constraints_relaxed(&self) -> bool {
+        use crate::constraint_type::EvaluatedConstraintBehavior;
         self.evaluated_constraints
             .values()
-            .filter(|c| c.stage.removed_reason.is_none())
-            .all(|c| c.stage.feasible)
+            .filter(|c| !c.is_removed())
+            .all(|c| c.is_feasible())
             && self
                 .evaluated_indicator_constraints
                 .values()
-                .filter(|c| c.stage.removed_reason.is_none())
-                .all(|c| c.stage.feasible)
+                .filter(|c| !c.is_removed())
+                .all(|c| c.is_feasible())
     }
 
     /// Check if all constraints and decision variables are feasible in the relaxed problem
