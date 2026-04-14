@@ -16,11 +16,11 @@
 //! 3. Implement `ConstraintType for NewConstraint` mapping all four stages.
 //! 4. Implement `Evaluate` for `NewConstraint<Created>` and `NewConstraint<Removed>`.
 //! 5. Add a `ConstraintCollection<NewConstraint>` field to [`Instance`].
-//! 6. Add a variant to [`ConstraintCapability`] and update `Instance::required_capabilities`.
+//! 6. Add a variant to [`AdditionalCapability`] and update `Instance::required_capabilities`.
 //!
 //! [`IndicatorConstraint`]: crate::IndicatorConstraint
 //! [`Instance`]: crate::Instance
-//! [`ConstraintCapability`]: crate::ConstraintCapability
+//! [`AdditionalCapability`]: crate::AdditionalCapability
 
 use crate::{
     constraint::{ConstraintID, EvaluatedConstraint, RemovedConstraint, SampledConstraint},

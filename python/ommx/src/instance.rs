@@ -263,14 +263,14 @@ impl Instance {
 
     /// Check that the adapter's supported capabilities cover this instance's requirements.
     ///
-    /// `supported` is a set of `ConstraintCapability` flags.
+    /// `supported` is a set of `AdditionalCapability` flags.
     ///
     /// Raises an error if the instance uses constraint types not in `supported`.
     pub fn check_capabilities(
         &self,
-        supported: std::collections::HashSet<crate::ConstraintCapability>,
+        supported: std::collections::HashSet<crate::AdditionalCapability>,
     ) -> anyhow::Result<()> {
-        let rust_supported: fnv::FnvHashSet<ommx::ConstraintCapability> =
+        let rust_supported: fnv::FnvHashSet<ommx::AdditionalCapability> =
             supported.into_iter().map(|c| c.into()).collect();
         self.inner.check_capabilities(&rust_supported)?;
         Ok(())

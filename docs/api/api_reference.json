@@ -1521,6 +1521,21 @@
       "items": [
         {
           "kind": "Class",
+          "name": "AdditionalCapability",
+          "doc": "Constraint type capability flag for non-standard constraint types.\n\nStandard constraints are always supported. This enum lists capabilities\nthat adapters must explicitly opt in to.\n\nUse as a set: `{AdditionalCapability.Indicator}`",
+          "bases": [],
+          "methods": [],
+          "attributes": [
+            {
+              "name": "Indicator",
+              "doc": "Indicator constraints: binvar = 1 → f(x) <= 0",
+              "type_": null
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
           "name": "Bound",
           "doc": "Variable bound wrapper for Python\n\nNote: This struct is named `VariableBound` in Rust code to avoid conflicts with PyO3's `Bound` type,\nbut is exposed as `Bound` in Python through the `#[pyclass(name = \"Bound\")]` attribute.",
           "bases": [],
@@ -2648,26 +2663,6 @@
               },
               "is_property": true,
               "is_readonly": true
-            }
-          ],
-          "deprecated": null
-        },
-        {
-          "kind": "Class",
-          "name": "ConstraintCapability",
-          "doc": "Constraint type capability flag.\n\nUsed to declare which constraint types a solver adapter supports.\nUse as a set: `{ConstraintCapability.Standard, ConstraintCapability.Indicator}`",
-          "bases": [],
-          "methods": [],
-          "attributes": [
-            {
-              "name": "Indicator",
-              "doc": "Indicator constraints: binvar = 1 → f(x) <= 0",
-              "type_": null
-            },
-            {
-              "name": "Standard",
-              "doc": "Standard constraints: f(x) = 0 or f(x) <= 0",
-              "type_": null
             }
           ],
           "deprecated": null
@@ -7591,18 +7586,18 @@
             },
             {
               "name": "check_capabilities",
-              "doc": "Check that the adapter's supported capabilities cover this instance's requirements.\n\n`supported` is a set of `ConstraintCapability` flags.\n\nRaises an error if the instance uses constraint types not in `supported`.",
+              "doc": "Check that the adapter's supported capabilities cover this instance's requirements.\n\n`supported` is a set of `AdditionalCapability` flags.\n\nRaises an error if the instance uses constraint types not in `supported`.",
               "signatures": [
                 {
                   "parameters": [
                     {
                       "name": "supported",
                       "type_": {
-                        "display": "set[ConstraintCapability]",
+                        "display": "set[AdditionalCapability]",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "ConstraintCapability",
+                            "display": "AdditionalCapability",
                             "link_target": null,
                             "children": []
                           }
@@ -19652,9 +19647,9 @@
     "ommx.artifact.get_images": "ommx.artifact",
     "ommx.artifact.get_local_registry_root": "ommx.artifact",
     "ommx.artifact.set_local_registry_root": "ommx.artifact",
+    "ommx.v1.AdditionalCapability": "ommx.v1",
     "ommx.v1.Bound": "ommx.v1",
     "ommx.v1.Constraint": "ommx.v1",
-    "ommx.v1.ConstraintCapability": "ommx.v1",
     "ommx.v1.ConstraintHints": "ommx.v1",
     "ommx.v1.DecisionVariable": "ommx.v1",
     "ommx.v1.DecisionVariableAnalysis": "ommx.v1",

@@ -1,33 +1,31 @@
 use pyo3::prelude::*;
 
-/// Constraint type capability flag.
+/// Constraint type capability flag for non-standard constraint types.
 ///
-/// Used to declare which constraint types a solver adapter supports.
-/// Use as a set: `{ConstraintCapability.Standard, ConstraintCapability.Indicator}`
+/// Standard constraints are always supported. This enum lists capabilities
+/// that adapters must explicitly opt in to.
+///
+/// Use as a set: `{AdditionalCapability.Indicator}`
 #[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
 #[pyclass(eq, eq_int, hash, frozen)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ConstraintCapability {
-    /// Standard constraints: f(x) = 0 or f(x) <= 0
-    Standard = 1,
+pub enum AdditionalCapability {
     /// Indicator constraints: binvar = 1 → f(x) <= 0
-    Indicator = 2,
+    Indicator = 1,
 }
 
-impl From<ommx::ConstraintCapability> for ConstraintCapability {
-    fn from(cap: ommx::ConstraintCapability) -> Self {
+impl From<ommx::AdditionalCapability> for AdditionalCapability {
+    fn from(cap: ommx::AdditionalCapability) -> Self {
         match cap {
-            ommx::ConstraintCapability::Standard => ConstraintCapability::Standard,
-            ommx::ConstraintCapability::Indicator => ConstraintCapability::Indicator,
+            ommx::AdditionalCapability::Indicator => AdditionalCapability::Indicator,
         }
     }
 }
 
-impl From<ConstraintCapability> for ommx::ConstraintCapability {
-    fn from(cap: ConstraintCapability) -> Self {
+impl From<AdditionalCapability> for ommx::AdditionalCapability {
+    fn from(cap: AdditionalCapability) -> Self {
         match cap {
-            ConstraintCapability::Standard => ommx::ConstraintCapability::Standard,
-            ConstraintCapability::Indicator => ommx::ConstraintCapability::Indicator,
+            AdditionalCapability::Indicator => ommx::AdditionalCapability::Indicator,
         }
     }
 }

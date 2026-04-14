@@ -2,9 +2,9 @@
 # ruff: noqa: F401
 
 from ommx._ommx_rust import (
+    AdditionalCapability,
     Bound,
     Constraint,
-    ConstraintCapability,
     ConstraintHints,
     DecisionVariable,
     DecisionVariableAnalysis,
@@ -41,9 +41,9 @@ from ommx._ommx_rust import (
 )
 
 __all__ = [
+    "AdditionalCapability",
     "Bound",
     "Constraint",
-    "ConstraintCapability",
     "ConstraintHints",
     "DecisionVariable",
     "DecisionVariableAnalysis",

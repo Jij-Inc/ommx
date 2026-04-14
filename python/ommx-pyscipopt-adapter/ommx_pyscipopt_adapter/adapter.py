@@ -17,7 +17,7 @@ from ommx.v1 import (
     DecisionVariable,
     Function,
     Constraint,
-    ConstraintCapability,
+    AdditionalCapability,
     State,
     ToState,
 )
@@ -29,10 +29,7 @@ HintMode = Literal["disabled", "auto", "forced"]
 
 
 class OMMXPySCIPOptAdapter(SolverAdapter):
-    supported_constraints = {
-        ConstraintCapability.Standard,
-        ConstraintCapability.Indicator,
-    }
+    ADDITIONAL_CAPABILITIES = {AdditionalCapability.Indicator}
     use_sos1: HintMode
 
     def __init__(

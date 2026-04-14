@@ -281,11 +281,11 @@ Finally, create a class that inherits `ommx.adapter.SolverAdapter` to standardiz
 
 ```python
 class SolverAdapter(ABC):
-    supported_constraints: set[ConstraintCapability] = {ConstraintCapability.Standard}
+    ADDITIONAL_CAPABILITIES: set[AdditionalCapability] = set()
 
     def __init__(self, ommx_instance: Instance):
         """Checks constraint capabilities. Subclasses must call super().__init__()."""
-        ommx_instance.check_capabilities(self.supported_constraints)
+        ommx_instance.check_capabilities(self.ADDITIONAL_CAPABILITIES)
 
     @classmethod
     @abstractmethod
@@ -309,12 +309,11 @@ This abstract base class assumes the following two use cases:
 
 #### Constraint Capability Declaration
 
-Each adapter must declare which constraint types it supports via the `supported_constraints` class attribute. The base class automatically checks that the given `Instance` only uses supported constraint types when `super().__init__()` is called. Available capabilities are:
+Each adapter must declare which constraint types it supports via the `ADDITIONAL_CAPABILITIES` class attribute. The base class automatically checks that the given `Instance` only uses supported constraint types when `super().__init__()` is called. Available capabilities are:
 
-- `ConstraintCapability.Standard`: Standard constraints (`f(x) = 0` or `f(x) <= 0`)
-- `ConstraintCapability.Indicator`: Indicator constraints (`binvar = 1 → f(x) <= 0`)
+- `AdditionalCapability.Indicator`: Indicator constraints (`binvar = 1 → f(x) <= 0`)
 
-If the adapter does not override `supported_constraints`, only standard constraints are supported by default. If an `Instance` contains unsupported constraint types, an error is raised automatically.
+If the adapter does not override `ADDITIONAL_CAPABILITIES`, only standard constraints are supported by default. If an `Instance` contains unsupported constraint types, an error is raised automatically.
 
 ```{important}
 Subclasses **must** call `super().__init__(ommx_instance)` in their `__init__` method to enable the automatic constraint capability check.
@@ -324,11 +323,11 @@ Using the functions prepared so far, you can implement it as follows:
 
 ```{code-cell} ipython3
 from ommx.adapter import SolverAdapter
-from ommx.v1 import ConstraintCapability
+from ommx.v1 import AdditionalCapability
 
 class OMMXPySCIPOptAdapter(SolverAdapter):
     # PySCIPOpt supports both standard and indicator constraints
-    supported_constraints = {ConstraintCapability.Standard, ConstraintCapability.Indicator}
+    ADDITIONAL_CAPABILITIES = {AdditionalCapability.Indicator}
 
     def __init__(
         self,
@@ -580,7 +579,7 @@ sample_set.summary
 In this tutorial, we learned how to implement an OMMX Adapter by connecting to PySCIPOpt as a Solver Adapter and OpenJij as a Sampler Adapter. Here are the key points when implementing an OMMX Adapter:
 
 1. Implement an OMMX Adapter by inheriting the abstract base class `SolverAdapter` or `SamplerAdapter`.
-2. Declare supported constraint types via `supported_constraints` and call `super().__init__()` to enable automatic capability checking.
+2. Declare supported constraint types via `ADDITIONAL_CAPABILITIES` and call `super().__init__()` to enable automatic capability checking.
 3. The main steps of the implementation are as follows:
    - Convert `ommx.v1.Instance` into a format that the backend solver can understand.
    - Run the backend solver to obtain a solution.

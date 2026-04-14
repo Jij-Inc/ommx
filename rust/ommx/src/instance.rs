@@ -40,25 +40,24 @@ use crate::{
 };
 use std::collections::BTreeMap;
 
-/// A constraint type capability flag.
+/// A constraint type capability flag for non-standard constraint types.
 ///
-/// Used to declare which constraint types a solver adapter supports
-/// and to check what an Instance requires.
+/// Standard constraints (`f(x) = 0` or `f(x) <= 0`) are always supported by all adapters
+/// and do not need a capability flag. This enum only lists capabilities that adapters
+/// must explicitly opt in to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ConstraintCapability {
-    /// Standard constraints: f(x) = 0 or f(x) <= 0
-    Standard,
+pub enum AdditionalCapability {
     /// Indicator constraints: binvar = 1 → f(x) <= 0
     Indicator,
 }
 
 /// Error returned when an Instance contains unsupported constraint types.
 #[derive(Debug, Clone, thiserror::Error)]
-pub struct UnsupportedConstraints {
-    pub unsupported: Vec<ConstraintCapability>,
+pub struct UnsupportedCapabilities {
+    pub unsupported: Vec<AdditionalCapability>,
 }
 
-impl std::fmt::Display for UnsupportedConstraints {
+impl std::fmt::Display for UnsupportedCapabilities {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Unsupported constraint types: {:?}", self.unsupported)
     }
@@ -87,7 +86,7 @@ pub enum Sense {
 /// are distinct and do not conflict. Uniqueness is only required within the same type
 /// (i.e. active and removed constraints of the same type must have disjoint IDs).
 ///
-/// Adapter compatibility is checked via [`ConstraintCapability`] and [`Instance::check_capabilities`].
+/// Adapter compatibility is checked via [`AdditionalCapability`] and [`Instance::check_capabilities`].
 ///
 /// Invariants
 /// -----------
@@ -178,19 +177,15 @@ impl Instance {
         &self.indicator_constraint_collection
     }
 
-    /// Returns the set of constraint capabilities required by this instance
-    /// beyond the universally supported [`ConstraintCapability::Standard`].
-    ///
-    /// [`ConstraintCapability::Standard`] is always implicitly supported by all adapters
-    /// and is never included in the returned set.
+    /// Returns the set of non-standard constraint capabilities required by this instance.
     ///
     /// Only **active** constraints are considered. Removed (relaxed) constraints are excluded
     /// because they are not passed to solver adapters — adapters only need to handle
     /// constraint types that are actively part of the problem.
-    pub fn required_capabilities(&self) -> fnv::FnvHashSet<ConstraintCapability> {
+    pub fn required_capabilities(&self) -> fnv::FnvHashSet<AdditionalCapability> {
         let mut caps = fnv::FnvHashSet::default();
         if !self.indicator_constraint_collection.active().is_empty() {
-            caps.insert(ConstraintCapability::Indicator);
+            caps.insert(AdditionalCapability::Indicator);
         }
         caps
     }
@@ -202,14 +197,14 @@ impl Instance {
     /// Returns an error listing unsupported constraint types if any are found.
     pub fn check_capabilities(
         &self,
-        supported: &fnv::FnvHashSet<ConstraintCapability>,
-    ) -> Result<(), UnsupportedConstraints> {
+        supported: &fnv::FnvHashSet<AdditionalCapability>,
+    ) -> Result<(), UnsupportedCapabilities> {
         let required = self.required_capabilities();
         let unsupported: Vec<_> = required.difference(supported).copied().collect();
         if unsupported.is_empty() {
             Ok(())
         } else {
-            Err(UnsupportedConstraints { unsupported })
+            Err(UnsupportedCapabilities { unsupported })
         }
     }
 }

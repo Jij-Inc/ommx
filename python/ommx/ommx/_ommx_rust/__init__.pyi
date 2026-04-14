@@ -12,11 +12,11 @@ import typing
 from typing import TypeAlias
 
 __all__ = [
+    "AdditionalCapability",
     "Artifact",
     "ArtifactBuilder",
     "Bound",
     "Constraint",
-    "ConstraintCapability",
     "ConstraintHints",
     "DecisionVariable",
     "DecisionVariableAnalysis",
@@ -1503,11 +1503,11 @@ class Instance:
         True
         ```
         """
-    def check_capabilities(self, supported: builtins.set[ConstraintCapability]) -> None:
+    def check_capabilities(self, supported: builtins.set[AdditionalCapability]) -> None:
         r"""
         Check that the adapter's supported capabilities cover this instance's requirements.
 
-        `supported` is a set of `ConstraintCapability` flags.
+        `supported` is a set of `AdditionalCapability` flags.
 
         Raises an error if the instance uses constraint types not in `supported`.
         """
@@ -4234,18 +4234,16 @@ class State:
     def __deepcopy__(self, _memo: typing.Any) -> State: ...
 
 @typing.final
-class ConstraintCapability(enum.Enum):
+class AdditionalCapability(enum.Enum):
     r"""
-    Constraint type capability flag.
+    Constraint type capability flag for non-standard constraint types.
 
-    Used to declare which constraint types a solver adapter supports.
-    Use as a set: `{ConstraintCapability.Standard, ConstraintCapability.Indicator}`
+    Standard constraints are always supported. This enum lists capabilities
+    that adapters must explicitly opt in to.
+
+    Use as a set: `{AdditionalCapability.Indicator}`
     """
 
-    Standard = ...
-    r"""
-    Standard constraints: f(x) = 0 or f(x) <= 0
-    """
     Indicator = ...
     r"""
     Indicator constraints: binvar = 1 → f(x) <= 0
