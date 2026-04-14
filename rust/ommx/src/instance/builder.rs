@@ -28,9 +28,11 @@ pub struct InstanceBuilder {
     constraints: Option<BTreeMap<ConstraintID, Constraint>>,
     named_functions: BTreeMap<NamedFunctionID, NamedFunction>,
     removed_constraints: BTreeMap<ConstraintID, RemovedConstraint>,
-    indicator_constraints: BTreeMap<ConstraintID, crate::IndicatorConstraint>,
-    removed_indicator_constraints:
-        BTreeMap<ConstraintID, crate::indicator_constraint::RemovedIndicatorConstraint>,
+    indicator_constraints: BTreeMap<crate::IndicatorConstraintID, crate::IndicatorConstraint>,
+    removed_indicator_constraints: BTreeMap<
+        crate::IndicatorConstraintID,
+        crate::indicator_constraint::RemovedIndicatorConstraint,
+    >,
     decision_variable_dependency: AcyclicAssignments,
     constraint_hints: ConstraintHints,
     parameters: Option<v1::Parameters>,
@@ -91,7 +93,7 @@ impl InstanceBuilder {
     /// Sets the indicator constraints.
     pub fn indicator_constraints(
         mut self,
-        indicator_constraints: BTreeMap<ConstraintID, crate::IndicatorConstraint>,
+        indicator_constraints: BTreeMap<crate::IndicatorConstraintID, crate::IndicatorConstraint>,
     ) -> Self {
         self.indicator_constraints = indicator_constraints;
         self
@@ -101,7 +103,7 @@ impl InstanceBuilder {
     pub fn removed_indicator_constraints(
         mut self,
         removed_indicator_constraints: BTreeMap<
-            ConstraintID,
+            crate::IndicatorConstraintID,
             crate::indicator_constraint::RemovedIndicatorConstraint,
         >,
     ) -> Self {
@@ -242,7 +244,7 @@ impl InstanceBuilder {
         // Validate indicator constraints
         for (key, value) in &self.indicator_constraints {
             if *key != value.id {
-                return Err(InstanceError::InconsistentConstraintID {
+                return Err(InstanceError::InconsistentIndicatorConstraintID {
                     key: *key,
                     value_id: value.id,
                 }
@@ -265,7 +267,7 @@ impl InstanceBuilder {
         }
         for (key, value) in &self.removed_indicator_constraints {
             if *key != value.id {
-                return Err(InstanceError::InconsistentRemovedConstraintID {
+                return Err(InstanceError::InconsistentRemovedIndicatorConstraintID {
                     key: *key,
                     value_id: value.id,
                 }
@@ -280,7 +282,7 @@ impl InstanceBuilder {
         // Validate disjointness of indicator active/removed
         for id in self.removed_indicator_constraints.keys() {
             if self.indicator_constraints.contains_key(id) {
-                return Err(InstanceError::OverlappingConstraintID { id: *id }.into());
+                return Err(InstanceError::OverlappingIndicatorConstraintID { id: *id }.into());
             }
         }
 

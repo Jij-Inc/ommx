@@ -2,12 +2,48 @@ mod evaluate;
 
 use crate::{
     constraint::{
-        stage, ConstraintID, ConstraintMetadata, Created, CreatedData, Equality, Evaluated,
-        EvaluatedData, Removed, RemovedData, SampledData, Stage,
+        stage, ConstraintMetadata, Created, CreatedData, Equality, Evaluated, EvaluatedData,
+        Removed, RemovedData, SampledData, Stage,
     },
     constraint_type::{ConstraintType, EvaluatedConstraintBehavior, SampledConstraintBehavior},
     Function, SampleID, VariableID,
 };
+use derive_more::{Deref, From};
+
+/// ID for indicator constraints, independent from regular [`ConstraintID`](crate::ConstraintID).
+#[derive(
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    From,
+    Deref,
+    serde::Serialize,
+    serde::Deserialize,
+)]
+#[serde(transparent)]
+pub struct IndicatorConstraintID(u64);
+
+impl std::fmt::Debug for IndicatorConstraintID {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "IndicatorConstraintID({})", self.0)
+    }
+}
+
+impl std::fmt::Display for IndicatorConstraintID {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl IndicatorConstraintID {
+    pub fn into_inner(self) -> u64 {
+        self.0
+    }
+}
 
 /// An indicator constraint: `indicator_variable = 1 → f(x) <= 0` (or `= 0`).
 ///
@@ -15,7 +51,7 @@ use crate::{
 /// When it is 1, the constraint `f(x) <= 0` (or `f(x) = 0`) must hold.
 #[derive(Debug, Clone, PartialEq)]
 pub struct IndicatorConstraint<S: Stage<Self> = Created> {
-    pub id: ConstraintID,
+    pub id: IndicatorConstraintID,
     /// The binary decision variable that activates this constraint.
     pub indicator_variable: VariableID,
     pub equality: Equality,
@@ -51,7 +87,8 @@ pub type SampledIndicatorConstraint = IndicatorConstraint<stage::Sampled>;
 // ===== HasConstraintID =====
 
 impl EvaluatedConstraintBehavior for EvaluatedIndicatorConstraint {
-    fn constraint_id(&self) -> ConstraintID {
+    type ID = IndicatorConstraintID;
+    fn constraint_id(&self) -> IndicatorConstraintID {
         self.id
     }
     fn is_feasible(&self) -> bool {
@@ -63,9 +100,10 @@ impl EvaluatedConstraintBehavior for EvaluatedIndicatorConstraint {
 }
 
 impl SampledConstraintBehavior for SampledIndicatorConstraint {
+    type ID = IndicatorConstraintID;
     type Evaluated = EvaluatedIndicatorConstraint;
 
-    fn constraint_id(&self) -> ConstraintID {
+    fn constraint_id(&self) -> IndicatorConstraintID {
         self.id
     }
     fn is_feasible_for(&self, sample_id: SampleID) -> Option<bool> {
@@ -106,6 +144,7 @@ impl SampledConstraintBehavior for SampledIndicatorConstraint {
 // ===== ConstraintType =====
 
 impl ConstraintType for IndicatorConstraint {
+    type ID = IndicatorConstraintID;
     type Created = IndicatorConstraint;
     type Removed = RemovedIndicatorConstraint;
     type Evaluated = EvaluatedIndicatorConstraint;
@@ -117,7 +156,7 @@ impl ConstraintType for IndicatorConstraint {
 impl IndicatorConstraint<Created> {
     /// Create a new indicator constraint.
     pub fn new(
-        id: ConstraintID,
+        id: IndicatorConstraintID,
         indicator_variable: VariableID,
         equality: Equality,
         function: Function,
@@ -175,12 +214,12 @@ mod tests {
     #[test]
     fn test_create_indicator_constraint() {
         let ic = IndicatorConstraint::new(
-            ConstraintID::from(1),
+            IndicatorConstraintID::from(1),
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + coeff!(-5.0)),
         );
-        assert_eq!(ic.id, ConstraintID::from(1));
+        assert_eq!(ic.id, IndicatorConstraintID::from(1));
         assert_eq!(ic.indicator_variable, VariableID::from(10));
         assert_eq!(ic.equality, Equality::LessThanOrEqualToZero);
     }
@@ -188,7 +227,7 @@ mod tests {
     #[test]
     fn test_display() {
         let ic = IndicatorConstraint::new(
-            ConstraintID::from(1),
+            IndicatorConstraintID::from(1),
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + coeff!(-5.0)),
@@ -202,7 +241,7 @@ mod tests {
     fn test_constraint_type_impl() {
         // Verify ConstraintType associated types compile correctly
         let ic = IndicatorConstraint::new(
-            ConstraintID::from(1),
+            IndicatorConstraintID::from(1),
             VariableID::from(10),
             Equality::EqualToZero,
             Function::Zero,

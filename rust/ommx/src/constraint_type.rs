@@ -39,29 +39,33 @@ use std::collections::BTreeMap;
 /// For example, `Constraint` (= `Constraint<Created>`) implements `ConstraintType`
 /// to define all stage types for regular constraints.
 pub trait ConstraintType {
+    /// The ID type for this constraint family.
+    type ID: Clone + Copy + Ord + std::hash::Hash + std::fmt::Debug;
     /// The constraint as defined in the problem.
     type Created: Evaluate<Output = Self::Evaluated, SampledOutput = Self::Sampled>;
     /// The constraint after being removed/relaxed.
     type Removed: Evaluate<Output = Self::Evaluated, SampledOutput = Self::Sampled>;
     /// The constraint after evaluation against a single state.
-    type Evaluated: EvaluatedConstraintBehavior;
+    type Evaluated: EvaluatedConstraintBehavior<ID = Self::ID>;
     /// The constraint after evaluation against multiple samples.
-    type Sampled: SampledConstraintBehavior<Evaluated = Self::Evaluated>;
+    type Sampled: SampledConstraintBehavior<ID = Self::ID, Evaluated = Self::Evaluated>;
 }
 
 /// Common behavior for an evaluated constraint (single state evaluation result).
 pub trait EvaluatedConstraintBehavior {
-    fn constraint_id(&self) -> ConstraintID;
+    type ID;
+    fn constraint_id(&self) -> Self::ID;
     fn is_feasible(&self) -> bool;
     fn is_removed(&self) -> bool;
 }
 
 /// Common behavior for a sampled constraint (multi-sample evaluation result).
 pub trait SampledConstraintBehavior {
+    type ID;
     /// The evaluated constraint type returned by [`get`](Self::get).
     type Evaluated;
 
-    fn constraint_id(&self) -> ConstraintID;
+    fn constraint_id(&self) -> Self::ID;
     fn is_feasible_for(&self, sample_id: SampleID) -> Option<bool>;
     fn is_removed(&self) -> bool;
 
@@ -77,6 +81,7 @@ pub trait SampledConstraintBehavior {
 // so the implementations are identical.
 
 impl EvaluatedConstraintBehavior for EvaluatedConstraint {
+    type ID = ConstraintID;
     fn constraint_id(&self) -> ConstraintID {
         self.id
     }
@@ -89,6 +94,7 @@ impl EvaluatedConstraintBehavior for EvaluatedConstraint {
 }
 
 impl SampledConstraintBehavior for SampledConstraint {
+    type ID = ConstraintID;
     type Evaluated = EvaluatedConstraint;
 
     fn constraint_id(&self) -> ConstraintID {
@@ -131,6 +137,7 @@ impl SampledConstraintBehavior for SampledConstraint {
 
 /// `Constraint` (= `Constraint<Created>`) serves as the type family for regular constraints.
 impl ConstraintType for Constraint {
+    type ID = ConstraintID;
     type Created = Constraint;
     type Removed = RemovedConstraint;
     type Evaluated = EvaluatedConstraint;
@@ -147,8 +154,8 @@ where
     T::Created: Clone + std::fmt::Debug + PartialEq,
     T::Removed: Clone + std::fmt::Debug + PartialEq,
 {
-    active: BTreeMap<ConstraintID, T::Created>,
-    removed: BTreeMap<ConstraintID, T::Removed>,
+    active: BTreeMap<T::ID, T::Created>,
+    removed: BTreeMap<T::ID, T::Removed>,
 }
 
 impl<T: ConstraintType> Default for ConstraintCollection<T>
@@ -169,40 +176,32 @@ where
     T::Created: Clone + std::fmt::Debug + PartialEq,
     T::Removed: Clone + std::fmt::Debug + PartialEq,
 {
-    pub fn new(
-        active: BTreeMap<ConstraintID, T::Created>,
-        removed: BTreeMap<ConstraintID, T::Removed>,
-    ) -> Self {
+    pub fn new(active: BTreeMap<T::ID, T::Created>, removed: BTreeMap<T::ID, T::Removed>) -> Self {
         Self { active, removed }
     }
 
     /// Access active constraints.
-    pub fn active(&self) -> &BTreeMap<ConstraintID, T::Created> {
+    pub fn active(&self) -> &BTreeMap<T::ID, T::Created> {
         &self.active
     }
 
     /// Access removed constraints.
-    pub fn removed(&self) -> &BTreeMap<ConstraintID, T::Removed> {
+    pub fn removed(&self) -> &BTreeMap<T::ID, T::Removed> {
         &self.removed
     }
 
     /// Mutable access to active constraints.
-    pub fn active_mut(&mut self) -> &mut BTreeMap<ConstraintID, T::Created> {
+    pub fn active_mut(&mut self) -> &mut BTreeMap<T::ID, T::Created> {
         &mut self.active
     }
 
     /// Mutable access to removed constraints.
-    pub fn removed_mut(&mut self) -> &mut BTreeMap<ConstraintID, T::Removed> {
+    pub fn removed_mut(&mut self) -> &mut BTreeMap<T::ID, T::Removed> {
         &mut self.removed
     }
 
     /// Consume the collection and return the active and removed maps.
-    pub fn into_parts(
-        self,
-    ) -> (
-        BTreeMap<ConstraintID, T::Created>,
-        BTreeMap<ConstraintID, T::Removed>,
-    ) {
+    pub fn into_parts(self) -> (BTreeMap<T::ID, T::Created>, BTreeMap<T::ID, T::Removed>) {
         (self.active, self.removed)
     }
 
@@ -224,7 +223,7 @@ where
         &self,
         state: &v1::State,
         atol: ATol,
-    ) -> Result<BTreeMap<ConstraintID, T::Evaluated>> {
+    ) -> Result<BTreeMap<T::ID, T::Evaluated>> {
         let mut results = BTreeMap::new();
         for constraint in self.active.values() {
             let evaluated = constraint.evaluate(state, atol)?;
@@ -251,10 +250,10 @@ where
 /// This is the Solution-side counterpart of [`ConstraintCollection`],
 /// providing generic feasibility checks via [`EvaluatedConstraintBehavior`].
 #[derive(Debug, Clone, PartialEq)]
-pub struct EvaluatedCollection<T: ConstraintType>(BTreeMap<ConstraintID, T::Evaluated>);
+pub struct EvaluatedCollection<T: ConstraintType>(BTreeMap<T::ID, T::Evaluated>);
 
 impl<T: ConstraintType> std::ops::Deref for EvaluatedCollection<T> {
-    type Target = BTreeMap<ConstraintID, T::Evaluated>;
+    type Target = BTreeMap<T::ID, T::Evaluated>;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
@@ -273,15 +272,15 @@ impl<T: ConstraintType> Default for EvaluatedCollection<T> {
 }
 
 impl<T: ConstraintType> EvaluatedCollection<T> {
-    pub fn new(constraints: BTreeMap<ConstraintID, T::Evaluated>) -> Self {
+    pub fn new(constraints: BTreeMap<T::ID, T::Evaluated>) -> Self {
         Self(constraints)
     }
 
-    pub fn inner(&self) -> &BTreeMap<ConstraintID, T::Evaluated> {
+    pub fn inner(&self) -> &BTreeMap<T::ID, T::Evaluated> {
         &self.0
     }
 
-    pub fn into_inner(self) -> BTreeMap<ConstraintID, T::Evaluated> {
+    pub fn into_inner(self) -> BTreeMap<T::ID, T::Evaluated> {
         self.0
     }
 
@@ -308,10 +307,10 @@ impl<T: ConstraintType> EvaluatedCollection<T> {
 /// This is the SampleSet-side counterpart of [`ConstraintCollection`],
 /// providing generic per-sample feasibility checks via [`SampledConstraintBehavior`].
 #[derive(Debug, Clone)]
-pub struct SampledCollection<T: ConstraintType>(BTreeMap<ConstraintID, T::Sampled>);
+pub struct SampledCollection<T: ConstraintType>(BTreeMap<T::ID, T::Sampled>);
 
 impl<T: ConstraintType> std::ops::Deref for SampledCollection<T> {
-    type Target = BTreeMap<ConstraintID, T::Sampled>;
+    type Target = BTreeMap<T::ID, T::Sampled>;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
@@ -324,15 +323,15 @@ impl<T: ConstraintType> Default for SampledCollection<T> {
 }
 
 impl<T: ConstraintType> SampledCollection<T> {
-    pub fn new(constraints: BTreeMap<ConstraintID, T::Sampled>) -> Self {
+    pub fn new(constraints: BTreeMap<T::ID, T::Sampled>) -> Self {
         Self(constraints)
     }
 
-    pub fn inner(&self) -> &BTreeMap<ConstraintID, T::Sampled> {
+    pub fn inner(&self) -> &BTreeMap<T::ID, T::Sampled> {
         &self.0
     }
 
-    pub fn into_inner(self) -> BTreeMap<ConstraintID, T::Sampled> {
+    pub fn into_inner(self) -> BTreeMap<T::ID, T::Sampled> {
         self.0
     }
 

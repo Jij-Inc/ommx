@@ -206,7 +206,7 @@ mod tests {
     fn test_evaluate_indicator_on_feasible() {
         // x1 <= 5, indicator = x10
         let ic = IndicatorConstraint::new(
-            ConstraintID::from(1),
+            IndicatorConstraintID::from(1),
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + coeff!(-5.0)),
@@ -223,7 +223,7 @@ mod tests {
     fn test_evaluate_indicator_on_infeasible() {
         // x1 <= 5, indicator = x10
         let ic = IndicatorConstraint::new(
-            ConstraintID::from(1),
+            IndicatorConstraintID::from(1),
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + coeff!(-5.0)),
@@ -240,7 +240,7 @@ mod tests {
     fn test_evaluate_indicator_off_always_feasible() {
         // x1 <= 5, indicator = x10
         let ic = IndicatorConstraint::new(
-            ConstraintID::from(1),
+            IndicatorConstraintID::from(1),
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + coeff!(-5.0)),
@@ -256,7 +256,7 @@ mod tests {
     #[test]
     fn test_required_ids_includes_indicator() {
         let ic = IndicatorConstraint::new(
-            ConstraintID::from(1),
+            IndicatorConstraintID::from(1),
             VariableID::from(10),
             Equality::EqualToZero,
             Function::from(linear!(1) + linear!(2)),

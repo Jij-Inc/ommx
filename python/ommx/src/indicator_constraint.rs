@@ -40,7 +40,7 @@ impl IndicatorConstraint {
     ) -> PyResult<Self> {
         let id = id.unwrap_or_else(next_constraint_id);
         let mut ic = ommx::IndicatorConstraint::new(
-            ommx::ConstraintID::from(id),
+            ommx::IndicatorConstraintID::from(id),
             indicator_variable.0.id(),
             equality.into(),
             function.0,
@@ -104,7 +104,7 @@ impl IndicatorConstraint {
     /// Set the constraint ID. Returns a new IndicatorConstraint.
     pub fn set_id(&self, id: u64) -> Self {
         let mut ic = self.clone();
-        ic.0.id = ommx::ConstraintID::from(id);
+        ic.0.id = ommx::IndicatorConstraintID::from(id);
         ic
     }
 

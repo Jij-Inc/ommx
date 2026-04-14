@@ -160,14 +160,16 @@ impl Instance {
     }
 
     /// Active indicator constraints.
-    pub fn indicator_constraints(&self) -> &BTreeMap<ConstraintID, IndicatorConstraint> {
+    pub fn indicator_constraints(
+        &self,
+    ) -> &BTreeMap<crate::IndicatorConstraintID, IndicatorConstraint> {
         self.indicator_constraint_collection.active()
     }
 
     /// Removed indicator constraints.
     pub fn removed_indicator_constraints(
         &self,
-    ) -> &BTreeMap<ConstraintID, RemovedIndicatorConstraint> {
+    ) -> &BTreeMap<crate::IndicatorConstraintID, RemovedIndicatorConstraint> {
         self.indicator_constraint_collection.removed()
     }
 

@@ -354,7 +354,7 @@ impl SampleSetBuilder {
     pub fn indicator_constraints(
         mut self,
         indicator_constraints: BTreeMap<
-            ConstraintID,
+            crate::IndicatorConstraintID,
             crate::indicator_constraint::SampledIndicatorConstraint,
         >,
     ) -> Self {

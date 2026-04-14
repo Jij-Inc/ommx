@@ -589,7 +589,7 @@ impl SolutionBuilder {
     pub fn evaluated_indicator_constraints(
         mut self,
         evaluated_indicator_constraints: BTreeMap<
-            ConstraintID,
+            crate::IndicatorConstraintID,
             crate::indicator_constraint::EvaluatedIndicatorConstraint,
         >,
     ) -> Self {

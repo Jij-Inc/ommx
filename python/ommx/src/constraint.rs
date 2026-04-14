@@ -288,7 +288,7 @@ impl Constraint {
         indicator_variable: &crate::DecisionVariable,
     ) -> crate::IndicatorConstraint {
         crate::IndicatorConstraint(ommx::IndicatorConstraint::new(
-            self.0.id,
+            ommx::IndicatorConstraintID::from(self.0.id.into_inner()),
             indicator_variable.0.id(),
             self.0.equality,
             self.0.stage.function.clone(),
