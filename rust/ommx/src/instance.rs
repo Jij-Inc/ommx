@@ -82,8 +82,12 @@ pub enum Sense {
 /// Future constraint types (Disjunction, SOS1, OneHot, etc.) follow the same pattern:
 /// add a new `ConstraintCollection<NewType>` field. See [`ConstraintType`] for details.
 ///
-/// Each constraint type has its own independent ID space. Adapter compatibility is checked
-/// via [`ConstraintCapability`] and [`Instance::check_capabilities`].
+/// Each constraint type has its own independent [`ConstraintID`] space:
+/// constraint ID 1 for a regular constraint and constraint ID 1 for an indicator constraint
+/// are distinct and do not conflict. Uniqueness is only required within the same type
+/// (i.e. active and removed constraints of the same type must have disjoint IDs).
+///
+/// Adapter compatibility is checked via [`ConstraintCapability`] and [`Instance::check_capabilities`].
 ///
 /// Invariants
 /// -----------

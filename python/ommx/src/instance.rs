@@ -1226,6 +1226,15 @@ impl Instance {
         entries_to_dataframe(py, self.inner.constraints().values(), "id")
     }
 
+    /// DataFrame of indicator constraints
+    #[getter]
+    pub fn indicator_constraints_df<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        entries_to_dataframe(py, self.inner.indicator_constraints().values(), "id")
+    }
+
     /// DataFrame of removed constraints
     #[getter]
     pub fn removed_constraints_df<'py>(
