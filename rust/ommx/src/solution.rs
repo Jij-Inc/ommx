@@ -2,8 +2,9 @@ mod parse;
 mod serialize;
 
 use crate::{
-    indicator_constraint::EvaluatedIndicatorConstraint, ConstraintID, EvaluatedConstraint,
-    EvaluatedDecisionVariable, EvaluatedNamedFunction, NamedFunctionID, Sense, VariableID,
+    constraint_type::EvaluatedCollection, indicator_constraint::IndicatorConstraint, Constraint,
+    ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable, EvaluatedNamedFunction,
+    NamedFunctionID, Sense, VariableID,
 };
 use getset::Getters;
 use std::collections::{BTreeMap, BTreeSet};
@@ -115,9 +116,9 @@ pub struct Solution {
     #[getset(get = "pub")]
     objective: f64,
     #[getset(get = "pub")]
-    evaluated_constraints: BTreeMap<ConstraintID, EvaluatedConstraint>,
+    evaluated_constraints: EvaluatedCollection<Constraint>,
     #[getset(get = "pub")]
-    evaluated_indicator_constraints: BTreeMap<ConstraintID, EvaluatedIndicatorConstraint>,
+    evaluated_indicator_constraints: EvaluatedCollection<IndicatorConstraint>,
     #[getset(get = "pub")]
     evaluated_named_functions: BTreeMap<NamedFunctionID, EvaluatedNamedFunction>,
     #[getset(get = "pub")]
@@ -550,8 +551,8 @@ impl Solution {
 #[derive(Debug, Clone, Default)]
 pub struct SolutionBuilder {
     objective: Option<f64>,
-    evaluated_constraints: Option<BTreeMap<ConstraintID, EvaluatedConstraint>>,
-    evaluated_indicator_constraints: BTreeMap<ConstraintID, EvaluatedIndicatorConstraint>,
+    evaluated_constraints: Option<EvaluatedCollection<Constraint>>,
+    evaluated_indicator_constraints: EvaluatedCollection<IndicatorConstraint>,
     evaluated_named_functions: BTreeMap<NamedFunctionID, EvaluatedNamedFunction>,
     decision_variables: Option<BTreeMap<VariableID, EvaluatedDecisionVariable>>,
     sense: Option<Sense>,
@@ -580,16 +581,20 @@ impl SolutionBuilder {
         mut self,
         evaluated_constraints: BTreeMap<ConstraintID, EvaluatedConstraint>,
     ) -> Self {
-        self.evaluated_constraints = Some(evaluated_constraints);
+        self.evaluated_constraints = Some(EvaluatedCollection::new(evaluated_constraints));
         self
     }
 
     /// Sets the evaluated indicator constraints.
     pub fn evaluated_indicator_constraints(
         mut self,
-        evaluated_indicator_constraints: BTreeMap<ConstraintID, EvaluatedIndicatorConstraint>,
+        evaluated_indicator_constraints: BTreeMap<
+            ConstraintID,
+            crate::indicator_constraint::EvaluatedIndicatorConstraint,
+        >,
     ) -> Self {
-        self.evaluated_indicator_constraints = evaluated_indicator_constraints;
+        self.evaluated_indicator_constraints =
+            EvaluatedCollection::new(evaluated_indicator_constraints);
         self
     }
 
@@ -667,7 +672,7 @@ impl SolutionBuilder {
         }
 
         // Validate constraint keys match their id
-        for (key, value) in &evaluated_constraints {
+        for (key, value) in evaluated_constraints.iter() {
             if *key != value.id {
                 return Err(SolutionError::InconsistentConstraintID {
                     key: *key,

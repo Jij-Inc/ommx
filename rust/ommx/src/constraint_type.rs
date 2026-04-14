@@ -208,6 +208,116 @@ where
     }
 }
 
+/// A collection of evaluated constraints of a single type.
+///
+/// This is the Solution-side counterpart of [`ConstraintCollection`],
+/// providing generic feasibility checks via [`EvaluatedConstraintBehavior`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct EvaluatedCollection<T: ConstraintType>(BTreeMap<ConstraintID, T::Evaluated>);
+
+impl<T: ConstraintType> std::ops::Deref for EvaluatedCollection<T> {
+    type Target = BTreeMap<ConstraintID, T::Evaluated>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T: ConstraintType> std::ops::DerefMut for EvaluatedCollection<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl<T: ConstraintType> Default for EvaluatedCollection<T> {
+    fn default() -> Self {
+        Self(BTreeMap::new())
+    }
+}
+
+impl<T: ConstraintType> EvaluatedCollection<T> {
+    pub fn new(constraints: BTreeMap<ConstraintID, T::Evaluated>) -> Self {
+        Self(constraints)
+    }
+
+    pub fn inner(&self) -> &BTreeMap<ConstraintID, T::Evaluated> {
+        &self.0
+    }
+
+    pub fn into_inner(self) -> BTreeMap<ConstraintID, T::Evaluated> {
+        self.0
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Check if all constraints are feasible.
+    pub fn is_feasible(&self) -> bool {
+        self.0.values().all(|c| c.is_feasible())
+    }
+
+    /// Check if all non-removed constraints are feasible.
+    pub fn is_feasible_relaxed(&self) -> bool {
+        self.0
+            .values()
+            .filter(|c| !c.is_removed())
+            .all(|c| c.is_feasible())
+    }
+}
+
+/// A collection of sampled constraints of a single type.
+///
+/// This is the SampleSet-side counterpart of [`ConstraintCollection`],
+/// providing generic per-sample feasibility checks via [`SampledConstraintBehavior`].
+#[derive(Debug, Clone)]
+pub struct SampledCollection<T: ConstraintType>(BTreeMap<ConstraintID, T::Sampled>);
+
+impl<T: ConstraintType> std::ops::Deref for SampledCollection<T> {
+    type Target = BTreeMap<ConstraintID, T::Sampled>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T: ConstraintType> Default for SampledCollection<T> {
+    fn default() -> Self {
+        Self(BTreeMap::new())
+    }
+}
+
+impl<T: ConstraintType> SampledCollection<T> {
+    pub fn new(constraints: BTreeMap<ConstraintID, T::Sampled>) -> Self {
+        Self(constraints)
+    }
+
+    pub fn inner(&self) -> &BTreeMap<ConstraintID, T::Sampled> {
+        &self.0
+    }
+
+    pub fn into_inner(self) -> BTreeMap<ConstraintID, T::Sampled> {
+        self.0
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Check if all constraints are feasible for a given sample.
+    pub fn is_feasible_for(&self, sample_id: SampleID) -> bool {
+        self.0
+            .values()
+            .all(|c| c.is_feasible_for(sample_id).unwrap_or(false))
+    }
+
+    /// Check if all non-removed constraints are feasible for a given sample.
+    pub fn is_feasible_relaxed_for(&self, sample_id: SampleID) -> bool {
+        self.0
+            .values()
+            .filter(|c| !c.is_removed())
+            .all(|c| c.is_feasible_for(sample_id).unwrap_or(false))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
