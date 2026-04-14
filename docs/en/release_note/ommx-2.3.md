@@ -28,7 +28,7 @@ A new `ommx.adapter.NoSolutionObtained` exception distinguishes the case where a
 
 ### Logical Memory Profiler (2.3.1, [#683](https://github.com/Jij-Inc/ommx/pull/683))
 
-A visitor-based logical memory profiling system that outputs flamegraph-compatible folded-stack format. Covers 13+ OMMX types via a declarative macro and is accessible from Python via `instance.logical_memory_profile()`. Useful for understanding the memory footprint of large-scale instances.
+A logical memory profiling system that outputs flamegraph-compatible folded-stack format, covering 13+ OMMX types. Accessible from Python via `instance.logical_memory_profile()`. Useful for understanding the memory footprint of large-scale instances.
 
 ### `log_encode` scoped to `used_decision_variables` (2.3.3, [#696](https://github.com/Jij-Inc/ommx/pull/696))
 

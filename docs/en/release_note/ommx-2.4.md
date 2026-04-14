@@ -20,8 +20,3 @@ Previously, removed constraints were implicitly assumed not to reference fixed o
 
 The log message emitted when constraint hints are discarded has been changed from `warn` to `debug` to reduce noise in normal usage.
 
-## Performance
-
-### Bulk `insert_constraints` method ([#735](https://github.com/Jij-Inc/ommx/pull/735))
-
-A new `insert_constraints` method allows inserting multiple constraints in a single call, reducing validation overhead by building validation sets once instead of per-constraint. For large-scale problems (e.g. ~750K variables with ~150K constraints), this reduces insertion time from tens of minutes to seconds.

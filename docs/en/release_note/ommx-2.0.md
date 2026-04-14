@@ -64,9 +64,9 @@ Binary packages (wheels) for Linux aarch64 are now provided. This makes it easie
 
 ## New Features (2.0.1–2.0.12)
 
-### Rust-idiomatic `ParametricInstance` (2.0.3, [#566](https://github.com/Jij-Inc/ommx/pull/566))
+### Stricter validation for `ParametricInstance` (2.0.3, [#566](https://github.com/Jij-Inc/ommx/pull/566))
 
-The Python bindings for `ParametricInstance` were migrated from the Protocol Buffers auto-generated `ommx::v1::ParametricInstance` to a new Rust-native `ommx::ParametricInstance` with stricter validation via the `Parse` trait. Previously valid-but-semantically-invalid instances (e.g., referencing undefined variables) are now rejected at parse time with clear error messages.
+`ParametricInstance` now performs stricter validation when loading data. Previously valid-but-semantically-invalid instances (e.g., referencing undefined variables) are now rejected at parse time with clear error messages.
 
 ### `Instance.used_decision_variables` and `penalty_method` (2.0.3, [#572](https://github.com/Jij-Inc/ommx/pull/572), [#553](https://github.com/Jij-Inc/ommx/pull/553))
 

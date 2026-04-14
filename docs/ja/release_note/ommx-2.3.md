@@ -28,7 +28,7 @@
 
 ### 論理メモリプロファイラー (2.3.1, [#683](https://github.com/Jij-Inc/ommx/pull/683))
 
-flamegraph互換のfolded-stack形式を出力するビジターベースの論理メモリプロファイリングシステムを導入しました。宣言的マクロにより13以上のOMMX型をカバーし、Pythonから `instance.logical_memory_profile()` でアクセスできます。大規模インスタンスのメモリフットプリントの把握に有用です。
+flamegraph互換のfolded-stack形式を出力する論理メモリプロファイリングシステムを導入しました。13以上のOMMX型をカバーし、Pythonから `instance.logical_memory_profile()` でアクセスできます。大規模インスタンスのメモリフットプリントの把握に有用です。
 
 ### `log_encode` を `used_decision_variables` に限定 (2.3.3, [#696](https://github.com/Jij-Inc/ommx/pull/696))
 

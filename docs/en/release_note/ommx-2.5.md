@@ -23,6 +23,6 @@ This feature is useful for:
 
 `extract_decision_variables` now ignores parameters and uses only subscripts for variable identification. Previously, variables with the same subscripts but different parameters would cause extraction failures. This is a fix for practical use cases where parameters vary across problem instances but subscripts remain stable.
 
-### Topological sort for dependent variable evaluation (2.5.1, [#753](https://github.com/Jij-Inc/ommx/pull/753))
+### Dependent variable evaluation order (2.5.1, [#753](https://github.com/Jij-Inc/ommx/pull/753))
 
-`populate()` was evaluating dependent variables in `BTreeMap` (ID) order, which fails when a lower-ID variable depends on a higher-ID one. Fixed by building an `AcyclicAssignments` and using its topological evaluation order.
+Dependent variables were evaluated in ID order, which fails when a lower-ID variable depends on a higher-ID one. Fixed by evaluating in topological order.

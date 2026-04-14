@@ -12,33 +12,33 @@
 
 ### `ommx.v1` 型の完全なRust再エクスポート ([#770](https://github.com/Jij-Inc/ommx/pull/770), [#771](https://github.com/Jij-Inc/ommx/pull/771), [#774](https://github.com/Jij-Inc/ommx/pull/774), [#775](https://github.com/Jij-Inc/ommx/pull/775))
 
-`ommx.v1` の全クラス — `Linear`, `Quadratic`, `Polynomial`, `Function`, `DecisionVariable`, `Parameter`, `Constraint`, `RemovedConstraint`, `NamedFunction`, `Instance`, `ParametricInstance`, `Solution`, `SampleSet` — がRustの `_ommx_rust` モジュールからの直接再エクスポートになりました。Pythonのラッパー層がなくなり、4,500行以上のPythonコードが削除されています。基礎となるprotobufオブジェクトへのアクセスを提供していた `.raw` 属性も廃止されました。
+`ommx.v1` の全クラス — `Linear`, `Quadratic`, `Polynomial`, `Function`, `DecisionVariable`, `Parameter`, `Constraint`, `RemovedConstraint`, `NamedFunction`, `Instance`, `ParametricInstance`, `Solution`, `SampleSet` — が完全にネイティブ実装になりました。Pythonのラッパー層がなくなり、4,500行以上のPythonコードが削除されています。基礎となるprotobufオブジェクトへのアクセスを提供していた `.raw` 属性も廃止されました。
 
-演算子、制約ID管理、DataFrameプロパティ、QUBO/HUBOパイプライン、緩和、サンプリングヘルパーはすべてRust側に移動しました。`State` 型はPythonから `dict`、`Mapping`、`Iterable` を `FromPyObject` 実装により受け付けます。
+演算子、制約ID管理、DataFrameプロパティ、QUBO/HUBOパイプライン、緩和、サンプリングヘルパーはすべてネイティブ実装の一部です。`State` 型はPythonから `dict`、`Mapping`、`Iterable` を受け付けます。
 
 ### Protocol Buffers Python依存の削除 ([#776](https://github.com/Jij-Inc/ommx/pull/776))
 
-28個の `*_pb2.py` / `*_pb2.pyi` ファイルをすべて削除しました。`protobuf` ランタイムと `mypy-protobuf` 開発依存を除去し、`proto:python` Taskfileタスクと `protogen` CIジョブを廃止しました。すべてのPython型はRust PyO3バインディングのみで提供され、protobufワイヤ形式へのシリアライズ/デシリアライズはRust側で処理されます。
+28個の `*_pb2.py` / `*_pb2.pyi` ファイルをすべて削除し、`protobuf` ランタイム依存を除去しました。すべてのPython型はネイティブバインディングのみで提供され、protobufワイヤ形式へのシリアライズ/デシリアライズは内部で処理されます。
 
-### アノテーションシステムのRust移行 ([#772](https://github.com/Jij-Inc/ommx/pull/772))
+### アノテーションシステムの再実装 ([#772](https://github.com/Jij-Inc/ommx/pull/772))
 
-`Instance`、`ParametricInstance`、`Solution`、`SampleSet` の `annotations: HashMap<String, String>` フィールドが完全にRust側の共有マクロで管理されるようになりました。Python側の `UserAnnotationBase` クラスと `annotation.py` のディスクリプタは削除されました。
+`Instance`、`ParametricInstance`、`Solution`、`SampleSet` の `annotations` フィールドがネイティブ実装になりました。Python側の `UserAnnotationBase` クラスと `annotation.py` のディスクリプタは削除されました。
 
-### Artifact/ArtifactBuilder のRust移行 ([#782](https://github.com/Jij-Inc/ommx/pull/782))
+### Artifact/ArtifactBuilder の再実装 ([#782](https://github.com/Jij-Inc/ommx/pull/782))
 
-`Artifact` と `ArtifactBuilder`（Archive/Dir/Builder を含む）がRust側に `PyArtifact` / `PyArtifactBuilder` として移植され、`ommx.artifact/__init__.py` が自動生成されます。6つのPython専用サブクラスは削除され、単一の `artifact.rs` に統合されました。
+`Artifact` と `ArtifactBuilder`（Archive/Dir/Builder を含む）がネイティブ実装に移行し、`ommx.artifact` モジュールが自動生成されます。6つのPython専用サブクラスは削除・統合されました。
 
 ### `ommx/v1/__init__.py` の自動生成 ([#779](https://github.com/Jij-Inc/ommx/pull/779))
 
-手書きの361行の `v1/__init__.py` が、48行の宣言的な `reexport_module_members!` Rustマクロに置き換えられました。ファイルは `pyo3-stub-gen` の `generate-init-py` 機能により `task python:stubgen` で生成されます。
+手書きの361行の `v1/__init__.py` が自動生成に置き換えられました。ファイルは `pyo3-stub-gen` の `generate-init-py` 機能により `task python:stubgen` で生成されます。
 
 ### pandas DataFrame ロジックの統合 ([#778](https://github.com/Jij-Inc/ommx/pull/778))
 
-統一された `pandas.rs` 内の `ToPandasEntry` トレイトと `WithSampleIds` ラッパーが、各型に散在していた `_as_pandas_entry` メソッドを置き換えました。null値の処理は `pandas.NA` に統一されました。
+内部のDataFrame変換ロジックが統合され、null値の処理が `pandas.NA` に統一されました。
 
 ### API リファレンスを pyo3-stub-gen docgen に切り替え ([#780](https://github.com/Jij-Inc/ommx/pull/780))
 
-Rustベースの `ommx.v1` 型のAPIドキュメントが `sphinx-autoapi` から `pyo3-stub-gen` の `doc-gen` 機能による生成に切り替えられました。純Python製のアダプターパッケージは引き続き `sphinx-autoapi` を使用します。
+`ommx.v1` 型のAPIドキュメントが `sphinx-autoapi` から `pyo3-stub-gen` の `doc-gen` 機能による生成に切り替えられました。純Python製のアダプターパッケージは引き続き `sphinx-autoapi` を使用します。
 
 ### ドキュメントをSphinxに移行 ([#785](https://github.com/Jij-Inc/ommx/pull/785))
 
