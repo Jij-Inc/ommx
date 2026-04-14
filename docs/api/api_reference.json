@@ -19171,12 +19171,13 @@
     "ommx.v1.ToState": "ommx.v1"
   },
   "config": {
-    "output-dir": "docs/api_reference/api",
+    "output-dir": "docs/api",
     "json-output": "api_reference.json",
     "separate-pages": true,
     "intro-message": null,
-    "index-title": "OMMX Python SDK API Reference",
+    "index-title": null,
     "contents-table": true,
-    "separate-items": true
+    "separate-items": true,
+    "generate-index": false
   }
 }
