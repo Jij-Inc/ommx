@@ -19,4 +19,3 @@ Previously, removed constraints were implicitly assumed not to reference fixed o
 ### Reduce constraint hint log level ([#740](https://github.com/Jij-Inc/ommx/pull/740))
 
 The log message emitted when constraint hints are discarded has been changed from `warn` to `debug` to reduce noise in normal usage.
-
