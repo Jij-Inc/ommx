@@ -131,7 +131,7 @@ impl SampleSet {
                 return Err(SampleSetError::ParameterizedConstraint);
             }
             let subscripts = constraint.metadata.subscripts.clone();
-            let value = *constraint.evaluated_values().get(sample_id)?;
+            let value = *constraint.stage.evaluated_values.get(sample_id)?;
             if result.insert(subscripts.clone(), value).is_some() {
                 return Err(SampleSetError::DuplicateSubscripts {
                     name: name.to_string(),

@@ -1,4 +1,5 @@
 use super::*;
+use crate::constraint::RemovedData;
 use crate::ATol;
 use anyhow::{anyhow, Result};
 
@@ -10,15 +11,23 @@ impl Instance {
         parameters: impl IntoIterator<Item = (String, String)>,
     ) -> Result<()> {
         let c = self
-            .constraints
+            .constraint_collection
+            .active_mut()
             .remove(&id)
             .ok_or_else(|| anyhow!("Constraint with ID {:?} not found", id))?;
-        self.removed_constraints.insert(
+        self.constraint_collection.removed_mut().insert(
             id,
-            RemovedConstraint {
-                constraint: c,
-                removed_reason,
-                removed_reason_parameters: parameters.into_iter().collect(),
+            Constraint {
+                id: c.id,
+                equality: c.equality,
+                metadata: c.metadata,
+                stage: RemovedData {
+                    function: c.stage.function,
+                    removed_reason: crate::constraint::RemovedReason {
+                        reason: removed_reason,
+                        parameters: parameters.into_iter().collect(),
+                    },
+                },
             },
         );
 
@@ -35,19 +44,27 @@ impl Instance {
 
     pub fn restore_constraint(&mut self, id: ConstraintID) -> Result<()> {
         let rc = self
-            .removed_constraints
+            .constraint_collection
+            .removed()
             .get(&id)
             .ok_or_else(|| anyhow!("Removed constraint with ID {:?} not found", id))?;
 
         // Clone the constraint first to avoid data loss if transformations fail
-        let mut constraint = rc.constraint.clone();
+        let mut constraint: Constraint<crate::constraint::Created> = Constraint {
+            id: rc.id,
+            equality: rc.equality,
+            metadata: rc.metadata.clone(),
+            stage: crate::constraint::CreatedData {
+                function: rc.stage.function.clone(),
+            },
+        };
 
         // 1. Substitute dependent variables first
         //    Dependency expansion may introduce fixed variables (e.g., x3 = x1 + x2 where x1 is fixed),
         //    so this must happen before partial_evaluate.
         if !self.decision_variable_dependency.is_empty() {
             crate::substitute_acyclic(
-                &mut constraint.function,
+                &mut constraint.stage.function,
                 &self.decision_variable_dependency,
             )?;
         }
@@ -66,8 +83,10 @@ impl Instance {
         }
 
         // Only remove from removed_constraints after all transformations succeed
-        self.removed_constraints.remove(&id);
-        self.constraints.insert(id, constraint);
+        self.constraint_collection.removed_mut().remove(&id);
+        self.constraint_collection
+            .active_mut()
+            .insert(id, constraint);
         Ok(())
     }
 }
@@ -105,12 +124,11 @@ mod tests {
         let mut constraints = BTreeMap::new();
         let constraint = Constraint {
             id: ConstraintID::from(1),
-            function: constraint_function,
             equality: Equality::LessThanOrEqualToZero,
-            name: None,
-            subscripts: Vec::new(),
-            parameters: Default::default(),
-            description: None,
+            metadata: crate::constraint::ConstraintMetadata::default(),
+            stage: crate::constraint::CreatedData {
+                function: constraint_function,
+            },
         };
         constraints.insert(ConstraintID::from(1), constraint);
 
@@ -125,8 +143,8 @@ mod tests {
             .unwrap();
 
         // Verify constraint is removed
-        assert!(instance.constraints.is_empty());
-        assert_eq!(instance.removed_constraints.len(), 1);
+        assert!(instance.constraints().is_empty());
+        assert_eq!(instance.removed_constraints().len(), 1);
 
         // Fix x1 to 3.0 using partial_evaluate on the instance
         let fix_state = v1::State {
@@ -150,13 +168,13 @@ mod tests {
         instance.restore_constraint(ConstraintID::from(1)).unwrap();
 
         // Verify constraint is restored
-        assert_eq!(instance.constraints.len(), 1);
-        assert!(instance.removed_constraints.is_empty());
+        assert_eq!(instance.constraints().len(), 1);
+        assert!(instance.removed_constraints().is_empty());
 
         // Check the restored constraint has x1 substituted
         // Original: x1 + x2 - 10
         // After substituting x1=3: 3 + x2 - 10 = x2 - 7
-        let restored_constraint = instance.constraints.get(&ConstraintID::from(1)).unwrap();
+        let restored_constraint = instance.constraints().get(&ConstraintID::from(1)).unwrap();
         let required_ids = restored_constraint.required_ids();
 
         // x1 should NOT be in the required IDs (it's been substituted)
@@ -196,12 +214,11 @@ mod tests {
         let mut constraints = BTreeMap::new();
         let constraint = Constraint {
             id: ConstraintID::from(1),
-            function: constraint_function,
             equality: Equality::LessThanOrEqualToZero,
-            name: None,
-            subscripts: Vec::new(),
-            parameters: Default::default(),
-            description: None,
+            metadata: crate::constraint::ConstraintMetadata::default(),
+            stage: crate::constraint::CreatedData {
+                function: constraint_function,
+            },
         };
         constraints.insert(ConstraintID::from(1), constraint);
 
@@ -216,8 +233,8 @@ mod tests {
             .unwrap();
 
         // Verify constraint is removed
-        assert!(instance.constraints.is_empty());
-        assert_eq!(instance.removed_constraints.len(), 1);
+        assert!(instance.constraints().is_empty());
+        assert_eq!(instance.removed_constraints().len(), 1);
 
         // Add dependency x3 = x1 + x2 using substitute_one on the instance
         // This will add the dependency to decision_variable_dependency
@@ -237,13 +254,13 @@ mod tests {
         instance.restore_constraint(ConstraintID::from(1)).unwrap();
 
         // Verify constraint is restored
-        assert_eq!(instance.constraints.len(), 1);
-        assert!(instance.removed_constraints.is_empty());
+        assert_eq!(instance.constraints().len(), 1);
+        assert!(instance.removed_constraints().is_empty());
 
         // Check the restored constraint has x3 substituted with x1 + x2
         // Original: x3 - 10
         // After substituting x3 = x1 + x2: x1 + x2 - 10
-        let restored_constraint = instance.constraints.get(&ConstraintID::from(1)).unwrap();
+        let restored_constraint = instance.constraints().get(&ConstraintID::from(1)).unwrap();
         let required_ids = restored_constraint.required_ids();
 
         // x3 should NOT be in the required IDs (it's been substituted)
@@ -289,12 +306,11 @@ mod tests {
         let mut constraints = BTreeMap::new();
         let constraint = Constraint {
             id: ConstraintID::from(1),
-            function: constraint_function,
             equality: Equality::LessThanOrEqualToZero,
-            name: None,
-            subscripts: Vec::new(),
-            parameters: Default::default(),
-            description: None,
+            metadata: crate::constraint::ConstraintMetadata::default(),
+            stage: crate::constraint::CreatedData {
+                function: constraint_function,
+            },
         };
         constraints.insert(ConstraintID::from(1), constraint);
         // Create instance
@@ -329,7 +345,7 @@ mod tests {
         // Original: x3 - 10
         // After x3 = x1 + x2: x1 + x2 - 10
         // After x1 = 3: x2 - 7
-        let restored_constraint = instance.constraints.get(&ConstraintID::from(1)).unwrap();
+        let restored_constraint = instance.constraints().get(&ConstraintID::from(1)).unwrap();
         let required_ids = restored_constraint.required_ids();
 
         // x3 should NOT be in the required IDs (it's been substituted)

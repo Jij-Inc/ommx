@@ -17,7 +17,7 @@ impl Instance {
     ) -> anyhow::Result<()> {
         // Validate that no hints reference removed constraints
         for hint in &constraint_hints.one_hot_constraints {
-            if self.removed_constraints.contains_key(&hint.id) {
+            if self.removed_constraints().contains_key(&hint.id) {
                 bail!(
                     "OneHot hint references removed constraint (id={:?}). \
                      Constraint hints can only reference active constraints.",
@@ -27,7 +27,7 @@ impl Instance {
         }
         for hint in &constraint_hints.sos1_constraints {
             if self
-                .removed_constraints
+                .removed_constraints()
                 .contains_key(&hint.binary_constraint_id)
             {
                 bail!(
@@ -37,7 +37,7 @@ impl Instance {
                 );
             }
             for id in &hint.big_m_constraint_ids {
-                if self.removed_constraints.contains_key(id) {
+                if self.removed_constraints().contains_key(id) {
                     bail!(
                         "Sos1 hint references removed constraint in big_m_constraint_ids (id={:?}). \
                          Constraint hints can only reference active constraints.",
@@ -51,8 +51,8 @@ impl Instance {
         let hints: v1::ConstraintHints = constraint_hints.into();
         let context = (
             self.decision_variables.clone(),
-            self.constraints.clone(),
-            self.removed_constraints.clone(),
+            self.constraints().clone(),
+            self.removed_constraints().clone(),
         );
         let constraint_hints = hints.parse(&context)?;
         self.constraint_hints = constraint_hints;
@@ -84,7 +84,7 @@ impl ParametricInstance {
     ) -> anyhow::Result<()> {
         // Validate that no hints reference removed constraints
         for hint in &constraint_hints.one_hot_constraints {
-            if self.removed_constraints.contains_key(&hint.id) {
+            if self.removed_constraints().contains_key(&hint.id) {
                 bail!(
                     "OneHot hint references removed constraint (id={:?}). \
                      Constraint hints can only reference active constraints.",
@@ -94,7 +94,7 @@ impl ParametricInstance {
         }
         for hint in &constraint_hints.sos1_constraints {
             if self
-                .removed_constraints
+                .removed_constraints()
                 .contains_key(&hint.binary_constraint_id)
             {
                 bail!(
@@ -104,7 +104,7 @@ impl ParametricInstance {
                 );
             }
             for id in &hint.big_m_constraint_ids {
-                if self.removed_constraints.contains_key(id) {
+                if self.removed_constraints().contains_key(id) {
                     bail!(
                         "Sos1 hint references removed constraint in big_m_constraint_ids (id={:?}). \
                          Constraint hints can only reference active constraints.",
@@ -118,8 +118,8 @@ impl ParametricInstance {
         let hints: v1::ConstraintHints = constraint_hints.into();
         let context = (
             self.decision_variables.clone(),
-            self.constraints.clone(),
-            self.removed_constraints.clone(),
+            self.constraints().clone(),
+            self.removed_constraints().clone(),
         );
         let constraint_hints = hints.parse(&context)?;
         self.constraint_hints = constraint_hints;

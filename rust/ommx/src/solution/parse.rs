@@ -30,7 +30,7 @@ impl Parse for crate::v1::Solution {
         let mut evaluated_constraints = std::collections::BTreeMap::default();
         for ec in self.evaluated_constraints {
             let parsed_constraint = ec.parse_as(&(), message, "evaluated_constraints")?;
-            evaluated_constraints.insert(*parsed_constraint.id(), parsed_constraint);
+            evaluated_constraints.insert(parsed_constraint.id, parsed_constraint);
         }
         let mut evaluated_named_functions = std::collections::BTreeMap::default();
         for enf in self.evaluated_named_functions {

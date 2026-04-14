@@ -549,7 +549,8 @@ impl SampleSet {
                 )?;
                 for (constraint_id, label) in &constraint_labels {
                     let c_feasible = constraints[constraint_id]
-                        .feasible()
+                        .stage
+                        .feasible
                         .get(sample_id)
                         .copied()
                         .unwrap_or(false);

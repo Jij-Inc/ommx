@@ -389,8 +389,7 @@ impl Solution {
         self.inner
             .evaluated_constraints()
             .get(&constraint_id)
-            .map(|ec| ec.evaluated_value())
-            .copied()
+            .map(|ec| ec.stage.evaluated_value)
             .ok_or_else(|| {
                 PyKeyError::new_err(format!(
                     "Unknown constraint ID: {}",
@@ -405,7 +404,7 @@ impl Solution {
         self.inner
             .evaluated_constraints()
             .get(&constraint_id)
-            .map(|ec| ec.dual_variable)
+            .map(|ec| ec.stage.dual_variable)
             .ok_or_else(|| {
                 PyKeyError::new_err(format!(
                     "Unknown constraint ID: {}",

@@ -1,4 +1,5 @@
 use super::*;
+use crate::constraint_type::ConstraintCollection;
 use crate::parse::Parse;
 
 /// Builder for creating [`ParametricInstance`] with validation.
@@ -175,10 +176,10 @@ impl ParametricInstanceBuilder {
 
         // Validate that removed constraint map keys match their value's id
         for (key, value) in &self.removed_constraints {
-            if *key != value.constraint.id {
+            if *key != value.id {
                 return Err(InstanceError::InconsistentRemovedConstraintID {
                     key: *key,
-                    value_id: value.constraint.id,
+                    value_id: value.id,
                 }
                 .into());
             }
@@ -221,7 +222,7 @@ impl ParametricInstanceBuilder {
         // Validate that all variable IDs in removed_constraints are defined
         // (removed_constraints may contain fixed or dependent variable IDs)
         for removed in self.removed_constraints.values() {
-            for id in removed.constraint.required_ids() {
+            for id in removed.required_ids() {
                 if !all_variable_ids.contains(&id) {
                     return Err(InstanceError::UndefinedVariableID { id }.into());
                 }
@@ -307,9 +308,8 @@ impl ParametricInstanceBuilder {
             objective,
             decision_variables,
             parameters,
-            constraints,
+            constraint_collection: ConstraintCollection::new(constraints, removed_constraints),
             named_functions: self.named_functions,
-            removed_constraints,
             decision_variable_dependency: self.decision_variable_dependency,
             constraint_hints,
             description: self.description,

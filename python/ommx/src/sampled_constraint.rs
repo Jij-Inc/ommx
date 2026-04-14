@@ -21,13 +21,13 @@ impl SampledConstraint {
     /// Get the constraint ID
     #[getter]
     pub fn id(&self) -> u64 {
-        self.0.id().into_inner()
+        self.0.id.into_inner()
     }
 
     /// Get the constraint equality type
     #[getter]
     pub fn equality(&self) -> crate::Equality {
-        (*self.0.equality()).into()
+        self.0.equality.into()
     }
 
     /// Get the constraint name
@@ -51,24 +51,35 @@ impl SampledConstraint {
     /// Get the removal reason
     #[getter]
     pub fn removed_reason(&self) -> Option<String> {
-        self.0.removed_reason().clone()
+        self.0
+            .stage
+            .removed_reason
+            .as_ref()
+            .map(|r| r.reason.clone())
     }
 
     /// Get the removal reason parameters
     #[getter]
     pub fn removed_reason_parameters(&self) -> std::collections::HashMap<String, String> {
         self.0
-            .removed_reason_parameters()
-            .iter()
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect()
+            .stage
+            .removed_reason
+            .as_ref()
+            .map(|r| {
+                r.parameters
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     /// Get the used decision variable IDs
     #[getter]
     pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
         self.0
-            .used_decision_variable_ids()
+            .stage
+            .used_decision_variable_ids
             .iter()
             .map(|id| id.into_inner())
             .collect()
@@ -78,7 +89,8 @@ impl SampledConstraint {
     #[getter]
     pub fn evaluated_values(&self) -> BTreeMap<u64, f64> {
         self.0
-            .evaluated_values()
+            .stage
+            .evaluated_values
             .iter()
             .map(|(&sample_id, value)| (sample_id.into_inner(), *value))
             .collect()
@@ -88,7 +100,8 @@ impl SampledConstraint {
     #[getter]
     pub fn feasible(&self) -> BTreeMap<u64, bool> {
         self.0
-            .feasible()
+            .stage
+            .feasible
             .iter()
             .map(|(&sample_id, feasible)| (sample_id.into_inner(), *feasible))
             .collect()

@@ -34,7 +34,7 @@ impl Parse for crate::v1::SampleSet {
         for v1_constraint in self.constraints {
             let parsed_constraint: crate::SampledConstraint =
                 v1_constraint.parse_as(&(), message, "constraints")?;
-            constraints.insert(*parsed_constraint.id(), parsed_constraint);
+            constraints.insert(parsed_constraint.id, parsed_constraint);
         }
 
         // Parse named functions into BTreeMap
