@@ -3,10 +3,10 @@ mod parse;
 mod serialize;
 
 use crate::{
-    indicator_constraint::SampledIndicatorConstraint, ConstraintID, EvaluatedConstraint,
-    EvaluatedDecisionVariable, EvaluatedNamedFunction, NamedFunctionID, SampleID, SampleIDSet,
-    Sampled, SampledConstraint, SampledDecisionVariable, SampledNamedFunction, Sense, Solution,
-    UnknownSampleIDError, VariableID,
+    constraint_type::SampledCollection, indicator_constraint::IndicatorConstraint, Constraint,
+    ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable, EvaluatedNamedFunction,
+    NamedFunctionID, SampleID, SampleIDSet, Sampled, SampledConstraint, SampledDecisionVariable,
+    SampledNamedFunction, Sense, Solution, UnknownSampleIDError, VariableID,
 };
 use getset::Getters;
 use std::collections::BTreeMap;
@@ -111,9 +111,9 @@ pub struct SampleSet {
     #[getset(get = "pub")]
     objectives: Sampled<f64>,
     #[getset(get = "pub")]
-    constraints: BTreeMap<ConstraintID, SampledConstraint>,
+    constraints: SampledCollection<Constraint>,
     #[getset(get = "pub")]
-    indicator_constraints: BTreeMap<ConstraintID, SampledIndicatorConstraint>,
+    indicator_constraints: SampledCollection<IndicatorConstraint>,
     #[getset(get = "pub")]
     named_functions: BTreeMap<NamedFunctionID, SampledNamedFunction>,
     #[getset(get = "pub")]
@@ -206,7 +206,7 @@ impl SampleSet {
         // Get evaluated constraints
         let mut evaluated_constraints: BTreeMap<ConstraintID, EvaluatedConstraint> =
             BTreeMap::default();
-        for (constraint_id, constraint) in &self.constraints {
+        for (constraint_id, constraint) in self.constraints.iter() {
             let evaluated_constraint = constraint.get(sample_id)?;
             evaluated_constraints.insert(*constraint_id, evaluated_constraint);
         }
@@ -306,8 +306,8 @@ impl SampleSet {
 pub struct SampleSetBuilder {
     decision_variables: Option<BTreeMap<VariableID, SampledDecisionVariable>>,
     objectives: Option<Sampled<f64>>,
-    constraints: Option<BTreeMap<ConstraintID, SampledConstraint>>,
-    indicator_constraints: BTreeMap<ConstraintID, SampledIndicatorConstraint>,
+    constraints: Option<SampledCollection<Constraint>>,
+    indicator_constraints: SampledCollection<IndicatorConstraint>,
     named_functions: BTreeMap<NamedFunctionID, SampledNamedFunction>,
     sense: Option<Sense>,
 }
@@ -335,16 +335,19 @@ impl SampleSetBuilder {
 
     /// Sets the constraints.
     pub fn constraints(mut self, constraints: BTreeMap<ConstraintID, SampledConstraint>) -> Self {
-        self.constraints = Some(constraints);
+        self.constraints = Some(SampledCollection::new(constraints));
         self
     }
 
     /// Sets the indicator constraints.
     pub fn indicator_constraints(
         mut self,
-        indicator_constraints: BTreeMap<ConstraintID, SampledIndicatorConstraint>,
+        indicator_constraints: BTreeMap<
+            ConstraintID,
+            crate::indicator_constraint::SampledIndicatorConstraint,
+        >,
     ) -> Self {
-        self.indicator_constraints = indicator_constraints;
+        self.indicator_constraints = SampledCollection::new(indicator_constraints);
         self
     }
 
@@ -400,7 +403,7 @@ impl SampleSetBuilder {
             }
         }
 
-        for (key, value) in &constraints {
+        for (key, value) in constraints.iter() {
             if *key != value.id {
                 return Err(SampleSetError::InconsistentConstraintID {
                     key: *key,
@@ -530,31 +533,18 @@ impl SampleSetBuilder {
     }
 
     fn compute_feasibility(
-        constraints: &BTreeMap<ConstraintID, SampledConstraint>,
-        indicator_constraints: &BTreeMap<ConstraintID, SampledIndicatorConstraint>,
+        constraints: &SampledCollection<Constraint>,
+        indicator_constraints: &SampledCollection<IndicatorConstraint>,
         sample_ids: &SampleIDSet,
     ) -> (BTreeMap<SampleID, bool>, BTreeMap<SampleID, bool>) {
-        use crate::constraint_type::SampledConstraintBehavior;
-
-        fn check_all<T: SampledConstraintBehavior>(
-            constraints: &BTreeMap<ConstraintID, T>,
-            sample_id: &SampleID,
-            relaxed: bool,
-        ) -> bool {
-            constraints
-                .values()
-                .filter(|c| !relaxed || !c.is_removed())
-                .all(|c| c.is_feasible_for(*sample_id).unwrap_or(false))
-        }
-
         let mut feasible = BTreeMap::new();
         let mut feasible_relaxed = BTreeMap::new();
 
         for sample_id in sample_ids {
-            let f = check_all(constraints, sample_id, false)
-                && check_all(indicator_constraints, sample_id, false);
-            let fr = check_all(constraints, sample_id, true)
-                && check_all(indicator_constraints, sample_id, true);
+            let f = constraints.is_feasible_for(*sample_id)
+                && indicator_constraints.is_feasible_for(*sample_id);
+            let fr = constraints.is_feasible_relaxed_for(*sample_id)
+                && indicator_constraints.is_feasible_relaxed_for(*sample_id);
 
             feasible.insert(*sample_id, f);
             feasible_relaxed.insert(*sample_id, fr);
