@@ -42,9 +42,15 @@ pub trait ConstraintType {
     /// The ID type for this constraint family.
     type ID: Clone + Copy + Ord + std::hash::Hash + std::fmt::Debug;
     /// The constraint as defined in the problem.
-    type Created: Evaluate<Output = Self::Evaluated, SampledOutput = Self::Sampled>;
+    type Created: Evaluate<Output = Self::Evaluated, SampledOutput = Self::Sampled>
+        + Clone
+        + std::fmt::Debug
+        + PartialEq;
     /// The constraint after being removed/relaxed.
-    type Removed: Evaluate<Output = Self::Evaluated, SampledOutput = Self::Sampled>;
+    type Removed: Evaluate<Output = Self::Evaluated, SampledOutput = Self::Sampled>
+        + Clone
+        + std::fmt::Debug
+        + PartialEq;
     /// The constraint after evaluation against a single state.
     type Evaluated: EvaluatedConstraintBehavior<ID = Self::ID>;
     /// The constraint after evaluation against multiple samples.
@@ -149,20 +155,12 @@ impl ConstraintType for Constraint {
 /// This provides the common evaluate/partial_evaluate logic
 /// that Instance would otherwise duplicate for each constraint type.
 #[derive(Debug, Clone, PartialEq)]
-pub struct ConstraintCollection<T: ConstraintType>
-where
-    T::Created: Clone + std::fmt::Debug + PartialEq,
-    T::Removed: Clone + std::fmt::Debug + PartialEq,
-{
+pub struct ConstraintCollection<T: ConstraintType> {
     active: BTreeMap<T::ID, T::Created>,
     removed: BTreeMap<T::ID, T::Removed>,
 }
 
-impl<T: ConstraintType> Default for ConstraintCollection<T>
-where
-    T::Created: Clone + std::fmt::Debug + PartialEq,
-    T::Removed: Clone + std::fmt::Debug + PartialEq,
-{
+impl<T: ConstraintType> Default for ConstraintCollection<T> {
     fn default() -> Self {
         Self {
             active: BTreeMap::new(),
@@ -171,11 +169,7 @@ where
     }
 }
 
-impl<T: ConstraintType> ConstraintCollection<T>
-where
-    T::Created: Clone + std::fmt::Debug + PartialEq,
-    T::Removed: Clone + std::fmt::Debug + PartialEq,
-{
+impl<T: ConstraintType> ConstraintCollection<T> {
     pub fn new(active: BTreeMap<T::ID, T::Created>, removed: BTreeMap<T::ID, T::Removed>) -> Self {
         Self { active, removed }
     }
@@ -260,11 +254,7 @@ where
     }
 }
 
-impl<T: ConstraintType> Evaluate for ConstraintCollection<T>
-where
-    T::Created: Clone + std::fmt::Debug + PartialEq,
-    T::Removed: Clone + std::fmt::Debug + PartialEq,
-{
+impl<T: ConstraintType> Evaluate for ConstraintCollection<T> {
     type Output = EvaluatedCollection<T>;
     type SampledOutput = SampledCollection<T>;
 
