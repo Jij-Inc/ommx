@@ -45,6 +45,32 @@ impl Substitute for Instance {
             }
         }
 
+        // Check that no indicator constraint's indicator_variable is being substituted.
+        // Substituting an indicator variable would change the constraint type
+        // (e.g. fixing it to 1 makes it a regular constraint, fixing to 0 removes it).
+        // This is not yet supported; fail explicitly rather than silently producing
+        // an inconsistent result.
+        for ic in self.indicator_constraint_collection.active().values() {
+            if substituted_variables.contains(&ic.indicator_variable) {
+                return Err(SubstitutionError::IndicatorVariableSubstitution {
+                    indicator_variable: ic.indicator_variable,
+                    constraint_id: ic.id,
+                });
+            }
+        }
+
+        // Apply substitution to the function part of active indicator constraints
+        for ic in self
+            .indicator_constraint_collection
+            .active_mut()
+            .values_mut()
+        {
+            let required_ids = ic.stage.function.required_ids();
+            if !required_ids.is_disjoint(&substituted_variables) {
+                substitute_acyclic(&mut ic.stage.function, acyclic)?;
+            }
+        }
+
         // Apply substitution to the existing decision_variable_dependency
         substitute_acyclic(&mut self.decision_variable_dependency, acyclic)?;
 
