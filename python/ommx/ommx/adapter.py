@@ -13,7 +13,7 @@ class SolverAdapter(ABC):
     """
     An abstract interface for OMMX Solver Adapters, defining how solvers should be used with OMMX.
 
-    See the `implementation guide <https://jij-inc.github.io/ommx/en/user_guide/solver_adapter.html>`_ for more details.
+    See the `implementation guide <https://jij-inc-ommx.readthedocs-hosted.com/en/latest/tutorial/implement_adapter.html>`_ for more details.
 
     Subclasses should set ``supported_constraints`` to declare which constraint
     types they can handle. Available capabilities:
@@ -51,7 +51,7 @@ class SamplerAdapter(SolverAdapter):
     """
     An abstract interface for OMMX Sampler Adapters, defining how samplers should be used with OMMX.
 
-    See the `implementation guide <https://jij-inc.github.io/ommx/en/user_guide/solver_adapter.html>`_ for more details.
+    See the `implementation guide <https://jij-inc-ommx.readthedocs-hosted.com/en/latest/tutorial/implement_adapter.html>`_ for more details.
     """
 
     @classmethod
