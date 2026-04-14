@@ -7,6 +7,7 @@ import math
 
 from ommx.adapter import (
     SolverAdapter,
+    ConstraintCapability,
     InfeasibleDetected,
     UnboundedDetected,
     NoSolutionReturned,
@@ -28,6 +29,7 @@ HintMode = Literal["disabled", "auto", "forced"]
 
 
 class OMMXPySCIPOptAdapter(SolverAdapter):
+    supported_constraints = ConstraintCapability.STANDARD | ConstraintCapability.INDICATOR
     use_sos1: HintMode
 
     def __init__(
@@ -45,6 +47,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             - "forced": Require SOS1 constraints and raise an error if no SOS1 constraint hints are found.
         :param initial_state: Optional initial solution state.
         """
+        super().__init__(ommx_instance)
         self.instance = ommx_instance
         self.use_sos1 = use_sos1
         self.model = pyscipopt.Model()

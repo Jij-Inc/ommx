@@ -139,6 +139,7 @@ class OMMXHighsAdapter(SolverAdapter):
         verbose : bool, default=False
             If True, enable HiGHS's console logging
         """
+        super().__init__(ommx_instance)
         self.instance = ommx_instance
         self.model = highspy.Highs()
 

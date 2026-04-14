@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from enum import Flag, auto
 from typing import Any
 from ommx.v1 import Instance, Solution, SampleSet
 
@@ -9,16 +10,49 @@ SamplerInput = Any
 SamplerOutput = Any
 
 
+class ConstraintCapability(Flag):
+    """Flags indicating which constraint types an adapter supports."""
+
+    #: Standard constraints: f(x) = 0 or f(x) <= 0
+    STANDARD = auto()
+    #: Indicator constraints: binvar = 1 → f(x) <= 0
+    INDICATOR = auto()
+
+
+class UnsupportedConstraintType(Exception):
+    """Raised when an Instance contains constraint types not supported by the adapter."""
+
+    pass
+
+
 class SolverAdapter(ABC):
     """
     An abstract interface for OMMX Solver Adapters, defining how solvers should be used with OMMX.
 
     See the `implementation guide <https://jij-inc.github.io/ommx/en/user_guide/solver_adapter.html>`_ for more details.
+
+    Subclasses should set ``supported_constraints`` to declare which constraint
+    types they can handle. The default is ``ConstraintCapability.STANDARD`` only.
+    Subclasses must call ``super().__init__(ommx_instance)`` to enable
+    automatic constraint capability checking.
     """
 
-    @abstractmethod
+    supported_constraints: ConstraintCapability = ConstraintCapability.STANDARD
+
     def __init__(self, ommx_instance: Instance):
-        pass
+        """Check constraint capabilities. Subclasses must call super().__init__()."""
+        self._check_constraint_capabilities(ommx_instance)
+
+    def _check_constraint_capabilities(self, instance: Instance) -> None:
+        """Raise UnsupportedConstraintType if the instance uses unsupported constraint types."""
+        if (
+            len(instance.indicator_constraints) > 0
+            and not (self.supported_constraints & ConstraintCapability.INDICATOR)
+        ):
+            raise UnsupportedConstraintType(
+                f"{self.__class__.__name__} does not support indicator constraints. "
+                f"Found {len(instance.indicator_constraints)} indicator constraint(s)."
+            )
 
     @classmethod
     @abstractmethod
