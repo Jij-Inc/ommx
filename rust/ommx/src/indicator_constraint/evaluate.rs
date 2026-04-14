@@ -89,6 +89,17 @@ impl Evaluate for IndicatorConstraint<Created> {
     }
 
     fn partial_evaluate(&mut self, state: &crate::v1::State, atol: ATol) -> anyhow::Result<()> {
+        if state
+            .entries
+            .contains_key(&self.indicator_variable.into_inner())
+        {
+            anyhow::bail!(
+                "Cannot partially evaluate indicator variable {:?} of indicator constraint {:?}. \
+                 Fixing an indicator variable would change the constraint type.",
+                self.indicator_variable,
+                self.id
+            );
+        }
         self.stage.function.partial_evaluate(state, atol)
     }
 
@@ -181,6 +192,17 @@ impl Evaluate for RemovedIndicatorConstraint {
     }
 
     fn partial_evaluate(&mut self, state: &crate::v1::State, atol: ATol) -> anyhow::Result<()> {
+        if state
+            .entries
+            .contains_key(&self.indicator_variable.into_inner())
+        {
+            anyhow::bail!(
+                "Cannot partially evaluate indicator variable {:?} of removed indicator constraint {:?}. \
+                 Fixing an indicator variable would change the constraint type.",
+                self.indicator_variable,
+                self.id
+            );
+        }
         self.stage.function.partial_evaluate(state, atol)
     }
 
@@ -260,5 +282,41 @@ mod tests {
         assert!(ids.contains(&VariableID::from(1)));
         assert!(ids.contains(&VariableID::from(2)));
         assert!(ids.contains(&VariableID::from(10))); // indicator variable
+    }
+
+    #[test]
+    fn test_partial_evaluate_function_variable() {
+        // Partial evaluate a variable in the function should work
+        let mut ic = IndicatorConstraint::new(
+            IndicatorConstraintID::from(1),
+            VariableID::from(10),
+            Equality::LessThanOrEqualToZero,
+            Function::from(linear!(1) + linear!(2) + coeff!(-5.0)),
+        );
+
+        // Fix x1 = 3, but leave x2 and indicator x10 free
+        let state = crate::v1::State::from(HashMap::from([(1, 3.0)]));
+        ic.partial_evaluate(&state, ATol::default()).unwrap();
+
+        // Function should now only depend on x2
+        let ids = ic.stage.function.required_ids();
+        assert!(!ids.contains(&VariableID::from(1)));
+        assert!(ids.contains(&VariableID::from(2)));
+    }
+
+    #[test]
+    fn test_partial_evaluate_indicator_variable_fails() {
+        // Partial evaluate the indicator variable itself should fail
+        let mut ic = IndicatorConstraint::new(
+            IndicatorConstraintID::from(1),
+            VariableID::from(10),
+            Equality::LessThanOrEqualToZero,
+            Function::from(linear!(1) + coeff!(-5.0)),
+        );
+
+        // Try to fix x10 (indicator variable)
+        let state = crate::v1::State::from(HashMap::from([(10, 1.0)]));
+        let result = ic.partial_evaluate(&state, ATol::default());
+        assert!(result.is_err());
     }
 }
