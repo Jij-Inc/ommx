@@ -454,4 +454,60 @@ mod tests {
             "Constraint hints should be cleared when all constraints are moved to removed_constraints"
         );
     }
+
+    #[test]
+    fn test_penalty_method_preserves_existing_removed_constraints() {
+        let mut instance = create_test_instance_with_constraints();
+
+        // Relax constraint 1 before applying penalty method
+        instance
+            .relax_constraint(
+                ConstraintID::from(1),
+                "pre_existing".to_string(),
+                std::iter::empty::<(String, String)>(),
+            )
+            .unwrap();
+
+        assert_eq!(instance.constraints().len(), 1); // only constraint 2 remains active
+        assert_eq!(instance.removed_constraints().len(), 1); // constraint 1 is removed
+
+        let parametric_instance = instance.penalty_method().unwrap();
+
+        // Both constraints should be in removed: the pre-existing one and the newly penalized one
+        assert_eq!(parametric_instance.removed_constraints().len(), 2);
+        assert!(parametric_instance
+            .removed_constraints()
+            .contains_key(&ConstraintID::from(1)));
+        assert!(parametric_instance
+            .removed_constraints()
+            .contains_key(&ConstraintID::from(2)));
+    }
+
+    #[test]
+    fn test_uniform_penalty_method_preserves_existing_removed_constraints() {
+        let mut instance = create_test_instance_with_constraints();
+
+        // Relax constraint 1 before applying uniform penalty method
+        instance
+            .relax_constraint(
+                ConstraintID::from(1),
+                "pre_existing".to_string(),
+                std::iter::empty::<(String, String)>(),
+            )
+            .unwrap();
+
+        assert_eq!(instance.constraints().len(), 1);
+        assert_eq!(instance.removed_constraints().len(), 1);
+
+        let parametric_instance = instance.uniform_penalty_method().unwrap();
+
+        // Both constraints should be in removed
+        assert_eq!(parametric_instance.removed_constraints().len(), 2);
+        assert!(parametric_instance
+            .removed_constraints()
+            .contains_key(&ConstraintID::from(1)));
+        assert!(parametric_instance
+            .removed_constraints()
+            .contains_key(&ConstraintID::from(2)));
+    }
 }
