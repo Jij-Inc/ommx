@@ -302,6 +302,15 @@ pub struct ConstraintMetadata {
 }
 ```
 
+## Not Yet Migrated
+
+The following types still use concrete constraint types directly rather than the `ConstraintType` pattern:
+
+- **`Solution`**: holds `BTreeMap<ConstraintID, EvaluatedConstraint>` directly
+- **`SampleSet`**: holds `BTreeMap<ConstraintID, SampledConstraint>` directly
+
+When new constraint types (e.g. `IndicatorConstraint`) are added, these will need additional fields or generalization.
+
 ## Migration Checklist
 
 - [ ] Update `constraint.function` → `constraint.function()` or `constraint.stage.function`
