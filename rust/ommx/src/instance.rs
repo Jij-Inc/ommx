@@ -30,12 +30,10 @@ pub use parametric_builder::*;
 pub use stats::*;
 
 use crate::{
-    constraint_hints::ConstraintHints,
-    constraint_type::{ConstraintCollection, Regular},
-    named_function::NamedFunctionID,
-    parse::Parse,
-    v1, AcyclicAssignments, Constraint, ConstraintID, DecisionVariable, Evaluate, Function,
-    NamedFunction, RemovedConstraint, VariableID, VariableIDSet,
+    constraint_hints::ConstraintHints, constraint_type::ConstraintCollection,
+    named_function::NamedFunctionID, parse::Parse, v1, AcyclicAssignments, Constraint,
+    ConstraintID, DecisionVariable, Evaluate, Function, NamedFunction, RemovedConstraint,
+    VariableID, VariableIDSet,
 };
 use std::collections::BTreeMap;
 
@@ -77,7 +75,7 @@ pub struct Instance {
     decision_variables: BTreeMap<VariableID, DecisionVariable>,
 
     /// Regular constraints collection (active + removed).
-    constraint_collection: ConstraintCollection<Regular>,
+    constraint_collection: ConstraintCollection<Constraint>,
 
     #[getset(get = "pub")]
     decision_variable_dependency: AcyclicAssignments,
@@ -111,7 +109,7 @@ impl Instance {
     }
 
     /// The full constraint collection (active + removed).
-    pub fn constraint_collection(&self) -> &ConstraintCollection<Regular> {
+    pub fn constraint_collection(&self) -> &ConstraintCollection<Constraint> {
         &self.constraint_collection
     }
 }
@@ -148,7 +146,7 @@ pub struct ParametricInstance {
     parameters: BTreeMap<VariableID, v1::Parameter>,
 
     /// Regular constraints collection (active + removed).
-    constraint_collection: ConstraintCollection<Regular>,
+    constraint_collection: ConstraintCollection<Constraint>,
 
     #[getset(get = "pub")]
     decision_variable_dependency: AcyclicAssignments,

@@ -1,7 +1,7 @@
 //! Type family for constraint types.
 //!
-//! Each constraint type (regular, indicator, etc.) is represented as a marker struct
-//! that implements [`ConstraintType`], mapping lifecycle stages to concrete types.
+//! Each constraint type's Created form (e.g. `Constraint`, `IndicatorConstraint`)
+//! implements [`ConstraintType`], mapping lifecycle stages to concrete types.
 //!
 //! This is a defunctionalization of `Stage → Type` since Rust lacks higher-kinded types.
 
@@ -18,7 +18,9 @@ use std::collections::BTreeMap;
 /// to concrete constraint types. Rust lacks higher-kinded types, so we enumerate
 /// the stages as associated types instead.
 ///
-/// Each constraint kind (regular, indicator, etc.) implements this trait via a marker struct.
+/// Each constraint kind's default (Created) form implements this trait.
+/// For example, `Constraint` (= `Constraint<Created>`) implements `ConstraintType`
+/// to define all stage types for regular constraints.
 pub trait ConstraintType {
     /// The constraint as defined in the problem.
     type Created: Evaluate<Output = Self::Evaluated, SampledOutput = Self::Sampled>;
@@ -39,6 +41,14 @@ impl<S: Stage<Constraint<S>>> HasConstraintID for Constraint<S> {
     fn constraint_id(&self) -> ConstraintID {
         self.id
     }
+}
+
+/// `Constraint` (= `Constraint<Created>`) serves as the type family for regular constraints.
+impl ConstraintType for Constraint {
+    type Created = Constraint;
+    type Removed = RemovedConstraint;
+    type Evaluated = EvaluatedConstraint;
+    type Sampled = SampledConstraint;
 }
 
 /// A collection of active and removed constraints of the same type.
@@ -150,31 +160,20 @@ where
     }
 }
 
-/// Marker for regular constraints: `f(x) = 0` or `f(x) <= 0`.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Regular;
-
-impl ConstraintType for Regular {
-    type Created = Constraint;
-    type Removed = RemovedConstraint;
-    type Evaluated = EvaluatedConstraint;
-    type Sampled = SampledConstraint;
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{coeff, constraint::ConstraintID, linear, Function};
 
     #[test]
-    fn regular_constraint_type_aliases() {
+    fn constraint_type_aliases() {
         let c = Constraint::equal_to_zero(ConstraintID::from(1), Function::Zero);
-        let _: <Regular as ConstraintType>::Created = c;
+        let _: <Constraint as ConstraintType>::Created = c;
     }
 
     #[test]
     fn empty_collection() {
-        let collection = ConstraintCollection::<Regular>::default();
+        let collection = ConstraintCollection::<Constraint>::default();
         assert!(collection.is_empty());
     }
 
@@ -196,7 +195,7 @@ mod tests {
             ),
         );
 
-        let collection = ConstraintCollection::<Regular>::new(active, BTreeMap::new());
+        let collection = ConstraintCollection::<Constraint>::new(active, BTreeMap::new());
 
         let state = v1::State {
             entries: [(1, 1.5)].into_iter().collect(),
@@ -216,7 +215,7 @@ mod tests {
             Constraint::equal_to_zero(ConstraintID::from(1), Function::Zero),
         );
 
-        let collection = ConstraintCollection::<Regular>::new(active, BTreeMap::new());
+        let collection = ConstraintCollection::<Constraint>::new(active, BTreeMap::new());
         assert_eq!(collection.active().len(), 1);
         assert_eq!(collection.removed().len(), 0);
     }

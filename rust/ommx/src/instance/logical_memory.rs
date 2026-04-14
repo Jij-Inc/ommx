@@ -26,9 +26,7 @@ crate::impl_logical_memory_profile! {
     }
 }
 
-impl LogicalMemoryProfile
-    for crate::constraint_type::ConstraintCollection<crate::constraint_type::Regular>
-{
+impl LogicalMemoryProfile for crate::constraint_type::ConstraintCollection<crate::Constraint> {
     fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
         self.active()
             .visit_logical_memory(path.with("constraints").as_mut(), visitor);
