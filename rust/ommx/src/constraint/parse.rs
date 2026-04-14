@@ -174,19 +174,10 @@ impl Parse for v1::EvaluatedConstraint {
                     .into_iter()
                     .map(VariableID::from)
                     .collect(),
-                removed_reason: if self.removed_reason.is_some() {
-                    Some(RemovedReason {
-                        reason: self.removed_reason.unwrap_or_default(),
-                        parameters: self.removed_reason_parameters.into_iter().collect(),
-                    })
-                } else if !self.removed_reason_parameters.is_empty() {
-                    Some(RemovedReason {
-                        reason: String::new(),
-                        parameters: self.removed_reason_parameters.into_iter().collect(),
-                    })
-                } else {
-                    None
-                },
+                removed_reason: self.removed_reason.map(|reason| RemovedReason {
+                    reason,
+                    parameters: self.removed_reason_parameters.into_iter().collect(),
+                }),
             },
         })
     }
@@ -234,19 +225,10 @@ impl Parse for v1::SampledConstraint {
                     .into_iter()
                     .map(VariableID::from)
                     .collect(),
-                removed_reason: if self.removed_reason.is_some() {
-                    Some(RemovedReason {
-                        reason: self.removed_reason.unwrap_or_default(),
-                        parameters: self.removed_reason_parameters.into_iter().collect(),
-                    })
-                } else if !self.removed_reason_parameters.is_empty() {
-                    Some(RemovedReason {
-                        reason: String::new(),
-                        parameters: self.removed_reason_parameters.into_iter().collect(),
-                    })
-                } else {
-                    None
-                },
+                removed_reason: self.removed_reason.map(|reason| RemovedReason {
+                    reason,
+                    parameters: self.removed_reason_parameters.into_iter().collect(),
+                }),
             },
         })
     }
