@@ -238,6 +238,9 @@ pub struct ParametricInstance {
     /// Regular constraints collection (active + removed).
     constraint_collection: ConstraintCollection<Constraint>,
 
+    /// Indicator constraints collection (active + removed).
+    indicator_constraint_collection: ConstraintCollection<IndicatorConstraint>,
+
     #[getset(get = "pub")]
     decision_variable_dependency: AcyclicAssignments,
     #[getset(get = "pub")]
@@ -266,5 +269,19 @@ impl ParametricInstance {
     /// Removed constraints.
     pub fn removed_constraints(&self) -> &BTreeMap<ConstraintID, RemovedConstraint> {
         self.constraint_collection.removed()
+    }
+
+    /// Active indicator constraints.
+    pub fn indicator_constraints(
+        &self,
+    ) -> &BTreeMap<crate::IndicatorConstraintID, IndicatorConstraint> {
+        self.indicator_constraint_collection.active()
+    }
+
+    /// Removed indicator constraints.
+    pub fn removed_indicator_constraints(
+        &self,
+    ) -> &BTreeMap<crate::IndicatorConstraintID, RemovedIndicatorConstraint> {
+        self.indicator_constraint_collection.removed()
     }
 }
