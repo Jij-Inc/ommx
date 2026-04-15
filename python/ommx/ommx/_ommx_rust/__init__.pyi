@@ -3558,7 +3558,7 @@ class SampleSet:
 
         Columns: id (index), removed_reason, removed_reason.{key}
 
-        Can be joined with `constraints_df` on the `id` column.
+        Can be joined with {attr}`constraints_df` using the `id` index.
         """
     @property
     def named_functions_df(self) -> pandas.DataFrame:
