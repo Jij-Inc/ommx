@@ -90,16 +90,7 @@ impl Instance {
         }
 
         self.indicator_constraint_collection.restore(id)?;
-
-        // Build fixed_state before taking mutable borrow on the collection
-        let fixed_state: v1::State = v1::State {
-            entries: self
-                .decision_variables
-                .iter()
-                .filter_map(|(id, dv)| dv.substituted_value().map(|v| (id.into_inner(), v)))
-                .collect(),
-        };
-
+        let fixed_state = self.fixed_state();
         let ic = self
             .indicator_constraint_collection
             .active_mut()
