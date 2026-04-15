@@ -193,6 +193,26 @@ impl<T: ConstraintType> ConstraintCollection<T> {
         (self.active, self.removed)
     }
 
+    /// Move an active constraint to the removed set with a reason.
+    pub fn relax(&mut self, id: T::ID, removed_reason: RemovedReason) -> Result<(), anyhow::Error> {
+        let c = self
+            .active
+            .remove(&id)
+            .ok_or_else(|| anyhow::anyhow!("Constraint with ID {:?} not found", id))?;
+        self.removed.insert(id, (c, removed_reason));
+        Ok(())
+    }
+
+    /// Move a removed constraint back to the active set.
+    pub fn restore(&mut self, id: T::ID) -> Result<(), anyhow::Error> {
+        let (constraint, _reason) = self
+            .removed
+            .remove(&id)
+            .ok_or_else(|| anyhow::anyhow!("Removed constraint with ID {:?} not found", id))?;
+        self.active.insert(id, constraint);
+        Ok(())
+    }
+
     /// Collect required variable IDs from all active constraints.
     pub fn required_ids(&self) -> VariableIDSet {
         let mut ids = VariableIDSet::default();

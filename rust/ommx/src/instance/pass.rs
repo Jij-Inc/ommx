@@ -1,6 +1,6 @@
 use super::*;
 use crate::ATol;
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 
 impl Instance {
     pub fn relax_constraint(
@@ -9,21 +9,13 @@ impl Instance {
         removed_reason: String,
         parameters: impl IntoIterator<Item = (String, String)>,
     ) -> Result<()> {
-        let c = self
-            .constraint_collection
-            .active_mut()
-            .remove(&id)
-            .ok_or_else(|| anyhow!("Constraint with ID {:?} not found", id))?;
-        self.constraint_collection.removed_mut().insert(
+        self.constraint_collection.relax(
             id,
-            (
-                c,
-                crate::constraint::RemovedReason {
-                    reason: removed_reason,
-                    parameters: parameters.into_iter().collect(),
-                },
-            ),
-        );
+            crate::constraint::RemovedReason {
+                reason: removed_reason,
+                parameters: parameters.into_iter().collect(),
+            },
+        )?;
 
         // Invalidate constraint hints that reference the removed constraint
         self.constraint_hints
@@ -37,27 +29,69 @@ impl Instance {
     }
 
     pub fn restore_constraint(&mut self, id: ConstraintID) -> Result<()> {
-        let rc = self
+        self.constraint_collection.restore(id)?;
+        let fixed_state = self.fixed_state();
+        let constraint = self
             .constraint_collection
-            .removed()
-            .get(&id)
-            .ok_or_else(|| anyhow!("Removed constraint with ID {:?} not found", id))?;
+            .active_mut()
+            .get_mut(&id)
+            .unwrap();
 
-        // Clone the constraint first to avoid data loss if transformations fail
-        let mut constraint: Constraint<crate::constraint::Created> = rc.0.clone();
-
-        // 1. Substitute dependent variables first
-        //    Dependency expansion may introduce fixed variables (e.g., x3 = x1 + x2 where x1 is fixed),
-        //    so this must happen before partial_evaluate.
         if !self.decision_variable_dependency.is_empty() {
             crate::substitute_acyclic(
                 &mut constraint.stage.function,
                 &self.decision_variable_dependency,
             )?;
         }
+        if !fixed_state.entries.is_empty() {
+            constraint.partial_evaluate(&fixed_state, ATol::default())?;
+        }
+        Ok(())
+    }
 
-        // 2. Substitute fixed variables (those with substituted_value set)
-        //    This comes after dependency substitution to handle variables introduced by expansion.
+    pub fn relax_indicator_constraint(
+        &mut self,
+        id: crate::IndicatorConstraintID,
+        removed_reason: String,
+        parameters: impl IntoIterator<Item = (String, String)>,
+    ) -> Result<()> {
+        self.indicator_constraint_collection.relax(
+            id,
+            crate::constraint::RemovedReason {
+                reason: removed_reason,
+                parameters: parameters.into_iter().collect(),
+            },
+        )?;
+        Ok(())
+    }
+
+    pub fn restore_indicator_constraint(&mut self, id: crate::IndicatorConstraintID) -> Result<()> {
+        // Check before restoring: if dependency contains the indicator variable, reject
+        let indicator_variable = self
+            .indicator_constraint_collection
+            .removed()
+            .get(&id)
+            .ok_or_else(|| {
+                anyhow::anyhow!("Removed indicator constraint with ID {:?} not found", id)
+            })?
+            .0
+            .indicator_variable;
+
+        if self
+            .decision_variable_dependency
+            .get(&indicator_variable)
+            .is_some()
+        {
+            anyhow::bail!(
+                "Cannot restore indicator constraint {:?}: indicator variable {:?} has been substituted",
+                id,
+                indicator_variable
+            );
+        }
+
+        self.indicator_constraint_collection.restore(id)?;
+
+        // Build fixed_state before taking mutable borrow on the collection
         let fixed_state: v1::State = v1::State {
             entries: self
                 .decision_variables
@@ -65,16 +99,31 @@ impl Instance {
                 .filter_map(|(id, dv)| dv.substituted_value().map(|v| (id.into_inner(), v)))
                 .collect(),
         };
-        if !fixed_state.entries.is_empty() {
-            constraint.partial_evaluate(&fixed_state, ATol::default())?;
-        }
 
-        // Only remove from removed_constraints after all transformations succeed
-        self.constraint_collection.removed_mut().remove(&id);
-        self.constraint_collection
+        let ic = self
+            .indicator_constraint_collection
             .active_mut()
-            .insert(id, constraint);
+            .get_mut(&id)
+            .unwrap();
+
+        if !self.decision_variable_dependency.is_empty() {
+            crate::substitute_acyclic(&mut ic.stage.function, &self.decision_variable_dependency)?;
+        }
+        if !fixed_state.entries.is_empty() {
+            ic.partial_evaluate(&fixed_state, ATol::default())?;
+        }
         Ok(())
+    }
+
+    /// Build a State containing all fixed (substituted) variable values.
+    fn fixed_state(&self) -> v1::State {
+        v1::State {
+            entries: self
+                .decision_variables
+                .iter()
+                .filter_map(|(id, dv)| dv.substituted_value().map(|v| (id.into_inner(), v)))
+                .collect(),
+        }
     }
 }
 
@@ -84,18 +133,8 @@ mod tests {
     use crate::{coeff, constraint::Equality, linear, DecisionVariable, Sense, Substitute};
     use std::collections::BTreeMap;
 
-    /// Test that restore_constraint correctly substitutes fixed variables.
-    ///
-    /// Scenario:
-    /// 1. Create an Instance with variables x1 and x2
-    /// 2. Add a constraint using x1: x1 + x2 <= 10
-    /// 3. Relax the constraint
-    /// 4. Set x1's substituted_value to 3.0
-    /// 5. Restore the constraint
-    /// 6. Verify the restored constraint has x1 substituted: x2 + 3 <= 10 (i.e., x2 - 7 <= 0)
     #[test]
     fn test_restore_constraint_with_fixed_variable() {
-        // Create decision variables
         let mut decision_variables = BTreeMap::new();
         decision_variables.insert(
             VariableID::from(1),
@@ -106,7 +145,6 @@ mod tests {
             DecisionVariable::continuous(VariableID::from(2)),
         );
 
-        // Create constraint: x1 + x2 - 10 <= 0
         let constraint_function = Function::from(linear!(1) + linear!(2) + coeff!(-10.0));
         let mut constraints = BTreeMap::new();
         let constraint = Constraint {
@@ -119,21 +157,16 @@ mod tests {
         };
         constraints.insert(ConstraintID::from(1), constraint);
 
-        // Create instance
         let objective = Function::from(linear!(1) + linear!(2));
         let mut instance =
             Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
 
-        // Relax the constraint
         instance
             .relax_constraint(ConstraintID::from(1), "test".to_string(), [])
             .unwrap();
-
-        // Verify constraint is removed
         assert!(instance.constraints().is_empty());
         assert_eq!(instance.removed_constraints().len(), 1);
 
-        // Fix x1 to 3.0 using partial_evaluate on the instance
         let fix_state = v1::State {
             entries: [(1, 3.0)].into_iter().collect(),
         };
@@ -141,176 +174,100 @@ mod tests {
             .partial_evaluate(&fix_state, ATol::default())
             .unwrap();
 
-        // Verify x1 has substituted_value set
-        assert_eq!(
-            instance
-                .decision_variables
-                .get(&VariableID::from(1))
-                .unwrap()
-                .substituted_value(),
-            Some(3.0)
-        );
-
-        // Restore the constraint
         instance.restore_constraint(ConstraintID::from(1)).unwrap();
-
-        // Verify constraint is restored
         assert_eq!(instance.constraints().len(), 1);
         assert!(instance.removed_constraints().is_empty());
 
-        // Check the restored constraint has x1 substituted
-        // Original: x1 + x2 - 10
-        // After substituting x1=3: 3 + x2 - 10 = x2 - 7
-        let restored_constraint = instance.constraints().get(&ConstraintID::from(1)).unwrap();
-        let required_ids = restored_constraint.required_ids();
-
-        // x1 should NOT be in the required IDs (it's been substituted)
-        assert!(!required_ids.contains(&VariableID::from(1)));
-        // x2 should still be in the required IDs
-        assert!(required_ids.contains(&VariableID::from(2)));
+        // Original: x1 + x2 - 10, after x1=3: x2 - 7
+        let restored = instance.constraints().get(&ConstraintID::from(1)).unwrap();
+        assert!(!restored.required_ids().contains(&VariableID::from(1)));
+        assert!(restored.required_ids().contains(&VariableID::from(2)));
     }
 
-    /// Test that restore_constraint correctly substitutes dependent variables.
-    ///
-    /// Scenario:
-    /// 1. Create an Instance with variables x1, x2, x3
-    /// 2. Add a constraint using x3: x3 <= 10
-    /// 3. Relax the constraint
-    /// 4. Add dependency x3 = x1 + x2
-    /// 5. Restore the constraint
-    /// 6. Verify the restored constraint has x3 substituted: x1 + x2 <= 10
     #[test]
     fn test_restore_constraint_with_dependent_variable() {
-        // Create decision variables
         let mut decision_variables = BTreeMap::new();
-        decision_variables.insert(
-            VariableID::from(1),
-            DecisionVariable::continuous(VariableID::from(1)),
-        );
-        decision_variables.insert(
-            VariableID::from(2),
-            DecisionVariable::continuous(VariableID::from(2)),
-        );
-        decision_variables.insert(
-            VariableID::from(3),
-            DecisionVariable::continuous(VariableID::from(3)),
-        );
+        for i in 1..=3 {
+            decision_variables.insert(
+                VariableID::from(i),
+                DecisionVariable::continuous(VariableID::from(i)),
+            );
+        }
 
-        // Create constraint: x3 - 10 <= 0
-        let constraint_function = Function::from(linear!(3) + coeff!(-10.0));
         let mut constraints = BTreeMap::new();
-        let constraint = Constraint {
-            id: ConstraintID::from(1),
-            equality: Equality::LessThanOrEqualToZero,
-            metadata: crate::constraint::ConstraintMetadata::default(),
-            stage: crate::constraint::CreatedData {
-                function: constraint_function,
+        constraints.insert(
+            ConstraintID::from(1),
+            Constraint {
+                id: ConstraintID::from(1),
+                equality: Equality::LessThanOrEqualToZero,
+                metadata: Default::default(),
+                stage: crate::constraint::CreatedData {
+                    function: Function::from(linear!(3) + coeff!(-10.0)),
+                },
             },
-        };
-        constraints.insert(ConstraintID::from(1), constraint);
+        );
 
-        // Create instance
-        let objective = Function::from(linear!(1) + linear!(2) + linear!(3));
-        let mut instance =
-            Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            Function::from(linear!(1) + linear!(2) + linear!(3)),
+            decision_variables,
+            constraints,
+        )
+        .unwrap();
 
-        // Relax the constraint
         instance
             .relax_constraint(ConstraintID::from(1), "test".to_string(), [])
             .unwrap();
 
-        // Verify constraint is removed
-        assert!(instance.constraints().is_empty());
-        assert_eq!(instance.removed_constraints().len(), 1);
-
-        // Add dependency x3 = x1 + x2 using substitute_one on the instance
-        // This will add the dependency to decision_variable_dependency
         let substitution = Function::from(linear!(1) + linear!(2));
         instance = instance
             .substitute_one(VariableID::from(3), &substitution)
             .unwrap();
 
-        // Verify dependency is set
-        assert_eq!(instance.decision_variable_dependency.len(), 1);
-        assert!(instance
-            .decision_variable_dependency
-            .get(&VariableID::from(3))
-            .is_some());
-
-        // Restore the constraint
         instance.restore_constraint(ConstraintID::from(1)).unwrap();
 
-        // Verify constraint is restored
-        assert_eq!(instance.constraints().len(), 1);
-        assert!(instance.removed_constraints().is_empty());
-
-        // Check the restored constraint has x3 substituted with x1 + x2
-        // Original: x3 - 10
-        // After substituting x3 = x1 + x2: x1 + x2 - 10
-        let restored_constraint = instance.constraints().get(&ConstraintID::from(1)).unwrap();
-        let required_ids = restored_constraint.required_ids();
-
-        // x3 should NOT be in the required IDs (it's been substituted)
-        assert!(!required_ids.contains(&VariableID::from(3)));
-        // x1 and x2 should be in the required IDs
-        assert!(required_ids.contains(&VariableID::from(1)));
-        assert!(required_ids.contains(&VariableID::from(2)));
+        // x3 substituted with x1 + x2
+        let restored = instance.constraints().get(&ConstraintID::from(1)).unwrap();
+        assert!(!restored.required_ids().contains(&VariableID::from(3)));
+        assert!(restored.required_ids().contains(&VariableID::from(1)));
+        assert!(restored.required_ids().contains(&VariableID::from(2)));
     }
 
-    /// Test that restore_constraint correctly handles the case where
-    /// dependency expansion introduces fixed variables.
-    ///
-    /// Scenario:
-    /// 1. Create an Instance with variables x1, x2, x3
-    /// 2. Add a constraint using x3: x3 <= 10
-    /// 3. Relax the constraint
-    /// 4. Fix x1 to 3.0 (set substituted_value)
-    /// 5. Add dependency x3 = x1 + x2
-    /// 6. Restore the constraint
-    /// 7. Expected: constraint should have both x3 and x1 substituted
-    ///    Original: x3 - 10
-    ///    After x3 = x1 + x2: x1 + x2 - 10
-    ///    After x1 = 3: x2 + 3 - 10 = x2 - 7
     #[test]
     fn test_restore_constraint_with_fixed_variable_in_dependency() {
-        // Create decision variables
         let mut decision_variables = BTreeMap::new();
-        decision_variables.insert(
-            VariableID::from(1),
-            DecisionVariable::continuous(VariableID::from(1)),
-        );
-        decision_variables.insert(
-            VariableID::from(2),
-            DecisionVariable::continuous(VariableID::from(2)),
-        );
-        decision_variables.insert(
-            VariableID::from(3),
-            DecisionVariable::continuous(VariableID::from(3)),
-        );
+        for i in 1..=3 {
+            decision_variables.insert(
+                VariableID::from(i),
+                DecisionVariable::continuous(VariableID::from(i)),
+            );
+        }
 
-        // Create constraint: x3 - 10 <= 0
-        let constraint_function = Function::from(linear!(3) + coeff!(-10.0));
         let mut constraints = BTreeMap::new();
-        let constraint = Constraint {
-            id: ConstraintID::from(1),
-            equality: Equality::LessThanOrEqualToZero,
-            metadata: crate::constraint::ConstraintMetadata::default(),
-            stage: crate::constraint::CreatedData {
-                function: constraint_function,
+        constraints.insert(
+            ConstraintID::from(1),
+            Constraint {
+                id: ConstraintID::from(1),
+                equality: Equality::LessThanOrEqualToZero,
+                metadata: Default::default(),
+                stage: crate::constraint::CreatedData {
+                    function: Function::from(linear!(3) + coeff!(-10.0)),
+                },
             },
-        };
-        constraints.insert(ConstraintID::from(1), constraint);
-        // Create instance
-        let objective = Function::from(linear!(1) + linear!(2) + linear!(3));
-        let mut instance =
-            Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
+        );
 
-        // Relax the constraint
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            Function::from(linear!(1) + linear!(2) + linear!(3)),
+            decision_variables,
+            constraints,
+        )
+        .unwrap();
+
         instance
             .relax_constraint(ConstraintID::from(1), "test".to_string(), [])
             .unwrap();
 
-        // Fix x1 to 3.0 BEFORE adding the dependency
         let fix_state = v1::State {
             entries: [(1, 3.0)].into_iter().collect(),
         };
@@ -318,31 +275,252 @@ mod tests {
             .partial_evaluate(&fix_state, ATol::default())
             .unwrap();
 
-        // Add dependency x3 = x1 + x2 AFTER fixing x1
-        // This means when we expand x3, we get x1 + x2, and x1 should also be substituted
         let substitution = Function::from(linear!(1) + linear!(2));
         instance = instance
             .substitute_one(VariableID::from(3), &substitution)
             .unwrap();
 
-        // Restore the constraint
         instance.restore_constraint(ConstraintID::from(1)).unwrap();
 
-        // Check the restored constraint has both x3 and x1 substituted
-        // Original: x3 - 10
-        // After x3 = x1 + x2: x1 + x2 - 10
-        // After x1 = 3: x2 - 7
-        let restored_constraint = instance.constraints().get(&ConstraintID::from(1)).unwrap();
-        let required_ids = restored_constraint.required_ids();
+        // x3 = x1 + x2, x1 = 3 → x2 - 7
+        let restored = instance.constraints().get(&ConstraintID::from(1)).unwrap();
+        assert!(!restored.required_ids().contains(&VariableID::from(3)));
+        assert!(!restored.required_ids().contains(&VariableID::from(1)));
+        assert!(restored.required_ids().contains(&VariableID::from(2)));
+    }
 
-        // x3 should NOT be in the required IDs (it's been substituted)
-        assert!(!required_ids.contains(&VariableID::from(3)));
-        // x1 should NOT be in the required IDs (it's been substituted via fixed value)
-        assert!(
-            !required_ids.contains(&VariableID::from(1)),
-            "x1 should be substituted because it was fixed before dependency was added"
+    #[test]
+    fn test_relax_restore_indicator_constraint() {
+        use crate::IndicatorConstraintID;
+
+        let mut decision_variables = BTreeMap::new();
+        decision_variables.insert(
+            VariableID::from(1),
+            DecisionVariable::continuous(VariableID::from(1)),
         );
-        // x2 should still be in the required IDs
-        assert!(required_ids.contains(&VariableID::from(2)));
+        decision_variables.insert(
+            VariableID::from(10),
+            DecisionVariable::binary(VariableID::from(10)),
+        );
+
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            Function::from(linear!(1)),
+            decision_variables,
+            BTreeMap::new(),
+        )
+        .unwrap();
+
+        let ic = crate::IndicatorConstraint::new(
+            IndicatorConstraintID::from(1),
+            VariableID::from(10),
+            Equality::LessThanOrEqualToZero,
+            Function::from(linear!(1) + coeff!(-5.0)),
+        );
+        instance
+            .indicator_constraint_collection
+            .active_mut()
+            .insert(IndicatorConstraintID::from(1), ic);
+
+        assert_eq!(instance.indicator_constraints().len(), 1);
+        assert!(instance.removed_indicator_constraints().is_empty());
+
+        instance
+            .relax_indicator_constraint(IndicatorConstraintID::from(1), "test".to_string(), [])
+            .unwrap();
+        assert!(instance.indicator_constraints().is_empty());
+        assert_eq!(instance.removed_indicator_constraints().len(), 1);
+
+        instance
+            .restore_indicator_constraint(IndicatorConstraintID::from(1))
+            .unwrap();
+        assert_eq!(instance.indicator_constraints().len(), 1);
+        assert!(instance.removed_indicator_constraints().is_empty());
+    }
+
+    /// Restoring an indicator constraint fails if the indicator variable was fixed.
+    #[test]
+    fn test_restore_indicator_constraint_fails_when_indicator_fixed() {
+        use crate::IndicatorConstraintID;
+
+        let mut decision_variables = BTreeMap::new();
+        decision_variables.insert(
+            VariableID::from(1),
+            DecisionVariable::continuous(VariableID::from(1)),
+        );
+        decision_variables.insert(
+            VariableID::from(10),
+            DecisionVariable::binary(VariableID::from(10)),
+        );
+
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            Function::from(linear!(1)),
+            decision_variables,
+            BTreeMap::new(),
+        )
+        .unwrap();
+
+        let ic = crate::IndicatorConstraint::new(
+            IndicatorConstraintID::from(1),
+            VariableID::from(10),
+            Equality::LessThanOrEqualToZero,
+            Function::from(linear!(1) + coeff!(-5.0)),
+        );
+        instance
+            .indicator_constraint_collection
+            .active_mut()
+            .insert(IndicatorConstraintID::from(1), ic);
+
+        instance
+            .relax_indicator_constraint(IndicatorConstraintID::from(1), "test".to_string(), [])
+            .unwrap();
+
+        // Fix the indicator variable
+        let fix_state = v1::State {
+            entries: [(10, 1.0)].into_iter().collect(),
+        };
+        instance
+            .partial_evaluate(&fix_state, ATol::default())
+            .unwrap();
+
+        // Restore should fail
+        let result = instance.restore_indicator_constraint(IndicatorConstraintID::from(1));
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("indicator variable"));
+    }
+
+    /// Restoring an indicator constraint applies pending substitutions to the function
+    /// but not to the indicator variable.
+    #[test]
+    fn test_restore_indicator_constraint_with_fixed_function_variable() {
+        use crate::IndicatorConstraintID;
+
+        let mut decision_variables = BTreeMap::new();
+        decision_variables.insert(
+            VariableID::from(1),
+            DecisionVariable::continuous(VariableID::from(1)),
+        );
+        decision_variables.insert(
+            VariableID::from(2),
+            DecisionVariable::continuous(VariableID::from(2)),
+        );
+        decision_variables.insert(
+            VariableID::from(10),
+            DecisionVariable::binary(VariableID::from(10)),
+        );
+
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            Function::from(linear!(1)),
+            decision_variables,
+            BTreeMap::new(),
+        )
+        .unwrap();
+
+        // x10 = 1 → x1 + x2 - 5 <= 0
+        let ic = crate::IndicatorConstraint::new(
+            IndicatorConstraintID::from(1),
+            VariableID::from(10),
+            Equality::LessThanOrEqualToZero,
+            Function::from(linear!(1) + linear!(2) + coeff!(-5.0)),
+        );
+        instance
+            .indicator_constraint_collection
+            .active_mut()
+            .insert(IndicatorConstraintID::from(1), ic);
+
+        instance
+            .relax_indicator_constraint(IndicatorConstraintID::from(1), "test".to_string(), [])
+            .unwrap();
+
+        // Fix x1 (function variable, not indicator)
+        let fix_state = v1::State {
+            entries: [(1, 3.0)].into_iter().collect(),
+        };
+        instance
+            .partial_evaluate(&fix_state, ATol::default())
+            .unwrap();
+
+        instance
+            .restore_indicator_constraint(IndicatorConstraintID::from(1))
+            .unwrap();
+
+        let restored = instance
+            .indicator_constraints()
+            .get(&IndicatorConstraintID::from(1))
+            .unwrap();
+        // x1 substituted, x2 remains
+        assert!(!restored
+            .stage
+            .function
+            .required_ids()
+            .contains(&VariableID::from(1)));
+        assert!(restored
+            .stage
+            .function
+            .required_ids()
+            .contains(&VariableID::from(2)));
+        assert_eq!(restored.indicator_variable, VariableID::from(10));
+    }
+
+    /// Restoring an indicator constraint fails if the indicator variable
+    /// was substituted (via dependency) while the constraint was removed.
+    #[test]
+    fn test_restore_indicator_constraint_fails_when_indicator_substituted() {
+        use crate::IndicatorConstraintID;
+
+        let mut decision_variables = BTreeMap::new();
+        decision_variables.insert(
+            VariableID::from(1),
+            DecisionVariable::continuous(VariableID::from(1)),
+        );
+        decision_variables.insert(
+            VariableID::from(10),
+            DecisionVariable::binary(VariableID::from(10)),
+        );
+        decision_variables.insert(
+            VariableID::from(20),
+            DecisionVariable::binary(VariableID::from(20)),
+        );
+
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            Function::from(linear!(1)),
+            decision_variables,
+            BTreeMap::new(),
+        )
+        .unwrap();
+
+        // x10 = 1 → x1 - 5 <= 0
+        let ic = crate::IndicatorConstraint::new(
+            IndicatorConstraintID::from(1),
+            VariableID::from(10),
+            Equality::LessThanOrEqualToZero,
+            Function::from(linear!(1) + coeff!(-5.0)),
+        );
+        instance
+            .indicator_constraint_collection
+            .active_mut()
+            .insert(IndicatorConstraintID::from(1), ic);
+
+        // Relax, then substitute indicator variable x10 = x20
+        instance
+            .relax_indicator_constraint(IndicatorConstraintID::from(1), "test".to_string(), [])
+            .unwrap();
+        instance = instance
+            .substitute_one(VariableID::from(10), &Function::from(linear!(20)))
+            .unwrap();
+
+        // Restore should fail because indicator variable x10 has been substituted
+        let result = instance.restore_indicator_constraint(IndicatorConstraintID::from(1));
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("indicator variable"));
     }
 }
