@@ -235,4 +235,55 @@ mod tests {
         let result = ic.partial_evaluate(&state, ATol::default());
         assert!(result.is_err());
     }
+
+    #[test]
+    fn test_evaluate_samples_indicator() {
+        // x1 <= 5, indicator = x10
+        let ic = IndicatorConstraint::new(
+            IndicatorConstraintID::from(1),
+            VariableID::from(10),
+            Equality::LessThanOrEqualToZero,
+            Function::from(linear!(1) + coeff!(-5.0)),
+        );
+
+        use crate::v1::samples::SamplesEntry;
+        let samples = crate::v1::Samples {
+            entries: vec![
+                // Sample 0: x1=3, x10=1 → ON, feasible (3-5=-2 <= 0)
+                SamplesEntry {
+                    state: Some(crate::v1::State::from(HashMap::from([(1, 3.0), (10, 1.0)]))),
+                    ids: vec![0],
+                },
+                // Sample 1: x1=7, x10=1 → ON, infeasible (7-5=2 > 0)
+                SamplesEntry {
+                    state: Some(crate::v1::State::from(HashMap::from([(1, 7.0), (10, 1.0)]))),
+                    ids: vec![1],
+                },
+                // Sample 2: x1=100, x10=0 → OFF, feasible (always)
+                SamplesEntry {
+                    state: Some(crate::v1::State::from(HashMap::from([
+                        (1, 100.0),
+                        (10, 0.0),
+                    ]))),
+                    ids: vec![2],
+                },
+            ],
+        };
+
+        let result = ic.evaluate_samples(&samples, ATol::default()).unwrap();
+
+        let s0 = crate::SampleID::from(0);
+        let s1 = crate::SampleID::from(1);
+        let s2 = crate::SampleID::from(2);
+
+        // Feasibility
+        assert_eq!(result.stage.feasible[&s0], true);
+        assert_eq!(result.stage.feasible[&s1], false);
+        assert_eq!(result.stage.feasible[&s2], true);
+
+        // Indicator active
+        assert_eq!(result.stage.indicator_active[&s0], true);
+        assert_eq!(result.stage.indicator_active[&s1], true);
+        assert_eq!(result.stage.indicator_active[&s2], false);
+    }
 }

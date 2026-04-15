@@ -936,6 +936,29 @@ impl Instance {
         Ok(())
     }
 
+    /// Relax an indicator constraint by moving it from active to removed.
+    #[pyo3(signature = (constraint_id, reason, **parameters))]
+    pub fn relax_indicator_constraint(
+        &mut self,
+        constraint_id: u64,
+        reason: String,
+        #[gen_stub(override_type(type_repr = "str"))] parameters: Option<HashMap<String, String>>,
+    ) -> Result<()> {
+        self.inner.relax_indicator_constraint(
+            constraint_id.into(),
+            reason,
+            parameters.unwrap_or_default(),
+        )?;
+        Ok(())
+    }
+
+    /// Restore a removed indicator constraint back to active.
+    pub fn restore_indicator_constraint(&mut self, constraint_id: u64) -> Result<()> {
+        self.inner
+            .restore_indicator_constraint(constraint_id.into())?;
+        Ok(())
+    }
+
     /// Log-encode the integer decision variables.
     ///
     /// Log encoding of an integer variable $x \in [l, u]$ is to represent by $m$ bits $b_i \in \{0, 1\}$ by:

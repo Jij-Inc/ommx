@@ -647,6 +647,31 @@ impl SampleSet {
         )
     }
 
+    /// DataFrame of removed indicator constraint reasons.
+    ///
+    /// Columns: id (index), removed_reason, removed_reason.{key}
+    ///
+    /// Can be joined with {attr}`indicator_constraints_df` using the `id` index.
+    #[getter]
+    pub fn indicator_removed_reasons_df<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        use crate::pandas::RemovedReasonEntry;
+        entries_to_dataframe(
+            py,
+            self.inner
+                .indicator_constraints()
+                .removed_reasons()
+                .iter()
+                .map(|(id, reason)| RemovedReasonEntry {
+                    id: id.into_inner(),
+                    reason,
+                }),
+            "id",
+        )
+    }
+
     /// DataFrame of named functions with per-sample value columns.
     /// Static columns: id, used_ids, name, subscripts, description, parameters.
     /// Dynamic columns: one per sample_id (int) with the function's evaluated value.
