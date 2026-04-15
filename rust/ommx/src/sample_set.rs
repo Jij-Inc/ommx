@@ -88,6 +88,12 @@ pub enum SampleSetError {
         value_id: ConstraintID,
     },
 
+    #[error("Indicator constraint key {key:?} does not match value's id {value_id:?}")]
+    InconsistentIndicatorConstraintID {
+        key: crate::IndicatorConstraintID,
+        value_id: crate::IndicatorConstraintID,
+    },
+
     #[error("Named function key {key:?} does not match value's id {value_id:?}")]
     InconsistentNamedFunctionID {
         key: NamedFunctionID,
@@ -417,6 +423,15 @@ impl SampleSetBuilder {
         for (key, value) in constraints.iter() {
             if *key != value.id {
                 return Err(SampleSetError::InconsistentConstraintID {
+                    key: *key,
+                    value_id: value.id,
+                });
+            }
+        }
+
+        for (key, value) in self.indicator_constraints.iter() {
+            if *key != value.id {
+                return Err(SampleSetError::InconsistentIndicatorConstraintID {
                     key: *key,
                     value_id: value.id,
                 });

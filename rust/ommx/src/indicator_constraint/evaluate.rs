@@ -9,11 +9,19 @@ impl Evaluate for IndicatorConstraint<Created> {
         let evaluated_value = self.stage.function.evaluate(state, atol)?;
         let used_decision_variable_ids = self.required_ids();
 
-        // Check if indicator variable is ON (= 1)
-        let indicator_on = state
+        // Check indicator variable value
+        let indicator_value = state
             .entries
             .get(&self.indicator_variable.into_inner())
-            .is_some_and(|v| *v > 1.0 - *atol);
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Indicator variable {:?} not found in state for indicator constraint {:?}",
+                    self.indicator_variable,
+                    self.id
+                )
+            })?;
+
+        let indicator_on = *indicator_value > 1.0 - *atol;
 
         let feasible = if indicator_on {
             // Indicator ON → check constraint as usual
@@ -57,10 +65,18 @@ impl Evaluate for IndicatorConstraint<Created> {
             let sample_id = crate::SampleID::from(*sample_id);
             let ev = *evaluated_values.get(sample_id)?;
 
-            let indicator_on = state
+            let indicator_value = state
                 .entries
                 .get(&self.indicator_variable.into_inner())
-                .is_some_and(|v| *v > 1.0 - *atol);
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "Indicator variable {:?} not found in sample {:?} for indicator constraint {:?}",
+                        self.indicator_variable,
+                        sample_id,
+                        self.id
+                    )
+                })?;
+            let indicator_on = *indicator_value > 1.0 - *atol;
 
             let f = if indicator_on {
                 match self.equality {
@@ -118,10 +134,18 @@ impl Evaluate for RemovedIndicatorConstraint {
         let evaluated_value = self.stage.function.evaluate(state, atol)?;
         let used_decision_variable_ids = self.required_ids();
 
-        let indicator_on = state
+        let indicator_value = state
             .entries
             .get(&self.indicator_variable.into_inner())
-            .is_some_and(|v| *v > 1.0 - *atol);
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Indicator variable {:?} not found in state for removed indicator constraint {:?}",
+                    self.indicator_variable,
+                    self.id
+                )
+            })?;
+
+        let indicator_on = *indicator_value > 1.0 - *atol;
 
         let feasible = if indicator_on {
             match self.equality {
@@ -160,10 +184,18 @@ impl Evaluate for RemovedIndicatorConstraint {
             let sample_id = crate::SampleID::from(*sample_id);
             let ev = *evaluated_values.get(sample_id)?;
 
-            let indicator_on = state
+            let indicator_value = state
                 .entries
                 .get(&self.indicator_variable.into_inner())
-                .is_some_and(|v| *v > 1.0 - *atol);
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "Indicator variable {:?} not found in sample {:?} for indicator constraint {:?}",
+                        self.indicator_variable,
+                        sample_id,
+                        self.id
+                    )
+                })?;
+            let indicator_on = *indicator_value > 1.0 - *atol;
 
             let f = if indicator_on {
                 match self.equality {

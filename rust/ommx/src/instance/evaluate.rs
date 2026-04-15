@@ -103,6 +103,23 @@ impl Evaluate for Instance {
             .constraint_hints
             .partial_evaluate(state.clone(), atol)?;
 
+        // Validate that no indicator variable is being partially evaluated.
+        // This check must happen before any mutation to ensure the Instance
+        // is not left in an inconsistent state on error.
+        for ic in self.indicator_constraint_collection.active().values() {
+            if updated_state
+                .entries
+                .contains_key(&ic.indicator_variable.into_inner())
+            {
+                anyhow::bail!(
+                    "Cannot partially evaluate indicator variable {:?} of indicator constraint {:?}. \
+                     Fixing an indicator variable would change the constraint type.",
+                    ic.indicator_variable,
+                    ic.id
+                );
+            }
+        }
+
         // Then proceed with the regular partial evaluation using the updated state
         for (id, value) in updated_state.entries.iter() {
             let Some(dv) = self.decision_variables.get_mut(&VariableID::from(*id)) else {
@@ -113,6 +130,8 @@ impl Evaluate for Instance {
         self.objective.partial_evaluate(&updated_state, atol)?;
         self.constraint_collection
             .partial_evaluate(&updated_state, atol)?;
+        // Indicator variable check already passed above, so this only
+        // partial_evaluates the function parts of indicator constraints.
         self.indicator_constraint_collection
             .partial_evaluate(&updated_state, atol)?;
         for named_function in self.named_functions.values_mut() {
