@@ -49,4 +49,5 @@ node_modules/
 # Claude Code
 .claude/*
 !.claude/rules/
+!.claude/skills/
 !.claude/CLAUDE.md
