@@ -89,7 +89,7 @@ evaluated.stage.dual_variable
 evaluated.stage.used_decision_variable_ids
 ```
 
-`removed_reason` is no longer on evaluated/sampled constraints — it's managed by `EvaluatedCollection` / `SampledCollection` (see [RemovedReason Management](#7-removedreason-management) below).
+`removed_reason` is no longer on evaluated/sampled constraints — it's managed by `EvaluatedCollection` / `SampledCollection` via `collection.removed_reasons()` and `collection.is_removed(&id)`.
 
 **Sampled stage** — same pattern:
 ```rust
@@ -247,30 +247,6 @@ self.constraint_collection.removed_mut().entry(id)
 
 Methods like `.id()`, `.equality()`, `.evaluated_value()`, `.feasible()` are **removed**. Use field access instead.
 
-### 7. RemovedReason Management
-
-`RemovedReason` is now managed at the collection level, not embedded in individual constraints.
-
-```rust
-// ❌ Before — removed_reason on the constraint itself
-let evaluated: EvaluatedConstraint = ...;
-if let Some(reason) = &evaluated.stage.removed_reason {
-    println!("Removed: {}", reason.reason);
-}
-
-// ✅ After — removed_reason on the collection
-let collection: EvaluatedCollection<Constraint> = ...;
-if let Some(reason) = collection.removed_reasons().get(&constraint_id) {
-    println!("Removed: {}", reason.reason);
-}
-
-// Check if a constraint is removed
-if collection.is_removed(&constraint_id) { ... }
-
-// Feasibility check excluding removed constraints
-collection.is_feasible_relaxed()
-```
-
 ## New Types
 
 ### ConstraintType Trait
@@ -392,8 +368,7 @@ pub struct ConstraintMetadata {
 - [ ] Update `RemovedConstraint` construction → `(Constraint, RemovedReason)` tuple
 - [ ] Update `removed.constraint.xxx` → `removed.0.xxx` (tuple access)
 - [ ] Update `removed_reason` / `removed_reason_parameters` → `RemovedReason { reason, parameters }`
-- [ ] Remove `removed_reason` field from `EvaluatedData` / `SampledData` construction
-- [ ] Update `is_removed()` calls → `collection.is_removed(&id)` on `EvaluatedCollection` / `SampledCollection`
+- [ ] Update `evaluated.removed_reason()` → `collection.removed_reasons().get(&id)`
 - [ ] Update struct literals to use `stage: CreatedData { ... }` / `EvaluatedData { ... }` / etc.
 - [ ] Update `self.constraints` / `self.removed_constraints` → `self.constraint_collection.active()` / `.removed()`
 - [ ] Remove any `getset` usage for constraint types
