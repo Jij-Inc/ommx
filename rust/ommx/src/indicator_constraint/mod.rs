@@ -1,14 +1,12 @@
 mod evaluate;
 
 use crate::{
-    constraint::{
-        stage, ConstraintMetadata, Created, CreatedData, Equality, Evaluated, EvaluatedData,
-        SampledData, Stage,
-    },
+    constraint::{stage, ConstraintMetadata, Created, CreatedData, Equality, Evaluated, Stage},
     constraint_type::{ConstraintType, EvaluatedConstraintBehavior, SampledConstraintBehavior},
-    Function, SampleID, VariableID,
+    Function, SampleID, VariableID, VariableIDSet,
 };
 use derive_more::{Deref, From};
+use std::collections::BTreeMap;
 
 /// ID for indicator constraints, independent from regular [`ConstraintID`](crate::ConstraintID).
 #[derive(
@@ -59,19 +57,44 @@ pub struct IndicatorConstraint<S: Stage<Self> = Created> {
     pub stage: S::Data,
 }
 
+// ===== Indicator-specific stage data =====
+
+/// Data carried by an indicator constraint in the Evaluated stage.
+///
+/// Unlike regular [`EvaluatedData`](crate::constraint::EvaluatedData), this records
+/// whether the indicator variable was active and does not include a dual variable
+/// (duals are not well-defined for indicator constraints).
+#[derive(Debug, Clone, PartialEq)]
+pub struct IndicatorEvaluatedData {
+    pub evaluated_value: f64,
+    pub feasible: bool,
+    /// Whether the indicator variable was active (ON) at evaluation time.
+    pub indicator_active: bool,
+    pub used_decision_variable_ids: VariableIDSet,
+}
+
+/// Data carried by an indicator constraint in the Sampled stage.
+#[derive(Debug, Clone)]
+pub struct IndicatorSampledData {
+    pub evaluated_values: crate::Sampled<f64>,
+    pub feasible: BTreeMap<SampleID, bool>,
+    /// Whether the indicator variable was active (ON) for each sample.
+    pub indicator_active: BTreeMap<SampleID, bool>,
+    pub used_decision_variable_ids: VariableIDSet,
+}
+
 // ===== Stage implementations =====
-// Reuse the same stage data types as regular Constraint.
 
 impl Stage<IndicatorConstraint<Created>> for Created {
     type Data = CreatedData;
 }
 
 impl Stage<IndicatorConstraint<Evaluated>> for Evaluated {
-    type Data = EvaluatedData;
+    type Data = IndicatorEvaluatedData;
 }
 
 impl Stage<IndicatorConstraint<stage::Sampled>> for stage::Sampled {
-    type Data = SampledData;
+    type Data = IndicatorSampledData;
 }
 
 // ===== Type aliases =====
@@ -106,23 +129,22 @@ impl SampledConstraintBehavior for SampledIndicatorConstraint {
         sample_id: SampleID,
     ) -> Result<Self::Evaluated, crate::sampled::UnknownSampleIDError> {
         let evaluated_value = *self.stage.evaluated_values.get(sample_id)?;
-        let dual_variable = self
-            .stage
-            .dual_variables
-            .as_ref()
-            .and_then(|duals| duals.get(sample_id).ok())
-            .copied();
         let feasible = *self.stage.feasible.get(&sample_id).unwrap_or(&false);
+        let indicator_active = *self
+            .stage
+            .indicator_active
+            .get(&sample_id)
+            .unwrap_or(&false);
 
         Ok(IndicatorConstraint {
             id: self.id,
             indicator_variable: self.indicator_variable,
             equality: self.equality,
             metadata: self.metadata.clone(),
-            stage: EvaluatedData {
+            stage: IndicatorEvaluatedData {
                 evaluated_value,
-                dual_variable,
                 feasible,
+                indicator_active,
                 used_decision_variable_ids: self.stage.used_decision_variable_ids.clone(),
             },
         })

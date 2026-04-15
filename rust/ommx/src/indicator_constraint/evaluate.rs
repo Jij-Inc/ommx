@@ -39,10 +39,10 @@ impl Evaluate for IndicatorConstraint<Created> {
             indicator_variable: self.indicator_variable,
             equality: self.equality,
             metadata: self.metadata.clone(),
-            stage: EvaluatedData {
+            stage: IndicatorEvaluatedData {
                 evaluated_value,
-                dual_variable: None,
                 feasible,
+                indicator_active: indicator_on,
                 used_decision_variable_ids,
             },
         })
@@ -60,6 +60,7 @@ impl Evaluate for IndicatorConstraint<Created> {
         // We need both the evaluated value and the indicator variable's state,
         // so we iterate over samples (which provides the state) and look up the evaluated value.
         let mut feasible = std::collections::BTreeMap::new();
+        let mut indicator_active = std::collections::BTreeMap::new();
         for (sample_id, state) in samples.iter() {
             let sample_id = crate::SampleID::from(*sample_id);
             let ev = *evaluated_values.get(sample_id)?;
@@ -86,6 +87,7 @@ impl Evaluate for IndicatorConstraint<Created> {
                 true
             };
             feasible.insert(sample_id, f);
+            indicator_active.insert(sample_id, indicator_on);
         }
 
         Ok(IndicatorConstraint {
@@ -93,10 +95,10 @@ impl Evaluate for IndicatorConstraint<Created> {
             indicator_variable: self.indicator_variable,
             equality: self.equality,
             metadata: self.metadata.clone(),
-            stage: SampledData {
+            stage: IndicatorSampledData {
                 evaluated_values,
-                dual_variables: None,
                 feasible,
+                indicator_active,
                 used_decision_variable_ids: self.required_ids(),
             },
         })
@@ -144,6 +146,7 @@ mod tests {
         let state = crate::v1::State::from(HashMap::from([(1, 3.0), (10, 1.0)]));
         let result = ic.evaluate(&state, ATol::default()).unwrap();
         assert!(result.stage.feasible);
+        assert!(result.stage.indicator_active);
         assert_eq!(result.stage.evaluated_value, -2.0);
     }
 
@@ -161,6 +164,7 @@ mod tests {
         let state = crate::v1::State::from(HashMap::from([(1, 7.0), (10, 1.0)]));
         let result = ic.evaluate(&state, ATol::default()).unwrap();
         assert!(!result.stage.feasible);
+        assert!(result.stage.indicator_active);
         assert_eq!(result.stage.evaluated_value, 2.0);
     }
 
@@ -178,6 +182,7 @@ mod tests {
         let state = crate::v1::State::from(HashMap::from([(1, 100.0), (10, 0.0)]));
         let result = ic.evaluate(&state, ATol::default()).unwrap();
         assert!(result.stage.feasible);
+        assert!(!result.stage.indicator_active);
         assert_eq!(result.stage.evaluated_value, 95.0); // f(x) still evaluated for diagnostics
     }
 
