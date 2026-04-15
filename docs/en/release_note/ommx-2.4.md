@@ -2,13 +2,13 @@
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.4.0-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.4.0)
 
-Released on 2026-03-11.
+See the GitHub Release above for full details. The following summarizes the main changes.
 
 ## Breaking Changes
 
-### Allow removed constraints to contain fixed/dependent variables ([#738](https://github.com/Jij-Inc/ommx/pull/738))
+### Allow `removed_constraint` to contain fixed/dependent variables ([#738](https://github.com/Jij-Inc/ommx/pull/738))
 
-Previously, removed constraints were implicitly assumed not to reference fixed or dependent variable IDs. This release lifts that restriction — removed constraints may now contain such variables. Constraint hints are updated to reference only active constraints.
+Previously, `removed_constraint` was implicitly assumed not to reference fixed or dependent variable IDs. This release lifts that restriction — `removed_constraint` may now contain such variables. Accordingly, `partial_evaluate` now skips `removed_constraint`, preventing performance degradation from unused constraints. These constraints are partially evaluated when restored via `restore_constraint`.
 
 ## Bug Fixes
 

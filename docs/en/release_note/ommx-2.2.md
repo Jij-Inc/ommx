@@ -2,7 +2,7 @@
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.2.0-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.2.0)
 
-Released on 2025-11-14.
+See the GitHub Release above for full details. The following summarizes the main changes.
 
 ## Breaking Changes
 

@@ -2,7 +2,7 @@
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.1.0-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.1.0)
 
-Released on 2025-11-13.
+See the GitHub Release above for full details. The following summarizes the main changes.
 
 ## Breaking Changes
 
@@ -21,6 +21,6 @@ All evaluate methods (`Instance.evaluate`, `Function.evaluate`, `Constraint.eval
 - `decision_variable_names` property is added to `Instance`, `Solution`, and `SampleSet`, returning the set of all decision variable names.
 - `extract_all_decision_variables()` method returns a dictionary mapping variable names to their subscript-value mappings, complementing the existing `extract_decision_variables(name)` method.
 
-### `DecisionVariableAnalysis` Display and serialization ([#668](https://github.com/Jij-Inc/ommx/pull/668))
+### `DecisionVariableAnalysis` `__repr__` support ([#668](https://github.com/Jij-Inc/ommx/pull/668))
 
-`DecisionVariableAnalysis`, which provides kind/usage-based partitioning of decision variables (e.g. identifying dependent variables created through `substitute_acyclic`), now supports `to_dict()` and `__repr__()` for inspection in Python.
+`DecisionVariableAnalysis`, which provides kind/usage-based partitioning of decision variables, now supports `to_dict()` and `__repr__()` for easier inspection in Python.

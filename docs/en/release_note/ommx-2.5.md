@@ -1,12 +1,13 @@
 # OMMX Python SDK 2.5.x
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.5.0-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.5.0)
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.5.1-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.5.1)
 
-Released on 2026-03-19.
+See the GitHub Releases above for full details. The following summarizes the main changes.
 
 ## New Features
 
-### `NamedFunction` ([#748](https://github.com/Jij-Inc/ommx/pull/748))
+### `NamedFunction` (2.5.0, [#748](https://github.com/Jij-Inc/ommx/pull/748))
 
 A new `NamedFunction` message and corresponding Python class have been introduced for tracking auxiliary functions (costs, penalties, KPIs, etc.) alongside optimization problems. Related types `EvaluatedNamedFunction` and `SampledNamedFunction` are also added.
 
