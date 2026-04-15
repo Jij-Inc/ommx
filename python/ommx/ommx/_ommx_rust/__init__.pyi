@@ -4025,7 +4025,45 @@ class Solution:
 
         Columns: id (index), removed_reason, removed_reason.{key}
 
-        Can be joined with `constraints_df` on the `id` column.
+        Can be joined with {attr}`constraints_df` on the `id` index.
+
+        # Examples
+
+        ```python
+        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> x = [DecisionVariable.binary(i) for i in range(3)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints=[
+        ...         (x[0] + x[1] == 1).set_id(10),
+        ...         (x[1] + x[2] == 1).set_id(20),
+        ...     ],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+        >>> instance.relax_constraint(10, "test_reason")
+        >>> solution = instance.evaluate({0: 1, 1: 0, 2: 1})
+        ```
+
+        `removed_reasons_df` contains only removed constraints:
+
+        ```python
+        >>> solution.removed_reasons_df
+            removed_reason
+        id
+        10    test_reason
+        ```
+
+        Join with `constraints_df` to get full information:
+
+        ```python
+        >>> df = solution.constraints_df.join(solution.removed_reasons_df)
+        >>> df[["value", "removed_reason"]]
+            value removed_reason
+        id
+        10    0.0   test_reason
+        20    0.0           NaN
+        ```
         """
     @property
     def named_functions_df(self) -> pandas.DataFrame:

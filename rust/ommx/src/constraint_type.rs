@@ -201,63 +201,6 @@ impl<T: ConstraintType> ConstraintCollection<T> {
         }
         ids
     }
-
-    /// Evaluate all constraints (active and removed) against a single state.
-    ///
-    /// Returns the evaluated constraints and a map of removed reasons for those
-    /// that were in the removed set.
-    pub fn evaluate_all(
-        &self,
-        state: &v1::State,
-        atol: ATol,
-    ) -> Result<(
-        BTreeMap<T::ID, T::Evaluated>,
-        BTreeMap<T::ID, RemovedReason>,
-    )> {
-        let mut results = BTreeMap::new();
-        let mut removed_reasons = BTreeMap::new();
-        for constraint in self.active.values() {
-            let evaluated = constraint.evaluate(state, atol)?;
-            results.insert(evaluated.constraint_id(), evaluated);
-        }
-        for (id, (constraint, reason)) in &self.removed {
-            let evaluated = constraint.evaluate(state, atol)?;
-            results.insert(evaluated.constraint_id(), evaluated);
-            removed_reasons.insert(*id, reason.clone());
-        }
-        Ok((results, removed_reasons))
-    }
-
-    /// Partially evaluate all active constraints in place.
-    pub fn partial_evaluate_active(&mut self, state: &v1::State, atol: ATol) -> Result<()> {
-        for constraint in self.active.values_mut() {
-            constraint.partial_evaluate(state, atol)?;
-        }
-        Ok(())
-    }
-
-    /// Evaluate all constraints (active and removed) against multiple samples.
-    ///
-    /// Returns the sampled constraints and a map of removed reasons for those
-    /// that were in the removed set.
-    pub fn evaluate_samples_all(
-        &self,
-        samples: &v1::Samples,
-        atol: ATol,
-    ) -> Result<(BTreeMap<T::ID, T::Sampled>, BTreeMap<T::ID, RemovedReason>)> {
-        let mut results = BTreeMap::new();
-        let mut removed_reasons = BTreeMap::new();
-        for constraint in self.active.values() {
-            let evaluated = constraint.evaluate_samples(samples, atol)?;
-            results.insert(evaluated.constraint_id(), evaluated);
-        }
-        for (id, (constraint, reason)) in &self.removed {
-            let evaluated = constraint.evaluate_samples(samples, atol)?;
-            results.insert(evaluated.constraint_id(), evaluated);
-            removed_reasons.insert(*id, reason.clone());
-        }
-        Ok((results, removed_reasons))
-    }
 }
 
 impl<T: ConstraintType> Evaluate for ConstraintCollection<T> {
@@ -265,17 +208,40 @@ impl<T: ConstraintType> Evaluate for ConstraintCollection<T> {
     type SampledOutput = SampledCollection<T>;
 
     fn evaluate(&self, state: &v1::State, atol: ATol) -> Result<Self::Output> {
-        let (constraints, removed_reasons) = self.evaluate_all(state, atol)?;
-        Ok(EvaluatedCollection::new(constraints, removed_reasons))
+        let mut results = BTreeMap::new();
+        let mut removed_reasons = BTreeMap::new();
+        for constraint in self.active.values() {
+            let evaluated = constraint.evaluate(state, atol)?;
+            results.insert(evaluated.constraint_id(), evaluated);
+        }
+        for (id, (constraint, reason)) in &self.removed {
+            let evaluated = constraint.evaluate(state, atol)?;
+            results.insert(evaluated.constraint_id(), evaluated);
+            removed_reasons.insert(*id, reason.clone());
+        }
+        Ok(EvaluatedCollection::new(results, removed_reasons))
     }
 
     fn evaluate_samples(&self, samples: &v1::Samples, atol: ATol) -> Result<Self::SampledOutput> {
-        let (constraints, removed_reasons) = self.evaluate_samples_all(samples, atol)?;
-        Ok(SampledCollection::new(constraints, removed_reasons))
+        let mut results = BTreeMap::new();
+        let mut removed_reasons = BTreeMap::new();
+        for constraint in self.active.values() {
+            let evaluated = constraint.evaluate_samples(samples, atol)?;
+            results.insert(evaluated.constraint_id(), evaluated);
+        }
+        for (id, (constraint, reason)) in &self.removed {
+            let evaluated = constraint.evaluate_samples(samples, atol)?;
+            results.insert(evaluated.constraint_id(), evaluated);
+            removed_reasons.insert(*id, reason.clone());
+        }
+        Ok(SampledCollection::new(results, removed_reasons))
     }
 
     fn partial_evaluate(&mut self, state: &v1::State, atol: ATol) -> Result<()> {
-        self.partial_evaluate_active(state, atol)
+        for constraint in self.active.values_mut() {
+            constraint.partial_evaluate(state, atol)?;
+        }
+        Ok(())
     }
 
     fn required_ids(&self) -> VariableIDSet {
@@ -340,6 +306,7 @@ impl<T: ConstraintType> EvaluatedCollection<T> {
     }
 
     /// Consume and return both the constraints and removed reasons.
+    #[allow(clippy::type_complexity)]
     pub fn into_parts(
         self,
     ) -> (
@@ -423,6 +390,7 @@ impl<T: ConstraintType> SampledCollection<T> {
     }
 
     /// Consume and return both the constraints and removed reasons.
+    #[allow(clippy::type_complexity)]
     pub fn into_parts(self) -> (BTreeMap<T::ID, T::Sampled>, BTreeMap<T::ID, RemovedReason>) {
         (self.constraints, self.removed_reasons)
     }
@@ -493,12 +461,12 @@ mod tests {
         let state = v1::State {
             entries: [(1, 1.5)].into_iter().collect(),
         };
-        let (results, removed_reasons) = collection.evaluate_all(&state, ATol::default()).unwrap();
+        let results = collection.evaluate(&state, ATol::default()).unwrap();
 
         assert_eq!(results.len(), 2);
         assert!(!results[&ConstraintID::from(1)].stage.feasible);
         assert!(!results[&ConstraintID::from(2)].stage.feasible);
-        assert!(removed_reasons.is_empty());
+        assert!(results.removed_reasons().is_empty());
     }
 
     #[test]
