@@ -235,27 +235,13 @@ macro_rules! impl_monomial_op {
     }};
 }
 
-// Legacy macro for backward compatibility - delegates to generic macro
-macro_rules! impl_monomial_add {
-    ($monomial:ty) => {
-        impl_monomial_op!(Add, add, $monomial);
-    };
-}
+impl_monomial_op!(Add, add, LinearMonomial);
+impl_monomial_op!(Add, add, QuadraticMonomial);
+impl_monomial_op!(Add, add, MonomialDyn);
 
-// Legacy macro for backward compatibility - delegates to generic macro
-macro_rules! impl_monomial_sub {
-    ($monomial:ty) => {
-        impl_monomial_op!(Sub, sub, $monomial);
-    };
-}
-
-impl_monomial_sub!(LinearMonomial);
-impl_monomial_sub!(QuadraticMonomial);
-impl_monomial_sub!(MonomialDyn);
-
-impl_monomial_add!(LinearMonomial);
-impl_monomial_add!(QuadraticMonomial);
-impl_monomial_add!(MonomialDyn);
+impl_monomial_op!(Sub, sub, LinearMonomial);
+impl_monomial_op!(Sub, sub, QuadraticMonomial);
+impl_monomial_op!(Sub, sub, MonomialDyn);
 
 impl<M: Monomial> Add for PolynomialBase<M> {
     type Output = Self;
