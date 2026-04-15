@@ -12,17 +12,6 @@ impl Constraint<Created> {
     }
 }
 
-impl RemovedConstraint {
-    /// Reduce binary powers in the removed constraint function.
-    ///
-    /// For binary variables, x^n = x for any n >= 1, so we can reduce higher powers to linear terms.
-    ///
-    /// Returns `true` if any reduction was performed, `false` otherwise.
-    pub fn reduce_binary_power(&mut self, binary_ids: &VariableIDSet) -> bool {
-        self.stage.function.reduce_binary_power(binary_ids)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

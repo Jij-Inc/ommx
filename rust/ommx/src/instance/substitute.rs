@@ -294,19 +294,19 @@ mod tests {
         // Create removed constraint that depends on x1: x1 + x3 == 1 (constraint_id=2)
         let mut removed_constraints = BTreeMap::new();
         let removed_constraint_function = Function::from(linear!(1) + linear!(3) + coeff!(-1.0));
-        let removed_constraint = RemovedConstraint {
+        let removed_constraint = Constraint {
             id: ConstraintID::from(2),
             equality: Equality::EqualToZero,
             metadata: crate::constraint::ConstraintMetadata::default(),
-            stage: crate::constraint::RemovedData {
+            stage: crate::constraint::CreatedData {
                 function: removed_constraint_function,
-                removed_reason: crate::constraint::RemovedReason {
-                    reason: "test".to_string(),
-                    parameters: Default::default(),
-                },
             },
         };
-        removed_constraints.insert(ConstraintID::from(2), removed_constraint);
+        let removed_reason = crate::constraint::RemovedReason {
+            reason: "test".to_string(),
+            parameters: Default::default(),
+        };
+        removed_constraints.insert(ConstraintID::from(2), (removed_constraint, removed_reason));
 
         // Create constraint hints - OneHot for removed constraint should also be removed
         let one_hot_for_active = OneHot {

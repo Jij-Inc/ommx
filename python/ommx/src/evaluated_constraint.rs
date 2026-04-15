@@ -57,16 +57,6 @@ impl EvaluatedConstraint {
         self.0.stage.feasible
     }
 
-    /// Get the removal reason
-    #[getter]
-    pub fn removed_reason(&self) -> Option<String> {
-        self.0
-            .stage
-            .removed_reason
-            .as_ref()
-            .map(|r| r.reason.clone())
-    }
-
     /// Get the constraint name
     #[getter]
     pub fn name(&self) -> Option<String> {

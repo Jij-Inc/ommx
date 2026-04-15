@@ -26,11 +26,19 @@ impl Parse for crate::v1::Solution {
             crate::v1::instance::Sense::Maximize => Some(crate::Sense::Maximize),
         };
 
-        // Parse evaluated constraints
+        // Parse evaluated constraints and extract removed reasons
         let mut evaluated_constraints = std::collections::BTreeMap::default();
+        let mut removed_reasons = std::collections::BTreeMap::default();
         for ec in self.evaluated_constraints {
-            let parsed_constraint = ec.parse_as(&(), message, "evaluated_constraints")?;
-            evaluated_constraints.insert(parsed_constraint.id, parsed_constraint);
+            let (parsed_constraint, removed_reason): (
+                crate::EvaluatedConstraint,
+                Option<crate::RemovedReason>,
+            ) = ec.parse_as(&(), message, "evaluated_constraints")?;
+            let id = parsed_constraint.id;
+            if let Some(reason) = removed_reason {
+                removed_reasons.insert(id, reason);
+            }
+            evaluated_constraints.insert(id, parsed_constraint);
         }
         let mut evaluated_named_functions = std::collections::BTreeMap::default();
         for enf in self.evaluated_named_functions {
@@ -84,6 +92,7 @@ impl Parse for crate::v1::Solution {
             objective,
             evaluated_constraints: crate::constraint_type::EvaluatedCollection::new(
                 evaluated_constraints,
+                removed_reasons,
             ),
             evaluated_indicator_constraints: Default::default(),
             evaluated_named_functions,
@@ -125,10 +134,22 @@ impl From<Solution> for crate::v1::Solution {
     fn from(solution: Solution) -> Self {
         let state = solution.state();
         let objective = *solution.objective();
-        let evaluated_constraints = solution
+        let removed_reasons = solution.evaluated_constraints().removed_reasons();
+        let evaluated_constraints: Vec<crate::v1::EvaluatedConstraint> = solution
             .evaluated_constraints()
-            .values()
-            .map(|ec| ec.clone().into())
+            .iter()
+            .map(|(id, ec)| {
+                let mut v1_ec = crate::v1::EvaluatedConstraint::from(ec.clone());
+                if let Some(reason) = removed_reasons.get(id) {
+                    v1_ec.removed_reason = Some(reason.reason.clone());
+                    v1_ec.removed_reason_parameters = reason
+                        .parameters
+                        .iter()
+                        .map(|(k, v)| (k.clone(), v.clone()))
+                        .collect();
+                }
+                v1_ec
+            })
             .collect();
         let evaluated_named_functions = solution
             .evaluated_named_functions()

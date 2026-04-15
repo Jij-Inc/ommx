@@ -1,5 +1,5 @@
 use super::*;
-use crate::{ATol, Evaluate, VariableIDSet};
+use crate::{Evaluate, VariableIDSet};
 
 impl Evaluate for Constraint<Created> {
     type Output = EvaluatedConstraint;
@@ -27,7 +27,6 @@ impl Evaluate for Constraint<Created> {
                 dual_variable: None,
                 feasible,
                 used_decision_variable_ids,
-                removed_reason: None,
             },
         })
     }
@@ -57,7 +56,6 @@ impl Evaluate for Constraint<Created> {
                 dual_variables: None,
                 feasible,
                 used_decision_variable_ids: self.stage.function.required_ids(),
-                removed_reason: None,
             },
         })
     }
@@ -67,72 +65,6 @@ impl Evaluate for Constraint<Created> {
         state: &crate::v1::State,
         atol: crate::ATol,
     ) -> anyhow::Result<()> {
-        self.stage.function.partial_evaluate(state, atol)
-    }
-
-    fn required_ids(&self) -> VariableIDSet {
-        self.stage.function.required_ids()
-    }
-}
-
-impl Evaluate for RemovedConstraint {
-    type Output = EvaluatedConstraint;
-    type SampledOutput = SampledConstraint;
-
-    fn evaluate(&self, solution: &crate::v1::State, atol: ATol) -> anyhow::Result<Self::Output> {
-        let evaluated_value = self.stage.function.evaluate(solution, atol)?;
-        let used_decision_variable_ids = self.stage.function.required_ids();
-
-        let feasible = match self.equality {
-            Equality::EqualToZero => evaluated_value.abs() < *atol,
-            Equality::LessThanOrEqualToZero => evaluated_value < *atol,
-        };
-
-        Ok(EvaluatedConstraint {
-            id: self.id,
-            equality: self.equality,
-            metadata: self.metadata.clone(),
-            stage: EvaluatedData {
-                evaluated_value,
-                dual_variable: None,
-                feasible,
-                used_decision_variable_ids,
-                removed_reason: Some(self.stage.removed_reason.clone()),
-            },
-        })
-    }
-
-    fn evaluate_samples(
-        &self,
-        samples: &crate::v1::Samples,
-        atol: ATol,
-    ) -> anyhow::Result<Self::SampledOutput> {
-        let evaluated_values_v1 = self.stage.function.evaluate_samples(samples, atol)?;
-        let evaluated_values: crate::Sampled<f64> = evaluated_values_v1.try_into()?;
-
-        let feasible: std::collections::BTreeMap<crate::SampleID, bool> = evaluated_values
-            .iter()
-            .map(|(sample_id, evaluated_value)| match self.equality {
-                Equality::EqualToZero => (*sample_id, evaluated_value.abs() < *atol),
-                Equality::LessThanOrEqualToZero => (*sample_id, *evaluated_value < *atol),
-            })
-            .collect();
-
-        Ok(SampledConstraint {
-            id: self.id,
-            equality: self.equality,
-            metadata: self.metadata.clone(),
-            stage: SampledData {
-                evaluated_values,
-                dual_variables: None,
-                feasible,
-                used_decision_variable_ids: self.stage.function.required_ids(),
-                removed_reason: Some(self.stage.removed_reason.clone()),
-            },
-        })
-    }
-
-    fn partial_evaluate(&mut self, state: &crate::v1::State, atol: ATol) -> anyhow::Result<()> {
         self.stage.function.partial_evaluate(state, atol)
     }
 

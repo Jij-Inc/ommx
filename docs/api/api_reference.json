@@ -5085,23 +5085,6 @@
               "is_readonly": true
             },
             {
-              "name": "removed_reason",
-              "doc": "Get the removal reason",
-              "type_": {
-                "display": "Optional[str]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "str",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
               "name": "subscripts",
               "doc": "Get the subscripts",
               "type_": {
@@ -15571,7 +15554,7 @@
         {
           "kind": "Class",
           "name": "RemovedConstraint",
-          "doc": "RemovedConstraint wrapper for Python",
+          "doc": "RemovedConstraint wrapper for Python.\n\nInternally holds `(ommx::Constraint, ommx::RemovedReason)`.",
           "bases": [],
           "methods": [
             {
@@ -16676,7 +16659,7 @@
             },
             {
               "name": "constraints_df",
-              "doc": "DataFrame of constraints with per-sample value and feasibility columns.\nStatic columns: id, equality, used_ids, name, subscripts, description, removed_reason, removed_reason_parameters.\nDynamic columns: value.{sample_id} and feasible.{sample_id} for each sample.",
+              "doc": "DataFrame of constraints with per-sample value and feasibility columns.\nStatic columns: id, equality, used_ids, name, subscripts, description.\nDynamic columns: value.{sample_id} and feasible.{sample_id} for each sample.",
               "type_": {
                 "display": "DataFrame",
                 "link_target": null,
@@ -16944,6 +16927,17 @@
               "is_property": true
             },
             {
+              "name": "removed_reasons_df",
+              "doc": "DataFrame of removed constraint reasons.\n\nColumns: id (index), removed_reason, removed_reason.{key}\n\nCan be joined with {attr}`constraints_df` using the `id` index.",
+              "type_": {
+                "display": "DataFrame",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "sample_ids_list",
               "doc": "Get sample IDs as a list (property version)",
               "type_": {
@@ -17184,45 +17178,6 @@
                 "display": "Optional[str]",
                 "link_target": null,
                 "children": [
-                  {
-                    "display": "str",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "removed_reason",
-              "doc": "Get the removal reason",
-              "type_": {
-                "display": "Optional[str]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "str",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "removed_reason_parameters",
-              "doc": "Get the removal reason parameters",
-              "type_": {
-                "display": "dict[str, str]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "str",
-                    "link_target": null,
-                    "children": []
-                  },
                   {
                     "display": "str",
                     "link_target": null,
@@ -18582,7 +18537,7 @@
             },
             {
               "name": "constraints_df",
-              "doc": "DataFrame of evaluated constraints\n\nColumns: id (index), equality, value, used_ids, name, subscripts, description, dual_variable, removed_reason",
+              "doc": "DataFrame of evaluated constraints\n\nColumns: id (index), equality, value, used_ids, name, subscripts, description, dual_variable",
               "type_": {
                 "display": "DataFrame",
                 "link_target": null,
@@ -18858,6 +18813,17 @@
                 "children": []
               },
               "is_property": true
+            },
+            {
+              "name": "removed_reasons_df",
+              "doc": "DataFrame of removed constraint reasons.\n\nColumns: id (index), removed_reason, removed_reason.{key}\n\nCan be joined with {attr}`constraints_df` on the `id` index.\n\n# Examples\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[\n...         (x[0] + x[1] == 1).set_id(10),\n...         (x[1] + x[2] == 1).set_id(20),\n...     ],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.relax_constraint(10, \"test_reason\")\n>>> solution = instance.evaluate({0: 1, 1: 0, 2: 1})\n```\n\n`removed_reasons_df` contains only removed constraints:\n\n```python\n>>> solution.removed_reasons_df\n    removed_reason\nid\n10    test_reason\n```\n\nJoin with `constraints_df` to get full information:\n\n```python\n>>> df = solution.constraints_df.join(solution.removed_reasons_df)\n>>> df[[\"value\", \"removed_reason\"]]\n    value removed_reason\nid\n10    0.0   test_reason\n20    0.0           NaN\n```",
+              "type_": {
+                "display": "DataFrame",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
             },
             {
               "name": "sense",

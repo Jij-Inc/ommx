@@ -588,7 +588,7 @@ impl SampleSet {
     }
 
     /// DataFrame of constraints with per-sample value and feasibility columns.
-    /// Static columns: id, equality, used_ids, name, subscripts, description, removed_reason, removed_reason_parameters.
+    /// Static columns: id, equality, used_ids, name, subscripts, description.
     /// Dynamic columns: value.{sample_id} and feasible.{sample_id} for each sample.
     #[getter]
     pub fn constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
@@ -599,6 +599,28 @@ impl SampleSet {
                 item,
                 sample_ids: &sample_ids,
             }),
+            "id",
+        )
+    }
+
+    /// DataFrame of removed constraint reasons.
+    ///
+    /// Columns: id (index), removed_reason, removed_reason.{key}
+    ///
+    /// Can be joined with {attr}`constraints_df` using the `id` index.
+    #[getter]
+    pub fn removed_reasons_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
+        use crate::pandas::RemovedReasonEntry;
+        entries_to_dataframe(
+            py,
+            self.inner
+                .constraints()
+                .removed_reasons()
+                .iter()
+                .map(|(id, reason)| RemovedReasonEntry {
+                    id: id.into_inner(),
+                    reason,
+                }),
             "id",
         )
     }
