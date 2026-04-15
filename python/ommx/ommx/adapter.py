@@ -31,7 +31,7 @@ class SolverAdapter(ABC):
 
     def __init__(self, ommx_instance: Instance):
         """Check constraint capabilities. Subclasses must call super().__init__()."""
-        ommx_instance.check_capabilities(self.ADDITIONAL_CAPABILITIES)
+        ommx_instance.check_capabilities(set(self.ADDITIONAL_CAPABILITIES))
 
     @classmethod
     @abstractmethod
