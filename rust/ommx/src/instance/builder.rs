@@ -273,6 +273,14 @@ impl InstanceBuilder {
                 }
                 .into());
             }
+            // Check that indicator_variable exists and is binary
+            let indicator_id = value.indicator_variable;
+            let Some(dv) = decision_variables.get(&indicator_id) else {
+                return Err(InstanceError::UndefinedIndicatorVariable { id: indicator_id }.into());
+            };
+            if dv.kind() != crate::decision_variable::Kind::Binary {
+                return Err(InstanceError::IndicatorVariableNotBinary { id: indicator_id }.into());
+            }
             for id in value.required_ids() {
                 if !variable_ids.contains(&id) {
                     return Err(InstanceError::UndefinedVariableID { id }.into());

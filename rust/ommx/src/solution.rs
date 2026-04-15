@@ -83,6 +83,12 @@ pub enum SolutionError {
         value_id: ConstraintID,
     },
 
+    #[error("Indicator constraint map key {key:?} does not match value's id {value_id:?}")]
+    InconsistentIndicatorConstraintID {
+        key: crate::IndicatorConstraintID,
+        value_id: crate::IndicatorConstraintID,
+    },
+
     #[error(
         "Variable ID {id:?} used in constraint {constraint_id:?} is not in decision_variables"
     )]
@@ -714,23 +720,23 @@ impl SolutionBuilder {
         // Validate indicator constraint keys match their id
         for (key, value) in self.evaluated_indicator_constraints.iter() {
             if *key != value.id {
-                return Err(SolutionError::InconsistentConstraintID {
-                    key: (*key).into_inner().into(),
-                    value_id: value.id.into_inner().into(),
+                return Err(SolutionError::InconsistentIndicatorConstraintID {
+                    key: *key,
+                    value_id: value.id,
                 }
                 .into());
             }
         }
 
-        // Validate all used_decision_variable_ids are in decision_variables
+        // Validate all used_decision_variable_ids in indicator constraints
         for ic in self.evaluated_indicator_constraints.values() {
             for var_id in &ic.stage.used_decision_variable_ids {
                 if !decision_variables.contains_key(var_id) {
-                    return Err(SolutionError::UndefinedVariableInConstraint {
-                        id: *var_id,
-                        constraint_id: ic.id.into_inner().into(),
-                    }
-                    .into());
+                    return Err(anyhow::anyhow!(
+                        "Variable {:?} used in indicator constraint {:?} is not defined in decision_variables",
+                        var_id,
+                        ic.id
+                    ));
                 }
             }
         }
