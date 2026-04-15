@@ -27,7 +27,7 @@ class SolverAdapter(ABC):
     automatic constraint capability checking.
     """
 
-    ADDITIONAL_CAPABILITIES: set[AdditionalCapability] = set()
+    ADDITIONAL_CAPABILITIES: frozenset[AdditionalCapability] = frozenset()
 
     def __init__(self, ommx_instance: Instance):
         """Check constraint capabilities. Subclasses must call super().__init__()."""

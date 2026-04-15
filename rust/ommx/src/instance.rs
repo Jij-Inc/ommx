@@ -53,14 +53,9 @@ pub enum AdditionalCapability {
 
 /// Error returned when an Instance contains unsupported constraint types.
 #[derive(Debug, Clone, thiserror::Error)]
+#[error("Unsupported constraint types: {unsupported:?}")]
 pub struct UnsupportedCapabilities {
     pub unsupported: Vec<AdditionalCapability>,
-}
-
-impl std::fmt::Display for UnsupportedCapabilities {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Unsupported constraint types: {:?}", self.unsupported)
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]

@@ -273,7 +273,7 @@ impl<T: ConstraintType> Evaluate for ConstraintCollection<T> {
     }
 
     fn required_ids(&self) -> VariableIDSet {
-        self.required_ids()
+        ConstraintCollection::required_ids(self)
     }
 }
 
