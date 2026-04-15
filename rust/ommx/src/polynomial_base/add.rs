@@ -96,7 +96,7 @@ impl<M: Monomial> Add<&M> for &PolynomialBase<M> {
     }
 }
 
-// Add missing Sub<Coefficient> operations
+// Sub<Coefficient> operations
 impl<M: Monomial> Sub<Coefficient> for PolynomialBase<M> {
     type Output = Self;
     fn sub(mut self, rhs: Coefficient) -> Self::Output {
