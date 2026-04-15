@@ -2,13 +2,13 @@
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.4.0-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.4.0)
 
-2026-03-11 リリース。
+詳細な変更点は上のGitHub Releaseをご覧ください。以下に主な変更点をまとめます。
 
 ## 破壊的変更
 
-### 削除された制約に固定・従属変数を含むことを許可 ([#738](https://github.com/Jij-Inc/ommx/pull/738))
+### `removed_constraint` に固定・従属変数を含むことを許可 ([#738](https://github.com/Jij-Inc/ommx/pull/738))
 
-従来、削除された制約は暗黙的に固定変数や従属変数のIDを参照しないことが前提でした。このリリースでその制約を撤廃し、削除された制約にもこれらの変数を含むことができるようになりました。制約ヒントはアクティブな制約のみを参照するように更新されます。
+従来、 `removed_constraint` は暗黙的に固定変数や従属変数のIDを参照しないことが前提でした。このリリースでその制約を撤廃し、 `removed_constraint` にこれらの変数を含むことができるようになりました。これに併せて `partial_evaluate` が `removed_constraint` をスキップするようになり、使っていない制約に由来する性能の低下を防止します。これらは `restore_constraint` を使って制約を復元する際に部分評価が実行されます。
 
 ## バグ修正
 

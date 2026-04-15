@@ -2,7 +2,7 @@
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.2.0-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.2.0)
 
-2025-11-14 リリース。
+詳細な変更点は上のGitHub Releaseをご覧ください。以下に主な変更点をまとめます。
 
 ## 破壊的変更
 
