@@ -255,38 +255,93 @@ A type family mapping lifecycle stages to concrete types (HKT defunctionalizatio
 
 ```rust
 pub trait ConstraintType {
-    type Created: Evaluate<Output = Self::Evaluated, SampledOutput = Self::Sampled>;
-    type Removed: Evaluate<Output = Self::Evaluated, SampledOutput = Self::Sampled>;
-    type Evaluated: HasConstraintID;
-    type Sampled: HasConstraintID;
+    type ID: Clone + Copy + Ord + Hash + Debug;
+    type Created: Evaluate<Output = Self::Evaluated, SampledOutput = Self::Sampled>
+        + Clone + Debug + PartialEq;
+    type Removed: Evaluate<Output = Self::Evaluated, SampledOutput = Self::Sampled>
+        + Clone + Debug + PartialEq;
+    type Evaluated: EvaluatedConstraintBehavior<ID = Self::ID>;
+    type Sampled: SampledConstraintBehavior<ID = Self::ID, Evaluated = Self::Evaluated>;
 }
 
 // Regular constraints
-impl ConstraintType for Constraint { ... }
+impl ConstraintType for Constraint {
+    type ID = ConstraintID;
+    // ...
+}
 
-// Future: indicator constraints
-// impl ConstraintType for IndicatorConstraint { ... }
+// Indicator constraints
+impl ConstraintType for IndicatorConstraint {
+    type ID = IndicatorConstraintID;
+    // ...
+}
+```
+
+### Behavior Traits
+
+`HasConstraintID` is replaced by two purpose-specific traits:
+
+```rust
+pub trait EvaluatedConstraintBehavior {
+    type ID;
+    fn constraint_id(&self) -> Self::ID;
+    fn is_feasible(&self) -> bool;
+    fn is_removed(&self) -> bool;
+}
+
+pub trait SampledConstraintBehavior {
+    type ID;
+    type Evaluated;
+    fn constraint_id(&self) -> Self::ID;
+    fn is_feasible_for(&self, sample_id: SampleID) -> Option<bool>;
+    fn is_removed(&self) -> bool;
+    fn get(&self, sample_id: SampleID) -> Result<Self::Evaluated, UnknownSampleIDError>;
+}
 ```
 
 ### ConstraintCollection
 
-Generic collection of active + removed constraints:
+Generic collection of active + removed constraints. Also implements `Evaluate`:
 
 ```rust
 pub struct ConstraintCollection<T: ConstraintType> {
-    active: BTreeMap<ConstraintID, T::Created>,
-    removed: BTreeMap<ConstraintID, T::Removed>,
+    active: BTreeMap<T::ID, T::Created>,
+    removed: BTreeMap<T::ID, T::Removed>,
 }
 
 // Methods
-collection.active()                    // &BTreeMap
-collection.removed()                   // &BTreeMap
+collection.active()                    // &BTreeMap<T::ID, T::Created>
+collection.removed()                   // &BTreeMap<T::ID, T::Removed>
 collection.active_mut()                // &mut BTreeMap
 collection.removed_mut()               // &mut BTreeMap
 collection.into_parts()                // (active, removed)
-collection.evaluate_all(state, atol)   // BTreeMap<ConstraintID, T::Evaluated>
-collection.partial_evaluate_active(state, atol)
-collection.required_ids()              // VariableIDSet
+
+// Evaluate trait impl
+collection.evaluate(state, atol)           // EvaluatedCollection<T>
+collection.evaluate_samples(samples, atol) // SampledCollection<T>
+collection.partial_evaluate(state, atol)   // only active constraints
+collection.required_ids()                  // VariableIDSet
+```
+
+### EvaluatedCollection / SampledCollection
+
+Generic wrappers for evaluation results, used in `Solution` and `SampleSet`:
+
+```rust
+// Solution uses:
+evaluated_constraints: EvaluatedCollection<Constraint>,
+evaluated_indicator_constraints: EvaluatedCollection<IndicatorConstraint>,
+
+// SampleSet uses:
+constraints: SampledCollection<Constraint>,
+indicator_constraints: SampledCollection<IndicatorConstraint>,
+
+// Both Deref to BTreeMap<T::ID, T::Evaluated/Sampled> for backward-compatible access
+// and provide feasibility methods:
+collection.is_feasible()             // EvaluatedCollection
+collection.is_feasible_relaxed()     // EvaluatedCollection
+collection.is_feasible_for(id)       // SampledCollection
+collection.is_feasible_relaxed_for(id) // SampledCollection
 ```
 
 ### ConstraintMetadata
@@ -301,15 +356,6 @@ pub struct ConstraintMetadata {
     pub description: Option<String>,
 }
 ```
-
-## Not Yet Migrated
-
-The following types still use concrete constraint types directly rather than the `ConstraintType` pattern:
-
-- **`Solution`**: holds `BTreeMap<ConstraintID, EvaluatedConstraint>` directly
-- **`SampleSet`**: holds `BTreeMap<ConstraintID, SampledConstraint>` directly
-
-When new constraint types (e.g. `IndicatorConstraint`) are added, these will need additional fields or generalization.
 
 ## Migration Checklist
 
