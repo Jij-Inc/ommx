@@ -457,6 +457,19 @@ impl SampleSetBuilder {
             }
         }
 
+        for sampled_ic in self.indicator_constraints.values() {
+            if !sampled_ic
+                .stage
+                .evaluated_values
+                .has_same_ids(&objective_sample_ids)
+            {
+                return Err(SampleSetError::InconsistentSampleIDs {
+                    expected: objective_sample_ids.clone(),
+                    found: sampled_ic.stage.evaluated_values.ids(),
+                });
+            }
+        }
+
         for sampled_named_function in self.named_functions.values() {
             if !sampled_named_function
                 .evaluated_values()
