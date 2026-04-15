@@ -279,7 +279,7 @@ impl ConstraintType for IndicatorConstraint {
 
 ### Behavior Traits
 
-`HasConstraintID` is replaced by two purpose-specific traits:
+Two traits define common behavior for evaluated and sampled constraints:
 
 ```rust
 pub trait EvaluatedConstraintBehavior {
