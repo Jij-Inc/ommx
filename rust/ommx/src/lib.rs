@@ -85,6 +85,29 @@
 //! );
 //! ```
 //!
+//! ## Constraint Type System
+//!
+//! OMMX supports multiple constraint types beyond standard `f(x) = 0` / `f(x) <= 0`:
+//!
+//! - **[`Constraint`]**: Standard constraints
+//! - **[`IndicatorConstraint`]**: `indicator_variable = 1 → f(x) <= 0`
+//!
+//! Each constraint type follows the **Stage pattern** — parameterized by lifecycle phase
+//! (`Created`, `Removed`, `Evaluated`, `Sampled`) — and implements the
+//! [`ConstraintType`] trait, which maps all four stages
+//! as associated types (a defunctionalization of `Stage → Type` since Rust lacks HKTs).
+//!
+//! Each constraint type also has its own independent ID type
+//! ([`ConstraintID`], [`IndicatorConstraintID`]) to prevent accidental cross-type lookups.
+//!
+//! Three generic collection wrappers handle constraints uniformly:
+//!
+//! - [`ConstraintCollection`]: active + removed (used in [`Instance`])
+//! - [`EvaluatedCollection`]: evaluation results (used in [`Solution`])
+//! - [`SampledCollection`]: sampled results (used in [`SampleSet`])
+//!
+//! To add a new constraint type, see the docs on [`ConstraintType`].
+//!
 //! ## [`Instance`]
 //!
 //! The [`Instance`] type represents a complete optimization problem with objective, variables,
