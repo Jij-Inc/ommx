@@ -12,9 +12,9 @@
 //! 1. Define a new struct `NewConstraint<S: Stage<Self> = Created>` with common fields
 //!    (`id`, `equality`, `metadata`, `stage`) plus type-specific fields.
 //! 2. Implement `Stage<NewConstraint<S>>` for each stage marker (reuse `CreatedData`,
-//!    `RemovedData`, etc. if the stage data is the same as regular constraints).
-//! 3. Implement `ConstraintType for NewConstraint` mapping all four stages.
-//! 4. Implement `Evaluate` for `NewConstraint<Created>` and `NewConstraint<Removed>`.
+//!    `EvaluatedData`, etc. if the stage data is the same as regular constraints).
+//! 3. Implement `ConstraintType for NewConstraint` mapping all three stages.
+//! 4. Implement `Evaluate` for `NewConstraint<Created>`.
 //! 5. Add a `ConstraintCollection<NewConstraint>` field to [`Instance`].
 //! 6. Add a variant to [`AdditionalCapability`] and update `Instance::required_capabilities`.
 //!
