@@ -356,6 +356,12 @@ impl SampleSetBuilder {
         self
     }
 
+    /// Sets the constraints with a full `SampledCollection` (including removed reasons).
+    pub fn constraints_collection(mut self, constraints: SampledCollection<Constraint>) -> Self {
+        self.constraints = Some(constraints);
+        self
+    }
+
     /// Sets the indicator constraints.
     pub fn indicator_constraints(
         mut self,

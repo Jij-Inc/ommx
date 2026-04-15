@@ -22,7 +22,8 @@ impl EvaluatedConstraint {
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
         let inner = v1::EvaluatedConstraint::decode(bytes)?;
-        Ok(Parse::parse(inner, &())?)
+        let (constraint, _removed_reason) = Parse::parse(inner, &())?;
+        Ok(constraint)
     }
 }
 
@@ -34,6 +35,7 @@ impl SampledConstraint {
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
         let inner = v1::SampledConstraint::decode(bytes)?;
-        Ok(Parse::parse(inner, &())?)
+        let (constraint, _removed_reason) = Parse::parse(inner, &())?;
+        Ok(constraint)
     }
 }

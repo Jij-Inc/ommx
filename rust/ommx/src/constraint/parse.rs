@@ -137,7 +137,7 @@ impl Parse for Vec<v1::RemovedConstraint> {
 }
 
 impl Parse for v1::EvaluatedConstraint {
-    type Output = EvaluatedConstraint;
+    type Output = (EvaluatedConstraint, Option<RemovedReason>);
     type Context = ();
 
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
@@ -157,26 +157,34 @@ impl Parse for v1::EvaluatedConstraint {
             Equality::LessThanOrEqualToZero => self.evaluated_value < *crate::ATol::default(),
         };
 
-        Ok(Constraint {
-            id: ConstraintID(self.id),
-            equality,
-            metadata,
-            stage: EvaluatedData {
-                evaluated_value: self.evaluated_value,
-                dual_variable: self.dual_variable,
-                feasible,
-                used_decision_variable_ids: self
-                    .used_decision_variable_ids
-                    .into_iter()
-                    .map(VariableID::from)
-                    .collect(),
+        let removed_reason = self.removed_reason.map(|reason| RemovedReason {
+            reason,
+            parameters: self.removed_reason_parameters.into_iter().collect(),
+        });
+
+        Ok((
+            Constraint {
+                id: ConstraintID(self.id),
+                equality,
+                metadata,
+                stage: EvaluatedData {
+                    evaluated_value: self.evaluated_value,
+                    dual_variable: self.dual_variable,
+                    feasible,
+                    used_decision_variable_ids: self
+                        .used_decision_variable_ids
+                        .into_iter()
+                        .map(VariableID::from)
+                        .collect(),
+                },
             },
-        })
+            removed_reason,
+        ))
     }
 }
 
 impl Parse for v1::SampledConstraint {
-    type Output = SampledConstraint;
+    type Output = (SampledConstraint, Option<RemovedReason>);
     type Context = ();
 
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
@@ -200,25 +208,33 @@ impl Parse for v1::SampledConstraint {
             description: self.description,
         };
 
-        Ok(Constraint {
-            id: ConstraintID(self.id),
-            equality,
-            metadata,
-            stage: SampledData {
-                evaluated_values,
-                dual_variables: None, // v1::SampledConstraint doesn't have dual_variables field
-                feasible: self
-                    .feasible
-                    .into_iter()
-                    .map(|(id, value)| (SampleID::from(id), value))
-                    .collect(),
-                used_decision_variable_ids: self
-                    .used_decision_variable_ids
-                    .into_iter()
-                    .map(VariableID::from)
-                    .collect(),
+        let removed_reason = self.removed_reason.map(|reason| RemovedReason {
+            reason,
+            parameters: self.removed_reason_parameters.into_iter().collect(),
+        });
+
+        Ok((
+            Constraint {
+                id: ConstraintID(self.id),
+                equality,
+                metadata,
+                stage: SampledData {
+                    evaluated_values,
+                    dual_variables: None,
+                    feasible: self
+                        .feasible
+                        .into_iter()
+                        .map(|(id, value)| (SampleID::from(id), value))
+                        .collect(),
+                    used_decision_variable_ids: self
+                        .used_decision_variable_ids
+                        .into_iter()
+                        .map(VariableID::from)
+                        .collect(),
+                },
             },
-        })
+            removed_reason,
+        ))
     }
 }
 
@@ -269,7 +285,8 @@ mod tests {
             removed_reason_parameters: Default::default(),
         };
 
-        let parsed: EvaluatedConstraint = v1_constraint.parse(&()).unwrap();
+        let (parsed, removed_reason): (EvaluatedConstraint, _) = v1_constraint.parse(&()).unwrap();
+        assert!(removed_reason.is_none());
 
         assert_eq!(parsed.id, ConstraintID(42));
         assert_eq!(parsed.equality, Equality::EqualToZero);
