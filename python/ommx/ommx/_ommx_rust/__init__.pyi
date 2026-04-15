@@ -5,6 +5,7 @@ import builtins
 import collections.abc
 import datetime
 import enum
+import numpy
 import os
 import pandas
 import pathlib
@@ -71,6 +72,8 @@ __all__ = [
 ToFunction: TypeAlias = (
     builtins.int
     | builtins.float
+    | numpy.integer
+    | numpy.floating
     | DecisionVariable
     | Parameter
     | Linear

@@ -1,5 +1,7 @@
 # FIXME: Use test case generator like Hypothesis
 
+import numpy as np
+
 from ommx.v1 import Linear, DecisionVariable, Quadratic, Polynomial, Function
 
 
@@ -272,3 +274,17 @@ def test_function_terms_polynomial():
         (8,): 9.0,
         (): 10.0,
     }
+
+
+def test_function_from_numpy_int64():
+    """numpy.int64 should be accepted as a constant value."""
+    i = np.int64(3)
+    f = Function(i)
+    assert_eq(f, Function(3))
+
+
+def test_function_from_numpy_float64():
+    """numpy.float64 should be accepted as a constant value."""
+    x = np.float64(2.5)
+    f = Function(x)
+    assert_eq(f, Function(2.5))
