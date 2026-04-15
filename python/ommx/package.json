@@ -1,0 +1,13 @@
+{
+  "name": "ommx-pyodide-test",
+  "version": "1.0.0",
+  "description": "Test OMMX Python SDK in pyodide",
+  "main": "test_pyodide.js",
+  "scripts": {
+    "test": "node test_pyodide.js"
+  },
+  "dependencies": {
+    "glob": "^11.0.0",
+    "pyodide": "^0.29.0"
+  }
+}

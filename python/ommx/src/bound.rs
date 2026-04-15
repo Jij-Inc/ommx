@@ -5,12 +5,12 @@ use pyo3::prelude::*;
 ///
 /// Note: This struct is named `VariableBound` in Rust code to avoid conflicts with PyO3's `Bound` type,
 /// but is exposed as `Bound` in Python through the `#[pyclass(name = "Bound")]` attribute.
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass(name = "Bound", eq)]
 #[derive(Clone, PartialEq)]
 pub struct VariableBound(pub ommx::Bound);
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl VariableBound {
     #[new]

@@ -12,30 +12,91 @@ pub use config::*;
 use crate::v1;
 use anyhow::{bail, ensure, Context, Result};
 use ocipkg::{
-    distribution::MediaType,
-    image::{
-        Image, OciArchive, OciArchiveBuilder, OciArtifact, OciDir, OciDirBuilder, Remote,
-        RemoteBuilder,
-    },
-    oci_spec::image::{Descriptor, ImageManifest},
+    image::{Image, OciArchive, OciArchiveBuilder, OciArtifact, OciDir, OciDirBuilder},
+    oci_spec::image::{Descriptor, ImageManifest, MediaType},
     Digest, ImageName,
 };
+
+#[cfg(feature = "remote-artifact")]
+use ocipkg::image::{Remote, RemoteBuilder};
 use prost::Message;
-use std::{env, path::PathBuf};
+use std::{env, path::PathBuf, sync::OnceLock};
 use std::{
     ops::{Deref, DerefMut},
     path::Path,
 };
 
-/// Root directory for OMMX artifacts
-pub fn data_dir() -> Result<PathBuf> {
-    Ok(directories::ProjectDirs::from("org", "ommx", "ommx")
-        .context("Failed to get project directories")?
-        .data_dir()
-        .to_path_buf())
+/// Global storage for the local registry root path
+static LOCAL_REGISTRY_ROOT: OnceLock<PathBuf> = OnceLock::new();
+
+/// Set the root directory for OMMX local registry
+///
+/// See [`get_local_registry_root`] for details.
+///
+pub fn set_local_registry_root(path: impl Into<PathBuf>) -> Result<()> {
+    let path = path.into();
+    LOCAL_REGISTRY_ROOT.set(path.clone()).map_err(|path| {
+        anyhow::anyhow!(
+            "Local registry root has already been set: {}",
+            path.display()
+        )
+    })?;
+    log::info!("Local registry root set via API: {}", path.display());
+    Ok(())
 }
 
+/// Get the root directory for OMMX local registry
+///
+/// - Once the root is set, it is immutable for the lifetime of the program.
+/// - You can set it via [`set_local_registry_root`] function before calling this.
+/// - If this is called without calling [`set_local_registry_root`],
+///   - It will check the `OMMX_LOCAL_REGISTRY_ROOT` environment variable.
+///   - If the environment variable is not set, it will use the default project data directory.
+/// - The root directory is **NOT** created automatically by this function.
+///
+pub fn get_local_registry_root() -> &'static Path {
+    LOCAL_REGISTRY_ROOT.get_or_init(|| {
+        // Try environment variable first
+        let path = if let Ok(custom_dir) = env::var("OMMX_LOCAL_REGISTRY_ROOT") {
+            let path = PathBuf::from(custom_dir);
+            log::info!(
+                "Local registry root initialized from OMMX_LOCAL_REGISTRY_ROOT: {}",
+                path.display()
+            );
+            path
+        } else {
+            let path = directories::ProjectDirs::from("org", "ommx", "ommx")
+                .expect("Failed to get project directories")
+                .data_dir()
+                .to_path_buf();
+            log::info!(
+                "Local registry root initialized to default: {}",
+                path.display()
+            );
+            path
+        };
+        path
+    })
+}
+
+#[deprecated(note = "Use get_local_registry_root instead")]
+pub fn data_dir() -> Result<PathBuf> {
+    let path = get_local_registry_root().to_path_buf();
+    if !path.exists() {
+        std::fs::create_dir_all(&path)
+            .with_context(|| format!("Failed to create data directory: {}", path.display()))?;
+    }
+    Ok(path)
+}
+
+/// Get the directory for the given image name in the local registry
+pub fn get_image_dir(image_name: &ImageName) -> PathBuf {
+    get_local_registry_root().join(image_name.as_path())
+}
+
+#[deprecated(note = "Use get_image_dir instead")]
 pub fn image_dir(image_name: &ImageName) -> Result<PathBuf> {
+    #[allow(deprecated)]
     Ok(data_dir()?.join(image_name.as_path()))
 }
 
@@ -66,6 +127,7 @@ fn gather_oci_dirs(dir: &Path) -> Result<Vec<PathBuf>> {
     Ok(images)
 }
 
+#[cfg(feature = "remote-artifact")]
 fn auth_from_env() -> Result<(String, String, String)> {
     if let (Ok(domain), Ok(username), Ok(password)) = (
         env::var("OMMX_BASIC_AUTH_DOMAIN"),
@@ -80,13 +142,14 @@ fn auth_from_env() -> Result<(String, String, String)> {
     bail!("No authentication information found in environment variables");
 }
 
+/// Get all images stored in the local registry
 pub fn get_images() -> Result<Vec<ImageName>> {
-    let root = data_dir()?;
-    let dirs = gather_oci_dirs(&root)?;
+    let root = get_local_registry_root();
+    let dirs = gather_oci_dirs(root)?;
     dirs.into_iter()
         .map(|dir| {
             let relative = dir
-                .strip_prefix(&root)
+                .strip_prefix(root)
                 .context("Failed to get relative path")?;
             ImageName::from_path(relative)
         })
@@ -115,6 +178,7 @@ impl Artifact<OciArchive> {
         Self::new(artifact)
     }
 
+    #[cfg(feature = "remote-artifact")]
     pub fn push(&mut self) -> Result<Artifact<Remote>> {
         let name = self.get_name()?;
         log::info!("Pushing: {name}");
@@ -128,12 +192,12 @@ impl Artifact<OciArchive> {
 
     pub fn load(&mut self) -> Result<()> {
         let image_name = self.get_name()?;
-        let path = image_dir(&image_name)?;
+        let path = get_image_dir(&image_name);
         if path.exists() {
-            log::trace!("Already exists in locally: {}", path.display());
+            log::trace!("Already exists in local registry: {}", path.display());
             return Ok(());
         }
-        log::info!("Loading: {image_name}");
+        log::info!("Loading to local registry: {image_name}");
         ocipkg::image::copy(self.0.deref_mut(), OciDirBuilder::new(path, image_name)?)?;
         Ok(())
     }
@@ -145,6 +209,7 @@ impl Artifact<OciDir> {
         Self::new(artifact)
     }
 
+    #[cfg(feature = "remote-artifact")]
     pub fn push(&mut self) -> Result<Artifact<Remote>> {
         let name = self.get_name()?;
         log::info!("Pushing: {name}");
@@ -170,6 +235,7 @@ impl Artifact<OciDir> {
     }
 }
 
+#[cfg(feature = "remote-artifact")]
 impl Artifact<Remote> {
     pub fn from_remote(image_name: ImageName) -> Result<Self> {
         let artifact = OciArtifact::from_remote(image_name)?;
@@ -178,12 +244,12 @@ impl Artifact<Remote> {
 
     pub fn pull(&mut self) -> Result<Artifact<OciDir>> {
         let image_name = self.get_name()?;
-        let path = image_dir(&image_name)?;
+        let path = get_image_dir(&image_name);
         if path.exists() {
-            log::trace!("Already exists in locally: {}", path.display());
+            log::trace!("Already exists in local registry: {}", path.display());
             return Ok(Artifact(OciArtifact::from_oci_dir(&path)?));
         }
-        log::info!("Pulling: {image_name}");
+        log::info!("Pulling to local registry: {image_name}");
         if let Ok((domain, username, password)) = auth_from_env() {
             self.0.add_basic_auth(&domain, &username, &password);
         }
@@ -229,7 +295,7 @@ impl<Base: Image> Artifact<Base> {
 
     pub fn get_layer(&mut self, digest: &Digest) -> Result<(Descriptor, Vec<u8>)> {
         for (desc, blob) in self.0.get_layers()? {
-            if desc.digest() == &digest.to_string() {
+            if desc.digest() == digest {
                 return Ok((desc, blob));
             }
         }

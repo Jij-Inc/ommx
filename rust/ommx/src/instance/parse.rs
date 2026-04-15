@@ -1,5 +1,6 @@
 use super::*;
 use crate::{
+    constraint_type::ConstraintCollection,
     parse::{as_variable_id, Parse, ParseError, RawParseError},
     v1::{self},
     Constraint, InstanceError, VariableID,
@@ -58,21 +59,31 @@ impl From<Constraint> for v1::Constraint {
         Self {
             id: *value.id,
             equality: value.equality.into(),
-            function: Some(value.function.into()),
-            name: value.name,
-            subscripts: value.subscripts,
-            parameters: value.parameters.into_iter().collect(),
-            description: value.description,
+            function: Some(value.stage.function.into()),
+            name: value.metadata.name,
+            subscripts: value.metadata.subscripts,
+            parameters: value.metadata.parameters.into_iter().collect(),
+            description: value.metadata.description,
         }
     }
 }
 
 impl From<RemovedConstraint> for v1::RemovedConstraint {
     fn from(value: RemovedConstraint) -> Self {
+        let crate::constraint::RemovedData {
+            function,
+            removed_reason,
+        } = value.stage;
+        let inner = Constraint {
+            id: value.id,
+            equality: value.equality,
+            metadata: value.metadata,
+            stage: crate::constraint::CreatedData { function },
+        };
         Self {
-            constraint: Some(value.constraint.into()),
-            removed_reason: value.removed_reason,
-            removed_reason_parameters: value.removed_reason_parameters.into_iter().collect(),
+            constraint: Some(inner.into()),
+            removed_reason: removed_reason.reason,
+            removed_reason_parameters: removed_reason.parameters.into_iter().collect(),
         }
     }
 }
@@ -124,6 +135,22 @@ impl Parse for v1::Instance {
             self.removed_constraints
                 .parse_as(&constraints, message, "removed_constraints")?;
 
+        let named_functions = self
+            .named_functions
+            .parse_as(&(), message, "named_functions")?;
+
+        // Validate that all variables used in named functions are defined as decision variables
+        for named_function in named_functions.values() {
+            for id in named_function.function.required_ids() {
+                if !decision_variable_ids.contains(&id) {
+                    return Err(
+                        RawParseError::from(InstanceError::UndefinedVariableID { id })
+                            .context(message, "named_functions"),
+                    );
+                }
+            }
+        }
+
         let mut decision_variable_dependency = BTreeMap::default();
         for (id, f) in self.decision_variable_dependency {
             decision_variable_dependency.insert(
@@ -146,13 +173,14 @@ impl Parse for v1::Instance {
         Ok(Instance {
             sense,
             objective,
-            constraints,
             decision_variables,
-            removed_constraints,
+            constraint_collection: ConstraintCollection::new(constraints, removed_constraints),
+            indicator_constraint_collection: Default::default(),
             decision_variable_dependency,
             parameters: self.parameters,
             description: self.description,
             constraint_hints,
+            named_functions,
         })
     }
 }
@@ -171,12 +199,14 @@ impl From<Instance> for v1::Instance {
             .into_values()
             .map(|dv| dv.into())
             .collect();
-        let constraints = value.constraints.into_values().map(|c| c.into()).collect();
-        let removed_constraints = value
-            .removed_constraints
+        let (active, removed) = value.constraint_collection.into_parts();
+        let constraints = active.into_values().map(|c| c.into()).collect();
+        let named_functions = value
+            .named_functions
             .into_values()
-            .map(|rc| rc.into())
+            .map(|nf| nf.into())
             .collect();
+        let removed_constraints = removed.into_values().map(|rc| rc.into()).collect();
         let decision_variable_dependency = value
             .decision_variable_dependency
             .into_iter()
@@ -187,6 +217,7 @@ impl From<Instance> for v1::Instance {
             decision_variables,
             objective: Some(value.objective.into()),
             constraints,
+            named_functions,
             removed_constraints,
             decision_variable_dependency,
             parameters: value.parameters,
@@ -266,6 +297,22 @@ impl Parse for v1::ParametricInstance {
             self.removed_constraints
                 .parse_as(&constraints, message, "removed_constraints")?;
 
+        let named_functions = self
+            .named_functions
+            .parse_as(&(), message, "named_functions")?;
+
+        // Validate that all variables used in named functions are defined (either as decision variables or parameters)
+        for named_function in named_functions.values() {
+            for id in named_function.function.required_ids() {
+                if !all_variable_ids.contains(&id) {
+                    return Err(
+                        RawParseError::from(InstanceError::UndefinedVariableID { id })
+                            .context(message, "named_functions"),
+                    );
+                }
+            }
+        }
+
         let mut decision_variable_dependency = BTreeMap::default();
         for (id, f) in self.decision_variable_dependency {
             decision_variable_dependency.insert(
@@ -290,8 +337,9 @@ impl Parse for v1::ParametricInstance {
             objective,
             decision_variables,
             parameters,
-            constraints,
-            removed_constraints,
+            constraint_collection: ConstraintCollection::new(constraints, removed_constraints),
+            indicator_constraint_collection: Default::default(),
+            named_functions,
             decision_variable_dependency,
             constraint_hints,
             description: self.description,
@@ -306,13 +354,15 @@ impl From<ParametricInstance> for v1::ParametricInstance {
             objective,
             decision_variables,
             parameters,
-            constraints,
-            removed_constraints,
+            constraint_collection,
+            indicator_constraint_collection: _, // Not serialized to v1 yet
             decision_variable_dependency,
             constraint_hints,
             description,
+            named_functions,
         }: ParametricInstance,
     ) -> Self {
+        let (constraints, removed_constraints) = constraint_collection.into_parts();
         Self {
             description,
             sense: v1::instance::Sense::from(sense) as i32,
@@ -323,6 +373,7 @@ impl From<ParametricInstance> for v1::ParametricInstance {
                 .collect(),
             parameters: parameters.into_values().collect(),
             constraints: constraints.into_values().map(|c| c.into()).collect(),
+            named_functions: named_functions.into_values().map(|nf| nf.into()).collect(),
             removed_constraints: removed_constraints
                 .into_values()
                 .map(|rc| rc.into())
@@ -371,6 +422,7 @@ mod tests {
                 ..Default::default()
             }],
             constraints: vec![],
+            named_functions: vec![],
             removed_constraints: vec![],
             decision_variable_dependency: HashMap::new(),
             constraint_hints: None,
@@ -408,6 +460,7 @@ mod tests {
                 Function::from(linear!(999) + coeff!(1.0)),
             )
             .into()],
+            named_functions: vec![],
             removed_constraints: vec![],
             decision_variable_dependency: HashMap::new(),
             constraint_hints: None,
@@ -434,6 +487,7 @@ mod tests {
             objective: Some(Function::from(linear!(999) + coeff!(1.0)).into()),
             decision_variables: vec![DecisionVariable::binary(VariableID::from(1)).into()],
             constraints: vec![],
+            named_functions: vec![],
             removed_constraints: vec![],
             decision_variable_dependency: HashMap::new(),
             parameters: None,
@@ -467,6 +521,7 @@ mod tests {
                 Function::from(linear!(999) + coeff!(1.0)),
             )
             .into()],
+            named_functions: vec![],
             removed_constraints: vec![],
             decision_variable_dependency: HashMap::new(),
             parameters: None,
@@ -497,9 +552,16 @@ mod tests {
             Function::from(linear!(1) + coeff!(1.0)),
         );
         let removed_constraint = RemovedConstraint {
-            constraint: constraint.clone(),
-            removed_reason: "test".to_string(),
-            removed_reason_parameters: Default::default(),
+            id: constraint.id,
+            equality: constraint.equality,
+            metadata: constraint.metadata.clone(),
+            stage: crate::constraint::RemovedData {
+                function: constraint.stage.function.clone(),
+                removed_reason: crate::constraint::RemovedReason {
+                    reason: "test".to_string(),
+                    parameters: Default::default(),
+                },
+            },
         };
 
         let v1_parametric_instance = v1::ParametricInstance {
@@ -512,6 +574,7 @@ mod tests {
                 ..Default::default()
             }],
             constraints: vec![constraint.into()],
+            named_functions: vec![],
             removed_constraints: vec![removed_constraint.into()],
             decision_variable_dependency: HashMap::new(),
             constraint_hints: None,
@@ -541,9 +604,16 @@ mod tests {
             Function::from(linear!(1) + coeff!(1.0)),
         );
         let removed_constraint = RemovedConstraint {
-            constraint: constraint.clone(),
-            removed_reason: "test".to_string(),
-            removed_reason_parameters: Default::default(),
+            id: constraint.id,
+            equality: constraint.equality,
+            metadata: constraint.metadata.clone(),
+            stage: crate::constraint::RemovedData {
+                function: constraint.stage.function.clone(),
+                removed_reason: crate::constraint::RemovedReason {
+                    reason: "test".to_string(),
+                    parameters: Default::default(),
+                },
+            },
         };
 
         let v1_instance = v1::Instance {
@@ -551,6 +621,7 @@ mod tests {
             objective: Some(Function::from(linear!(1) + coeff!(1.0)).into()),
             decision_variables: vec![DecisionVariable::binary(VariableID::from(1)).into()],
             constraints: vec![constraint.into()],
+            named_functions: vec![],
             removed_constraints: vec![removed_constraint.into()],
             decision_variable_dependency: HashMap::new(),
             parameters: None,
@@ -583,6 +654,7 @@ mod tests {
                 ..Default::default()
             }],
             constraints: vec![],
+            named_functions: vec![],
             removed_constraints: vec![],
             decision_variable_dependency: HashMap::new(),
             constraint_hints: None,
@@ -607,6 +679,7 @@ mod tests {
             objective: Some(Function::from(linear!(1) + coeff!(1.0)).into()),
             decision_variables: vec![DecisionVariable::binary(VariableID::from(1)).into()],
             constraints: vec![],
+            named_functions: vec![],
             removed_constraints: vec![],
             decision_variable_dependency: HashMap::new(),
             parameters: None,
@@ -637,6 +710,7 @@ mod tests {
                 ..Default::default()
             }],
             constraints: vec![],
+            named_functions: vec![],
             removed_constraints: vec![],
             decision_variable_dependency: HashMap::new(),
             constraint_hints: None,
@@ -662,6 +736,7 @@ mod tests {
             objective: None, // Missing objective
             decision_variables: vec![DecisionVariable::binary(VariableID::from(1)).into()],
             constraints: vec![],
+            named_functions: vec![],
             removed_constraints: vec![],
             decision_variable_dependency: HashMap::new(),
             parameters: None,
@@ -693,6 +768,7 @@ mod tests {
                 ..Default::default()
             }], // Same ID as decision variable
             constraints: vec![],
+            named_functions: vec![],
             removed_constraints: vec![],
             decision_variable_dependency: HashMap::new(),
             constraint_hints: None,
@@ -735,6 +811,7 @@ mod tests {
                 ..Default::default()
             }],
             constraints: vec![constraint1.into(), constraint2.into()],
+            named_functions: vec![],
             removed_constraints: vec![],
             decision_variable_dependency: HashMap::new(),
             constraint_hints: None,
@@ -772,6 +849,7 @@ mod tests {
             objective: Some(Function::from(linear!(1) + coeff!(1.0)).into()),
             decision_variables: vec![DecisionVariable::binary(VariableID::from(1)).into()],
             constraints: vec![constraint1.into(), constraint2.into()],
+            named_functions: vec![],
             removed_constraints: vec![],
             decision_variable_dependency: HashMap::new(),
             parameters: None,

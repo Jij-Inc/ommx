@@ -1,5 +1,4 @@
-from ommx.artifact import Artifact
-from ommx._ommx_rust import Descriptor
+from ommx.artifact import Artifact, Descriptor
 
 
 def test_serialize():

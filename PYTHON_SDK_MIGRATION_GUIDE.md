@@ -1,6 +1,288 @@
+# Python SDK Migration Guide
+
+This document is a guide for migrating the OMMX Python SDK across major versions.
+
+- [v2 to v3](#python-sdk-v2-to-v3-migration-guide) - Complete PyO3 migration for mathematical types
+- [v1 to v2](#python-sdk-v1-to-v2-migration-guide) - Protocol Buffer to PyO3 migration
+
+---
+
+# Python SDK v2 to v3 Migration Guide
+
+This section covers the migration from v2 to v3, which completes the PyO3 migration for mathematical expression types and decision variables.
+
+## Overview
+
+v3 completes the migration of core mathematical types from Python wrapper classes to direct Rust re-exports:
+- `Linear`, `Quadratic`, `Polynomial`, `Function` - now re-exported from `_ommx_rust`
+- `DecisionVariable`, `Parameter` - now re-exported from `_ommx_rust`
+
+## ⚠️ Removal of `.raw` Attribute
+
+In v3, the `.raw` attribute is **completely removed** from migrated classes. The `.raw` attribute was deprecated in v2 and provided access to the underlying Rust object. In v3, classes are now direct Rust re-exports, so there is no separate "raw" object.
+
+**Affected classes:**
+- `Linear`, `Quadratic`, `Polynomial`, `Function`
+- `DecisionVariable`, `Parameter`
+- `Instance`, `Solution`, `SampleSet`
+
+**Migration:**
+```python
+# ❌ v2 (deprecated) - No longer works in v3
+linear.raw.terms
+decision_variable.raw.id
+instance.raw.sense
+solution.raw.optimality
+
+# ✅ v3 - Access properties directly
+linear.terms
+decision_variable.id
+instance.sense
+solution.optimality
+```
+
+## Breaking Changes
+
+### 1. Constraint Properties Return `Optional[str]`
+
+**Before (v2)**:
+```python
+constraint.name        # str (empty string if not set)
+constraint.description # str (empty string if not set)
+```
+
+**After (v3)**:
+```python
+constraint.name        # Optional[str] (None if not set)
+constraint.description # Optional[str] (None if not set)
+
+# Migration pattern
+if constraint.name:  # Works for both "" and None
+    print(constraint.name)
+
+# Or explicit check
+if constraint.name is not None:
+    print(constraint.name)
+```
+
+### 2. `Instance.from_components` Now Takes Lists, Not Dicts
+
+`Instance.from_components` now accepts lists of `DecisionVariable`, `Constraint`, etc. instead of dicts keyed by ID. Duplicate IDs are detected and raise an error.
+
+**Before (v2)**:
+```python
+Instance.from_components(
+    sense=Instance.MINIMIZE,
+    objective=objective,
+    decision_variables={0: x0, 1: x1},  # dict[int, DecisionVariable]
+    constraints={0: c0},                # dict[int, Constraint]
+)
+```
+
+**After (v3)**:
+```python
+Instance.from_components(
+    sense=Instance.MINIMIZE,
+    objective=objective,
+    decision_variables=[x0, x1],  # list[DecisionVariable]
+    constraints=[c0],             # list[Constraint]
+)
+```
+
+Also note: all arguments are now keyword-only (use `sense=...`, not positional).
+
+### 3. `Instance.write_mps` Renamed to `Instance.save_mps`
+
+```python
+# ❌ v2
+instance.write_mps("output.mps")
+
+# ✅ v3
+instance.save_mps("output.mps")
+```
+
+### 4. Removed Methods
+
+The following methods have been removed:
+- `Linear.from_object()` - was internal use only
+- `Linear.equals_to()` - was deprecated
+
+### 5. Artifact Module Migrated to Rust
+
+The `ommx.artifact` module has been fully migrated to Rust. The low-level wrapper types have been removed and replaced with unified `Artifact` and `ArtifactBuilder` classes.
+
+**Removed types:**
+- `ArtifactBase`, `ArtifactBuilderBase` (Python ABC classes)
+- `ArtifactArchive`, `ArtifactDir` (use `Artifact` instead)
+- `ArtifactArchiveBuilder`, `ArtifactDirBuilder` (use `ArtifactBuilder` instead)
+
+**Before (v2)**:
+```python
+from ommx.artifact import Artifact, ArtifactArchive, ArtifactDir
+
+# Low-level types were exposed
+archive = ArtifactArchive.from_oci_archive(path)
+dir_artifact = ArtifactDir.from_oci_dir(path)
+```
+
+**After (v3)**:
+```python
+from ommx.artifact import Artifact, ArtifactBuilder
+
+# Unified API
+artifact = Artifact.load("ghcr.io/jij-inc/ommx/...")  # from registry
+artifact = Artifact.load_archive("path/to/file.ommx")  # from file or directory
+
+# Property access for first layer (unchanged)
+instance = artifact.instance
+solution = artifact.solution
+
+# Method access with descriptor (unchanged)
+instance = artifact.get_instance(descriptor)
+```
+
+### 6. Constraint Method Chaining Returns New Object
+
+In v3, Constraint mutation methods (`add_name()`, `add_description()`, etc.) return a new `Constraint` object rather than modifying in place. Use the returned object:
+
+**Before (v2)**:
+```python
+constraint = x == 1
+constraint.add_name("test")  # Modified in place
+print(constraint.name)  # "test"
+```
+
+**After (v3)**:
+```python
+constraint = x == 1
+constraint = constraint.add_name("test")  # Use returned object
+print(constraint.name)  # "test"
+
+# Or chain directly
+constraint = (x == 1).add_name("test").add_description("A test constraint")
+```
+
+## New Features
+
+### 1. DecisionVariable Factory Methods Accept `lower`/`upper` kwargs
+
+**Before (v2)**:
+```python
+from ommx.v1 import DecisionVariable, Bound
+
+# Required Bound object
+bound = Bound(lower=0, upper=10)
+x = DecisionVariable.integer(1, bound=bound)
+```
+
+**After (v3)**:
+```python
+from ommx.v1 import DecisionVariable
+
+# Direct lower/upper kwargs (more convenient)
+x = DecisionVariable.integer(1, lower=0, upper=10)
+y = DecisionVariable.continuous(2, lower=-1.0, upper=1.0)
+
+# Default bounds are -∞ to +∞
+z = DecisionVariable.integer(3)  # unbounded
+```
+
+### 2. Class-Level Kind Constants
+
+**New in v3**:
+```python
+from ommx.v1 import DecisionVariable
+
+# Class constants for variable kinds
+DecisionVariable.BINARY        # 1
+DecisionVariable.INTEGER       # 2
+DecisionVariable.CONTINUOUS    # 3
+DecisionVariable.SEMI_INTEGER  # 4
+DecisionVariable.SEMI_CONTINUOUS  # 5
+
+# Usage in conditionals
+if var.kind == DecisionVariable.INTEGER:
+    print("Integer variable")
+```
+
+### 3. `equals_to()` Method for DecisionVariable
+
+Since `==` creates a `Constraint`, use `equals_to()` for object equality:
+
+```python
+x = DecisionVariable.integer(1, lower=0, upper=10)
+y = DecisionVariable.integer(1, lower=0, upper=10)
+
+# This creates a Constraint, NOT a boolean!
+constraint = x == y  # Constraint object
+
+# For equality comparison, use equals_to()
+x.equals_to(y)  # True (same id, kind, and bound)
+
+# Or compare IDs directly
+x.id == y.id  # True
+```
+
+### 4. Parameter Class Now in Rust
+
+The `Parameter` class is now implemented in Rust with the same operators as `DecisionVariable`:
+
+```python
+from ommx.v1 import Parameter, DecisionVariable
+
+p = Parameter(id=1, name="param1")
+x = DecisionVariable.integer(1, lower=0, upper=10)
+
+# Arithmetic operations work between Parameter and DecisionVariable
+expr = x + p      # Linear
+expr = x * p      # Quadratic
+expr = 2 * p + 3  # Linear
+```
+
+## Comparison Operators Return Constraint
+
+All comparison operators on `DecisionVariable`, `Parameter`, `Linear`, `Quadratic`, `Polynomial`, and `Function` now return `Constraint` objects:
+
+```python
+x = DecisionVariable.integer(1)
+y = DecisionVariable.integer(2)
+
+# All return Constraint objects
+c1 = x == 1        # EqualToZero constraint
+c2 = x + y <= 10   # LessThanOrEqualToZero constraint
+c3 = x >= 0        # LessThanOrEqualToZero constraint (negated)
+
+# Chain with metadata
+constraint = (x + y <= 10).add_name("capacity").add_description("Capacity limit")
+```
+
+## Migration Checklist
+
+- [ ] Replace `ArtifactArchive`/`ArtifactDir` usage with `Artifact.load_archive()` or `Artifact.load()`
+- [ ] Replace `ArtifactArchiveBuilder`/`ArtifactDirBuilder` usage with `ArtifactBuilder`
+- [ ] Remove all `.raw` access on Instance, Solution, SampleSet (access properties directly)
+- [ ] Update `Instance.from_components` to pass lists instead of dicts
+- [ ] Rename `instance.write_mps(...)` to `instance.save_mps(...)`
+- [ ] Update `constraint.name` / `constraint.description` checks to handle `None`
+- [ ] Remove any usage of `Linear.from_object()` or `Linear.equals_to()`
+- [ ] Update Constraint method chaining to use returned objects
+- [ ] Replace protobuf imports (`from ommx.v1.*_pb2 import ...`) with `from ommx.v1 import ...`
+- [ ] Consider using `lower`/`upper` kwargs for DecisionVariable factory methods
+- [ ] Use `DecisionVariable.BINARY`, `.INTEGER`, etc. constants where appropriate
+- [ ] Use `equals_to()` instead of `==` for DecisionVariable equality comparisons
+
+## Performance Improvements
+
+v3 provides significant performance improvements through:
+- Native Rust implementations for all arithmetic operations
+- Efficient polynomial representations using deduplication
+- Direct memory access without Python wrapper overhead
+
+---
+
 # Python SDK v1 to v2 Migration Guide
 
-This document is a guide for migrating the OMMX Python SDK from Protocol Buffer-based (v1) to Rust-PyO3-based (v2).
+This section covers the migration from Protocol Buffer-based (v1) to Rust-PyO3-based (v2).
 
 ## ⚠️ Important: Deprecation of `raw` Attributes
 
@@ -603,7 +885,3 @@ removed_constraint = instance.get_removed_constraint(constraint_id)  # Individua
 - [ ] Update test assertions from `len(instance.decision_variables())` → `len(instance.decision_variables)`
 - [ ] Use `instance.get_decision_variable_by_id(id)` for individual variable access
 - [ ] Use `instance.get_constraint_by_id(id)` for individual constraint access
-
----
-
-**Note**: v2 API migration is complete. All core data structures now use PyO3 for improved performance.

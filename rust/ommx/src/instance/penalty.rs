@@ -1,5 +1,5 @@
 use super::*;
-use crate::{linear, v1, Function, VariableID};
+use crate::{constraint_type::ConstraintCollection, linear, v1, Function, VariableID};
 use anyhow::Result;
 use num::Zero;
 
@@ -39,6 +39,12 @@ impl Instance {
     ///
     /// where $\lambda_1$ and $\lambda_2$ are penalty parameters.
     pub fn penalty_method(self) -> Result<ParametricInstance> {
+        anyhow::ensure!(
+            self.indicator_constraint_collection.active().is_empty(),
+            "penalty_method does not support indicator constraints. \
+             Remove or convert indicator constraints before applying penalty method."
+        );
+
         let mut max_id = 0;
 
         // Find the maximum ID among decision variables
@@ -58,7 +64,9 @@ impl Instance {
         let mut parameters = BTreeMap::new();
         let mut removed_constraints = BTreeMap::new();
 
-        for (i, (constraint_id, constraint)) in self.constraints.into_iter().enumerate() {
+        let (active_constraints, existing_removed) = self.constraint_collection.into_parts();
+        removed_constraints.extend(existing_removed);
+        for (i, (constraint_id, constraint)) in active_constraints.into_iter().enumerate() {
             let parameter_id = VariableID::from(id_base + i as u64);
             let parameter = v1::Parameter {
                 id: parameter_id.into_inner(),
@@ -67,22 +75,29 @@ impl Instance {
                 ..Default::default()
             };
 
-            let f = constraint.function.clone();
+            let f = constraint.function().clone();
             // Add penalty term: λ * f(x)^2
             let penalty_term = Function::from(linear!(parameter_id)) * f.clone() * f;
             objective += penalty_term;
 
             // Create removed constraint
-            let removed_constraint = RemovedConstraint {
-                constraint: constraint.clone(),
-                removed_reason: "penalty_method".to_string(),
-                removed_reason_parameters: {
-                    let mut map = std::collections::HashMap::default();
-                    map.insert(
-                        "parameter_id".to_string(),
-                        parameter_id.into_inner().to_string(),
-                    );
-                    map
+            let removed_constraint = Constraint {
+                id: constraint.id,
+                equality: constraint.equality,
+                metadata: constraint.metadata.clone(),
+                stage: crate::constraint::RemovedData {
+                    function: constraint.stage.function,
+                    removed_reason: crate::constraint::RemovedReason {
+                        reason: "penalty_method".to_string(),
+                        parameters: {
+                            let mut map = fnv::FnvHashMap::default();
+                            map.insert(
+                                "parameter_id".to_string(),
+                                parameter_id.into_inner().to_string(),
+                            );
+                            map
+                        },
+                    },
                 },
             };
 
@@ -95,11 +110,13 @@ impl Instance {
             objective,
             decision_variables: self.decision_variables,
             parameters,
-            constraints: BTreeMap::new(),
-            removed_constraints,
+            constraint_collection: ConstraintCollection::new(BTreeMap::new(), removed_constraints),
+            indicator_constraint_collection: self.indicator_constraint_collection,
             decision_variable_dependency: self.decision_variable_dependency,
-            constraint_hints: self.constraint_hints,
+            // All constraints are moved to removed_constraints, so all hints are invalidated
+            constraint_hints: ConstraintHints::default(),
             description: self.description,
+            named_functions: self.named_functions,
         })
     }
 
@@ -138,18 +155,26 @@ impl Instance {
     ///
     /// where $\lambda$ is the single penalty parameter.
     pub fn uniform_penalty_method(self) -> Result<ParametricInstance> {
-        // Early return if no constraints
-        if self.constraints.is_empty() {
+        anyhow::ensure!(
+            self.indicator_constraint_collection.active().is_empty(),
+            "uniform_penalty_method does not support indicator constraints. \
+             Remove or convert indicator constraints before applying penalty method."
+        );
+
+        // Early return if no active constraints (preserve any existing removed constraints)
+        if self.constraints().is_empty() {
+            let (_active, existing_removed) = self.constraint_collection.into_parts();
             return Ok(ParametricInstance {
                 sense: self.sense,
                 objective: self.objective,
                 decision_variables: self.decision_variables,
                 parameters: BTreeMap::new(),
-                constraints: BTreeMap::new(),
-                removed_constraints: BTreeMap::new(),
+                constraint_collection: ConstraintCollection::new(BTreeMap::new(), existing_removed),
+                indicator_constraint_collection: self.indicator_constraint_collection,
                 decision_variable_dependency: self.decision_variable_dependency,
                 constraint_hints: self.constraint_hints,
                 description: self.description,
+                named_functions: self.named_functions,
             });
         }
 
@@ -177,16 +202,25 @@ impl Instance {
 
         let mut removed_constraints = BTreeMap::new();
         let mut quad_sum = Function::zero();
+        let (active_constraints, existing_removed) = self.constraint_collection.into_parts();
+        removed_constraints.extend(existing_removed);
 
-        for (constraint_id, constraint) in self.constraints.into_iter() {
-            let f = constraint.function.clone();
+        for (constraint_id, constraint) in active_constraints.into_iter() {
+            let f = constraint.function().clone();
             quad_sum += f.clone() * f;
 
             // Create removed constraint
-            let removed_constraint = RemovedConstraint {
-                constraint: constraint.clone(),
-                removed_reason: "uniform_penalty_method".to_string(),
-                removed_reason_parameters: Default::default(),
+            let removed_constraint = Constraint {
+                id: constraint.id,
+                equality: constraint.equality,
+                metadata: constraint.metadata,
+                stage: crate::constraint::RemovedData {
+                    function: constraint.stage.function,
+                    removed_reason: crate::constraint::RemovedReason {
+                        reason: "uniform_penalty_method".to_string(),
+                        parameters: Default::default(),
+                    },
+                },
             };
 
             removed_constraints.insert(constraint_id, removed_constraint);
@@ -201,11 +235,13 @@ impl Instance {
             objective,
             decision_variables: self.decision_variables,
             parameters,
-            constraints: BTreeMap::new(),
-            removed_constraints,
+            constraint_collection: ConstraintCollection::new(BTreeMap::new(), removed_constraints),
+            indicator_constraint_collection: self.indicator_constraint_collection,
             decision_variable_dependency: self.decision_variable_dependency,
-            constraint_hints: self.constraint_hints,
+            // All constraints are moved to removed_constraints, so all hints are invalidated
+            constraint_hints: ConstraintHints::default(),
             description: self.description,
+            named_functions: self.named_functions,
         })
     }
 }
@@ -235,24 +271,22 @@ mod tests {
             ConstraintID::from(1),
             Constraint {
                 id: ConstraintID::from(1),
-                function: Function::from(linear!(1) + linear!(2) + coeff!(-1.0)),
                 equality: Equality::LessThanOrEqualToZero,
-                name: None,
-                subscripts: Vec::new(),
-                parameters: Default::default(),
-                description: None,
+                metadata: crate::constraint::ConstraintMetadata::default(),
+                stage: crate::constraint::CreatedData {
+                    function: Function::from(linear!(1) + linear!(2) + coeff!(-1.0)),
+                },
             },
         );
         constraints.insert(
             ConstraintID::from(2),
             Constraint {
                 id: ConstraintID::from(2),
-                function: Function::from(linear!(1) + coeff!(-1.0) * linear!(2)),
                 equality: Equality::EqualToZero,
-                name: None,
-                subscripts: Vec::new(),
-                parameters: Default::default(),
-                description: None,
+                metadata: crate::constraint::ConstraintMetadata::default(),
+                stage: crate::constraint::CreatedData {
+                    function: Function::from(linear!(1) + coeff!(-1.0) * linear!(2)),
+                },
             },
         );
 
@@ -268,9 +302,9 @@ mod tests {
         expected_param_name: &str,
     ) {
         // Check that constraints are removed
-        assert_eq!(parametric_instance.constraints.len(), 0);
+        assert_eq!(parametric_instance.constraints().len(), 0);
         assert_eq!(
-            parametric_instance.removed_constraints.len(),
+            parametric_instance.removed_constraints().len(),
             original_constraint_count
         );
 
@@ -307,14 +341,14 @@ mod tests {
         assert!(substituted
             .objective
             .abs_diff_eq(&original_objective, crate::ATol::default()));
-        assert_eq!(substituted.constraints.len(), 0);
+        assert_eq!(substituted.constraints().len(), 0);
     }
 
     #[test]
     fn test_penalty_method() {
         let instance = create_test_instance_with_constraints();
         let original_objective = instance.objective.clone();
-        let original_constraint_count = instance.constraints.len();
+        let original_constraint_count = instance.constraints().len();
         let parametric_instance = instance.penalty_method().unwrap();
 
         verify_penalty_method_properties(
@@ -330,7 +364,7 @@ mod tests {
     fn test_uniform_penalty_method() {
         let instance = create_test_instance_with_constraints();
         let original_objective = instance.objective.clone();
-        let original_constraint_count = instance.constraints.len();
+        let original_constraint_count = instance.constraints().len();
         let parametric_instance = instance.uniform_penalty_method().unwrap();
 
         verify_penalty_method_properties(
@@ -365,15 +399,131 @@ mod tests {
         // Test penalty_method
         let parametric_instance = instance.clone().penalty_method().unwrap();
         assert_eq!(parametric_instance.parameters.len(), 0);
-        assert_eq!(parametric_instance.constraints.len(), 0);
-        assert_eq!(parametric_instance.removed_constraints.len(), 0);
+        assert_eq!(parametric_instance.constraints().len(), 0);
+        assert_eq!(parametric_instance.removed_constraints().len(), 0);
         assert_eq!(parametric_instance.objective, objective);
 
         // Test uniform_penalty_method
         let parametric_instance = instance.uniform_penalty_method().unwrap();
         assert_eq!(parametric_instance.parameters.len(), 0);
-        assert_eq!(parametric_instance.constraints.len(), 0);
-        assert_eq!(parametric_instance.removed_constraints.len(), 0);
+        assert_eq!(parametric_instance.constraints().len(), 0);
+        assert_eq!(parametric_instance.removed_constraints().len(), 0);
         assert_eq!(parametric_instance.objective, objective);
+    }
+
+    #[test]
+    fn test_penalty_method_clears_constraint_hints() {
+        use crate::constraint_hints::OneHot;
+        use std::collections::BTreeSet;
+
+        // Create instance with constraint hints
+        let mut instance = create_test_instance_with_constraints();
+
+        // Add a OneHot hint for constraint 1
+        let mut variables = BTreeSet::new();
+        variables.insert(VariableID::from(1));
+        variables.insert(VariableID::from(2));
+        instance.constraint_hints.one_hot_constraints.push(OneHot {
+            id: ConstraintID::from(1),
+            variables,
+        });
+
+        // Verify hint exists before penalty method
+        assert_eq!(instance.constraint_hints.one_hot_constraints.len(), 1);
+
+        // Apply penalty_method
+        let parametric_instance = instance.penalty_method().unwrap();
+
+        // All constraints are moved to removed_constraints, so all hints should be cleared
+        assert!(
+            parametric_instance.constraint_hints.is_empty(),
+            "Constraint hints should be cleared when all constraints are moved to removed_constraints"
+        );
+    }
+
+    #[test]
+    fn test_uniform_penalty_method_clears_constraint_hints() {
+        use crate::constraint_hints::OneHot;
+        use std::collections::BTreeSet;
+
+        // Create instance with constraint hints
+        let mut instance = create_test_instance_with_constraints();
+
+        // Add a OneHot hint for constraint 1
+        let mut variables = BTreeSet::new();
+        variables.insert(VariableID::from(1));
+        variables.insert(VariableID::from(2));
+        instance.constraint_hints.one_hot_constraints.push(OneHot {
+            id: ConstraintID::from(1),
+            variables,
+        });
+
+        // Verify hint exists before uniform penalty method
+        assert_eq!(instance.constraint_hints.one_hot_constraints.len(), 1);
+
+        // Apply uniform_penalty_method
+        let parametric_instance = instance.uniform_penalty_method().unwrap();
+
+        // All constraints are moved to removed_constraints, so all hints should be cleared
+        assert!(
+            parametric_instance.constraint_hints.is_empty(),
+            "Constraint hints should be cleared when all constraints are moved to removed_constraints"
+        );
+    }
+
+    #[test]
+    fn test_penalty_method_preserves_existing_removed_constraints() {
+        let mut instance = create_test_instance_with_constraints();
+
+        // Relax constraint 1 before applying penalty method
+        instance
+            .relax_constraint(
+                ConstraintID::from(1),
+                "pre_existing".to_string(),
+                std::iter::empty::<(String, String)>(),
+            )
+            .unwrap();
+
+        assert_eq!(instance.constraints().len(), 1); // only constraint 2 remains active
+        assert_eq!(instance.removed_constraints().len(), 1); // constraint 1 is removed
+
+        let parametric_instance = instance.penalty_method().unwrap();
+
+        // Both constraints should be in removed: the pre-existing one and the newly penalized one
+        assert_eq!(parametric_instance.removed_constraints().len(), 2);
+        assert!(parametric_instance
+            .removed_constraints()
+            .contains_key(&ConstraintID::from(1)));
+        assert!(parametric_instance
+            .removed_constraints()
+            .contains_key(&ConstraintID::from(2)));
+    }
+
+    #[test]
+    fn test_uniform_penalty_method_preserves_existing_removed_constraints() {
+        let mut instance = create_test_instance_with_constraints();
+
+        // Relax constraint 1 before applying uniform penalty method
+        instance
+            .relax_constraint(
+                ConstraintID::from(1),
+                "pre_existing".to_string(),
+                std::iter::empty::<(String, String)>(),
+            )
+            .unwrap();
+
+        assert_eq!(instance.constraints().len(), 1);
+        assert_eq!(instance.removed_constraints().len(), 1);
+
+        let parametric_instance = instance.uniform_penalty_method().unwrap();
+
+        // Both constraints should be in removed
+        assert_eq!(parametric_instance.removed_constraints().len(), 2);
+        assert!(parametric_instance
+            .removed_constraints()
+            .contains_key(&ConstraintID::from(1)));
+        assert!(parametric_instance
+            .removed_constraints()
+            .contains_key(&ConstraintID::from(2)));
     }
 }

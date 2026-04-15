@@ -14,7 +14,7 @@ impl Instance {
         }
         let mut changed = false;
         changed |= self.objective.reduce_binary_power(&binary_ids);
-        for constraint in self.constraints.values_mut() {
+        for constraint in self.constraint_collection.active_mut().values_mut() {
             changed |= constraint.reduce_binary_power(&binary_ids);
         }
         // Note: We don't need to reduce in removed_constraints since they are not active
@@ -26,10 +26,11 @@ impl Instance {
 mod tests {
     use super::*;
     use crate::{
-        coeff, quadratic, ATol, Bound, Constraint, DecisionVariable, Equality, Kind, Sense,
+        coeff,
+        constraint::{ConstraintMetadata, CreatedData},
+        quadratic, ATol, Bound, Constraint, DecisionVariable, Equality, Kind, Sense,
     };
     use ::approx::assert_abs_diff_eq;
-    use fnv::FnvHashMap;
     use proptest::prelude::*;
 
     #[test]
@@ -64,12 +65,11 @@ mod tests {
             ConstraintID::from(1),
             Constraint {
                 id: ConstraintID::from(1),
-                function: constraint_func,
                 equality: Equality::LessThanOrEqualToZero,
-                name: None,
-                subscripts: vec![],
-                parameters: FnvHashMap::default(),
-                description: None,
+                metadata: ConstraintMetadata::default(),
+                stage: CreatedData {
+                    function: constraint_func,
+                },
             },
         );
 
@@ -90,11 +90,11 @@ mod tests {
         let expected_constraint_func =
             Function::Quadratic(quadratic!(1) + quadratic!(2) + coeff!(-5.0));
         assert_eq!(
-            &instance
+            instance
                 .constraints()
                 .get(&ConstraintID::from(1))
                 .unwrap()
-                .function,
+                .function(),
             &expected_constraint_func
         );
 

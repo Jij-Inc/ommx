@@ -135,7 +135,7 @@ fn write_columns<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWr
     // Collect linear terms from constraints
     for (constr_id, constr) in instance.constraints().iter() {
         let row_name = constr_name(*constr_id);
-        for (var_id, coeff) in constr.function.linear_terms() {
+        for (var_id, coeff) in constr.function().linear_terms() {
             variable_entries
                 .entry(var_id)
                 .or_default()
@@ -214,15 +214,15 @@ fn write_rhs<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWriteE
 
     for (constr_id, constr) in instance.constraints().iter() {
         let name = constr_name(*constr_id);
-        let constant = if let Some(linear) = constr.function.as_linear() {
+        let constant = if let Some(linear) = constr.function().as_linear() {
             linear.constant_term()
-        } else if let Some(quadratic) = constr.function.as_quadratic() {
+        } else if let Some(quadratic) = constr.function().as_quadratic() {
             quadratic.constant_term()
         } else {
             // Higher degree functions not supported
             return Err(MpsWriteError::InvalidConstraintType {
                 name: name.to_string(),
-                degree: (*constr.function.degree()),
+                degree: (*constr.function().degree()),
             });
         };
 
@@ -330,7 +330,7 @@ fn write_quadobj<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWr
 fn write_qcmatrix<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWriteError> {
     // Write QCMATRIX sections for each constraint that has quadratic terms
     for (constr_id, constr) in instance.constraints().iter() {
-        if let Some(quadratic) = constr.function.as_quadratic() {
+        if let Some(quadratic) = constr.function().as_quadratic() {
             let has_quadratic_terms = quadratic
                 .iter()
                 .any(|(monomial, _)| matches!(monomial, crate::QuadraticMonomial::Pair(_)));

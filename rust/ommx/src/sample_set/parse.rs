@@ -34,7 +34,15 @@ impl Parse for crate::v1::SampleSet {
         for v1_constraint in self.constraints {
             let parsed_constraint: crate::SampledConstraint =
                 v1_constraint.parse_as(&(), message, "constraints")?;
-            constraints.insert(*parsed_constraint.id(), parsed_constraint);
+            constraints.insert(parsed_constraint.id, parsed_constraint);
+        }
+
+        // Parse named functions into BTreeMap
+        let mut named_functions = std::collections::BTreeMap::new();
+        for v1_named_function in self.named_functions {
+            let parsed_named_function: crate::SampledNamedFunction =
+                v1_named_function.parse_as(&(), message, "named_functions")?;
+            named_functions.insert(*parsed_named_function.id(), parsed_named_function);
         }
 
         let sense = self.sense.try_into().map_err(|_| {
@@ -46,7 +54,13 @@ impl Parse for crate::v1::SampleSet {
         })?;
 
         // Create SampleSet with validation
-        let sample_set = SampleSet::new(decision_variables, objectives, constraints, sense)
+        let sample_set = SampleSet::builder()
+            .decision_variables(decision_variables)
+            .objectives(objectives)
+            .constraints(constraints)
+            .named_functions(named_functions)
+            .sense(sense)
+            .build()
             .map_err(crate::RawParseError::SampleSetError)?;
 
         // Check the consistency of feasibility maps from the original v1 data
@@ -101,6 +115,11 @@ impl From<SampleSet> for crate::v1::SampleSet {
             .values()
             .map(|sc| sc.clone().into())
             .collect();
+        let named_functions: Vec<crate::v1::SampledNamedFunction> = sample_set
+            .named_functions()
+            .values()
+            .map(|nf| nf.clone().into())
+            .collect();
         let sense = (*sample_set.sense()).into();
 
         // Compute feasible maps from constraint evaluations
@@ -125,6 +144,7 @@ impl From<SampleSet> for crate::v1::SampleSet {
             decision_variables,
             objectives,
             constraints,
+            named_functions,
             feasible_relaxed,
             feasible,
             sense,

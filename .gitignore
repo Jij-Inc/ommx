@@ -8,6 +8,9 @@
 # Rust
 target/
 
+# Insta snapshots (pending review)
+*.snap.new
+
 # Proptest
 rust/ommx/proptest-regressions/
 
@@ -36,3 +39,15 @@ proto/protobuf.html
 
 # CodSpeed
 .codspeed/
+
+# Downloaded binaries (e.g., task)
+bin/
+
+# For Pyodide testing
+node_modules/
+
+# Claude Code
+.claude/*
+!.claude/rules/
+!.claude/skills/
+!.claude/CLAUDE.md

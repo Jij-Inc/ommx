@@ -52,15 +52,15 @@ def test_invalid_samples_creation():
     """Test error cases for Samples creation"""
     # Invalid type
     with pytest.raises(TypeError):
-        _ommx_rust.Samples("invalid")
+        _ommx_rust.Samples("invalid")  # type: ignore[arg-type]
 
     # Invalid dictionary values
     with pytest.raises(TypeError):
-        _ommx_rust.Samples({0: "not_a_state"})
+        _ommx_rust.Samples({0: "not_a_state"})  # type: ignore[arg-type]
 
     # Invalid iterable items
     with pytest.raises(TypeError):
-        _ommx_rust.Samples(["not_a_state"])
+        _ommx_rust.Samples(["not_a_state"])  # type: ignore[arg-type]
 
 
 def test_empty_samples():
@@ -80,11 +80,11 @@ def test_dict_with_string_keys():
     """Test creating Samples from dict with string keys (should fail)"""
     # Dictionary with string keys should be rejected
     with pytest.raises(TypeError):
-        _ommx_rust.Samples({"sample1": {1: 0.0, 2: 1.0}, "sample2": {1: 1.0, 2: 0.0}})
+        _ommx_rust.Samples({"sample1": {1: 0.0, 2: 1.0}, "sample2": {1: 1.0, 2: 0.0}})  # type: ignore[arg-type]
 
     # Mixed string and int keys should also be rejected
     with pytest.raises(TypeError):
-        _ommx_rust.Samples({0: {1: 0.0, 2: 1.0}, "sample": {1: 1.0, 2: 0.0}})
+        _ommx_rust.Samples({0: {1: 0.0, 2: 1.0}, "sample": {1: 1.0, 2: 0.0}})  # type: ignore[arg-type]
 
 
 def test_create_samples_from_iterable():
@@ -176,3 +176,25 @@ def test_create_samples_mixed_types():
     ]
     samples = _ommx_rust.Samples(mixed_list)
     assert samples.num_samples() == 3
+
+
+def test_samples_append_with_state():
+    """Test Samples.append with State object."""
+    from ommx.v1 import State
+
+    samples = _ommx_rust.Samples({})
+    state = State({1: 1.0, 2: 2.0})
+    samples.append([0], state)
+    assert samples.num_samples() == 1
+    assert 0 in samples.sample_ids()
+
+
+def test_samples_append_with_dict():
+    """Test Samples.append with dict (ToState).
+
+    Since State implements FromPyObject, append should accept dict directly.
+    """
+    samples = _ommx_rust.Samples({})
+    samples.append([0], {1: 1.0, 2: 2.0})
+    assert samples.num_samples() == 1
+    assert 0 in samples.sample_ids()

@@ -3,8 +3,12 @@ mod parse;
 mod serialize;
 
 use crate::{
-    ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable, SampleID, SampleIDSet, Sampled,
-    SampledConstraint, SampledDecisionVariable, Sense, Solution, UnknownSampleIDError, VariableID,
+    constraint_type::{SampledCollection, SampledConstraintBehavior},
+    indicator_constraint::IndicatorConstraint,
+    Constraint, ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable,
+    EvaluatedNamedFunction, NamedFunctionID, SampleID, SampleIDSet, Sampled, SampledConstraint,
+    SampledDecisionVariable, SampledNamedFunction, Sense, Solution, UnknownSampleIDError,
+    VariableID,
 };
 use getset::Getters;
 use std::collections::BTreeMap;
@@ -42,6 +46,9 @@ pub enum SampleSetError {
     #[error("No constraint with name '{name}' found")]
     UnknownConstraintName { name: String },
 
+    #[deprecated(
+        note = "Parameters are now ignored in extract_decision_variables and extract_all_decision_variables"
+    )]
     #[error("Decision variable with parameters is not supported")]
     ParameterizedVariable,
 
@@ -56,9 +63,55 @@ pub enum SampleSetError {
 
     #[error("No feasible solution found in relaxed problem")]
     NoFeasibleSolutionRelaxed,
+
+    #[error("No named function with name '{name}' found")]
+    UnknownNamedFunctionName { name: String },
+
+    #[deprecated(
+        note = "Parameters are now allowed in extract methods; only subscripts are used as keys"
+    )]
+    #[error("Named function with parameters is not supported")]
+    ParameterizedNamedFunction,
+
+    #[error("Required field is missing: {field}")]
+    MissingRequiredField { field: &'static str },
+
+    #[error("Decision variable key {key:?} does not match value's id {value_id:?}")]
+    InconsistentDecisionVariableID {
+        key: VariableID,
+        value_id: VariableID,
+    },
+
+    #[error("Constraint key {key:?} does not match value's id {value_id:?}")]
+    InconsistentConstraintID {
+        key: ConstraintID,
+        value_id: ConstraintID,
+    },
+
+    #[error("Indicator constraint key {key:?} does not match value's id {value_id:?}")]
+    InconsistentIndicatorConstraintID {
+        key: crate::IndicatorConstraintID,
+        value_id: crate::IndicatorConstraintID,
+    },
+
+    #[error("Named function key {key:?} does not match value's id {value_id:?}")]
+    InconsistentNamedFunctionID {
+        key: NamedFunctionID,
+        value_id: NamedFunctionID,
+    },
 }
 
 /// Multiple sample solution results with deduplication
+///
+/// Invariants
+/// -----------
+/// - The keys of [`Self::decision_variables`] match the `id()` of their values.
+/// - The keys of [`Self::constraints`] match the `id()` of their values.
+/// - The keys of [`Self::named_functions`] match the `id()` of their values.
+/// - All [`Self::decision_variables`], [`Self::objectives`], [`Self::constraints`], and [`Self::named_functions`] have the same sample ID set.
+/// - [`Self::feasible`] and [`Self::feasible_relaxed`] are computed from [`Self::constraints`]:
+///   - `feasible`: true if all constraints are satisfied for that sample
+///   - `feasible_relaxed`: true if all non-removed constraints (where `removed_reason.is_none()`) are satisfied
 #[derive(Debug, Clone, Getters)]
 pub struct SampleSet {
     #[getset(get = "pub")]
@@ -66,7 +119,11 @@ pub struct SampleSet {
     #[getset(get = "pub")]
     objectives: Sampled<f64>,
     #[getset(get = "pub")]
-    constraints: BTreeMap<ConstraintID, SampledConstraint>,
+    constraints: SampledCollection<Constraint>,
+    #[getset(get = "pub")]
+    indicator_constraints: SampledCollection<IndicatorConstraint>,
+    #[getset(get = "pub")]
+    named_functions: BTreeMap<NamedFunctionID, SampledNamedFunction>,
     #[getset(get = "pub")]
     sense: Sense,
     #[getset(get = "pub")]
@@ -77,76 +134,26 @@ pub struct SampleSet {
 
 impl SampleSet {
     /// Create a new SampleSet
+    ///
+    /// # Deprecated
+    /// This constructor does not support named functions.
+    /// Use [`SampleSetBuilder::build`] for full functionality.
+    #[deprecated(
+        since = "2.5.0",
+        note = "Use SampleSet::builder().build() for construction with named_functions support"
+    )]
     pub fn new(
         decision_variables: BTreeMap<VariableID, SampledDecisionVariable>,
         objectives: Sampled<f64>,
         constraints: BTreeMap<ConstraintID, SampledConstraint>,
         sense: Sense,
     ) -> Result<Self, SampleSetError> {
-        // Get all sample IDs from objectives
-        let objective_sample_ids = objectives.ids();
-
-        // Verify that all decision variables have the same sample IDs
-        for sampled_dv in decision_variables.values() {
-            if !sampled_dv.samples().has_same_ids(&objective_sample_ids) {
-                return Err(SampleSetError::InconsistentSampleIDs {
-                    expected: objective_sample_ids.clone(),
-                    found: sampled_dv.samples().ids(),
-                });
-            }
-        }
-
-        // Verify that all constraints have the same sample IDs
-        for sampled_constraint in constraints.values() {
-            if !sampled_constraint
-                .evaluated_values()
-                .has_same_ids(&objective_sample_ids)
-            {
-                return Err(SampleSetError::InconsistentSampleIDs {
-                    expected: objective_sample_ids.clone(),
-                    found: sampled_constraint.evaluated_values().ids(),
-                });
-            }
-        }
-
-        // Compute feasibility from constraints for all samples
-        let mut feasible = BTreeMap::new();
-        let mut feasible_relaxed = BTreeMap::new();
-
-        for sample_id in &objective_sample_ids {
-            // Compute feasibility from constraints
-            let is_feasible = constraints.values().all(|constraint| {
-                constraint
-                    .feasible()
-                    .get(sample_id)
-                    .copied()
-                    .unwrap_or(false)
-            });
-
-            // For feasible_relaxed, only consider constraints that haven't been removed
-            let is_feasible_relaxed = constraints
-                .values()
-                .filter(|constraint| constraint.removed_reason().is_none())
-                .all(|constraint| {
-                    constraint
-                        .feasible()
-                        .get(sample_id)
-                        .copied()
-                        .unwrap_or(false)
-                });
-
-            feasible.insert(*sample_id, is_feasible);
-            feasible_relaxed.insert(*sample_id, is_feasible_relaxed);
-        }
-
-        Ok(Self {
-            decision_variables,
-            objectives,
-            constraints,
-            sense,
-            feasible,
-            feasible_relaxed,
-        })
+        Self::builder()
+            .decision_variables(decision_variables)
+            .objectives(objectives)
+            .constraints(constraints)
+            .sense(sense)
+            .build()
     }
 
     /// Get sample IDs available in this sample set
@@ -207,19 +214,41 @@ impl SampleSet {
         // Get evaluated constraints
         let mut evaluated_constraints: BTreeMap<ConstraintID, EvaluatedConstraint> =
             BTreeMap::default();
-        for (constraint_id, constraint) in &self.constraints {
+        for (constraint_id, constraint) in self.constraints.iter() {
             let evaluated_constraint = constraint.get(sample_id)?;
             evaluated_constraints.insert(*constraint_id, evaluated_constraint);
         }
 
+        // Get evaluated indicator constraints
+        let mut evaluated_indicator_constraints = BTreeMap::default();
+        for (constraint_id, constraint) in self.indicator_constraints.iter() {
+            use crate::constraint_type::SampledConstraintBehavior;
+            let evaluated = constraint.get(sample_id)?;
+            evaluated_indicator_constraints.insert(*constraint_id, evaluated);
+        }
+
+        // Get evaluated named functions
+        let mut evaluated_named_functions: BTreeMap<NamedFunctionID, EvaluatedNamedFunction> =
+            BTreeMap::default();
+        for (named_function_id, named_function) in &self.named_functions {
+            let evaluated_named_function = named_function.get(sample_id)?;
+            evaluated_named_functions.insert(*named_function_id, evaluated_named_function);
+        }
+
         let sense = *self.sense();
 
-        Ok(Solution::new(
-            objective,
-            evaluated_constraints,
-            decision_variables,
-            sense,
-        ))
+        // SAFETY: SampleSet invariants guarantee Solution invariants
+        Ok(unsafe {
+            Solution::builder()
+                .objective(objective)
+                .evaluated_constraints(evaluated_constraints)
+                .evaluated_indicator_constraints(evaluated_indicator_constraints)
+                .evaluated_named_functions(evaluated_named_functions)
+                .decision_variables(decision_variables)
+                .sense(sense)
+                .build_unchecked()
+                .expect("SampleSet invariants guarantee Solution invariants")
+        })
     }
 
     pub fn best_feasible_id(&self) -> Result<SampleID, SampleSetError> {
@@ -267,5 +296,299 @@ impl SampleSet {
     pub fn best_feasible_relaxed(&self) -> Result<Solution, SampleSetError> {
         let id = self.best_feasible_relaxed_id()?;
         self.get(id).map_err(SampleSetError::from)
+    }
+
+    /// Creates a new [`SampleSetBuilder`].
+    pub fn builder() -> SampleSetBuilder {
+        SampleSetBuilder::new()
+    }
+}
+
+/// Builder for creating [`SampleSet`] with validation.
+///
+/// # Example
+/// ```
+/// use ommx::{SampleSet, Sampled, Sense};
+/// use std::collections::BTreeMap;
+///
+/// let sample_set = SampleSet::builder()
+///     .decision_variables(BTreeMap::new())
+///     .objectives(Sampled::default())
+///     .constraints(BTreeMap::new())
+///     .sense(Sense::Minimize)
+///     .build()
+///     .unwrap();
+/// ```
+#[derive(Debug, Clone, Default)]
+pub struct SampleSetBuilder {
+    decision_variables: Option<BTreeMap<VariableID, SampledDecisionVariable>>,
+    objectives: Option<Sampled<f64>>,
+    constraints: Option<SampledCollection<Constraint>>,
+    indicator_constraints: SampledCollection<IndicatorConstraint>,
+    named_functions: BTreeMap<NamedFunctionID, SampledNamedFunction>,
+    sense: Option<Sense>,
+}
+
+impl SampleSetBuilder {
+    /// Creates a new `SampleSetBuilder` with all fields unset.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets the decision variables.
+    pub fn decision_variables(
+        mut self,
+        decision_variables: BTreeMap<VariableID, SampledDecisionVariable>,
+    ) -> Self {
+        self.decision_variables = Some(decision_variables);
+        self
+    }
+
+    /// Sets the objectives.
+    pub fn objectives(mut self, objectives: Sampled<f64>) -> Self {
+        self.objectives = Some(objectives);
+        self
+    }
+
+    /// Sets the constraints.
+    pub fn constraints(mut self, constraints: BTreeMap<ConstraintID, SampledConstraint>) -> Self {
+        self.constraints = Some(SampledCollection::new(constraints));
+        self
+    }
+
+    /// Sets the indicator constraints.
+    pub fn indicator_constraints(
+        mut self,
+        indicator_constraints: BTreeMap<
+            crate::IndicatorConstraintID,
+            crate::indicator_constraint::SampledIndicatorConstraint,
+        >,
+    ) -> Self {
+        self.indicator_constraints = SampledCollection::new(indicator_constraints);
+        self
+    }
+
+    /// Sets the named functions.
+    pub fn named_functions(
+        mut self,
+        named_functions: BTreeMap<NamedFunctionID, SampledNamedFunction>,
+    ) -> Self {
+        self.named_functions = named_functions;
+        self
+    }
+
+    /// Sets the optimization sense.
+    pub fn sense(mut self, sense: Sense) -> Self {
+        self.sense = Some(sense);
+        self
+    }
+
+    /// Builds the `SampleSet` with validation.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Required fields (`decision_variables`, `objectives`, `constraints`, `sense`) are not set
+    /// - Keys do not match the `id()` of their values
+    /// - Sample IDs are inconsistent across decision variables, objectives, constraints, and named functions
+    pub fn build(self) -> Result<SampleSet, SampleSetError> {
+        let decision_variables =
+            self.decision_variables
+                .ok_or(SampleSetError::MissingRequiredField {
+                    field: "decision_variables",
+                })?;
+        let objectives = self
+            .objectives
+            .ok_or(SampleSetError::MissingRequiredField {
+                field: "objectives",
+            })?;
+        let constraints = self
+            .constraints
+            .ok_or(SampleSetError::MissingRequiredField {
+                field: "constraints",
+            })?;
+        let sense = self
+            .sense
+            .ok_or(SampleSetError::MissingRequiredField { field: "sense" })?;
+
+        // Validate key/id consistency
+        for (key, value) in &decision_variables {
+            if key != value.id() {
+                return Err(SampleSetError::InconsistentDecisionVariableID {
+                    key: *key,
+                    value_id: *value.id(),
+                });
+            }
+        }
+
+        for (key, value) in constraints.iter() {
+            if *key != value.id {
+                return Err(SampleSetError::InconsistentConstraintID {
+                    key: *key,
+                    value_id: value.id,
+                });
+            }
+        }
+
+        for (key, value) in self.indicator_constraints.iter() {
+            if *key != value.id {
+                return Err(SampleSetError::InconsistentIndicatorConstraintID {
+                    key: *key,
+                    value_id: value.id,
+                });
+            }
+        }
+
+        for (key, value) in &self.named_functions {
+            if key != value.id() {
+                return Err(SampleSetError::InconsistentNamedFunctionID {
+                    key: *key,
+                    value_id: *value.id(),
+                });
+            }
+        }
+
+        // Validate sample ID consistency
+        let objective_sample_ids = objectives.ids();
+
+        for sampled_dv in decision_variables.values() {
+            if !sampled_dv.samples().has_same_ids(&objective_sample_ids) {
+                return Err(SampleSetError::InconsistentSampleIDs {
+                    expected: objective_sample_ids.clone(),
+                    found: sampled_dv.samples().ids(),
+                });
+            }
+        }
+
+        for sampled_constraint in constraints.values() {
+            if !sampled_constraint
+                .stage
+                .evaluated_values
+                .has_same_ids(&objective_sample_ids)
+            {
+                return Err(SampleSetError::InconsistentSampleIDs {
+                    expected: objective_sample_ids.clone(),
+                    found: sampled_constraint.stage.evaluated_values.ids(),
+                });
+            }
+        }
+
+        for sampled_ic in self.indicator_constraints.values() {
+            if !sampled_ic
+                .stage
+                .evaluated_values
+                .has_same_ids(&objective_sample_ids)
+            {
+                return Err(SampleSetError::InconsistentSampleIDs {
+                    expected: objective_sample_ids.clone(),
+                    found: sampled_ic.stage.evaluated_values.ids(),
+                });
+            }
+        }
+
+        for sampled_named_function in self.named_functions.values() {
+            if !sampled_named_function
+                .evaluated_values()
+                .has_same_ids(&objective_sample_ids)
+            {
+                return Err(SampleSetError::InconsistentSampleIDs {
+                    expected: objective_sample_ids.clone(),
+                    found: sampled_named_function.evaluated_values().ids(),
+                });
+            }
+        }
+
+        // Compute feasibility (considers both regular and indicator constraints)
+        let (feasible, feasible_relaxed) = Self::compute_feasibility(
+            &constraints,
+            &self.indicator_constraints,
+            &objective_sample_ids,
+        );
+
+        Ok(SampleSet {
+            decision_variables,
+            objectives,
+            constraints,
+            indicator_constraints: self.indicator_constraints,
+            named_functions: self.named_functions,
+            sense,
+            feasible,
+            feasible_relaxed,
+        })
+    }
+
+    /// Builds the `SampleSet` without invariant validation.
+    ///
+    /// # Safety
+    /// This method does not validate that the SampleSet invariants hold.
+    /// The caller must ensure:
+    /// - Decision variable keys match their value's `id()`
+    /// - Constraint keys match their value's `id()`
+    /// - Named function keys match their value's `id()`
+    /// - Sample IDs are consistent across all components
+    ///
+    /// Use [`Self::build`] for validated construction.
+    /// This method is useful when invariants are guaranteed by construction,
+    /// such as when creating a SampleSet from `Instance::evaluate_samples`.
+    ///
+    /// # Errors
+    /// Returns an error if required fields are not set.
+    pub unsafe fn build_unchecked(self) -> Result<SampleSet, SampleSetError> {
+        let decision_variables =
+            self.decision_variables
+                .ok_or(SampleSetError::MissingRequiredField {
+                    field: "decision_variables",
+                })?;
+        let objectives = self
+            .objectives
+            .ok_or(SampleSetError::MissingRequiredField {
+                field: "objectives",
+            })?;
+        let constraints = self
+            .constraints
+            .ok_or(SampleSetError::MissingRequiredField {
+                field: "constraints",
+            })?;
+        let sense = self
+            .sense
+            .ok_or(SampleSetError::MissingRequiredField { field: "sense" })?;
+
+        let objective_sample_ids = objectives.ids();
+        let (feasible, feasible_relaxed) = Self::compute_feasibility(
+            &constraints,
+            &self.indicator_constraints,
+            &objective_sample_ids,
+        );
+
+        Ok(SampleSet {
+            decision_variables,
+            objectives,
+            constraints,
+            indicator_constraints: self.indicator_constraints,
+            named_functions: self.named_functions,
+            sense,
+            feasible,
+            feasible_relaxed,
+        })
+    }
+
+    fn compute_feasibility(
+        constraints: &SampledCollection<Constraint>,
+        indicator_constraints: &SampledCollection<IndicatorConstraint>,
+        sample_ids: &SampleIDSet,
+    ) -> (BTreeMap<SampleID, bool>, BTreeMap<SampleID, bool>) {
+        let mut feasible = BTreeMap::new();
+        let mut feasible_relaxed = BTreeMap::new();
+
+        for sample_id in sample_ids {
+            let f = constraints.is_feasible_for(*sample_id)
+                && indicator_constraints.is_feasible_for(*sample_id);
+            let fr = constraints.is_feasible_relaxed_for(*sample_id)
+                && indicator_constraints.is_feasible_relaxed_for(*sample_id);
+
+            feasible.insert(*sample_id, f);
+            feasible_relaxed.insert(*sample_id, fr);
+        }
+
+        (feasible, feasible_relaxed)
     }
 }

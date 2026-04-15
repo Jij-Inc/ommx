@@ -2,6 +2,7 @@ use super::*;
 use crate::{random::unique_integers, VariableID, VariableIDPair};
 use anyhow::{bail, Result};
 use proptest::prelude::*;
+use serde::ser::SerializeTuple;
 use std::{collections::HashSet, fmt::Debug, hash::Hash};
 
 pub type Linear = PolynomialBase<LinearMonomial>;
@@ -103,6 +104,70 @@ impl std::ops::Neg for LinearMonomial {
 
     fn neg(self) -> Self::Output {
         Linear::single_term(self, crate::coeff!(-1.0))
+    }
+}
+
+impl serde::Serialize for LinearMonomial {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            LinearMonomial::Variable(id) => {
+                let mut tuple = serializer.serialize_tuple(1)?;
+                tuple.serialize_element(&id.into_inner())?;
+                tuple.end()
+            }
+            LinearMonomial::Constant => {
+                let tuple = serializer.serialize_tuple(0)?;
+                tuple.end()
+            }
+        }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for LinearMonomial {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct LinearMonomialVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for LinearMonomialVisitor {
+            type Value = LinearMonomial;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a variable ID (u64) or an array of 0 or 1 variable IDs")
+            }
+
+            // When a plain integer is provided, treat it as LinearMonomial::Variable
+            fn visit_u64<E>(self, value: u64) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(LinearMonomial::Variable(value.into()))
+            }
+
+            // Handle array inputs
+            fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                let first = seq.next_element::<u64>()?;
+                let second = seq.next_element::<u64>()?;
+
+                match (first, second) {
+                    // Array of length 1 -> LinearMonomial::Variable
+                    (Some(id), None) => Ok(LinearMonomial::Variable(id.into())),
+                    // Array of length 0 -> LinearMonomial::Constant
+                    (None, None) => Ok(LinearMonomial::Constant),
+                    // Any other length is an error
+                    _ => Err(serde::de::Error::custom("expected array of length 0 or 1")),
+                }
+            }
+        }
+
+        deserializer.deserialize_any(LinearMonomialVisitor)
     }
 }
 
@@ -230,5 +295,49 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn test_linear_monomial_serde() {
+        // Test Variable serialization/deserialization with u64
+        let var = LinearMonomial::Variable(42.into());
+        let json = serde_json::to_string(&var).unwrap();
+        assert_eq!(json, "[42]");
+        let deserialized: LinearMonomial = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, var);
+
+        // Test deserializing from plain u64
+        let deserialized: LinearMonomial = serde_json::from_str("42").unwrap();
+        assert_eq!(deserialized, LinearMonomial::Variable(42.into()));
+
+        // Test Constant serialization/deserialization (empty tuple)
+        let constant = LinearMonomial::Constant;
+        let json = serde_json::to_string(&constant).unwrap();
+        assert_eq!(json, "[]");
+        let deserialized: LinearMonomial = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, constant);
+
+        // Test round-trip for Variable
+        let original = LinearMonomial::Variable(123.into());
+        let serialized = serde_json::to_string(&original).unwrap();
+        let deserialized: LinearMonomial = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(deserialized, original);
+
+        // Test round-trip for Constant
+        let original = LinearMonomial::Constant;
+        let serialized = serde_json::to_string(&original).unwrap();
+        let deserialized: LinearMonomial = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(deserialized, original);
+    }
+
+    #[test]
+    fn test_linear_monomial_deserialize_invalid() {
+        // Array with more than 1 element should fail
+        let result: Result<LinearMonomial, _> = serde_json::from_str("[1, 2]");
+        assert!(result.is_err());
+
+        // Array with more than 2 elements should fail
+        let result: Result<LinearMonomial, _> = serde_json::from_str("[1, 2, 3]");
+        assert!(result.is_err());
     }
 }

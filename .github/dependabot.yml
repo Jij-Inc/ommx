@@ -18,3 +18,7 @@ updates:
       dependencies:
         patterns:
           - "*"
+    ignore:
+      # Do not upgrade prost related dependencies
+      - dependency-name: "prost"
+      - dependency-name: "prost-build"

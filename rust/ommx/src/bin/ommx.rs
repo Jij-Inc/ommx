@@ -2,7 +2,7 @@ use anyhow::{bail, Result};
 use clap::Parser;
 use colored::Colorize;
 use ocipkg::{oci_spec::image::ImageManifest, ImageName};
-use ommx::artifact::{image_dir, Artifact};
+use ommx::artifact::{get_image_dir, Artifact};
 use std::path::{Path, PathBuf};
 
 mod built_info {
@@ -86,7 +86,7 @@ impl ImageNameOrPath {
             return Ok(Self::OciArchive(path.to_path_buf()));
         }
         if let Ok(name) = ImageName::parse(input) {
-            let path = image_dir(&name)?;
+            let path = get_image_dir(&name);
             if path.exists() {
                 return Ok(Self::Local(name));
             } else {
@@ -103,7 +103,7 @@ impl ImageNameOrPath {
                 Artifact::from_oci_archive(path)?.get_manifest()?
             }
             ImageNameOrPath::Local(name) => {
-                let image_dir = image_dir(name)?;
+                let image_dir = get_image_dir(name);
                 Artifact::from_oci_dir(&image_dir)?.get_manifest()?
             }
             ImageNameOrPath::Remote(name) => Artifact::from_remote(name.clone())?.get_manifest()?,
@@ -168,7 +168,7 @@ fn main() -> Result<()> {
                 artifact.push()?;
             }
             ImageNameOrPath::Local(name) => {
-                let image_dir = image_dir(&name)?;
+                let image_dir = get_image_dir(&name);
                 let mut artifact = Artifact::from_oci_dir(&image_dir)?;
                 artifact.push()?;
             }
@@ -185,7 +185,7 @@ fn main() -> Result<()> {
 
         Command::Save { image_name, output } => {
             let name = ImageName::parse(image_name)?;
-            let image_dir = image_dir(&name)?;
+            let image_dir = get_image_dir(&name);
             let mut artifact = Artifact::from_oci_dir(&image_dir)?;
             artifact.save(output)?;
         }
@@ -197,7 +197,7 @@ fn main() -> Result<()> {
 
         Command::ImageDirectory { image_name } => {
             let name = ImageName::parse(image_name)?;
-            let path = image_dir(&name)?;
+            let path = get_image_dir(&name);
             println!("{}", path.display());
         }
 

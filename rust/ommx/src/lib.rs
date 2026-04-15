@@ -85,6 +85,29 @@
 //! );
 //! ```
 //!
+//! ## Constraint Type System
+//!
+//! OMMX supports multiple constraint types beyond standard `f(x) = 0` / `f(x) <= 0`:
+//!
+//! - **[`Constraint`]**: Standard constraints
+//! - **[`IndicatorConstraint`]**: `indicator_variable = 1 → f(x) <= 0`
+//!
+//! Each constraint type follows the **Stage pattern** — parameterized by lifecycle phase
+//! (`Created`, `Removed`, `Evaluated`, `Sampled`) — and implements the
+//! [`ConstraintType`] trait, which maps all four stages
+//! as associated types (a defunctionalization of `Stage → Type` since Rust lacks HKTs).
+//!
+//! Each constraint type also has its own independent ID type
+//! ([`ConstraintID`], [`IndicatorConstraintID`]) to prevent accidental cross-type lookups.
+//!
+//! Three generic collection wrappers handle constraints uniformly:
+//!
+//! - [`ConstraintCollection`]: active + removed (used in [`Instance`])
+//! - [`EvaluatedCollection`]: evaluation results (used in [`Solution`])
+//! - [`SampledCollection`]: sampled results (used in [`SampleSet`])
+//!
+//! To add a new constraint type, see the docs on [`ConstraintType`].
+//!
 //! ## [`Instance`]
 //!
 //! The [`Instance`] type represents a complete optimization problem with objective, variables,
@@ -94,6 +117,7 @@
 //! ```rust
 //! use ommx::{Instance, DecisionVariable, VariableID, Constraint, ConstraintID, Function, Sense, Linear, linear, coeff};
 //! use maplit::btreemap;
+//! use std::collections::BTreeMap;
 //!
 //! // Create decision variables
 //! let decision_variables = btreemap! {
@@ -167,7 +191,7 @@
 //! use ommx::{Instance, DecisionVariable, VariableID, Constraint, ConstraintID, Function, Sense, Linear, Evaluate, ATol, linear, coeff};
 //! use ommx::v1::State;
 //! use maplit::btreemap;
-//! use std::collections::HashMap;
+//! use std::collections::{BTreeMap, HashMap};
 //!
 //! // Create an instance with variables and constraints
 //! let decision_variables = btreemap! {
@@ -213,13 +237,13 @@
 //!
 //! // Constraint 1: x1 + x2 - 10 <= 0, evaluated to 3 + 4 - 10 = -3
 //! let constraint1 = &evaluated_constraints[&ConstraintID::from(1)];
-//! assert_eq!(constraint1.evaluated_value(), &-3.0);
-//! assert!(constraint1.feasible()); // -3 <= 0 ✓
+//! assert_eq!(constraint1.stage.evaluated_value, -3.0);
+//! assert!(constraint1.stage.feasible); // -3 <= 0 ✓
 //!
 //! // Constraint 2: -x1 + 1 <= 0, evaluated to -3 + 1 = -2
 //! let constraint2 = &evaluated_constraints[&ConstraintID::from(2)];
-//! assert_eq!(constraint2.evaluated_value(), &-2.0);
-//! assert!(constraint2.feasible()); // -2 <= 0 ✓
+//! assert_eq!(constraint2.stage.evaluated_value, -2.0);
+//! assert!(constraint2.stage.feasible); // -2 <= 0 ✓
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 //!
@@ -254,7 +278,9 @@ pub use prost::Message;
 
 // Public modules
 pub mod artifact;
+#[cfg(feature = "remote-artifact")]
 pub mod dataset;
+pub mod logical_memory;
 pub mod mps;
 pub mod parse;
 pub mod qplib;
@@ -266,13 +292,16 @@ mod bound;
 mod coefficient;
 mod constraint;
 mod constraint_hints;
+mod constraint_type;
 mod decision_variable;
 mod evaluate;
 mod format;
 mod function;
+mod indicator_constraint;
 mod infeasible_detected;
 mod instance;
 mod macros;
+mod named_function;
 mod polynomial_base;
 mod sample_set;
 mod sampled;
@@ -284,11 +313,14 @@ pub use bound::*;
 pub use coefficient::*;
 pub use constraint::*;
 pub use constraint_hints::*;
+pub use constraint_type::*;
 pub use decision_variable::*;
 pub use evaluate::Evaluate;
 pub use function::*;
+pub use indicator_constraint::*;
 pub use infeasible_detected::*;
 pub use instance::*;
+pub use named_function::*;
 pub use parse::*;
 pub use polynomial_base::*;
 pub use sample_set::*;

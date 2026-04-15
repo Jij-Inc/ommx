@@ -1,23 +1,167 @@
-use crate::{Linear, Polynomial, Quadratic, Rng};
+use crate::{
+    next_constraint_id, Constraint, DecisionVariable, Linear, Parameter, Polynomial, Quadratic,
+    Rng, State,
+};
 
 use anyhow::{anyhow, Result};
 use approx::AbsDiffEq;
-use ommx::{ATol, Coefficient, CoefficientError, Evaluate};
+use ommx::{ATol, Coefficient, CoefficientError, Evaluate, LinearMonomial};
 use pyo3::{
+    exceptions::PyTypeError,
     prelude::*,
-    types::{PyBytes, PyDict, PyTuple},
+    types::{PyBytes, PyDict},
     Bound, PyAny,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
-#[pyclass]
+/// General mathematical function of decision variables.
+///
+/// Function is a unified type that can represent constant, linear, quadratic,
+/// or polynomial functions. It is used as the objective function and constraint
+/// functions in optimization problems.
+///
+/// # Examples
+///
+/// Create from various types:
+///
+/// ```python
+/// >>> f = Function(1.0)  # Constant
+/// >>> f = Function(Linear(terms={1: 2}, constant=1))  # Linear
+/// >>> f = Function(x * y)  # From Quadratic expression
+/// ```
+///
+/// Access the terms:
+///
+/// ```python
+/// >>> f = Function(Linear(terms={1: 2.5}, constant=1.0))
+/// >>> f.terms
+/// {(1,): 2.5, (): 1.0}
+/// ```
+///
+/// Check the degree:
+///
+/// ```python
+/// >>> f.degree()
+/// 1
+/// ```
+#[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct Function(pub ommx::Function);
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+// Manual PyClassInfo submission (instead of #[gen_stub_pyclass])
+pyo3_stub_gen::inventory::submit! {
+    pyo3_stub_gen::type_info::PyClassInfo {
+        pyclass_name: "Function",
+        struct_id: || std::any::TypeId::of::<Function>(),
+        doc: "General mathematical function of decision variables.",
+        module: Some("ommx._ommx_rust"),
+        bases: &[],
+        getters: &[],
+        setters: &[],
+        has_eq: false,
+        has_hash: false,
+        has_ord: false,
+        has_str: false,
+        subclass: false,
+    }
+}
+
+// PyStubType: input uses ToFunction, output uses Function
+impl pyo3_stub_gen::PyStubType for Function {
+    fn type_input() -> pyo3_stub_gen::TypeInfo {
+        pyo3_stub_gen::TypeInfo::locally_defined("ToFunction", "ommx._ommx_rust".into())
+    }
+    fn type_output() -> pyo3_stub_gen::TypeInfo {
+        pyo3_stub_gen::TypeInfo::locally_defined("Function", "ommx._ommx_rust".into())
+    }
+}
+
+/// Convert various Python types to Function.
+///
+/// Accepts: int, float, DecisionVariable, Parameter, Linear, Quadratic, Polynomial, Function.
+///
+/// Note: Parameter is accepted here because ParametricInstance uses Function for its objective
+/// and constraints, which may contain parameters. Whether a Parameter is valid in a given context
+/// is enforced by the Rust SDK's validation (e.g., Instance builder rejects undefined variable IDs).
+impl<'py> FromPyObject<'_, 'py> for Function {
+    type Error = PyErr;
+    fn extract(ob: Borrowed<'_, 'py, PyAny>) -> PyResult<Self> {
+        if let Ok(f) = ob.cast::<Function>() {
+            return Ok(f.borrow().clone());
+        }
+        if let Ok(p) = ob.extract::<Polynomial>() {
+            return Ok(Self(ommx::Function::from(p.0)));
+        }
+        if let Ok(q) = ob.extract::<Quadratic>() {
+            return Ok(Self(ommx::Function::from(q.0)));
+        }
+        if let Ok(l) = ob.extract::<Linear>() {
+            return Ok(Self(ommx::Function::from(l.0)));
+        }
+        if let Ok(dv) = ob.extract::<DecisionVariable>() {
+            let linear =
+                ommx::Linear::single_term(LinearMonomial::Variable(dv.0.id()), ommx::coeff!(1.0));
+            return Ok(Self(ommx::Function::from(linear)));
+        }
+        if let Ok(param) = ob.extract::<Parameter>() {
+            let linear = ommx::Linear::single_term(
+                LinearMonomial::Variable(ommx::VariableID::from(param.0.id)),
+                ommx::coeff!(1.0),
+            );
+            return Ok(Self(ommx::Function::from(linear)));
+        }
+        if let Ok(scalar) = ob.extract::<f64>() {
+            return match TryInto::<Coefficient>::try_into(scalar) {
+                Ok(coeff) => Ok(Self(ommx::Function::from(coeff))),
+                Err(CoefficientError::Zero) => Ok(Self(ommx::Function::default())),
+                Err(e) => Err(PyTypeError::new_err(e.to_string())),
+            };
+        }
+        Err(PyTypeError::new_err(format!(
+            "Cannot convert {} to Function. Accepted: int, float, DecisionVariable, Parameter, Linear, Quadratic, Polynomial, Function",
+            ob.get_type().name()?
+        )))
+    }
+}
+
+pyo3_stub_gen::impl_py_runtime_type!(Function);
+
+// Type alias: ToFunction = int | float | DecisionVariable | Linear | Quadratic | Polynomial | Function
+// i64 and f64 have PyStubType/PyRuntimeType provided by pyo3-stub-gen builtins
+pyo3_stub_gen::type_alias!(
+    "ommx._ommx_rust",
+    ToFunction =
+        i64 | f64 | DecisionVariable | Parameter | Linear | Quadratic | Polynomial | Function
+);
+
+// Manual stub for __iadd__ (PyO3 returns () but Python returns self)
+pyo3_stub_gen::inventory::submit! {
+    pyo3_stub_gen::derive::gen_methods_from_python! {
+        r#"
+        class Function:
+            def __iadd__(self, rhs: ToFunction) -> Function: ...
+        "#
+    }
+}
+
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Function {
+    /// Create a Function from various types.
+    ///
+    /// Accepts:
+    /// - int or float: creates a constant function
+    /// - DecisionVariable: creates a linear function with single term
+    /// - Parameter: creates a linear function with single term
+    /// - Linear: creates a linear function
+    /// - Quadratic: creates a quadratic function
+    /// - Polynomial: creates a polynomial function
+    /// - Function: returns a copy
+    #[new]
+    pub fn new(inner: Function) -> Self {
+        inner
+    }
+
     #[staticmethod]
     pub fn from_scalar(scalar: f64) -> Result<Self> {
         match TryInto::<Coefficient>::try_into(scalar) {
@@ -98,20 +242,49 @@ impl Function {
         format!("Function({})", self.0)
     }
 
-    pub fn __add__(&self, rhs: &Function) -> Function {
+    /// Negation operator
+    pub fn __neg__(&self) -> Function {
+        Function(-self.0.clone())
+    }
+
+    /// Addition
+    pub fn __add__(&self, rhs: Function) -> Function {
         Function(&self.0 + &rhs.0)
     }
 
-    pub fn __sub__(&self, rhs: &Function) -> Function {
+    /// Reverse addition (lhs + self)
+    pub fn __radd__(&self, lhs: Function) -> Function {
+        Function(&self.0 + &lhs.0)
+    }
+
+    /// Subtraction
+    pub fn __sub__(&self, rhs: Function) -> Function {
         Function(&self.0 - &rhs.0)
+    }
+
+    /// Reverse subtraction (lhs - self)
+    pub fn __rsub__(&self, lhs: Function) -> Function {
+        Function(&lhs.0 - &self.0)
     }
 
     pub fn add_assign(&mut self, rhs: &Function) {
         self.0 += &rhs.0;
     }
 
-    pub fn __mul__(&self, rhs: &Function) -> Function {
+    /// In-place addition for += operator
+    #[gen_stub(skip)]
+    pub fn __iadd__(&mut self, rhs: &Function) {
+        self.0 += &rhs.0;
+    }
+
+    /// Multiplication
+    pub fn __mul__(&self, rhs: Function) -> Function {
         Function(&self.0 * &rhs.0)
+    }
+
+    /// Reverse multiplication (lhs * self)
+    pub fn __rmul__(&self, lhs: Function) -> Function {
+        Function(&self.0 * &lhs.0)
     }
 
     pub fn add_scalar(&self, scalar: f64) -> Result<Function> {
@@ -166,14 +339,10 @@ impl Function {
             .collect()
     }
 
+    #[getter]
     pub fn terms<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let result = PyDict::new(py);
-        for (ids, coeff) in self.0.iter() {
-            let u64_ids: Vec<u64> = ids.into_iter().map(|id| id.into_inner()).collect();
-            let py_tuple = PyTuple::new(py, &u64_ids)?;
-            result.set_item(py_tuple, coeff.into_inner())?;
-        }
-        Ok(result)
+        let obj = serde_pyobject::to_pyobject(py, &self.0)?;
+        Ok(obj.cast::<PyDict>()?.clone())
     }
 
     /// Get linear terms as a dictionary mapping variable id to coefficient.
@@ -232,17 +401,30 @@ impl Function {
         Ok(Self(inner))
     }
 
-    pub fn evaluate(&self, state: &Bound<PyBytes>) -> Result<f64> {
-        use ommx::{Evaluate, Message};
-        let state = ommx::v1::State::decode(state.as_bytes())?;
-        self.0.evaluate(&state, ommx::ATol::default())
+    #[pyo3(signature = (state, *, atol=None))]
+    pub fn evaluate(&self, state: State, atol: Option<f64>) -> PyResult<f64> {
+        use ommx::Evaluate;
+        let atol = match atol {
+            Some(value) => ommx::ATol::new(value)
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?,
+            None => ommx::ATol::default(),
+        };
+        self.0
+            .evaluate(&state.0, atol)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))
     }
 
-    pub fn partial_evaluate(&self, state: &Bound<PyBytes>) -> Result<Function> {
-        use ommx::Message;
-        let state = ommx::v1::State::decode(state.as_bytes())?;
+    #[pyo3(signature = (state, *, atol=None))]
+    pub fn partial_evaluate(&self, state: State, atol: Option<f64>) -> PyResult<Function> {
+        let atol = match atol {
+            Some(value) => ommx::ATol::new(value)
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?,
+            None => ommx::ATol::default(),
+        };
         let mut inner = self.0.clone();
-        inner.partial_evaluate(&state, ommx::ATol::default())?;
+        inner
+            .partial_evaluate(&state.0, atol)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
         Ok(Function(inner))
     }
 
@@ -270,16 +452,65 @@ impl Function {
 
     /// Reduce binary powers in the function.
     ///
-    /// For binary variables, x^n = x for any n >= 1, so we can reduce higher powers to linear terms.
+    /// For binary variables, $x^n = x$ for any $n \geq 1$, so we can reduce higher powers to linear terms.
     ///
-    /// Args:
-    ///     binary_ids: Set of binary variable IDs to reduce powers for
+    /// **Args:**
     ///
-    /// Returns:
-    ///     True if any reduction was performed, False otherwise
+    /// - `binary_ids`: Set of binary variable IDs to reduce powers for
+    ///
+    /// **Returns:** `True` if any reduction was performed, `False` otherwise
     pub fn reduce_binary_power(&mut self, binary_ids: BTreeSet<u64>) -> bool {
         let variable_id_set: ommx::VariableIDSet =
             binary_ids.into_iter().map(ommx::VariableID::from).collect();
         self.0.reduce_binary_power(&variable_id_set)
+    }
+
+    /// Create an equality constraint: self == other → Constraint with EqualToZero
+    ///
+    /// Returns a Constraint where (self - other) == 0.
+    /// Note: This does NOT return bool, it creates a Constraint object.
+    #[gen_stub(type_ignore = ["override"])]
+    #[pyo3(name = "__eq__")]
+    pub fn py_eq(&self, other: Function) -> Constraint {
+        let mut function = -other.0;
+        function += &self.0;
+        let id = next_constraint_id();
+        Constraint(ommx::Constraint {
+            id: ommx::ConstraintID::from(id),
+            equality: ommx::Equality::EqualToZero,
+            metadata: ommx::ConstraintMetadata::default(),
+            stage: ommx::CreatedData { function },
+        })
+    }
+
+    /// Create a less-than-or-equal constraint: self <= other → Constraint with LessThanOrEqualToZero
+    ///
+    /// Returns a Constraint where (self - other) <= 0.
+    #[pyo3(name = "__le__")]
+    pub fn py_le(&self, other: Function) -> Constraint {
+        let mut function = -other.0;
+        function += &self.0;
+        let id = next_constraint_id();
+        Constraint(ommx::Constraint {
+            id: ommx::ConstraintID::from(id),
+            equality: ommx::Equality::LessThanOrEqualToZero,
+            metadata: ommx::ConstraintMetadata::default(),
+            stage: ommx::CreatedData { function },
+        })
+    }
+
+    /// Create a greater-than-or-equal constraint: self >= other → Constraint with LessThanOrEqualToZero
+    ///
+    /// Returns a Constraint where (other - self) <= 0.
+    #[pyo3(name = "__ge__")]
+    pub fn py_ge(&self, other: Function) -> Constraint {
+        let function = other.0 - &self.0;
+        let id = next_constraint_id();
+        Constraint(ommx::Constraint {
+            id: ommx::ConstraintID::from(id),
+            equality: ommx::Equality::LessThanOrEqualToZero,
+            metadata: ommx::ConstraintMetadata::default(),
+            stage: ommx::CreatedData { function },
+        })
     }
 }

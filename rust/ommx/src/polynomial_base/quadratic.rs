@@ -93,6 +93,84 @@ impl Quadratic {
     }
 }
 
+impl serde::Serialize for QuadraticMonomial {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeTuple;
+        match self {
+            QuadraticMonomial::Pair(pair) => {
+                let mut tuple = serializer.serialize_tuple(2)?;
+                tuple.serialize_element(&pair.lower().into_inner())?;
+                tuple.serialize_element(&pair.upper().into_inner())?;
+                tuple.end()
+            }
+            QuadraticMonomial::Linear(id) => {
+                let mut tuple = serializer.serialize_tuple(1)?;
+                tuple.serialize_element(&id.into_inner())?;
+                tuple.end()
+            }
+            QuadraticMonomial::Constant => {
+                let tuple = serializer.serialize_tuple(0)?;
+                tuple.end()
+            }
+        }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for QuadraticMonomial {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct QuadraticMonomialVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for QuadraticMonomialVisitor {
+            type Value = QuadraticMonomial;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a variable ID (u64) or an array of 0, 1, or 2 variable IDs")
+            }
+
+            // When a plain integer is provided, treat it as QuadraticMonomial::Linear
+            fn visit_u64<E>(self, value: u64) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(QuadraticMonomial::Linear(value.into()))
+            }
+
+            // Handle array inputs
+            fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                let first = seq.next_element::<u64>()?;
+                let second = seq.next_element::<u64>()?;
+                let third = seq.next_element::<u64>()?;
+
+                match (first, second, third) {
+                    // Array of length 2 -> QuadraticMonomial::Pair
+                    (Some(id1), Some(id2), None) => Ok(QuadraticMonomial::Pair(
+                        VariableIDPair::new(id1.into(), id2.into()),
+                    )),
+                    // Array of length 1 -> QuadraticMonomial::Linear
+                    (Some(id), None, None) => Ok(QuadraticMonomial::Linear(id.into())),
+                    // Array of length 0 -> QuadraticMonomial::Constant
+                    (None, None, None) => Ok(QuadraticMonomial::Constant),
+                    // Any other length is an error
+                    _ => Err(serde::de::Error::custom(
+                        "expected array of length 0, 1, or 2",
+                    )),
+                }
+            }
+        }
+
+        deserializer.deserialize_any(QuadraticMonomialVisitor)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct VariableIDPair {
     lower: VariableID,
@@ -312,5 +390,62 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn test_quadratic_monomial_serde() {
+        // Test Pair serialization/deserialization
+        let pair = QuadraticMonomial::Pair(VariableIDPair::new(3.into(), 5.into()));
+        let json = serde_json::to_string(&pair).unwrap();
+        assert_eq!(json, "[3,5]");
+        let deserialized: QuadraticMonomial = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, pair);
+
+        // Test Linear serialization/deserialization with u64
+        let linear = QuadraticMonomial::Linear(42.into());
+        let json = serde_json::to_string(&linear).unwrap();
+        assert_eq!(json, "[42]");
+        let deserialized: QuadraticMonomial = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, linear);
+
+        // Test deserializing from plain u64
+        let deserialized: QuadraticMonomial = serde_json::from_str("42").unwrap();
+        assert_eq!(deserialized, QuadraticMonomial::Linear(42.into()));
+
+        // Test Constant serialization/deserialization (empty tuple)
+        let constant = QuadraticMonomial::Constant;
+        let json = serde_json::to_string(&constant).unwrap();
+        assert_eq!(json, "[]");
+        let deserialized: QuadraticMonomial = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, constant);
+
+        // Test round-trip for Pair
+        let original = QuadraticMonomial::Pair(VariableIDPair::new(10.into(), 20.into()));
+        let serialized = serde_json::to_string(&original).unwrap();
+        let deserialized: QuadraticMonomial = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(deserialized, original);
+
+        // Test round-trip for Linear
+        let original = QuadraticMonomial::Linear(123.into());
+        let serialized = serde_json::to_string(&original).unwrap();
+        let deserialized: QuadraticMonomial = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(deserialized, original);
+
+        // Test round-trip for Constant
+        let original = QuadraticMonomial::Constant;
+        let serialized = serde_json::to_string(&original).unwrap();
+        let deserialized: QuadraticMonomial = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(deserialized, original);
+    }
+
+    #[test]
+    fn test_quadratic_monomial_deserialize_invalid() {
+        // Array with more than 2 elements should fail
+        let result: Result<QuadraticMonomial, _> = serde_json::from_str("[1, 2, 3]");
+        assert!(result.is_err());
+
+        // Array with more than 3 elements should fail
+        let result: Result<QuadraticMonomial, _> = serde_json::from_str("[1, 2, 3, 4]");
+        assert!(result.is_err());
     }
 }

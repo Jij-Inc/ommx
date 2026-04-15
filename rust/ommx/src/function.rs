@@ -9,6 +9,7 @@ mod add;
 mod approx;
 mod arbitrary;
 mod evaluate;
+mod logical_memory;
 mod mul;
 mod parse;
 mod reduce_binary_power;
@@ -28,6 +29,41 @@ pub enum Function {
     Linear(Linear),
     Quadratic(Quadratic),
     Polynomial(Polynomial),
+}
+
+impl serde::Serialize for Function {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            Function::Zero => {
+                use serde::ser::SerializeMap;
+                let map = serializer.serialize_map(Some(0))?;
+                map.end()
+            }
+            Function::Constant(c) => {
+                use serde::ser::SerializeMap;
+                let mut map = serializer.serialize_map(Some(1))?;
+                map.serialize_entry(&(), &c.into_inner())?;
+                map.end()
+            }
+            Function::Linear(l) => l.serialize(serializer),
+            Function::Quadratic(q) => q.serialize(serializer),
+            Function::Polynomial(p) => p.serialize(serializer),
+        }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Function {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        // Always deserialize as Polynomial
+        let polynomial = Polynomial::deserialize(deserializer)?;
+        Ok(Function::Polynomial(polynomial))
+    }
 }
 
 impl TryFrom<f64> for Function {
@@ -72,7 +108,7 @@ impl Function {
         }
     }
 
-    pub fn as_linear(&self) -> Option<Cow<Linear>> {
+    pub fn as_linear(&self) -> Option<Cow<'_, Linear>> {
         match self {
             Function::Zero => Some(Cow::Owned(Linear::zero())),
             Function::Constant(c) => Some(Cow::Owned((*c).into())),
@@ -82,7 +118,7 @@ impl Function {
         }
     }
 
-    pub fn as_quadratic(&self) -> Option<Cow<Quadratic>> {
+    pub fn as_quadratic(&self) -> Option<Cow<'_, Quadratic>> {
         match self {
             Function::Zero => Some(Cow::Owned(Quadratic::zero())),
             Function::Constant(c) => Some(Cow::Owned((*c).into())),

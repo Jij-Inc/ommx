@@ -68,7 +68,7 @@ pub type Bounds = BTreeMap<VariableID, Bound>;
 /// // Default is `(-inf, inf)`
 /// assert_eq!(Bound::default(), Bound::try_from([f64::NEG_INFINITY, f64::INFINITY]).unwrap());
 /// ```
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Bound {
     lower: f64,
     upper: f64,
@@ -415,7 +415,7 @@ impl Bound {
     }
 
     pub fn pow(&self, exp: u8) -> Self {
-        if exp % 2 == 0 {
+        if exp.is_multiple_of(2) {
             if self.lower >= 0.0 {
                 // 0 <= lower <= upper
                 Bound::new(self.lower.powi(exp as i32), self.upper.powi(exp as i32)).unwrap()
@@ -526,6 +526,8 @@ impl Arbitrary for Bound {
             .boxed()
     }
 }
+
+mod logical_memory;
 
 #[cfg(test)]
 mod tests {

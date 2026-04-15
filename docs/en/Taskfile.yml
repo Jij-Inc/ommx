@@ -4,27 +4,17 @@ version: "3"
 
 tasks:
   build:
-    desc: "Build the book in docs/en"
+    desc: "Build the Sphinx documentation in docs/en"
     cmds:
-      - uv run jupyter-book build .
-
-  test:
-    desc: "Test each notebook in the book"
-    cmds:
-      - uv run pytest --nbval-lax tutorial/*.ipynb user_guide/*.ipynb
+      - uv run sphinx-build -b html . _build/html
 
   open:
-    desc: "Open the book in docs/en"
+    desc: "Open the documentation in docs/en"
     cmds:
       - uv run python -m webbrowser file:///$(pwd)/_build/html/index.html
 
-  watch:
-    desc: "Watch the book in docs/en"
-    cmds:
-      - fswatch -o $(find . -name '*.ipynb' -or -name '*.md') | xargs -n1 -I{} uv run jupyter-book build .
-
   default:
-    desc: "Build and open the book in docs/en"
+    desc: "Build and open the documentation in docs/en"
     cmds:
       - task: build
       - task: open

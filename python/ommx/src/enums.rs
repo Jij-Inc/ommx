@@ -1,7 +1,37 @@
 use pyo3::prelude::*;
 
+/// Constraint type capability flag for non-standard constraint types.
+///
+/// Standard constraints are always supported. This enum lists capabilities
+/// that adapters must explicitly opt in to.
+///
+/// Use as a set: `{AdditionalCapability.Indicator}`
+#[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
+#[pyclass(eq, eq_int, hash, frozen)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum AdditionalCapability {
+    /// Indicator constraints: binvar = 1 → f(x) <= 0
+    Indicator = 1,
+}
+
+impl From<ommx::AdditionalCapability> for AdditionalCapability {
+    fn from(cap: ommx::AdditionalCapability) -> Self {
+        match cap {
+            ommx::AdditionalCapability::Indicator => AdditionalCapability::Indicator,
+        }
+    }
+}
+
+impl From<AdditionalCapability> for ommx::AdditionalCapability {
+    fn from(cap: AdditionalCapability) -> Self {
+        match cap {
+            AdditionalCapability::Indicator => ommx::AdditionalCapability::Indicator,
+        }
+    }
+}
+
 /// Sense of optimization (minimize or maximize)
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass_enum)]
+#[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
 #[pyclass(eq, eq_int)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Sense {
@@ -11,7 +41,7 @@ pub enum Sense {
     Maximize = 2,
 }
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Sense {
     /// Convert from Protocol Buffer sense value
@@ -62,7 +92,7 @@ impl From<Sense> for ommx::Sense {
 }
 
 /// Equality type for constraints
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass_enum)]
+#[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
 #[pyclass(eq, eq_int)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Equality {
@@ -72,7 +102,7 @@ pub enum Equality {
     LessThanOrEqualToZero = 2,
 }
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Equality {
     /// Convert from Protocol Buffer equality value
@@ -126,7 +156,7 @@ impl From<Equality> for ommx::Equality {
 }
 
 /// Kind of decision variable
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass_enum)]
+#[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
 #[pyclass(eq, eq_int)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Kind {
@@ -142,7 +172,7 @@ pub enum Kind {
     SemiContinuous = 5,
 }
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Kind {
     /// Convert from Protocol Buffer kind value
@@ -206,7 +236,7 @@ impl From<Kind> for ommx::Kind {
 }
 
 /// Optimality status of a solution
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass_enum)]
+#[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
 #[pyclass(eq, eq_int)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Optimality {
@@ -218,7 +248,7 @@ pub enum Optimality {
     NotOptimal = 2,
 }
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Optimality {
     /// Convert from Protocol Buffer optimality value
@@ -274,7 +304,7 @@ impl From<Optimality> for ommx::v1::Optimality {
 }
 
 /// Relaxation status of a solution
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass_enum)]
+#[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
 #[pyclass(eq, eq_int)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Relaxation {
@@ -284,7 +314,7 @@ pub enum Relaxation {
     LpRelaxed = 1,
 }
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Relaxation {
     /// Convert from Protocol Buffer relaxation value

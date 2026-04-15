@@ -13,18 +13,15 @@ def test_constraint_add_name():
     # Initially no name
     assert constraint.name is None
 
-    # Add name
+    # Add name - returns a Constraint object for chaining
     result = constraint.add_name("test_constraint")
 
-    # Should return the same constraint object (chaining)
-    assert result is constraint
+    # Name should be set on the returned object
+    assert result.name == "test_constraint"
 
-    # Name should be set
-    assert constraint.name == "test_constraint"
-
-    # Can update name
-    constraint.add_name("updated_name")
-    assert constraint.name == "updated_name"
+    # Can update name via chaining
+    result = result.add_name("updated_name")
+    assert result.name == "updated_name"
 
 
 def test_constraint_add_subscripts():
@@ -35,18 +32,15 @@ def test_constraint_add_subscripts():
     # Initially no subscripts
     assert constraint.subscripts == []
 
-    # Add subscripts
+    # Add subscripts - returns a Constraint object for chaining
     result = constraint.add_subscripts([1, 2, 3])
 
-    # Should return the same constraint object (chaining)
-    assert result is constraint
+    # Subscripts should be set on the returned object
+    assert result.subscripts == [1, 2, 3]
 
-    # Subscripts should be set
-    assert constraint.subscripts == [1, 2, 3]
-
-    # Add more subscripts
-    constraint.add_subscripts([4, 5])
-    assert constraint.subscripts == [1, 2, 3, 4, 5]
+    # Add more subscripts via chaining
+    result = result.add_subscripts([4, 5])
+    assert result.subscripts == [1, 2, 3, 4, 5]
 
 
 def test_constraint_chaining():
@@ -59,22 +53,16 @@ def test_constraint_chaining():
 
 
 def test_constraint_method_efficiency():
-    """Test that methods modify constraint in place rather than creating new objects"""
+    """Test that method chaining works correctly"""
     x = DecisionVariable.binary(0)
     constraint = x == 1
 
-    # Store reference to the raw object
-    original_raw = constraint.raw
+    # Chain multiple modifications
+    result = constraint.add_name("test").add_subscripts([1, 2])
 
-    # Modify metadata
-    constraint.add_name("test").add_subscripts([1, 2])
-
-    # Raw object should be the same (in-place modification)
-    assert constraint.raw is original_raw
-
-    # But values should be updated
-    assert constraint.name == "test"
-    assert constraint.subscripts == [1, 2]
+    # Values should be set on the chained result
+    assert result.name == "test"
+    assert result.subscripts == [1, 2]
 
 
 def test_constraint_description():
@@ -85,18 +73,15 @@ def test_constraint_description():
     # Initially no description
     assert constraint.description is None
 
-    # Add description
+    # Add description - returns a Constraint object for chaining
     result = constraint.add_description("This is a test constraint")
 
-    # Should return the same constraint object (chaining)
-    assert result is constraint
+    # Description should be set on the returned object
+    assert result.description == "This is a test constraint"
 
-    # Description should be set
-    assert constraint.description == "This is a test constraint"
-
-    # Can update description
-    constraint.add_description("Updated description")
-    assert constraint.description == "Updated description"
+    # Can update description via chaining
+    result = result.add_description("Updated description")
+    assert result.description == "Updated description"
 
 
 def test_constraint_parameters():
@@ -107,22 +92,15 @@ def test_constraint_parameters():
     # Initially no parameters
     assert constraint.parameters == {}
 
-    # Add parameters
+    # Add parameters - returns a Constraint object for chaining
     result = constraint.add_parameters({"solver": "highs", "timeout": "60"})
 
-    # Should return the same constraint object (chaining)
-    assert result is constraint
+    # Parameters should be set on the returned object
+    assert result.parameters == {"solver": "highs", "timeout": "60"}
 
-    # Parameters should be set
-    assert constraint.parameters == {"solver": "highs", "timeout": "60"}
-
-    # Add more parameters
-    constraint.add_parameters({"precision": "1e-6"})
-    assert constraint.parameters == {
-        "solver": "highs",
-        "timeout": "60",
-        "precision": "1e-6",
-    }
+    # Note: add_parameters replaces all parameters (via set_parameters alias)
+    result = result.add_parameters({"precision": "1e-6"})
+    assert result.parameters == {"precision": "1e-6"}
 
 
 def test_constraint_set_id():
@@ -133,15 +111,12 @@ def test_constraint_set_id():
     # Get initial ID
     initial_id = constraint.id
 
-    # Set new ID
+    # Set new ID - returns a Constraint object for chaining
     result = constraint.set_id(999)
 
-    # Should return the same constraint object (chaining)
-    assert result is constraint
-
-    # ID should be updated
-    assert constraint.id == 999
-    assert constraint.id != initial_id
+    # ID should be updated on the returned object
+    assert result.id == 999
+    assert result.id != initial_id
 
 
 def test_constraint_complete_metadata():
@@ -165,27 +140,25 @@ def test_constraint_complete_metadata():
 
 
 def test_constraint_metadata_efficiency():
-    """Test that all metadata methods modify constraint in place"""
+    """Test that all metadata methods can be chained together"""
     x = DecisionVariable.binary(0)
     constraint = x == 1
 
-    # Store reference to the raw object
-    original_raw = constraint.raw
+    # Chain all metadata modifications
+    result = (
+        constraint.set_id(123)
+        .add_name("efficient")
+        .add_description("Efficient test")
+        .add_subscripts([1])
+        .add_parameters({"key": "value"})
+    )
 
-    # Modify all metadata
-    constraint.set_id(123).add_name("efficient").add_description(
-        "Efficient test"
-    ).add_subscripts([1]).add_parameters({"key": "value"})
-
-    # Raw object should be the same (in-place modification)
-    assert constraint.raw is original_raw
-
-    # But all values should be updated
-    assert constraint.id == 123
-    assert constraint.name == "efficient"
-    assert constraint.description == "Efficient test"
-    assert constraint.subscripts == [1]
-    assert constraint.parameters == {"key": "value"}
+    # All values should be set on the chained result
+    assert result.id == 123
+    assert result.name == "efficient"
+    assert result.description == "Efficient test"
+    assert result.subscripts == [1]
+    assert result.parameters == {"key": "value"}
 
 
 def test_constraint_constructor_with_metadata():

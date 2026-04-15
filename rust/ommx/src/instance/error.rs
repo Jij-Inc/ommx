@@ -24,4 +24,76 @@ pub enum InstanceError {
 
     #[error("Dependent variable cannot be used in objectives or constraints: {id:?}")]
     DependentVariableUsed { id: VariableID },
+
+    #[error("Duplicated named function ID is found in definition: {id:?}")]
+    DuplicatedNamedFunctionID { id: NamedFunctionID },
+
+    #[error("Variable {id:?} cannot be both fixed (substituted_value set) and dependent")]
+    FixedAndDependentVariable { id: VariableID },
+
+    #[error(
+        "Fixed variable {id:?} (substituted_value set) cannot be used in objectives or constraints"
+    )]
+    FixedVariableUsed { id: VariableID },
+
+    #[error("Required field is missing: {field}")]
+    MissingRequiredField { field: &'static str },
+
+    #[error(
+        "Constraint ID {id:?} is in both constraints and removed_constraints, but they must be disjoint"
+    )]
+    OverlappingConstraintID { id: ConstraintID },
+
+    #[error("Variable ID {id:?} in decision_variable_dependency is not in decision_variables")]
+    UndefinedDependentVariableID { id: VariableID },
+
+    #[error("Decision variable map key {key:?} does not match value's id {value_id:?}")]
+    InconsistentDecisionVariableID {
+        key: VariableID,
+        value_id: VariableID,
+    },
+
+    #[error("Constraint map key {key:?} does not match value's id {value_id:?}")]
+    InconsistentConstraintID {
+        key: ConstraintID,
+        value_id: ConstraintID,
+    },
+
+    #[error("Removed constraint map key {key:?} does not match value's id {value_id:?}")]
+    InconsistentRemovedConstraintID {
+        key: ConstraintID,
+        value_id: ConstraintID,
+    },
+
+    #[error("Parameter map key {key:?} does not match value's id {value_id}")]
+    InconsistentParameterID { key: VariableID, value_id: u64 },
+
+    #[error("Named function map key {key:?} does not match value's id {id:?}")]
+    InconsistentNamedFunctionID {
+        key: NamedFunctionID,
+        id: NamedFunctionID,
+    },
+
+    #[error("Indicator variable {id:?} must be binary")]
+    IndicatorVariableNotBinary { id: VariableID },
+
+    #[error("Indicator variable {id:?} is not defined in decision_variables")]
+    UndefinedIndicatorVariable { id: VariableID },
+
+    #[error("Indicator constraint map key {key:?} does not match value's id {value_id:?}")]
+    InconsistentIndicatorConstraintID {
+        key: crate::IndicatorConstraintID,
+        value_id: crate::IndicatorConstraintID,
+    },
+
+    #[error("Removed indicator constraint map key {key:?} does not match value's id {value_id:?}")]
+    InconsistentRemovedIndicatorConstraintID {
+        key: crate::IndicatorConstraintID,
+        value_id: crate::IndicatorConstraintID,
+    },
+
+    #[error(
+        "Indicator constraint ID {id:?} is in both indicator_constraints and removed_indicator_constraints, but they must be disjoint"
+    )]
+    OverlappingIndicatorConstraintID { id: crate::IndicatorConstraintID },
 }

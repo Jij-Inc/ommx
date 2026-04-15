@@ -5,25 +5,25 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ommx_tests"
-version = "2.0.7"
+version = "3.0.0a2"
 
 description = "Test suite for OMMX Python SDK"
 authors = [{ name = "Jij Inc.", email = "info@j-ij.com" }]
 readme = "README.md"
 
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 classifiers = [
   "Programming Language :: Python :: 3 :: Only",
-  "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "License :: OSI Approved :: Apache Software License",
   "License :: OSI Approved :: MIT License",
 ]
 
-dependencies = ["ommx", "pluggy"]
+dependencies = ["ommx >= 3.0.0a2, < 4.0.0","pluggy"]
 
 [project.urls]
 Repository = "https://github.com/Jij-Inc/ommx"

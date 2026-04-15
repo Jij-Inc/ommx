@@ -24,7 +24,9 @@ pub enum CoefficientError {
 /// Invariants
 /// -----------
 /// - The value is not zero and finite.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(
+    Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
 #[repr(transparent)]
 pub struct Coefficient(NotNan<f64>);
 

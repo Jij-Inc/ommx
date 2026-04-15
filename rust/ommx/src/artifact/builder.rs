@@ -1,6 +1,7 @@
 use crate::{
     artifact::{
-        data_dir, ghcr, media_types, Artifact, Config, InstanceAnnotations, SolutionAnnotations,
+        get_local_registry_root, ghcr, media_types, Artifact, Config, InstanceAnnotations,
+        SolutionAnnotations,
     },
     v1,
 };
@@ -65,7 +66,7 @@ impl Builder<OciArchiveBuilder> {
 
 impl Builder<OciDirBuilder> {
     pub fn new(image_name: ImageName) -> Result<Self> {
-        let dir = data_dir()?.join(image_name.as_path());
+        let dir = get_local_registry_root().join(image_name.as_path());
         let layout = OciDirBuilder::new(dir, image_name)?;
         Ok(Self(OciArtifactBuilder::new(
             layout,

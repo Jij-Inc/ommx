@@ -1,4 +1,5 @@
 use super::*;
+use crate::constraint_type::ConstraintCollection;
 use std::ops::Neg;
 
 impl Instance {
@@ -41,11 +42,12 @@ impl From<Instance> for ParametricInstance {
             sense,
             objective,
             decision_variables,
-            constraints,
-            removed_constraints,
+            constraint_collection,
+            indicator_constraint_collection,
             decision_variable_dependency,
             constraint_hints,
             description,
+            named_functions,
             ..
         }: Instance,
     ) -> Self {
@@ -54,11 +56,12 @@ impl From<Instance> for ParametricInstance {
             objective,
             decision_variables,
             parameters: BTreeMap::default(),
-            constraints,
-            removed_constraints,
+            constraint_collection,
+            indicator_constraint_collection,
             decision_variable_dependency,
             constraint_hints,
             description,
+            named_functions,
         }
     }
 }
@@ -100,21 +103,27 @@ impl ParametricInstance {
         };
         let atol = ATol::default();
 
-        // Partially evaluate the objective and constraints
+        // Partially evaluate the objective, constraints, and named functions
         let mut objective = self.objective;
         objective.partial_evaluate(&state, atol)?;
 
-        let mut constraints = self.constraints;
+        let (mut constraints, removed_constraints) = self.constraint_collection.into_parts();
         for (_, constraint) in constraints.iter_mut() {
-            constraint.function.partial_evaluate(&state, atol)?;
+            constraint.stage.function.partial_evaluate(&state, atol)?;
+        }
+
+        let mut named_functions = self.named_functions;
+        for (_, named_function) in named_functions.iter_mut() {
+            named_function.partial_evaluate(&state, atol)?;
         }
 
         Ok(Instance {
             sense: self.sense,
             objective,
             decision_variables: self.decision_variables,
-            constraints,
-            removed_constraints: self.removed_constraints,
+            constraint_collection: ConstraintCollection::new(constraints, removed_constraints),
+            indicator_constraint_collection: self.indicator_constraint_collection,
+            named_functions,
             decision_variable_dependency: self.decision_variable_dependency,
             constraint_hints: self.constraint_hints,
             parameters: Some(parameters),

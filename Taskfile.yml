@@ -3,9 +3,6 @@
 version: "3"
 
 includes:
-  api_reference:
-    taskfile: docs/api_reference/Taskfile.yml
-    dir: docs/api_reference
   book_ja:
     taskfile: docs/ja/Taskfile.yml
     dir: docs/ja
@@ -23,11 +20,6 @@ includes:
     dir: proto
 
 tasks:
-  pip_compile:
-    cmds:
-      - uv pip compile pyproject.toml -o ../requirements.txt
-    dir: docs/
-
   codspeed:trigger:
     desc: Trigger GitHub Actions workflow for Codspeed on current branch
     cmds:
@@ -43,3 +35,4 @@ tasks:
     cmds:
       - task: python:format
       - task: rust:format
+      - task: proto:format

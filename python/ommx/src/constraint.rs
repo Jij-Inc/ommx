@@ -1,41 +1,115 @@
-use crate::{Equality, Function};
-use anyhow::Result;
+use crate::{Equality, EvaluatedConstraint, Function, State};
 use fnv::FnvHashMap;
-use ommx::{ConstraintID, Evaluate, Message};
+use ommx::{ConstraintID, Evaluate};
 use pyo3::{prelude::*, types::PyBytes, Bound, PyAny};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+/// Global counter for auto-generating constraint IDs
+static CONSTRAINT_ID_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+/// Get next constraint ID (thread-safe)
+#[pyo3_stub_gen::derive::gen_stub_pyfunction]
+#[pyfunction]
+pub fn next_constraint_id() -> u64 {
+    CONSTRAINT_ID_COUNTER.fetch_add(1, Ordering::SeqCst)
+}
+
+/// Set constraint ID counter (for deserialization compatibility)
+#[pyo3_stub_gen::derive::gen_stub_pyfunction]
+#[pyfunction]
+pub fn set_constraint_id_counter(value: u64) {
+    CONSTRAINT_ID_COUNTER.store(value, Ordering::SeqCst);
+}
+
+/// Update counter to ensure it's at least the given value + 1
+/// Returns the new counter value after update
+#[pyo3_stub_gen::derive::gen_stub_pyfunction]
+#[pyfunction]
+pub fn update_constraint_id_counter(value: u64) -> u64 {
+    let new_value = value + 1;
+    let previous = CONSTRAINT_ID_COUNTER.fetch_max(new_value, Ordering::SeqCst);
+    previous.max(new_value)
+}
+
+/// Get current constraint ID counter value
+#[pyo3_stub_gen::derive::gen_stub_pyfunction]
+#[pyfunction]
+pub fn get_constraint_id_counter() -> u64 {
+    CONSTRAINT_ID_COUNTER.load(Ordering::SeqCst)
+}
 
 /// Constraint wrapper for Python
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
 pub struct Constraint(pub ommx::Constraint);
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Constraint {
+    /// Class constant for equality type: equal to zero (==)
+    #[classattr]
+    #[pyo3(name = "EQUAL_TO_ZERO")]
+    fn class_equal_to_zero() -> Equality {
+        Equality::EqualToZero
+    }
+
+    /// Class constant for equality type: less than or equal to zero (<=)
+    #[classattr]
+    #[pyo3(name = "LESS_THAN_OR_EQUAL_TO_ZERO")]
+    fn class_less_than_or_equal_to_zero() -> Equality {
+        Equality::LessThanOrEqualToZero
+    }
+
+    /// Create a new Constraint.
+    ///
+    /// **Args:**
+    ///
+    /// - `function`: The constraint function (int, float, DecisionVariable, Linear, Quadratic, Polynomial, or Function)
+    /// - `equality`: The equality type (EqualToZero or LessThanOrEqualToZero)
+    /// - `id`: Optional constraint ID (auto-generated if not provided)
+    /// - `name`: Optional name for the constraint
+    /// - `subscripts`: Optional subscripts for indexing
+    /// - `description`: Optional description
+    /// - `parameters`: Optional key-value parameters
     #[new]
-    #[pyo3(signature = (id, function, equality, name=None, subscripts=Vec::new(), description=None, parameters=HashMap::default()))]
+    #[pyo3(signature = (*, function, equality, id=None, name=None, subscripts=Vec::new(), description=None, parameters=HashMap::default()))]
     pub fn new(
-        id: u64,
         function: Function,
         equality: Equality,
+        id: Option<u64>,
         name: Option<String>,
         subscripts: Vec<i64>,
         description: Option<String>,
         parameters: HashMap<String, String>,
-    ) -> Result<Self> {
-        let constraint_id = ConstraintID::from(id);
+    ) -> PyResult<Self> {
+        let rust_function = function.0;
+
+        // Auto-generate ID if not provided
+        let constraint_id = match id {
+            Some(id_val) => {
+                // Update counter to ensure it's at least the given value
+                update_constraint_id_counter(id_val);
+                ConstraintID::from(id_val)
+            }
+            None => ConstraintID::from(next_constraint_id()),
+        };
+
         let rust_equality = equality.into();
 
         let constraint = ommx::Constraint {
             id: constraint_id,
-            function: function.0,
             equality: rust_equality,
-            name,
-            subscripts,
-            parameters: parameters.into_iter().collect(),
-            description,
+            metadata: ommx::ConstraintMetadata {
+                name,
+                subscripts,
+                parameters: parameters.into_iter().collect(),
+                description,
+            },
+            stage: ommx::CreatedData {
+                function: rust_function,
+            },
         };
 
         Ok(Self(constraint))
@@ -48,7 +122,7 @@ impl Constraint {
 
     #[getter]
     pub fn function(&self) -> Function {
-        Function(self.0.function.clone())
+        Function(self.0.stage.function.clone())
     }
 
     #[getter]
@@ -57,23 +131,24 @@ impl Constraint {
     }
 
     #[getter]
-    pub fn name(&self) -> String {
-        self.0.name.clone().unwrap_or_default()
+    pub fn name(&self) -> Option<String> {
+        self.0.metadata.name.clone()
     }
 
     #[getter]
     pub fn subscripts(&self) -> Vec<i64> {
-        self.0.subscripts.clone()
+        self.0.metadata.subscripts.clone()
     }
 
     #[getter]
-    pub fn description(&self) -> String {
-        self.0.description.clone().unwrap_or_default()
+    pub fn description(&self) -> Option<String> {
+        self.0.metadata.description.clone()
     }
 
     #[getter]
     pub fn parameters(&self) -> HashMap<String, String> {
         self.0
+            .metadata
             .parameters
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
@@ -81,69 +156,145 @@ impl Constraint {
     }
 
     #[staticmethod]
-    pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
-        Ok(Self(ommx::Constraint::from_bytes(bytes.as_bytes())?))
+    pub fn from_bytes(bytes: &Bound<PyBytes>) -> PyResult<Self> {
+        let constraint = <ommx::Constraint>::from_bytes(bytes.as_bytes())
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        // Update the ID counter to ensure new IDs don't conflict
+        update_constraint_id_counter(constraint.id.into_inner());
+        Ok(Self(constraint))
     }
 
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
         PyBytes::new(py, &self.0.to_bytes())
     }
 
-    pub fn evaluate<'py>(
-        &self,
-        py: Python<'py>,
-        state: &Bound<PyBytes>,
-    ) -> Result<Bound<'py, PyBytes>> {
-        let state = ommx::v1::State::decode(state.as_bytes())?;
-        let evaluated = self.0.evaluate(&state, ommx::ATol::default())?;
-        let v1_evaluated: ommx::v1::EvaluatedConstraint = evaluated.into();
-        Ok(PyBytes::new(py, &v1_evaluated.encode_to_vec()))
+    /// Evaluate the constraint with the given state.
+    ///
+    /// **Args:**
+    ///
+    /// - `state`: A State object, dict[int, float], or iterable of (int, float) tuples
+    /// - `atol`: Optional absolute tolerance for evaluation
+    ///
+    /// **Returns:** {class}`~ommx.v1.EvaluatedConstraint` containing the evaluated value and feasibility
+    #[pyo3(signature = (state, *, atol=None))]
+    pub fn evaluate(&self, state: State, atol: Option<f64>) -> PyResult<EvaluatedConstraint> {
+        let atol = match atol {
+            Some(value) => ommx::ATol::new(value)
+                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?,
+            None => ommx::ATol::default(),
+        };
+        let evaluated = self
+            .0
+            .evaluate(&state.0, atol)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        Ok(EvaluatedConstraint(evaluated))
     }
 
-    pub fn partial_evaluate<'py>(
-        &mut self,
-        py: Python<'py>,
-        state: &Bound<PyBytes>,
-    ) -> Result<Bound<'py, PyBytes>> {
-        let state = ommx::v1::State::decode(state.as_bytes())?;
-        self.0.partial_evaluate(&state, ommx::ATol::default())?;
-        let inner: ommx::v1::Constraint = self.0.clone().into();
-        Ok(PyBytes::new(py, &inner.encode_to_vec()))
+    /// Partially evaluate the constraint with the given state.
+    ///
+    /// This modifies self in-place and returns self for method chaining.
+    ///
+    /// **Args:**
+    ///
+    /// - `state`: A State object, dict[int, float], or iterable of (int, float) tuples
+    /// - `atol`: Optional absolute tolerance for evaluation
+    ///
+    /// **Returns:** Self (modified in-place) for method chaining
+    #[pyo3(signature = (state, *, atol=None))]
+    pub fn partial_evaluate(&mut self, state: State, atol: Option<f64>) -> PyResult<Self> {
+        let atol = match atol {
+            Some(value) => ommx::ATol::new(value)
+                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?,
+            None => ommx::ATol::default(),
+        };
+        self.0
+            .partial_evaluate(&state.0, atol)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        Ok(self.clone())
     }
 
     /// Set the name of the constraint
-    pub fn set_name(&mut self, name: String) {
-        self.0.name = Some(name);
+    /// Returns self for method chaining
+    pub fn set_name(&mut self, name: String) -> Self {
+        self.0.metadata.name = Some(name);
+        self.clone()
+    }
+
+    /// Alias for set_name (backward compatibility)
+    /// Returns self for method chaining
+    pub fn add_name(&mut self, name: String) -> Self {
+        self.set_name(name)
     }
 
     /// Set the subscripts of the constraint
-    pub fn set_subscripts(&mut self, subscripts: Vec<i64>) {
-        self.0.subscripts = subscripts;
+    /// Returns self for method chaining
+    pub fn set_subscripts(&mut self, subscripts: Vec<i64>) -> Self {
+        self.0.metadata.subscripts = subscripts;
+        self.clone()
     }
 
     /// Add subscripts to the constraint
-    pub fn add_subscripts(&mut self, subscripts: Vec<i64>) {
-        self.0.subscripts.extend(subscripts);
+    /// Returns self for method chaining
+    pub fn add_subscripts(&mut self, subscripts: Vec<i64>) -> Self {
+        self.0.metadata.subscripts.extend(subscripts);
+        self.clone()
     }
 
     /// Set the ID of the constraint
-    pub fn set_id(&mut self, id: u64) {
+    /// Returns self for method chaining
+    pub fn set_id(&mut self, id: u64) -> Self {
         self.0.id = ConstraintID::from(id);
+        self.clone()
     }
 
     /// Set the description of the constraint
-    pub fn set_description(&mut self, description: String) {
-        self.0.description = Some(description);
+    /// Returns self for method chaining
+    pub fn set_description(&mut self, description: String) -> Self {
+        self.0.metadata.description = Some(description);
+        self.clone()
+    }
+
+    /// Alias for set_description (backward compatibility)
+    /// Returns self for method chaining
+    pub fn add_description(&mut self, description: String) -> Self {
+        self.set_description(description)
     }
 
     /// Set the parameters of the constraint
-    pub fn set_parameters(&mut self, parameters: HashMap<String, String>) {
-        self.0.parameters = parameters.into_iter().collect();
+    /// Returns self for method chaining
+    pub fn set_parameters(&mut self, parameters: HashMap<String, String>) -> Self {
+        self.0.metadata.parameters = parameters.into_iter().collect();
+        self.clone()
+    }
+
+    /// Alias for set_parameters (backward compatibility)
+    /// Returns self for method chaining
+    pub fn add_parameters(&mut self, parameters: HashMap<String, String>) -> Self {
+        self.set_parameters(parameters)
     }
 
     /// Add a parameter to the constraint
-    pub fn add_parameter(&mut self, key: String, value: String) {
-        self.0.parameters.insert(key, value);
+    /// Returns self for method chaining
+    pub fn add_parameter(&mut self, key: String, value: String) -> Self {
+        self.0.metadata.parameters.insert(key, value);
+        self.clone()
+    }
+
+    /// Create an indicator constraint from this constraint.
+    ///
+    /// Returns an IndicatorConstraint where `indicator_variable = 1 → this constraint`.
+    pub fn with_indicator(
+        &self,
+        indicator_variable: &crate::DecisionVariable,
+    ) -> crate::IndicatorConstraint {
+        let mut ic = ommx::IndicatorConstraint::new(
+            ommx::IndicatorConstraintID::from(self.0.id.into_inner()),
+            indicator_variable.0.id(),
+            self.0.equality,
+            self.0.stage.function.clone(),
+        );
+        ic.metadata = self.0.metadata.clone();
+        crate::IndicatorConstraint(ic)
     }
 
     pub fn __repr__(&self) -> String {
@@ -163,12 +314,12 @@ impl Constraint {
 }
 
 /// RemovedConstraint wrapper for Python
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
 pub struct RemovedConstraint(pub ommx::RemovedConstraint);
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl RemovedConstraint {
     #[new]
@@ -179,11 +330,18 @@ impl RemovedConstraint {
         removed_reason_parameters: Option<HashMap<String, String>>,
     ) -> Self {
         let removed_constraint = ommx::RemovedConstraint {
-            constraint: constraint.0,
-            removed_reason,
-            removed_reason_parameters: removed_reason_parameters
-                .map(|params| params.into_iter().collect::<FnvHashMap<_, _>>())
-                .unwrap_or_default(),
+            id: constraint.0.id,
+            equality: constraint.0.equality,
+            metadata: constraint.0.metadata,
+            stage: ommx::RemovedData {
+                function: constraint.0.stage.function,
+                removed_reason: ommx::RemovedReason {
+                    reason: removed_reason,
+                    parameters: removed_reason_parameters
+                        .map(|params| params.into_iter().collect::<FnvHashMap<_, _>>())
+                        .unwrap_or_default(),
+                },
+            },
         };
 
         Self(removed_constraint)
@@ -191,18 +349,27 @@ impl RemovedConstraint {
 
     #[getter]
     pub fn constraint(&self) -> Constraint {
-        Constraint(self.0.constraint.clone())
+        Constraint(ommx::Constraint {
+            id: self.0.id,
+            equality: self.0.equality,
+            metadata: self.0.metadata.clone(),
+            stage: ommx::CreatedData {
+                function: self.0.stage.function.clone(),
+            },
+        })
     }
 
     #[getter]
     pub fn removed_reason(&self) -> String {
-        self.0.removed_reason.clone()
+        self.0.stage.removed_reason.reason.clone()
     }
 
     #[getter]
     pub fn removed_reason_parameters(&self) -> HashMap<String, String> {
         self.0
-            .removed_reason_parameters
+            .stage
+            .removed_reason
+            .parameters
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect()
@@ -210,17 +377,54 @@ impl RemovedConstraint {
 
     #[getter]
     pub fn id(&self) -> u64 {
-        self.0.constraint.id.into_inner()
+        self.0.id.into_inner()
     }
 
     #[getter]
-    pub fn name(&self) -> String {
-        self.0.constraint.name.clone().unwrap_or_default()
+    pub fn name(&self) -> Option<String> {
+        self.0.metadata.name.clone()
+    }
+
+    /// Get the equality type from the underlying constraint
+    #[getter]
+    pub fn equality(&self) -> Equality {
+        self.0.equality.into()
+    }
+
+    /// Get the function from the underlying constraint
+    #[getter]
+    pub fn function(&self) -> Function {
+        Function(self.0.stage.function.clone())
+    }
+
+    /// Get the description from the underlying constraint
+    #[getter]
+    pub fn description(&self) -> Option<String> {
+        self.0.metadata.description.clone()
+    }
+
+    /// Get the subscripts from the underlying constraint
+    #[getter]
+    pub fn subscripts(&self) -> Vec<i64> {
+        self.0.metadata.subscripts.clone()
+    }
+
+    /// Get the parameters from the underlying constraint
+    #[getter]
+    pub fn parameters(&self) -> HashMap<String, String> {
+        self.0
+            .metadata
+            .parameters
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
     }
 
     #[staticmethod]
-    pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
-        Ok(Self(ommx::RemovedConstraint::from_bytes(bytes.as_bytes())?))
+    pub fn from_bytes(bytes: &Bound<PyBytes>) -> PyResult<Self> {
+        ommx::RemovedConstraint::from_bytes(bytes.as_bytes())
+            .map(Self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
     }
 
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {

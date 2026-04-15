@@ -50,6 +50,59 @@ impl From<QuadraticMonomial> for MonomialDyn {
     }
 }
 
+impl serde::Serialize for MonomialDyn {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeTuple;
+        let mut tuple = serializer.serialize_tuple(self.0.len())?;
+        for id in self.0.iter() {
+            tuple.serialize_element(&id.into_inner())?;
+        }
+        tuple.end()
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for MonomialDyn {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct MonomialDynVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for MonomialDynVisitor {
+            type Value = MonomialDyn;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a variable ID (u64) or an array of variable IDs")
+            }
+
+            // When a plain integer is provided, treat it as a single-element monomial
+            fn visit_u64<E>(self, value: u64) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(MonomialDyn(smallvec::smallvec![value.into()]))
+            }
+
+            // Handle array inputs
+            fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                let mut ids = smallvec::SmallVec::new();
+                while let Some(id) = seq.next_element::<u64>()? {
+                    ids.push(id.into());
+                }
+                Ok(MonomialDyn(ids))
+            }
+        }
+
+        deserializer.deserialize_any(MonomialDynVisitor)
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 #[error("Cannot convert {degree}-degree monomial to {max_degree}-degree")]
 pub struct InvalidDegreeError {
@@ -564,6 +617,51 @@ mod tests {
                     prop_assert!(*id <= p.max_id);
                 }
             }
+        }
+    }
+
+    #[test]
+    fn test_monomial_dyn_serde() {
+        // Test empty monomial (Constant)
+        let constant = MonomialDyn::default();
+        let json = serde_json::to_string(&constant).unwrap();
+        assert_eq!(json, "[]");
+        let deserialized: MonomialDyn = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, constant);
+
+        // Test single variable from u64
+        let deserialized: MonomialDyn = serde_json::from_str("42").unwrap();
+        assert_eq!(deserialized, MonomialDyn(smallvec::smallvec![42.into()]));
+
+        // Test single variable from array
+        let single = MonomialDyn(smallvec::smallvec![42.into()]);
+        let json = serde_json::to_string(&single).unwrap();
+        assert_eq!(json, "[42]");
+        let deserialized: MonomialDyn = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, single);
+
+        // Test pair (quadratic)
+        let pair = MonomialDyn(smallvec::smallvec![3.into(), 5.into()]);
+        let json = serde_json::to_string(&pair).unwrap();
+        assert_eq!(json, "[3,5]");
+        let deserialized: MonomialDyn = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, pair);
+
+        // Test higher degree monomial
+        let high_degree = MonomialDyn(smallvec::smallvec![1.into(), 2.into(), 3.into(), 4.into()]);
+        let json = serde_json::to_string(&high_degree).unwrap();
+        assert_eq!(json, "[1,2,3,4]");
+        let deserialized: MonomialDyn = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, high_degree);
+
+        // Test round-trip for various sizes
+        for size in 0..10 {
+            let ids: smallvec::SmallVec<[VariableID; 3]> =
+                (0..size).map(|i| (i as u64).into()).collect();
+            let original = MonomialDyn(ids);
+            let serialized = serde_json::to_string(&original).unwrap();
+            let deserialized: MonomialDyn = serde_json::from_str(&serialized).unwrap();
+            assert_eq!(deserialized, original);
         }
     }
 }

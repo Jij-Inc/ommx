@@ -6,9 +6,9 @@ import ommx._ommx_rust as _ommx_rust
 
 def test_constraint_hints_constraint_id_validation():
     """Test that constraint hints validate referenced constraint IDs exist."""
-    decision_variables = {1: _ommx_rust.DecisionVariable.binary(1)}
+    decision_variables = [_ommx_rust.DecisionVariable.binary(1)]
     objective = _ommx_rust.Function.from_scalar(1.0)
-    constraints = {}  # Empty constraints
+    constraints = []  # Empty constraints
 
     # Create constraint hints that reference non-existent constraint ID
     one_hot = _ommx_rust.OneHot(id=999, variables=[1])  # ID 999 doesn't exist
@@ -29,7 +29,7 @@ def test_constraint_hints_constraint_id_validation():
 
 def test_constraint_hints_variable_id_validation():
     """Test that constraint hints validate referenced variable IDs exist."""
-    decision_variables = {1: _ommx_rust.DecisionVariable.binary(1)}
+    decision_variables = [_ommx_rust.DecisionVariable.binary(1)]
     objective = _ommx_rust.Function.from_scalar(1.0)
 
     # Create a constraint
@@ -37,7 +37,7 @@ def test_constraint_hints_variable_id_validation():
     constraint = _ommx_rust.Constraint(
         id=1, function=constraint_func, equality=_ommx_rust.Equality.EqualToZero
     )
-    constraints = {1: constraint}
+    constraints = [constraint]
 
     # Create constraint hints that reference non-existent variable ID
     one_hot = _ommx_rust.OneHot(id=1, variables=[1, 999])  # Variable 999 doesn't exist
@@ -58,12 +58,12 @@ def test_constraint_hints_variable_id_validation():
 
 def test_sos1_constraint_id_validation():
     """Test that SOS1 hints validate referenced constraint IDs exist."""
-    decision_variables = {
-        1: _ommx_rust.DecisionVariable.binary(1),
-        2: _ommx_rust.DecisionVariable.binary(2),
-    }
+    decision_variables = [
+        _ommx_rust.DecisionVariable.binary(1),
+        _ommx_rust.DecisionVariable.binary(2),
+    ]
     objective = _ommx_rust.Function.from_scalar(1.0)
-    constraints = {}  # Empty constraints
+    constraints = []  # Empty constraints
 
     # Create SOS1 hint that references non-existent constraint IDs
     sos1 = _ommx_rust.Sos1(
@@ -88,7 +88,7 @@ def test_sos1_constraint_id_validation():
 
 def test_sos1_variable_id_validation():
     """Test that SOS1 hints validate referenced variable IDs exist."""
-    decision_variables = {1: _ommx_rust.DecisionVariable.binary(1)}
+    decision_variables = [_ommx_rust.DecisionVariable.binary(1)]
     objective = _ommx_rust.Function.from_scalar(1.0)
 
     # Create required constraints
@@ -102,7 +102,7 @@ def test_sos1_variable_id_validation():
     big_m_constraint2 = _ommx_rust.Constraint(
         id=3, function=constraint_func, equality=_ommx_rust.Equality.EqualToZero
     )
-    constraints = {1: binary_constraint, 2: big_m_constraint1, 3: big_m_constraint2}
+    constraints = [binary_constraint, big_m_constraint1, big_m_constraint2]
 
     # Create SOS1 hint that references non-existent variable ID
     sos1 = _ommx_rust.Sos1(
@@ -128,11 +128,11 @@ def test_sos1_variable_id_validation():
 def test_valid_constraint_hints():
     """Test that valid constraint hints work correctly."""
     # Create decision variables
-    decision_variables = {
-        1: _ommx_rust.DecisionVariable.binary(1),
-        2: _ommx_rust.DecisionVariable.binary(2),
-        3: _ommx_rust.DecisionVariable.binary(3),
-    }
+    decision_variables = [
+        _ommx_rust.DecisionVariable.binary(1),
+        _ommx_rust.DecisionVariable.binary(2),
+        _ommx_rust.DecisionVariable.binary(3),
+    ]
 
     # Create objective
     objective = _ommx_rust.Function.from_scalar(1.0)
@@ -144,7 +144,7 @@ def test_valid_constraint_hints():
     constraint = _ommx_rust.Constraint(
         id=1, function=constraint_func, equality=_ommx_rust.Equality.EqualToZero
     )
-    constraints = {1: constraint}
+    constraints = [constraint]
 
     # Create valid constraint hints
     one_hot = _ommx_rust.OneHot(id=1, variables=[1, 2, 3])  # References constraint ID 1

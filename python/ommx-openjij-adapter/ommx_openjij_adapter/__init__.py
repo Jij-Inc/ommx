@@ -83,6 +83,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         penalty_weights: dict[int, float] = {},
         inequality_integer_slack_max_range: int = 32,
     ):
+        super().__init__(ommx_instance)
         self.ommx_instance = copy.deepcopy(ommx_instance)
         self.beta_min = beta_min
         self.beta_max = beta_max
@@ -287,17 +288,16 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
                 weights = {
                     p.id: self.penalty_weights[p.subscripts[0]] for p in pi.parameters
                 }
-                unconstrained = pi.with_parameters(weights)
+                self.ommx_instance = pi.with_parameters(weights)
             else:
                 if self.uniform_penalty_weight is None:
                     # If both are None, defaults to uniform_penalty_weight = 1.0
                     self.uniform_penalty_weight = 1.0
                 pi = self.ommx_instance.uniform_penalty_method()
                 weight = pi.parameters[0]
-                unconstrained = pi.with_parameters(
+                self.ommx_instance = pi.with_parameters(
                     {weight.id: self.uniform_penalty_weight}
                 )
-            self.ommx_instance.raw = unconstrained.raw
 
         self.ommx_instance.log_encode()
 
@@ -336,7 +336,9 @@ def decode_to_samples(response: oj.Response) -> Samples:
     num_reads = len(response.record.num_occurrences)
     for i in range(num_reads):
         sample = response.record.sample[i]
-        state = State(entries=zip(response.variables, sample))
+        # type: ignore because dimod.Variable lacks __int__ stub,
+        # so zip[tuple[Variable, Any]] doesn't match Iterable[tuple[int, float]]
+        state = State(entries=zip(response.variables, sample))  # type: ignore[arg-type]
         # `num_occurrences` is encoded into sample ID list.
         # For example, if `num_occurrences` is 2, there are two samples with the same state, thus two sample IDs are generated.
         ids = []

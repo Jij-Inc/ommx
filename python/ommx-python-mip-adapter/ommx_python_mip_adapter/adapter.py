@@ -4,7 +4,12 @@ from typing import Optional
 
 import mip
 
-from ommx.adapter import SolverAdapter, InfeasibleDetected, UnboundedDetected
+from ommx.adapter import (
+    SolverAdapter,
+    InfeasibleDetected,
+    UnboundedDetected,
+    NoSolutionReturned,
+)
 from ommx.v1 import Instance, Constraint, DecisionVariable, Solution, State, Function
 
 from .exception import OMMXPythonMIPAdapterError
@@ -27,6 +32,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         :param solver: Passes a specific solver to the Python-MIP model.
         :param verbose: If True, enable Python-MIP's verbose mode
         """
+        super().__init__(ommx_instance)
         if ommx_instance.sense == Instance.MAXIMIZE:
             sense = mip.MAXIMIZE
         elif ommx_instance.sense == Instance.MINIMIZE:
@@ -196,7 +202,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         be set _only_ if `relax=True` was passed to the constructor. There is no
         way for this adapter to get relaxation information from Python-MIP
         directly. If relaxing the model separately after obtaining it with
-        `solver_input`, you must set `solution.raw.relaxation` yourself if you
+        `solver_input`, you must set `solution.relaxation` yourself if you
         care about this value.
 
         Examples
@@ -224,18 +230,10 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             <OptimizationStatus.OPTIMAL: 0>
 
             >>> solution = adapter.decode(model)
-            >>> solution.raw.objective
+            >>> solution.objective
             42.0
 
         """
-        # TODO check if `optimize()` has been called
-
-        if data.status == mip.OptimizationStatus.INFEASIBLE:
-            raise InfeasibleDetected("Model was infeasible")
-
-        if data.status == mip.OptimizationStatus.UNBOUNDED:
-            raise UnboundedDetected("Model was unbounded")
-
         state = self.decode_to_state(data)
         solution = self.instance.evaluate(state)
 
@@ -285,12 +283,27 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             >>> ommx_state.entries
             {1: 0.0}
         """
+        if data.status == mip.OptimizationStatus.LOADED:
+            raise OMMXPythonMIPAdapterError(
+                "The model may not be optimized. [status: LOADED]"
+            )
+
+        if data.status == mip.OptimizationStatus.INFEASIBLE:
+            raise InfeasibleDetected("Model was infeasible")
+
+        if data.status == mip.OptimizationStatus.UNBOUNDED:
+            raise UnboundedDetected("Model was unbounded")
+
+        if data.status == mip.OptimizationStatus.NO_SOLUTION_FOUND:
+            raise NoSolutionReturned("No solution was returned during the search")
+
+        # Catch all other statuses (CUTOFF, ERROR, INT_INFEASIBLE, etc.)
         if not (
             data.status == mip.OptimizationStatus.OPTIMAL
             or data.status == mip.OptimizationStatus.FEASIBLE
         ):
             raise OMMXPythonMIPAdapterError(
-                " The model's `status` must be `OPTIMAL` or `FEASIBLE`."
+                f"Optimization ended with status: {data.status.name}"
             )
 
         return State(

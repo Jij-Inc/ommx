@@ -18,17 +18,12 @@ impl Substitute for Instance {
         // Identify constraint IDs that depend on substituted variables
         let mut affected_constraint_ids = std::collections::BTreeSet::new();
 
-        // Check active constraints
-        for (constraint_id, constraint) in &self.constraints {
+        // Check active constraints only.
+        // Removed constraints are not checked here; they will be substituted
+        // when restored via `restore_constraint`. Constraint hints for removed
+        // constraints are discarded when the constraint is removed.
+        for (constraint_id, constraint) in self.constraint_collection.active() {
             let required_ids = constraint.required_ids();
-            if !required_ids.is_disjoint(&substituted_variables) {
-                affected_constraint_ids.insert(*constraint_id);
-            }
-        }
-
-        // Check removed constraints
-        for (constraint_id, removed_constraint) in &self.removed_constraints {
-            let required_ids = removed_constraint.constraint.required_ids();
             if !required_ids.is_disjoint(&substituted_variables) {
                 affected_constraint_ids.insert(*constraint_id);
             }
@@ -37,14 +32,43 @@ impl Substitute for Instance {
         // Apply substitution to the objective function
         substitute_acyclic(&mut self.objective, acyclic)?;
 
-        // Apply substitution to all constraints
-        for constraint in self.constraints.values_mut() {
-            substitute_acyclic(&mut constraint.function, acyclic)?;
+        // Apply substitution only to affected active constraints.
+        // Removed constraints are not substituted here; they will be substituted
+        // when restored via `restore_constraint`.
+        for constraint_id in &affected_constraint_ids {
+            if let Some(constraint) = self
+                .constraint_collection
+                .active_mut()
+                .get_mut(constraint_id)
+            {
+                substitute_acyclic(&mut constraint.stage.function, acyclic)?;
+            }
         }
 
-        // Apply substitution to all removed constraints
-        for removed_constraint in self.removed_constraints.values_mut() {
-            substitute_acyclic(&mut removed_constraint.constraint.function, acyclic)?;
+        // Check that no indicator constraint's indicator_variable is being substituted.
+        // Substituting an indicator variable would change the constraint type
+        // (e.g. fixing it to 1 makes it a regular constraint, fixing to 0 removes it).
+        // This is not yet supported; fail explicitly rather than silently producing
+        // an inconsistent result.
+        for ic in self.indicator_constraint_collection.active().values() {
+            if substituted_variables.contains(&ic.indicator_variable) {
+                return Err(SubstitutionError::IndicatorVariableSubstitution {
+                    indicator_variable: ic.indicator_variable,
+                    constraint_id: ic.id,
+                });
+            }
+        }
+
+        // Apply substitution to the function part of active indicator constraints
+        for ic in self
+            .indicator_constraint_collection
+            .active_mut()
+            .values_mut()
+        {
+            let required_ids = ic.stage.function.required_ids();
+            if !required_ids.is_disjoint(&substituted_variables) {
+                substitute_acyclic(&mut ic.stage.function, acyclic)?;
+            }
         }
 
         // Apply substitution to the existing decision_variable_dependency
@@ -109,12 +133,11 @@ mod tests {
         let mut constraints = BTreeMap::new();
         let constraint = Constraint {
             id: ConstraintID::from(1),
-            function: constraint_function,
             equality: Equality::LessThanOrEqualToZero,
-            name: None,
-            subscripts: Vec::new(),
-            parameters: Default::default(),
-            description: None,
+            metadata: crate::constraint::ConstraintMetadata::default(),
+            stage: crate::constraint::CreatedData {
+                function: constraint_function,
+            },
         };
         constraints.insert(ConstraintID::from(1), constraint);
         let _constraint_hints = ConstraintHints::default();
@@ -158,12 +181,11 @@ mod tests {
         let constraint1_function = Function::from(linear!(1) + linear!(2) + coeff!(-1.0));
         let constraint1 = Constraint {
             id: ConstraintID::from(1),
-            function: constraint1_function,
             equality: Equality::EqualToZero,
-            name: None,
-            subscripts: Vec::new(),
-            parameters: Default::default(),
-            description: None,
+            metadata: crate::constraint::ConstraintMetadata::default(),
+            stage: crate::constraint::CreatedData {
+                function: constraint1_function,
+            },
         };
         constraints.insert(ConstraintID::from(1), constraint1);
 
@@ -171,12 +193,11 @@ mod tests {
         let constraint2_function = Function::from(linear!(2) + linear!(3) + coeff!(-1.0));
         let constraint2 = Constraint {
             id: ConstraintID::from(2),
-            function: constraint2_function,
             equality: Equality::EqualToZero,
-            name: None,
-            subscripts: Vec::new(),
-            parameters: Default::default(),
-            description: None,
+            metadata: crate::constraint::ConstraintMetadata::default(),
+            stage: crate::constraint::CreatedData {
+                function: constraint2_function,
+            },
         };
         constraints.insert(ConstraintID::from(2), constraint2);
 
@@ -262,31 +283,28 @@ mod tests {
         let constraint1_function = Function::from(linear!(1) + linear!(2) + coeff!(-1.0));
         let constraint1 = Constraint {
             id: ConstraintID::from(1),
-            function: constraint1_function,
             equality: Equality::EqualToZero,
-            name: None,
-            subscripts: Vec::new(),
-            parameters: Default::default(),
-            description: None,
+            metadata: crate::constraint::ConstraintMetadata::default(),
+            stage: crate::constraint::CreatedData {
+                function: constraint1_function,
+            },
         };
         constraints.insert(ConstraintID::from(1), constraint1);
 
         // Create removed constraint that depends on x1: x1 + x3 == 1 (constraint_id=2)
         let mut removed_constraints = BTreeMap::new();
         let removed_constraint_function = Function::from(linear!(1) + linear!(3) + coeff!(-1.0));
-        let removed_constraint_inner = Constraint {
-            id: ConstraintID::from(2),
-            function: removed_constraint_function,
-            equality: Equality::EqualToZero,
-            name: None,
-            subscripts: Vec::new(),
-            parameters: Default::default(),
-            description: None,
-        };
         let removed_constraint = RemovedConstraint {
-            constraint: removed_constraint_inner,
-            removed_reason: "test".to_string(),
-            removed_reason_parameters: Default::default(),
+            id: ConstraintID::from(2),
+            equality: Equality::EqualToZero,
+            metadata: crate::constraint::ConstraintMetadata::default(),
+            stage: crate::constraint::RemovedData {
+                function: removed_constraint_function,
+                removed_reason: crate::constraint::RemovedReason {
+                    reason: "test".to_string(),
+                    parameters: Default::default(),
+                },
+            },
         };
         removed_constraints.insert(ConstraintID::from(2), removed_constraint);
 
@@ -312,12 +330,15 @@ mod tests {
         // Create objective
         let objective = Function::from(linear!(1) + linear!(2) + linear!(3));
 
-        // Create instance directly since new() only accepts active constraints
-        let mut instance =
-            Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
-
-        // Manually set removed constraints and constraint hints
-        instance.removed_constraints = removed_constraints;
+        // Create instance with both active and removed constraints
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(objective)
+            .decision_variables(decision_variables)
+            .constraints(constraints)
+            .removed_constraints(removed_constraints)
+            .build()
+            .unwrap();
         instance.constraint_hints = constraint_hints;
 
         // Before substitution, verify we have 2 OneHot constraints
@@ -330,9 +351,119 @@ mod tests {
             .unwrap();
 
         // After substitution:
-        // Both OneHot constraints should be removed because:
-        // - constraint1 (active) depends on x1
-        // - constraint2 (removed) also depends on x1
-        assert_eq!(result.constraint_hints.one_hot_constraints.len(), 0);
+        // Only the OneHot constraint for the active constraint is removed.
+        // The hint for the removed constraint remains (it should have been
+        // discarded when the constraint was removed, not during substitution).
+        assert_eq!(result.constraint_hints.one_hot_constraints.len(), 1);
+        assert_eq!(
+            result.constraint_hints.one_hot_constraints[0].id,
+            ConstraintID::from(2)
+        );
+    }
+
+    #[test]
+    fn test_substitute_indicator_function() {
+        // Substituting a variable in the indicator's function should work
+        let mut decision_variables = BTreeMap::new();
+        decision_variables.insert(
+            VariableID::from(1),
+            DecisionVariable::continuous(VariableID::from(1)),
+        );
+        decision_variables.insert(
+            VariableID::from(2),
+            DecisionVariable::continuous(VariableID::from(2)),
+        );
+        decision_variables.insert(
+            VariableID::from(10),
+            DecisionVariable::binary(VariableID::from(10)),
+        );
+
+        let objective = Function::from(linear!(1));
+
+        let mut indicator_constraints = BTreeMap::new();
+        indicator_constraints.insert(
+            crate::IndicatorConstraintID::from(1),
+            crate::IndicatorConstraint::new(
+                crate::IndicatorConstraintID::from(1),
+                VariableID::from(10),
+                Equality::LessThanOrEqualToZero,
+                Function::from(linear!(1) + coeff!(-5.0)),
+            ),
+        );
+
+        let instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(objective)
+            .decision_variables(decision_variables)
+            .constraints(BTreeMap::new())
+            .indicator_constraints(indicator_constraints)
+            .build()
+            .unwrap();
+
+        // Substitute x1 = x2 + 1
+        let assignments = crate::AcyclicAssignments::new(vec![(
+            VariableID::from(1),
+            Function::from(linear!(2) + coeff!(1.0)),
+        )])
+        .unwrap();
+
+        let result = instance.substitute_acyclic(&assignments).unwrap();
+
+        // Indicator constraint should still exist with substituted function
+        assert_eq!(result.indicator_constraints().len(), 1);
+    }
+
+    #[test]
+    fn test_substitute_indicator_variable_fails() {
+        // Substituting the indicator variable itself should fail
+        let mut decision_variables = BTreeMap::new();
+        decision_variables.insert(
+            VariableID::from(1),
+            DecisionVariable::continuous(VariableID::from(1)),
+        );
+        decision_variables.insert(
+            VariableID::from(10),
+            DecisionVariable::binary(VariableID::from(10)),
+        );
+
+        let objective = Function::from(linear!(1));
+
+        let mut indicator_constraints = BTreeMap::new();
+        indicator_constraints.insert(
+            crate::IndicatorConstraintID::from(1),
+            crate::IndicatorConstraint::new(
+                crate::IndicatorConstraintID::from(1),
+                VariableID::from(10),
+                Equality::LessThanOrEqualToZero,
+                Function::from(linear!(1) + coeff!(-5.0)),
+            ),
+        );
+
+        let instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(objective)
+            .decision_variables(decision_variables)
+            .constraints(BTreeMap::new())
+            .indicator_constraints(indicator_constraints)
+            .build()
+            .unwrap();
+
+        // Try to substitute the indicator variable x10
+        let assignments = crate::AcyclicAssignments::new(vec![(
+            VariableID::from(10),
+            Function::from(coeff!(1.0)),
+        )])
+        .unwrap();
+
+        let result = instance.substitute_acyclic(&assignments);
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            SubstitutionError::IndicatorVariableSubstitution {
+                indicator_variable,
+                constraint_id,
+            } if indicator_variable == VariableID::from(10)
+                && constraint_id == crate::IndicatorConstraintID::from(1)
+        ));
     }
 }

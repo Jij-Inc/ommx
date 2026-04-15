@@ -3,15 +3,20 @@
 # See https://docs.readthedocs.io/en/stable/config-file/v2.html for details
 
 version: 2
+
+sphinx:
+  configuration: docs/en/conf.py
+
 build:
   os: ubuntu-24.04
   tools:
-    python: "3.11"
+    python: "3.12"
   jobs:
-    pre_build:
-      - "jupyter-book config sphinx docs/en"
-sphinx:
-  configuration: docs/en/conf.py
-python:
-  install:
-    - requirements: requirements.txt
+    pre_create_environment:
+      - asdf plugin add uv
+      - asdf install uv latest
+      - asdf global uv latest
+    create_environment:
+      - uv venv "${READTHEDOCS_VIRTUALENV_PATH}"
+    install:
+      - UV_PROJECT_ENVIRONMENT="${READTHEDOCS_VIRTUALENV_PATH}" uv sync --frozen --only-group docs
