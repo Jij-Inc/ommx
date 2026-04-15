@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_arguments)] // PyO3 functions often have many arguments, and it's not worth refactoring them to avoid this warning.
+
 mod annotations;
 mod artifact;
 mod bound;
