@@ -522,6 +522,21 @@ impl Solution {
         )
     }
 
+    /// DataFrame of evaluated indicator constraints
+    ///
+    /// Columns: id (index), indicator_variable_id, equality, value, indicator_active, used_ids, name, subscripts, description
+    #[getter]
+    pub fn indicator_constraints_df<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        entries_to_dataframe(
+            py,
+            self.inner.evaluated_indicator_constraints().values(),
+            "id",
+        )
+    }
+
     /// DataFrame of evaluated named functions
     ///
     /// Columns: id (index), value, used_ids, name, subscripts, description, parameters.{key}

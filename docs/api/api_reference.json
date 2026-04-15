@@ -16796,6 +16796,17 @@
               "is_readonly": true
             },
             {
+              "name": "indicator_constraints_df",
+              "doc": "DataFrame of indicator constraints with per-sample value, feasibility, and indicator_active columns.\nStatic columns: id, indicator_variable_id, equality, used_ids, name, subscripts, description.\nDynamic columns: value.{sample_id}, feasible.{sample_id}, indicator_active.{sample_id} for each sample.",
+              "type_": {
+                "display": "DataFrame",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "instance",
               "doc": "",
               "type_": {
@@ -18651,6 +18662,17 @@
               "doc": "Feasibility of the solution in terms of all constraints, including relaxed (removed) constraints.",
               "type_": {
                 "display": "bool",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "indicator_constraints_df",
+              "doc": "DataFrame of evaluated indicator constraints\n\nColumns: id (index), indicator_variable_id, equality, value, indicator_active, used_ids, name, subscripts, description",
+              "type_": {
+                "display": "DataFrame",
                 "link_target": null,
                 "children": []
               },

@@ -625,6 +625,28 @@ impl SampleSet {
         )
     }
 
+    /// DataFrame of indicator constraints with per-sample value, feasibility, and indicator_active columns.
+    /// Static columns: id, indicator_variable_id, equality, used_ids, name, subscripts, description.
+    /// Dynamic columns: value.{sample_id}, feasible.{sample_id}, indicator_active.{sample_id} for each sample.
+    #[getter]
+    pub fn indicator_constraints_df<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let sample_ids = sorted_sample_ids(&self.inner);
+        entries_to_dataframe(
+            py,
+            self.inner
+                .indicator_constraints()
+                .values()
+                .map(|item| WithSampleIds {
+                    item,
+                    sample_ids: &sample_ids,
+                }),
+            "id",
+        )
+    }
+
     /// DataFrame of named functions with per-sample value columns.
     /// Static columns: id, used_ids, name, subscripts, description, parameters.
     /// Dynamic columns: one per sample_id (int) with the function's evaluated value.
