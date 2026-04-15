@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Any
-from ommx.v1 import Instance, Solution, SampleSet
+from ommx.v1 import Instance, Solution, SampleSet, AdditionalCapability
 
 
 SolverInput = Any
@@ -13,12 +13,25 @@ class SolverAdapter(ABC):
     """
     An abstract interface for OMMX Solver Adapters, defining how solvers should be used with OMMX.
 
-    See the `implementation guide <https://jij-inc.github.io/ommx/en/user_guide/solver_adapter.html>`_ for more details.
+    See the `implementation guide <https://jij-inc-ommx.readthedocs-hosted.com/en/latest/tutorial/implement_adapter.html>`_ for more details.
+
+    Subclasses should set ``ADDITIONAL_CAPABILITIES`` to declare which non-standard
+    constraint types they can handle. Standard constraints are always supported.
+
+    Available capabilities:
+
+    - ``AdditionalCapability.Indicator``: binvar = 1 → f(x) <= 0
+
+    The default is an empty set (standard constraints only).
+    Subclasses must call ``super().__init__(ommx_instance)`` to enable
+    automatic constraint capability checking.
     """
 
-    @abstractmethod
+    ADDITIONAL_CAPABILITIES: frozenset[AdditionalCapability] = frozenset()
+
     def __init__(self, ommx_instance: Instance):
-        pass
+        """Check constraint capabilities. Subclasses must call super().__init__()."""
+        ommx_instance.check_capabilities(set(self.ADDITIONAL_CAPABILITIES))
 
     @classmethod
     @abstractmethod
@@ -39,7 +52,7 @@ class SamplerAdapter(SolverAdapter):
     """
     An abstract interface for OMMX Sampler Adapters, defining how samplers should be used with OMMX.
 
-    See the `implementation guide <https://jij-inc.github.io/ommx/en/user_guide/solver_adapter.html>`_ for more details.
+    See the `implementation guide <https://jij-inc-ommx.readthedocs-hosted.com/en/latest/tutorial/implement_adapter.html>`_ for more details.
     """
 
     @classmethod

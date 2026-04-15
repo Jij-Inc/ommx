@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_arguments)] // PyO3 functions often have many arguments, and it's not worth refactoring them to avoid this warning.
+
 mod annotations;
 mod artifact;
 mod bound;
@@ -12,6 +14,7 @@ mod evaluated_constraint;
 mod evaluated_decision_variable;
 mod evaluated_named_function;
 mod function;
+mod indicator_constraint;
 mod instance;
 mod linear;
 mod named_function;
@@ -43,6 +46,7 @@ pub use evaluated_constraint::*;
 pub use evaluated_decision_variable::*;
 pub use evaluated_named_function::*;
 pub use function::*;
+pub use indicator_constraint::*;
 pub use instance::*;
 pub use linear::*;
 pub use named_function::*;
@@ -101,7 +105,9 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<DecisionVariableAnalysis>()?;
     m.add_class::<DecisionVariable>()?;
     m.add_class::<Parameter>()?;
+    m.add_class::<AdditionalCapability>()?;
     m.add_class::<Constraint>()?;
+    m.add_class::<IndicatorConstraint>()?;
     m.add_class::<NamedFunction>()?;
     m.add_class::<RemovedConstraint>()?;
     m.add_class::<OneHot>()?;
@@ -172,8 +178,11 @@ pyo3_stub_gen::reexport_module_members!("ommx.v1" from "ommx._ommx_rust";
     // Decision variable and parameter
     "DecisionVariable",
     "Parameter",
+    // Constraint capability
+    "AdditionalCapability",
     // Constraint and named function
     "Constraint",
+    "IndicatorConstraint",
     "RemovedConstraint",
     "NamedFunction",
     // Constraint hints

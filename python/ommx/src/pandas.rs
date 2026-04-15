@@ -276,6 +276,30 @@ impl ToPandasEntry for ommx::Constraint {
     }
 }
 
+impl ToPandasEntry for ommx::IndicatorConstraint {
+    fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let dict = PyDict::new(py);
+        dict.set_item("id", self.id.into_inner())?;
+        dict.set_item(
+            "indicator_variable_id",
+            self.indicator_variable.into_inner(),
+        )?;
+        set_equality(&dict, self.equality)?;
+        set_function_type(&dict, &self.stage.function)?;
+        // Include indicator_variable in used_ids
+        let mut used_ids = self.stage.function.required_ids();
+        used_ids.insert(self.indicator_variable);
+        set_used_ids(&dict, &used_ids)?;
+        set_metadata(
+            &dict,
+            self.metadata.name.as_deref(),
+            &self.metadata.subscripts,
+            self.metadata.description.as_deref(),
+        )?;
+        Ok(dict)
+    }
+}
+
 impl ToPandasEntry for ommx::RemovedConstraint {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let dict = PyDict::new(py);

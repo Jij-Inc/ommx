@@ -3,9 +3,12 @@ mod parse;
 mod serialize;
 
 use crate::{
-    ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable, EvaluatedNamedFunction,
-    NamedFunctionID, SampleID, SampleIDSet, Sampled, SampledConstraint, SampledDecisionVariable,
-    SampledNamedFunction, Sense, Solution, UnknownSampleIDError, VariableID,
+    constraint_type::{SampledCollection, SampledConstraintBehavior},
+    indicator_constraint::IndicatorConstraint,
+    Constraint, ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable,
+    EvaluatedNamedFunction, NamedFunctionID, SampleID, SampleIDSet, Sampled, SampledConstraint,
+    SampledDecisionVariable, SampledNamedFunction, Sense, Solution, UnknownSampleIDError,
+    VariableID,
 };
 use getset::Getters;
 use std::collections::BTreeMap;
@@ -85,6 +88,12 @@ pub enum SampleSetError {
         value_id: ConstraintID,
     },
 
+    #[error("Indicator constraint key {key:?} does not match value's id {value_id:?}")]
+    InconsistentIndicatorConstraintID {
+        key: crate::IndicatorConstraintID,
+        value_id: crate::IndicatorConstraintID,
+    },
+
     #[error("Named function key {key:?} does not match value's id {value_id:?}")]
     InconsistentNamedFunctionID {
         key: NamedFunctionID,
@@ -110,7 +119,9 @@ pub struct SampleSet {
     #[getset(get = "pub")]
     objectives: Sampled<f64>,
     #[getset(get = "pub")]
-    constraints: BTreeMap<ConstraintID, SampledConstraint>,
+    constraints: SampledCollection<Constraint>,
+    #[getset(get = "pub")]
+    indicator_constraints: SampledCollection<IndicatorConstraint>,
     #[getset(get = "pub")]
     named_functions: BTreeMap<NamedFunctionID, SampledNamedFunction>,
     #[getset(get = "pub")]
@@ -203,9 +214,17 @@ impl SampleSet {
         // Get evaluated constraints
         let mut evaluated_constraints: BTreeMap<ConstraintID, EvaluatedConstraint> =
             BTreeMap::default();
-        for (constraint_id, constraint) in &self.constraints {
+        for (constraint_id, constraint) in self.constraints.iter() {
             let evaluated_constraint = constraint.get(sample_id)?;
             evaluated_constraints.insert(*constraint_id, evaluated_constraint);
+        }
+
+        // Get evaluated indicator constraints
+        let mut evaluated_indicator_constraints = BTreeMap::default();
+        for (constraint_id, constraint) in self.indicator_constraints.iter() {
+            use crate::constraint_type::SampledConstraintBehavior;
+            let evaluated = constraint.get(sample_id)?;
+            evaluated_indicator_constraints.insert(*constraint_id, evaluated);
         }
 
         // Get evaluated named functions
@@ -223,6 +242,7 @@ impl SampleSet {
             Solution::builder()
                 .objective(objective)
                 .evaluated_constraints(evaluated_constraints)
+                .evaluated_indicator_constraints(evaluated_indicator_constraints)
                 .evaluated_named_functions(evaluated_named_functions)
                 .decision_variables(decision_variables)
                 .sense(sense)
@@ -303,7 +323,8 @@ impl SampleSet {
 pub struct SampleSetBuilder {
     decision_variables: Option<BTreeMap<VariableID, SampledDecisionVariable>>,
     objectives: Option<Sampled<f64>>,
-    constraints: Option<BTreeMap<ConstraintID, SampledConstraint>>,
+    constraints: Option<SampledCollection<Constraint>>,
+    indicator_constraints: SampledCollection<IndicatorConstraint>,
     named_functions: BTreeMap<NamedFunctionID, SampledNamedFunction>,
     sense: Option<Sense>,
 }
@@ -331,7 +352,19 @@ impl SampleSetBuilder {
 
     /// Sets the constraints.
     pub fn constraints(mut self, constraints: BTreeMap<ConstraintID, SampledConstraint>) -> Self {
-        self.constraints = Some(constraints);
+        self.constraints = Some(SampledCollection::new(constraints));
+        self
+    }
+
+    /// Sets the indicator constraints.
+    pub fn indicator_constraints(
+        mut self,
+        indicator_constraints: BTreeMap<
+            crate::IndicatorConstraintID,
+            crate::indicator_constraint::SampledIndicatorConstraint,
+        >,
+    ) -> Self {
+        self.indicator_constraints = SampledCollection::new(indicator_constraints);
         self
     }
 
@@ -387,9 +420,18 @@ impl SampleSetBuilder {
             }
         }
 
-        for (key, value) in &constraints {
+        for (key, value) in constraints.iter() {
             if *key != value.id {
                 return Err(SampleSetError::InconsistentConstraintID {
+                    key: *key,
+                    value_id: value.id,
+                });
+            }
+        }
+
+        for (key, value) in self.indicator_constraints.iter() {
+            if *key != value.id {
+                return Err(SampleSetError::InconsistentIndicatorConstraintID {
                     key: *key,
                     value_id: value.id,
                 });
@@ -430,6 +472,19 @@ impl SampleSetBuilder {
             }
         }
 
+        for sampled_ic in self.indicator_constraints.values() {
+            if !sampled_ic
+                .stage
+                .evaluated_values
+                .has_same_ids(&objective_sample_ids)
+            {
+                return Err(SampleSetError::InconsistentSampleIDs {
+                    expected: objective_sample_ids.clone(),
+                    found: sampled_ic.stage.evaluated_values.ids(),
+                });
+            }
+        }
+
         for sampled_named_function in self.named_functions.values() {
             if !sampled_named_function
                 .evaluated_values()
@@ -442,14 +497,18 @@ impl SampleSetBuilder {
             }
         }
 
-        // Compute feasibility
-        let (feasible, feasible_relaxed) =
-            Self::compute_feasibility(&constraints, &objective_sample_ids);
+        // Compute feasibility (considers both regular and indicator constraints)
+        let (feasible, feasible_relaxed) = Self::compute_feasibility(
+            &constraints,
+            &self.indicator_constraints,
+            &objective_sample_ids,
+        );
 
         Ok(SampleSet {
             decision_variables,
             objectives,
             constraints,
+            indicator_constraints: self.indicator_constraints,
             named_functions: self.named_functions,
             sense,
             feasible,
@@ -494,13 +553,17 @@ impl SampleSetBuilder {
             .ok_or(SampleSetError::MissingRequiredField { field: "sense" })?;
 
         let objective_sample_ids = objectives.ids();
-        let (feasible, feasible_relaxed) =
-            Self::compute_feasibility(&constraints, &objective_sample_ids);
+        let (feasible, feasible_relaxed) = Self::compute_feasibility(
+            &constraints,
+            &self.indicator_constraints,
+            &objective_sample_ids,
+        );
 
         Ok(SampleSet {
             decision_variables,
             objectives,
             constraints,
+            indicator_constraints: self.indicator_constraints,
             named_functions: self.named_functions,
             sense,
             feasible,
@@ -509,36 +572,21 @@ impl SampleSetBuilder {
     }
 
     fn compute_feasibility(
-        constraints: &BTreeMap<ConstraintID, SampledConstraint>,
+        constraints: &SampledCollection<Constraint>,
+        indicator_constraints: &SampledCollection<IndicatorConstraint>,
         sample_ids: &SampleIDSet,
     ) -> (BTreeMap<SampleID, bool>, BTreeMap<SampleID, bool>) {
         let mut feasible = BTreeMap::new();
         let mut feasible_relaxed = BTreeMap::new();
 
         for sample_id in sample_ids {
-            let is_feasible = constraints.values().all(|constraint| {
-                constraint
-                    .stage
-                    .feasible
-                    .get(sample_id)
-                    .copied()
-                    .unwrap_or(false)
-            });
+            let f = constraints.is_feasible_for(*sample_id)
+                && indicator_constraints.is_feasible_for(*sample_id);
+            let fr = constraints.is_feasible_relaxed_for(*sample_id)
+                && indicator_constraints.is_feasible_relaxed_for(*sample_id);
 
-            let is_feasible_relaxed = constraints
-                .values()
-                .filter(|constraint| constraint.stage.removed_reason.is_none())
-                .all(|constraint| {
-                    constraint
-                        .stage
-                        .feasible
-                        .get(sample_id)
-                        .copied()
-                        .unwrap_or(false)
-                });
-
-            feasible.insert(*sample_id, is_feasible);
-            feasible_relaxed.insert(*sample_id, is_feasible_relaxed);
+            feasible.insert(*sample_id, f);
+            feasible_relaxed.insert(*sample_id, fr);
         }
 
         (feasible, feasible_relaxed)

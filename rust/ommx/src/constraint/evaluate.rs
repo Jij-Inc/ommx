@@ -144,7 +144,7 @@ impl Evaluate for RemovedConstraint {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{random::*, v1::Samples};
+    use crate::{constraint_type::SampledConstraintBehavior, random::*, v1::Samples};
     use proptest::prelude::*;
 
     fn constraint_and_samples() -> impl Strategy<Value = (Constraint<Created>, Samples)> {

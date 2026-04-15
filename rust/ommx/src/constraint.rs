@@ -232,33 +232,6 @@ impl From<EvaluatedConstraint> for crate::v1::EvaluatedConstraint {
 pub type SampledConstraint = Constraint<stage::Sampled>;
 
 impl SampledConstraint {
-    /// Get an evaluated constraint for a specific sample ID
-    pub fn get(&self, sample_id: SampleID) -> Result<EvaluatedConstraint, UnknownSampleIDError> {
-        let evaluated_value = *self.stage.evaluated_values.get(sample_id)?;
-
-        let dual_variable = self
-            .stage
-            .dual_variables
-            .as_ref()
-            .and_then(|duals| duals.get(sample_id).ok())
-            .copied();
-
-        let feasible = *self.stage.feasible.get(&sample_id).unwrap_or(&false);
-
-        Ok(EvaluatedConstraint {
-            id: self.id,
-            equality: self.equality,
-            metadata: self.metadata.clone(),
-            stage: EvaluatedData {
-                evaluated_value,
-                dual_variable,
-                feasible,
-                used_decision_variable_ids: self.stage.used_decision_variable_ids.clone(),
-                removed_reason: self.stage.removed_reason.clone(),
-            },
-        })
-    }
-
     /// Check feasibility for a specific sample
     pub fn is_feasible(
         &self,

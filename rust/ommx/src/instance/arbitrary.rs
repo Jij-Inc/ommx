@@ -241,6 +241,7 @@ impl Arbitrary for Instance {
                                     decision_variables,
                                     constraint_hints: Default::default(),
                                     parameters: Default::default(),
+                                    indicator_constraint_collection: Default::default(),
                                     decision_variable_dependency: Default::default(),
                                     description: None,
                                 }

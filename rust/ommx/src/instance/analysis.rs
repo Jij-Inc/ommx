@@ -267,6 +267,9 @@ impl Instance {
         for constraint in self.constraints().values() {
             used.extend(constraint.function().required_ids());
         }
+        for ic in self.indicator_constraints().values() {
+            used.extend(ic.required_ids());
+        }
         // Note: named_functions are intentionally excluded from the "used" set.
         // They are auxiliary quantities that can reference fixed/dependent variables.
         used

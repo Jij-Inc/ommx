@@ -1,13 +1,30 @@
 //! Type family for constraint types.
 //!
-//! Each constraint type's Created form (e.g. `Constraint`, `IndicatorConstraint`)
+//! Each constraint type's Created form (e.g. [`Constraint`], [`IndicatorConstraint`])
 //! implements [`ConstraintType`], mapping lifecycle stages to concrete types.
 //!
 //! This is a defunctionalization of `Stage → Type` since Rust lacks higher-kinded types.
+//!
+//! # Adding new constraint types
+//!
+//! To add a new constraint type (e.g. Disjunction, SOS1, OneHot):
+//!
+//! 1. Define a new struct `NewConstraint<S: Stage<Self> = Created>` with common fields
+//!    (`id`, `equality`, `metadata`, `stage`) plus type-specific fields.
+//! 2. Implement `Stage<NewConstraint<S>>` for each stage marker (reuse `CreatedData`,
+//!    `RemovedData`, etc. if the stage data is the same as regular constraints).
+//! 3. Implement `ConstraintType for NewConstraint` mapping all four stages.
+//! 4. Implement `Evaluate` for `NewConstraint<Created>` and `NewConstraint<Removed>`.
+//! 5. Add a `ConstraintCollection<NewConstraint>` field to [`Instance`].
+//! 6. Add a variant to [`AdditionalCapability`] and update `Instance::required_capabilities`.
+//!
+//! [`IndicatorConstraint`]: crate::IndicatorConstraint
+//! [`Instance`]: crate::Instance
+//! [`AdditionalCapability`]: crate::AdditionalCapability
 
 use crate::{
-    constraint::{ConstraintID, EvaluatedConstraint, RemovedConstraint, SampledConstraint, Stage},
-    v1, ATol, Constraint, Evaluate, VariableIDSet,
+    constraint::{ConstraintID, EvaluatedConstraint, RemovedConstraint, SampledConstraint},
+    v1, ATol, Constraint, Evaluate, SampleID, VariableIDSet,
 };
 use anyhow::Result;
 use std::collections::BTreeMap;
@@ -22,29 +39,111 @@ use std::collections::BTreeMap;
 /// For example, `Constraint` (= `Constraint<Created>`) implements `ConstraintType`
 /// to define all stage types for regular constraints.
 pub trait ConstraintType {
+    /// The ID type for this constraint family.
+    type ID: Clone + Copy + Ord + std::hash::Hash + std::fmt::Debug;
     /// The constraint as defined in the problem.
-    type Created: Evaluate<Output = Self::Evaluated, SampledOutput = Self::Sampled>;
+    type Created: Evaluate<Output = Self::Evaluated, SampledOutput = Self::Sampled>
+        + Clone
+        + std::fmt::Debug
+        + PartialEq;
     /// The constraint after being removed/relaxed.
-    type Removed: Evaluate<Output = Self::Evaluated, SampledOutput = Self::Sampled>;
+    type Removed: Evaluate<Output = Self::Evaluated, SampledOutput = Self::Sampled>
+        + Clone
+        + std::fmt::Debug
+        + PartialEq;
     /// The constraint after evaluation against a single state.
-    type Evaluated: HasConstraintID;
+    type Evaluated: EvaluatedConstraintBehavior<ID = Self::ID>;
     /// The constraint after evaluation against multiple samples.
-    type Sampled: HasConstraintID;
+    type Sampled: SampledConstraintBehavior<ID = Self::ID, Evaluated = Self::Evaluated>;
 }
 
-/// Trait for types that carry a ConstraintID.
-pub trait HasConstraintID {
-    fn constraint_id(&self) -> ConstraintID;
+/// Common behavior for an evaluated constraint (single state evaluation result).
+pub trait EvaluatedConstraintBehavior {
+    type ID;
+    fn constraint_id(&self) -> Self::ID;
+    fn is_feasible(&self) -> bool;
+    fn is_removed(&self) -> bool;
 }
 
-impl<S: Stage<Constraint<S>>> HasConstraintID for Constraint<S> {
+/// Common behavior for a sampled constraint (multi-sample evaluation result).
+pub trait SampledConstraintBehavior {
+    type ID;
+    /// The evaluated constraint type returned by [`get`](Self::get).
+    type Evaluated;
+
+    fn constraint_id(&self) -> Self::ID;
+    fn is_feasible_for(&self, sample_id: SampleID) -> Option<bool>;
+    fn is_removed(&self) -> bool;
+
+    /// Extract an evaluated constraint for a specific sample.
+    fn get(
+        &self,
+        sample_id: SampleID,
+    ) -> Result<Self::Evaluated, crate::sampled::UnknownSampleIDError>;
+}
+
+// ===== Blanket-like impls for Constraint<Evaluated> and Constraint<Sampled> =====
+// Both Constraint and IndicatorConstraint share EvaluatedData/SampledData in their stage,
+// so the implementations are identical.
+
+impl EvaluatedConstraintBehavior for EvaluatedConstraint {
+    type ID = ConstraintID;
     fn constraint_id(&self) -> ConstraintID {
         self.id
+    }
+    fn is_feasible(&self) -> bool {
+        self.stage.feasible
+    }
+    fn is_removed(&self) -> bool {
+        self.stage.removed_reason.is_some()
+    }
+}
+
+impl SampledConstraintBehavior for SampledConstraint {
+    type ID = ConstraintID;
+    type Evaluated = EvaluatedConstraint;
+
+    fn constraint_id(&self) -> ConstraintID {
+        self.id
+    }
+    fn is_feasible_for(&self, sample_id: SampleID) -> Option<bool> {
+        self.stage.feasible.get(&sample_id).copied()
+    }
+    fn is_removed(&self) -> bool {
+        self.stage.removed_reason.is_some()
+    }
+    fn get(
+        &self,
+        sample_id: SampleID,
+    ) -> Result<Self::Evaluated, crate::sampled::UnknownSampleIDError> {
+        use crate::constraint::EvaluatedData;
+        let evaluated_value = *self.stage.evaluated_values.get(sample_id)?;
+        let dual_variable = self
+            .stage
+            .dual_variables
+            .as_ref()
+            .and_then(|duals| duals.get(sample_id).ok())
+            .copied();
+        let feasible = *self.stage.feasible.get(&sample_id).unwrap_or(&false);
+
+        Ok(crate::Constraint {
+            id: self.id,
+            equality: self.equality,
+            metadata: self.metadata.clone(),
+            stage: EvaluatedData {
+                evaluated_value,
+                dual_variable,
+                feasible,
+                used_decision_variable_ids: self.stage.used_decision_variable_ids.clone(),
+                removed_reason: self.stage.removed_reason.clone(),
+            },
+        })
     }
 }
 
 /// `Constraint` (= `Constraint<Created>`) serves as the type family for regular constraints.
 impl ConstraintType for Constraint {
+    type ID = ConstraintID;
     type Created = Constraint;
     type Removed = RemovedConstraint;
     type Evaluated = EvaluatedConstraint;
@@ -56,20 +155,12 @@ impl ConstraintType for Constraint {
 /// This provides the common evaluate/partial_evaluate logic
 /// that Instance would otherwise duplicate for each constraint type.
 #[derive(Debug, Clone, PartialEq)]
-pub struct ConstraintCollection<T: ConstraintType>
-where
-    T::Created: Clone + std::fmt::Debug + PartialEq,
-    T::Removed: Clone + std::fmt::Debug + PartialEq,
-{
-    active: BTreeMap<ConstraintID, T::Created>,
-    removed: BTreeMap<ConstraintID, T::Removed>,
+pub struct ConstraintCollection<T: ConstraintType> {
+    active: BTreeMap<T::ID, T::Created>,
+    removed: BTreeMap<T::ID, T::Removed>,
 }
 
-impl<T: ConstraintType> Default for ConstraintCollection<T>
-where
-    T::Created: Clone + std::fmt::Debug + PartialEq,
-    T::Removed: Clone + std::fmt::Debug + PartialEq,
-{
+impl<T: ConstraintType> Default for ConstraintCollection<T> {
     fn default() -> Self {
         Self {
             active: BTreeMap::new(),
@@ -78,50 +169,35 @@ where
     }
 }
 
-impl<T: ConstraintType> ConstraintCollection<T>
-where
-    T::Created: Clone + std::fmt::Debug + PartialEq,
-    T::Removed: Clone + std::fmt::Debug + PartialEq,
-{
-    pub fn new(
-        active: BTreeMap<ConstraintID, T::Created>,
-        removed: BTreeMap<ConstraintID, T::Removed>,
-    ) -> Self {
+impl<T: ConstraintType> ConstraintCollection<T> {
+    pub fn new(active: BTreeMap<T::ID, T::Created>, removed: BTreeMap<T::ID, T::Removed>) -> Self {
         Self { active, removed }
     }
 
     /// Access active constraints.
-    pub fn active(&self) -> &BTreeMap<ConstraintID, T::Created> {
+    pub fn active(&self) -> &BTreeMap<T::ID, T::Created> {
         &self.active
     }
 
     /// Access removed constraints.
-    pub fn removed(&self) -> &BTreeMap<ConstraintID, T::Removed> {
+    pub fn removed(&self) -> &BTreeMap<T::ID, T::Removed> {
         &self.removed
     }
 
     /// Mutable access to active constraints.
-    pub fn active_mut(&mut self) -> &mut BTreeMap<ConstraintID, T::Created> {
+    pub fn active_mut(&mut self) -> &mut BTreeMap<T::ID, T::Created> {
         &mut self.active
     }
 
     /// Mutable access to removed constraints.
-    pub fn removed_mut(&mut self) -> &mut BTreeMap<ConstraintID, T::Removed> {
+    pub fn removed_mut(&mut self) -> &mut BTreeMap<T::ID, T::Removed> {
         &mut self.removed
     }
 
     /// Consume the collection and return the active and removed maps.
-    pub fn into_parts(
-        self,
-    ) -> (
-        BTreeMap<ConstraintID, T::Created>,
-        BTreeMap<ConstraintID, T::Removed>,
-    ) {
+    #[allow(clippy::type_complexity)]
+    pub fn into_parts(self) -> (BTreeMap<T::ID, T::Created>, BTreeMap<T::ID, T::Removed>) {
         (self.active, self.removed)
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.active.is_empty() && self.removed.is_empty()
     }
 
     /// Collect required variable IDs from all active constraints.
@@ -138,7 +214,7 @@ where
         &self,
         state: &v1::State,
         atol: ATol,
-    ) -> Result<BTreeMap<ConstraintID, T::Evaluated>> {
+    ) -> Result<BTreeMap<T::ID, T::Evaluated>> {
         let mut results = BTreeMap::new();
         for constraint in self.active.values() {
             let evaluated = constraint.evaluate(state, atol)?;
@@ -158,6 +234,157 @@ where
         }
         Ok(())
     }
+
+    /// Evaluate all constraints (active and removed) against multiple samples.
+    pub fn evaluate_samples_all(
+        &self,
+        samples: &v1::Samples,
+        atol: ATol,
+    ) -> Result<BTreeMap<T::ID, T::Sampled>> {
+        let mut results = BTreeMap::new();
+        for constraint in self.active.values() {
+            let evaluated = constraint.evaluate_samples(samples, atol)?;
+            results.insert(evaluated.constraint_id(), evaluated);
+        }
+        for constraint in self.removed.values() {
+            let evaluated = constraint.evaluate_samples(samples, atol)?;
+            results.insert(evaluated.constraint_id(), evaluated);
+        }
+        Ok(results)
+    }
+}
+
+impl<T: ConstraintType> Evaluate for ConstraintCollection<T> {
+    type Output = EvaluatedCollection<T>;
+    type SampledOutput = SampledCollection<T>;
+
+    fn evaluate(&self, state: &v1::State, atol: ATol) -> Result<Self::Output> {
+        Ok(EvaluatedCollection::new(self.evaluate_all(state, atol)?))
+    }
+
+    fn evaluate_samples(&self, samples: &v1::Samples, atol: ATol) -> Result<Self::SampledOutput> {
+        Ok(SampledCollection::new(
+            self.evaluate_samples_all(samples, atol)?,
+        ))
+    }
+
+    fn partial_evaluate(&mut self, state: &v1::State, atol: ATol) -> Result<()> {
+        self.partial_evaluate_active(state, atol)
+    }
+
+    fn required_ids(&self) -> VariableIDSet {
+        ConstraintCollection::required_ids(self)
+    }
+}
+
+/// A collection of evaluated constraints of a single type.
+///
+/// This is the Solution-side counterpart of [`ConstraintCollection`],
+/// providing generic feasibility checks via [`EvaluatedConstraintBehavior`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct EvaluatedCollection<T: ConstraintType>(BTreeMap<T::ID, T::Evaluated>);
+
+impl<T: ConstraintType> std::ops::Deref for EvaluatedCollection<T> {
+    type Target = BTreeMap<T::ID, T::Evaluated>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T: ConstraintType> std::ops::DerefMut for EvaluatedCollection<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl<T: ConstraintType> Default for EvaluatedCollection<T> {
+    fn default() -> Self {
+        Self(BTreeMap::new())
+    }
+}
+
+impl<T: ConstraintType> EvaluatedCollection<T> {
+    pub fn new(constraints: BTreeMap<T::ID, T::Evaluated>) -> Self {
+        Self(constraints)
+    }
+
+    pub fn inner(&self) -> &BTreeMap<T::ID, T::Evaluated> {
+        &self.0
+    }
+
+    pub fn into_inner(self) -> BTreeMap<T::ID, T::Evaluated> {
+        self.0
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Check if all constraints are feasible.
+    pub fn is_feasible(&self) -> bool {
+        self.0.values().all(|c| c.is_feasible())
+    }
+
+    /// Check if all non-removed constraints are feasible.
+    pub fn is_feasible_relaxed(&self) -> bool {
+        self.0
+            .values()
+            .filter(|c| !c.is_removed())
+            .all(|c| c.is_feasible())
+    }
+}
+
+/// A collection of sampled constraints of a single type.
+///
+/// This is the SampleSet-side counterpart of [`ConstraintCollection`],
+/// providing generic per-sample feasibility checks via [`SampledConstraintBehavior`].
+#[derive(Debug, Clone)]
+pub struct SampledCollection<T: ConstraintType>(BTreeMap<T::ID, T::Sampled>);
+
+impl<T: ConstraintType> std::ops::Deref for SampledCollection<T> {
+    type Target = BTreeMap<T::ID, T::Sampled>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T: ConstraintType> Default for SampledCollection<T> {
+    fn default() -> Self {
+        Self(BTreeMap::new())
+    }
+}
+
+impl<T: ConstraintType> SampledCollection<T> {
+    pub fn new(constraints: BTreeMap<T::ID, T::Sampled>) -> Self {
+        Self(constraints)
+    }
+
+    pub fn inner(&self) -> &BTreeMap<T::ID, T::Sampled> {
+        &self.0
+    }
+
+    pub fn into_inner(self) -> BTreeMap<T::ID, T::Sampled> {
+        self.0
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Check if all constraints are feasible for a given sample.
+    pub fn is_feasible_for(&self, sample_id: SampleID) -> bool {
+        self.0
+            .values()
+            .all(|c| c.is_feasible_for(sample_id).unwrap_or(false))
+    }
+
+    /// Check if all non-removed constraints are feasible for a given sample.
+    pub fn is_feasible_relaxed_for(&self, sample_id: SampleID) -> bool {
+        self.0
+            .values()
+            .filter(|c| !c.is_removed())
+            .all(|c| c.is_feasible_for(sample_id).unwrap_or(false))
+    }
 }
 
 #[cfg(test)]
@@ -174,7 +401,8 @@ mod tests {
     #[test]
     fn empty_collection() {
         let collection = ConstraintCollection::<Constraint>::default();
-        assert!(collection.is_empty());
+        assert!(collection.active().is_empty());
+        assert!(collection.removed().is_empty());
     }
 
     #[test]

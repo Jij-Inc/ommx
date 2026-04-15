@@ -73,4 +73,27 @@ pub enum InstanceError {
         key: NamedFunctionID,
         id: NamedFunctionID,
     },
+
+    #[error("Indicator variable {id:?} must be binary")]
+    IndicatorVariableNotBinary { id: VariableID },
+
+    #[error("Indicator variable {id:?} is not defined in decision_variables")]
+    UndefinedIndicatorVariable { id: VariableID },
+
+    #[error("Indicator constraint map key {key:?} does not match value's id {value_id:?}")]
+    InconsistentIndicatorConstraintID {
+        key: crate::IndicatorConstraintID,
+        value_id: crate::IndicatorConstraintID,
+    },
+
+    #[error("Removed indicator constraint map key {key:?} does not match value's id {value_id:?}")]
+    InconsistentRemovedIndicatorConstraintID {
+        key: crate::IndicatorConstraintID,
+        value_id: crate::IndicatorConstraintID,
+    },
+
+    #[error(
+        "Indicator constraint ID {id:?} is in both indicator_constraints and removed_indicator_constraints, but they must be disjoint"
+    )]
+    OverlappingIndicatorConstraintID { id: crate::IndicatorConstraintID },
 }

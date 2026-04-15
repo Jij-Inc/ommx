@@ -2,6 +2,7 @@ mod parse;
 mod serialize;
 
 use crate::{
+    constraint_type::EvaluatedCollection, indicator_constraint::IndicatorConstraint, Constraint,
     ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable, EvaluatedNamedFunction,
     NamedFunctionID, Sense, VariableID,
 };
@@ -82,6 +83,12 @@ pub enum SolutionError {
         value_id: ConstraintID,
     },
 
+    #[error("Indicator constraint map key {key:?} does not match value's id {value_id:?}")]
+    InconsistentIndicatorConstraintID {
+        key: crate::IndicatorConstraintID,
+        value_id: crate::IndicatorConstraintID,
+    },
+
     #[error(
         "Variable ID {id:?} used in constraint {constraint_id:?} is not in decision_variables"
     )]
@@ -115,7 +122,9 @@ pub struct Solution {
     #[getset(get = "pub")]
     objective: f64,
     #[getset(get = "pub")]
-    evaluated_constraints: BTreeMap<ConstraintID, EvaluatedConstraint>,
+    evaluated_constraints: EvaluatedCollection<Constraint>,
+    #[getset(get = "pub")]
+    evaluated_indicator_constraints: EvaluatedCollection<IndicatorConstraint>,
     #[getset(get = "pub")]
     evaluated_named_functions: BTreeMap<NamedFunctionID, EvaluatedNamedFunction>,
     #[getset(get = "pub")]
@@ -186,9 +195,12 @@ impl Solution {
     /// - To check both constraints and decision variables, use [`feasible()`](Self::feasible)
     /// - To check only decision variables, use [`feasible_decision_variables()`](Self::feasible_decision_variables)
     pub fn feasible_constraints(&self) -> bool {
-        self.evaluated_constraints
-            .values()
-            .all(|c| c.stage.feasible)
+        use crate::constraint_type::EvaluatedConstraintBehavior;
+        self.evaluated_constraints.values().all(|c| c.is_feasible())
+            && self
+                .evaluated_indicator_constraints
+                .values()
+                .all(|c| c.is_feasible())
     }
 
     /// Check if all constraints and decision variables are feasible
@@ -206,10 +218,16 @@ impl Solution {
     /// - To check both constraints and decision variables, use [`feasible_relaxed()`](Self::feasible_relaxed)
     /// - To check only decision variables, use [`feasible_decision_variables()`](Self::feasible_decision_variables)
     pub fn feasible_constraints_relaxed(&self) -> bool {
+        use crate::constraint_type::EvaluatedConstraintBehavior;
         self.evaluated_constraints
             .values()
-            .filter(|c| c.stage.removed_reason.is_none())
-            .all(|c| c.stage.feasible)
+            .filter(|c| !c.is_removed())
+            .all(|c| c.is_feasible())
+            && self
+                .evaluated_indicator_constraints
+                .values()
+                .filter(|c| !c.is_removed())
+                .all(|c| c.is_feasible())
     }
 
     /// Check if all constraints and decision variables are feasible in the relaxed problem
@@ -539,7 +557,8 @@ impl Solution {
 #[derive(Debug, Clone, Default)]
 pub struct SolutionBuilder {
     objective: Option<f64>,
-    evaluated_constraints: Option<BTreeMap<ConstraintID, EvaluatedConstraint>>,
+    evaluated_constraints: Option<EvaluatedCollection<Constraint>>,
+    evaluated_indicator_constraints: EvaluatedCollection<IndicatorConstraint>,
     evaluated_named_functions: BTreeMap<NamedFunctionID, EvaluatedNamedFunction>,
     decision_variables: Option<BTreeMap<VariableID, EvaluatedDecisionVariable>>,
     sense: Option<Sense>,
@@ -568,7 +587,38 @@ impl SolutionBuilder {
         mut self,
         evaluated_constraints: BTreeMap<ConstraintID, EvaluatedConstraint>,
     ) -> Self {
+        self.evaluated_constraints = Some(EvaluatedCollection::new(evaluated_constraints));
+        self
+    }
+
+    /// Sets the evaluated constraints from a collection.
+    pub fn evaluated_constraints_collection(
+        mut self,
+        evaluated_constraints: EvaluatedCollection<Constraint>,
+    ) -> Self {
         self.evaluated_constraints = Some(evaluated_constraints);
+        self
+    }
+
+    /// Sets the evaluated indicator constraints from a collection.
+    pub fn evaluated_indicator_constraints_collection(
+        mut self,
+        evaluated_indicator_constraints: EvaluatedCollection<IndicatorConstraint>,
+    ) -> Self {
+        self.evaluated_indicator_constraints = evaluated_indicator_constraints;
+        self
+    }
+
+    /// Sets the evaluated indicator constraints.
+    pub fn evaluated_indicator_constraints(
+        mut self,
+        evaluated_indicator_constraints: BTreeMap<
+            crate::IndicatorConstraintID,
+            crate::indicator_constraint::EvaluatedIndicatorConstraint,
+        >,
+    ) -> Self {
+        self.evaluated_indicator_constraints =
+            EvaluatedCollection::new(evaluated_indicator_constraints);
         self
     }
 
@@ -646,7 +696,7 @@ impl SolutionBuilder {
         }
 
         // Validate constraint keys match their id
-        for (key, value) in &evaluated_constraints {
+        for (key, value) in evaluated_constraints.iter() {
             if *key != value.id {
                 return Err(SolutionError::InconsistentConstraintID {
                     key: *key,
@@ -667,6 +717,30 @@ impl SolutionBuilder {
             }
         }
 
+        // Validate indicator constraint keys match their id
+        for (key, value) in self.evaluated_indicator_constraints.iter() {
+            if *key != value.id {
+                return Err(SolutionError::InconsistentIndicatorConstraintID {
+                    key: *key,
+                    value_id: value.id,
+                }
+                .into());
+            }
+        }
+
+        // Validate all used_decision_variable_ids in indicator constraints
+        for ic in self.evaluated_indicator_constraints.values() {
+            for var_id in &ic.stage.used_decision_variable_ids {
+                if !decision_variables.contains_key(var_id) {
+                    return Err(anyhow::anyhow!(
+                        "Variable {:?} used in indicator constraint {:?} is not defined in decision_variables",
+                        var_id,
+                        ic.id
+                    ));
+                }
+            }
+        }
+
         // Validate all used_decision_variable_ids are in decision_variables
         for constraint in evaluated_constraints.values() {
             for var_id in &constraint.stage.used_decision_variable_ids {
@@ -683,6 +757,7 @@ impl SolutionBuilder {
         Ok(Solution {
             objective,
             evaluated_constraints,
+            evaluated_indicator_constraints: self.evaluated_indicator_constraints,
             evaluated_named_functions: self.evaluated_named_functions,
             decision_variables,
             optimality: self.optimality,
@@ -728,6 +803,7 @@ impl SolutionBuilder {
         Ok(Solution {
             objective,
             evaluated_constraints,
+            evaluated_indicator_constraints: self.evaluated_indicator_constraints,
             evaluated_named_functions: self.evaluated_named_functions,
             decision_variables,
             optimality: self.optimality,

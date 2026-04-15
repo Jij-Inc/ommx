@@ -309,6 +309,7 @@ impl ParametricInstanceBuilder {
             decision_variables,
             parameters,
             constraint_collection: ConstraintCollection::new(constraints, removed_constraints),
+            indicator_constraint_collection: Default::default(),
             named_functions: self.named_functions,
             decision_variable_dependency: self.decision_variable_dependency,
             constraint_hints,

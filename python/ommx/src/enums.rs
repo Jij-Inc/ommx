@@ -1,5 +1,35 @@
 use pyo3::prelude::*;
 
+/// Constraint type capability flag for non-standard constraint types.
+///
+/// Standard constraints are always supported. This enum lists capabilities
+/// that adapters must explicitly opt in to.
+///
+/// Use as a set: `{AdditionalCapability.Indicator}`
+#[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
+#[pyclass(eq, eq_int, hash, frozen)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum AdditionalCapability {
+    /// Indicator constraints: binvar = 1 → f(x) <= 0
+    Indicator = 1,
+}
+
+impl From<ommx::AdditionalCapability> for AdditionalCapability {
+    fn from(cap: ommx::AdditionalCapability) -> Self {
+        match cap {
+            ommx::AdditionalCapability::Indicator => AdditionalCapability::Indicator,
+        }
+    }
+}
+
+impl From<AdditionalCapability> for ommx::AdditionalCapability {
+    fn from(cap: AdditionalCapability) -> Self {
+        match cap {
+            AdditionalCapability::Indicator => ommx::AdditionalCapability::Indicator,
+        }
+    }
+}
+
 /// Sense of optimization (minimize or maximize)
 #[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
 #[pyclass(eq, eq_int)]
