@@ -84,6 +84,7 @@ impl Parse for crate::v1::Solution {
             objective,
             evaluated_constraints: crate::constraint_type::EvaluatedCollection::new(
                 evaluated_constraints,
+                std::collections::BTreeMap::new(),
             ),
             evaluated_indicator_constraints: Default::default(),
             evaluated_named_functions,

@@ -26,7 +26,7 @@ pub struct ParametricInstanceBuilder {
     parameters: Option<BTreeMap<VariableID, v1::Parameter>>,
     constraints: Option<BTreeMap<ConstraintID, Constraint>>,
     named_functions: BTreeMap<NamedFunctionID, NamedFunction>,
-    removed_constraints: BTreeMap<ConstraintID, RemovedConstraint>,
+    removed_constraints: BTreeMap<ConstraintID, (Constraint, crate::constraint::RemovedReason)>,
     decision_variable_dependency: AcyclicAssignments,
     constraint_hints: ConstraintHints,
     description: Option<v1::instance::Description>,
@@ -83,7 +83,7 @@ impl ParametricInstanceBuilder {
     /// Sets the removed constraints.
     pub fn removed_constraints(
         mut self,
-        removed_constraints: BTreeMap<ConstraintID, RemovedConstraint>,
+        removed_constraints: BTreeMap<ConstraintID, (Constraint, crate::constraint::RemovedReason)>,
     ) -> Self {
         self.removed_constraints = removed_constraints;
         self
@@ -175,11 +175,11 @@ impl ParametricInstanceBuilder {
         }
 
         // Validate that removed constraint map keys match their value's id
-        for (key, value) in &self.removed_constraints {
-            if *key != value.id {
+        for (key, (constraint, _reason)) in &self.removed_constraints {
+            if *key != constraint.id {
                 return Err(InstanceError::InconsistentRemovedConstraintID {
                     key: *key,
-                    value_id: value.id,
+                    value_id: constraint.id,
                 }
                 .into());
             }
@@ -221,7 +221,7 @@ impl ParametricInstanceBuilder {
         }
         // Validate that all variable IDs in removed_constraints are defined
         // (removed_constraints may contain fixed or dependent variable IDs)
-        for removed in self.removed_constraints.values() {
+        for (removed, _reason) in self.removed_constraints.values() {
             for id in removed.required_ids() {
                 if !all_variable_ids.contains(&id) {
                     return Err(InstanceError::UndefinedVariableID { id }.into());

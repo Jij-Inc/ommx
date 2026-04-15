@@ -56,7 +56,7 @@ impl Instance {
             .removed_mut()
             .entry(constraint.id)
         {
-            let rc = o.get_mut();
+            let (rc, _reason) = o.get_mut();
             let old_function = std::mem::replace(&mut rc.stage.function, constraint.stage.function);
             let old_equality = std::mem::replace(&mut rc.equality, constraint.equality);
             let old_metadata = std::mem::replace(&mut rc.metadata, constraint.metadata);
@@ -114,7 +114,7 @@ impl Instance {
             let old = if let Entry::Occupied(mut o) =
                 self.constraint_collection.removed_mut().entry(id)
             {
-                let rc = o.get_mut();
+                let (rc, _reason) = o.get_mut();
                 let old_function =
                     std::mem::replace(&mut rc.stage.function, constraint.stage.function);
                 let old_equality = std::mem::replace(&mut rc.equality, constraint.equality);
@@ -471,7 +471,7 @@ mod tests {
 
         assert_eq!(instance.constraints().len(), 1);
         assert_eq!(instance.removed_constraints().len(), 1);
-        let removed = instance
+        let (removed, _reason) = instance
             .removed_constraints()
             .get(&ConstraintID::from(2))
             .unwrap();

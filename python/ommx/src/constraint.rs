@@ -313,11 +313,25 @@ impl Constraint {
     }
 }
 
-/// RemovedConstraint wrapper for Python
+/// RemovedConstraint wrapper for Python.
+///
+/// Internally holds `(ommx::Constraint, ommx::RemovedReason)`.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
-pub struct RemovedConstraint(pub ommx::RemovedConstraint);
+pub struct RemovedConstraint {
+    pub constraint: ommx::Constraint,
+    pub removed_reason: ommx::RemovedReason,
+}
+
+impl RemovedConstraint {
+    pub fn from_pair(constraint: ommx::Constraint, removed_reason: ommx::RemovedReason) -> Self {
+        Self {
+            constraint,
+            removed_reason,
+        }
+    }
+}
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
@@ -329,46 +343,30 @@ impl RemovedConstraint {
         removed_reason: String,
         removed_reason_parameters: Option<HashMap<String, String>>,
     ) -> Self {
-        let removed_constraint = ommx::RemovedConstraint {
-            id: constraint.0.id,
-            equality: constraint.0.equality,
-            metadata: constraint.0.metadata,
-            stage: ommx::RemovedData {
-                function: constraint.0.stage.function,
-                removed_reason: ommx::RemovedReason {
-                    reason: removed_reason,
-                    parameters: removed_reason_parameters
-                        .map(|params| params.into_iter().collect::<FnvHashMap<_, _>>())
-                        .unwrap_or_default(),
-                },
+        Self {
+            constraint: constraint.0,
+            removed_reason: ommx::RemovedReason {
+                reason: removed_reason,
+                parameters: removed_reason_parameters
+                    .map(|params| params.into_iter().collect::<FnvHashMap<_, _>>())
+                    .unwrap_or_default(),
             },
-        };
-
-        Self(removed_constraint)
+        }
     }
 
     #[getter]
     pub fn constraint(&self) -> Constraint {
-        Constraint(ommx::Constraint {
-            id: self.0.id,
-            equality: self.0.equality,
-            metadata: self.0.metadata.clone(),
-            stage: ommx::CreatedData {
-                function: self.0.stage.function.clone(),
-            },
-        })
+        Constraint(self.constraint.clone())
     }
 
     #[getter]
     pub fn removed_reason(&self) -> String {
-        self.0.stage.removed_reason.reason.clone()
+        self.removed_reason.reason.clone()
     }
 
     #[getter]
     pub fn removed_reason_parameters(&self) -> HashMap<String, String> {
-        self.0
-            .stage
-            .removed_reason
+        self.removed_reason
             .parameters
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
@@ -377,42 +375,42 @@ impl RemovedConstraint {
 
     #[getter]
     pub fn id(&self) -> u64 {
-        self.0.id.into_inner()
+        self.constraint.id.into_inner()
     }
 
     #[getter]
     pub fn name(&self) -> Option<String> {
-        self.0.metadata.name.clone()
+        self.constraint.metadata.name.clone()
     }
 
     /// Get the equality type from the underlying constraint
     #[getter]
     pub fn equality(&self) -> Equality {
-        self.0.equality.into()
+        self.constraint.equality.into()
     }
 
     /// Get the function from the underlying constraint
     #[getter]
     pub fn function(&self) -> Function {
-        Function(self.0.stage.function.clone())
+        Function(self.constraint.stage.function.clone())
     }
 
     /// Get the description from the underlying constraint
     #[getter]
     pub fn description(&self) -> Option<String> {
-        self.0.metadata.description.clone()
+        self.constraint.metadata.description.clone()
     }
 
     /// Get the subscripts from the underlying constraint
     #[getter]
     pub fn subscripts(&self) -> Vec<i64> {
-        self.0.metadata.subscripts.clone()
+        self.constraint.metadata.subscripts.clone()
     }
 
     /// Get the parameters from the underlying constraint
     #[getter]
     pub fn parameters(&self) -> HashMap<String, String> {
-        self.0
+        self.constraint
             .metadata
             .parameters
             .iter()
@@ -422,26 +420,38 @@ impl RemovedConstraint {
 
     #[staticmethod]
     pub fn from_bytes(bytes: &Bound<PyBytes>) -> PyResult<Self> {
-        ommx::RemovedConstraint::from_bytes(bytes.as_bytes())
-            .map(Self)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+        use ommx::{parse::Parse, Message};
+        let v1_removed = ommx::v1::RemovedConstraint::decode(bytes.as_bytes())
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        let (constraint, reason): (ommx::Constraint, ommx::RemovedReason) =
+            v1_removed
+                .parse(&())
+                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        Ok(Self::from_pair(constraint, reason))
     }
 
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
-        PyBytes::new(py, &self.0.to_bytes())
+        use ommx::Message;
+        let v1: ommx::v1::RemovedConstraint =
+            (self.constraint.clone(), self.removed_reason.clone()).into();
+        PyBytes::new(py, &v1.encode_to_vec())
     }
 
     pub fn __repr__(&self) -> String {
-        self.0.to_string()
+        let equality_symbol = match self.constraint.equality {
+            ommx::Equality::EqualToZero => "==",
+            ommx::Equality::LessThanOrEqualToZero => "<=",
+        };
+        format!(
+            "RemovedConstraint({} {} 0, reason={})",
+            self.constraint.stage.function, equality_symbol, self.removed_reason.reason
+        )
     }
 
     fn __copy__(&self) -> Self {
         self.clone()
     }
 
-    // __deepcopy__ can also be implemented with self.clone()
-    // memo argument is required to match Python protocol but not used in this implementation
-    // Since this implementation contains no PyObject references, simple clone is sufficient
     fn __deepcopy__(&self, _memo: Bound<'_, PyAny>) -> Self {
         self.clone()
     }

@@ -352,7 +352,7 @@ impl SampleSetBuilder {
 
     /// Sets the constraints.
     pub fn constraints(mut self, constraints: BTreeMap<ConstraintID, SampledConstraint>) -> Self {
-        self.constraints = Some(SampledCollection::new(constraints));
+        self.constraints = Some(SampledCollection::new(constraints, BTreeMap::new()));
         self
     }
 
@@ -364,7 +364,7 @@ impl SampleSetBuilder {
             crate::indicator_constraint::SampledIndicatorConstraint,
         >,
     ) -> Self {
-        self.indicator_constraints = SampledCollection::new(indicator_constraints);
+        self.indicator_constraints = SampledCollection::new(indicator_constraints, BTreeMap::new());
         self
     }
 

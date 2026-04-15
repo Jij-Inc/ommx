@@ -27,11 +27,11 @@ pub struct InstanceBuilder {
     decision_variables: Option<BTreeMap<VariableID, DecisionVariable>>,
     constraints: Option<BTreeMap<ConstraintID, Constraint>>,
     named_functions: BTreeMap<NamedFunctionID, NamedFunction>,
-    removed_constraints: BTreeMap<ConstraintID, RemovedConstraint>,
+    removed_constraints: BTreeMap<ConstraintID, (Constraint, crate::constraint::RemovedReason)>,
     indicator_constraints: BTreeMap<crate::IndicatorConstraintID, crate::IndicatorConstraint>,
     removed_indicator_constraints: BTreeMap<
         crate::IndicatorConstraintID,
-        crate::indicator_constraint::RemovedIndicatorConstraint,
+        (crate::IndicatorConstraint, crate::constraint::RemovedReason),
     >,
     decision_variable_dependency: AcyclicAssignments,
     constraint_hints: ConstraintHints,
@@ -84,7 +84,7 @@ impl InstanceBuilder {
     /// Sets the removed constraints.
     pub fn removed_constraints(
         mut self,
-        removed_constraints: BTreeMap<ConstraintID, RemovedConstraint>,
+        removed_constraints: BTreeMap<ConstraintID, (Constraint, crate::constraint::RemovedReason)>,
     ) -> Self {
         self.removed_constraints = removed_constraints;
         self
@@ -104,7 +104,7 @@ impl InstanceBuilder {
         mut self,
         removed_indicator_constraints: BTreeMap<
             crate::IndicatorConstraintID,
-            crate::indicator_constraint::RemovedIndicatorConstraint,
+            (crate::IndicatorConstraint, crate::constraint::RemovedReason),
         >,
     ) -> Self {
         self.removed_indicator_constraints = removed_indicator_constraints;
@@ -189,11 +189,11 @@ impl InstanceBuilder {
         }
 
         // Validate that removed constraint map keys match their value's id
-        for (key, value) in &self.removed_constraints {
-            if *key != value.id {
+        for (key, (constraint, _reason)) in &self.removed_constraints {
+            if *key != constraint.id {
                 return Err(InstanceError::InconsistentRemovedConstraintID {
                     key: *key,
-                    value_id: value.id,
+                    value_id: constraint.id,
                 }
                 .into());
             }
@@ -217,8 +217,8 @@ impl InstanceBuilder {
         }
         // Validate that all variable IDs in removed_constraints are defined
         // (removed_constraints may contain fixed or dependent variable IDs)
-        for removed in self.removed_constraints.values() {
-            for id in removed.required_ids() {
+        for (constraint, _reason) in self.removed_constraints.values() {
+            for id in constraint.required_ids() {
                 if !variable_ids.contains(&id) {
                     return Err(InstanceError::UndefinedVariableID { id }.into());
                 }
@@ -265,23 +265,23 @@ impl InstanceBuilder {
                 }
             }
         }
-        for (key, value) in &self.removed_indicator_constraints {
-            if *key != value.id {
+        for (key, (ic, _reason)) in &self.removed_indicator_constraints {
+            if *key != ic.id {
                 return Err(InstanceError::InconsistentRemovedIndicatorConstraintID {
                     key: *key,
-                    value_id: value.id,
+                    value_id: ic.id,
                 }
                 .into());
             }
             // Check that indicator_variable exists and is binary
-            let indicator_id = value.indicator_variable;
+            let indicator_id = ic.indicator_variable;
             let Some(dv) = decision_variables.get(&indicator_id) else {
                 return Err(InstanceError::UndefinedIndicatorVariable { id: indicator_id }.into());
             };
             if dv.kind() != crate::decision_variable::Kind::Binary {
                 return Err(InstanceError::IndicatorVariableNotBinary { id: indicator_id }.into());
             }
-            for id in value.required_ids() {
+            for id in ic.required_ids() {
                 if !variable_ids.contains(&id) {
                     return Err(InstanceError::UndefinedVariableID { id }.into());
                 }
@@ -473,22 +473,15 @@ mod tests {
 
     #[test]
     fn test_builder_overlapping_constraint_ids() {
-        use crate::{Constraint, RemovedConstraint};
+        use crate::Constraint;
         use maplit::btreemap;
 
         let constraint_id = ConstraintID::from(1);
         let constraint = Constraint::equal_to_zero(constraint_id, Function::Zero);
-        let removed_constraint = RemovedConstraint {
-            id: constraint_id,
-            equality: constraint.equality,
-            metadata: constraint.metadata.clone(),
-            stage: crate::constraint::RemovedData {
-                function: constraint.stage.function.clone(),
-                removed_reason: crate::constraint::RemovedReason {
-                    reason: "test".to_string(),
-                    parameters: Default::default(),
-                },
-            },
+        let removed_constraint = Constraint::equal_to_zero(constraint_id, Function::Zero);
+        let removed_reason = crate::constraint::RemovedReason {
+            reason: "test".to_string(),
+            parameters: Default::default(),
         };
 
         let err = Instance::builder()
@@ -496,7 +489,9 @@ mod tests {
             .objective(Function::Zero)
             .decision_variables(BTreeMap::new())
             .constraints(btreemap! { constraint_id => constraint })
-            .removed_constraints(btreemap! { constraint_id => removed_constraint })
+            .removed_constraints(
+                btreemap! { constraint_id => (removed_constraint, removed_reason) },
+            )
             .build()
             .unwrap_err();
 
@@ -671,24 +666,15 @@ mod tests {
 
     #[test]
     fn test_builder_undefined_variable_in_removed_constraint() {
-        use crate::RemovedConstraint;
         use maplit::btreemap;
 
         let constraint_id = ConstraintID::from(1);
         // Create a removed constraint that references undefined variable ID 999
-        let constraint =
+        let removed_constraint =
             Constraint::equal_to_zero(constraint_id, Function::from(linear!(999) + coeff!(1.0)));
-        let removed_constraint = RemovedConstraint {
-            id: constraint.id,
-            equality: constraint.equality,
-            metadata: constraint.metadata,
-            stage: crate::constraint::RemovedData {
-                function: constraint.stage.function,
-                removed_reason: crate::constraint::RemovedReason {
-                    reason: "test".to_string(),
-                    parameters: Default::default(),
-                },
-            },
+        let removed_reason = crate::constraint::RemovedReason {
+            reason: "test".to_string(),
+            parameters: Default::default(),
         };
 
         let err = Instance::builder()
@@ -696,7 +682,9 @@ mod tests {
             .objective(Function::Zero)
             .decision_variables(BTreeMap::new())
             .constraints(BTreeMap::new())
-            .removed_constraints(btreemap! { constraint_id => removed_constraint })
+            .removed_constraints(
+                btreemap! { constraint_id => (removed_constraint, removed_reason) },
+            )
             .build()
             .unwrap_err();
 

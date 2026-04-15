@@ -913,11 +913,6 @@ class EvaluatedConstraint:
         Get the feasibility status
         """
     @property
-    def removed_reason(self) -> typing.Optional[builtins.str]:
-        r"""
-        Get the removal reason
-        """
-    @property
     def name(self) -> typing.Optional[builtins.str]:
         r"""
         Get the constraint name
@@ -3267,7 +3262,9 @@ class Quadratic:
 @typing.final
 class RemovedConstraint:
     r"""
-    RemovedConstraint wrapper for Python
+    RemovedConstraint wrapper for Python.
+
+    Internally holds `(ommx::Constraint, ommx::RemovedReason)`.
     """
     @property
     def constraint(self) -> Constraint: ...
@@ -3692,16 +3689,6 @@ class SampledConstraint:
     def description(self) -> typing.Optional[builtins.str]:
         r"""
         Get the description
-        """
-    @property
-    def removed_reason(self) -> typing.Optional[builtins.str]:
-        r"""
-        Get the removal reason
-        """
-    @property
-    def removed_reason_parameters(self) -> builtins.dict[builtins.str, builtins.str]:
-        r"""
-        Get the removal reason parameters
         """
     @property
     def used_decision_variable_ids(self) -> builtins.set[builtins.int]:

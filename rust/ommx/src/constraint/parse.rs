@@ -69,30 +69,23 @@ impl Parse for v1::Constraint {
 }
 
 impl Parse for v1::RemovedConstraint {
-    type Output = RemovedConstraint;
+    type Output = (Constraint<Created>, RemovedReason);
     type Context = ();
 
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v1.RemovedConstraint";
-        let inner: Constraint<Created> = self
+        let constraint: Constraint<Created> = self
             .constraint
             .ok_or(RawParseError::MissingField {
                 message,
                 field: "constraint",
             })?
             .parse_as(&(), message, "constraint")?;
-        Ok(RemovedConstraint {
-            id: inner.id,
-            equality: inner.equality,
-            metadata: inner.metadata,
-            stage: RemovedData {
-                function: inner.stage.function,
-                removed_reason: RemovedReason {
-                    reason: self.removed_reason,
-                    parameters: self.removed_reason_parameters.into_iter().collect(),
-                },
-            },
-        })
+        let removed_reason = RemovedReason {
+            reason: self.removed_reason,
+            parameters: self.removed_reason_parameters.into_iter().collect(),
+        };
+        Ok((constraint, removed_reason))
     }
 }
 
@@ -116,20 +109,23 @@ impl Parse for Vec<v1::Constraint> {
 }
 
 impl Parse for Vec<v1::RemovedConstraint> {
-    type Output = BTreeMap<ConstraintID, RemovedConstraint>;
+    type Output = BTreeMap<ConstraintID, (Constraint<Created>, RemovedReason)>;
     type Context = BTreeMap<ConstraintID, Constraint<Created>>;
     fn parse(self, constraints: &Self::Context) -> Result<Self::Output, ParseError> {
         let mut removed_constraints = BTreeMap::default();
         for c in self {
-            let c: RemovedConstraint = c.parse(&())?;
-            let id = c.id;
+            let (constraint, reason): (Constraint<Created>, RemovedReason) = c.parse(&())?;
+            let id = constraint.id;
             if constraints.contains_key(&id) {
                 return Err(
                     RawParseError::InstanceError(InstanceError::DuplicatedConstraintID { id })
                         .into(),
                 );
             }
-            if removed_constraints.insert(id, c).is_some() {
+            if removed_constraints
+                .insert(id, (constraint, reason))
+                .is_some()
+            {
                 return Err(
                     RawParseError::InstanceError(InstanceError::DuplicatedConstraintID { id })
                         .into(),
@@ -174,10 +170,6 @@ impl Parse for v1::EvaluatedConstraint {
                     .into_iter()
                     .map(VariableID::from)
                     .collect(),
-                removed_reason: self.removed_reason.map(|reason| RemovedReason {
-                    reason,
-                    parameters: self.removed_reason_parameters.into_iter().collect(),
-                }),
             },
         })
     }
@@ -225,10 +217,6 @@ impl Parse for v1::SampledConstraint {
                     .into_iter()
                     .map(VariableID::from)
                     .collect(),
-                removed_reason: self.removed_reason.map(|reason| RemovedReason {
-                    reason,
-                    parameters: self.removed_reason_parameters.into_iter().collect(),
-                }),
             },
         })
     }
@@ -242,7 +230,7 @@ mod tests {
 
     #[test]
     fn error_message() {
-        let out: Result<RemovedConstraint, ParseError> = v1::RemovedConstraint {
+        let out: Result<(Constraint<Created>, RemovedReason), ParseError> = v1::RemovedConstraint {
             constraint: Some(v1::Constraint {
                 id: 1,
                 function: Some(v1::Function { function: None }),

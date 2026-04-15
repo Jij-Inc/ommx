@@ -1,8 +1,5 @@
 use crate::{
-    v1::{
-        Constraint, Equality, EvaluatedConstraint, Function, RemovedConstraint, SampledConstraint,
-        Samples, State,
-    },
+    v1::{Constraint, Equality, EvaluatedConstraint, Function, SampledConstraint, Samples, State},
     Evaluate, VariableIDSet,
 };
 use anyhow::{bail, Context, Result};
@@ -169,49 +166,5 @@ impl Evaluate for Constraint {
         self.function
             .as_ref()
             .map_or(VariableIDSet::default(), |f| f.required_ids())
-    }
-}
-
-impl Evaluate for RemovedConstraint {
-    type Output = EvaluatedConstraint;
-    type SampledOutput = SampledConstraint;
-
-    fn evaluate(&self, solution: &State, atol: crate::ATol) -> Result<Self::Output> {
-        let mut out = self
-            .constraint
-            .as_ref()
-            .context("RemovedConstraint does not contain constraint")?
-            .evaluate(solution, atol)?;
-        out.removed_reason = Some(self.removed_reason.clone());
-        out.removed_reason_parameters = self.removed_reason_parameters.clone();
-        Ok(out)
-    }
-
-    fn partial_evaluate(&mut self, state: &State, atol: crate::ATol) -> Result<()> {
-        self.constraint
-            .as_mut()
-            .context("RemovedConstraint does not contain constraint")?
-            .partial_evaluate(state, atol)
-    }
-
-    fn evaluate_samples(
-        &self,
-        samples: &Samples,
-        atol: crate::ATol,
-    ) -> Result<Self::SampledOutput> {
-        let mut evaluated = self
-            .constraint
-            .as_ref()
-            .expect("RemovedConstraint does not contain constraint")
-            .evaluate_samples(samples, atol)?;
-        evaluated.removed_reason = Some(self.removed_reason.clone());
-        evaluated.removed_reason_parameters = self.removed_reason_parameters.clone();
-        Ok(evaluated)
-    }
-
-    fn required_ids(&self) -> VariableIDSet {
-        self.constraint
-            .as_ref()
-            .map_or(VariableIDSet::default(), |c| c.required_ids())
     }
 }

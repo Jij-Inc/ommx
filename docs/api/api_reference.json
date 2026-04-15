@@ -5085,23 +5085,6 @@
               "is_readonly": true
             },
             {
-              "name": "removed_reason",
-              "doc": "Get the removal reason",
-              "type_": {
-                "display": "Optional[str]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "str",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
               "name": "subscripts",
               "doc": "Get the subscripts",
               "type_": {
@@ -15571,7 +15554,7 @@
         {
           "kind": "Class",
           "name": "RemovedConstraint",
-          "doc": "RemovedConstraint wrapper for Python",
+          "doc": "RemovedConstraint wrapper for Python.\n\nInternally holds `(ommx::Constraint, ommx::RemovedReason)`.",
           "bases": [],
           "methods": [
             {
@@ -17184,45 +17167,6 @@
                 "display": "Optional[str]",
                 "link_target": null,
                 "children": [
-                  {
-                    "display": "str",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "removed_reason",
-              "doc": "Get the removal reason",
-              "type_": {
-                "display": "Optional[str]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "str",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "removed_reason_parameters",
-              "doc": "Get the removal reason parameters",
-              "type_": {
-                "display": "dict[str, str]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "str",
-                    "link_target": null,
-                    "children": []
-                  },
                   {
                     "display": "str",
                     "link_target": null,

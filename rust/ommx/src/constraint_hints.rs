@@ -9,9 +9,10 @@ use one_hot::OneHotPartialEvaluateResult;
 use sos1::Sos1PartialEvaluateResult;
 
 use crate::{
+    constraint::RemovedReason,
     parse::{Parse, ParseError},
     v1::{self, State},
-    ATol, Constraint, ConstraintID, DecisionVariable, RemovedConstraint, VariableID,
+    ATol, Constraint, ConstraintID, DecisionVariable, VariableID,
 };
 use std::collections::BTreeMap;
 use thiserror::Error;
@@ -122,7 +123,7 @@ impl Parse for v1::ConstraintHints {
     type Context = (
         BTreeMap<VariableID, DecisionVariable>,
         BTreeMap<ConstraintID, Constraint>,
-        BTreeMap<ConstraintID, RemovedConstraint>,
+        BTreeMap<ConstraintID, (Constraint, RemovedReason)>,
     );
     fn parse(self, context: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v1.ConstraintHints";
@@ -375,9 +376,9 @@ mod tests {
     #[test]
     fn test_parse_discards_hints_referencing_removed_constraints() {
         use crate::{
-            constraint::{ConstraintMetadata, CreatedData, Equality, RemovedData},
+            constraint::{ConstraintMetadata, CreatedData, Equality, RemovedReason},
             parse::Parse,
-            Function, RemovedConstraint,
+            Function,
         };
 
         // Create decision variables
@@ -406,18 +407,20 @@ mod tests {
         let mut removed_constraints = BTreeMap::new();
         removed_constraints.insert(
             ConstraintID::from(2),
-            RemovedConstraint {
-                id: ConstraintID::from(2),
-                equality: Equality::EqualToZero,
-                metadata: ConstraintMetadata::default(),
-                stage: RemovedData {
-                    function: Function::Zero,
-                    removed_reason: crate::constraint::RemovedReason {
-                        reason: "test".to_string(),
-                        parameters: Default::default(),
+            (
+                Constraint {
+                    id: ConstraintID::from(2),
+                    equality: Equality::EqualToZero,
+                    metadata: ConstraintMetadata::default(),
+                    stage: CreatedData {
+                        function: Function::Zero,
                     },
                 },
-            },
+                RemovedReason {
+                    reason: "test".to_string(),
+                    parameters: Default::default(),
+                },
+            ),
         );
 
         // Create v1::ConstraintHints with hints referencing both active and removed constraints

@@ -26,18 +26,6 @@ impl EvaluatedConstraint {
     }
 }
 
-impl RemovedConstraint {
-    pub fn to_bytes(&self) -> Vec<u8> {
-        let v1_removed_constraint = v1::RemovedConstraint::from(self.clone());
-        v1_removed_constraint.encode_to_vec()
-    }
-
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
-        let inner = v1::RemovedConstraint::decode(bytes)?;
-        Ok(Parse::parse(inner, &())?)
-    }
-}
-
 impl SampledConstraint {
     pub fn to_bytes(&self) -> Vec<u8> {
         let v1_sampled_constraint = v1::SampledConstraint::from(self.clone());

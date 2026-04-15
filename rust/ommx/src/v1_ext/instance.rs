@@ -1,8 +1,8 @@
 use crate::{
     v1::{
         decision_variable::Kind, instance::Sense, DecisionVariable, Equality, Function, Instance,
-        Linear, Optimality, Relaxation, RemovedConstraint, SampleSet, SampledDecisionVariable,
-        Samples, Solution, State,
+        Linear, Optimality, Relaxation, SampleSet, SampledDecisionVariable, Samples, Solution,
+        State,
     },
     BinaryIdPair, BinaryIds, Bound, Bounds, ConstraintID, Evaluate, InfeasibleDetected, VariableID,
     VariableIDSet,
@@ -138,7 +138,7 @@ impl Instance {
             .position(|c| c.id == constraint_id)
             .with_context(|| format!("Constraint ID {constraint_id} not found"))?;
         let c = self.constraints.remove(index);
-        self.removed_constraints.push(RemovedConstraint {
+        self.removed_constraints.push(crate::v1::RemovedConstraint {
             constraint: Some(c),
             removed_reason,
             removed_reason_parameters,
@@ -644,8 +644,14 @@ impl Evaluate for Instance {
             evaluated_constraints.push(c);
         }
         let mut feasible = feasible_relaxed;
-        for c in &self.removed_constraints {
-            let c = c.evaluate(state, atol)?;
+        for rc in &self.removed_constraints {
+            let inner = rc
+                .constraint
+                .as_ref()
+                .context("RemovedConstraint does not contain constraint")?;
+            let mut c = inner.evaluate(state, atol)?;
+            c.removed_reason = Some(rc.removed_reason.clone());
+            c.removed_reason_parameters = rc.removed_reason_parameters.clone();
             if feasible {
                 feasible = c.is_feasible(atol)?;
             }
@@ -692,8 +698,11 @@ impl Evaluate for Instance {
         for constraints in &mut self.constraints {
             constraints.partial_evaluate(state, atol)?;
         }
-        for constraints in &mut self.removed_constraints {
-            constraints.partial_evaluate(state, atol)?;
+        for rc in &mut self.removed_constraints {
+            rc.constraint
+                .as_mut()
+                .context("RemovedConstraint does not contain constraint")?
+                .partial_evaluate(state, atol)?;
         }
         for d in self.decision_variable_dependency.values_mut() {
             d.partial_evaluate(state, atol)?;
@@ -721,8 +730,14 @@ impl Evaluate for Instance {
             constraints.push(evaluated);
         }
         let mut feasible = feasible_relaxed.clone();
-        for c in &self.removed_constraints {
-            let v = c.evaluate_samples(samples, atol)?;
+        for rc in &self.removed_constraints {
+            let inner = rc
+                .constraint
+                .as_ref()
+                .context("RemovedConstraint does not contain constraint")?;
+            let mut v = inner.evaluate_samples(samples, atol)?;
+            v.removed_reason = Some(rc.removed_reason.clone());
+            v.removed_reason_parameters = rc.removed_reason_parameters.clone();
             for (sample_id, feasible_) in v.is_feasible(atol)? {
                 if !feasible_ {
                     feasible.insert(sample_id, false);
