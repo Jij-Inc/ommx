@@ -711,6 +711,30 @@ impl SolutionBuilder {
             }
         }
 
+        // Validate indicator constraint keys match their id
+        for (key, value) in self.evaluated_indicator_constraints.iter() {
+            if *key != value.id {
+                return Err(SolutionError::InconsistentConstraintID {
+                    key: (*key).into_inner().into(),
+                    value_id: value.id.into_inner().into(),
+                }
+                .into());
+            }
+        }
+
+        // Validate all used_decision_variable_ids are in decision_variables
+        for ic in self.evaluated_indicator_constraints.values() {
+            for var_id in &ic.stage.used_decision_variable_ids {
+                if !decision_variables.contains_key(var_id) {
+                    return Err(SolutionError::UndefinedVariableInConstraint {
+                        id: *var_id,
+                        constraint_id: ic.id.into_inner().into(),
+                    }
+                    .into());
+                }
+            }
+        }
+
         // Validate all used_decision_variable_ids are in decision_variables
         for constraint in evaluated_constraints.values() {
             for var_id in &constraint.stage.used_decision_variable_ids {
