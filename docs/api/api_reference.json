@@ -16659,7 +16659,7 @@
             },
             {
               "name": "constraints_df",
-              "doc": "DataFrame of constraints with per-sample value and feasibility columns.\nStatic columns: id, equality, used_ids, name, subscripts, description, removed_reason, removed_reason_parameters.\nDynamic columns: value.{sample_id} and feasible.{sample_id} for each sample.",
+              "doc": "DataFrame of constraints with per-sample value and feasibility columns.\nStatic columns: id, equality, used_ids, name, subscripts, description.\nDynamic columns: value.{sample_id} and feasible.{sample_id} for each sample.",
               "type_": {
                 "display": "DataFrame",
                 "link_target": null,
@@ -16925,6 +16925,17 @@
                 ]
               },
               "is_property": true
+            },
+            {
+              "name": "removed_reasons_df",
+              "doc": "DataFrame of removed constraint reasons.\n\nColumns: id (index), removed_reason, removed_reason.{key}\n\nCan be joined with `constraints_df` on the `id` column.",
+              "type_": {
+                "display": "DataFrame",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
             },
             {
               "name": "sample_ids_list",
@@ -18526,7 +18537,7 @@
             },
             {
               "name": "constraints_df",
-              "doc": "DataFrame of evaluated constraints\n\nColumns: id (index), equality, value, used_ids, name, subscripts, description, dual_variable, removed_reason",
+              "doc": "DataFrame of evaluated constraints\n\nColumns: id (index), equality, value, used_ids, name, subscripts, description, dual_variable",
               "type_": {
                 "display": "DataFrame",
                 "link_target": null,
@@ -18802,6 +18813,17 @@
                 "children": []
               },
               "is_property": true
+            },
+            {
+              "name": "removed_reasons_df",
+              "doc": "DataFrame of removed constraint reasons.\n\nColumns: id (index), removed_reason, removed_reason.{key}\n\nCan be joined with `constraints_df` on the `id` column.",
+              "type_": {
+                "display": "DataFrame",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
             },
             {
               "name": "sense",

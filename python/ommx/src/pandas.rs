@@ -404,6 +404,24 @@ impl ToPandasEntry for ommx::EvaluatedConstraint {
     }
 }
 
+/// Entry for removed_reasons_df: constraint_id → removed_reason, removed_reason.{key}
+pub struct RemovedReasonEntry<'a> {
+    pub id: u64,
+    pub reason: &'a ommx::RemovedReason,
+}
+
+impl ToPandasEntry for RemovedReasonEntry<'_> {
+    fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let dict = PyDict::new(py);
+        dict.set_item("id", self.id)?;
+        dict.set_item("removed_reason", &self.reason.reason)?;
+        for (key, value) in &self.reason.parameters {
+            dict.set_item(format!("removed_reason.{key}"), value)?;
+        }
+        Ok(dict)
+    }
+}
+
 impl ToPandasEntry for ommx::EvaluatedNamedFunction {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let dict = PyDict::new(py);

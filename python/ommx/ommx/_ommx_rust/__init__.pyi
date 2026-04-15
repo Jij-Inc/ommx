@@ -3548,8 +3548,17 @@ class SampleSet:
     def constraints_df(self) -> pandas.DataFrame:
         r"""
         DataFrame of constraints with per-sample value and feasibility columns.
-        Static columns: id, equality, used_ids, name, subscripts, description, removed_reason, removed_reason_parameters.
+        Static columns: id, equality, used_ids, name, subscripts, description.
         Dynamic columns: value.{sample_id} and feasible.{sample_id} for each sample.
+        """
+    @property
+    def removed_reasons_df(self) -> pandas.DataFrame:
+        r"""
+        DataFrame of removed constraint reasons.
+
+        Columns: id (index), removed_reason, removed_reason.{key}
+
+        Can be joined with `constraints_df` on the `id` column.
         """
     @property
     def named_functions_df(self) -> pandas.DataFrame:
@@ -4007,7 +4016,16 @@ class Solution:
         r"""
         DataFrame of evaluated constraints
 
-        Columns: id (index), equality, value, used_ids, name, subscripts, description, dual_variable, removed_reason
+        Columns: id (index), equality, value, used_ids, name, subscripts, description, dual_variable
+        """
+    @property
+    def removed_reasons_df(self) -> pandas.DataFrame:
+        r"""
+        DataFrame of removed constraint reasons.
+
+        Columns: id (index), removed_reason, removed_reason.{key}
+
+        Can be joined with `constraints_df` on the `id` column.
         """
     @property
     def named_functions_df(self) -> pandas.DataFrame:

@@ -456,10 +456,32 @@ impl Solution {
 
     /// DataFrame of evaluated constraints
     ///
-    /// Columns: id (index), equality, value, used_ids, name, subscripts, description, dual_variable, removed_reason
+    /// Columns: id (index), equality, value, used_ids, name, subscripts, description, dual_variable
     #[getter]
     pub fn constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
         entries_to_dataframe(py, self.inner.evaluated_constraints().values(), "id")
+    }
+
+    /// DataFrame of removed constraint reasons.
+    ///
+    /// Columns: id (index), removed_reason, removed_reason.{key}
+    ///
+    /// Can be joined with `constraints_df` on the `id` column.
+    #[getter]
+    pub fn removed_reasons_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
+        use crate::pandas::RemovedReasonEntry;
+        entries_to_dataframe(
+            py,
+            self.inner
+                .evaluated_constraints()
+                .removed_reasons()
+                .iter()
+                .map(|(id, reason)| RemovedReasonEntry {
+                    id: id.into_inner(),
+                    reason,
+                }),
+            "id",
+        )
     }
 
     /// DataFrame of evaluated named functions
