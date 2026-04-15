@@ -89,6 +89,19 @@ impl Instance {
             );
         }
 
+        if self
+            .decision_variables
+            .get(&indicator_variable)
+            .and_then(|dv| dv.substituted_value())
+            .is_some()
+        {
+            anyhow::bail!(
+                "Cannot restore indicator constraint {:?}: indicator variable {:?} has been fixed",
+                id,
+                indicator_variable
+            );
+        }
+
         self.indicator_constraint_collection.restore(id)?;
         let fixed_state = self.fixed_state();
         let ic = self
