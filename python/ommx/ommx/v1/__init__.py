@@ -2,6 +2,7 @@
 # ruff: noqa: F401
 
 from ommx._ommx_rust import (
+    AdditionalCapability,
     Bound,
     Constraint,
     ConstraintHints,
@@ -12,6 +13,7 @@ from ommx._ommx_rust import (
     EvaluatedDecisionVariable,
     EvaluatedNamedFunction,
     Function,
+    IndicatorConstraint,
     Instance,
     Kind,
     Linear,
@@ -39,6 +41,7 @@ from ommx._ommx_rust import (
 )
 
 __all__ = [
+    "AdditionalCapability",
     "Bound",
     "Constraint",
     "ConstraintHints",
@@ -49,6 +52,7 @@ __all__ = [
     "EvaluatedDecisionVariable",
     "EvaluatedNamedFunction",
     "Function",
+    "IndicatorConstraint",
     "Instance",
     "Kind",
     "Linear",

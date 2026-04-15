@@ -280,6 +280,23 @@ impl Constraint {
         self.clone()
     }
 
+    /// Create an indicator constraint from this constraint.
+    ///
+    /// Returns an IndicatorConstraint where `indicator_variable = 1 → this constraint`.
+    pub fn with_indicator(
+        &self,
+        indicator_variable: &crate::DecisionVariable,
+    ) -> crate::IndicatorConstraint {
+        let mut ic = ommx::IndicatorConstraint::new(
+            ommx::IndicatorConstraintID::from(self.0.id.into_inner()),
+            indicator_variable.0.id(),
+            self.0.equality,
+            self.0.stage.function.clone(),
+        );
+        ic.metadata = self.0.metadata.clone();
+        crate::IndicatorConstraint(ic)
+    }
+
     pub fn __repr__(&self) -> String {
         self.0.to_string()
     }

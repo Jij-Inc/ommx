@@ -281,9 +281,11 @@ Finally, create a class that inherits `ommx.adapter.SolverAdapter` to standardiz
 
 ```python
 class SolverAdapter(ABC):
-    @abstractmethod
+    ADDITIONAL_CAPABILITIES: set[AdditionalCapability] = set()
+
     def __init__(self, ommx_instance: Instance):
-        pass
+        """Checks constraint capabilities. Subclasses must call super().__init__()."""
+        ommx_instance.check_capabilities(self.ADDITIONAL_CAPABILITIES)
 
     @classmethod
     @abstractmethod
@@ -305,16 +307,33 @@ This abstract base class assumes the following two use cases:
 - If you do not adjust the backend solver's parameters, use the `solve` class method.
 - If you adjust the backend solver's parameters, use `solver_input` to get the data structure for the backend solver (in this case, `pyscipopt.Model`), adjust it, then input it to the backend solver, and finally convert the backend solver's output using `decode`.
 
+#### Constraint Capability Declaration
+
+Each adapter must declare which constraint types it supports via the `ADDITIONAL_CAPABILITIES` class attribute. The base class automatically checks that the given `Instance` only uses supported constraint types when `super().__init__()` is called. Available capabilities are:
+
+- `AdditionalCapability.Indicator`: Indicator constraints (`binvar = 1 → f(x) <= 0`)
+
+If the adapter does not override `ADDITIONAL_CAPABILITIES`, only standard constraints are supported by default. If an `Instance` contains unsupported constraint types, an error is raised automatically.
+
+```{important}
+Subclasses **must** call `super().__init__(ommx_instance)` in their `__init__` method to enable the automatic constraint capability check.
+```
+
 Using the functions prepared so far, you can implement it as follows:
 
 ```{code-cell} ipython3
 from ommx.adapter import SolverAdapter
+from ommx.v1 import AdditionalCapability
 
 class OMMXPySCIPOptAdapter(SolverAdapter):
+    # PySCIPOpt supports both standard and indicator constraints
+    ADDITIONAL_CAPABILITIES = {AdditionalCapability.Indicator}
+
     def __init__(
         self,
         ommx_instance: Instance,
     ):
+        super().__init__(ommx_instance)  # Check constraint capabilities
         self.instance = ommx_instance
         self.model = pyscipopt.Model()
         self.model.hideOutput()
@@ -481,6 +500,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     ommx_instance: Instance
     
     def __init__(self, ommx_instance: Instance):
+        super().__init__(ommx_instance)  # Check constraint capabilities
         self.ommx_instance = ommx_instance
 
     # Perform sampling
@@ -559,12 +579,13 @@ sample_set.summary
 In this tutorial, we learned how to implement an OMMX Adapter by connecting to PySCIPOpt as a Solver Adapter and OpenJij as a Sampler Adapter. Here are the key points when implementing an OMMX Adapter:
 
 1. Implement an OMMX Adapter by inheriting the abstract base class `SolverAdapter` or `SamplerAdapter`.
-2. The main steps of the implementation are as follows:
+2. Declare supported constraint types via `ADDITIONAL_CAPABILITIES` and call `super().__init__()` to enable automatic capability checking.
+3. The main steps of the implementation are as follows:
    - Convert `ommx.v1.Instance` into a format that the backend solver can understand.
    - Run the backend solver to obtain a solution.
    - Convert the backend solver's output into `ommx.v1.Solution` or `ommx.v1.SampleSet`.
-3. Understand the characteristics and limitations of each backend solver and handle them appropriately.
-4. Pay attention to managing IDs and mapping variables to bridge the backend solver and OMMX.
+4. Understand the characteristics and limitations of each backend solver and handle them appropriately.
+5. Pay attention to managing IDs and mapping variables to bridge the backend solver and OMMX.
 
 If you want to connect your own backend solver to OMMX, refer to this tutorial for implementation. By implementing an OMMX Adapter following this tutorial, you can use optimization with various backend solvers through a common API.
 

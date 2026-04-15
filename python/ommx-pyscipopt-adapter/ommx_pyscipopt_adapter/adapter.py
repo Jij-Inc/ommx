@@ -17,6 +17,7 @@ from ommx.v1 import (
     DecisionVariable,
     Function,
     Constraint,
+    AdditionalCapability,
     State,
     ToState,
 )
@@ -28,6 +29,7 @@ HintMode = Literal["disabled", "auto", "forced"]
 
 
 class OMMXPySCIPOptAdapter(SolverAdapter):
+    ADDITIONAL_CAPABILITIES = frozenset({AdditionalCapability.Indicator})
     use_sos1: HintMode
 
     def __init__(
@@ -45,6 +47,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             - "forced": Require SOS1 constraints and raise an error if no SOS1 constraint hints are found.
         :param initial_state: Optional initial solution state.
         """
+        super().__init__(ommx_instance)
         self.instance = ommx_instance
         self.use_sos1 = use_sos1
         self.model = pyscipopt.Model()
@@ -432,6 +435,56 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                 )
 
             self.model.addCons(constr_expr, name=str(constraint.id))
+
+        # Handle indicator constraints
+        for indicator in self.instance.indicator_constraints:
+            f = indicator.function
+            degree = f.degree()
+            if degree == 0:
+                # Constant indicator constraint: check feasibility statically
+                # When indicator is ON, the constant constraint must hold
+                constant_value = f.constant_term
+                is_feasible = (
+                    indicator.equality == Constraint.EQUAL_TO_ZERO
+                    and math.isclose(constant_value, 0, abs_tol=1e-6)
+                ) or (
+                    indicator.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
+                    and constant_value <= 1e-6
+                )
+                if is_feasible:
+                    continue  # Always feasible, skip
+                # If infeasible when indicator is ON, add indicator constraint
+                # that forces indicator to be 0
+                binvar = self.varname_map[str(indicator.indicator_variable_id)]
+                self.model.addCons(binvar == 0, name=f"ind_{indicator.id}_forced_off")
+                continue
+            elif degree == 1:
+                expr = self._make_linear_expr(f)
+            else:
+                raise OMMXPySCIPOptAdapterError(
+                    f"Indicator constraints must be linear. "
+                    f"id: {indicator.id}, degree: {degree}"
+                )
+
+            binvar = self.varname_map[str(indicator.indicator_variable_id)]
+
+            if indicator.equality == Constraint.EQUAL_TO_ZERO:
+                # Decompose f(x) == 0 into two indicator constraints
+                self.model.addConsIndicator(
+                    expr <= 0, binvar=binvar, name=f"ind_{indicator.id}_le"
+                )
+                self.model.addConsIndicator(
+                    -expr <= 0, binvar=binvar, name=f"ind_{indicator.id}_ge"
+                )
+            elif indicator.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO:
+                self.model.addConsIndicator(
+                    expr <= 0, binvar=binvar, name=f"ind_{indicator.id}"
+                )
+            else:
+                raise OMMXPySCIPOptAdapterError(
+                    f"Not supported indicator constraint equality: "
+                    f"id: {indicator.id}, equality: {indicator.equality}"
+                )
 
     def _make_linear_expr(self, f: Function) -> pyscipopt.Expr:
         return (

@@ -1521,6 +1521,21 @@
       "items": [
         {
           "kind": "Class",
+          "name": "AdditionalCapability",
+          "doc": "Constraint type capability flag for non-standard constraint types.\n\nStandard constraints are always supported. This enum lists capabilities\nthat adapters must explicitly opt in to.\n\nUse as a set: `{AdditionalCapability.Indicator}`",
+          "bases": [],
+          "methods": [],
+          "attributes": [
+            {
+              "name": "Indicator",
+              "doc": "Indicator constraints: binvar = 1 → f(x) <= 0",
+              "type_": null
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
           "name": "Bound",
           "doc": "Variable bound wrapper for Python\n\nNote: This struct is named `VariableBound` in Rust code to avoid conflicts with PyO3's `Bound` type,\nbut is exposed as `Bound` in Python through the `#[pyclass(name = \"Bound\")]` attribute.",
           "bases": [],
@@ -2484,6 +2499,32 @@
                   "parameters": [],
                   "return_type": {
                     "display": "bytes",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "with_indicator",
+              "doc": "Create an indicator constraint from this constraint.\n\nReturns an IndicatorConstraint where `indicator_variable = 1 → this constraint`.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "indicator_variable",
+                      "type_": {
+                        "display": "DecisionVariable",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "IndicatorConstraint",
                     "link_target": null,
                     "children": []
                   }
@@ -6871,6 +6912,393 @@
         },
         {
           "kind": "Class",
+          "name": "IndicatorConstraint",
+          "doc": "",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__copy__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "IndicatorConstraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__deepcopy__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "_memo",
+                      "type_": {
+                        "display": "Any",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "IndicatorConstraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__new__",
+              "doc": "Create a new indicator constraint.\n\nAn indicator constraint is: `indicator_variable = 1 → f(x) <= 0` (or `f(x) = 0`).\n\n**Args:**\n\n- `indicator_variable`: A binary decision variable that activates this constraint\n- `function`: The constraint function\n- `equality`: The equality type (EqualToZero or LessThanOrEqualToZero)\n- `id`: Optional constraint ID (auto-generated if not provided)\n- `name`: Optional name for the constraint\n- `subscripts`: Optional subscripts for indexing\n- `description`: Optional description\n- `parameters`: Optional key-value parameters",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "indicator_variable",
+                      "type_": {
+                        "display": "DecisionVariable",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "function",
+                      "type_": {
+                        "display": "ToFunction",
+                        "link_target": {
+                          "fqn": "ommx._ommx_rust.ToFunction",
+                          "doc_module": "ommx._ommx_rust",
+                          "kind": "Class",
+                          "attribute": null
+                        },
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "equality",
+                      "type_": {
+                        "display": "Equality",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "id",
+                      "type_": {
+                        "display": "Optional[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "subscripts",
+                      "type_": {
+                        "display": "Sequence[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "[]"
+                      }
+                    },
+                    {
+                      "name": "description",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "parameters",
+                      "type_": {
+                        "display": "Mapping[str, str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "{}"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "IndicatorConstraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "set_id",
+              "doc": "Set the constraint ID. Returns a new IndicatorConstraint.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "id",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "IndicatorConstraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "set_name",
+              "doc": "Set the constraint name. Returns a new IndicatorConstraint.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "IndicatorConstraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "description",
+              "doc": "",
+              "type_": {
+                "display": "Optional[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "equality",
+              "doc": "",
+              "type_": {
+                "display": "Equality",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "function",
+              "doc": "",
+              "type_": {
+                "display": "Function",
+                "link_target": {
+                  "fqn": "ommx.v1.Function",
+                  "doc_module": "ommx.v1",
+                  "kind": "Class",
+                  "attribute": null
+                },
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "id",
+              "doc": "",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "indicator_variable_id",
+              "doc": "",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "name",
+              "doc": "",
+              "type_": {
+                "display": "Optional[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "parameters",
+              "doc": "",
+              "type_": {
+                "display": "dict[str, str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "subscripts",
+              "doc": "",
+              "type_": {
+                "display": "list[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
           "name": "Instance",
           "doc": "Optimization problem instance.\n\nNote that this class also contains annotations like {attr}`~ommx.v1.Instance.title` which are not contained in protobuf message but stored in OMMX artifact.\nThese annotations are loaded from annotations while reading from OMMX artifact.\n\n# Examples\n\nCreate an instance for KnapSack Problem\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable\n```\n\nProfit and weight of items\n\n```python\n>>> p = [10, 13, 18, 31, 7, 15]\n>>> w = [11, 15, 20, 35, 10, 33]\n```\n\nDecision variables\n\n```python\n>>> x = [DecisionVariable.binary(i) for i in range(6)]\n```\n\nObjective and constraint\n\n```python\n>>> objective = sum(p[i] * x[i] for i in range(6))\n>>> constraint = sum(w[i] * x[i] for i in range(6)) <= 47\n```\n\nCompose as an instance\n\n```python\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=objective,\n...     constraints=[constraint],\n...     sense=Instance.MAXIMIZE,\n... )\n```",
           "bases": [],
@@ -7157,6 +7585,38 @@
               "deprecated": null
             },
             {
+              "name": "check_capabilities",
+              "doc": "Check that the adapter's supported capabilities cover this instance's requirements.\n\n`supported` is a set of `AdditionalCapability` flags.\n\nRaises an error if the instance uses constraint types not in `supported`.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "supported",
+                      "type_": {
+                        "display": "set[AdditionalCapability]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "AdditionalCapability",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "convert_inequality_to_equality_with_integer_slack",
               "doc": "Convert an inequality constraint $f(x) \\leq 0$ to an equality constraint $f(x) + s/a = 0$ with an integer slack variable $s$.\n\n- Since $a$ is determined as the minimal multiplier to make every coefficient of $a f(x)$ integer,\n  $a$ itself and the range of $s$ becomes impractically large. ``max_integer_range`` limits the maximal\n  range of $s$, and returns error if the range exceeds it.\n\n- Since this method evaluates the bound of $f(x)$, we may find that:\n\n  - The bound $[l, u]$ is strictly positive, i.e. $l > 0$:\n    this means the instance is infeasible because this constraint never be satisfied,\n    and an error is raised.\n\n  - The bound $[l, u]$ is always negative, i.e. $u \\leq 0$:\n    this means this constraint is trivially satisfied,\n    the constraint is moved to {attr}`~ommx.v1.Instance.removed_constraints`,\n    and this method returns without introducing slack variable or raising an error.\n\n# Examples\n\nLet's consider a simple inequality constraint x0 + 2*x1 <= 5.\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable\n>>> x = [\n...     DecisionVariable.integer(i, lower=0, upper=3, name=\"x\", subscripts=[i])\n...     for i in range(3)\n... ]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[\n...         (x[0] + 2*x[1] <= 5).set_id(0)\n...     ],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.constraints[0]\nConstraint(x0 + 2*x1 - 5 <= 0)\n```\n\nIntroduce an integer slack variable\n\n```python\n>>> instance.convert_inequality_to_equality_with_integer_slack(\n...     constraint_id=0,\n...     max_integer_range=32\n... )\n>>> instance.constraints[0]\nConstraint(x0 + 2*x1 + x3 - 5 == 0)\n```",
               "signatures": [
@@ -7405,6 +7865,30 @@
                         ]
                       },
                       "default": null
+                    },
+                    {
+                      "name": "indicator_constraints",
+                      "type_": {
+                        "display": "Optional[Sequence[IndicatorConstraint]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Sequence[IndicatorConstraint]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "IndicatorConstraint",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
                     },
                     {
                       "name": "named_functions",
@@ -8500,6 +8984,34 @@
                     "children": []
                   }
                 ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "indicator_constraints",
+              "doc": "List of all indicator constraints in the instance sorted by their IDs.",
+              "type_": {
+                "display": "list[IndicatorConstraint]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "IndicatorConstraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "indicator_constraints_df",
+              "doc": "DataFrame of indicator constraints",
+              "type_": {
+                "display": "DataFrame",
+                "link_target": null,
+                "children": []
               },
               "is_property": true,
               "is_readonly": true
@@ -19135,6 +19647,7 @@
     "ommx.artifact.get_images": "ommx.artifact",
     "ommx.artifact.get_local_registry_root": "ommx.artifact",
     "ommx.artifact.set_local_registry_root": "ommx.artifact",
+    "ommx.v1.AdditionalCapability": "ommx.v1",
     "ommx.v1.Bound": "ommx.v1",
     "ommx.v1.Constraint": "ommx.v1",
     "ommx.v1.ConstraintHints": "ommx.v1",
@@ -19145,6 +19658,7 @@
     "ommx.v1.EvaluatedDecisionVariable": "ommx.v1",
     "ommx.v1.EvaluatedNamedFunction": "ommx.v1",
     "ommx.v1.Function": "ommx.v1",
+    "ommx.v1.IndicatorConstraint": "ommx.v1",
     "ommx.v1.Instance": "ommx.v1",
     "ommx.v1.Kind": "ommx.v1",
     "ommx.v1.Linear": "ommx.v1",

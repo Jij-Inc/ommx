@@ -11,4 +11,12 @@ pub enum SubstitutionError {
     /// Error indicating that a cycle was detected in the assignment graph.
     #[error("Cyclic assignment detected: circular dependency found in variable assignments")]
     CyclicAssignmentDetected,
+
+    /// Substituting an indicator variable is not yet supported.
+    /// Fixing it to 1 would convert to a regular constraint, fixing to 0 would remove it.
+    #[error("Cannot substitute indicator variable {indicator_variable:?} of indicator constraint {constraint_id:?}")]
+    IndicatorVariableSubstitution {
+        indicator_variable: VariableID,
+        constraint_id: crate::indicator_constraint::IndicatorConstraintID,
+    },
 }

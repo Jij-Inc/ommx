@@ -30,12 +30,33 @@ pub use parametric_builder::*;
 pub use stats::*;
 
 use crate::{
-    constraint_hints::ConstraintHints, constraint_type::ConstraintCollection,
-    named_function::NamedFunctionID, parse::Parse, v1, AcyclicAssignments, Constraint,
-    ConstraintID, DecisionVariable, Evaluate, Function, NamedFunction, RemovedConstraint,
-    VariableID, VariableIDSet,
+    constraint_hints::ConstraintHints,
+    constraint_type::ConstraintCollection,
+    indicator_constraint::{IndicatorConstraint, RemovedIndicatorConstraint},
+    named_function::NamedFunctionID,
+    parse::Parse,
+    v1, AcyclicAssignments, Constraint, ConstraintID, DecisionVariable, Evaluate, Function,
+    NamedFunction, RemovedConstraint, VariableID, VariableIDSet,
 };
 use std::collections::BTreeMap;
+
+/// A constraint type capability flag for non-standard constraint types.
+///
+/// Standard constraints (`f(x) = 0` or `f(x) <= 0`) are always supported by all adapters
+/// and do not need a capability flag. This enum only lists capabilities that adapters
+/// must explicitly opt in to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum AdditionalCapability {
+    /// Indicator constraints: binvar = 1 → f(x) <= 0
+    Indicator,
+}
+
+/// Error returned when an Instance contains unsupported constraint types.
+#[derive(Debug, Clone, thiserror::Error)]
+#[error("Unsupported constraint types: {unsupported:?}")]
+pub struct UnsupportedCapabilities {
+    pub unsupported: Vec<AdditionalCapability>,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub enum Sense {
@@ -45,6 +66,22 @@ pub enum Sense {
 }
 
 /// Instance, represents a mathematical optimization problem.
+///
+/// # Multi-type constraint architecture
+///
+/// Instance holds multiple [`ConstraintCollection`]s, one per constraint type:
+/// - [`Constraint`]: standard constraints (`f(x) = 0` or `f(x) <= 0`)
+/// - [`IndicatorConstraint`]: indicator constraints (`binvar = 1 → f(x) <= 0`)
+///
+/// Future constraint types (Disjunction, SOS1, OneHot, etc.) follow the same pattern:
+/// add a new `ConstraintCollection<NewType>` field. See [`crate::constraint_type::ConstraintType`] for details.
+///
+/// Each constraint type has its own independent [`ConstraintID`] space:
+/// constraint ID 1 for a regular constraint and constraint ID 1 for an indicator constraint
+/// are distinct and do not conflict. Uniqueness is only required within the same type
+/// (i.e. active and removed constraints of the same type must have disjoint IDs).
+///
+/// Adapter compatibility is checked via [`AdditionalCapability`] and [`Instance::check_capabilities`].
 ///
 /// Invariants
 /// -----------
@@ -76,6 +113,9 @@ pub struct Instance {
 
     /// Regular constraints collection (active + removed).
     constraint_collection: ConstraintCollection<Constraint>,
+
+    /// Indicator constraints collection (active + removed).
+    indicator_constraint_collection: ConstraintCollection<IndicatorConstraint>,
 
     #[getset(get = "pub")]
     decision_variable_dependency: AcyclicAssignments,
@@ -111,6 +151,56 @@ impl Instance {
     /// The full constraint collection (active + removed).
     pub fn constraint_collection(&self) -> &ConstraintCollection<Constraint> {
         &self.constraint_collection
+    }
+
+    /// Active indicator constraints.
+    pub fn indicator_constraints(
+        &self,
+    ) -> &BTreeMap<crate::IndicatorConstraintID, IndicatorConstraint> {
+        self.indicator_constraint_collection.active()
+    }
+
+    /// Removed indicator constraints.
+    pub fn removed_indicator_constraints(
+        &self,
+    ) -> &BTreeMap<crate::IndicatorConstraintID, RemovedIndicatorConstraint> {
+        self.indicator_constraint_collection.removed()
+    }
+
+    /// The full indicator constraint collection (active + removed).
+    pub fn indicator_constraint_collection(&self) -> &ConstraintCollection<IndicatorConstraint> {
+        &self.indicator_constraint_collection
+    }
+
+    /// Returns the set of non-standard constraint capabilities required by this instance.
+    ///
+    /// Only **active** constraints are considered. Removed (relaxed) constraints are excluded
+    /// because they are not passed to solver adapters — adapters only need to handle
+    /// constraint types that are actively part of the problem.
+    pub fn required_capabilities(&self) -> fnv::FnvHashSet<AdditionalCapability> {
+        let mut caps = fnv::FnvHashSet::default();
+        if !self.indicator_constraint_collection.active().is_empty() {
+            caps.insert(AdditionalCapability::Indicator);
+        }
+        caps
+    }
+
+    /// Check that the given supported capabilities cover all constraint types in this instance.
+    ///
+    /// Only active constraints are checked (see [`Self::required_capabilities`]).
+    ///
+    /// Returns an error listing unsupported constraint types if any are found.
+    pub fn check_capabilities(
+        &self,
+        supported: &fnv::FnvHashSet<AdditionalCapability>,
+    ) -> Result<(), UnsupportedCapabilities> {
+        let required = self.required_capabilities();
+        let unsupported: Vec<_> = required.difference(supported).copied().collect();
+        if unsupported.is_empty() {
+            Ok(())
+        } else {
+            Err(UnsupportedCapabilities { unsupported })
+        }
     }
 }
 
@@ -148,6 +238,9 @@ pub struct ParametricInstance {
     /// Regular constraints collection (active + removed).
     constraint_collection: ConstraintCollection<Constraint>,
 
+    /// Indicator constraints collection (active + removed).
+    indicator_constraint_collection: ConstraintCollection<IndicatorConstraint>,
+
     #[getset(get = "pub")]
     decision_variable_dependency: AcyclicAssignments,
     #[getset(get = "pub")]
@@ -176,5 +269,19 @@ impl ParametricInstance {
     /// Removed constraints.
     pub fn removed_constraints(&self) -> &BTreeMap<ConstraintID, RemovedConstraint> {
         self.constraint_collection.removed()
+    }
+
+    /// Active indicator constraints.
+    pub fn indicator_constraints(
+        &self,
+    ) -> &BTreeMap<crate::IndicatorConstraintID, IndicatorConstraint> {
+        self.indicator_constraint_collection.active()
+    }
+
+    /// Removed indicator constraints.
+    pub fn removed_indicator_constraints(
+        &self,
+    ) -> &BTreeMap<crate::IndicatorConstraintID, RemovedIndicatorConstraint> {
+        self.indicator_constraint_collection.removed()
     }
 }

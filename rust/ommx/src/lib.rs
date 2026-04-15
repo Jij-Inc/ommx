@@ -85,6 +85,29 @@
 //! );
 //! ```
 //!
+//! ## Constraint Type System
+//!
+//! OMMX supports multiple constraint types beyond standard `f(x) = 0` / `f(x) <= 0`:
+//!
+//! - **[`Constraint`]**: Standard constraints
+//! - **[`IndicatorConstraint`]**: `indicator_variable = 1 → f(x) <= 0`
+//!
+//! Each constraint type follows the **Stage pattern** — parameterized by lifecycle phase
+//! (`Created`, `Removed`, `Evaluated`, `Sampled`) — and implements the
+//! [`ConstraintType`] trait, which maps all four stages
+//! as associated types (a defunctionalization of `Stage → Type` since Rust lacks HKTs).
+//!
+//! Each constraint type also has its own independent ID type
+//! ([`ConstraintID`], [`IndicatorConstraintID`]) to prevent accidental cross-type lookups.
+//!
+//! Three generic collection wrappers handle constraints uniformly:
+//!
+//! - [`ConstraintCollection`]: active + removed (used in [`Instance`])
+//! - [`EvaluatedCollection`]: evaluation results (used in [`Solution`])
+//! - [`SampledCollection`]: sampled results (used in [`SampleSet`])
+//!
+//! To add a new constraint type, see the docs on [`ConstraintType`].
+//!
 //! ## [`Instance`]
 //!
 //! The [`Instance`] type represents a complete optimization problem with objective, variables,
@@ -274,6 +297,7 @@ mod decision_variable;
 mod evaluate;
 mod format;
 mod function;
+mod indicator_constraint;
 mod infeasible_detected;
 mod instance;
 mod macros;
@@ -293,6 +317,7 @@ pub use constraint_type::*;
 pub use decision_variable::*;
 pub use evaluate::Evaluate;
 pub use function::*;
+pub use indicator_constraint::*;
 pub use infeasible_detected::*;
 pub use instance::*;
 pub use named_function::*;

@@ -126,12 +126,44 @@ impl<'py> FromPyObject<'_, 'py> for Function {
 
 pyo3_stub_gen::impl_py_runtime_type!(Function);
 
-// Type alias: ToFunction = int | float | DecisionVariable | Linear | Quadratic | Polynomial | Function
-// i64 and f64 have PyStubType/PyRuntimeType provided by pyo3-stub-gen builtins
+// Marker types for numpy scalar types in stubs
+macro_rules! numpy_stub_marker {
+    ($marker:ident, $numpy_name:expr, $numpy_attr:expr) => {
+        pub struct $marker;
+        impl pyo3_stub_gen::PyStubType for $marker {
+            fn type_output() -> pyo3_stub_gen::TypeInfo {
+                pyo3_stub_gen::TypeInfo {
+                    name: format!("numpy.{}", $numpy_name),
+                    source_module: None,
+                    import: std::collections::HashSet::from(["numpy".into()]),
+                    type_refs: std::collections::HashMap::new(),
+                }
+            }
+        }
+        impl pyo3_stub_gen::runtime::PyRuntimeType for $marker {
+            fn runtime_type_object(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+                let numpy = py.import("numpy")?;
+                numpy.getattr($numpy_attr)
+            }
+        }
+    };
+}
+numpy_stub_marker!(NumpyInteger, "integer", "integer");
+numpy_stub_marker!(NumpyFloating, "floating", "floating");
+
+// Type alias: ToFunction = int | float | numpy.integer | numpy.floating | DecisionVariable | ...
 pyo3_stub_gen::type_alias!(
     "ommx._ommx_rust",
-    ToFunction =
-        i64 | f64 | DecisionVariable | Parameter | Linear | Quadratic | Polynomial | Function
+    ToFunction = i64
+        | f64
+        | NumpyInteger
+        | NumpyFloating
+        | DecisionVariable
+        | Parameter
+        | Linear
+        | Quadratic
+        | Polynomial
+        | Function
 );
 
 // Manual stub for __iadd__ (PyO3 returns () but Python returns self)

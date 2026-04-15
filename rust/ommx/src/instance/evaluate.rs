@@ -1,7 +1,6 @@
 use super::*;
 use crate::{ATol, Evaluate, VariableIDSet};
 use anyhow::{anyhow, Result};
-use fnv::FnvHashMap;
 use std::collections::BTreeMap;
 
 impl Evaluate for Instance {
@@ -14,16 +13,10 @@ impl Evaluate for Instance {
             .populate(state.clone(), atol)?;
 
         let objective = self.objective.evaluate(&state, atol)?;
-
-        let mut evaluated_constraints = BTreeMap::default();
-        for constraint in self.constraint_collection.active().values() {
-            let evaluated = constraint.evaluate(&state, atol)?;
-            evaluated_constraints.insert(evaluated.id, evaluated);
-        }
-        for constraint in self.constraint_collection.removed().values() {
-            let evaluated = constraint.evaluate(&state, atol)?;
-            evaluated_constraints.insert(evaluated.id, evaluated);
-        }
+        let evaluated_constraints = self.constraint_collection.evaluate(&state, atol)?;
+        let evaluated_indicator_constraints = self
+            .indicator_constraint_collection
+            .evaluate(&state, atol)?;
 
         let mut decision_variables = BTreeMap::default();
         for dv in self.decision_variables.values() {
@@ -43,7 +36,8 @@ impl Evaluate for Instance {
         let solution = unsafe {
             crate::Solution::builder()
                 .objective(objective)
-                .evaluated_constraints(evaluated_constraints)
+                .evaluated_constraints_collection(evaluated_constraints)
+                .evaluated_indicator_constraints_collection(evaluated_indicator_constraints)
                 .evaluated_named_functions(evaluated_named_functions)
                 .decision_variables(decision_variables)
                 .sense(sense)
@@ -67,26 +61,14 @@ impl Evaluate for Instance {
             samples
         };
 
-        let mut feasible_relaxed: FnvHashMap<u64, bool> =
-            samples.ids().map(|id| (*id, true)).collect();
-
-        // Constraints
-        let mut constraints = Vec::new();
-        for c in self.constraint_collection.active().values() {
-            let evaluated = c.evaluate_samples(&samples, atol)?;
-            for sample_id in evaluated.infeasible_ids(atol) {
-                feasible_relaxed.insert(sample_id.into_inner(), false);
-            }
-            constraints.push(evaluated);
-        }
-        let mut feasible = feasible_relaxed.clone();
-        for c in self.constraint_collection.removed().values() {
-            let v = c.evaluate_samples(&samples, atol)?;
-            for sample_id in v.infeasible_ids(atol) {
-                feasible.insert(sample_id.into_inner(), false);
-            }
-            constraints.push(v);
-        }
+        let sampled_constraints: crate::constraint_type::SampledCollection<crate::Constraint> =
+            self.constraint_collection
+                .evaluate_samples(&samples, atol)?;
+        let sampled_indicator_constraints: crate::constraint_type::SampledCollection<
+            crate::IndicatorConstraint,
+        > = self
+            .indicator_constraint_collection
+            .evaluate_samples(&samples, atol)?;
 
         // Objective
         let objectives = self.objective().evaluate_samples(&samples, atol)?;
@@ -96,12 +78,6 @@ impl Evaluate for Instance {
         for dv in self.decision_variables.values() {
             let sampled_dv = dv.evaluate_samples(&samples, atol)?;
             decision_variables.insert(dv.id(), sampled_dv);
-        }
-
-        // Reconstruct constraint values
-        let mut constraints_map = std::collections::BTreeMap::new();
-        for constraint in constraints {
-            constraints_map.insert(constraint.id, constraint);
         }
 
         // Reconstruct named function values
@@ -114,7 +90,8 @@ impl Evaluate for Instance {
         Ok(crate::SampleSet::builder()
             .decision_variables(decision_variables)
             .objectives(objectives.try_into()?)
-            .constraints(constraints_map)
+            .constraints(sampled_constraints.into_inner())
+            .indicator_constraints(sampled_indicator_constraints.into_inner())
             .named_functions(named_functions)
             .sense(self.sense)
             .build()?)
@@ -126,6 +103,23 @@ impl Evaluate for Instance {
             .constraint_hints
             .partial_evaluate(state.clone(), atol)?;
 
+        // Validate that no indicator variable is being partially evaluated.
+        // This check must happen before any mutation to ensure the Instance
+        // is not left in an inconsistent state on error.
+        for ic in self.indicator_constraint_collection.active().values() {
+            if updated_state
+                .entries
+                .contains_key(&ic.indicator_variable.into_inner())
+            {
+                anyhow::bail!(
+                    "Cannot partially evaluate indicator variable {:?} of indicator constraint {:?}. \
+                     Fixing an indicator variable would change the constraint type.",
+                    ic.indicator_variable,
+                    ic.id
+                );
+            }
+        }
+
         // Then proceed with the regular partial evaluation using the updated state
         for (id, value) in updated_state.entries.iter() {
             let Some(dv) = self.decision_variables.get_mut(&VariableID::from(*id)) else {
@@ -134,12 +128,12 @@ impl Evaluate for Instance {
             dv.substitute(*value, atol)?;
         }
         self.objective.partial_evaluate(&updated_state, atol)?;
-        // Only partial_evaluate active constraints.
-        // Removed constraints are not evaluated here; they will be substituted
-        // when restored via `restore_constraint`.
-        for constraint in self.constraint_collection.active_mut().values_mut() {
-            constraint.partial_evaluate(&updated_state, atol)?;
-        }
+        self.constraint_collection
+            .partial_evaluate(&updated_state, atol)?;
+        // Indicator variable check already passed above, so this only
+        // partial_evaluates the function parts of indicator constraints.
+        self.indicator_constraint_collection
+            .partial_evaluate(&updated_state, atol)?;
         for named_function in self.named_functions.values_mut() {
             named_function.partial_evaluate(&updated_state, atol)?;
         }

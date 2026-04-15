@@ -39,7 +39,6 @@ impl ParametricInstance {
 
     #[staticmethod]
     #[pyo3(signature = (*, sense, objective, decision_variables, constraints, parameters, named_functions=None, description=None, constraint_hints=None))]
-    #[allow(clippy::too_many_arguments)]
     pub fn from_components(
         sense: Sense,
         objective: Function,

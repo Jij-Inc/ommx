@@ -47,4 +47,7 @@ bin/
 node_modules/
 
 # Claude Code
-.claude/
+.claude/*
+!.claude/rules/
+!.claude/skills/
+!.claude/CLAUDE.md

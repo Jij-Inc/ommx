@@ -39,6 +39,12 @@ impl Instance {
     ///
     /// where $\lambda_1$ and $\lambda_2$ are penalty parameters.
     pub fn penalty_method(self) -> Result<ParametricInstance> {
+        anyhow::ensure!(
+            self.indicator_constraint_collection.active().is_empty(),
+            "penalty_method does not support indicator constraints. \
+             Remove or convert indicator constraints before applying penalty method."
+        );
+
         let mut max_id = 0;
 
         // Find the maximum ID among decision variables
@@ -105,6 +111,7 @@ impl Instance {
             decision_variables: self.decision_variables,
             parameters,
             constraint_collection: ConstraintCollection::new(BTreeMap::new(), removed_constraints),
+            indicator_constraint_collection: self.indicator_constraint_collection,
             decision_variable_dependency: self.decision_variable_dependency,
             // All constraints are moved to removed_constraints, so all hints are invalidated
             constraint_hints: ConstraintHints::default(),
@@ -148,6 +155,12 @@ impl Instance {
     ///
     /// where $\lambda$ is the single penalty parameter.
     pub fn uniform_penalty_method(self) -> Result<ParametricInstance> {
+        anyhow::ensure!(
+            self.indicator_constraint_collection.active().is_empty(),
+            "uniform_penalty_method does not support indicator constraints. \
+             Remove or convert indicator constraints before applying penalty method."
+        );
+
         // Early return if no active constraints (preserve any existing removed constraints)
         if self.constraints().is_empty() {
             let (_active, existing_removed) = self.constraint_collection.into_parts();
@@ -157,6 +170,7 @@ impl Instance {
                 decision_variables: self.decision_variables,
                 parameters: BTreeMap::new(),
                 constraint_collection: ConstraintCollection::new(BTreeMap::new(), existing_removed),
+                indicator_constraint_collection: self.indicator_constraint_collection,
                 decision_variable_dependency: self.decision_variable_dependency,
                 constraint_hints: self.constraint_hints,
                 description: self.description,
@@ -222,6 +236,7 @@ impl Instance {
             decision_variables: self.decision_variables,
             parameters,
             constraint_collection: ConstraintCollection::new(BTreeMap::new(), removed_constraints),
+            indicator_constraint_collection: self.indicator_constraint_collection,
             decision_variable_dependency: self.decision_variable_dependency,
             // All constraints are moved to removed_constraints, so all hints are invalidated
             constraint_hints: ConstraintHints::default(),

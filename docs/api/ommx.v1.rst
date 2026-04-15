@@ -20,7 +20,9 @@ ommx.v1
    _items/ommx.v1.Function
    _items/ommx.v1.DecisionVariable
    _items/ommx.v1.Parameter
+   _items/ommx.v1.AdditionalCapability
    _items/ommx.v1.Constraint
+   _items/ommx.v1.IndicatorConstraint
    _items/ommx.v1.RemovedConstraint
    _items/ommx.v1.NamedFunction
    _items/ommx.v1.OneHot

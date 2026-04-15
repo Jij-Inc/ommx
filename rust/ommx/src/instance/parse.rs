@@ -175,6 +175,7 @@ impl Parse for v1::Instance {
             objective,
             decision_variables,
             constraint_collection: ConstraintCollection::new(constraints, removed_constraints),
+            indicator_constraint_collection: Default::default(),
             decision_variable_dependency,
             parameters: self.parameters,
             description: self.description,
@@ -337,6 +338,7 @@ impl Parse for v1::ParametricInstance {
             decision_variables,
             parameters,
             constraint_collection: ConstraintCollection::new(constraints, removed_constraints),
+            indicator_constraint_collection: Default::default(),
             named_functions,
             decision_variable_dependency,
             constraint_hints,
@@ -353,6 +355,7 @@ impl From<ParametricInstance> for v1::ParametricInstance {
             decision_variables,
             parameters,
             constraint_collection,
+            indicator_constraint_collection: _, // Not serialized to v1 yet
             decision_variable_dependency,
             constraint_hints,
             description,

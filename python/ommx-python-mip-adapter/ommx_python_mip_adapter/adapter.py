@@ -32,6 +32,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         :param solver: Passes a specific solver to the Python-MIP model.
         :param verbose: If True, enable Python-MIP's verbose mode
         """
+        super().__init__(ommx_instance)
         if ommx_instance.sense == Instance.MAXIMIZE:
             sense = mip.MAXIMIZE
         elif ommx_instance.sense == Instance.MINIMIZE:
