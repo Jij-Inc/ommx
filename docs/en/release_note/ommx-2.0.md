@@ -1,4 +1,6 @@
-# OMMX Python SDK 2.0.x
+# OMMX Python SDK 2.0.0
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.0.0-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.0.0)
 
 This is the first major version release in about a year since the [OMMX Python SDK 1.0.0](https://github.com/Jij-Inc/ommx/releases/tag/python-1.0.0) release on 2024/7/10. This version includes significant performance improvements, API enhancements with breaking changes, and the addition of new features.
 
@@ -62,7 +64,26 @@ Binary packages (wheels) for Linux aarch64 are now provided. This makes it easie
 - IaaS using high-performance ARM CPUs such as AWS Graviton and Ampere, and corresponding PaaS
 - GitHub Actions `ubuntu-24.04-arm` environment
 
-## New Features (2.0.1–2.0.12)
+---------
+
+# OMMX Python SDK 2.0.x
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.0.1-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.0.1)
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.0.2-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.0.2)
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.0.3-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.0.3)
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.0.4-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.0.4)
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.0.5-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.0.5)
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.0.6-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.0.6)
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.0.7-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.0.7)
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.0.8-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.0.8)
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.0.9-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.0.9)
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.0.10-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.0.10)
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.0.11-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.0.11)
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.0.12-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.0.12)
+
+The following summarizes releases from 2.0.1 onwards. See the GitHub Releases above for full details.
+
+## New Features
 
 ### Stricter validation for `ParametricInstance` (2.0.3, [#566](https://github.com/Jij-Inc/ommx/pull/566))
 
@@ -78,7 +99,7 @@ The MPS parser and writer now handle `QUADOBJ` and `QCMATRIX` sections (as used 
 
 ### Partial evaluate for `ConstraintHints` (2.0.6, [#609](https://github.com/Jij-Inc/ommx/pull/609))
 
-When calling `Instance.partial_evaluate`, `OneHot` and `SOS1` constraint hints now automatically propagate fixed values to dependent variables, iterated to a fixed point. This prevents adapter errors from dangling variable references after partial evaluation.
+When calling `Instance.partial_evaluate`, `OneHot` and `SOS1` constraint hints now automatically propagate fixed values to dependent variables. For example, given a one-hot constraint `x0 + x1 + x2 = 1`, fixing `x0=1` will automatically propagate `x1=0` and `x2=0`.
 
 ### Configurable default absolute tolerance (2.0.6, [#610](https://github.com/Jij-Inc/ommx/pull/610))
 
@@ -96,16 +117,7 @@ A new `Instance.stats()` method returns a hierarchical summary of the instance: 
 
 Local registry management functions (`get_local_registry_root`, `set_local_registry_root`, `get_image_dir`, `get_images`) were incrementally exposed to Python, with aliases added under `ommx.artifact.*` for convenience. All return `pathlib.Path` objects.
 
-### Other new features
-
-- (2.0.1) `substituted_value` property and binary power reduction ([#537](https://github.com/Jij-Inc/ommx/pull/537), [#540](https://github.com/Jij-Inc/ommx/pull/540))
-- (2.0.1) Compare `Bound` by value ([#541](https://github.com/Jij-Inc/ommx/pull/541))
-- (2.0.2) Direct `from_bytes`/`to_bytes` for messages ([#549](https://github.com/Jij-Inc/ommx/pull/549))
-- (2.0.3) QPLIB parser updates ([#575](https://github.com/Jij-Inc/ommx/pull/575))
-- (2.0.6) Split `constraint_hints` submodule ([#608](https://github.com/Jij-Inc/ommx/pull/608))
-- (2.0.11) ID allocation methods ([#650](https://github.com/Jij-Inc/ommx/pull/650))
-
-## Bug Fixes (2.0.1–2.0.12)
+## Bug Fixes
 
 ### OpenJij inverted sign in objective for maximization (2.0.5, [#600](https://github.com/Jij-Inc/ommx/pull/600))
 
@@ -114,11 +126,3 @@ When solving maximization problems, the OpenJij adapter negated the objective to
 ### `ConstraintHints` not restored after relaxing constraints (2.0.2, [#551](https://github.com/Jij-Inc/ommx/pull/551))
 
 Relaxing and then un-relaxing constraints could leave `ConstraintHints` in an inconsistent state.
-
-### Other bug fixes
-
-- (2.0.1) `Instance.decision_variables_df` missing `substituted_value` column ([#542](https://github.com/Jij-Inc/ommx/pull/542))
-- (2.0.3) MPS I/O for `Instance`, handle `f64::INFINITY` in `Bound` ([#562](https://github.com/Jij-Inc/ommx/pull/562), [#577](https://github.com/Jij-Inc/ommx/pull/577))
-- (2.0.4) Normalize `-0.0` to `0.0` in `Bound` ([#581](https://github.com/Jij-Inc/ommx/pull/581))
-- (2.0.9) Fix `to_qubo`/`to_hubo` docstrings ([#631](https://github.com/Jij-Inc/ommx/pull/631))
-- (2.0.10) QPLIB annotation key format inconsistency ([#648](https://github.com/Jij-Inc/ommx/pull/648))
