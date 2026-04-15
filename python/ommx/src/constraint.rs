@@ -442,9 +442,21 @@ impl RemovedConstraint {
             ommx::Equality::EqualToZero => "==",
             ommx::Equality::LessThanOrEqualToZero => "<=",
         };
+
+        let mut reason_str = format!("reason={}", self.removed_reason.reason);
+        if !self.removed_reason.parameters.is_empty() {
+            let params: Vec<String> = self
+                .removed_reason
+                .parameters
+                .iter()
+                .map(|(k, v)| format!("{k}={v}"))
+                .collect();
+            reason_str = format!("{}, {}", reason_str, params.join(", "));
+        }
+
         format!(
-            "RemovedConstraint({} {} 0, reason={})",
-            self.constraint.stage.function, equality_symbol, self.removed_reason.reason
+            "RemovedConstraint({} {} 0, {})",
+            self.constraint.stage.function, equality_symbol, reason_str
         )
     }
 

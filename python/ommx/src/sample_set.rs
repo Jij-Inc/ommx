@@ -607,7 +607,7 @@ impl SampleSet {
     ///
     /// Columns: id (index), removed_reason, removed_reason.{key}
     ///
-    /// Can be joined with `constraints_df` on the `id` column.
+    /// Can be joined with {attr}`constraints_df` using the `id` index.
     #[getter]
     pub fn removed_reasons_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
         use crate::pandas::RemovedReasonEntry;

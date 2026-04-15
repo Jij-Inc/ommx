@@ -134,7 +134,7 @@ Constraint::less_than_or_equal_to_zero(ConstraintID::from(1), function)
 
 **Removed constraints** are no longer constructed as `Constraint<Removed>`. They are stored as `(Constraint<Created>, RemovedReason)` tuples in `ConstraintCollection`:
 ```rust
-// ❌ Before
+// ❌ Before (v2)
 let removed = RemovedConstraint {
     constraint: inner_constraint,
     removed_reason: "reason".to_string(),
@@ -184,12 +184,12 @@ Constraint {
 `RemovedConstraint` type alias no longer exists. Removed constraints are stored as `(Constraint<Created>, RemovedReason)` tuples in `ConstraintCollection`.
 
 ```rust
-// ❌ Before
+// ❌ Before (v2)
 removed.constraint.id
 removed.constraint.equality
 removed.constraint.function
-removed.removed_reason
-removed.removed_reason_parameters
+removed.removed_reason              // String
+removed.removed_reason_parameters   // FnvHashMap<String, String>
 
 // ✅ After — access via the tuple
 let (constraint, reason) = collection.removed().get(&id).unwrap();
