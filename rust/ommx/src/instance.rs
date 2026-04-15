@@ -79,7 +79,7 @@ pub enum Sense {
 /// - [`IndicatorConstraint`]: indicator constraints (`binvar = 1 → f(x) <= 0`)
 ///
 /// Future constraint types (Disjunction, SOS1, OneHot, etc.) follow the same pattern:
-/// add a new `ConstraintCollection<NewType>` field. See [`ConstraintType`] for details.
+/// add a new `ConstraintCollection<NewType>` field. See [`crate::constraint_type::ConstraintType`] for details.
 ///
 /// Each constraint type has its own independent [`ConstraintID`] space:
 /// constraint ID 1 for a regular constraint and constraint ID 1 for an indicator constraint
