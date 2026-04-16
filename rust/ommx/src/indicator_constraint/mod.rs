@@ -164,6 +164,20 @@ impl ConstraintType for IndicatorConstraint {
     type Sampled = SampledIndicatorConstraint;
 }
 
+// ===== Propagate output =====
+
+/// Result of propagating an indicator constraint.
+#[derive(Debug, Clone)]
+pub enum IndicatorPropagateOutput {
+    /// Indicator variable not fixed; constraint remains active.
+    /// Inner function may have been partial-evaluated.
+    Active(IndicatorConstraint<Created>),
+    /// Indicator = 1; inner constraint promoted to a regular `Constraint`.
+    Promote(crate::Constraint<Created>),
+    /// Indicator = 0; constraint vacuously satisfied, removed.
+    Removed,
+}
+
 // ===== Created stage =====
 
 impl IndicatorConstraint<Created> {

@@ -23,6 +23,27 @@ pub trait Evaluate {
     fn required_ids(&self) -> VariableIDSet;
 }
 
+/// Unit propagation trait for constraint types.
+///
+/// Consumes `self` and returns the propagated result together with any
+/// additional variable fixings discovered during propagation.
+///
+/// The associated `Output` type varies per constraint:
+/// - `Self` for types that never change shape (e.g. regular `Constraint`)
+/// - `Option<Self>` for types that can be consumed (OneHot, SOS1)
+/// - A custom enum for types that can transform into a different constraint
+///   (e.g. `IndicatorConstraint` → `Constraint`)
+pub trait Propagate {
+    type Output;
+
+    /// Propagate variable fixings from `state` through this constraint.
+    ///
+    /// Returns `(output, additional_fixings)` where:
+    /// - `output` is the constraint after propagation (may be consumed or transformed)
+    /// - `additional_fixings` contains newly discovered variable values
+    fn propagate(self, state: &State, atol: crate::ATol) -> Result<(Self::Output, State)>;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -316,7 +316,7 @@ pub use coefficient::*;
 pub use constraint::*;
 pub use constraint_type::*;
 pub use decision_variable::*;
-pub use evaluate::Evaluate;
+pub use evaluate::{Evaluate, Propagate};
 pub use function::*;
 pub use indicator_constraint::*;
 pub use infeasible_detected::*;
