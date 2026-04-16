@@ -1,6 +1,6 @@
 use crate::{
-    polynomial_base::QuadraticParseError, BoundError, CoefficientError, Constraint, ConstraintID,
-    DecisionVariable, DecisionVariableError, InstanceError, RemovedConstraint, SampleID,
+    constraint::RemovedReason, polynomial_base::QuadraticParseError, BoundError, CoefficientError,
+    Constraint, ConstraintID, DecisionVariable, DecisionVariableError, InstanceError, SampleID,
     SampleSetError, SolutionError, SubstitutionError, VariableID,
 };
 use prost::DecodeError;
@@ -131,7 +131,7 @@ impl RawParseError {
 
 pub(crate) fn as_constraint_id(
     constraints: &BTreeMap<ConstraintID, Constraint>,
-    removed_constraints: &BTreeMap<ConstraintID, RemovedConstraint>,
+    removed_constraints: &BTreeMap<ConstraintID, (Constraint, RemovedReason)>,
     id: u64,
 ) -> Result<ConstraintID, ParseError> {
     let id = ConstraintID::from(id);

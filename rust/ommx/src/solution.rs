@@ -195,12 +195,8 @@ impl Solution {
     /// - To check both constraints and decision variables, use [`feasible()`](Self::feasible)
     /// - To check only decision variables, use [`feasible_decision_variables()`](Self::feasible_decision_variables)
     pub fn feasible_constraints(&self) -> bool {
-        use crate::constraint_type::EvaluatedConstraintBehavior;
-        self.evaluated_constraints.values().all(|c| c.is_feasible())
-            && self
-                .evaluated_indicator_constraints
-                .values()
-                .all(|c| c.is_feasible())
+        self.evaluated_constraints.is_feasible()
+            && self.evaluated_indicator_constraints.is_feasible()
     }
 
     /// Check if all constraints and decision variables are feasible
@@ -218,16 +214,8 @@ impl Solution {
     /// - To check both constraints and decision variables, use [`feasible_relaxed()`](Self::feasible_relaxed)
     /// - To check only decision variables, use [`feasible_decision_variables()`](Self::feasible_decision_variables)
     pub fn feasible_constraints_relaxed(&self) -> bool {
-        use crate::constraint_type::EvaluatedConstraintBehavior;
-        self.evaluated_constraints
-            .values()
-            .filter(|c| !c.is_removed())
-            .all(|c| c.is_feasible())
-            && self
-                .evaluated_indicator_constraints
-                .values()
-                .filter(|c| !c.is_removed())
-                .all(|c| c.is_feasible())
+        self.evaluated_constraints.is_feasible_relaxed()
+            && self.evaluated_indicator_constraints.is_feasible_relaxed()
     }
 
     /// Check if all constraints and decision variables are feasible in the relaxed problem
@@ -587,7 +575,10 @@ impl SolutionBuilder {
         mut self,
         evaluated_constraints: BTreeMap<ConstraintID, EvaluatedConstraint>,
     ) -> Self {
-        self.evaluated_constraints = Some(EvaluatedCollection::new(evaluated_constraints));
+        self.evaluated_constraints = Some(EvaluatedCollection::new(
+            evaluated_constraints,
+            BTreeMap::new(),
+        ));
         self
     }
 
@@ -618,7 +609,7 @@ impl SolutionBuilder {
         >,
     ) -> Self {
         self.evaluated_indicator_constraints =
-            EvaluatedCollection::new(evaluated_indicator_constraints);
+            EvaluatedCollection::new(evaluated_indicator_constraints, BTreeMap::new());
         self
     }
 

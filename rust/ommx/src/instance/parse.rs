@@ -68,20 +68,10 @@ impl From<Constraint> for v1::Constraint {
     }
 }
 
-impl From<RemovedConstraint> for v1::RemovedConstraint {
-    fn from(value: RemovedConstraint) -> Self {
-        let crate::constraint::RemovedData {
-            function,
-            removed_reason,
-        } = value.stage;
-        let inner = Constraint {
-            id: value.id,
-            equality: value.equality,
-            metadata: value.metadata,
-            stage: crate::constraint::CreatedData { function },
-        };
+impl From<(Constraint, crate::constraint::RemovedReason)> for v1::RemovedConstraint {
+    fn from((constraint, removed_reason): (Constraint, crate::constraint::RemovedReason)) -> Self {
         Self {
-            constraint: Some(inner.into()),
+            constraint: Some(constraint.into()),
             removed_reason: removed_reason.reason,
             removed_reason_parameters: removed_reason.parameters.into_iter().collect(),
         }
@@ -541,8 +531,7 @@ mod tests {
     #[test]
     fn test_parametric_instance_parse_fails_with_duplicate_constraint_ids() {
         use crate::{
-            coeff, linear, Constraint, ConstraintID, DecisionVariable, Function, RemovedConstraint,
-            VariableID,
+            coeff, linear, Constraint, ConstraintID, DecisionVariable, Function, VariableID,
         };
         use std::collections::HashMap;
 
@@ -551,18 +540,11 @@ mod tests {
             ConstraintID::from(1),
             Function::from(linear!(1) + coeff!(1.0)),
         );
-        let removed_constraint = RemovedConstraint {
-            id: constraint.id,
-            equality: constraint.equality,
-            metadata: constraint.metadata.clone(),
-            stage: crate::constraint::RemovedData {
-                function: constraint.stage.function.clone(),
-                removed_reason: crate::constraint::RemovedReason {
-                    reason: "test".to_string(),
-                    parameters: Default::default(),
-                },
-            },
+        let removed_reason = crate::constraint::RemovedReason {
+            reason: "test".to_string(),
+            parameters: Default::default(),
         };
+        let removed_constraint: v1::RemovedConstraint = (constraint.clone(), removed_reason).into();
 
         let v1_parametric_instance = v1::ParametricInstance {
             sense: v1::instance::Sense::Minimize as i32,
@@ -575,7 +557,7 @@ mod tests {
             }],
             constraints: vec![constraint.into()],
             named_functions: vec![],
-            removed_constraints: vec![removed_constraint.into()],
+            removed_constraints: vec![removed_constraint],
             decision_variable_dependency: HashMap::new(),
             constraint_hints: None,
             description: None,
@@ -593,8 +575,7 @@ mod tests {
     #[test]
     fn test_instance_parse_fails_with_duplicate_constraint_ids() {
         use crate::{
-            coeff, linear, Constraint, ConstraintID, DecisionVariable, Function, RemovedConstraint,
-            VariableID,
+            coeff, linear, Constraint, ConstraintID, DecisionVariable, Function, VariableID,
         };
         use std::collections::HashMap;
 
@@ -603,18 +584,11 @@ mod tests {
             ConstraintID::from(1),
             Function::from(linear!(1) + coeff!(1.0)),
         );
-        let removed_constraint = RemovedConstraint {
-            id: constraint.id,
-            equality: constraint.equality,
-            metadata: constraint.metadata.clone(),
-            stage: crate::constraint::RemovedData {
-                function: constraint.stage.function.clone(),
-                removed_reason: crate::constraint::RemovedReason {
-                    reason: "test".to_string(),
-                    parameters: Default::default(),
-                },
-            },
+        let removed_reason = crate::constraint::RemovedReason {
+            reason: "test".to_string(),
+            parameters: Default::default(),
         };
+        let removed_constraint: v1::RemovedConstraint = (constraint.clone(), removed_reason).into();
 
         let v1_instance = v1::Instance {
             sense: v1::instance::Sense::Minimize as i32,
@@ -622,7 +596,7 @@ mod tests {
             decision_variables: vec![DecisionVariable::binary(VariableID::from(1)).into()],
             constraints: vec![constraint.into()],
             named_functions: vec![],
-            removed_constraints: vec![removed_constraint.into()],
+            removed_constraints: vec![removed_constraint],
             decision_variable_dependency: HashMap::new(),
             parameters: None,
             description: None,

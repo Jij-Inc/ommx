@@ -81,28 +81,20 @@ impl Instance {
             objective += penalty_term;
 
             // Create removed constraint
-            let removed_constraint = Constraint {
-                id: constraint.id,
-                equality: constraint.equality,
-                metadata: constraint.metadata.clone(),
-                stage: crate::constraint::RemovedData {
-                    function: constraint.stage.function,
-                    removed_reason: crate::constraint::RemovedReason {
-                        reason: "penalty_method".to_string(),
-                        parameters: {
-                            let mut map = fnv::FnvHashMap::default();
-                            map.insert(
-                                "parameter_id".to_string(),
-                                parameter_id.into_inner().to_string(),
-                            );
-                            map
-                        },
-                    },
+            let removed_reason = crate::constraint::RemovedReason {
+                reason: "penalty_method".to_string(),
+                parameters: {
+                    let mut map = fnv::FnvHashMap::default();
+                    map.insert(
+                        "parameter_id".to_string(),
+                        parameter_id.into_inner().to_string(),
+                    );
+                    map
                 },
             };
 
             parameters.insert(parameter_id, parameter);
-            removed_constraints.insert(constraint_id, removed_constraint);
+            removed_constraints.insert(constraint_id, (constraint, removed_reason));
         }
 
         Ok(ParametricInstance {
@@ -210,20 +202,12 @@ impl Instance {
             quad_sum += f.clone() * f;
 
             // Create removed constraint
-            let removed_constraint = Constraint {
-                id: constraint.id,
-                equality: constraint.equality,
-                metadata: constraint.metadata,
-                stage: crate::constraint::RemovedData {
-                    function: constraint.stage.function,
-                    removed_reason: crate::constraint::RemovedReason {
-                        reason: "uniform_penalty_method".to_string(),
-                        parameters: Default::default(),
-                    },
-                },
+            let removed_reason = crate::constraint::RemovedReason {
+                reason: "uniform_penalty_method".to_string(),
+                parameters: Default::default(),
             };
 
-            removed_constraints.insert(constraint_id, removed_constraint);
+            removed_constraints.insert(constraint_id, (constraint, removed_reason));
         }
 
         objective += Function::from(linear!(parameter_id)) * quad_sum;

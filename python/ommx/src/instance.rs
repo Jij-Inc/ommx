@@ -282,7 +282,10 @@ impl Instance {
         self.inner
             .removed_constraints()
             .values()
-            .map(|removed_constraint| RemovedConstraint(removed_constraint.clone()))
+            .map(|removed_constraint| {
+                let (c, r) = removed_constraint;
+                RemovedConstraint::from_pair(c.clone(), r.clone())
+            })
             .collect()
     }
 
@@ -1375,7 +1378,10 @@ impl Instance {
         self.inner
             .removed_constraints()
             .get(&ConstraintID::from(constraint_id))
-            .map(|removed_constraint| RemovedConstraint(removed_constraint.clone()))
+            .map(|removed_constraint| {
+                let (c, r) = removed_constraint;
+                RemovedConstraint::from_pair(c.clone(), r.clone())
+            })
             .ok_or_else(|| {
                 PyKeyError::new_err(format!(
                     "Removed constraint with ID {constraint_id} not found"

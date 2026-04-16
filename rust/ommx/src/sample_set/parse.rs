@@ -29,12 +29,19 @@ impl Parse for crate::v1::SampleSet {
             )?
             .parse_as(&(), message, "objectives")?;
 
-        // Parse constraints into BTreeMap
+        // Parse constraints and extract removed reasons
         let mut constraints = std::collections::BTreeMap::new();
+        let mut constraint_removed_reasons = std::collections::BTreeMap::new();
         for v1_constraint in self.constraints {
-            let parsed_constraint: crate::SampledConstraint =
-                v1_constraint.parse_as(&(), message, "constraints")?;
-            constraints.insert(parsed_constraint.id, parsed_constraint);
+            let (parsed_constraint, removed_reason): (
+                crate::SampledConstraint,
+                Option<crate::RemovedReason>,
+            ) = v1_constraint.parse_as(&(), message, "constraints")?;
+            let id = parsed_constraint.id;
+            if let Some(reason) = removed_reason {
+                constraint_removed_reasons.insert(id, reason);
+            }
+            constraints.insert(id, parsed_constraint);
         }
 
         // Parse named functions into BTreeMap
@@ -57,7 +64,10 @@ impl Parse for crate::v1::SampleSet {
         let sample_set = SampleSet::builder()
             .decision_variables(decision_variables)
             .objectives(objectives)
-            .constraints(constraints)
+            .constraints_collection(crate::constraint_type::SampledCollection::new(
+                constraints,
+                constraint_removed_reasons,
+            ))
             .named_functions(named_functions)
             .sense(sense)
             .build()
@@ -110,10 +120,22 @@ impl From<SampleSet> for crate::v1::SampleSet {
             .map(|dv| dv.clone().into())
             .collect();
         let objectives = Some(sample_set.objectives().clone().into());
+        let removed_reasons = sample_set.constraints().removed_reasons();
         let constraints: Vec<crate::v1::SampledConstraint> = sample_set
             .constraints()
-            .values()
-            .map(|sc| sc.clone().into())
+            .iter()
+            .map(|(id, sc)| {
+                let mut v1_sc = crate::v1::SampledConstraint::from(sc.clone());
+                if let Some(reason) = removed_reasons.get(id) {
+                    v1_sc.removed_reason = Some(reason.reason.clone());
+                    v1_sc.removed_reason_parameters = reason
+                        .parameters
+                        .iter()
+                        .map(|(k, v)| (k.clone(), v.clone()))
+                        .collect();
+                }
+                v1_sc
+            })
             .collect();
         let named_functions: Vec<crate::v1::SampledNamedFunction> = sample_set
             .named_functions()

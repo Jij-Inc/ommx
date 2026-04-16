@@ -12,9 +12,9 @@
 //! 1. Define a new struct `NewConstraint<S: Stage<Self> = Created>` with common fields
 //!    (`id`, `equality`, `metadata`, `stage`) plus type-specific fields.
 //! 2. Implement `Stage<NewConstraint<S>>` for each stage marker (reuse `CreatedData`,
-//!    `RemovedData`, etc. if the stage data is the same as regular constraints).
-//! 3. Implement `ConstraintType for NewConstraint` mapping all four stages.
-//! 4. Implement `Evaluate` for `NewConstraint<Created>` and `NewConstraint<Removed>`.
+//!    `EvaluatedData`, etc. if the stage data is the same as regular constraints).
+//! 3. Implement `ConstraintType for NewConstraint` mapping all three stages.
+//! 4. Implement `Evaluate` for `NewConstraint<Created>`.
 //! 5. Add a `ConstraintCollection<NewConstraint>` field to [`Instance`].
 //! 6. Add a variant to [`AdditionalCapability`] and update `Instance::required_capabilities`.
 //!
@@ -23,7 +23,7 @@
 //! [`AdditionalCapability`]: crate::AdditionalCapability
 
 use crate::{
-    constraint::{ConstraintID, EvaluatedConstraint, RemovedConstraint, SampledConstraint},
+    constraint::{ConstraintID, EvaluatedConstraint, RemovedReason, SampledConstraint},
     v1, ATol, Constraint, Evaluate, SampleID, VariableIDSet,
 };
 use anyhow::Result;
@@ -46,11 +46,6 @@ pub trait ConstraintType {
         + Clone
         + std::fmt::Debug
         + PartialEq;
-    /// The constraint after being removed/relaxed.
-    type Removed: Evaluate<Output = Self::Evaluated, SampledOutput = Self::Sampled>
-        + Clone
-        + std::fmt::Debug
-        + PartialEq;
     /// The constraint after evaluation against a single state.
     type Evaluated: EvaluatedConstraintBehavior<ID = Self::ID>;
     /// The constraint after evaluation against multiple samples.
@@ -62,7 +57,6 @@ pub trait EvaluatedConstraintBehavior {
     type ID;
     fn constraint_id(&self) -> Self::ID;
     fn is_feasible(&self) -> bool;
-    fn is_removed(&self) -> bool;
 }
 
 /// Common behavior for a sampled constraint (multi-sample evaluation result).
@@ -73,7 +67,6 @@ pub trait SampledConstraintBehavior {
 
     fn constraint_id(&self) -> Self::ID;
     fn is_feasible_for(&self, sample_id: SampleID) -> Option<bool>;
-    fn is_removed(&self) -> bool;
 
     /// Extract an evaluated constraint for a specific sample.
     fn get(
@@ -94,9 +87,6 @@ impl EvaluatedConstraintBehavior for EvaluatedConstraint {
     fn is_feasible(&self) -> bool {
         self.stage.feasible
     }
-    fn is_removed(&self) -> bool {
-        self.stage.removed_reason.is_some()
-    }
 }
 
 impl SampledConstraintBehavior for SampledConstraint {
@@ -108,9 +98,6 @@ impl SampledConstraintBehavior for SampledConstraint {
     }
     fn is_feasible_for(&self, sample_id: SampleID) -> Option<bool> {
         self.stage.feasible.get(&sample_id).copied()
-    }
-    fn is_removed(&self) -> bool {
-        self.stage.removed_reason.is_some()
     }
     fn get(
         &self,
@@ -135,7 +122,6 @@ impl SampledConstraintBehavior for SampledConstraint {
                 dual_variable,
                 feasible,
                 used_decision_variable_ids: self.stage.used_decision_variable_ids.clone(),
-                removed_reason: self.stage.removed_reason.clone(),
             },
         })
     }
@@ -145,19 +131,18 @@ impl SampledConstraintBehavior for SampledConstraint {
 impl ConstraintType for Constraint {
     type ID = ConstraintID;
     type Created = Constraint;
-    type Removed = RemovedConstraint;
     type Evaluated = EvaluatedConstraint;
     type Sampled = SampledConstraint;
 }
 
 /// A collection of active and removed constraints of the same type.
 ///
-/// This provides the common evaluate/partial_evaluate logic
-/// that Instance would otherwise duplicate for each constraint type.
+/// Removed constraints are stored as `(T::Created, RemovedReason)` pairs.
+/// The `RemovedReason` is collection-level metadata, not part of the constraint itself.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConstraintCollection<T: ConstraintType> {
     active: BTreeMap<T::ID, T::Created>,
-    removed: BTreeMap<T::ID, T::Removed>,
+    removed: BTreeMap<T::ID, (T::Created, RemovedReason)>,
 }
 
 impl<T: ConstraintType> Default for ConstraintCollection<T> {
@@ -170,7 +155,10 @@ impl<T: ConstraintType> Default for ConstraintCollection<T> {
 }
 
 impl<T: ConstraintType> ConstraintCollection<T> {
-    pub fn new(active: BTreeMap<T::ID, T::Created>, removed: BTreeMap<T::ID, T::Removed>) -> Self {
+    pub fn new(
+        active: BTreeMap<T::ID, T::Created>,
+        removed: BTreeMap<T::ID, (T::Created, RemovedReason)>,
+    ) -> Self {
         Self { active, removed }
     }
 
@@ -179,8 +167,8 @@ impl<T: ConstraintType> ConstraintCollection<T> {
         &self.active
     }
 
-    /// Access removed constraints.
-    pub fn removed(&self) -> &BTreeMap<T::ID, T::Removed> {
+    /// Access removed constraints with their removal reasons.
+    pub fn removed(&self) -> &BTreeMap<T::ID, (T::Created, RemovedReason)> {
         &self.removed
     }
 
@@ -190,13 +178,18 @@ impl<T: ConstraintType> ConstraintCollection<T> {
     }
 
     /// Mutable access to removed constraints.
-    pub fn removed_mut(&mut self) -> &mut BTreeMap<T::ID, T::Removed> {
+    pub fn removed_mut(&mut self) -> &mut BTreeMap<T::ID, (T::Created, RemovedReason)> {
         &mut self.removed
     }
 
     /// Consume the collection and return the active and removed maps.
     #[allow(clippy::type_complexity)]
-    pub fn into_parts(self) -> (BTreeMap<T::ID, T::Created>, BTreeMap<T::ID, T::Removed>) {
+    pub fn into_parts(
+        self,
+    ) -> (
+        BTreeMap<T::ID, T::Created>,
+        BTreeMap<T::ID, (T::Created, RemovedReason)>,
+    ) {
         (self.active, self.removed)
     }
 
@@ -208,50 +201,6 @@ impl<T: ConstraintType> ConstraintCollection<T> {
         }
         ids
     }
-
-    /// Evaluate all constraints (active and removed) against a single state.
-    pub fn evaluate_all(
-        &self,
-        state: &v1::State,
-        atol: ATol,
-    ) -> Result<BTreeMap<T::ID, T::Evaluated>> {
-        let mut results = BTreeMap::new();
-        for constraint in self.active.values() {
-            let evaluated = constraint.evaluate(state, atol)?;
-            results.insert(evaluated.constraint_id(), evaluated);
-        }
-        for constraint in self.removed.values() {
-            let evaluated = constraint.evaluate(state, atol)?;
-            results.insert(evaluated.constraint_id(), evaluated);
-        }
-        Ok(results)
-    }
-
-    /// Partially evaluate all active constraints in place.
-    pub fn partial_evaluate_active(&mut self, state: &v1::State, atol: ATol) -> Result<()> {
-        for constraint in self.active.values_mut() {
-            constraint.partial_evaluate(state, atol)?;
-        }
-        Ok(())
-    }
-
-    /// Evaluate all constraints (active and removed) against multiple samples.
-    pub fn evaluate_samples_all(
-        &self,
-        samples: &v1::Samples,
-        atol: ATol,
-    ) -> Result<BTreeMap<T::ID, T::Sampled>> {
-        let mut results = BTreeMap::new();
-        for constraint in self.active.values() {
-            let evaluated = constraint.evaluate_samples(samples, atol)?;
-            results.insert(evaluated.constraint_id(), evaluated);
-        }
-        for constraint in self.removed.values() {
-            let evaluated = constraint.evaluate_samples(samples, atol)?;
-            results.insert(evaluated.constraint_id(), evaluated);
-        }
-        Ok(results)
-    }
 }
 
 impl<T: ConstraintType> Evaluate for ConstraintCollection<T> {
@@ -259,17 +208,40 @@ impl<T: ConstraintType> Evaluate for ConstraintCollection<T> {
     type SampledOutput = SampledCollection<T>;
 
     fn evaluate(&self, state: &v1::State, atol: ATol) -> Result<Self::Output> {
-        Ok(EvaluatedCollection::new(self.evaluate_all(state, atol)?))
+        let mut results = BTreeMap::new();
+        let mut removed_reasons = BTreeMap::new();
+        for constraint in self.active.values() {
+            let evaluated = constraint.evaluate(state, atol)?;
+            results.insert(evaluated.constraint_id(), evaluated);
+        }
+        for (id, (constraint, reason)) in &self.removed {
+            let evaluated = constraint.evaluate(state, atol)?;
+            results.insert(evaluated.constraint_id(), evaluated);
+            removed_reasons.insert(*id, reason.clone());
+        }
+        Ok(EvaluatedCollection::new(results, removed_reasons))
     }
 
     fn evaluate_samples(&self, samples: &v1::Samples, atol: ATol) -> Result<Self::SampledOutput> {
-        Ok(SampledCollection::new(
-            self.evaluate_samples_all(samples, atol)?,
-        ))
+        let mut results = BTreeMap::new();
+        let mut removed_reasons = BTreeMap::new();
+        for constraint in self.active.values() {
+            let evaluated = constraint.evaluate_samples(samples, atol)?;
+            results.insert(evaluated.constraint_id(), evaluated);
+        }
+        for (id, (constraint, reason)) in &self.removed {
+            let evaluated = constraint.evaluate_samples(samples, atol)?;
+            results.insert(evaluated.constraint_id(), evaluated);
+            removed_reasons.insert(*id, reason.clone());
+        }
+        Ok(SampledCollection::new(results, removed_reasons))
     }
 
     fn partial_evaluate(&mut self, state: &v1::State, atol: ATol) -> Result<()> {
-        self.partial_evaluate_active(state, atol)
+        for constraint in self.active.values_mut() {
+            constraint.partial_evaluate(state, atol)?;
+        }
+        Ok(())
     }
 
     fn required_ids(&self) -> VariableIDSet {
@@ -282,55 +254,88 @@ impl<T: ConstraintType> Evaluate for ConstraintCollection<T> {
 /// This is the Solution-side counterpart of [`ConstraintCollection`],
 /// providing generic feasibility checks via [`EvaluatedConstraintBehavior`].
 #[derive(Debug, Clone, PartialEq)]
-pub struct EvaluatedCollection<T: ConstraintType>(BTreeMap<T::ID, T::Evaluated>);
+pub struct EvaluatedCollection<T: ConstraintType> {
+    constraints: BTreeMap<T::ID, T::Evaluated>,
+    removed_reasons: BTreeMap<T::ID, RemovedReason>,
+}
 
 impl<T: ConstraintType> std::ops::Deref for EvaluatedCollection<T> {
     type Target = BTreeMap<T::ID, T::Evaluated>;
     fn deref(&self) -> &Self::Target {
-        &self.0
+        &self.constraints
     }
 }
 
 impl<T: ConstraintType> std::ops::DerefMut for EvaluatedCollection<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+        &mut self.constraints
     }
 }
 
 impl<T: ConstraintType> Default for EvaluatedCollection<T> {
     fn default() -> Self {
-        Self(BTreeMap::new())
+        Self {
+            constraints: BTreeMap::new(),
+            removed_reasons: BTreeMap::new(),
+        }
     }
 }
 
 impl<T: ConstraintType> EvaluatedCollection<T> {
-    pub fn new(constraints: BTreeMap<T::ID, T::Evaluated>) -> Self {
-        Self(constraints)
+    pub fn new(
+        constraints: BTreeMap<T::ID, T::Evaluated>,
+        removed_reasons: BTreeMap<T::ID, RemovedReason>,
+    ) -> Self {
+        Self {
+            constraints,
+            removed_reasons,
+        }
     }
 
     pub fn inner(&self) -> &BTreeMap<T::ID, T::Evaluated> {
-        &self.0
+        &self.constraints
     }
 
     pub fn into_inner(self) -> BTreeMap<T::ID, T::Evaluated> {
-        self.0
+        self.constraints
+    }
+
+    /// Access the removed reasons map.
+    pub fn removed_reasons(&self) -> &BTreeMap<T::ID, RemovedReason> {
+        &self.removed_reasons
+    }
+
+    /// Consume and return both the constraints and removed reasons.
+    #[allow(clippy::type_complexity)]
+    pub fn into_parts(
+        self,
+    ) -> (
+        BTreeMap<T::ID, T::Evaluated>,
+        BTreeMap<T::ID, RemovedReason>,
+    ) {
+        (self.constraints, self.removed_reasons)
+    }
+
+    /// Check if a constraint was removed.
+    pub fn is_removed(&self, id: &T::ID) -> bool {
+        self.removed_reasons.contains_key(id)
     }
 
     pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.constraints.is_empty()
     }
 
     /// Check if all constraints are feasible.
     pub fn is_feasible(&self) -> bool {
-        self.0.values().all(|c| c.is_feasible())
+        self.constraints.values().all(|c| c.is_feasible())
     }
 
     /// Check if all non-removed constraints are feasible.
     pub fn is_feasible_relaxed(&self) -> bool {
-        self.0
-            .values()
-            .filter(|c| !c.is_removed())
-            .all(|c| c.is_feasible())
+        self.constraints
+            .iter()
+            .filter(|(id, _)| !self.removed_reasons.contains_key(id))
+            .all(|(_, c)| c.is_feasible())
     }
 }
 
@@ -339,51 +344,79 @@ impl<T: ConstraintType> EvaluatedCollection<T> {
 /// This is the SampleSet-side counterpart of [`ConstraintCollection`],
 /// providing generic per-sample feasibility checks via [`SampledConstraintBehavior`].
 #[derive(Debug, Clone)]
-pub struct SampledCollection<T: ConstraintType>(BTreeMap<T::ID, T::Sampled>);
+pub struct SampledCollection<T: ConstraintType> {
+    constraints: BTreeMap<T::ID, T::Sampled>,
+    removed_reasons: BTreeMap<T::ID, RemovedReason>,
+}
 
 impl<T: ConstraintType> std::ops::Deref for SampledCollection<T> {
     type Target = BTreeMap<T::ID, T::Sampled>;
     fn deref(&self) -> &Self::Target {
-        &self.0
+        &self.constraints
     }
 }
 
 impl<T: ConstraintType> Default for SampledCollection<T> {
     fn default() -> Self {
-        Self(BTreeMap::new())
+        Self {
+            constraints: BTreeMap::new(),
+            removed_reasons: BTreeMap::new(),
+        }
     }
 }
 
 impl<T: ConstraintType> SampledCollection<T> {
-    pub fn new(constraints: BTreeMap<T::ID, T::Sampled>) -> Self {
-        Self(constraints)
+    pub fn new(
+        constraints: BTreeMap<T::ID, T::Sampled>,
+        removed_reasons: BTreeMap<T::ID, RemovedReason>,
+    ) -> Self {
+        Self {
+            constraints,
+            removed_reasons,
+        }
     }
 
     pub fn inner(&self) -> &BTreeMap<T::ID, T::Sampled> {
-        &self.0
+        &self.constraints
     }
 
     pub fn into_inner(self) -> BTreeMap<T::ID, T::Sampled> {
-        self.0
+        self.constraints
+    }
+
+    /// Access the removed reasons map.
+    pub fn removed_reasons(&self) -> &BTreeMap<T::ID, RemovedReason> {
+        &self.removed_reasons
+    }
+
+    /// Consume and return both the constraints and removed reasons.
+    #[allow(clippy::type_complexity)]
+    pub fn into_parts(self) -> (BTreeMap<T::ID, T::Sampled>, BTreeMap<T::ID, RemovedReason>) {
+        (self.constraints, self.removed_reasons)
+    }
+
+    /// Check if a constraint was removed.
+    pub fn is_removed(&self, id: &T::ID) -> bool {
+        self.removed_reasons.contains_key(id)
     }
 
     pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.constraints.is_empty()
     }
 
     /// Check if all constraints are feasible for a given sample.
     pub fn is_feasible_for(&self, sample_id: SampleID) -> bool {
-        self.0
+        self.constraints
             .values()
             .all(|c| c.is_feasible_for(sample_id).unwrap_or(false))
     }
 
     /// Check if all non-removed constraints are feasible for a given sample.
     pub fn is_feasible_relaxed_for(&self, sample_id: SampleID) -> bool {
-        self.0
-            .values()
-            .filter(|c| !c.is_removed())
-            .all(|c| c.is_feasible_for(sample_id).unwrap_or(false))
+        self.constraints
+            .iter()
+            .filter(|(id, _)| !self.removed_reasons.contains_key(id))
+            .all(|(_, c)| c.is_feasible_for(sample_id).unwrap_or(false))
     }
 }
 
@@ -428,11 +461,12 @@ mod tests {
         let state = v1::State {
             entries: [(1, 1.5)].into_iter().collect(),
         };
-        let results = collection.evaluate_all(&state, ATol::default()).unwrap();
+        let results = collection.evaluate(&state, ATol::default()).unwrap();
 
         assert_eq!(results.len(), 2);
         assert!(!results[&ConstraintID::from(1)].stage.feasible);
         assert!(!results[&ConstraintID::from(2)].stage.feasible);
+        assert!(results.removed_reasons().is_empty());
     }
 
     #[test]

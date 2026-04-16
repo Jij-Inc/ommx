@@ -1,8 +1,9 @@
 use crate::{
+    constraint::RemovedReason,
     parse::{as_constraint_id, as_variable_id, Parse, ParseError, RawParseError},
     v1::{self, State},
     ATol, Constraint, ConstraintHintsError, ConstraintID, DecisionVariable, InstanceError,
-    RemovedConstraint, VariableID,
+    VariableID,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -91,7 +92,7 @@ impl Parse for v1::Sos1 {
     type Context = (
         BTreeMap<VariableID, DecisionVariable>,
         BTreeMap<ConstraintID, Constraint>,
-        BTreeMap<ConstraintID, RemovedConstraint>,
+        BTreeMap<ConstraintID, (Constraint, RemovedReason)>,
     );
     fn parse(
         self,

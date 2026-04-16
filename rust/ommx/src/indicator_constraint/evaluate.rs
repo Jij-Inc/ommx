@@ -44,7 +44,6 @@ impl Evaluate for IndicatorConstraint<Created> {
                 dual_variable: None,
                 feasible,
                 used_decision_variable_ids,
-                removed_reason: None,
             },
         })
     }
@@ -99,7 +98,6 @@ impl Evaluate for IndicatorConstraint<Created> {
                 dual_variables: None,
                 feasible,
                 used_decision_variable_ids: self.required_ids(),
-                removed_reason: None,
             },
         })
     }
@@ -111,125 +109,6 @@ impl Evaluate for IndicatorConstraint<Created> {
         {
             anyhow::bail!(
                 "Cannot partially evaluate indicator variable {:?} of indicator constraint {:?}. \
-                 Fixing an indicator variable would change the constraint type.",
-                self.indicator_variable,
-                self.id
-            );
-        }
-        self.stage.function.partial_evaluate(state, atol)
-    }
-
-    fn required_ids(&self) -> VariableIDSet {
-        let mut ids = self.stage.function.required_ids();
-        ids.insert(self.indicator_variable);
-        ids
-    }
-}
-
-impl Evaluate for RemovedIndicatorConstraint {
-    type Output = EvaluatedIndicatorConstraint;
-    type SampledOutput = SampledIndicatorConstraint;
-
-    fn evaluate(&self, state: &crate::v1::State, atol: ATol) -> anyhow::Result<Self::Output> {
-        let evaluated_value = self.stage.function.evaluate(state, atol)?;
-        let used_decision_variable_ids = self.required_ids();
-
-        let indicator_value = state
-            .entries
-            .get(&self.indicator_variable.into_inner())
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "Indicator variable {:?} not found in state for removed indicator constraint {:?}",
-                    self.indicator_variable,
-                    self.id
-                )
-            })?;
-
-        let indicator_on = *indicator_value > 1.0 - *atol;
-
-        let feasible = if indicator_on {
-            match self.equality {
-                Equality::EqualToZero => evaluated_value.abs() < *atol,
-                Equality::LessThanOrEqualToZero => evaluated_value < *atol,
-            }
-        } else {
-            true
-        };
-
-        Ok(IndicatorConstraint {
-            id: self.id,
-            indicator_variable: self.indicator_variable,
-            equality: self.equality,
-            metadata: self.metadata.clone(),
-            stage: EvaluatedData {
-                evaluated_value,
-                dual_variable: None,
-                feasible,
-                used_decision_variable_ids,
-                removed_reason: Some(self.stage.removed_reason.clone()),
-            },
-        })
-    }
-
-    fn evaluate_samples(
-        &self,
-        samples: &crate::v1::Samples,
-        atol: ATol,
-    ) -> anyhow::Result<Self::SampledOutput> {
-        let evaluated_values_v1 = self.stage.function.evaluate_samples(samples, atol)?;
-        let evaluated_values: crate::Sampled<f64> = evaluated_values_v1.try_into()?;
-
-        let mut feasible = std::collections::BTreeMap::new();
-        for (sample_id, state) in samples.iter() {
-            let sample_id = crate::SampleID::from(*sample_id);
-            let ev = *evaluated_values.get(sample_id)?;
-
-            let indicator_value = state
-                .entries
-                .get(&self.indicator_variable.into_inner())
-                .ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "Indicator variable {:?} not found in sample {:?} for indicator constraint {:?}",
-                        self.indicator_variable,
-                        sample_id,
-                        self.id
-                    )
-                })?;
-            let indicator_on = *indicator_value > 1.0 - *atol;
-
-            let f = if indicator_on {
-                match self.equality {
-                    Equality::EqualToZero => ev.abs() < *atol,
-                    Equality::LessThanOrEqualToZero => ev < *atol,
-                }
-            } else {
-                true
-            };
-            feasible.insert(sample_id, f);
-        }
-
-        Ok(IndicatorConstraint {
-            id: self.id,
-            indicator_variable: self.indicator_variable,
-            equality: self.equality,
-            metadata: self.metadata.clone(),
-            stage: SampledData {
-                evaluated_values,
-                dual_variables: None,
-                feasible,
-                used_decision_variable_ids: self.required_ids(),
-                removed_reason: Some(self.stage.removed_reason.clone()),
-            },
-        })
-    }
-
-    fn partial_evaluate(&mut self, state: &crate::v1::State, atol: ATol) -> anyhow::Result<()> {
-        if state
-            .entries
-            .contains_key(&self.indicator_variable.into_inner())
-        {
-            anyhow::bail!(
-                "Cannot partially evaluate indicator variable {:?} of removed indicator constraint {:?}. \
                  Fixing an indicator variable would change the constraint type.",
                 self.indicator_variable,
                 self.id

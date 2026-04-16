@@ -1,5 +1,4 @@
 use super::*;
-use crate::constraint::RemovedData;
 use crate::ATol;
 use anyhow::{anyhow, Result};
 
@@ -17,18 +16,13 @@ impl Instance {
             .ok_or_else(|| anyhow!("Constraint with ID {:?} not found", id))?;
         self.constraint_collection.removed_mut().insert(
             id,
-            Constraint {
-                id: c.id,
-                equality: c.equality,
-                metadata: c.metadata,
-                stage: RemovedData {
-                    function: c.stage.function,
-                    removed_reason: crate::constraint::RemovedReason {
-                        reason: removed_reason,
-                        parameters: parameters.into_iter().collect(),
-                    },
+            (
+                c,
+                crate::constraint::RemovedReason {
+                    reason: removed_reason,
+                    parameters: parameters.into_iter().collect(),
                 },
-            },
+            ),
         );
 
         // Invalidate constraint hints that reference the removed constraint
@@ -50,14 +44,7 @@ impl Instance {
             .ok_or_else(|| anyhow!("Removed constraint with ID {:?} not found", id))?;
 
         // Clone the constraint first to avoid data loss if transformations fail
-        let mut constraint: Constraint<crate::constraint::Created> = Constraint {
-            id: rc.id,
-            equality: rc.equality,
-            metadata: rc.metadata.clone(),
-            stage: crate::constraint::CreatedData {
-                function: rc.stage.function.clone(),
-            },
-        };
+        let mut constraint: Constraint<crate::constraint::Created> = rc.0.clone();
 
         // 1. Substitute dependent variables first
         //    Dependency expansion may introduce fixed variables (e.g., x3 = x1 + x2 where x1 is fixed),

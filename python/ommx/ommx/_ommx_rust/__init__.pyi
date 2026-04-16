@@ -913,11 +913,6 @@ class EvaluatedConstraint:
         Get the feasibility status
         """
     @property
-    def removed_reason(self) -> typing.Optional[builtins.str]:
-        r"""
-        Get the removal reason
-        """
-    @property
     def name(self) -> typing.Optional[builtins.str]:
         r"""
         Get the constraint name
@@ -3267,7 +3262,9 @@ class Quadratic:
 @typing.final
 class RemovedConstraint:
     r"""
-    RemovedConstraint wrapper for Python
+    RemovedConstraint wrapper for Python.
+
+    Internally holds `(ommx::Constraint, ommx::RemovedReason)`.
     """
     @property
     def constraint(self) -> Constraint: ...
@@ -3551,8 +3548,17 @@ class SampleSet:
     def constraints_df(self) -> pandas.DataFrame:
         r"""
         DataFrame of constraints with per-sample value and feasibility columns.
-        Static columns: id, equality, used_ids, name, subscripts, description, removed_reason, removed_reason_parameters.
+        Static columns: id, equality, used_ids, name, subscripts, description.
         Dynamic columns: value.{sample_id} and feasible.{sample_id} for each sample.
+        """
+    @property
+    def removed_reasons_df(self) -> pandas.DataFrame:
+        r"""
+        DataFrame of removed constraint reasons.
+
+        Columns: id (index), removed_reason, removed_reason.{key}
+
+        Can be joined with {attr}`constraints_df` using the `id` index.
         """
     @property
     def named_functions_df(self) -> pandas.DataFrame:
@@ -3692,16 +3698,6 @@ class SampledConstraint:
     def description(self) -> typing.Optional[builtins.str]:
         r"""
         Get the description
-        """
-    @property
-    def removed_reason(self) -> typing.Optional[builtins.str]:
-        r"""
-        Get the removal reason
-        """
-    @property
-    def removed_reason_parameters(self) -> builtins.dict[builtins.str, builtins.str]:
-        r"""
-        Get the removal reason parameters
         """
     @property
     def used_decision_variable_ids(self) -> builtins.set[builtins.int]:
@@ -4020,7 +4016,54 @@ class Solution:
         r"""
         DataFrame of evaluated constraints
 
-        Columns: id (index), equality, value, used_ids, name, subscripts, description, dual_variable, removed_reason
+        Columns: id (index), equality, value, used_ids, name, subscripts, description, dual_variable
+        """
+    @property
+    def removed_reasons_df(self) -> pandas.DataFrame:
+        r"""
+        DataFrame of removed constraint reasons.
+
+        Columns: id (index), removed_reason, removed_reason.{key}
+
+        Can be joined with {attr}`constraints_df` on the `id` index.
+
+        # Examples
+
+        ```python
+        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> x = [DecisionVariable.binary(i) for i in range(3)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints=[
+        ...         (x[0] + x[1] == 1).set_id(10),
+        ...         (x[1] + x[2] == 1).set_id(20),
+        ...     ],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+        >>> instance.relax_constraint(10, "test_reason")
+        >>> solution = instance.evaluate({0: 1, 1: 0, 2: 1})
+        ```
+
+        `removed_reasons_df` contains only removed constraints:
+
+        ```python
+        >>> solution.removed_reasons_df
+            removed_reason
+        id
+        10    test_reason
+        ```
+
+        Join with `constraints_df` to get full information:
+
+        ```python
+        >>> df = solution.constraints_df.join(solution.removed_reasons_df)
+        >>> df[["value", "removed_reason"]]
+            value removed_reason
+        id
+        10    0.0   test_reason
+        20    0.0           NaN
+        ```
         """
     @property
     def named_functions_df(self) -> pandas.DataFrame:

@@ -16,10 +16,6 @@ pub trait Stage<C> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Created;
 
-/// The constraint has been removed (relaxed) from the active set.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Removed;
-
 // ===== Common types =====
 
 /// Reason why a constraint was removed/relaxed.
@@ -39,13 +35,6 @@ pub struct CreatedData {
     pub function: crate::Function,
 }
 
-/// Data carried by a regular constraint in the Removed stage.
-#[derive(Debug, Clone, PartialEq)]
-pub struct RemovedData {
-    pub function: crate::Function,
-    pub removed_reason: RemovedReason,
-}
-
 /// The constraint has been evaluated against a single state.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Evaluated;
@@ -63,7 +52,6 @@ pub struct EvaluatedData {
     pub feasible: bool,
     pub used_decision_variable_ids: VariableIDSet,
     pub dual_variable: Option<f64>,
-    pub removed_reason: Option<RemovedReason>,
 }
 
 /// Data carried by a constraint in the Sampled stage.
@@ -73,17 +61,12 @@ pub struct SampledData {
     pub feasible: BTreeMap<SampleID, bool>,
     pub used_decision_variable_ids: VariableIDSet,
     pub dual_variables: Option<crate::Sampled<f64>>,
-    pub removed_reason: Option<RemovedReason>,
 }
 
 // ===== Stage implementations for Constraint =====
 
 impl Stage<Constraint<Created>> for Created {
     type Data = CreatedData;
-}
-
-impl Stage<Constraint<Removed>> for Removed {
-    type Data = RemovedData;
 }
 
 impl Stage<Constraint<Evaluated>> for Evaluated {

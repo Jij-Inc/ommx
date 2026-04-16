@@ -30,13 +30,10 @@ pub use parametric_builder::*;
 pub use stats::*;
 
 use crate::{
-    constraint_hints::ConstraintHints,
-    constraint_type::ConstraintCollection,
-    indicator_constraint::{IndicatorConstraint, RemovedIndicatorConstraint},
-    named_function::NamedFunctionID,
-    parse::Parse,
-    v1, AcyclicAssignments, Constraint, ConstraintID, DecisionVariable, Evaluate, Function,
-    NamedFunction, RemovedConstraint, VariableID, VariableIDSet,
+    constraint::RemovedReason, constraint_hints::ConstraintHints,
+    constraint_type::ConstraintCollection, indicator_constraint::IndicatorConstraint,
+    named_function::NamedFunctionID, parse::Parse, v1, AcyclicAssignments, Constraint,
+    ConstraintID, DecisionVariable, Evaluate, Function, NamedFunction, VariableID, VariableIDSet,
 };
 use std::collections::BTreeMap;
 
@@ -144,7 +141,7 @@ impl Instance {
     }
 
     /// Removed constraints.
-    pub fn removed_constraints(&self) -> &BTreeMap<ConstraintID, RemovedConstraint> {
+    pub fn removed_constraints(&self) -> &BTreeMap<ConstraintID, (Constraint, RemovedReason)> {
         self.constraint_collection.removed()
     }
 
@@ -163,7 +160,7 @@ impl Instance {
     /// Removed indicator constraints.
     pub fn removed_indicator_constraints(
         &self,
-    ) -> &BTreeMap<crate::IndicatorConstraintID, RemovedIndicatorConstraint> {
+    ) -> &BTreeMap<crate::IndicatorConstraintID, (IndicatorConstraint, RemovedReason)> {
         self.indicator_constraint_collection.removed()
     }
 
@@ -267,7 +264,7 @@ impl ParametricInstance {
     }
 
     /// Removed constraints.
-    pub fn removed_constraints(&self) -> &BTreeMap<ConstraintID, RemovedConstraint> {
+    pub fn removed_constraints(&self) -> &BTreeMap<ConstraintID, (Constraint, RemovedReason)> {
         self.constraint_collection.removed()
     }
 
@@ -281,7 +278,7 @@ impl ParametricInstance {
     /// Removed indicator constraints.
     pub fn removed_indicator_constraints(
         &self,
-    ) -> &BTreeMap<crate::IndicatorConstraintID, RemovedIndicatorConstraint> {
+    ) -> &BTreeMap<crate::IndicatorConstraintID, (IndicatorConstraint, RemovedReason)> {
         self.indicator_constraint_collection.removed()
     }
 }

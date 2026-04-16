@@ -48,32 +48,6 @@ impl SampledConstraint {
         self.0.metadata.description.clone()
     }
 
-    /// Get the removal reason
-    #[getter]
-    pub fn removed_reason(&self) -> Option<String> {
-        self.0
-            .stage
-            .removed_reason
-            .as_ref()
-            .map(|r| r.reason.clone())
-    }
-
-    /// Get the removal reason parameters
-    #[getter]
-    pub fn removed_reason_parameters(&self) -> std::collections::HashMap<String, String> {
-        self.0
-            .stage
-            .removed_reason
-            .as_ref()
-            .map(|r| {
-                r.parameters
-                    .iter()
-                    .map(|(k, v)| (k.clone(), v.clone()))
-                    .collect()
-            })
-            .unwrap_or_default()
-    }
-
     /// Get the used decision variable IDs
     #[getter]
     pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {

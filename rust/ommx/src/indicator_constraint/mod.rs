@@ -3,7 +3,7 @@ mod evaluate;
 use crate::{
     constraint::{
         stage, ConstraintMetadata, Created, CreatedData, Equality, Evaluated, EvaluatedData,
-        Removed, RemovedData, SampledData, Stage,
+        SampledData, Stage,
     },
     constraint_type::{ConstraintType, EvaluatedConstraintBehavior, SampledConstraintBehavior},
     Function, SampleID, VariableID,
@@ -66,10 +66,6 @@ impl Stage<IndicatorConstraint<Created>> for Created {
     type Data = CreatedData;
 }
 
-impl Stage<IndicatorConstraint<Removed>> for Removed {
-    type Data = RemovedData;
-}
-
 impl Stage<IndicatorConstraint<Evaluated>> for Evaluated {
     type Data = EvaluatedData;
 }
@@ -80,7 +76,6 @@ impl Stage<IndicatorConstraint<stage::Sampled>> for stage::Sampled {
 
 // ===== Type aliases =====
 
-pub type RemovedIndicatorConstraint = IndicatorConstraint<Removed>;
 pub type EvaluatedIndicatorConstraint = IndicatorConstraint<Evaluated>;
 pub type SampledIndicatorConstraint = IndicatorConstraint<stage::Sampled>;
 
@@ -94,9 +89,6 @@ impl EvaluatedConstraintBehavior for EvaluatedIndicatorConstraint {
     fn is_feasible(&self) -> bool {
         self.stage.feasible
     }
-    fn is_removed(&self) -> bool {
-        self.stage.removed_reason.is_some()
-    }
 }
 
 impl SampledConstraintBehavior for SampledIndicatorConstraint {
@@ -108,9 +100,6 @@ impl SampledConstraintBehavior for SampledIndicatorConstraint {
     }
     fn is_feasible_for(&self, sample_id: SampleID) -> Option<bool> {
         self.stage.feasible.get(&sample_id).copied()
-    }
-    fn is_removed(&self) -> bool {
-        self.stage.removed_reason.is_some()
     }
     fn get(
         &self,
@@ -135,7 +124,6 @@ impl SampledConstraintBehavior for SampledIndicatorConstraint {
                 dual_variable,
                 feasible,
                 used_decision_variable_ids: self.stage.used_decision_variable_ids.clone(),
-                removed_reason: self.stage.removed_reason.clone(),
             },
         })
     }
@@ -146,7 +134,6 @@ impl SampledConstraintBehavior for SampledIndicatorConstraint {
 impl ConstraintType for IndicatorConstraint {
     type ID = IndicatorConstraintID;
     type Created = IndicatorConstraint;
-    type Removed = RemovedIndicatorConstraint;
     type Evaluated = EvaluatedIndicatorConstraint;
     type Sampled = SampledIndicatorConstraint;
 }
@@ -194,15 +181,6 @@ impl std::fmt::Display for IndicatorConstraint<Created> {
             self.stage.function,
             equality_symbol
         )
-    }
-}
-
-// ===== Removed stage =====
-
-impl RemovedIndicatorConstraint {
-    /// Access the constraint function.
-    pub fn function(&self) -> &Function {
-        &self.stage.function
     }
 }
 

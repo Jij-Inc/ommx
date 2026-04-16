@@ -166,7 +166,7 @@ impl ParametricInstance {
         self.inner
             .removed_constraints()
             .values()
-            .map(|rc| RemovedConstraint(rc.clone()))
+            .map(|(c, r)| RemovedConstraint::from_pair(c.clone(), r.clone()))
             .collect()
     }
 
@@ -246,7 +246,7 @@ impl ParametricInstance {
         self.inner
             .removed_constraints()
             .get(&ConstraintID::from(constraint_id))
-            .map(|rc| RemovedConstraint(rc.clone()))
+            .map(|(c, r)| RemovedConstraint::from_pair(c.clone(), r.clone()))
             .ok_or_else(|| {
                 PyKeyError::new_err(format!(
                     "Removed constraint with ID {constraint_id} not found"
