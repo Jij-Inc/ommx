@@ -197,7 +197,6 @@ impl Parse for v1::Instance {
             decision_variable_dependency,
             parameters: self.parameters,
             description: self.description,
-            constraint_hints,
             named_functions,
         })
     }
@@ -230,6 +229,60 @@ impl From<Instance> for v1::Instance {
             .into_iter()
             .map(|(id, dep)| (id.into(), dep.into()))
             .collect();
+        // Reconstruct constraint_hints from first-class OneHot/SOS1 collections
+        // for backward-compatible proto serialization.
+        // If constraint_id / binary_constraint_id is None (created directly, not from hints),
+        // use the constraint type's own ID as the proto constraint_id.
+        let constraint_hints = {
+            let one_hot_constraints: Vec<v1::OneHot> = value
+                .one_hot_constraint_collection
+                .into_parts()
+                .0
+                .into_values()
+                .map(|oh| {
+                    let cid = oh
+                        .stage
+                        .constraint_id
+                        .map(|id| id.into_inner())
+                        .unwrap_or(oh.id.into_inner());
+                    v1::OneHot {
+                        constraint_id: cid,
+                        decision_variables: oh.variables.iter().map(|v| v.into_inner()).collect(),
+                    }
+                })
+                .collect();
+            let sos1_constraints: Vec<v1::Sos1> = value
+                .sos1_constraint_collection
+                .into_parts()
+                .0
+                .into_values()
+                .map(|s| {
+                    let bid = s
+                        .stage
+                        .binary_constraint_id
+                        .map(|id| id.into_inner())
+                        .unwrap_or(s.id.into_inner());
+                    v1::Sos1 {
+                        binary_constraint_id: bid,
+                        big_m_constraint_ids: s
+                            .stage
+                            .big_m_constraint_ids
+                            .iter()
+                            .map(|id| id.into_inner())
+                            .collect(),
+                        decision_variables: s.variables.iter().map(|v| v.into_inner()).collect(),
+                    }
+                })
+                .collect();
+            if one_hot_constraints.is_empty() && sos1_constraints.is_empty() {
+                None
+            } else {
+                Some(v1::ConstraintHints {
+                    one_hot_constraints,
+                    sos1_constraints,
+                })
+            }
+        };
         Self {
             sense: v1::instance::Sense::from(value.sense).into(),
             decision_variables,
@@ -240,7 +293,7 @@ impl From<Instance> for v1::Instance {
             decision_variable_dependency,
             parameters: value.parameters,
             description: value.description,
-            constraint_hints: Some(value.constraint_hints.into()),
+            constraint_hints,
         }
     }
 }
@@ -387,7 +440,6 @@ impl Parse for v1::ParametricInstance {
             sos1_constraint_collection: ConstraintCollection::new(sos1_active, BTreeMap::new()),
             named_functions,
             decision_variable_dependency,
-            constraint_hints,
             description: self.description,
         })
     }
@@ -402,15 +454,63 @@ impl From<ParametricInstance> for v1::ParametricInstance {
             parameters,
             constraint_collection,
             indicator_constraint_collection: _, // Not serialized to v1 yet
-            one_hot_constraint_collection: _,   // Not serialized to v1 yet
-            sos1_constraint_collection: _,      // Not serialized to v1 yet
+            one_hot_constraint_collection,
+            sos1_constraint_collection,
             decision_variable_dependency,
-            constraint_hints,
             description,
             named_functions,
         }: ParametricInstance,
     ) -> Self {
         let (constraints, removed_constraints) = constraint_collection.into_parts();
+        // Reconstruct constraint_hints from first-class OneHot/SOS1 collections
+        let constraint_hints = {
+            let one_hot_constraints: Vec<v1::OneHot> = one_hot_constraint_collection
+                .into_parts()
+                .0
+                .into_values()
+                .map(|oh| {
+                    let cid = oh
+                        .stage
+                        .constraint_id
+                        .map(|id| id.into_inner())
+                        .unwrap_or(oh.id.into_inner());
+                    v1::OneHot {
+                        constraint_id: cid,
+                        decision_variables: oh.variables.iter().map(|v| v.into_inner()).collect(),
+                    }
+                })
+                .collect();
+            let sos1_constraints: Vec<v1::Sos1> = sos1_constraint_collection
+                .into_parts()
+                .0
+                .into_values()
+                .map(|s| {
+                    let bid = s
+                        .stage
+                        .binary_constraint_id
+                        .map(|id| id.into_inner())
+                        .unwrap_or(s.id.into_inner());
+                    v1::Sos1 {
+                        binary_constraint_id: bid,
+                        big_m_constraint_ids: s
+                            .stage
+                            .big_m_constraint_ids
+                            .iter()
+                            .map(|id| id.into_inner())
+                            .collect(),
+                        decision_variables: s.variables.iter().map(|v| v.into_inner()).collect(),
+                    }
+                })
+                .collect();
+            if one_hot_constraints.is_empty() && sos1_constraints.is_empty() {
+                None
+            } else {
+                Some(v1::ConstraintHints {
+                    one_hot_constraints,
+                    sos1_constraints,
+                })
+            }
+        };
         Self {
             description,
             sense: v1::instance::Sense::from(sense) as i32,
@@ -430,11 +530,7 @@ impl From<ParametricInstance> for v1::ParametricInstance {
                 .into_iter()
                 .map(|(id, dep)| (id.into(), dep.into()))
                 .collect(),
-            constraint_hints: if constraint_hints.is_empty() {
-                None
-            } else {
-                Some(constraint_hints.into())
-            },
+            constraint_hints,
         }
     }
 }

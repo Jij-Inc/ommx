@@ -314,7 +314,7 @@ pub use atol::*;
 pub use bound::*;
 pub use coefficient::*;
 pub use constraint::*;
-pub use constraint_hints::*;
+pub(crate) use constraint_hints::*;
 pub use constraint_type::*;
 pub use decision_variable::*;
 pub use evaluate::Evaluate;

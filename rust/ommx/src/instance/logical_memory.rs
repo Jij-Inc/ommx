@@ -42,7 +42,6 @@ crate::impl_logical_memory_profile! {
         decision_variables,
         constraint_collection,
         decision_variable_dependency,
-        constraint_hints,
         parameters,
         description,
     }
@@ -64,8 +63,6 @@ mod tests {
         insta::assert_snapshot!(folded, @r###"
         Instance.constraint_collection;constraints;BTreeMap[stack] 24
         Instance.constraint_collection;removed_constraints;BTreeMap[stack] 24
-        Instance.constraint_hints;ConstraintHints.one_hot_constraints;Vec[stack] 24
-        Instance.constraint_hints;ConstraintHints.sos1_constraints;Vec[stack] 24
         Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[stack] 32
         Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
         Instance.decision_variables;BTreeMap[stack] 24
@@ -99,8 +96,6 @@ mod tests {
         insta::assert_snapshot!(folded, @r###"
         Instance.constraint_collection;constraints;BTreeMap[stack] 24
         Instance.constraint_collection;removed_constraints;BTreeMap[stack] 24
-        Instance.constraint_hints;ConstraintHints.one_hot_constraints;Vec[stack] 24
-        Instance.constraint_hints;ConstraintHints.sos1_constraints;Vec[stack] 24
         Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[stack] 32
         Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
         Instance.decision_variables;BTreeMap[key] 16
@@ -163,8 +158,6 @@ mod tests {
         Instance.constraint_collection;constraints;Constraint.metadata;ConstraintMetadata.subscripts;Vec[stack] 24
         Instance.constraint_collection;constraints;Constraint.stage;CreatedData.function;Linear;PolynomialBase.terms 80
         Instance.constraint_collection;removed_constraints;BTreeMap[stack] 24
-        Instance.constraint_hints;ConstraintHints.one_hot_constraints;Vec[stack] 24
-        Instance.constraint_hints;ConstraintHints.sos1_constraints;Vec[stack] 24
         Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[stack] 32
         Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
         Instance.decision_variables;BTreeMap[key] 16
@@ -214,8 +207,6 @@ mod tests {
         insta::assert_snapshot!(folded, @r###"
         Instance.constraint_collection;constraints;BTreeMap[stack] 24
         Instance.constraint_collection;removed_constraints;BTreeMap[stack] 24
-        Instance.constraint_hints;ConstraintHints.one_hot_constraints;Vec[stack] 24
-        Instance.constraint_hints;ConstraintHints.sos1_constraints;Vec[stack] 24
         Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[stack] 32
         Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
         Instance.decision_variables;BTreeMap[key] 24
@@ -270,8 +261,6 @@ mod tests {
         insta::assert_snapshot!(folded, @r###"
         Instance.constraint_collection;constraints;BTreeMap[stack] 24
         Instance.constraint_collection;removed_constraints;BTreeMap[stack] 24
-        Instance.constraint_hints;ConstraintHints.one_hot_constraints;Vec[stack] 24
-        Instance.constraint_hints;ConstraintHints.sos1_constraints;Vec[stack] 24
         Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[stack] 32
         Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
         Instance.decision_variables;BTreeMap[key] 8

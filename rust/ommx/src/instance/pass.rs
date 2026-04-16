@@ -17,14 +17,6 @@ impl Instance {
             },
         )?;
 
-        // Invalidate constraint hints that reference the removed constraint
-        self.constraint_hints
-            .one_hot_constraints
-            .retain(|hint| hint.id != id);
-        self.constraint_hints.sos1_constraints.retain(|hint| {
-            hint.binary_constraint_id != id && !hint.big_m_constraint_ids.contains(&id)
-        });
-
         Ok(())
     }
 

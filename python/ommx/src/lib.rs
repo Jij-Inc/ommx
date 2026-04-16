@@ -4,7 +4,6 @@ mod annotations;
 mod artifact;
 mod bound;
 mod constraint;
-mod constraint_hints;
 #[cfg(feature = "remote-artifact")]
 mod dataset;
 mod decision_variable;
@@ -38,7 +37,6 @@ mod state;
 pub use artifact::*;
 pub use bound::*;
 pub use constraint::*;
-pub use constraint_hints::*;
 #[cfg(feature = "remote-artifact")]
 pub use dataset::*;
 pub use decision_variable::*;
@@ -116,9 +114,6 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<Sos1Constraint>()?;
     m.add_class::<NamedFunction>()?;
     m.add_class::<RemovedConstraint>()?;
-    m.add_class::<OneHot>()?;
-    m.add_class::<Sos1>()?;
-    m.add_class::<ConstraintHints>()?;
     m.add_class::<ParametricInstance>()?;
     m.add_class::<Parameters>()?;
     m.add_class::<Solution>()?;
@@ -193,10 +188,6 @@ pyo3_stub_gen::reexport_module_members!("ommx.v1" from "ommx._ommx_rust";
     "Sos1Constraint",
     "RemovedConstraint",
     "NamedFunction",
-    // Constraint hints
-    "OneHot",
-    "Sos1",
-    "ConstraintHints",
     // Evaluated types
     "EvaluatedDecisionVariable",
     "EvaluatedConstraint",

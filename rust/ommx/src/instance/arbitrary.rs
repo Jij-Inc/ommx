@@ -239,7 +239,6 @@ impl Arbitrary for Instance {
                                     named_functions,
                                     sense,
                                     decision_variables,
-                                    constraint_hints: Default::default(),
                                     parameters: Default::default(),
                                     indicator_constraint_collection: Default::default(),
                                     one_hot_constraint_collection: Default::default(),

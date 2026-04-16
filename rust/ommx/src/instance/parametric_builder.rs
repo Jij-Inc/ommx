@@ -1,6 +1,5 @@
 use super::*;
 use crate::constraint_type::ConstraintCollection;
-use crate::parse::Parse;
 
 /// Builder for creating [`ParametricInstance`] with validation.
 ///
@@ -28,7 +27,6 @@ pub struct ParametricInstanceBuilder {
     named_functions: BTreeMap<NamedFunctionID, NamedFunction>,
     removed_constraints: BTreeMap<ConstraintID, (Constraint, crate::constraint::RemovedReason)>,
     decision_variable_dependency: AcyclicAssignments,
-    constraint_hints: ConstraintHints,
     description: Option<v1::instance::Description>,
 }
 
@@ -95,12 +93,6 @@ impl ParametricInstanceBuilder {
         decision_variable_dependency: AcyclicAssignments,
     ) -> Self {
         self.decision_variable_dependency = decision_variable_dependency;
-        self
-    }
-
-    /// Sets the constraint hints.
-    pub fn constraint_hints(mut self, constraint_hints: ConstraintHints) -> Self {
-        self.constraint_hints = constraint_hints;
         self
     }
 
@@ -291,59 +283,17 @@ impl ParametricInstanceBuilder {
             return Err(InstanceError::FixedAndDependentVariable { id: *id }.into());
         }
 
-        // Validate constraint_hints using Parse trait.
-        // Unlike `add_constraint_hints` which errors on removed constraint references,
-        // the builder uses Parse which silently filters invalid hints (with debug log).
-        // This is intentional: the builder may receive data from old serialized instances
-        // where hints may reference constraints that have since been removed, and we want
-        // to heal such inconsistencies rather than fail.
-        // Move values into context tuple to avoid cloning, then destructure to recover ownership.
-        let hints: v1::ConstraintHints = self.constraint_hints.into();
-        let context = (decision_variables, constraints, self.removed_constraints);
-        let constraint_hints = hints.parse(&context)?;
-        let (decision_variables, constraints, removed_constraints) = context;
-
-        // Convert hints to first-class constraint collections
-        let mut one_hot_active = std::collections::BTreeMap::new();
-        for hint in &constraint_hints.one_hot_constraints {
-            let id = crate::OneHotConstraintID::from(*hint.id);
-            one_hot_active.insert(
-                id,
-                crate::OneHotConstraint::with_constraint_id(id, hint.variables.clone(), hint.id),
-            );
-        }
-        let mut sos1_active = std::collections::BTreeMap::new();
-        for hint in &constraint_hints.sos1_constraints {
-            let id = crate::Sos1ConstraintID::from(*hint.binary_constraint_id);
-            sos1_active.insert(
-                id,
-                crate::Sos1Constraint::with_constraint_ids(
-                    id,
-                    hint.variables.clone(),
-                    hint.binary_constraint_id,
-                    hint.big_m_constraint_ids.clone(),
-                ),
-            );
-        }
-
         Ok(ParametricInstance {
             sense,
             objective,
             decision_variables,
             parameters,
-            constraint_collection: ConstraintCollection::new(constraints, removed_constraints),
+            constraint_collection: ConstraintCollection::new(constraints, self.removed_constraints),
             indicator_constraint_collection: Default::default(),
-            one_hot_constraint_collection: ConstraintCollection::new(
-                one_hot_active,
-                std::collections::BTreeMap::new(),
-            ),
-            sos1_constraint_collection: ConstraintCollection::new(
-                sos1_active,
-                std::collections::BTreeMap::new(),
-            ),
+            one_hot_constraint_collection: Default::default(),
+            sos1_constraint_collection: Default::default(),
             named_functions: self.named_functions,
             decision_variable_dependency: self.decision_variable_dependency,
-            constraint_hints,
             description: self.description,
         })
     }

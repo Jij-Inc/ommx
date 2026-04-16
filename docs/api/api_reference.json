@@ -2679,188 +2679,6 @@
         },
         {
           "kind": "Class",
-          "name": "ConstraintHints",
-          "doc": "ConstraintHints wrapper for Python",
-          "bases": [],
-          "methods": [
-            {
-              "name": "__copy__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "ConstraintHints",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "__deepcopy__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "_memo",
-                      "type_": {
-                        "display": "Any",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "ConstraintHints",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "__eq__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "other",
-                      "type_": {
-                        "display": "object",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "bool",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "__new__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "one_hot_constraints",
-                      "type_": {
-                        "display": "Sequence[OneHot]",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "OneHot",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      },
-                      "default": {
-                        "kind": "Simple",
-                        "value": "[]"
-                      }
-                    },
-                    {
-                      "name": "sos1_constraints",
-                      "type_": {
-                        "display": "Sequence[Sos1]",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "Sos1",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      },
-                      "default": {
-                        "kind": "Simple",
-                        "value": "[]"
-                      }
-                    }
-                  ],
-                  "return_type": {
-                    "display": "ConstraintHints",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "__repr__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "str",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            }
-          ],
-          "attributes": [
-            {
-              "name": "one_hot_constraints",
-              "doc": "",
-              "type_": {
-                "display": "list[OneHot]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "OneHot",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "sos1_constraints",
-              "doc": "",
-              "type_": {
-                "display": "list[Sos1]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "Sos1",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            }
-          ],
-          "deprecated": null
-        },
-        {
-          "kind": "Class",
           "name": "DecisionVariable",
           "doc": "Decision variable in an optimization problem.\n\nThis class represents a variable that will be optimized in a mathematical programming problem.\nIt supports various types (binary, integer, continuous, semi-integer, semi-continuous) and\ncan be used in arithmetic expressions to build objective functions and constraints.\n\nNote that this object overloads `==` for creating a constraint, not for equality comparison.\n\n# Examples\n\n```python\n>>> x = DecisionVariable.integer(1)\n>>> x == 1  # Returns Constraint, not bool\nConstraint(...)\n```\n\nFor object equality comparison, use the ``equals_to()`` method or compare IDs:\n\n```python\n>>> y = DecisionVariable.integer(2)\n>>> x.id == y.id\nFalse\n```",
           "bases": [],
@@ -7802,7 +7620,7 @@
             },
             {
               "name": "from_components",
-              "doc": "Create an instance from its components.\n\n**Args:**\n- `sense`: Optimization sense (minimize or maximize)\n- `objective`: Objective function\n- `decision_variables`: List of decision variables\n- `constraints`: List of constraints\n- `named_functions`: Optional list of named functions\n- `description`: Optional instance description\n- `constraint_hints`: Optional constraint hints for solvers\n\n**Returns:**\nA new Instance",
+              "doc": "Create an instance from its components.\n\n**Args:**\n- `sense`: Optimization sense (minimize or maximize)\n- `objective`: Objective function\n- `decision_variables`: List of decision variables\n- `constraints`: List of constraints\n- `named_functions`: Optional list of named functions\n- `description`: Optional instance description\n\n**Returns:**\nA new Instance",
               "signatures": [
                 {
                   "parameters": [
@@ -7884,6 +7702,54 @@
                       }
                     },
                     {
+                      "name": "one_hot_constraints",
+                      "type_": {
+                        "display": "Optional[Sequence[OneHotConstraint]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Sequence[OneHotConstraint]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "OneHotConstraint",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "sos1_constraints",
+                      "type_": {
+                        "display": "Optional[Sequence[Sos1Constraint]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Sequence[Sos1Constraint]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "Sos1Constraint",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
                       "name": "named_functions",
                       "type_": {
                         "display": "Optional[Sequence[NamedFunction]]",
@@ -7915,24 +7781,6 @@
                         "children": [
                           {
                             "display": "InstanceDescription",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      },
-                      "default": {
-                        "kind": "Simple",
-                        "value": "None"
-                      }
-                    },
-                    {
-                      "name": "constraint_hints",
-                      "type_": {
-                        "display": "Optional[ConstraintHints]",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "ConstraintHints",
                             "link_target": null,
                             "children": []
                           }
@@ -8917,17 +8765,6 @@
                 ]
               },
               "is_property": true
-            },
-            {
-              "name": "constraint_hints",
-              "doc": "",
-              "type_": {
-                "display": "ConstraintHints",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
             },
             {
               "name": "constraints",
@@ -11310,170 +11147,6 @@
         },
         {
           "kind": "Class",
-          "name": "OneHot",
-          "doc": "OneHot constraint hint wrapper for Python",
-          "bases": [],
-          "methods": [
-            {
-              "name": "__copy__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "OneHot",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "__deepcopy__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "_memo",
-                      "type_": {
-                        "display": "Any",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "OneHot",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "__eq__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "other",
-                      "type_": {
-                        "display": "object",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "bool",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "__new__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "id",
-                      "type_": {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    },
-                    {
-                      "name": "variables",
-                      "type_": {
-                        "display": "Sequence[int]",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "int",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "OneHot",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "__repr__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "str",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            }
-          ],
-          "attributes": [
-            {
-              "name": "id",
-              "doc": "",
-              "type_": {
-                "display": "int",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "variables",
-              "doc": "",
-              "type_": {
-                "display": "list[int]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "int",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            }
-          ],
-          "deprecated": null
-        },
-        {
-          "kind": "Class",
           "name": "OneHotConstraint",
           "doc": "A one-hot constraint: exactly one variable must be 1, the rest must be 0.\n\nThis is a structural constraint — no explicit function is stored.\nThe implicit constraint is `sum(x_i) = 1` where all `x_i` are binary.",
           "bases": [],
@@ -12935,24 +12608,6 @@
                         "kind": "Simple",
                         "value": "None"
                       }
-                    },
-                    {
-                      "name": "constraint_hints",
-                      "type_": {
-                        "display": "Optional[ConstraintHints]",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "ConstraintHints",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      },
-                      "default": {
-                        "kind": "Simple",
-                        "value": "None"
-                      }
                     }
                   ],
                   "return_type": {
@@ -13264,17 +12919,6 @@
                 ]
               },
               "is_property": true
-            },
-            {
-              "name": "constraint_hints",
-              "doc": "",
-              "type_": {
-                "display": "ConstraintHints",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
             },
             {
               "name": "constraints",
@@ -19253,202 +18897,6 @@
         },
         {
           "kind": "Class",
-          "name": "Sos1",
-          "doc": "SOS1 constraint hint wrapper for Python",
-          "bases": [],
-          "methods": [
-            {
-              "name": "__copy__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "Sos1",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "__deepcopy__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "_memo",
-                      "type_": {
-                        "display": "Any",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "Sos1",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "__eq__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "other",
-                      "type_": {
-                        "display": "object",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "bool",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "__new__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "binary_constraint_id",
-                      "type_": {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    },
-                    {
-                      "name": "big_m_constraint_ids",
-                      "type_": {
-                        "display": "Sequence[int]",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "int",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      },
-                      "default": null
-                    },
-                    {
-                      "name": "variables",
-                      "type_": {
-                        "display": "Sequence[int]",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "int",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "Sos1",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "__repr__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "str",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            }
-          ],
-          "attributes": [
-            {
-              "name": "big_m_constraint_ids",
-              "doc": "",
-              "type_": {
-                "display": "list[int]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "int",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "binary_constraint_id",
-              "doc": "",
-              "type_": {
-                "display": "int",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "variables",
-              "doc": "",
-              "type_": {
-                "display": "list[int]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "int",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            }
-          ],
-          "deprecated": null
-        },
-        {
-          "kind": "Class",
           "name": "Sos1Constraint",
           "doc": "A SOS1 (Special Ordered Set type 1) constraint: at most one variable can be non-zero.\n\nThis is a structural constraint — no explicit function is stored.\nUnlike OneHotConstraint, SOS1 allows all variables to be zero.",
           "bases": [],
@@ -20171,7 +19619,6 @@
     "ommx.v1.AdditionalCapability": "ommx.v1",
     "ommx.v1.Bound": "ommx.v1",
     "ommx.v1.Constraint": "ommx.v1",
-    "ommx.v1.ConstraintHints": "ommx.v1",
     "ommx.v1.DecisionVariable": "ommx.v1",
     "ommx.v1.DecisionVariableAnalysis": "ommx.v1",
     "ommx.v1.Equality": "ommx.v1",
@@ -20184,7 +19631,6 @@
     "ommx.v1.Kind": "ommx.v1",
     "ommx.v1.Linear": "ommx.v1",
     "ommx.v1.NamedFunction": "ommx.v1",
-    "ommx.v1.OneHot": "ommx.v1",
     "ommx.v1.OneHotConstraint": "ommx.v1",
     "ommx.v1.Optimality": "ommx.v1",
     "ommx.v1.Parameter": "ommx.v1",
@@ -20201,7 +19647,6 @@
     "ommx.v1.Samples": "ommx.v1",
     "ommx.v1.Sense": "ommx.v1",
     "ommx.v1.Solution": "ommx.v1",
-    "ommx.v1.Sos1": "ommx.v1",
     "ommx.v1.Sos1Constraint": "ommx.v1",
     "ommx.v1.State": "ommx.v1",
     "ommx.v1.ToSamples": "ommx.v1",

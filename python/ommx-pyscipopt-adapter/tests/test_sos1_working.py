@@ -1,6 +1,6 @@
 """Test SOS1 functionality with valid constraints."""
 
-from ommx.v1 import Instance, DecisionVariable, Sos1, ConstraintHints
+from ommx.v1 import Instance, DecisionVariable, Sos1Constraint
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
 
@@ -20,18 +20,15 @@ def test_sos1_constraint_functionality():
     bigm1 = (x[0] <= 1).set_id(2)  # type: ignore
     bigm2 = (x[1] <= 1).set_id(3)  # type: ignore
 
-    # Create SOS1 hint with valid constraint references
-    sos1_hint = Sos1(
-        binary_constraint_id=1, big_m_constraint_ids=[2, 3], variables=[1, 2, 3]
-    )
-    constraint_hints = ConstraintHints(sos1_constraints=[sos1_hint])
+    # Create SOS1 constraint as a first-class type
+    sos1 = Sos1Constraint(variables=[1, 2, 3])
 
     instance = Instance.from_components(
         decision_variables=x,
         objective=objective,
         constraints=[dummy_constraint, bigm1, bigm2],
+        sos1_constraints=[sos1],
         sense=Instance.MINIMIZE,
-        constraint_hints=constraint_hints,
     )
 
     # Create adapter and verify SOS1 constraint is added
@@ -43,11 +40,6 @@ def test_sos1_constraint_functionality():
     sos1_names = [name for name in constraint_names if name.startswith("sos1_")]
 
     assert len(sos1_names) > 0, "SOS1 constraint should be created"
-
-    # Check that referenced constraints are excluded
-    assert "1" not in constraint_names, "Referenced constraint should be excluded"
-    assert "2" not in constraint_names, "Referenced Big-M constraint should be excluded"
-    assert "3" not in constraint_names, "Referenced Big-M constraint should be excluded"
 
     # Solve and get a solution (may be infeasible due to constraint exclusion, which is expected)
     model.optimize()
@@ -63,23 +55,18 @@ def test_sos1_constraint_naming():
 
     objective = sum(x)
 
-    # Create constraints for SOS1 to reference
+    # Create constraints
     constraint1 = (sum(x) == 1).set_id(10)  # type: ignore
-    bigm1 = (x[0] <= 1).set_id(20)  # type: ignore
-    bigm2 = (x[1] <= 1).set_id(30)  # type: ignore
 
-    # Test SOS1 with both binary and big-M constraints
-    sos1_hint = Sos1(
-        binary_constraint_id=10, big_m_constraint_ids=[20, 30], variables=[1, 2]
-    )
-    constraint_hints = ConstraintHints(sos1_constraints=[sos1_hint])
+    # Create SOS1 constraint
+    sos1 = Sos1Constraint(variables=[1, 2], id=42)
 
     instance = Instance.from_components(
         decision_variables=x,
         objective=objective,
-        constraints=[constraint1, bigm1, bigm2],
+        constraints=[constraint1],
+        sos1_constraints=[sos1],
         sense=Instance.MINIMIZE,
-        constraint_hints=constraint_hints,
     )
 
     adapter = OMMXPySCIPOptAdapter(instance, use_sos1="auto")
@@ -90,8 +77,8 @@ def test_sos1_constraint_naming():
     sos1_names = [name for name in constraint_names if name.startswith("sos1_")]
 
     assert len(sos1_names) == 1
-    # The name should include binary constraint ID and big-M constraint IDs
-    expected_name = "sos1_10_20_30"
+    # The name should include the SOS1 constraint ID
+    expected_name = "sos1_42"
     assert sos1_names[0] == expected_name, (
         f"Expected {expected_name}, got {sos1_names[0]}"
     )
@@ -104,23 +91,18 @@ def test_sos1_constraint_naming_no_bigm():
 
     objective = sum(x)
 
-    # Create constraint for SOS1 to reference (just binary constraint)
+    # Create constraint
     constraint1 = (sum(x) <= 1).set_id(5)  # type: ignore
 
-    # SOS1 with only binary constraint, no big-M
-    sos1_hint = Sos1(
-        binary_constraint_id=5,
-        big_m_constraint_ids=[],  # No big-M constraints
-        variables=[1, 2],
-    )
-    constraint_hints = ConstraintHints(sos1_constraints=[sos1_hint])
+    # SOS1 with no associated constraint IDs
+    sos1 = Sos1Constraint(variables=[1, 2], id=7)
 
     instance = Instance.from_components(
         decision_variables=x,
         objective=objective,
         constraints=[constraint1],
+        sos1_constraints=[sos1],
         sense=Instance.MINIMIZE,
-        constraint_hints=constraint_hints,
     )
 
     adapter = OMMXPySCIPOptAdapter(instance, use_sos1="auto")
@@ -131,8 +113,7 @@ def test_sos1_constraint_naming_no_bigm():
     sos1_names = [name for name in constraint_names if name.startswith("sos1_")]
 
     assert len(sos1_names) == 1
-    # When no big-M constraints, should just be sos1_{binary_constraint_id}
-    expected_name = "sos1_5"
+    expected_name = "sos1_7"
     assert sos1_names[0] == expected_name, (
         f"Expected {expected_name}, got {sos1_names[0]}"
     )

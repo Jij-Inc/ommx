@@ -47,7 +47,6 @@ impl From<Instance> for ParametricInstance {
             one_hot_constraint_collection,
             sos1_constraint_collection,
             decision_variable_dependency,
-            constraint_hints,
             description,
             named_functions,
             ..
@@ -63,7 +62,6 @@ impl From<Instance> for ParametricInstance {
             one_hot_constraint_collection,
             sos1_constraint_collection,
             decision_variable_dependency,
-            constraint_hints,
             description,
             named_functions,
         }
@@ -131,7 +129,6 @@ impl ParametricInstance {
             sos1_constraint_collection: self.sos1_constraint_collection,
             named_functions,
             decision_variable_dependency: self.decision_variable_dependency,
-            constraint_hints: self.constraint_hints,
             parameters: Some(parameters),
             description: self.description,
         })

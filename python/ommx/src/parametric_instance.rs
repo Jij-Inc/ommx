@@ -1,7 +1,7 @@
 use crate::{
     pandas::{entries_to_dataframe, PyDataFrame},
-    Constraint, ConstraintHints, DecisionVariable, Function, Instance, NamedFunction, Parameter,
-    RemovedConstraint, Sense,
+    Constraint, DecisionVariable, Function, Instance, NamedFunction, Parameter, RemovedConstraint,
+    Sense,
 };
 use anyhow::Result;
 use ommx::{ConstraintID, NamedFunctionID, VariableID};
@@ -38,7 +38,7 @@ impl ParametricInstance {
     }
 
     #[staticmethod]
-    #[pyo3(signature = (*, sense, objective, decision_variables, constraints, parameters, named_functions=None, description=None, constraint_hints=None))]
+    #[pyo3(signature = (*, sense, objective, decision_variables, constraints, parameters, named_functions=None, description=None))]
     pub fn from_components(
         sense: Sense,
         objective: Function,
@@ -47,7 +47,6 @@ impl ParametricInstance {
         parameters: Vec<Parameter>,
         named_functions: Option<Vec<NamedFunction>>,
         description: Option<crate::InstanceDescription>,
-        constraint_hints: Option<ConstraintHints>,
     ) -> Result<Self> {
         let mut rust_decision_variables = BTreeMap::new();
         for var in decision_variables {
@@ -91,10 +90,6 @@ impl ParametricInstance {
             builder = builder.named_functions(rust_named_functions);
         }
 
-        if let Some(hints) = constraint_hints {
-            builder = builder.constraint_hints(hints.0);
-        }
-
         if let Some(desc) = description {
             builder = builder.description(desc.0);
         }
@@ -114,7 +109,6 @@ impl ParametricInstance {
             Vec::new(),
             Vec::new(),
             Vec::new(),
-            None,
             None,
             None,
         )
@@ -194,11 +188,6 @@ impl ParametricInstance {
             .description
             .as_ref()
             .map(|desc| crate::InstanceDescription(desc.clone()))
-    }
-
-    #[getter]
-    pub fn constraint_hints(&self) -> ConstraintHints {
-        ConstraintHints(self.inner.constraint_hints().clone())
     }
 
     #[getter]

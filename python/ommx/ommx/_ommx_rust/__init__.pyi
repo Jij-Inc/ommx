@@ -18,7 +18,6 @@ __all__ = [
     "ArtifactBuilder",
     "Bound",
     "Constraint",
-    "ConstraintHints",
     "DecisionVariable",
     "DecisionVariableAnalysis",
     "Descriptor",
@@ -33,7 +32,6 @@ __all__ = [
     "Kind",
     "Linear",
     "NamedFunction",
-    "OneHot",
     "OneHotConstraint",
     "Optimality",
     "Parameter",
@@ -51,7 +49,6 @@ __all__ = [
     "Samples",
     "Sense",
     "Solution",
-    "Sos1",
     "Sos1Constraint",
     "State",
     "ToFunction",
@@ -635,25 +632,6 @@ class Constraint:
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> Constraint: ...
     def __deepcopy__(self, _memo: typing.Any) -> Constraint: ...
-
-@typing.final
-class ConstraintHints:
-    r"""
-    ConstraintHints wrapper for Python
-    """
-    @property
-    def one_hot_constraints(self) -> builtins.list[OneHot]: ...
-    @property
-    def sos1_constraints(self) -> builtins.list[Sos1]: ...
-    def __eq__(self, other: builtins.object) -> builtins.bool: ...
-    def __new__(
-        cls,
-        one_hot_constraints: typing.Sequence[OneHot] = [],
-        sos1_constraints: typing.Sequence[Sos1] = [],
-    ) -> ConstraintHints: ...
-    def __repr__(self) -> builtins.str: ...
-    def __copy__(self) -> ConstraintHints: ...
-    def __deepcopy__(self, _memo: typing.Any) -> ConstraintHints: ...
 
 @typing.final
 class DecisionVariable:
@@ -1418,8 +1396,6 @@ class Instance:
     @property
     def description(self) -> typing.Optional[InstanceDescription]: ...
     @property
-    def constraint_hints(self) -> ConstraintHints: ...
-    @property
     def used_decision_variables(self) -> builtins.list[DecisionVariable]: ...
     @property
     def decision_variables_df(self) -> pandas.DataFrame:
@@ -1480,9 +1456,10 @@ class Instance:
         indicator_constraints: typing.Optional[
             typing.Sequence[IndicatorConstraint]
         ] = None,
+        one_hot_constraints: typing.Optional[typing.Sequence[OneHotConstraint]] = None,
+        sos1_constraints: typing.Optional[typing.Sequence[Sos1Constraint]] = None,
         named_functions: typing.Optional[typing.Sequence[NamedFunction]] = None,
         description: typing.Optional[InstanceDescription] = None,
-        constraint_hints: typing.Optional[ConstraintHints] = None,
     ) -> Instance:
         r"""
         Create an instance from its components.
@@ -1494,7 +1471,6 @@ class Instance:
         - `constraints`: List of constraints
         - `named_functions`: Optional list of named functions
         - `description`: Optional instance description
-        - `constraint_hints`: Optional constraint hints for solvers
 
         **Returns:**
         A new Instance
@@ -2722,23 +2698,6 @@ class NamedFunction:
     def __deepcopy__(self, _memo: typing.Any) -> NamedFunction: ...
 
 @typing.final
-class OneHot:
-    r"""
-    OneHot constraint hint wrapper for Python
-    """
-    @property
-    def id(self) -> builtins.int: ...
-    @property
-    def variables(self) -> builtins.list[builtins.int]: ...
-    def __eq__(self, other: builtins.object) -> builtins.bool: ...
-    def __new__(
-        cls, id: builtins.int, variables: typing.Sequence[builtins.int]
-    ) -> OneHot: ...
-    def __repr__(self) -> builtins.str: ...
-    def __copy__(self) -> OneHot: ...
-    def __deepcopy__(self, _memo: typing.Any) -> OneHot: ...
-
-@typing.final
 class OneHotConstraint:
     r"""
     A one-hot constraint: exactly one variable must be 1, the rest must be 0.
@@ -2960,8 +2919,6 @@ class ParametricInstance:
     @property
     def description(self) -> typing.Optional[InstanceDescription]: ...
     @property
-    def constraint_hints(self) -> ConstraintHints: ...
-    @property
     def decision_variable_ids(self) -> builtins.set[builtins.int]: ...
     @property
     def parameter_ids(self) -> builtins.set[builtins.int]: ...
@@ -3025,7 +2982,6 @@ class ParametricInstance:
         parameters: typing.Sequence[Parameter],
         named_functions: typing.Optional[typing.Sequence[NamedFunction]] = None,
         description: typing.Optional[InstanceDescription] = None,
-        constraint_hints: typing.Optional[ConstraintHints] = None,
     ) -> ParametricInstance: ...
     @staticmethod
     def empty() -> ParametricInstance:
@@ -4327,28 +4283,6 @@ class Solution:
         - For equality constraints: $\sum (f(x))^2$
         - For inequality constraints: $\sum (\max(0, f(x)))^2$
         """
-
-@typing.final
-class Sos1:
-    r"""
-    SOS1 constraint hint wrapper for Python
-    """
-    @property
-    def binary_constraint_id(self) -> builtins.int: ...
-    @property
-    def big_m_constraint_ids(self) -> builtins.list[builtins.int]: ...
-    @property
-    def variables(self) -> builtins.list[builtins.int]: ...
-    def __eq__(self, other: builtins.object) -> builtins.bool: ...
-    def __new__(
-        cls,
-        binary_constraint_id: builtins.int,
-        big_m_constraint_ids: typing.Sequence[builtins.int],
-        variables: typing.Sequence[builtins.int],
-    ) -> Sos1: ...
-    def __repr__(self) -> builtins.str: ...
-    def __copy__(self) -> Sos1: ...
-    def __deepcopy__(self, _memo: typing.Any) -> Sos1: ...
 
 @typing.final
 class Sos1Constraint:

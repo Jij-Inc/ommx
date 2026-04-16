@@ -3,7 +3,6 @@ mod approx;
 pub(crate) mod arbitrary;
 mod builder;
 mod clip_bounds;
-mod constraint_hints;
 mod convert;
 mod decision_variable;
 mod error;
@@ -30,11 +29,11 @@ pub use parametric_builder::*;
 pub use stats::*;
 
 use crate::{
-    constraint::RemovedReason, constraint_hints::ConstraintHints,
-    constraint_type::ConstraintCollection, indicator_constraint::IndicatorConstraint,
-    named_function::NamedFunctionID, one_hot_constraint::OneHotConstraint, parse::Parse,
-    sos1_constraint::Sos1Constraint, v1, AcyclicAssignments, Constraint, ConstraintID,
-    DecisionVariable, Evaluate, Function, NamedFunction, VariableID, VariableIDSet,
+    constraint::RemovedReason, constraint_type::ConstraintCollection,
+    indicator_constraint::IndicatorConstraint, named_function::NamedFunctionID,
+    one_hot_constraint::OneHotConstraint, parse::Parse, sos1_constraint::Sos1Constraint, v1,
+    AcyclicAssignments, Constraint, ConstraintID, DecisionVariable, Evaluate, Function,
+    NamedFunction, VariableID, VariableIDSet,
 };
 use std::collections::BTreeMap;
 
@@ -129,15 +128,6 @@ pub struct Instance {
     decision_variable_dependency: AcyclicAssignments,
     #[getset(get = "pub")]
     named_functions: BTreeMap<NamedFunctionID, NamedFunction>,
-
-    /// The constraint hints, i.e. some constraints are in form of one-hot, SOS1,2, or other special types.
-    ///
-    /// Note
-    /// -----
-    /// This struct does not validate the hints in mathematical sense.
-    /// Only checks the decision variable and constraint IDs are valid.
-    #[getset(get = "pub")]
-    constraint_hints: ConstraintHints,
 
     // Optional fields for additional metadata.
     // These fields are public since arbitrary values can be set without validation.
@@ -299,15 +289,6 @@ pub struct ParametricInstance {
     decision_variable_dependency: AcyclicAssignments,
     #[getset(get = "pub")]
     named_functions: BTreeMap<NamedFunctionID, NamedFunction>,
-
-    /// The constraint hints, i.e. some constraints are in form of one-hot, SOS1,2, or other special types.
-    ///
-    /// Note
-    /// -----
-    /// This struct does not validate the hints in mathematical sense.
-    /// Only checks the decision variable and constraint IDs are valid.
-    #[getset(get = "pub")]
-    constraint_hints: ConstraintHints,
 
     // Optional fields for additional metadata.
     // These fields are public since arbitrary values can be set without validation.
