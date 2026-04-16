@@ -126,6 +126,10 @@ pub struct Solution {
     #[getset(get = "pub")]
     evaluated_indicator_constraints: EvaluatedCollection<IndicatorConstraint>,
     #[getset(get = "pub")]
+    evaluated_one_hot_constraints: EvaluatedCollection<crate::OneHotConstraint>,
+    #[getset(get = "pub")]
+    evaluated_sos1_constraints: EvaluatedCollection<crate::Sos1Constraint>,
+    #[getset(get = "pub")]
     evaluated_named_functions: BTreeMap<NamedFunctionID, EvaluatedNamedFunction>,
     #[getset(get = "pub")]
     decision_variables: BTreeMap<VariableID, EvaluatedDecisionVariable>,
@@ -197,6 +201,8 @@ impl Solution {
     pub fn feasible_constraints(&self) -> bool {
         self.evaluated_constraints.is_feasible()
             && self.evaluated_indicator_constraints.is_feasible()
+            && self.evaluated_one_hot_constraints.is_feasible()
+            && self.evaluated_sos1_constraints.is_feasible()
     }
 
     /// Check if all constraints and decision variables are feasible
@@ -216,6 +222,8 @@ impl Solution {
     pub fn feasible_constraints_relaxed(&self) -> bool {
         self.evaluated_constraints.is_feasible_relaxed()
             && self.evaluated_indicator_constraints.is_feasible_relaxed()
+            && self.evaluated_one_hot_constraints.is_feasible_relaxed()
+            && self.evaluated_sos1_constraints.is_feasible_relaxed()
     }
 
     /// Check if all constraints and decision variables are feasible in the relaxed problem
@@ -547,6 +555,8 @@ pub struct SolutionBuilder {
     objective: Option<f64>,
     evaluated_constraints: Option<EvaluatedCollection<Constraint>>,
     evaluated_indicator_constraints: EvaluatedCollection<IndicatorConstraint>,
+    evaluated_one_hot_constraints: EvaluatedCollection<crate::OneHotConstraint>,
+    evaluated_sos1_constraints: EvaluatedCollection<crate::Sos1Constraint>,
     evaluated_named_functions: BTreeMap<NamedFunctionID, EvaluatedNamedFunction>,
     decision_variables: Option<BTreeMap<VariableID, EvaluatedDecisionVariable>>,
     sense: Option<Sense>,
@@ -610,6 +620,24 @@ impl SolutionBuilder {
     ) -> Self {
         self.evaluated_indicator_constraints =
             EvaluatedCollection::new(evaluated_indicator_constraints, BTreeMap::new());
+        self
+    }
+
+    /// Sets the evaluated one-hot constraints from a collection.
+    pub fn evaluated_one_hot_constraints_collection(
+        mut self,
+        evaluated_one_hot_constraints: EvaluatedCollection<crate::OneHotConstraint>,
+    ) -> Self {
+        self.evaluated_one_hot_constraints = evaluated_one_hot_constraints;
+        self
+    }
+
+    /// Sets the evaluated SOS1 constraints from a collection.
+    pub fn evaluated_sos1_constraints_collection(
+        mut self,
+        evaluated_sos1_constraints: EvaluatedCollection<crate::Sos1Constraint>,
+    ) -> Self {
+        self.evaluated_sos1_constraints = evaluated_sos1_constraints;
         self
     }
 
@@ -749,6 +777,8 @@ impl SolutionBuilder {
             objective,
             evaluated_constraints,
             evaluated_indicator_constraints: self.evaluated_indicator_constraints,
+            evaluated_one_hot_constraints: self.evaluated_one_hot_constraints,
+            evaluated_sos1_constraints: self.evaluated_sos1_constraints,
             evaluated_named_functions: self.evaluated_named_functions,
             decision_variables,
             optimality: self.optimality,
@@ -795,6 +825,8 @@ impl SolutionBuilder {
             objective,
             evaluated_constraints,
             evaluated_indicator_constraints: self.evaluated_indicator_constraints,
+            evaluated_one_hot_constraints: self.evaluated_one_hot_constraints,
+            evaluated_sos1_constraints: self.evaluated_sos1_constraints,
             evaluated_named_functions: self.evaluated_named_functions,
             decision_variables,
             optimality: self.optimality,

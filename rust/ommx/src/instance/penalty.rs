@@ -104,6 +104,8 @@ impl Instance {
             parameters,
             constraint_collection: ConstraintCollection::new(BTreeMap::new(), removed_constraints),
             indicator_constraint_collection: self.indicator_constraint_collection,
+            one_hot_constraint_collection: self.one_hot_constraint_collection,
+            sos1_constraint_collection: self.sos1_constraint_collection,
             decision_variable_dependency: self.decision_variable_dependency,
             // All constraints are moved to removed_constraints, so all hints are invalidated
             constraint_hints: ConstraintHints::default(),
@@ -163,6 +165,8 @@ impl Instance {
                 parameters: BTreeMap::new(),
                 constraint_collection: ConstraintCollection::new(BTreeMap::new(), existing_removed),
                 indicator_constraint_collection: self.indicator_constraint_collection,
+                one_hot_constraint_collection: self.one_hot_constraint_collection,
+                sos1_constraint_collection: self.sos1_constraint_collection,
                 decision_variable_dependency: self.decision_variable_dependency,
                 constraint_hints: self.constraint_hints,
                 description: self.description,
@@ -221,6 +225,8 @@ impl Instance {
             parameters,
             constraint_collection: ConstraintCollection::new(BTreeMap::new(), removed_constraints),
             indicator_constraint_collection: self.indicator_constraint_collection,
+            one_hot_constraint_collection: self.one_hot_constraint_collection,
+            sos1_constraint_collection: self.sos1_constraint_collection,
             decision_variable_dependency: self.decision_variable_dependency,
             // All constraints are moved to removed_constraints, so all hints are invalidated
             constraint_hints: ConstraintHints::default(),

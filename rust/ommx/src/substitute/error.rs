@@ -19,4 +19,18 @@ pub enum SubstitutionError {
         indicator_variable: VariableID,
         constraint_id: crate::indicator_constraint::IndicatorConstraintID,
     },
+
+    /// Substituting a one-hot variable would change the constraint type.
+    #[error("Cannot substitute variable {variable:?} of one-hot constraint {constraint_id:?}")]
+    OneHotVariableSubstitution {
+        variable: VariableID,
+        constraint_id: crate::one_hot_constraint::OneHotConstraintID,
+    },
+
+    /// Substituting a SOS1 variable would change the constraint type.
+    #[error("Cannot substitute variable {variable:?} of SOS1 constraint {constraint_id:?}")]
+    Sos1VariableSubstitution {
+        variable: VariableID,
+        constraint_id: crate::sos1_constraint::Sos1ConstraintID,
+    },
 }

@@ -95,6 +95,8 @@ impl Parse for crate::v1::Solution {
                 removed_reasons,
             ),
             evaluated_indicator_constraints: Default::default(),
+            evaluated_one_hot_constraints: Default::default(),
+            evaluated_sos1_constraints: Default::default(),
             evaluated_named_functions,
             decision_variables,
             optimality,

@@ -364,6 +364,8 @@ impl InstanceBuilder {
                 self.indicator_constraints,
                 self.removed_indicator_constraints,
             ),
+            one_hot_constraint_collection: Default::default(),
+            sos1_constraint_collection: Default::default(),
             named_functions: self.named_functions,
             decision_variable_dependency: self.decision_variable_dependency,
             constraint_hints,

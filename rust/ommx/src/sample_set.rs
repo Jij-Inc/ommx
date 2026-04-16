@@ -3,7 +3,7 @@ mod parse;
 mod serialize;
 
 use crate::{
-    constraint_type::{SampledCollection, SampledConstraintBehavior},
+    constraint_type::{EvaluatedCollection, SampledCollection, SampledConstraintBehavior},
     indicator_constraint::IndicatorConstraint,
     Constraint, ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable,
     EvaluatedNamedFunction, NamedFunctionID, SampleID, SampleIDSet, Sampled, SampledConstraint,
@@ -123,6 +123,10 @@ pub struct SampleSet {
     #[getset(get = "pub")]
     indicator_constraints: SampledCollection<IndicatorConstraint>,
     #[getset(get = "pub")]
+    one_hot_constraints: SampledCollection<crate::OneHotConstraint>,
+    #[getset(get = "pub")]
+    sos1_constraints: SampledCollection<crate::Sos1Constraint>,
+    #[getset(get = "pub")]
     named_functions: BTreeMap<NamedFunctionID, SampledNamedFunction>,
     #[getset(get = "pub")]
     sense: Sense,
@@ -227,6 +231,22 @@ impl SampleSet {
             evaluated_indicator_constraints.insert(*constraint_id, evaluated);
         }
 
+        // Get evaluated one-hot constraints
+        let mut evaluated_one_hot_constraints = BTreeMap::default();
+        for (constraint_id, constraint) in self.one_hot_constraints.iter() {
+            use crate::constraint_type::SampledConstraintBehavior;
+            let evaluated = constraint.get(sample_id)?;
+            evaluated_one_hot_constraints.insert(*constraint_id, evaluated);
+        }
+
+        // Get evaluated SOS1 constraints
+        let mut evaluated_sos1_constraints = BTreeMap::default();
+        for (constraint_id, constraint) in self.sos1_constraints.iter() {
+            use crate::constraint_type::SampledConstraintBehavior;
+            let evaluated = constraint.get(sample_id)?;
+            evaluated_sos1_constraints.insert(*constraint_id, evaluated);
+        }
+
         // Get evaluated named functions
         let mut evaluated_named_functions: BTreeMap<NamedFunctionID, EvaluatedNamedFunction> =
             BTreeMap::default();
@@ -243,6 +263,14 @@ impl SampleSet {
                 .objective(objective)
                 .evaluated_constraints(evaluated_constraints)
                 .evaluated_indicator_constraints(evaluated_indicator_constraints)
+                .evaluated_one_hot_constraints_collection(EvaluatedCollection::new(
+                    evaluated_one_hot_constraints,
+                    BTreeMap::new(),
+                ))
+                .evaluated_sos1_constraints_collection(EvaluatedCollection::new(
+                    evaluated_sos1_constraints,
+                    BTreeMap::new(),
+                ))
                 .evaluated_named_functions(evaluated_named_functions)
                 .decision_variables(decision_variables)
                 .sense(sense)
@@ -325,6 +353,8 @@ pub struct SampleSetBuilder {
     objectives: Option<Sampled<f64>>,
     constraints: Option<SampledCollection<Constraint>>,
     indicator_constraints: SampledCollection<IndicatorConstraint>,
+    one_hot_constraints: SampledCollection<crate::OneHotConstraint>,
+    sos1_constraints: SampledCollection<crate::Sos1Constraint>,
     named_functions: BTreeMap<NamedFunctionID, SampledNamedFunction>,
     sense: Option<Sense>,
 }
@@ -371,6 +401,30 @@ impl SampleSetBuilder {
         >,
     ) -> Self {
         self.indicator_constraints = SampledCollection::new(indicator_constraints, BTreeMap::new());
+        self
+    }
+
+    /// Sets the one-hot constraints.
+    pub fn one_hot_constraints(
+        mut self,
+        one_hot_constraints: BTreeMap<
+            crate::OneHotConstraintID,
+            crate::one_hot_constraint::SampledOneHotConstraint,
+        >,
+    ) -> Self {
+        self.one_hot_constraints = SampledCollection::new(one_hot_constraints, BTreeMap::new());
+        self
+    }
+
+    /// Sets the SOS1 constraints.
+    pub fn sos1_constraints(
+        mut self,
+        sos1_constraints: BTreeMap<
+            crate::Sos1ConstraintID,
+            crate::sos1_constraint::SampledSos1Constraint,
+        >,
+    ) -> Self {
+        self.sos1_constraints = SampledCollection::new(sos1_constraints, BTreeMap::new());
         self
     }
 
@@ -507,6 +561,8 @@ impl SampleSetBuilder {
         let (feasible, feasible_relaxed) = Self::compute_feasibility(
             &constraints,
             &self.indicator_constraints,
+            &self.one_hot_constraints,
+            &self.sos1_constraints,
             &objective_sample_ids,
         );
 
@@ -515,6 +571,8 @@ impl SampleSetBuilder {
             objectives,
             constraints,
             indicator_constraints: self.indicator_constraints,
+            one_hot_constraints: self.one_hot_constraints,
+            sos1_constraints: self.sos1_constraints,
             named_functions: self.named_functions,
             sense,
             feasible,
@@ -562,6 +620,8 @@ impl SampleSetBuilder {
         let (feasible, feasible_relaxed) = Self::compute_feasibility(
             &constraints,
             &self.indicator_constraints,
+            &self.one_hot_constraints,
+            &self.sos1_constraints,
             &objective_sample_ids,
         );
 
@@ -570,6 +630,8 @@ impl SampleSetBuilder {
             objectives,
             constraints,
             indicator_constraints: self.indicator_constraints,
+            one_hot_constraints: self.one_hot_constraints,
+            sos1_constraints: self.sos1_constraints,
             named_functions: self.named_functions,
             sense,
             feasible,
@@ -580,6 +642,8 @@ impl SampleSetBuilder {
     fn compute_feasibility(
         constraints: &SampledCollection<Constraint>,
         indicator_constraints: &SampledCollection<IndicatorConstraint>,
+        one_hot_constraints: &SampledCollection<crate::OneHotConstraint>,
+        sos1_constraints: &SampledCollection<crate::Sos1Constraint>,
         sample_ids: &SampleIDSet,
     ) -> (BTreeMap<SampleID, bool>, BTreeMap<SampleID, bool>) {
         let mut feasible = BTreeMap::new();
@@ -587,9 +651,13 @@ impl SampleSetBuilder {
 
         for sample_id in sample_ids {
             let f = constraints.is_feasible_for(*sample_id)
-                && indicator_constraints.is_feasible_for(*sample_id);
+                && indicator_constraints.is_feasible_for(*sample_id)
+                && one_hot_constraints.is_feasible_for(*sample_id)
+                && sos1_constraints.is_feasible_for(*sample_id);
             let fr = constraints.is_feasible_relaxed_for(*sample_id)
-                && indicator_constraints.is_feasible_relaxed_for(*sample_id);
+                && indicator_constraints.is_feasible_relaxed_for(*sample_id)
+                && one_hot_constraints.is_feasible_relaxed_for(*sample_id)
+                && sos1_constraints.is_feasible_relaxed_for(*sample_id);
 
             feasible.insert(*sample_id, f);
             feasible_relaxed.insert(*sample_id, fr);

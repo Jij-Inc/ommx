@@ -71,6 +71,28 @@ impl Substitute for Instance {
             }
         }
 
+        // Check that no one-hot or SOS1 variable is being substituted.
+        for oh in self.one_hot_constraint_collection.active().values() {
+            for var_id in &oh.variables {
+                if substituted_variables.contains(var_id) {
+                    return Err(SubstitutionError::OneHotVariableSubstitution {
+                        variable: *var_id,
+                        constraint_id: oh.id,
+                    });
+                }
+            }
+        }
+        for sos1 in self.sos1_constraint_collection.active().values() {
+            for var_id in &sos1.variables {
+                if substituted_variables.contains(var_id) {
+                    return Err(SubstitutionError::Sos1VariableSubstitution {
+                        variable: *var_id,
+                        constraint_id: sos1.id,
+                    });
+                }
+            }
+        }
+
         // Apply substitution to the existing decision_variable_dependency
         substitute_acyclic(&mut self.decision_variable_dependency, acyclic)?;
 

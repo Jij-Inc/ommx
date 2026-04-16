@@ -17,6 +17,9 @@ impl Evaluate for Instance {
         let evaluated_indicator_constraints = self
             .indicator_constraint_collection
             .evaluate(&state, atol)?;
+        let evaluated_one_hot_constraints =
+            self.one_hot_constraint_collection.evaluate(&state, atol)?;
+        let evaluated_sos1_constraints = self.sos1_constraint_collection.evaluate(&state, atol)?;
 
         let mut decision_variables = BTreeMap::default();
         for dv in self.decision_variables.values() {
@@ -38,6 +41,8 @@ impl Evaluate for Instance {
                 .objective(objective)
                 .evaluated_constraints_collection(evaluated_constraints)
                 .evaluated_indicator_constraints_collection(evaluated_indicator_constraints)
+                .evaluated_one_hot_constraints_collection(evaluated_one_hot_constraints)
+                .evaluated_sos1_constraints_collection(evaluated_sos1_constraints)
                 .evaluated_named_functions(evaluated_named_functions)
                 .decision_variables(decision_variables)
                 .sense(sense)
@@ -69,6 +74,16 @@ impl Evaluate for Instance {
         > = self
             .indicator_constraint_collection
             .evaluate_samples(&samples, atol)?;
+        let sampled_one_hot_constraints: crate::constraint_type::SampledCollection<
+            crate::OneHotConstraint,
+        > = self
+            .one_hot_constraint_collection
+            .evaluate_samples(&samples, atol)?;
+        let sampled_sos1_constraints: crate::constraint_type::SampledCollection<
+            crate::Sos1Constraint,
+        > = self
+            .sos1_constraint_collection
+            .evaluate_samples(&samples, atol)?;
 
         // Objective
         let objectives = self.objective().evaluate_samples(&samples, atol)?;
@@ -92,6 +107,8 @@ impl Evaluate for Instance {
             .objectives(objectives.try_into()?)
             .constraints(sampled_constraints.into_inner())
             .indicator_constraints(sampled_indicator_constraints.into_inner())
+            .one_hot_constraints(sampled_one_hot_constraints.into_inner())
+            .sos1_constraints(sampled_sos1_constraints.into_inner())
             .named_functions(named_functions)
             .sense(self.sense)
             .build()?)
@@ -117,6 +134,32 @@ impl Evaluate for Instance {
                     ic.indicator_variable,
                     ic.id
                 );
+            }
+        }
+
+        // Validate that no one-hot or SOS1 variable is being partially evaluated.
+        for oh in self.one_hot_constraint_collection.active().values() {
+            for var_id in &oh.variables {
+                if updated_state.entries.contains_key(&var_id.into_inner()) {
+                    anyhow::bail!(
+                        "Cannot partially evaluate variable {:?} of one-hot constraint {:?}. \
+                         Fixing a one-hot variable would change the constraint type.",
+                        var_id,
+                        oh.id
+                    );
+                }
+            }
+        }
+        for sos1 in self.sos1_constraint_collection.active().values() {
+            for var_id in &sos1.variables {
+                if updated_state.entries.contains_key(&var_id.into_inner()) {
+                    anyhow::bail!(
+                        "Cannot partially evaluate variable {:?} of SOS1 constraint {:?}. \
+                         Fixing a SOS1 variable would change the constraint type.",
+                        var_id,
+                        sos1.id
+                    );
+                }
             }
         }
 
