@@ -389,7 +389,6 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                 self.model.addConsSOS1(vars, name=name)
 
         for constraint in self.instance.constraints:
-
             # Handle constraint function based on its type
             f = constraint.function
             degree = f.degree()
