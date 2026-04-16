@@ -10,7 +10,7 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 {class}`~ommx.v1.IndicatorConstraint` is now a first-class feature in OMMX. An indicator constraint expresses a conditional relationship: a constraint `f(x) <= 0` (or `f(x) = 0`) is enforced only when a user-defined binary indicator variable `z = 1`. When `z = 0`, the constraint is unconditionally satisfied.
 
-Use {meth}`Constraint.with_indicator() <ommx.v1.Constraint.with_indicator>` to create an {class}`~ommx.v1.IndicatorConstraint` from an existing constraint. The PySCIPOpt Adapter supports solving instances with indicator constraints:
+Use {meth}`Constraint.with_indicator() <ommx.v1.Constraint.with_indicator>` to create an {class}`~ommx.v1.IndicatorConstraint` from an existing constraint. The PySCIPOpt Adapter converts these into SCIP's [`addConsIndicator`](https://pyscipopt.readthedocs.io/en/latest/api/model.html#pyscipopt.scip.Model.addConsIndicator):
 
 ```python
 from ommx.v1 import DecisionVariable, Instance
