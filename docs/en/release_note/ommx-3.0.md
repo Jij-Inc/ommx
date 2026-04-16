@@ -60,9 +60,9 @@ df = solution.constraints_df.join(solution.removed_reasons_df)
 
 This applies to both regular constraints and indicator constraints.
 
-#### Adapter Capability model
+### Adapter Capability model ([#790](https://github.com/Jij-Inc/ommx/pull/790))
 
-As specialized constraint types are added and support varies across solvers, an Adapter Capability model has been introduced. Adapters declare their supported capabilities via `ADDITIONAL_CAPABILITIES`, and `Instance.check_capabilities()` validates that the problem is compatible before solving.
+As specialized constraint types (such as Indicator Constraints) are added and support varies across solvers, an Adapter Capability model has been introduced. Adapters declare their supported capabilities via `ADDITIONAL_CAPABILITIES`, and `Instance.check_capabilities()` validates that the problem is compatible before solving.
 
 ```python
 from ommx.v1 import AdditionalCapability

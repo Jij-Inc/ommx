@@ -60,9 +60,9 @@ df = solution.constraints_df.join(solution.removed_reasons_df)
 
 これは通常の制約とindicator constraintの両方に適用されます。
 
-#### Adapter Capabilityモデル
+### Adapter Capabilityモデル ([#790](https://github.com/Jij-Inc/ommx/pull/790))
 
-特殊な制約型が追加されソルバー毎に対応・未対応が分かれるため、Adapter Capabilityモデルが導入されました。Adapterは `ADDITIONAL_CAPABILITIES` でサポートするCapabilityを宣言し、`Instance.check_capabilities()` で問題の互換性を検証します。
+Indicator Constraintのような特殊な制約型が追加されソルバー毎に対応・未対応が分かれるため、Adapter Capabilityモデルが導入されました。Adapterは `ADDITIONAL_CAPABILITIES` でサポートするCapabilityを宣言し、`Instance.check_capabilities()` で問題の互換性を検証します。
 
 ```python
 from ommx.v1 import AdditionalCapability
