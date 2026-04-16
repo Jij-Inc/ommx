@@ -35,8 +35,12 @@ impl Instance {
             .constraint_collection
             .active_mut()
             .get_mut(&id)
-            .unwrap();
+            .expect("restore() just inserted this id into active");
 
+        // The following operations are infallible for regular constraints:
+        // - substitute_acyclic only fails on cyclic dependencies, which AcyclicAssignments prevents
+        // - Constraint::partial_evaluate delegates to Function::partial_evaluate, which is infallible
+        // No rollback is needed.
         if !self.decision_variable_dependency.is_empty() {
             crate::substitute_acyclic(
                 &mut constraint.stage.function,
@@ -108,8 +112,13 @@ impl Instance {
             .indicator_constraint_collection
             .active_mut()
             .get_mut(&id)
-            .unwrap();
+            .expect("restore() just inserted this id into active");
 
+        // The following operations are infallible because:
+        // - substitute_acyclic only fails on cyclic dependencies, which AcyclicAssignments prevents
+        // - IndicatorConstraint::partial_evaluate fails only if the indicator variable is in
+        //   fixed_state, but we already checked that above before restoring
+        // No rollback is needed.
         if !self.decision_variable_dependency.is_empty() {
             crate::substitute_acyclic(&mut ic.stage.function, &self.decision_variable_dependency)?;
         }
