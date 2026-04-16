@@ -18,6 +18,7 @@ mod indicator_constraint;
 mod instance;
 mod linear;
 mod named_function;
+mod one_hot_constraint;
 mod pandas;
 mod parameter;
 mod parameters;
@@ -31,6 +32,7 @@ mod sampled_decision_variable;
 mod sampled_named_function;
 mod samples;
 mod solution;
+mod sos1_constraint;
 mod state;
 
 pub use artifact::*;
@@ -50,6 +52,7 @@ pub use indicator_constraint::*;
 pub use instance::*;
 pub use linear::*;
 pub use named_function::*;
+pub use one_hot_constraint::*;
 pub use parameter::*;
 pub use parameters::*;
 pub use parametric_instance::*;
@@ -62,6 +65,7 @@ pub use sampled_decision_variable::*;
 pub use sampled_named_function::*;
 pub use samples::*;
 pub use solution::*;
+pub use sos1_constraint::*;
 pub use state::*;
 
 use pyo3::prelude::*;
@@ -108,6 +112,8 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<AdditionalCapability>()?;
     m.add_class::<Constraint>()?;
     m.add_class::<IndicatorConstraint>()?;
+    m.add_class::<OneHotConstraint>()?;
+    m.add_class::<Sos1Constraint>()?;
     m.add_class::<NamedFunction>()?;
     m.add_class::<RemovedConstraint>()?;
     m.add_class::<OneHot>()?;
@@ -183,6 +189,8 @@ pyo3_stub_gen::reexport_module_members!("ommx.v1" from "ommx._ommx_rust";
     // Constraint and named function
     "Constraint",
     "IndicatorConstraint",
+    "OneHotConstraint",
+    "Sos1Constraint",
     "RemovedConstraint",
     "NamedFunction",
     // Constraint hints

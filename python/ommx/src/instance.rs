@@ -261,6 +261,26 @@ impl Instance {
             .collect()
     }
 
+    /// List of all one-hot constraints in the instance sorted by their IDs.
+    #[getter]
+    pub fn one_hot_constraints(&self) -> Vec<crate::OneHotConstraint> {
+        self.inner
+            .one_hot_constraints()
+            .values()
+            .map(|c| crate::OneHotConstraint(c.clone()))
+            .collect()
+    }
+
+    /// List of all SOS1 constraints in the instance sorted by their IDs.
+    #[getter]
+    pub fn sos1_constraints(&self) -> Vec<crate::Sos1Constraint> {
+        self.inner
+            .sos1_constraints()
+            .values()
+            .map(|c| crate::Sos1Constraint(c.clone()))
+            .collect()
+    }
+
     /// Check that the adapter's supported capabilities cover this instance's requirements.
     ///
     /// `supported` is a set of `AdditionalCapability` flags.
