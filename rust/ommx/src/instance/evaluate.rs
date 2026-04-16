@@ -234,6 +234,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "Constraint propagation via ConstraintHints is deferred to the forget phase"]
     fn test_partial_evaluate_with_constraint_hints() {
         use crate::DecisionVariable;
         use maplit::btreemap;

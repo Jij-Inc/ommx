@@ -355,6 +355,29 @@ impl InstanceBuilder {
         let constraint_hints = hints.parse(&context)?;
         let (decision_variables, constraints, removed_constraints) = context;
 
+        // Convert hints to first-class constraint collections
+        let mut one_hot_active = BTreeMap::new();
+        for hint in &constraint_hints.one_hot_constraints {
+            let id = crate::OneHotConstraintID::from(*hint.id);
+            one_hot_active.insert(
+                id,
+                crate::OneHotConstraint::with_constraint_id(id, hint.variables.clone(), hint.id),
+            );
+        }
+        let mut sos1_active = BTreeMap::new();
+        for hint in &constraint_hints.sos1_constraints {
+            let id = crate::Sos1ConstraintID::from(*hint.binary_constraint_id);
+            sos1_active.insert(
+                id,
+                crate::Sos1Constraint::with_constraint_ids(
+                    id,
+                    hint.variables.clone(),
+                    hint.binary_constraint_id,
+                    hint.big_m_constraint_ids.clone(),
+                ),
+            );
+        }
+
         Ok(Instance {
             sense,
             objective,
@@ -364,8 +387,11 @@ impl InstanceBuilder {
                 self.indicator_constraints,
                 self.removed_indicator_constraints,
             ),
-            one_hot_constraint_collection: Default::default(),
-            sos1_constraint_collection: Default::default(),
+            one_hot_constraint_collection: ConstraintCollection::new(
+                one_hot_active,
+                BTreeMap::new(),
+            ),
+            sos1_constraint_collection: ConstraintCollection::new(sos1_active, BTreeMap::new()),
             named_functions: self.named_functions,
             decision_variable_dependency: self.decision_variable_dependency,
             constraint_hints,

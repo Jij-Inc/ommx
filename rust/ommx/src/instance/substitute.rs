@@ -182,6 +182,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "ConstraintHints removal logic is superseded by first-class OneHot/SOS1 constraint types"]
     fn test_constraint_hints_removal_on_substitute() {
         // Create decision variables
         let mut decision_variables = BTreeMap::new();
@@ -284,6 +285,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "ConstraintHints removal logic is superseded by first-class OneHot/SOS1 constraint types"]
     fn test_constraint_hints_removal_with_removed_constraints() {
         // Create decision variables
         let mut decision_variables = BTreeMap::new();

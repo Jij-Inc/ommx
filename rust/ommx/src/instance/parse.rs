@@ -160,14 +160,40 @@ impl Parse for v1::Instance {
         };
         let (decision_variables, constraints, removed_constraints) = context;
 
+        // Convert ConstraintHints OneHot/Sos1 entries to first-class constraint collections
+        let mut one_hot_active = BTreeMap::new();
+        for hint in &constraint_hints.one_hot_constraints {
+            let id = crate::OneHotConstraintID::from(*hint.id);
+            one_hot_active.insert(
+                id,
+                crate::OneHotConstraint::with_constraint_id(id, hint.variables.clone(), hint.id),
+            );
+        }
+        let mut sos1_active = BTreeMap::new();
+        for hint in &constraint_hints.sos1_constraints {
+            let id = crate::Sos1ConstraintID::from(*hint.binary_constraint_id);
+            sos1_active.insert(
+                id,
+                crate::Sos1Constraint::with_constraint_ids(
+                    id,
+                    hint.variables.clone(),
+                    hint.binary_constraint_id,
+                    hint.big_m_constraint_ids.clone(),
+                ),
+            );
+        }
+
         Ok(Instance {
             sense,
             objective,
             decision_variables,
             constraint_collection: ConstraintCollection::new(constraints, removed_constraints),
             indicator_constraint_collection: Default::default(),
-            one_hot_constraint_collection: Default::default(),
-            sos1_constraint_collection: Default::default(),
+            one_hot_constraint_collection: ConstraintCollection::new(
+                one_hot_active,
+                BTreeMap::new(),
+            ),
+            sos1_constraint_collection: ConstraintCollection::new(sos1_active, BTreeMap::new()),
             decision_variable_dependency,
             parameters: self.parameters,
             description: self.description,
@@ -324,6 +350,29 @@ impl Parse for v1::ParametricInstance {
         };
         let (decision_variables, constraints, removed_constraints) = context;
 
+        // Convert ConstraintHints OneHot/Sos1 entries to first-class constraint collections
+        let mut one_hot_active = BTreeMap::new();
+        for hint in &constraint_hints.one_hot_constraints {
+            let id = crate::OneHotConstraintID::from(*hint.id);
+            one_hot_active.insert(
+                id,
+                crate::OneHotConstraint::with_constraint_id(id, hint.variables.clone(), hint.id),
+            );
+        }
+        let mut sos1_active = BTreeMap::new();
+        for hint in &constraint_hints.sos1_constraints {
+            let id = crate::Sos1ConstraintID::from(*hint.binary_constraint_id);
+            sos1_active.insert(
+                id,
+                crate::Sos1Constraint::with_constraint_ids(
+                    id,
+                    hint.variables.clone(),
+                    hint.binary_constraint_id,
+                    hint.big_m_constraint_ids.clone(),
+                ),
+            );
+        }
+
         Ok(ParametricInstance {
             sense,
             objective,
@@ -331,8 +380,11 @@ impl Parse for v1::ParametricInstance {
             parameters,
             constraint_collection: ConstraintCollection::new(constraints, removed_constraints),
             indicator_constraint_collection: Default::default(),
-            one_hot_constraint_collection: Default::default(),
-            sos1_constraint_collection: Default::default(),
+            one_hot_constraint_collection: ConstraintCollection::new(
+                one_hot_active,
+                BTreeMap::new(),
+            ),
+            sos1_constraint_collection: ConstraintCollection::new(sos1_active, BTreeMap::new()),
             named_functions,
             decision_variable_dependency,
             constraint_hints,

@@ -55,6 +55,28 @@ impl Instance {
             self.removed_constraints().clone(),
         );
         let constraint_hints = hints.parse(&context)?;
+
+        // Convert hints to first-class constraint collections
+        for hint in &constraint_hints.one_hot_constraints {
+            let id = crate::OneHotConstraintID::from(*hint.id);
+            self.one_hot_constraint_collection.active_mut().insert(
+                id,
+                crate::OneHotConstraint::with_constraint_id(id, hint.variables.clone(), hint.id),
+            );
+        }
+        for hint in &constraint_hints.sos1_constraints {
+            let id = crate::Sos1ConstraintID::from(*hint.binary_constraint_id);
+            self.sos1_constraint_collection.active_mut().insert(
+                id,
+                crate::Sos1Constraint::with_constraint_ids(
+                    id,
+                    hint.variables.clone(),
+                    hint.binary_constraint_id,
+                    hint.big_m_constraint_ids.clone(),
+                ),
+            );
+        }
+
         self.constraint_hints = constraint_hints;
         Ok(())
     }
@@ -122,6 +144,28 @@ impl ParametricInstance {
             self.removed_constraints().clone(),
         );
         let constraint_hints = hints.parse(&context)?;
+
+        // Convert hints to first-class constraint collections
+        for hint in &constraint_hints.one_hot_constraints {
+            let id = crate::OneHotConstraintID::from(*hint.id);
+            self.one_hot_constraint_collection.active_mut().insert(
+                id,
+                crate::OneHotConstraint::with_constraint_id(id, hint.variables.clone(), hint.id),
+            );
+        }
+        for hint in &constraint_hints.sos1_constraints {
+            let id = crate::Sos1ConstraintID::from(*hint.binary_constraint_id);
+            self.sos1_constraint_collection.active_mut().insert(
+                id,
+                crate::Sos1Constraint::with_constraint_ids(
+                    id,
+                    hint.variables.clone(),
+                    hint.binary_constraint_id,
+                    hint.big_m_constraint_ids.clone(),
+                ),
+            );
+        }
+
         self.constraint_hints = constraint_hints;
         Ok(())
     }
