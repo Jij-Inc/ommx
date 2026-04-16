@@ -9,6 +9,10 @@ use crate::{
 
 /// Reconstruct `v1::ConstraintHints` from first-class OneHot/SOS1 constraint collections
 /// for backward-compatible proto serialization.
+///
+/// Note: the proto `constraint_id` / `binary_constraint_id` fields are set to
+/// the OneHot/SOS1 constraint's own ID. The `big_m_constraint_ids` field is empty
+/// since that information is not preserved after conversion.
 fn collections_to_v1_hints(
     one_hot_collection: ConstraintCollection<crate::OneHotConstraint>,
     sos1_collection: ConstraintCollection<crate::Sos1Constraint>,
@@ -17,38 +21,19 @@ fn collections_to_v1_hints(
         .into_parts()
         .0
         .into_values()
-        .map(|oh| {
-            let cid = oh
-                .stage
-                .constraint_id
-                .map(|id| id.into_inner())
-                .unwrap_or(oh.id.into_inner());
-            v1::OneHot {
-                constraint_id: cid,
-                decision_variables: oh.variables.iter().map(|v| v.into_inner()).collect(),
-            }
+        .map(|oh| v1::OneHot {
+            constraint_id: oh.id.into_inner(),
+            decision_variables: oh.variables.iter().map(|v| v.into_inner()).collect(),
         })
         .collect();
     let sos1_constraints: Vec<v1::Sos1> = sos1_collection
         .into_parts()
         .0
         .into_values()
-        .map(|s| {
-            let bid = s
-                .stage
-                .binary_constraint_id
-                .map(|id| id.into_inner())
-                .unwrap_or(s.id.into_inner());
-            v1::Sos1 {
-                binary_constraint_id: bid,
-                big_m_constraint_ids: s
-                    .stage
-                    .big_m_constraint_ids
-                    .iter()
-                    .map(|id| id.into_inner())
-                    .collect(),
-                decision_variables: s.variables.iter().map(|v| v.into_inner()).collect(),
-            }
+        .map(|s| v1::Sos1 {
+            binary_constraint_id: s.id.into_inner(),
+            big_m_constraint_ids: Vec::new(),
+            decision_variables: s.variables.iter().map(|v| v.into_inner()).collect(),
         })
         .collect();
     if one_hot_constraints.is_empty() && sos1_constraints.is_empty() {
@@ -61,35 +46,31 @@ fn collections_to_v1_hints(
     }
 }
 
-/// Convert parsed `ConstraintHints` to first-class OneHot/SOS1 constraint collections.
+/// Convert parsed `ConstraintHints` to first-class OneHot/SOS1 constraint collections,
+/// and return the set of regular constraint IDs that should be removed from the
+/// constraint collection (they are subsumed by the new first-class constraints).
 fn convert_hints_to_collections(
     hints: &ConstraintHints,
 ) -> (
     BTreeMap<crate::OneHotConstraintID, crate::OneHotConstraint>,
     BTreeMap<crate::Sos1ConstraintID, crate::Sos1Constraint>,
+    std::collections::BTreeSet<crate::ConstraintID>,
 ) {
     let mut one_hot_active = BTreeMap::new();
+    let mut absorbed_constraint_ids = std::collections::BTreeSet::new();
     for hint in &hints.one_hot_constraints {
         let id = crate::OneHotConstraintID::from(*hint.id);
-        one_hot_active.insert(
-            id,
-            crate::OneHotConstraint::with_constraint_id(id, hint.variables.clone(), hint.id),
-        );
+        one_hot_active.insert(id, crate::OneHotConstraint::new(id, hint.variables.clone()));
+        absorbed_constraint_ids.insert(hint.id);
     }
     let mut sos1_active = BTreeMap::new();
     for hint in &hints.sos1_constraints {
         let id = crate::Sos1ConstraintID::from(*hint.binary_constraint_id);
-        sos1_active.insert(
-            id,
-            crate::Sos1Constraint::with_constraint_ids(
-                id,
-                hint.variables.clone(),
-                hint.binary_constraint_id,
-                hint.big_m_constraint_ids.clone(),
-            ),
-        );
+        sos1_active.insert(id, crate::Sos1Constraint::new(id, hint.variables.clone()));
+        absorbed_constraint_ids.insert(hint.binary_constraint_id);
+        absorbed_constraint_ids.extend(&hint.big_m_constraint_ids);
     }
-    (one_hot_active, sos1_active)
+    (one_hot_active, sos1_active, absorbed_constraint_ids)
 }
 
 impl Parse for v1::instance::Sense {
@@ -244,9 +225,14 @@ impl Parse for v1::Instance {
         } else {
             Default::default()
         };
-        let (decision_variables, constraints, removed_constraints) = context;
+        let (decision_variables, mut constraints, removed_constraints) = context;
 
-        let (one_hot_active, sos1_active) = convert_hints_to_collections(&constraint_hints);
+        let (one_hot_active, sos1_active, absorbed_ids) =
+            convert_hints_to_collections(&constraint_hints);
+        // Remove regular constraints that are absorbed by OneHot/SOS1
+        for id in &absorbed_ids {
+            constraints.remove(id);
+        }
 
         Ok(Instance {
             sense,
@@ -416,9 +402,14 @@ impl Parse for v1::ParametricInstance {
         } else {
             Default::default()
         };
-        let (decision_variables, constraints, removed_constraints) = context;
+        let (decision_variables, mut constraints, removed_constraints) = context;
 
-        let (one_hot_active, sos1_active) = convert_hints_to_collections(&constraint_hints);
+        let (one_hot_active, sos1_active, absorbed_ids) =
+            convert_hints_to_collections(&constraint_hints);
+        // Remove regular constraints that are absorbed by OneHot/SOS1
+        for id in &absorbed_ids {
+            constraints.remove(id);
+        }
 
         Ok(ParametricInstance {
             sense,

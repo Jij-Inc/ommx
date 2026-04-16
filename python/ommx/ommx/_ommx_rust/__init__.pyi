@@ -2709,13 +2709,6 @@ class OneHotConstraint:
     def id(self) -> builtins.int: ...
     @property
     def variables(self) -> builtins.list[builtins.int]: ...
-    @property
-    def constraint_id(self) -> typing.Optional[builtins.int]:
-        r"""
-        The regular constraint ID that this one-hot was derived from (if any).
-
-        This is set when the one-hot constraint was converted from a ConstraintHints entry.
-        """
     def __new__(
         cls,
         *,
@@ -4296,21 +4289,6 @@ class Sos1Constraint:
     def id(self) -> builtins.int: ...
     @property
     def variables(self) -> builtins.list[builtins.int]: ...
-    @property
-    def binary_constraint_id(self) -> typing.Optional[builtins.int]:
-        r"""
-        The binary constraint ID that this SOS1 was derived from (if any).
-
-        This is set when the SOS1 constraint was converted from a ConstraintHints entry.
-        Used by adapters to exclude the corresponding regular constraint.
-        """
-    @property
-    def big_m_constraint_ids(self) -> builtins.list[builtins.int]:
-        r"""
-        The big-M constraint IDs associated with this SOS1 (if any).
-
-        Used by adapters to exclude the corresponding regular constraints.
-        """
     def __new__(
         cls,
         *,

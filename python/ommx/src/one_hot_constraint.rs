@@ -42,14 +42,6 @@ impl OneHotConstraint {
         self.0.variables.iter().map(|v| v.into_inner()).collect()
     }
 
-    /// The regular constraint ID that this one-hot was derived from (if any).
-    ///
-    /// This is set when the one-hot constraint was converted from a ConstraintHints entry.
-    #[getter]
-    pub fn constraint_id(&self) -> Option<u64> {
-        self.0.stage.constraint_id.map(|id| id.into_inner())
-    }
-
     /// Set the constraint ID. Returns a new OneHotConstraint.
     pub fn set_id(&self, id: u64) -> Self {
         let mut c = self.clone();

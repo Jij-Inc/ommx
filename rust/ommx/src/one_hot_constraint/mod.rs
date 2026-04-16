@@ -3,7 +3,7 @@ mod evaluate;
 use crate::{
     constraint::{stage, ConstraintMetadata, Created, Evaluated, Stage},
     constraint_type::{ConstraintType, EvaluatedConstraintBehavior, SampledConstraintBehavior},
-    ConstraintID, SampleID, VariableID, VariableIDSet,
+    SampleID, VariableID, VariableIDSet,
 };
 use derive_more::{Deref, From};
 use std::collections::{BTreeMap, BTreeSet};
@@ -61,14 +61,8 @@ pub struct OneHotConstraint<S: Stage<Self> = Created> {
 /// Data carried by a one-hot constraint in the Created stage.
 ///
 /// One-hot constraints are structural — no function is stored.
-/// The `constraint_id` records which regular constraint this one-hot
-/// corresponds to (used by the forget operation).
 #[derive(Debug, Clone, PartialEq)]
-pub struct OneHotCreatedData {
-    /// The regular constraint ID that this one-hot constraint corresponds to.
-    /// Used when "forgetting" back to a regular `sum(x_i) = 1` constraint.
-    pub constraint_id: Option<ConstraintID>,
-}
+pub struct OneHotCreatedData;
 
 /// Data carried by a one-hot constraint in the Evaluated stage.
 #[derive(Debug, Clone, PartialEq)]
@@ -175,25 +169,7 @@ impl OneHotConstraint<Created> {
             id,
             variables,
             metadata: ConstraintMetadata::default(),
-            stage: OneHotCreatedData {
-                constraint_id: None,
-            },
-        }
-    }
-
-    /// Create a new one-hot constraint with a reference to the corresponding regular constraint.
-    pub fn with_constraint_id(
-        id: OneHotConstraintID,
-        variables: BTreeSet<VariableID>,
-        constraint_id: ConstraintID,
-    ) -> Self {
-        Self {
-            id,
-            variables,
-            metadata: ConstraintMetadata::default(),
-            stage: OneHotCreatedData {
-                constraint_id: Some(constraint_id),
-            },
+            stage: OneHotCreatedData,
         }
     }
 }

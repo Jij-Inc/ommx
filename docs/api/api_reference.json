@@ -11288,23 +11288,6 @@
           ],
           "attributes": [
             {
-              "name": "constraint_id",
-              "doc": "The regular constraint ID that this one-hot was derived from (if any).\n\nThis is set when the one-hot constraint was converted from a ConstraintHints entry.",
-              "type_": {
-                "display": "Optional[int]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "int",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
               "name": "id",
               "doc": "",
               "type_": {
@@ -19037,40 +19020,6 @@
             }
           ],
           "attributes": [
-            {
-              "name": "big_m_constraint_ids",
-              "doc": "The big-M constraint IDs associated with this SOS1 (if any).\n\nUsed by adapters to exclude the corresponding regular constraints.",
-              "type_": {
-                "display": "list[int]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "int",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "binary_constraint_id",
-              "doc": "The binary constraint ID that this SOS1 was derived from (if any).\n\nThis is set when the SOS1 constraint was converted from a ConstraintHints entry.\nUsed by adapters to exclude the corresponding regular constraint.",
-              "type_": {
-                "display": "Optional[int]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "int",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
             {
               "name": "id",
               "doc": "",

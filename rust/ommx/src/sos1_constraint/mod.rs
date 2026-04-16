@@ -3,7 +3,7 @@ mod evaluate;
 use crate::{
     constraint::{stage, ConstraintMetadata, Created, Evaluated, Stage},
     constraint_type::{ConstraintType, EvaluatedConstraintBehavior, SampledConstraintBehavior},
-    ConstraintID, SampleID, VariableID, VariableIDSet,
+    SampleID, VariableID, VariableIDSet,
 };
 use derive_more::{Deref, From};
 use std::collections::{BTreeMap, BTreeSet};
@@ -61,15 +61,8 @@ pub struct Sos1Constraint<S: Stage<Self> = Created> {
 /// Data carried by a SOS1 constraint in the Created stage.
 ///
 /// SOS1 constraints are structural — no function is stored.
-/// The constraint IDs record the regular constraints that this SOS1
-/// was derived from (used by the forget operation).
 #[derive(Debug, Clone, PartialEq)]
-pub struct Sos1CreatedData {
-    /// The binary constraint ID that this SOS1 corresponds to.
-    pub binary_constraint_id: Option<ConstraintID>,
-    /// The big-M constraint IDs associated with this SOS1.
-    pub big_m_constraint_ids: BTreeSet<ConstraintID>,
-}
+pub struct Sos1CreatedData;
 
 /// Data carried by a SOS1 constraint in the Evaluated stage.
 #[derive(Debug, Clone, PartialEq)]
@@ -176,28 +169,7 @@ impl Sos1Constraint<Created> {
             id,
             variables,
             metadata: ConstraintMetadata::default(),
-            stage: Sos1CreatedData {
-                binary_constraint_id: None,
-                big_m_constraint_ids: BTreeSet::new(),
-            },
-        }
-    }
-
-    /// Create a new SOS1 constraint with references to the corresponding regular constraints.
-    pub fn with_constraint_ids(
-        id: Sos1ConstraintID,
-        variables: BTreeSet<VariableID>,
-        binary_constraint_id: ConstraintID,
-        big_m_constraint_ids: BTreeSet<ConstraintID>,
-    ) -> Self {
-        Self {
-            id,
-            variables,
-            metadata: ConstraintMetadata::default(),
-            stage: Sos1CreatedData {
-                binary_constraint_id: Some(binary_constraint_id),
-                big_m_constraint_ids,
-            },
+            stage: Sos1CreatedData,
         }
     }
 }
