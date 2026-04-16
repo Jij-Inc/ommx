@@ -129,12 +129,16 @@ impl SampledConstraintBehavior for SampledIndicatorConstraint {
         sample_id: SampleID,
     ) -> Result<Self::Evaluated, crate::sampled::UnknownSampleIDError> {
         let evaluated_value = *self.stage.evaluated_values.get(sample_id)?;
-        let feasible = *self.stage.feasible.get(&sample_id).unwrap_or(&false);
+        let feasible = *self
+            .stage
+            .feasible
+            .get(&sample_id)
+            .ok_or(crate::sampled::UnknownSampleIDError { id: sample_id })?;
         let indicator_active = *self
             .stage
             .indicator_active
             .get(&sample_id)
-            .unwrap_or(&false);
+            .ok_or(crate::sampled::UnknownSampleIDError { id: sample_id })?;
 
         Ok(IndicatorConstraint {
             id: self.id,

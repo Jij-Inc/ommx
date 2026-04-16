@@ -111,7 +111,11 @@ impl SampledConstraintBehavior for SampledConstraint {
             .as_ref()
             .and_then(|duals| duals.get(sample_id).ok())
             .copied();
-        let feasible = *self.stage.feasible.get(&sample_id).unwrap_or(&false);
+        let feasible = *self
+            .stage
+            .feasible
+            .get(&sample_id)
+            .ok_or(crate::sampled::UnknownSampleIDError { id: sample_id })?;
 
         Ok(crate::Constraint {
             id: self.id,
