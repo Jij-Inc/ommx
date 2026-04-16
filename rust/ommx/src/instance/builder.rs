@@ -1,6 +1,5 @@
 use super::*;
 use crate::constraint_type::ConstraintCollection;
-use crate::parse::Parse;
 
 /// Builder for creating [`Instance`] with validation.
 ///
@@ -33,8 +32,9 @@ pub struct InstanceBuilder {
         crate::IndicatorConstraintID,
         (crate::IndicatorConstraint, crate::constraint::RemovedReason),
     >,
+    one_hot_constraints: BTreeMap<crate::OneHotConstraintID, crate::OneHotConstraint>,
+    sos1_constraints: BTreeMap<crate::Sos1ConstraintID, crate::Sos1Constraint>,
     decision_variable_dependency: AcyclicAssignments,
-    constraint_hints: ConstraintHints,
     parameters: Option<v1::Parameters>,
     description: Option<v1::instance::Description>,
 }
@@ -111,18 +111,30 @@ impl InstanceBuilder {
         self
     }
 
+    /// Sets the one-hot constraints.
+    pub fn one_hot_constraints(
+        mut self,
+        one_hot_constraints: BTreeMap<crate::OneHotConstraintID, crate::OneHotConstraint>,
+    ) -> Self {
+        self.one_hot_constraints = one_hot_constraints;
+        self
+    }
+
+    /// Sets the SOS1 constraints.
+    pub fn sos1_constraints(
+        mut self,
+        sos1_constraints: BTreeMap<crate::Sos1ConstraintID, crate::Sos1Constraint>,
+    ) -> Self {
+        self.sos1_constraints = sos1_constraints;
+        self
+    }
+
     /// Sets the decision variable dependency.
     pub fn decision_variable_dependency(
         mut self,
         decision_variable_dependency: AcyclicAssignments,
     ) -> Self {
         self.decision_variable_dependency = decision_variable_dependency;
-        self
-    }
-
-    /// Sets the constraint hints.
-    pub fn constraint_hints(mut self, constraint_hints: ConstraintHints) -> Self {
-        self.constraint_hints = constraint_hints;
         self
     }
 
@@ -294,6 +306,41 @@ impl InstanceBuilder {
             }
         }
 
+        // Validate one-hot constraints
+        for (key, value) in &self.one_hot_constraints {
+            if *key != value.id {
+                return Err(InstanceError::InconsistentOneHotConstraintID {
+                    key: *key,
+                    value_id: value.id,
+                }
+                .into());
+            }
+            for var_id in &value.variables {
+                let Some(dv) = decision_variables.get(var_id) else {
+                    return Err(InstanceError::UndefinedOneHotVariable { id: *var_id }.into());
+                };
+                if dv.kind() != crate::decision_variable::Kind::Binary {
+                    return Err(InstanceError::OneHotVariableNotBinary { id: *var_id }.into());
+                }
+            }
+        }
+
+        // Validate SOS1 constraints
+        for (key, value) in &self.sos1_constraints {
+            if *key != value.id {
+                return Err(InstanceError::InconsistentSos1ConstraintID {
+                    key: *key,
+                    value_id: value.id,
+                }
+                .into());
+            }
+            for var_id in &value.variables {
+                if !variable_ids.contains(var_id) {
+                    return Err(InstanceError::UndefinedSos1Variable { id: *var_id }.into());
+                }
+            }
+        }
+
         // Validate that constraints and removed_constraints keys are disjoint
         for id in self.removed_constraints.keys() {
             if constraints.contains_key(id) {
@@ -321,6 +368,12 @@ impl InstanceBuilder {
         for ic in self.indicator_constraints.values() {
             used.extend(ic.required_ids());
         }
+        for oh in self.one_hot_constraints.values() {
+            used.extend(oh.required_ids());
+        }
+        for sos1 in self.sos1_constraints.values() {
+            used.extend(sos1.required_ids());
+        }
         let fixed: VariableIDSet = decision_variables
             .values()
             .filter(|dv| dv.substituted_value().is_some())
@@ -343,30 +396,25 @@ impl InstanceBuilder {
             return Err(InstanceError::FixedAndDependentVariable { id: *id }.into());
         }
 
-        // Validate constraint_hints using Parse trait.
-        // Unlike `add_constraint_hints` which errors on removed constraint references,
-        // the builder uses Parse which silently filters invalid hints (with debug log).
-        // This is intentional: the builder may receive data from old serialized instances
-        // where hints may reference constraints that have since been removed, and we want
-        // to heal such inconsistencies rather than fail.
-        // Move values into context tuple to avoid cloning, then destructure to recover ownership.
-        let hints: v1::ConstraintHints = self.constraint_hints.into();
-        let context = (decision_variables, constraints, self.removed_constraints);
-        let constraint_hints = hints.parse(&context)?;
-        let (decision_variables, constraints, removed_constraints) = context;
-
         Ok(Instance {
             sense,
             objective,
             decision_variables,
-            constraint_collection: ConstraintCollection::new(constraints, removed_constraints),
+            constraint_collection: ConstraintCollection::new(constraints, self.removed_constraints),
             indicator_constraint_collection: ConstraintCollection::new(
                 self.indicator_constraints,
                 self.removed_indicator_constraints,
             ),
+            one_hot_constraint_collection: ConstraintCollection::new(
+                self.one_hot_constraints,
+                BTreeMap::new(),
+            ),
+            sos1_constraint_collection: ConstraintCollection::new(
+                self.sos1_constraints,
+                BTreeMap::new(),
+            ),
             named_functions: self.named_functions,
             decision_variable_dependency: self.decision_variable_dependency,
-            constraint_hints,
             parameters: self.parameters,
             description: self.description,
         })

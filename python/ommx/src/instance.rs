@@ -1,7 +1,7 @@
 use crate::{
     pandas::{entries_to_dataframe, PyDataFrame},
-    Constraint, ConstraintHints, DecisionVariable, Function, NamedFunction, ParametricInstance,
-    RemovedConstraint, Rng, SampleSet, Samples, Sense, Solution, State, VariableBound,
+    Constraint, DecisionVariable, Function, NamedFunction, ParametricInstance, RemovedConstraint,
+    Rng, SampleSet, Samples, Sense, Solution, State, VariableBound,
 };
 use anyhow::Result;
 use ommx::{ConstraintID, Evaluate, NamedFunctionID, Parse, VariableID};
@@ -86,21 +86,21 @@ impl Instance {
     /// - `constraints`: List of constraints
     /// - `named_functions`: Optional list of named functions
     /// - `description`: Optional instance description
-    /// - `constraint_hints`: Optional constraint hints for solvers
     ///
     /// **Returns:**
     /// A new Instance
     #[staticmethod]
-    #[pyo3(signature = (*, sense, objective, decision_variables, constraints, indicator_constraints=None, named_functions=None, description=None, constraint_hints=None))]
+    #[pyo3(signature = (*, sense, objective, decision_variables, constraints, indicator_constraints=None, one_hot_constraints=None, sos1_constraints=None, named_functions=None, description=None))]
     pub fn from_components(
         sense: Sense,
         objective: Function,
         decision_variables: Vec<DecisionVariable>,
         constraints: Vec<Constraint>,
         indicator_constraints: Option<Vec<crate::IndicatorConstraint>>,
+        one_hot_constraints: Option<Vec<crate::OneHotConstraint>>,
+        sos1_constraints: Option<Vec<crate::Sos1Constraint>>,
         named_functions: Option<Vec<NamedFunction>>,
         description: Option<InstanceDescription>,
-        constraint_hints: Option<ConstraintHints>,
     ) -> Result<Self> {
         let mut rust_decision_variables = BTreeMap::new();
         for var in decision_variables {
@@ -135,6 +135,28 @@ impl Instance {
             builder = builder.indicator_constraints(rust_indicator_constraints);
         }
 
+        if let Some(ohs) = one_hot_constraints {
+            let mut rust_one_hot_constraints = BTreeMap::new();
+            for oh in ohs {
+                let id = oh.0.id;
+                if rust_one_hot_constraints.insert(id, oh.0).is_some() {
+                    anyhow::bail!("Duplicate one-hot constraint ID: {}", id.into_inner());
+                }
+            }
+            builder = builder.one_hot_constraints(rust_one_hot_constraints);
+        }
+
+        if let Some(s1s) = sos1_constraints {
+            let mut rust_sos1_constraints = BTreeMap::new();
+            for s1 in s1s {
+                let id = s1.0.id;
+                if rust_sos1_constraints.insert(id, s1.0).is_some() {
+                    anyhow::bail!("Duplicate SOS1 constraint ID: {}", id.into_inner());
+                }
+            }
+            builder = builder.sos1_constraints(rust_sos1_constraints);
+        }
+
         if let Some(nfs) = named_functions {
             let mut rust_named_functions = BTreeMap::new();
             for nf in nfs {
@@ -144,10 +166,6 @@ impl Instance {
                 }
             }
             builder = builder.named_functions(rust_named_functions);
-        }
-
-        if let Some(hints) = constraint_hints {
-            builder = builder.constraint_hints(hints.0);
         }
 
         if let Some(desc) = description {
@@ -177,6 +195,7 @@ impl Instance {
             Function(ommx::Function::Zero),
             Vec::new(),
             Vec::new(),
+            None,
             None,
             None,
             None,
@@ -261,6 +280,26 @@ impl Instance {
             .collect()
     }
 
+    /// List of all one-hot constraints in the instance sorted by their IDs.
+    #[getter]
+    pub fn one_hot_constraints(&self) -> Vec<crate::OneHotConstraint> {
+        self.inner
+            .one_hot_constraints()
+            .values()
+            .map(|c| crate::OneHotConstraint(c.clone()))
+            .collect()
+    }
+
+    /// List of all SOS1 constraints in the instance sorted by their IDs.
+    #[getter]
+    pub fn sos1_constraints(&self) -> Vec<crate::Sos1Constraint> {
+        self.inner
+            .sos1_constraints()
+            .values()
+            .map(|c| crate::Sos1Constraint(c.clone()))
+            .collect()
+    }
+
     /// Check that the adapter's supported capabilities cover this instance's requirements.
     ///
     /// `supported` is a set of `AdditionalCapability` flags.
@@ -306,11 +345,6 @@ impl Instance {
             .description
             .as_ref()
             .map(|desc| InstanceDescription(desc.clone()))
-    }
-
-    #[getter]
-    pub fn constraint_hints(&self) -> ConstraintHints {
-        ConstraintHints(self.inner.constraint_hints().clone())
     }
 
     #[getter]

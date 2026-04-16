@@ -17,6 +17,9 @@ impl Evaluate for Instance {
         let evaluated_indicator_constraints = self
             .indicator_constraint_collection
             .evaluate(&state, atol)?;
+        let evaluated_one_hot_constraints =
+            self.one_hot_constraint_collection.evaluate(&state, atol)?;
+        let evaluated_sos1_constraints = self.sos1_constraint_collection.evaluate(&state, atol)?;
 
         let mut decision_variables = BTreeMap::default();
         for dv in self.decision_variables.values() {
@@ -38,6 +41,8 @@ impl Evaluate for Instance {
                 .objective(objective)
                 .evaluated_constraints_collection(evaluated_constraints)
                 .evaluated_indicator_constraints_collection(evaluated_indicator_constraints)
+                .evaluated_one_hot_constraints_collection(evaluated_one_hot_constraints)
+                .evaluated_sos1_constraints_collection(evaluated_sos1_constraints)
                 .evaluated_named_functions(evaluated_named_functions)
                 .decision_variables(decision_variables)
                 .sense(sense)
@@ -69,6 +74,16 @@ impl Evaluate for Instance {
         > = self
             .indicator_constraint_collection
             .evaluate_samples(&samples, atol)?;
+        let sampled_one_hot_constraints: crate::constraint_type::SampledCollection<
+            crate::OneHotConstraint,
+        > = self
+            .one_hot_constraint_collection
+            .evaluate_samples(&samples, atol)?;
+        let sampled_sos1_constraints: crate::constraint_type::SampledCollection<
+            crate::Sos1Constraint,
+        > = self
+            .sos1_constraint_collection
+            .evaluate_samples(&samples, atol)?;
 
         // Objective
         let objectives = self.objective().evaluate_samples(&samples, atol)?;
@@ -92,16 +107,15 @@ impl Evaluate for Instance {
             .objectives(objectives.try_into()?)
             .constraints(sampled_constraints.into_inner())
             .indicator_constraints(sampled_indicator_constraints.into_inner())
+            .one_hot_constraints(sampled_one_hot_constraints.into_inner())
+            .sos1_constraints(sampled_sos1_constraints.into_inner())
             .named_functions(named_functions)
             .sense(self.sense)
             .build()?)
     }
 
     fn partial_evaluate(&mut self, state: &v1::State, atol: ATol) -> Result<()> {
-        // First, apply constraint hints to potentially update the state
-        let updated_state = self
-            .constraint_hints
-            .partial_evaluate(state.clone(), atol)?;
+        let updated_state = state.clone();
 
         // Validate that no indicator variable is being partially evaluated.
         // This check must happen before any mutation to ensure the Instance
@@ -117,6 +131,32 @@ impl Evaluate for Instance {
                     ic.indicator_variable,
                     ic.id
                 );
+            }
+        }
+
+        // Validate that no one-hot or SOS1 variable is being partially evaluated.
+        for oh in self.one_hot_constraint_collection.active().values() {
+            for var_id in &oh.variables {
+                if updated_state.entries.contains_key(&var_id.into_inner()) {
+                    anyhow::bail!(
+                        "Cannot partially evaluate variable {:?} of one-hot constraint {:?}. \
+                         Fixing a one-hot variable would change the constraint type.",
+                        var_id,
+                        oh.id
+                    );
+                }
+            }
+        }
+        for sos1 in self.sos1_constraint_collection.active().values() {
+            for var_id in &sos1.variables {
+                if updated_state.entries.contains_key(&var_id.into_inner()) {
+                    anyhow::bail!(
+                        "Cannot partially evaluate variable {:?} of SOS1 constraint {:?}. \
+                         Fixing a SOS1 variable would change the constraint type.",
+                        var_id,
+                        sos1.id
+                    );
+                }
             }
         }
 
@@ -151,7 +191,7 @@ impl Evaluate for Instance {
 mod tests {
     use super::*;
     use crate::random::arbitrary_split_state;
-    use crate::{coeff, constraint_hints::OneHot, linear};
+    use crate::{coeff, linear};
     use ::approx::AbsDiffEq;
     use proptest::prelude::*;
     use std::collections::HashMap;
@@ -188,67 +228,6 @@ mod tests {
             let s2 = instance.evaluate(&v, ATol::default()).unwrap();
             prop_assert!(s1.state().abs_diff_eq(&s2.state(), ATol::default()));
         }
-    }
-
-    #[test]
-    fn test_partial_evaluate_with_constraint_hints() {
-        use crate::DecisionVariable;
-        use maplit::btreemap;
-
-        // Create an instance with OneHot constraint
-        let decision_variables = btreemap! {
-            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
-            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
-            VariableID::from(3) => DecisionVariable::binary(VariableID::from(3)),
-        };
-
-        // Objective: minimize x1 + x2 + x3
-        let objective = Function::from(linear!(1) + linear!(2) + linear!(3));
-
-        // Create a OneHot constraint for variables 1, 2, 3
-        let mut constraint_hints = crate::constraint_hints::ConstraintHints::default();
-        constraint_hints.one_hot_constraints.push(OneHot {
-            id: ConstraintID::from(100),
-            variables: vec![
-                VariableID::from(1),
-                VariableID::from(2),
-                VariableID::from(3),
-            ]
-            .into_iter()
-            .collect(),
-        });
-        let mut instance = Instance::new(
-            Sense::Minimize,
-            objective,
-            decision_variables,
-            BTreeMap::new(), // No regular constraints
-        )
-        .unwrap();
-        instance.constraint_hints = constraint_hints;
-
-        // Create initial state where variable 2 is fixed to 1
-        let initial_state = v1::State::from(HashMap::from([(2, 1.0)]));
-
-        // Apply partial evaluate
-        instance
-            .partial_evaluate(&initial_state, ATol::default())
-            .unwrap();
-
-        // After partial evaluation, due to OneHot constraint propagation:
-        // - Variable 2 remains fixed to 1
-        // - Variables 1 and 3 should be fixed to 0
-
-        // Verify by evaluating with empty state (all fixed variables should be substituted)
-        let empty_state = v1::State::default();
-        let solution = instance.evaluate(&empty_state, ATol::default()).unwrap();
-
-        // Check that the state contains all three variables with correct values
-        assert_eq!(solution.state().entries.get(&1), Some(&0.0));
-        assert_eq!(solution.state().entries.get(&2), Some(&1.0));
-        assert_eq!(solution.state().entries.get(&3), Some(&0.0));
-
-        // The objective value should be 1 (only x2 = 1)
-        assert_eq!(*solution.objective(), 1.0);
     }
 
     /// Test that named functions can reference fixed, dependent, and irrelevant variables

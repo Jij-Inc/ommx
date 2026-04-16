@@ -1,10 +1,38 @@
 use super::*;
 use crate::{
+    constraint_hints::ConstraintHints,
     constraint_type::ConstraintCollection,
     parse::{as_variable_id, Parse, ParseError, RawParseError},
     v1::{self},
     Constraint, InstanceError, VariableID,
 };
+
+/// Convert parsed `ConstraintHints` to first-class OneHot/SOS1 constraint collections,
+/// and return the set of regular constraint IDs that should be removed from the
+/// constraint collection (they are subsumed by the new first-class constraints).
+fn convert_hints_to_collections(
+    hints: &ConstraintHints,
+) -> (
+    BTreeMap<crate::OneHotConstraintID, crate::OneHotConstraint>,
+    BTreeMap<crate::Sos1ConstraintID, crate::Sos1Constraint>,
+    std::collections::BTreeSet<crate::ConstraintID>,
+) {
+    let mut one_hot_active = BTreeMap::new();
+    let mut absorbed_constraint_ids = std::collections::BTreeSet::new();
+    for hint in &hints.one_hot_constraints {
+        let id = crate::OneHotConstraintID::from(*hint.id);
+        one_hot_active.insert(id, crate::OneHotConstraint::new(id, hint.variables.clone()));
+        absorbed_constraint_ids.insert(hint.id);
+    }
+    let mut sos1_active = BTreeMap::new();
+    for hint in &hints.sos1_constraints {
+        let id = crate::Sos1ConstraintID::from(*hint.binary_constraint_id);
+        sos1_active.insert(id, crate::Sos1Constraint::new(id, hint.variables.clone()));
+        absorbed_constraint_ids.insert(hint.binary_constraint_id);
+        absorbed_constraint_ids.extend(&hint.big_m_constraint_ids);
+    }
+    (one_hot_active, sos1_active, absorbed_constraint_ids)
+}
 
 impl Parse for v1::instance::Sense {
     type Output = Sense;
@@ -158,7 +186,14 @@ impl Parse for v1::Instance {
         } else {
             Default::default()
         };
-        let (decision_variables, constraints, removed_constraints) = context;
+        let (decision_variables, mut constraints, removed_constraints) = context;
+
+        let (one_hot_active, sos1_active, absorbed_ids) =
+            convert_hints_to_collections(&constraint_hints);
+        // Remove regular constraints that are absorbed by OneHot/SOS1
+        for id in &absorbed_ids {
+            constraints.remove(id);
+        }
 
         Ok(Instance {
             sense,
@@ -166,10 +201,14 @@ impl Parse for v1::Instance {
             decision_variables,
             constraint_collection: ConstraintCollection::new(constraints, removed_constraints),
             indicator_constraint_collection: Default::default(),
+            one_hot_constraint_collection: ConstraintCollection::new(
+                one_hot_active,
+                BTreeMap::new(),
+            ),
+            sos1_constraint_collection: ConstraintCollection::new(sos1_active, BTreeMap::new()),
             decision_variable_dependency,
             parameters: self.parameters,
             description: self.description,
-            constraint_hints,
             named_functions,
         })
     }
@@ -202,6 +241,23 @@ impl From<Instance> for v1::Instance {
             .into_iter()
             .map(|(id, dep)| (id.into(), dep.into()))
             .collect();
+        // Special constraint types do not have a v1 proto representation yet.
+        // Serialization is not supported when these collections are non-empty.
+        if !value.indicator_constraint_collection.active().is_empty()
+            || !value.indicator_constraint_collection.removed().is_empty()
+        {
+            unimplemented!("Serialization of IndicatorConstraint to v1 proto is not yet supported");
+        }
+        if !value.one_hot_constraint_collection.active().is_empty()
+            || !value.one_hot_constraint_collection.removed().is_empty()
+        {
+            unimplemented!("Serialization of OneHotConstraint to v1 proto is not yet supported");
+        }
+        if !value.sos1_constraint_collection.active().is_empty()
+            || !value.sos1_constraint_collection.removed().is_empty()
+        {
+            unimplemented!("Serialization of Sos1Constraint to v1 proto is not yet supported");
+        }
         Self {
             sense: v1::instance::Sense::from(value.sense).into(),
             decision_variables,
@@ -212,7 +268,7 @@ impl From<Instance> for v1::Instance {
             decision_variable_dependency,
             parameters: value.parameters,
             description: value.description,
-            constraint_hints: Some(value.constraint_hints.into()),
+            constraint_hints: None,
         }
     }
 }
@@ -320,7 +376,14 @@ impl Parse for v1::ParametricInstance {
         } else {
             Default::default()
         };
-        let (decision_variables, constraints, removed_constraints) = context;
+        let (decision_variables, mut constraints, removed_constraints) = context;
+
+        let (one_hot_active, sos1_active, absorbed_ids) =
+            convert_hints_to_collections(&constraint_hints);
+        // Remove regular constraints that are absorbed by OneHot/SOS1
+        for id in &absorbed_ids {
+            constraints.remove(id);
+        }
 
         Ok(ParametricInstance {
             sense,
@@ -329,9 +392,13 @@ impl Parse for v1::ParametricInstance {
             parameters,
             constraint_collection: ConstraintCollection::new(constraints, removed_constraints),
             indicator_constraint_collection: Default::default(),
+            one_hot_constraint_collection: ConstraintCollection::new(
+                one_hot_active,
+                BTreeMap::new(),
+            ),
+            sos1_constraint_collection: ConstraintCollection::new(sos1_active, BTreeMap::new()),
             named_functions,
             decision_variable_dependency,
-            constraint_hints,
             description: self.description,
         })
     }
@@ -345,13 +412,30 @@ impl From<ParametricInstance> for v1::ParametricInstance {
             decision_variables,
             parameters,
             constraint_collection,
-            indicator_constraint_collection: _, // Not serialized to v1 yet
+            indicator_constraint_collection,
+            one_hot_constraint_collection,
+            sos1_constraint_collection,
             decision_variable_dependency,
-            constraint_hints,
             description,
             named_functions,
         }: ParametricInstance,
     ) -> Self {
+        // Special constraint types do not have a v1 proto representation yet.
+        if !indicator_constraint_collection.active().is_empty()
+            || !indicator_constraint_collection.removed().is_empty()
+        {
+            unimplemented!("Serialization of IndicatorConstraint to v1 proto is not yet supported");
+        }
+        if !one_hot_constraint_collection.active().is_empty()
+            || !one_hot_constraint_collection.removed().is_empty()
+        {
+            unimplemented!("Serialization of OneHotConstraint to v1 proto is not yet supported");
+        }
+        if !sos1_constraint_collection.active().is_empty()
+            || !sos1_constraint_collection.removed().is_empty()
+        {
+            unimplemented!("Serialization of Sos1Constraint to v1 proto is not yet supported");
+        }
         let (constraints, removed_constraints) = constraint_collection.into_parts();
         Self {
             description,
@@ -372,11 +456,7 @@ impl From<ParametricInstance> for v1::ParametricInstance {
                 .into_iter()
                 .map(|(id, dep)| (id.into(), dep.into()))
                 .collect(),
-            constraint_hints: if constraint_hints.is_empty() {
-                None
-            } else {
-                Some(constraint_hints.into())
-            },
+            constraint_hints: None,
         }
     }
 }

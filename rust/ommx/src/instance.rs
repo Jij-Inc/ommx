@@ -3,7 +3,6 @@ mod approx;
 pub(crate) mod arbitrary;
 mod builder;
 mod clip_bounds;
-mod constraint_hints;
 mod convert;
 mod decision_variable;
 mod error;
@@ -30,10 +29,11 @@ pub use parametric_builder::*;
 pub use stats::*;
 
 use crate::{
-    constraint::RemovedReason, constraint_hints::ConstraintHints,
-    constraint_type::ConstraintCollection, indicator_constraint::IndicatorConstraint,
-    named_function::NamedFunctionID, parse::Parse, v1, AcyclicAssignments, Constraint,
-    ConstraintID, DecisionVariable, Evaluate, Function, NamedFunction, VariableID, VariableIDSet,
+    constraint::RemovedReason, constraint_type::ConstraintCollection,
+    indicator_constraint::IndicatorConstraint, named_function::NamedFunctionID,
+    one_hot_constraint::OneHotConstraint, parse::Parse, sos1_constraint::Sos1Constraint, v1,
+    AcyclicAssignments, Constraint, ConstraintID, DecisionVariable, Evaluate, Function,
+    NamedFunction, VariableID, VariableIDSet,
 };
 use std::collections::BTreeMap;
 
@@ -46,6 +46,10 @@ use std::collections::BTreeMap;
 pub enum AdditionalCapability {
     /// Indicator constraints: binvar = 1 → f(x) <= 0
     Indicator,
+    /// One-hot constraints: exactly one of a set of binary variables must be 1
+    OneHot,
+    /// SOS1 constraints: at most one of a set of variables can be non-zero
+    Sos1,
 }
 
 /// Error returned when an Instance contains unsupported constraint types.
@@ -114,19 +118,16 @@ pub struct Instance {
     /// Indicator constraints collection (active + removed).
     indicator_constraint_collection: ConstraintCollection<IndicatorConstraint>,
 
+    /// One-hot constraints collection (active + removed).
+    one_hot_constraint_collection: ConstraintCollection<OneHotConstraint>,
+
+    /// SOS1 constraints collection (active + removed).
+    sos1_constraint_collection: ConstraintCollection<Sos1Constraint>,
+
     #[getset(get = "pub")]
     decision_variable_dependency: AcyclicAssignments,
     #[getset(get = "pub")]
     named_functions: BTreeMap<NamedFunctionID, NamedFunction>,
-
-    /// The constraint hints, i.e. some constraints are in form of one-hot, SOS1,2, or other special types.
-    ///
-    /// Note
-    /// -----
-    /// This struct does not validate the hints in mathematical sense.
-    /// Only checks the decision variable and constraint IDs are valid.
-    #[getset(get = "pub")]
-    constraint_hints: ConstraintHints,
 
     // Optional fields for additional metadata.
     // These fields are public since arbitrary values can be set without validation.
@@ -169,6 +170,40 @@ impl Instance {
         &self.indicator_constraint_collection
     }
 
+    /// Active one-hot constraints.
+    pub fn one_hot_constraints(&self) -> &BTreeMap<crate::OneHotConstraintID, OneHotConstraint> {
+        self.one_hot_constraint_collection.active()
+    }
+
+    /// Removed one-hot constraints.
+    pub fn removed_one_hot_constraints(
+        &self,
+    ) -> &BTreeMap<crate::OneHotConstraintID, (OneHotConstraint, RemovedReason)> {
+        self.one_hot_constraint_collection.removed()
+    }
+
+    /// The full one-hot constraint collection (active + removed).
+    pub fn one_hot_constraint_collection(&self) -> &ConstraintCollection<OneHotConstraint> {
+        &self.one_hot_constraint_collection
+    }
+
+    /// Active SOS1 constraints.
+    pub fn sos1_constraints(&self) -> &BTreeMap<crate::Sos1ConstraintID, Sos1Constraint> {
+        self.sos1_constraint_collection.active()
+    }
+
+    /// Removed SOS1 constraints.
+    pub fn removed_sos1_constraints(
+        &self,
+    ) -> &BTreeMap<crate::Sos1ConstraintID, (Sos1Constraint, RemovedReason)> {
+        self.sos1_constraint_collection.removed()
+    }
+
+    /// The full SOS1 constraint collection (active + removed).
+    pub fn sos1_constraint_collection(&self) -> &ConstraintCollection<Sos1Constraint> {
+        &self.sos1_constraint_collection
+    }
+
     /// Returns the set of non-standard constraint capabilities required by this instance.
     ///
     /// Only **active** constraints are considered. Removed (relaxed) constraints are excluded
@@ -178,6 +213,12 @@ impl Instance {
         let mut caps = fnv::FnvHashSet::default();
         if !self.indicator_constraint_collection.active().is_empty() {
             caps.insert(AdditionalCapability::Indicator);
+        }
+        if !self.one_hot_constraint_collection.active().is_empty() {
+            caps.insert(AdditionalCapability::OneHot);
+        }
+        if !self.sos1_constraint_collection.active().is_empty() {
+            caps.insert(AdditionalCapability::Sos1);
         }
         caps
     }
@@ -238,19 +279,16 @@ pub struct ParametricInstance {
     /// Indicator constraints collection (active + removed).
     indicator_constraint_collection: ConstraintCollection<IndicatorConstraint>,
 
+    /// One-hot constraints collection (active + removed).
+    one_hot_constraint_collection: ConstraintCollection<OneHotConstraint>,
+
+    /// SOS1 constraints collection (active + removed).
+    sos1_constraint_collection: ConstraintCollection<Sos1Constraint>,
+
     #[getset(get = "pub")]
     decision_variable_dependency: AcyclicAssignments,
     #[getset(get = "pub")]
     named_functions: BTreeMap<NamedFunctionID, NamedFunction>,
-
-    /// The constraint hints, i.e. some constraints are in form of one-hot, SOS1,2, or other special types.
-    ///
-    /// Note
-    /// -----
-    /// This struct does not validate the hints in mathematical sense.
-    /// Only checks the decision variable and constraint IDs are valid.
-    #[getset(get = "pub")]
-    constraint_hints: ConstraintHints,
 
     // Optional fields for additional metadata.
     // These fields are public since arbitrary values can be set without validation.
@@ -280,5 +318,29 @@ impl ParametricInstance {
         &self,
     ) -> &BTreeMap<crate::IndicatorConstraintID, (IndicatorConstraint, RemovedReason)> {
         self.indicator_constraint_collection.removed()
+    }
+
+    /// Active one-hot constraints.
+    pub fn one_hot_constraints(&self) -> &BTreeMap<crate::OneHotConstraintID, OneHotConstraint> {
+        self.one_hot_constraint_collection.active()
+    }
+
+    /// Removed one-hot constraints.
+    pub fn removed_one_hot_constraints(
+        &self,
+    ) -> &BTreeMap<crate::OneHotConstraintID, (OneHotConstraint, RemovedReason)> {
+        self.one_hot_constraint_collection.removed()
+    }
+
+    /// Active SOS1 constraints.
+    pub fn sos1_constraints(&self) -> &BTreeMap<crate::Sos1ConstraintID, Sos1Constraint> {
+        self.sos1_constraint_collection.active()
+    }
+
+    /// Removed SOS1 constraints.
+    pub fn removed_sos1_constraints(
+        &self,
+    ) -> &BTreeMap<crate::Sos1ConstraintID, (Sos1Constraint, RemovedReason)> {
+        self.sos1_constraint_collection.removed()
     }
 }

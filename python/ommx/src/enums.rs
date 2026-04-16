@@ -12,12 +12,18 @@ use pyo3::prelude::*;
 pub enum AdditionalCapability {
     /// Indicator constraints: binvar = 1 → f(x) <= 0
     Indicator = 1,
+    /// One-hot constraints: exactly one of a set of binary variables must be 1
+    OneHot = 2,
+    /// SOS1 constraints: at most one of a set of variables can be non-zero
+    Sos1 = 3,
 }
 
 impl From<ommx::AdditionalCapability> for AdditionalCapability {
     fn from(cap: ommx::AdditionalCapability) -> Self {
         match cap {
             ommx::AdditionalCapability::Indicator => AdditionalCapability::Indicator,
+            ommx::AdditionalCapability::OneHot => AdditionalCapability::OneHot,
+            ommx::AdditionalCapability::Sos1 => AdditionalCapability::Sos1,
         }
     }
 }
@@ -26,6 +32,8 @@ impl From<AdditionalCapability> for ommx::AdditionalCapability {
     fn from(cap: AdditionalCapability) -> Self {
         match cap {
             AdditionalCapability::Indicator => ommx::AdditionalCapability::Indicator,
+            AdditionalCapability::OneHot => ommx::AdditionalCapability::OneHot,
+            AdditionalCapability::Sos1 => ommx::AdditionalCapability::Sos1,
         }
     }
 }

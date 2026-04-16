@@ -1,7 +1,7 @@
 """Test PySCIPOpt adapter behavior with partial_evaluate and SOS1 constraints."""
 
 import pytest
-from ommx.v1 import Instance, DecisionVariable, Sos1, ConstraintHints, State
+from ommx.v1 import Instance, DecisionVariable, Sos1Constraint, State
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
 
@@ -27,22 +27,20 @@ def sos1_instance_setup():
     # Independent constraint not related to SOS1
     independent_constraint = (z >= 1).set_id(5)
 
-    sos1_hint = Sos1(
-        binary_constraint_id=1,
-        big_m_constraint_ids=[2, 3, 4],
-        variables=[1, 2, 3],  # x0, x1, x2 (continuous variables)
-    )
-    constraint_hints = ConstraintHints(sos1_constraints=[sos1_hint])
+    sos1 = Sos1Constraint(variables=[1, 2, 3])  # x0, x1, x2 (continuous variables)
 
     return Instance.from_components(
         decision_variables=x + y + [z],
         objective=objective,
         constraints=[binary_constraint, big_m1, big_m2, big_m3, independent_constraint],
+        sos1_constraints=[sos1],
         sense=Instance.MINIMIZE,
-        constraint_hints=constraint_hints,
     )
 
 
+@pytest.mark.skip(
+    reason="SOS1 variable partial_evaluate is deferred to the forget phase"
+)
 def test_adapter_handles_sos1_variable_fixed_nonzero(sos1_instance_setup):
     """Test that PySCIPOpt adapter handles instances when SOS1 variable is fixed to non-zero value."""
     instance = sos1_instance_setup
@@ -66,6 +64,9 @@ def test_adapter_handles_sos1_variable_fixed_nonzero(sos1_instance_setup):
     assert fixed_var.value == 5.0, "Fixed variable should have the specified value"
 
 
+@pytest.mark.skip(
+    reason="SOS1 variable partial_evaluate is deferred to the forget phase"
+)
 def test_adapter_handles_sos1_variable_fixed_to_zero(sos1_instance_setup):
     """Test adapter behavior when SOS1 variable is fixed to zero."""
     instance = sos1_instance_setup

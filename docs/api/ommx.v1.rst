@@ -23,11 +23,10 @@ ommx.v1
    _items/ommx.v1.AdditionalCapability
    _items/ommx.v1.Constraint
    _items/ommx.v1.IndicatorConstraint
+   _items/ommx.v1.OneHotConstraint
+   _items/ommx.v1.Sos1Constraint
    _items/ommx.v1.RemovedConstraint
    _items/ommx.v1.NamedFunction
-   _items/ommx.v1.OneHot
-   _items/ommx.v1.Sos1
-   _items/ommx.v1.ConstraintHints
    _items/ommx.v1.EvaluatedDecisionVariable
    _items/ommx.v1.EvaluatedConstraint
    _items/ommx.v1.EvaluatedNamedFunction

@@ -1,0 +1,241 @@
+use super::*;
+use crate::{ATol, Evaluate, VariableIDSet};
+
+impl Evaluate for OneHotConstraint<Created> {
+    type Output = EvaluatedOneHotConstraint;
+    type SampledOutput = SampledOneHotConstraint;
+
+    fn evaluate(&self, state: &crate::v1::State, atol: ATol) -> anyhow::Result<Self::Output> {
+        let used_decision_variable_ids = self.required_ids();
+        let (feasible, active_variable) = check_one_hot(&self.variables, state, atol, self.id)?;
+
+        Ok(OneHotConstraint {
+            id: self.id,
+            variables: self.variables.clone(),
+            metadata: self.metadata.clone(),
+            stage: OneHotEvaluatedData {
+                feasible,
+                active_variable,
+                used_decision_variable_ids,
+            },
+        })
+    }
+
+    fn evaluate_samples(
+        &self,
+        samples: &crate::v1::Samples,
+        atol: ATol,
+    ) -> anyhow::Result<Self::SampledOutput> {
+        let mut feasible = BTreeMap::new();
+        let mut active_variable = BTreeMap::new();
+
+        for (sample_id, state) in samples.iter() {
+            let sample_id = crate::SampleID::from(*sample_id);
+            let (f, av) = check_one_hot(&self.variables, state, atol, self.id)?;
+            feasible.insert(sample_id, f);
+            active_variable.insert(sample_id, av);
+        }
+
+        Ok(OneHotConstraint {
+            id: self.id,
+            variables: self.variables.clone(),
+            metadata: self.metadata.clone(),
+            stage: OneHotSampledData {
+                feasible,
+                active_variable,
+                used_decision_variable_ids: self.required_ids(),
+            },
+        })
+    }
+
+    fn partial_evaluate(&mut self, state: &crate::v1::State, _atol: ATol) -> anyhow::Result<()> {
+        for var_id in &self.variables {
+            if state.entries.contains_key(&var_id.into_inner()) {
+                anyhow::bail!(
+                    "Cannot partially evaluate variable {:?} of one-hot constraint {:?}. \
+                     Fixing a one-hot variable would change the constraint type.",
+                    var_id,
+                    self.id
+                );
+            }
+        }
+        Ok(())
+    }
+
+    fn required_ids(&self) -> VariableIDSet {
+        self.variables.iter().copied().collect()
+    }
+}
+
+/// Check one-hot feasibility for a single state.
+///
+/// Returns `(feasible, active_variable)`:
+/// - feasible: exactly one variable is 1, the rest are 0
+/// - active_variable: the variable that is 1 (None if infeasible)
+fn check_one_hot(
+    variables: &BTreeSet<VariableID>,
+    state: &crate::v1::State,
+    atol: ATol,
+    constraint_id: OneHotConstraintID,
+) -> anyhow::Result<(bool, Option<VariableID>)> {
+    let mut active: Option<VariableID> = None;
+
+    for &var_id in variables {
+        let value = state.entries.get(&var_id.into_inner()).ok_or_else(|| {
+            anyhow::anyhow!(
+                "Variable {:?} not found in state for one-hot constraint {:?}",
+                var_id,
+                constraint_id
+            )
+        })?;
+
+        if (value - 1.0).abs() < *atol {
+            // Variable is ~1
+            if active.is_some() {
+                // Multiple variables are 1 → infeasible
+                return Ok((false, None));
+            }
+            active = Some(var_id);
+        } else if value.abs() < *atol {
+            // Variable is ~0, OK
+        } else {
+            // Variable is neither 0 nor 1 → infeasible
+            return Ok((false, None));
+        }
+    }
+
+    match active {
+        Some(var_id) => Ok((true, Some(var_id))),
+        None => Ok((false, None)), // All zeros → infeasible for one-hot
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Evaluate;
+    use std::collections::HashMap;
+
+    fn make_one_hot(id: u64, var_ids: &[u64]) -> OneHotConstraint {
+        let vars = var_ids.iter().copied().map(VariableID::from).collect();
+        OneHotConstraint::new(OneHotConstraintID::from(id), vars)
+    }
+
+    #[test]
+    fn test_evaluate_feasible() {
+        let c = make_one_hot(1, &[1, 2, 3]);
+        // x1=0, x2=1, x3=0 → feasible, active=x2
+        let state = crate::v1::State::from(HashMap::from([(1, 0.0), (2, 1.0), (3, 0.0)]));
+        let result = c.evaluate(&state, ATol::default()).unwrap();
+        assert!(result.stage.feasible);
+        assert_eq!(result.stage.active_variable, Some(VariableID::from(2)));
+    }
+
+    #[test]
+    fn test_evaluate_infeasible_multiple_ones() {
+        let c = make_one_hot(1, &[1, 2, 3]);
+        // x1=1, x2=1, x3=0 → infeasible
+        let state = crate::v1::State::from(HashMap::from([(1, 1.0), (2, 1.0), (3, 0.0)]));
+        let result = c.evaluate(&state, ATol::default()).unwrap();
+        assert!(!result.stage.feasible);
+        assert_eq!(result.stage.active_variable, None);
+    }
+
+    #[test]
+    fn test_evaluate_infeasible_all_zeros() {
+        let c = make_one_hot(1, &[1, 2, 3]);
+        // x1=0, x2=0, x3=0 → infeasible (one-hot requires exactly one)
+        let state = crate::v1::State::from(HashMap::from([(1, 0.0), (2, 0.0), (3, 0.0)]));
+        let result = c.evaluate(&state, ATol::default()).unwrap();
+        assert!(!result.stage.feasible);
+        assert_eq!(result.stage.active_variable, None);
+    }
+
+    #[test]
+    fn test_evaluate_infeasible_non_binary() {
+        let c = make_one_hot(1, &[1, 2]);
+        // x1=0.5, x2=0.5 → infeasible
+        let state = crate::v1::State::from(HashMap::from([(1, 0.5), (2, 0.5)]));
+        let result = c.evaluate(&state, ATol::default()).unwrap();
+        assert!(!result.stage.feasible);
+    }
+
+    #[test]
+    fn test_partial_evaluate_error() {
+        let mut c = make_one_hot(1, &[1, 2, 3]);
+        let state = crate::v1::State::from(HashMap::from([(2, 1.0)]));
+        let result = c.partial_evaluate(&state, ATol::default());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_partial_evaluate_no_overlap() {
+        let mut c = make_one_hot(1, &[1, 2, 3]);
+        // Fixing a variable NOT in the one-hot set is fine
+        let state = crate::v1::State::from(HashMap::from([(99, 1.0)]));
+        let result = c.partial_evaluate(&state, ATol::default());
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_required_ids() {
+        let c = make_one_hot(1, &[1, 2, 3]);
+        let ids = c.required_ids();
+        assert!(ids.contains(&VariableID::from(1)));
+        assert!(ids.contains(&VariableID::from(2)));
+        assert!(ids.contains(&VariableID::from(3)));
+        assert_eq!(ids.len(), 3);
+    }
+
+    #[test]
+    fn test_evaluate_samples() {
+        let c = make_one_hot(1, &[1, 2, 3]);
+
+        use crate::v1::samples::SamplesEntry;
+        let samples = crate::v1::Samples {
+            entries: vec![
+                // Sample 0: x1=1, x2=0, x3=0 → feasible, active=x1
+                SamplesEntry {
+                    state: Some(crate::v1::State::from(HashMap::from([
+                        (1, 1.0),
+                        (2, 0.0),
+                        (3, 0.0),
+                    ]))),
+                    ids: vec![0],
+                },
+                // Sample 1: x1=1, x2=1, x3=0 → infeasible
+                SamplesEntry {
+                    state: Some(crate::v1::State::from(HashMap::from([
+                        (1, 1.0),
+                        (2, 1.0),
+                        (3, 0.0),
+                    ]))),
+                    ids: vec![1],
+                },
+                // Sample 2: x1=0, x2=0, x3=0 → infeasible (all zeros)
+                SamplesEntry {
+                    state: Some(crate::v1::State::from(HashMap::from([
+                        (1, 0.0),
+                        (2, 0.0),
+                        (3, 0.0),
+                    ]))),
+                    ids: vec![2],
+                },
+            ],
+        };
+
+        let result = c.evaluate_samples(&samples, ATol::default()).unwrap();
+
+        let s0 = crate::SampleID::from(0);
+        let s1 = crate::SampleID::from(1);
+        let s2 = crate::SampleID::from(2);
+
+        assert_eq!(result.stage.feasible[&s0], true);
+        assert_eq!(result.stage.feasible[&s1], false);
+        assert_eq!(result.stage.feasible[&s2], false);
+
+        assert_eq!(result.stage.active_variable[&s0], Some(VariableID::from(1)));
+        assert_eq!(result.stage.active_variable[&s1], None);
+        assert_eq!(result.stage.active_variable[&s2], None);
+    }
+}

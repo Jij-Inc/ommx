@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Literal, Optional
+from typing import Optional
 
 import pyscipopt
 import math
@@ -25,31 +25,26 @@ from ommx.v1 import (
 from .exception import OMMXPySCIPOptAdapterError
 
 
-HintMode = Literal["disabled", "auto", "forced"]
-
-
 class OMMXPySCIPOptAdapter(SolverAdapter):
-    ADDITIONAL_CAPABILITIES = frozenset({AdditionalCapability.Indicator})
-    use_sos1: HintMode
+    ADDITIONAL_CAPABILITIES = frozenset(
+        {
+            AdditionalCapability.Indicator,
+            AdditionalCapability.Sos1,
+        }
+    )
 
     def __init__(
         self,
         ommx_instance: Instance,
         *,
-        use_sos1: Literal["disabled", "auto", "forced"] = "auto",
         initial_state: Optional[ToState] = None,
     ):
         """
         :param ommx_instance: The ommx.v1.Instance to solve.
-        :param use_sos1: Strategy for handling SOS1 constraints.Options:
-            - "disabled": Do not use SOS1 constraints.
-            - "auto": Use SOS1 constraints if hints are provided, otherwise solve without them.(default)
-            - "forced": Require SOS1 constraints and raise an error if no SOS1 constraint hints are found.
         :param initial_state: Optional initial solution state.
         """
         super().__init__(ommx_instance)
         self.instance = ommx_instance
-        self.use_sos1 = use_sos1
         self.model = pyscipopt.Model()
         self.model.hideOutput()
 
@@ -66,17 +61,12 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         cls,
         ommx_instance: Instance,
         *,
-        use_sos1: Literal["disabled", "auto", "forced"] = "auto",
         initial_state: Optional[ToState] = None,
     ) -> Solution:
         """
         Solve the given ommx.v1.Instance using PySCIPopt, returning an ommx.v1.Solution.
 
         :param ommx_instance: The ommx.v1.Instance to solve.
-        :param use_sos1: Strategy for handling SOS1 constraints.Options:
-            - "disabled": Do not use SOS1 constraints.
-            - "auto": Use SOS1 constraints if hints are provided, otherwise solve without them.(default)
-            - "forced": Require SOS1 constraints and raise an error if no SOS1 constraint hints are found.
         :param initial_state: Optional initial solution state.
 
         Examples
@@ -160,7 +150,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                     ...
                 ommx.adapter.UnboundedDetected: Model was unbounded
         """
-        adapter = cls(ommx_instance, use_sos1=use_sos1, initial_state=initial_state)
+        adapter = cls(ommx_instance, initial_state=initial_state)
         model = adapter.solver_input
         model.optimize()
         return adapter.decode(model)
@@ -368,32 +358,13 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             )
 
     def _set_constraints(self):
-        ommx_hints = self.instance.constraint_hints
-        excluded = set()
-
-        # Handle SOS1 constraints from constraint hints
-        if self.use_sos1 != "disabled":
-            if self.use_sos1 == "forced" and len(ommx_hints.sos1_constraints) == 0:
-                raise OMMXPySCIPOptAdapterError(
-                    "No SOS1 constraints were found, but `use_sos1` is set to `forced`."
-                )
-
-            for sos1 in ommx_hints.sos1_constraints:
-                bid = sos1.binary_constraint_id
-                excluded.add(bid)
-                big_m_ids = sos1.big_m_constraint_ids
-                if len(big_m_ids) == 0:
-                    name = f"sos1_{bid}"
-                else:
-                    name = f"sos1_{bid}_{'_'.join(map(str, big_m_ids))}"
-                    excluded.update(big_m_ids)
-                vars = [self.varname_map[str(v)] for v in sos1.variables]
-                self.model.addConsSOS1(vars, name=name)
+        # Handle SOS1 constraints (first-class constraint type)
+        for sos1 in self.instance.sos1_constraints:
+            name = f"sos1_{sos1.id}"
+            vars = [self.varname_map[str(v)] for v in sos1.variables]
+            self.model.addConsSOS1(vars, name=name)
 
         for constraint in self.instance.constraints:
-            if constraint.id in excluded:
-                continue
-
             # Handle constraint function based on its type
             f = constraint.function
             degree = f.degree()

@@ -89,6 +89,18 @@ pub enum SolutionError {
         value_id: crate::IndicatorConstraintID,
     },
 
+    #[error("One-hot constraint map key {key:?} does not match value's id {value_id:?}")]
+    InconsistentOneHotConstraintID {
+        key: crate::OneHotConstraintID,
+        value_id: crate::OneHotConstraintID,
+    },
+
+    #[error("SOS1 constraint map key {key:?} does not match value's id {value_id:?}")]
+    InconsistentSos1ConstraintID {
+        key: crate::Sos1ConstraintID,
+        value_id: crate::Sos1ConstraintID,
+    },
+
     #[error(
         "Variable ID {id:?} used in constraint {constraint_id:?} is not in decision_variables"
     )]
@@ -125,6 +137,10 @@ pub struct Solution {
     evaluated_constraints: EvaluatedCollection<Constraint>,
     #[getset(get = "pub")]
     evaluated_indicator_constraints: EvaluatedCollection<IndicatorConstraint>,
+    #[getset(get = "pub")]
+    evaluated_one_hot_constraints: EvaluatedCollection<crate::OneHotConstraint>,
+    #[getset(get = "pub")]
+    evaluated_sos1_constraints: EvaluatedCollection<crate::Sos1Constraint>,
     #[getset(get = "pub")]
     evaluated_named_functions: BTreeMap<NamedFunctionID, EvaluatedNamedFunction>,
     #[getset(get = "pub")]
@@ -197,6 +213,8 @@ impl Solution {
     pub fn feasible_constraints(&self) -> bool {
         self.evaluated_constraints.is_feasible()
             && self.evaluated_indicator_constraints.is_feasible()
+            && self.evaluated_one_hot_constraints.is_feasible()
+            && self.evaluated_sos1_constraints.is_feasible()
     }
 
     /// Check if all constraints and decision variables are feasible
@@ -216,6 +234,8 @@ impl Solution {
     pub fn feasible_constraints_relaxed(&self) -> bool {
         self.evaluated_constraints.is_feasible_relaxed()
             && self.evaluated_indicator_constraints.is_feasible_relaxed()
+            && self.evaluated_one_hot_constraints.is_feasible_relaxed()
+            && self.evaluated_sos1_constraints.is_feasible_relaxed()
     }
 
     /// Check if all constraints and decision variables are feasible in the relaxed problem
@@ -547,6 +567,8 @@ pub struct SolutionBuilder {
     objective: Option<f64>,
     evaluated_constraints: Option<EvaluatedCollection<Constraint>>,
     evaluated_indicator_constraints: EvaluatedCollection<IndicatorConstraint>,
+    evaluated_one_hot_constraints: EvaluatedCollection<crate::OneHotConstraint>,
+    evaluated_sos1_constraints: EvaluatedCollection<crate::Sos1Constraint>,
     evaluated_named_functions: BTreeMap<NamedFunctionID, EvaluatedNamedFunction>,
     decision_variables: Option<BTreeMap<VariableID, EvaluatedDecisionVariable>>,
     sense: Option<Sense>,
@@ -610,6 +632,24 @@ impl SolutionBuilder {
     ) -> Self {
         self.evaluated_indicator_constraints =
             EvaluatedCollection::new(evaluated_indicator_constraints, BTreeMap::new());
+        self
+    }
+
+    /// Sets the evaluated one-hot constraints from a collection.
+    pub fn evaluated_one_hot_constraints_collection(
+        mut self,
+        evaluated_one_hot_constraints: EvaluatedCollection<crate::OneHotConstraint>,
+    ) -> Self {
+        self.evaluated_one_hot_constraints = evaluated_one_hot_constraints;
+        self
+    }
+
+    /// Sets the evaluated SOS1 constraints from a collection.
+    pub fn evaluated_sos1_constraints_collection(
+        mut self,
+        evaluated_sos1_constraints: EvaluatedCollection<crate::Sos1Constraint>,
+    ) -> Self {
+        self.evaluated_sos1_constraints = evaluated_sos1_constraints;
         self
     }
 
@@ -719,6 +759,28 @@ impl SolutionBuilder {
             }
         }
 
+        // Validate one-hot constraint keys match their id
+        for (key, value) in self.evaluated_one_hot_constraints.iter() {
+            if *key != value.id {
+                return Err(SolutionError::InconsistentOneHotConstraintID {
+                    key: *key,
+                    value_id: value.id,
+                }
+                .into());
+            }
+        }
+
+        // Validate SOS1 constraint keys match their id
+        for (key, value) in self.evaluated_sos1_constraints.iter() {
+            if *key != value.id {
+                return Err(SolutionError::InconsistentSos1ConstraintID {
+                    key: *key,
+                    value_id: value.id,
+                }
+                .into());
+            }
+        }
+
         // Validate all used_decision_variable_ids in indicator constraints
         for ic in self.evaluated_indicator_constraints.values() {
             for var_id in &ic.stage.used_decision_variable_ids {
@@ -727,6 +789,32 @@ impl SolutionBuilder {
                         "Variable {:?} used in indicator constraint {:?} is not defined in decision_variables",
                         var_id,
                         ic.id
+                    ));
+                }
+            }
+        }
+
+        // Validate all used_decision_variable_ids in one-hot constraints
+        for oh in self.evaluated_one_hot_constraints.values() {
+            for var_id in &oh.stage.used_decision_variable_ids {
+                if !decision_variables.contains_key(var_id) {
+                    return Err(anyhow::anyhow!(
+                        "Variable {:?} used in one-hot constraint {:?} is not defined in decision_variables",
+                        var_id,
+                        oh.id
+                    ));
+                }
+            }
+        }
+
+        // Validate all used_decision_variable_ids in SOS1 constraints
+        for s1 in self.evaluated_sos1_constraints.values() {
+            for var_id in &s1.stage.used_decision_variable_ids {
+                if !decision_variables.contains_key(var_id) {
+                    return Err(anyhow::anyhow!(
+                        "Variable {:?} used in SOS1 constraint {:?} is not defined in decision_variables",
+                        var_id,
+                        s1.id
                     ));
                 }
             }
@@ -749,6 +837,8 @@ impl SolutionBuilder {
             objective,
             evaluated_constraints,
             evaluated_indicator_constraints: self.evaluated_indicator_constraints,
+            evaluated_one_hot_constraints: self.evaluated_one_hot_constraints,
+            evaluated_sos1_constraints: self.evaluated_sos1_constraints,
             evaluated_named_functions: self.evaluated_named_functions,
             decision_variables,
             optimality: self.optimality,
@@ -795,6 +885,8 @@ impl SolutionBuilder {
             objective,
             evaluated_constraints,
             evaluated_indicator_constraints: self.evaluated_indicator_constraints,
+            evaluated_one_hot_constraints: self.evaluated_one_hot_constraints,
+            evaluated_sos1_constraints: self.evaluated_sos1_constraints,
             evaluated_named_functions: self.evaluated_named_functions,
             decision_variables,
             optimality: self.optimality,

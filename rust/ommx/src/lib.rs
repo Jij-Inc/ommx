@@ -302,17 +302,18 @@ mod infeasible_detected;
 mod instance;
 mod macros;
 mod named_function;
+mod one_hot_constraint;
 mod polynomial_base;
 mod sample_set;
 mod sampled;
 mod solution;
+mod sos1_constraint;
 mod substitute;
 
 pub use atol::*;
 pub use bound::*;
 pub use coefficient::*;
 pub use constraint::*;
-pub use constraint_hints::*;
 pub use constraint_type::*;
 pub use decision_variable::*;
 pub use evaluate::Evaluate;
@@ -321,11 +322,13 @@ pub use indicator_constraint::*;
 pub use infeasible_detected::*;
 pub use instance::*;
 pub use named_function::*;
+pub use one_hot_constraint::*;
 pub use parse::*;
 pub use polynomial_base::*;
 pub use sample_set::*;
 pub use sampled::*;
 pub use solution::*;
+pub use sos1_constraint::*;
 pub use substitute::*;
 
 /// Module created from `ommx.v1` proto files

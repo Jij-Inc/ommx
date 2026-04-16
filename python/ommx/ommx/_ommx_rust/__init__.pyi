@@ -18,7 +18,6 @@ __all__ = [
     "ArtifactBuilder",
     "Bound",
     "Constraint",
-    "ConstraintHints",
     "DecisionVariable",
     "DecisionVariableAnalysis",
     "Descriptor",
@@ -33,7 +32,7 @@ __all__ = [
     "Kind",
     "Linear",
     "NamedFunction",
-    "OneHot",
+    "OneHotConstraint",
     "Optimality",
     "Parameter",
     "Parameters",
@@ -50,7 +49,7 @@ __all__ = [
     "Samples",
     "Sense",
     "Solution",
-    "Sos1",
+    "Sos1Constraint",
     "State",
     "ToFunction",
     "ToSamples",
@@ -633,25 +632,6 @@ class Constraint:
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> Constraint: ...
     def __deepcopy__(self, _memo: typing.Any) -> Constraint: ...
-
-@typing.final
-class ConstraintHints:
-    r"""
-    ConstraintHints wrapper for Python
-    """
-    @property
-    def one_hot_constraints(self) -> builtins.list[OneHot]: ...
-    @property
-    def sos1_constraints(self) -> builtins.list[Sos1]: ...
-    def __eq__(self, other: builtins.object) -> builtins.bool: ...
-    def __new__(
-        cls,
-        one_hot_constraints: typing.Sequence[OneHot] = [],
-        sos1_constraints: typing.Sequence[Sos1] = [],
-    ) -> ConstraintHints: ...
-    def __repr__(self) -> builtins.str: ...
-    def __copy__(self) -> ConstraintHints: ...
-    def __deepcopy__(self, _memo: typing.Any) -> ConstraintHints: ...
 
 @typing.final
 class DecisionVariable:
@@ -1394,6 +1374,16 @@ class Instance:
         List of all indicator constraints in the instance sorted by their IDs.
         """
     @property
+    def one_hot_constraints(self) -> builtins.list[OneHotConstraint]:
+        r"""
+        List of all one-hot constraints in the instance sorted by their IDs.
+        """
+    @property
+    def sos1_constraints(self) -> builtins.list[Sos1Constraint]:
+        r"""
+        List of all SOS1 constraints in the instance sorted by their IDs.
+        """
+    @property
     def removed_constraints(self) -> builtins.list[RemovedConstraint]:
         r"""
         List of all removed constraints in the instance sorted by their IDs.
@@ -1405,8 +1395,6 @@ class Instance:
         """
     @property
     def description(self) -> typing.Optional[InstanceDescription]: ...
-    @property
-    def constraint_hints(self) -> ConstraintHints: ...
     @property
     def used_decision_variables(self) -> builtins.list[DecisionVariable]: ...
     @property
@@ -1468,9 +1456,10 @@ class Instance:
         indicator_constraints: typing.Optional[
             typing.Sequence[IndicatorConstraint]
         ] = None,
+        one_hot_constraints: typing.Optional[typing.Sequence[OneHotConstraint]] = None,
+        sos1_constraints: typing.Optional[typing.Sequence[Sos1Constraint]] = None,
         named_functions: typing.Optional[typing.Sequence[NamedFunction]] = None,
         description: typing.Optional[InstanceDescription] = None,
-        constraint_hints: typing.Optional[ConstraintHints] = None,
     ) -> Instance:
         r"""
         Create an instance from its components.
@@ -1482,7 +1471,6 @@ class Instance:
         - `constraints`: List of constraints
         - `named_functions`: Optional list of named functions
         - `description`: Optional instance description
-        - `constraint_hints`: Optional constraint hints for solvers
 
         **Returns:**
         A new Instance
@@ -2710,21 +2698,38 @@ class NamedFunction:
     def __deepcopy__(self, _memo: typing.Any) -> NamedFunction: ...
 
 @typing.final
-class OneHot:
+class OneHotConstraint:
     r"""
-    OneHot constraint hint wrapper for Python
+    A one-hot constraint: exactly one variable must be 1, the rest must be 0.
+
+    This is a structural constraint — no explicit function is stored.
+    The implicit constraint is `sum(x_i) = 1` where all `x_i` are binary.
     """
     @property
     def id(self) -> builtins.int: ...
     @property
     def variables(self) -> builtins.list[builtins.int]: ...
-    def __eq__(self, other: builtins.object) -> builtins.bool: ...
     def __new__(
-        cls, id: builtins.int, variables: typing.Sequence[builtins.int]
-    ) -> OneHot: ...
+        cls,
+        *,
+        variables: typing.Sequence[builtins.int],
+        id: typing.Optional[builtins.int] = None,
+    ) -> OneHotConstraint:
+        r"""
+        Create a new one-hot constraint.
+
+        **Args:**
+
+        - `variables`: List of binary decision variable IDs (exactly one must be 1)
+        - `id`: Optional constraint ID (auto-generated if not provided)
+        """
+    def set_id(self, id: builtins.int) -> OneHotConstraint:
+        r"""
+        Set the constraint ID. Returns a new OneHotConstraint.
+        """
     def __repr__(self) -> builtins.str: ...
-    def __copy__(self) -> OneHot: ...
-    def __deepcopy__(self, _memo: typing.Any) -> OneHot: ...
+    def __copy__(self) -> OneHotConstraint: ...
+    def __deepcopy__(self, _memo: typing.Any) -> OneHotConstraint: ...
 
 @typing.final
 class Parameter:
@@ -2907,8 +2912,6 @@ class ParametricInstance:
     @property
     def description(self) -> typing.Optional[InstanceDescription]: ...
     @property
-    def constraint_hints(self) -> ConstraintHints: ...
-    @property
     def decision_variable_ids(self) -> builtins.set[builtins.int]: ...
     @property
     def parameter_ids(self) -> builtins.set[builtins.int]: ...
@@ -2972,7 +2975,6 @@ class ParametricInstance:
         parameters: typing.Sequence[Parameter],
         named_functions: typing.Optional[typing.Sequence[NamedFunction]] = None,
         description: typing.Optional[InstanceDescription] = None,
-        constraint_hints: typing.Optional[ConstraintHints] = None,
     ) -> ParametricInstance: ...
     @staticmethod
     def empty() -> ParametricInstance:
@@ -4276,26 +4278,38 @@ class Solution:
         """
 
 @typing.final
-class Sos1:
+class Sos1Constraint:
     r"""
-    SOS1 constraint hint wrapper for Python
+    A SOS1 (Special Ordered Set type 1) constraint: at most one variable can be non-zero.
+
+    This is a structural constraint — no explicit function is stored.
+    Unlike OneHotConstraint, SOS1 allows all variables to be zero.
     """
     @property
-    def binary_constraint_id(self) -> builtins.int: ...
-    @property
-    def big_m_constraint_ids(self) -> builtins.list[builtins.int]: ...
+    def id(self) -> builtins.int: ...
     @property
     def variables(self) -> builtins.list[builtins.int]: ...
-    def __eq__(self, other: builtins.object) -> builtins.bool: ...
     def __new__(
         cls,
-        binary_constraint_id: builtins.int,
-        big_m_constraint_ids: typing.Sequence[builtins.int],
+        *,
         variables: typing.Sequence[builtins.int],
-    ) -> Sos1: ...
+        id: typing.Optional[builtins.int] = None,
+    ) -> Sos1Constraint:
+        r"""
+        Create a new SOS1 constraint.
+
+        **Args:**
+
+        - `variables`: List of decision variable IDs (at most one can be non-zero)
+        - `id`: Optional constraint ID (auto-generated if not provided)
+        """
+    def set_id(self, id: builtins.int) -> Sos1Constraint:
+        r"""
+        Set the constraint ID. Returns a new Sos1Constraint.
+        """
     def __repr__(self) -> builtins.str: ...
-    def __copy__(self) -> Sos1: ...
-    def __deepcopy__(self, _memo: typing.Any) -> Sos1: ...
+    def __copy__(self) -> Sos1Constraint: ...
+    def __deepcopy__(self, _memo: typing.Any) -> Sos1Constraint: ...
 
 @typing.final
 class State:
@@ -4335,6 +4349,14 @@ class AdditionalCapability(enum.Enum):
     Indicator = ...
     r"""
     Indicator constraints: binvar = 1 → f(x) <= 0
+    """
+    OneHot = ...
+    r"""
+    One-hot constraints: exactly one of a set of binary variables must be 1
+    """
+    Sos1 = ...
+    r"""
+    SOS1 constraints: at most one of a set of variables can be non-zero
     """
 
 @typing.final

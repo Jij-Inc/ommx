@@ -1,6 +1,5 @@
 use super::*;
 use crate::constraint_type::ConstraintCollection;
-use crate::parse::Parse;
 
 /// Builder for creating [`ParametricInstance`] with validation.
 ///
@@ -28,7 +27,6 @@ pub struct ParametricInstanceBuilder {
     named_functions: BTreeMap<NamedFunctionID, NamedFunction>,
     removed_constraints: BTreeMap<ConstraintID, (Constraint, crate::constraint::RemovedReason)>,
     decision_variable_dependency: AcyclicAssignments,
-    constraint_hints: ConstraintHints,
     description: Option<v1::instance::Description>,
 }
 
@@ -95,12 +93,6 @@ impl ParametricInstanceBuilder {
         decision_variable_dependency: AcyclicAssignments,
     ) -> Self {
         self.decision_variable_dependency = decision_variable_dependency;
-        self
-    }
-
-    /// Sets the constraint hints.
-    pub fn constraint_hints(mut self, constraint_hints: ConstraintHints) -> Self {
-        self.constraint_hints = constraint_hints;
         self
     }
 
@@ -291,28 +283,17 @@ impl ParametricInstanceBuilder {
             return Err(InstanceError::FixedAndDependentVariable { id: *id }.into());
         }
 
-        // Validate constraint_hints using Parse trait.
-        // Unlike `add_constraint_hints` which errors on removed constraint references,
-        // the builder uses Parse which silently filters invalid hints (with debug log).
-        // This is intentional: the builder may receive data from old serialized instances
-        // where hints may reference constraints that have since been removed, and we want
-        // to heal such inconsistencies rather than fail.
-        // Move values into context tuple to avoid cloning, then destructure to recover ownership.
-        let hints: v1::ConstraintHints = self.constraint_hints.into();
-        let context = (decision_variables, constraints, self.removed_constraints);
-        let constraint_hints = hints.parse(&context)?;
-        let (decision_variables, constraints, removed_constraints) = context;
-
         Ok(ParametricInstance {
             sense,
             objective,
             decision_variables,
             parameters,
-            constraint_collection: ConstraintCollection::new(constraints, removed_constraints),
+            constraint_collection: ConstraintCollection::new(constraints, self.removed_constraints),
             indicator_constraint_collection: Default::default(),
+            one_hot_constraint_collection: Default::default(),
+            sos1_constraint_collection: Default::default(),
             named_functions: self.named_functions,
             decision_variable_dependency: self.decision_variable_dependency,
-            constraint_hints,
             description: self.description,
         })
     }

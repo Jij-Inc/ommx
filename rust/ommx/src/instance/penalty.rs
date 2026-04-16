@@ -44,6 +44,16 @@ impl Instance {
             "penalty_method does not support indicator constraints. \
              Remove or convert indicator constraints before applying penalty method."
         );
+        anyhow::ensure!(
+            self.one_hot_constraint_collection.active().is_empty(),
+            "penalty_method does not support one-hot constraints. \
+             Remove or convert one-hot constraints before applying penalty method."
+        );
+        anyhow::ensure!(
+            self.sos1_constraint_collection.active().is_empty(),
+            "penalty_method does not support SOS1 constraints. \
+             Remove or convert SOS1 constraints before applying penalty method."
+        );
 
         let mut max_id = 0;
 
@@ -104,9 +114,9 @@ impl Instance {
             parameters,
             constraint_collection: ConstraintCollection::new(BTreeMap::new(), removed_constraints),
             indicator_constraint_collection: self.indicator_constraint_collection,
+            one_hot_constraint_collection: self.one_hot_constraint_collection,
+            sos1_constraint_collection: self.sos1_constraint_collection,
             decision_variable_dependency: self.decision_variable_dependency,
-            // All constraints are moved to removed_constraints, so all hints are invalidated
-            constraint_hints: ConstraintHints::default(),
             description: self.description,
             named_functions: self.named_functions,
         })
@@ -152,6 +162,16 @@ impl Instance {
             "uniform_penalty_method does not support indicator constraints. \
              Remove or convert indicator constraints before applying penalty method."
         );
+        anyhow::ensure!(
+            self.one_hot_constraint_collection.active().is_empty(),
+            "uniform_penalty_method does not support one-hot constraints. \
+             Remove or convert one-hot constraints before applying penalty method."
+        );
+        anyhow::ensure!(
+            self.sos1_constraint_collection.active().is_empty(),
+            "uniform_penalty_method does not support SOS1 constraints. \
+             Remove or convert SOS1 constraints before applying penalty method."
+        );
 
         // Early return if no active constraints (preserve any existing removed constraints)
         if self.constraints().is_empty() {
@@ -163,8 +183,9 @@ impl Instance {
                 parameters: BTreeMap::new(),
                 constraint_collection: ConstraintCollection::new(BTreeMap::new(), existing_removed),
                 indicator_constraint_collection: self.indicator_constraint_collection,
+                one_hot_constraint_collection: self.one_hot_constraint_collection,
+                sos1_constraint_collection: self.sos1_constraint_collection,
                 decision_variable_dependency: self.decision_variable_dependency,
-                constraint_hints: self.constraint_hints,
                 description: self.description,
                 named_functions: self.named_functions,
             });
@@ -221,9 +242,9 @@ impl Instance {
             parameters,
             constraint_collection: ConstraintCollection::new(BTreeMap::new(), removed_constraints),
             indicator_constraint_collection: self.indicator_constraint_collection,
+            one_hot_constraint_collection: self.one_hot_constraint_collection,
+            sos1_constraint_collection: self.sos1_constraint_collection,
             decision_variable_dependency: self.decision_variable_dependency,
-            // All constraints are moved to removed_constraints, so all hints are invalidated
-            constraint_hints: ConstraintHints::default(),
             description: self.description,
             named_functions: self.named_functions,
         })
@@ -393,66 +414,6 @@ mod tests {
         assert_eq!(parametric_instance.constraints().len(), 0);
         assert_eq!(parametric_instance.removed_constraints().len(), 0);
         assert_eq!(parametric_instance.objective, objective);
-    }
-
-    #[test]
-    fn test_penalty_method_clears_constraint_hints() {
-        use crate::constraint_hints::OneHot;
-        use std::collections::BTreeSet;
-
-        // Create instance with constraint hints
-        let mut instance = create_test_instance_with_constraints();
-
-        // Add a OneHot hint for constraint 1
-        let mut variables = BTreeSet::new();
-        variables.insert(VariableID::from(1));
-        variables.insert(VariableID::from(2));
-        instance.constraint_hints.one_hot_constraints.push(OneHot {
-            id: ConstraintID::from(1),
-            variables,
-        });
-
-        // Verify hint exists before penalty method
-        assert_eq!(instance.constraint_hints.one_hot_constraints.len(), 1);
-
-        // Apply penalty_method
-        let parametric_instance = instance.penalty_method().unwrap();
-
-        // All constraints are moved to removed_constraints, so all hints should be cleared
-        assert!(
-            parametric_instance.constraint_hints.is_empty(),
-            "Constraint hints should be cleared when all constraints are moved to removed_constraints"
-        );
-    }
-
-    #[test]
-    fn test_uniform_penalty_method_clears_constraint_hints() {
-        use crate::constraint_hints::OneHot;
-        use std::collections::BTreeSet;
-
-        // Create instance with constraint hints
-        let mut instance = create_test_instance_with_constraints();
-
-        // Add a OneHot hint for constraint 1
-        let mut variables = BTreeSet::new();
-        variables.insert(VariableID::from(1));
-        variables.insert(VariableID::from(2));
-        instance.constraint_hints.one_hot_constraints.push(OneHot {
-            id: ConstraintID::from(1),
-            variables,
-        });
-
-        // Verify hint exists before uniform penalty method
-        assert_eq!(instance.constraint_hints.one_hot_constraints.len(), 1);
-
-        // Apply uniform_penalty_method
-        let parametric_instance = instance.uniform_penalty_method().unwrap();
-
-        // All constraints are moved to removed_constraints, so all hints should be cleared
-        assert!(
-            parametric_instance.constraint_hints.is_empty(),
-            "Constraint hints should be cleared when all constraints are moved to removed_constraints"
-        );
     }
 
     #[test]
