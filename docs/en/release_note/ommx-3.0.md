@@ -6,10 +6,73 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
-### Indicator Constraint support and Adapter Capability model ([#790](https://github.com/Jij-Inc/ommx/pull/790))
+### Indicator Constraint support ([#789](https://github.com/Jij-Inc/ommx/pull/789), [#790](https://github.com/Jij-Inc/ommx/pull/790), [#795](https://github.com/Jij-Inc/ommx/pull/795), [#796](https://github.com/Jij-Inc/ommx/pull/796))
 
-- Added support for Indicator Constraints, where a constraint `f(x) <= 0` is enforced only when a user-defined binary variable `z = 1`. Support in the PySCIPOpt Adapter is also added.
-- As more specialized constraints like this are added and support varies across adapters and extensions, an Adapter Capability model has been introduced where adapters declare their capabilities and a common capability checking API is provided. **Each OMMX Adapter will need changes to support Python SDK 3.0.0.**
+Indicator Constraints are now a first-class feature in OMMX. An indicator constraint expresses a conditional relationship: a constraint `f(x) <= 0` (or `f(x) = 0`) is enforced only when a user-defined binary indicator variable `z = 1`. When `z = 0`, the constraint is unconditionally satisfied.
+
+#### Creating Indicator Constraints
+
+```python
+from ommx.v1 import DecisionVariable, IndicatorConstraint, Equality, Sense, Instance
+
+z = DecisionVariable.binary(0)
+x = DecisionVariable.continuous(1, lower=0, upper=10)
+
+# z = 1 → x <= 5
+ic = IndicatorConstraint(
+    indicator_variable=z,
+    function=x - 5,
+    equality=Equality.LessThanOrEqualToZero,
+)
+
+instance = Instance.from_components(
+    decision_variables=[z, x],
+    indicator_constraints=[ic],
+    objective=x,
+    sense=Sense.Minimize,
+)
+```
+
+#### Evaluation results
+
+After solving, `Solution` and `SampleSet` provide DataFrames for indicator constraints:
+
+- `Solution.indicator_constraints_df` — columns: id, indicator_variable_id, equality, value, indicator_active, used_ids, name, subscripts, description
+- `Solution.indicator_removed_reasons_df` — removal reasons for relaxed indicator constraints
+- `SampleSet.indicator_constraints_df` / `SampleSet.indicator_removed_reasons_df` — per-sample versions
+
+The `indicator_active` column disambiguates between "the indicator was OFF (constraint trivially satisfied)" and "the indicator was ON and the constraint was satisfied." Note that indicator constraints do not have dual variables, as dual values are not well-defined for conditional constraints.
+
+#### Relax and restore
+
+Indicator constraints support the same relax/restore workflow as regular constraints:
+
+- `Instance.relax_indicator_constraint(id, reason, **parameters)` — relax (deactivate) an indicator constraint with a reason
+- `Instance.restore_indicator_constraint(id)` — restore a previously relaxed indicator constraint, with safety checks (fails if the indicator variable was substituted or fixed)
+
+#### `removed_reasons_df` separation
+
+As part of this work, `removed_reason` is no longer a column in `constraints_df`. Instead, `removed_reasons_df` is available as a separate table on both `Solution` and `SampleSet`, which can be joined with `constraints_df`:
+
+```python
+df = solution.constraints_df.join(solution.removed_reasons_df)
+```
+
+This applies to both regular constraints and indicator constraints.
+
+#### Adapter Capability model
+
+As specialized constraint types are added and support varies across solvers, an Adapter Capability model has been introduced. Adapters declare their supported capabilities via `ADDITIONAL_CAPABILITIES`, and `Instance.check_capabilities()` validates that the problem is compatible before solving.
+
+```python
+from ommx.v1 import AdditionalCapability
+from ommx.adapter import SolverAdapter
+
+class MySolverAdapter(SolverAdapter):
+    ADDITIONAL_CAPABILITIES = frozenset({AdditionalCapability.Indicator})
+```
+
+Currently, the PySCIPOpt Adapter declares indicator constraint support. **Each OMMX Adapter will need changes to support Python SDK 3.0.0** — specifically, calling `super().__init__(instance)` for automatic capability checking.
 
 ## 3.0.0 Alpha 1
 
