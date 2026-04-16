@@ -13,17 +13,13 @@ Indicator Constraints are now a first-class feature in OMMX. An indicator constr
 #### Creating Indicator Constraints
 
 ```python
-from ommx.v1 import DecisionVariable, IndicatorConstraint, Equality, Sense, Instance
+from ommx.v1 import DecisionVariable, Sense, Instance
 
 z = DecisionVariable.binary(0)
 x = DecisionVariable.continuous(1, lower=0, upper=10)
 
 # z = 1 → x <= 5
-ic = IndicatorConstraint(
-    indicator_variable=z,
-    function=x - 5,
-    equality=Equality.LessThanOrEqualToZero,
-)
+ic = (x <= 5).with_indicator(z)
 
 instance = Instance.from_components(
     decision_variables=[z, x],
