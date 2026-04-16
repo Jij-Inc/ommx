@@ -22,16 +22,12 @@ impl Propagate for IndicatorConstraint<Created> {
                 metadata.provenance =
                     Some(crate::constraint::Provenance::IndicatorConstraint(self.id));
 
-                let constraint = crate::Constraint {
-                    id: crate::ConstraintID::from(self.id.into_inner()),
-                    equality: self.equality,
-                    metadata,
-                    stage: CreatedData {
-                        function: promoted_function,
-                    },
-                };
                 Ok((
-                    Some(IndicatorPropagateOutput::Promote(constraint)),
+                    Some(IndicatorPropagateOutput::Promote {
+                        equality: self.equality,
+                        function: promoted_function,
+                        metadata,
+                    }),
                     empty_state,
                 ))
             } else if indicator_value.abs() < *atol {
@@ -356,9 +352,16 @@ mod tests {
         let (transformed, additional) = ic.propagate(&state, ATol::default()).unwrap();
         assert!(additional.entries.is_empty());
         match transformed {
-            Some(IndicatorPropagateOutput::Promote(constraint)) => {
-                assert_eq!(constraint.equality, Equality::LessThanOrEqualToZero);
-                assert_eq!(constraint.id, crate::ConstraintID::from(1));
+            Some(IndicatorPropagateOutput::Promote {
+                equality,
+                function: _,
+                metadata,
+            }) => {
+                assert_eq!(equality, Equality::LessThanOrEqualToZero);
+                assert!(matches!(
+                    metadata.provenance,
+                    Some(crate::constraint::Provenance::IndicatorConstraint(id)) if id == IndicatorConstraintID::from(1)
+                ));
             }
             _ => panic!("Expected Some(Promote)"),
         }
@@ -419,8 +422,8 @@ mod tests {
         let (transformed, additional) = ic.propagate(&state, ATol::default()).unwrap();
         assert!(additional.entries.is_empty());
         match transformed {
-            Some(IndicatorPropagateOutput::Promote(constraint)) => {
-                let ids = constraint.stage.function.required_ids();
+            Some(IndicatorPropagateOutput::Promote { function, .. }) => {
+                let ids = function.required_ids();
                 assert!(!ids.contains(&VariableID::from(1))); // substituted
                 assert!(ids.contains(&VariableID::from(2))); // still free
             }

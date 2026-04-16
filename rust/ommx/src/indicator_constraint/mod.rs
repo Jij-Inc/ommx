@@ -43,6 +43,12 @@ impl IndicatorConstraintID {
     }
 }
 
+impl From<IndicatorConstraintID> for u64 {
+    fn from(id: IndicatorConstraintID) -> Self {
+        id.0
+    }
+}
+
 /// An indicator constraint: `indicator_variable = 1 → f(x) <= 0` (or `= 0`).
 ///
 /// When the binary indicator variable is 0, the constraint is unconditionally satisfied.
@@ -172,8 +178,15 @@ impl ConstraintType for IndicatorConstraint {
 /// The "active/in-place" case is represented by `None` at the `Propagate` level.
 #[derive(Debug, Clone)]
 pub enum IndicatorPropagateOutput {
-    /// Indicator = 1; inner constraint promoted to a regular `Constraint`.
-    Promote(crate::Constraint<Created>),
+    /// Indicator = 1; inner constraint should be promoted to a regular `Constraint`.
+    ///
+    /// Contains the components needed to build the promoted constraint.
+    /// The caller (Instance) is responsible for assigning a unique `ConstraintID`.
+    Promote {
+        equality: Equality,
+        function: Function,
+        metadata: ConstraintMetadata,
+    },
     /// Indicator = 0; constraint vacuously satisfied, removed.
     Removed,
 }

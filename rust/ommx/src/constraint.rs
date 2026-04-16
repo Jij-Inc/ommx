@@ -62,6 +62,12 @@ impl ConstraintID {
     }
 }
 
+impl From<ConstraintID> for u64 {
+    fn from(id: ConstraintID) -> Self {
+        id.0
+    }
+}
+
 /// Tracks the origin of a constraint that was created by transforming another constraint type.
 ///
 /// For example, when an indicator constraint with indicator=1 is propagated,

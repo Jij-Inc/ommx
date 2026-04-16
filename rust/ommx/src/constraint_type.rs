@@ -40,7 +40,7 @@ use std::collections::BTreeMap;
 /// to define all stage types for regular constraints.
 pub trait ConstraintType {
     /// The ID type for this constraint family.
-    type ID: Clone + Copy + Ord + std::hash::Hash + std::fmt::Debug;
+    type ID: Clone + Copy + Ord + std::hash::Hash + std::fmt::Debug + From<u64> + Into<u64>;
     /// The constraint as defined in the problem.
     type Created: Evaluate<Output = Self::Evaluated, SampledOutput = Self::Sampled>
         + Clone
@@ -184,6 +184,25 @@ impl<T: ConstraintType> ConstraintCollection<T> {
     /// Mutable access to removed constraints.
     pub fn removed_mut(&mut self) -> &mut BTreeMap<T::ID, (T::Created, RemovedReason)> {
         &mut self.removed
+    }
+
+    /// Return an ID that is not used by any active or removed constraint in this collection.
+    pub fn unused_id(&self) -> T::ID {
+        let max_active: u64 = self
+            .active
+            .keys()
+            .last()
+            .copied()
+            .map(Into::into)
+            .unwrap_or(0);
+        let max_removed: u64 = self
+            .removed
+            .keys()
+            .last()
+            .copied()
+            .map(Into::into)
+            .unwrap_or(0);
+        T::ID::from(max_active.max(max_removed) + 1)
     }
 
     /// Consume the collection and return the active and removed maps.

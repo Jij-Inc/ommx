@@ -43,6 +43,12 @@ impl Sos1ConstraintID {
     }
 }
 
+impl From<Sos1ConstraintID> for u64 {
+    fn from(id: Sos1ConstraintID) -> Self {
+        id.0
+    }
+}
+
 /// A SOS1 (Special Ordered Set type 1) constraint: at most one variable can be non-zero.
 ///
 /// This is a structural constraint — no explicit function or equality is stored.

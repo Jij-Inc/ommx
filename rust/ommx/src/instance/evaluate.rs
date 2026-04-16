@@ -240,19 +240,18 @@ impl Instance {
                             .active_mut()
                             .insert(id, ic);
                     }
-                    Some(IndicatorPropagateOutput::Promote(constraint)) => {
-                        // Validate no ConstraintID collision
-                        let cid = constraint.id;
-                        if self.constraint_collection.active().contains_key(&cid)
-                            || self.constraint_collection.removed().contains_key(&cid)
-                        {
-                            anyhow::bail!(
-                                "Cannot promote indicator constraint {:?}: \
-                                 ConstraintID {:?} already exists in constraint collection",
-                                id,
-                                cid
-                            );
-                        }
+                    Some(IndicatorPropagateOutput::Promote {
+                        equality,
+                        function,
+                        metadata,
+                    }) => {
+                        let cid = self.constraint_collection.unused_id();
+                        let constraint = crate::Constraint {
+                            id: cid,
+                            equality,
+                            metadata,
+                            stage: crate::CreatedData { function },
+                        };
                         self.constraint_collection
                             .active_mut()
                             .insert(cid, constraint);
@@ -624,11 +623,8 @@ mod tests {
         assert!(instance.indicator_constraint_collection.active().is_empty());
         assert_eq!(instance.indicator_constraint_collection.removed().len(), 1);
 
-        // A new regular constraint should be added with ConstraintID(100)
-        assert!(instance
-            .constraint_collection
-            .active()
-            .contains_key(&ConstraintID::from(100)));
+        // A new regular constraint should be added
+        assert_eq!(instance.constraint_collection.active().len(), 1);
     }
 
     #[test]
