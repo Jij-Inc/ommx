@@ -8459,6 +8459,50 @@
               "deprecated": null
             },
             {
+              "name": "relax_indicator_constraint",
+              "doc": "Relax an indicator constraint by moving it from active to removed.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "constraint_id",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "reason",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "parameters",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "required_ids",
               "doc": "Get the set of decision variable IDs used in the objective and remaining constraints.\n\n# Examples\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.required_ids()\n{0, 1, 2}\n```",
               "signatures": [
@@ -8483,6 +8527,32 @@
             {
               "name": "restore_constraint",
               "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "constraint_id",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "restore_indicator_constraint",
+              "doc": "Restore a removed indicator constraint back to active.",
               "signatures": [
                 {
                   "parameters": [
@@ -16796,6 +16866,28 @@
               "is_readonly": true
             },
             {
+              "name": "indicator_constraints_df",
+              "doc": "DataFrame of indicator constraints with per-sample value, feasibility, and indicator_active columns.\nStatic columns: id, indicator_variable_id, equality, used_ids, name, subscripts, description.\nDynamic columns: value.{sample_id}, feasible.{sample_id}, indicator_active.{sample_id} for each sample.",
+              "type_": {
+                "display": "DataFrame",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "indicator_removed_reasons_df",
+              "doc": "DataFrame of removed indicator constraint reasons.\n\nColumns: id (index), removed_reason, removed_reason.{key}\n\nCan be joined with {attr}`indicator_constraints_df` using the `id` index.",
+              "type_": {
+                "display": "DataFrame",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "instance",
               "doc": "",
               "type_": {
@@ -18651,6 +18743,28 @@
               "doc": "Feasibility of the solution in terms of all constraints, including relaxed (removed) constraints.",
               "type_": {
                 "display": "bool",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "indicator_constraints_df",
+              "doc": "DataFrame of evaluated indicator constraints\n\nColumns: id (index), indicator_variable_id, equality, value, indicator_active, used_ids, name, subscripts, description",
+              "type_": {
+                "display": "DataFrame",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "indicator_removed_reasons_df",
+              "doc": "DataFrame of removed indicator constraint reasons.\n\nColumns: id (index), removed_reason, removed_reason.{key}\n\nCan be joined with {attr}`indicator_constraints_df` using the `id` index.",
+              "type_": {
+                "display": "DataFrame",
                 "link_target": null,
                 "children": []
               },

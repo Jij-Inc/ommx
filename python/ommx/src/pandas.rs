@@ -300,6 +300,57 @@ impl ToPandasEntry for ommx::IndicatorConstraint {
     }
 }
 
+impl ToPandasEntry for ommx::EvaluatedIndicatorConstraint {
+    fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let dict = PyDict::new(py);
+        dict.set_item("id", self.id.into_inner())?;
+        dict.set_item(
+            "indicator_variable_id",
+            self.indicator_variable.into_inner(),
+        )?;
+        set_equality(&dict, self.equality)?;
+        dict.set_item("value", self.stage.evaluated_value)?;
+        dict.set_item("indicator_active", self.stage.indicator_active)?;
+        set_used_ids(&dict, &self.stage.used_decision_variable_ids)?;
+        set_metadata(
+            &dict,
+            self.metadata.name.as_deref(),
+            &self.metadata.subscripts,
+            self.metadata.description.as_deref(),
+        )?;
+        Ok(dict)
+    }
+}
+
+impl<'a> ToPandasEntry for WithSampleIds<'a, ommx::SampledIndicatorConstraint> {
+    fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let ic = self.item;
+        let dict = PyDict::new(py);
+        dict.set_item("id", ic.id.into_inner())?;
+        dict.set_item("indicator_variable_id", ic.indicator_variable.into_inner())?;
+        set_equality(&dict, ic.equality)?;
+        set_used_ids(&dict, &ic.stage.used_decision_variable_ids)?;
+        set_metadata(
+            &dict,
+            ic.metadata.name.as_deref(),
+            &ic.metadata.subscripts,
+            ic.metadata.description.as_deref(),
+        )?;
+        for &sample_id in self.sample_ids {
+            let value = ic.stage.evaluated_values.get(sample_id).ok().copied();
+            dict.set_item(format!("value.{}", sample_id.into_inner()), value)?;
+            let feas = ic.stage.feasible.get(&sample_id).copied();
+            dict.set_item(format!("feasible.{}", sample_id.into_inner()), feas)?;
+            let active = ic.stage.indicator_active.get(&sample_id).copied();
+            dict.set_item(
+                format!("indicator_active.{}", sample_id.into_inner()),
+                active,
+            )?;
+        }
+        Ok(dict)
+    }
+}
+
 impl ToPandasEntry for (ommx::Constraint, ommx::RemovedReason) {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let (constraint, reason) = self;

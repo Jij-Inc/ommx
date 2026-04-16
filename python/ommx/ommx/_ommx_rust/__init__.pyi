@@ -1981,6 +1981,16 @@ class Instance:
         ```
         """
     def restore_constraint(self, constraint_id: builtins.int) -> None: ...
+    def relax_indicator_constraint(
+        self, constraint_id: builtins.int, reason: builtins.str, **parameters: str
+    ) -> None:
+        r"""
+        Relax an indicator constraint by moving it from active to removed.
+        """
+    def restore_indicator_constraint(self, constraint_id: builtins.int) -> None:
+        r"""
+        Restore a removed indicator constraint back to active.
+        """
     def log_encode(
         self, decision_variable_ids: builtins.set[builtins.int] = set()
     ) -> None:
@@ -3561,6 +3571,22 @@ class SampleSet:
         Can be joined with {attr}`constraints_df` using the `id` index.
         """
     @property
+    def indicator_constraints_df(self) -> pandas.DataFrame:
+        r"""
+        DataFrame of indicator constraints with per-sample value, feasibility, and indicator_active columns.
+        Static columns: id, indicator_variable_id, equality, used_ids, name, subscripts, description.
+        Dynamic columns: value.{sample_id}, feasible.{sample_id}, indicator_active.{sample_id} for each sample.
+        """
+    @property
+    def indicator_removed_reasons_df(self) -> pandas.DataFrame:
+        r"""
+        DataFrame of removed indicator constraint reasons.
+
+        Columns: id (index), removed_reason, removed_reason.{key}
+
+        Can be joined with {attr}`indicator_constraints_df` using the `id` index.
+        """
+    @property
     def named_functions_df(self) -> pandas.DataFrame:
         r"""
         DataFrame of named functions with per-sample value columns.
@@ -4064,6 +4090,22 @@ class Solution:
         10    0.0   test_reason
         20    0.0           NaN
         ```
+        """
+    @property
+    def indicator_constraints_df(self) -> pandas.DataFrame:
+        r"""
+        DataFrame of evaluated indicator constraints
+
+        Columns: id (index), indicator_variable_id, equality, value, indicator_active, used_ids, name, subscripts, description
+        """
+    @property
+    def indicator_removed_reasons_df(self) -> pandas.DataFrame:
+        r"""
+        DataFrame of removed indicator constraint reasons.
+
+        Columns: id (index), removed_reason, removed_reason.{key}
+
+        Can be joined with {attr}`indicator_constraints_df` using the `id` index.
         """
     @property
     def named_functions_df(self) -> pandas.DataFrame:

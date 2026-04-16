@@ -111,7 +111,11 @@ impl SampledConstraintBehavior for SampledConstraint {
             .as_ref()
             .and_then(|duals| duals.get(sample_id).ok())
             .copied();
-        let feasible = *self.stage.feasible.get(&sample_id).unwrap_or(&false);
+        let feasible = *self
+            .stage
+            .feasible
+            .get(&sample_id)
+            .ok_or(crate::sampled::UnknownSampleIDError { id: sample_id })?;
 
         Ok(crate::Constraint {
             id: self.id,
@@ -191,6 +195,26 @@ impl<T: ConstraintType> ConstraintCollection<T> {
         BTreeMap<T::ID, (T::Created, RemovedReason)>,
     ) {
         (self.active, self.removed)
+    }
+
+    /// Move an active constraint to the removed set with a reason.
+    pub fn relax(&mut self, id: T::ID, removed_reason: RemovedReason) -> Result<(), anyhow::Error> {
+        let c = self
+            .active
+            .remove(&id)
+            .ok_or_else(|| anyhow::anyhow!("Constraint with ID {:?} not found", id))?;
+        self.removed.insert(id, (c, removed_reason));
+        Ok(())
+    }
+
+    /// Move a removed constraint back to the active set.
+    pub fn restore(&mut self, id: T::ID) -> Result<(), anyhow::Error> {
+        let (constraint, _reason) = self
+            .removed
+            .remove(&id)
+            .ok_or_else(|| anyhow::anyhow!("Removed constraint with ID {:?} not found", id))?;
+        self.active.insert(id, constraint);
+        Ok(())
     }
 
     /// Collect required variable IDs from all active constraints.
