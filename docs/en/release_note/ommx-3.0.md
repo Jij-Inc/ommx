@@ -10,25 +10,28 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 {class}`~ommx.v1.IndicatorConstraint` is now a first-class feature in OMMX. An indicator constraint expresses a conditional relationship: a constraint `f(x) <= 0` (or `f(x) = 0`) is enforced only when a user-defined binary indicator variable `z = 1`. When `z = 0`, the constraint is unconditionally satisfied.
 
-#### Creating Indicator Constraints
-
-Use {meth}`Constraint.with_indicator() <ommx.v1.Constraint.with_indicator>` to create an {class}`~ommx.v1.IndicatorConstraint` from an existing constraint:
+Use {meth}`Constraint.with_indicator() <ommx.v1.Constraint.with_indicator>` to create an {class}`~ommx.v1.IndicatorConstraint` from an existing constraint. The PySCIPOpt Adapter supports solving instances with indicator constraints:
 
 ```python
-from ommx.v1 import DecisionVariable, Sense, Instance
+from ommx.v1 import DecisionVariable, Instance
+from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
-z = DecisionVariable.binary(0)
+b = DecisionVariable.binary(0)
 x = DecisionVariable.continuous(1, lower=0, upper=10)
 
-# z = 1 → x <= 5
-ic = (x <= 5).with_indicator(z)
+# b = 1 → x <= 5
+ic = (x <= 5).with_indicator(b)
 
 instance = Instance.from_components(
-    decision_variables=[z, x],
-    indicator_constraints=[ic],
+    decision_variables=[b, x],
     objective=x,
-    sense=Sense.Minimize,
+    constraints=[b >= 1],  # Force b = 1
+    indicator_constraints=[ic],
+    sense=Instance.MAXIMIZE,
 )
+
+solution = OMMXPySCIPOptAdapter.solve(instance)
+assert abs(solution.objective - 5.0) < 1e-6
 ```
 
 #### Evaluation results
