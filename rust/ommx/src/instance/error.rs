@@ -96,4 +96,25 @@ pub enum InstanceError {
         "Indicator constraint ID {id:?} is in both indicator_constraints and removed_indicator_constraints, but they must be disjoint"
     )]
     OverlappingIndicatorConstraintID { id: crate::IndicatorConstraintID },
+
+    #[error("One-hot variable {id:?} must be binary")]
+    OneHotVariableNotBinary { id: VariableID },
+
+    #[error("One-hot variable {id:?} is not defined in decision_variables")]
+    UndefinedOneHotVariable { id: VariableID },
+
+    #[error("SOS1 variable {id:?} is not defined in decision_variables")]
+    UndefinedSos1Variable { id: VariableID },
+
+    #[error("One-hot constraint map key {key:?} does not match value's id {value_id:?}")]
+    InconsistentOneHotConstraintID {
+        key: crate::OneHotConstraintID,
+        value_id: crate::OneHotConstraintID,
+    },
+
+    #[error("SOS1 constraint map key {key:?} does not match value's id {value_id:?}")]
+    InconsistentSos1ConstraintID {
+        key: crate::Sos1ConstraintID,
+        value_id: crate::Sos1ConstraintID,
+    },
 }

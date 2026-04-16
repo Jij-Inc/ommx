@@ -294,6 +294,27 @@ impl InstanceBuilder {
             }
         }
 
+        // Validate one-hot constraints from constraint_hints
+        // (one_hot_active is built below from constraint_hints, but we validate the hints here)
+        for hint in &self.constraint_hints.one_hot_constraints {
+            for var_id in &hint.variables {
+                let Some(dv) = decision_variables.get(var_id) else {
+                    return Err(InstanceError::UndefinedOneHotVariable { id: *var_id }.into());
+                };
+                if dv.kind() != crate::decision_variable::Kind::Binary {
+                    return Err(InstanceError::OneHotVariableNotBinary { id: *var_id }.into());
+                }
+            }
+        }
+        // Validate SOS1 constraints from constraint_hints
+        for hint in &self.constraint_hints.sos1_constraints {
+            for var_id in &hint.variables {
+                if !variable_ids.contains(var_id) {
+                    return Err(InstanceError::UndefinedSos1Variable { id: *var_id }.into());
+                }
+            }
+        }
+
         // Validate that constraints and removed_constraints keys are disjoint
         for id in self.removed_constraints.keys() {
             if constraints.contains_key(id) {
@@ -320,6 +341,12 @@ impl InstanceBuilder {
         }
         for ic in self.indicator_constraints.values() {
             used.extend(ic.required_ids());
+        }
+        for hint in &self.constraint_hints.one_hot_constraints {
+            used.extend(hint.variables.iter().copied());
+        }
+        for hint in &self.constraint_hints.sos1_constraints {
+            used.extend(hint.variables.iter().copied());
         }
         let fixed: VariableIDSet = decision_variables
             .values()
