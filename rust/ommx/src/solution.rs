@@ -89,6 +89,18 @@ pub enum SolutionError {
         value_id: crate::IndicatorConstraintID,
     },
 
+    #[error("One-hot constraint map key {key:?} does not match value's id {value_id:?}")]
+    InconsistentOneHotConstraintID {
+        key: crate::OneHotConstraintID,
+        value_id: crate::OneHotConstraintID,
+    },
+
+    #[error("SOS1 constraint map key {key:?} does not match value's id {value_id:?}")]
+    InconsistentSos1ConstraintID {
+        key: crate::Sos1ConstraintID,
+        value_id: crate::Sos1ConstraintID,
+    },
+
     #[error(
         "Variable ID {id:?} used in constraint {constraint_id:?} is not in decision_variables"
     )]
@@ -747,6 +759,28 @@ impl SolutionBuilder {
             }
         }
 
+        // Validate one-hot constraint keys match their id
+        for (key, value) in self.evaluated_one_hot_constraints.iter() {
+            if *key != value.id {
+                return Err(SolutionError::InconsistentOneHotConstraintID {
+                    key: *key,
+                    value_id: value.id,
+                }
+                .into());
+            }
+        }
+
+        // Validate SOS1 constraint keys match their id
+        for (key, value) in self.evaluated_sos1_constraints.iter() {
+            if *key != value.id {
+                return Err(SolutionError::InconsistentSos1ConstraintID {
+                    key: *key,
+                    value_id: value.id,
+                }
+                .into());
+            }
+        }
+
         // Validate all used_decision_variable_ids in indicator constraints
         for ic in self.evaluated_indicator_constraints.values() {
             for var_id in &ic.stage.used_decision_variable_ids {
@@ -755,6 +789,32 @@ impl SolutionBuilder {
                         "Variable {:?} used in indicator constraint {:?} is not defined in decision_variables",
                         var_id,
                         ic.id
+                    ));
+                }
+            }
+        }
+
+        // Validate all used_decision_variable_ids in one-hot constraints
+        for oh in self.evaluated_one_hot_constraints.values() {
+            for var_id in &oh.stage.used_decision_variable_ids {
+                if !decision_variables.contains_key(var_id) {
+                    return Err(anyhow::anyhow!(
+                        "Variable {:?} used in one-hot constraint {:?} is not defined in decision_variables",
+                        var_id,
+                        oh.id
+                    ));
+                }
+            }
+        }
+
+        // Validate all used_decision_variable_ids in SOS1 constraints
+        for s1 in self.evaluated_sos1_constraints.values() {
+            for var_id in &s1.stage.used_decision_variable_ids {
+                if !decision_variables.contains_key(var_id) {
+                    return Err(anyhow::anyhow!(
+                        "Variable {:?} used in SOS1 constraint {:?} is not defined in decision_variables",
+                        var_id,
+                        s1.id
                     ));
                 }
             }
