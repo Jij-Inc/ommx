@@ -7,45 +7,6 @@ use crate::{
     Constraint, InstanceError, VariableID,
 };
 
-/// Reconstruct `v1::ConstraintHints` from first-class OneHot/SOS1 constraint collections
-/// for backward-compatible proto serialization.
-///
-/// Note: the proto `constraint_id` / `binary_constraint_id` fields are set to
-/// the OneHot/SOS1 constraint's own ID. The `big_m_constraint_ids` field is empty
-/// since that information is not preserved after conversion.
-fn collections_to_v1_hints(
-    one_hot_collection: ConstraintCollection<crate::OneHotConstraint>,
-    sos1_collection: ConstraintCollection<crate::Sos1Constraint>,
-) -> Option<v1::ConstraintHints> {
-    let one_hot_constraints: Vec<v1::OneHot> = one_hot_collection
-        .into_parts()
-        .0
-        .into_values()
-        .map(|oh| v1::OneHot {
-            constraint_id: oh.id.into_inner(),
-            decision_variables: oh.variables.iter().map(|v| v.into_inner()).collect(),
-        })
-        .collect();
-    let sos1_constraints: Vec<v1::Sos1> = sos1_collection
-        .into_parts()
-        .0
-        .into_values()
-        .map(|s| v1::Sos1 {
-            binary_constraint_id: s.id.into_inner(),
-            big_m_constraint_ids: Vec::new(),
-            decision_variables: s.variables.iter().map(|v| v.into_inner()).collect(),
-        })
-        .collect();
-    if one_hot_constraints.is_empty() && sos1_constraints.is_empty() {
-        None
-    } else {
-        Some(v1::ConstraintHints {
-            one_hot_constraints,
-            sos1_constraints,
-        })
-    }
-}
-
 /// Convert parsed `ConstraintHints` to first-class OneHot/SOS1 constraint collections,
 /// and return the set of regular constraint IDs that should be removed from the
 /// constraint collection (they are subsumed by the new first-class constraints).
@@ -280,10 +241,23 @@ impl From<Instance> for v1::Instance {
             .into_iter()
             .map(|(id, dep)| (id.into(), dep.into()))
             .collect();
-        let constraint_hints = collections_to_v1_hints(
-            value.one_hot_constraint_collection,
-            value.sos1_constraint_collection,
-        );
+        // Special constraint types do not have a v1 proto representation yet.
+        // Serialization is not supported when these collections are non-empty.
+        if !value.indicator_constraint_collection.active().is_empty()
+            || !value.indicator_constraint_collection.removed().is_empty()
+        {
+            unimplemented!("Serialization of IndicatorConstraint to v1 proto is not yet supported");
+        }
+        if !value.one_hot_constraint_collection.active().is_empty()
+            || !value.one_hot_constraint_collection.removed().is_empty()
+        {
+            unimplemented!("Serialization of OneHotConstraint to v1 proto is not yet supported");
+        }
+        if !value.sos1_constraint_collection.active().is_empty()
+            || !value.sos1_constraint_collection.removed().is_empty()
+        {
+            unimplemented!("Serialization of Sos1Constraint to v1 proto is not yet supported");
+        }
         Self {
             sense: v1::instance::Sense::from(value.sense).into(),
             decision_variables,
@@ -294,7 +268,7 @@ impl From<Instance> for v1::Instance {
             decision_variable_dependency,
             parameters: value.parameters,
             description: value.description,
-            constraint_hints,
+            constraint_hints: None,
         }
     }
 }
@@ -438,7 +412,7 @@ impl From<ParametricInstance> for v1::ParametricInstance {
             decision_variables,
             parameters,
             constraint_collection,
-            indicator_constraint_collection: _, // Not serialized to v1 yet
+            indicator_constraint_collection,
             one_hot_constraint_collection,
             sos1_constraint_collection,
             decision_variable_dependency,
@@ -446,9 +420,23 @@ impl From<ParametricInstance> for v1::ParametricInstance {
             named_functions,
         }: ParametricInstance,
     ) -> Self {
+        // Special constraint types do not have a v1 proto representation yet.
+        if !indicator_constraint_collection.active().is_empty()
+            || !indicator_constraint_collection.removed().is_empty()
+        {
+            unimplemented!("Serialization of IndicatorConstraint to v1 proto is not yet supported");
+        }
+        if !one_hot_constraint_collection.active().is_empty()
+            || !one_hot_constraint_collection.removed().is_empty()
+        {
+            unimplemented!("Serialization of OneHotConstraint to v1 proto is not yet supported");
+        }
+        if !sos1_constraint_collection.active().is_empty()
+            || !sos1_constraint_collection.removed().is_empty()
+        {
+            unimplemented!("Serialization of Sos1Constraint to v1 proto is not yet supported");
+        }
         let (constraints, removed_constraints) = constraint_collection.into_parts();
-        let constraint_hints =
-            collections_to_v1_hints(one_hot_constraint_collection, sos1_constraint_collection);
         Self {
             description,
             sense: v1::instance::Sense::from(sense) as i32,
@@ -468,7 +456,7 @@ impl From<ParametricInstance> for v1::ParametricInstance {
                 .into_iter()
                 .map(|(id, dep)| (id.into(), dep.into()))
                 .collect(),
-            constraint_hints,
+            constraint_hints: None,
         }
     }
 }

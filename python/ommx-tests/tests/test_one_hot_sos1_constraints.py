@@ -98,40 +98,21 @@ def test_one_hot_variable_not_binary():
         )
 
 
-def test_serialize_deserialize_roundtrip():
-    """Test that OneHot/SOS1 constraints survive serialization roundtrip via proto.
-
-    Proto format stores OneHot/SOS1 as ConstraintHints with constraint_id
-    referencing regular constraints. So the OneHotConstraintID / Sos1ConstraintID
-    must match an existing regular constraint ID for the roundtrip to work.
-    """
+def test_serialize_not_yet_supported():
+    """Serialization of OneHot/SOS1 constraints to v1 proto is not yet supported."""
     x = [DecisionVariable.binary(i) for i in range(1, 4)]
     objective = sum(x)
 
-    # Create regular constraints that the proto constraint_hints will reference
-    constraint_oh = (x[0] + x[1] + x[2] == 1).set_id(10)
-    constraint_sos1 = (x[0] + x[1] + x[2] <= 1).set_id(20)
-
-    # Use IDs matching the regular constraints
     instance = Instance.from_components(
         decision_variables=x,
         objective=objective,
-        constraints=[constraint_oh, constraint_sos1],
+        constraints=[],
         one_hot_constraints=[OneHotConstraint(variables=[1, 2, 3], id=10)],
-        sos1_constraints=[Sos1Constraint(variables=[1, 2, 3], id=20)],
         sense=Instance.MINIMIZE,
     )
 
-    # Roundtrip through bytes
-    instance_bytes = instance.to_bytes()
-    parsed = Instance.from_bytes(instance_bytes)
-
-    # OneHot and SOS1 should be preserved (via constraint_hints in proto)
-    assert len(parsed.one_hot_constraints) == 1
-    assert parsed.one_hot_constraints[0].variables == [1, 2, 3]
-
-    assert len(parsed.sos1_constraints) == 1
-    assert parsed.sos1_constraints[0].variables == [1, 2, 3]
+    with pytest.raises(BaseException):
+        instance.to_bytes()
 
 
 def test_both_one_hot_and_sos1():
