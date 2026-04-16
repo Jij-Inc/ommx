@@ -42,6 +42,28 @@ impl Sos1Constraint {
         self.0.variables.iter().map(|v| v.into_inner()).collect()
     }
 
+    /// The binary constraint ID that this SOS1 was derived from (if any).
+    ///
+    /// This is set when the SOS1 constraint was converted from a ConstraintHints entry.
+    /// Used by adapters to exclude the corresponding regular constraint.
+    #[getter]
+    pub fn binary_constraint_id(&self) -> Option<u64> {
+        self.0.stage.binary_constraint_id.map(|id| id.into_inner())
+    }
+
+    /// The big-M constraint IDs associated with this SOS1 (if any).
+    ///
+    /// Used by adapters to exclude the corresponding regular constraints.
+    #[getter]
+    pub fn big_m_constraint_ids(&self) -> Vec<u64> {
+        self.0
+            .stage
+            .big_m_constraint_ids
+            .iter()
+            .map(|id| id.into_inner())
+            .collect()
+    }
+
     /// Set the constraint ID. Returns a new Sos1Constraint.
     pub fn set_id(&self, id: u64) -> Self {
         let mut c = self.clone();
