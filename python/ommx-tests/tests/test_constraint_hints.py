@@ -46,7 +46,7 @@ def test_constraint_hints_variable_id_validation():
     )
 
     # This should fail with validation error
-    with pytest.raises(RuntimeError, match="Undefined variable ID is used"):
+    with pytest.raises(RuntimeError, match="One-hot variable.*not defined"):
         _ommx_rust.Instance.from_components(
             sense=_ommx_rust.Sense.Minimize,
             objective=objective,
@@ -115,7 +115,7 @@ def test_sos1_variable_id_validation():
     )
 
     # This should fail with validation error
-    with pytest.raises(RuntimeError, match="Undefined variable ID is used"):
+    with pytest.raises(RuntimeError, match="SOS1 variable.*not defined"):
         _ommx_rust.Instance.from_components(
             sense=_ommx_rust.Sense.Minimize,
             objective=objective,

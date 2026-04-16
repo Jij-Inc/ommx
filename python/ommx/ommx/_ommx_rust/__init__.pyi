@@ -34,6 +34,7 @@ __all__ = [
     "Linear",
     "NamedFunction",
     "OneHot",
+    "OneHotConstraint",
     "Optimality",
     "Parameter",
     "Parameters",
@@ -51,6 +52,7 @@ __all__ = [
     "Sense",
     "Solution",
     "Sos1",
+    "Sos1Constraint",
     "State",
     "ToFunction",
     "ToSamples",
@@ -1394,6 +1396,16 @@ class Instance:
         List of all indicator constraints in the instance sorted by their IDs.
         """
     @property
+    def one_hot_constraints(self) -> builtins.list[OneHotConstraint]:
+        r"""
+        List of all one-hot constraints in the instance sorted by their IDs.
+        """
+    @property
+    def sos1_constraints(self) -> builtins.list[Sos1Constraint]:
+        r"""
+        List of all SOS1 constraints in the instance sorted by their IDs.
+        """
+    @property
     def removed_constraints(self) -> builtins.list[RemovedConstraint]:
         r"""
         List of all removed constraints in the instance sorted by their IDs.
@@ -2725,6 +2737,47 @@ class OneHot:
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> OneHot: ...
     def __deepcopy__(self, _memo: typing.Any) -> OneHot: ...
+
+@typing.final
+class OneHotConstraint:
+    r"""
+    A one-hot constraint: exactly one variable must be 1, the rest must be 0.
+
+    This is a structural constraint — no explicit function is stored.
+    The implicit constraint is `sum(x_i) = 1` where all `x_i` are binary.
+    """
+    @property
+    def id(self) -> builtins.int: ...
+    @property
+    def variables(self) -> builtins.list[builtins.int]: ...
+    @property
+    def constraint_id(self) -> typing.Optional[builtins.int]:
+        r"""
+        The regular constraint ID that this one-hot was derived from (if any).
+
+        This is set when the one-hot constraint was converted from a ConstraintHints entry.
+        """
+    def __new__(
+        cls,
+        *,
+        variables: typing.Sequence[builtins.int],
+        id: typing.Optional[builtins.int] = None,
+    ) -> OneHotConstraint:
+        r"""
+        Create a new one-hot constraint.
+
+        **Args:**
+
+        - `variables`: List of binary decision variable IDs (exactly one must be 1)
+        - `id`: Optional constraint ID (auto-generated if not provided)
+        """
+    def set_id(self, id: builtins.int) -> OneHotConstraint:
+        r"""
+        Set the constraint ID. Returns a new OneHotConstraint.
+        """
+    def __repr__(self) -> builtins.str: ...
+    def __copy__(self) -> OneHotConstraint: ...
+    def __deepcopy__(self, _memo: typing.Any) -> OneHotConstraint: ...
 
 @typing.final
 class Parameter:
@@ -4298,6 +4351,55 @@ class Sos1:
     def __deepcopy__(self, _memo: typing.Any) -> Sos1: ...
 
 @typing.final
+class Sos1Constraint:
+    r"""
+    A SOS1 (Special Ordered Set type 1) constraint: at most one variable can be non-zero.
+
+    This is a structural constraint — no explicit function is stored.
+    Unlike OneHotConstraint, SOS1 allows all variables to be zero.
+    """
+    @property
+    def id(self) -> builtins.int: ...
+    @property
+    def variables(self) -> builtins.list[builtins.int]: ...
+    @property
+    def binary_constraint_id(self) -> typing.Optional[builtins.int]:
+        r"""
+        The binary constraint ID that this SOS1 was derived from (if any).
+
+        This is set when the SOS1 constraint was converted from a ConstraintHints entry.
+        Used by adapters to exclude the corresponding regular constraint.
+        """
+    @property
+    def big_m_constraint_ids(self) -> builtins.list[builtins.int]:
+        r"""
+        The big-M constraint IDs associated with this SOS1 (if any).
+
+        Used by adapters to exclude the corresponding regular constraints.
+        """
+    def __new__(
+        cls,
+        *,
+        variables: typing.Sequence[builtins.int],
+        id: typing.Optional[builtins.int] = None,
+    ) -> Sos1Constraint:
+        r"""
+        Create a new SOS1 constraint.
+
+        **Args:**
+
+        - `variables`: List of decision variable IDs (at most one can be non-zero)
+        - `id`: Optional constraint ID (auto-generated if not provided)
+        """
+    def set_id(self, id: builtins.int) -> Sos1Constraint:
+        r"""
+        Set the constraint ID. Returns a new Sos1Constraint.
+        """
+    def __repr__(self) -> builtins.str: ...
+    def __copy__(self) -> Sos1Constraint: ...
+    def __deepcopy__(self, _memo: typing.Any) -> Sos1Constraint: ...
+
+@typing.final
 class State:
     r"""
     State wrapper for Python
@@ -4335,6 +4437,14 @@ class AdditionalCapability(enum.Enum):
     Indicator = ...
     r"""
     Indicator constraints: binvar = 1 → f(x) <= 0
+    """
+    OneHot = ...
+    r"""
+    One-hot constraints: exactly one of a set of binary variables must be 1
+    """
+    Sos1 = ...
+    r"""
+    SOS1 constraints: at most one of a set of variables can be non-zero
     """
 
 @typing.final

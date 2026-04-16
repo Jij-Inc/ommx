@@ -29,7 +29,10 @@ HintMode = Literal["disabled", "auto", "forced"]
 
 
 class OMMXPySCIPOptAdapter(SolverAdapter):
-    ADDITIONAL_CAPABILITIES = frozenset({AdditionalCapability.Indicator})
+    ADDITIONAL_CAPABILITIES = frozenset({
+        AdditionalCapability.Indicator,
+        AdditionalCapability.Sos1,
+    })
     use_sos1: HintMode
 
     def __init__(
