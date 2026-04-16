@@ -25,23 +25,31 @@ pub trait Evaluate {
 
 /// Unit propagation trait for constraint types.
 ///
-/// Consumes `self` and returns the propagated result together with any
-/// additional variable fixings discovered during propagation.
+/// Mutates `self` in-place and returns the propagation result together with
+/// any additional variable fixings discovered during propagation.
 ///
-/// The associated `Output` type varies per constraint:
-/// - `Self` for types that never change shape (e.g. regular `Constraint`)
-/// - `Option<Self>` for types that can be consumed (OneHot, SOS1)
-/// - A custom enum for types that can transform into a different constraint
-///   (e.g. `IndicatorConstraint` → `Constraint`)
+/// The associated `Transformed` type represents what the constraint becomes
+/// when it undergoes a type change (e.g. `IndicatorConstraint` → `Constraint`).
+/// When no type change occurs, `Transformed` is `()`.
+///
+/// Return value semantics:
+/// - `(None, state)` — constraint was modified in-place; it stays active.
+/// - `(Some(transformed), state)` — constraint was transformed into another type.
+///   The caller moves `self` to the removed set and handles the transformed value.
 pub trait Propagate {
-    type Output;
+    type Transformed;
 
     /// Propagate variable fixings from `state` through this constraint.
     ///
-    /// Returns `(output, additional_fixings)` where:
-    /// - `output` is the constraint after propagation (may be consumed or transformed)
-    /// - `additional_fixings` contains newly discovered variable values
-    fn propagate(self, state: &State, atol: crate::ATol) -> Result<(Self::Output, State)>;
+    /// Returns `(transformed, additional_fixings)` where:
+    /// - `transformed` is `None` if the constraint was only modified in-place,
+    ///   or `Some(T)` if the constraint was consumed/transformed.
+    /// - `additional_fixings` contains newly discovered variable values.
+    fn propagate(
+        &mut self,
+        state: &State,
+        atol: crate::ATol,
+    ) -> Result<(Option<Self::Transformed>, State)>;
 }
 
 #[cfg(test)]

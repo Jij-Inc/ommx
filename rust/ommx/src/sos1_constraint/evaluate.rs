@@ -2,13 +2,13 @@ use super::*;
 use crate::{ATol, Evaluate, Propagate, VariableIDSet};
 
 impl Propagate for Sos1Constraint<Created> {
-    type Output = Option<Self>;
+    type Transformed = ();
 
     fn propagate(
-        mut self,
+        &mut self,
         state: &crate::v1::State,
         atol: ATol,
-    ) -> anyhow::Result<(Self::Output, crate::v1::State)> {
+    ) -> anyhow::Result<(Option<()>, crate::v1::State)> {
         let mut fixed_nonzero: Option<VariableID> = None;
         let mut unfixed = BTreeSet::new();
 
@@ -40,14 +40,16 @@ impl Propagate for Sos1Constraint<Created> {
             for var_id in &unfixed {
                 additional.entries.insert(var_id.into_inner(), 0.0);
             }
-            Ok((None, additional))
+            // self not mutated — caller moves it to removed
+            Ok((Some(()), additional))
         } else if unfixed.is_empty() {
             // All variables fixed to 0 → vacuously satisfied for SOS1
-            Ok((None, crate::v1::State::default()))
+            // self not mutated — caller moves it to removed
+            Ok((Some(()), crate::v1::State::default()))
         } else {
-            // Multiple unfixed variables remain, constraint still active
+            // Multiple unfixed variables remain — modify in-place
             self.variables = unfixed;
-            Ok((Some(self), crate::v1::State::default()))
+            Ok((None, crate::v1::State::default()))
         }
     }
 }
@@ -277,42 +279,44 @@ mod tests {
 
     #[test]
     fn test_propagate_nonzero_fixes_rest() {
-        let c = make_sos1(1, &[1, 2, 3]);
-        // x2=5.0 → x1=0, x3=0
+        let mut c = make_sos1(1, &[1, 2, 3]);
+        // x2=5.0 → transformed (consumed), fix x1=0, x3=0
         let state = crate::v1::State::from(HashMap::from([(2, 5.0)]));
-        let (output, additional) = c.propagate(&state, ATol::default()).unwrap();
-        assert!(output.is_none());
+        let (transformed, additional) = c.propagate(&state, ATol::default()).unwrap();
+        assert!(transformed.is_some());
         assert_eq!(additional.entries.get(&1), Some(&0.0));
         assert_eq!(additional.entries.get(&3), Some(&0.0));
         assert_eq!(additional.entries.len(), 2);
+        // Original preserved
+        assert_eq!(c.variables.len(), 3);
     }
 
     #[test]
     fn test_propagate_zero_shrinks() {
-        let c = make_sos1(1, &[1, 2, 3]);
-        // x1=0 → constraint shrinks to {x2, x3}
+        let mut c = make_sos1(1, &[1, 2, 3]);
+        // x1=0 → in-place shrink to {x2, x3}
         let state = crate::v1::State::from(HashMap::from([(1, 0.0)]));
-        let (output, additional) = c.propagate(&state, ATol::default()).unwrap();
-        let shrunk = output.unwrap();
-        assert_eq!(shrunk.variables.len(), 2);
-        assert!(shrunk.variables.contains(&VariableID::from(2)));
-        assert!(shrunk.variables.contains(&VariableID::from(3)));
+        let (transformed, additional) = c.propagate(&state, ATol::default()).unwrap();
+        assert!(transformed.is_none()); // in-place
+        assert_eq!(c.variables.len(), 2);
+        assert!(c.variables.contains(&VariableID::from(2)));
+        assert!(c.variables.contains(&VariableID::from(3)));
         assert!(additional.entries.is_empty());
     }
 
     #[test]
     fn test_propagate_all_zeros_satisfied() {
-        let c = make_sos1(1, &[1, 2, 3]);
-        // All zeros → vacuously satisfied (unlike OneHot)
+        let mut c = make_sos1(1, &[1, 2, 3]);
+        // All zeros → transformed (vacuously satisfied)
         let state = crate::v1::State::from(HashMap::from([(1, 0.0), (2, 0.0), (3, 0.0)]));
-        let (output, additional) = c.propagate(&state, ATol::default()).unwrap();
-        assert!(output.is_none()); // consumed
+        let (transformed, additional) = c.propagate(&state, ATol::default()).unwrap();
+        assert!(transformed.is_some()); // consumed
         assert!(additional.entries.is_empty());
     }
 
     #[test]
     fn test_propagate_multiple_nonzero_error() {
-        let c = make_sos1(1, &[1, 2, 3]);
+        let mut c = make_sos1(1, &[1, 2, 3]);
         let state = crate::v1::State::from(HashMap::from([(1, 1.0), (2, 2.0)]));
         let result = c.propagate(&state, ATol::default());
         assert!(result.is_err());
@@ -320,11 +324,11 @@ mod tests {
 
     #[test]
     fn test_propagate_no_overlap() {
-        let c = make_sos1(1, &[1, 2, 3]);
+        let mut c = make_sos1(1, &[1, 2, 3]);
         let state = crate::v1::State::from(HashMap::from([(99, 5.0)]));
-        let (output, additional) = c.propagate(&state, ATol::default()).unwrap();
-        let same = output.unwrap();
-        assert_eq!(same.variables.len(), 3);
+        let (transformed, additional) = c.propagate(&state, ATol::default()).unwrap();
+        assert!(transformed.is_none()); // in-place
+        assert_eq!(c.variables.len(), 3);
         assert!(additional.entries.is_empty());
     }
 }

@@ -175,74 +175,72 @@ impl Instance {
 
             // --- OneHot constraints ---
             let one_hots = std::mem::take(self.one_hot_constraint_collection.active_mut());
-            for (id, oh) in one_hots {
-                let (output, additional) = oh.propagate(&expanded, atol)?;
+            for (id, mut oh) in one_hots {
+                let (transformed, additional) = oh.propagate(&expanded, atol)?;
                 if !additional.entries.is_empty() {
                     for (var_id, value) in additional.entries {
                         expanded.entries.insert(var_id, value);
                     }
                     changed = true;
                 }
-                match output {
-                    Some(shrunk) => {
+                match transformed {
+                    None => {
+                        // In-place modification — keep active
                         self.one_hot_constraint_collection
                             .active_mut()
-                            .insert(id, shrunk);
+                            .insert(id, oh);
                     }
-                    None => {
-                        // Constraint consumed — create a placeholder for removed set
-                        let placeholder =
-                            crate::OneHotConstraint::new(id, std::collections::BTreeSet::new());
+                    Some(()) => {
+                        // Transformed (consumed) — move original to removed
                         self.one_hot_constraint_collection
                             .removed_mut()
-                            .insert(id, (placeholder, propagation_reason.clone()));
+                            .insert(id, (oh, propagation_reason.clone()));
                     }
                 }
             }
 
             // --- SOS1 constraints ---
             let sos1s = std::mem::take(self.sos1_constraint_collection.active_mut());
-            for (id, sos1) in sos1s {
-                let (output, additional) = sos1.propagate(&expanded, atol)?;
+            for (id, mut sos1) in sos1s {
+                let (transformed, additional) = sos1.propagate(&expanded, atol)?;
                 if !additional.entries.is_empty() {
                     for (var_id, value) in additional.entries {
                         expanded.entries.insert(var_id, value);
                     }
                     changed = true;
                 }
-                match output {
-                    Some(shrunk) => {
+                match transformed {
+                    None => {
                         self.sos1_constraint_collection
                             .active_mut()
-                            .insert(id, shrunk);
+                            .insert(id, sos1);
                     }
-                    None => {
-                        let placeholder =
-                            crate::Sos1Constraint::new(id, std::collections::BTreeSet::new());
+                    Some(()) => {
                         self.sos1_constraint_collection
                             .removed_mut()
-                            .insert(id, (placeholder, propagation_reason.clone()));
+                            .insert(id, (sos1, propagation_reason.clone()));
                     }
                 }
             }
 
             // --- Indicator constraints ---
             let indicators = std::mem::take(self.indicator_constraint_collection.active_mut());
-            for (id, ic) in indicators {
-                let (output, additional) = ic.propagate(&expanded, atol)?;
+            for (id, mut ic) in indicators {
+                let (transformed, additional) = ic.propagate(&expanded, atol)?;
                 if !additional.entries.is_empty() {
                     for (var_id, value) in additional.entries {
                         expanded.entries.insert(var_id, value);
                     }
                     changed = true;
                 }
-                match output {
-                    IndicatorPropagateOutput::Active(ic) => {
+                match transformed {
+                    None => {
+                        // In-place — keep active
                         self.indicator_constraint_collection
                             .active_mut()
                             .insert(id, ic);
                     }
-                    IndicatorPropagateOutput::Promote(constraint) => {
+                    Some(IndicatorPropagateOutput::Promote(constraint)) => {
                         // Validate no ConstraintID collision
                         let cid = constraint.id;
                         if self.constraint_collection.active().contains_key(&cid)
@@ -258,27 +256,16 @@ impl Instance {
                         self.constraint_collection
                             .active_mut()
                             .insert(cid, constraint);
-                        // Also record indicator as removed
-                        let placeholder = crate::IndicatorConstraint::new(
-                            id,
-                            VariableID::from(0), // placeholder
-                            crate::constraint::Equality::EqualToZero,
-                            Function::Zero,
-                        );
+                        // Move original indicator to removed (preserves full data)
                         self.indicator_constraint_collection
                             .removed_mut()
-                            .insert(id, (placeholder, propagation_reason.clone()));
+                            .insert(id, (ic, propagation_reason.clone()));
                     }
-                    IndicatorPropagateOutput::Removed => {
-                        let placeholder = crate::IndicatorConstraint::new(
-                            id,
-                            VariableID::from(0),
-                            crate::constraint::Equality::EqualToZero,
-                            Function::Zero,
-                        );
+                    Some(IndicatorPropagateOutput::Removed) => {
+                        // Move original indicator to removed
                         self.indicator_constraint_collection
                             .removed_mut()
-                            .insert(id, (placeholder, propagation_reason.clone()));
+                            .insert(id, (ic, propagation_reason.clone()));
                     }
                 }
             }
