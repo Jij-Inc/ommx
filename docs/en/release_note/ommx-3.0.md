@@ -56,10 +56,12 @@ Indicator constraints support the same relax/restore workflow as regular constra
 As part of this work, `removed_reason` is no longer a column in {attr}`~ommx.v1.Solution.constraints_df`. Instead, {attr}`~ommx.v1.Solution.removed_reasons_df` is available as a separate table on both {class}`~ommx.v1.Solution` and {class}`~ommx.v1.SampleSet`, which can be joined with {attr}`~ommx.v1.Solution.constraints_df`:
 
 ```python
+# Regular constraints
 df = solution.constraints_df.join(solution.removed_reasons_df)
-```
 
-This applies to both regular constraints and indicator constraints.
+# Indicator constraints
+df = solution.indicator_constraints_df.join(solution.indicator_removed_reasons_df)
+```
 
 ### Adapter Capability model ([#790](https://github.com/Jij-Inc/ommx/pull/790))
 
