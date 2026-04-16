@@ -26,14 +26,94 @@ crate::impl_logical_memory_profile! {
     }
 }
 
-impl LogicalMemoryProfile for crate::constraint_type::ConstraintCollection<crate::Constraint> {
-    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
-        self.active()
-            .visit_logical_memory(path.with("constraints").as_mut(), visitor);
-        self.removed()
-            .visit_logical_memory(path.with("removed_constraints").as_mut(), visitor);
-    }
+// Leaf impls for special constraint ID types
+macro_rules! impl_id_logical_memory {
+    ($id_type:ty) => {
+        impl LogicalMemoryProfile for $id_type {
+            fn visit_logical_memory<V: LogicalMemoryVisitor>(
+                &self,
+                path: &mut Path,
+                visitor: &mut V,
+            ) {
+                visitor.visit_leaf(path, std::mem::size_of::<$id_type>());
+            }
+        }
+    };
 }
+impl_id_logical_memory!(crate::IndicatorConstraintID);
+impl_id_logical_memory!(crate::OneHotConstraintID);
+impl_id_logical_memory!(crate::Sos1ConstraintID);
+
+// LogicalMemoryProfile for special constraint Created types
+// These are simpler than Constraint since they have no function.
+macro_rules! impl_special_constraint_profile {
+    ($constraint_type:ty, $name:expr) => {
+        impl LogicalMemoryProfile for $constraint_type {
+            fn visit_logical_memory<V: LogicalMemoryVisitor>(
+                &self,
+                path: &mut Path,
+                visitor: &mut V,
+            ) {
+                // Count the whole constraint as a single leaf for simplicity
+                visitor.visit_leaf(path, std::mem::size_of_val(self));
+            }
+        }
+
+        impl LogicalMemoryProfile for ($constraint_type, crate::constraint::RemovedReason) {
+            fn visit_logical_memory<V: LogicalMemoryVisitor>(
+                &self,
+                path: &mut Path,
+                visitor: &mut V,
+            ) {
+                self.0
+                    .visit_logical_memory(path.with($name).as_mut(), visitor);
+                self.1.visit_logical_memory(
+                    path.with(concat!($name, ".removed_reason")).as_mut(),
+                    visitor,
+                );
+            }
+        }
+    };
+}
+impl_special_constraint_profile!(crate::IndicatorConstraint, "IndicatorConstraint");
+impl_special_constraint_profile!(crate::OneHotConstraint, "OneHotConstraint");
+impl_special_constraint_profile!(crate::Sos1Constraint, "Sos1Constraint");
+
+macro_rules! impl_constraint_collection_profile {
+    ($constraint_type:ty, $active_name:expr, $removed_name:expr) => {
+        impl LogicalMemoryProfile
+            for crate::constraint_type::ConstraintCollection<$constraint_type>
+        {
+            fn visit_logical_memory<V: LogicalMemoryVisitor>(
+                &self,
+                path: &mut Path,
+                visitor: &mut V,
+            ) {
+                self.active()
+                    .visit_logical_memory(path.with($active_name).as_mut(), visitor);
+                self.removed()
+                    .visit_logical_memory(path.with($removed_name).as_mut(), visitor);
+            }
+        }
+    };
+}
+
+impl_constraint_collection_profile!(crate::Constraint, "constraints", "removed_constraints");
+impl_constraint_collection_profile!(
+    crate::IndicatorConstraint,
+    "indicator_constraints",
+    "removed_indicator_constraints"
+);
+impl_constraint_collection_profile!(
+    crate::OneHotConstraint,
+    "one_hot_constraints",
+    "removed_one_hot_constraints"
+);
+impl_constraint_collection_profile!(
+    crate::Sos1Constraint,
+    "sos1_constraints",
+    "removed_sos1_constraints"
+);
 
 crate::impl_logical_memory_profile! {
     Instance {
@@ -41,6 +121,9 @@ crate::impl_logical_memory_profile! {
         objective,
         decision_variables,
         constraint_collection,
+        indicator_constraint_collection,
+        one_hot_constraint_collection,
+        sos1_constraint_collection,
         decision_variable_dependency,
         parameters,
         description,
@@ -67,9 +150,15 @@ mod tests {
         Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
         Instance.decision_variables;BTreeMap[stack] 24
         Instance.description;Option[stack] 96
+        Instance.indicator_constraint_collection;indicator_constraints;BTreeMap[stack] 24
+        Instance.indicator_constraint_collection;removed_indicator_constraints;BTreeMap[stack] 24
         Instance.objective;Zero 40
+        Instance.one_hot_constraint_collection;one_hot_constraints;BTreeMap[stack] 24
+        Instance.one_hot_constraint_collection;removed_one_hot_constraints;BTreeMap[stack] 24
         Instance.parameters;Option[stack] 48
         Instance.sense 1
+        Instance.sos1_constraint_collection;removed_sos1_constraints;BTreeMap[stack] 24
+        Instance.sos1_constraint_collection;sos1_constraints;BTreeMap[stack] 24
         "###);
     }
 
@@ -109,9 +198,15 @@ mod tests {
         Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.subscripts;Vec[stack] 48
         Instance.decision_variables;DecisionVariable.substituted_value;Option[stack] 32
         Instance.description;Option[stack] 96
+        Instance.indicator_constraint_collection;indicator_constraints;BTreeMap[stack] 24
+        Instance.indicator_constraint_collection;removed_indicator_constraints;BTreeMap[stack] 24
         Instance.objective;Linear;PolynomialBase.terms 80
+        Instance.one_hot_constraint_collection;one_hot_constraints;BTreeMap[stack] 24
+        Instance.one_hot_constraint_collection;removed_one_hot_constraints;BTreeMap[stack] 24
         Instance.parameters;Option[stack] 48
         Instance.sense 1
+        Instance.sos1_constraint_collection;removed_sos1_constraints;BTreeMap[stack] 24
+        Instance.sos1_constraint_collection;sos1_constraints;BTreeMap[stack] 24
         "###);
     }
 
@@ -171,9 +266,15 @@ mod tests {
         Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.subscripts;Vec[stack] 48
         Instance.decision_variables;DecisionVariable.substituted_value;Option[stack] 32
         Instance.description;Option[stack] 96
+        Instance.indicator_constraint_collection;indicator_constraints;BTreeMap[stack] 24
+        Instance.indicator_constraint_collection;removed_indicator_constraints;BTreeMap[stack] 24
         Instance.objective;Linear;PolynomialBase.terms 80
+        Instance.one_hot_constraint_collection;one_hot_constraints;BTreeMap[stack] 24
+        Instance.one_hot_constraint_collection;removed_one_hot_constraints;BTreeMap[stack] 24
         Instance.parameters;Option[stack] 48
         Instance.sense 1
+        Instance.sos1_constraint_collection;removed_sos1_constraints;BTreeMap[stack] 24
+        Instance.sos1_constraint_collection;sos1_constraints;BTreeMap[stack] 24
         "###);
     }
 
@@ -220,9 +321,15 @@ mod tests {
         Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.subscripts;Vec[stack] 72
         Instance.decision_variables;DecisionVariable.substituted_value;Option[stack] 48
         Instance.description;Option[stack] 96
+        Instance.indicator_constraint_collection;indicator_constraints;BTreeMap[stack] 24
+        Instance.indicator_constraint_collection;removed_indicator_constraints;BTreeMap[stack] 24
         Instance.objective;Zero 40
+        Instance.one_hot_constraint_collection;one_hot_constraints;BTreeMap[stack] 24
+        Instance.one_hot_constraint_collection;removed_one_hot_constraints;BTreeMap[stack] 24
         Instance.parameters;Option[stack] 48
         Instance.sense 1
+        Instance.sos1_constraint_collection;removed_sos1_constraints;BTreeMap[stack] 24
+        Instance.sos1_constraint_collection;sos1_constraints;BTreeMap[stack] 24
         "###);
     }
 
@@ -278,11 +385,17 @@ mod tests {
         Instance.description;Description.created_by 39
         Instance.description;Description.description 51
         Instance.description;Description.name 37
+        Instance.indicator_constraint_collection;indicator_constraints;BTreeMap[stack] 24
+        Instance.indicator_constraint_collection;removed_indicator_constraints;BTreeMap[stack] 24
         Instance.objective;Zero 40
+        Instance.one_hot_constraint_collection;one_hot_constraints;BTreeMap[stack] 24
+        Instance.one_hot_constraint_collection;removed_one_hot_constraints;BTreeMap[stack] 24
         Instance.parameters;Parameters.entries 16
         Instance.parameters;Parameters.entries;HashMap[key] 16
         Instance.parameters;Parameters.entries;HashMap[stack] 48
         Instance.sense 1
+        Instance.sos1_constraint_collection;removed_sos1_constraints;BTreeMap[stack] 24
+        Instance.sos1_constraint_collection;sos1_constraints;BTreeMap[stack] 24
         "###);
     }
 }
