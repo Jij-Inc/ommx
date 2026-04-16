@@ -6,10 +6,76 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
-### Indicator Constraint support and Adapter Capability model ([#790](https://github.com/Jij-Inc/ommx/pull/790))
+### Indicator Constraint support ([#789](https://github.com/Jij-Inc/ommx/pull/789), [#790](https://github.com/Jij-Inc/ommx/pull/790), [#795](https://github.com/Jij-Inc/ommx/pull/795), [#796](https://github.com/Jij-Inc/ommx/pull/796))
 
-- Added support for Indicator Constraints, where a constraint `f(x) <= 0` is enforced only when a user-defined binary variable `z = 1`. Support in the PySCIPOpt Adapter is also added.
-- As more specialized constraints like this are added and support varies across adapters and extensions, an Adapter Capability model has been introduced where adapters declare their capabilities and a common capability checking API is provided. **Each OMMX Adapter will need changes to support Python SDK 3.0.0.**
+{class}`~ommx.v1.IndicatorConstraint` is now a first-class feature in OMMX. An indicator constraint expresses a conditional relationship: a constraint `f(x) <= 0` (or `f(x) = 0`) is enforced only when a user-defined binary indicator variable `z = 1`. When `z = 0`, the constraint is unconditionally satisfied.
+
+Use {meth}`Constraint.with_indicator() <ommx.v1.Constraint.with_indicator>` to create an {class}`~ommx.v1.IndicatorConstraint` from an existing constraint. The PySCIPOpt Adapter converts these into SCIP's [`addConsIndicator`](https://pyscipopt.readthedocs.io/en/latest/api/model.html#pyscipopt.scip.Model.addConsIndicator):
+
+```python
+from ommx.v1 import DecisionVariable, Instance
+from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
+
+b = DecisionVariable.binary(0)
+x = DecisionVariable.continuous(1, lower=0, upper=10)
+
+# b = 1 → x <= 5
+ic = (x <= 5).with_indicator(b)
+
+instance = Instance.from_components(
+    decision_variables=[b, x],
+    objective=x,
+    constraints=[b >= 1],  # Force b = 1
+    indicator_constraints=[ic],
+    sense=Instance.MAXIMIZE,
+)
+
+solution = OMMXPySCIPOptAdapter.solve(instance)
+assert abs(solution.objective - 5.0) < 1e-6
+```
+
+#### Evaluation results
+
+After solving, {class}`~ommx.v1.Solution` and {class}`~ommx.v1.SampleSet` provide DataFrames for indicator constraints:
+
+- {attr}`Solution.indicator_constraints_df <ommx.v1.Solution.indicator_constraints_df>` — columns: id, indicator_variable_id, equality, value, indicator_active, used_ids, name, subscripts, description
+- {attr}`Solution.indicator_removed_reasons_df <ommx.v1.Solution.indicator_removed_reasons_df>` — removal reasons for relaxed indicator constraints
+- {attr}`SampleSet.indicator_constraints_df <ommx.v1.SampleSet.indicator_constraints_df>` / {attr}`SampleSet.indicator_removed_reasons_df <ommx.v1.SampleSet.indicator_removed_reasons_df>` — per-sample versions
+
+The `indicator_active` column disambiguates between "the indicator was OFF (constraint trivially satisfied)" and "the indicator was ON and the constraint was satisfied." Note that indicator constraints do not have dual variables, as dual values are not well-defined for conditional constraints.
+
+#### Relax and restore
+
+Indicator constraints support the same relax/restore workflow as regular constraints:
+
+- {meth}`Instance.relax_indicator_constraint() <ommx.v1.Instance.relax_indicator_constraint>` — relax (deactivate) an indicator constraint with a reason
+- {meth}`Instance.restore_indicator_constraint() <ommx.v1.Instance.restore_indicator_constraint>` — restore a previously relaxed indicator constraint, with safety checks (fails if the indicator variable was substituted or fixed)
+
+#### {attr}`~ommx.v1.Solution.removed_reasons_df` separation
+
+As part of this work, `removed_reason` is no longer a column in {attr}`~ommx.v1.Solution.constraints_df`. Instead, {attr}`~ommx.v1.Solution.removed_reasons_df` is available as a separate table on both {class}`~ommx.v1.Solution` and {class}`~ommx.v1.SampleSet`, which can be joined with {attr}`~ommx.v1.Solution.constraints_df`:
+
+```python
+# Regular constraints
+df = solution.constraints_df.join(solution.removed_reasons_df)
+
+# Indicator constraints
+df = solution.indicator_constraints_df.join(solution.indicator_removed_reasons_df)
+```
+
+### Adapter Capability model ([#790](https://github.com/Jij-Inc/ommx/pull/790))
+
+As specialized constraint types (such as {class}`~ommx.v1.IndicatorConstraint`) are added and support varies across solvers, an Adapter Capability model has been introduced. Adapters declare their supported capabilities via `ADDITIONAL_CAPABILITIES`, and {meth}`Instance.check_capabilities() <ommx.v1.Instance.check_capabilities>` validates that the problem is compatible before solving.
+
+```python
+from ommx.v1 import AdditionalCapability
+from ommx.adapter import SolverAdapter
+
+class MySolverAdapter(SolverAdapter):
+    ADDITIONAL_CAPABILITIES = frozenset({AdditionalCapability.Indicator})
+```
+
+Currently, the PySCIPOpt Adapter declares indicator constraint support. **Each OMMX Adapter will need changes to support Python SDK 3.0.0** — specifically, calling `super().__init__(instance)` for automatic capability checking.
 
 ## 3.0.0 Alpha 1
 
