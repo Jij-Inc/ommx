@@ -38,7 +38,9 @@ def sos1_instance_setup():
     )
 
 
-@pytest.mark.skip(reason="SOS1 variable partial_evaluate is deferred to the forget phase")
+@pytest.mark.skip(
+    reason="SOS1 variable partial_evaluate is deferred to the forget phase"
+)
 def test_adapter_handles_sos1_variable_fixed_nonzero(sos1_instance_setup):
     """Test that PySCIPOpt adapter handles instances when SOS1 variable is fixed to non-zero value."""
     instance = sos1_instance_setup
@@ -62,7 +64,9 @@ def test_adapter_handles_sos1_variable_fixed_nonzero(sos1_instance_setup):
     assert fixed_var.value == 5.0, "Fixed variable should have the specified value"
 
 
-@pytest.mark.skip(reason="SOS1 variable partial_evaluate is deferred to the forget phase")
+@pytest.mark.skip(
+    reason="SOS1 variable partial_evaluate is deferred to the forget phase"
+)
 def test_adapter_handles_sos1_variable_fixed_to_zero(sos1_instance_setup):
     """Test adapter behavior when SOS1 variable is fixed to zero."""
     instance = sos1_instance_setup
