@@ -106,6 +106,7 @@ impl Constraint {
                 subscripts,
                 parameters: parameters.into_iter().collect(),
                 description,
+                provenance: None,
             },
             stage: ommx::CreatedData {
                 function: rust_function,

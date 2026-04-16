@@ -62,6 +62,18 @@ impl ConstraintID {
     }
 }
 
+/// Tracks the origin of a constraint that was created by transforming another constraint type.
+///
+/// For example, when an indicator constraint with indicator=1 is propagated,
+/// it is promoted to a regular `Constraint` with provenance recording the original
+/// indicator constraint ID.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Provenance {
+    IndicatorConstraint(crate::IndicatorConstraintID),
+    OneHotConstraint(crate::OneHotConstraintID),
+    Sos1Constraint(crate::Sos1ConstraintID),
+}
+
 /// Auxiliary metadata for constraints (excluding essential id and equality)
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct ConstraintMetadata {
@@ -69,6 +81,9 @@ pub struct ConstraintMetadata {
     pub subscripts: Vec<i64>,
     pub parameters: FnvHashMap<String, String>,
     pub description: Option<String>,
+    /// If this constraint was created by transforming another constraint type,
+    /// this records the original constraint's identity.
+    pub provenance: Option<Provenance>,
 }
 
 /// A constraint parameterized by its lifecycle stage.

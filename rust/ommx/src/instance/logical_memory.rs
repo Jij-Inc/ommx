@@ -250,6 +250,7 @@ mod tests {
         Instance.constraint_collection;constraints;Constraint.metadata;ConstraintMetadata.description;Option[stack] 24
         Instance.constraint_collection;constraints;Constraint.metadata;ConstraintMetadata.name;Option[stack] 24
         Instance.constraint_collection;constraints;Constraint.metadata;ConstraintMetadata.parameters;FnvHashMap[stack] 32
+        Instance.constraint_collection;constraints;Constraint.metadata;ConstraintMetadata.provenance;Option[stack] 16
         Instance.constraint_collection;constraints;Constraint.metadata;ConstraintMetadata.subscripts;Vec[stack] 24
         Instance.constraint_collection;constraints;Constraint.stage;CreatedData.function;Linear;PolynomialBase.terms 80
         Instance.constraint_collection;removed_constraints;BTreeMap[stack] 24

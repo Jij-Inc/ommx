@@ -50,6 +50,7 @@ impl IndicatorConstraint {
             subscripts,
             parameters: parameters.into_iter().collect(),
             description,
+            provenance: None,
         };
         Ok(Self(ic))
     }

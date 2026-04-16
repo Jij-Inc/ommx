@@ -1,5 +1,6 @@
 use crate::constraint::{
-    Constraint, ConstraintID, ConstraintMetadata, Created, CreatedData, Equality, RemovedReason,
+    Constraint, ConstraintID, ConstraintMetadata, Created, CreatedData, Equality, Provenance,
+    RemovedReason,
 };
 use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
 use std::mem::size_of;
@@ -16,12 +17,19 @@ impl LogicalMemoryProfile for Equality {
     }
 }
 
+impl LogicalMemoryProfile for Provenance {
+    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
+        visitor.visit_leaf(path, size_of::<Provenance>());
+    }
+}
+
 crate::impl_logical_memory_profile! {
     ConstraintMetadata {
         name,
         subscripts,
         parameters,
         description,
+        provenance,
     }
 }
 

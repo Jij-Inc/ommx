@@ -18,10 +18,14 @@ impl Propagate for IndicatorConstraint<Created> {
                 let mut promoted_function = self.stage.function.clone();
                 promoted_function.partial_evaluate(state, atol)?;
 
+                let mut metadata = self.metadata.clone();
+                metadata.provenance =
+                    Some(crate::constraint::Provenance::IndicatorConstraint(self.id));
+
                 let constraint = crate::Constraint {
                     id: crate::ConstraintID::from(self.id.into_inner()),
                     equality: self.equality,
-                    metadata: self.metadata.clone(),
+                    metadata,
                     stage: CreatedData {
                         function: promoted_function,
                     },
