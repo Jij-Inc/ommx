@@ -32,7 +32,7 @@ def test_sos1_constraint_functionality():
     )
 
     # Create adapter and verify SOS1 constraint is added
-    adapter = OMMXPySCIPOptAdapter(instance, use_sos1="auto")
+    adapter = OMMXPySCIPOptAdapter(instance)
     model = adapter.solver_input
 
     # Check that SOS1 constraint was created
@@ -69,7 +69,7 @@ def test_sos1_constraint_naming():
         sense=Instance.MINIMIZE,
     )
 
-    adapter = OMMXPySCIPOptAdapter(instance, use_sos1="auto")
+    adapter = OMMXPySCIPOptAdapter(instance)
     model = adapter.solver_input
 
     # Check SOS1 constraint naming
@@ -105,7 +105,7 @@ def test_sos1_constraint_naming_no_bigm():
         sense=Instance.MINIMIZE,
     )
 
-    adapter = OMMXPySCIPOptAdapter(instance, use_sos1="auto")
+    adapter = OMMXPySCIPOptAdapter(instance)
     model = adapter.solver_input
 
     # Check SOS1 constraint naming

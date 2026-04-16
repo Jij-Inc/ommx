@@ -44,6 +44,16 @@ impl Instance {
             "penalty_method does not support indicator constraints. \
              Remove or convert indicator constraints before applying penalty method."
         );
+        anyhow::ensure!(
+            self.one_hot_constraint_collection.active().is_empty(),
+            "penalty_method does not support one-hot constraints. \
+             Remove or convert one-hot constraints before applying penalty method."
+        );
+        anyhow::ensure!(
+            self.sos1_constraint_collection.active().is_empty(),
+            "penalty_method does not support SOS1 constraints. \
+             Remove or convert SOS1 constraints before applying penalty method."
+        );
 
         let mut max_id = 0;
 
@@ -151,6 +161,16 @@ impl Instance {
             self.indicator_constraint_collection.active().is_empty(),
             "uniform_penalty_method does not support indicator constraints. \
              Remove or convert indicator constraints before applying penalty method."
+        );
+        anyhow::ensure!(
+            self.one_hot_constraint_collection.active().is_empty(),
+            "uniform_penalty_method does not support one-hot constraints. \
+             Remove or convert one-hot constraints before applying penalty method."
+        );
+        anyhow::ensure!(
+            self.sos1_constraint_collection.active().is_empty(),
+            "uniform_penalty_method does not support SOS1 constraints. \
+             Remove or convert SOS1 constraints before applying penalty method."
         );
 
         // Early return if no active constraints (preserve any existing removed constraints)
