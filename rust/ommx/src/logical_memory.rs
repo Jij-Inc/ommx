@@ -131,7 +131,11 @@ pub(crate) trait LogicalMemoryVisitor {
 /// - `inferno` (Rust): <https://github.com/jonhoo/inferno>
 #[derive(Debug, Clone, Default)]
 pub struct MemoryProfile {
-    entries: BTreeMap<Vec<String>, usize>,
+    // All frame names come from string literals and `concat!()` expansions,
+    // so `&'static str` is sufficient. This avoids allocating a `String` per
+    // path segment (and the segments account for the bulk of the work during
+    // profiling) — only one `Vec` per leaf visit remains.
+    entries: BTreeMap<Vec<&'static str>, usize>,
 }
 
 impl MemoryProfile {
@@ -144,7 +148,7 @@ impl MemoryProfile {
     ///
     /// Each path is a slice of frame names like `["Instance", "objective", ...]`.
     /// The iteration order follows the natural ordering of paths.
-    pub fn entries(&self) -> impl Iterator<Item = (&[String], usize)> {
+    pub fn entries(&self) -> impl Iterator<Item = (&[&'static str], usize)> {
         self.entries
             .iter()
             .map(|(path, bytes)| (path.as_slice(), *bytes))
@@ -166,8 +170,7 @@ impl LogicalMemoryVisitor for MemoryProfile {
         if bytes == 0 {
             return;
         }
-        let key: Vec<String> = path.as_slice().iter().map(|s| (*s).to_string()).collect();
-        *self.entries.entry(key).or_insert(0) += bytes;
+        *self.entries.entry(path.as_slice().to_vec()).or_insert(0) += bytes;
     }
 }
 

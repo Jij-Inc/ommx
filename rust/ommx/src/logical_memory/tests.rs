@@ -47,12 +47,9 @@ fn test_memory_profile_entries_iter() {
     profile.visit_leaf(&Path::from(vec!["a"]), 1);
     profile.visit_leaf(&Path::from(vec!["b"]), 2);
 
-    let collected: Vec<(Vec<String>, usize)> =
+    let collected: Vec<(Vec<&'static str>, usize)> =
         profile.entries().map(|(p, b)| (p.to_vec(), b)).collect();
-    assert_eq!(
-        collected,
-        vec![(vec!["a".to_string()], 1), (vec!["b".to_string()], 2),]
-    );
+    assert_eq!(collected, vec![(vec!["a"], 1), (vec!["b"], 2),]);
 }
 
 // Integration tests for polynomial types

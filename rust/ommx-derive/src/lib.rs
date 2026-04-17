@@ -2,10 +2,17 @@
 //!
 //! This crate exists solely as an implementation detail of [`ommx`]: it
 //! is published to crates.io because `ommx` depends on it, but it has no
-//! stable API of its own. Depend on `ommx` and use the re-exported derive
-//! rather than pulling this crate in directly.
+//! stable API of its own and **no public surface for external use**.
+//!
+//! The `ommx` crate scopes the `LogicalMemoryProfile` trait and the
+//! re-exported derive to `pub(crate)`, so downstream users cannot
+//! meaningfully derive it on their own types. External consumers should
+//! use [`ommx::Instance::logical_memory_profile`] and
+//! [`ommx::MemoryProfile`] instead.
 //!
 //! [`ommx`]: https://docs.rs/ommx
+//! [`ommx::Instance::logical_memory_profile`]: https://docs.rs/ommx/latest/ommx/struct.Instance.html#method.logical_memory_profile
+//! [`ommx::MemoryProfile`]: https://docs.rs/ommx/latest/ommx/struct.MemoryProfile.html
 //!
 //! # `#[derive(LogicalMemoryProfile)]`
 //!
