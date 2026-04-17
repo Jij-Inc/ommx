@@ -148,24 +148,32 @@ impl Instance {
         let b = -f_bound.lower() / slack_upper_bound as f64;
         let slack_bound = Bound::new(0.0, slack_upper_bound as f64).unwrap();
 
+        // Validate the slack coefficient before mutating the instance so failures
+        // (e.g. `slack_upper_bound == 0` giving `b = inf`) do not leave an orphan
+        // slack decision variable behind. `b` is non-negative in this branch (we
+        // bailed on lower > 0 and relaxed when upper <= 0). `b == 0` only when
+        // `f_bound.lower() == 0`, which is a boundary case; adding a zero-coefficient
+        // slack term is mathematically a no-op so we skip the term in that case,
+        // matching v1 observable behavior (where a zero coefficient is dropped on
+        // insertion).
+        let b_coeff = match Coefficient::try_from(b) {
+            Ok(c) => Some(c),
+            Err(crate::CoefficientError::Zero) => None,
+            Err(e) => return Err(e).context("Slack coefficient must be finite"),
+        };
+
         let slack_id = self.next_variable_id();
         let slack =
             self.new_decision_variable(Kind::Integer, slack_bound, None, ATol::default())?;
         slack.metadata.name = Some("ommx.slack".to_string());
         slack.metadata.subscripts = vec![constraint_id.into_inner() as i64];
 
-        // `b` is non-negative in this branch (we bailed on lower > 0 and relaxed when
-        // upper <= 0). `b == 0` only when `f_bound.lower() == 0`, which is a boundary
-        // case; adding a zero-coefficient slack term is mathematically a no-op so we
-        // only modify the function when `b > 0`, matching the v1 observable behavior
-        // (where a zero coefficient is dropped on insertion).
-        let new_function = match Coefficient::try_from(b) {
-            Ok(b_coeff) => {
-                let slack_term = Linear::single_term(LinearMonomial::Variable(slack_id), b_coeff);
+        let new_function = match b_coeff {
+            Some(c) => {
+                let slack_term = Linear::single_term(LinearMonomial::Variable(slack_id), c);
                 function + slack_term
             }
-            Err(crate::CoefficientError::Zero) => function,
-            Err(e) => return Err(e).context("Slack coefficient must be finite"),
+            None => function,
         };
 
         let constraint = self
@@ -295,6 +303,36 @@ mod tests {
         assert!(result.is_none());
         assert!(instance.constraints().is_empty());
         assert_eq!(instance.removed_constraints().len(), 1);
+    }
+
+    #[test]
+    fn rejects_zero_slack_upper_bound_without_mutating_instance() {
+        // f(x) = x1 - 2 with x1 in [0, 3] gives a finite non-zero lower, so
+        // `slack_upper_bound == 0` drives `b = inf`. The call must fail without
+        // leaving behind an orphan slack decision variable.
+        let dv = btreemap! {
+            VariableID::from(1) => DecisionVariable::new(
+                VariableID::from(1), Kind::Integer, Bound::new(0.0, 3.0).unwrap(), None, ATol::default()
+            ).unwrap(),
+        };
+        let objective = Function::from(linear!(1));
+        let constraint_fn = Function::from(linear!(1)) + coeff!(-2.0);
+        let constraints = btreemap! {
+            ConstraintID::from(0) => crate::Constraint::less_than_or_equal_to_zero(
+                ConstraintID::from(0),
+                constraint_fn,
+            ),
+        };
+        let mut instance = Instance::new(Sense::Minimize, objective, dv, constraints).unwrap();
+        let before = instance.decision_variables.len();
+
+        let err = instance.add_integer_slack_to_inequality(0, 0).unwrap_err();
+        assert!(err.to_string().to_lowercase().contains("finite"));
+        // No slack variable should have been added on the failure path.
+        assert_eq!(instance.decision_variables.len(), before);
+        // The original constraint is still the untouched inequality.
+        let constraint = instance.constraints().get(&ConstraintID::from(0)).unwrap();
+        assert_eq!(constraint.equality, Equality::LessThanOrEqualToZero);
     }
 
     #[test]
