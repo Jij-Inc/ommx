@@ -24,6 +24,7 @@ mod stats;
 mod substitute;
 
 pub use analysis::*;
+pub use arbitrary::InstanceParameters;
 pub use builder::*;
 pub use error::*;
 pub use log_encode::*;
