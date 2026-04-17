@@ -15,9 +15,11 @@ mod parametric_builder;
 mod parse;
 mod pass;
 mod penalty;
+mod qubo;
 mod reduce_binary_power;
 mod serialize;
 mod setter;
+mod slack;
 mod stats;
 mod substitute;
 
