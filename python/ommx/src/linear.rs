@@ -111,9 +111,22 @@ impl Linear {
     #[new]
     #[pyo3(signature = (terms, constant=0.0))]
     pub fn new(terms: BTreeMap<u64, f64>, constant: f64) -> Result<Self> {
-        let linear = ommx::v1::Linear::new(terms.into_iter(), constant);
-        let parsed = ommx::Parse::parse(linear, &())?;
-        Ok(Self(parsed))
+        let mut linear = ommx::Linear::default();
+        for (id, coefficient) in terms {
+            // Drop coefficients below f64::EPSILON to preserve the previous
+            // v1::Linear::new numerical-noise filter.
+            if coefficient.abs() <= f64::EPSILON {
+                continue;
+            }
+            let coeff = Coefficient::try_from(coefficient)?;
+            linear.add_term(LinearMonomial::Variable(id.into()), coeff);
+        }
+        match Coefficient::try_from(constant) {
+            Ok(coeff) => linear.add_term(LinearMonomial::Constant, coeff),
+            Err(CoefficientError::Zero) => {}
+            Err(e) => return Err(e.into()),
+        }
+        Ok(Self(linear))
     }
 
     #[staticmethod]

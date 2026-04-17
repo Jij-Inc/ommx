@@ -8,8 +8,15 @@ impl Parse for crate::v1::Solution {
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v1.Solution";
 
-        let provided_feasible = self.get_feasible();
-        let provided_feasible_relaxed = self.get_feasible_relaxed();
+        let provided_feasible = match self.feasible_relaxed {
+            Some(_) => self.feasible,
+            None =>
+            {
+                #[allow(deprecated)]
+                self.feasible_unrelaxed
+            }
+        };
+        let provided_feasible_relaxed = self.feasible_relaxed.unwrap_or(self.feasible);
 
         let state = self.state.unwrap_or_default();
         let objective = self.objective;
