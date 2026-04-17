@@ -189,14 +189,21 @@ impl<T: ConstraintType> ConstraintCollection<T> {
     /// Return an ID that is not used by any active or removed constraint in this collection.
     ///
     /// Returns `0` when the collection is empty, otherwise `max(existing id) + 1`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the maximum existing ID is `u64::MAX`, i.e. all IDs are exhausted.
     pub fn unused_id(&self) -> T::ID {
         let max_active = self.active.keys().last().copied().map(Into::into);
         let max_removed = self.removed.keys().last().copied().map(Into::into);
         let next = match (max_active, max_removed) {
             (None, None) => 0u64,
-            (Some(a), None) => a + 1,
-            (None, Some(r)) => r + 1,
-            (Some(a), Some(r)) => a.max(r) + 1,
+            (Some(a), None) => a.checked_add(1).expect("constraint ID space exhausted"),
+            (None, Some(r)) => r.checked_add(1).expect("constraint ID space exhausted"),
+            (Some(a), Some(r)) => a
+                .max(r)
+                .checked_add(1)
+                .expect("constraint ID space exhausted"),
         };
         T::ID::from(next)
     }

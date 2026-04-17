@@ -8,12 +8,17 @@ use std::collections::BTreeMap;
 /// Merge additional variable fixings from propagation into `expanded` state.
 ///
 /// Returns `Err` if any fixing conflicts with an existing value in `expanded`
-/// (outside of numerical tolerance), which indicates infeasibility discovered
-/// during propagation.
-fn merge_state(expanded: &mut v1::State, additional: v1::State, changed: &mut bool) -> Result<()> {
+/// (outside of `atol`), which indicates infeasibility discovered during
+/// propagation.
+fn merge_state(
+    expanded: &mut v1::State,
+    additional: v1::State,
+    atol: ATol,
+    changed: &mut bool,
+) -> Result<()> {
     for (var_id, value) in additional.entries {
         if let Some(&existing) = expanded.entries.get(&var_id) {
-            if (existing - value).abs() > *ATol::default() {
+            if (existing - value).abs() > *atol {
                 return Err(anyhow!(
                     "Conflicting variable fixings for ID={var_id}: \
                      existing={existing}, new={value}"
@@ -208,7 +213,7 @@ impl Instance {
             let one_hots = std::mem::take(self.one_hot_constraint_collection.active_mut());
             for (id, oh) in one_hots {
                 let (outcome, additional) = oh.propagate(&expanded, atol)?;
-                merge_state(&mut expanded, additional, &mut changed)?;
+                merge_state(&mut expanded, additional, atol, &mut changed)?;
                 match outcome {
                     PropagateOutcome::Active(oh) => {
                         self.one_hot_constraint_collection
@@ -233,7 +238,7 @@ impl Instance {
             let sos1s = std::mem::take(self.sos1_constraint_collection.active_mut());
             for (id, sos1) in sos1s {
                 let (outcome, additional) = sos1.propagate(&expanded, atol)?;
-                merge_state(&mut expanded, additional, &mut changed)?;
+                merge_state(&mut expanded, additional, atol, &mut changed)?;
                 match outcome {
                     PropagateOutcome::Active(sos1) => {
                         self.sos1_constraint_collection
@@ -257,7 +262,7 @@ impl Instance {
             let indicators = std::mem::take(self.indicator_constraint_collection.active_mut());
             for (id, ic) in indicators {
                 let (outcome, additional) = ic.propagate(&expanded, atol)?;
-                merge_state(&mut expanded, additional, &mut changed)?;
+                merge_state(&mut expanded, additional, atol, &mut changed)?;
                 match outcome {
                     PropagateOutcome::Active(ic) => {
                         self.indicator_constraint_collection
