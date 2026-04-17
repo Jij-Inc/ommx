@@ -187,22 +187,18 @@ impl<T: ConstraintType> ConstraintCollection<T> {
     }
 
     /// Return an ID that is not used by any active or removed constraint in this collection.
+    ///
+    /// Returns `0` when the collection is empty, otherwise `max(existing id) + 1`.
     pub fn unused_id(&self) -> T::ID {
-        let max_active: u64 = self
-            .active
-            .keys()
-            .last()
-            .copied()
-            .map(Into::into)
-            .unwrap_or(0);
-        let max_removed: u64 = self
-            .removed
-            .keys()
-            .last()
-            .copied()
-            .map(Into::into)
-            .unwrap_or(0);
-        T::ID::from(max_active.max(max_removed) + 1)
+        let max_active = self.active.keys().last().copied().map(Into::into);
+        let max_removed = self.removed.keys().last().copied().map(Into::into);
+        let next = match (max_active, max_removed) {
+            (None, None) => 0u64,
+            (Some(a), None) => a + 1,
+            (None, Some(r)) => r + 1,
+            (Some(a), Some(r)) => a.max(r) + 1,
+        };
+        T::ID::from(next)
     }
 
     /// Consume the collection and return the active and removed maps.

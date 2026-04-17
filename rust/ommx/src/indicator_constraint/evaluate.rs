@@ -12,8 +12,8 @@ impl Propagate for IndicatorConstraint<Created> {
         let empty_state = crate::v1::State::default();
 
         if let Some(&indicator_value) = state.entries.get(&self.indicator_variable.into_inner()) {
-            if indicator_value > 1.0 - *atol {
-                // Indicator ON → promote inner constraint to regular Constraint.
+            if (indicator_value - 1.0).abs() < *atol {
+                // Indicator ON (~1) → promote inner constraint to regular Constraint.
                 // Clone the function so self (going to removed) retains its data.
                 let mut promoted_function = self.stage.function.clone();
                 promoted_function.partial_evaluate(state, atol)?;
@@ -35,7 +35,7 @@ impl Propagate for IndicatorConstraint<Created> {
                     empty_state,
                 ))
             } else if indicator_value.abs() < *atol {
-                // Indicator OFF → vacuously satisfied; the constraint is consumed.
+                // Indicator OFF (~0) → vacuously satisfied; the constraint is consumed.
                 Ok((PropagateOutcome::Consumed(self), empty_state))
             } else {
                 anyhow::bail!(
@@ -73,7 +73,18 @@ impl Evaluate for IndicatorConstraint<Created> {
                 )
             })?;
 
-        let indicator_on = *indicator_value > 1.0 - *atol;
+        let indicator_on = if (*indicator_value - 1.0).abs() < *atol {
+            true
+        } else if indicator_value.abs() < *atol {
+            false
+        } else {
+            anyhow::bail!(
+                "Indicator variable {:?} of indicator constraint {:?} has invalid value {} (must be 0 or 1)",
+                self.indicator_variable,
+                self.id,
+                indicator_value
+            );
+        };
 
         let feasible = if indicator_on {
             // Indicator ON → check constraint as usual
@@ -128,7 +139,19 @@ impl Evaluate for IndicatorConstraint<Created> {
                         self.id
                     )
                 })?;
-            let indicator_on = *indicator_value > 1.0 - *atol;
+            let indicator_on = if (*indicator_value - 1.0).abs() < *atol {
+                true
+            } else if indicator_value.abs() < *atol {
+                false
+            } else {
+                anyhow::bail!(
+                    "Indicator variable {:?} of indicator constraint {:?} has invalid value {} in sample {:?} (must be 0 or 1)",
+                    self.indicator_variable,
+                    self.id,
+                    indicator_value,
+                    sample_id
+                );
+            };
 
             let f = if indicator_on {
                 match self.equality {
