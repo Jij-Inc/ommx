@@ -10,7 +10,7 @@ use approx::AbsDiffEq;
 use num::Zero;
 use std::{
     borrow::Cow,
-    collections::{hash_map::Entry as HashMapEntry, BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{hash_map::Entry as HashMapEntry, BTreeMap, BTreeSet, HashMap},
 };
 
 impl Instance {
@@ -50,20 +50,6 @@ impl Instance {
         Ok(())
     }
 
-    pub fn get_kinds(&self) -> HashMap<VariableID, Kind> {
-        self.decision_variables
-            .iter()
-            .map(|dv| (VariableID::from(dv.id), dv.kind()))
-            .collect()
-    }
-
-    pub fn defined_ids(&self) -> BTreeSet<u64> {
-        self.decision_variables
-            .iter()
-            .map(|dv| dv.id)
-            .collect::<BTreeSet<_>>()
-    }
-
     pub fn constraint_ids(&self) -> BTreeSet<u64> {
         self.constraints.iter().map(|c| c.id).collect()
     }
@@ -72,55 +58,6 @@ impl Instance {
         self.removed_constraints
             .iter()
             .filter_map(|c| c.constraint.as_ref().map(|c| c.id))
-            .collect()
-    }
-
-    /// Execute all validations for this instance
-    pub fn validate(&self) -> Result<()> {
-        self.validate_decision_variable_ids()?;
-        self.validate_constraint_ids()?;
-        Ok(())
-    }
-
-    /// Validate that all decision variable IDs used in the instance are defined.
-    pub fn validate_decision_variable_ids(&self) -> Result<()> {
-        let used_ids = self.required_ids();
-        let mut defined_ids = VariableIDSet::default();
-        for dv in &self.decision_variables {
-            if !defined_ids.insert(dv.id.into()) {
-                bail!("Duplicated definition of decision variable ID: {}", dv.id);
-            }
-        }
-        if !used_ids.is_subset(&defined_ids) {
-            let undefined_ids = used_ids.difference(&defined_ids).collect::<Vec<_>>();
-            bail!("Undefined decision variable IDs: {:?}", undefined_ids);
-        }
-        Ok(())
-    }
-
-    /// Test all constraints and removed constraints have unique IDs.
-    pub fn validate_constraint_ids(&self) -> Result<()> {
-        let mut map = HashSet::new();
-        for c in &self.constraints {
-            if !map.insert(c.id) {
-                bail!("Duplicated constraint ID: {}", c.id);
-            }
-        }
-        for c in &self.removed_constraints {
-            if let Some(c) = &c.constraint {
-                if !map.insert(c.id) {
-                    bail!("Duplicated constraint ID: {}", c.id);
-                }
-            }
-        }
-        Ok(())
-    }
-
-    pub fn binary_ids(&self) -> VariableIDSet {
-        self.decision_variables
-            .iter()
-            .filter(|dv| dv.kind() == Kind::Binary)
-            .map(|dv| dv.id.into())
             .collect()
     }
 
@@ -141,60 +78,6 @@ impl Instance {
             removed_reason,
             removed_reason_parameters,
         });
-        Ok(())
-    }
-
-    pub fn restore_constraint(&mut self, constraint_id: u64) -> Result<()> {
-        let index = self
-            .removed_constraints
-            .iter()
-            .position(|c| c.constraint.as_ref().is_some_and(|c| c.id == constraint_id))
-            .with_context(|| format!("Constraint ID {constraint_id} not found"))?;
-        let c = self.removed_constraints.remove(index).constraint.unwrap();
-        self.constraints.push(c);
-        Ok(())
-    }
-
-    /// Convert the instance into a minimization problem.
-    ///
-    /// This is based on the fact that maximization problem with negative objective function is equivalent to minimization problem.
-    pub fn as_minimization_problem(&mut self) {
-        if self.sense() == Sense::Minimize {
-            return;
-        }
-        self.sense = Sense::Minimize as i32;
-        self.objective = Some(-self.objective().into_owned());
-    }
-
-    pub fn as_maximization_problem(&mut self) {
-        if self.sense() == Sense::Maximize {
-            return;
-        }
-        self.sense = Sense::Maximize as i32;
-        self.objective = Some(-self.objective().into_owned());
-    }
-
-    /// Substitute dependent decision variables with given [Function]s.
-    pub fn substitute(&mut self, replacement: HashMap<u64, Function>) -> Result<()> {
-        if let Some(obj) = self.objective.as_mut() {
-            *obj = obj.substitute(&replacement)?;
-        }
-        for c in &mut self.constraints {
-            if let Some(f) = c.function.as_mut() {
-                *f = f.substitute(&replacement)?;
-            }
-        }
-        for c in &mut self.removed_constraints {
-            if let Some(c) = &mut c.constraint {
-                if let Some(f) = c.function.as_mut() {
-                    *f = f.substitute(&replacement)?;
-                }
-            }
-        }
-        for (_id, f) in self.decision_variable_dependency.iter_mut() {
-            *f = f.substitute(&replacement)?;
-        }
-        self.decision_variable_dependency.extend(replacement);
         Ok(())
     }
 }
@@ -454,30 +337,7 @@ fn eval_dependencies(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        v1::{Linear, State},
-        Evaluate,
-    };
-    use proptest::prelude::*;
-
-    proptest! {
-        #[test]
-        fn test_instance_arbitrary_any(instance in Instance::arbitrary()) {
-            instance.validate().unwrap();
-        }
-
-        /// Compare the result of partial_evaluate and substitute with `Function::Constant`.
-        #[test]
-        fn substitute_fixed_value(instance in Instance::arbitrary(), value in -3.0..3.0) {
-            for id in instance.defined_ids() {
-                let mut partially_evaluated = instance.clone();
-                partially_evaluated.partial_evaluate(&State { entries: [(id, value)].into_iter().collect() }, crate::ATol::default()).unwrap();
-                let mut substituted = instance.clone();
-                substituted.substitute([(id, Function::from(value))].into_iter().collect()).unwrap();
-                prop_assert!(partially_evaluated.abs_diff_eq(&substituted, crate::ATol::default()));
-            }
-        }
-    }
+    use crate::v1::{Linear, State};
 
     #[test]
     fn test_eval_dependencies() {
