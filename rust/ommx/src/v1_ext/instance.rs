@@ -75,6 +75,26 @@ impl Instance {
             .collect()
     }
 
+    pub fn relax_constraint(
+        &mut self,
+        constraint_id: u64,
+        removed_reason: String,
+        removed_reason_parameters: HashMap<String, String>,
+    ) -> Result<()> {
+        let index = self
+            .constraints
+            .iter()
+            .position(|c| c.id == constraint_id)
+            .with_context(|| format!("Constraint ID {constraint_id} not found"))?;
+        let c = self.constraints.remove(index);
+        self.removed_constraints.push(crate::v1::RemovedConstraint {
+            constraint: Some(c),
+            removed_reason,
+            removed_reason_parameters,
+        });
+        Ok(())
+    }
+
     /// Execute all validations for this instance
     pub fn validate(&self) -> Result<()> {
         self.validate_decision_variable_ids()?;
@@ -113,88 +133,6 @@ impl Instance {
                 }
             }
         }
-        Ok(())
-    }
-
-    pub fn binary_ids(&self) -> VariableIDSet {
-        self.decision_variables
-            .iter()
-            .filter(|dv| dv.kind() == Kind::Binary)
-            .map(|dv| dv.id.into())
-            .collect()
-    }
-
-    pub fn relax_constraint(
-        &mut self,
-        constraint_id: u64,
-        removed_reason: String,
-        removed_reason_parameters: HashMap<String, String>,
-    ) -> Result<()> {
-        let index = self
-            .constraints
-            .iter()
-            .position(|c| c.id == constraint_id)
-            .with_context(|| format!("Constraint ID {constraint_id} not found"))?;
-        let c = self.constraints.remove(index);
-        self.removed_constraints.push(crate::v1::RemovedConstraint {
-            constraint: Some(c),
-            removed_reason,
-            removed_reason_parameters,
-        });
-        Ok(())
-    }
-
-    pub fn restore_constraint(&mut self, constraint_id: u64) -> Result<()> {
-        let index = self
-            .removed_constraints
-            .iter()
-            .position(|c| c.constraint.as_ref().is_some_and(|c| c.id == constraint_id))
-            .with_context(|| format!("Constraint ID {constraint_id} not found"))?;
-        let c = self.removed_constraints.remove(index).constraint.unwrap();
-        self.constraints.push(c);
-        Ok(())
-    }
-
-    /// Convert the instance into a minimization problem.
-    ///
-    /// This is based on the fact that maximization problem with negative objective function is equivalent to minimization problem.
-    pub fn as_minimization_problem(&mut self) {
-        if self.sense() == Sense::Minimize {
-            return;
-        }
-        self.sense = Sense::Minimize as i32;
-        self.objective = Some(-self.objective().into_owned());
-    }
-
-    pub fn as_maximization_problem(&mut self) {
-        if self.sense() == Sense::Maximize {
-            return;
-        }
-        self.sense = Sense::Maximize as i32;
-        self.objective = Some(-self.objective().into_owned());
-    }
-
-    /// Substitute dependent decision variables with given [Function]s.
-    pub fn substitute(&mut self, replacement: HashMap<u64, Function>) -> Result<()> {
-        if let Some(obj) = self.objective.as_mut() {
-            *obj = obj.substitute(&replacement)?;
-        }
-        for c in &mut self.constraints {
-            if let Some(f) = c.function.as_mut() {
-                *f = f.substitute(&replacement)?;
-            }
-        }
-        for c in &mut self.removed_constraints {
-            if let Some(c) = &mut c.constraint {
-                if let Some(f) = c.function.as_mut() {
-                    *f = f.substitute(&replacement)?;
-                }
-            }
-        }
-        for (_id, f) in self.decision_variable_dependency.iter_mut() {
-            *f = f.substitute(&replacement)?;
-        }
-        self.decision_variable_dependency.extend(replacement);
         Ok(())
     }
 }
@@ -454,10 +392,7 @@ fn eval_dependencies(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        v1::{Linear, State},
-        Evaluate,
-    };
+    use crate::v1::{Linear, State};
     use proptest::prelude::*;
 
     proptest! {
@@ -466,17 +401,6 @@ mod tests {
             instance.validate().unwrap();
         }
 
-        /// Compare the result of partial_evaluate and substitute with `Function::Constant`.
-        #[test]
-        fn substitute_fixed_value(instance in Instance::arbitrary(), value in -3.0..3.0) {
-            for id in instance.defined_ids() {
-                let mut partially_evaluated = instance.clone();
-                partially_evaluated.partial_evaluate(&State { entries: [(id, value)].into_iter().collect() }, crate::ATol::default()).unwrap();
-                let mut substituted = instance.clone();
-                substituted.substitute([(id, Function::from(value))].into_iter().collect()).unwrap();
-                prop_assert!(partially_evaluated.abs_diff_eq(&substituted, crate::ATol::default()));
-            }
-        }
     }
 
     #[test]
