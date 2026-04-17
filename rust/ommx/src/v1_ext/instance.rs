@@ -10,7 +10,7 @@ use approx::AbsDiffEq;
 use num::Zero;
 use std::{
     borrow::Cow,
-    collections::{hash_map::Entry as HashMapEntry, BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{hash_map::Entry as HashMapEntry, BTreeMap, BTreeSet, HashMap},
 };
 
 impl Instance {
@@ -50,20 +50,6 @@ impl Instance {
         Ok(())
     }
 
-    pub fn get_kinds(&self) -> HashMap<VariableID, Kind> {
-        self.decision_variables
-            .iter()
-            .map(|dv| (VariableID::from(dv.id), dv.kind()))
-            .collect()
-    }
-
-    pub fn defined_ids(&self) -> BTreeSet<u64> {
-        self.decision_variables
-            .iter()
-            .map(|dv| dv.id)
-            .collect::<BTreeSet<_>>()
-    }
-
     pub fn constraint_ids(&self) -> BTreeSet<u64> {
         self.constraints.iter().map(|c| c.id).collect()
     }
@@ -92,47 +78,6 @@ impl Instance {
             removed_reason,
             removed_reason_parameters,
         });
-        Ok(())
-    }
-
-    /// Execute all validations for this instance
-    pub fn validate(&self) -> Result<()> {
-        self.validate_decision_variable_ids()?;
-        self.validate_constraint_ids()?;
-        Ok(())
-    }
-
-    /// Validate that all decision variable IDs used in the instance are defined.
-    pub fn validate_decision_variable_ids(&self) -> Result<()> {
-        let used_ids = self.required_ids();
-        let mut defined_ids = VariableIDSet::default();
-        for dv in &self.decision_variables {
-            if !defined_ids.insert(dv.id.into()) {
-                bail!("Duplicated definition of decision variable ID: {}", dv.id);
-            }
-        }
-        if !used_ids.is_subset(&defined_ids) {
-            let undefined_ids = used_ids.difference(&defined_ids).collect::<Vec<_>>();
-            bail!("Undefined decision variable IDs: {:?}", undefined_ids);
-        }
-        Ok(())
-    }
-
-    /// Test all constraints and removed constraints have unique IDs.
-    pub fn validate_constraint_ids(&self) -> Result<()> {
-        let mut map = HashSet::new();
-        for c in &self.constraints {
-            if !map.insert(c.id) {
-                bail!("Duplicated constraint ID: {}", c.id);
-            }
-        }
-        for c in &self.removed_constraints {
-            if let Some(c) = &c.constraint {
-                if !map.insert(c.id) {
-                    bail!("Duplicated constraint ID: {}", c.id);
-                }
-            }
-        }
         Ok(())
     }
 }
@@ -393,15 +338,6 @@ fn eval_dependencies(
 mod tests {
     use super::*;
     use crate::v1::{Linear, State};
-    use proptest::prelude::*;
-
-    proptest! {
-        #[test]
-        fn test_instance_arbitrary_any(instance in Instance::arbitrary()) {
-            instance.validate().unwrap();
-        }
-
-    }
 
     #[test]
     fn test_eval_dependencies() {

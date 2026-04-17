@@ -1,11 +1,11 @@
 use crate::v1::{
-    instance::Sense, sampled_values::SampledValuesEntry, samples::SamplesEntry, SampleSet,
-    SampledValues, Samples, Solution, State,
+    sampled_values::SampledValuesEntry, samples::SamplesEntry, SampleSet, SampledValues, Samples,
+    Solution, State,
 };
-use anyhow::{bail, ensure, Context, Result};
+use anyhow::{bail, Context, Result};
 use approx::AbsDiffEq;
 use ordered_float::OrderedFloat;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::HashMap;
 
 impl From<HashMap<OrderedFloat<f64>, Vec<u64>>> for SampledValues {
     fn from(map: HashMap<OrderedFloat<f64>, Vec<u64>>) -> Self {
@@ -174,7 +174,7 @@ impl SampleSet {
             .context("SampleSet lacks objectives")
     }
 
-    pub fn feasible_relaxed(&self) -> &HashMap<u64, bool> {
+    fn feasible_relaxed_map(&self) -> &HashMap<u64, bool> {
         if self.feasible_relaxed.is_empty() {
             &self.feasible
         } else {
@@ -182,7 +182,7 @@ impl SampleSet {
         }
     }
 
-    pub fn feasible_unrelaxed(&self) -> &HashMap<u64, bool> {
+    fn feasible_unrelaxed_map(&self) -> &HashMap<u64, bool> {
         if self.feasible_relaxed.is_empty() {
             #[allow(deprecated)]
             &self.feasible_unrelaxed
@@ -191,76 +191,12 @@ impl SampleSet {
         }
     }
 
-    pub fn num_samples(&self) -> Result<usize> {
-        let objectives = self.objectives()?;
-        ensure!(
-            objectives.len() == self.feasible_relaxed().len()
-                && objectives.len() == self.feasible_unrelaxed().len(),
-            "SampleSet has inconsistent number of objectives and feasibility"
-        );
-        Ok(objectives.len())
-    }
-
-    pub fn sample_ids(&self) -> BTreeSet<u64> {
-        self.feasible_relaxed().keys().cloned().collect()
-    }
-
-    pub fn feasible_ids(&self) -> BTreeSet<u64> {
-        self.feasible_relaxed()
-            .iter()
-            .filter_map(|(id, is_feasible)| is_feasible.then_some(*id))
-            .collect()
-    }
-
-    pub fn feasible_unrelaxed_ids(&self) -> BTreeSet<u64> {
-        self.feasible_unrelaxed()
-            .iter()
-            .filter_map(|(id, is_feasible)| is_feasible.then_some(*id))
-            .collect()
-    }
-
-    /// Find the best ID in terms of the total objective value.
-    fn best(&self, ids: impl Iterator<Item = u64>) -> Result<u64> {
-        let objectives = self.objectives()?;
-        let obj = ids
-            .map(|id| {
-                Ok((
-                    id,
-                    objectives
-                        .get(id)
-                        .context(format!("SampleSet lacks objective for sample ID={id}"))?,
-                ))
-            })
-            .collect::<Result<Vec<_>>>()?;
-        let sense = Sense::try_from(self.sense).context("Invalid sense")?;
-        obj.iter()
-            .min_by(|(_, a), (_, b)| {
-                if sense == Sense::Minimize {
-                    a.total_cmp(b)
-                } else {
-                    b.total_cmp(a)
-                }
-            })
-            .map(|(id, _)| *id)
-            .context("No feasible solution found in SampleSet")
-    }
-
-    pub fn best_feasible_id(&self) -> Result<u64> {
-        self.best(self.feasible_ids().into_iter())
-    }
-
-    pub fn best_feasible_unrelaxed_id(&self) -> Result<u64> {
-        self.best(self.feasible_unrelaxed_ids().into_iter())
-    }
-
-    pub fn best_feasible(&self) -> Result<Solution> {
-        self.get(self.best_feasible_id()?)
-    }
-
-    pub fn best_feasible_unrelaxed(&self) -> Result<Solution> {
-        self.get(self.best_feasible_unrelaxed_id()?)
-    }
-
+    /// Extract the [`Solution`] for a specific sample ID.
+    ///
+    /// Retained solely for the v1_ext proptest that compares
+    /// `v1::Instance::evaluate_samples` with single-sample
+    /// `v1::Instance::evaluate`. Will go away when those tests are
+    /// migrated to the domain layer (see issue #802).
     pub fn get(&self, sample_id: u64) -> Result<Solution> {
         let mut decision_variables = Vec::new();
         let mut state = State::default();
@@ -292,12 +228,15 @@ impl SampleSet {
                 format!("SampleSet lacks objective for sample with ID={sample_id}")
             })?,
             decision_variables,
-            feasible_relaxed: Some(*self.feasible_relaxed().get(&sample_id).with_context(
+            feasible_relaxed: Some(*self.feasible_relaxed_map().get(&sample_id).with_context(
                 || format!("SampleSet lacks feasibility for sample with ID={sample_id}"),
             )?),
-            feasible: *self.feasible_unrelaxed().get(&sample_id).with_context(|| {
-                format!("SampleSet lacks unrelaxed feasibility for sample with ID={sample_id}")
-            })?,
+            feasible: *self
+                .feasible_unrelaxed_map()
+                .get(&sample_id)
+                .with_context(|| {
+                    format!("SampleSet lacks unrelaxed feasibility for sample with ID={sample_id}")
+                })?,
             evaluated_constraints,
             ..Default::default()
         })
