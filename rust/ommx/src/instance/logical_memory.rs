@@ -115,18 +115,27 @@ impl_constraint_collection_profile!(
     "removed_sos1_constraints"
 );
 
-crate::impl_logical_memory_profile! {
-    Instance {
-        sense,
-        objective,
-        decision_variables,
-        constraint_collection,
-        indicator_constraint_collection,
-        one_hot_constraint_collection,
-        sos1_constraint_collection,
-        decision_variable_dependency,
-        parameters,
-        description,
+// `Instance` uses `#[derive(LogicalMemoryProfile)]` on its definition site,
+// which reflects every field of the struct automatically. The declarative
+// macro invocation it replaced had silently drifted — `named_functions`
+// was missing — which is exactly the failure mode the derive is designed
+// to prevent.
+
+impl Instance {
+    /// Compute the logical memory profile of this instance.
+    ///
+    /// Returns a [`crate::MemoryProfile`] that can be rendered as a
+    /// folded-stack string via [`ToString::to_string`] (for flamegraph
+    /// tools) or inspected programmatically via
+    /// [`crate::MemoryProfile::entries`] and
+    /// [`crate::MemoryProfile::total_bytes`].
+    ///
+    /// The reported byte counts are a logical estimation, not exact heap
+    /// profiling: allocator overhead, padding, and unused capacity are
+    /// deliberately ignored. See [`crate::MemoryProfile`] for the
+    /// flamegraph workflow and full caveats.
+    pub fn logical_memory_profile(&self) -> crate::MemoryProfile {
+        crate::logical_memory::build_profile(self)
     }
 }
 
@@ -152,6 +161,7 @@ mod tests {
         Instance.description;Option[stack] 96
         Instance.indicator_constraint_collection;indicator_constraints;BTreeMap[stack] 24
         Instance.indicator_constraint_collection;removed_indicator_constraints;BTreeMap[stack] 24
+        Instance.named_functions;BTreeMap[stack] 24
         Instance.objective;Zero 40
         Instance.one_hot_constraint_collection;one_hot_constraints;BTreeMap[stack] 24
         Instance.one_hot_constraint_collection;removed_one_hot_constraints;BTreeMap[stack] 24
@@ -200,6 +210,7 @@ mod tests {
         Instance.description;Option[stack] 96
         Instance.indicator_constraint_collection;indicator_constraints;BTreeMap[stack] 24
         Instance.indicator_constraint_collection;removed_indicator_constraints;BTreeMap[stack] 24
+        Instance.named_functions;BTreeMap[stack] 24
         Instance.objective;Linear;PolynomialBase.terms 80
         Instance.one_hot_constraint_collection;one_hot_constraints;BTreeMap[stack] 24
         Instance.one_hot_constraint_collection;removed_one_hot_constraints;BTreeMap[stack] 24
@@ -269,6 +280,7 @@ mod tests {
         Instance.description;Option[stack] 96
         Instance.indicator_constraint_collection;indicator_constraints;BTreeMap[stack] 24
         Instance.indicator_constraint_collection;removed_indicator_constraints;BTreeMap[stack] 24
+        Instance.named_functions;BTreeMap[stack] 24
         Instance.objective;Linear;PolynomialBase.terms 80
         Instance.one_hot_constraint_collection;one_hot_constraints;BTreeMap[stack] 24
         Instance.one_hot_constraint_collection;removed_one_hot_constraints;BTreeMap[stack] 24
@@ -324,6 +336,7 @@ mod tests {
         Instance.description;Option[stack] 96
         Instance.indicator_constraint_collection;indicator_constraints;BTreeMap[stack] 24
         Instance.indicator_constraint_collection;removed_indicator_constraints;BTreeMap[stack] 24
+        Instance.named_functions;BTreeMap[stack] 24
         Instance.objective;Zero 40
         Instance.one_hot_constraint_collection;one_hot_constraints;BTreeMap[stack] 24
         Instance.one_hot_constraint_collection;removed_one_hot_constraints;BTreeMap[stack] 24
@@ -388,6 +401,7 @@ mod tests {
         Instance.description;Description.name 37
         Instance.indicator_constraint_collection;indicator_constraints;BTreeMap[stack] 24
         Instance.indicator_constraint_collection;removed_indicator_constraints;BTreeMap[stack] 24
+        Instance.named_functions;BTreeMap[stack] 24
         Instance.objective;Zero 40
         Instance.one_hot_constraint_collection;one_hot_constraints;BTreeMap[stack] 24
         Instance.one_hot_constraint_collection;removed_one_hot_constraints;BTreeMap[stack] 24

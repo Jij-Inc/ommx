@@ -1563,7 +1563,7 @@ impl Instance {
     /// True
     /// ```
     pub fn logical_memory_profile(&self) -> String {
-        ommx::logical_memory::logical_memory_to_folded(&self.inner)
+        self.inner.logical_memory_profile().to_string()
     }
 }
 

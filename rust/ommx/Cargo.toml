@@ -43,6 +43,7 @@ log.workspace = true
 maplit.workspace = true
 num.workspace = true
 ocipkg = { workspace = true }
+ommx-derive = { path = "../ommx-derive", version = "=3.0.0-alpha.1" }
 ordered-float.workspace = true
 petgraph.workspace = true
 proptest.workspace = true

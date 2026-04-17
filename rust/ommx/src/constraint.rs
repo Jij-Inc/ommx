@@ -7,6 +7,7 @@ mod reduce_binary_power;
 mod serialize;
 pub(crate) mod stage;
 
+use crate::logical_memory::LogicalMemoryProfile;
 use crate::{sampled::UnknownSampleIDError, Function, SampleID, VariableID};
 pub use arbitrary::*;
 use derive_more::{Deref, From};
@@ -81,7 +82,7 @@ pub enum Provenance {
 }
 
 /// Auxiliary metadata for constraints (excluding essential id and equality)
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, LogicalMemoryProfile)]
 pub struct ConstraintMetadata {
     pub name: Option<String>,
     pub subscripts: Vec<i64>,

@@ -1,0 +1,31 @@
+[package]
+name = "ommx-derive"
+
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+readme.workspace = true
+
+# crate-specific settings for publishing
+description = "Internal derive macros for the `ommx` crate."
+documentation = "https://docs.rs/ommx-derive/"
+repository = "https://github.com/Jij-Inc/ommx"
+keywords = ["optimization", "ommx"]
+categories = ["data-structures", "mathematics", "science"]
+
+[lib]
+proc-macro = true
+
+[lints]
+workspace = true
+
+[dependencies]
+proc-macro2.workspace = true
+quote.workspace = true
+syn.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+# `syn = "full"` is needed by prettyplease to parse the generated `syn::File`.
+prettyplease = "0.2.37"
+syn = { workspace = true, features = ["full"] }

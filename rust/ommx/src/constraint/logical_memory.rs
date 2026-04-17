@@ -1,7 +1,4 @@
-use crate::constraint::{
-    Constraint, ConstraintID, ConstraintMetadata, Created, CreatedData, Equality, Provenance,
-    RemovedReason,
-};
+use crate::constraint::{Constraint, ConstraintID, Created, Equality, Provenance, RemovedReason};
 use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
 use std::mem::size_of;
 
@@ -23,28 +20,8 @@ impl LogicalMemoryProfile for Provenance {
     }
 }
 
-crate::impl_logical_memory_profile! {
-    ConstraintMetadata {
-        name,
-        subscripts,
-        parameters,
-        description,
-        provenance,
-    }
-}
-
-crate::impl_logical_memory_profile! {
-    CreatedData {
-        function,
-    }
-}
-
-crate::impl_logical_memory_profile! {
-    RemovedReason {
-        reason,
-        parameters,
-    }
-}
+// ConstraintMetadata, CreatedData, and RemovedReason use
+// `#[derive(LogicalMemoryProfile)]` on their definition sites.
 
 // Constraint<Created> - manually implemented because generic types
 // cannot be used with the simple ident-based macro form.

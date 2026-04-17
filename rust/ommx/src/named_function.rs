@@ -7,6 +7,7 @@ use derive_more::{Deref, From};
 use fnv::FnvHashMap;
 use getset::*;
 
+use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
 use crate::{Function, SampleID, Sampled, UnknownSampleIDError, VariableIDSet};
 pub use arbitrary::*;
 
@@ -45,6 +46,12 @@ impl NamedFunctionID {
     }
 }
 
+impl LogicalMemoryProfile for NamedFunctionID {
+    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
+        visitor.visit_leaf(path, std::mem::size_of::<NamedFunctionID>());
+    }
+}
+
 /// A named function represents an arbitrary mathematical function with associated metadata.
 ///
 /// Named functions allow attaching names, subscripts, parameters, and descriptions to
@@ -62,7 +69,7 @@ impl NamedFunctionID {
 /// so the same ID value can be used across these different namespaces.
 ///
 /// Corresponds to `ommx.v1.NamedFunction`.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, LogicalMemoryProfile)]
 pub struct NamedFunction {
     pub id: NamedFunctionID,
     pub function: Function,

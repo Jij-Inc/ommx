@@ -7,6 +7,7 @@ mod serialize;
 pub use arbitrary::*;
 use getset::CopyGetters;
 
+use crate::logical_memory::LogicalMemoryProfile;
 use crate::{sampled::UnknownSampleIDError, ATol, Bound, Parse, RawParseError, SampleID, Sampled};
 use ::approx::AbsDiffEq;
 use derive_more::{Deref, From};
@@ -151,7 +152,7 @@ impl Kind {
 ///   - i.e. `bound` is invariant under `|bound| kind.consistent_bound(bound, atol).unwrap()` for appropriate `atol`.
 /// - If `substituted_value` is set, it is consistent to `kind` and `bound`.
 ///
-#[derive(Debug, Clone, PartialEq, CopyGetters)]
+#[derive(Debug, Clone, PartialEq, CopyGetters, LogicalMemoryProfile)]
 pub struct DecisionVariable {
     #[getset(get_copy = "pub")]
     id: VariableID,
@@ -386,7 +387,7 @@ pub enum DecisionVariableError {
 }
 
 /// Auxiliary metadata for decision variables (excluding essential id, kind, bound, substituted_value)
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, LogicalMemoryProfile)]
 pub struct DecisionVariableMetadata {
     pub name: Option<String>,
     pub subscripts: Vec<i64>,

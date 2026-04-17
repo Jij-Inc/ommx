@@ -1,4 +1,7 @@
 //! Path management for logical memory profiling.
+//!
+//! Internal implementation detail of [`crate::logical_memory`]; not part of the
+//! public API surface.
 
 /// Logical path for memory profiling.
 ///
@@ -19,23 +22,6 @@ impl Path {
     }
 
     /// Create a path guard that automatically pops on drop.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// use ommx::logical_memory::{Path, LogicalMemoryVisitor};
-    /// use std::mem::size_of;
-    ///
-    /// # struct MyVisitor;
-    /// # impl ommx::logical_memory::LogicalMemoryVisitor for MyVisitor {
-    /// #     fn visit_leaf(&mut self, _path: &Path, _bytes: usize) {}
-    /// # }
-    /// let mut path = Path::new();
-    /// let mut visitor = MyVisitor;
-    ///
-    /// visitor.visit_leaf(&path.with("field"), size_of::<u64>());
-    /// // path is automatically popped when guard is dropped
-    /// ```
     pub fn with(&mut self, name: &'static str) -> PathGuard<'_> {
         PathGuard::new(self, name)
     }
@@ -51,24 +37,6 @@ impl From<Vec<&'static str>> for Path {
 ///
 /// This guard ensures that path push/pop operations are always paired,
 /// preventing bugs from forgetting to pop.
-///
-/// # Example
-///
-/// ```rust
-/// use ommx::logical_memory::{Path, LogicalMemoryVisitor};
-/// use std::mem::size_of;
-///
-/// # struct MyVisitor;
-/// # impl ommx::logical_memory::LogicalMemoryVisitor for MyVisitor {
-/// #     fn visit_leaf(&mut self, _path: &Path, _bytes: usize) {}
-/// # }
-/// let mut path = Path::new();
-/// let mut visitor = MyVisitor;
-///
-/// // Automatic pop via guard:
-/// visitor.visit_leaf(&path.with("field"), size_of::<u64>());
-/// // path is automatically popped when guard is dropped
-/// ```
 pub struct PathGuard<'a> {
     path: &'a mut Path,
 }
@@ -78,28 +46,6 @@ impl<'a> PathGuard<'a> {
     fn new(path: &'a mut Path, name: &'static str) -> Self {
         path.0.push(name);
         Self { path }
-    }
-
-    /// Create a nested path guard.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// use ommx::logical_memory::{Path, LogicalMemoryVisitor};
-    /// # struct MyVisitor;
-    /// # impl ommx::logical_memory::LogicalMemoryVisitor for MyVisitor {
-    /// #     fn visit_leaf(&mut self, _path: &Path, _bytes: usize) {}
-    /// # }
-    /// let mut path = Path::new();
-    /// let mut visitor = MyVisitor;
-    ///
-    /// // Nested guards
-    /// let mut guard1 = path.with("parent");
-    /// visitor.visit_leaf(&guard1.with("child"), 42);
-    /// // Both "child" and "parent" are automatically popped in reverse order
-    /// ```
-    pub fn with(&mut self, name: &'static str) -> PathGuard<'_> {
-        PathGuard::new(self.path, name)
     }
 }
 
