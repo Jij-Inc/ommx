@@ -103,7 +103,15 @@ pub enum Sense {
 ///   Variable IDs in `named_functions` must be registered in [`Self::decision_variables`],
 ///   but are NOT included in the "used" set calculation.
 ///
-#[derive(Debug, Clone, PartialEq, getset::Getters, getset::CopyGetters, Default)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    getset::Getters,
+    getset::CopyGetters,
+    Default,
+    crate::logical_memory::LogicalMemoryProfile,
+)]
 pub struct Instance {
     #[getset(get_copy = "pub")]
     sense: Sense,

@@ -1,3 +1,4 @@
+use crate::logical_memory::LogicalMemoryProfile;
 use crate::{SampleID, VariableIDSet};
 use fnv::FnvHashMap;
 use std::collections::BTreeMap;
@@ -19,7 +20,7 @@ pub struct Created;
 // ===== Common types =====
 
 /// Reason why a constraint was removed/relaxed.
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, LogicalMemoryProfile)]
 pub struct RemovedReason {
     /// Short reason (e.g. method or application name that removed the constraint).
     pub reason: String,
@@ -30,7 +31,7 @@ pub struct RemovedReason {
 // ===== Stage data types for regular Constraint =====
 
 /// Data carried by a regular constraint in the Created stage.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, LogicalMemoryProfile)]
 pub struct CreatedData {
     pub function: crate::Function,
 }

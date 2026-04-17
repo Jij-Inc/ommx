@@ -1,4 +1,4 @@
-use crate::decision_variable::{DecisionVariable, DecisionVariableMetadata, Kind, VariableID};
+use crate::decision_variable::{Kind, VariableID};
 use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
 use std::mem::size_of;
 
@@ -14,29 +14,12 @@ impl LogicalMemoryProfile for Kind {
     }
 }
 
-crate::impl_logical_memory_profile! {
-    DecisionVariable {
-        id,
-        kind,
-        bound,
-        substituted_value,
-        metadata,
-    }
-}
-
-crate::impl_logical_memory_profile! {
-    DecisionVariableMetadata {
-        name,
-        subscripts,
-        parameters,
-        description,
-    }
-}
+// DecisionVariable and DecisionVariableMetadata use
+// `#[derive(LogicalMemoryProfile)]` on their definition sites.
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::decision_variable::{Kind, VariableID};
+    use crate::decision_variable::{DecisionVariable, Kind, VariableID};
     use crate::logical_memory::logical_memory_to_folded;
     use crate::{ATol, Bound};
 
