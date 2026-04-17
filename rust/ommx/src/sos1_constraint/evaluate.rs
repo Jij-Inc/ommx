@@ -2,7 +2,7 @@ use super::*;
 use crate::{ATol, Evaluate, Propagate, PropagateOutcome, VariableIDSet};
 
 impl Propagate for Sos1Constraint<Created> {
-    type Transformed = ();
+    type Transformed = std::convert::Infallible;
 
     fn propagate(
         mut self,

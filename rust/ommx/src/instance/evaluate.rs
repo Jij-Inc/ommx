@@ -225,12 +225,7 @@ impl Instance {
                             .removed_mut()
                             .insert(id, (oh, propagation_reason.clone()));
                     }
-                    PropagateOutcome::Transformed { original, new: () } => {
-                        // OneHot has no non-trivial transformation; treat as consumed.
-                        self.one_hot_constraint_collection
-                            .removed_mut()
-                            .insert(id, (original, propagation_reason.clone()));
-                    }
+                    PropagateOutcome::Transformed { new, .. } => match new {},
                 }
             }
 
@@ -250,11 +245,7 @@ impl Instance {
                             .removed_mut()
                             .insert(id, (sos1, propagation_reason.clone()));
                     }
-                    PropagateOutcome::Transformed { original, new: () } => {
-                        self.sos1_constraint_collection
-                            .removed_mut()
-                            .insert(id, (original, propagation_reason.clone()));
-                    }
+                    PropagateOutcome::Transformed { new, .. } => match new {},
                 }
             }
 
