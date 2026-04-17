@@ -4,9 +4,14 @@ name = "ommx-derive"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+readme.workspace = true
 
-# This crate is only for internal use within the ommx workspace
-publish = false
+# crate-specific settings for publishing
+description = "Internal derive macros for the `ommx` crate."
+documentation = "https://docs.rs/ommx-derive/"
+repository = "https://github.com/Jij-Inc/ommx"
+keywords = ["optimization", "ommx"]
+categories = ["data-structures", "mathematics", "science"]
 
 [lib]
 proc-macro = true

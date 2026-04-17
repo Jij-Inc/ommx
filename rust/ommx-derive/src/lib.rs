@@ -1,7 +1,11 @@
 //! Derive macros for the `ommx` crate.
 //!
-//! This crate is for internal use within the OMMX workspace only. It is
-//! unpublished and has no stability guarantees outside the workspace.
+//! This crate exists solely as an implementation detail of [`ommx`]: it
+//! is published to crates.io because `ommx` depends on it, but it has no
+//! stable API of its own. Depend on `ommx` and use the re-exported derive
+//! rather than pulling this crate in directly.
+//!
+//! [`ommx`]: https://docs.rs/ommx
 //!
 //! # `#[derive(LogicalMemoryProfile)]`
 //!
