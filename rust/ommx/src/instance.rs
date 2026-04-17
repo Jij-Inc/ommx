@@ -11,6 +11,7 @@ mod log_encode;
 mod logical_memory;
 mod named_function;
 mod new;
+mod one_hot;
 mod parametric_builder;
 mod parse;
 mod pass;

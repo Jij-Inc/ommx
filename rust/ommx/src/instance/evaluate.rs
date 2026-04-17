@@ -204,7 +204,7 @@ impl Instance {
         let mut changed = true;
 
         let propagation_reason = RemovedReason {
-            reason: "unit_propagation".to_string(),
+            reason: "ommx.Instance.partial_evaluate.unit_propagation".to_string(),
             parameters: Default::default(),
         };
 
