@@ -53,9 +53,13 @@ impl From<IndicatorConstraintID> for u64 {
 ///
 /// When the binary indicator variable is 0, the constraint is unconditionally satisfied.
 /// When it is 1, the constraint `f(x) <= 0` (or `f(x) = 0`) must hold.
+///
+/// The constraint's [`IndicatorConstraintID`] is not stored in this struct — it is held
+/// by the enclosing collection (e.g. the `BTreeMap` key in [`Instance`]).
+///
+/// [`Instance`]: crate::Instance
 #[derive(Debug, Clone, PartialEq)]
 pub struct IndicatorConstraint<S: Stage<Self> = Created> {
-    pub id: IndicatorConstraintID,
     /// The binary decision variable that activates this constraint.
     pub indicator_variable: VariableID,
     pub equality: Equality,
@@ -112,9 +116,6 @@ pub type SampledIndicatorConstraint = IndicatorConstraint<stage::Sampled>;
 
 impl EvaluatedConstraintBehavior for EvaluatedIndicatorConstraint {
     type ID = IndicatorConstraintID;
-    fn constraint_id(&self) -> IndicatorConstraintID {
-        self.id
-    }
     fn is_feasible(&self) -> bool {
         self.stage.feasible
     }
@@ -124,9 +125,6 @@ impl SampledConstraintBehavior for SampledIndicatorConstraint {
     type ID = IndicatorConstraintID;
     type Evaluated = EvaluatedIndicatorConstraint;
 
-    fn constraint_id(&self) -> IndicatorConstraintID {
-        self.id
-    }
     fn is_feasible_for(&self, sample_id: SampleID) -> Option<bool> {
         self.stage.feasible.get(&sample_id).copied()
     }
@@ -147,7 +145,6 @@ impl SampledConstraintBehavior for SampledIndicatorConstraint {
             .ok_or(crate::sampled::UnknownSampleIDError { id: sample_id })?;
 
         Ok(IndicatorConstraint {
-            id: self.id,
             indicator_variable: self.indicator_variable,
             equality: self.equality,
             metadata: self.metadata.clone(),
@@ -191,14 +188,8 @@ pub struct IndicatorPromote {
 
 impl IndicatorConstraint<Created> {
     /// Create a new indicator constraint.
-    pub fn new(
-        id: IndicatorConstraintID,
-        indicator_variable: VariableID,
-        equality: Equality,
-        function: Function,
-    ) -> Self {
+    pub fn new(indicator_variable: VariableID, equality: Equality, function: Function) -> Self {
         Self {
-            id,
             indicator_variable,
             equality,
             metadata: ConstraintMetadata::default(),
@@ -241,12 +232,10 @@ mod tests {
     #[test]
     fn test_create_indicator_constraint() {
         let ic = IndicatorConstraint::new(
-            IndicatorConstraintID::from(1),
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + coeff!(-5.0)),
         );
-        assert_eq!(ic.id, IndicatorConstraintID::from(1));
         assert_eq!(ic.indicator_variable, VariableID::from(10));
         assert_eq!(ic.equality, Equality::LessThanOrEqualToZero);
     }
@@ -254,7 +243,6 @@ mod tests {
     #[test]
     fn test_display() {
         let ic = IndicatorConstraint::new(
-            IndicatorConstraintID::from(1),
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + coeff!(-5.0)),
@@ -267,12 +255,8 @@ mod tests {
     #[test]
     fn test_constraint_type_impl() {
         // Verify ConstraintType associated types compile correctly
-        let ic = IndicatorConstraint::new(
-            IndicatorConstraintID::from(1),
-            VariableID::from(10),
-            Equality::EqualToZero,
-            Function::Zero,
-        );
+        let ic =
+            IndicatorConstraint::new(VariableID::from(10), Equality::EqualToZero, Function::Zero);
         let _: <IndicatorConstraint as ConstraintType>::Created = ic;
     }
 }

@@ -155,28 +155,6 @@ impl ParametricInstanceBuilder {
             }
         }
 
-        // Validate that constraint map keys match their value's id
-        for (key, value) in &constraints {
-            if *key != value.id {
-                return Err(InstanceError::InconsistentConstraintID {
-                    key: *key,
-                    value_id: value.id,
-                }
-                .into());
-            }
-        }
-
-        // Validate that removed constraint map keys match their value's id
-        for (key, (constraint, _reason)) in &self.removed_constraints {
-            if *key != constraint.id {
-                return Err(InstanceError::InconsistentRemovedConstraintID {
-                    key: *key,
-                    value_id: constraint.id,
-                }
-                .into());
-            }
-        }
-
         // Check that decision variable IDs and parameter IDs are disjoint
         let decision_variable_ids: VariableIDSet = decision_variables.keys().cloned().collect();
         let parameter_ids: VariableIDSet = parameters.keys().cloned().collect();

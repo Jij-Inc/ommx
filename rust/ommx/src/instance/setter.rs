@@ -38,30 +38,26 @@ impl Instance {
         Ok(())
     }
 
-    /// Insert a constraint into the instance.
+    /// Insert a constraint into the instance under the given [`ConstraintID`].
     ///
     /// - If the constraint already exists, it will be replaced.
-    /// - If the ID of given constraint is in the removed constraints, it replaces it.
+    /// - If the ID is in the removed constraints, it replaces it.
     /// - Otherwise, it adds the constraint to the instance.
     ///
     pub fn insert_constraint(
         &mut self,
+        id: ConstraintID,
         constraint: Constraint,
     ) -> anyhow::Result<Option<Constraint>> {
         // Validate that all variables in the constraints are defined
         self.validate_required_ids(constraint.required_ids())?;
         use std::collections::btree_map::Entry;
-        if let Entry::Occupied(mut o) = self
-            .constraint_collection
-            .removed_mut()
-            .entry(constraint.id)
-        {
+        if let Entry::Occupied(mut o) = self.constraint_collection.removed_mut().entry(id) {
             let (rc, _reason) = o.get_mut();
             let old_function = std::mem::replace(&mut rc.stage.function, constraint.stage.function);
             let old_equality = std::mem::replace(&mut rc.equality, constraint.equality);
             let old_metadata = std::mem::replace(&mut rc.metadata, constraint.metadata);
             let removed = Constraint {
-                id: constraint.id,
                 equality: old_equality,
                 metadata: old_metadata,
                 stage: crate::constraint::CreatedData {
@@ -73,10 +69,10 @@ impl Instance {
         Ok(self
             .constraint_collection
             .active_mut()
-            .insert(constraint.id, constraint))
+            .insert(id, constraint))
     }
 
-    /// Insert multiple constraints into the instance with a single validation pass.
+    /// Insert multiple `(id, constraint)` pairs into the instance with a single validation pass.
     ///
     /// This is more efficient than calling [`Self::insert_constraint`] multiple times
     /// because it validates all required variable IDs once, rather than
@@ -84,7 +80,7 @@ impl Instance {
     ///
     /// The behavior for each constraint follows the same rules as [`Self::insert_constraint`]:
     /// - If the constraint already exists, it will be replaced.
-    /// - If the ID of given constraint is in the removed constraints, it replaces it.
+    /// - If the ID is in the removed constraints, it replaces it.
     /// - Otherwise, it adds the constraint to the instance.
     ///
     /// # Atomicity
@@ -94,23 +90,22 @@ impl Instance {
     ///
     pub fn insert_constraints(
         &mut self,
-        constraints: Vec<Constraint>,
+        constraints: Vec<(ConstraintID, Constraint)>,
     ) -> anyhow::Result<BTreeMap<ConstraintID, Constraint>> {
         // Build validation sets once
         let variable_ids: VariableIDSet = self.decision_variables.keys().cloned().collect();
         let dependency_keys: VariableIDSet = self.decision_variable_dependency.keys().collect();
 
         // Validate all constraints first (atomic: fail before any insertion)
-        for constraint in &constraints {
+        for (_, constraint) in &constraints {
             let required_ids = constraint.required_ids();
             Self::validate_required_ids_with_sets(&required_ids, &variable_ids, &dependency_keys)?;
         }
 
         // Insert all constraints (validation already done)
         let mut replaced = BTreeMap::new();
-        for constraint in constraints {
+        for (id, constraint) in constraints {
             use std::collections::btree_map::Entry;
-            let id = constraint.id;
             let old = if let Entry::Occupied(mut o) =
                 self.constraint_collection.removed_mut().entry(id)
             {
@@ -120,7 +115,6 @@ impl Instance {
                 let old_equality = std::mem::replace(&mut rc.equality, constraint.equality);
                 let old_metadata = std::mem::replace(&mut rc.metadata, constraint.metadata);
                 Some(Constraint {
-                    id,
                     equality: old_equality,
                     metadata: old_metadata,
                     stage: crate::constraint::CreatedData {

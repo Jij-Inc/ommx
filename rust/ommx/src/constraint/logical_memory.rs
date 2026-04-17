@@ -27,8 +27,6 @@ impl LogicalMemoryProfile for Provenance {
 // cannot be used with the simple ident-based macro form.
 impl LogicalMemoryProfile for Constraint<Created> {
     fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
-        self.id
-            .visit_logical_memory(path.with("Constraint.id").as_mut(), visitor);
         self.equality
             .visit_logical_memory(path.with("Constraint.equality").as_mut(), visitor);
         self.metadata
@@ -52,26 +50,21 @@ impl LogicalMemoryProfile for (Constraint<Created>, RemovedReason) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::constraint::ConstraintID;
     use crate::logical_memory::logical_memory_to_folded;
     use crate::{coeff, linear, Function};
 
     #[test]
     fn test_constraint_snapshot() {
-        let constraint = Constraint::equal_to_zero(
-            ConstraintID::from(1),
-            Function::Linear(coeff!(2.0) * linear!(1) + coeff!(3.0) * linear!(2)),
-        );
+        let constraint = Constraint::equal_to_zero(Function::Linear(
+            coeff!(2.0) * linear!(1) + coeff!(3.0) * linear!(2),
+        ));
         let folded = logical_memory_to_folded(&constraint);
         insta::assert_snapshot!(folded);
     }
 
     #[test]
     fn test_constraint_with_metadata_snapshot() {
-        let mut constraint = Constraint::equal_to_zero(
-            ConstraintID::from(1),
-            Function::Linear(coeff!(2.0) * linear!(1)),
-        );
+        let mut constraint = Constraint::equal_to_zero(Function::Linear(coeff!(2.0) * linear!(1)));
         constraint.metadata.name = Some("test_constraint".to_string());
         constraint.metadata.description = Some("A test constraint".to_string());
         constraint.metadata.subscripts = vec![1, 2, 3];

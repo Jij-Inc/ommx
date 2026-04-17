@@ -24,7 +24,6 @@ impl Arbitrary for Constraint<Created> {
     fn arbitrary_with(params: Self::Parameters) -> Self::Strategy {
         (Function::arbitrary_with(params), Equality::arbitrary())
             .prop_map(|(function, equality)| Constraint {
-                id: ConstraintID(0), // Should be replaced with a unique ID, but cannot be generated here
                 equality,
                 metadata: ConstraintMetadata::default(),
                 stage: CreatedData { function },
@@ -73,10 +72,6 @@ pub fn arbitrary_constraints(
             ids.into_iter()
                 .map(ConstraintID::from)
                 .zip(constraints)
-                .map(|(id, mut constraint)| {
-                    constraint.id = id;
-                    (id, constraint)
-                })
                 .collect()
         })
         .boxed()

@@ -492,42 +492,6 @@ impl SampleSetBuilder {
             }
         }
 
-        for (key, value) in constraints.iter() {
-            if *key != value.id {
-                return Err(SampleSetError::InconsistentConstraintID {
-                    key: *key,
-                    value_id: value.id,
-                });
-            }
-        }
-
-        for (key, value) in self.indicator_constraints.iter() {
-            if *key != value.id {
-                return Err(SampleSetError::InconsistentIndicatorConstraintID {
-                    key: *key,
-                    value_id: value.id,
-                });
-            }
-        }
-
-        for (key, value) in self.one_hot_constraints.iter() {
-            if *key != value.id {
-                return Err(SampleSetError::InconsistentOneHotConstraintID {
-                    key: *key,
-                    value_id: value.id,
-                });
-            }
-        }
-
-        for (key, value) in self.sos1_constraints.iter() {
-            if *key != value.id {
-                return Err(SampleSetError::InconsistentSos1ConstraintID {
-                    key: *key,
-                    value_id: value.id,
-                });
-            }
-        }
-
         for (key, value) in &self.named_functions {
             if key != value.id() {
                 return Err(SampleSetError::InconsistentNamedFunctionID {

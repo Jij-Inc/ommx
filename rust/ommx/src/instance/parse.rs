@@ -21,13 +21,13 @@ fn convert_hints_to_collections(
     let mut absorbed_constraint_ids = std::collections::BTreeSet::new();
     for hint in &hints.one_hot_constraints {
         let id = crate::OneHotConstraintID::from(*hint.id);
-        one_hot_active.insert(id, crate::OneHotConstraint::new(id, hint.variables.clone()));
+        one_hot_active.insert(id, crate::OneHotConstraint::new(hint.variables.clone()));
         absorbed_constraint_ids.insert(hint.id);
     }
     let mut sos1_active = BTreeMap::new();
     for hint in &hints.sos1_constraints {
         let id = crate::Sos1ConstraintID::from(*hint.binary_constraint_id);
-        sos1_active.insert(id, crate::Sos1Constraint::new(id, hint.variables.clone()));
+        sos1_active.insert(id, crate::Sos1Constraint::new(hint.variables.clone()));
         absorbed_constraint_ids.insert(hint.binary_constraint_id);
         absorbed_constraint_ids.extend(&hint.big_m_constraint_ids);
     }
@@ -82,10 +82,10 @@ impl From<Sense> for i32 {
     }
 }
 
-impl From<Constraint> for v1::Constraint {
-    fn from(value: Constraint) -> Self {
+impl From<(ConstraintID, Constraint)> for v1::Constraint {
+    fn from((id, value): (ConstraintID, Constraint)) -> Self {
         Self {
-            id: *value.id,
+            id: id.into_inner(),
             equality: value.equality.into(),
             function: Some(value.stage.function.into()),
             name: value.metadata.name,
@@ -96,10 +96,16 @@ impl From<Constraint> for v1::Constraint {
     }
 }
 
-impl From<(Constraint, crate::constraint::RemovedReason)> for v1::RemovedConstraint {
-    fn from((constraint, removed_reason): (Constraint, crate::constraint::RemovedReason)) -> Self {
+impl From<(ConstraintID, Constraint, crate::constraint::RemovedReason)> for v1::RemovedConstraint {
+    fn from(
+        (id, constraint, removed_reason): (
+            ConstraintID,
+            Constraint,
+            crate::constraint::RemovedReason,
+        ),
+    ) -> Self {
         Self {
-            constraint: Some(constraint.into()),
+            constraint: Some((id, constraint).into()),
             removed_reason: removed_reason.reason,
             removed_reason_parameters: removed_reason.parameters.into_iter().collect(),
         }
@@ -229,13 +235,16 @@ impl From<Instance> for v1::Instance {
             .map(|dv| dv.into())
             .collect();
         let (active, removed) = value.constraint_collection.into_parts();
-        let constraints = active.into_values().map(|c| c.into()).collect();
+        let constraints = active.into_iter().map(|(id, c)| (id, c).into()).collect();
         let named_functions = value
             .named_functions
             .into_values()
             .map(|nf| nf.into())
             .collect();
-        let removed_constraints = removed.into_values().map(|rc| rc.into()).collect();
+        let removed_constraints = removed
+            .into_iter()
+            .map(|(id, (c, r))| (id, c, r).into())
+            .collect();
         let decision_variable_dependency = value
             .decision_variable_dependency
             .into_iter()
@@ -446,11 +455,14 @@ impl From<ParametricInstance> for v1::ParametricInstance {
                 .map(|dv| dv.into())
                 .collect(),
             parameters: parameters.into_values().collect(),
-            constraints: constraints.into_values().map(|c| c.into()).collect(),
+            constraints: constraints
+                .into_iter()
+                .map(|(id, c)| (id, c).into())
+                .collect(),
             named_functions: named_functions.into_values().map(|nf| nf.into()).collect(),
             removed_constraints: removed_constraints
-                .into_values()
-                .map(|rc| rc.into())
+                .into_iter()
+                .map(|(id, (c, r))| (id, c, r).into())
                 .collect(),
             decision_variable_dependency: decision_variable_dependency
                 .into_iter()

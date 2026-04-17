@@ -24,8 +24,7 @@ impl Propagate for Sos1Constraint<Created> {
                 // Variable is non-zero
                 if let Some(first) = fixed_nonzero {
                     anyhow::bail!(
-                        "Multiple variables fixed to non-zero in SOS1 constraint {:?}: {:?} and {:?}",
-                        self.id,
+                        "Multiple variables fixed to non-zero in SOS1 constraint: {:?} and {:?}",
                         first,
                         var_id
                     );
@@ -61,10 +60,9 @@ impl Evaluate for Sos1Constraint<Created> {
 
     fn evaluate(&self, state: &crate::v1::State, atol: ATol) -> anyhow::Result<Self::Output> {
         let used_decision_variable_ids = self.required_ids();
-        let (feasible, active_variable) = check_sos1(&self.variables, state, atol, self.id)?;
+        let (feasible, active_variable) = check_sos1(&self.variables, state, atol)?;
 
         Ok(Sos1Constraint {
-            id: self.id,
             variables: self.variables.clone(),
             metadata: self.metadata.clone(),
             stage: Sos1EvaluatedData {
@@ -84,13 +82,12 @@ impl Evaluate for Sos1Constraint<Created> {
         let mut active_variable = BTreeMap::new();
 
         for (sample_id, state) in samples.iter() {
-            let (f, av) = check_sos1(&self.variables, state, atol, self.id)?;
+            let (f, av) = check_sos1(&self.variables, state, atol)?;
             feasible.insert(*sample_id, f);
             active_variable.insert(*sample_id, av);
         }
 
         Ok(Sos1Constraint {
-            id: self.id,
             variables: self.variables.clone(),
             metadata: self.metadata.clone(),
             stage: Sos1SampledData {
@@ -105,10 +102,9 @@ impl Evaluate for Sos1Constraint<Created> {
         for var_id in &self.variables {
             if state.entries.contains_key(&var_id.into_inner()) {
                 anyhow::bail!(
-                    "Cannot partially evaluate variable {:?} of SOS1 constraint {:?}. \
+                    "Cannot partially evaluate variable {:?} of SOS1 constraint. \
                      Fixing a SOS1 variable would change the constraint type.",
-                    var_id,
-                    self.id
+                    var_id
                 );
             }
         }
@@ -129,16 +125,14 @@ fn check_sos1(
     variables: &BTreeSet<VariableID>,
     state: &crate::v1::State,
     atol: ATol,
-    constraint_id: Sos1ConstraintID,
 ) -> anyhow::Result<(bool, Option<VariableID>)> {
     let mut active: Option<VariableID> = None;
 
     for &var_id in variables {
         let value = state.entries.get(&var_id.into_inner()).ok_or_else(|| {
             anyhow::anyhow!(
-                "Variable {:?} not found in state for SOS1 constraint {:?}",
+                "Variable {:?} not found in state for SOS1 constraint",
                 var_id,
-                constraint_id
             )
         })?;
 
@@ -162,9 +156,9 @@ mod tests {
     use crate::{Evaluate, Propagate, PropagateOutcome};
     use std::collections::HashMap;
 
-    fn make_sos1(id: u64, var_ids: &[u64]) -> Sos1Constraint {
+    fn make_sos1(_id: u64, var_ids: &[u64]) -> Sos1Constraint {
         let vars = var_ids.iter().copied().map(VariableID::from).collect();
-        Sos1Constraint::new(Sos1ConstraintID::from(id), vars)
+        Sos1Constraint::new(vars)
     }
 
     #[test]

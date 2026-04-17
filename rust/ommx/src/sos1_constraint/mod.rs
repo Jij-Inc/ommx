@@ -53,9 +53,13 @@ impl From<Sos1ConstraintID> for u64 {
 ///
 /// This is a structural constraint — no explicit function or equality is stored.
 /// Unlike [`OneHotConstraint`](crate::OneHotConstraint), SOS1 allows all variables to be zero.
+///
+/// The constraint's [`Sos1ConstraintID`] is not stored in this struct — it is held
+/// by the enclosing collection (e.g. the `BTreeMap` key in [`Instance`]).
+///
+/// [`Instance`]: crate::Instance
 #[derive(Debug, Clone, PartialEq)]
 pub struct Sos1Constraint<S: Stage<Self> = Created> {
-    pub id: Sos1ConstraintID,
     /// The decision variables, at most one of which can be non-zero.
     pub variables: BTreeSet<VariableID>,
     pub metadata: ConstraintMetadata,
@@ -111,9 +115,6 @@ pub type SampledSos1Constraint = Sos1Constraint<stage::Sampled>;
 
 impl EvaluatedConstraintBehavior for EvaluatedSos1Constraint {
     type ID = Sos1ConstraintID;
-    fn constraint_id(&self) -> Sos1ConstraintID {
-        self.id
-    }
     fn is_feasible(&self) -> bool {
         self.stage.feasible
     }
@@ -123,9 +124,6 @@ impl SampledConstraintBehavior for SampledSos1Constraint {
     type ID = Sos1ConstraintID;
     type Evaluated = EvaluatedSos1Constraint;
 
-    fn constraint_id(&self) -> Sos1ConstraintID {
-        self.id
-    }
     fn is_feasible_for(&self, sample_id: SampleID) -> Option<bool> {
         self.stage.feasible.get(&sample_id).copied()
     }
@@ -145,7 +143,6 @@ impl SampledConstraintBehavior for SampledSos1Constraint {
             .ok_or(crate::sampled::UnknownSampleIDError { id: sample_id })?;
 
         Ok(Sos1Constraint {
-            id: self.id,
             variables: self.variables.clone(),
             metadata: self.metadata.clone(),
             stage: Sos1EvaluatedData {
@@ -170,9 +167,8 @@ impl ConstraintType for Sos1Constraint {
 
 impl Sos1Constraint<Created> {
     /// Create a new SOS1 constraint.
-    pub fn new(id: Sos1ConstraintID, variables: BTreeSet<VariableID>) -> Self {
+    pub fn new(variables: BTreeSet<VariableID>) -> Self {
         Self {
-            id,
             variables,
             metadata: ConstraintMetadata::default(),
             stage: Sos1CreatedData,
@@ -202,15 +198,14 @@ mod tests {
     #[test]
     fn test_create_sos1_constraint() {
         let vars: BTreeSet<_> = [1, 2, 3].into_iter().map(VariableID::from).collect();
-        let c = Sos1Constraint::new(Sos1ConstraintID::from(1), vars.clone());
-        assert_eq!(c.id, Sos1ConstraintID::from(1));
+        let c = Sos1Constraint::new(vars.clone());
         assert_eq!(c.variables, vars);
     }
 
     #[test]
     fn test_display() {
         let vars: BTreeSet<_> = [1, 2, 3].into_iter().map(VariableID::from).collect();
-        let c = Sos1Constraint::new(Sos1ConstraintID::from(1), vars);
+        let c = Sos1Constraint::new(vars);
         let s = format!("{}", c);
         assert!(s.contains("Sos1Constraint"));
         assert!(s.contains("x1"));
@@ -219,7 +214,7 @@ mod tests {
     #[test]
     fn test_constraint_type_impl() {
         let vars: BTreeSet<_> = [1, 2].into_iter().map(VariableID::from).collect();
-        let c = Sos1Constraint::new(Sos1ConstraintID::from(1), vars);
+        let c = Sos1Constraint::new(vars);
         let _: <Sos1Constraint as ConstraintType>::Created = c;
     }
 }

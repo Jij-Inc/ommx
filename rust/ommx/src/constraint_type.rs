@@ -55,7 +55,6 @@ pub trait ConstraintType {
 /// Common behavior for an evaluated constraint (single state evaluation result).
 pub trait EvaluatedConstraintBehavior {
     type ID;
-    fn constraint_id(&self) -> Self::ID;
     fn is_feasible(&self) -> bool;
 }
 
@@ -65,7 +64,6 @@ pub trait SampledConstraintBehavior {
     /// The evaluated constraint type returned by [`get`](Self::get).
     type Evaluated;
 
-    fn constraint_id(&self) -> Self::ID;
     fn is_feasible_for(&self, sample_id: SampleID) -> Option<bool>;
 
     /// Extract an evaluated constraint for a specific sample.
@@ -81,9 +79,6 @@ pub trait SampledConstraintBehavior {
 
 impl EvaluatedConstraintBehavior for EvaluatedConstraint {
     type ID = ConstraintID;
-    fn constraint_id(&self) -> ConstraintID {
-        self.id
-    }
     fn is_feasible(&self) -> bool {
         self.stage.feasible
     }
@@ -93,9 +88,6 @@ impl SampledConstraintBehavior for SampledConstraint {
     type ID = ConstraintID;
     type Evaluated = EvaluatedConstraint;
 
-    fn constraint_id(&self) -> ConstraintID {
-        self.id
-    }
     fn is_feasible_for(&self, sample_id: SampleID) -> Option<bool> {
         self.stage.feasible.get(&sample_id).copied()
     }
@@ -118,7 +110,6 @@ impl SampledConstraintBehavior for SampledConstraint {
             .ok_or(crate::sampled::UnknownSampleIDError { id: sample_id })?;
 
         Ok(crate::Constraint {
-            id: self.id,
             equality: self.equality,
             metadata: self.metadata.clone(),
             stage: EvaluatedData {
@@ -256,13 +247,13 @@ impl<T: ConstraintType> Evaluate for ConstraintCollection<T> {
     fn evaluate(&self, state: &v1::State, atol: ATol) -> Result<Self::Output> {
         let mut results = BTreeMap::new();
         let mut removed_reasons = BTreeMap::new();
-        for constraint in self.active.values() {
+        for (id, constraint) in &self.active {
             let evaluated = constraint.evaluate(state, atol)?;
-            results.insert(evaluated.constraint_id(), evaluated);
+            results.insert(*id, evaluated);
         }
         for (id, (constraint, reason)) in &self.removed {
             let evaluated = constraint.evaluate(state, atol)?;
-            results.insert(evaluated.constraint_id(), evaluated);
+            results.insert(*id, evaluated);
             removed_reasons.insert(*id, reason.clone());
         }
         Ok(EvaluatedCollection::new(results, removed_reasons))
@@ -275,13 +266,13 @@ impl<T: ConstraintType> Evaluate for ConstraintCollection<T> {
     ) -> Result<Self::SampledOutput> {
         let mut results = BTreeMap::new();
         let mut removed_reasons = BTreeMap::new();
-        for constraint in self.active.values() {
+        for (id, constraint) in &self.active {
             let evaluated = constraint.evaluate_samples(samples, atol)?;
-            results.insert(evaluated.constraint_id(), evaluated);
+            results.insert(*id, evaluated);
         }
         for (id, (constraint, reason)) in &self.removed {
             let evaluated = constraint.evaluate_samples(samples, atol)?;
-            results.insert(evaluated.constraint_id(), evaluated);
+            results.insert(*id, evaluated);
             removed_reasons.insert(*id, reason.clone());
         }
         Ok(SampledCollection::new(results, removed_reasons))
@@ -477,7 +468,7 @@ mod tests {
 
     #[test]
     fn constraint_type_aliases() {
-        let c = Constraint::equal_to_zero(ConstraintID::from(1), Function::Zero);
+        let c = Constraint::equal_to_zero(Function::Zero);
         let _: <Constraint as ConstraintType>::Created = c;
     }
 
@@ -493,17 +484,11 @@ mod tests {
         let mut active = BTreeMap::new();
         active.insert(
             ConstraintID::from(1),
-            Constraint::less_than_or_equal_to_zero(
-                ConstraintID::from(1),
-                Function::from(linear!(1) + coeff!(-1.0)),
-            ),
+            Constraint::less_than_or_equal_to_zero(Function::from(linear!(1) + coeff!(-1.0))),
         );
         active.insert(
             ConstraintID::from(2),
-            Constraint::equal_to_zero(
-                ConstraintID::from(2),
-                Function::from(linear!(1) + coeff!(-2.0)),
-            ),
+            Constraint::equal_to_zero(Function::from(linear!(1) + coeff!(-2.0))),
         );
 
         let collection = ConstraintCollection::<Constraint>::new(active, BTreeMap::new());
@@ -524,7 +509,7 @@ mod tests {
         let mut active = BTreeMap::new();
         active.insert(
             ConstraintID::from(1),
-            Constraint::equal_to_zero(ConstraintID::from(1), Function::Zero),
+            Constraint::equal_to_zero(Function::Zero),
         );
 
         let collection = ConstraintCollection::<Constraint>::new(active, BTreeMap::new());
