@@ -1,7 +1,37 @@
 use super::*;
-use crate::{ATol, Evaluate, VariableIDSet};
+use crate::{
+    constraint::RemovedReason, ATol, Evaluate, Propagate, PropagateOutcome, VariableIDSet,
+};
 use anyhow::{anyhow, Result};
 use std::collections::BTreeMap;
+
+/// Merge additional variable fixings from propagation into `expanded` state.
+///
+/// Returns `Err` if any fixing conflicts with an existing value in `expanded`
+/// (outside of `atol`), which indicates infeasibility discovered during
+/// propagation.
+fn merge_state(
+    expanded: &mut v1::State,
+    additional: v1::State,
+    atol: ATol,
+    changed: &mut bool,
+) -> Result<()> {
+    for (var_id, value) in additional.entries {
+        if let Some(&existing) = expanded.entries.get(&var_id) {
+            if (existing - value).abs() > *atol {
+                return Err(anyhow!(
+                    "Conflicting variable fixings for ID={var_id}: \
+                     existing={existing}, new={value}"
+                ));
+            }
+            // Same value: nothing to do.
+        } else {
+            expanded.entries.insert(var_id, value);
+            *changed = true;
+        }
+    }
+    Ok(())
+}
 
 impl Evaluate for Instance {
     type Output = crate::Solution;
@@ -115,75 +145,149 @@ impl Evaluate for Instance {
     }
 
     fn partial_evaluate(&mut self, state: &v1::State, atol: ATol) -> Result<()> {
-        let updated_state = state.clone();
+        // Operate on a clone so that any failure leaves `self` unchanged (atomic).
+        // Propagation consumes constraints via `self` in `Propagate`, so even a
+        // partial failure would otherwise leave the Instance in an inconsistent state.
+        let mut working = self.clone();
 
-        // Validate that no indicator variable is being partially evaluated.
-        // This check must happen before any mutation to ensure the Instance
-        // is not left in an inconsistent state on error.
-        for ic in self.indicator_constraint_collection.active().values() {
-            if updated_state
-                .entries
-                .contains_key(&ic.indicator_variable.into_inner())
-            {
-                anyhow::bail!(
-                    "Cannot partially evaluate indicator variable {:?} of indicator constraint {:?}. \
-                     Fixing an indicator variable would change the constraint type.",
-                    ic.indicator_variable,
-                    ic.id
-                );
-            }
-        }
+        // Phase 1: Propagate through special constraints (unit propagation).
+        let expanded_state = working.propagate_special_constraints(state, atol)?;
 
-        // Validate that no one-hot or SOS1 variable is being partially evaluated.
-        for oh in self.one_hot_constraint_collection.active().values() {
-            for var_id in &oh.variables {
-                if updated_state.entries.contains_key(&var_id.into_inner()) {
-                    anyhow::bail!(
-                        "Cannot partially evaluate variable {:?} of one-hot constraint {:?}. \
-                         Fixing a one-hot variable would change the constraint type.",
-                        var_id,
-                        oh.id
-                    );
-                }
-            }
-        }
-        for sos1 in self.sos1_constraint_collection.active().values() {
-            for var_id in &sos1.variables {
-                if updated_state.entries.contains_key(&var_id.into_inner()) {
-                    anyhow::bail!(
-                        "Cannot partially evaluate variable {:?} of SOS1 constraint {:?}. \
-                         Fixing a SOS1 variable would change the constraint type.",
-                        var_id,
-                        sos1.id
-                    );
-                }
-            }
-        }
-
-        // Then proceed with the regular partial evaluation using the updated state
-        for (id, value) in updated_state.entries.iter() {
-            let Some(dv) = self.decision_variables.get_mut(&VariableID::from(*id)) else {
+        // Phase 2: Substitute fixed values into decision variables.
+        for (id, value) in expanded_state.entries.iter() {
+            let Some(dv) = working.decision_variables.get_mut(&VariableID::from(*id)) else {
                 return Err(anyhow!("Unknown decision variable (ID={id}) in state."));
             };
             dv.substitute(*value, atol)?;
         }
-        self.objective.partial_evaluate(&updated_state, atol)?;
-        self.constraint_collection
-            .partial_evaluate(&updated_state, atol)?;
-        // Indicator variable check already passed above, so this only
-        // partial_evaluates the function parts of indicator constraints.
-        self.indicator_constraint_collection
-            .partial_evaluate(&updated_state, atol)?;
-        for named_function in self.named_functions.values_mut() {
-            named_function.partial_evaluate(&updated_state, atol)?;
+
+        // Phase 3: Regular partial evaluation with expanded state.
+        // Special constraint collections are already handled by propagation — not called again.
+        working.objective.partial_evaluate(&expanded_state, atol)?;
+        working
+            .constraint_collection
+            .partial_evaluate(&expanded_state, atol)?;
+        for named_function in working.named_functions.values_mut() {
+            named_function.partial_evaluate(&expanded_state, atol)?;
         }
-        self.decision_variable_dependency
-            .partial_evaluate(&updated_state, atol)?;
+        working
+            .decision_variable_dependency
+            .partial_evaluate(&expanded_state, atol)?;
+
+        // All operations succeeded; commit changes atomically.
+        *self = working;
         Ok(())
     }
 
     fn required_ids(&self) -> VariableIDSet {
         self.analyze_decision_variables().used().clone()
+    }
+}
+
+impl Instance {
+    /// Run unit propagation over special constraint types (OneHot, SOS1, Indicator).
+    ///
+    /// This is a fixed-point iteration: each constraint is propagated with the current
+    /// state, and any additional variable fixings are merged back into the state.
+    /// The loop continues until no new fixings are discovered.
+    ///
+    /// Consumed constraints are moved to the removed set.
+    /// Promoted indicator constraints are inserted into the regular constraint collection.
+    fn propagate_special_constraints(
+        &mut self,
+        state: &v1::State,
+        atol: ATol,
+    ) -> Result<v1::State> {
+        let mut expanded = state.clone();
+        let mut changed = true;
+
+        let propagation_reason = RemovedReason {
+            reason: "unit_propagation".to_string(),
+            parameters: Default::default(),
+        };
+
+        while changed {
+            changed = false;
+
+            // --- OneHot constraints ---
+            let one_hots = std::mem::take(self.one_hot_constraint_collection.active_mut());
+            for (id, oh) in one_hots {
+                let (outcome, additional) = oh.propagate(&expanded, atol)?;
+                merge_state(&mut expanded, additional, atol, &mut changed)?;
+                match outcome {
+                    PropagateOutcome::Active(oh) => {
+                        self.one_hot_constraint_collection
+                            .active_mut()
+                            .insert(id, oh);
+                    }
+                    PropagateOutcome::Consumed(oh) => {
+                        self.one_hot_constraint_collection
+                            .removed_mut()
+                            .insert(id, (oh, propagation_reason.clone()));
+                    }
+                    PropagateOutcome::Transformed { new, .. } => match new {},
+                }
+            }
+
+            // --- SOS1 constraints ---
+            let sos1s = std::mem::take(self.sos1_constraint_collection.active_mut());
+            for (id, sos1) in sos1s {
+                let (outcome, additional) = sos1.propagate(&expanded, atol)?;
+                merge_state(&mut expanded, additional, atol, &mut changed)?;
+                match outcome {
+                    PropagateOutcome::Active(sos1) => {
+                        self.sos1_constraint_collection
+                            .active_mut()
+                            .insert(id, sos1);
+                    }
+                    PropagateOutcome::Consumed(sos1) => {
+                        self.sos1_constraint_collection
+                            .removed_mut()
+                            .insert(id, (sos1, propagation_reason.clone()));
+                    }
+                    PropagateOutcome::Transformed { new, .. } => match new {},
+                }
+            }
+
+            // --- Indicator constraints ---
+            let indicators = std::mem::take(self.indicator_constraint_collection.active_mut());
+            for (id, ic) in indicators {
+                let (outcome, additional) = ic.propagate(&expanded, atol)?;
+                merge_state(&mut expanded, additional, atol, &mut changed)?;
+                match outcome {
+                    PropagateOutcome::Active(ic) => {
+                        self.indicator_constraint_collection
+                            .active_mut()
+                            .insert(id, ic);
+                    }
+                    PropagateOutcome::Consumed(ic) => {
+                        self.indicator_constraint_collection
+                            .removed_mut()
+                            .insert(id, (ic, propagation_reason.clone()));
+                    }
+                    PropagateOutcome::Transformed { original, new } => {
+                        // Indicator=1 → promote inner constraint to regular constraint
+                        let cid = self.constraint_collection.unused_id();
+                        let constraint = crate::Constraint {
+                            id: cid,
+                            equality: new.equality,
+                            metadata: new.metadata,
+                            stage: crate::CreatedData {
+                                function: new.function,
+                            },
+                        };
+                        self.constraint_collection
+                            .active_mut()
+                            .insert(cid, constraint);
+                        self.indicator_constraint_collection
+                            .removed_mut()
+                            .insert(id, (original, propagation_reason.clone()));
+                    }
+                }
+            }
+        }
+
+        Ok(expanded)
     }
 }
 
@@ -335,5 +439,249 @@ mod tests {
         assert!(used_ids.contains(&VariableID::from(5)));
         // x1 is not used in the named function
         assert!(!used_ids.contains(&VariableID::from(1)));
+    }
+
+    // === Unit propagation integration tests ===
+
+    #[test]
+    fn test_partial_evaluate_one_hot_propagation() {
+        use crate::{DecisionVariable, OneHotConstraint, OneHotConstraintID};
+        use maplit::btreemap;
+
+        // Binary variables x1, x2, x3 with OneHot{x1, x2, x3}
+        let decision_variables = btreemap! {
+            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
+            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
+            VariableID::from(3) => DecisionVariable::binary(VariableID::from(3)),
+        };
+        let objective = Function::from(linear!(1) + linear!(2) + linear!(3));
+
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            objective,
+            decision_variables,
+            BTreeMap::new(),
+        )
+        .unwrap();
+
+        let oh = OneHotConstraint::new(
+            OneHotConstraintID::from(1),
+            [1, 2, 3].into_iter().map(VariableID::from).collect(),
+        );
+        instance
+            .one_hot_constraint_collection
+            .active_mut()
+            .insert(OneHotConstraintID::from(1), oh);
+
+        // Fix x2 = 1 → OneHot propagation should fix x1=0, x3=0
+        let state = v1::State::from(HashMap::from([(2, 1.0)]));
+        instance.partial_evaluate(&state, ATol::default()).unwrap();
+
+        // All three variables should be substituted
+        assert_eq!(
+            instance.decision_variables[&VariableID::from(1)].substituted_value(),
+            Some(0.0)
+        );
+        assert_eq!(
+            instance.decision_variables[&VariableID::from(2)].substituted_value(),
+            Some(1.0)
+        );
+        assert_eq!(
+            instance.decision_variables[&VariableID::from(3)].substituted_value(),
+            Some(0.0)
+        );
+
+        // OneHot constraint should be consumed (moved to removed)
+        assert!(instance.one_hot_constraint_collection.active().is_empty());
+        assert_eq!(instance.one_hot_constraint_collection.removed().len(), 1);
+    }
+
+    #[test]
+    fn test_partial_evaluate_one_hot_unit_propagation() {
+        use crate::{DecisionVariable, OneHotConstraint, OneHotConstraintID};
+        use maplit::btreemap;
+
+        let decision_variables = btreemap! {
+            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
+            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
+            VariableID::from(3) => DecisionVariable::binary(VariableID::from(3)),
+        };
+        let objective = Function::from(linear!(1) + linear!(2) + linear!(3));
+
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            objective,
+            decision_variables,
+            BTreeMap::new(),
+        )
+        .unwrap();
+
+        let oh = OneHotConstraint::new(
+            OneHotConstraintID::from(1),
+            [1, 2, 3].into_iter().map(VariableID::from).collect(),
+        );
+        instance
+            .one_hot_constraint_collection
+            .active_mut()
+            .insert(OneHotConstraintID::from(1), oh);
+
+        // Fix x1=0, x2=0 → unit propagation: x3 must be 1
+        let state = v1::State::from(HashMap::from([(1, 0.0), (2, 0.0)]));
+        instance.partial_evaluate(&state, ATol::default()).unwrap();
+
+        assert_eq!(
+            instance.decision_variables[&VariableID::from(3)].substituted_value(),
+            Some(1.0)
+        );
+    }
+
+    #[test]
+    fn test_partial_evaluate_cascade_one_hot_sos1() {
+        use crate::{
+            DecisionVariable, OneHotConstraint, OneHotConstraintID, Sos1Constraint,
+            Sos1ConstraintID,
+        };
+        use maplit::btreemap;
+
+        // x1, x2 in OneHot; x2, x3 in SOS1
+        // Fix x1=1 → OneHot propagates x2=0 → SOS1 shrinks (x2 removed)
+        let decision_variables = btreemap! {
+            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
+            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
+            VariableID::from(3) => DecisionVariable::continuous(VariableID::from(3)),
+        };
+        let objective = Function::from(linear!(1) + linear!(2) + linear!(3));
+
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            objective,
+            decision_variables,
+            BTreeMap::new(),
+        )
+        .unwrap();
+
+        let oh = OneHotConstraint::new(
+            OneHotConstraintID::from(1),
+            [1, 2].into_iter().map(VariableID::from).collect(),
+        );
+        instance
+            .one_hot_constraint_collection
+            .active_mut()
+            .insert(OneHotConstraintID::from(1), oh);
+
+        let sos1 = Sos1Constraint::new(
+            Sos1ConstraintID::from(1),
+            [2, 3].into_iter().map(VariableID::from).collect(),
+        );
+        instance
+            .sos1_constraint_collection
+            .active_mut()
+            .insert(Sos1ConstraintID::from(1), sos1);
+
+        // Fix x1=1 → OneHot: x2=0 → SOS1{x2,x3} shrinks to SOS1{x3}
+        let state = v1::State::from(HashMap::from([(1, 1.0)]));
+        instance.partial_evaluate(&state, ATol::default()).unwrap();
+
+        // x2 should be fixed to 0 by propagation
+        assert_eq!(
+            instance.decision_variables[&VariableID::from(2)].substituted_value(),
+            Some(0.0)
+        );
+
+        // OneHot consumed, SOS1 shrunk to just x3
+        assert!(instance.one_hot_constraint_collection.active().is_empty());
+        let sos1_active = instance.sos1_constraint_collection.active();
+        assert_eq!(sos1_active.len(), 1);
+        let remaining_sos1 = sos1_active.values().next().unwrap();
+        assert_eq!(remaining_sos1.variables.len(), 1);
+        assert!(remaining_sos1.variables.contains(&VariableID::from(3)));
+    }
+
+    #[test]
+    fn test_partial_evaluate_indicator_promotion() {
+        use crate::{constraint::Equality, DecisionVariable, IndicatorConstraintID};
+        use maplit::btreemap;
+
+        // x10 (indicator), x1, x2 (function variables)
+        let decision_variables = btreemap! {
+            VariableID::from(1) => DecisionVariable::continuous(VariableID::from(1)),
+            VariableID::from(2) => DecisionVariable::continuous(VariableID::from(2)),
+            VariableID::from(10) => DecisionVariable::binary(VariableID::from(10)),
+        };
+        let objective = Function::from(linear!(1) + linear!(2));
+
+        let mut indicator_constraints = BTreeMap::new();
+        indicator_constraints.insert(
+            IndicatorConstraintID::from(100),
+            crate::IndicatorConstraint::new(
+                IndicatorConstraintID::from(100),
+                VariableID::from(10),
+                Equality::LessThanOrEqualToZero,
+                Function::from(linear!(1) + linear!(2) + coeff!(-5.0)),
+            ),
+        );
+
+        let instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(objective)
+            .decision_variables(decision_variables)
+            .constraints(BTreeMap::new())
+            .indicator_constraints(indicator_constraints)
+            .build()
+            .unwrap();
+
+        let mut instance = instance;
+
+        // Fix x10=1 → indicator promoted to regular constraint
+        let state = v1::State::from(HashMap::from([(10, 1.0)]));
+        instance.partial_evaluate(&state, ATol::default()).unwrap();
+
+        // Indicator constraint should be removed
+        assert!(instance.indicator_constraint_collection.active().is_empty());
+        assert_eq!(instance.indicator_constraint_collection.removed().len(), 1);
+
+        // A new regular constraint should be added
+        assert_eq!(instance.constraint_collection.active().len(), 1);
+    }
+
+    #[test]
+    fn test_partial_evaluate_indicator_removed() {
+        use crate::{constraint::Equality, DecisionVariable, IndicatorConstraintID};
+        use maplit::btreemap;
+
+        let decision_variables = btreemap! {
+            VariableID::from(1) => DecisionVariable::continuous(VariableID::from(1)),
+            VariableID::from(10) => DecisionVariable::binary(VariableID::from(10)),
+        };
+        let objective = Function::from(linear!(1));
+
+        let mut indicator_constraints = BTreeMap::new();
+        indicator_constraints.insert(
+            IndicatorConstraintID::from(1),
+            crate::IndicatorConstraint::new(
+                IndicatorConstraintID::from(1),
+                VariableID::from(10),
+                Equality::LessThanOrEqualToZero,
+                Function::from(linear!(1) + coeff!(-5.0)),
+            ),
+        );
+
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(objective)
+            .decision_variables(decision_variables)
+            .constraints(BTreeMap::new())
+            .indicator_constraints(indicator_constraints)
+            .build()
+            .unwrap();
+
+        // Fix x10=0 → indicator removed (vacuously satisfied)
+        let state = v1::State::from(HashMap::from([(10, 0.0)]));
+        instance.partial_evaluate(&state, ATol::default()).unwrap();
+
+        assert!(instance.indicator_constraint_collection.active().is_empty());
+        assert_eq!(instance.indicator_constraint_collection.removed().len(), 1);
+        // No new regular constraint should be added
+        assert!(instance.constraint_collection.active().is_empty());
     }
 }

@@ -62,6 +62,24 @@ impl ConstraintID {
     }
 }
 
+impl From<ConstraintID> for u64 {
+    fn from(id: ConstraintID) -> Self {
+        id.0
+    }
+}
+
+/// One step in a constraint's transformation history.
+///
+/// For example, when an indicator constraint with indicator=1 is propagated,
+/// it is promoted to a regular `Constraint` with a provenance step recording
+/// the original indicator constraint ID.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Provenance {
+    IndicatorConstraint(crate::IndicatorConstraintID),
+    OneHotConstraint(crate::OneHotConstraintID),
+    Sos1Constraint(crate::Sos1ConstraintID),
+}
+
 /// Auxiliary metadata for constraints (excluding essential id and equality)
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct ConstraintMetadata {
@@ -69,6 +87,14 @@ pub struct ConstraintMetadata {
     pub subscripts: Vec<i64>,
     pub parameters: FnvHashMap<String, String>,
     pub description: Option<String>,
+    /// Chain of transformations that produced this constraint.
+    ///
+    /// Empty for constraints that were directly authored. When a constraint is
+    /// transformed from another (e.g. an indicator constraint promoted to a
+    /// regular constraint), a new [`Provenance`] entry is appended. Each entry
+    /// records the identity of the constraint that existed just before the
+    /// transformation. Older entries come first, newer last.
+    pub provenance: Vec<Provenance>,
 }
 
 /// A constraint parameterized by its lifecycle stage.

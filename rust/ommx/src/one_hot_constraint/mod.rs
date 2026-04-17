@@ -43,6 +43,12 @@ impl OneHotConstraintID {
     }
 }
 
+impl From<OneHotConstraintID> for u64 {
+    fn from(id: OneHotConstraintID) -> Self {
+        id.0
+    }
+}
+
 /// A one-hot constraint: exactly one variable in `variables` must be 1, the rest must be 0.
 ///
 /// This is a structural constraint — no explicit function or equality is stored.

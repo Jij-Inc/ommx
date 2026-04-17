@@ -43,6 +43,12 @@ impl IndicatorConstraintID {
     }
 }
 
+impl From<IndicatorConstraintID> for u64 {
+    fn from(id: IndicatorConstraintID) -> Self {
+        id.0
+    }
+}
+
 /// An indicator constraint: `indicator_variable = 1 → f(x) <= 0` (or `= 0`).
 ///
 /// When the binary indicator variable is 0, the constraint is unconditionally satisfied.
@@ -162,6 +168,23 @@ impl ConstraintType for IndicatorConstraint {
     type Created = IndicatorConstraint;
     type Evaluated = EvaluatedIndicatorConstraint;
     type Sampled = SampledIndicatorConstraint;
+}
+
+// ===== Propagate output =====
+
+/// Components of a regular constraint promoted from an indicator constraint
+/// (when the indicator variable is fixed to 1).
+///
+/// This is the `Transformed` type for `Propagate` impl on `IndicatorConstraint`.
+/// The caller (Instance) assigns a unique `ConstraintID` for the new constraint.
+///
+/// Other propagation outcomes (indicator=0 → removed, no propagation → active)
+/// are represented at the [`PropagateOutcome`](crate::PropagateOutcome) level.
+#[derive(Debug, Clone)]
+pub struct IndicatorPromote {
+    pub equality: Equality,
+    pub function: Function,
+    pub metadata: ConstraintMetadata,
 }
 
 // ===== Created stage =====

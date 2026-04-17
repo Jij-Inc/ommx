@@ -40,7 +40,7 @@ use std::collections::BTreeMap;
 /// to define all stage types for regular constraints.
 pub trait ConstraintType {
     /// The ID type for this constraint family.
-    type ID: Clone + Copy + Ord + std::hash::Hash + std::fmt::Debug;
+    type ID: Clone + Copy + Ord + std::hash::Hash + std::fmt::Debug + From<u64> + Into<u64>;
     /// The constraint as defined in the problem.
     type Created: Evaluate<Output = Self::Evaluated, SampledOutput = Self::Sampled>
         + Clone
@@ -184,6 +184,28 @@ impl<T: ConstraintType> ConstraintCollection<T> {
     /// Mutable access to removed constraints.
     pub fn removed_mut(&mut self) -> &mut BTreeMap<T::ID, (T::Created, RemovedReason)> {
         &mut self.removed
+    }
+
+    /// Return an ID that is not used by any active or removed constraint in this collection.
+    ///
+    /// Returns `0` when the collection is empty, otherwise `max(existing id) + 1`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the maximum existing ID is `u64::MAX`, i.e. all IDs are exhausted.
+    pub fn unused_id(&self) -> T::ID {
+        let max_active = self.active.keys().last().copied().map(Into::into);
+        let max_removed = self.removed.keys().last().copied().map(Into::into);
+        let next = match (max_active, max_removed) {
+            (None, None) => 0u64,
+            (Some(a), None) => a.checked_add(1).expect("constraint ID space exhausted"),
+            (None, Some(r)) => r.checked_add(1).expect("constraint ID space exhausted"),
+            (Some(a), Some(r)) => a
+                .max(r)
+                .checked_add(1)
+                .expect("constraint ID space exhausted"),
+        };
+        T::ID::from(next)
     }
 
     /// Consume the collection and return the active and removed maps.

@@ -50,6 +50,7 @@ impl IndicatorConstraint {
             subscripts,
             parameters: parameters.into_iter().collect(),
             description,
+            provenance: Vec::new(),
         };
         Ok(Self(ic))
     }
