@@ -1,11 +1,9 @@
 use crate::{
     v1::{
-        decision_variable::Kind, instance::Sense, DecisionVariable, Equality, Function, Instance,
-        Linear, Optimality, Relaxation, SampleSet, SampledDecisionVariable, Samples, Solution,
-        State,
+        decision_variable::Kind, instance::Sense, DecisionVariable, Function, Instance, Linear,
+        Optimality, Relaxation, SampleSet, SampledDecisionVariable, Samples, Solution, State,
     },
-    BinaryIdPair, BinaryIds, Bound, Bounds, ConstraintID, Evaluate, InfeasibleDetected, VariableID,
-    VariableIDSet,
+    Bound, Bounds, Evaluate, VariableID, VariableIDSet,
 };
 use anyhow::{bail, ensure, Context, Result};
 use approx::AbsDiffEq;
@@ -176,91 +174,6 @@ impl Instance {
         self.objective = Some(-self.objective().into_owned());
     }
 
-    /// Create QUBO (Quadratic Unconstrained Binary Optimization) dictionary from the instance.
-    ///
-    /// Before calling this method, you should check that this instance is suitable for QUBO:
-    ///
-    /// - This instance has no constraints
-    ///   - Use penalty method (TODO: ALM will be added) to convert into an unconstrained problem.
-    /// - The objective function uses only binary decision variables.
-    ///   - TODO: Binary encoding will be added.
-    /// - The degree of the objective is at most 2.
-    ///
-    pub fn as_qubo_format(&self) -> Result<(BTreeMap<BinaryIdPair, f64>, f64)> {
-        if self.sense() == Sense::Maximize {
-            bail!("QUBO format is only for minimization problems.");
-        }
-        if !self.constraints.is_empty() {
-            bail!("The instance still has constraints. Use penalty method or other way to translate into unconstrained problem first.");
-        }
-        if !self
-            .objective()
-            .required_ids()
-            .is_subset(&self.binary_ids())
-        {
-            bail!("The objective function uses non-binary decision variables.");
-        }
-        let mut constant = 0.0;
-        let mut quad = BTreeMap::new();
-        for (ids, c) in self.objective().into_iter() {
-            if c.abs() <= f64::EPSILON {
-                continue;
-            }
-            if ids.is_empty() {
-                constant += c;
-            } else {
-                let key = BinaryIdPair::try_from(ids)?;
-                let value = quad.entry(key).and_modify(|v| *v += c).or_insert(c);
-                if value.abs() < f64::EPSILON {
-                    quad.remove(&key);
-                }
-            }
-        }
-        Ok((quad, constant))
-    }
-
-    /// Create HUBO (Higher-Order Unconstrained Binary Optimization) dictionary from the instance.
-    ///
-    /// Before calling this method, you should check that this instance is suitable for QUBO:
-    ///
-    /// - This instance has no constraints
-    ///   - Use penalty method (TODO: ALM will be added) to convert into an unconstrained problem.
-    /// - The objective function uses only binary decision variables.
-    ///   - TODO: Binary encoding will be added.
-    ///
-    pub fn as_hubo_format(&self) -> Result<(BTreeMap<BinaryIds, f64>, f64)> {
-        if self.sense() == Sense::Maximize {
-            bail!("HUBO format is only for minimization problems.");
-        }
-        if !self.constraints.is_empty() {
-            bail!("The instance still has constraints. Use penalty method or other way to translate into unconstrained problem first.");
-        }
-        if !self
-            .objective()
-            .required_ids()
-            .is_subset(&self.binary_ids())
-        {
-            bail!("The objective function uses non-binary decision variables.");
-        }
-        let mut constant = 0.0;
-        let mut quad = BTreeMap::new();
-        for (ids, c) in self.objective().into_iter() {
-            if c.abs() <= f64::EPSILON {
-                continue;
-            }
-            if ids.is_empty() {
-                constant += c;
-            } else {
-                let key = BinaryIds::from(ids);
-                let value = quad.entry(key.clone()).and_modify(|v| *v += c).or_insert(c);
-                if value.abs() < f64::EPSILON {
-                    quad.remove(&key);
-                }
-            }
-        }
-        Ok((quad, constant))
-    }
-
     /// Encode an integer decision variable into binary decision variables.
     ///
     /// Note that this method does not substitute the yielded binary representation into the objective and constraints.
@@ -368,205 +281,6 @@ impl Instance {
         }
         self.decision_variable_dependency.extend(replacement);
         Ok(())
-    }
-
-    /// Convert inequality `f(x) <= 0` into equality `f(x) + s/a = 0` with an *integer* slack variable `s`.
-    ///
-    /// Arguments
-    /// ---------
-    /// - `constraint_id`: The ID of the constraint to be converted.
-    /// - `max_integer_range`: The maximum integer range of the slack variable.
-    /// - `atol`: Absolute tolerance for approximating the coefficient to rational number.
-    ///
-    /// Since any `x: f64` can be approximated by an rational number (`x ~ p/q`) within some tolerance,
-    /// multiplying the lcm `a` of every denominator of coefficients `q_1, ...` yields `a * f(x)` whose coefficients are all integer.
-    /// However, this cause very large coefficients and thus the slack variable may have very large range,
-    /// which is not practical for solvers.
-    /// `max_integer_range` is used to limit the range of the slack variable, and the method returns error if exceeded it.
-    ///
-    /// Mutability
-    /// ----------
-    /// - This evaluates the bound of `f(x)` as `[lower, upper]`, and then:
-    ///   - if `lower > 0`, this constraint never be satisfied, and the method returns [`InfeasibleDetected::InequalityConstraintBound`].
-    ///   - if `upper <= 0`, this constraint is always satisfied, and the constraint is moved to `removed_constraints`.
-    /// - This creates a new decision variable for the slack variable.
-    ///   - Its name is `ommx.slack`
-    ///   - Its subscript is single element `[constraint_id]`
-    ///   - Its bound is determined from `f(x)`
-    ///   - Its kind are discussed below
-    /// - The constraint is changed as equality with keeping the constraint ID.
-    ///   - Its function will be converted `f(x)` to `f(x) + s/a`
-    ///
-    /// Error
-    /// -----
-    /// - The constraint ID is not found, or is not inequality
-    /// - The constraint contains continuous decision variables
-    /// - The slack variable range exceeds `max_integer_range`
-    ///
-    pub fn convert_inequality_to_equality_with_integer_slack(
-        &mut self,
-        constraint_id: u64,
-        max_integer_range: u64,
-        atol: crate::ATol,
-    ) -> Result<()> {
-        let bounds = self.get_bounds()?;
-        let kinds = self.get_kinds();
-        let next_id = self.defined_ids().last().map(|id| id + 1).unwrap_or(0);
-
-        let constraint = self
-            .constraints
-            .iter_mut()
-            .find(|c| c.id == constraint_id)
-            .with_context(|| format!("Constraint ID {constraint_id} not found"))?;
-        let function = constraint
-            .function
-            .as_ref()
-            .with_context(|| format!("Constraint ID {constraint_id} does not have a function"))?;
-
-        // If the constraint contains continuous decision variables, integer slack variable cannot be introduced
-        for id in function.required_ids() {
-            let kind = kinds
-                .get(&id)
-                .with_context(|| format!("Decision variable ID {id:?} not found"))?;
-            if !matches!(kind, Kind::Binary | Kind::Integer) {
-                bail!("The constraint contains continuous decision variables: ID={id:?}");
-            }
-        }
-
-        // Evaluate minimal integer coefficient multiplier `a` which make all coefficients of `a * f(x)` integer
-        let a = function
-            .content_factor()
-            .context("Cannot normalize the coefficients to integers")?;
-        let af = a * function.clone();
-
-        // Check the bound of `a*f`
-        // - If `lower > 0`, the constraint is infeasible
-        // - If `upper <= 0`, the constraint is always satisfied, thus moved to `removed_constraints`
-        let bound = af.evaluate_bound(&bounds);
-        let bound = bound.as_integer_bound(atol).ok_or_else(|| {
-            InfeasibleDetected::InequalityConstraintBound {
-                id: ConstraintID::from(constraint_id),
-                bound,
-            }
-        })?;
-        if bound.lower() > 0.0 {
-            bail!(InfeasibleDetected::InequalityConstraintBound {
-                id: ConstraintID::from(constraint_id),
-                bound,
-            });
-        }
-        if bound.upper() <= 0.0 {
-            // The constraint is always satisfied
-            self.relax_constraint(
-                constraint_id,
-                "convert_inequality_to_equality_with_integer_slack".to_string(),
-                Default::default(),
-            )?;
-            return Ok(());
-        }
-        let bound = Bound::new(0.0, -bound.lower()).unwrap();
-        if bound.width() > max_integer_range as f64 {
-            bail!(
-                "The range of the slack variable exceeds the limit: evaluated({width}) > limit({max_integer_range})",
-                width = bound.width()
-            );
-        }
-
-        self.decision_variables.push(DecisionVariable {
-            id: next_id,
-            name: Some("ommx.slack".to_string()),
-            subscripts: vec![constraint_id as i64],
-            kind: Kind::Integer as i32,
-            bound: Some(bound.into()),
-            ..Default::default()
-        });
-        constraint.function = Some(function.clone() + Linear::single_term(next_id, 1.0 / a));
-        constraint.set_equality(Equality::EqualToZero);
-
-        Ok(())
-    }
-
-    /// Add integer slack variable to inequality
-    ///
-    /// This converts an inequality `f(x) <= 0` to `f(x) + b*s <= 0` where `s` is an integer slack variable.
-    ///
-    /// Mutability
-    /// ----------
-    /// - This evaluates the bound of `f(x)` as `[lower, upper]`, and then:
-    ///   - if `lower > 0`, this constraint never be satisfied, and the method returns [`InfeasibleDetected::InequalityConstraintBound`].
-    ///   - if `upper <= 0`, this constraint is always satisfied, and the constraint is moved to `removed_constraints`.
-    /// - This adds a new decision variable for the slack variable.
-    ///   - Its name is `ommx.slack`
-    ///   - Its subscript is single element `[constraint_id]`
-    ///   - Its bound is `[0, slack_upper_bound]`
-    ///   - Its kind is integer
-    ///
-    /// Errors
-    /// ------
-    /// - The constraint ID is not found, or is not inequality
-    /// - The constraint contains continuous decision variables
-    ///
-    pub fn add_integer_slack_to_inequality(
-        &mut self,
-        constraint_id: u64,
-        slack_upper_bound: u64,
-    ) -> Result<Option<f64>> {
-        let slack_id = self.defined_ids().last().map(|id| id + 1).unwrap_or(0);
-        let bounds = self.get_bounds()?;
-        let kinds = self.get_kinds();
-        let constraint = self
-            .constraints
-            .iter_mut()
-            .find(|c| c.id == constraint_id)
-            .with_context(|| format!("Constraint ID {constraint_id} not found"))?;
-        if constraint.equality() != Equality::LessThanOrEqualToZero {
-            bail!("The constraint is not inequality: ID={}", constraint_id);
-        }
-        let f = constraint
-            .function
-            .as_ref()
-            .with_context(|| format!("Constraint ID {constraint_id} does not have a function"))?;
-
-        for id in f.required_ids() {
-            let kind = kinds
-                .get(&id)
-                .with_context(|| format!("Decision variable ID {id:?} not found"))?;
-            if !matches!(kind, Kind::Binary | Kind::Integer) {
-                bail!("The constraint contains continuous decision variables: ID={id:?}");
-            }
-        }
-
-        let bound = f.evaluate_bound(&bounds);
-        if bound.lower() > 0.0 {
-            bail!(InfeasibleDetected::InequalityConstraintBound {
-                id: ConstraintID::from(constraint_id),
-                bound,
-            });
-        }
-        if bound.upper() <= 0.0 {
-            // The constraint is always satisfied
-            self.relax_constraint(
-                constraint_id,
-                "add_integer_slack_to_inequality".to_string(),
-                Default::default(),
-            )?;
-            return Ok(None);
-        }
-        let b = -bound.lower() / slack_upper_bound as f64;
-
-        self.decision_variables.push(DecisionVariable {
-            id: slack_id,
-            name: Some("ommx.slack".to_string()),
-            subscripts: vec![constraint_id as i64],
-            kind: Kind::Integer as i32,
-            bound: Some(crate::v1::Bound {
-                lower: 0.0,
-                upper: slack_upper_bound as f64,
-            }),
-            ..Default::default()
-        });
-        constraint.function = Some(f.clone() + Linear::single_term(slack_id, b));
-        Ok(Some(b))
     }
 }
 
@@ -825,39 +539,13 @@ fn eval_dependencies(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{random::InstanceParameters, v1::State, Evaluate};
+    use crate::{v1::State, Evaluate};
     use proptest::prelude::*;
 
     proptest! {
         #[test]
         fn test_instance_arbitrary_any(instance in Instance::arbitrary()) {
             instance.validate().unwrap();
-        }
-
-
-        #[test]
-        fn test_qubo(instance in Instance::arbitrary_with(InstanceParameters::default_qubo())) {
-            if instance.sense() == Sense::Maximize {
-                return Ok(());
-            }
-            let (quad, _) = instance.as_qubo_format().unwrap();
-            for (ids, c) in quad {
-                prop_assert!(ids.0 <= ids.1);
-                prop_assert!(c.abs() > f64:: EPSILON);
-            }
-        }
-
-        #[test]
-        fn test_hubo(instance in Instance::arbitrary_with(InstanceParameters::default_hubo())) {
-            if instance.sense() == Sense::Maximize {
-                return Ok(());
-            }
-            let degree = instance.objective().degree();
-            let (quad, _) = instance.as_hubo_format().unwrap();
-            for (ids, c) in quad {
-                prop_assert!(ids.len() <= degree as usize);
-                prop_assert!(c.abs() > f64:: EPSILON);
-            }
         }
 
         #[test]
