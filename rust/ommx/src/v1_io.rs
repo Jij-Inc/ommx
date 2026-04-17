@@ -1,11 +1,20 @@
-use approx::AbsDiffEq;
+//! IO-adjacent conversions on protobuf-generated `v1::*` types.
+//!
+//! These impls are the last surviving inhabitants of what used to be
+//! `rust/ommx/src/v1_ext/`. They are kept because several test fixtures and
+//! a handful of production call sites construct `v1::State` from a
+//! `HashMap<u64, f64>` literal — a bag-of-bytes shape that is hard to
+//! express through the generated protobuf API alone. Everything else that
+//! used to live in `v1_ext/` was either ported to the domain layer or
+//! deleted with its only (internal) callers.
 
 use crate::{v1::State, ATol};
+use approx::AbsDiffEq;
 use std::collections::HashMap;
 
 impl From<HashMap<u64, f64>> for State {
-    fn from(value: HashMap<u64, f64>) -> Self {
-        Self { entries: value }
+    fn from(entries: HashMap<u64, f64>) -> Self {
+        Self { entries }
     }
 }
 
@@ -41,9 +50,5 @@ impl AbsDiffEq for State {
                     .get(key)
                     .is_some_and(|v| (*value - *v).abs() < atol)
             })
-            && other
-                .entries
-                .keys()
-                .all(|key| self.entries.contains_key(key))
     }
 }

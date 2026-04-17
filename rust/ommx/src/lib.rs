@@ -343,17 +343,4 @@ pub mod v1 {
     include!("ommx.v1.rs");
 }
 
-mod v1_ext {
-    mod constraint;
-    mod decision_variable;
-    mod function;
-    mod instance;
-    mod linear;
-    mod parameter;
-    mod parametric_instance;
-    mod polynomial;
-    mod quadratic;
-    mod sample_set;
-    mod solution;
-    mod state;
-}
+mod v1_io;
