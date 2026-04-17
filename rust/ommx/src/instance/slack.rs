@@ -20,13 +20,18 @@ impl Instance {
         let bounds = self.bounds();
         let kinds = self.kinds();
 
-        let function = self
-            .constraint_collection
-            .active()
-            .get(&constraint_id)
-            .with_context(|| format!("Constraint ID {constraint_id:?} not found"))?
-            .function()
-            .clone();
+        let (function, equality) = {
+            let constraint = self
+                .constraint_collection
+                .active()
+                .get(&constraint_id)
+                .with_context(|| format!("Constraint ID {constraint_id:?} not found"))?;
+            (constraint.function().clone(), constraint.equality)
+        };
+
+        if equality != Equality::LessThanOrEqualToZero {
+            bail!("The constraint is not inequality: ID={constraint_id:?}");
+        }
 
         for id in function.required_ids() {
             let kind = kinds
@@ -73,8 +78,8 @@ impl Instance {
             );
         }
 
-        let slack_id = self.next_variable_id();
         let slack = self.new_decision_variable(Kind::Integer, slack_bound, None, atol)?;
+        let slack_id = slack.id();
         slack.metadata.name = Some("ommx.slack".to_string());
         slack.metadata.subscripts = vec![constraint_id.into_inner() as i64];
 
@@ -162,9 +167,9 @@ impl Instance {
             Err(e) => return Err(e).context("Slack coefficient must be finite"),
         };
 
-        let slack_id = self.next_variable_id();
         let slack =
             self.new_decision_variable(Kind::Integer, slack_bound, None, ATol::default())?;
+        let slack_id = slack.id();
         slack.metadata.name = Some("ommx.slack".to_string());
         slack.metadata.subscripts = vec![constraint_id.into_inner() as i64];
 
@@ -333,6 +338,33 @@ mod tests {
         // The original constraint is still the untouched inequality.
         let constraint = instance.constraints().get(&ConstraintID::from(0)).unwrap();
         assert_eq!(constraint.equality, Equality::LessThanOrEqualToZero);
+    }
+
+    #[test]
+    fn convert_inequality_rejects_equality_constraint() {
+        // An `EqualToZero` constraint must be rejected by
+        // `convert_inequality_to_equality_with_integer_slack`, which names the
+        // contract in its identifier. Matches the guard in the sibling
+        // `add_integer_slack_to_inequality`.
+        let dv = btreemap! {
+            VariableID::from(1) => DecisionVariable::new(
+                VariableID::from(1), Kind::Integer, Bound::new(0.0, 3.0).unwrap(), None, ATol::default()
+            ).unwrap(),
+        };
+        let objective = Function::from(linear!(1));
+        let constraint_fn = Function::from(linear!(1)) + coeff!(-2.0);
+        let constraints = btreemap! {
+            ConstraintID::from(0) => crate::Constraint::equal_to_zero(
+                ConstraintID::from(0),
+                constraint_fn,
+            ),
+        };
+        let mut instance = Instance::new(Sense::Minimize, objective, dv, constraints).unwrap();
+
+        let err = instance
+            .convert_inequality_to_equality_with_integer_slack(0, 32, ATol::default())
+            .unwrap_err();
+        assert!(err.to_string().contains("not inequality"));
     }
 
     #[test]

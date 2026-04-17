@@ -53,13 +53,16 @@ mod tests {
 
     #[test]
     fn bound_of_quadratic_with_squared_term() {
-        // f = x1*x1 with x1 in [-2, 3] → [0, 9]
+        // f = x1*x1 with x1 in [-2, 3].
+        //
+        // `Function::evaluate_bound` collapses the monomial via `MonomialDyn::chunks()`
+        // into `Bound::pow(2)`. For an even exponent across zero, `Bound::pow` uses
+        // sound interval-power semantics and yields [0, max(|-2|^2, 3^2)] = [0, 9],
+        // not a naive interval-square [-6, 9].
         let f = Function::from(quadratic!(1, 1));
         let mut bounds = Bounds::new();
         bounds.insert(VariableID::from(1), Bound::new(-2.0, 3.0).unwrap());
-        // Interval arithmetic gives [-2, 3]^2 = [-6, 9] since the chunks() exponent
-        // treats x1^2 as pow(2). This matches `v1::Function::evaluate_bound` semantics.
-        let expected = Bound::new(-2.0, 3.0).unwrap().pow(2);
+        let expected = Bound::new(0.0, 9.0).unwrap();
         assert_eq!(f.evaluate_bound(&bounds), expected);
     }
 
