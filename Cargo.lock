@@ -1639,6 +1639,8 @@ dependencies = [
 name = "ommx-derive"
 version = "3.0.0-alpha.1"
 dependencies = [
+ "insta",
+ "prettyplease",
  "proc-macro2",
  "quote",
  "syn",

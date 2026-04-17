@@ -3,8 +3,9 @@
 //! This crate is for internal use within the OMMX workspace only.
 
 use proc_macro::TokenStream;
+use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use syn::{parse_macro_input, Data, DeriveInput, Fields};
+use syn::{Data, DeriveInput, Fields};
 
 /// Derive `LogicalMemoryProfile` for a struct by delegating to each field.
 ///
@@ -12,7 +13,18 @@ use syn::{parse_macro_input, Data, DeriveInput, Fields};
 /// emitted under the path frame `"TypeName.field_name"`.
 #[proc_macro_derive(LogicalMemoryProfile)]
 pub fn derive_logical_memory_profile(input: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(input as DeriveInput);
+    derive_logical_memory_profile_impl(input.into()).into()
+}
+
+/// Pure `TokenStream2` entry point for the derive.
+///
+/// Split out from the `#[proc_macro_derive]` wrapper so that unit tests
+/// can exercise the code-generation logic without the proc-macro runtime.
+fn derive_logical_memory_profile_impl(input: TokenStream2) -> TokenStream2 {
+    let input = match syn::parse2::<DeriveInput>(input) {
+        Ok(ast) => ast,
+        Err(err) => return err.to_compile_error(),
+    };
     let name = &input.ident;
     let name_str = name.to_string();
 
@@ -24,8 +36,7 @@ pub fn derive_logical_memory_profile(input: TokenStream) -> TokenStream {
                     name,
                     "LogicalMemoryProfile derive only supports structs with named fields",
                 )
-                .to_compile_error()
-                .into();
+                .to_compile_error();
             }
         },
         _ => {
@@ -33,8 +44,7 @@ pub fn derive_logical_memory_profile(input: TokenStream) -> TokenStream {
                 name,
                 "LogicalMemoryProfile derive only supports structs",
             )
-            .to_compile_error()
-            .into();
+            .to_compile_error();
         }
     };
 
@@ -52,7 +62,7 @@ pub fn derive_logical_memory_profile(input: TokenStream) -> TokenStream {
 
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
 
-    let expanded = quote! {
+    quote! {
         impl #impl_generics ::ommx::logical_memory::LogicalMemoryProfile
             for #name #ty_generics #where_clause
         {
@@ -64,7 +74,153 @@ pub fn derive_logical_memory_profile(input: TokenStream) -> TokenStream {
                 #( #field_visits )*
             }
         }
-    };
+    }
+}
 
-    TokenStream::from(expanded)
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Render a derive-generated `TokenStream2` as a formatted Rust source
+    /// string, so `insta::assert_snapshot!` diffs are readable.
+    fn render(input: TokenStream2) -> String {
+        let tokens = derive_logical_memory_profile_impl(input);
+        let file: syn::File = syn::parse2(tokens).expect("derive output must parse as syn::File");
+        prettyplease::unparse(&file)
+    }
+
+    #[test]
+    fn snapshot_flat_struct() {
+        let input = quote! {
+            struct Foo {
+                a: u64,
+                b: String,
+            }
+        };
+        insta::assert_snapshot!(render(input), @r###"
+        impl ::ommx::logical_memory::LogicalMemoryProfile for Foo {
+            fn visit_logical_memory<__V: ::ommx::logical_memory::LogicalMemoryVisitor>(
+                &self,
+                path: &mut ::ommx::logical_memory::Path,
+                visitor: &mut __V,
+            ) {
+                ::ommx::logical_memory::LogicalMemoryProfile::visit_logical_memory(
+                    &self.a,
+                    path.with("Foo.a").as_mut(),
+                    visitor,
+                );
+                ::ommx::logical_memory::LogicalMemoryProfile::visit_logical_memory(
+                    &self.b,
+                    path.with("Foo.b").as_mut(),
+                    visitor,
+                );
+            }
+        }
+        "###);
+    }
+
+    #[test]
+    fn snapshot_single_field_struct() {
+        let input = quote! {
+            struct Wrapper {
+                inner: Inner,
+            }
+        };
+        insta::assert_snapshot!(render(input), @r###"
+        impl ::ommx::logical_memory::LogicalMemoryProfile for Wrapper {
+            fn visit_logical_memory<__V: ::ommx::logical_memory::LogicalMemoryVisitor>(
+                &self,
+                path: &mut ::ommx::logical_memory::Path,
+                visitor: &mut __V,
+            ) {
+                ::ommx::logical_memory::LogicalMemoryProfile::visit_logical_memory(
+                    &self.inner,
+                    path.with("Wrapper.inner").as_mut(),
+                    visitor,
+                );
+            }
+        }
+        "###);
+    }
+
+    #[test]
+    fn snapshot_empty_struct() {
+        // Unit-like structs with empty named-field bodies are legal; the
+        // derive should emit an empty `visit_logical_memory` body.
+        let input = quote! {
+            struct Empty {}
+        };
+        insta::assert_snapshot!(render(input), @r###"
+        impl ::ommx::logical_memory::LogicalMemoryProfile for Empty {
+            fn visit_logical_memory<__V: ::ommx::logical_memory::LogicalMemoryVisitor>(
+                &self,
+                path: &mut ::ommx::logical_memory::Path,
+                visitor: &mut __V,
+            ) {}
+        }
+        "###);
+    }
+
+    #[test]
+    fn snapshot_generic_struct() {
+        // Generic parameters are propagated without automatic trait-bound
+        // injection; callers must ensure `T: LogicalMemoryProfile` themselves
+        // (e.g. via a `where` clause on the struct definition).
+        let input = quote! {
+            struct Generic<T> where T: ::ommx::logical_memory::LogicalMemoryProfile {
+                value: T,
+                count: u64,
+            }
+        };
+        insta::assert_snapshot!(render(input), @r###"
+        impl<T> ::ommx::logical_memory::LogicalMemoryProfile for Generic<T>
+        where
+            T: ::ommx::logical_memory::LogicalMemoryProfile,
+        {
+            fn visit_logical_memory<__V: ::ommx::logical_memory::LogicalMemoryVisitor>(
+                &self,
+                path: &mut ::ommx::logical_memory::Path,
+                visitor: &mut __V,
+            ) {
+                ::ommx::logical_memory::LogicalMemoryProfile::visit_logical_memory(
+                    &self.value,
+                    path.with("Generic.value").as_mut(),
+                    visitor,
+                );
+                ::ommx::logical_memory::LogicalMemoryProfile::visit_logical_memory(
+                    &self.count,
+                    path.with("Generic.count").as_mut(),
+                    visitor,
+                );
+            }
+        }
+        "###);
+    }
+
+    #[test]
+    fn snapshot_rejects_enum() {
+        // Error output is also snapshot-tested to lock in the diagnostic
+        // message surface. The generated compile_error! invocation is the
+        // contract for non-struct inputs.
+        let input = quote! {
+            enum NotSupported { A, B }
+        };
+        insta::assert_snapshot!(render(input), @r###"
+        ::core::compile_error! {
+            "LogicalMemoryProfile derive only supports structs"
+        }
+        "###);
+    }
+
+    #[test]
+    fn snapshot_rejects_tuple_struct() {
+        let input = quote! {
+            struct Tuple(u64, String);
+        };
+        insta::assert_snapshot!(render(input), @r###"
+        ::core::compile_error! {
+            "LogicalMemoryProfile derive only supports structs with named fields"
+        }
+        "###);
+    }
 }
