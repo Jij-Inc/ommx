@@ -99,10 +99,7 @@ impl Instance {
     }
 
     pub fn arbitrary_samples(&self, params: SamplesParameters) -> BoxedStrategy<Sampled<State>> {
-        // FIXME: Generate Sampled<State> directly
         arbitrary_samples(params, self.arbitrary_state())
-            .prop_map(|samples| samples.parse(&()).unwrap())
-            .boxed()
     }
 }
 

@@ -1,53 +1,32 @@
-//! Random generation and [`mod@proptest`] support for OMMX Message structs
+//! Random generation and [`mod@proptest`] support for OMMX domain types
 //!
 //! Random Generation
 //! -----------------
-//! The messages like [`crate::v1::Instance`] and [`crate::v1::Linear`] can be generated randomly via [`Arbitrary`] trait
-//! using [`random`] and [`random_deterministic`] functions.
+//! Domain types like [`crate::Instance`] and [`crate::Linear`] can be generated randomly via
+//! the [`Arbitrary`] trait using [`random`] and [`random_deterministic`] functions.
 //!
 //! ```rust
-//! use ommx::{v1::{Linear, Instance, decision_variable::Kind}, random::*};
+//! use ommx::{Instance, InstanceParameters, Linear, LinearParameters, random::random_deterministic};
 //!
 //! // Linear function with random coefficients
-//! let linear: Linear = random_deterministic(FunctionParameters { num_terms: 5, max_degree: 1, max_id: 10 });
+//! let linear: Linear = random_deterministic(LinearParameters::new(5, 10.into()).unwrap());
 //!
 //! // LP instance
-//! let instance: Instance = random_deterministic(InstanceParameters {
-//!   num_constraints: 7,
-//!   objective: FunctionParameters { max_degree: 1, ..Default::default() },
-//!   constraint: FunctionParameters { max_degree: 1, ..Default::default() },
-//!   kinds: vec![Kind::Continuous],
-//! });
+//! let instance: Instance = random_deterministic(InstanceParameters::default_lp());
 //! ```
-//!
-//! [`InstanceParameters`] and [`FunctionParameters`] are used to specify the size of the generated components.
 //!
 //! Proptest Support
 //! ----------------
 //!
-//! This modules implements [`Arbitrary`] trait for the most of structs in [`crate::v1`] module.
-//! In addition, there are several helper functions, e.g. [`arbitrary_coefficient`] or [`arbitrary_decision_variables`],
-//! for property-based testing by the users of this crate.
-//! See [proptest book](https://proptest-rs.github.io/proptest/intro.html) for the details.
+//! The domain types implement the [`Arbitrary`] trait so `proptest!` macros can drive them
+//! directly. This module provides the accompanying helpers (e.g. [`arbitrary_coefficient`],
+//! [`arbitrary_state`]) for hand-rolled property tests. See the
+//! [proptest book](https://proptest-rs.github.io/proptest/intro.html) for details.
 //!
 
-mod constraint;
-mod decision_variable;
-mod function;
-mod instance;
-mod linear;
-mod parameter;
-mod parametric_instance;
-mod polynomial;
-mod quadratic;
 mod samples;
 mod state;
 
-pub use constraint::*;
-pub use decision_variable::*;
-pub use function::*;
-pub use instance::*;
-pub use parameter::*;
 pub use samples::*;
 pub use state::*;
 

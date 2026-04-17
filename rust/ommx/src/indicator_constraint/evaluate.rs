@@ -114,11 +114,10 @@ impl Evaluate for IndicatorConstraint<Created> {
 
     fn evaluate_samples(
         &self,
-        samples: &crate::v1::Samples,
+        samples: &crate::Sampled<crate::v1::State>,
         atol: ATol,
     ) -> anyhow::Result<Self::SampledOutput> {
-        let evaluated_values_v1 = self.stage.function.evaluate_samples(samples, atol)?;
-        let evaluated_values: crate::Sampled<f64> = evaluated_values_v1.try_into()?;
+        let evaluated_values = self.stage.function.evaluate_samples(samples, atol)?;
 
         // Compute feasibility per sample.
         // We need both the evaluated value and the indicator variable's state,
@@ -126,7 +125,7 @@ impl Evaluate for IndicatorConstraint<Created> {
         let mut feasible = std::collections::BTreeMap::new();
         let mut indicator_active = std::collections::BTreeMap::new();
         for (sample_id, state) in samples.iter() {
-            let sample_id = crate::SampleID::from(*sample_id);
+            let sample_id = *sample_id;
             let ev = *evaluated_values.get(sample_id)?;
 
             let indicator_value = state
@@ -322,29 +321,28 @@ mod tests {
             Function::from(linear!(1) + coeff!(-5.0)),
         );
 
-        use crate::v1::samples::SamplesEntry;
-        let samples = crate::v1::Samples {
-            entries: vec![
-                // Sample 0: x1=3, x10=1 → ON, feasible (3-5=-2 <= 0)
-                SamplesEntry {
-                    state: Some(crate::v1::State::from(HashMap::from([(1, 3.0), (10, 1.0)]))),
-                    ids: vec![0],
-                },
-                // Sample 1: x1=7, x10=1 → ON, infeasible (7-5=2 > 0)
-                SamplesEntry {
-                    state: Some(crate::v1::State::from(HashMap::from([(1, 7.0), (10, 1.0)]))),
-                    ids: vec![1],
-                },
-                // Sample 2: x1=100, x10=0 → OFF, feasible (always)
-                SamplesEntry {
-                    state: Some(crate::v1::State::from(HashMap::from([
-                        (1, 100.0),
-                        (10, 0.0),
-                    ]))),
-                    ids: vec![2],
-                },
-            ],
-        };
+        let mut samples = crate::Sampled::<crate::v1::State>::default();
+        // Sample 0: x1=3, x10=1 → ON, feasible (3-5=-2 <= 0)
+        samples
+            .append(
+                [crate::SampleID::from(0)],
+                crate::v1::State::from(HashMap::from([(1, 3.0), (10, 1.0)])),
+            )
+            .unwrap();
+        // Sample 1: x1=7, x10=1 → ON, infeasible (7-5=2 > 0)
+        samples
+            .append(
+                [crate::SampleID::from(1)],
+                crate::v1::State::from(HashMap::from([(1, 7.0), (10, 1.0)])),
+            )
+            .unwrap();
+        // Sample 2: x1=100, x10=0 → OFF, feasible (always)
+        samples
+            .append(
+                [crate::SampleID::from(2)],
+                crate::v1::State::from(HashMap::from([(1, 100.0), (10, 0.0)])),
+            )
+            .unwrap();
 
         let result = ic.evaluate_samples(&samples, ATol::default()).unwrap();
 

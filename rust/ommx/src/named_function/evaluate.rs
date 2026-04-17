@@ -37,11 +37,10 @@ impl Evaluate for NamedFunction {
 
     fn evaluate_samples(
         &self,
-        samples: &crate::v1::Samples,
+        samples: &crate::Sampled<crate::v1::State>,
         atol: crate::ATol,
     ) -> anyhow::Result<Self::SampledOutput> {
-        let evaluated_values_v1 = self.function.evaluate_samples(samples, atol)?;
-        let evaluated_values = evaluated_values_v1.try_into()?;
+        let evaluated_values = self.function.evaluate_samples(samples, atol)?;
         let used_decision_variable_ids = self.function.required_ids();
         Ok(SampledNamedFunction {
             id: self.id,

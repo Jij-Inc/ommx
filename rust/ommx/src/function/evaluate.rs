@@ -1,9 +1,9 @@
 use super::*;
-use crate::{v1::SampledValues, Evaluate, VariableIDSet};
+use crate::{Evaluate, Sampled, VariableIDSet};
 
 impl Evaluate for Function {
     type Output = f64;
-    type SampledOutput = crate::v1::SampledValues;
+    type SampledOutput = Sampled<f64>;
 
     fn evaluate(
         &self,
@@ -43,13 +43,13 @@ impl Evaluate for Function {
 
     fn evaluate_samples(
         &self,
-        samples: &crate::v1::Samples,
+        samples: &Sampled<crate::v1::State>,
         atol: crate::ATol,
     ) -> anyhow::Result<Self::SampledOutput> {
         match self {
-            Function::Zero => Ok(SampledValues::zeros(samples.ids().cloned())),
-            Function::Constant(c) => Ok(SampledValues::constants(
-                samples.ids().cloned(),
+            Function::Zero => Ok(Sampled::constants(samples.ids().into_iter(), 0.0)),
+            Function::Constant(c) => Ok(Sampled::constants(
+                samples.ids().into_iter(),
                 c.into_inner(),
             )),
             Function::Linear(f) => f.evaluate_samples(samples, atol),
@@ -62,11 +62,11 @@ impl Evaluate for Function {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{random::*, v1::Samples};
+    use crate::random::*;
     use ::approx::AbsDiffEq;
     use proptest::prelude::*;
 
-    fn function_and_samples() -> impl Strategy<Value = (Function, Samples)> {
+    fn function_and_samples() -> impl Strategy<Value = (Function, Sampled<crate::v1::State>)> {
         Function::arbitrary()
             .prop_flat_map(|f| {
                 let ids = f.required_ids();
@@ -81,11 +81,14 @@ mod tests {
         #[test]
         fn test_evaluate_samples((f, samples) in function_and_samples()) {
             let evaluated = f.evaluate_samples(&samples, crate::ATol::default()).unwrap();
-            let evaluated_each: SampledValues = samples.iter().map(|(parameter_id, state)| {
-                let value = f.evaluate(state, crate::ATol::default()).unwrap();
-                (*parameter_id, value)
-            }).collect();
-            prop_assert!(evaluated.abs_diff_eq(&evaluated_each, crate::ATol::default()), "evaluated = {evaluated:?}, evaluated_each = {evaluated_each:?}");
+            for (sample_id, state) in samples.iter() {
+                let expected = f.evaluate(state, crate::ATol::default()).unwrap();
+                let actual = *evaluated.get(*sample_id).unwrap();
+                prop_assert!(
+                    actual.abs_diff_eq(&expected, 1e-9),
+                    "sample_id = {sample_id:?}, expected = {expected}, actual = {actual}"
+                );
+            }
         }
     }
 }

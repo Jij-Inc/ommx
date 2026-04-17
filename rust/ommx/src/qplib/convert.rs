@@ -1,5 +1,4 @@
 use itertools::izip;
-use num::Zero;
 
 use super::{
     parser::{ObjSense, QplibFile, VarType},
@@ -207,7 +206,9 @@ fn to_linear(coeffs: &HashMap<usize, f64>) -> v1::Linear {
 }
 
 fn wrap_function(mut quad: v1::Quadratic, mut linear: v1::Linear, constant: f64) -> v1::Function {
-    let func = if quad.is_zero() {
+    // `quad` has `linear: None` at this point (see caller below), so emptiness of the
+    // quadratic-term triplet is the only thing distinguishing Linear from Quadratic output.
+    let func = if quad.values.is_empty() {
         if linear.terms.is_empty() {
             v1::function::Function::Constant(constant)
         } else {

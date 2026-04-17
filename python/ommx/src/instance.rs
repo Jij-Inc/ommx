@@ -780,13 +780,12 @@ impl Instance {
 
     #[pyo3(signature = (samples, *, atol=None))]
     pub fn evaluate_samples(&self, samples: Samples, atol: Option<f64>) -> Result<SampleSet> {
-        let v1_samples: ommx::v1::Samples = samples.0.into();
         let atol = match atol {
             Some(value) => ommx::ATol::new(value)?,
             None => ommx::ATol::default(),
         };
         Ok(SampleSet {
-            inner: self.inner.evaluate_samples(&v1_samples, atol)?,
+            inner: self.inner.evaluate_samples(&samples.0, atol)?,
             annotations: HashMap::new(),
         })
     }

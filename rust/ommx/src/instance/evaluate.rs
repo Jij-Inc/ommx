@@ -82,16 +82,18 @@ impl Evaluate for Instance {
         Ok(solution)
     }
 
-    fn evaluate_samples(&self, samples: &v1::Samples, atol: ATol) -> Result<Self::SampledOutput> {
+    fn evaluate_samples(
+        &self,
+        samples: &crate::Sampled<v1::State>,
+        atol: ATol,
+    ) -> Result<Self::SampledOutput> {
         // Populate the decision variables in the samples
         let samples = {
             let analysis = self.analyze_decision_variables();
             let mut samples = samples.clone();
-            for sample in samples.states_mut() {
-                let sample = sample?;
-                let state = std::mem::take(sample);
-                let state = analysis.populate(state, atol)?;
-                *sample = state;
+            for state in samples.iter_mut() {
+                let taken = std::mem::take(state);
+                *state = analysis.populate(taken, atol)?;
             }
             samples
         };
@@ -134,7 +136,7 @@ impl Evaluate for Instance {
 
         Ok(crate::SampleSet::builder()
             .decision_variables(decision_variables)
-            .objectives(objectives.try_into()?)
+            .objectives(objectives)
             .constraints(sampled_constraints.into_inner())
             .indicator_constraints(sampled_indicator_constraints.into_inner())
             .one_hot_constraints(sampled_one_hot_constraints.into_inner())

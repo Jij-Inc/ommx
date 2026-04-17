@@ -1,6 +1,7 @@
 use crate::{
     random::{arbitrary_integer_partition, unique_integers},
-    v1::{samples::SamplesEntry, Samples, State},
+    v1::State,
+    SampleID, Sampled,
 };
 use anyhow::{bail, Result};
 use getset::Getters;
@@ -54,7 +55,7 @@ impl Default for SamplesParameters {
 pub fn arbitrary_samples(
     params: SamplesParameters,
     state_strategy: BoxedStrategy<State>,
-) -> BoxedStrategy<Samples> {
+) -> BoxedStrategy<Sampled<State>> {
     unique_integers(0, params.max_sample_id, params.num_samples)
         .prop_flat_map(move |sample_ids| {
             let states =
@@ -63,12 +64,15 @@ pub fn arbitrary_samples(
                 arbitrary_integer_partition(sample_ids.len(), params.num_different_samples);
             (states, partition).prop_map(move |(states, partition)| {
                 let mut base = 0;
-                let mut samples = Samples::default();
+                let mut samples = Sampled::default();
                 for (state, size) in states.into_iter().zip(partition) {
-                    samples.entries.push(SamplesEntry {
-                        state: Some(state.clone()),
-                        ids: sample_ids[base..base + size].to_vec(),
-                    });
+                    let ids = sample_ids[base..base + size]
+                        .iter()
+                        .map(|id| SampleID::from(*id));
+                    // Safety: `sample_ids` are unique by construction.
+                    samples
+                        .append(ids, state)
+                        .expect("unique_integers guarantees no duplicate sample IDs");
                     base += size;
                 }
                 samples
@@ -90,9 +94,9 @@ mod tests {
                 arbitrary_state((0..=5).map(VariableID::from).collect())
             )
         ) {
-            prop_assert_eq!(samples.entries.len(), 10);
-            prop_assert_eq!(samples.entries.iter().map(|v| v.ids.len()).sum::<usize>(), 100);
-            prop_assert!(samples.entries.iter().all(|v| v.ids.iter().all(|id| *id <= 1000)));
+            // 100 sample IDs are bucketed into 10 distinct states.
+            prop_assert_eq!(samples.num_samples(), 100);
+            prop_assert!(samples.ids().iter().all(|id| id.into_inner() <= 1000));
         }
 
     }

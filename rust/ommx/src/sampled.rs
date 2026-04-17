@@ -155,6 +155,15 @@ impl<T> Sampled<T> {
         })
     }
 
+    /// Mutable iterator over the *unique* stored values.
+    ///
+    /// Each distinct `T` is yielded once, even when multiple [`SampleID`]s
+    /// point at it. Mutating the value therefore mutates it for every sample
+    /// that references it.
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
+        self.data.iter_mut()
+    }
+
     pub fn ids(&self) -> SampleIDSet {
         self.offsets.keys().copied().collect()
     }
@@ -172,6 +181,19 @@ impl<T> Sampled<T> {
             offsets: self.offsets,
             data: self.data.into_iter().map(f).collect(),
         }
+    }
+
+    /// Non-consuming, fallible variant of [`Self::map`].
+    ///
+    /// Applies `f` to each unique stored value once; sample-id grouping is
+    /// preserved. Useful when evaluating per-sample-state like in
+    /// `Evaluate::evaluate_samples`.
+    pub fn try_map_ref<U>(&self, mut f: impl FnMut(&T) -> Result<U>) -> Result<Sampled<U>> {
+        let data = self.data.iter().map(&mut f).collect::<Result<Vec<_>>>()?;
+        Ok(Sampled {
+            offsets: self.offsets.clone(),
+            data,
+        })
     }
 
     pub fn num_samples(&self) -> usize {
@@ -288,6 +310,68 @@ mod tests {
         let offset_2 = sampled.offsets[&SampleID(2)];
         let offset_5 = sampled.offsets[&SampleID(5)];
         assert_eq!(offset_2, offset_5); // Should point to same data
+    }
+
+    #[test]
+    fn test_iter_mut_shared_value_propagation() {
+        // Two sample IDs share one stored value via append([a, b], value).
+        // Mutating through iter_mut must be visible from both IDs, and the
+        // offsets table must not be disturbed.
+        let mut sampled = Sampled::<Vec<i32>>::default();
+        sampled
+            .append([SampleID(1), SampleID(2)], vec![10])
+            .unwrap();
+        sampled.append([SampleID(3)], vec![20]).unwrap();
+
+        // Distinct values only: iter_mut yields one reference per stored entry,
+        // not per sample id.
+        assert_eq!(sampled.iter_mut().count(), 2);
+
+        for v in sampled.iter_mut() {
+            v.push(99);
+        }
+
+        // Both shared IDs see the mutation through the same storage slot.
+        assert_eq!(sampled.get(SampleID(1)).unwrap(), &vec![10, 99]);
+        assert_eq!(sampled.get(SampleID(2)).unwrap(), &vec![10, 99]);
+        assert_eq!(sampled.get(SampleID(3)).unwrap(), &vec![20, 99]);
+
+        // Offsets remain stable: shared IDs still point at the same slot.
+        assert_eq!(sampled.offsets[&SampleID(1)], sampled.offsets[&SampleID(2)]);
+        assert_ne!(sampled.offsets[&SampleID(1)], sampled.offsets[&SampleID(3)]);
+        assert_eq!(sampled.num_samples(), 3);
+    }
+
+    #[test]
+    fn test_try_map_ref_preserves_offsets_and_propagates_errors() {
+        let sampled = Sampled::new(
+            [[SampleID(1), SampleID(2)], [SampleID(5), SampleID(7)]],
+            [10, 20],
+        )
+        .unwrap();
+
+        // Happy path: mapping preserves the ID → offset grouping exactly, so
+        // IDs that shared storage before still share the mapped value.
+        let mapped = sampled.try_map_ref(|v| anyhow::Ok(*v + 1)).unwrap();
+        assert_eq!(mapped.num_samples(), 4);
+        assert_eq!(mapped.get(SampleID(1)).unwrap(), &11);
+        assert_eq!(mapped.get(SampleID(2)).unwrap(), &11);
+        assert_eq!(mapped.get(SampleID(5)).unwrap(), &21);
+        assert_eq!(mapped.get(SampleID(7)).unwrap(), &21);
+        assert_eq!(mapped.offsets[&SampleID(1)], mapped.offsets[&SampleID(2)]);
+        assert_eq!(mapped.offsets[&SampleID(5)], mapped.offsets[&SampleID(7)]);
+
+        // Errors short-circuit: a failure on any stored value surfaces to the
+        // caller instead of producing a partial Sampled<U>.
+        let err = sampled
+            .try_map_ref(|v| -> Result<i32> {
+                if *v == 20 {
+                    anyhow::bail!("boom");
+                }
+                Ok(*v)
+            })
+            .unwrap_err();
+        assert_eq!(err.to_string(), "boom");
     }
 
     #[test]

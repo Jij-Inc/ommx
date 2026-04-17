@@ -90,17 +90,16 @@ impl Evaluate for OneHotConstraint<Created> {
 
     fn evaluate_samples(
         &self,
-        samples: &crate::v1::Samples,
+        samples: &crate::Sampled<crate::v1::State>,
         atol: ATol,
     ) -> anyhow::Result<Self::SampledOutput> {
         let mut feasible = BTreeMap::new();
         let mut active_variable = BTreeMap::new();
 
         for (sample_id, state) in samples.iter() {
-            let sample_id = crate::SampleID::from(*sample_id);
             let (f, av) = check_one_hot(&self.variables, state, atol, self.id)?;
-            feasible.insert(sample_id, f);
-            active_variable.insert(sample_id, av);
+            feasible.insert(*sample_id, f);
+            active_variable.insert(*sample_id, av);
         }
 
         Ok(OneHotConstraint {
@@ -258,38 +257,28 @@ mod tests {
     fn test_evaluate_samples() {
         let c = make_one_hot(1, &[1, 2, 3]);
 
-        use crate::v1::samples::SamplesEntry;
-        let samples = crate::v1::Samples {
-            entries: vec![
-                // Sample 0: x1=1, x2=0, x3=0 → feasible, active=x1
-                SamplesEntry {
-                    state: Some(crate::v1::State::from(HashMap::from([
-                        (1, 1.0),
-                        (2, 0.0),
-                        (3, 0.0),
-                    ]))),
-                    ids: vec![0],
-                },
-                // Sample 1: x1=1, x2=1, x3=0 → infeasible
-                SamplesEntry {
-                    state: Some(crate::v1::State::from(HashMap::from([
-                        (1, 1.0),
-                        (2, 1.0),
-                        (3, 0.0),
-                    ]))),
-                    ids: vec![1],
-                },
-                // Sample 2: x1=0, x2=0, x3=0 → infeasible (all zeros)
-                SamplesEntry {
-                    state: Some(crate::v1::State::from(HashMap::from([
-                        (1, 0.0),
-                        (2, 0.0),
-                        (3, 0.0),
-                    ]))),
-                    ids: vec![2],
-                },
-            ],
-        };
+        let mut samples = crate::Sampled::<crate::v1::State>::default();
+        // Sample 0: x1=1, x2=0, x3=0 → feasible, active=x1
+        samples
+            .append(
+                [crate::SampleID::from(0)],
+                crate::v1::State::from(HashMap::from([(1, 1.0), (2, 0.0), (3, 0.0)])),
+            )
+            .unwrap();
+        // Sample 1: x1=1, x2=1, x3=0 → infeasible
+        samples
+            .append(
+                [crate::SampleID::from(1)],
+                crate::v1::State::from(HashMap::from([(1, 1.0), (2, 1.0), (3, 0.0)])),
+            )
+            .unwrap();
+        // Sample 2: x1=0, x2=0, x3=0 → infeasible (all zeros)
+        samples
+            .append(
+                [crate::SampleID::from(2)],
+                crate::v1::State::from(HashMap::from([(1, 0.0), (2, 0.0), (3, 0.0)])),
+            )
+            .unwrap();
 
         let result = c.evaluate_samples(&samples, ATol::default()).unwrap();
 
