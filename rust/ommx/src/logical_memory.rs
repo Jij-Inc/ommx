@@ -1,65 +1,38 @@
 //! Logical memory profiling for OMMX types.
 //!
 //! This module provides a visitor-based approach to profile memory usage
-//! of optimization problem instances. It generates folded stack format
-//! output that can be visualized with flamegraph tools.
+//! of optimization problem instances. The public entry point is
+//! [`crate::Instance::logical_memory_profile`], which returns a
+//! [`MemoryProfile`] that can be rendered as a folded-stack string via
+//! its [`std::fmt::Display`] impl and consumed programmatically through
+//! [`MemoryProfile::entries`] / [`MemoryProfile::total_bytes`].
 //!
 //! # Design Philosophy
 //!
-//! - **Only leaf nodes emit byte counts**: This avoids inclusive/exclusive calculation complexity
-//! - **Visitor pattern**: Output formats are delegated to visitor implementations
-//! - **Flexible granularity**: Each type decides its own decomposition level
+//! - **Only leaf nodes emit byte counts**: avoids inclusive/exclusive calculation complexity
+//! - **Visitor pattern**: output formats are delegated to visitor implementations
+//! - **Flexible granularity**: each type decides its own decomposition level
 //!
-//! # Example
+//! # Internal use only
 //!
-//! ```rust
-//! use ommx::logical_memory::logical_memory_to_folded;
-//! use ommx::Linear;
-//!
-//! let linear = Linear::default();
-//! let folded = logical_memory_to_folded(&linear);
-//! println!("{}", folded);
-//! ```
+//! The `LogicalMemoryProfile` trait, `Path`/`PathGuard` helpers and related
+//! free functions are `pub(crate)`: they are implementation details used within
+//! the `ommx` crate and are not part of the public API. External consumers
+//! should interact with [`MemoryProfile`] via the method on [`crate::Instance`].
 
 mod collections;
 mod path;
-pub use path::{Path, PathGuard};
+pub(crate) use path::Path;
+
+use std::collections::BTreeMap;
+use std::fmt;
 
 /// Types that provide logical memory profiling.
 ///
 /// Implementations should enumerate their "logical memory leaves" by calling
 /// `visitor.visit_leaf()` for each leaf node, while intermediate nodes should
 /// delegate to their children.
-///
-/// # Recommended Implementation Pattern
-///
-/// Use [`Path::with()`] to create RAII guards that automatically manage path push/pop:
-///
-/// ```rust
-/// use ommx::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
-/// use std::mem::size_of;
-///
-/// struct MyStruct {
-///     field1: u64,
-///     field2: String,
-/// }
-///
-/// impl LogicalMemoryProfile for MyStruct {
-///     fn visit_logical_memory<V: LogicalMemoryVisitor>(
-///         &self,
-///         path: &mut Path,
-///         visitor: &mut V,
-///     ) {
-///         // Count primitive fields using path guards
-///         visitor.visit_leaf(&path.with("field1"), size_of::<u64>());
-///
-///         // Count String: stack + heap
-///         let field2_bytes = size_of::<String>() + self.field2.len();
-///         visitor.visit_leaf(&path.with("field2"), field2_bytes);
-///     }
-/// }
-/// ```
-pub trait LogicalMemoryProfile {
+pub(crate) trait LogicalMemoryProfile {
     /// Enumerate the "logical memory leaves" of this value.
     ///
     /// # Arguments
@@ -74,106 +47,102 @@ pub trait LogicalMemoryProfile {
 }
 
 /// Visitor for logical memory leaf nodes.
-pub trait LogicalMemoryVisitor {
+pub(crate) trait LogicalMemoryVisitor {
     /// Callback for a single "leaf node" (logical memory chunk).
-    ///
-    /// # Arguments
-    /// - `path`: Logical path (e.g., `&Path::new("Instance").with("objective").with("terms")`)
-    /// - `bytes`: Bytes used by this node
     fn visit_leaf(&mut self, path: &Path, bytes: usize);
 }
 
-/// Collector for generating folded stack format.
+/// Logical memory profile of a value.
 ///
-/// This format is compatible with flamegraph visualization tools like
-/// `flamegraph.pl` and `inferno`.
+/// This is the public output type of [`crate::Instance::logical_memory_profile`].
+/// Internally it is a flat map from logical path (e.g. `["Instance", "objective", ...]`)
+/// to the number of bytes attributed to that leaf.
 ///
-/// The collector automatically aggregates multiple visits to the same path,
-/// which is useful when profiling collections (e.g., multiple DecisionVariables
-/// with the same metadata structure).
-#[derive(Debug, Default)]
-pub struct FoldedCollector {
-    // Use HashMap to aggregate same paths
-    aggregated: std::collections::HashMap<String, usize>,
+/// Render as a folded-stack string with [`ToString::to_string`] (via the
+/// [`std::fmt::Display`] impl) to feed into flamegraph tools such as
+/// `flamegraph.pl` or `inferno`.
+#[derive(Debug, Clone, Default)]
+pub struct MemoryProfile {
+    entries: BTreeMap<Vec<String>, usize>,
 }
 
-impl FoldedCollector {
-    /// Create a new folded stack collector.
-    pub fn new() -> Self {
+impl MemoryProfile {
+    pub(crate) fn new() -> Self {
         Self::default()
     }
 
-    /// Finish collecting and return the folded stack output.
+    /// Total bytes across all leaves.
+    pub fn total_bytes(&self) -> usize {
+        self.entries.values().sum()
+    }
+
+    /// Iterate over `(path, bytes)` pairs.
     ///
-    /// Each line has format: `"frame1;frame2;...;frameN bytes"`
-    /// Lines are sorted for deterministic output.
-    pub fn finish(self) -> String {
-        let mut lines: Vec<_> = self
-            .aggregated
-            .into_iter()
-            .map(|(path, bytes)| format!("{path} {bytes}"))
-            .collect();
-        lines.sort();
-        lines.join("\n")
+    /// Each path is a slice of frame names like `["Instance", "objective", ...]`.
+    /// The iteration order follows the natural ordering of paths.
+    pub fn entries(&self) -> impl Iterator<Item = (&[String], usize)> {
+        self.entries
+            .iter()
+            .map(|(path, bytes)| (path.as_slice(), *bytes))
+    }
+
+    /// Number of distinct leaf paths recorded.
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    /// Whether no leaves were recorded.
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
     }
 }
 
-impl LogicalMemoryVisitor for FoldedCollector {
+impl LogicalMemoryVisitor for MemoryProfile {
     fn visit_leaf(&mut self, path: &Path, bytes: usize) {
         if bytes == 0 {
             return;
         }
-        let frames = path.as_slice().join(";");
-        *self.aggregated.entry(frames).or_insert(0) += bytes;
+        let key: Vec<String> = path.as_slice().iter().map(|s| (*s).to_string()).collect();
+        *self.entries.entry(key).or_insert(0) += bytes;
     }
 }
 
-/// Generate folded stack format for a value.
-///
-/// # Arguments
-/// - `value`: Value to profile
-///
-/// # Returns
-/// Folded stack format string, with each line in format `"frame1;frame2;... bytes"`
-///
-/// # Example
-///
-/// ```rust
-/// use ommx::logical_memory::logical_memory_to_folded;
-/// use ommx::Linear;
-///
-/// let linear = Linear::default();
-/// let folded = logical_memory_to_folded(&linear);
-/// // Output: "PolynomialBase.terms 32" (HashMap struct overhead)
-/// assert_eq!(folded, "PolynomialBase.terms 32");
-/// ```
-pub fn logical_memory_to_folded<T: LogicalMemoryProfile>(value: &T) -> String {
-    let mut path = Path::new();
-    let mut collector = FoldedCollector::new();
-    value.visit_logical_memory(&mut path, &mut collector);
-    collector.finish()
+/// Renders the profile as folded stack format: each leaf on its own line as
+/// `"frame1;frame2;...;frameN bytes"`, lines sorted for deterministic output.
+impl fmt::Display for MemoryProfile {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut first = true;
+        for (path, bytes) in &self.entries {
+            if !first {
+                writeln!(f)?;
+            }
+            first = false;
+            let frames = path.join(";");
+            write!(f, "{frames} {bytes}")?;
+        }
+        Ok(())
+    }
 }
 
-/// Calculate total bytes used by a value.
+/// Build a [`MemoryProfile`] for a value.
+pub(crate) fn build_profile<T: LogicalMemoryProfile>(value: &T) -> MemoryProfile {
+    let mut path = Path::new();
+    let mut profile = MemoryProfile::new();
+    value.visit_logical_memory(&mut path, &mut profile);
+    profile
+}
+
+/// Convenience wrapper returning the folded-stack string directly.
 ///
-/// # Arguments
-/// - `value`: Value to profile
-///
-/// # Returns
-/// Total bytes across all leaf nodes
-///
-/// # Example
-///
-/// ```rust
-/// use ommx::logical_memory::logical_total_bytes;
-/// use ommx::Linear;
-///
-/// let linear = Linear::default();
-/// let total = logical_total_bytes(&linear);
-/// // Empty polynomial has only struct overhead
-/// assert!(total > 0);
-/// ```
-pub fn logical_total_bytes<T: LogicalMemoryProfile>(value: &T) -> usize {
+/// Equivalent to `build_profile(value).to_string()`.
+#[cfg(test)]
+pub(crate) fn logical_memory_to_folded<T: LogicalMemoryProfile>(value: &T) -> String {
+    build_profile(value).to_string()
+}
+
+/// Total bytes used by a value.
+#[cfg(test)]
+pub(crate) fn logical_total_bytes<T: LogicalMemoryProfile>(value: &T) -> usize {
     struct Sum(usize);
     impl LogicalMemoryVisitor for Sum {
         fn visit_leaf(&mut self, _path: &Path, bytes: usize) {
@@ -189,6 +158,9 @@ pub fn logical_total_bytes<T: LogicalMemoryProfile>(value: &T) -> usize {
 
 // Macro to implement LogicalMemoryProfile for structs with fields
 /// Generates a LogicalMemoryProfile implementation that delegates to each field.
+///
+/// Kept for types that cannot use `#[derive(LogicalMemoryProfile)]`, e.g. types
+/// defined in external modules where we need an explicit type-name override.
 ///
 /// # Example
 /// ```ignore
@@ -207,7 +179,6 @@ pub fn logical_total_bytes<T: LogicalMemoryProfile>(value: &T) -> usize {
 ///     }
 /// }
 /// ```
-#[macro_export]
 macro_rules! impl_logical_memory_profile {
     // For types with explicit name (e.g., v1::Parameters as "Parameters")
     ($type_path:path as $type_name:literal { $($field:ident),* $(,)? }) => {
@@ -218,7 +189,8 @@ macro_rules! impl_logical_memory_profile {
                 visitor: &mut V,
             ) {
                 $(
-                    self.$field.visit_logical_memory(
+                    $crate::logical_memory::LogicalMemoryProfile::visit_logical_memory(
+                        &self.$field,
                         path.with(concat!($type_name, ".", stringify!($field))).as_mut(),
                         visitor,
                     );
@@ -235,7 +207,8 @@ macro_rules! impl_logical_memory_profile {
                 visitor: &mut V,
             ) {
                 $(
-                    self.$field.visit_logical_memory(
+                    $crate::logical_memory::LogicalMemoryProfile::visit_logical_memory(
+                        &self.$field,
                         path.with(concat!(stringify!($type_name), ".", stringify!($field))).as_mut(),
                         visitor,
                     );
@@ -244,6 +217,12 @@ macro_rules! impl_logical_memory_profile {
         }
     };
 }
+pub(crate) use impl_logical_memory_profile;
+
+// Re-export the derive macro so downstream modules can write
+// `use crate::logical_memory::LogicalMemoryProfile;` and then
+// `#[derive(LogicalMemoryProfile)]`.
+pub(crate) use ommx_derive::LogicalMemoryProfile;
 
 // Generic implementations for primitive types
 

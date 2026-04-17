@@ -1621,6 +1621,7 @@ dependencies = [
  "maplit",
  "num",
  "ocipkg",
+ "ommx-derive",
  "ordered-float",
  "petgraph 0.8.3",
  "proptest",
@@ -1632,6 +1633,15 @@ dependencies = [
  "thiserror",
  "url",
  "uuid",
+]
+
+[[package]]
+name = "ommx-derive"
+version = "3.0.0-alpha.1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

@@ -272,6 +272,10 @@
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 
+// Allow the `ommx-derive` proc-macro to refer to this crate as `::ommx` when
+// its generated code is compiled inside this crate itself.
+extern crate self as ommx;
+
 // Re-export the dependencies
 pub use ocipkg;
 pub use prost::Message;
@@ -280,7 +284,9 @@ pub use prost::Message;
 pub mod artifact;
 #[cfg(feature = "remote-artifact")]
 pub mod dataset;
-pub mod logical_memory;
+pub(crate) mod logical_memory;
+pub(crate) use logical_memory::impl_logical_memory_profile;
+pub use logical_memory::MemoryProfile;
 pub mod mps;
 pub mod parse;
 pub mod qplib;

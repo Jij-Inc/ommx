@@ -1,28 +1,58 @@
 use super::{
-    logical_memory_to_folded, logical_total_bytes, FoldedCollector, LogicalMemoryVisitor, Path,
+    logical_memory_to_folded, logical_total_bytes, LogicalMemoryProfile, LogicalMemoryVisitor,
+    MemoryProfile, Path,
 };
 use crate::{coeff, linear, quadratic, Linear, Quadratic};
 
 // Unit tests for core collectors
 
 #[test]
-fn test_folded_collector() {
-    let mut collector = FoldedCollector::new();
-    collector.visit_leaf(&Path::from(vec!["root", "child", "leaf"]), 1024);
-    collector.visit_leaf(&Path::from(vec!["root", "child", "other"]), 2048);
+fn test_memory_profile_aggregation() {
+    let mut profile = MemoryProfile::default();
+    profile.visit_leaf(&Path::from(vec!["root", "child", "leaf"]), 1024);
+    profile.visit_leaf(&Path::from(vec!["root", "child", "other"]), 2048);
 
-    let output = collector.finish();
+    let output = profile.to_string();
     assert_eq!(output, "root;child;leaf 1024\nroot;child;other 2048");
+    assert_eq!(profile.total_bytes(), 3072);
+    assert_eq!(profile.len(), 2);
 }
 
 #[test]
-fn test_folded_collector_skip_zero() {
-    let mut collector = FoldedCollector::new();
-    collector.visit_leaf(&Path::from(vec!["root", "empty"]), 0);
-    collector.visit_leaf(&Path::from(vec!["root", "nonempty"]), 100);
+fn test_memory_profile_skip_zero() {
+    let mut profile = MemoryProfile::default();
+    profile.visit_leaf(&Path::from(vec!["root", "empty"]), 0);
+    profile.visit_leaf(&Path::from(vec!["root", "nonempty"]), 100);
 
-    let output = collector.finish();
+    let output = profile.to_string();
     assert_eq!(output, "root;nonempty 100");
+    assert_eq!(profile.total_bytes(), 100);
+}
+
+#[test]
+fn test_memory_profile_same_path_aggregates() {
+    let mut profile = MemoryProfile::default();
+    profile.visit_leaf(&Path::from(vec!["root", "leaf"]), 10);
+    profile.visit_leaf(&Path::from(vec!["root", "leaf"]), 32);
+
+    // Multiple visits to the same path accumulate
+    assert_eq!(profile.to_string(), "root;leaf 42");
+    assert_eq!(profile.total_bytes(), 42);
+    assert_eq!(profile.len(), 1);
+}
+
+#[test]
+fn test_memory_profile_entries_iter() {
+    let mut profile = MemoryProfile::default();
+    profile.visit_leaf(&Path::from(vec!["a"]), 1);
+    profile.visit_leaf(&Path::from(vec!["b"]), 2);
+
+    let collected: Vec<(Vec<String>, usize)> =
+        profile.entries().map(|(p, b)| (p.to_vec(), b)).collect();
+    assert_eq!(
+        collected,
+        vec![(vec!["a".to_string()], 1), (vec!["b".to_string()], 2),]
+    );
 }
 
 // Integration tests for polynomial types
@@ -173,4 +203,89 @@ fn test_empty_collections() {
     let folded_vec = logical_memory_to_folded(&empty_vec);
     // Empty vec should only have struct overhead
     insta::assert_snapshot!(folded_vec, @"Vec[stack] 24");
+}
+
+// Tests for the #[derive(LogicalMemoryProfile)] macro.
+//
+// These confirm that the proc-macro-generated impl matches the behavior of
+// the declarative `impl_logical_memory_profile!` macro: fields are emitted
+// under `Type.field` frames, and delegation to nested types preserves the
+// path hierarchy.
+
+#[derive(LogicalMemoryProfile)]
+struct DeriveTargetFlat {
+    alpha: u64,
+    beta: f64,
+    gamma: String,
+}
+
+#[derive(LogicalMemoryProfile)]
+struct DeriveTargetNested {
+    leaf: u32,
+    inner: DeriveTargetFlat,
+}
+
+#[test]
+fn test_derive_flat_struct_snapshot() {
+    // u64=8, f64=8, String: size_of<String>=24 + len("hi")=2 → 26
+    let value = DeriveTargetFlat {
+        alpha: 0,
+        beta: 0.0,
+        gamma: "hi".to_string(),
+    };
+    let folded = logical_memory_to_folded(&value);
+    insta::assert_snapshot!(folded, @r###"
+    DeriveTargetFlat.alpha 8
+    DeriveTargetFlat.beta 8
+    DeriveTargetFlat.gamma 26
+    "###);
+}
+
+#[test]
+fn test_derive_nested_struct_snapshot() {
+    // Nested struct: the outer type emits `DeriveTargetNested.inner` as the
+    // frame, then the inner `#[derive]` emits its own `DeriveTargetFlat.*`
+    // segments under that.
+    let value = DeriveTargetNested {
+        leaf: 7,
+        inner: DeriveTargetFlat {
+            alpha: 0,
+            beta: 0.0,
+            gamma: String::new(),
+        },
+    };
+    let folded = logical_memory_to_folded(&value);
+    insta::assert_snapshot!(folded, @r###"
+    DeriveTargetNested.inner;DeriveTargetFlat.alpha 8
+    DeriveTargetNested.inner;DeriveTargetFlat.beta 8
+    DeriveTargetNested.inner;DeriveTargetFlat.gamma 24
+    DeriveTargetNested.leaf 4
+    "###);
+}
+
+#[test]
+fn test_derive_matches_declarative_macro() {
+    // The derive and the declarative `impl_logical_memory_profile!` macro
+    // must produce identical output for the same field set. This guards
+    // against regressions if one of the two implementations drifts.
+    struct Target {
+        a: u64,
+        b: u32,
+    }
+    crate::impl_logical_memory_profile! {
+        Target { a, b }
+    }
+
+    #[derive(LogicalMemoryProfile)]
+    struct TargetDerived {
+        a: u64,
+        b: u32,
+    }
+
+    let declarative = logical_memory_to_folded(&Target { a: 1, b: 2 });
+    let derived = logical_memory_to_folded(&TargetDerived { a: 1, b: 2 });
+
+    // Swap the type name so the two outputs are directly comparable.
+    let derived_renamed = derived.replace("TargetDerived", "Target");
+    assert_eq!(declarative, derived_renamed);
 }
