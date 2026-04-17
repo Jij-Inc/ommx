@@ -4,7 +4,7 @@ use crate::{
     Rng, SampleSet, Samples, Sense, Solution, State, VariableBound,
 };
 use anyhow::Result;
-use ommx::{ConstraintID, Evaluate, NamedFunctionID, Parse, VariableID};
+use ommx::{ConstraintID, Evaluate, NamedFunctionID, VariableID};
 use pyo3::{
     exceptions::PyKeyError,
     prelude::*,
@@ -386,8 +386,7 @@ impl Instance {
     }
 
     pub fn as_qubo_format<'py>(&self, py: Python<'py>) -> Result<(Bound<'py, PyDict>, f64)> {
-        let inner: ommx::v1::Instance = self.inner.clone().into();
-        let (qubo, constant) = inner.as_qubo_format()?;
+        let (qubo, constant) = self.inner.as_qubo_format()?;
         Ok((
             serde_pyobject::to_pyobject(py, &qubo)?
                 .extract()
@@ -397,8 +396,7 @@ impl Instance {
     }
 
     pub fn as_hubo_format<'py>(&self, py: Python<'py>) -> Result<(Bound<'py, PyDict>, f64)> {
-        let inner: ommx::v1::Instance = self.inner.clone().into();
-        let (hubo, constant) = inner.as_hubo_format()?;
+        let (hubo, constant) = self.inner.as_hubo_format()?;
         Ok((
             serde_pyobject::to_pyobject(py, &hubo)?
                 .extract()
@@ -1118,13 +1116,12 @@ impl Instance {
         constraint_id: u64,
         max_integer_range: u64,
     ) -> Result<()> {
-        let mut inner: ommx::v1::Instance = self.inner.clone().into();
-        inner.convert_inequality_to_equality_with_integer_slack(
-            constraint_id,
-            max_integer_range,
-            ommx::ATol::default(),
-        )?;
-        self.inner = Parse::parse(inner, &())?;
+        self.inner
+            .convert_inequality_to_equality_with_integer_slack(
+                constraint_id,
+                max_integer_range,
+                ommx::ATol::default(),
+            )?;
         Ok(())
     }
 
@@ -1180,9 +1177,9 @@ impl Instance {
         constraint_id: u64,
         slack_upper_bound: u64,
     ) -> Result<Option<f64>> {
-        let mut inner: ommx::v1::Instance = self.inner.clone().into();
-        let result = inner.add_integer_slack_to_inequality(constraint_id, slack_upper_bound)?;
-        self.inner = Parse::parse(inner, &())?;
+        let result = self
+            .inner
+            .add_integer_slack_to_inequality(constraint_id, slack_upper_bound)?;
         Ok(result)
     }
 

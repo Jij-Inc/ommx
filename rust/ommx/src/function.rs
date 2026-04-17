@@ -9,6 +9,7 @@ mod add;
 mod approx;
 mod arbitrary;
 mod evaluate;
+mod evaluate_bound;
 mod logical_memory;
 mod mul;
 mod parse;
@@ -206,7 +207,9 @@ impl Function {
     pub fn content_factor(&self) -> anyhow::Result<Coefficient> {
         match self {
             Function::Zero => Ok(Coefficient::one()),
-            Function::Constant(c) => Ok(c.inv()),
+            // The factor must be positive so that multiplying it preserves the sign of
+            // the constraint, matching `PolynomialBase::content_factor` for Linear/Quadratic/Polynomial.
+            Function::Constant(c) => Ok(c.inv().abs()),
             Function::Linear(l) => l.content_factor(),
             Function::Quadratic(q) => q.content_factor(),
             Function::Polynomial(p) => p.content_factor(),
