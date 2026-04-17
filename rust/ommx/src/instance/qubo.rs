@@ -1,6 +1,6 @@
 use super::{Instance, Sense};
 use crate::{BinaryIdPair, BinaryIds, Evaluate};
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use std::collections::BTreeMap;
 
 impl Instance {
@@ -21,6 +21,8 @@ impl Instance {
         if !self.constraints().is_empty() {
             bail!("The instance still has constraints. Use penalty method or other way to translate into unconstrained problem first.");
         }
+        self.check_capabilities(&fnv::FnvHashSet::default())
+            .context("QUBO format does not support these constraint types. Convert via penalty method or equivalent first.")?;
         if !self
             .objective()
             .required_ids()
@@ -64,6 +66,8 @@ impl Instance {
         if !self.constraints().is_empty() {
             bail!("The instance still has constraints. Use penalty method or other way to translate into unconstrained problem first.");
         }
+        self.check_capabilities(&fnv::FnvHashSet::default())
+            .context("HUBO format does not support these constraint types. Convert via penalty method or equivalent first.")?;
         if !self
             .objective()
             .required_ids()
@@ -173,6 +177,37 @@ mod tests {
         .unwrap();
         let err = instance.as_qubo_format().unwrap_err();
         assert!(err.to_string().contains("non-binary"));
+    }
+
+    #[test]
+    fn qubo_rejects_instances_with_one_hot_constraints() {
+        use crate::{OneHotConstraint, OneHotConstraintID};
+        use std::collections::BTreeSet;
+
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            linear!(1).into(),
+            binary_vars([1, 2]),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        let one_hot = OneHotConstraint::new(
+            OneHotConstraintID::from(0),
+            [VariableID::from(1), VariableID::from(2)]
+                .into_iter()
+                .collect::<BTreeSet<_>>(),
+        );
+        instance
+            .one_hot_constraint_collection
+            .active_mut()
+            .insert(OneHotConstraintID::from(0), one_hot);
+
+        let err = instance.as_qubo_format().unwrap_err();
+        let msg = err.to_string() + " " + &err.root_cause().to_string();
+        assert!(
+            msg.contains("QUBO") || msg.contains("Unsupported"),
+            "expected rejection message, got: {msg}"
+        );
     }
 
     #[test]
