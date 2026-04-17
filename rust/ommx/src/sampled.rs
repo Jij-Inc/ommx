@@ -155,6 +155,15 @@ impl<T> Sampled<T> {
         })
     }
 
+    /// Mutable iterator over the *unique* stored values.
+    ///
+    /// Each distinct `T` is yielded once, even when multiple [`SampleID`]s
+    /// point at it. Mutating the value therefore mutates it for every sample
+    /// that references it.
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
+        self.data.iter_mut()
+    }
+
     pub fn ids(&self) -> SampleIDSet {
         self.offsets.keys().copied().collect()
     }
@@ -172,6 +181,19 @@ impl<T> Sampled<T> {
             offsets: self.offsets,
             data: self.data.into_iter().map(f).collect(),
         }
+    }
+
+    /// Non-consuming, fallible variant of [`Self::map`].
+    ///
+    /// Applies `f` to each unique stored value once; sample-id grouping is
+    /// preserved. Useful when evaluating per-sample-state like in
+    /// `Evaluate::evaluate_samples`.
+    pub fn try_map_ref<U>(&self, mut f: impl FnMut(&T) -> Result<U>) -> Result<Sampled<U>> {
+        let data = self.data.iter().map(&mut f).collect::<Result<Vec<_>>>()?;
+        Ok(Sampled {
+            offsets: self.offsets.clone(),
+            data,
+        })
     }
 
     pub fn num_samples(&self) -> usize {

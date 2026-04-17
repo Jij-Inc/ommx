@@ -1,6 +1,6 @@
 use crate::{
-    v1::{Constraint, Equality, EvaluatedConstraint, Function, SampledConstraint, Samples, State},
-    Evaluate, VariableIDSet,
+    v1::{Constraint, Equality, EvaluatedConstraint, Function, SampledConstraint, State},
+    Evaluate, Sampled, VariableIDSet,
 };
 use anyhow::{bail, Context, Result};
 use approx::AbsDiffEq;
@@ -126,25 +126,26 @@ impl Evaluate for Constraint {
 
     fn evaluate_samples(
         &self,
-        samples: &Samples,
+        samples: &Sampled<State>,
         atol: crate::ATol,
     ) -> Result<Self::SampledOutput> {
         let evaluated_values = self.function().evaluate_samples(samples, atol)?;
         let feasible: HashMap<u64, bool> = evaluated_values
             .iter()
             .map(|(sample_id, value)| {
+                let raw_id = sample_id.into_inner();
                 if self.equality() == Equality::EqualToZero {
-                    return Ok((*sample_id, value.abs() < *atol));
+                    return Ok((raw_id, value.abs() < *atol));
                 }
                 if self.equality() == Equality::LessThanOrEqualToZero {
-                    return Ok((*sample_id, *value < *atol));
+                    return Ok((raw_id, *value < *atol));
                 }
                 bail!("Unsupported equality: {:?}", self.equality());
             })
             .collect::<Result<_>>()?;
         Ok(SampledConstraint {
             id: self.id,
-            evaluated_values: Some(evaluated_values),
+            evaluated_values: Some(evaluated_values.into()),
             used_decision_variable_ids: self
                 .function()
                 .required_ids()

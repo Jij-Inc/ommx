@@ -1,7 +1,7 @@
 use crate::{
     v1::{
         decision_variable::Kind, instance::Sense, Function, Instance, Optimality, Relaxation,
-        SampleSet, SampledDecisionVariable, Samples, Solution, State,
+        SampleSet, SampledDecisionVariable, Solution, State,
     },
     Bound, Bounds, Evaluate, VariableID, VariableIDSet,
 };
@@ -224,11 +224,14 @@ impl Evaluate for Instance {
 
     fn evaluate_samples(
         &self,
-        samples: &Samples,
+        samples: &crate::Sampled<State>,
         atol: crate::ATol,
     ) -> Result<Self::SampledOutput> {
-        let mut feasible_relaxed: HashMap<u64, bool> =
-            samples.ids().map(|id| (*id, true)).collect();
+        let mut feasible_relaxed: HashMap<u64, bool> = samples
+            .ids()
+            .into_iter()
+            .map(|id| (id.into_inner(), true))
+            .collect();
 
         // Constraints
         let mut constraints = Vec::new();
@@ -263,10 +266,23 @@ impl Evaluate for Instance {
 
         // Reconstruct decision variable values
         let mut samples = samples.clone();
-        for state in samples.states_mut() {
-            eval_dependencies(&self.decision_variable_dependency, state?, atol)?;
+        for state in samples.iter_mut() {
+            eval_dependencies(&self.decision_variable_dependency, state, atol)?;
         }
-        let mut transposed = samples.transpose();
+        let mut transposed: HashMap<u64, HashMap<ordered_float::OrderedFloat<f64>, Vec<u64>>> =
+            HashMap::new();
+        for (sample_id, state) in samples.iter() {
+            for (decision_variable_id, value) in &state.entries {
+                transposed
+                    .entry(*decision_variable_id)
+                    .or_default()
+                    .entry(ordered_float::OrderedFloat(*value))
+                    .or_default()
+                    .push(sample_id.into_inner());
+            }
+        }
+        let mut transposed: HashMap<u64, crate::v1::SampledValues> =
+            transposed.into_iter().map(|(k, v)| (k, v.into())).collect();
         let decision_variables: Vec<SampledDecisionVariable> = self
             .decision_variables
             .iter()
@@ -280,7 +296,7 @@ impl Evaluate for Instance {
 
         Ok(SampleSet {
             decision_variables,
-            objectives: Some(objectives),
+            objectives: Some(objectives.into()),
             constraints,
             feasible_relaxed,
             feasible,

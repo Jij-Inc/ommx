@@ -554,7 +554,7 @@ impl crate::Evaluate for DecisionVariable {
 
     fn evaluate_samples(
         &self,
-        samples: &crate::v1::Samples,
+        samples: &crate::Sampled<crate::v1::State>,
         _atol: crate::ATol,
     ) -> anyhow::Result<Self::SampledOutput> {
         let variable_id = self.id.into_inner();
@@ -569,7 +569,7 @@ impl crate::Evaluate for DecisionVariable {
                 grouped_values
                     .entry(ordered_float::OrderedFloat(*value))
                     .or_default()
-                    .push(crate::SampleID::from(*sample_id));
+                    .push(*sample_id);
             }
         }
 

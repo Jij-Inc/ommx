@@ -2,9 +2,9 @@ use crate::{
     macros::*,
     v1::{
         function::{self, Function as FunctionEnum},
-        Function, Linear, Polynomial, Quadratic, SampledValues, Samples, State,
+        Function, Linear, Polynomial, Quadratic, State,
     },
-    Bound, Bounds, Evaluate, MonomialDyn, VariableID, VariableIDSet,
+    Bound, Bounds, Evaluate, MonomialDyn, Sampled, VariableID, VariableIDSet,
 };
 use anyhow::{Context, Result};
 use approx::AbsDiffEq;
@@ -414,7 +414,7 @@ impl fmt::Display for Function {
 
 impl Evaluate for Function {
     type Output = f64;
-    type SampledOutput = SampledValues;
+    type SampledOutput = Sampled<f64>;
 
     fn evaluate(&self, solution: &State, atol: crate::ATol) -> Result<f64> {
         let out = match &self.function {
@@ -439,14 +439,10 @@ impl Evaluate for Function {
 
     fn evaluate_samples(
         &self,
-        samples: &Samples,
+        samples: &Sampled<State>,
         atol: crate::ATol,
     ) -> Result<Self::SampledOutput> {
-        let out = samples.map(|s| {
-            let value = self.evaluate(s, atol)?;
-            Ok(value)
-        })?;
-        Ok(out)
+        samples.try_map_ref(|s| self.evaluate(s, atol))
     }
 
     fn required_ids(&self) -> VariableIDSet {

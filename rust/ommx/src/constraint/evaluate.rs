@@ -33,11 +33,10 @@ impl Evaluate for Constraint<Created> {
 
     fn evaluate_samples(
         &self,
-        samples: &crate::v1::Samples,
+        samples: &crate::Sampled<crate::v1::State>,
         atol: crate::ATol,
     ) -> anyhow::Result<Self::SampledOutput> {
-        let evaluated_values_v1 = self.stage.function.evaluate_samples(samples, atol)?;
-        let evaluated_values: crate::Sampled<f64> = evaluated_values_v1.try_into()?;
+        let evaluated_values = self.stage.function.evaluate_samples(samples, atol)?;
 
         let feasible: std::collections::BTreeMap<crate::SampleID, bool> = evaluated_values
             .iter()
@@ -76,10 +75,11 @@ impl Evaluate for Constraint<Created> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{constraint_type::SampledConstraintBehavior, random::*, v1::Samples};
+    use crate::{constraint_type::SampledConstraintBehavior, random::*, Sampled};
     use proptest::prelude::*;
 
-    fn constraint_and_samples() -> impl Strategy<Value = (Constraint<Created>, Samples)> {
+    fn constraint_and_samples(
+    ) -> impl Strategy<Value = (Constraint<Created>, Sampled<crate::v1::State>)> {
         Constraint::arbitrary()
             .prop_flat_map(|c| {
                 let ids = c.stage.function.required_ids();
@@ -94,13 +94,10 @@ mod tests {
         #[test]
         fn test_evaluate_samples((c, samples) in constraint_and_samples()) {
             let evaluated = c.evaluate_samples(&samples, crate::ATol::default()).unwrap();
-            let evaluated_each: FnvHashMap<u64, EvaluatedConstraint> = samples.iter().map(|(parameter_id, state)| {
-                let value = c.evaluate(state, crate::ATol::default()).unwrap();
-                (*parameter_id, value)
-            }).collect();
-            for (sample_id, each) in evaluated_each {
-                let extracted = evaluated.get(SampleID::from(sample_id)).unwrap();
-                prop_assert_eq!(extracted, each)
+            for (sample_id, state) in samples.iter() {
+                let expected = c.evaluate(state, crate::ATol::default()).unwrap();
+                let extracted = evaluated.get(*sample_id).unwrap();
+                prop_assert_eq!(extracted, expected);
             }
         }
     }

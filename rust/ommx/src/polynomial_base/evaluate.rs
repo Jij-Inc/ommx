@@ -1,13 +1,10 @@
 use super::*;
-use crate::{
-    v1::{SampledValues, Samples, State},
-    Evaluate, VariableIDSet,
-};
+use crate::{v1::State, Evaluate, Sampled, VariableIDSet};
 use anyhow::{anyhow, Result};
 
 impl<M: Monomial> Evaluate for PolynomialBase<M> {
     type Output = f64;
-    type SampledOutput = SampledValues;
+    type SampledOutput = Sampled<f64>;
 
     fn evaluate(&self, state: &State, _atol: crate::ATol) -> Result<Self::Output> {
         let mut result = 0.0;
@@ -58,10 +55,10 @@ impl<M: Monomial> Evaluate for PolynomialBase<M> {
 
     fn evaluate_samples(
         &self,
-        samples: &Samples,
+        samples: &Sampled<State>,
         atol: crate::ATol,
     ) -> Result<Self::SampledOutput> {
-        samples.map(|state| self.evaluate(state, atol))
+        samples.try_map_ref(|state| self.evaluate(state, atol))
     }
 }
 
@@ -181,8 +178,8 @@ mod tests {
     test_partial_evaluate!(QuadraticMonomial, test_partial_evaluate_quadratic);
     test_partial_evaluate!(MonomialDyn, test_partial_evaluate_polynomial);
 
-    fn polynomial_and_samples<M: Monomial>() -> impl Strategy<Value = (PolynomialBase<M>, Samples)>
-    {
+    fn polynomial_and_samples<M: Monomial>(
+    ) -> impl Strategy<Value = (PolynomialBase<M>, Sampled<State>)> {
         PolynomialBase::arbitrary()
             .prop_flat_map(|poly| {
                 let ids = poly.required_ids();
@@ -199,11 +196,14 @@ mod tests {
             (poly, samples) in polynomial_and_samples::<LinearMonomial>()
         ) {
             let evaluated = poly.evaluate_samples(&samples, crate::ATol::default()).unwrap();
-            let evaluated_each: SampledValues = samples.iter().map(|(parameter_id, state)| {
-                let value = poly.evaluate(state, crate::ATol::default()).unwrap();
-                (*parameter_id, value)
-            }).collect();
-            prop_assert!(evaluated.abs_diff_eq(&evaluated_each, crate::ATol::default()), "evaluated = {evaluated:?}, evaluated_each = {evaluated_each:?}");
+            for (sample_id, state) in samples.iter() {
+                let expected = poly.evaluate(state, crate::ATol::default()).unwrap();
+                let actual = *evaluated.get(*sample_id).unwrap();
+                prop_assert!(
+                    actual.abs_diff_eq(&expected, 1e-9),
+                    "sample_id = {sample_id:?}, expected = {expected}, actual = {actual}"
+                );
+            }
         }
     }
 }

@@ -1,7 +1,7 @@
 use crate::{
     macros::*,
-    v1::{linear::Term, Linear, Quadratic, SampledValues, Samples, State},
-    Evaluate, VariableID, VariableIDSet,
+    v1::{linear::Term, Linear, Quadratic, State},
+    Evaluate, Sampled, VariableID, VariableIDSet,
 };
 use anyhow::{Context, Result};
 use approx::AbsDiffEq;
@@ -247,7 +247,7 @@ impl fmt::Display for Linear {
 
 impl Evaluate for Linear {
     type Output = f64;
-    type SampledOutput = SampledValues;
+    type SampledOutput = Sampled<f64>;
 
     fn evaluate(&self, solution: &State, _atol: crate::ATol) -> Result<f64> {
         let mut sum = self.constant;
@@ -277,14 +277,10 @@ impl Evaluate for Linear {
 
     fn evaluate_samples(
         &self,
-        samples: &Samples,
+        samples: &Sampled<State>,
         atol: crate::ATol,
     ) -> Result<Self::SampledOutput> {
-        let out = samples.map(|s| {
-            let value = self.evaluate(s, atol)?;
-            Ok(value)
-        })?;
-        Ok(out)
+        samples.try_map_ref(|s| self.evaluate(s, atol))
     }
 
     fn required_ids(&self) -> VariableIDSet {

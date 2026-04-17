@@ -2,10 +2,7 @@ mod logical_memory;
 
 use super::error::SubstitutionError;
 use crate::{
-    check_self_assignment,
-    decision_variable::VariableID,
-    substitute_acyclic_via_one,
-    v1::{Samples, State},
+    check_self_assignment, decision_variable::VariableID, substitute_acyclic_via_one, v1::State,
     ATol, Evaluate, Function, Substitute, VariableIDSet,
 };
 use anyhow::Result;
@@ -214,7 +211,7 @@ impl Default for AcyclicAssignmentsParameters {
 
 impl Evaluate for AcyclicAssignments {
     type Output = State;
-    type SampledOutput = FnvHashMap<VariableID, crate::v1::SampledValues>;
+    type SampledOutput = FnvHashMap<VariableID, crate::Sampled<f64>>;
 
     fn evaluate(&self, state: &State, atol: ATol) -> Result<Self::Output> {
         let mut extended_state = state.clone();
@@ -245,7 +242,11 @@ impl Evaluate for AcyclicAssignments {
         Ok(())
     }
 
-    fn evaluate_samples(&self, samples: &Samples, atol: ATol) -> Result<Self::SampledOutput> {
+    fn evaluate_samples(
+        &self,
+        samples: &crate::Sampled<State>,
+        atol: ATol,
+    ) -> Result<Self::SampledOutput> {
         let mut result = FnvHashMap::default();
 
         // For each assignment in topological order

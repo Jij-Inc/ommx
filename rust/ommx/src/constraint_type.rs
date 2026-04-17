@@ -268,7 +268,11 @@ impl<T: ConstraintType> Evaluate for ConstraintCollection<T> {
         Ok(EvaluatedCollection::new(results, removed_reasons))
     }
 
-    fn evaluate_samples(&self, samples: &v1::Samples, atol: ATol) -> Result<Self::SampledOutput> {
+    fn evaluate_samples(
+        &self,
+        samples: &crate::Sampled<v1::State>,
+        atol: ATol,
+    ) -> Result<Self::SampledOutput> {
         let mut results = BTreeMap::new();
         let mut removed_reasons = BTreeMap::new();
         for constraint in self.active.values() {

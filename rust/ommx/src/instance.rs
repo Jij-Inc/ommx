@@ -33,9 +33,9 @@ pub use stats::*;
 use crate::{
     constraint::RemovedReason, constraint_type::ConstraintCollection,
     indicator_constraint::IndicatorConstraint, named_function::NamedFunctionID,
-    one_hot_constraint::OneHotConstraint, parse::Parse, sos1_constraint::Sos1Constraint, v1,
-    AcyclicAssignments, Constraint, ConstraintID, DecisionVariable, Evaluate, Function,
-    NamedFunction, VariableID, VariableIDSet,
+    one_hot_constraint::OneHotConstraint, sos1_constraint::Sos1Constraint, v1, AcyclicAssignments,
+    Constraint, ConstraintID, DecisionVariable, Evaluate, Function, NamedFunction, VariableID,
+    VariableIDSet,
 };
 use std::collections::BTreeMap;
 

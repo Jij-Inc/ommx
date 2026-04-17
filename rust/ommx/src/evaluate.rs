@@ -1,7 +1,4 @@
-use crate::{
-    v1::{Samples, State},
-    VariableIDSet,
-};
+use crate::{v1::State, Sampled, VariableIDSet};
 use anyhow::Result;
 
 /// Evaluate with a [State]
@@ -13,8 +10,11 @@ pub trait Evaluate {
     fn evaluate(&self, state: &State, atol: crate::ATol) -> Result<Self::Output>;
 
     /// Evaluate for each sample
-    fn evaluate_samples(&self, samples: &Samples, atol: crate::ATol)
-        -> Result<Self::SampledOutput>;
+    fn evaluate_samples(
+        &self,
+        samples: &Sampled<State>,
+        atol: crate::ATol,
+    ) -> Result<Self::SampledOutput>;
 
     /// Partially evaluate the function to return the used variable ids
     fn partial_evaluate(&mut self, state: &State, atol: crate::ATol) -> Result<()>;
@@ -252,8 +252,8 @@ mod tests {
         fn evaluate_samples((instance, state) in instance_with_state()) {
             let solution = instance.evaluate(&state, crate::ATol::default()).unwrap();
 
-            let mut samples = Samples::default();
-            samples.add_sample(0, state);
+            let mut samples = crate::Sampled::<State>::default();
+            samples.append([crate::SampleID::from(0u64)], state).unwrap();
             let sample_set = instance.evaluate_samples(&samples, crate::ATol::default()).unwrap();
 
             prop_assert_eq!(solution, sample_set.get(0).unwrap());
