@@ -1,24 +1,68 @@
 //! Logical memory profiling for OMMX types.
 //!
-//! This module provides a visitor-based approach to profile memory usage
-//! of optimization problem instances. The public entry point is
-//! [`crate::Instance::logical_memory_profile`], which returns a
-//! [`MemoryProfile`] that can be rendered as a folded-stack string via
-//! its [`std::fmt::Display`] impl and consumed programmatically through
-//! [`MemoryProfile::entries`] / [`MemoryProfile::total_bytes`].
+//! The public entry point is [`crate::Instance::logical_memory_profile`],
+//! which returns a [`MemoryProfile`] that can be rendered as a folded-stack
+//! string via its [`std::fmt::Display`] impl and consumed programmatically
+//! through [`MemoryProfile::entries`] / [`MemoryProfile::total_bytes`].
 //!
-//! # Design Philosophy
+//! # Design philosophy
 //!
-//! - **Only leaf nodes emit byte counts**: avoids inclusive/exclusive calculation complexity
-//! - **Visitor pattern**: output formats are delegated to visitor implementations
-//! - **Flexible granularity**: each type decides its own decomposition level
+//! - **Only leaf nodes emit byte counts.** Intermediate nodes delegate to
+//!   their children; aggregation is the collector's job. This eliminates
+//!   the inclusive/exclusive-bytes distinction and makes double-counting
+//!   structurally impossible.
+//! - **Visitor pattern.** Each type's only responsibility is to describe
+//!   its logical structure to a visitor; output formats (folded stack,
+//!   totals, ...) live in visitor implementations.
+//! - **Flexible granularity.** Each type decides how deep to decompose
+//!   itself — a struct may report every field, or collapse itself to one
+//!   leaf (e.g. ID wrappers that are just `size_of::<T>()`).
 //!
 //! # Internal use only
 //!
-//! The `LogicalMemoryProfile` trait, `Path`/`PathGuard` helpers and related
-//! free functions are `pub(crate)`: they are implementation details used within
-//! the `ommx` crate and are not part of the public API. External consumers
-//! should interact with [`MemoryProfile`] via the method on [`crate::Instance`].
+//! The [`LogicalMemoryProfile`] trait, [`Path`]/`PathGuard` helpers and
+//! related free functions are `pub(crate)`: they are implementation details
+//! used within the `ommx` crate and are not part of the public API.
+//! External consumers should interact with [`MemoryProfile`] via the
+//! method on [`crate::Instance`].
+//!
+//! # Implementation notes
+//!
+//! These conventions are enforced by `#[derive(LogicalMemoryProfile)]`
+//! (from the `ommx-derive` crate) and by the declarative
+//! `impl_logical_memory_profile!` macro. Hand-written impls for
+//! generic / enum / foreign types should follow them too.
+//!
+//! - **Naming: `Type.field`.** Each field's frame is
+//!   `"TypeName.field_name"`. Flamegraph frames then show both the
+//!   owning type and the field name, which makes the hierarchy
+//!   easy to read at a glance.
+//!
+//! - **Never write `size_of::<Self>()` at a struct leaf.** That would
+//!   double-count: the struct's stack slot already includes every field
+//!   by layout. Delegate to each field instead. Padding between fields
+//!   is the only thing missed — an acceptable trade-off.
+//!
+//! - **Stack vs heap.** Primitives and POD structs (`Bound`, `Kind`, ...)
+//!   emit a single leaf of `size_of::<T>()`. Collections emit a
+//!   `Type[stack]` leaf for their header (`size_of::<Vec<T>>()` etc.)
+//!   and then delegate to their elements; unused capacity is deliberately
+//!   ignored. `String` emits `size_of::<String>() + len()` (heap
+//!   bytes actually present).
+//!
+//! - **Aggregation.** Multiple visits to the same path accumulate in
+//!   [`MemoryProfile`]. So profiling a `BTreeMap<Id, T>` with 1000
+//!   entries produces one line per unique path, not 1000 duplicates.
+//!
+//! # Caveats
+//!
+//! This is a logical-structure estimation, not exact heap profiling.
+//! Allocator overhead, internal fragmentation, and padding between
+//! fields are not tracked. Unused `Vec` / `HashMap` capacity is
+//! deliberately ignored — only bytes holding live data are counted.
+//! For precise heap accounting use a dedicated profiler (jemalloc,
+//! valgrind, heaptrack); this tool is for understanding proportions
+//! and flamegraph visualization.
 
 mod collections;
 mod path;
@@ -54,23 +98,43 @@ pub(crate) trait LogicalMemoryVisitor {
 
 /// Logical memory profile of a value.
 ///
-/// This is the public output type of [`crate::Instance::logical_memory_profile`].
-/// Internally it is a flat map from logical path (e.g. `["Instance", "objective", ...]`)
-/// to the number of bytes attributed to that leaf.
+/// This is the output type of [`crate::Instance::logical_memory_profile`].
+/// Internally it is a flat map from logical path (e.g.
+/// `["Instance", "objective", ...]`) to the number of bytes attributed to
+/// that leaf.
 ///
-/// Render as a folded-stack string with [`ToString::to_string`] (via the
-/// [`std::fmt::Display`] impl) to feed into flamegraph tools such as
-/// `flamegraph.pl` or `inferno`.
+/// # Caveats
+///
+/// Reported bytes are a logical-structure estimation, not exact heap
+/// profiling: allocator overhead, padding, and unused collection capacity
+/// are deliberately ignored. See the module docs for details. Use for
+/// proportions and flamegraph visualization, not for total-allocation
+/// accounting.
+///
+/// # Flamegraph workflow
+///
+/// The [`std::fmt::Display`] impl produces the folded-stack format read
+/// by `flamegraph.pl` and `inferno`:
+///
+/// ```bash
+/// # in a Rust program / test / example
+/// std::fs::write("profile.txt", instance.logical_memory_profile().to_string())?;
+///
+/// # then, in the shell:
+/// flamegraph.pl profile.txt > memory.svg
+/// # or with inferno:
+/// inferno-flamegraph < profile.txt > memory.svg
+/// ```
+///
+/// External tools:
+/// - `flamegraph.pl`: <https://github.com/brendangregg/FlameGraph>
+/// - `inferno` (Rust): <https://github.com/jonhoo/inferno>
 #[derive(Debug, Clone, Default)]
 pub struct MemoryProfile {
     entries: BTreeMap<Vec<String>, usize>,
 }
 
 impl MemoryProfile {
-    pub(crate) fn new() -> Self {
-        Self::default()
-    }
-
     /// Total bytes across all leaves.
     pub fn total_bytes(&self) -> usize {
         self.entries.values().sum()
@@ -127,7 +191,7 @@ impl fmt::Display for MemoryProfile {
 /// Build a [`MemoryProfile`] for a value.
 pub(crate) fn build_profile<T: LogicalMemoryProfile>(value: &T) -> MemoryProfile {
     let mut path = Path::new();
-    let mut profile = MemoryProfile::new();
+    let mut profile = MemoryProfile::default();
     value.visit_logical_memory(&mut path, &mut profile);
     profile
 }

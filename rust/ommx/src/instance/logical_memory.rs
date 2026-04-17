@@ -125,14 +125,15 @@ impl Instance {
     /// Compute the logical memory profile of this instance.
     ///
     /// Returns a [`crate::MemoryProfile`] that can be rendered as a
-    /// folded-stack string via [`ToString::to_string`] or inspected
-    /// programmatically via [`crate::MemoryProfile::entries`] and
+    /// folded-stack string via [`ToString::to_string`] (for flamegraph
+    /// tools) or inspected programmatically via
+    /// [`crate::MemoryProfile::entries`] and
     /// [`crate::MemoryProfile::total_bytes`].
     ///
     /// The reported byte counts are a logical estimation, not exact heap
     /// profiling: allocator overhead, padding, and unused capacity are
-    /// intentionally ignored. See `docs/design/logical_memory_profile.md`
-    /// for details.
+    /// deliberately ignored. See [`crate::MemoryProfile`] for the
+    /// flamegraph workflow and full caveats.
     pub fn logical_memory_profile(&self) -> crate::MemoryProfile {
         crate::logical_memory::build_profile(self)
     }

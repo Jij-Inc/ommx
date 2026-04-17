@@ -1,6 +1,50 @@
 //! Derive macros for the `ommx` crate.
 //!
-//! This crate is for internal use within the OMMX workspace only.
+//! This crate is for internal use within the OMMX workspace only. It is
+//! unpublished and has no stability guarantees outside the workspace.
+//!
+//! # `#[derive(LogicalMemoryProfile)]`
+//!
+//! Generates a `LogicalMemoryProfile` impl that delegates to each field
+//! of a named-field struct. Each field is emitted under the path frame
+//! `"TypeName.field_name"`. The `ommx` crate uses this derive at every
+//! struct definition that participates in memory profiling, so that
+//! adding or removing a field automatically adjusts the profile.
+//!
+//! ## Supported
+//!
+//! - Structs with named fields.
+//!   - All fields must implement `LogicalMemoryProfile`. Primitives,
+//!     `String`, `Option<T>`, `Vec<T>`, `BTreeMap`, `HashMap`,
+//!     `FnvHashMap`, and `BTreeSet` all have blanket impls in
+//!     `ommx::logical_memory::collections`.
+//! - Generic structs: type parameters are propagated through, but
+//!   **no `LogicalMemoryProfile` bound is added automatically**. The
+//!   struct must declare its own `where T: LogicalMemoryProfile`
+//!   clause. This matches `serde`'s historical `#[serde(bound = ...)]`
+//!   philosophy — the derive does not guess.
+//!
+//! ## Not supported
+//!
+//! - Tuple structs and unit structs → emit a `compile_error!` directing
+//!   the caller to a hand-written impl.
+//! - Enums → emit a `compile_error!`. For enums, hand-write a `match`
+//!   (`Function` in the `ommx` crate is an example).
+//! - Field skipping → there is no `#[logical_memory(skip)]` attribute.
+//!   If a field truly should not participate, hand-write the impl.
+//! - Custom frame names → the frame is always `"TypeName.field_name"`
+//!   taken from the struct ident and field ident. For a renamed frame
+//!   (e.g. when wrapping an external type), use the declarative
+//!   `impl_logical_memory_profile! { path::to::Type as "Name" { ... } }`
+//!   form instead.
+//!
+//! # Testing
+//!
+//! The proc-macro entry point delegates to
+//! `derive_logical_memory_profile_impl`, a pure
+//! `TokenStream2 -> TokenStream2` function. This is exercised by inline
+//! `insta` snapshot tests in this crate — the generated code is checked
+//! in as a snapshot so any drift is caught at review time.
 
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
