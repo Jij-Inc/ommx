@@ -1,14 +1,14 @@
 use super::*;
-use crate::{ATol, Evaluate, Propagate, VariableIDSet};
+use crate::{ATol, Evaluate, Propagate, PropagateOutcome, VariableIDSet};
 
 impl Propagate for IndicatorConstraint<Created> {
-    type Transformed = IndicatorPropagateOutput;
+    type Transformed = IndicatorPromote;
 
     fn propagate(
-        &mut self,
+        mut self,
         state: &crate::v1::State,
         atol: ATol,
-    ) -> anyhow::Result<(Option<IndicatorPropagateOutput>, crate::v1::State)> {
+    ) -> anyhow::Result<(PropagateOutcome<Self, IndicatorPromote>, crate::v1::State)> {
         let empty_state = crate::v1::State::default();
 
         if let Some(&indicator_value) = state.entries.get(&self.indicator_variable.into_inner()) {
@@ -22,18 +22,21 @@ impl Propagate for IndicatorConstraint<Created> {
                 metadata.provenance =
                     Some(crate::constraint::Provenance::IndicatorConstraint(self.id));
 
+                let new = IndicatorPromote {
+                    equality: self.equality,
+                    function: promoted_function,
+                    metadata,
+                };
                 Ok((
-                    Some(IndicatorPropagateOutput::Promote {
-                        equality: self.equality,
-                        function: promoted_function,
-                        metadata,
-                    }),
+                    PropagateOutcome::Transformed {
+                        original: self,
+                        new,
+                    },
                     empty_state,
                 ))
             } else if indicator_value.abs() < *atol {
-                // Indicator OFF → vacuously satisfied
-                // self not mutated — caller moves it to removed
-                Ok((Some(IndicatorPropagateOutput::Removed), empty_state))
+                // Indicator OFF → vacuously satisfied; the constraint is consumed.
+                Ok((PropagateOutcome::Consumed(self), empty_state))
             } else {
                 anyhow::bail!(
                     "Indicator variable {:?} of indicator constraint {:?} has invalid value {} (must be 0 or 1)",
@@ -45,7 +48,7 @@ impl Propagate for IndicatorConstraint<Created> {
         } else {
             // Indicator variable not in state — partial-evaluate inner function in-place
             self.stage.function.partial_evaluate(state, atol)?;
-            Ok((None, empty_state))
+            Ok((PropagateOutcome::Active(self), empty_state))
         }
     }
 }
@@ -178,7 +181,7 @@ impl Evaluate for IndicatorConstraint<Created> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{coeff, linear, Evaluate, Function, Propagate};
+    use crate::{coeff, linear, Evaluate, Function, Propagate, PropagateOutcome};
     use std::collections::HashMap;
 
     #[test]
@@ -340,100 +343,96 @@ mod tests {
 
     #[test]
     fn test_propagate_indicator_on_promotes() {
-        let mut ic = IndicatorConstraint::new(
+        let ic = IndicatorConstraint::new(
             IndicatorConstraintID::from(1),
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + coeff!(-5.0)),
         );
 
-        // x10 = 1 → transformed: promote inner constraint
+        // x10 = 1 → Transformed: promote inner constraint
         let state = crate::v1::State::from(HashMap::from([(10, 1.0)]));
-        let (transformed, additional) = ic.propagate(&state, ATol::default()).unwrap();
+        let (outcome, additional) = ic.propagate(&state, ATol::default()).unwrap();
         assert!(additional.entries.is_empty());
-        match transformed {
-            Some(IndicatorPropagateOutput::Promote {
-                equality,
-                function: _,
-                metadata,
-            }) => {
-                assert_eq!(equality, Equality::LessThanOrEqualToZero);
+        match outcome {
+            PropagateOutcome::Transformed { original, new } => {
+                assert_eq!(new.equality, Equality::LessThanOrEqualToZero);
                 assert!(matches!(
-                    metadata.provenance,
+                    new.metadata.provenance,
                     Some(crate::constraint::Provenance::IndicatorConstraint(id)) if id == IndicatorConstraintID::from(1)
                 ));
+                // Original indicator constraint preserved for removed set
+                assert_eq!(original.indicator_variable, VariableID::from(10));
             }
-            _ => panic!("Expected Some(Promote)"),
+            _ => panic!("Expected Transformed"),
         }
-        // Original indicator constraint preserved for removed set
-        assert_eq!(ic.indicator_variable, VariableID::from(10));
     }
 
     #[test]
-    fn test_propagate_indicator_off_removed() {
-        let mut ic = IndicatorConstraint::new(
+    fn test_propagate_indicator_off_consumed() {
+        let ic = IndicatorConstraint::new(
             IndicatorConstraintID::from(1),
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + coeff!(-5.0)),
         );
 
-        // x10 = 0 → transformed: removed
+        // x10 = 0 → Consumed (vacuously satisfied)
         let state = crate::v1::State::from(HashMap::from([(10, 0.0)]));
-        let (transformed, additional) = ic.propagate(&state, ATol::default()).unwrap();
+        let (outcome, additional) = ic.propagate(&state, ATol::default()).unwrap();
         assert!(additional.entries.is_empty());
-        assert!(matches!(
-            transformed,
-            Some(IndicatorPropagateOutput::Removed)
-        ));
+        assert!(matches!(outcome, PropagateOutcome::Consumed(_)));
     }
 
     #[test]
     fn test_propagate_indicator_not_fixed_partial_evaluates_function() {
-        let mut ic = IndicatorConstraint::new(
+        let ic = IndicatorConstraint::new(
             IndicatorConstraintID::from(1),
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + linear!(2) + coeff!(-5.0)),
         );
 
-        // x1 = 3 (not indicator) → in-place: function partial-evaluated
+        // x1 = 3 (not indicator) → Active: function partial-evaluated
         let state = crate::v1::State::from(HashMap::from([(1, 3.0)]));
-        let (transformed, additional) = ic.propagate(&state, ATol::default()).unwrap();
+        let (outcome, additional) = ic.propagate(&state, ATol::default()).unwrap();
         assert!(additional.entries.is_empty());
-        assert!(transformed.is_none()); // in-place
-                                        // ic's function was partial-evaluated
-        let ids = ic.stage.function.required_ids();
-        assert!(!ids.contains(&VariableID::from(1)));
-        assert!(ids.contains(&VariableID::from(2)));
+        match outcome {
+            PropagateOutcome::Active(ic) => {
+                let ids = ic.stage.function.required_ids();
+                assert!(!ids.contains(&VariableID::from(1)));
+                assert!(ids.contains(&VariableID::from(2)));
+            }
+            _ => panic!("Expected Active"),
+        }
     }
 
     #[test]
     fn test_propagate_indicator_on_with_function_partial_eval() {
-        let mut ic = IndicatorConstraint::new(
+        let ic = IndicatorConstraint::new(
             IndicatorConstraintID::from(1),
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + linear!(2) + coeff!(-5.0)),
         );
 
-        // x10=1, x1=3 → promote with x1 substituted in promoted function
+        // x10=1, x1=3 → Transformed with x1 substituted in promoted function
         let state = crate::v1::State::from(HashMap::from([(10, 1.0), (1, 3.0)]));
-        let (transformed, additional) = ic.propagate(&state, ATol::default()).unwrap();
+        let (outcome, additional) = ic.propagate(&state, ATol::default()).unwrap();
         assert!(additional.entries.is_empty());
-        match transformed {
-            Some(IndicatorPropagateOutput::Promote { function, .. }) => {
-                let ids = function.required_ids();
+        match outcome {
+            PropagateOutcome::Transformed { original, new } => {
+                let ids = new.function.required_ids();
                 assert!(!ids.contains(&VariableID::from(1))); // substituted
                 assert!(ids.contains(&VariableID::from(2))); // still free
+                                                             // Original ic still has unmodified function (was cloned for promotion)
+                assert!(original
+                    .stage
+                    .function
+                    .required_ids()
+                    .contains(&VariableID::from(1)));
             }
-            _ => panic!("Expected Some(Promote)"),
+            _ => panic!("Expected Transformed"),
         }
-        // Original ic still has unmodified function (was cloned for promotion)
-        assert!(ic
-            .stage
-            .function
-            .required_ids()
-            .contains(&VariableID::from(1)));
     }
 }

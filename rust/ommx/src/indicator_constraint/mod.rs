@@ -172,23 +172,19 @@ impl ConstraintType for IndicatorConstraint {
 
 // ===== Propagate output =====
 
-/// The transformation result when an indicator constraint is consumed during propagation.
+/// Components of a regular constraint promoted from an indicator constraint
+/// (when the indicator variable is fixed to 1).
 ///
 /// This is the `Transformed` type for `Propagate` impl on `IndicatorConstraint`.
-/// The "active/in-place" case is represented by `None` at the `Propagate` level.
+/// The caller (Instance) assigns a unique `ConstraintID` for the new constraint.
+///
+/// Other propagation outcomes (indicator=0 → removed, no propagation → active)
+/// are represented at the [`PropagateOutcome`](crate::PropagateOutcome) level.
 #[derive(Debug, Clone)]
-pub enum IndicatorPropagateOutput {
-    /// Indicator = 1; inner constraint should be promoted to a regular `Constraint`.
-    ///
-    /// Contains the components needed to build the promoted constraint.
-    /// The caller (Instance) is responsible for assigning a unique `ConstraintID`.
-    Promote {
-        equality: Equality,
-        function: Function,
-        metadata: ConstraintMetadata,
-    },
-    /// Indicator = 0; constraint vacuously satisfied, removed.
-    Removed,
+pub struct IndicatorPromote {
+    pub equality: Equality,
+    pub function: Function,
+    pub metadata: ConstraintMetadata,
 }
 
 // ===== Created stage =====

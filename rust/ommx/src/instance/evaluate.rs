@@ -1,10 +1,32 @@
 use super::*;
 use crate::{
-    constraint::RemovedReason, indicator_constraint::IndicatorPropagateOutput, ATol, Evaluate,
-    Propagate, VariableIDSet,
+    constraint::RemovedReason, ATol, Evaluate, Propagate, PropagateOutcome, VariableIDSet,
 };
 use anyhow::{anyhow, Result};
 use std::collections::BTreeMap;
+
+/// Merge additional variable fixings from propagation into `expanded` state.
+///
+/// Returns `Err` if any fixing conflicts with an existing value in `expanded`
+/// (outside of numerical tolerance), which indicates infeasibility discovered
+/// during propagation.
+fn merge_state(expanded: &mut v1::State, additional: v1::State, changed: &mut bool) -> Result<()> {
+    for (var_id, value) in additional.entries {
+        if let Some(&existing) = expanded.entries.get(&var_id) {
+            if (existing - value).abs() > *ATol::default() {
+                return Err(anyhow!(
+                    "Conflicting variable fixings for ID={var_id}: \
+                     existing={existing}, new={value}"
+                ));
+            }
+            // Same value: nothing to do.
+        } else {
+            expanded.entries.insert(var_id, value);
+            *changed = true;
+        }
+    }
+    Ok(())
+}
 
 impl Evaluate for Instance {
     type Output = crate::Solution;
@@ -118,13 +140,17 @@ impl Evaluate for Instance {
     }
 
     fn partial_evaluate(&mut self, state: &v1::State, atol: ATol) -> Result<()> {
+        // Operate on a clone so that any failure leaves `self` unchanged (atomic).
+        // Propagation consumes constraints via `self` in `Propagate`, so even a
+        // partial failure would otherwise leave the Instance in an inconsistent state.
+        let mut working = self.clone();
+
         // Phase 1: Propagate through special constraints (unit propagation).
-        // This may discover additional variable fixings and consume/transform constraints.
-        let expanded_state = self.propagate_special_constraints(state, atol)?;
+        let expanded_state = working.propagate_special_constraints(state, atol)?;
 
         // Phase 2: Substitute fixed values into decision variables.
         for (id, value) in expanded_state.entries.iter() {
-            let Some(dv) = self.decision_variables.get_mut(&VariableID::from(*id)) else {
+            let Some(dv) = working.decision_variables.get_mut(&VariableID::from(*id)) else {
                 return Err(anyhow!("Unknown decision variable (ID={id}) in state."));
             };
             dv.substitute(*value, atol)?;
@@ -132,14 +158,19 @@ impl Evaluate for Instance {
 
         // Phase 3: Regular partial evaluation with expanded state.
         // Special constraint collections are already handled by propagation — not called again.
-        self.objective.partial_evaluate(&expanded_state, atol)?;
-        self.constraint_collection
+        working.objective.partial_evaluate(&expanded_state, atol)?;
+        working
+            .constraint_collection
             .partial_evaluate(&expanded_state, atol)?;
-        for named_function in self.named_functions.values_mut() {
+        for named_function in working.named_functions.values_mut() {
             named_function.partial_evaluate(&expanded_state, atol)?;
         }
-        self.decision_variable_dependency
+        working
+            .decision_variable_dependency
             .partial_evaluate(&expanded_state, atol)?;
+
+        // All operations succeeded; commit changes atomically.
+        *self = working;
         Ok(())
     }
 
@@ -175,96 +206,86 @@ impl Instance {
 
             // --- OneHot constraints ---
             let one_hots = std::mem::take(self.one_hot_constraint_collection.active_mut());
-            for (id, mut oh) in one_hots {
-                let (transformed, additional) = oh.propagate(&expanded, atol)?;
-                if !additional.entries.is_empty() {
-                    for (var_id, value) in additional.entries {
-                        expanded.entries.insert(var_id, value);
-                    }
-                    changed = true;
-                }
-                match transformed {
-                    None => {
-                        // In-place modification — keep active
+            for (id, oh) in one_hots {
+                let (outcome, additional) = oh.propagate(&expanded, atol)?;
+                merge_state(&mut expanded, additional, &mut changed)?;
+                match outcome {
+                    PropagateOutcome::Active(oh) => {
                         self.one_hot_constraint_collection
                             .active_mut()
                             .insert(id, oh);
                     }
-                    Some(()) => {
-                        // Transformed (consumed) — move original to removed
+                    PropagateOutcome::Consumed(oh) => {
                         self.one_hot_constraint_collection
                             .removed_mut()
                             .insert(id, (oh, propagation_reason.clone()));
+                    }
+                    PropagateOutcome::Transformed { original, new: () } => {
+                        // OneHot has no non-trivial transformation; treat as consumed.
+                        self.one_hot_constraint_collection
+                            .removed_mut()
+                            .insert(id, (original, propagation_reason.clone()));
                     }
                 }
             }
 
             // --- SOS1 constraints ---
             let sos1s = std::mem::take(self.sos1_constraint_collection.active_mut());
-            for (id, mut sos1) in sos1s {
-                let (transformed, additional) = sos1.propagate(&expanded, atol)?;
-                if !additional.entries.is_empty() {
-                    for (var_id, value) in additional.entries {
-                        expanded.entries.insert(var_id, value);
-                    }
-                    changed = true;
-                }
-                match transformed {
-                    None => {
+            for (id, sos1) in sos1s {
+                let (outcome, additional) = sos1.propagate(&expanded, atol)?;
+                merge_state(&mut expanded, additional, &mut changed)?;
+                match outcome {
+                    PropagateOutcome::Active(sos1) => {
                         self.sos1_constraint_collection
                             .active_mut()
                             .insert(id, sos1);
                     }
-                    Some(()) => {
+                    PropagateOutcome::Consumed(sos1) => {
                         self.sos1_constraint_collection
                             .removed_mut()
                             .insert(id, (sos1, propagation_reason.clone()));
+                    }
+                    PropagateOutcome::Transformed { original, new: () } => {
+                        self.sos1_constraint_collection
+                            .removed_mut()
+                            .insert(id, (original, propagation_reason.clone()));
                     }
                 }
             }
 
             // --- Indicator constraints ---
             let indicators = std::mem::take(self.indicator_constraint_collection.active_mut());
-            for (id, mut ic) in indicators {
-                let (transformed, additional) = ic.propagate(&expanded, atol)?;
-                if !additional.entries.is_empty() {
-                    for (var_id, value) in additional.entries {
-                        expanded.entries.insert(var_id, value);
-                    }
-                    changed = true;
-                }
-                match transformed {
-                    None => {
-                        // In-place — keep active
+            for (id, ic) in indicators {
+                let (outcome, additional) = ic.propagate(&expanded, atol)?;
+                merge_state(&mut expanded, additional, &mut changed)?;
+                match outcome {
+                    PropagateOutcome::Active(ic) => {
                         self.indicator_constraint_collection
                             .active_mut()
                             .insert(id, ic);
                     }
-                    Some(IndicatorPropagateOutput::Promote {
-                        equality,
-                        function,
-                        metadata,
-                    }) => {
-                        let cid = self.constraint_collection.unused_id();
-                        let constraint = crate::Constraint {
-                            id: cid,
-                            equality,
-                            metadata,
-                            stage: crate::CreatedData { function },
-                        };
-                        self.constraint_collection
-                            .active_mut()
-                            .insert(cid, constraint);
-                        // Move original indicator to removed (preserves full data)
+                    PropagateOutcome::Consumed(ic) => {
                         self.indicator_constraint_collection
                             .removed_mut()
                             .insert(id, (ic, propagation_reason.clone()));
                     }
-                    Some(IndicatorPropagateOutput::Removed) => {
-                        // Move original indicator to removed
+                    PropagateOutcome::Transformed { original, new } => {
+                        // Indicator=1 → promote inner constraint to regular constraint
+                        let cid = self.constraint_collection.unused_id();
+                        let constraint = crate::Constraint {
+                            id: cid,
+                            equality: new.equality,
+                            metadata: new.metadata,
+                            stage: crate::CreatedData {
+                                function: new.function,
+                            },
+                        };
+                        self.constraint_collection
+                            .active_mut()
+                            .insert(cid, constraint);
                         self.indicator_constraint_collection
                             .removed_mut()
-                            .insert(id, (ic, propagation_reason.clone()));
+                            .insert(id, (original, propagation_reason.clone()));
                     }
                 }
             }

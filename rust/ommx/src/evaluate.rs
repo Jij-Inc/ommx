@@ -23,33 +23,42 @@ pub trait Evaluate {
     fn required_ids(&self) -> VariableIDSet;
 }
 
+/// Outcome of [`Propagate::propagate`].
+///
+/// `self` is consumed by propagation; the variant decides where it ends up.
+/// Atomicity is the caller's responsibility: on error, the constraint is lost,
+/// so callers that need atomicity should clone before calling (or snapshot the
+/// containing structure).
+#[derive(Debug, Clone)]
+pub enum PropagateOutcome<Self_, Transformed> {
+    /// Constraint remains active (possibly shrunk / modified).
+    Active(Self_),
+    /// Constraint is fully determined by the state. Move to the removed set as-is.
+    Consumed(Self_),
+    /// Constraint transformed into another type (e.g. IndicatorConstraint → Constraint).
+    /// `original` goes to the removed set, `new` is the replacement.
+    Transformed { original: Self_, new: Transformed },
+}
+
 /// Unit propagation trait for constraint types.
 ///
-/// Mutates `self` in-place and returns the propagation result together with
-/// any additional variable fixings discovered during propagation.
+/// Consumes `self` and returns [`PropagateOutcome`] together with any
+/// additional variable fixings discovered during propagation.
 ///
-/// The associated `Transformed` type represents what the constraint becomes
-/// when it undergoes a type change (e.g. `IndicatorConstraint` → `Constraint`).
-/// When no type change occurs, `Transformed` is `()`.
-///
-/// Return value semantics:
-/// - `(None, state)` — constraint was modified in-place; it stays active.
-/// - `(Some(transformed), state)` — constraint was transformed into another type.
-///   The caller moves `self` to the removed set and handles the transformed value.
-pub trait Propagate {
+/// Atomicity note: on error, `self` is lost. Callers requiring atomicity must
+/// clone `self` before calling, or snapshot the containing structure.
+pub trait Propagate: Sized {
     type Transformed;
 
     /// Propagate variable fixings from `state` through this constraint.
     ///
-    /// Returns `(transformed, additional_fixings)` where:
-    /// - `transformed` is `None` if the constraint was only modified in-place,
-    ///   or `Some(T)` if the constraint was consumed/transformed.
-    /// - `additional_fixings` contains newly discovered variable values.
+    /// Returns `(outcome, additional_fixings)` where `additional_fixings`
+    /// contains newly discovered variable values.
     fn propagate(
-        &mut self,
+        self,
         state: &State,
         atol: crate::ATol,
-    ) -> Result<(Option<Self::Transformed>, State)>;
+    ) -> Result<(PropagateOutcome<Self, Self::Transformed>, State)>;
 }
 
 #[cfg(test)]
