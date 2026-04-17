@@ -1,11 +1,11 @@
 use crate::{
     v1::{
-        decision_variable::Kind, instance::Sense, DecisionVariable, Function, Instance, Linear,
-        Optimality, Relaxation, SampleSet, SampledDecisionVariable, Samples, Solution, State,
+        decision_variable::Kind, instance::Sense, Function, Instance, Optimality, Relaxation,
+        SampleSet, SampledDecisionVariable, Samples, Solution, State,
     },
     Bound, Bounds, Evaluate, VariableID, VariableIDSet,
 };
-use anyhow::{bail, ensure, Context, Result};
+use anyhow::{bail, Context, Result};
 use approx::AbsDiffEq;
 use num::Zero;
 use std::{
@@ -172,91 +172,6 @@ impl Instance {
         }
         self.sense = Sense::Maximize as i32;
         self.objective = Some(-self.objective().into_owned());
-    }
-
-    /// Encode an integer decision variable into binary decision variables.
-    ///
-    /// Note that this method does not substitute the yielded binary representation into the objective and constraints.
-    /// Call [`Instance::substitute`] with the returned [`Linear`] representation.
-    ///
-    /// Mutability
-    /// ----------
-    /// - This adds new binary decision variables introduced for binary encoding to the instance.
-    ///
-    /// Errors
-    /// ------
-    /// Returns [anyhow::Error] in the following cases:
-    ///
-    /// - The given decision variable ID is not found
-    /// - The specified decision variable is not an integer type.
-    /// - The bound of the decision variable is not set or not finite.
-    ///
-    pub fn log_encode(&mut self, decision_variable_id: u64) -> Result<Linear> {
-        let v = self
-            .decision_variables
-            .iter()
-            .find(|dv| dv.id == decision_variable_id)
-            .with_context(|| format!("Decision variable ID {decision_variable_id} not found"))?;
-        if v.kind() != Kind::Integer {
-            bail!(
-                "The decision variable is not an integer type: ID={}",
-                decision_variable_id
-            );
-        }
-
-        let bound = v.bound.as_ref().with_context(|| {
-            format!("Bound must be set and finite for log-encoding: ID={decision_variable_id}")
-        })?;
-
-        // Bound of integer may be non-integer value
-        let upper = bound.upper.floor();
-        let lower = bound.lower.ceil();
-        let u_l = upper - lower;
-        ensure!(
-            u_l >= 0.0,
-            "No feasible integer found in the bound: ID={}, lower={}, upper={}",
-            decision_variable_id,
-            bound.lower,
-            bound.upper
-        );
-
-        // There is only one feasible integer, and no need to encode
-        if u_l == 0.0 {
-            return Ok(Linear::from(lower));
-        }
-
-        // Log-encoding
-        let n = (u_l + 1.0).log2().ceil() as usize;
-        let id_base = self
-            .defined_ids()
-            .last()
-            .map(|id| id + 1)
-            .expect("At least one decision variable here");
-
-        let mut terms = Vec::new();
-        for i in 0..n {
-            let id = id_base + i as u64;
-            terms.push((
-                id,
-                if i == n - 1 {
-                    u_l - 2.0f64.powi(i as i32) + 1.0
-                } else {
-                    2.0f64.powi(i as i32)
-                },
-            ));
-            self.decision_variables.push(DecisionVariable {
-                id,
-                name: Some("ommx.log_encode".to_string()),
-                subscripts: vec![decision_variable_id as i64, i as i64],
-                kind: Kind::Binary as i32,
-                bound: Some(crate::v1::Bound {
-                    lower: 0.0,
-                    upper: 1.0,
-                }),
-                ..Default::default()
-            });
-        }
-        Ok(Linear::new(terms.into_iter(), lower))
     }
 
     /// Substitute dependent decision variables with given [Function]s.
@@ -539,59 +454,16 @@ fn eval_dependencies(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{v1::State, Evaluate};
+    use crate::{
+        v1::{Linear, State},
+        Evaluate,
+    };
     use proptest::prelude::*;
 
     proptest! {
         #[test]
         fn test_instance_arbitrary_any(instance in Instance::arbitrary()) {
             instance.validate().unwrap();
-        }
-
-        #[test]
-        fn log_encode((lower, upper) in (-10.0_f64..10.0, -10.0_f64..10.0)
-            .prop_filter("At least one integer", |(lower, upper)| lower.ceil() <= upper.floor())
-        ) {
-            let mut instance = Instance::default();
-            instance.decision_variables.push(DecisionVariable {
-                id: 0,
-                name: Some("x".to_string()),
-                kind: Kind::Integer as i32,
-                bound: Some(crate::v1::Bound { lower, upper }),
-                ..Default::default()
-            });
-            let encoded = instance.log_encode(0).unwrap();
-
-            // Test the ID of yielded decision variables are not duplicated
-            instance.validate().unwrap();
-
-            // Get decision variables introduced for log-encoding
-            let aux_bits = instance
-                .decision_variables
-                .iter()
-                .filter_map(|dv| {
-                    if dv.name == Some("ommx.log_encode".to_string()) && dv.subscripts[0] == 0 {
-                        Some(dv.id)
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<_>>();
-
-            if lower.ceil() == upper.floor() {
-                // No need to encode
-                prop_assert_eq!(encoded.as_constant().unwrap(), lower.ceil());
-                prop_assert_eq!(aux_bits.len(), 0);
-                return Ok(());
-            }
-
-            let state = State { entries: aux_bits.iter().map(|&id| (id, 0.0)).collect::<HashMap<_, _>>() };
-            let lower_evaluated = encoded.evaluate(&state, crate::ATol::default()).unwrap();
-            prop_assert_eq!(lower_evaluated, lower.ceil());
-
-            let state = State { entries: aux_bits.iter().map(|&id| (id, 1.0)).collect::<HashMap<_, _>>() };
-            let upper_evaluated = encoded.evaluate(&state, crate::ATol::default()).unwrap();
-            prop_assert_eq!(upper_evaluated, upper.floor());
         }
 
         /// Compare the result of partial_evaluate and substitute with `Function::Constant`.
