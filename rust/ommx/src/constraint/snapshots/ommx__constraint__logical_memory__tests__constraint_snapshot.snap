@@ -7,6 +7,6 @@ Constraint.id 8
 Constraint.metadata;ConstraintMetadata.description;Option[stack] 24
 Constraint.metadata;ConstraintMetadata.name;Option[stack] 24
 Constraint.metadata;ConstraintMetadata.parameters;FnvHashMap[stack] 32
-Constraint.metadata;ConstraintMetadata.provenance;Option[stack] 16
+Constraint.metadata;ConstraintMetadata.provenance;Vec[stack] 24
 Constraint.metadata;ConstraintMetadata.subscripts;Vec[stack] 24
 Constraint.stage;CreatedData.function;Linear;PolynomialBase.terms 80

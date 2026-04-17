@@ -51,7 +51,7 @@ impl Parse for v1::Constraint {
             subscripts: self.subscripts,
             parameters: self.parameters.into_iter().collect(),
             description: self.description,
-            provenance: None,
+            provenance: Vec::new(),
         };
         let function = self
             .function
@@ -151,7 +151,7 @@ impl Parse for v1::EvaluatedConstraint {
             subscripts: self.subscripts,
             parameters: self.parameters.into_iter().collect(),
             description: self.description,
-            provenance: None,
+            provenance: Vec::new(),
         };
 
         let feasible = match equality {
@@ -208,7 +208,7 @@ impl Parse for v1::SampledConstraint {
             subscripts: self.subscripts,
             parameters: self.parameters.into_iter().collect(),
             description: self.description,
-            provenance: None,
+            provenance: Vec::new(),
         };
 
         let removed_reason = self.removed_reason.map(|reason| RemovedReason {

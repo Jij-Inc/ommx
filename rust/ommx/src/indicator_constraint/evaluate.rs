@@ -19,8 +19,9 @@ impl Propagate for IndicatorConstraint<Created> {
                 promoted_function.partial_evaluate(state, atol)?;
 
                 let mut metadata = self.metadata.clone();
-                metadata.provenance =
-                    Some(crate::constraint::Provenance::IndicatorConstraint(self.id));
+                metadata
+                    .provenance
+                    .push(crate::constraint::Provenance::IndicatorConstraint(self.id));
 
                 let new = IndicatorPromote {
                     equality: self.equality,
@@ -380,9 +381,10 @@ mod tests {
         match outcome {
             PropagateOutcome::Transformed { original, new } => {
                 assert_eq!(new.equality, Equality::LessThanOrEqualToZero);
+                assert_eq!(new.metadata.provenance.len(), 1);
                 assert!(matches!(
-                    new.metadata.provenance,
-                    Some(crate::constraint::Provenance::IndicatorConstraint(id)) if id == IndicatorConstraintID::from(1)
+                    new.metadata.provenance[0],
+                    crate::constraint::Provenance::IndicatorConstraint(id) if id == IndicatorConstraintID::from(1)
                 ));
                 // Original indicator constraint preserved for removed set
                 assert_eq!(original.indicator_variable, VariableID::from(10));
