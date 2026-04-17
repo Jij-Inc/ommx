@@ -8,7 +8,7 @@ impl Propagate for Sos1Constraint<Created> {
         mut self,
         state: &crate::v1::State,
         atol: ATol,
-    ) -> anyhow::Result<(PropagateOutcome<Self, ()>, crate::v1::State)> {
+    ) -> anyhow::Result<(PropagateOutcome<Self>, crate::v1::State)> {
         let mut fixed_nonzero: Option<VariableID> = None;
         let mut unfixed = BTreeSet::new();
 

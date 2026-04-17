@@ -30,14 +30,14 @@ pub trait Evaluate {
 /// so callers that need atomicity should clone before calling (or snapshot the
 /// containing structure).
 #[derive(Debug, Clone)]
-pub enum PropagateOutcome<Self_, Transformed> {
+pub enum PropagateOutcome<T: Propagate> {
     /// Constraint remains active (possibly shrunk / modified).
-    Active(Self_),
+    Active(T),
     /// Constraint is fully determined by the state. Move to the removed set as-is.
-    Consumed(Self_),
+    Consumed(T),
     /// Constraint transformed into another type (e.g. IndicatorConstraint → Constraint).
     /// `original` goes to the removed set, `new` is the replacement.
-    Transformed { original: Self_, new: Transformed },
+    Transformed { original: T, new: T::Transformed },
 }
 
 /// Unit propagation trait for constraint types.
@@ -54,11 +54,8 @@ pub trait Propagate: Sized {
     ///
     /// Returns `(outcome, additional_fixings)` where `additional_fixings`
     /// contains newly discovered variable values.
-    fn propagate(
-        self,
-        state: &State,
-        atol: crate::ATol,
-    ) -> Result<(PropagateOutcome<Self, Self::Transformed>, State)>;
+    fn propagate(self, state: &State, atol: crate::ATol)
+        -> Result<(PropagateOutcome<Self>, State)>;
 }
 
 #[cfg(test)]

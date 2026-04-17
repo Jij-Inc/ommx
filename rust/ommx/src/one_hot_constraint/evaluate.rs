@@ -8,7 +8,7 @@ impl Propagate for OneHotConstraint<Created> {
         mut self,
         state: &crate::v1::State,
         atol: ATol,
-    ) -> anyhow::Result<(PropagateOutcome<Self, ()>, crate::v1::State)> {
+    ) -> anyhow::Result<(PropagateOutcome<Self>, crate::v1::State)> {
         let mut fixed_to_one: Option<VariableID> = None;
         let mut unfixed = BTreeSet::new();
 

@@ -8,7 +8,7 @@ impl Propagate for IndicatorConstraint<Created> {
         mut self,
         state: &crate::v1::State,
         atol: ATol,
-    ) -> anyhow::Result<(PropagateOutcome<Self, IndicatorPromote>, crate::v1::State)> {
+    ) -> anyhow::Result<(PropagateOutcome<Self>, crate::v1::State)> {
         let empty_state = crate::v1::State::default();
 
         if let Some(&indicator_value) = state.entries.get(&self.indicator_variable.into_inner()) {
