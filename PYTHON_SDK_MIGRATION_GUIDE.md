@@ -9,73 +9,165 @@ This document is a guide for migrating the OMMX Python SDK across major versions
 
 # Python SDK v2 to v3 Migration Guide
 
-This section covers the migration from v2 to v3, which completes the PyO3 migration for mathematical expression types and decision variables.
+Baseline for this guide: **v2.5.1** (tag `python-2.5.1`). Upgrades from earlier 2.x releases should consult this guide plus [v1 → v2](#python-sdk-v1-to-v2-migration-guide).
 
 ## Overview
 
-v3 completes the migration of core mathematical types from Python wrapper classes to direct Rust re-exports:
-- `Linear`, `Quadratic`, `Polynomial`, `Function` - now re-exported from `_ommx_rust`
-- `DecisionVariable`, `Parameter` - now re-exported from `_ommx_rust`
+v3 completes the PyO3 migration that started in v2: every class in `ommx.v1` is now a direct Rust type re-exported from `ommx._ommx_rust`, not a Python wrapper around a protobuf message. As a side effect, a number of v2-era shims (`.raw`, `.from_raw()`, `.from_protobuf()`, `.to_protobuf()`, counter helpers, `Parameters`, …) were removed, and several APIs adopted cleaner signatures.
 
-## ⚠️ Removal of `.raw` Attribute
+Themes you will encounter:
 
-In v3, the `.raw` attribute is **completely removed** from migrated classes. The `.raw` attribute was deprecated in v2 and provided access to the underlying Rust object. In v3, classes are now direct Rust re-exports, so there is no separate "raw" object.
+1. Every trace of the protobuf layer is gone — imports from `ommx.v1.*_pb2` must switch to `ommx.v1`, and bridge methods like `.raw`/`from_protobuf`/`to_protobuf` are removed.
+2. `Constraint` no longer has an `id` — constraint IDs live only as the keys of the `dict[int, Constraint]` you pass to `Instance.from_components`. All `.id` getters, `set_id()` / `id=` kwargs, and global ID-counter helpers are gone.
+3. Container types flipped: every constraint-valued argument and getter on `Instance` / `ParametricInstance` / `Solution` is now `dict[int, T]`, not `list[T]`. `decision_variables` stays a `list`.
+4. A handful of renames and small signature changes (`write_mps` → `save_mps`, `Parameters(entries=...)` → plain `dict`, …).
 
-**Affected classes:**
-- `Linear`, `Quadratic`, `Polynomial`, `Function`
-- `DecisionVariable`, `Parameter`
-- `Instance`, `Solution`, `SampleSet`
+## 1. Import changes
 
-**Migration:**
+### 1.1 Protobuf submodules are gone
+
+Every `ommx.v1.*_pb2` module and `ommx.v1.annotation` is removed. Import classes from `ommx.v1` directly.
+
+**Before (v2.5.1)**:
 ```python
-# ❌ v2 (deprecated) - No longer works in v3
-linear.raw.terms
-decision_variable.raw.id
+from ommx.v1.constraint_pb2 import Constraint, Equality
+from ommx.v1.function_pb2 import Function
+from ommx.v1.linear_pb2 import Linear
+from ommx.v1.solution_pb2 import State
+```
+
+**After (v3)**:
+```python
+from ommx.v1 import Constraint, Equality, Function, Linear, State
+```
+
+The `.from_protobuf()` / `.to_protobuf()` bridge methods on `Constraint`, `RemovedConstraint`, `DecisionVariable`, etc. are removed along with the protobuf objects they produced. Use `from_bytes` / `to_bytes` for serialisation instead.
+
+### 1.2 Constraint-hint helper types removed
+
+`ConstraintHints`, `OneHot`, `Sos1`, and the `Parameters` wrapper are no longer exported from `ommx.v1`. They are superseded by the first-class constraint types (`OneHotConstraint`, `Sos1Constraint`, `IndicatorConstraint`) and plain `dict[int, float]` for parameter substitution.
+
+**Before (v2.5.1)**:
+```python
+from ommx.v1 import OneHot, Sos1, ConstraintHints, Parameters
+```
+
+**After (v3)**:
+```python
+from ommx.v1 import OneHotConstraint, Sos1Constraint, IndicatorConstraint
+# Parameters is gone — pass a plain dict[int, float] to ParametricInstance.with_parameters
+```
+
+## 2. Removal of `.raw` and `from_raw` / `from_protobuf` / `to_protobuf`
+
+v2 deprecated `.raw`, v3 removes it. All migrated classes are direct Rust types; there is no separate underlying object.
+
+**Affected classes**: `Linear`, `Quadratic`, `Polynomial`, `Function`, `NamedFunction`, `DecisionVariable`, `Parameter`, `Instance`, `ParametricInstance`, `Solution`, `SampleSet`, `Constraint`, `RemovedConstraint`, `Bound`, `DecisionVariableAnalysis`.
+
+**Before (v2.5.1)**:
+```python
+linear.raw.linear_terms
 instance.raw.sense
-solution.raw.optimality
+solution.raw.optimality = Optimality.Optimal
+constraint.raw.id
+Linear.from_raw(rust_linear)
+Constraint.from_protobuf(pb_constraint)
+dv.to_protobuf()
+```
 
-# ✅ v3 - Access properties directly
-linear.terms
-decision_variable.id
+**After (v3)**:
+```python
+linear.linear_terms
 instance.sense
-solution.optimality
+solution.optimality = Optimality.Optimal
+# constraint.id is gone — see §3
+Linear(...)                     # just call the constructor
+Constraint.from_bytes(data)
+dv.to_bytes()
 ```
 
-## Breaking Changes
+The dataclass-style constructors (`Instance(raw=..., annotations=...)`) are also gone — `Instance`, `Solution`, `SampleSet` are no longer Python `@dataclass`es. Construct through `Instance.from_components(...)` etc. and set `instance.annotations = {...}` or `instance.add_user_annotation(...)` afterwards.
 
-### 1. Constraint Properties Return `Optional[str]`
+## 3. Constraint IDs moved out of the `Constraint` object
 
-**Before (v2)**:
+### 3.1 No more `id` / `set_id()` / `id=` kwarg
+
+`Constraint` (and `IndicatorConstraint`, `OneHotConstraint`, `Sos1Constraint`, `RemovedConstraint`, `EvaluatedConstraint`, `SampledConstraint`) no longer carry an ID. The constraint object is **detached** — it gets an ID only when it is placed in the `dict[int, Constraint]` you pass to `Instance.from_components` (see §4).
+
+**Before (v2.5.1)**:
 ```python
-constraint.name        # str (empty string if not set)
-constraint.description # str (empty string if not set)
+c = Constraint(
+    function=x + y,
+    equality=Constraint.EQUAL_TO_ZERO,
+    id=5,
+    name="cap",
+)
+c.id                 # 5
+c.set_id(6)
+
+oh = OneHotConstraint(id=10, variables=[0, 1, 2])
+s1 = Sos1Constraint(id=11, variables=[0, 1])
 ```
 
 **After (v3)**:
 ```python
-constraint.name        # Optional[str] (None if not set)
-constraint.description # Optional[str] (None if not set)
+c  = Constraint(function=x + y, equality=Constraint.EQUAL_TO_ZERO, name="cap")
+oh = OneHotConstraint(variables=[0, 1, 2])
+s1 = Sos1Constraint(variables=[0, 1])
 
-# Migration pattern
-if constraint.name:  # Works for both "" and None
-    print(constraint.name)
-
-# Or explicit check
-if constraint.name is not None:
-    print(constraint.name)
+# IDs are assigned by the enclosing Instance:
+instance = Instance.from_components(
+    sense=Instance.MINIMIZE,
+    objective=...,
+    decision_variables=[...],
+    constraints={5: c},
+    one_hot_constraints={10: oh},
+    sos1_constraints={11: s1},
+)
 ```
 
-### 2. `Instance.from_components` Now Takes Lists, Not Dicts
+### 3.2 Comparison operators return a detached `Constraint`
 
-`Instance.from_components` now accepts lists of `DecisionVariable`, `Constraint`, etc. instead of dicts keyed by ID. Duplicate IDs are detected and raise an error.
+`==`, `<=`, `>=` on `DecisionVariable` / `Parameter` / `Linear` / `Quadratic` / `Polynomial` / `Function` / `NamedFunction` still return a `Constraint`, but with no ID. Assign the ID through the `constraints=` dict.
 
-**Before (v2)**:
+**Before (v2.5.1)**:
+```python
+c = (x + y <= 5).set_id(0)
+Instance.from_components(..., constraints=[c], ...)
+```
+
+**After (v3)**:
+```python
+c = x + y <= 5
+Instance.from_components(..., constraints={0: c}, ...)
+```
+
+### 3.3 Global ID-counter helpers removed
+
+These module-level names are gone from `ommx._ommx_rust`:
+
+- `CONSTRAINT_ID_COUNTER`
+- `next_constraint_id()`
+- `set_constraint_id_counter(...)`
+- `update_constraint_id_counter(...)`
+- `get_constraint_id_counter()`
+
+Constraint IDs no longer exist outside the `BTreeMap` keys inside an `Instance`. If you need a fresh ID for a new constraint, call `instance.next_constraint_id()`.
+
+## 4. Container-type changes (`list` → `dict[int, T]`)
+
+### 4.1 `Instance.from_components(constraints=...)` expects a `dict[int, Constraint]`
+
+All constraint-valued arguments are keyed by ID. `decision_variables` stays a `Sequence[DecisionVariable]`.
+
+**Before (v2.5.1)**:
 ```python
 Instance.from_components(
     sense=Instance.MINIMIZE,
-    objective=objective,
-    decision_variables={0: x0, 1: x1},  # dict[int, DecisionVariable]
-    constraints={0: c0},                # dict[int, Constraint]
+    objective=obj,
+    decision_variables=[x0, x1],
+    constraints=[c0, c1],                 # list; IDs came from Constraint.id
+    constraint_hints=ConstraintHints(...) # separate hints object
 )
 ```
 
@@ -83,200 +175,280 @@ Instance.from_components(
 ```python
 Instance.from_components(
     sense=Instance.MINIMIZE,
-    objective=objective,
-    decision_variables=[x0, x1],  # list[DecisionVariable]
-    constraints=[c0],             # list[Constraint]
+    objective=obj,
+    decision_variables=[x0, x1],
+    constraints={0: c0, 1: c1},           # dict keyed by constraint ID
+    indicator_constraints={10: ic},       # all structural-constraint args are dicts
+    one_hot_constraints={20: oh},
+    sos1_constraints={30: sc},
 )
 ```
 
-Also note: all arguments are now keyword-only (use `sense=...`, not positional).
+All arguments are keyword-only. `ParametricInstance.from_components` takes the same `constraints: Mapping[int, Constraint]` shape.
 
-### 3. `Instance.write_mps` Renamed to `Instance.save_mps`
+### 4.2 Constraint accessors on `Instance` / `ParametricInstance` / `Solution` return dicts
 
+**Before (v2.5.1)**:
 ```python
-# ❌ v2
-instance.write_mps("output.mps")
+for c in instance.constraints:              # list[Constraint]
+    print(c.id, c.function)
 
-# ✅ v3
-instance.save_mps("output.mps")
+for rc in instance.removed_constraints:     # list[RemovedConstraint]
+    ...
+
+for ec in solution.constraints:             # list[EvaluatedConstraint]
+    print(ec.id, ec.evaluated_value)
+
+hints = instance.constraint_hints           # one_hot_constraints / sos1_constraints inside
+for oh in hints.one_hot_constraints:
+    ...
 ```
 
-### 4. Removed Methods
-
-The following methods have been removed:
-- `Linear.from_object()` - was internal use only
-- `Linear.equals_to()` - was deprecated
-
-### 5. Artifact Module Migrated to Rust
-
-The `ommx.artifact` module has been fully migrated to Rust. The low-level wrapper types have been removed and replaced with unified `Artifact` and `ArtifactBuilder` classes.
-
-**Removed types:**
-- `ArtifactBase`, `ArtifactBuilderBase` (Python ABC classes)
-- `ArtifactArchive`, `ArtifactDir` (use `Artifact` instead)
-- `ArtifactArchiveBuilder`, `ArtifactDirBuilder` (use `ArtifactBuilder` instead)
-
-**Before (v2)**:
+**After (v3)**:
 ```python
-from ommx.artifact import Artifact, ArtifactArchive, ArtifactDir
+for cid, c in instance.constraints.items():              # dict[int, Constraint]
+    print(cid, c.function)
 
-# Low-level types were exposed
+for cid, rc in instance.removed_constraints.items():     # dict[int, RemovedConstraint]
+    ...
+
+for cid, ec in solution.constraints.items():             # dict[int, EvaluatedConstraint]
+    print(cid, ec.evaluated_value)
+
+# First-class constraint dicts replace constraint_hints:
+for hid, oh in instance.one_hot_constraints.items(): ...
+for hid, sc in instance.sos1_constraints.items():    ...
+for hid, ic in instance.indicator_constraints.items(): ...
+```
+
+`SampleSet.constraints` / `.decision_variables` / `.named_functions` remain `list`.
+
+## 5. Renames and signature changes
+
+### 5.1 `write_mps` → `save_mps`
+
+```python
+# v2.5.1
+instance.write_mps("out.mps.gz")
+
+# v3
+instance.save_mps("out.mps.gz")                 # compress=True by default
+instance.save_mps("out.mps", compress=False)
+```
+
+### 5.2 `Instance.used_decision_variable_ids()` → `Instance.required_ids()`
+
+```python
+# v2.5.1
+instance.used_decision_variable_ids()
+func.used_decision_variable_ids()               # on Function as well
+
+# v3
+instance.required_ids()
+func.required_ids()
+```
+
+(`used_decision_variable_ids()` is still the name on `EvaluatedConstraint`, `SampledConstraint`, `EvaluatedDecisionVariable`, `EvaluatedNamedFunction`, `SampledNamedFunction`.)
+
+### 5.3 `Parameter.new(id=...)` → `Parameter(id, ...)`
+
+The `.new` factory is removed; the `id` argument is positional.
+
+```python
+# v2.5.1
+p = Parameter.new(id=3, name="w", subscripts=[0])
+
+# v3
+p = Parameter(3, name="w", subscripts=[0])
+```
+
+### 5.4 `ParametricInstance.with_parameters` takes a plain dict
+
+The `Parameters(entries=...)` wrapper is gone.
+
+```python
+# v2.5.1
+from ommx.v1 import Parameters
+pi.with_parameters(Parameters(entries={p.id: 1.0}))
+
+# v3
+pi.with_parameters({p.id: 1.0})
+```
+
+### 5.5 `Linear(terms=..., constant=...)` always takes `dict[int, float]`
+
+v2.5.1 had a protobuf form (`Linear(terms=[Linear.Term(id=j, coefficient=c) for ...], constant=-b)`) via `linear_pb2`. In v3 `terms` is always `dict[int, float]` and `Linear.Term` does not exist.
+
+```python
+# v2.5.1 (protobuf path)
+from ommx.v1.linear_pb2 import Linear
+Linear(
+    terms=[Linear.Term(id=j, coefficient=c) for j, c in enumerate(row)],
+    constant=-b,
+)
+
+# v3
+from ommx.v1 import Linear
+Linear(terms={int(j): float(c) for j, c in enumerate(row)}, constant=float(-b))
+```
+
+## 6. Return-type changes
+
+### 6.1 `Constraint.name` / `Constraint.description` are `Optional[str]`
+
+v2.5.1 declared them `str` (empty string when unset). v3 declares `Optional[str]` and returns `None`. This also applies to `RemovedConstraint`, `IndicatorConstraint`, `EvaluatedConstraint`, `SampledConstraint`, `NamedFunction`, `EvaluatedNamedFunction`, `SampledNamedFunction`.
+
+```python
+# v2.5.1
+name: str = constraint.name                      # "" when unset
+
+# v3
+name: Optional[str] = constraint.name            # None when unset
+if constraint.name:                              # still works for both
+    print(constraint.name)
+```
+
+### 6.2 `Linear.terms` / `Quadratic.terms` / `Polynomial.terms` are methods, not properties
+
+Only `Function.terms` remains a property. The three building-block types switched to methods.
+
+```python
+# v2.5.1
+linear.terms                                     # property
+quadratic.terms                                  # property
+polynomial.terms                                 # property
+
+# v3
+linear.terms()                                   # method call
+quadratic.terms()
+polynomial.terms()
+```
+
+`Linear.linear_terms`, `Quadratic.linear_terms` / `quadratic_terms`, and `Polynomial.constant_term` stay properties.
+
+### 6.3 `DecisionVariable.BINARY`/`INTEGER`/… are `int` sentinels
+
+In v2.5.1 these class constants were `Kind` enum members. In v3 they are the underlying `int` values, and `DecisionVariable.kind` returns `int` (the protobuf wire value).
+
+```python
+# v2.5.1
+DecisionVariable.BINARY        # Kind.Binary
+if var.kind == DecisionVariable.INTEGER:  # Kind.Integer == Kind.Integer
+    ...
+
+# v3
+DecisionVariable.BINARY        # 1 (int)
+if var.kind == DecisionVariable.INTEGER:  # int == int
+    ...
+# If you want the enum, construct it: Kind(var.kind)
+```
+
+### 6.4 `SampleSet.sample_ids` changed from list-property to set-method
+
+```python
+# v2.5.1
+ids: list[int] = sample_set.sample_ids           # @property
+
+# v3
+ids: set[int]  = sample_set.sample_ids()         # method
+ids: list[int] = sample_set.sample_ids_list      # separate property when you need a list
+```
+
+## 7. Removed helpers
+
+- `Linear.from_object(x)` — construct via `Linear.single_term(...)`, `Linear.constant(...)`, or the arithmetic operators.
+- `Linear.equals_to(other)` — use `linear.almost_equal(other, atol=...)`. (Available on every expression type.)
+- `instance.constraint_hints` — replaced by `instance.one_hot_constraints` / `sos1_constraints` / `indicator_constraints`.
+- `Parameters` / `OneHot` / `Sos1` / `ConstraintHints` — see §1.2.
+- `Artifact` low-level types (`ArtifactArchive`, `ArtifactDir`, `ArtifactArchiveBuilder`, `ArtifactDirBuilder`) — replaced by unified `Artifact` / `ArtifactBuilder`.
+
+```python
+# v2.5.1
+from ommx.artifact import ArtifactArchive, ArtifactDir
 archive = ArtifactArchive.from_oci_archive(path)
-dir_artifact = ArtifactDir.from_oci_dir(path)
+dir_art = ArtifactDir.from_oci_dir(path)
+
+# v3
+from ommx.artifact import Artifact
+artifact = Artifact.load_archive("path/to/file.ommx")   # file or directory
+artifact = Artifact.load("ghcr.io/jij-inc/ommx/...")    # remote registry
 ```
 
-**After (v3)**:
-```python
-from ommx.artifact import Artifact, ArtifactBuilder
+## 8. Constraint metadata methods return new objects
 
-# Unified API
-artifact = Artifact.load("ghcr.io/jij-inc/ommx/...")  # from registry
-artifact = Artifact.load_archive("path/to/file.ommx")  # from file or directory
+v2 mutated the Python wrapper in place; v3 methods are thin wrappers around a Rust call that returns a fresh `Constraint`.
 
-# Property access for first layer (unchanged)
-instance = artifact.instance
-solution = artifact.solution
-
-# Method access with descriptor (unchanged)
-instance = artifact.get_instance(descriptor)
-```
-
-### 6. Constraint Method Chaining Returns New Object
-
-In v3, Constraint mutation methods (`add_name()`, `add_description()`, etc.) return a new `Constraint` object rather than modifying in place. Use the returned object:
-
-**Before (v2)**:
+**Before (v2.5.1)**:
 ```python
 constraint = x == 1
-constraint.add_name("test")  # Modified in place
-print(constraint.name)  # "test"
+constraint.add_name("test")           # mutated in place
+print(constraint.name)                # "test"
 ```
 
 **After (v3)**:
 ```python
 constraint = x == 1
-constraint = constraint.add_name("test")  # Use returned object
-print(constraint.name)  # "test"
-
-# Or chain directly
+constraint = constraint.add_name("test")
+# or chain directly:
 constraint = (x == 1).add_name("test").add_description("A test constraint")
 ```
 
-## New Features
+## 9. Convenience additions (not breaking)
 
-### 1. DecisionVariable Factory Methods Accept `lower`/`upper` kwargs
+### 9.1 `DecisionVariable.binary` / `integer` / `continuous` accept `lower` / `upper` kwargs
 
-**Before (v2)**:
 ```python
-from ommx.v1 import DecisionVariable, Bound
-
-# Required Bound object
-bound = Bound(lower=0, upper=10)
-x = DecisionVariable.integer(1, bound=bound)
-```
-
-**After (v3)**:
-```python
-from ommx.v1 import DecisionVariable
-
-# Direct lower/upper kwargs (more convenient)
+# v3
 x = DecisionVariable.integer(1, lower=0, upper=10)
 y = DecisionVariable.continuous(2, lower=-1.0, upper=1.0)
-
-# Default bounds are -∞ to +∞
-z = DecisionVariable.integer(3)  # unbounded
+z = DecisionVariable.integer(3)                  # unbounded
 ```
 
-### 2. Class-Level Kind Constants
+### 9.2 `DecisionVariable.equals_to(other)` for object equality
 
-**New in v3**:
-```python
-from ommx.v1 import DecisionVariable
-
-# Class constants for variable kinds
-DecisionVariable.BINARY        # 1
-DecisionVariable.INTEGER       # 2
-DecisionVariable.CONTINUOUS    # 3
-DecisionVariable.SEMI_INTEGER  # 4
-DecisionVariable.SEMI_CONTINUOUS  # 5
-
-# Usage in conditionals
-if var.kind == DecisionVariable.INTEGER:
-    print("Integer variable")
-```
-
-### 3. `equals_to()` Method for DecisionVariable
-
-Since `==` creates a `Constraint`, use `equals_to()` for object equality:
+Because `==` creates a `Constraint`, v3 adds an explicit `equals_to` method (and the same for `Parameter` / `Linear` / …) for `bool` equality.
 
 ```python
 x = DecisionVariable.integer(1, lower=0, upper=10)
 y = DecisionVariable.integer(1, lower=0, upper=10)
 
-# This creates a Constraint, NOT a boolean!
-constraint = x == y  # Constraint object
-
-# For equality comparison, use equals_to()
-x.equals_to(y)  # True (same id, kind, and bound)
-
-# Or compare IDs directly
-x.id == y.id  # True
+c = x == y          # Constraint (not a bool)
+x.equals_to(y)      # True
+x.id == y.id        # True
 ```
 
-### 4. Parameter Class Now in Rust
-
-The `Parameter` class is now implemented in Rust with the same operators as `DecisionVariable`:
+### 9.3 `Parameter` supports the same operators as `DecisionVariable`
 
 ```python
 from ommx.v1 import Parameter, DecisionVariable
 
-p = Parameter(id=1, name="param1")
-x = DecisionVariable.integer(1, lower=0, upper=10)
+p = Parameter(1, name="param1")
+x = DecisionVariable.integer(2, lower=0, upper=10)
 
-# Arithmetic operations work between Parameter and DecisionVariable
 expr = x + p      # Linear
 expr = x * p      # Quadratic
 expr = 2 * p + 3  # Linear
 ```
 
-## Comparison Operators Return Constraint
+## Migration checklist
 
-All comparison operators on `DecisionVariable`, `Parameter`, `Linear`, `Quadratic`, `Polynomial`, and `Function` now return `Constraint` objects:
-
-```python
-x = DecisionVariable.integer(1)
-y = DecisionVariable.integer(2)
-
-# All return Constraint objects
-c1 = x == 1        # EqualToZero constraint
-c2 = x + y <= 10   # LessThanOrEqualToZero constraint
-c3 = x >= 0        # LessThanOrEqualToZero constraint (negated)
-
-# Chain with metadata
-constraint = (x + y <= 10).add_name("capacity").add_description("Capacity limit")
-```
-
-## Migration Checklist
-
-- [ ] Replace `ArtifactArchive`/`ArtifactDir` usage with `Artifact.load_archive()` or `Artifact.load()`
-- [ ] Replace `ArtifactArchiveBuilder`/`ArtifactDirBuilder` usage with `ArtifactBuilder`
-- [ ] Remove all `.raw` access on Instance, Solution, SampleSet (access properties directly)
-- [ ] Update `Instance.from_components` to pass lists instead of dicts
-- [ ] Rename `instance.write_mps(...)` to `instance.save_mps(...)`
-- [ ] Update `constraint.name` / `constraint.description` checks to handle `None`
-- [ ] Remove any usage of `Linear.from_object()` or `Linear.equals_to()`
-- [ ] Update Constraint method chaining to use returned objects
-- [ ] Replace protobuf imports (`from ommx.v1.*_pb2 import ...`) with `from ommx.v1 import ...`
-- [ ] Consider using `lower`/`upper` kwargs for DecisionVariable factory methods
-- [ ] Use `DecisionVariable.BINARY`, `.INTEGER`, etc. constants where appropriate
-- [ ] Use `equals_to()` instead of `==` for DecisionVariable equality comparisons
-
-## Performance Improvements
-
-v3 provides significant performance improvements through:
-- Native Rust implementations for all arithmetic operations
-- Efficient polynomial representations using deduplication
-- Direct memory access without Python wrapper overhead
+- [ ] Replace every `from ommx.v1.*_pb2 import ...` with `from ommx.v1 import ...`.
+- [ ] Remove all `.raw`, `from_raw(...)`, `from_protobuf(...)`, `to_protobuf(...)` usage; use `from_bytes` / `to_bytes` or direct properties.
+- [ ] Replace `Constraint(id=N, ...)` / `.set_id(N)` / `(expr <= 0).set_id(N)` with `{N: (expr <= 0)}` in the `constraints=` dict.
+- [ ] Remove reads of `constraint.id`; iterate with `.items()` on constraint dicts instead.
+- [ ] Remove any use of `next_constraint_id()` / `set_constraint_id_counter(...)` / related counter helpers.
+- [ ] Update `Instance.from_components(constraints=[...])` to pass a `dict[int, Constraint]`. Same for `indicator_constraints`, `one_hot_constraints`, `sos1_constraints`.
+- [ ] Replace `constraint_hints` reads with `instance.{one_hot,sos1,indicator}_constraints` (all `dict[int, T]`).
+- [ ] Rename `write_mps(...)` → `save_mps(...)`.
+- [ ] Rename `instance.used_decision_variable_ids()` / `function.used_decision_variable_ids()` → `required_ids()`.
+- [ ] Replace `Parameter.new(id=...)` with `Parameter(id, ...)`.
+- [ ] Replace `pi.with_parameters(Parameters(entries={...}))` with `pi.with_parameters({...})`.
+- [ ] Update `constraint.name` / `constraint.description` handling for `None` return (was `""`).
+- [ ] Update code that used `Linear.terms` / `Quadratic.terms` / `Polynomial.terms` as a property — they are methods now.
+- [ ] `SampleSet.sample_ids` is a method returning `set[int]`; use `sample_set.sample_ids_list` if you need a `list`.
+- [ ] Treat `Constraint.add_name(...)` / `add_description(...)` / `add_subscripts(...)` as returning a new object — assign the result.
+- [ ] Replace `ArtifactArchive` / `ArtifactDir` usage with `Artifact.load_archive(...)` or `Artifact.load(...)`.
+- [ ] Remove any `Linear.from_object(...)` / `Linear.equals_to(...)` calls.
 
 ---
 
