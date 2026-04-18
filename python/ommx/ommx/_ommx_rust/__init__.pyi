@@ -54,18 +54,14 @@ __all__ = [
     "ToFunction",
     "ToSamples",
     "ToState",
-    "get_constraint_id_counter",
     "get_default_atol",
     "get_image_dir",
     "get_images",
     "get_local_registry_root",
     "miplib2017_instance_annotations",
-    "next_constraint_id",
     "qplib_instance_annotations",
-    "set_constraint_id_counter",
     "set_default_atol",
     "set_local_registry_root",
-    "update_constraint_id_counter",
 ]
 
 ToFunction: TypeAlias = (
@@ -499,8 +495,6 @@ class Constraint:
     Class constant for equality type: less than or equal to zero (<=)
     """
     @property
-    def id(self) -> builtins.int: ...
-    @property
     def function(self) -> Function: ...
     @property
     def equality(self) -> Equality: ...
@@ -517,7 +511,6 @@ class Constraint:
         *,
         function: ToFunction,
         equality: Equality,
-        id: typing.Optional[builtins.int] = None,
         name: typing.Optional[builtins.str] = None,
         subscripts: typing.Sequence[builtins.int] = [],
         description: typing.Optional[builtins.str] = None,
@@ -530,7 +523,6 @@ class Constraint:
 
         - `function`: The constraint function (int, float, DecisionVariable, Linear, Quadratic, Polynomial, or Function)
         - `equality`: The equality type (EqualToZero or LessThanOrEqualToZero)
-        - `id`: Optional constraint ID (auto-generated if not provided)
         - `name`: Optional name for the constraint
         - `subscripts`: Optional subscripts for indexing
         - `description`: Optional description
@@ -585,11 +577,6 @@ class Constraint:
     def add_subscripts(self, subscripts: typing.Sequence[builtins.int]) -> Constraint:
         r"""
         Add subscripts to the constraint
-        Returns self for method chaining
-        """
-    def set_id(self, id: builtins.int) -> Constraint:
-        r"""
-        Set the ID of the constraint
         Returns self for method chaining
         """
     def set_description(self, description: builtins.str) -> Constraint:
@@ -862,11 +849,6 @@ class Descriptor:
 
 @typing.final
 class EvaluatedConstraint:
-    @property
-    def id(self) -> builtins.int:
-        r"""
-        Get the constraint ID
-        """
     @property
     def equality(self) -> Equality:
         r"""
@@ -1195,8 +1177,6 @@ class Function:
 @typing.final
 class IndicatorConstraint:
     @property
-    def id(self) -> builtins.int: ...
-    @property
     def indicator_variable_id(self) -> builtins.int: ...
     @property
     def function(self) -> Function: ...
@@ -1216,7 +1196,6 @@ class IndicatorConstraint:
         indicator_variable: DecisionVariable,
         function: ToFunction,
         equality: Equality,
-        id: typing.Optional[builtins.int] = None,
         name: typing.Optional[builtins.str] = None,
         subscripts: typing.Sequence[builtins.int] = [],
         description: typing.Optional[builtins.str] = None,
@@ -1232,7 +1211,6 @@ class IndicatorConstraint:
         - `indicator_variable`: A binary decision variable that activates this constraint
         - `function`: The constraint function
         - `equality`: The equality type (EqualToZero or LessThanOrEqualToZero)
-        - `id`: Optional constraint ID (auto-generated if not provided)
         - `name`: Optional name for the constraint
         - `subscripts`: Optional subscripts for indexing
         - `description`: Optional description
@@ -1241,10 +1219,6 @@ class IndicatorConstraint:
     def set_name(self, name: builtins.str) -> IndicatorConstraint:
         r"""
         Set the constraint name. Returns a new IndicatorConstraint.
-        """
-    def set_id(self, id: builtins.int) -> IndicatorConstraint:
-        r"""
-        Set the constraint ID. Returns a new IndicatorConstraint.
         """
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> IndicatorConstraint: ...
@@ -1364,29 +1338,29 @@ class Instance:
         List of all decision variables in the instance sorted by their IDs.
         """
     @property
-    def constraints(self) -> builtins.list[Constraint]:
+    def constraints(self) -> builtins.dict[builtins.int, Constraint]:
         r"""
-        List of all constraints in the instance sorted by their IDs.
+        Dict of all constraints in the instance keyed by their IDs.
         """
     @property
-    def indicator_constraints(self) -> builtins.list[IndicatorConstraint]:
+    def indicator_constraints(self) -> builtins.dict[builtins.int, IndicatorConstraint]:
         r"""
-        List of all indicator constraints in the instance sorted by their IDs.
+        Dict of all indicator constraints in the instance keyed by their IDs.
         """
     @property
-    def one_hot_constraints(self) -> builtins.list[OneHotConstraint]:
+    def one_hot_constraints(self) -> builtins.dict[builtins.int, OneHotConstraint]:
         r"""
-        List of all one-hot constraints in the instance sorted by their IDs.
+        Dict of all one-hot constraints in the instance keyed by their IDs.
         """
     @property
-    def sos1_constraints(self) -> builtins.list[Sos1Constraint]:
+    def sos1_constraints(self) -> builtins.dict[builtins.int, Sos1Constraint]:
         r"""
-        List of all SOS1 constraints in the instance sorted by their IDs.
+        Dict of all SOS1 constraints in the instance keyed by their IDs.
         """
     @property
-    def removed_constraints(self) -> builtins.list[RemovedConstraint]:
+    def removed_constraints(self) -> builtins.dict[builtins.int, RemovedConstraint]:
         r"""
-        List of all removed constraints in the instance sorted by their IDs.
+        Dict of all removed constraints in the instance keyed by their IDs.
         """
     @property
     def named_functions(self) -> builtins.list[NamedFunction]:
@@ -1452,12 +1426,16 @@ class Instance:
         sense: Sense,
         objective: ToFunction,
         decision_variables: typing.Sequence[DecisionVariable],
-        constraints: typing.Sequence[Constraint],
+        constraints: typing.Mapping[builtins.int, Constraint],
         indicator_constraints: typing.Optional[
-            typing.Sequence[IndicatorConstraint]
+            typing.Mapping[builtins.int, IndicatorConstraint]
         ] = None,
-        one_hot_constraints: typing.Optional[typing.Sequence[OneHotConstraint]] = None,
-        sos1_constraints: typing.Optional[typing.Sequence[Sos1Constraint]] = None,
+        one_hot_constraints: typing.Optional[
+            typing.Mapping[builtins.int, OneHotConstraint]
+        ] = None,
+        sos1_constraints: typing.Optional[
+            typing.Mapping[builtins.int, Sos1Constraint]
+        ] = None,
         named_functions: typing.Optional[typing.Sequence[NamedFunction]] = None,
         description: typing.Optional[InstanceDescription] = None,
     ) -> Instance:
@@ -2706,26 +2684,14 @@ class OneHotConstraint:
     The implicit constraint is `sum(x_i) = 1` where all `x_i` are binary.
     """
     @property
-    def id(self) -> builtins.int: ...
-    @property
     def variables(self) -> builtins.list[builtins.int]: ...
-    def __new__(
-        cls,
-        *,
-        variables: typing.Sequence[builtins.int],
-        id: typing.Optional[builtins.int] = None,
-    ) -> OneHotConstraint:
+    def __new__(cls, *, variables: typing.Sequence[builtins.int]) -> OneHotConstraint:
         r"""
         Create a new one-hot constraint.
 
         **Args:**
 
         - `variables`: List of binary decision variable IDs (exactly one must be 1)
-        - `id`: Optional constraint ID (auto-generated if not provided)
-        """
-    def set_id(self, id: builtins.int) -> OneHotConstraint:
-        r"""
-        Set the constraint ID. Returns a new OneHotConstraint.
         """
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> OneHotConstraint: ...
@@ -2902,9 +2868,9 @@ class ParametricInstance:
     @property
     def decision_variables(self) -> builtins.list[DecisionVariable]: ...
     @property
-    def constraints(self) -> builtins.list[Constraint]: ...
+    def constraints(self) -> builtins.dict[builtins.int, Constraint]: ...
     @property
-    def removed_constraints(self) -> builtins.list[RemovedConstraint]: ...
+    def removed_constraints(self) -> builtins.dict[builtins.int, RemovedConstraint]: ...
     @property
     def named_functions(self) -> builtins.list[NamedFunction]: ...
     @property
@@ -2971,7 +2937,7 @@ class ParametricInstance:
         sense: Sense,
         objective: ToFunction,
         decision_variables: typing.Sequence[DecisionVariable],
-        constraints: typing.Sequence[Constraint],
+        constraints: typing.Mapping[builtins.int, Constraint],
         parameters: typing.Sequence[Parameter],
         named_functions: typing.Optional[typing.Sequence[NamedFunction]] = None,
         description: typing.Optional[InstanceDescription] = None,
@@ -3286,8 +3252,6 @@ class RemovedConstraint:
     def removed_reason_parameters(
         self,
     ) -> builtins.dict[builtins.str, builtins.str]: ...
-    @property
-    def id(self) -> builtins.int: ...
     @property
     def name(self) -> typing.Optional[builtins.str]: ...
     @property
@@ -3703,11 +3667,6 @@ class SampleSet:
 @typing.final
 class SampledConstraint:
     @property
-    def id(self) -> builtins.int:
-        r"""
-        Get the constraint ID
-        """
-    @property
     def equality(self) -> Equality:
         r"""
         Get the constraint equality type
@@ -3988,9 +3947,9 @@ class Solution:
         Get evaluated decision variables as a list sorted by ID
         """
     @property
-    def constraints(self) -> builtins.list[EvaluatedConstraint]:
+    def constraints(self) -> builtins.dict[builtins.int, EvaluatedConstraint]:
         r"""
-        Get evaluated constraints as a list sorted by ID
+        Get evaluated constraints as a dict keyed by constraint ID
         """
     @property
     def named_functions(self) -> builtins.list[EvaluatedNamedFunction]:
@@ -4286,26 +4245,14 @@ class Sos1Constraint:
     Unlike OneHotConstraint, SOS1 allows all variables to be zero.
     """
     @property
-    def id(self) -> builtins.int: ...
-    @property
     def variables(self) -> builtins.list[builtins.int]: ...
-    def __new__(
-        cls,
-        *,
-        variables: typing.Sequence[builtins.int],
-        id: typing.Optional[builtins.int] = None,
-    ) -> Sos1Constraint:
+    def __new__(cls, *, variables: typing.Sequence[builtins.int]) -> Sos1Constraint:
         r"""
         Create a new SOS1 constraint.
 
         **Args:**
 
         - `variables`: List of decision variable IDs (at most one can be non-zero)
-        - `id`: Optional constraint ID (auto-generated if not provided)
-        """
-    def set_id(self, id: builtins.int) -> Sos1Constraint:
-        r"""
-        Set the constraint ID. Returns a new Sos1Constraint.
         """
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> Sos1Constraint: ...
@@ -4510,11 +4457,6 @@ class Sense(enum.Enum):
     def __repr__(self) -> builtins.str: ...
     def __str__(self) -> builtins.str: ...
 
-def get_constraint_id_counter() -> builtins.int:
-    r"""
-    Get current constraint ID counter value
-    """
-
 def get_default_atol() -> builtins.float: ...
 def get_image_dir(image_name: builtins.str) -> pathlib.Path:
     r"""
@@ -4538,19 +4480,9 @@ def get_local_registry_root() -> pathlib.Path:
 def miplib2017_instance_annotations() -> builtins.dict[
     builtins.str, builtins.dict[builtins.str, builtins.str]
 ]: ...
-def next_constraint_id() -> builtins.int:
-    r"""
-    Get next constraint ID (thread-safe)
-    """
-
 def qplib_instance_annotations() -> builtins.dict[
     builtins.str, builtins.dict[builtins.str, builtins.str]
 ]: ...
-def set_constraint_id_counter(value: builtins.int) -> None:
-    r"""
-    Set constraint ID counter (for deserialization compatibility)
-    """
-
 def set_default_atol(value: builtins.float) -> None: ...
 def set_local_registry_root(path: builtins.str | os.PathLike | pathlib.Path) -> None:
     r"""
@@ -4564,10 +4496,4 @@ def set_local_registry_root(path: builtins.str | os.PathLike | pathlib.Path) -> 
       - Otherwise, OS-specific path by [directories](https://docs.rs/directories/latest/directories/struct.ProjectDirs.html#method.data_dir) is used:
         - `$XDG_DATA_HOME/ommx/` on Linux
         - `$HOME/Library/Application Support/org.ommx.ommx/` on macOS
-    """
-
-def update_constraint_id_counter(value: builtins.int) -> builtins.int:
-    r"""
-    Update counter to ensure it's at least the given value + 1
-    Returns the new counter value after update
     """

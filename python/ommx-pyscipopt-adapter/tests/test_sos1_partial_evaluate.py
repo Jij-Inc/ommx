@@ -18,22 +18,28 @@ def sos1_instance_setup():
     objective = sum(x) + 0.5 * z
 
     # SOS1 constraint setup: y0 + y1 + y2 <= 1 (binary constraint)
-    binary_constraint = (y[0] + y[1] + y[2] <= 1).set_id(1)
+    binary_constraint = y[0] + y[1] + y[2] <= 1
     # Big-M constraints: x0 <= 10*y0, x1 <= 10*y1, x2 <= 10*y2
-    big_m1 = (x[0] <= 10 * y[0]).set_id(2)
-    big_m2 = (x[1] <= 10 * y[1]).set_id(3)
-    big_m3 = (x[2] <= 10 * y[2]).set_id(4)
+    big_m1 = x[0] <= 10 * y[0]
+    big_m2 = x[1] <= 10 * y[1]
+    big_m3 = x[2] <= 10 * y[2]
 
     # Independent constraint not related to SOS1
-    independent_constraint = (z >= 1).set_id(5)
+    independent_constraint = z >= 1
 
     sos1 = Sos1Constraint(variables=[1, 2, 3])  # x0, x1, x2 (continuous variables)
 
     return Instance.from_components(
         decision_variables=x + y + [z],
         objective=objective,
-        constraints=[binary_constraint, big_m1, big_m2, big_m3, independent_constraint],
-        sos1_constraints=[sos1],
+        constraints={
+            1: binary_constraint,
+            2: big_m1,
+            3: big_m2,
+            4: big_m3,
+            5: independent_constraint,
+        },
+        sos1_constraints={0: sos1},
         sense=Instance.MINIMIZE,
     )
 

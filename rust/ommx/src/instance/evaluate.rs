@@ -271,7 +271,6 @@ impl Instance {
                         // Indicator=1 → promote inner constraint to regular constraint
                         let cid = self.constraint_collection.unused_id();
                         let constraint = crate::Constraint {
-                            id: cid,
                             equality: new.equality,
                             metadata: new.metadata,
                             stage: crate::CreatedData {
@@ -466,10 +465,7 @@ mod tests {
         )
         .unwrap();
 
-        let oh = OneHotConstraint::new(
-            OneHotConstraintID::from(1),
-            [1, 2, 3].into_iter().map(VariableID::from).collect(),
-        );
+        let oh = OneHotConstraint::new([1, 2, 3].into_iter().map(VariableID::from).collect());
         instance
             .one_hot_constraint_collection
             .active_mut()
@@ -518,10 +514,7 @@ mod tests {
         )
         .unwrap();
 
-        let oh = OneHotConstraint::new(
-            OneHotConstraintID::from(1),
-            [1, 2, 3].into_iter().map(VariableID::from).collect(),
-        );
+        let oh = OneHotConstraint::new([1, 2, 3].into_iter().map(VariableID::from).collect());
         instance
             .one_hot_constraint_collection
             .active_mut()
@@ -562,19 +555,13 @@ mod tests {
         )
         .unwrap();
 
-        let oh = OneHotConstraint::new(
-            OneHotConstraintID::from(1),
-            [1, 2].into_iter().map(VariableID::from).collect(),
-        );
+        let oh = OneHotConstraint::new([1, 2].into_iter().map(VariableID::from).collect());
         instance
             .one_hot_constraint_collection
             .active_mut()
             .insert(OneHotConstraintID::from(1), oh);
 
-        let sos1 = Sos1Constraint::new(
-            Sos1ConstraintID::from(1),
-            [2, 3].into_iter().map(VariableID::from).collect(),
-        );
+        let sos1 = Sos1Constraint::new([2, 3].into_iter().map(VariableID::from).collect());
         instance
             .sos1_constraint_collection
             .active_mut()
@@ -616,7 +603,6 @@ mod tests {
         indicator_constraints.insert(
             IndicatorConstraintID::from(100),
             crate::IndicatorConstraint::new(
-                IndicatorConstraintID::from(100),
                 VariableID::from(10),
                 Equality::LessThanOrEqualToZero,
                 Function::from(linear!(1) + linear!(2) + coeff!(-5.0)),
@@ -661,7 +647,6 @@ mod tests {
         indicator_constraints.insert(
             IndicatorConstraintID::from(1),
             crate::IndicatorConstraint::new(
-                IndicatorConstraintID::from(1),
                 VariableID::from(10),
                 Equality::LessThanOrEqualToZero,
                 Function::from(linear!(1) + coeff!(-5.0)),

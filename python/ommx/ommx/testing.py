@@ -106,17 +106,16 @@ class SingleFeasibleLPGenerator:
             ]
 
         # define constraints using Rust types
-        constraints = []
+        constraints: dict[int, Constraint] = {}
         for i in range(len(self._b)):
             # Build linear function: sum(A[i][j] * x[j]) - b[i] == 0
             terms = {int(j): float(value) for j, value in enumerate(self._A[i])}
             linear = Linear(terms=terms, constant=float(-self._b[i]))
             constraint = Constraint(
-                id=i,
                 equality=Constraint.EQUAL_TO_ZERO,
                 function=Function(linear),
             )
-            constraints.append(constraint)
+            constraints[i] = constraint
 
         return Instance.from_components(
             description=Instance.Description(name="LPTest"),

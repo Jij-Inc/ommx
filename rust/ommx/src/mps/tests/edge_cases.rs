@@ -37,9 +37,7 @@ fn test_unused_variable_filtering() {
 
     // Only use x2 in constraint: x2 - 5 <= 0
     let constraints = btreemap! {
-        ConstraintID::from(0) => Constraint::less_than_or_equal_to_zero(
-            ConstraintID::from(0),
-            Function::from(linear!(1) + coeff!(-5.0))
+        ConstraintID::from(0) => Constraint::less_than_or_equal_to_zero(Function::from(linear!(1) + coeff!(-5.0))
         ),
     };
 
@@ -90,9 +88,7 @@ fn test_removed_constraint_variable_preservation() {
 
     // Add constraint that uses x1: x1 - 3 <= 0
     let constraints = btreemap! {
-        ConstraintID::from(100) => Constraint::less_than_or_equal_to_zero(
-            ConstraintID::from(100),
-            Function::from(linear!(1) + coeff!(-3.0))
+        ConstraintID::from(100) => Constraint::less_than_or_equal_to_zero(Function::from(linear!(1) + coeff!(-3.0))
         ),
     };
 
@@ -148,13 +144,9 @@ fn test_removed_constraint_information_loss() {
 
     // Add two constraints
     let constraints = btreemap! {
-        ConstraintID::from(0) => Constraint::less_than_or_equal_to_zero(
-            ConstraintID::from(0),
-            Function::from(linear!(0) + coeff!(-5.0))  // x0 - 5 <= 0
+        ConstraintID::from(0) => Constraint::less_than_or_equal_to_zero(Function::from(linear!(0) + coeff!(-5.0))  // x0 - 5 <= 0
         ),
-        ConstraintID::from(1) => Constraint::equal_to_zero(
-            ConstraintID::from(1),
-            Function::from(coeff!(2.0) * linear!(0) + coeff!(-10.0))  // 2*x0 - 10 = 0
+        ConstraintID::from(1) => Constraint::equal_to_zero(Function::from(coeff!(2.0) * linear!(0) + coeff!(-10.0))  // 2*x0 - 10 = 0
         ),
     };
 

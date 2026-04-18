@@ -37,11 +37,11 @@ impl Parse for crate::v1::Solution {
         let mut evaluated_constraints = std::collections::BTreeMap::default();
         let mut removed_reasons = std::collections::BTreeMap::default();
         for ec in self.evaluated_constraints {
-            let (parsed_constraint, removed_reason): (
+            let (id, parsed_constraint, removed_reason): (
+                crate::ConstraintID,
                 crate::EvaluatedConstraint,
                 Option<crate::RemovedReason>,
             ) = ec.parse_as(&(), message, "evaluated_constraints")?;
-            let id = parsed_constraint.id;
             if let Some(reason) = removed_reason {
                 removed_reasons.insert(id, reason);
             }
@@ -148,7 +148,7 @@ impl From<Solution> for crate::v1::Solution {
             .evaluated_constraints()
             .iter()
             .map(|(id, ec)| {
-                let mut v1_ec = crate::v1::EvaluatedConstraint::from(ec.clone());
+                let mut v1_ec = crate::v1::EvaluatedConstraint::from((*id, ec.clone()));
                 if let Some(reason) = removed_reasons.get(id) {
                     v1_ec.removed_reason = Some(reason.reason.clone());
                     v1_ec.removed_reason_parameters = reason
@@ -212,7 +212,6 @@ mod tests {
             }),
             objective: 42.5,
             evaluated_constraints: vec![v1::EvaluatedConstraint {
-                id: 1,
                 equality: v1::Equality::EqualToZero as i32,
                 evaluated_value: 0.0,
                 dual_variable: Some(1.5),
@@ -349,7 +348,6 @@ mod tests {
             state: None, // State can be None when there are no decision variables
             objective: 42.5,
             evaluated_constraints: vec![v1::EvaluatedConstraint {
-                id: 1,
                 equality: v1::Equality::EqualToZero as i32,
                 evaluated_value: 1.0, // This should make constraint infeasible (1.0 != 0.0)
                 dual_variable: Some(1.5),

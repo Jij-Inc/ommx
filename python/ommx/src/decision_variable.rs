@@ -1,7 +1,4 @@
-use crate::{
-    next_constraint_id, Constraint, Function, Linear, Parameter, Polynomial, Quadratic,
-    VariableBound,
-};
+use crate::{Constraint, Function, Linear, Parameter, Polynomial, Quadratic, VariableBound};
 use anyhow::Result;
 use ommx::{v1, ATol, LinearMonomial, VariableID};
 use pyo3::{prelude::*, types::PyBytes, Bound, PyAny};
@@ -620,9 +617,7 @@ impl DecisionVariable {
     pub fn py_eq(&self, other: Function) -> Constraint {
         let mut function = -other.0;
         function += &self.as_linear();
-        let id = next_constraint_id();
         Constraint(ommx::Constraint {
-            id: ommx::ConstraintID::from(id),
             equality: ommx::Equality::EqualToZero,
             metadata: ommx::ConstraintMetadata::default(),
             stage: ommx::CreatedData { function },
@@ -634,9 +629,7 @@ impl DecisionVariable {
     pub fn py_le(&self, other: Function) -> Constraint {
         let mut function = -other.0;
         function += &self.as_linear();
-        let id = next_constraint_id();
         Constraint(ommx::Constraint {
-            id: ommx::ConstraintID::from(id),
             equality: ommx::Equality::LessThanOrEqualToZero,
             metadata: ommx::ConstraintMetadata::default(),
             stage: ommx::CreatedData { function },
@@ -647,9 +640,7 @@ impl DecisionVariable {
     #[pyo3(name = "__ge__")]
     pub fn py_ge(&self, other: Function) -> Constraint {
         let function = other.0 - &self.as_linear();
-        let id = next_constraint_id();
         Constraint(ommx::Constraint {
-            id: ommx::ConstraintID::from(id),
             equality: ommx::Equality::LessThanOrEqualToZero,
             metadata: ommx::ConstraintMetadata::default(),
             stage: ommx::CreatedData { function },

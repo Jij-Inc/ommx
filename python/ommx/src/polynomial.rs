@@ -1,7 +1,4 @@
-use crate::{
-    next_constraint_id, Constraint, DecisionVariable, Function, Linear, Parameter, Quadratic, Rng,
-    State,
-};
+use crate::{Constraint, DecisionVariable, Function, Linear, Parameter, Quadratic, Rng, State};
 
 use anyhow::{anyhow, Result};
 use approx::AbsDiffEq;
@@ -426,9 +423,7 @@ impl Polynomial {
     pub fn py_eq(&self, other: Function) -> Constraint {
         let mut function = -other.0;
         function += &self.0;
-        let id = next_constraint_id();
         Constraint(ommx::Constraint {
-            id: ommx::ConstraintID::from(id),
             equality: ommx::Equality::EqualToZero,
             metadata: ommx::ConstraintMetadata::default(),
             stage: ommx::CreatedData { function },
@@ -440,9 +435,7 @@ impl Polynomial {
     pub fn py_le(&self, other: Function) -> Constraint {
         let mut function = -other.0;
         function += &self.0;
-        let id = next_constraint_id();
         Constraint(ommx::Constraint {
-            id: ommx::ConstraintID::from(id),
             equality: ommx::Equality::LessThanOrEqualToZero,
             metadata: ommx::ConstraintMetadata::default(),
             stage: ommx::CreatedData { function },
@@ -453,9 +446,7 @@ impl Polynomial {
     #[pyo3(name = "__ge__")]
     pub fn py_ge(&self, other: Function) -> Constraint {
         let function = other.0 - &self.0;
-        let id = next_constraint_id();
         Constraint(ommx::Constraint {
-            id: ommx::ConstraintID::from(id),
             equality: ommx::Equality::LessThanOrEqualToZero,
             metadata: ommx::ConstraintMetadata::default(),
             stage: ommx::CreatedData { function },

@@ -64,7 +64,6 @@ mod tests {
         constraints.insert(
             ConstraintID::from(1),
             Constraint {
-                id: ConstraintID::from(1),
                 equality: Equality::LessThanOrEqualToZero,
                 metadata: ConstraintMetadata::default(),
                 stage: CreatedData {

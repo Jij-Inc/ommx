@@ -33,11 +33,11 @@ impl Parse for crate::v1::SampleSet {
         let mut constraints = std::collections::BTreeMap::new();
         let mut constraint_removed_reasons = std::collections::BTreeMap::new();
         for v1_constraint in self.constraints {
-            let (parsed_constraint, removed_reason): (
+            let (id, parsed_constraint, removed_reason): (
+                crate::ConstraintID,
                 crate::SampledConstraint,
                 Option<crate::RemovedReason>,
             ) = v1_constraint.parse_as(&(), message, "constraints")?;
-            let id = parsed_constraint.id;
             if let Some(reason) = removed_reason {
                 constraint_removed_reasons.insert(id, reason);
             }
@@ -125,7 +125,7 @@ impl From<SampleSet> for crate::v1::SampleSet {
             .constraints()
             .iter()
             .map(|(id, sc)| {
-                let mut v1_sc = crate::v1::SampledConstraint::from(sc.clone());
+                let mut v1_sc = crate::v1::SampledConstraint::from((*id, sc.clone()));
                 if let Some(reason) = removed_reasons.get(id) {
                     v1_sc.removed_reason = Some(reason.reason.clone());
                     v1_sc.removed_reason_parameters = reason
@@ -297,7 +297,6 @@ mod tests {
                 }],
             }),
             constraints: vec![v1::SampledConstraint {
-                id: 1,
                 equality: v1::Equality::EqualToZero as i32,
                 evaluated_values: Some(v1::SampledValues {
                     entries: vec![v1::sampled_values::SampledValuesEntry {

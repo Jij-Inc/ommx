@@ -13,8 +13,7 @@ def test_example_mps():
     assert instance.sense == Instance.MAXIMIZE  # OBJSENSE field is specified
     dvars = instance.decision_variables
     dvars.sort(key=lambda x: x.name)
-    constraints = instance.constraints
-    constraints.sort(key=lambda c: c.name or "")
+    constraints = sorted(instance.constraints.values(), key=lambda c: c.name or "")
 
     assert len(dvars) == 3
     assert len(constraints) == 3
@@ -64,12 +63,10 @@ def test_output():
     ]
 
     objective = sum(obj_coeff[i] * x[i] for i in range(6)) + 10
-    constraints = [
-        (sum(constr_coeffs[c][i] * x[i] for i in range(6)) <= 500).add_name(  # type: ignore[reportAttributeAccessIssue]
+    constraints={0: (sum(constr_coeffs[c][i] * x[i] for i in range(6)) <= 500).add_name(  # type: ignore[reportAttributeAccessIssue]
             f"constr{c}"
         )
-        for c in range(5)
-    ]
+        for c in range(5)}
 
     # Step 4: Create the Instance
     instance = Instance.from_components(
@@ -98,8 +95,10 @@ def test_output():
     constr_before = instance.constraints
     constr_after = loaded.constraints
     assert len(constr_before) == len(constr_after)
-    for b, a in zip(constr_before, constr_after):
-        assert b.id == a.id
+    assert set(constr_before.keys()) == set(constr_after.keys())
+    for cid in constr_before:
+        b = constr_before[cid]
+        a = constr_after[cid]
         # Note: MPS format does not preserve constraint names (see Instance.write_mps docstring)
         # assert before.name == after.name  # Skip name check as it's not preserved
         assert b.equality == a.equality

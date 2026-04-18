@@ -115,7 +115,7 @@ class OMMXHighsAdapter(SolverAdapter):
     >>> instance = Instance.from_components(
     ...     decision_variables=[x, y],
     ...     objective=2*x + 3*y,
-    ...     constraints=[x + y <= 5],
+    ...     constraints={0: x + y <= 5},
     ...     sense=Instance.MAXIMIZE,
     ... )
     >>>
@@ -209,7 +209,7 @@ class OMMXHighsAdapter(SolverAdapter):
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=sum(p[i] * x[i] for i in range(6)),
-        ...     constraints=[sum(w[i] * x[i] for i in range(6)) <= 47],
+        ...     constraints={0: sum(w[i] * x[i] for i in range(6)) <= 47},
         ...     sense=Instance.MAXIMIZE,
         ... )
         >>>
@@ -228,7 +228,7 @@ class OMMXHighsAdapter(SolverAdapter):
         >>> instance = Instance.from_components(
         ...     decision_variables=[x],
         ...     objective=x,
-        ...     constraints=[x >= 4],  # Impossible: x ≤ 3 and x ≥ 4
+        ...     constraints={0: x >= 4},  # Impossible: x ≤ 3 and x ≥ 4
         ...     sense=Instance.MAXIMIZE,
         ... )
         >>> OMMXHighsAdapter.solve(instance)  # doctest: +IGNORE_EXCEPTION_DETAIL
@@ -250,7 +250,7 @@ class OMMXHighsAdapter(SolverAdapter):
         # >>> instance = Instance.from_components(
         # ...     decision_variables=[x],
         # ...     objective=x,
-        # ...     constraints=[],
+        # ...     constraints={},
         # ...     sense=Instance.MAXIMIZE,
         # ... )
 
@@ -329,7 +329,7 @@ class OMMXHighsAdapter(SolverAdapter):
         >>> instance = Instance.from_components(
         ...     decision_variables=[x],
         ...     objective=x,
-        ...     constraints=[],
+        ...     constraints={},
         ...     sense=Instance.MAXIMIZE,
         ... )
         >>>
@@ -392,7 +392,7 @@ class OMMXHighsAdapter(SolverAdapter):
         >>> instance = Instance.from_components(
         ...     decision_variables=[x1],
         ...     objective=x1,
-        ...     constraints=[],
+        ...     constraints={},
         ...     sense=Instance.MINIMIZE,
         ... )
         >>> adapter = OMMXHighsAdapter(instance)
@@ -477,7 +477,7 @@ class OMMXHighsAdapter(SolverAdapter):
             raise OMMXHighsAdapterError(f"Unsupported sense: {self.instance.sense}")
 
     def _set_constraints(self):
-        for constr in self.instance.constraints:
+        for cid, constr in self.instance.constraints.items():
             const_expr = self._linear_expr_conversion(constr.function)
             if isinstance(const_expr, float):
                 val = const_expr
@@ -496,9 +496,9 @@ class OMMXHighsAdapter(SolverAdapter):
             else:
                 const_expr = highs_linear_expression(const_expr)
                 if constr.equality == Constraint.EQUAL_TO_ZERO:
-                    self.model.addConstr(const_expr == 0, str(constr.id))
+                    self.model.addConstr(const_expr == 0, str(cid))
                 elif constr.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO:
-                    self.model.addConstr(const_expr <= 0, str(constr.id))
+                    self.model.addConstr(const_expr <= 0, str(cid))
                 else:
                     raise OMMXHighsAdapterError(
                         f"Unsupported constraint equality kind: {constr.equality}"

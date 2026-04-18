@@ -53,18 +53,6 @@ pub enum InstanceError {
         value_id: VariableID,
     },
 
-    #[error("Constraint map key {key:?} does not match value's id {value_id:?}")]
-    InconsistentConstraintID {
-        key: ConstraintID,
-        value_id: ConstraintID,
-    },
-
-    #[error("Removed constraint map key {key:?} does not match value's id {value_id:?}")]
-    InconsistentRemovedConstraintID {
-        key: ConstraintID,
-        value_id: ConstraintID,
-    },
-
     #[error("Parameter map key {key:?} does not match value's id {value_id}")]
     InconsistentParameterID { key: VariableID, value_id: u64 },
 
@@ -80,18 +68,6 @@ pub enum InstanceError {
     #[error("Indicator variable {id:?} is not defined in decision_variables")]
     UndefinedIndicatorVariable { id: VariableID },
 
-    #[error("Indicator constraint map key {key:?} does not match value's id {value_id:?}")]
-    InconsistentIndicatorConstraintID {
-        key: crate::IndicatorConstraintID,
-        value_id: crate::IndicatorConstraintID,
-    },
-
-    #[error("Removed indicator constraint map key {key:?} does not match value's id {value_id:?}")]
-    InconsistentRemovedIndicatorConstraintID {
-        key: crate::IndicatorConstraintID,
-        value_id: crate::IndicatorConstraintID,
-    },
-
     #[error(
         "Indicator constraint ID {id:?} is in both indicator_constraints and removed_indicator_constraints, but they must be disjoint"
     )]
@@ -105,16 +81,4 @@ pub enum InstanceError {
 
     #[error("SOS1 variable {id:?} is not defined in decision_variables")]
     UndefinedSos1Variable { id: VariableID },
-
-    #[error("One-hot constraint map key {key:?} does not match value's id {value_id:?}")]
-    InconsistentOneHotConstraintID {
-        key: crate::OneHotConstraintID,
-        value_id: crate::OneHotConstraintID,
-    },
-
-    #[error("SOS1 constraint map key {key:?} does not match value's id {value_id:?}")]
-    InconsistentSos1ConstraintID {
-        key: crate::Sos1ConstraintID,
-        value_id: crate::Sos1ConstraintID,
-    },
 }

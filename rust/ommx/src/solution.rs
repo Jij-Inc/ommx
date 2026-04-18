@@ -77,30 +77,6 @@ pub enum SolutionError {
         value_id: VariableID,
     },
 
-    #[error("Constraint key {key:?} does not match value's id {value_id:?}")]
-    InconsistentConstraintID {
-        key: ConstraintID,
-        value_id: ConstraintID,
-    },
-
-    #[error("Indicator constraint map key {key:?} does not match value's id {value_id:?}")]
-    InconsistentIndicatorConstraintID {
-        key: crate::IndicatorConstraintID,
-        value_id: crate::IndicatorConstraintID,
-    },
-
-    #[error("One-hot constraint map key {key:?} does not match value's id {value_id:?}")]
-    InconsistentOneHotConstraintID {
-        key: crate::OneHotConstraintID,
-        value_id: crate::OneHotConstraintID,
-    },
-
-    #[error("SOS1 constraint map key {key:?} does not match value's id {value_id:?}")]
-    InconsistentSos1ConstraintID {
-        key: crate::Sos1ConstraintID,
-        value_id: crate::Sos1ConstraintID,
-    },
-
     #[error(
         "Variable ID {id:?} used in constraint {constraint_id:?} is not in decision_variables"
     )]
@@ -863,10 +839,8 @@ mod tests {
         let mut constraints = BTreeMap::new();
 
         // Equality constraint: f(x) = 0.0001 (near zero, but not exactly zero due to Coefficient restrictions)
-        let c1 = Constraint::equal_to_zero(
-            ConstraintID::from(1),
-            Function::Constant(Coefficient::try_from(0.0001).unwrap()),
-        );
+        let c1 =
+            Constraint::equal_to_zero(Function::Constant(Coefficient::try_from(0.0001).unwrap()));
         let state = crate::v1::State::default();
         constraints.insert(
             ConstraintID::from(1),
@@ -874,10 +848,9 @@ mod tests {
         );
 
         // Inequality constraint: f(x) = -1.0 ≤ 0 (satisfied)
-        let c2 = Constraint::less_than_or_equal_to_zero(
-            ConstraintID::from(2),
-            Function::Constant(Coefficient::try_from(-1.0).unwrap()),
-        );
+        let c2 = Constraint::less_than_or_equal_to_zero(Function::Constant(
+            Coefficient::try_from(-1.0).unwrap(),
+        ));
         constraints.insert(
             ConstraintID::from(2),
             c2.evaluate(&state, crate::ATol::default()).unwrap(),
@@ -905,30 +878,25 @@ mod tests {
         let state = crate::v1::State::default();
 
         // Equality constraint violated: f(x) = 2.5
-        let c1 = Constraint::equal_to_zero(
-            ConstraintID::from(1),
-            Function::Constant(Coefficient::try_from(2.5).unwrap()),
-        );
+        let c1 = Constraint::equal_to_zero(Function::Constant(Coefficient::try_from(2.5).unwrap()));
         constraints.insert(
             ConstraintID::from(1),
             c1.evaluate(&state, crate::ATol::default()).unwrap(),
         );
 
         // Inequality constraint violated: f(x) = 1.5 > 0
-        let c2 = Constraint::less_than_or_equal_to_zero(
-            ConstraintID::from(2),
-            Function::Constant(Coefficient::try_from(1.5).unwrap()),
-        );
+        let c2 = Constraint::less_than_or_equal_to_zero(Function::Constant(
+            Coefficient::try_from(1.5).unwrap(),
+        ));
         constraints.insert(
             ConstraintID::from(2),
             c2.evaluate(&state, crate::ATol::default()).unwrap(),
         );
 
         // Inequality constraint satisfied: f(x) = -0.5 ≤ 0
-        let c3 = Constraint::less_than_or_equal_to_zero(
-            ConstraintID::from(3),
-            Function::Constant(Coefficient::try_from(-0.5).unwrap()),
-        );
+        let c3 = Constraint::less_than_or_equal_to_zero(Function::Constant(
+            Coefficient::try_from(-0.5).unwrap(),
+        ));
         constraints.insert(
             ConstraintID::from(3),
             c3.evaluate(&state, crate::ATol::default()).unwrap(),
@@ -956,30 +924,25 @@ mod tests {
         let state = crate::v1::State::default();
 
         // Equality constraint violated: f(x) = 2.5
-        let c1 = Constraint::equal_to_zero(
-            ConstraintID::from(1),
-            Function::Constant(Coefficient::try_from(2.5).unwrap()),
-        );
+        let c1 = Constraint::equal_to_zero(Function::Constant(Coefficient::try_from(2.5).unwrap()));
         constraints.insert(
             ConstraintID::from(1),
             c1.evaluate(&state, crate::ATol::default()).unwrap(),
         );
 
         // Inequality constraint violated: f(x) = 1.5 > 0
-        let c2 = Constraint::less_than_or_equal_to_zero(
-            ConstraintID::from(2),
-            Function::Constant(Coefficient::try_from(1.5).unwrap()),
-        );
+        let c2 = Constraint::less_than_or_equal_to_zero(Function::Constant(
+            Coefficient::try_from(1.5).unwrap(),
+        ));
         constraints.insert(
             ConstraintID::from(2),
             c2.evaluate(&state, crate::ATol::default()).unwrap(),
         );
 
         // Inequality constraint satisfied: f(x) = -0.5 ≤ 0
-        let c3 = Constraint::less_than_or_equal_to_zero(
-            ConstraintID::from(3),
-            Function::Constant(Coefficient::try_from(-0.5).unwrap()),
-        );
+        let c3 = Constraint::less_than_or_equal_to_zero(Function::Constant(
+            Coefficient::try_from(-0.5).unwrap(),
+        ));
         constraints.insert(
             ConstraintID::from(3),
             c3.evaluate(&state, crate::ATol::default()).unwrap(),
@@ -1025,10 +988,8 @@ mod tests {
         let state = crate::v1::State::default();
 
         // Equality constraint: f(x) = -3.0
-        let c1 = Constraint::equal_to_zero(
-            ConstraintID::from(1),
-            Function::Constant(Coefficient::try_from(-3.0).unwrap()),
-        );
+        let c1 =
+            Constraint::equal_to_zero(Function::Constant(Coefficient::try_from(-3.0).unwrap()));
         constraints.insert(
             ConstraintID::from(1),
             c1.evaluate(&state, crate::ATol::default()).unwrap(),
@@ -1241,37 +1202,6 @@ mod tests {
     }
 
     #[test]
-    fn test_builder_inconsistent_constraint_id() {
-        let state = crate::v1::State::default();
-        let constraint_id_1 = ConstraintID::from(1);
-        let constraint_id_2 = ConstraintID::from(2);
-
-        let c = Constraint::equal_to_zero(
-            constraint_id_1,
-            Function::Constant(Coefficient::try_from(1.0).unwrap()),
-        );
-        let evaluated_c = c.evaluate(&state, crate::ATol::default()).unwrap();
-
-        // Map key (2) doesn't match value's id (1)
-        let mut evaluated_constraints = BTreeMap::new();
-        evaluated_constraints.insert(constraint_id_2, evaluated_c);
-
-        let err = Solution::builder()
-            .objective(0.0)
-            .evaluated_constraints(evaluated_constraints)
-            .decision_variables(BTreeMap::new())
-            .sense(Sense::Minimize)
-            .build()
-            .unwrap_err();
-        let solution_err = err.downcast_ref::<SolutionError>().unwrap();
-        assert!(matches!(
-            solution_err,
-            SolutionError::InconsistentConstraintID { key, value_id }
-                if *key == constraint_id_2 && *value_id == constraint_id_1
-        ));
-    }
-
-    #[test]
     fn test_builder_undefined_variable_in_constraint() {
         use crate::linear;
 
@@ -1280,7 +1210,7 @@ mod tests {
         let var_id = VariableID::from(1);
 
         // Constraint uses variable ID 1
-        let c = Constraint::equal_to_zero(constraint_id, Function::from(linear!(1)));
+        let c = Constraint::equal_to_zero(Function::from(linear!(1)));
         let evaluated_c = c.evaluate(&state, crate::ATol::default()).unwrap();
 
         let mut evaluated_constraints = BTreeMap::new();

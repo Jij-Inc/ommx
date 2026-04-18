@@ -475,8 +475,9 @@ mod tests {
         use maplit::btreemap;
 
         let constraint_id = ConstraintID::from(1);
-        let constraint = Constraint::equal_to_zero(constraint_id, Function::Zero);
-        let removed_constraint = Constraint::equal_to_zero(constraint_id, Function::Zero);
+        let constraint = Constraint::equal_to_zero(Function::Zero);
+        let removed_constraint = Constraint::equal_to_zero(Function::Zero);
+        let _ = constraint_id;
         let removed_reason = crate::constraint::RemovedReason {
             reason: "test".to_string(),
             parameters: Default::default(),
@@ -611,7 +612,7 @@ mod tests {
         .unwrap();
 
         // Constraint uses var_id, which is also a dependent variable - this should fail
-        let constraint = Constraint::equal_to_zero(constraint_id, Function::from(linear!(1)));
+        let constraint = Constraint::equal_to_zero(Function::from(linear!(1)));
         let err = Instance::builder()
             .sense(Sense::Minimize)
             .objective(Function::Zero)
@@ -669,7 +670,7 @@ mod tests {
         let constraint_id = ConstraintID::from(1);
         // Create a removed constraint that references undefined variable ID 999
         let removed_constraint =
-            Constraint::equal_to_zero(constraint_id, Function::from(linear!(999) + coeff!(1.0)));
+            Constraint::equal_to_zero(Function::from(linear!(999) + coeff!(1.0)));
         let removed_reason = crate::constraint::RemovedReason {
             reason: "test".to_string(),
             parameters: Default::default(),

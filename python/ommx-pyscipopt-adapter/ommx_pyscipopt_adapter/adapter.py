@@ -86,7 +86,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             >>> instance = Instance.from_components(
             ...     decision_variables=x,
             ...     objective=sum(p[i] * x[i] for i in range(6)),
-            ...     constraints=[(sum(w[i] * x[i] for i in range(6)) <= 47).set_id(0)],
+            ...     constraints={0: sum(w[i] * x[i] for i in range(6)) <= 47},
             ...     sense=Instance.MAXIMIZE,
             ... )
 
@@ -121,7 +121,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                 >>> instance = Instance.from_components(
                 ...     decision_variables=[x],
                 ...     objective=x,
-                ...     constraints=[x >= 4],
+                ...     constraints={0: x >= 4},
                 ...     sense=Instance.MAXIMIZE,
                 ... )
 
@@ -141,7 +141,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                 >>> instance = Instance.from_components(
                 ...     decision_variables=[x],
                 ...     objective=x,
-                ...     constraints=[],
+                ...     constraints={},
                 ...     sense=Instance.MAXIMIZE,
                 ... )
 
@@ -186,7 +186,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             >>> instance = Instance.from_components(
             ...     decision_variables=x,
             ...     objective=sum(p[i] * x[i] for i in range(6)),
-            ...     constraints=[sum(w[i] * x[i] for i in range(6)) <= 47],
+            ...     constraints={0: sum(w[i] * x[i] for i in range(6)) <= 47},
             ...     sense=Instance.MAXIMIZE,
             ... )
 
@@ -231,7 +231,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             >>> ommx_instance = Instance.from_components(
             ...     decision_variables=[x1],
             ...     objective=x1,
-            ...     constraints=[],
+            ...     constraints={},
             ...     sense=Instance.MINIMIZE,
             ... )
             >>> adapter = OMMXPySCIPOptAdapter(ommx_instance)
@@ -359,12 +359,12 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
     def _set_constraints(self):
         # Handle SOS1 constraints (first-class constraint type)
-        for sos1 in self.instance.sos1_constraints:
-            name = f"sos1_{sos1.id}"
+        for sos1_id, sos1 in self.instance.sos1_constraints.items():
+            name = f"sos1_{sos1_id}"
             vars = [self.varname_map[str(v)] for v in sos1.variables]
             self.model.addConsSOS1(vars, name=name)
 
-        for constraint in self.instance.constraints:
+        for cid, constraint in self.instance.constraints.items():
             # Handle constraint function based on its type
             f = constraint.function
             degree = f.degree()
@@ -382,7 +382,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                     continue  # Skip feasible constant constraint
                 else:
                     raise OMMXPySCIPOptAdapterError(
-                        f"Infeasible constant constraint was found: id {constraint.id}"
+                        f"Infeasible constant constraint was found: id {cid}"
                     )
             elif degree == 1:
                 expr = self._make_linear_expr(f)
@@ -391,7 +391,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             else:
                 raise OMMXPySCIPOptAdapterError(
                     f"Constraints must be either constant, linear or quadratic. "
-                    f"id: {constraint.id}, "
+                    f"id: {cid}, "
                     f"degree: {degree}"
                 )
 
@@ -402,13 +402,13 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             else:
                 raise OMMXPySCIPOptAdapterError(
                     f"Not supported constraint equality: "
-                    f"id: {constraint.id}, equality: {constraint.equality}"
+                    f"id: {cid}, equality: {constraint.equality}"
                 )
 
-            self.model.addCons(constr_expr, name=str(constraint.id))
+            self.model.addCons(constr_expr, name=str(cid))
 
         # Handle indicator constraints
-        for indicator in self.instance.indicator_constraints:
+        for ind_id, indicator in self.instance.indicator_constraints.items():
             f = indicator.function
             degree = f.degree()
             if degree == 0:
@@ -427,14 +427,14 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                 # If infeasible when indicator is ON, add indicator constraint
                 # that forces indicator to be 0
                 binvar = self.varname_map[str(indicator.indicator_variable_id)]
-                self.model.addCons(binvar == 0, name=f"ind_{indicator.id}_forced_off")
+                self.model.addCons(binvar == 0, name=f"ind_{ind_id}_forced_off")
                 continue
             elif degree == 1:
                 expr = self._make_linear_expr(f)
             else:
                 raise OMMXPySCIPOptAdapterError(
                     f"Indicator constraints must be linear. "
-                    f"id: {indicator.id}, degree: {degree}"
+                    f"id: {ind_id}, degree: {degree}"
                 )
 
             binvar = self.varname_map[str(indicator.indicator_variable_id)]
@@ -442,19 +442,19 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             if indicator.equality == Constraint.EQUAL_TO_ZERO:
                 # Decompose f(x) == 0 into two indicator constraints
                 self.model.addConsIndicator(
-                    expr <= 0, binvar=binvar, name=f"ind_{indicator.id}_le"
+                    expr <= 0, binvar=binvar, name=f"ind_{ind_id}_le"
                 )
                 self.model.addConsIndicator(
-                    -expr <= 0, binvar=binvar, name=f"ind_{indicator.id}_ge"
+                    -expr <= 0, binvar=binvar, name=f"ind_{ind_id}_ge"
                 )
             elif indicator.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO:
                 self.model.addConsIndicator(
-                    expr <= 0, binvar=binvar, name=f"ind_{indicator.id}"
+                    expr <= 0, binvar=binvar, name=f"ind_{ind_id}"
                 )
             else:
                 raise OMMXPySCIPOptAdapterError(
                     f"Not supported indicator constraint equality: "
-                    f"id: {indicator.id}, equality: {indicator.equality}"
+                    f"id: {ind_id}, equality: {indicator.equality}"
                 )
 
     def _make_linear_expr(self, f: Function) -> pyscipopt.Expr:

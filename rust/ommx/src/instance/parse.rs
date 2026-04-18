@@ -537,11 +537,11 @@ mod tests {
                 name: Some("p1".to_string()),
                 ..Default::default()
             }],
-            constraints: vec![Constraint::equal_to_zero(
+            constraints: vec![(
                 ConstraintID::from(1),
-                Function::from(linear!(999) + coeff!(1.0)),
+                Constraint::equal_to_zero(Function::from(linear!(999) + coeff!(1.0))),
             )
-            .into()],
+                .into()],
             named_functions: vec![],
             removed_constraints: vec![],
             decision_variable_dependency: HashMap::new(),
@@ -598,11 +598,11 @@ mod tests {
             sense: v1::instance::Sense::Minimize as i32,
             objective: Some(Function::from(linear!(1) + coeff!(1.0)).into()),
             decision_variables: vec![DecisionVariable::binary(VariableID::from(1)).into()],
-            constraints: vec![Constraint::equal_to_zero(
+            constraints: vec![(
                 ConstraintID::from(1),
-                Function::from(linear!(999) + coeff!(1.0)),
+                Constraint::equal_to_zero(Function::from(linear!(999) + coeff!(1.0))),
             )
-            .into()],
+                .into()],
             named_functions: vec![],
             removed_constraints: vec![],
             decision_variable_dependency: HashMap::new(),
@@ -628,15 +628,14 @@ mod tests {
         use std::collections::HashMap;
 
         // Create a v1::ParametricInstance with duplicate constraint IDs in constraints and removed_constraints
-        let constraint = Constraint::equal_to_zero(
-            ConstraintID::from(1),
-            Function::from(linear!(1) + coeff!(1.0)),
-        );
+        let cid = ConstraintID::from(1);
+        let constraint = Constraint::equal_to_zero(Function::from(linear!(1) + coeff!(1.0)));
         let removed_reason = crate::constraint::RemovedReason {
             reason: "test".to_string(),
             parameters: Default::default(),
         };
-        let removed_constraint: v1::RemovedConstraint = (constraint.clone(), removed_reason).into();
+        let removed_constraint: v1::RemovedConstraint =
+            (cid, constraint.clone(), removed_reason).into();
 
         let v1_parametric_instance = v1::ParametricInstance {
             sense: v1::instance::Sense::Minimize as i32,
@@ -647,7 +646,7 @@ mod tests {
                 name: Some("p1".to_string()),
                 ..Default::default()
             }],
-            constraints: vec![constraint.into()],
+            constraints: vec![(cid, constraint).into()],
             named_functions: vec![],
             removed_constraints: vec![removed_constraint],
             decision_variable_dependency: HashMap::new(),
@@ -672,21 +671,20 @@ mod tests {
         use std::collections::HashMap;
 
         // Create a v1::Instance with duplicate constraint IDs in constraints and removed_constraints
-        let constraint = Constraint::equal_to_zero(
-            ConstraintID::from(1),
-            Function::from(linear!(1) + coeff!(1.0)),
-        );
+        let cid = ConstraintID::from(1);
+        let constraint = Constraint::equal_to_zero(Function::from(linear!(1) + coeff!(1.0)));
         let removed_reason = crate::constraint::RemovedReason {
             reason: "test".to_string(),
             parameters: Default::default(),
         };
-        let removed_constraint: v1::RemovedConstraint = (constraint.clone(), removed_reason).into();
+        let removed_constraint: v1::RemovedConstraint =
+            (cid, constraint.clone(), removed_reason).into();
 
         let v1_instance = v1::Instance {
             sense: v1::instance::Sense::Minimize as i32,
             objective: Some(Function::from(linear!(1) + coeff!(1.0)).into()),
             decision_variables: vec![DecisionVariable::binary(VariableID::from(1)).into()],
-            constraints: vec![constraint.into()],
+            constraints: vec![(cid, constraint).into()],
             named_functions: vec![],
             removed_constraints: vec![removed_constraint],
             decision_variable_dependency: HashMap::new(),
@@ -858,14 +856,9 @@ mod tests {
         use std::collections::HashMap;
 
         // Create a v1::ParametricInstance with duplicate constraint IDs within constraints
-        let constraint1 = Constraint::equal_to_zero(
-            ConstraintID::from(1),
-            Function::from(linear!(1) + coeff!(1.0)),
-        );
-        let constraint2 = Constraint::equal_to_zero(
-            ConstraintID::from(1),
-            Function::from(linear!(1) + coeff!(2.0)),
-        ); // Same ID
+        let cid = ConstraintID::from(1);
+        let constraint1 = Constraint::equal_to_zero(Function::from(linear!(1) + coeff!(1.0)));
+        let constraint2 = Constraint::equal_to_zero(Function::from(linear!(1) + coeff!(2.0))); // Same ID
 
         let v1_parametric_instance = v1::ParametricInstance {
             sense: v1::instance::Sense::Minimize as i32,
@@ -876,7 +869,7 @@ mod tests {
                 name: Some("p1".to_string()),
                 ..Default::default()
             }],
-            constraints: vec![constraint1.into(), constraint2.into()],
+            constraints: vec![(cid, constraint1).into(), (cid, constraint2).into()],
             named_functions: vec![],
             removed_constraints: vec![],
             decision_variable_dependency: HashMap::new(),
@@ -901,20 +894,15 @@ mod tests {
         use std::collections::HashMap;
 
         // Create a v1::Instance with duplicate constraint IDs within constraints
-        let constraint1 = Constraint::equal_to_zero(
-            ConstraintID::from(1),
-            Function::from(linear!(1) + coeff!(1.0)),
-        );
-        let constraint2 = Constraint::equal_to_zero(
-            ConstraintID::from(1),
-            Function::from(linear!(1) + coeff!(2.0)),
-        ); // Same ID
+        let cid = ConstraintID::from(1);
+        let constraint1 = Constraint::equal_to_zero(Function::from(linear!(1) + coeff!(1.0)));
+        let constraint2 = Constraint::equal_to_zero(Function::from(linear!(1) + coeff!(2.0))); // Same ID
 
         let v1_instance = v1::Instance {
             sense: v1::instance::Sense::Minimize as i32,
             objective: Some(Function::from(linear!(1) + coeff!(1.0)).into()),
             decision_variables: vec![DecisionVariable::binary(VariableID::from(1)).into()],
-            constraints: vec![constraint1.into(), constraint2.into()],
+            constraints: vec![(cid, constraint1).into(), (cid, constraint2).into()],
             named_functions: vec![],
             removed_constraints: vec![],
             decision_variable_dependency: HashMap::new(),

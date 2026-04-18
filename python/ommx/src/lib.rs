@@ -151,12 +151,6 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(set_default_atol, m)?)?;
     m.add_function(wrap_pyfunction!(get_default_atol, m)?)?;
 
-    // Constraint ID management
-    m.add_function(wrap_pyfunction!(next_constraint_id, m)?)?;
-    m.add_function(wrap_pyfunction!(set_constraint_id_counter, m)?)?;
-    m.add_function(wrap_pyfunction!(update_constraint_id_counter, m)?)?;
-    m.add_function(wrap_pyfunction!(get_constraint_id_counter, m)?)?;
-
     Ok(())
 }
 

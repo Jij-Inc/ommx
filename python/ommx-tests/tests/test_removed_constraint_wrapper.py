@@ -9,7 +9,6 @@ def test_removed_constraint_creation():
     linear = rust.Linear.single_term(1, 1.0)
     function = rust.Function.from_linear(linear)
     constraint = rust.Constraint(
-        id=1,
         function=function,
         equality=rust.Equality.EqualToZero,
         name="test_constraint",
@@ -22,7 +21,6 @@ def test_removed_constraint_creation():
         removed_reason_parameters={"method": "penalty", "weight": "1000"},
     )
 
-    assert removed_constraint.id == 1
     assert removed_constraint.removed_reason == "Infeasible"
     assert removed_constraint.removed_reason_parameters == {
         "method": "penalty",
@@ -37,7 +35,6 @@ def test_removed_constraint_no_parameters():
     linear = rust.Linear({2: 2.0}, -5.0)
     function = rust.Function.from_linear(linear)
     constraint = rust.Constraint(
-        id=2,
         function=function,
         equality=rust.Equality.LessThanOrEqualToZero,
         name="leq_constraint",
@@ -48,7 +45,6 @@ def test_removed_constraint_no_parameters():
         constraint=constraint, removed_reason="Redundant"
     )
 
-    assert removed_constraint.id == 2
     assert removed_constraint.removed_reason == "Redundant"
     assert removed_constraint.removed_reason_parameters == {}
     assert removed_constraint.name == "leq_constraint"
@@ -60,8 +56,7 @@ def test_removed_constraint_access_original_constraint():
     terms = {(1, 1): 1.0, (2,): 1.0}  # x1^2 + x2
     polynomial = rust.Polynomial(terms)
     function = rust.Function.from_polynomial(polynomial)
-    original_constraint = rust.Constraint(
-        id=3, function=function, equality=rust.Equality.EqualToZero, name="original"
+    original_constraint = rust.Constraint( function=function, equality=rust.Equality.EqualToZero, name="original"
     )
 
     # Create removed constraint
@@ -74,7 +69,6 @@ def test_removed_constraint_access_original_constraint():
     # Access the original constraint
     retrieved_constraint = removed_constraint.constraint
     assert isinstance(retrieved_constraint, rust.Constraint)
-    assert retrieved_constraint.id == 3
     assert retrieved_constraint.name == "original"
     assert retrieved_constraint.equality == 1  # EqualToZero
 
@@ -83,8 +77,7 @@ def test_removed_constraint_repr():
     """Test RemovedConstraint string representation."""
     linear = rust.Linear.constant(5.0)
     function = rust.Function.from_linear(linear)
-    constraint = rust.Constraint(
-        id=1, function=function, equality=rust.Equality.EqualToZero, name="repr_test"
+    constraint = rust.Constraint( function=function, equality=rust.Equality.EqualToZero, name="repr_test"
     )
 
     removed_constraint = rust.RemovedConstraint(
@@ -100,8 +93,7 @@ def test_removed_constraint_empty_name():
     """Test RemovedConstraint with constraint that has no name."""
     linear = rust.Linear.single_term(1, 1.0)
     function = rust.Function.from_linear(linear)
-    constraint = rust.Constraint(
-        id=1, function=function, equality=rust.Equality.EqualToZero, name=None
+    constraint = rust.Constraint( function=function, equality=rust.Equality.EqualToZero, name=None
     )
 
     removed_constraint = rust.RemovedConstraint(
@@ -119,7 +111,6 @@ def test_removed_constraint_complex_parameters():
     linear = rust.Linear({1: 1.0, 2: -1.0}, 0.0)
     function = rust.Function.from_linear(linear)
     constraint = rust.Constraint(
-        id=5,
         function=function,
         equality=rust.Equality.LessThanOrEqualToZero,
         name="complex_test",
@@ -147,7 +138,6 @@ def test_removed_constraint_getter_properties():
     linear = rust.Linear({3: 0.5}, 2.0)
     function = rust.Function.from_linear(linear)
     constraint = rust.Constraint(
-        id=10,
         function=function,
         equality=rust.Equality.LessThanOrEqualToZero,
         name="getter_test",
@@ -161,14 +151,12 @@ def test_removed_constraint_getter_properties():
     )
 
     # Test all properties
-    assert removed_constraint.id == 10
     assert removed_constraint.name == "getter_test"
     assert removed_constraint.removed_reason == "Property test"
     assert removed_constraint.removed_reason_parameters == {"key": "value"}
 
     # Test that the constraint property returns the right type and values
     retrieved_constraint = removed_constraint.constraint
-    assert retrieved_constraint.id == 10
     assert retrieved_constraint.name == "getter_test"
     assert retrieved_constraint.equality == 2
     assert retrieved_constraint.subscripts == [1, 2, 3]

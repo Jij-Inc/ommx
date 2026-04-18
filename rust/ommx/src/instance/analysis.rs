@@ -313,14 +313,14 @@ impl Instance {
         );
 
         let mut used_in_constraints: BTreeMap<ConstraintID, VariableIDSet> = BTreeMap::default();
-        for constraint in self.constraints().values() {
+        for (&cid, constraint) in self.constraints().iter() {
             let required_ids: VariableIDSet =
                 constraint.function().required_ids().into_iter().collect();
             debug_assert!(
                 required_ids.is_subset(&all),
                 "Constraints use variables not in the instance"
             );
-            used_in_constraints.insert(constraint.id, required_ids);
+            used_in_constraints.insert(cid, required_ids);
         }
 
         let mut used = used_in_objective.clone();
@@ -561,15 +561,11 @@ mod tests {
         let mut constraints = BTreeMap::new();
         constraints.insert(
             ConstraintID::from(0),
-            Constraint::equal_to_zero(
-                ConstraintID::from(0),
-                (linear!(1) + linear!(2) + coeff!(-1.0)).into(),
-            ),
+            Constraint::equal_to_zero((linear!(1) + linear!(2) + coeff!(-1.0)).into()),
         );
         constraints.insert(
             ConstraintID::from(1),
             Constraint::equal_to_zero(
-                ConstraintID::from(1),
                 (linear!(3) + coeff!(-1.0) * linear!(0) + coeff!(-1.0) * linear!(1)).into(),
             ),
         );

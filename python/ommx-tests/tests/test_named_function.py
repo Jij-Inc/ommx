@@ -34,7 +34,7 @@ def _make_instance_with_named_functions():
     instance = Instance.from_components(
         decision_variables=x,
         objective=objective,
-        constraints=[Function(sum(x)) <= 2],
+        constraints={0: Function(sum(x)) <= 2},
         sense=Instance.MAXIMIZE,
         named_functions=[nf0, nf1],
     )
@@ -239,7 +239,7 @@ class TestInstanceNamedFunctions:
         instance = Instance.from_components(
             decision_variables=x,
             objective=x[0] + x[1],
-            constraints=[],
+            constraints={},
             sense=Instance.MINIMIZE,
         )
         assert instance.named_functions == []

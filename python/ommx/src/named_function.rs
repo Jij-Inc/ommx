@@ -1,4 +1,4 @@
-use crate::{next_constraint_id, Constraint, EvaluatedNamedFunction, Function, State};
+use crate::{Constraint, EvaluatedNamedFunction, Function, State};
 use ommx::{Evaluate, NamedFunctionID};
 use pyo3::{prelude::*, types::PyBytes, Bound, PyAny};
 use std::collections::HashMap;
@@ -182,9 +182,7 @@ impl NamedFunction {
     pub fn py_eq(&self, other: Function) -> Constraint {
         let mut function = -other.0;
         function += &self.0.function;
-        let id = next_constraint_id();
         Constraint(ommx::Constraint {
-            id: ommx::ConstraintID::from(id),
             equality: ommx::Equality::EqualToZero,
             metadata: ommx::ConstraintMetadata::default(),
             stage: ommx::CreatedData { function },
@@ -198,9 +196,7 @@ impl NamedFunction {
     pub fn py_le(&self, other: Function) -> Constraint {
         let mut function = -other.0;
         function += &self.0.function;
-        let id = next_constraint_id();
         Constraint(ommx::Constraint {
-            id: ommx::ConstraintID::from(id),
             equality: ommx::Equality::LessThanOrEqualToZero,
             metadata: ommx::ConstraintMetadata::default(),
             stage: ommx::CreatedData { function },
@@ -213,9 +209,7 @@ impl NamedFunction {
     #[pyo3(name = "__ge__")]
     pub fn py_ge(&self, other: Function) -> Constraint {
         let function = other.0 - &self.0.function;
-        let id = next_constraint_id();
         Constraint(ommx::Constraint {
-            id: ommx::ConstraintID::from(id),
             equality: ommx::Equality::LessThanOrEqualToZero,
             metadata: ommx::ConstraintMetadata::default(),
             stage: ommx::CreatedData { function },

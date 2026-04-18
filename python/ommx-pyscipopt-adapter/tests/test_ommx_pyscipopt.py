@@ -9,7 +9,7 @@ def test_solution_optimality():
     ommx_instance = Instance.from_components(
         decision_variables=[x, y],
         objective=x + y,
-        constraints=[],
+        constraints={},
         sense=Instance.MAXIMIZE,
     )
 

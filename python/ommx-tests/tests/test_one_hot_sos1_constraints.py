@@ -9,19 +9,19 @@ def test_one_hot_constraint_from_components():
     x = [DecisionVariable.binary(i) for i in range(1, 4)]
     objective = sum(x)
 
-    oh = OneHotConstraint(variables=[1, 2, 3], id=10)
+    oh = OneHotConstraint(variables=[1, 2, 3])
 
     instance = Instance.from_components(
         decision_variables=x,
         objective=objective,
-        constraints=[],
-        one_hot_constraints=[oh],
+        constraints={},
+        one_hot_constraints={10: oh},
         sense=Instance.MINIMIZE,
     )
 
     assert len(instance.one_hot_constraints) == 1
-    assert instance.one_hot_constraints[0].id == 10
-    assert instance.one_hot_constraints[0].variables == [1, 2, 3]
+    assert 10 in instance.one_hot_constraints
+    assert instance.one_hot_constraints[10].variables == [1, 2, 3]
 
 
 def test_sos1_constraint_from_components():
@@ -29,19 +29,19 @@ def test_sos1_constraint_from_components():
     x = [DecisionVariable.continuous(i, lower=0, upper=10) for i in range(1, 4)]
     objective = sum(x)
 
-    sos1 = Sos1Constraint(variables=[1, 2, 3], id=20)
+    sos1 = Sos1Constraint(variables=[1, 2, 3])
 
     instance = Instance.from_components(
         decision_variables=x,
         objective=objective,
-        constraints=[],
-        sos1_constraints=[sos1],
+        constraints={},
+        sos1_constraints={20: sos1},
         sense=Instance.MINIMIZE,
     )
 
     assert len(instance.sos1_constraints) == 1
-    assert instance.sos1_constraints[0].id == 20
-    assert instance.sos1_constraints[0].variables == [1, 2, 3]
+    assert 20 in instance.sos1_constraints
+    assert instance.sos1_constraints[20].variables == [1, 2, 3]
 
 
 def test_one_hot_variable_not_defined():
@@ -49,14 +49,14 @@ def test_one_hot_variable_not_defined():
     x = [DecisionVariable.binary(1)]
     objective = x[0]
 
-    oh = OneHotConstraint(variables=[1, 999], id=10)  # 999 doesn't exist
+    oh = OneHotConstraint(variables=[1, 999])  # 999 doesn't exist
 
     with pytest.raises(RuntimeError):
         Instance.from_components(
             decision_variables=x,
             objective=objective,
-            constraints=[],
-            one_hot_constraints=[oh],
+            constraints={},
+            one_hot_constraints={10: oh},
             sense=Instance.MINIMIZE,
         )
 
@@ -66,14 +66,14 @@ def test_sos1_variable_not_defined():
     x = [DecisionVariable.continuous(1, lower=0, upper=10)]
     objective = x[0]
 
-    sos1 = Sos1Constraint(variables=[1, 999], id=20)  # 999 doesn't exist
+    sos1 = Sos1Constraint(variables=[1, 999])  # 999 doesn't exist
 
     with pytest.raises(RuntimeError):
         Instance.from_components(
             decision_variables=x,
             objective=objective,
-            constraints=[],
-            sos1_constraints=[sos1],
+            constraints={},
+            sos1_constraints={20: sos1},
             sense=Instance.MINIMIZE,
         )
 
@@ -86,14 +86,14 @@ def test_one_hot_variable_not_binary():
     ]
     objective = sum(x)
 
-    oh = OneHotConstraint(variables=[1, 2], id=10)
+    oh = OneHotConstraint(variables=[1, 2])
 
     with pytest.raises(RuntimeError, match="One-hot variable.*must be binary"):
         Instance.from_components(
             decision_variables=x,
             objective=objective,
-            constraints=[],
-            one_hot_constraints=[oh],
+            constraints={},
+            one_hot_constraints={10: oh},
             sense=Instance.MINIMIZE,
         )
 
@@ -106,8 +106,8 @@ def test_serialize_not_yet_supported():
     instance = Instance.from_components(
         decision_variables=x,
         objective=objective,
-        constraints=[],
-        one_hot_constraints=[OneHotConstraint(variables=[1, 2, 3], id=10)],
+        constraints={},
+        one_hot_constraints={10: OneHotConstraint(variables=[1, 2, 3])},
         sense=Instance.MINIMIZE,
     )
 
@@ -120,15 +120,15 @@ def test_both_one_hot_and_sos1():
     x = [DecisionVariable.binary(i) for i in range(1, 6)]
     objective = sum(x)
 
-    oh = OneHotConstraint(variables=[1, 2, 3], id=10)
-    sos1 = Sos1Constraint(variables=[3, 4, 5], id=20)
+    oh = OneHotConstraint(variables=[1, 2, 3])
+    sos1 = Sos1Constraint(variables=[3, 4, 5])
 
     instance = Instance.from_components(
         decision_variables=x,
         objective=objective,
-        constraints=[],
-        one_hot_constraints=[oh],
-        sos1_constraints=[sos1],
+        constraints={},
+        one_hot_constraints={10: oh},
+        sos1_constraints={20: sos1},
         sense=Instance.MINIMIZE,
     )
 
@@ -143,13 +143,13 @@ def test_evaluate_with_one_hot_feasible():
     x = [DecisionVariable.binary(i) for i in range(1, 4)]
     objective = sum(x)
 
-    oh = OneHotConstraint(variables=[1, 2, 3], id=10)
+    oh = OneHotConstraint(variables=[1, 2, 3])
 
     instance = Instance.from_components(
         decision_variables=x,
         objective=objective,
-        constraints=[],
-        one_hot_constraints=[oh],
+        constraints={},
+        one_hot_constraints={10: oh},
         sense=Instance.MINIMIZE,
     )
 
@@ -166,13 +166,13 @@ def test_evaluate_with_one_hot_infeasible():
     x = [DecisionVariable.binary(i) for i in range(1, 4)]
     objective = sum(x)
 
-    oh = OneHotConstraint(variables=[1, 2, 3], id=10)
+    oh = OneHotConstraint(variables=[1, 2, 3])
 
     instance = Instance.from_components(
         decision_variables=x,
         objective=objective,
-        constraints=[],
-        one_hot_constraints=[oh],
+        constraints={},
+        one_hot_constraints={10: oh},
         sense=Instance.MINIMIZE,
     )
 
@@ -189,13 +189,13 @@ def test_evaluate_with_sos1_feasible():
     x = [DecisionVariable.continuous(i, lower=0, upper=10) for i in range(1, 4)]
     objective = sum(x)
 
-    sos1 = Sos1Constraint(variables=[1, 2, 3], id=20)
+    sos1 = Sos1Constraint(variables=[1, 2, 3])
 
     instance = Instance.from_components(
         decision_variables=x,
         objective=objective,
-        constraints=[],
-        sos1_constraints=[sos1],
+        constraints={},
+        sos1_constraints={20: sos1},
         sense=Instance.MINIMIZE,
     )
 
@@ -217,13 +217,13 @@ def test_evaluate_with_sos1_infeasible():
     x = [DecisionVariable.continuous(i, lower=0, upper=10) for i in range(1, 4)]
     objective = sum(x)
 
-    sos1 = Sos1Constraint(variables=[1, 2, 3], id=20)
+    sos1 = Sos1Constraint(variables=[1, 2, 3])
 
     instance = Instance.from_components(
         decision_variables=x,
         objective=objective,
-        constraints=[],
-        sos1_constraints=[sos1],
+        constraints={},
+        sos1_constraints={20: sos1},
         sense=Instance.MINIMIZE,
     )
 

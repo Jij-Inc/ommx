@@ -63,7 +63,7 @@ def test_constraint_print_equality(snapshot):
     """Test Constraint print output with equality constraint."""
     x1 = DecisionVariable.binary(1)
     x2 = DecisionVariable.binary(2)
-    constraint = (x1 + 2 * x2 == 5).set_id(1).add_name("equality_constraint")
+    constraint = (x1 + 2 * x2 == 5).add_name("equality_constraint")
     assert str(constraint) == snapshot
 
 
@@ -71,7 +71,7 @@ def test_constraint_print_less_equal(snapshot):
     """Test Constraint print output with less-than-or-equal constraint."""
     x1 = DecisionVariable.binary(1)
     x2 = DecisionVariable.binary(2)
-    constraint = (x1 + 2 * x2 <= 10).set_id(2).add_name("leq_constraint")
+    constraint = (x1 + 2 * x2 <= 10).add_name("leq_constraint")
     assert str(constraint) == snapshot
 
 
@@ -80,7 +80,7 @@ def test_constraint_print_greater_equal(snapshot):
     x1 = DecisionVariable.binary(1)
     x2 = DecisionVariable.binary(2)
     x3 = DecisionVariable.binary(3)
-    constraint = (x1 + x2 + x3 >= 1).set_id(3).add_name("geq_constraint")
+    constraint = (x1 + x2 + x3 >= 1).add_name("geq_constraint")
     assert str(constraint) == snapshot
 
 
@@ -90,10 +90,10 @@ def test_decision_variable_analysis_print(snapshot):
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0] + x[1] + x[2],
-        constraints=[
-            (x[1] + x[2] == 1).set_id(0),
-            (x[3] == x[0] + x[1]).set_id(1),  # x[3] becomes dependent
-        ],
+        constraints={
+            0: x[1] + x[2] == 1,
+            1: x[3] == x[0] + x[1],  # x[3] becomes dependent
+        },
         sense=Instance.MAXIMIZE,
     )
 
@@ -110,7 +110,7 @@ def test_bound_print(snapshot):
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0],
-        constraints=[],
+        constraints={},
         sense=Instance.MAXIMIZE,
     )
     analysis = instance.decision_variable_analysis()
@@ -129,10 +129,7 @@ def test_instance_stats_print(snapshot):
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0] + x[1],
-        constraints=[
-            (x[0] + x[1] <= 1).set_id(0),
-            (x[1] + x[2] >= 1).set_id(1),
-        ],
+        constraints={0: x[0] + x[1] <= 1, 1: x[1] + x[2] >= 1},
         sense=Instance.MINIMIZE,
     )
     stats = instance.stats()
@@ -145,7 +142,7 @@ def test_decision_variable_analysis_to_dict(snapshot):
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0] + x[1],
-        constraints=[(x[1] + x[2] == 1).set_id(0)],
+        constraints={0: x[1] + x[2] == 1},
         sense=Instance.MAXIMIZE,
     )
     analysis = instance.decision_variable_analysis()

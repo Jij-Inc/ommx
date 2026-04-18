@@ -259,74 +259,84 @@ impl ToPandasEntry for ommx::DecisionVariable {
     }
 }
 
-impl ToPandasEntry for ommx::Constraint {
+impl ToPandasEntry for (ommx::ConstraintID, &ommx::Constraint) {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let (id, c) = self;
         let dict = PyDict::new(py);
-        dict.set_item("id", self.id.into_inner())?;
-        set_equality(&dict, self.equality)?;
-        set_function_type(&dict, &self.stage.function)?;
-        set_used_ids(&dict, &self.stage.function.required_ids())?;
+        dict.set_item("id", id.into_inner())?;
+        set_equality(&dict, c.equality)?;
+        set_function_type(&dict, &c.stage.function)?;
+        set_used_ids(&dict, &c.stage.function.required_ids())?;
         set_metadata(
             &dict,
-            self.metadata.name.as_deref(),
-            &self.metadata.subscripts,
-            self.metadata.description.as_deref(),
+            c.metadata.name.as_deref(),
+            &c.metadata.subscripts,
+            c.metadata.description.as_deref(),
         )?;
         Ok(dict)
     }
 }
 
-impl ToPandasEntry for ommx::IndicatorConstraint {
+impl ToPandasEntry for (ommx::IndicatorConstraintID, &ommx::IndicatorConstraint) {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let (id, c) = self;
         let dict = PyDict::new(py);
-        dict.set_item("id", self.id.into_inner())?;
-        dict.set_item(
-            "indicator_variable_id",
-            self.indicator_variable.into_inner(),
-        )?;
-        set_equality(&dict, self.equality)?;
-        set_function_type(&dict, &self.stage.function)?;
+        dict.set_item("id", id.into_inner())?;
+        dict.set_item("indicator_variable_id", c.indicator_variable.into_inner())?;
+        set_equality(&dict, c.equality)?;
+        set_function_type(&dict, &c.stage.function)?;
         // Include indicator_variable in used_ids
-        let mut used_ids = self.stage.function.required_ids();
-        used_ids.insert(self.indicator_variable);
+        let mut used_ids = c.stage.function.required_ids();
+        used_ids.insert(c.indicator_variable);
         set_used_ids(&dict, &used_ids)?;
         set_metadata(
             &dict,
-            self.metadata.name.as_deref(),
-            &self.metadata.subscripts,
-            self.metadata.description.as_deref(),
+            c.metadata.name.as_deref(),
+            &c.metadata.subscripts,
+            c.metadata.description.as_deref(),
         )?;
         Ok(dict)
     }
 }
 
-impl ToPandasEntry for ommx::EvaluatedIndicatorConstraint {
+impl ToPandasEntry
+    for (
+        ommx::IndicatorConstraintID,
+        &ommx::EvaluatedIndicatorConstraint,
+    )
+{
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let (id, c) = self;
         let dict = PyDict::new(py);
-        dict.set_item("id", self.id.into_inner())?;
-        dict.set_item(
-            "indicator_variable_id",
-            self.indicator_variable.into_inner(),
-        )?;
-        set_equality(&dict, self.equality)?;
-        dict.set_item("value", self.stage.evaluated_value)?;
-        dict.set_item("indicator_active", self.stage.indicator_active)?;
-        set_used_ids(&dict, &self.stage.used_decision_variable_ids)?;
+        dict.set_item("id", id.into_inner())?;
+        dict.set_item("indicator_variable_id", c.indicator_variable.into_inner())?;
+        set_equality(&dict, c.equality)?;
+        dict.set_item("value", c.stage.evaluated_value)?;
+        dict.set_item("indicator_active", c.stage.indicator_active)?;
+        set_used_ids(&dict, &c.stage.used_decision_variable_ids)?;
         set_metadata(
             &dict,
-            self.metadata.name.as_deref(),
-            &self.metadata.subscripts,
-            self.metadata.description.as_deref(),
+            c.metadata.name.as_deref(),
+            &c.metadata.subscripts,
+            c.metadata.description.as_deref(),
         )?;
         Ok(dict)
     }
 }
 
-impl<'a> ToPandasEntry for WithSampleIds<'a, ommx::SampledIndicatorConstraint> {
+impl<'a> ToPandasEntry
+    for WithSampleIds<
+        'a,
+        (
+            ommx::IndicatorConstraintID,
+            &'a ommx::SampledIndicatorConstraint,
+        ),
+    >
+{
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let ic = self.item;
+        let (id, ic) = &self.item;
         let dict = PyDict::new(py);
-        dict.set_item("id", ic.id.into_inner())?;
+        dict.set_item("id", id.into_inner())?;
         dict.set_item("indicator_variable_id", ic.indicator_variable.into_inner())?;
         set_equality(&dict, ic.equality)?;
         set_used_ids(&dict, &ic.stage.used_decision_variable_ids)?;
@@ -351,11 +361,12 @@ impl<'a> ToPandasEntry for WithSampleIds<'a, ommx::SampledIndicatorConstraint> {
     }
 }
 
-impl ToPandasEntry for (ommx::Constraint, ommx::RemovedReason) {
+impl ToPandasEntry for (ommx::ConstraintID, &(ommx::Constraint, ommx::RemovedReason)) {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let (constraint, reason) = self;
+        let (id, inner) = self;
+        let (constraint, reason) = inner;
         let dict = PyDict::new(py);
-        dict.set_item("id", constraint.id.into_inner())?;
+        dict.set_item("id", id.into_inner())?;
         set_equality(&dict, constraint.equality)?;
         set_function_type(&dict, &constraint.stage.function)?;
         set_used_ids(&dict, &constraint.stage.function.required_ids())?;
@@ -433,21 +444,22 @@ impl ToPandasEntry for ommx::EvaluatedDecisionVariable {
     }
 }
 
-impl ToPandasEntry for ommx::EvaluatedConstraint {
+impl ToPandasEntry for (ommx::ConstraintID, &ommx::EvaluatedConstraint) {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let (id, c) = self;
         let na = get_na(py)?;
         let dict = PyDict::new(py);
-        dict.set_item("id", self.id.into_inner())?;
-        set_equality(&dict, self.equality)?;
-        dict.set_item("value", self.stage.evaluated_value)?;
-        set_used_ids(&dict, &self.stage.used_decision_variable_ids)?;
+        dict.set_item("id", id.into_inner())?;
+        set_equality(&dict, c.equality)?;
+        dict.set_item("value", c.stage.evaluated_value)?;
+        set_used_ids(&dict, &c.stage.used_decision_variable_ids)?;
         set_metadata(
             &dict,
-            self.metadata.name.as_deref(),
-            &self.metadata.subscripts,
-            self.metadata.description.as_deref(),
+            c.metadata.name.as_deref(),
+            &c.metadata.subscripts,
+            c.metadata.description.as_deref(),
         )?;
-        match self.stage.dual_variable {
+        match c.stage.dual_variable {
             Some(v) => dict.set_item("dual_variable", v)?,
             None => dict.set_item("dual_variable", &na)?,
         }
@@ -497,11 +509,11 @@ impl ToPandasEntry for ommx::EvaluatedNamedFunction {
 /// Wrapper that pairs a sampled item with the global sorted sample IDs,
 /// so `ToPandasEntry` can generate per-sample dynamic columns.
 pub struct WithSampleIds<'a, T> {
-    pub item: &'a T,
+    pub item: T,
     pub sample_ids: &'a [ommx::SampleID],
 }
 
-impl<'a> ToPandasEntry for WithSampleIds<'a, ommx::SampledDecisionVariable> {
+impl<'a> ToPandasEntry for WithSampleIds<'a, &'a ommx::SampledDecisionVariable> {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let dv = self.item;
         let dict = PyDict::new(py);
@@ -523,11 +535,11 @@ impl<'a> ToPandasEntry for WithSampleIds<'a, ommx::SampledDecisionVariable> {
     }
 }
 
-impl<'a> ToPandasEntry for WithSampleIds<'a, ommx::SampledConstraint> {
+impl<'a> ToPandasEntry for WithSampleIds<'a, (ommx::ConstraintID, &'a ommx::SampledConstraint)> {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let sc = self.item;
+        let (id, sc) = &self.item;
         let dict = PyDict::new(py);
-        dict.set_item("id", sc.id.into_inner())?;
+        dict.set_item("id", id.into_inner())?;
         set_equality(&dict, sc.equality)?;
         set_used_ids(&dict, &sc.stage.used_decision_variable_ids)?;
         set_metadata(
@@ -546,7 +558,7 @@ impl<'a> ToPandasEntry for WithSampleIds<'a, ommx::SampledConstraint> {
     }
 }
 
-impl<'a> ToPandasEntry for WithSampleIds<'a, ommx::SampledNamedFunction> {
+impl<'a> ToPandasEntry for WithSampleIds<'a, &'a ommx::SampledNamedFunction> {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let nf = self.item;
         let dict = PyDict::new(py);

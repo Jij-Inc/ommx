@@ -15,8 +15,8 @@ def test_indicator_constraint_le():
     instance = Instance.from_components(
         decision_variables=[b, x],
         objective=x,
-        constraints=[],
-        indicator_constraints=[ic],
+        constraints={},
+        indicator_constraints={0: ic},
         sense=Instance.MAXIMIZE,
     )
 
@@ -37,8 +37,8 @@ def test_indicator_constraint_forced_on():
     instance = Instance.from_components(
         decision_variables=[b, x],
         objective=x,
-        constraints=[b >= 1],  # Force b = 1
-        indicator_constraints=[ic],
+        constraints={0: b >= 1},  # Force b = 1
+        indicator_constraints={0: ic},
         sense=Instance.MAXIMIZE,
     )
 
@@ -54,13 +54,13 @@ def test_indicator_constraint_eq():
     x = DecisionVariable.continuous(1, lower=0, upper=10)
 
     # b = 1 → x == 3 (i.e., x - 3 == 0)
-    ic = (x == 3).with_indicator(b).set_id(100)
+    ic = (x == 3).with_indicator(b)
 
     instance = Instance.from_components(
         decision_variables=[b, x],
         objective=x,
-        constraints=[b >= 1],  # Force b = 1
-        indicator_constraints=[ic],
+        constraints={0: b >= 1},  # Force b = 1
+        indicator_constraints={0: ic},
         sense=Instance.MAXIMIZE,
     )
 
@@ -77,17 +77,16 @@ def test_indicator_constraint_multiple():
     x = DecisionVariable.continuous(2, lower=0, upper=100)
 
     # b1 = 1 → x <= 50
-    ic1 = (x <= 50).with_indicator(b1).set_id(10)
+    ic1 = (x <= 50).with_indicator(b1)
     # b2 = 1 → x <= 30
-    ic2 = (x <= 30).with_indicator(b2).set_id(11)
+    ic2 = (x <= 30).with_indicator(b2)
 
     instance = Instance.from_components(
         decision_variables=[b1, b2, x],
         objective=x,
-        constraints=[
-            (b1 + b2 >= 1).set_id(0),  # At least one indicator must be on
-        ],
-        indicator_constraints=[ic1, ic2],
+        # At least one indicator must be on
+        constraints={0: b1 + b2 >= 1},
+        indicator_constraints={10: ic1, 11: ic2},
         sense=Instance.MAXIMIZE,
     )
 

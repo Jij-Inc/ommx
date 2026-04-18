@@ -72,8 +72,8 @@ class OMMXInstanceBuilder:
 
         return self.as_ommx_function(objective)
 
-    def constraints(self) -> list[Constraint]:
-        constraints = []
+    def constraints(self) -> dict[int, Constraint]:
+        constraints: dict[int, Constraint] = {}
 
         for constr in self.model.constrs:
             id = constr.idx
@@ -82,14 +82,12 @@ class OMMXInstanceBuilder:
 
             if lin_expr.sense == "=":
                 constraint = Constraint(
-                    id=id,
                     function=self.as_ommx_function(lin_expr),
                     equality=Constraint.EQUAL_TO_ZERO,
                     name=name,
                 )
             elif lin_expr.sense == "<":
                 constraint = Constraint(
-                    id=id,
                     function=self.as_ommx_function(lin_expr),
                     equality=Constraint.LESS_THAN_OR_EQUAL_TO_ZERO,
                     name=name,
@@ -98,7 +96,6 @@ class OMMXInstanceBuilder:
                 # `ommx.v1.Constraint` does not support `GREATER_THAN_OR_EQUAL_TO_ZERO`.
                 # So multiply the linear expression by -1.
                 constraint = Constraint(
-                    id=id,
                     function=self.as_ommx_function(-lin_expr),
                     equality=Constraint.LESS_THAN_OR_EQUAL_TO_ZERO,
                     name=name,
@@ -109,7 +106,7 @@ class OMMXInstanceBuilder:
                     f"name: {constr.name}, sense: {lin_expr.sense}"
                 )
 
-            constraints.append(constraint)
+            constraints[id] = constraint
 
         return constraints
 

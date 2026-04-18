@@ -42,10 +42,8 @@ fn main() -> Result<()> {
     );
 
     let objective = Function::from(linear!(1) + linear!(2));
-    let constraint = Constraint::less_than_or_equal_to_zero(
-        ConstraintID::from(1),
-        (linear!(1) + linear!(2) + coeff!(-10.0)).into(),
-    );
+    let constraint =
+        Constraint::less_than_or_equal_to_zero((linear!(1) + linear!(2) + coeff!(-10.0)).into());
 
     let mut constraints = BTreeMap::new();
     constraints.insert(ConstraintID::from(1), constraint);
