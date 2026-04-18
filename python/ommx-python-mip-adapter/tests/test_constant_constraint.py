@@ -12,8 +12,11 @@ def test_constant_constraint_feasible():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={0: # 1 >= 0 is always true
-            Linear(terms={}, constant=1) >= 0, 1: x <= 1},
+        constraints={
+            0:  # 1 >= 0 is always true
+            Linear(terms={}, constant=1) >= 0,
+            1: x <= 1,
+        },
         sense=Instance.MAXIMIZE,
     )
     solution = OMMXPythonMIPAdapter.solve(instance)
@@ -32,8 +35,11 @@ def test_constant_constraint_infeasible():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={0: # -1 >= 0 is always false
-            Linear(terms={}, constant=-1) >= 0, 1: x <= 1},
+        constraints={
+            0:  # -1 >= 0 is always false
+            Linear(terms={}, constant=-1) >= 0,
+            1: x <= 1,
+        },
         sense=Instance.MAXIMIZE,
     )
     with pytest.raises(InfeasibleDetected):

@@ -63,10 +63,12 @@ def test_output():
     ]
 
     objective = sum(obj_coeff[i] * x[i] for i in range(6)) + 10
-    constraints={0: (sum(constr_coeffs[c][i] * x[i] for i in range(6)) <= 500).add_name(  # type: ignore[reportAttributeAccessIssue]
+    constraints = {
+        0: (sum(constr_coeffs[c][i] * x[i] for i in range(6)) <= 500).add_name(  # type: ignore[reportAttributeAccessIssue]
             f"constr{c}"
         )
-        for c in range(5)}
+        for c in range(5)
+    }
 
     # Step 4: Create the Instance
     instance = Instance.from_components(

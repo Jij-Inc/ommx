@@ -56,7 +56,8 @@ def test_removed_constraint_access_original_constraint():
     terms = {(1, 1): 1.0, (2,): 1.0}  # x1^2 + x2
     polynomial = rust.Polynomial(terms)
     function = rust.Function.from_polynomial(polynomial)
-    original_constraint = rust.Constraint( function=function, equality=rust.Equality.EqualToZero, name="original"
+    original_constraint = rust.Constraint(
+        function=function, equality=rust.Equality.EqualToZero, name="original"
     )
 
     # Create removed constraint
@@ -77,7 +78,8 @@ def test_removed_constraint_repr():
     """Test RemovedConstraint string representation."""
     linear = rust.Linear.constant(5.0)
     function = rust.Function.from_linear(linear)
-    constraint = rust.Constraint( function=function, equality=rust.Equality.EqualToZero, name="repr_test"
+    constraint = rust.Constraint(
+        function=function, equality=rust.Equality.EqualToZero, name="repr_test"
     )
 
     removed_constraint = rust.RemovedConstraint(
@@ -93,7 +95,8 @@ def test_removed_constraint_empty_name():
     """Test RemovedConstraint with constraint that has no name."""
     linear = rust.Linear.single_term(1, 1.0)
     function = rust.Function.from_linear(linear)
-    constraint = rust.Constraint( function=function, equality=rust.Equality.EqualToZero, name=None
+    constraint = rust.Constraint(
+        function=function, equality=rust.Equality.EqualToZero, name=None
     )
 
     removed_constraint = rust.RemovedConstraint(

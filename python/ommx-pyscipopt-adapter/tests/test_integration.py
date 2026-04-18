@@ -187,7 +187,8 @@ def test_integration_quadratic_constraint():
         sense=Instance.MINIMIZE,
         decision_variables=[x1, x2],
         objective=-x1 - x2,
-        constraints={0: Constraint(
+        constraints={
+            0: Constraint(
                 function=Quadratic(
                     columns=[1, 2],
                     rows=[1, 2],
@@ -195,7 +196,8 @@ def test_integration_quadratic_constraint():
                     linear=Linear(terms={}, constant=-100),
                 ),
                 equality=Constraint.LESS_THAN_OR_EQUAL_TO_ZERO,
-            )},
+            )
+        },
     )
 
     adapter = OMMXPySCIPOptAdapter(instance)
@@ -224,10 +226,14 @@ def test_integration_feasible_constant_constraint():
     instance = Instance.from_components(
         decision_variables=[x1, x2],
         objective=-x1 - x2,
-        constraints={0: 3 * x1 - x2 <= 6, 1: -x1 + 3 * x2 <= 6, 2: Constraint(
+        constraints={
+            0: 3 * x1 - x2 <= 6,
+            1: -x1 + 3 * x2 <= 6,
+            2: Constraint(
                 function=-1,
                 equality=Constraint.LESS_THAN_OR_EQUAL_TO_ZERO,
-            )},
+            ),
+        },
         sense=Instance.MINIMIZE,
     )
 

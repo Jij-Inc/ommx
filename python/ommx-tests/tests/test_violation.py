@@ -124,7 +124,8 @@ def test_solution_total_violation_with_satisfied_constraints():
         objective=x,
         constraints={
             0: x == 2.0,  # Violated equality: x = 2.0, evaluated at x=5 gives |5-2| = 3
-            1: x <= 10.0,  # Satisfied inequality: x <= 10, evaluated at x=5 gives max(0, 5-10) = 0
+            1: x
+            <= 10.0,  # Satisfied inequality: x <= 10, evaluated at x=5 gives max(0, 5-10) = 0
         },
         sense=Instance.MINIMIZE,
     )

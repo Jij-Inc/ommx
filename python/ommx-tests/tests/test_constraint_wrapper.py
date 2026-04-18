@@ -65,7 +65,8 @@ def test_constraint_function_access():
     linear = rust.Linear({1: 3.0, 2: -1.0}, 10.0)
     function = rust.Function.from_linear(linear)
 
-    constraint = rust.Constraint( function=function, equality=rust.Equality.EqualToZero, name="access_test"
+    constraint = rust.Constraint(
+        function=function, equality=rust.Equality.EqualToZero, name="access_test"
     )
 
     # Access the function from constraint
@@ -79,7 +80,8 @@ def test_constraint_repr():
     function = rust.Function.from_linear(linear)
 
     # Test EqualToZero representation
-    constraint1 = rust.Constraint( function=function, equality=rust.Equality.EqualToZero, name="eq_test"
+    constraint1 = rust.Constraint(
+        function=function, equality=rust.Equality.EqualToZero, name="eq_test"
     )
     repr_str1 = repr(constraint1)
     assert "Constraint(5 == 0)" == repr_str1
@@ -100,7 +102,8 @@ def test_constraint_empty_name():
     function = rust.Function.from_linear(linear)
 
     # Create constraint without name
-    constraint = rust.Constraint( function=function, equality=rust.Equality.EqualToZero, name=None
+    constraint = rust.Constraint(
+        function=function, equality=rust.Equality.EqualToZero, name=None
     )
 
     assert constraint.name is None  # Should return None for unset name
