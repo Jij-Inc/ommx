@@ -33,9 +33,9 @@ from ommx.v1 import ParametricInstance, DecisionVariable, Parameter, Instance
 N = 6
 x = [DecisionVariable.binary(id=i, name="x", subscripts=[i]) for i in range(N)]
 
-p = [Parameter.new(id=i+  N, name="Profit", subscripts=[i]) for i in range(N)]
-w = [Parameter.new(id=i+2*N, name="Weight", subscripts=[i]) for i in range(N)]
-W =  Parameter.new(id=  3*N, name="Capacity")
+p = [Parameter(i +   N, name="Profit", subscripts=[i]) for i in range(N)]
+w = [Parameter(i + 2*N, name="Weight", subscripts=[i]) for i in range(N)]
+W =  Parameter(    3*N, name="Capacity")
 ```
 
 `ommx.v1.Parameter` also has an ID and uses the same numbering as `ommx.v1.DecisionVariable`, so please ensure there are no duplicates. Like decision variables, parameters can have names and subscripts. They can also be used with operators such as `+` and `<=` to create `ommx.v1.Function` or `ommx.v1.Constraint` objects.
@@ -52,15 +52,15 @@ parametric_instance = ParametricInstance.from_components(
     decision_variables=x,
     parameters=p + w + [W],
     objective=objective,
-    constraints=[constraint],
+    constraints={0: constraint},
     sense=Instance.MAXIMIZE,
 )
 ```
 
-Like `ommx.v1.Instance`, you can view the decision variables and constraints as DataFrames through the `decision_variables` and `constraints` properties. In addition, `ommx.v1.ParametricInstance` has a `parameters` property for viewing parameter information in a DataFrame.
+Like `ommx.v1.Instance`, you can view the decision variables and constraints as DataFrames through the `decision_variables_df` and `constraints_df` properties. In addition, `ommx.v1.ParametricInstance` has a `parameters_df` property for viewing parameter information in a DataFrame.
 
 ```{code-cell} ipython3
-parametric_instance.parameters
+parametric_instance.parameters_df
 ```
 
 Next, let’s assign specific values to the parameters. Use `ParametricInstance.with_parameters`, which takes a dictionary mapping each `ommx.v1.Parameter` ID to its corresponding value.

@@ -43,7 +43,7 @@ x = [
 instance = Instance.from_components(
     decision_variables=x,
     objective=sum(v[i] * x[i] for i in range(N)),
-    constraints=[sum(w[i] * x[i] for i in range(N)) - W <= 0],
+    constraints={0: sum(w[i] * x[i] for i in range(N)) - W <= 0},
     sense=Instance.MAXIMIZE,
 )
 ```

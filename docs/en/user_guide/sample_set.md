@@ -44,7 +44,7 @@ x = [DecisionVariable.binary(i) for i in range(3)]
 instance = Instance.from_components(
     decision_variables=x,
     objective=x[0] + 2*x[1] + 3*x[2],
-    constraints=[sum(x) == 1],
+    constraints={0: sum(x) == 1},
     sense=Instance.MAXIMIZE,
 )
 ```

@@ -110,8 +110,8 @@ instance = Instance.from_components(
     decision_variables=x,
     # 目的関数を登録する
     objective=objective,
-    # 制約条件を登録する
-    constraints=[constraint],
+    # 制約条件を登録する (キーは制約ID)
+    constraints={0: constraint},
     # 最大化問題であることを指定する
     sense=Instance.MAXIMIZE,
 )

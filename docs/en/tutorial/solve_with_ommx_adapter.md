@@ -109,8 +109,8 @@ instance = Instance.from_components(
     decision_variables=x,
     # Register the objective function
     objective=objective,
-    # Register all constraints
-    constraints=[constraint],
+    # Register all constraints (keys are constraint IDs)
+    constraints={0: constraint},
     # Specify that it is a maximization problem
     sense=Instance.MAXIMIZE,
 )
