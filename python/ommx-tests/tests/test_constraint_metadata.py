@@ -103,22 +103,6 @@ def test_constraint_parameters():
     assert result.parameters == {"precision": "1e-6"}
 
 
-def test_constraint_set_id():
-    """Test set_id functionality"""
-    x = DecisionVariable.binary(0)
-    constraint = x == 1
-
-    # Get initial ID
-    initial_id = constraint.id
-
-    # Set new ID - returns a Constraint object for chaining
-    result = constraint.set_id(999)
-
-    # ID should be updated on the returned object
-    assert result.id == 999
-    assert result.id != initial_id
-
-
 def test_constraint_complete_metadata():
     """Test all metadata methods together"""
     x = DecisionVariable.binary(0)
@@ -128,11 +112,9 @@ def test_constraint_complete_metadata():
         .add_description("A comprehensive test constraint")
         .add_subscripts([10, 20, 30])
         .add_parameters({"method": "branch_and_bound", "threads": "4"})
-        .set_id(42)
     )
 
     # Verify all metadata is set correctly
-    assert constraint.id == 42
     assert constraint.name == "comprehensive_test"
     assert constraint.description == "A comprehensive test constraint"
     assert constraint.subscripts == [10, 20, 30]
@@ -146,15 +128,13 @@ def test_constraint_metadata_efficiency():
 
     # Chain all metadata modifications
     result = (
-        constraint.set_id(123)
-        .add_name("efficient")
+        constraint.add_name("efficient")
         .add_description("Efficient test")
         .add_subscripts([1])
         .add_parameters({"key": "value"})
     )
 
     # All values should be set on the chained result
-    assert result.id == 123
     assert result.name == "efficient"
     assert result.description == "Efficient test"
     assert result.subscripts == [1]
@@ -171,7 +151,6 @@ def test_constraint_constructor_with_metadata():
     constraint = Constraint(
         function=function,
         equality=Constraint.EQUAL_TO_ZERO,
-        id=100,
         name="constructor_test",
         description="Created via constructor",
         subscripts=[5, 10, 15],
@@ -179,7 +158,6 @@ def test_constraint_constructor_with_metadata():
     )
 
     # Verify all metadata is set correctly
-    assert constraint.id == 100
     assert constraint.name == "constructor_test"
     assert constraint.description == "Created via constructor"
     assert constraint.subscripts == [5, 10, 15]

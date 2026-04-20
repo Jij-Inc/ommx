@@ -211,13 +211,9 @@ mod tests {
         let objective = (linear!(1) + coeff!(1.0)).into();
 
         let constraints = btreemap! {
-            ConstraintID::from(1) => Constraint::equal_to_zero(
-                ConstraintID::from(1),
-                (linear!(1) + linear!(2) + coeff!(-1.0)).into(),
+            ConstraintID::from(1) => Constraint::equal_to_zero((linear!(1) + linear!(2) + coeff!(-1.0)).into(),
             ),
-            ConstraintID::from(2) => Constraint::equal_to_zero(
-                ConstraintID::from(2),
-                (linear!(3) + coeff!(-1.0)).into(),
+            ConstraintID::from(2) => Constraint::equal_to_zero((linear!(3) + coeff!(-1.0)).into(),
             ),
         };
 
@@ -308,17 +304,11 @@ mod tests {
         let objective = (linear!(1) + coeff!(1.0)).into();
 
         let constraints = btreemap! {
-            ConstraintID::from(1) => Constraint::equal_to_zero(
-                ConstraintID::from(1),
-                (linear!(1) + linear!(2) + coeff!(-1.0)).into(),
+            ConstraintID::from(1) => Constraint::equal_to_zero((linear!(1) + linear!(2) + coeff!(-1.0)).into(),
             ),
-            ConstraintID::from(2) => Constraint::equal_to_zero(
-                ConstraintID::from(2),
-                (linear!(2) + linear!(3) + coeff!(-5.0)).into(),
+            ConstraintID::from(2) => Constraint::equal_to_zero((linear!(2) + linear!(3) + coeff!(-5.0)).into(),
             ),
-            ConstraintID::from(3) => Constraint::equal_to_zero(
-                ConstraintID::from(3),
-                (linear!(3) + coeff!(-10.0)).into(),
+            ConstraintID::from(3) => Constraint::equal_to_zero((linear!(3) + coeff!(-10.0)).into(),
             ),
         };
 

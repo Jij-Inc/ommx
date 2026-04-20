@@ -95,10 +95,10 @@ impl Instance {
         sense: Sense,
         objective: Function,
         decision_variables: Vec<DecisionVariable>,
-        constraints: Vec<Constraint>,
-        indicator_constraints: Option<Vec<crate::IndicatorConstraint>>,
-        one_hot_constraints: Option<Vec<crate::OneHotConstraint>>,
-        sos1_constraints: Option<Vec<crate::Sos1Constraint>>,
+        constraints: BTreeMap<u64, Constraint>,
+        indicator_constraints: Option<BTreeMap<u64, crate::IndicatorConstraint>>,
+        one_hot_constraints: Option<BTreeMap<u64, crate::OneHotConstraint>>,
+        sos1_constraints: Option<BTreeMap<u64, crate::Sos1Constraint>>,
         named_functions: Option<Vec<NamedFunction>>,
         description: Option<InstanceDescription>,
     ) -> Result<Self> {
@@ -110,13 +110,10 @@ impl Instance {
             }
         }
 
-        let mut rust_constraints = BTreeMap::new();
-        for c in constraints {
-            let id = c.0.id;
-            if rust_constraints.insert(id, c.0).is_some() {
-                anyhow::bail!("Duplicate constraint ID: {}", id.into_inner());
-            }
-        }
+        let rust_constraints: BTreeMap<ConstraintID, ommx::Constraint> = constraints
+            .into_iter()
+            .map(|(id, c)| (ConstraintID::from(id), c.0))
+            .collect();
 
         let mut builder = ommx::Instance::builder()
             .sense(sense.into())
@@ -125,35 +122,32 @@ impl Instance {
             .constraints(rust_constraints);
 
         if let Some(ics) = indicator_constraints {
-            let mut rust_indicator_constraints = BTreeMap::new();
-            for ic in ics {
-                let id = ic.0.id;
-                if rust_indicator_constraints.insert(id, ic.0).is_some() {
-                    anyhow::bail!("Duplicate indicator constraint ID: {}", id.into_inner());
-                }
-            }
+            let rust_indicator_constraints: BTreeMap<
+                ommx::IndicatorConstraintID,
+                ommx::IndicatorConstraint,
+            > = ics
+                .into_iter()
+                .map(|(id, ic)| (ommx::IndicatorConstraintID::from(id), ic.0))
+                .collect();
             builder = builder.indicator_constraints(rust_indicator_constraints);
         }
 
         if let Some(ohs) = one_hot_constraints {
-            let mut rust_one_hot_constraints = BTreeMap::new();
-            for oh in ohs {
-                let id = oh.0.id;
-                if rust_one_hot_constraints.insert(id, oh.0).is_some() {
-                    anyhow::bail!("Duplicate one-hot constraint ID: {}", id.into_inner());
-                }
-            }
+            let rust_one_hot_constraints: BTreeMap<
+                ommx::OneHotConstraintID,
+                ommx::OneHotConstraint,
+            > = ohs
+                .into_iter()
+                .map(|(id, oh)| (ommx::OneHotConstraintID::from(id), oh.0))
+                .collect();
             builder = builder.one_hot_constraints(rust_one_hot_constraints);
         }
 
         if let Some(s1s) = sos1_constraints {
-            let mut rust_sos1_constraints = BTreeMap::new();
-            for s1 in s1s {
-                let id = s1.0.id;
-                if rust_sos1_constraints.insert(id, s1.0).is_some() {
-                    anyhow::bail!("Duplicate SOS1 constraint ID: {}", id.into_inner());
-                }
-            }
+            let rust_sos1_constraints: BTreeMap<ommx::Sos1ConstraintID, ommx::Sos1Constraint> = s1s
+                .into_iter()
+                .map(|(id, s1)| (ommx::Sos1ConstraintID::from(id), s1.0))
+                .collect();
             builder = builder.sos1_constraints(rust_sos1_constraints);
         }
 
@@ -194,7 +188,7 @@ impl Instance {
             Sense::Minimize,
             Function(ommx::Function::Zero),
             Vec::new(),
-            Vec::new(),
+            BTreeMap::new(),
             None,
             None,
             None,
@@ -260,43 +254,43 @@ impl Instance {
             .collect()
     }
 
-    /// List of all constraints in the instance sorted by their IDs.
+    /// Dict of all constraints in the instance keyed by their IDs.
     #[getter]
-    pub fn constraints(&self) -> Vec<Constraint> {
+    pub fn constraints(&self) -> BTreeMap<u64, Constraint> {
         self.inner
             .constraints()
-            .values()
-            .map(|constraint| Constraint(constraint.clone()))
+            .iter()
+            .map(|(id, constraint)| (id.into_inner(), Constraint(constraint.clone())))
             .collect()
     }
 
-    /// List of all indicator constraints in the instance sorted by their IDs.
+    /// Dict of all indicator constraints in the instance keyed by their IDs.
     #[getter]
-    pub fn indicator_constraints(&self) -> Vec<crate::IndicatorConstraint> {
+    pub fn indicator_constraints(&self) -> BTreeMap<u64, crate::IndicatorConstraint> {
         self.inner
             .indicator_constraints()
-            .values()
-            .map(|ic| crate::IndicatorConstraint(ic.clone()))
+            .iter()
+            .map(|(id, ic)| (id.into_inner(), crate::IndicatorConstraint(ic.clone())))
             .collect()
     }
 
-    /// List of all one-hot constraints in the instance sorted by their IDs.
+    /// Dict of all one-hot constraints in the instance keyed by their IDs.
     #[getter]
-    pub fn one_hot_constraints(&self) -> Vec<crate::OneHotConstraint> {
+    pub fn one_hot_constraints(&self) -> BTreeMap<u64, crate::OneHotConstraint> {
         self.inner
             .one_hot_constraints()
-            .values()
-            .map(|c| crate::OneHotConstraint(c.clone()))
+            .iter()
+            .map(|(id, c)| (id.into_inner(), crate::OneHotConstraint(c.clone())))
             .collect()
     }
 
-    /// List of all SOS1 constraints in the instance sorted by their IDs.
+    /// Dict of all SOS1 constraints in the instance keyed by their IDs.
     #[getter]
-    pub fn sos1_constraints(&self) -> Vec<crate::Sos1Constraint> {
+    pub fn sos1_constraints(&self) -> BTreeMap<u64, crate::Sos1Constraint> {
         self.inner
             .sos1_constraints()
-            .values()
-            .map(|c| crate::Sos1Constraint(c.clone()))
+            .iter()
+            .map(|(id, c)| (id.into_inner(), crate::Sos1Constraint(c.clone())))
             .collect()
     }
 
@@ -315,15 +309,17 @@ impl Instance {
         Ok(())
     }
 
-    /// List of all removed constraints in the instance sorted by their IDs.
+    /// Dict of all removed constraints in the instance keyed by their IDs.
     #[getter]
-    pub fn removed_constraints(&self) -> Vec<RemovedConstraint> {
+    pub fn removed_constraints(&self) -> BTreeMap<u64, RemovedConstraint> {
         self.inner
             .removed_constraints()
-            .values()
-            .map(|removed_constraint| {
-                let (c, r) = removed_constraint;
-                RemovedConstraint::from_pair(c.clone(), r.clone())
+            .iter()
+            .map(|(id, (c, r))| {
+                (
+                    id.into_inner(),
+                    RemovedConstraint::from_pair(c.clone(), r.clone()),
+                )
             })
             .collect()
     }
@@ -1279,7 +1275,11 @@ impl Instance {
     /// DataFrame of constraints
     #[getter]
     pub fn constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
-        entries_to_dataframe(py, self.inner.constraints().values(), "id")
+        entries_to_dataframe(
+            py,
+            self.inner.constraints().iter().map(|(id, c)| (*id, c)),
+            "id",
+        )
     }
 
     /// DataFrame of indicator constraints
@@ -1288,7 +1288,14 @@ impl Instance {
         &self,
         py: Python<'py>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
-        entries_to_dataframe(py, self.inner.indicator_constraints().values(), "id")
+        entries_to_dataframe(
+            py,
+            self.inner
+                .indicator_constraints()
+                .iter()
+                .map(|(id, c)| (*id, c)),
+            "id",
+        )
     }
 
     /// DataFrame of removed constraints
@@ -1297,7 +1304,14 @@ impl Instance {
         &self,
         py: Python<'py>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
-        entries_to_dataframe(py, self.inner.removed_constraints().values(), "id")
+        entries_to_dataframe(
+            py,
+            self.inner
+                .removed_constraints()
+                .iter()
+                .map(|(id, pair)| (*id, pair)),
+            "id",
+        )
     }
 
     /// DataFrame of named functions

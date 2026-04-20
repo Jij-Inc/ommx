@@ -38,9 +38,7 @@ fn test_nonlinear_constraint_error() {
     // Create constraint with cubic function: x^3 <= 0 (degree 3, not supported)
     let cubic_function = (quadratic!(0, 0) * quadratic!(0)).into();
     let constraints = btreemap! {
-        ConstraintID::from(0) => Constraint::less_than_or_equal_to_zero(
-            ConstraintID::from(0),
-            cubic_function
+        ConstraintID::from(0) => Constraint::less_than_or_equal_to_zero(cubic_function
         ),
     };
 

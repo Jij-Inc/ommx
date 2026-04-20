@@ -595,10 +595,13 @@ impl SampleSet {
         let sample_ids = sorted_sample_ids(&self.inner);
         entries_to_dataframe(
             py,
-            self.inner.constraints().values().map(|item| WithSampleIds {
-                item,
-                sample_ids: &sample_ids,
-            }),
+            self.inner
+                .constraints()
+                .iter()
+                .map(|(id, c)| WithSampleIds {
+                    item: (*id, c),
+                    sample_ids: &sample_ids,
+                }),
             "id",
         )
     }
@@ -638,9 +641,9 @@ impl SampleSet {
             py,
             self.inner
                 .indicator_constraints()
-                .values()
-                .map(|item| WithSampleIds {
-                    item,
+                .iter()
+                .map(|(id, c)| WithSampleIds {
+                    item: (*id, c),
                     sample_ids: &sample_ids,
                 }),
             "id",

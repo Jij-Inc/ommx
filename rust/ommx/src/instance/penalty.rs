@@ -275,7 +275,6 @@ mod tests {
         constraints.insert(
             ConstraintID::from(1),
             Constraint {
-                id: ConstraintID::from(1),
                 equality: Equality::LessThanOrEqualToZero,
                 metadata: crate::constraint::ConstraintMetadata::default(),
                 stage: crate::constraint::CreatedData {
@@ -286,7 +285,6 @@ mod tests {
         constraints.insert(
             ConstraintID::from(2),
             Constraint {
-                id: ConstraintID::from(2),
                 equality: Equality::EqualToZero,
                 metadata: crate::constraint::ConstraintMetadata::default(),
                 stage: crate::constraint::CreatedData {

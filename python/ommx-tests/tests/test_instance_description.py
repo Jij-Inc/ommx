@@ -7,7 +7,7 @@ def test_instance_description_none():
     """Test that instance description is None when not set."""
     x = DecisionVariable.binary(0)
     instance = Instance.from_components(
-        decision_variables=[x], objective=x, constraints=[], sense=Instance.MINIMIZE
+        decision_variables=[x], objective=x, constraints={}, sense=Instance.MINIMIZE
     )
 
     assert instance.description is None
@@ -28,7 +28,7 @@ def test_instance_description_with_from_components():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints=[],
+        constraints={},
         sense=Instance.MINIMIZE,
         description=desc,
     )

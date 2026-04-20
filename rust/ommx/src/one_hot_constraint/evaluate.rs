@@ -22,8 +22,7 @@ impl Propagate for OneHotConstraint<Created> {
                 // Variable is ~1
                 if let Some(first) = fixed_to_one {
                     anyhow::bail!(
-                        "Multiple variables fixed to 1 in one-hot constraint {:?}: {:?} and {:?}",
-                        self.id,
+                        "Multiple variables fixed to 1 in one-hot constraint: {:?} and {:?}",
                         first,
                         var_id
                     );
@@ -33,9 +32,8 @@ impl Propagate for OneHotConstraint<Created> {
                 // Variable is ~0, removed from set
             } else {
                 anyhow::bail!(
-                    "Variable {:?} in one-hot constraint {:?} fixed to invalid value {} (must be 0 or 1)",
+                    "Variable {:?} in one-hot constraint fixed to invalid value {} (must be 0 or 1)",
                     var_id,
-                    self.id,
                     value
                 );
             }
@@ -51,8 +49,7 @@ impl Propagate for OneHotConstraint<Created> {
         } else if unfixed.is_empty() {
             // All variables fixed to 0 → infeasible
             anyhow::bail!(
-                "All variables in one-hot constraint {:?} are fixed to 0, constraint cannot be satisfied",
-                self.id
+                "All variables in one-hot constraint are fixed to 0, constraint cannot be satisfied"
             );
         } else if unfixed.len() == 1 {
             // Unit propagation: exactly one unfixed variable → must be 1
@@ -74,10 +71,9 @@ impl Evaluate for OneHotConstraint<Created> {
 
     fn evaluate(&self, state: &crate::v1::State, atol: ATol) -> anyhow::Result<Self::Output> {
         let used_decision_variable_ids = self.required_ids();
-        let (feasible, active_variable) = check_one_hot(&self.variables, state, atol, self.id)?;
+        let (feasible, active_variable) = check_one_hot(&self.variables, state, atol)?;
 
         Ok(OneHotConstraint {
-            id: self.id,
             variables: self.variables.clone(),
             metadata: self.metadata.clone(),
             stage: OneHotEvaluatedData {
@@ -97,13 +93,12 @@ impl Evaluate for OneHotConstraint<Created> {
         let mut active_variable = BTreeMap::new();
 
         for (sample_id, state) in samples.iter() {
-            let (f, av) = check_one_hot(&self.variables, state, atol, self.id)?;
+            let (f, av) = check_one_hot(&self.variables, state, atol)?;
             feasible.insert(*sample_id, f);
             active_variable.insert(*sample_id, av);
         }
 
         Ok(OneHotConstraint {
-            id: self.id,
             variables: self.variables.clone(),
             metadata: self.metadata.clone(),
             stage: OneHotSampledData {
@@ -118,10 +113,9 @@ impl Evaluate for OneHotConstraint<Created> {
         for var_id in &self.variables {
             if state.entries.contains_key(&var_id.into_inner()) {
                 anyhow::bail!(
-                    "Cannot partially evaluate variable {:?} of one-hot constraint {:?}. \
+                    "Cannot partially evaluate variable {:?} of one-hot constraint. \
                      Fixing a one-hot variable would change the constraint type.",
-                    var_id,
-                    self.id
+                    var_id
                 );
             }
         }
@@ -142,16 +136,14 @@ fn check_one_hot(
     variables: &BTreeSet<VariableID>,
     state: &crate::v1::State,
     atol: ATol,
-    constraint_id: OneHotConstraintID,
 ) -> anyhow::Result<(bool, Option<VariableID>)> {
     let mut active: Option<VariableID> = None;
 
     for &var_id in variables {
         let value = state.entries.get(&var_id.into_inner()).ok_or_else(|| {
             anyhow::anyhow!(
-                "Variable {:?} not found in state for one-hot constraint {:?}",
+                "Variable {:?} not found in state for one-hot constraint",
                 var_id,
-                constraint_id
             )
         })?;
 
@@ -182,9 +174,9 @@ mod tests {
     use crate::{Evaluate, Propagate, PropagateOutcome};
     use std::collections::HashMap;
 
-    fn make_one_hot(id: u64, var_ids: &[u64]) -> OneHotConstraint {
+    fn make_one_hot(_id: u64, var_ids: &[u64]) -> OneHotConstraint {
         let vars = var_ids.iter().copied().map(VariableID::from).collect();
-        OneHotConstraint::new(OneHotConstraintID::from(id), vars)
+        OneHotConstraint::new(vars)
     }
 
     #[test]

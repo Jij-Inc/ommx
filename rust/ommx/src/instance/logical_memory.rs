@@ -233,7 +233,6 @@ mod tests {
         let objective = Function::Linear(coeff!(2.0) * linear!(1) + coeff!(3.0) * linear!(2));
 
         let constraint = Constraint {
-            id: ConstraintID::from(1),
             equality: Equality::LessThanOrEqualToZero,
             metadata: ConstraintMetadata::default(),
             stage: CreatedData {
@@ -242,7 +241,7 @@ mod tests {
         };
 
         let mut constraints = BTreeMap::new();
-        constraints.insert(constraint.id, constraint);
+        constraints.insert(ConstraintID::from(1), constraint);
 
         let instance = Instance::new(
             crate::instance::Sense::Minimize,
@@ -257,7 +256,6 @@ mod tests {
         Instance.constraint_collection;constraints;BTreeMap[key] 8
         Instance.constraint_collection;constraints;BTreeMap[stack] 24
         Instance.constraint_collection;constraints;Constraint.equality 1
-        Instance.constraint_collection;constraints;Constraint.id 8
         Instance.constraint_collection;constraints;Constraint.metadata;ConstraintMetadata.description;Option[stack] 24
         Instance.constraint_collection;constraints;Constraint.metadata;ConstraintMetadata.name;Option[stack] 24
         Instance.constraint_collection;constraints;Constraint.metadata;ConstraintMetadata.parameters;FnvHashMap[stack] 32

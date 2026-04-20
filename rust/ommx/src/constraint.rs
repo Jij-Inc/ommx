@@ -100,12 +100,18 @@ pub struct ConstraintMetadata {
 
 /// A constraint parameterized by its lifecycle stage.
 ///
-/// Common fields (`id`, `equality`, `metadata`) are always present.
+/// Common fields (`equality`, `metadata`) are always present.
 /// Stage-specific data (e.g. `function` for [`Created`], evaluation results for [`Evaluated`])
 /// is stored in the `stage` field, whose type is determined by `S::Data`.
+///
+/// The constraint's [`ConstraintID`] is not stored in this struct — it is held
+/// by the enclosing collection (e.g. the `BTreeMap` key in [`Instance`]), which
+/// is the single source of truth. Standalone constraints are identity-less until
+/// inserted into a collection.
+///
+/// [`Instance`]: crate::Instance
 #[derive(Debug, Clone, PartialEq)]
 pub struct Constraint<S: Stage<Self> = Created> {
-    pub id: ConstraintID,
     pub equality: Equality,
     pub metadata: ConstraintMetadata,
     pub stage: S::Data,
@@ -124,18 +130,16 @@ impl Constraint<Created> {
         &mut self.stage.function
     }
 
-    pub fn equal_to_zero(id: ConstraintID, function: Function) -> Self {
+    pub fn equal_to_zero(function: Function) -> Self {
         Self {
-            id,
             equality: Equality::EqualToZero,
             metadata: ConstraintMetadata::default(),
             stage: CreatedData { function },
         }
     }
 
-    pub fn less_than_or_equal_to_zero(id: ConstraintID, function: Function) -> Self {
+    pub fn less_than_or_equal_to_zero(function: Function) -> Self {
         Self {
-            id,
             equality: Equality::LessThanOrEqualToZero,
             metadata: ConstraintMetadata::default(),
             stage: CreatedData { function },
@@ -186,10 +190,10 @@ impl EvaluatedConstraint {
     }
 }
 
-impl From<EvaluatedConstraint> for crate::v1::EvaluatedConstraint {
-    fn from(c: EvaluatedConstraint) -> Self {
+impl From<(ConstraintID, EvaluatedConstraint)> for crate::v1::EvaluatedConstraint {
+    fn from((id, c): (ConstraintID, EvaluatedConstraint)) -> Self {
         crate::v1::EvaluatedConstraint {
-            id: c.id.into_inner(),
+            id: id.into_inner(),
             equality: c.equality.into(),
             evaluated_value: c.stage.evaluated_value,
             used_decision_variable_ids: c
@@ -268,8 +272,8 @@ impl SampledConstraint {
     }
 }
 
-impl From<SampledConstraint> for crate::v1::SampledConstraint {
-    fn from(c: SampledConstraint) -> Self {
+impl From<(ConstraintID, SampledConstraint)> for crate::v1::SampledConstraint {
+    fn from((id, c): (ConstraintID, SampledConstraint)) -> Self {
         let evaluated_values: crate::v1::SampledValues = c.stage.evaluated_values.into();
         let feasible = c
             .stage
@@ -279,7 +283,7 @@ impl From<SampledConstraint> for crate::v1::SampledConstraint {
             .collect();
 
         crate::v1::SampledConstraint {
-            id: c.id.into_inner(),
+            id: id.into_inner(),
             equality: c.equality.into(),
             name: c.metadata.name,
             subscripts: c.metadata.subscripts,
@@ -306,10 +310,8 @@ mod tests {
 
     #[test]
     fn test_violation_equality_positive() {
-        let constraint = Constraint::equal_to_zero(
-            ConstraintID::from(1),
-            Function::Constant(Coefficient::try_from(2.5).unwrap()),
-        );
+        let constraint =
+            Constraint::equal_to_zero(Function::Constant(Coefficient::try_from(2.5).unwrap()));
         let state = crate::v1::State::default();
         let evaluated = constraint.evaluate(&state, crate::ATol::default()).unwrap();
         assert_eq!(evaluated.violation(), 2.5);
@@ -317,10 +319,8 @@ mod tests {
 
     #[test]
     fn test_violation_equality_negative() {
-        let constraint = Constraint::equal_to_zero(
-            ConstraintID::from(1),
-            Function::Constant(Coefficient::try_from(-3.0).unwrap()),
-        );
+        let constraint =
+            Constraint::equal_to_zero(Function::Constant(Coefficient::try_from(-3.0).unwrap()));
         let state = crate::v1::State::default();
         let evaluated = constraint.evaluate(&state, crate::ATol::default()).unwrap();
         assert_eq!(evaluated.violation(), 3.0);
@@ -328,10 +328,8 @@ mod tests {
 
     #[test]
     fn test_violation_equality_near_zero() {
-        let constraint = Constraint::equal_to_zero(
-            ConstraintID::from(1),
-            Function::Constant(Coefficient::try_from(0.0001).unwrap()),
-        );
+        let constraint =
+            Constraint::equal_to_zero(Function::Constant(Coefficient::try_from(0.0001).unwrap()));
         let state = crate::v1::State::default();
         let evaluated = constraint.evaluate(&state, crate::ATol::default()).unwrap();
         assert_eq!(evaluated.violation(), 0.0001);
@@ -339,10 +337,9 @@ mod tests {
 
     #[test]
     fn test_violation_inequality_violated() {
-        let constraint = Constraint::less_than_or_equal_to_zero(
-            ConstraintID::from(1),
-            Function::Constant(Coefficient::try_from(1.5).unwrap()),
-        );
+        let constraint = Constraint::less_than_or_equal_to_zero(Function::Constant(
+            Coefficient::try_from(1.5).unwrap(),
+        ));
         let state = crate::v1::State::default();
         let evaluated = constraint.evaluate(&state, crate::ATol::default()).unwrap();
         assert_eq!(evaluated.violation(), 1.5);
@@ -350,10 +347,9 @@ mod tests {
 
     #[test]
     fn test_violation_inequality_satisfied() {
-        let constraint = Constraint::less_than_or_equal_to_zero(
-            ConstraintID::from(1),
-            Function::Constant(Coefficient::try_from(-1.0).unwrap()),
-        );
+        let constraint = Constraint::less_than_or_equal_to_zero(Function::Constant(
+            Coefficient::try_from(-1.0).unwrap(),
+        ));
         let state = crate::v1::State::default();
         let evaluated = constraint.evaluate(&state, crate::ATol::default()).unwrap();
         assert_eq!(evaluated.violation(), 0.0);
@@ -361,10 +357,9 @@ mod tests {
 
     #[test]
     fn test_violation_inequality_near_boundary() {
-        let constraint = Constraint::less_than_or_equal_to_zero(
-            ConstraintID::from(1),
-            Function::Constant(Coefficient::try_from(0.0001).unwrap()),
-        );
+        let constraint = Constraint::less_than_or_equal_to_zero(Function::Constant(
+            Coefficient::try_from(0.0001).unwrap(),
+        ));
         let state = crate::v1::State::default();
         let evaluated = constraint.evaluate(&state, crate::ATol::default()).unwrap();
         assert_eq!(evaluated.violation(), 0.0001);

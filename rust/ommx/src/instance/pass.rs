@@ -153,7 +153,6 @@ mod tests {
         let constraint_function = Function::from(linear!(1) + linear!(2) + coeff!(-10.0));
         let mut constraints = BTreeMap::new();
         let constraint = Constraint {
-            id: ConstraintID::from(1),
             equality: Equality::LessThanOrEqualToZero,
             metadata: crate::constraint::ConstraintMetadata::default(),
             stage: crate::constraint::CreatedData {
@@ -203,7 +202,6 @@ mod tests {
         constraints.insert(
             ConstraintID::from(1),
             Constraint {
-                id: ConstraintID::from(1),
                 equality: Equality::LessThanOrEqualToZero,
                 metadata: Default::default(),
                 stage: crate::constraint::CreatedData {
@@ -252,7 +250,6 @@ mod tests {
         constraints.insert(
             ConstraintID::from(1),
             Constraint {
-                id: ConstraintID::from(1),
                 equality: Equality::LessThanOrEqualToZero,
                 metadata: Default::default(),
                 stage: crate::constraint::CreatedData {
@@ -317,7 +314,6 @@ mod tests {
         .unwrap();
 
         let ic = crate::IndicatorConstraint::new(
-            IndicatorConstraintID::from(1),
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + coeff!(-5.0)),
@@ -367,7 +363,6 @@ mod tests {
         .unwrap();
 
         let ic = crate::IndicatorConstraint::new(
-            IndicatorConstraintID::from(1),
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + coeff!(-5.0)),
@@ -428,7 +423,6 @@ mod tests {
 
         // x10 = 1 → x1 + x2 - 5 <= 0
         let ic = crate::IndicatorConstraint::new(
-            IndicatorConstraintID::from(1),
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + linear!(2) + coeff!(-5.0)),
@@ -502,7 +496,6 @@ mod tests {
 
         // x10 = 1 → x1 - 5 <= 0
         let ic = crate::IndicatorConstraint::new(
-            IndicatorConstraintID::from(1),
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + coeff!(-5.0)),

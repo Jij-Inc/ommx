@@ -14,11 +14,11 @@ def test_sos1_constraint_functionality():
 
     # Create a constraint that the SOS1 will reference
     # This constraint ensures the problem has a meaningful solution space
-    dummy_constraint = (sum(x) <= 2).set_id(1)  # type: ignore
+    dummy_constraint = sum(x) <= 2  # type: ignore
 
     # Create additional constraints for the SOS1 big-M
-    bigm1 = (x[0] <= 1).set_id(2)  # type: ignore
-    bigm2 = (x[1] <= 1).set_id(3)  # type: ignore
+    bigm1 = x[0] <= 1
+    bigm2 = x[1] <= 1
 
     # Create SOS1 constraint as a first-class type
     sos1 = Sos1Constraint(variables=[1, 2, 3])
@@ -26,8 +26,8 @@ def test_sos1_constraint_functionality():
     instance = Instance.from_components(
         decision_variables=x,
         objective=objective,
-        constraints=[dummy_constraint, bigm1, bigm2],
-        sos1_constraints=[sos1],
+        constraints={1: dummy_constraint, 2: bigm1, 3: bigm2},  # type: ignore
+        sos1_constraints={0: sos1},
         sense=Instance.MINIMIZE,
     )
 
@@ -56,16 +56,16 @@ def test_sos1_constraint_naming():
     objective = sum(x)
 
     # Create constraints
-    constraint1 = (sum(x) == 1).set_id(10)  # type: ignore
+    constraint1 = sum(x) == 1  # type: ignore
 
     # Create SOS1 constraint
-    sos1 = Sos1Constraint(variables=[1, 2], id=42)
+    sos1 = Sos1Constraint(variables=[1, 2])
 
     instance = Instance.from_components(
         decision_variables=x,
         objective=objective,
-        constraints=[constraint1],
-        sos1_constraints=[sos1],
+        constraints={10: constraint1},  # type: ignore
+        sos1_constraints={42: sos1},
         sense=Instance.MINIMIZE,
     )
 
@@ -92,16 +92,16 @@ def test_sos1_constraint_naming_no_bigm():
     objective = sum(x)
 
     # Create constraint
-    constraint1 = (sum(x) <= 1).set_id(5)  # type: ignore
+    constraint1 = sum(x) <= 1  # type: ignore
 
     # SOS1 with no associated constraint IDs
-    sos1 = Sos1Constraint(variables=[1, 2], id=7)
+    sos1 = Sos1Constraint(variables=[1, 2])
 
     instance = Instance.from_components(
         decision_variables=x,
         objective=objective,
-        constraints=[constraint1],
-        sos1_constraints=[sos1],
+        constraints={5: constraint1},  # type: ignore
+        sos1_constraints={7: sos1},
         sense=Instance.MINIMIZE,
     )
 

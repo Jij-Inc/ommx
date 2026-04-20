@@ -34,12 +34,12 @@ def test_default_atol_constraint_evaluation():
     x = DecisionVariable.continuous(1, lower=-10, upper=10)
 
     # Create constraint: x <= 0 using expression syntax
-    constraint = (x <= 0).set_id(1)
+    constraint = x <= 0
 
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,  # minimize x
-        constraints=[constraint],
+        constraints={1: constraint},
         sense=Instance.MINIMIZE,
     )
 
@@ -108,13 +108,13 @@ def test_instance_evaluate_with_custom_atol():
     x1 = DecisionVariable.continuous(1, lower=0, upper=10)
 
     # Create constraint: x1 <= 1.0, which is equivalent to x1 - 1.0 <= 0
-    constraint = (x1 <= 1.0).set_id(1)
+    constraint = x1 <= 1.0
 
     # Create an instance with the constraint
     instance = Instance.from_components(
         decision_variables=[x1],
         objective=x1,
-        constraints=[constraint],
+        constraints={1: constraint},
         sense=Instance.MINIMIZE,
     )
 

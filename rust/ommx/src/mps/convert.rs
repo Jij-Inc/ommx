@@ -198,10 +198,8 @@ fn convert_constraints(
                 convert_inequality(row, b_value, row_name, eq, ge, le, name_id_map, quad_terms)?;
             let id = ConstraintID::from(i as u64);
             let mut constraint = match equality {
-                Equality::EqualToZero => Constraint::equal_to_zero(id, function),
-                Equality::LessThanOrEqualToZero => {
-                    Constraint::less_than_or_equal_to_zero(id, function)
-                }
+                Equality::EqualToZero => Constraint::equal_to_zero(function),
+                Equality::LessThanOrEqualToZero => Constraint::less_than_or_equal_to_zero(function),
             };
             constraint.metadata.name = Some(row_name.0.clone());
             constrs.insert(id, constraint);
@@ -217,10 +215,8 @@ fn convert_constraints(
                 convert_inequality(row, b_value, row_name, eq, ge, le, name_id_map, quad_terms)?;
             let id = ConstraintID::from(id_value);
             let constraint = match equality {
-                Equality::EqualToZero => Constraint::equal_to_zero(id, function),
-                Equality::LessThanOrEqualToZero => {
-                    Constraint::less_than_or_equal_to_zero(id, function)
-                }
+                Equality::EqualToZero => Constraint::equal_to_zero(function),
+                Equality::LessThanOrEqualToZero => Constraint::less_than_or_equal_to_zero(function),
             };
             // Do not add name here since it means OMMX ID, not user-defined name
             constrs.insert(id, constraint);

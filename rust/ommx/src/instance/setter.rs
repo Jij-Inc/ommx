@@ -38,30 +38,26 @@ impl Instance {
         Ok(())
     }
 
-    /// Insert a constraint into the instance.
+    /// Insert a constraint into the instance under the given [`ConstraintID`].
     ///
     /// - If the constraint already exists, it will be replaced.
-    /// - If the ID of given constraint is in the removed constraints, it replaces it.
+    /// - If the ID is in the removed constraints, it replaces it.
     /// - Otherwise, it adds the constraint to the instance.
     ///
     pub fn insert_constraint(
         &mut self,
+        id: ConstraintID,
         constraint: Constraint,
     ) -> anyhow::Result<Option<Constraint>> {
         // Validate that all variables in the constraints are defined
         self.validate_required_ids(constraint.required_ids())?;
         use std::collections::btree_map::Entry;
-        if let Entry::Occupied(mut o) = self
-            .constraint_collection
-            .removed_mut()
-            .entry(constraint.id)
-        {
+        if let Entry::Occupied(mut o) = self.constraint_collection.removed_mut().entry(id) {
             let (rc, _reason) = o.get_mut();
             let old_function = std::mem::replace(&mut rc.stage.function, constraint.stage.function);
             let old_equality = std::mem::replace(&mut rc.equality, constraint.equality);
             let old_metadata = std::mem::replace(&mut rc.metadata, constraint.metadata);
             let removed = Constraint {
-                id: constraint.id,
                 equality: old_equality,
                 metadata: old_metadata,
                 stage: crate::constraint::CreatedData {
@@ -73,10 +69,10 @@ impl Instance {
         Ok(self
             .constraint_collection
             .active_mut()
-            .insert(constraint.id, constraint))
+            .insert(id, constraint))
     }
 
-    /// Insert multiple constraints into the instance with a single validation pass.
+    /// Insert multiple `(id, constraint)` pairs into the instance with a single validation pass.
     ///
     /// This is more efficient than calling [`Self::insert_constraint`] multiple times
     /// because it validates all required variable IDs once, rather than
@@ -84,7 +80,7 @@ impl Instance {
     ///
     /// The behavior for each constraint follows the same rules as [`Self::insert_constraint`]:
     /// - If the constraint already exists, it will be replaced.
-    /// - If the ID of given constraint is in the removed constraints, it replaces it.
+    /// - If the ID is in the removed constraints, it replaces it.
     /// - Otherwise, it adds the constraint to the instance.
     ///
     /// # Atomicity
@@ -94,23 +90,22 @@ impl Instance {
     ///
     pub fn insert_constraints(
         &mut self,
-        constraints: Vec<Constraint>,
+        constraints: Vec<(ConstraintID, Constraint)>,
     ) -> anyhow::Result<BTreeMap<ConstraintID, Constraint>> {
         // Build validation sets once
         let variable_ids: VariableIDSet = self.decision_variables.keys().cloned().collect();
         let dependency_keys: VariableIDSet = self.decision_variable_dependency.keys().collect();
 
         // Validate all constraints first (atomic: fail before any insertion)
-        for constraint in &constraints {
+        for (_, constraint) in &constraints {
             let required_ids = constraint.required_ids();
             Self::validate_required_ids_with_sets(&required_ids, &variable_ids, &dependency_keys)?;
         }
 
         // Insert all constraints (validation already done)
         let mut replaced = BTreeMap::new();
-        for constraint in constraints {
+        for (id, constraint) in constraints {
             use std::collections::btree_map::Entry;
-            let id = constraint.id;
             let old = if let Entry::Occupied(mut o) =
                 self.constraint_collection.removed_mut().entry(id)
             {
@@ -120,7 +115,6 @@ impl Instance {
                 let old_equality = std::mem::replace(&mut rc.equality, constraint.equality);
                 let old_metadata = std::mem::replace(&mut rc.metadata, constraint.metadata);
                 Some(Constraint {
-                    id,
                     equality: old_equality,
                     metadata: old_metadata,
                     stage: crate::constraint::CreatedData {
@@ -196,9 +190,10 @@ mod tests {
         .unwrap();
 
         // Insert a new constraint using variable 1
-        let constraint =
-            Constraint::equal_to_zero(ConstraintID::from(10), (linear!(1) + coeff!(2.0)).into());
-        let result = instance.insert_constraint(constraint.clone()).unwrap();
+        let constraint = Constraint::equal_to_zero((linear!(1) + coeff!(2.0)).into());
+        let result = instance
+            .insert_constraint(ConstraintID::from(10), constraint.clone())
+            .unwrap();
 
         // Should return None since no constraint with ID 10 existed before
         assert!(result.is_none());
@@ -228,17 +223,17 @@ mod tests {
         ));
 
         let mut constraints = BTreeMap::new();
-        let original_constraint =
-            Constraint::equal_to_zero(ConstraintID::from(5), (linear!(1) + coeff!(1.0)).into());
+        let original_constraint = Constraint::equal_to_zero((linear!(1) + coeff!(1.0)).into());
         constraints.insert(ConstraintID::from(5), original_constraint.clone());
 
         let mut instance =
             Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
 
         // Insert a new constraint with the same ID but using variable 2
-        let new_constraint =
-            Constraint::equal_to_zero(ConstraintID::from(5), (linear!(2) + coeff!(1.0)).into());
-        let result = instance.insert_constraint(new_constraint.clone()).unwrap();
+        let new_constraint = Constraint::equal_to_zero((linear!(2) + coeff!(1.0)).into());
+        let result = instance
+            .insert_constraint(ConstraintID::from(5), new_constraint.clone())
+            .unwrap();
 
         // Should return the old constraint that was replaced
         assert_eq!(result, Some(original_constraint));
@@ -276,9 +271,8 @@ mod tests {
         .unwrap();
 
         // Try to insert constraint using undefined variable 999
-        let constraint =
-            Constraint::equal_to_zero(ConstraintID::from(10), (linear!(999) + coeff!(1.0)).into());
-        let result = instance.insert_constraint(constraint);
+        let constraint = Constraint::equal_to_zero((linear!(999) + coeff!(1.0)).into());
+        let result = instance.insert_constraint(ConstraintID::from(1), constraint);
 
         // Should fail with undefined variable error
         assert!(result.is_err());
@@ -322,31 +316,29 @@ mod tests {
         .unwrap();
 
         // Insert multiple constraints
-        let constraint1 =
-            Constraint::equal_to_zero(ConstraintID::from(1), (linear!(1) + coeff!(1.0)).into());
-        let constraint2 =
-            Constraint::equal_to_zero(ConstraintID::from(2), (linear!(2) + coeff!(1.0)).into());
-        let constraint3 =
-            Constraint::equal_to_zero(ConstraintID::from(3), (linear!(3) + coeff!(1.0)).into());
+        let constraint1 = Constraint::equal_to_zero((linear!(1) + coeff!(1.0)).into());
+        let constraint2 = Constraint::equal_to_zero((linear!(2) + coeff!(1.0)).into());
+        let constraint3 = Constraint::equal_to_zero((linear!(3) + coeff!(1.0)).into());
 
         assert!(instance
-            .insert_constraint(constraint1.clone())
+            .insert_constraint(ConstraintID::from(1), constraint1.clone())
             .unwrap()
             .is_none());
         assert!(instance
-            .insert_constraint(constraint2.clone())
+            .insert_constraint(ConstraintID::from(2), constraint2.clone())
             .unwrap()
             .is_none());
         assert!(instance
-            .insert_constraint(constraint3.clone())
+            .insert_constraint(ConstraintID::from(3), constraint3.clone())
             .unwrap()
             .is_none());
         assert_eq!(instance.constraints().len(), 3);
 
         // Replace constraint 2 with new one
-        let new_constraint2 =
-            Constraint::equal_to_zero(ConstraintID::from(2), (linear!(1) + coeff!(1.0)).into());
-        let replaced = instance.insert_constraint(new_constraint2.clone()).unwrap();
+        let new_constraint2 = Constraint::equal_to_zero((linear!(1) + coeff!(1.0)).into());
+        let replaced = instance
+            .insert_constraint(ConstraintID::from(2), new_constraint2.clone())
+            .unwrap();
         assert_eq!(replaced, Some(constraint2));
         assert_eq!(instance.constraints().len(), 3);
         assert_eq!(
@@ -378,9 +370,8 @@ mod tests {
         };
 
         // Try to insert constraint using variable 2 (which is in dependency keys)
-        let constraint =
-            Constraint::equal_to_zero(ConstraintID::from(10), (linear!(2) + coeff!(1.0)).into());
-        let result = instance.insert_constraint(constraint);
+        let constraint = Constraint::equal_to_zero((linear!(2) + coeff!(1.0)).into());
+        let result = instance.insert_constraint(ConstraintID::from(1), constraint);
         assert_eq!(
             result.unwrap_err().to_string(),
             "Dependent variable cannot be used in objectives or constraints: VariableID(2)"
@@ -433,13 +424,9 @@ mod tests {
 
         let objective = (linear!(1) + coeff!(1.0)).into();
         let constraints = btreemap! {
-            ConstraintID::from(1) => Constraint::equal_to_zero(
-                ConstraintID::from(1),
-                (linear!(1) + coeff!(1.0)).into(),
+            ConstraintID::from(1) => Constraint::equal_to_zero((linear!(1) + coeff!(1.0)).into(),
             ),
-            ConstraintID::from(2) => Constraint::equal_to_zero(
-                ConstraintID::from(2),
-                (linear!(2) + coeff!(2.0)).into(),
+            ConstraintID::from(2) => Constraint::equal_to_zero((linear!(2) + coeff!(2.0)).into(),
             ),
         };
 
@@ -454,19 +441,16 @@ mod tests {
         assert_eq!(instance.removed_constraints().len(), 1);
 
         // Insert a new constraint with the same ID as the removed constraint
-        let new_constraint = Constraint::equal_to_zero(
-            ConstraintID::from(2),
-            (linear!(1) + linear!(2) + coeff!(3.0)).into(),
-        );
-        let result = instance.insert_constraint(new_constraint.clone()).unwrap();
+        let new_constraint =
+            Constraint::equal_to_zero((linear!(1) + linear!(2) + coeff!(3.0)).into());
+        let result = instance
+            .insert_constraint(ConstraintID::from(2), new_constraint.clone())
+            .unwrap();
 
         // Should return the old removed constraint
         assert_eq!(
             result,
-            Some(Constraint::equal_to_zero(
-                ConstraintID::from(2),
-                (linear!(2) + coeff!(2.0)).into(),
-            ))
+            Some(Constraint::equal_to_zero((linear!(2) + coeff!(2.0)).into(),))
         );
 
         assert_eq!(instance.constraints().len(), 1);
@@ -475,7 +459,6 @@ mod tests {
             .removed_constraints()
             .get(&ConstraintID::from(2))
             .unwrap();
-        assert_eq!(removed.id, new_constraint.id);
         assert_eq!(removed.equality, new_constraint.equality);
         assert_eq!(removed.metadata, new_constraint.metadata);
         assert_eq!(removed.stage.function, new_constraint.stage.function);
@@ -500,9 +483,18 @@ mod tests {
 
         // Insert multiple constraints at once
         let constraints = vec![
-            Constraint::equal_to_zero(ConstraintID::from(1), (linear!(1) + coeff!(1.0)).into()),
-            Constraint::equal_to_zero(ConstraintID::from(2), (linear!(2) + coeff!(2.0)).into()),
-            Constraint::equal_to_zero(ConstraintID::from(3), (linear!(3) + coeff!(3.0)).into()),
+            (
+                ConstraintID::from(1),
+                Constraint::equal_to_zero((linear!(1) + coeff!(1.0)).into()),
+            ),
+            (
+                ConstraintID::from(2),
+                Constraint::equal_to_zero((linear!(2) + coeff!(2.0)).into()),
+            ),
+            (
+                ConstraintID::from(3),
+                Constraint::equal_to_zero((linear!(3) + coeff!(3.0)).into()),
+            ),
         ];
 
         let replaced = instance.insert_constraints(constraints.clone()).unwrap();
@@ -512,8 +504,8 @@ mod tests {
         assert_eq!(instance.constraints().len(), 3);
 
         // Verify constraints were inserted correctly
-        for constraint in &constraints {
-            assert_eq!(instance.constraints().get(&constraint.id), Some(constraint));
+        for (id, constraint) in &constraints {
+            assert_eq!(instance.constraints().get(id), Some(constraint));
         }
     }
 
@@ -535,9 +527,18 @@ mod tests {
 
         // Try to insert constraints where one uses undefined variable 999
         let constraints = vec![
-            Constraint::equal_to_zero(ConstraintID::from(1), (linear!(1) + coeff!(1.0)).into()),
-            Constraint::equal_to_zero(ConstraintID::from(2), (linear!(999) + coeff!(2.0)).into()), // undefined
-            Constraint::equal_to_zero(ConstraintID::from(3), (linear!(2) + coeff!(3.0)).into()),
+            (
+                ConstraintID::from(1),
+                Constraint::equal_to_zero((linear!(1) + coeff!(1.0)).into()),
+            ),
+            (
+                ConstraintID::from(2),
+                Constraint::equal_to_zero((linear!(999) + coeff!(2.0)).into()),
+            ),
+            (
+                ConstraintID::from(3),
+                Constraint::equal_to_zero((linear!(2) + coeff!(3.0)).into()),
+            ),
         ];
 
         let result = instance.insert_constraints(constraints);
@@ -561,13 +562,9 @@ mod tests {
         };
         let objective = linear!(1) + coeff!(1.0);
         let constraints = btreemap! {
-            ConstraintID::from(1) => Constraint::equal_to_zero(
-                ConstraintID::from(1),
-                (linear!(1) + coeff!(1.0)).into(),
+            ConstraintID::from(1) => Constraint::equal_to_zero((linear!(1) + coeff!(1.0)).into(),
             ),
-            ConstraintID::from(2) => Constraint::equal_to_zero(
-                ConstraintID::from(2),
-                (linear!(2) + coeff!(2.0)).into(),
+            ConstraintID::from(2) => Constraint::equal_to_zero((linear!(2) + coeff!(2.0)).into(),
             ),
         };
         let mut instance = Instance::new(
@@ -580,8 +577,14 @@ mod tests {
 
         // Replace constraint 1, add constraint 3
         let new_constraints = vec![
-            Constraint::equal_to_zero(ConstraintID::from(1), (linear!(2) + coeff!(10.0)).into()), // replace
-            Constraint::equal_to_zero(ConstraintID::from(3), (linear!(1) + coeff!(3.0)).into()), // new
+            (
+                ConstraintID::from(1),
+                Constraint::equal_to_zero((linear!(2) + coeff!(10.0)).into()),
+            ),
+            (
+                ConstraintID::from(3),
+                Constraint::equal_to_zero((linear!(1) + coeff!(3.0)).into()),
+            ),
         ];
 
         let replaced = instance
@@ -603,9 +606,7 @@ mod tests {
         };
         let objective = linear!(1) + coeff!(1.0);
         let constraints = btreemap! {
-            ConstraintID::from(1) => Constraint::equal_to_zero(
-                ConstraintID::from(1),
-                (linear!(1) + coeff!(1.0)).into(),
+            ConstraintID::from(1) => Constraint::equal_to_zero((linear!(1) + coeff!(1.0)).into(),
             ),
         };
         let mut instance = Instance::new(
@@ -624,9 +625,9 @@ mod tests {
         assert_eq!(instance.removed_constraints().len(), 1);
 
         // Replace the removed constraint
-        let new_constraints = vec![Constraint::equal_to_zero(
+        let new_constraints = vec![(
             ConstraintID::from(1),
-            (linear!(2) + coeff!(10.0)).into(),
+            Constraint::equal_to_zero((linear!(2) + coeff!(10.0)).into()),
         )];
 
         let replaced = instance.insert_constraints(new_constraints).unwrap();
@@ -662,8 +663,14 @@ mod tests {
 
         // Try to insert constraints using variable 2 (which is in dependency keys)
         let constraints = vec![
-            Constraint::equal_to_zero(ConstraintID::from(1), (linear!(1) + coeff!(1.0)).into()),
-            Constraint::equal_to_zero(ConstraintID::from(2), (linear!(2) + coeff!(2.0)).into()), // uses dependent var
+            (
+                ConstraintID::from(1),
+                Constraint::equal_to_zero((linear!(1) + coeff!(1.0)).into()),
+            ),
+            (
+                ConstraintID::from(2),
+                Constraint::equal_to_zero((linear!(2) + coeff!(2.0)).into()),
+            ),
         ];
 
         let result = instance.insert_constraints(constraints);
@@ -700,13 +707,9 @@ mod tests {
         };
         let objective = (linear!(1) + coeff!(1.0)).into();
         let constraints = btreemap! {
-            ConstraintID::from(3) => Constraint::equal_to_zero(
-                ConstraintID::from(3),
-                (linear!(1) + coeff!(1.0)).into(),
+            ConstraintID::from(3) => Constraint::equal_to_zero((linear!(1) + coeff!(1.0)).into(),
             ),
-            ConstraintID::from(15) => Constraint::equal_to_zero(
-                ConstraintID::from(15),
-                (linear!(1) + coeff!(2.0)).into(),
+            ConstraintID::from(15) => Constraint::equal_to_zero((linear!(1) + coeff!(2.0)).into(),
             ),
         };
         let mut instance =

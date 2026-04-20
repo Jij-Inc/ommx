@@ -12,7 +12,7 @@ def test_decision_variable_analysis_basic():
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0] + x[1],
-        constraints=[(x[1] + x[2] == 1).set_id(0)],
+        constraints={0: x[1] + x[2] == 1},
         sense=Instance.MAXIMIZE,
     )
 
@@ -52,7 +52,7 @@ def test_decision_variable_analysis_mixed_types():
     instance = Instance.from_components(
         decision_variables=[x_bin, x_int, x_cont],
         objective=x_bin + x_int + x_cont,
-        constraints=[],
+        constraints={},
         sense=Instance.MINIMIZE,
     )
 
@@ -84,7 +84,7 @@ def test_bound_wrapper_functionality():
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0],
-        constraints=[],
+        constraints={},
         sense=Instance.MAXIMIZE,
     )
 

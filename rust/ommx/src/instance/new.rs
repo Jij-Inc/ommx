@@ -85,7 +85,7 @@ mod tests {
 
         // Create constraint that uses undefined variable ID 999
         let constraints = btreemap! {
-            ConstraintID::from(1) => Constraint::equal_to_zero(ConstraintID::from(1), (linear!(999) + coeff!(1.0)).into()),
+            ConstraintID::from(1) => Constraint::equal_to_zero((linear!(999) + coeff!(1.0)).into()),
         };
 
         // This should fail because variable ID 999 is used in constraint but not defined
@@ -119,8 +119,8 @@ mod tests {
 
         // Constraints also use both decision variables and parameters
         let constraints = btreemap! {
-            ConstraintID::from(1) => Constraint::equal_to_zero(ConstraintID::from(1), (linear!(2) + linear!(101) + coeff!(1.0)).into()),
-            ConstraintID::from(2) => Constraint::less_than_or_equal_to_zero(ConstraintID::from(2), (linear!(1) + linear!(100) + coeff!(2.0)).into()),
+            ConstraintID::from(1) => Constraint::equal_to_zero((linear!(2) + linear!(101) + coeff!(1.0)).into()),
+            ConstraintID::from(2) => Constraint::less_than_or_equal_to_zero((linear!(1) + linear!(100) + coeff!(2.0)).into()),
         };
 
         let parametric_instance = ParametricInstance::new(
@@ -214,7 +214,7 @@ mod tests {
 
         // Constraint uses undefined variable ID 999
         let constraints = btreemap! {
-            ConstraintID::from(1) => Constraint::equal_to_zero(ConstraintID::from(1), (linear!(999) + coeff!(1.0)).into()),
+            ConstraintID::from(1) => Constraint::equal_to_zero((linear!(999) + coeff!(1.0)).into()),
         };
 
         insta::assert_snapshot!(

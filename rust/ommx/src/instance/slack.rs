@@ -228,9 +228,7 @@ mod tests {
         let objective = Function::from(linear!(1)) + Function::from(linear!(2));
         let constraint_fn = Function::from(linear!(1)) + Function::from(linear!(2)) + coeff!(-4.0);
         let constraints = btreemap! {
-            ConstraintID::from(0) => crate::Constraint::less_than_or_equal_to_zero(
-                ConstraintID::from(0),
-                constraint_fn,
+            ConstraintID::from(0) => crate::Constraint::less_than_or_equal_to_zero(constraint_fn,
             ),
         };
         let mut instance = Instance::new(Sense::Minimize, objective, dv, constraints).unwrap();
@@ -262,9 +260,7 @@ mod tests {
         let objective = Function::from(linear!(1));
         let constraint_fn = Function::from(linear!(1)) + coeff!(-2.0);
         let constraints = btreemap! {
-            ConstraintID::from(0) => crate::Constraint::less_than_or_equal_to_zero(
-                ConstraintID::from(0),
-                constraint_fn,
+            ConstraintID::from(0) => crate::Constraint::less_than_or_equal_to_zero(constraint_fn,
             ),
         };
         let mut instance = Instance::new(Sense::Minimize, objective, dv, constraints).unwrap();
@@ -297,9 +293,7 @@ mod tests {
         let objective = Function::from(linear!(1));
         let constraint_fn = Function::from(linear!(1)) + coeff!(-10.0);
         let constraints = btreemap! {
-            ConstraintID::from(0) => crate::Constraint::less_than_or_equal_to_zero(
-                ConstraintID::from(0),
-                constraint_fn,
+            ConstraintID::from(0) => crate::Constraint::less_than_or_equal_to_zero(constraint_fn,
             ),
         };
         let mut instance = Instance::new(Sense::Minimize, objective, dv, constraints).unwrap();
@@ -323,9 +317,7 @@ mod tests {
         let objective = Function::from(linear!(1));
         let constraint_fn = Function::from(linear!(1)) + coeff!(-2.0);
         let constraints = btreemap! {
-            ConstraintID::from(0) => crate::Constraint::less_than_or_equal_to_zero(
-                ConstraintID::from(0),
-                constraint_fn,
+            ConstraintID::from(0) => crate::Constraint::less_than_or_equal_to_zero(constraint_fn,
             ),
         };
         let mut instance = Instance::new(Sense::Minimize, objective, dv, constraints).unwrap();
@@ -354,9 +346,7 @@ mod tests {
         let objective = Function::from(linear!(1));
         let constraint_fn = Function::from(linear!(1)) + coeff!(-2.0);
         let constraints = btreemap! {
-            ConstraintID::from(0) => crate::Constraint::equal_to_zero(
-                ConstraintID::from(0),
-                constraint_fn,
+            ConstraintID::from(0) => crate::Constraint::equal_to_zero(constraint_fn,
             ),
         };
         let mut instance = Instance::new(Sense::Minimize, objective, dv, constraints).unwrap();
@@ -375,9 +365,7 @@ mod tests {
         let objective = Function::from(linear!(1));
         let constraint_fn = Function::from(linear!(1)) + coeff!(-2.0);
         let constraints = btreemap! {
-            ConstraintID::from(0) => crate::Constraint::less_than_or_equal_to_zero(
-                ConstraintID::from(0),
-                constraint_fn,
+            ConstraintID::from(0) => crate::Constraint::less_than_or_equal_to_zero(constraint_fn,
             ),
         };
         let mut instance = Instance::new(Sense::Minimize, objective, dv, constraints).unwrap();

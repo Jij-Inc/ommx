@@ -267,17 +267,18 @@ impl Instance {
                             .removed_mut()
                             .insert(id, (ic, propagation_reason.clone()));
                     }
-                    PropagateOutcome::Transformed { original, new } => {
-                        // Indicator=1 → promote inner constraint to regular constraint
+                    PropagateOutcome::Transformed {
+                        original,
+                        new: mut constraint,
+                    } => {
+                        // Indicator=1 → promote inner constraint to regular constraint.
+                        // Record the promotion in the new constraint's provenance so that
+                        // downstream consumers can trace it back to the original indicator.
                         let cid = self.constraint_collection.unused_id();
-                        let constraint = crate::Constraint {
-                            id: cid,
-                            equality: new.equality,
-                            metadata: new.metadata,
-                            stage: crate::CreatedData {
-                                function: new.function,
-                            },
-                        };
+                        constraint
+                            .metadata
+                            .provenance
+                            .push(crate::constraint::Provenance::IndicatorConstraint(id));
                         self.constraint_collection
                             .active_mut()
                             .insert(cid, constraint);
@@ -466,10 +467,7 @@ mod tests {
         )
         .unwrap();
 
-        let oh = OneHotConstraint::new(
-            OneHotConstraintID::from(1),
-            [1, 2, 3].into_iter().map(VariableID::from).collect(),
-        );
+        let oh = OneHotConstraint::new([1, 2, 3].into_iter().map(VariableID::from).collect());
         instance
             .one_hot_constraint_collection
             .active_mut()
@@ -518,10 +516,7 @@ mod tests {
         )
         .unwrap();
 
-        let oh = OneHotConstraint::new(
-            OneHotConstraintID::from(1),
-            [1, 2, 3].into_iter().map(VariableID::from).collect(),
-        );
+        let oh = OneHotConstraint::new([1, 2, 3].into_iter().map(VariableID::from).collect());
         instance
             .one_hot_constraint_collection
             .active_mut()
@@ -562,19 +557,13 @@ mod tests {
         )
         .unwrap();
 
-        let oh = OneHotConstraint::new(
-            OneHotConstraintID::from(1),
-            [1, 2].into_iter().map(VariableID::from).collect(),
-        );
+        let oh = OneHotConstraint::new([1, 2].into_iter().map(VariableID::from).collect());
         instance
             .one_hot_constraint_collection
             .active_mut()
             .insert(OneHotConstraintID::from(1), oh);
 
-        let sos1 = Sos1Constraint::new(
-            Sos1ConstraintID::from(1),
-            [2, 3].into_iter().map(VariableID::from).collect(),
-        );
+        let sos1 = Sos1Constraint::new([2, 3].into_iter().map(VariableID::from).collect());
         instance
             .sos1_constraint_collection
             .active_mut()
@@ -616,7 +605,6 @@ mod tests {
         indicator_constraints.insert(
             IndicatorConstraintID::from(100),
             crate::IndicatorConstraint::new(
-                IndicatorConstraintID::from(100),
                 VariableID::from(10),
                 Equality::LessThanOrEqualToZero,
                 Function::from(linear!(1) + linear!(2) + coeff!(-5.0)),
@@ -642,8 +630,22 @@ mod tests {
         assert!(instance.indicator_constraint_collection.active().is_empty());
         assert_eq!(instance.indicator_constraint_collection.removed().len(), 1);
 
-        // A new regular constraint should be added
+        // A new regular constraint should be added, and its provenance
+        // should reference the original IndicatorConstraintID so that the
+        // transformation lineage is preserved.
         assert_eq!(instance.constraint_collection.active().len(), 1);
+        let (_, promoted) = instance
+            .constraint_collection
+            .active()
+            .iter()
+            .next()
+            .unwrap();
+        assert_eq!(
+            promoted.metadata.provenance,
+            vec![crate::constraint::Provenance::IndicatorConstraint(
+                IndicatorConstraintID::from(100)
+            )]
+        );
     }
 
     #[test]
@@ -661,7 +663,6 @@ mod tests {
         indicator_constraints.insert(
             IndicatorConstraintID::from(1),
             crate::IndicatorConstraint::new(
-                IndicatorConstraintID::from(1),
                 VariableID::from(10),
                 Equality::LessThanOrEqualToZero,
                 Function::from(linear!(1) + coeff!(-5.0)),

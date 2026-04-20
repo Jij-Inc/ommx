@@ -263,8 +263,8 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
 
         # Prepare inequality constraints
         ineq_ids = [
-            c.id
-            for c in self.ommx_instance.constraints
+            cid
+            for cid, c in self.ommx_instance.constraints.items()
             if c.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
         ]
         for ineq_id in ineq_ids:

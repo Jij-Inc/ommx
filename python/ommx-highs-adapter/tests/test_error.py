@@ -12,7 +12,7 @@ def test_error_nonlinear_objective():
     ommx_instance = Instance.from_components(
         decision_variables=[x],
         objective=2.3 * x * x,
-        constraints=[],
+        constraints={},
         sense=Instance.MINIMIZE,
     )
 
@@ -28,7 +28,7 @@ def test_error_nonlinear_constraint():
     ommx_instance = Instance.from_components(
         decision_variables=[x],
         objective=0,  # constant 0
-        constraints=[2.3 * x * x == 0],
+        constraints={0: 2.3 * x * x == 0},
         sense=Instance.MINIMIZE,
     )
 
@@ -41,12 +41,12 @@ def test_error_infeasible_constant_equality_constraint():
     ommx_instance = Instance.from_components(
         decision_variables=[],
         objective=0,
-        constraints=[
-            Constraint(
+        constraints={
+            0: Constraint(
                 function=-1,
                 equality=Constraint.EQUAL_TO_ZERO,
-            ),
-        ],
+            )
+        },
         sense=Instance.MINIMIZE,
     )
     with pytest.raises(OMMXHighsAdapterError) as e:
@@ -58,12 +58,12 @@ def test_error_infeasible_constant_inequality_constraint():
     ommx_instance = Instance.from_components(
         decision_variables=[],
         objective=0,
-        constraints=[
-            Constraint(
+        constraints={
+            0: Constraint(
                 function=1,
                 equality=Constraint.LESS_THAN_OR_EQUAL_TO_ZERO,
-            ),
-        ],
+            )
+        },
         sense=Instance.MINIMIZE,
     )
     with pytest.raises(OMMXHighsAdapterError) as e:
@@ -76,16 +76,16 @@ def test_error_infeasible_model():
     ommx_instance = Instance.from_components(
         decision_variables=[x],
         objective=0,
-        constraints=[
-            Constraint(
+        constraints={
+            0: Constraint(
                 function=x,
                 equality=Constraint.EQUAL_TO_ZERO,
             ),
-            Constraint(
+            1: Constraint(
                 function=x - 1,
                 equality=Constraint.EQUAL_TO_ZERO,
             ),
-        ],
+        },
         sense=Instance.MINIMIZE,
     )
     with pytest.raises(InfeasibleDetected):

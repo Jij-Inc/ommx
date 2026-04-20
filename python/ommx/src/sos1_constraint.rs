@@ -19,34 +19,17 @@ impl Sos1Constraint {
     /// **Args:**
     ///
     /// - `variables`: List of decision variable IDs (at most one can be non-zero)
-    /// - `id`: Optional constraint ID (auto-generated if not provided)
     #[new]
-    #[pyo3(signature = (*, variables, id=None))]
-    pub fn new(variables: Vec<u64>, id: Option<u64>) -> Self {
-        let id = id.unwrap_or_else(crate::constraint::next_constraint_id);
+    #[pyo3(signature = (*, variables))]
+    pub fn new(variables: Vec<u64>) -> Self {
         let vars: BTreeSet<ommx::VariableID> =
             variables.into_iter().map(ommx::VariableID::from).collect();
-        Self(ommx::Sos1Constraint::new(
-            ommx::Sos1ConstraintID::from(id),
-            vars,
-        ))
-    }
-
-    #[getter]
-    pub fn id(&self) -> u64 {
-        self.0.id.into_inner()
+        Self(ommx::Sos1Constraint::new(vars))
     }
 
     #[getter]
     pub fn variables(&self) -> Vec<u64> {
         self.0.variables.iter().map(|v| v.into_inner()).collect()
-    }
-
-    /// Set the constraint ID. Returns a new Sos1Constraint.
-    pub fn set_id(&self, id: u64) -> Self {
-        let mut c = self.clone();
-        c.0.id = ommx::Sos1ConstraintID::from(id);
-        c
     }
 
     fn __repr__(&self) -> String {

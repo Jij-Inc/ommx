@@ -43,7 +43,7 @@ impl ParametricInstance {
         sense: Sense,
         objective: Function,
         decision_variables: Vec<DecisionVariable>,
-        constraints: Vec<Constraint>,
+        constraints: BTreeMap<u64, Constraint>,
         parameters: Vec<Parameter>,
         named_functions: Option<Vec<NamedFunction>>,
         description: Option<crate::InstanceDescription>,
@@ -56,13 +56,10 @@ impl ParametricInstance {
             }
         }
 
-        let mut rust_constraints = BTreeMap::new();
-        for c in constraints {
-            let id = c.0.id;
-            if rust_constraints.insert(id, c.0).is_some() {
-                anyhow::bail!("Duplicate constraint ID: {}", id.into_inner());
-            }
-        }
+        let rust_constraints: BTreeMap<ConstraintID, ommx::Constraint> = constraints
+            .into_iter()
+            .map(|(id, c)| (ConstraintID::from(id), c.0))
+            .collect();
 
         let mut rust_parameters = BTreeMap::new();
         for p in parameters {
@@ -107,7 +104,7 @@ impl ParametricInstance {
             Sense::Minimize,
             Function(ommx::Function::Zero),
             Vec::new(),
-            Vec::new(),
+            BTreeMap::new(),
             Vec::new(),
             None,
             None,
@@ -147,20 +144,25 @@ impl ParametricInstance {
     }
 
     #[getter]
-    pub fn constraints(&self) -> Vec<Constraint> {
+    pub fn constraints(&self) -> BTreeMap<u64, Constraint> {
         self.inner
             .constraints()
-            .values()
-            .map(|constraint| Constraint(constraint.clone()))
+            .iter()
+            .map(|(id, constraint)| (id.into_inner(), Constraint(constraint.clone())))
             .collect()
     }
 
     #[getter]
-    pub fn removed_constraints(&self) -> Vec<RemovedConstraint> {
+    pub fn removed_constraints(&self) -> BTreeMap<u64, RemovedConstraint> {
         self.inner
             .removed_constraints()
-            .values()
-            .map(|(c, r)| RemovedConstraint::from_pair(c.clone(), r.clone()))
+            .iter()
+            .map(|(id, (c, r))| {
+                (
+                    id.into_inner(),
+                    RemovedConstraint::from_pair(c.clone(), r.clone()),
+                )
+            })
             .collect()
     }
 
@@ -276,7 +278,11 @@ impl ParametricInstance {
     /// DataFrame of constraints
     #[getter]
     pub fn constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
-        entries_to_dataframe(py, self.inner.constraints().values(), "id")
+        entries_to_dataframe(
+            py,
+            self.inner.constraints().iter().map(|(id, c)| (*id, c)),
+            "id",
+        )
     }
 
     /// DataFrame of removed constraints
@@ -285,7 +291,14 @@ impl ParametricInstance {
         &self,
         py: Python<'py>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
-        entries_to_dataframe(py, self.inner.removed_constraints().values(), "id")
+        entries_to_dataframe(
+            py,
+            self.inner
+                .removed_constraints()
+                .iter()
+                .map(|(id, pair)| (*id, pair)),
+            "id",
+        )
     }
 
     /// DataFrame of named functions

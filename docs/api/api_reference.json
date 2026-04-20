@@ -1925,7 +1925,7 @@
             },
             {
               "name": "__new__",
-              "doc": "Create a new Constraint.\n\n**Args:**\n\n- `function`: The constraint function (int, float, DecisionVariable, Linear, Quadratic, Polynomial, or Function)\n- `equality`: The equality type (EqualToZero or LessThanOrEqualToZero)\n- `id`: Optional constraint ID (auto-generated if not provided)\n- `name`: Optional name for the constraint\n- `subscripts`: Optional subscripts for indexing\n- `description`: Optional description\n- `parameters`: Optional key-value parameters",
+              "doc": "Create a new Constraint.\n\n**Args:**\n\n- `function`: The constraint function (int, float, DecisionVariable, Linear, Quadratic, Polynomial, or Function)\n- `equality`: The equality type (EqualToZero or LessThanOrEqualToZero)\n- `name`: Optional name for the constraint\n- `subscripts`: Optional subscripts for indexing\n- `description`: Optional description\n- `parameters`: Optional key-value parameters",
               "signatures": [
                 {
                   "parameters": [
@@ -1951,24 +1951,6 @@
                         "children": []
                       },
                       "default": null
-                    },
-                    {
-                      "name": "id",
-                      "type_": {
-                        "display": "Optional[int]",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "int",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      },
-                      "default": {
-                        "kind": "Simple",
-                        "value": "None"
-                      }
                     },
                     {
                       "name": "name",
@@ -2280,32 +2262,6 @@
               "deprecated": null
             },
             {
-              "name": "from_bytes",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "bytes",
-                      "type_": {
-                        "display": "bytes",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "Constraint",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
               "name": "partial_evaluate",
               "doc": "Partially evaluate the constraint with the given state.\n\nThis modifies self in-place and returns self for method chaining.\n\n**Args:**\n\n- `state`: A State object, dict[int, float], or iterable of (int, float) tuples\n- `atol`: Optional absolute tolerance for evaluation\n\n**Returns:** Self (modified in-place) for method chaining",
               "signatures": [
@@ -2364,32 +2320,6 @@
                       "name": "description",
                       "type_": {
                         "display": "str",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "Constraint",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "set_id",
-              "doc": "Set the ID of the constraint\nReturns self for method chaining",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "id",
-                      "type_": {
-                        "display": "int",
                         "link_target": null,
                         "children": []
                       },
@@ -2502,22 +2432,6 @@
               "deprecated": null
             },
             {
-              "name": "to_bytes",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "bytes",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
               "name": "with_indicator",
               "doc": "Create an indicator constraint from this constraint.\n\nReturns an IndicatorConstraint where `indicator_variable = 1 → this constraint`.",
               "signatures": [
@@ -2602,17 +2516,6 @@
                   "kind": "Class",
                   "attribute": null
                 },
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "id",
-              "doc": "",
-              "type_": {
-                "display": "int",
-                "link_target": null,
                 "children": []
               },
               "is_property": true,
@@ -4737,48 +4640,6 @@
           "bases": [],
           "methods": [
             {
-              "name": "from_bytes",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "bytes",
-                      "type_": {
-                        "display": "bytes",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "EvaluatedConstraint",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "to_bytes",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "bytes",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
               "name": "violation",
               "doc": "Calculate the violation (constraint breach) value for this constraint\n\nReturns the amount by which this constraint is violated:\n- For $f(x) = 0$: returns $|f(x)|$\n- For $f(x) \\leq 0$: returns $\\max(0, f(x))$\n\nReturns 0.0 if the constraint is satisfied.",
               "signatures": [
@@ -4856,17 +4717,6 @@
               "doc": "Get the feasibility status",
               "type_": {
                 "display": "bool",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "id",
-              "doc": "Get the constraint ID",
-              "type_": {
-                "display": "int",
                 "link_target": null,
                 "children": []
               },
@@ -6771,7 +6621,7 @@
             },
             {
               "name": "__new__",
-              "doc": "Create a new indicator constraint.\n\nAn indicator constraint is: `indicator_variable = 1 → f(x) <= 0` (or `f(x) = 0`).\n\n**Args:**\n\n- `indicator_variable`: A binary decision variable that activates this constraint\n- `function`: The constraint function\n- `equality`: The equality type (EqualToZero or LessThanOrEqualToZero)\n- `id`: Optional constraint ID (auto-generated if not provided)\n- `name`: Optional name for the constraint\n- `subscripts`: Optional subscripts for indexing\n- `description`: Optional description\n- `parameters`: Optional key-value parameters",
+              "doc": "Create a new indicator constraint.\n\nAn indicator constraint is: `indicator_variable = 1 → f(x) <= 0` (or `f(x) = 0`).\n\n**Args:**\n\n- `indicator_variable`: A binary decision variable that activates this constraint\n- `function`: The constraint function\n- `equality`: The equality type (EqualToZero or LessThanOrEqualToZero)\n- `name`: Optional name for the constraint\n- `subscripts`: Optional subscripts for indexing\n- `description`: Optional description\n- `parameters`: Optional key-value parameters",
               "signatures": [
                 {
                   "parameters": [
@@ -6806,24 +6656,6 @@
                         "children": []
                       },
                       "default": null
-                    },
-                    {
-                      "name": "id",
-                      "type_": {
-                        "display": "Optional[int]",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "int",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      },
-                      "default": {
-                        "kind": "Simple",
-                        "value": "None"
-                      }
                     },
                     {
                       "name": "name",
@@ -6930,32 +6762,6 @@
               "deprecated": null
             },
             {
-              "name": "set_id",
-              "doc": "Set the constraint ID. Returns a new IndicatorConstraint.",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "id",
-                      "type_": {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "IndicatorConstraint",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
               "name": "set_name",
               "doc": "Set the constraint name. Returns a new IndicatorConstraint.",
               "signatures": [
@@ -7022,17 +6828,6 @@
                   "kind": "Class",
                   "attribute": null
                 },
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "id",
-              "doc": "",
-              "type_": {
-                "display": "int",
-                "link_target": null,
                 "children": []
               },
               "is_property": true,
@@ -7665,9 +7460,14 @@
                     {
                       "name": "constraints",
                       "type_": {
-                        "display": "Sequence[Constraint]",
+                        "display": "Mapping[int, Constraint]",
                         "link_target": null,
                         "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          },
                           {
                             "display": "Constraint",
                             "link_target": null,
@@ -7680,13 +7480,18 @@
                     {
                       "name": "indicator_constraints",
                       "type_": {
-                        "display": "Optional[Sequence[IndicatorConstraint]]",
+                        "display": "Optional[Mapping[int, IndicatorConstraint]]",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Sequence[IndicatorConstraint]",
+                            "display": "Mapping[int, IndicatorConstraint]",
                             "link_target": null,
                             "children": [
+                              {
+                                "display": "int",
+                                "link_target": null,
+                                "children": []
+                              },
                               {
                                 "display": "IndicatorConstraint",
                                 "link_target": null,
@@ -7704,13 +7509,18 @@
                     {
                       "name": "one_hot_constraints",
                       "type_": {
-                        "display": "Optional[Sequence[OneHotConstraint]]",
+                        "display": "Optional[Mapping[int, OneHotConstraint]]",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Sequence[OneHotConstraint]",
+                            "display": "Mapping[int, OneHotConstraint]",
                             "link_target": null,
                             "children": [
+                              {
+                                "display": "int",
+                                "link_target": null,
+                                "children": []
+                              },
                               {
                                 "display": "OneHotConstraint",
                                 "link_target": null,
@@ -7728,13 +7538,18 @@
                     {
                       "name": "sos1_constraints",
                       "type_": {
-                        "display": "Optional[Sequence[Sos1Constraint]]",
+                        "display": "Optional[Mapping[int, Sos1Constraint]]",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Sequence[Sos1Constraint]",
+                            "display": "Mapping[int, Sos1Constraint]",
                             "link_target": null,
                             "children": [
+                              {
+                                "display": "int",
+                                "link_target": null,
+                                "children": []
+                              },
                               {
                                 "display": "Sos1Constraint",
                                 "link_target": null,
@@ -8768,11 +8583,16 @@
             },
             {
               "name": "constraints",
-              "doc": "List of all constraints in the instance sorted by their IDs.",
+              "doc": "Dict of all constraints in the instance keyed by their IDs.",
               "type_": {
-                "display": "list[Constraint]",
+                "display": "dict[int, Constraint]",
                 "link_target": null,
                 "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  },
                   {
                     "display": "Constraint",
                     "link_target": null,
@@ -8890,11 +8710,16 @@
             },
             {
               "name": "indicator_constraints",
-              "doc": "List of all indicator constraints in the instance sorted by their IDs.",
+              "doc": "Dict of all indicator constraints in the instance keyed by their IDs.",
               "type_": {
-                "display": "list[IndicatorConstraint]",
+                "display": "dict[int, IndicatorConstraint]",
                 "link_target": null,
                 "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  },
                   {
                     "display": "IndicatorConstraint",
                     "link_target": null,
@@ -9026,11 +8851,16 @@
             },
             {
               "name": "one_hot_constraints",
-              "doc": "List of all one-hot constraints in the instance sorted by their IDs.",
+              "doc": "Dict of all one-hot constraints in the instance keyed by their IDs.",
               "type_": {
-                "display": "list[OneHotConstraint]",
+                "display": "dict[int, OneHotConstraint]",
                 "link_target": null,
                 "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  },
                   {
                     "display": "OneHotConstraint",
                     "link_target": null,
@@ -9043,11 +8873,16 @@
             },
             {
               "name": "removed_constraints",
-              "doc": "List of all removed constraints in the instance sorted by their IDs.",
+              "doc": "Dict of all removed constraints in the instance keyed by their IDs.",
               "type_": {
-                "display": "list[RemovedConstraint]",
+                "display": "dict[int, RemovedConstraint]",
                 "link_target": null,
                 "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  },
                   {
                     "display": "RemovedConstraint",
                     "link_target": null,
@@ -9082,11 +8917,16 @@
             },
             {
               "name": "sos1_constraints",
-              "doc": "List of all SOS1 constraints in the instance sorted by their IDs.",
+              "doc": "Dict of all SOS1 constraints in the instance keyed by their IDs.",
               "type_": {
-                "display": "list[Sos1Constraint]",
+                "display": "dict[int, Sos1Constraint]",
                 "link_target": null,
                 "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  },
                   {
                     "display": "Sos1Constraint",
                     "link_target": null,
@@ -11195,7 +11035,7 @@
             },
             {
               "name": "__new__",
-              "doc": "Create a new one-hot constraint.\n\n**Args:**\n\n- `variables`: List of binary decision variable IDs (exactly one must be 1)\n- `id`: Optional constraint ID (auto-generated if not provided)",
+              "doc": "Create a new one-hot constraint.\n\n**Args:**\n\n- `variables`: List of binary decision variable IDs (exactly one must be 1)",
               "signatures": [
                 {
                   "parameters": [
@@ -11213,24 +11053,6 @@
                         ]
                       },
                       "default": null
-                    },
-                    {
-                      "name": "id",
-                      "type_": {
-                        "display": "Optional[int]",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "int",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      },
-                      "default": {
-                        "kind": "Simple",
-                        "value": "None"
-                      }
                     }
                   ],
                   "return_type": {
@@ -11258,46 +11080,9 @@
               ],
               "is_async": false,
               "deprecated": null
-            },
-            {
-              "name": "set_id",
-              "doc": "Set the constraint ID. Returns a new OneHotConstraint.",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "id",
-                      "type_": {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "OneHotConstraint",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
             }
           ],
           "attributes": [
-            {
-              "name": "id",
-              "doc": "",
-              "type_": {
-                "display": "int",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
             {
               "name": "variables",
               "doc": "",
@@ -12523,9 +12308,14 @@
                     {
                       "name": "constraints",
                       "type_": {
-                        "display": "Sequence[Constraint]",
+                        "display": "Mapping[int, Constraint]",
                         "link_target": null,
                         "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          },
                           {
                             "display": "Constraint",
                             "link_target": null,
@@ -12907,9 +12697,14 @@
               "name": "constraints",
               "doc": "",
               "type_": {
-                "display": "list[Constraint]",
+                "display": "dict[int, Constraint]",
                 "link_target": null,
                 "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  },
                   {
                     "display": "Constraint",
                     "link_target": null,
@@ -13166,9 +12961,14 @@
               "name": "removed_constraints",
               "doc": "",
               "type_": {
-                "display": "list[RemovedConstraint]",
+                "display": "dict[int, RemovedConstraint]",
                 "link_target": null,
                 "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  },
                   {
                     "display": "RemovedConstraint",
                     "link_target": null,
@@ -15609,48 +15409,6 @@
               ],
               "is_async": false,
               "deprecated": null
-            },
-            {
-              "name": "from_bytes",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "bytes",
-                      "type_": {
-                        "display": "bytes",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "RemovedConstraint",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "to_bytes",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "bytes",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
             }
           ],
           "attributes": [
@@ -15704,17 +15462,6 @@
                   "kind": "Class",
                   "attribute": null
                 },
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "id",
-              "doc": "",
-              "type_": {
-                "display": "int",
-                "link_target": null,
                 "children": []
               },
               "is_property": true,
@@ -16996,50 +16743,7 @@
           "name": "SampledConstraint",
           "doc": "",
           "bases": [],
-          "methods": [
-            {
-              "name": "from_bytes",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "bytes",
-                      "type_": {
-                        "display": "bytes",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "SampledConstraint",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "to_bytes",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "bytes",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            }
-          ],
+          "methods": [],
           "attributes": [
             {
               "name": "description",
@@ -17109,17 +16813,6 @@
                     "children": []
                   }
                 ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "id",
-              "doc": "Get the constraint ID",
-              "type_": {
-                "display": "int",
-                "link_target": null,
-                "children": []
               },
               "is_property": true,
               "is_readonly": true
@@ -18473,11 +18166,16 @@
             },
             {
               "name": "constraints",
-              "doc": "Get evaluated constraints as a list sorted by ID",
+              "doc": "Get evaluated constraints as a dict keyed by constraint ID",
               "type_": {
-                "display": "list[EvaluatedConstraint]",
+                "display": "dict[int, EvaluatedConstraint]",
                 "link_target": null,
                 "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  },
                   {
                     "display": "EvaluatedConstraint",
                     "link_target": null,
@@ -18928,7 +18626,7 @@
             },
             {
               "name": "__new__",
-              "doc": "Create a new SOS1 constraint.\n\n**Args:**\n\n- `variables`: List of decision variable IDs (at most one can be non-zero)\n- `id`: Optional constraint ID (auto-generated if not provided)",
+              "doc": "Create a new SOS1 constraint.\n\n**Args:**\n\n- `variables`: List of decision variable IDs (at most one can be non-zero)",
               "signatures": [
                 {
                   "parameters": [
@@ -18946,24 +18644,6 @@
                         ]
                       },
                       "default": null
-                    },
-                    {
-                      "name": "id",
-                      "type_": {
-                        "display": "Optional[int]",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "int",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      },
-                      "default": {
-                        "kind": "Simple",
-                        "value": "None"
-                      }
                     }
                   ],
                   "return_type": {
@@ -18991,46 +18671,9 @@
               ],
               "is_async": false,
               "deprecated": null
-            },
-            {
-              "name": "set_id",
-              "doc": "Set the constraint ID. Returns a new Sos1Constraint.",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "id",
-                      "type_": {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "Sos1Constraint",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
             }
           ],
           "attributes": [
-            {
-              "name": "id",
-              "doc": "",
-              "type_": {
-                "display": "int",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
             {
               "name": "variables",
               "doc": "",

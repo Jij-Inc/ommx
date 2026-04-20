@@ -1,7 +1,4 @@
-use crate::{
-    next_constraint_id, Constraint, DecisionVariable, Function, Parameter, Polynomial, Quadratic,
-    Rng, State,
-};
+use crate::{Constraint, DecisionVariable, Function, Parameter, Polynomial, Quadratic, Rng, State};
 
 use anyhow::{anyhow, Result};
 use approx::AbsDiffEq;
@@ -499,9 +496,7 @@ impl Linear {
         // self - other == 0
         let mut function = -other.0;
         function += &self.0;
-        let id = next_constraint_id();
         Constraint(ommx::Constraint {
-            id: ommx::ConstraintID::from(id),
             equality: ommx::Equality::EqualToZero,
             metadata: ommx::ConstraintMetadata::default(),
             stage: ommx::CreatedData { function },
@@ -514,9 +509,7 @@ impl Linear {
         // self - other <= 0: compute as -(other) + self
         let mut function = -other.0;
         function += &self.0;
-        let id = next_constraint_id();
         Constraint(ommx::Constraint {
-            id: ommx::ConstraintID::from(id),
             equality: ommx::Equality::LessThanOrEqualToZero,
             metadata: ommx::ConstraintMetadata::default(),
             stage: ommx::CreatedData { function },
@@ -528,9 +521,7 @@ impl Linear {
     pub fn py_ge(&self, other: Function) -> Constraint {
         // self >= other ⇔ other - self <= 0
         let function = other.0 - &self.0;
-        let id = next_constraint_id();
         Constraint(ommx::Constraint {
-            id: ommx::ConstraintID::from(id),
             equality: ommx::Equality::LessThanOrEqualToZero,
             metadata: ommx::ConstraintMetadata::default(),
             stage: ommx::CreatedData { function },

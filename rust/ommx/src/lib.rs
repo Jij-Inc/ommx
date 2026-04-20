@@ -68,21 +68,15 @@
 //! or inequality types, and can be temporarily removed while preserving their definition.
 //!
 //! ```rust
-//! use ommx::{Constraint, ConstraintID, Function, Linear, linear, coeff};
+//! use ommx::{Constraint, Function, Linear, linear, coeff};
 //!
 //! // Create constraints: x1 + x2 <= 10 (as x1 + x2 - 10 <= 0)
 //! let constraint_expr = coeff!(1.0) * linear!(1) + coeff!(1.0) * linear!(2) + Linear::from(coeff!(-10.0));
-//! let constraint = Constraint::less_than_or_equal_to_zero(
-//!     ConstraintID::from(1),
-//!     Function::from(constraint_expr)
-//! );
+//! let constraint = Constraint::less_than_or_equal_to_zero(Function::from(constraint_expr));
 //!
 //! // Equality constraint: x1 - x2 = 0 (as f(x) = 0)
 //! let eq_expr = coeff!(1.0) * linear!(1) - coeff!(1.0) * linear!(2);
-//! let eq_constraint = Constraint::equal_to_zero(
-//!     ConstraintID::from(2),
-//!     Function::from(eq_expr)
-//! );
+//! let eq_constraint = Constraint::equal_to_zero(Function::from(eq_expr));
 //! ```
 //!
 //! ## Constraint Type System
@@ -132,12 +126,10 @@
 //! let constraints = btreemap! {
 //!     // x1 + x2 = 1
 //!     ConstraintID::from(1) => Constraint::equal_to_zero(
-//!         ConstraintID::from(1),
 //!         Function::from(linear!(1) + linear!(2) + Linear::from(coeff!(-1.0)))
 //!     ),
 //!     // x2 <= 5
 //!     ConstraintID::from(2) => Constraint::less_than_or_equal_to_zero(
-//!         ConstraintID::from(2),
 //!         Function::from(linear!(2) + Linear::from(coeff!(-5.0)))
 //!     ),
 //! };
@@ -204,12 +196,10 @@
 //! let constraints = btreemap! {
 //!     // x1 + x2 <= 10
 //!     ConstraintID::from(1) => Constraint::less_than_or_equal_to_zero(
-//!         ConstraintID::from(1),
 //!         Function::from(linear!(1) + linear!(2) + Linear::from(coeff!(-10.0)))
 //!     ),
 //!     // x1 >= 1 (as -x1 + 1 <= 0)
 //!     ConstraintID::from(2) => Constraint::less_than_or_equal_to_zero(
-//!         ConstraintID::from(2),
 //!         Function::from(coeff!(-1.0) * linear!(1) + Linear::from(coeff!(1.0)))
 //!     ),
 //! };

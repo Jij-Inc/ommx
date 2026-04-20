@@ -189,28 +189,6 @@ impl InstanceBuilder {
             }
         }
 
-        // Validate that constraint map keys match their value's id
-        for (key, value) in &constraints {
-            if *key != value.id {
-                return Err(InstanceError::InconsistentConstraintID {
-                    key: *key,
-                    value_id: value.id,
-                }
-                .into());
-            }
-        }
-
-        // Validate that removed constraint map keys match their value's id
-        for (key, (constraint, _reason)) in &self.removed_constraints {
-            if *key != constraint.id {
-                return Err(InstanceError::InconsistentRemovedConstraintID {
-                    key: *key,
-                    value_id: constraint.id,
-                }
-                .into());
-            }
-        }
-
         // Collect all variable IDs for validation
         let variable_ids: VariableIDSet = decision_variables.keys().cloned().collect();
 
@@ -254,14 +232,7 @@ impl InstanceBuilder {
         }
 
         // Validate indicator constraints
-        for (key, value) in &self.indicator_constraints {
-            if *key != value.id {
-                return Err(InstanceError::InconsistentIndicatorConstraintID {
-                    key: *key,
-                    value_id: value.id,
-                }
-                .into());
-            }
+        for value in self.indicator_constraints.values() {
             // Check that indicator_variable exists and is binary
             let indicator_id = value.indicator_variable;
             let Some(dv) = decision_variables.get(&indicator_id) else {
@@ -277,14 +248,7 @@ impl InstanceBuilder {
                 }
             }
         }
-        for (key, (ic, _reason)) in &self.removed_indicator_constraints {
-            if *key != ic.id {
-                return Err(InstanceError::InconsistentRemovedIndicatorConstraintID {
-                    key: *key,
-                    value_id: ic.id,
-                }
-                .into());
-            }
+        for (ic, _reason) in self.removed_indicator_constraints.values() {
             // Check that indicator_variable exists and is binary
             let indicator_id = ic.indicator_variable;
             let Some(dv) = decision_variables.get(&indicator_id) else {
@@ -307,14 +271,7 @@ impl InstanceBuilder {
         }
 
         // Validate one-hot constraints
-        for (key, value) in &self.one_hot_constraints {
-            if *key != value.id {
-                return Err(InstanceError::InconsistentOneHotConstraintID {
-                    key: *key,
-                    value_id: value.id,
-                }
-                .into());
-            }
+        for value in self.one_hot_constraints.values() {
             for var_id in &value.variables {
                 let Some(dv) = decision_variables.get(var_id) else {
                     return Err(InstanceError::UndefinedOneHotVariable { id: *var_id }.into());
@@ -326,14 +283,7 @@ impl InstanceBuilder {
         }
 
         // Validate SOS1 constraints
-        for (key, value) in &self.sos1_constraints {
-            if *key != value.id {
-                return Err(InstanceError::InconsistentSos1ConstraintID {
-                    key: *key,
-                    value_id: value.id,
-                }
-                .into());
-            }
+        for value in self.sos1_constraints.values() {
             for var_id in &value.variables {
                 if !variable_ids.contains(var_id) {
                     return Err(InstanceError::UndefinedSos1Variable { id: *var_id }.into());
@@ -525,8 +475,9 @@ mod tests {
         use maplit::btreemap;
 
         let constraint_id = ConstraintID::from(1);
-        let constraint = Constraint::equal_to_zero(constraint_id, Function::Zero);
-        let removed_constraint = Constraint::equal_to_zero(constraint_id, Function::Zero);
+        let constraint = Constraint::equal_to_zero(Function::Zero);
+        let removed_constraint = Constraint::equal_to_zero(Function::Zero);
+        let _ = constraint_id;
         let removed_reason = crate::constraint::RemovedReason {
             reason: "test".to_string(),
             parameters: Default::default(),
@@ -661,7 +612,7 @@ mod tests {
         .unwrap();
 
         // Constraint uses var_id, which is also a dependent variable - this should fail
-        let constraint = Constraint::equal_to_zero(constraint_id, Function::from(linear!(1)));
+        let constraint = Constraint::equal_to_zero(Function::from(linear!(1)));
         let err = Instance::builder()
             .sense(Sense::Minimize)
             .objective(Function::Zero)
@@ -719,7 +670,7 @@ mod tests {
         let constraint_id = ConstraintID::from(1);
         // Create a removed constraint that references undefined variable ID 999
         let removed_constraint =
-            Constraint::equal_to_zero(constraint_id, Function::from(linear!(999) + coeff!(1.0)));
+            Constraint::equal_to_zero(Function::from(linear!(999) + coeff!(1.0)));
         let removed_reason = crate::constraint::RemovedReason {
             reason: "test".to_string(),
             parameters: Default::default(),

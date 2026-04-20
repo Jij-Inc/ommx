@@ -143,14 +143,13 @@ impl Solution {
             .collect()
     }
 
-    /// Get evaluated constraints as a list sorted by ID
+    /// Get evaluated constraints as a dict keyed by constraint ID
     #[getter]
-    pub fn constraints(&self) -> Vec<crate::EvaluatedConstraint> {
-        // BTreeMap is already sorted by key
+    pub fn constraints(&self) -> std::collections::BTreeMap<u64, crate::EvaluatedConstraint> {
         self.inner
             .evaluated_constraints()
-            .values()
-            .map(|ec| crate::EvaluatedConstraint(ec.clone()))
+            .iter()
+            .map(|(id, ec)| (id.into_inner(), crate::EvaluatedConstraint(ec.clone())))
             .collect()
     }
 
@@ -459,7 +458,14 @@ impl Solution {
     /// Columns: id (index), equality, value, used_ids, name, subscripts, description, dual_variable
     #[getter]
     pub fn constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
-        entries_to_dataframe(py, self.inner.evaluated_constraints().values(), "id")
+        entries_to_dataframe(
+            py,
+            self.inner
+                .evaluated_constraints()
+                .iter()
+                .map(|(id, c)| (*id, c)),
+            "id",
+        )
     }
 
     /// DataFrame of removed constraint reasons.
@@ -532,7 +538,10 @@ impl Solution {
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         entries_to_dataframe(
             py,
-            self.inner.evaluated_indicator_constraints().values(),
+            self.inner
+                .evaluated_indicator_constraints()
+                .iter()
+                .map(|(id, c)| (*id, c)),
             "id",
         )
     }

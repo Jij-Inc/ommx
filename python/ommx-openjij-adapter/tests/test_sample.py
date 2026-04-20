@@ -9,7 +9,7 @@ def binary_no_constraint_minimize():
     instance = Instance.from_components(
         decision_variables=[x0, x1],
         objective=x0 + x1,
-        constraints=[],
+        constraints={},
         sense=Instance.MINIMIZE,
     )
     ans = {(0,): 0.0, (1,): 0.0}
@@ -22,7 +22,7 @@ def binary_no_constraint_maximize():
     instance = Instance.from_components(
         decision_variables=[x0, x1],
         objective=x0 + x1,
-        constraints=[],
+        constraints={},
         sense=Instance.MAXIMIZE,
     )
     ans = {(0,): 1.0, (1,): 1.0}
@@ -37,7 +37,7 @@ def binary_equality():
     instance = Instance.from_components(
         decision_variables=[x0, x1, x2],
         objective=x0 + 2 * x1 + 3 * x2,
-        constraints=[x1 * x2 == 0],
+        constraints={0: x1 * x2 == 0},
         sense=Instance.MAXIMIZE,
     )
 
@@ -54,7 +54,7 @@ def binary_inequality():
     instance = Instance.from_components(
         decision_variables=[x0, x1, x2],
         objective=x0 + 2 * x1 + 3 * x2,
-        constraints=[x0 + x1 + x2 <= 2],
+        constraints={0: x0 + x1 + x2 <= 2},
         sense=Instance.MAXIMIZE,
     )
 
@@ -70,7 +70,7 @@ def integer_equality():
     instance = Instance.from_components(
         decision_variables=[x0, x1],
         objective=x0 + 2 * x1,
-        constraints=[x0 + x1 == 0],
+        constraints={0: x0 + x1 == 0},
         sense=Instance.MAXIMIZE,
     )
 
@@ -86,7 +86,7 @@ def integer_inequality():
     instance = Instance.from_components(
         decision_variables=[x0, x1],
         objective=x0 + 2 * x1,
-        constraints=[x0 + x1 <= 0],
+        constraints={0: x0 + x1 <= 0},
         sense=Instance.MAXIMIZE,
     )
 
@@ -102,7 +102,7 @@ def hubo_binary_no_constraint_minimize():
     instance = Instance.from_components(
         decision_variables=[x0, x1, x2],
         objective=x0 + x1 + x2 + x0 * x1 * x2,
-        constraints=[],
+        constraints={},
         sense=Instance.MINIMIZE,
     )
     ans = {(0,): 0.0, (1,): 0.0, (2,): 0.0}
@@ -116,7 +116,7 @@ def hubo_binary_no_constraint_maximize():
     instance = Instance.from_components(
         decision_variables=[x0, x1, x2],
         objective=x0 + x0 * x1 * x2,
-        constraints=[],
+        constraints={},
         sense=Instance.MAXIMIZE,
     )
     ans = {(0,): 1.0, (1,): 1.0, (2,): 1.0}
@@ -131,7 +131,7 @@ def hubo_binary_equality():
     instance = Instance.from_components(
         decision_variables=[x0, x1, x2],
         objective=x0 + 2 * x1 + 3 * x2 + x0 * x1 * x2,
-        constraints=[x1 * x2 == 0],
+        constraints={0: x1 * x2 == 0},
         sense=Instance.MAXIMIZE,
     )
 
@@ -148,7 +148,7 @@ def hubo_binary_inequality():
     instance = Instance.from_components(
         decision_variables=[x0, x1, x2],
         objective=x0 + 2 * x1 + 3 * x2 + x0 * x1 * x2,
-        constraints=[x0 + x1 + x2 <= 2],
+        constraints={0: x0 + x1 + x2 <= 2},
         sense=Instance.MAXIMIZE,
     )
 

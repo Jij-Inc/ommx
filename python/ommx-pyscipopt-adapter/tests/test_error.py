@@ -15,7 +15,7 @@ def test_error_polynomial_objective():
     ommx_instance = Instance.from_components(
         decision_variables=[DecisionVariable.continuous(1)],
         objective=Polynomial(terms={(1, 1, 1): 2.3}),
-        constraints=[],
+        constraints={},
         sense=Instance.MINIMIZE,
     )
     with pytest.raises(OMMXPySCIPOptAdapterError) as e:
@@ -29,12 +29,12 @@ def test_error_nonlinear_constraint():
     ommx_instance = Instance.from_components(
         decision_variables=[DecisionVariable.continuous(1)],
         objective=0,
-        constraints=[
-            Constraint(
+        constraints={
+            0: Constraint(
                 function=Polynomial(terms={(1, 1, 1): 2.3}),
                 equality=Constraint.EQUAL_TO_ZERO,
-            ),
-        ],
+            )
+        },
         sense=Instance.MINIMIZE,
     )
     with pytest.raises(OMMXPySCIPOptAdapterError) as e:
@@ -47,7 +47,7 @@ def test_error_not_optimized_model():
     instance = Instance.from_components(
         decision_variables=[],
         objective=0,
-        constraints=[],
+        constraints={},
         sense=Instance.MINIMIZE,
     )
     with pytest.raises(OMMXPySCIPOptAdapterError) as e:
@@ -60,16 +60,16 @@ def test_error_infeasible_model():
     ommx_instance = Instance.from_components(
         decision_variables=[x],
         objective=0,
-        constraints=[
-            Constraint(
+        constraints={
+            0: Constraint(
                 function=x,
                 equality=Constraint.EQUAL_TO_ZERO,
             ),
-            Constraint(
+            1: Constraint(
                 function=x - 1,
                 equality=Constraint.EQUAL_TO_ZERO,
             ),
-        ],
+        },
         sense=Instance.MINIMIZE,
     )
     with pytest.raises(InfeasibleDetected):
@@ -80,12 +80,12 @@ def test_error_infeasible_constant_equality_constraint():
     ommx_instance = Instance.from_components(
         decision_variables=[],
         objective=0,
-        constraints=[
-            Constraint(
+        constraints={
+            0: Constraint(
                 function=-1,
                 equality=Constraint.EQUAL_TO_ZERO,
-            ),
-        ],
+            )
+        },
         sense=Instance.MINIMIZE,
     )
     with pytest.raises(OMMXPySCIPOptAdapterError) as e:
@@ -97,12 +97,12 @@ def test_error_infeasible_constant_inequality_constraint():
     ommx_instance = Instance.from_components(
         decision_variables=[],
         objective=0,
-        constraints=[
-            Constraint(
+        constraints={
+            0: Constraint(
                 function=1,
                 equality=Constraint.LESS_THAN_OR_EQUAL_TO_ZERO,
-            ),
-        ],
+            )
+        },
         sense=Instance.MINIMIZE,
     )
     with pytest.raises(OMMXPySCIPOptAdapterError) as e:

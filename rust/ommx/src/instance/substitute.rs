@@ -50,11 +50,11 @@ impl Substitute for Instance {
         // (e.g. fixing it to 1 makes it a regular constraint, fixing to 0 removes it).
         // This is not yet supported; fail explicitly rather than silently producing
         // an inconsistent result.
-        for ic in self.indicator_constraint_collection.active().values() {
+        for (&cid, ic) in self.indicator_constraint_collection.active().iter() {
             if substituted_variables.contains(&ic.indicator_variable) {
                 return Err(SubstitutionError::IndicatorVariableSubstitution {
                     indicator_variable: ic.indicator_variable,
-                    constraint_id: ic.id,
+                    constraint_id: cid,
                 });
             }
         }
@@ -72,22 +72,22 @@ impl Substitute for Instance {
         }
 
         // Check that no one-hot or SOS1 variable is being substituted.
-        for oh in self.one_hot_constraint_collection.active().values() {
+        for (&cid, oh) in self.one_hot_constraint_collection.active().iter() {
             for var_id in &oh.variables {
                 if substituted_variables.contains(var_id) {
                     return Err(SubstitutionError::OneHotVariableSubstitution {
                         variable: *var_id,
-                        constraint_id: oh.id,
+                        constraint_id: cid,
                     });
                 }
             }
         }
-        for sos1 in self.sos1_constraint_collection.active().values() {
+        for (&cid, sos1) in self.sos1_constraint_collection.active().iter() {
             for var_id in &sos1.variables {
                 if substituted_variables.contains(var_id) {
                     return Err(SubstitutionError::Sos1VariableSubstitution {
                         variable: *var_id,
-                        constraint_id: sos1.id,
+                        constraint_id: cid,
                     });
                 }
             }
@@ -133,7 +133,6 @@ mod tests {
 
         let mut constraints = BTreeMap::new();
         let constraint = Constraint {
-            id: ConstraintID::from(1),
             equality: Equality::LessThanOrEqualToZero,
             metadata: crate::constraint::ConstraintMetadata::default(),
             stage: crate::constraint::CreatedData {
@@ -182,7 +181,6 @@ mod tests {
         indicator_constraints.insert(
             crate::IndicatorConstraintID::from(1),
             crate::IndicatorConstraint::new(
-                crate::IndicatorConstraintID::from(1),
                 VariableID::from(10),
                 Equality::LessThanOrEqualToZero,
                 Function::from(linear!(1) + coeff!(-5.0)),
@@ -230,7 +228,6 @@ mod tests {
         indicator_constraints.insert(
             crate::IndicatorConstraintID::from(1),
             crate::IndicatorConstraint::new(
-                crate::IndicatorConstraintID::from(1),
                 VariableID::from(10),
                 Equality::LessThanOrEqualToZero,
                 Function::from(linear!(1) + coeff!(-5.0)),

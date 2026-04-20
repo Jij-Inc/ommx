@@ -15,7 +15,7 @@ def test_adapter_class_with_initial_state():
     ommx_instance = Instance.from_components(
         decision_variables=[x, y],
         objective=x - y,
-        constraints=[x + y <= 5],
+        constraints={0: x + y <= 5},
         sense=Instance.MAXIMIZE,
     )
     initial_state = State(
@@ -47,7 +47,7 @@ def test_solve_with_initial_state():
     ommx_instance = Instance.from_components(
         decision_variables=[x, y],
         objective=x - y,
-        constraints=[x + y <= 5],
+        constraints={0: x + y <= 5},
         sense=Instance.MAXIMIZE,
     )
     initial_state = State(
@@ -75,7 +75,7 @@ def test_adapter_class_with_initial_state_from_mapping():
     ommx_instance = Instance.from_components(
         decision_variables=[x, y],
         objective=x - y,
-        constraints=[x + y <= 5],
+        constraints={0: x + y <= 5},
         sense=Instance.MAXIMIZE,
     )
     initial_mapping = {
@@ -104,7 +104,7 @@ def test_solve_with_initial_state_from_mapping():
     ommx_instance = Instance.from_components(
         decision_variables=[x, y],
         objective=x - y,
-        constraints=[x + y <= 5],
+        constraints={0: x + y <= 5},
         sense=Instance.MAXIMIZE,
     )
     initial_mapping = {

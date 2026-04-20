@@ -9,18 +9,18 @@ def test_evaluated_constraint_violation_equality():
     # Create instance with equality constraint: x = 2.5 evaluated at x=0
     # This gives f(x) = x - 2.5 = 0 - 2.5 = -2.5, violation = |-2.5| = 2.5
     x = DecisionVariable.continuous(id=1, lower=0, upper=10)
-    constraint = (x == 2.5).set_id(1)
+    constraint = x == 2.5
 
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints=[constraint],
+        constraints={1: constraint},
         sense=Instance.MINIMIZE,
     )
 
     # Evaluate at x=0, so constraint becomes 0 = 2.5, f(x) = -2.5
     solution = instance.evaluate({1: 0.0})
-    evaluated_constraint = solution.constraints[0]
+    evaluated_constraint = solution.constraints[1]
 
     # For equality constraint f(x) = 0, violation = |f(x)| = |-2.5| = 2.5
     assert evaluated_constraint.violation() == pytest.approx(2.5)
@@ -31,18 +31,18 @@ def test_evaluated_constraint_violation_inequality_violated():
     # Create instance with inequality constraint: x <= 1.5 evaluated at x=3
     # This gives f(x) = x - 1.5 = 3 - 1.5 = 1.5, violation = max(0, 1.5) = 1.5
     x = DecisionVariable.continuous(id=1, lower=0, upper=10)
-    constraint = (x <= 1.5).set_id(1)
+    constraint = x <= 1.5
 
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints=[constraint],
+        constraints={1: constraint},
         sense=Instance.MINIMIZE,
     )
 
     # Evaluate at x=3, so constraint becomes 3 <= 1.5, f(x) = 1.5
     solution = instance.evaluate({1: 3.0})
-    evaluated_constraint = solution.constraints[0]
+    evaluated_constraint = solution.constraints[1]
 
     # For inequality constraint f(x) ≤ 0, violation = max(0, f(x)) = max(0, 1.5) = 1.5
     assert evaluated_constraint.violation() == pytest.approx(1.5)
@@ -53,18 +53,18 @@ def test_evaluated_constraint_violation_inequality_satisfied():
     # Create instance with inequality constraint: x <= 5 evaluated at x=2
     # This gives f(x) = x - 5 = 2 - 5 = -3, violation = max(0, -3) = 0
     x = DecisionVariable.continuous(id=1, lower=0, upper=10)
-    constraint = (x <= 5.0).set_id(1)
+    constraint = x <= 5.0
 
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints=[constraint],
+        constraints={1: constraint},
         sense=Instance.MINIMIZE,
     )
 
     # Evaluate at x=2, so constraint becomes 2 <= 5, f(x) = -3
     solution = instance.evaluate({1: 2.0})
-    evaluated_constraint = solution.constraints[0]
+    evaluated_constraint = solution.constraints[1]
 
     # For inequality constraint f(x) ≤ 0, violation = max(0, f(x)) = max(0, -3) = 0.0
     assert evaluated_constraint.violation() == pytest.approx(0.0)
@@ -77,14 +77,10 @@ def test_solution_total_violation_l1():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints=[
-            (x == 2.5).set_id(
-                1
-            ),  # Equality: x = 2.5, evaluated at x=0 gives f(x) = -2.5
-            (x <= 1.5).set_id(
-                2
-            ),  # Inequality: x <= 1.5, evaluated at x=3 gives f(x) = 1.5
-        ],
+        constraints={
+            0: x == 2.5,  # Equality: x = 2.5, evaluated at x=0 gives f(x) = -2.5
+            1: x <= 1.5,  # Inequality: x <= 1.5, evaluated at x=3 gives f(x) = 1.5
+        },
         sense=Instance.MINIMIZE,
     )
 
@@ -104,10 +100,10 @@ def test_solution_total_violation_l2():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints=[
-            (x == 2.5).set_id(1),  # Equality: x = 2.5
-            (x <= 1.5).set_id(2),  # Inequality: x <= 1.5
-        ],
+        constraints={
+            0: x == 2.5,  # Equality: x = 2.5
+            1: x <= 1.5,  # Inequality: x <= 1.5
+        },
         sense=Instance.MINIMIZE,
     )
 
@@ -126,14 +122,11 @@ def test_solution_total_violation_with_satisfied_constraints():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints=[
-            (x == 2.0).set_id(
-                1
-            ),  # Violated equality: x = 2.0, evaluated at x=5 gives |5-2| = 3
-            (x <= 10.0).set_id(
-                2
-            ),  # Satisfied inequality: x <= 10, evaluated at x=5 gives max(0, 5-10) = 0
-        ],
+        constraints={
+            0: x == 2.0,  # Violated equality: x = 2.0, evaluated at x=5 gives |5-2| = 3
+            1: x
+            <= 10.0,  # Satisfied inequality: x <= 10, evaluated at x=5 gives max(0, 5-10) = 0
+        },
         sense=Instance.MINIMIZE,
     )
 
@@ -152,7 +145,7 @@ def test_solution_total_violation_empty():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints=[],
+        constraints={},
         sense=Instance.MINIMIZE,
     )
 

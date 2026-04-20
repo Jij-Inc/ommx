@@ -10,7 +10,7 @@ def test_error_nonlinear_objective():
     ommx_instance = Instance.from_components(
         decision_variables=[x],
         objective=2.3 * x * x,
-        constraints=[],
+        constraints={},
         sense=Instance.MINIMIZE,
     )
 
@@ -29,7 +29,7 @@ def test_error_nonlinear_constraint():
     ommx_instance = Instance.from_components(
         decision_variables=[x],
         objective=0.0,
-        constraints=[(2.3 * x * x == 0).set_id(0)],
+        constraints={0: 2.3 * x * x == 0},
         sense=Instance.MINIMIZE,
     )
 

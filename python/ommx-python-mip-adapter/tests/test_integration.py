@@ -48,10 +48,7 @@ def test_integration_milp():
     ommx_instance = Instance.from_components(
         decision_variables=[x1, x2],
         objective=-x1 - x2,
-        constraints=[
-            3 * x1 - x2 <= 6,
-            -x1 + 3 * x2 <= 6,
-        ],
+        constraints={0: 3 * x1 - x2 <= 6, 1: -x1 + 3 * x2 <= 6},
         sense=Instance.MINIMIZE,
     )
 
@@ -70,7 +67,7 @@ def test_solution_optimality():
     ommx_instance = Instance.from_components(
         decision_variables=[x, y],
         objective=x + y,
-        constraints=[],
+        constraints={},
         sense=Instance.MAXIMIZE,
     )
 
@@ -83,7 +80,7 @@ def test_partial_evaluate():
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0] + x[1] + x[2],
-        constraints=[(x[0] + x[1] + x[2] <= 1).set_id(0)],  # one-hot constraint
+        constraints={0: x[0] + x[1] + x[2] <= 1},  # one-hot constraint
         sense=Instance.MINIMIZE,
     )
     assert instance.used_decision_variables == x
@@ -109,7 +106,7 @@ def test_relax_constraint():
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0] + x[1],
-        constraints=[(x[0] + 2 * x[1] <= 1).set_id(0), (x[1] + x[2] <= 1).set_id(1)],
+        constraints={0: x[0] + 2 * x[1] <= 1, 1: x[1] + x[2] <= 1},
         sense=Instance.MINIMIZE,
     )
 
@@ -150,7 +147,7 @@ def test_integration_timelimit():
     instance = Instance.from_components(
         decision_variables=x,
         objective=sum(v[i] * x[i] for i in range(n)),
-        constraints=[constraint],
+        constraints={0: constraint},
         sense=Instance.MAXIMIZE,
     )
     adapter = OMMXPythonMIPAdapter(instance)
@@ -172,7 +169,7 @@ def test_infeasible_problem():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints=[x >= 4],
+        constraints={0: x >= 4},
         sense=Instance.MAXIMIZE,
     )
     adapter = OMMXPythonMIPAdapter(instance)
@@ -189,7 +186,7 @@ def test_unbounded_problem():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints=[],
+        constraints={},
         sense=Instance.MAXIMIZE,
     )
     adapter = OMMXPythonMIPAdapter(instance)
@@ -205,7 +202,7 @@ def test_decode_before_optimize():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints=[],
+        constraints={},
         sense=Instance.MINIMIZE,
     )
     adapter = OMMXPythonMIPAdapter(instance)

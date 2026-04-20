@@ -25,7 +25,6 @@ mod tests {
         let function = Function::Quadratic(quadratic!(1, 1) + quadratic!(2));
 
         let mut constraint: Constraint<Created> = Constraint {
-            id: ConstraintID::from(1),
             equality: Equality::LessThanOrEqualToZero,
             metadata: ConstraintMetadata::default(),
             stage: CreatedData { function },

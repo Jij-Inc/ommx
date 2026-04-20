@@ -1,8 +1,8 @@
 use super::*;
-use crate::{ATol, Evaluate, Propagate, PropagateOutcome, VariableIDSet};
+use crate::{ATol, Constraint, CreatedData, Evaluate, Propagate, PropagateOutcome, VariableIDSet};
 
 impl Propagate for IndicatorConstraint<Created> {
-    type Transformed = IndicatorPromote;
+    type Transformed = Constraint<Created>;
 
     fn propagate(
         mut self,
@@ -18,15 +18,13 @@ impl Propagate for IndicatorConstraint<Created> {
                 let mut promoted_function = self.stage.function.clone();
                 promoted_function.partial_evaluate(state, atol)?;
 
-                let mut metadata = self.metadata.clone();
-                metadata
-                    .provenance
-                    .push(crate::constraint::Provenance::IndicatorConstraint(self.id));
-
-                let new = IndicatorPromote {
+                // Provenance is added by the caller that has the original IndicatorConstraintID.
+                let new = Constraint {
                     equality: self.equality,
-                    function: promoted_function,
-                    metadata,
+                    metadata: self.metadata.clone(),
+                    stage: CreatedData {
+                        function: promoted_function,
+                    },
                 };
                 Ok((
                     PropagateOutcome::Transformed {
@@ -40,9 +38,8 @@ impl Propagate for IndicatorConstraint<Created> {
                 Ok((PropagateOutcome::Consumed(self), empty_state))
             } else {
                 anyhow::bail!(
-                    "Indicator variable {:?} of indicator constraint {:?} has invalid value {} (must be 0 or 1)",
+                    "Indicator variable {:?} of indicator constraint has invalid value {} (must be 0 or 1)",
                     self.indicator_variable,
-                    self.id,
                     indicator_value
                 );
             }
@@ -68,9 +65,8 @@ impl Evaluate for IndicatorConstraint<Created> {
             .get(&self.indicator_variable.into_inner())
             .ok_or_else(|| {
                 anyhow::anyhow!(
-                    "Indicator variable {:?} not found in state for indicator constraint {:?}",
+                    "Indicator variable {:?} not found in state for indicator constraint",
                     self.indicator_variable,
-                    self.id
                 )
             })?;
 
@@ -80,9 +76,8 @@ impl Evaluate for IndicatorConstraint<Created> {
             false
         } else {
             anyhow::bail!(
-                "Indicator variable {:?} of indicator constraint {:?} has invalid value {} (must be 0 or 1)",
+                "Indicator variable {:?} of indicator constraint has invalid value {} (must be 0 or 1)",
                 self.indicator_variable,
-                self.id,
                 indicator_value
             );
         };
@@ -99,7 +94,6 @@ impl Evaluate for IndicatorConstraint<Created> {
         };
 
         Ok(IndicatorConstraint {
-            id: self.id,
             indicator_variable: self.indicator_variable,
             equality: self.equality,
             metadata: self.metadata.clone(),
@@ -133,10 +127,9 @@ impl Evaluate for IndicatorConstraint<Created> {
                 .get(&self.indicator_variable.into_inner())
                 .ok_or_else(|| {
                     anyhow::anyhow!(
-                        "Indicator variable {:?} not found in sample {:?} for indicator constraint {:?}",
+                        "Indicator variable {:?} not found in sample {:?} for indicator constraint",
                         self.indicator_variable,
                         sample_id,
-                        self.id
                     )
                 })?;
             let indicator_on = if (*indicator_value - 1.0).abs() < *atol {
@@ -145,9 +138,8 @@ impl Evaluate for IndicatorConstraint<Created> {
                 false
             } else {
                 anyhow::bail!(
-                    "Indicator variable {:?} of indicator constraint {:?} has invalid value {} in sample {:?} (must be 0 or 1)",
+                    "Indicator variable {:?} of indicator constraint has invalid value {} in sample {:?} (must be 0 or 1)",
                     self.indicator_variable,
-                    self.id,
                     indicator_value,
                     sample_id
                 );
@@ -166,7 +158,6 @@ impl Evaluate for IndicatorConstraint<Created> {
         }
 
         Ok(IndicatorConstraint {
-            id: self.id,
             indicator_variable: self.indicator_variable,
             equality: self.equality,
             metadata: self.metadata.clone(),
@@ -185,10 +176,9 @@ impl Evaluate for IndicatorConstraint<Created> {
             .contains_key(&self.indicator_variable.into_inner())
         {
             anyhow::bail!(
-                "Cannot partially evaluate indicator variable {:?} of indicator constraint {:?}. \
+                "Cannot partially evaluate indicator variable {:?} of indicator constraint. \
                  Fixing an indicator variable would change the constraint type.",
                 self.indicator_variable,
-                self.id
             );
         }
         self.stage.function.partial_evaluate(state, atol)
@@ -211,7 +201,6 @@ mod tests {
     fn test_evaluate_indicator_on_feasible() {
         // x1 <= 5, indicator = x10
         let ic = IndicatorConstraint::new(
-            IndicatorConstraintID::from(1),
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + coeff!(-5.0)),
@@ -229,7 +218,6 @@ mod tests {
     fn test_evaluate_indicator_on_infeasible() {
         // x1 <= 5, indicator = x10
         let ic = IndicatorConstraint::new(
-            IndicatorConstraintID::from(1),
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + coeff!(-5.0)),
@@ -247,7 +235,6 @@ mod tests {
     fn test_evaluate_indicator_off_always_feasible() {
         // x1 <= 5, indicator = x10
         let ic = IndicatorConstraint::new(
-            IndicatorConstraintID::from(1),
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + coeff!(-5.0)),
@@ -264,7 +251,6 @@ mod tests {
     #[test]
     fn test_required_ids_includes_indicator() {
         let ic = IndicatorConstraint::new(
-            IndicatorConstraintID::from(1),
             VariableID::from(10),
             Equality::EqualToZero,
             Function::from(linear!(1) + linear!(2)),
@@ -279,7 +265,6 @@ mod tests {
     fn test_partial_evaluate_function_variable() {
         // Partial evaluate a variable in the function should work
         let mut ic = IndicatorConstraint::new(
-            IndicatorConstraintID::from(1),
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + linear!(2) + coeff!(-5.0)),
@@ -299,7 +284,6 @@ mod tests {
     fn test_partial_evaluate_indicator_variable_fails() {
         // Partial evaluate the indicator variable itself should fail
         let mut ic = IndicatorConstraint::new(
-            IndicatorConstraintID::from(1),
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + coeff!(-5.0)),
@@ -315,7 +299,6 @@ mod tests {
     fn test_evaluate_samples_indicator() {
         // x1 <= 5, indicator = x10
         let ic = IndicatorConstraint::new(
-            IndicatorConstraintID::from(1),
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + coeff!(-5.0)),
@@ -366,7 +349,6 @@ mod tests {
     #[test]
     fn test_propagate_indicator_on_promotes() {
         let ic = IndicatorConstraint::new(
-            IndicatorConstraintID::from(1),
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + coeff!(-5.0)),
@@ -379,11 +361,8 @@ mod tests {
         match outcome {
             PropagateOutcome::Transformed { original, new } => {
                 assert_eq!(new.equality, Equality::LessThanOrEqualToZero);
-                assert_eq!(new.metadata.provenance.len(), 1);
-                assert!(matches!(
-                    new.metadata.provenance[0],
-                    crate::constraint::Provenance::IndicatorConstraint(id) if id == IndicatorConstraintID::from(1)
-                ));
+                // Provenance is added by the caller (Instance) that owns the original ID.
+                assert!(new.metadata.provenance.is_empty());
                 // Original indicator constraint preserved for removed set
                 assert_eq!(original.indicator_variable, VariableID::from(10));
             }
@@ -394,7 +373,6 @@ mod tests {
     #[test]
     fn test_propagate_indicator_off_consumed() {
         let ic = IndicatorConstraint::new(
-            IndicatorConstraintID::from(1),
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + coeff!(-5.0)),
@@ -410,7 +388,6 @@ mod tests {
     #[test]
     fn test_propagate_indicator_not_fixed_partial_evaluates_function() {
         let ic = IndicatorConstraint::new(
-            IndicatorConstraintID::from(1),
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + linear!(2) + coeff!(-5.0)),
@@ -433,7 +410,6 @@ mod tests {
     #[test]
     fn test_propagate_indicator_on_with_function_partial_eval() {
         let ic = IndicatorConstraint::new(
-            IndicatorConstraintID::from(1),
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
             Function::from(linear!(1) + linear!(2) + coeff!(-5.0)),
@@ -445,7 +421,7 @@ mod tests {
         assert!(additional.entries.is_empty());
         match outcome {
             PropagateOutcome::Transformed { original, new } => {
-                let ids = new.function.required_ids();
+                let ids = new.function().required_ids();
                 assert!(!ids.contains(&VariableID::from(1))); // substituted
                 assert!(ids.contains(&VariableID::from(2))); // still free
                                                              // Original ic still has unmodified function (was cloned for promotion)

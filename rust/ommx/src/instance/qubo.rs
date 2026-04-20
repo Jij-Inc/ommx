@@ -150,7 +150,7 @@ mod tests {
     fn qubo_rejects_instances_with_constraints() {
         let constraints = btreemap! {
             crate::ConstraintID::from(0) =>
-                crate::Constraint::equal_to_zero(crate::ConstraintID::from(0), linear!(1).into()),
+                crate::Constraint::equal_to_zero(linear!(1).into()),
         };
         let instance = Instance::new(
             Sense::Minimize,
@@ -192,7 +192,6 @@ mod tests {
         )
         .unwrap();
         let one_hot = OneHotConstraint::new(
-            OneHotConstraintID::from(0),
             [VariableID::from(1), VariableID::from(2)]
                 .into_iter()
                 .collect::<BTreeSet<_>>(),
