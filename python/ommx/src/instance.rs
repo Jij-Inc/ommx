@@ -1088,21 +1088,30 @@ impl Instance {
 
     /// Convert a SOS1 constraint to regular constraints using the Big-M method.
     ///
-    /// A SOS1 constraint over ``{x_1, ..., x_n}`` with each ``x_i in [l_i, u_i]``
-    /// asserts that at most one variable is non-zero. Per variable, a binary
-    /// indicator ``y_i`` is introduced with
-    /// ``x_i - u_i y_i <= 0`` and ``l_i y_i - x_i <= 0`` (trivial sides are skipped).
-    /// A single cardinality constraint ``sum_i y_i - 1 <= 0`` is then added.
+    /// A SOS1 constraint over $\{x_1, \ldots, x_n\}$ with each $x_i \in [l_i, u_i]$
+    /// asserts that at most one $x_i$ is non-zero. Per variable, a binary indicator
+    /// $y_i$ is introduced with the Big-M pair
     ///
-    /// If ``x_i`` is already binary with bound ``[0, 1]``, ``x_i`` itself is reused
-    /// as its indicator (no new variable, no Big-M pair).
+    /// $$
+    /// x_i - u_i y_i \leq 0, \qquad l_i y_i - x_i \leq 0
+    /// $$
+    ///
+    /// (trivial sides $u_i = 0$ or $l_i = 0$ are skipped), together with the single
+    /// cardinality constraint
+    ///
+    /// $$
+    /// \sum_i y_i - 1 \leq 0.
+    /// $$
+    ///
+    /// If $x_i$ is already binary with bound $[0, 1]$, $x_i$ itself is reused as its
+    /// indicator (no new variable, no Big-M pair).
     ///
     /// Returns the list of newly created regular constraint IDs in insertion order
     /// (Big-M upper/lower pairs per non-binary variable, followed by the cardinality
     /// sum).
     ///
-    /// Raises if any ``x_i`` has a non-binary bound that is not finite, or if its
-    /// domain excludes ``0``. The instance is not mutated on error.
+    /// Raises if any $x_i$ has a non-binary bound that is not finite, or if its
+    /// domain excludes $0$. The instance is not mutated on error.
     ///
     /// # Examples
     ///
