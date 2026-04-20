@@ -562,7 +562,7 @@ mod tests {
 
         let result = instance.convert_all_sos1_to_constraints().unwrap();
         assert_eq!(result.len(), 2);
-        for (_, new_ids) in &result {
+        for new_ids in result.values() {
             assert_eq!(new_ids.len(), 1); // all-binary: only cardinality
             assert!(instance.constraints().contains_key(&new_ids[0]));
         }
