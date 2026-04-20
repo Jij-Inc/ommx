@@ -29,8 +29,10 @@ Decision variables (shared by both formulations)
 
 .. math::
 
-    s_{i,j} \in [0, d_j]    \qquad i \in 1..N,\ j \in 1..M \\
-    c_i     \in [0, C_i]    \qquad i \in 1..N
+    \begin{aligned}
+    s_{i,j} &\in [0, d_j] \qquad i \in 1..N,\ j \in 1..M \\
+    c_i     &\in [0, C_i] \qquad i \in 1..N
+    \end{aligned}
 
 where :math:`s_{i,j}` is the amount delivered from plant :math:`i` to client
 :math:`j` and :math:`c_i` is the total capacity drawn from plant :math:`i`.
@@ -40,8 +42,10 @@ Shared constraints
 
 .. math::
 
-    \sum_{j=1}^M s_{i,j} = c_i \quad &\text{(capacity balance, per plant)} \\
-    \sum_{i=1}^N s_{i,j} = d_j \quad &\text{(demand, per client)}
+    \begin{aligned}
+    \sum_{j=1}^M s_{i,j} &= c_i \quad \text{(capacity balance, per plant)} \\
+    \sum_{i=1}^N s_{i,j} &= d_j \quad \text{(demand, per client)}
+    \end{aligned}
 
 Objective (minimize)
 ~~~~~~~~~~~~~~~~~~~~
@@ -68,9 +72,11 @@ an opening indicator, and add
 
 .. math::
 
+    \begin{aligned}
     c_i &\le C_i \, \delta_i \qquad \forall i \\
     \sum_{i \in W} \delta_i &\le 1 \\
     \sum_{i \in E} \delta_i &\le 1
+    \end{aligned}
 
 No SOS1 constraint is produced; the solver sees only plain linear
 constraints. The two formulations share the same projection onto
