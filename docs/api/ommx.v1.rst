@@ -26,6 +26,7 @@ ommx.v1
    _items/ommx.v1.OneHotConstraint
    _items/ommx.v1.RemovedOneHotConstraint
    _items/ommx.v1.Sos1Constraint
+   _items/ommx.v1.RemovedSos1Constraint
    _items/ommx.v1.RemovedConstraint
    _items/ommx.v1.NamedFunction
    _items/ommx.v1.EvaluatedDecisionVariable

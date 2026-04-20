@@ -21,6 +21,7 @@ mod reduce_binary_power;
 mod serialize;
 mod setter;
 mod slack;
+mod sos1;
 mod stats;
 mod substitute;
 

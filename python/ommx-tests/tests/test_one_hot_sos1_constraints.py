@@ -210,6 +210,83 @@ def test_evaluate_with_sos1_feasible():
     assert solution_zeros.feasible
 
 
+def test_convert_sos1_with_integer_variables_emits_bigm_pair():
+    """Non-binary SOS1 variables get a fresh binary indicator plus upper and lower Big-M."""
+    x = [DecisionVariable.integer(i, lower=-2, upper=3) for i in range(1, 3)]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=sum(x),
+        constraints={},
+        sos1_constraints={10: Sos1Constraint(variables=[1, 2])},
+        sense=Instance.MINIMIZE,
+    )
+
+    before_var_ids = {dv.id for dv in instance.decision_variables}
+    new_ids = instance.convert_sos1_to_constraints(10)
+
+    # Two integer vars with [-2, 3]: upper + lower per var, plus cardinality = 5 constraints.
+    assert len(new_ids) == 5
+    # Two fresh binary indicators were introduced.
+    after_vars = {dv.id: dv for dv in instance.decision_variables}
+    new_var_ids = set(after_vars) - before_var_ids
+    assert len(new_var_ids) == 2
+    for v_id in new_var_ids:
+        assert after_vars[v_id].name == "ommx.sos1_indicator"
+    # Original SOS1 is retained on the removed side with our reason string.
+    removed = instance.removed_sos1_constraints[10]
+    assert removed.removed_reason == "ommx.Instance.convert_sos1_to_constraints"
+    # `constraint_ids` parameter lists all 5 new IDs in insertion order.
+    assert removed.removed_reason_parameters["constraint_ids"] == ",".join(
+        str(i) for i in new_ids
+    )
+
+
+def test_convert_sos1_rejects_domain_excluding_zero():
+    """SOS1 over x with bound [1, 3] cannot be Big-M converted: y=0 ⇒ x=0 is infeasible."""
+    x = [DecisionVariable.integer(1, lower=1, upper=3)]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=x[0],
+        constraints={},
+        sos1_constraints={10: Sos1Constraint(variables=[1])},
+        sense=Instance.MINIMIZE,
+    )
+    before_var_ids = {dv.id for dv in instance.decision_variables}
+
+    with pytest.raises(RuntimeError, match="excludes 0"):
+        instance.convert_sos1_to_constraints(10)
+
+    # Instance unchanged on error.
+    assert {dv.id for dv in instance.decision_variables} == before_var_ids
+    assert 10 in instance.sos1_constraints
+
+
+def test_sos1_constraints_df_roundtrips_removed_metadata():
+    """removed_sos1_constraints_df surfaces reason + constraint_ids parameter as columns."""
+    x = [DecisionVariable.binary(i) for i in range(3)]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=sum(x),
+        constraints={},
+        sos1_constraints={7: Sos1Constraint(variables=[0, 1, 2])},
+        sense=Instance.MINIMIZE,
+    )
+    new_ids = instance.convert_sos1_to_constraints(7)
+
+    active_df = instance.sos1_constraints_df
+    assert active_df.empty
+
+    removed_df = instance.removed_sos1_constraints_df
+    assert list(removed_df.index) == [7]
+    assert (
+        removed_df.loc[7, "removed_reason"]
+        == "ommx.Instance.convert_sos1_to_constraints"
+    )
+    assert removed_df.loc[7, "removed_reason.constraint_ids"] == ",".join(
+        str(i) for i in new_ids
+    )
+
+
 def test_evaluate_with_sos1_infeasible():
     """Test that evaluation with SOS1 constraints detects infeasibility."""
     from ommx.v1 import State

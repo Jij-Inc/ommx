@@ -81,4 +81,7 @@ pub enum InstanceError {
 
     #[error("SOS1 variable {id:?} is not defined in decision_variables")]
     UndefinedSos1Variable { id: VariableID },
+
+    #[error("SOS1 constraint {id:?} has no variables; SOS1 constraints must contain at least one variable")]
+    EmptySos1Constraint { id: crate::Sos1ConstraintID },
 }
