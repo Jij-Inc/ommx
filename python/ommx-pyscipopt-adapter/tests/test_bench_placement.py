@@ -31,7 +31,7 @@ from ommx.testing.placement import (
 from ommx.v1 import Instance
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
-_SIZES = [(6 * (i + 1), 10 * (i + 1)) for i in range(5)]
+_SIZES = [(6, 10), (12, 20), (24, 40), (48, 80)]
 _INSTANCES_PER_SIZE = 3
 
 
