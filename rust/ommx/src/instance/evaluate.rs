@@ -267,16 +267,18 @@ impl Instance {
                             .removed_mut()
                             .insert(id, (ic, propagation_reason.clone()));
                     }
-                    PropagateOutcome::Transformed { original, new } => {
-                        // Indicator=1 → promote inner constraint to regular constraint
+                    PropagateOutcome::Transformed {
+                        original,
+                        new: mut constraint,
+                    } => {
+                        // Indicator=1 → promote inner constraint to regular constraint.
+                        // Record the promotion in the new constraint's provenance so that
+                        // downstream consumers can trace it back to the original indicator.
                         let cid = self.constraint_collection.unused_id();
-                        let constraint = crate::Constraint {
-                            equality: new.equality,
-                            metadata: new.metadata,
-                            stage: crate::CreatedData {
-                                function: new.function,
-                            },
-                        };
+                        constraint
+                            .metadata
+                            .provenance
+                            .push(crate::constraint::Provenance::IndicatorConstraint(id));
                         self.constraint_collection
                             .active_mut()
                             .insert(cid, constraint);
@@ -628,8 +630,22 @@ mod tests {
         assert!(instance.indicator_constraint_collection.active().is_empty());
         assert_eq!(instance.indicator_constraint_collection.removed().len(), 1);
 
-        // A new regular constraint should be added
+        // A new regular constraint should be added, and its provenance
+        // should reference the original IndicatorConstraintID so that the
+        // transformation lineage is preserved.
         assert_eq!(instance.constraint_collection.active().len(), 1);
+        let (_, promoted) = instance
+            .constraint_collection
+            .active()
+            .iter()
+            .next()
+            .unwrap();
+        assert_eq!(
+            promoted.metadata.provenance,
+            vec![crate::constraint::Provenance::IndicatorConstraint(
+                IndicatorConstraintID::from(100)
+            )]
+        );
     }
 
     #[test]

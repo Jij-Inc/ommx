@@ -167,23 +167,6 @@ impl ConstraintType for IndicatorConstraint {
     type Sampled = SampledIndicatorConstraint;
 }
 
-// ===== Propagate output =====
-
-/// Components of a regular constraint promoted from an indicator constraint
-/// (when the indicator variable is fixed to 1).
-///
-/// This is the `Transformed` type for `Propagate` impl on `IndicatorConstraint`.
-/// The caller (Instance) assigns a unique `ConstraintID` for the new constraint.
-///
-/// Other propagation outcomes (indicator=0 → removed, no propagation → active)
-/// are represented at the [`PropagateOutcome`](crate::PropagateOutcome) level.
-#[derive(Debug, Clone)]
-pub struct IndicatorPromote {
-    pub equality: Equality,
-    pub function: Function,
-    pub metadata: ConstraintMetadata,
-}
-
 // ===== Created stage =====
 
 impl IndicatorConstraint<Created> {

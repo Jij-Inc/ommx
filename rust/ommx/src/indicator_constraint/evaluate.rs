@@ -1,8 +1,8 @@
 use super::*;
-use crate::{ATol, Evaluate, Propagate, PropagateOutcome, VariableIDSet};
+use crate::{ATol, Constraint, CreatedData, Evaluate, Propagate, PropagateOutcome, VariableIDSet};
 
 impl Propagate for IndicatorConstraint<Created> {
-    type Transformed = IndicatorPromote;
+    type Transformed = Constraint<Created>;
 
     fn propagate(
         mut self,
@@ -18,12 +18,13 @@ impl Propagate for IndicatorConstraint<Created> {
                 let mut promoted_function = self.stage.function.clone();
                 promoted_function.partial_evaluate(state, atol)?;
 
-                let metadata = self.metadata.clone();
                 // Provenance is added by the caller that has the original IndicatorConstraintID.
-                let new = IndicatorPromote {
+                let new = Constraint {
                     equality: self.equality,
-                    function: promoted_function,
-                    metadata,
+                    metadata: self.metadata.clone(),
+                    stage: CreatedData {
+                        function: promoted_function,
+                    },
                 };
                 Ok((
                     PropagateOutcome::Transformed {
@@ -420,7 +421,7 @@ mod tests {
         assert!(additional.entries.is_empty());
         match outcome {
             PropagateOutcome::Transformed { original, new } => {
-                let ids = new.function.required_ids();
+                let ids = new.function().required_ids();
                 assert!(!ids.contains(&VariableID::from(1))); // substituted
                 assert!(ids.contains(&VariableID::from(2))); // still free
                                                              // Original ic still has unmodified function (was cloned for promotion)
