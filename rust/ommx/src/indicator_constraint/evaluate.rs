@@ -334,14 +334,14 @@ mod tests {
         let s2 = crate::SampleID::from(2);
 
         // Feasibility
-        assert_eq!(result.stage.feasible[&s0], true);
-        assert_eq!(result.stage.feasible[&s1], false);
-        assert_eq!(result.stage.feasible[&s2], true);
+        assert!(result.stage.feasible[&s0]);
+        assert!(!result.stage.feasible[&s1]);
+        assert!(result.stage.feasible[&s2]);
 
         // Indicator active
-        assert_eq!(result.stage.indicator_active[&s0], true);
-        assert_eq!(result.stage.indicator_active[&s1], true);
-        assert_eq!(result.stage.indicator_active[&s2], false);
+        assert!(result.stage.indicator_active[&s0]);
+        assert!(result.stage.indicator_active[&s1]);
+        assert!(!result.stage.indicator_active[&s2]);
     }
 
     // === Propagate tests ===
