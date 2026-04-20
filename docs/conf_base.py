@@ -54,6 +54,7 @@ myst_update_mathjax = False
 nb_execution_mode = os.environ.get("OMMX_NB_EXECUTION", "off")
 nb_execution_timeout = 300
 nb_execution_excludepatterns = ["release_note/ommx-1.*.md"]
+nb_execution_raise_on_error = True
 
 # -- Options for HTML output -------------------------------------------------
 
