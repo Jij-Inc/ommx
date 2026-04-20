@@ -100,7 +100,7 @@ instance.constraints_df
 
 OMMXでは制約条件もIDで管理されます。このIDは決定変数のIDとは独立です。制約条件のIDは `Instance` に登録する際に決まります: [`Instance.from_components`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.from_components) に渡す `constraints` 辞書のキーがそのまま制約条件のIDになります。
 
-制約条件に必須の情報は `equality` です。`equality` はその制約条件が等式制約 ([`Constraint.EQUAL_TO_ZERO`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Constraint.EQUAL_TO_ZERO)) か不等式制約 ([`Constraint.LESS_THAN_OR_EQUAL_TO_ZERO`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Constraint.LESS_THAN_OR_EQUAL_TO_ZERO)) かを表します。$f(x) \geq 0$のタイプの制約条件は $-f(x) \leq 0$ として扱われることに注意してくください。
+制約条件に必須の情報は `equality` です。`equality` はその制約条件が等式制約 ([`Constraint.EQUAL_TO_ZERO`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Constraint.EQUAL_TO_ZERO)) か不等式制約 ([`Constraint.LESS_THAN_OR_EQUAL_TO_ZERO`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Constraint.LESS_THAN_OR_EQUAL_TO_ZERO)) かを表します。$f(x) \geq 0$のタイプの制約条件は $-f(x) \leq 0$ として扱われることに注意してください。
 
 制約条件にも決定変数と同様にメタデータを保存することができます。決定変数と同様に `name`, `description`, `subscripts`, `parameters` が利用できます。これらは [`add_name`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Constraint.add_name), [`add_description`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Constraint.add_description), [`add_subscripts`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Constraint.add_subscripts), [`add_parameters`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Constraint.add_parameters) メソッドで設定できます。
 

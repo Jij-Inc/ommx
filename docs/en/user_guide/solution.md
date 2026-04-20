@@ -58,7 +58,7 @@ The generated `ommx.v1.Solution` inherits most of the information from the `ommx
 solution.decision_variables_df
 ```
 
-In addition to the required attributes—ID, `kind`, `lower`, and `upper`-it also inherits metadata such as `name`. Additionally, the `value` stores which was assigned in `evaluate`.  Similarly, the evaluation value is added to the constraints as `value`.
+In addition to the required attributes—ID, `kind`, `lower`, and `upper`—it also inherits metadata such as `name`. Additionally, the `value` assigned in `evaluate` is stored. Similarly, the evaluation value is added to the constraints as `value`.
 
 ```{code-cell} ipython3
 solution.constraints_df
