@@ -9,7 +9,7 @@ import pytest
 
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
-from placement import Input, build_bigm, build_sos1
+from ommx.testing.placement import Input, build_bigm, build_sos1
 
 
 @pytest.fixture

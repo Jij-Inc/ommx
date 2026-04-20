@@ -10,7 +10,7 @@ import pytest
 from ommx.v1 import Instance
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
-from placement import Input, build_bigm, build_sos1
+from ommx.testing.placement import Input, build_bigm, build_sos1
 
 _SIZES = [(6 * (i + 1), 10 * (i + 1)) for i in range(5)]
 _INSTANCES_PER_SIZE = 3
