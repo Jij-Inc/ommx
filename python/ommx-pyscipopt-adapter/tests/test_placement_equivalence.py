@@ -1,4 +1,4 @@
-"""Verify that ``build_sos1`` and ``build_bigm`` define the same optimum."""
+"""Verify that the four Plant Placement builders define the same optimum."""
 
 from __future__ import annotations
 
@@ -9,7 +9,13 @@ import pytest
 
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
-from ommx.testing.placement import Input, build_bigm, build_sos1
+from ommx.testing.placement import (
+    Input,
+    build_bigm,
+    build_sos1,
+    build_sos1_on_delta,
+    build_sos1_on_delta_with_card,
+)
 
 
 @pytest.fixture
@@ -18,10 +24,21 @@ def small_input() -> Input:
     return Input.random(num_plants=6, num_clients=10)
 
 
-def test_sos1_and_bigm_match(small_input: Input) -> None:
-    sos1_sol = OMMXPySCIPOptAdapter.solve(build_sos1(small_input))
-    bigm_sol = OMMXPySCIPOptAdapter.solve(build_bigm(small_input))
+def test_all_formulations_match(small_input: Input) -> None:
+    builders = {
+        "sos1": build_sos1,
+        "sos1_on_delta": build_sos1_on_delta,
+        "sos1_on_delta_with_card": build_sos1_on_delta_with_card,
+        "bigm": build_bigm,
+    }
+    objectives = {}
+    for name, builder in builders.items():
+        sol = OMMXPySCIPOptAdapter.solve(builder(small_input))
+        assert sol.feasible, f"{name} should be feasible"
+        objectives[name] = sol.objective
 
-    assert sos1_sol.feasible
-    assert bigm_sol.feasible
-    assert math.isclose(sos1_sol.objective, bigm_sol.objective, rel_tol=1e-6)
+    base = objectives["sos1"]
+    for name, value in objectives.items():
+        assert math.isclose(value, base, rel_tol=1e-6), (
+            f"{name} optimum {value} differs from sos1 optimum {base}"
+        )
