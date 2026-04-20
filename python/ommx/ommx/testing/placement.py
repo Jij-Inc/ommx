@@ -1,9 +1,10 @@
-r"""Plant Placement Problem — two equivalent OMMX formulations.
+r"""Plant Placement Problem — equivalent OMMX formulations.
 
 This module provides a small, solver-agnostic benchmark problem used to
-exercise an adapter's SOS1 handling. Both builders produce `ommx.v1.Instance`
-objects describing the same feasible region and optimum; they differ only in
-how "at most one plant per region" is communicated to the solver.
+exercise an adapter's SOS1 handling. The builders in this module produce
+`ommx.v1.Instance` objects describing the same feasible region and optimum;
+they differ only in how "at most one plant per region" is communicated to
+the solver.
 
 Problem
 -------
@@ -136,17 +137,30 @@ class Input:
 
     @classmethod
     def random(cls, num_plants: int, num_clients: int) -> "Input":
-        """Sample a random instance.
+        """Sample a random instance that is feasible under the one-plant-per-region rule.
 
         Plant and client positions are drawn uniformly from :math:`[0, 100]^2`.
         Client demands are uniform on :math:`[200, 400]`. Plant capacities are
-        sized relative to the total demand and then rescaled, if necessary, so
-        that the "smallest-plant-in-each-region" lower bound still covers total
-        demand — keeping the random instance feasible for the
-        one-plant-per-region restriction.
+        drawn from a range sized relative to total demand.
 
-        Callers are expected to seed :mod:`random` before calling this.
+        To keep the sampled instance feasible under "at most one plant per
+        region", two repairs are applied:
+
+        1. Plant positions are resampled until both west and east regions
+           contain at least one plant.
+        2. If the *best* plant in each region together cannot cover total
+           demand, the deficit is split evenly between those two best plants.
+           Only the two best plants are touched — all other capacities are
+           left at their sampled values, so the benchmark difficulty is not
+           inflated across the board.
+
+        Requires ``num_plants >= 2``. Callers are expected to seed
+        :mod:`random` before calling this.
         """
+        if num_plants < 2:
+            raise ValueError(
+                "num_plants must be at least 2 to place one plant per region"
+            )
         clients = [
             Client(
                 position=(random.uniform(0, 100), random.uniform(0, 100)),
@@ -156,25 +170,35 @@ class Input:
         ]
         total_demand = sum(c.demand for c in clients)
         lb = ceil(total_demand / 2)
-        plants = [
-            Plant(
-                position=(random.uniform(0, 100), random.uniform(0, 100)),
-                max_capacity=random.uniform(2 * lb // 3, lb * 2),
+
+        while True:
+            plants = [
+                Plant(
+                    position=(random.uniform(0, 100), random.uniform(0, 100)),
+                    max_capacity=random.uniform(2 * lb // 3, lb * 2),
+                )
+                for _ in range(num_plants)
+            ]
+            wests = [i for i, p in enumerate(plants) if p.position[0] < 50]
+            easts = [i for i, p in enumerate(plants) if p.position[0] >= 50]
+            if wests and easts:
+                break
+
+        max_w = max(wests, key=lambda i: plants[i].max_capacity)
+        max_e = max(easts, key=lambda i: plants[i].max_capacity)
+        deficit = total_demand - (
+            plants[max_w].max_capacity + plants[max_e].max_capacity
+        )
+        if deficit > 0:
+            bump = deficit / 2
+            plants[max_w] = Plant(
+                position=plants[max_w].position,
+                max_capacity=plants[max_w].max_capacity + bump,
             )
-            for _ in range(num_plants)
-        ]
-        wests = [p for p in plants if p.position[0] < 50]
-        easts = [p for p in plants if p.position[0] >= 50]
-        if wests and easts:
-            min_capas = min(p.max_capacity for p in wests) + min(
-                p.max_capacity for p in easts
+            plants[max_e] = Plant(
+                position=plants[max_e].position,
+                max_capacity=plants[max_e].max_capacity + bump,
             )
-            if total_demand > min_capas:
-                shift = total_demand - min_capas
-                plants = [
-                    Plant(position=p.position, max_capacity=p.max_capacity + shift)
-                    for p in plants
-                ]
         return cls(plants=plants, clients=clients)
 
 
