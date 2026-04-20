@@ -1994,7 +1994,7 @@ class Instance:
         A one-hot constraint over ``{x_1, ..., x_n}`` is mathematically equivalent to the
         linear equality ``x_1 + ... + x_n - 1 == 0``. This method inserts that equality
         as a new regular constraint and moves the one-hot constraint into
-        :attr:`~ommx.v1.Instance.removed_one_hot_constraints` with
+        {attr}`~ommx.v1.Instance.removed_one_hot_constraints` with
         ``reason="ommx.Instance.convert_one_hot_to_constraint"`` and a
         ``constraint_id`` parameter pointing to the new regular constraint.
 
@@ -2025,7 +2025,7 @@ class Instance:
         r"""
         Convert every active one-hot constraint to a regular equality constraint.
 
-        See :meth:`~ommx.v1.Instance.convert_one_hot_to_constraint` for the conversion rule.
+        See {meth}`~ommx.v1.Instance.convert_one_hot_to_constraint` for the conversion rule.
         Returns the IDs of the newly created regular constraints.
 
         # Examples
@@ -2103,7 +2103,7 @@ class Instance:
         r"""
         Convert every active SOS1 constraint to regular constraints using Big-M.
 
-        See :meth:`~ommx.v1.Instance.convert_sos1_to_constraints` for the conversion
+        See {meth}`~ommx.v1.Instance.convert_sos1_to_constraints` for the conversion
         rule. Returns a dict mapping each original SOS1 ID to the list of regular
         constraint IDs it produced.
 
