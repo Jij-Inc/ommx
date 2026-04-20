@@ -63,7 +63,7 @@ impl Instance {
         if af_bound.upper() <= 0.0 {
             self.relax_constraint(
                 constraint_id,
-                "convert_inequality_to_equality_with_integer_slack".to_string(),
+                "ommx.Instance.convert_inequality_to_equality_with_integer_slack".to_string(),
                 [],
             )?;
             return Ok(());

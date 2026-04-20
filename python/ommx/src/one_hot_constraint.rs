@@ -1,6 +1,6 @@
 use pyo3::prelude::*;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 
 /// A one-hot constraint: exactly one variable must be 1, the rest must be 0.
 ///
@@ -42,5 +42,74 @@ impl OneHotConstraint {
 
     fn __deepcopy__(&self, _memo: pyo3::Bound<pyo3::types::PyAny>) -> Self {
         self.clone()
+    }
+}
+
+/// A removed one-hot constraint together with the reason it was removed.
+#[gen_stub_pyclass]
+#[pyclass]
+#[derive(Clone)]
+pub struct RemovedOneHotConstraint {
+    pub constraint: ommx::OneHotConstraint,
+    pub removed_reason: ommx::RemovedReason,
+}
+
+impl RemovedOneHotConstraint {
+    pub fn from_pair(
+        constraint: ommx::OneHotConstraint,
+        removed_reason: ommx::RemovedReason,
+    ) -> Self {
+        Self {
+            constraint,
+            removed_reason,
+        }
+    }
+}
+
+#[gen_stub_pymethods]
+#[pymethods]
+impl RemovedOneHotConstraint {
+    #[getter]
+    pub fn constraint(&self) -> OneHotConstraint {
+        OneHotConstraint(self.constraint.clone())
+    }
+
+    #[getter]
+    pub fn variables(&self) -> Vec<u64> {
+        self.constraint
+            .variables
+            .iter()
+            .map(|v| v.into_inner())
+            .collect()
+    }
+
+    #[getter]
+    pub fn removed_reason(&self) -> String {
+        self.removed_reason.reason.clone()
+    }
+
+    #[getter]
+    pub fn removed_reason_parameters(&self) -> HashMap<String, String> {
+        self.removed_reason
+            .parameters
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
+    }
+
+    fn __repr__(&self) -> String {
+        let mut extras: Vec<String> = self
+            .removed_reason
+            .parameters
+            .iter()
+            .map(|(k, v)| format!("{k}={v}"))
+            .collect();
+        extras.sort();
+        let mut head = format!("{}, reason={}", self.constraint, self.removed_reason.reason);
+        if !extras.is_empty() {
+            head.push_str(", ");
+            head.push_str(&extras.join(", "));
+        }
+        format!("RemovedOneHotConstraint({head})")
     }
 }

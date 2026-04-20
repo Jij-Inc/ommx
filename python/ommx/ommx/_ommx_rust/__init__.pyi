@@ -41,6 +41,7 @@ __all__ = [
     "Quadratic",
     "Relaxation",
     "RemovedConstraint",
+    "RemovedOneHotConstraint",
     "Rng",
     "SampleSet",
     "SampledConstraint",
@@ -1347,6 +1348,13 @@ class Instance:
         Dict of all one-hot constraints in the instance keyed by their IDs.
         """
     @property
+    def removed_one_hot_constraints(
+        self,
+    ) -> builtins.dict[builtins.int, RemovedOneHotConstraint]:
+        r"""
+        Dict of all removed one-hot constraints in the instance keyed by their IDs.
+        """
+    @property
     def sos1_constraints(self) -> builtins.dict[builtins.int, Sos1Constraint]:
         r"""
         Dict of all SOS1 constraints in the instance keyed by their IDs.
@@ -1379,6 +1387,16 @@ class Instance:
     def indicator_constraints_df(self) -> pandas.DataFrame:
         r"""
         DataFrame of indicator constraints
+        """
+    @property
+    def one_hot_constraints_df(self) -> pandas.DataFrame:
+        r"""
+        DataFrame of one-hot constraints
+        """
+    @property
+    def removed_one_hot_constraints_df(self) -> pandas.DataFrame:
+        r"""
+        DataFrame of removed one-hot constraints
         """
     @property
     def removed_constraints_df(self) -> pandas.DataFrame:
@@ -1640,9 +1658,9 @@ class Instance:
         >>> len(pi.removed_constraints)
         2
         >>> pi.removed_constraints[0]
-        RemovedConstraint(x0 + x1 - 1 == 0, reason=penalty_method, parameter_id=3)
+        RemovedConstraint(x0 + x1 - 1 == 0, reason=ommx.Instance.penalty_method, parameter_id=3)
         >>> pi.removed_constraints[1]
-        RemovedConstraint(x1 + x2 - 1 == 0, reason=penalty_method, parameter_id=4)
+        RemovedConstraint(x1 + x2 - 1 == 0, reason=ommx.Instance.penalty_method, parameter_id=4)
         ```
         """
     def uniform_penalty_method(self) -> ParametricInstance:
@@ -1689,7 +1707,7 @@ class Instance:
         >>> len(pi.removed_constraints)
         1
         >>> pi.removed_constraints[0]
-        RemovedConstraint(x0 + x1 + x2 - 3 == 0, reason=uniform_penalty_method)
+        RemovedConstraint(x0 + x1 + x2 - 3 == 0, reason=ommx.Instance.uniform_penalty_method)
         ```
 
         There is only one parameter in the instance
@@ -1950,6 +1968,70 @@ class Instance:
     def restore_indicator_constraint(self, constraint_id: builtins.int) -> None:
         r"""
         Restore a removed indicator constraint back to active.
+        """
+    def convert_one_hot_to_constraint(self, one_hot_id: builtins.int) -> builtins.int:
+        r"""
+        Convert a one-hot constraint to a regular equality constraint.
+
+        A one-hot constraint over ``{x_1, ..., x_n}`` is mathematically equivalent to the
+        linear equality ``x_1 + ... + x_n - 1 == 0``. This method inserts that equality
+        as a new regular constraint and moves the one-hot constraint into
+        :attr:`~ommx.v1.Instance.removed_one_hot_constraints` with
+        ``reason="ommx.Instance.convert_one_hot_to_constraint"`` and a
+        ``constraint_id`` parameter pointing to the new regular constraint.
+
+        Returns the ID of the newly created regular constraint.
+
+        # Examples
+
+        ```python
+        >>> from ommx.v1 import Instance, DecisionVariable, OneHotConstraint
+        >>> x = [DecisionVariable.binary(i) for i in range(3)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints={},
+        ...     one_hot_constraints={1: OneHotConstraint(variables=[0, 1, 2])},
+        ...     sense=Instance.MINIMIZE,
+        ... )
+        >>> new_id = instance.convert_one_hot_to_constraint(1)
+        >>> instance.one_hot_constraints
+        {}
+        >>> instance.constraints
+        {0: Constraint(x0 + x1 + x2 - 1 == 0)}
+        >>> instance.removed_one_hot_constraints
+        {1: RemovedOneHotConstraint(OneHotConstraint(exactly one of {x0, x1, x2} = 1), reason=ommx.Instance.convert_one_hot_to_constraint, constraint_id=0)}
+        ```
+        """
+    def convert_one_hots_to_constraints(self) -> builtins.list[builtins.int]:
+        r"""
+        Convert every active one-hot constraint to a regular equality constraint.
+
+        See :meth:`~ommx.v1.Instance.convert_one_hot_to_constraint` for the conversion rule.
+        Returns the IDs of the newly created regular constraints.
+
+        # Examples
+
+        ```python
+        >>> from ommx.v1 import Instance, DecisionVariable, OneHotConstraint
+        >>> x = [DecisionVariable.binary(i) for i in range(4)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints={},
+        ...     one_hot_constraints={
+        ...         1: OneHotConstraint(variables=[0, 1]),
+        ...         2: OneHotConstraint(variables=[2, 3]),
+        ...     },
+        ...     sense=Instance.MINIMIZE,
+        ... )
+        >>> instance.convert_one_hots_to_constraints()
+        [0, 1]
+        >>> instance.one_hot_constraints
+        {}
+        >>> instance.constraints
+        {0: Constraint(x0 + x1 - 1 == 0), 1: Constraint(x2 + x3 - 1 == 0)}
+        ```
         """
     def log_encode(
         self, decision_variable_ids: builtins.set[builtins.int] = set()
@@ -3284,6 +3366,23 @@ class RemovedConstraint:
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> RemovedConstraint: ...
     def __deepcopy__(self, _memo: typing.Any) -> RemovedConstraint: ...
+
+@typing.final
+class RemovedOneHotConstraint:
+    r"""
+    A removed one-hot constraint together with the reason it was removed.
+    """
+    @property
+    def constraint(self) -> OneHotConstraint: ...
+    @property
+    def variables(self) -> builtins.list[builtins.int]: ...
+    @property
+    def removed_reason(self) -> builtins.str: ...
+    @property
+    def removed_reason_parameters(
+        self,
+    ) -> builtins.dict[builtins.str, builtins.str]: ...
+    def __repr__(self) -> builtins.str: ...
 
 @typing.final
 class Rng:
