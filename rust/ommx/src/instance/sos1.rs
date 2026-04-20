@@ -37,8 +37,11 @@ impl Instance {
     /// - Otherwise, a fresh binary $y_i$ is introduced with the upper and lower Big-M
     ///   constraints. Trivial bounds $u_i = 0$ (upper) or $l_i = 0$ (lower) are skipped.
     ///
-    /// Errors if any $x_i$ has a non-binary bound that is not finite, or whose domain
-    /// excludes $0$ (so that $y_i = 0 \Rightarrow x_i = 0$ would be infeasible).
+    /// Errors if any $x_i$ has a non-binary bound that is not finite, whose domain
+    /// excludes $0$ (so that $y_i = 0 \Rightarrow x_i = 0$ would be infeasible), or whose
+    /// kind is [`Kind::SemiInteger`] or [`Kind::SemiContinuous`] (the split domain
+    /// $\{0\} \cup [l, u]$ is not uniformly implemented across the codebase, so Big-M
+    /// conversion of these kinds is not supported yet).
     /// All validation happens before any mutation, so a failed call leaves the instance
     /// unchanged.
     ///
@@ -73,6 +76,18 @@ impl Instance {
             if dv.kind() == Kind::Binary && bound == Bound::of_binary() {
                 plans.push((var_id, IndicatorPlan::Reuse));
                 continue;
+            }
+            // Semi-continuous / semi-integer variables carry a split domain `{0} ∪ [l, u]`
+            // that the rest of the codebase does not yet treat uniformly (the bound field
+            // does not always contain 0, while `check_value_consistency` and many
+            // transformations assume it does). Converting them via Big-M would silently
+            // paper over that inconsistency, so reject them until the semi semantics are
+            // resolved project-wide.
+            if matches!(dv.kind(), Kind::SemiInteger | Kind::SemiContinuous) {
+                bail!(
+                    "Cannot convert SOS1 constraint {id:?} with Big-M: variable {var_id:?} has kind {:?}; semi-continuous / semi-integer variables are not supported",
+                    dv.kind()
+                );
             }
             if !bound.is_finite() {
                 bail!(
@@ -410,6 +425,44 @@ mod tests {
             .convert_sos1_to_constraints(Sos1ConstraintID::from(9))
             .unwrap_err();
         assert!(err.to_string().contains("excludes 0"));
+    }
+
+    #[test]
+    fn semi_variables_are_rejected() {
+        // Kind::SemiInteger / SemiContinuous carry a split {0} ∪ [l, u] domain that
+        // isn't uniformly implemented across the codebase; Big-M conversion is
+        // explicitly not supported for them and must error before mutation.
+        for dv in [
+            DecisionVariable::semi_integer(VariableID::from(0)),
+            DecisionVariable::semi_continuous(VariableID::from(0)),
+        ] {
+            let kind = dv.kind();
+            let sos1 =
+                Sos1Constraint::new([VariableID::from(0)].into_iter().collect::<BTreeSet<_>>());
+            let mut instance = Instance::builder()
+                .sense(Sense::Minimize)
+                .objective(Function::from(linear!(0)))
+                .decision_variables(btreemap! { VariableID::from(0) => dv })
+                .constraints(BTreeMap::new())
+                .sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(9), sos1)]))
+                .build()
+                .unwrap();
+            let before_constraints = instance.constraints().clone();
+
+            let err = instance
+                .convert_sos1_to_constraints(Sos1ConstraintID::from(9))
+                .unwrap_err();
+            let msg = err.to_string();
+            assert!(
+                msg.contains("semi-continuous") && msg.contains("not supported"),
+                "expected not-supported error for {kind:?}, got: {msg}"
+            );
+            // Error is raised before any mutation: active SOS1 still present, no new constraints.
+            assert!(instance
+                .sos1_constraints()
+                .contains_key(&Sos1ConstraintID::from(9)));
+            assert_eq!(instance.constraints(), &before_constraints);
+        }
     }
 
     #[test]

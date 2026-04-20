@@ -2079,8 +2079,11 @@ class Instance:
         (Big-M upper/lower pairs per non-binary variable, followed by the cardinality
         sum).
 
-        Raises if any $x_i$ has a non-binary bound that is not finite, or if its
-        domain excludes $0$. The instance is not mutated on error.
+        Raises if any $x_i$ has a non-binary bound that is not finite, if its domain
+        excludes $0$, or if its kind is semi-continuous / semi-integer (the split
+        domain $\{0\} \cup [l, u]$ is not uniformly implemented across the codebase
+        yet, so Big-M conversion of these kinds is not supported).
+        The instance is not mutated on error.
 
         # Examples
 
