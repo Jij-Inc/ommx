@@ -42,6 +42,7 @@ __all__ = [
     "Relaxation",
     "RemovedConstraint",
     "RemovedOneHotConstraint",
+    "RemovedSos1Constraint",
     "Rng",
     "SampleSet",
     "SampledConstraint",
@@ -1360,6 +1361,13 @@ class Instance:
         Dict of all SOS1 constraints in the instance keyed by their IDs.
         """
     @property
+    def removed_sos1_constraints(
+        self,
+    ) -> builtins.dict[builtins.int, RemovedSos1Constraint]:
+        r"""
+        Dict of all removed SOS1 constraints in the instance keyed by their IDs.
+        """
+    @property
     def removed_constraints(self) -> builtins.dict[builtins.int, RemovedConstraint]:
         r"""
         Dict of all removed constraints in the instance keyed by their IDs.
@@ -1397,6 +1405,16 @@ class Instance:
     def removed_one_hot_constraints_df(self) -> pandas.DataFrame:
         r"""
         DataFrame of removed one-hot constraints
+        """
+    @property
+    def sos1_constraints_df(self) -> pandas.DataFrame:
+        r"""
+        DataFrame of SOS1 constraints
+        """
+    @property
+    def removed_sos1_constraints_df(self) -> pandas.DataFrame:
+        r"""
+        DataFrame of removed SOS1 constraints
         """
     @property
     def removed_constraints_df(self) -> pandas.DataFrame:
@@ -2031,6 +2049,85 @@ class Instance:
         {}
         >>> instance.constraints
         {0: Constraint(x0 + x1 - 1 == 0), 1: Constraint(x2 + x3 - 1 == 0)}
+        ```
+        """
+    def convert_sos1_to_constraints(
+        self, sos1_id: builtins.int
+    ) -> builtins.list[builtins.int]:
+        r"""
+        Convert a SOS1 constraint to regular constraints using the Big-M method.
+
+        A SOS1 constraint over ``{x_1, ..., x_n}`` with each ``x_i in [l_i, u_i]``
+        asserts that at most one variable is non-zero. Per variable, a binary
+        indicator ``y_i`` is introduced with
+        ``x_i - u_i y_i <= 0`` and ``l_i y_i - x_i <= 0`` (trivial sides are skipped).
+        A single cardinality constraint ``sum_i y_i - 1 <= 0`` is then added.
+
+        If ``x_i`` is already binary with bound ``[0, 1]``, ``x_i`` itself is reused
+        as its indicator (no new variable, no Big-M pair).
+
+        Returns the list of newly created regular constraint IDs in insertion order
+        (Big-M upper/lower pairs per non-binary variable, followed by the cardinality
+        sum).
+
+        Raises if any ``x_i`` has a non-binary bound that is not finite, or if its
+        domain excludes ``0``. The instance is not mutated on error.
+
+        # Examples
+
+        All-binary SOS1 reduces to ``sum(x_i) - 1 <= 0`` without extra variables:
+
+        ```python
+        >>> from ommx.v1 import Instance, DecisionVariable, Sos1Constraint
+        >>> x = [DecisionVariable.binary(i) for i in range(3)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints={},
+        ...     sos1_constraints={1: Sos1Constraint(variables=[0, 1, 2])},
+        ...     sense=Instance.MINIMIZE,
+        ... )
+        >>> instance.convert_sos1_to_constraints(1)
+        [0]
+        >>> instance.sos1_constraints
+        {}
+        >>> instance.constraints
+        {0: Constraint(x0 + x1 + x2 - 1 <= 0)}
+        >>> instance.removed_sos1_constraints
+        {1: RemovedSos1Constraint(Sos1Constraint(at most one of {x0, x1, x2} ≠ 0), reason=ommx.Instance.convert_sos1_to_constraints, constraint_ids=0)}
+        ```
+        """
+    def convert_all_sos1_to_constraints(
+        self,
+    ) -> builtins.dict[builtins.int, builtins.list[builtins.int]]:
+        r"""
+        Convert every active SOS1 constraint to regular constraints using Big-M.
+
+        See :meth:`~ommx.v1.Instance.convert_sos1_to_constraints` for the conversion
+        rule. Returns a dict mapping each original SOS1 ID to the list of regular
+        constraint IDs it produced.
+
+        # Examples
+
+        ```python
+        >>> from ommx.v1 import Instance, DecisionVariable, Sos1Constraint
+        >>> x = [DecisionVariable.binary(i) for i in range(4)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints={},
+        ...     sos1_constraints={
+        ...         1: Sos1Constraint(variables=[0, 1]),
+        ...         2: Sos1Constraint(variables=[2, 3]),
+        ...     },
+        ...     sense=Instance.MINIMIZE,
+        ... )
+        >>> instance.convert_all_sos1_to_constraints()
+        {1: [0], 2: [1]}
+        >>> instance.sos1_constraints
+        {}
+        >>> instance.constraints
+        {0: Constraint(x0 + x1 - 1 <= 0), 1: Constraint(x2 + x3 - 1 <= 0)}
         ```
         """
     def log_encode(
@@ -3374,6 +3471,23 @@ class RemovedOneHotConstraint:
     """
     @property
     def constraint(self) -> OneHotConstraint: ...
+    @property
+    def variables(self) -> builtins.list[builtins.int]: ...
+    @property
+    def removed_reason(self) -> builtins.str: ...
+    @property
+    def removed_reason_parameters(
+        self,
+    ) -> builtins.dict[builtins.str, builtins.str]: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class RemovedSos1Constraint:
+    r"""
+    A removed SOS1 constraint together with the reason it was removed.
+    """
+    @property
+    def constraint(self) -> Sos1Constraint: ...
     @property
     def variables(self) -> builtins.list[builtins.int]: ...
     @property

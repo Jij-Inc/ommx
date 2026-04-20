@@ -7223,6 +7223,39 @@
               "deprecated": null
             },
             {
+              "name": "convert_all_sos1_to_constraints",
+              "doc": "Convert every active SOS1 constraint to regular constraints using Big-M.\n\nSee :meth:`~ommx.v1.Instance.convert_sos1_to_constraints` for the conversion\nrule. Returns a dict mapping each original SOS1 ID to the list of regular\nconstraint IDs it produced.\n\n# Examples\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable, Sos1Constraint\n>>> x = [DecisionVariable.binary(i) for i in range(4)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={},\n...     sos1_constraints={\n...         1: Sos1Constraint(variables=[0, 1]),\n...         2: Sos1Constraint(variables=[2, 3]),\n...     },\n...     sense=Instance.MINIMIZE,\n... )\n>>> instance.convert_all_sos1_to_constraints()\n{1: [0], 2: [1]}\n>>> instance.sos1_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + x1 - 1 <= 0), 1: Constraint(x2 + x3 - 1 <= 0)}\n```",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "dict[int, list[int]]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "list[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "convert_inequality_to_equality_with_integer_slack",
               "doc": "Convert an inequality constraint $f(x) \\leq 0$ to an equality constraint $f(x) + s/a = 0$ with an integer slack variable $s$.\n\n- Since $a$ is determined as the minimal multiplier to make every coefficient of $a f(x)$ integer,\n  $a$ itself and the range of $s$ becomes impractically large. ``max_integer_range`` limits the maximal\n  range of $s$, and returns error if the range exceeds it.\n\n- Since this method evaluates the bound of $f(x)$, we may find that:\n\n  - The bound $[l, u]$ is strictly positive, i.e. $l > 0$:\n    this means the instance is infeasible because this constraint never be satisfied,\n    and an error is raised.\n\n  - The bound $[l, u]$ is always negative, i.e. $u \\leq 0$:\n    this means this constraint is trivially satisfied,\n    the constraint is moved to {attr}`~ommx.v1.Instance.removed_constraints`,\n    and this method returns without introducing slack variable or raising an error.\n\n# Examples\n\nLet's consider a simple inequality constraint x0 + 2*x1 <= 5.\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable\n>>> x = [\n...     DecisionVariable.integer(i, lower=0, upper=3, name=\"x\", subscripts=[i])\n...     for i in range(3)\n... ]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[\n...         (x[0] + 2*x[1] <= 5).set_id(0)\n...     ],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.constraints[0]\nConstraint(x0 + 2*x1 - 5 <= 0)\n```\n\nIntroduce an integer slack variable\n\n```python\n>>> instance.convert_inequality_to_equality_with_integer_slack(\n...     constraint_id=0,\n...     max_integer_range=32\n... )\n>>> instance.constraints[0]\nConstraint(x0 + 2*x1 + x3 - 5 == 0)\n```",
               "signatures": [
@@ -7289,6 +7322,38 @@
               "signatures": [
                 {
                   "parameters": [],
+                  "return_type": {
+                    "display": "list[int]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "convert_sos1_to_constraints",
+              "doc": "Convert a SOS1 constraint to regular constraints using the Big-M method.\n\nA SOS1 constraint over ``{x_1, ..., x_n}`` with each ``x_i in [l_i, u_i]``\nasserts that at most one variable is non-zero. Per variable, a binary\nindicator ``y_i`` is introduced with\n``x_i - u_i y_i <= 0`` and ``l_i y_i - x_i <= 0`` (trivial sides are skipped).\nA single cardinality constraint ``sum_i y_i - 1 <= 0`` is then added.\n\nIf ``x_i`` is already binary with bound ``[0, 1]``, ``x_i`` itself is reused\nas its indicator (no new variable, no Big-M pair).\n\nReturns the list of newly created regular constraint IDs in insertion order\n(Big-M upper/lower pairs per non-binary variable, followed by the cardinality\nsum).\n\nRaises if any ``x_i`` has a non-binary bound that is not finite, or if its\ndomain excludes ``0``. The instance is not mutated on error.\n\n# Examples\n\nAll-binary SOS1 reduces to ``sum(x_i) - 1 <= 0`` without extra variables:\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable, Sos1Constraint\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={},\n...     sos1_constraints={1: Sos1Constraint(variables=[0, 1, 2])},\n...     sense=Instance.MINIMIZE,\n... )\n>>> instance.convert_sos1_to_constraints(1)\n[0]\n>>> instance.sos1_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + x1 + x2 - 1 <= 0)}\n>>> instance.removed_sos1_constraints\n{1: RemovedSos1Constraint(Sos1Constraint(at most one of {x0, x1, x2} ≠ 0), reason=ommx.Instance.convert_sos1_to_constraints, constraint_ids=0)}\n```",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "sos1_id",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
                   "return_type": {
                     "display": "list[int]",
                     "link_target": null,
@@ -8997,6 +9062,39 @@
               "is_readonly": true
             },
             {
+              "name": "removed_sos1_constraints",
+              "doc": "Dict of all removed SOS1 constraints in the instance keyed by their IDs.",
+              "type_": {
+                "display": "dict[int, RemovedSos1Constraint]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "RemovedSos1Constraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "removed_sos1_constraints_df",
+              "doc": "DataFrame of removed SOS1 constraints",
+              "type_": {
+                "display": "DataFrame",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "sense",
               "doc": "",
               "type_": {
@@ -9025,6 +9123,17 @@
                     "children": []
                   }
                 ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "sos1_constraints_df",
+              "doc": "DataFrame of SOS1 constraints",
+              "type_": {
+                "display": "DataFrame",
+                "link_target": null,
+                "children": []
               },
               "is_property": true,
               "is_readonly": true
@@ -15741,6 +15850,94 @@
         },
         {
           "kind": "Class",
+          "name": "RemovedSos1Constraint",
+          "doc": "A removed SOS1 constraint together with the reason it was removed.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "constraint",
+              "doc": "",
+              "type_": {
+                "display": "Sos1Constraint",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "removed_reason",
+              "doc": "",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "removed_reason_parameters",
+              "doc": "",
+              "type_": {
+                "display": "dict[str, str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "variables",
+              "doc": "",
+              "type_": {
+                "display": "list[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
           "name": "Rng",
           "doc": "",
           "bases": [],
@@ -19412,6 +19609,7 @@
     "ommx.v1.Relaxation": "ommx.v1",
     "ommx.v1.RemovedConstraint": "ommx.v1",
     "ommx.v1.RemovedOneHotConstraint": "ommx.v1",
+    "ommx.v1.RemovedSos1Constraint": "ommx.v1",
     "ommx.v1.Rng": "ommx.v1",
     "ommx.v1.SampleSet": "ommx.v1",
     "ommx.v1.SampledConstraint": "ommx.v1",
