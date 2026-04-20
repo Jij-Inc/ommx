@@ -369,7 +369,7 @@ impl ToPandasEntry for (ommx::OneHotConstraintID, &ommx::OneHotConstraint) {
         let vars: Vec<u64> = one_hot.variables.iter().map(|v| v.into_inner()).collect();
         dict.set_item("variables", PySet::new(py, &vars)?)?;
         dict.set_item("num_variables", vars.len())?;
-        set_used_ids(&dict, &one_hot.variables.iter().copied().collect())?;
+        set_used_ids(&dict, &one_hot.variables)?;
         set_metadata(
             &dict,
             one_hot.metadata.name.as_deref(),
