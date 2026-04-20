@@ -250,9 +250,9 @@ mod tests {
         let s1 = crate::SampleID::from(1);
         let s2 = crate::SampleID::from(2);
 
-        assert_eq!(result.stage.feasible[&s0], true);
-        assert_eq!(result.stage.feasible[&s1], false);
-        assert_eq!(result.stage.feasible[&s2], true);
+        assert!(result.stage.feasible[&s0]);
+        assert!(!result.stage.feasible[&s1]);
+        assert!(result.stage.feasible[&s2]);
 
         assert_eq!(result.stage.active_variable[&s0], Some(VariableID::from(2)));
         assert_eq!(result.stage.active_variable[&s1], None);
