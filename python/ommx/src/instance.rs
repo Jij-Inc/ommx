@@ -284,6 +284,21 @@ impl Instance {
             .collect()
     }
 
+    /// Dict of all removed one-hot constraints in the instance keyed by their IDs.
+    #[getter]
+    pub fn removed_one_hot_constraints(&self) -> BTreeMap<u64, crate::RemovedOneHotConstraint> {
+        self.inner
+            .removed_one_hot_constraints()
+            .iter()
+            .map(|(id, (c, r))| {
+                (
+                    id.into_inner(),
+                    crate::RemovedOneHotConstraint::from_pair(c.clone(), r.clone()),
+                )
+            })
+            .collect()
+    }
+
     /// Dict of all SOS1 constraints in the instance keyed by their IDs.
     #[getter]
     pub fn sos1_constraints(&self) -> BTreeMap<u64, crate::Sos1Constraint> {
@@ -578,9 +593,9 @@ impl Instance {
     /// >>> len(pi.removed_constraints)
     /// 2
     /// >>> pi.removed_constraints[0]
-    /// RemovedConstraint(x0 + x1 - 1 == 0, reason=penalty_method, parameter_id=3)
+    /// RemovedConstraint(x0 + x1 - 1 == 0, reason=ommx.Instance.penalty_method, parameter_id=3)
     /// >>> pi.removed_constraints[1]
-    /// RemovedConstraint(x1 + x2 - 1 == 0, reason=penalty_method, parameter_id=4)
+    /// RemovedConstraint(x1 + x2 - 1 == 0, reason=ommx.Instance.penalty_method, parameter_id=4)
     /// ```
     pub fn penalty_method(&self) -> Result<ParametricInstance> {
         let parametric_instance = self.inner.clone().penalty_method()?;
@@ -632,7 +647,7 @@ impl Instance {
     /// >>> len(pi.removed_constraints)
     /// 1
     /// >>> pi.removed_constraints[0]
-    /// RemovedConstraint(x0 + x1 + x2 - 3 == 0, reason=uniform_penalty_method)
+    /// RemovedConstraint(x0 + x1 + x2 - 3 == 0, reason=ommx.Instance.uniform_penalty_method)
     /// ```
     ///
     /// There is only one parameter in the instance
@@ -986,6 +1001,76 @@ impl Instance {
         Ok(())
     }
 
+    /// Convert a one-hot constraint to a regular equality constraint.
+    ///
+    /// A one-hot constraint over ``{x_1, ..., x_n}`` is mathematically equivalent to the
+    /// linear equality ``x_1 + ... + x_n - 1 == 0``. This method inserts that equality
+    /// as a new regular constraint and moves the one-hot constraint into
+    /// :attr:`~ommx.v1.Instance.removed_one_hot_constraints` with
+    /// ``reason="ommx.Instance.convert_one_hot_to_constraint"`` and a
+    /// ``constraint_id`` parameter pointing to the new regular constraint.
+    ///
+    /// Returns the ID of the newly created regular constraint.
+    ///
+    /// # Examples
+    ///
+    /// ```python
+    /// >>> from ommx.v1 import Instance, DecisionVariable, OneHotConstraint
+    /// >>> x = [DecisionVariable.binary(i) for i in range(3)]
+    /// >>> instance = Instance.from_components(
+    /// ...     decision_variables=x,
+    /// ...     objective=sum(x),
+    /// ...     constraints={},
+    /// ...     one_hot_constraints={1: OneHotConstraint(variables=[0, 1, 2])},
+    /// ...     sense=Instance.MINIMIZE,
+    /// ... )
+    /// >>> new_id = instance.convert_one_hot_to_constraint(1)
+    /// >>> instance.one_hot_constraints
+    /// {}
+    /// >>> instance.constraints
+    /// {0: Constraint(x0 + x1 + x2 - 1 == 0)}
+    /// >>> instance.removed_one_hot_constraints
+    /// {1: RemovedOneHotConstraint(OneHotConstraint(exactly one of {x0, x1, x2} = 1), reason=ommx.Instance.convert_one_hot_to_constraint, constraint_id=0)}
+    /// ```
+    pub fn convert_one_hot_to_constraint(&mut self, one_hot_id: u64) -> Result<u64> {
+        let new_id = self
+            .inner
+            .convert_one_hot_to_constraint(one_hot_id.into())?;
+        Ok(new_id.into_inner())
+    }
+
+    /// Convert every active one-hot constraint to a regular equality constraint.
+    ///
+    /// See :meth:`~ommx.v1.Instance.convert_one_hot_to_constraint` for the conversion rule.
+    /// Returns the IDs of the newly created regular constraints.
+    ///
+    /// # Examples
+    ///
+    /// ```python
+    /// >>> from ommx.v1 import Instance, DecisionVariable, OneHotConstraint
+    /// >>> x = [DecisionVariable.binary(i) for i in range(4)]
+    /// >>> instance = Instance.from_components(
+    /// ...     decision_variables=x,
+    /// ...     objective=sum(x),
+    /// ...     constraints={},
+    /// ...     one_hot_constraints={
+    /// ...         1: OneHotConstraint(variables=[0, 1]),
+    /// ...         2: OneHotConstraint(variables=[2, 3]),
+    /// ...     },
+    /// ...     sense=Instance.MINIMIZE,
+    /// ... )
+    /// >>> instance.convert_one_hots_to_constraints()
+    /// [0, 1]
+    /// >>> instance.one_hot_constraints
+    /// {}
+    /// >>> instance.constraints
+    /// {0: Constraint(x0 + x1 - 1 == 0), 1: Constraint(x2 + x3 - 1 == 0)}
+    /// ```
+    pub fn convert_one_hots_to_constraints(&mut self) -> Result<Vec<u64>> {
+        let ids = self.inner.convert_one_hots_to_constraints()?;
+        Ok(ids.into_iter().map(|id| id.into_inner()).collect())
+    }
+
     /// Log-encode the integer decision variables.
     ///
     /// Log encoding of an integer variable $x \in [l, u]$ is to represent by $m$ bits $b_i \in \{0, 1\}$ by:
@@ -1294,6 +1379,38 @@ impl Instance {
                 .indicator_constraints()
                 .iter()
                 .map(|(id, c)| (*id, c)),
+            "id",
+        )
+    }
+
+    /// DataFrame of one-hot constraints
+    #[getter]
+    pub fn one_hot_constraints_df<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        entries_to_dataframe(
+            py,
+            self.inner
+                .one_hot_constraints()
+                .iter()
+                .map(|(id, c)| (*id, c)),
+            "id",
+        )
+    }
+
+    /// DataFrame of removed one-hot constraints
+    #[getter]
+    pub fn removed_one_hot_constraints_df<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        entries_to_dataframe(
+            py,
+            self.inner
+                .removed_one_hot_constraints()
+                .iter()
+                .map(|(id, pair)| (*id, pair)),
             "id",
         )
     }

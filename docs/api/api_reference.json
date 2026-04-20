@@ -7258,6 +7258,54 @@
               "deprecated": null
             },
             {
+              "name": "convert_one_hot_to_constraint",
+              "doc": "Convert a one-hot constraint to a regular equality constraint.\n\nA one-hot constraint over ``{x_1, ..., x_n}`` is mathematically equivalent to the\nlinear equality ``x_1 + ... + x_n - 1 == 0``. This method inserts that equality\nas a new regular constraint and moves the one-hot constraint into\n:attr:`~ommx.v1.Instance.removed_one_hot_constraints` with\n``reason=\"ommx.Instance.convert_one_hot_to_constraint\"`` and a\n``constraint_id`` parameter pointing to the new regular constraint.\n\nReturns the ID of the newly created regular constraint.\n\n# Examples\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable, OneHotConstraint\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={},\n...     one_hot_constraints={1: OneHotConstraint(variables=[0, 1, 2])},\n...     sense=Instance.MINIMIZE,\n... )\n>>> new_id = instance.convert_one_hot_to_constraint(1)\n>>> instance.one_hot_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + x1 + x2 - 1 == 0)}\n>>> instance.removed_one_hot_constraints\n{1: RemovedOneHotConstraint(OneHotConstraint(exactly one of {x0, x1, x2} = 1), reason=ommx.Instance.convert_one_hot_to_constraint, constraint_id=0)}\n```",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "one_hot_id",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "convert_one_hots_to_constraints",
+              "doc": "Convert every active one-hot constraint to a regular equality constraint.\n\nSee :meth:`~ommx.v1.Instance.convert_one_hot_to_constraint` for the conversion rule.\nReturns the IDs of the newly created regular constraints.\n\n# Examples\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable, OneHotConstraint\n>>> x = [DecisionVariable.binary(i) for i in range(4)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={},\n...     one_hot_constraints={\n...         1: OneHotConstraint(variables=[0, 1]),\n...         2: OneHotConstraint(variables=[2, 3]),\n...     },\n...     sense=Instance.MINIMIZE,\n... )\n>>> instance.convert_one_hots_to_constraints()\n[0, 1]\n>>> instance.one_hot_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + x1 - 1 == 0), 1: Constraint(x2 + x3 - 1 == 0)}\n```",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "list[int]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "decision_variable_analysis",
               "doc": "Analyze decision variables in the optimization problem instance.\n\nReturns a comprehensive analysis of all decision variables including:\n\n- Kind-based partitioning (binary, integer, continuous, etc.)\n- Usage-based partitioning (used in objective, constraints, fixed, etc.)\n- Variable bounds information\n\n**Returns:**\nAnalysis object containing detailed information about decision variables\n\n# Examples\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=x[0] + x[1],\n...     constraints=[(x[1] + x[2] == 1).set_id(0)],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> analysis = instance.decision_variable_analysis()\n>>> analysis.used_decision_variable_ids()\n{0, 1, 2}\n>>> analysis.used_in_objective()\n{0, 1}\n>>> analysis.used_in_constraints()\n{0: {1, 2}}\n```",
               "signatures": [
@@ -7953,7 +8001,7 @@
             },
             {
               "name": "penalty_method",
-              "doc": "Convert to a parametric unconstrained instance by penalty method.\n\nRoughly, this converts a constrained problem:\n\n$$\\min_x f(x) \\quad \\text{s.t.} \\quad g_i(x) = 0 \\; (\\forall i), \\quad h_j(x) \\leq 0 \\; (\\forall j)$$\n\nto an unconstrained problem with parameters:\n\n$$\\min_x f(x) + \\sum_i \\lambda_i g_i(x)^2 + \\sum_j \\rho_j h_j(x)^2$$\n\nwhere $\\lambda_i$ and $\\rho_j$ are the penalty weight parameters for each constraint.\nIf you want to use single weight parameter, use {meth}`~ommx.v1.Instance.uniform_penalty_method` instead.\n\nThe removed constraints are stored in {attr}`~ommx.v1.ParametricInstance.removed_constraints`.\n\n> Note: This method converts inequality constraints $h(x) \\leq 0$ to $|h(x)|^2$ not to $\\max(0, h(x))^2$.\n> This means the penalty is enforced even for $h(x) < 0$ cases, and $h(x) = 0$ is unfairly favored.\n> This feature is intended to use with {meth}`~ommx.v1.Instance.add_integer_slack_to_inequality`.\n\n# Examples\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable, Constraint\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[x[0] + x[1] == 1, x[1] + x[2] == 1],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.objective\nFunction(x0 + x1 + x2)\n>>> pi = instance.penalty_method()\n```\n\nThe constraint is put in removed_constraints\n\n```python\n>>> pi.constraints\n[]\n>>> len(pi.removed_constraints)\n2\n>>> pi.removed_constraints[0]\nRemovedConstraint(x0 + x1 - 1 == 0, reason=penalty_method, parameter_id=3)\n>>> pi.removed_constraints[1]\nRemovedConstraint(x1 + x2 - 1 == 0, reason=penalty_method, parameter_id=4)\n```",
+              "doc": "Convert to a parametric unconstrained instance by penalty method.\n\nRoughly, this converts a constrained problem:\n\n$$\\min_x f(x) \\quad \\text{s.t.} \\quad g_i(x) = 0 \\; (\\forall i), \\quad h_j(x) \\leq 0 \\; (\\forall j)$$\n\nto an unconstrained problem with parameters:\n\n$$\\min_x f(x) + \\sum_i \\lambda_i g_i(x)^2 + \\sum_j \\rho_j h_j(x)^2$$\n\nwhere $\\lambda_i$ and $\\rho_j$ are the penalty weight parameters for each constraint.\nIf you want to use single weight parameter, use {meth}`~ommx.v1.Instance.uniform_penalty_method` instead.\n\nThe removed constraints are stored in {attr}`~ommx.v1.ParametricInstance.removed_constraints`.\n\n> Note: This method converts inequality constraints $h(x) \\leq 0$ to $|h(x)|^2$ not to $\\max(0, h(x))^2$.\n> This means the penalty is enforced even for $h(x) < 0$ cases, and $h(x) = 0$ is unfairly favored.\n> This feature is intended to use with {meth}`~ommx.v1.Instance.add_integer_slack_to_inequality`.\n\n# Examples\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable, Constraint\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[x[0] + x[1] == 1, x[1] + x[2] == 1],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.objective\nFunction(x0 + x1 + x2)\n>>> pi = instance.penalty_method()\n```\n\nThe constraint is put in removed_constraints\n\n```python\n>>> pi.constraints\n[]\n>>> len(pi.removed_constraints)\n2\n>>> pi.removed_constraints[0]\nRemovedConstraint(x0 + x1 - 1 == 0, reason=ommx.Instance.penalty_method, parameter_id=3)\n>>> pi.removed_constraints[1]\nRemovedConstraint(x1 + x2 - 1 == 0, reason=ommx.Instance.penalty_method, parameter_id=4)\n```",
               "signatures": [
                 {
                   "parameters": [],
@@ -8495,7 +8543,7 @@
             },
             {
               "name": "uniform_penalty_method",
-              "doc": "Convert to a parametric unconstrained instance by penalty method with uniform weight.\n\nRoughly, this converts a constrained problem:\n\n$$\\min_x f(x) \\quad \\text{s.t.} \\quad g_i(x) = 0 \\; (\\forall i), \\quad h_j(x) \\leq 0 \\; (\\forall j)$$\n\nto an unconstrained problem with a parameter:\n\n$$\\min_x f(x) + \\lambda \\left( \\sum_i g_i(x)^2 + \\sum_j h_j(x)^2 \\right)$$\n\nwhere $\\lambda$ is the uniform penalty weight parameter for all constraints.\n\nThe removed constraints are stored in {attr}`~ommx.v1.ParametricInstance.removed_constraints`.\n\n> Note: This method converts inequality constraints $h(x) \\leq 0$ to $|h(x)|^2$ not to $\\max(0, h(x))^2$.\n> This means the penalty is enforced even for $h(x) < 0$ cases, and $h(x) = 0$ is unfairly favored.\n> This feature is intended to use with {meth}`~ommx.v1.Instance.add_integer_slack_to_inequality`.\n\n# Examples\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[sum(x) == 3],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.objective\nFunction(x0 + x1 + x2)\n>>> pi = instance.uniform_penalty_method()\n```\n\nThe constraint is put in removed_constraints\n\n```python\n>>> pi.constraints\n[]\n>>> len(pi.removed_constraints)\n1\n>>> pi.removed_constraints[0]\nRemovedConstraint(x0 + x1 + x2 - 3 == 0, reason=uniform_penalty_method)\n```\n\nThere is only one parameter in the instance\n\n```python\n>>> len(pi.parameters)\n1\n>>> p = pi.parameters[0]\n>>> p.id\n3\n>>> p.name\n'uniform_penalty_weight'\n```",
+              "doc": "Convert to a parametric unconstrained instance by penalty method with uniform weight.\n\nRoughly, this converts a constrained problem:\n\n$$\\min_x f(x) \\quad \\text{s.t.} \\quad g_i(x) = 0 \\; (\\forall i), \\quad h_j(x) \\leq 0 \\; (\\forall j)$$\n\nto an unconstrained problem with a parameter:\n\n$$\\min_x f(x) + \\lambda \\left( \\sum_i g_i(x)^2 + \\sum_j h_j(x)^2 \\right)$$\n\nwhere $\\lambda$ is the uniform penalty weight parameter for all constraints.\n\nThe removed constraints are stored in {attr}`~ommx.v1.ParametricInstance.removed_constraints`.\n\n> Note: This method converts inequality constraints $h(x) \\leq 0$ to $|h(x)|^2$ not to $\\max(0, h(x))^2$.\n> This means the penalty is enforced even for $h(x) < 0$ cases, and $h(x) = 0$ is unfairly favored.\n> This feature is intended to use with {meth}`~ommx.v1.Instance.add_integer_slack_to_inequality`.\n\n# Examples\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[sum(x) == 3],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.objective\nFunction(x0 + x1 + x2)\n>>> pi = instance.uniform_penalty_method()\n```\n\nThe constraint is put in removed_constraints\n\n```python\n>>> pi.constraints\n[]\n>>> len(pi.removed_constraints)\n1\n>>> pi.removed_constraints[0]\nRemovedConstraint(x0 + x1 + x2 - 3 == 0, reason=ommx.Instance.uniform_penalty_method)\n```\n\nThere is only one parameter in the instance\n\n```python\n>>> len(pi.parameters)\n1\n>>> p = pi.parameters[0]\n>>> p.id\n3\n>>> p.name\n'uniform_penalty_weight'\n```",
               "signatures": [
                 {
                   "parameters": [],
@@ -8872,6 +8920,17 @@
               "is_readonly": true
             },
             {
+              "name": "one_hot_constraints_df",
+              "doc": "DataFrame of one-hot constraints",
+              "type_": {
+                "display": "DataFrame",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "removed_constraints",
               "doc": "Dict of all removed constraints in the instance keyed by their IDs.",
               "type_": {
@@ -8896,6 +8955,39 @@
             {
               "name": "removed_constraints_df",
               "doc": "DataFrame of removed constraints",
+              "type_": {
+                "display": "DataFrame",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "removed_one_hot_constraints",
+              "doc": "Dict of all removed one-hot constraints in the instance keyed by their IDs.",
+              "type_": {
+                "display": "dict[int, RemovedOneHotConstraint]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "RemovedOneHotConstraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "removed_one_hot_constraints_df",
+              "doc": "DataFrame of removed one-hot constraints",
               "type_": {
                 "display": "DataFrame",
                 "link_target": null,
@@ -15561,6 +15653,94 @@
         },
         {
           "kind": "Class",
+          "name": "RemovedOneHotConstraint",
+          "doc": "A removed one-hot constraint together with the reason it was removed.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "constraint",
+              "doc": "",
+              "type_": {
+                "display": "OneHotConstraint",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "removed_reason",
+              "doc": "",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "removed_reason_parameters",
+              "doc": "",
+              "type_": {
+                "display": "dict[str, str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "variables",
+              "doc": "",
+              "type_": {
+                "display": "list[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
           "name": "Rng",
           "doc": "",
           "bases": [],
@@ -19231,6 +19411,7 @@
     "ommx.v1.Quadratic": "ommx.v1",
     "ommx.v1.Relaxation": "ommx.v1",
     "ommx.v1.RemovedConstraint": "ommx.v1",
+    "ommx.v1.RemovedOneHotConstraint": "ommx.v1",
     "ommx.v1.Rng": "ommx.v1",
     "ommx.v1.SampleSet": "ommx.v1",
     "ommx.v1.SampledConstraint": "ommx.v1",

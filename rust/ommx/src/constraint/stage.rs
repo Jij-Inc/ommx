@@ -22,7 +22,19 @@ pub struct Created;
 /// Reason why a constraint was removed/relaxed.
 #[derive(Debug, Clone, PartialEq, Default, LogicalMemoryProfile)]
 pub struct RemovedReason {
-    /// Short reason (e.g. method or application name that removed the constraint).
+    /// Fully qualified, dot-separated path identifying the method, function,
+    /// or application that removed the constraint.
+    ///
+    /// External libraries are expected to mutate constraint collections (e.g.
+    /// solver adapters, preprocessing passes), so the convention is to write a
+    /// stable identifier that can be traced back to the originating code.
+    /// Segments follow the host language's namespacing (e.g. Rust module path,
+    /// Python dotted path).
+    ///
+    /// Examples:
+    /// - `"ommx.Instance.convert_one_hot_to_constraint"`
+    /// - `"ommx.Instance.penalty_method"`
+    /// - `"my_adapter.Preprocessor.drop_trivial"`
     pub reason: String,
     /// Arbitrary key-value parameters for debugging.
     pub parameters: FnvHashMap<String, String>,

@@ -92,7 +92,7 @@ impl Instance {
 
             // Create removed constraint
             let removed_reason = crate::constraint::RemovedReason {
-                reason: "penalty_method".to_string(),
+                reason: "ommx.Instance.penalty_method".to_string(),
                 parameters: {
                     let mut map = fnv::FnvHashMap::default();
                     map.insert(
@@ -224,7 +224,7 @@ impl Instance {
 
             // Create removed constraint
             let removed_reason = crate::constraint::RemovedReason {
-                reason: "uniform_penalty_method".to_string(),
+                reason: "ommx.Instance.uniform_penalty_method".to_string(),
                 parameters: Default::default(),
             };
 

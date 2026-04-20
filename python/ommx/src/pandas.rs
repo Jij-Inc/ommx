@@ -361,6 +361,43 @@ impl<'a> ToPandasEntry
     }
 }
 
+impl ToPandasEntry for (ommx::OneHotConstraintID, &ommx::OneHotConstraint) {
+    fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let (id, one_hot) = self;
+        let dict = PyDict::new(py);
+        dict.set_item("id", id.into_inner())?;
+        let vars: Vec<u64> = one_hot.variables.iter().map(|v| v.into_inner()).collect();
+        dict.set_item("variables", PySet::new(py, &vars)?)?;
+        dict.set_item("num_variables", vars.len())?;
+        set_used_ids(&dict, &one_hot.variables)?;
+        set_metadata(
+            &dict,
+            one_hot.metadata.name.as_deref(),
+            &one_hot.metadata.subscripts,
+            one_hot.metadata.description.as_deref(),
+        )?;
+        Ok(dict)
+    }
+}
+
+impl ToPandasEntry
+    for (
+        ommx::OneHotConstraintID,
+        &(ommx::OneHotConstraint, ommx::RemovedReason),
+    )
+{
+    fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let (id, inner) = self;
+        let (one_hot, reason) = inner;
+        let dict = (*id, one_hot).to_pandas_entry(py)?;
+        dict.set_item("removed_reason", &reason.reason)?;
+        for (key, value) in &reason.parameters {
+            dict.set_item(format!("removed_reason.{key}"), value)?;
+        }
+        Ok(dict)
+    }
+}
+
 impl ToPandasEntry for (ommx::ConstraintID, &(ommx::Constraint, ommx::RemovedReason)) {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let (id, inner) = self;
