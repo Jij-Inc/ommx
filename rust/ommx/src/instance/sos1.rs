@@ -219,15 +219,23 @@ impl Instance {
         }
 
         // Cardinality sum: sum_i y_i - 1 <= 0.
-        let sum = indicators
-            .values()
-            .fold(Linear::zero(), |acc, v| acc + linear!(v.into_inner()));
-        let cardinality = Function::from(sum + Linear::from(coeff!(-1.0)));
-        let new_id = self.insert_sos1_generated_constraint(
-            id,
-            Constraint::less_than_or_equal_to_zero(cardinality),
-        );
-        new_constraint_ids.push(new_id);
+        //
+        // Skip emitting it for an empty SOS1, since `0 + (-1) <= 0` is the trivially
+        // satisfied tautology `-1 <= 0` and would only inflate the constraint count.
+        // Empty SOS1 constraints are rejected at `Instance::build` time, so this
+        // branch is defensive: it covers callers that bypass the builder (e.g.
+        // future preprocessing that shrinks a SOS1 to empty).
+        if !indicators.is_empty() {
+            let sum = indicators
+                .values()
+                .fold(Linear::zero(), |acc, v| acc + linear!(v.into_inner()));
+            let cardinality = Function::from(sum + Linear::from(coeff!(-1.0)));
+            let new_id = self.insert_sos1_generated_constraint(
+                id,
+                Constraint::less_than_or_equal_to_zero(cardinality),
+            );
+            new_constraint_ids.push(new_id);
+        }
 
         // Move SOS1 to removed with a listing of the new constraint IDs.
         let mut parameters = fnv::FnvHashMap::default();
@@ -560,6 +568,28 @@ mod tests {
         }
         assert!(instance.sos1_constraints().is_empty());
         assert_eq!(instance.removed_sos1_constraints().len(), 2);
+    }
+
+    #[test]
+    fn empty_sos1_constraint_is_rejected_at_build() {
+        // An empty Sos1Constraint carries no variables to constrain, so the
+        // Big-M cardinality constraint would degenerate to the tautology `-1 <= 0`.
+        // The builder should reject empty SOS1 instead of letting it through.
+        let dv = DecisionVariable::binary(VariableID::from(0));
+        let empty_sos1 = Sos1Constraint::new(BTreeSet::new());
+        let err = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(linear!(0)))
+            .decision_variables(btreemap! { VariableID::from(0) => dv })
+            .constraints(BTreeMap::new())
+            .sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(42), empty_sos1)]))
+            .build()
+            .unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("no variables") && msg.contains("42"),
+            "expected EmptySos1Constraint error mentioning the id, got: {msg}"
+        );
     }
 
     #[test]

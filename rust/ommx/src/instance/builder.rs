@@ -283,7 +283,10 @@ impl InstanceBuilder {
         }
 
         // Validate SOS1 constraints
-        for value in self.sos1_constraints.values() {
+        for (id, value) in &self.sos1_constraints {
+            if value.variables.is_empty() {
+                return Err(InstanceError::EmptySos1Constraint { id: *id }.into());
+            }
             for var_id in &value.variables {
                 if !variable_ids.contains(var_id) {
                     return Err(InstanceError::UndefinedSos1Variable { id: *var_id }.into());
