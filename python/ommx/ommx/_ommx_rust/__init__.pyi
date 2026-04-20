@@ -41,6 +41,7 @@ __all__ = [
     "Quadratic",
     "Relaxation",
     "RemovedConstraint",
+    "RemovedIndicatorConstraint",
     "RemovedOneHotConstraint",
     "RemovedSos1Constraint",
     "Rng",
@@ -1344,6 +1345,13 @@ class Instance:
         Dict of all indicator constraints in the instance keyed by their IDs.
         """
     @property
+    def removed_indicator_constraints(
+        self,
+    ) -> builtins.dict[builtins.int, RemovedIndicatorConstraint]:
+        r"""
+        Dict of all removed indicator constraints in the instance keyed by their IDs.
+        """
+    @property
     def one_hot_constraints(self) -> builtins.dict[builtins.int, OneHotConstraint]:
         r"""
         Dict of all one-hot constraints in the instance keyed by their IDs.
@@ -1395,6 +1403,11 @@ class Instance:
     def indicator_constraints_df(self) -> pandas.DataFrame:
         r"""
         DataFrame of indicator constraints
+        """
+    @property
+    def removed_indicator_constraints_df(self) -> pandas.DataFrame:
+        r"""
+        DataFrame of removed indicator constraints
         """
     @property
     def one_hot_constraints_df(self) -> pandas.DataFrame:
@@ -2146,6 +2159,81 @@ class Instance:
         >>> instance.constraints
         {0: Constraint(x0 + x1 - 1 <= 0), 1: Constraint(x2 + x3 - 1 <= 0)}
         ```
+        """
+    def convert_indicator_to_constraint(
+        self, indicator_id: builtins.int
+    ) -> builtins.list[builtins.int]:
+        r"""
+        Convert an indicator constraint to regular constraints using the Big-M method.
+
+        An indicator constraint ``y = 1 → f(x) <= 0`` (or ``= 0``) is encoded with
+        upper and lower Big-M sides computed from the interval bounds of $f(x)$:
+
+        $$
+        f(x) + u y - u \leq 0, \qquad -f(x) - l y + l \leq 0,
+        $$
+
+        where $u \geq \sup f(x)$ and $l \leq \inf f(x)$ are the upper and lower
+        bounds of $f$ over the decision variables' domains.
+
+        Side emission:
+
+        - For ``<=`` indicators, only the upper side is considered; it is emitted
+          iff $u > 0$. If $u \leq 0$ the constraint is already implied by the
+          variable bounds and no Big-M is emitted.
+        - For ``=`` indicators, both sides are considered independently: upper
+          emitted iff $u > 0$, lower emitted iff $l < 0$.
+
+        Returns the list of newly created regular constraint IDs in insertion order
+        (upper first, then lower). The list is empty when both sides are redundant.
+
+        Raises if the bound needed for an emitted side is non-finite. The instance
+        is not mutated on error.
+
+        # Examples
+
+        Convert an inequality indicator where the upper side is active:
+
+        ```python
+        >>> from ommx.v1 import (
+        ...     Instance, DecisionVariable, IndicatorConstraint, Equality,
+        ... )
+        >>> x = DecisionVariable.continuous(0, lower=0.0, upper=5.0)
+        >>> y = DecisionVariable.binary(1)
+        >>> ic = IndicatorConstraint(
+        ...     indicator_variable=y,
+        ...     function=x - 2,
+        ...     equality=Equality.LessThanOrEqualToZero,
+        ... )
+        >>> instance = Instance.from_components(
+        ...     decision_variables=[x, y],
+        ...     objective=x,
+        ...     constraints={},
+        ...     indicator_constraints={1: ic},
+        ...     sense=Instance.MINIMIZE,
+        ... )
+        >>> instance.convert_indicator_to_constraint(1)
+        [0]
+        >>> instance.indicator_constraints
+        {}
+        >>> instance.constraints
+        {0: Constraint(x0 + 3*x1 - 5 <= 0)}
+        ```
+        """
+    def convert_all_indicators_to_constraints(
+        self,
+    ) -> builtins.dict[builtins.int, builtins.list[builtins.int]]:
+        r"""
+        Convert every active indicator constraint to regular constraints using Big-M.
+
+        See {meth}`~ommx.v1.Instance.convert_indicator_to_constraint` for the
+        conversion rule. Returns a dict mapping each original indicator ID to the
+        list of regular constraint IDs it produced.
+
+        Atomic: every active indicator is validated up front, and only if every
+        one is convertible are the conversions applied. If any indicator fails
+        validation (non-finite bound on a required side), no mutation happens and
+        the instance is left untouched.
         """
     def log_encode(
         self, decision_variable_ids: builtins.set[builtins.int] = set()
@@ -3480,6 +3568,27 @@ class RemovedConstraint:
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> RemovedConstraint: ...
     def __deepcopy__(self, _memo: typing.Any) -> RemovedConstraint: ...
+
+@typing.final
+class RemovedIndicatorConstraint:
+    r"""
+    A removed indicator constraint together with the reason it was removed.
+    """
+    @property
+    def constraint(self) -> IndicatorConstraint: ...
+    @property
+    def indicator_variable_id(self) -> builtins.int: ...
+    @property
+    def equality(self) -> Equality: ...
+    @property
+    def function(self) -> Function: ...
+    @property
+    def removed_reason(self) -> builtins.str: ...
+    @property
+    def removed_reason_parameters(
+        self,
+    ) -> builtins.dict[builtins.str, builtins.str]: ...
+    def __repr__(self) -> builtins.str: ...
 
 @typing.final
 class RemovedOneHotConstraint:

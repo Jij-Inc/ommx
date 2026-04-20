@@ -102,3 +102,78 @@ impl IndicatorConstraint {
         self.clone()
     }
 }
+
+/// A removed indicator constraint together with the reason it was removed.
+#[gen_stub_pyclass]
+#[pyclass]
+#[derive(Clone)]
+pub struct RemovedIndicatorConstraint {
+    pub constraint: ommx::IndicatorConstraint,
+    pub removed_reason: ommx::RemovedReason,
+}
+
+impl RemovedIndicatorConstraint {
+    pub fn from_pair(
+        constraint: ommx::IndicatorConstraint,
+        removed_reason: ommx::RemovedReason,
+    ) -> Self {
+        Self {
+            constraint,
+            removed_reason,
+        }
+    }
+}
+
+#[gen_stub_pymethods]
+#[pymethods]
+impl RemovedIndicatorConstraint {
+    #[getter]
+    pub fn constraint(&self) -> IndicatorConstraint {
+        IndicatorConstraint(self.constraint.clone())
+    }
+
+    #[getter]
+    pub fn indicator_variable_id(&self) -> u64 {
+        self.constraint.indicator_variable.into_inner()
+    }
+
+    #[getter]
+    pub fn equality(&self) -> Equality {
+        self.constraint.equality.into()
+    }
+
+    #[getter]
+    pub fn function(&self) -> Function {
+        Function(self.constraint.function().clone())
+    }
+
+    #[getter]
+    pub fn removed_reason(&self) -> String {
+        self.removed_reason.reason.clone()
+    }
+
+    #[getter]
+    pub fn removed_reason_parameters(&self) -> HashMap<String, String> {
+        self.removed_reason
+            .parameters
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
+    }
+
+    fn __repr__(&self) -> String {
+        let mut extras: Vec<String> = self
+            .removed_reason
+            .parameters
+            .iter()
+            .map(|(k, v)| format!("{k}={v}"))
+            .collect();
+        extras.sort();
+        let mut head = format!("{}, reason={}", self.constraint, self.removed_reason.reason);
+        if !extras.is_empty() {
+            head.push_str(", ");
+            head.push_str(&extras.join(", "));
+        }
+        format!("RemovedIndicatorConstraint({head})")
+    }
+}

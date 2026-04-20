@@ -361,6 +361,24 @@ impl<'a> ToPandasEntry
     }
 }
 
+impl ToPandasEntry
+    for (
+        ommx::IndicatorConstraintID,
+        &(ommx::IndicatorConstraint, ommx::RemovedReason),
+    )
+{
+    fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let (id, inner) = self;
+        let (ic, reason) = inner;
+        let dict = (*id, ic).to_pandas_entry(py)?;
+        dict.set_item("removed_reason", &reason.reason)?;
+        for (key, value) in &reason.parameters {
+            dict.set_item(format!("removed_reason.{key}"), value)?;
+        }
+        Ok(dict)
+    }
+}
+
 impl ToPandasEntry for (ommx::OneHotConstraintID, &ommx::OneHotConstraint) {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let (id, one_hot) = self;

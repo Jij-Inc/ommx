@@ -274,6 +274,23 @@ impl Instance {
             .collect()
     }
 
+    /// Dict of all removed indicator constraints in the instance keyed by their IDs.
+    #[getter]
+    pub fn removed_indicator_constraints(
+        &self,
+    ) -> BTreeMap<u64, crate::RemovedIndicatorConstraint> {
+        self.inner
+            .removed_indicator_constraints()
+            .iter()
+            .map(|(id, (c, r))| {
+                (
+                    id.into_inner(),
+                    crate::RemovedIndicatorConstraint::from_pair(c.clone(), r.clone()),
+                )
+            })
+            .collect()
+    }
+
     /// Dict of all one-hot constraints in the instance keyed by their IDs.
     #[getter]
     pub fn one_hot_constraints(&self) -> BTreeMap<u64, crate::OneHotConstraint> {
@@ -1190,6 +1207,91 @@ impl Instance {
             .collect())
     }
 
+    /// Convert an indicator constraint to regular constraints using the Big-M method.
+    ///
+    /// An indicator constraint ``y = 1 → f(x) <= 0`` (or ``= 0``) is encoded with
+    /// upper and lower Big-M sides computed from the interval bounds of $f(x)$:
+    ///
+    /// $$
+    /// f(x) + u y - u \leq 0, \qquad -f(x) - l y + l \leq 0,
+    /// $$
+    ///
+    /// where $u \geq \sup f(x)$ and $l \leq \inf f(x)$ are the upper and lower
+    /// bounds of $f$ over the decision variables' domains.
+    ///
+    /// Side emission:
+    ///
+    /// - For ``<=`` indicators, only the upper side is considered; it is emitted
+    ///   iff $u > 0$. If $u \leq 0$ the constraint is already implied by the
+    ///   variable bounds and no Big-M is emitted.
+    /// - For ``=`` indicators, both sides are considered independently: upper
+    ///   emitted iff $u > 0$, lower emitted iff $l < 0$.
+    ///
+    /// Returns the list of newly created regular constraint IDs in insertion order
+    /// (upper first, then lower). The list is empty when both sides are redundant.
+    ///
+    /// Raises if the bound needed for an emitted side is non-finite. The instance
+    /// is not mutated on error.
+    ///
+    /// # Examples
+    ///
+    /// Convert an inequality indicator where the upper side is active:
+    ///
+    /// ```python
+    /// >>> from ommx.v1 import (
+    /// ...     Instance, DecisionVariable, IndicatorConstraint, Equality,
+    /// ... )
+    /// >>> x = DecisionVariable.continuous(0, lower=0.0, upper=5.0)
+    /// >>> y = DecisionVariable.binary(1)
+    /// >>> ic = IndicatorConstraint(
+    /// ...     indicator_variable=y,
+    /// ...     function=x - 2,
+    /// ...     equality=Equality.LessThanOrEqualToZero,
+    /// ... )
+    /// >>> instance = Instance.from_components(
+    /// ...     decision_variables=[x, y],
+    /// ...     objective=x,
+    /// ...     constraints={},
+    /// ...     indicator_constraints={1: ic},
+    /// ...     sense=Instance.MINIMIZE,
+    /// ... )
+    /// >>> instance.convert_indicator_to_constraint(1)
+    /// [0]
+    /// >>> instance.indicator_constraints
+    /// {}
+    /// >>> instance.constraints
+    /// {0: Constraint(x0 + 3*x1 - 5 <= 0)}
+    /// ```
+    pub fn convert_indicator_to_constraint(&mut self, indicator_id: u64) -> Result<Vec<u64>> {
+        let new_ids = self
+            .inner
+            .convert_indicator_to_constraint(indicator_id.into())?;
+        Ok(new_ids.into_iter().map(|id| id.into_inner()).collect())
+    }
+
+    /// Convert every active indicator constraint to regular constraints using Big-M.
+    ///
+    /// See {meth}`~ommx.v1.Instance.convert_indicator_to_constraint` for the
+    /// conversion rule. Returns a dict mapping each original indicator ID to the
+    /// list of regular constraint IDs it produced.
+    ///
+    /// Atomic: every active indicator is validated up front, and only if every
+    /// one is convertible are the conversions applied. If any indicator fails
+    /// validation (non-finite bound on a required side), no mutation happens and
+    /// the instance is left untouched.
+    pub fn convert_all_indicators_to_constraints(&mut self) -> Result<BTreeMap<u64, Vec<u64>>> {
+        let result = self.inner.convert_all_indicators_to_constraints()?;
+        Ok(result
+            .into_iter()
+            .map(|(id, ids)| {
+                (
+                    id.into_inner(),
+                    ids.into_iter().map(|c| c.into_inner()).collect(),
+                )
+            })
+            .collect())
+    }
+
     /// Log-encode the integer decision variables.
     ///
     /// Log encoding of an integer variable $x \in [l, u]$ is to represent by $m$ bits $b_i \in \{0, 1\}$ by:
@@ -1498,6 +1600,22 @@ impl Instance {
                 .indicator_constraints()
                 .iter()
                 .map(|(id, c)| (*id, c)),
+            "id",
+        )
+    }
+
+    /// DataFrame of removed indicator constraints
+    #[getter]
+    pub fn removed_indicator_constraints_df<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        entries_to_dataframe(
+            py,
+            self.inner
+                .removed_indicator_constraints()
+                .iter()
+                .map(|(id, pair)| (*id, pair)),
             "id",
         )
     }

@@ -7,6 +7,7 @@ mod convert;
 mod decision_variable;
 mod error;
 mod evaluate;
+mod indicator;
 mod log_encode;
 mod logical_memory;
 mod named_function;
