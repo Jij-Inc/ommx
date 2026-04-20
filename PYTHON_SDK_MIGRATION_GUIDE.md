@@ -82,11 +82,12 @@ instance.sense
 solution.optimality = Optimality.Optimal
 # constraint.id is gone — see §3
 Linear(...)                     # just call the constructor
-Constraint.from_bytes(data)
-dv.to_bytes()
+instance.to_bytes()             # (de)serialise whole Instance / Solution / SampleSet
 ```
 
 The dataclass-style constructors (`Instance(raw=..., annotations=...)`) are also gone — `Instance`, `Solution`, `SampleSet` are no longer Python `@dataclass`es. Construct through `Instance.from_components(...)` etc. and set `instance.annotations = {...}` or `instance.add_user_annotation(...)` afterwards.
+
+`Constraint`, `EvaluatedConstraint`, `SampledConstraint`, and `RemovedConstraint` no longer have `to_bytes` / `from_bytes` — a single constraint cannot meaningfully carry its ID on its own now that IDs live in the enclosing dict, so the per-constraint serialisation API was removed. Serialise the containing `Instance` / `Solution` / `SampleSet` instead.
 
 ## 3. Constraint IDs moved out of the `Constraint` object
 

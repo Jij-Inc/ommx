@@ -1,5 +1,4 @@
-use anyhow::Result;
-use pyo3::{prelude::*, types::PyBytes, Bound};
+use pyo3::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
@@ -9,16 +8,6 @@ pub struct SampledConstraint(pub ommx::SampledConstraint);
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl SampledConstraint {
-    #[staticmethod]
-    pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
-        let (_id, constraint) = ommx::SampledConstraint::from_bytes(bytes.as_bytes())?;
-        Ok(Self(constraint))
-    }
-
-    pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
-        PyBytes::new(py, &self.0.to_bytes(ommx::ConstraintID::from(0)))
-    }
-
     /// Get the constraint equality type
     #[getter]
     pub fn equality(&self) -> crate::Equality {

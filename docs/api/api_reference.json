@@ -2262,32 +2262,6 @@
               "deprecated": null
             },
             {
-              "name": "from_bytes",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "bytes",
-                      "type_": {
-                        "display": "bytes",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "Constraint",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
               "name": "partial_evaluate",
               "doc": "Partially evaluate the constraint with the given state.\n\nThis modifies self in-place and returns self for method chaining.\n\n**Args:**\n\n- `state`: A State object, dict[int, float], or iterable of (int, float) tuples\n- `atol`: Optional absolute tolerance for evaluation\n\n**Returns:** Self (modified in-place) for method chaining",
               "signatures": [
@@ -2449,22 +2423,6 @@
                   ],
                   "return_type": {
                     "display": "Constraint",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "to_bytes",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "bytes",
                     "link_target": null,
                     "children": []
                   }
@@ -4681,48 +4639,6 @@
           "doc": "",
           "bases": [],
           "methods": [
-            {
-              "name": "from_bytes",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "bytes",
-                      "type_": {
-                        "display": "bytes",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "EvaluatedConstraint",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "to_bytes",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "bytes",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
             {
               "name": "violation",
               "doc": "Calculate the violation (constraint breach) value for this constraint\n\nReturns the amount by which this constraint is violated:\n- For $f(x) = 0$: returns $|f(x)|$\n- For $f(x) \\leq 0$: returns $\\max(0, f(x))$\n\nReturns 0.0 if the constraint is satisfied.",
@@ -15493,48 +15409,6 @@
               ],
               "is_async": false,
               "deprecated": null
-            },
-            {
-              "name": "from_bytes",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "bytes",
-                      "type_": {
-                        "display": "bytes",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "RemovedConstraint",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "to_bytes",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "bytes",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
             }
           ],
           "attributes": [
@@ -16869,50 +16743,7 @@
           "name": "SampledConstraint",
           "doc": "",
           "bases": [],
-          "methods": [
-            {
-              "name": "from_bytes",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "bytes",
-                      "type_": {
-                        "display": "bytes",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "SampledConstraint",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "to_bytes",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "bytes",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            }
-          ],
+          "methods": [],
           "attributes": [
             {
               "name": "description",

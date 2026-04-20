@@ -528,9 +528,6 @@ class Constraint:
         - `description`: Optional description
         - `parameters`: Optional key-value parameters
         """
-    @staticmethod
-    def from_bytes(bytes: bytes) -> Constraint: ...
-    def to_bytes(self) -> bytes: ...
     def evaluate(
         self, state: ToState, *, atol: typing.Optional[builtins.float] = None
     ) -> EvaluatedConstraint:
@@ -899,9 +896,6 @@ class EvaluatedConstraint:
         r"""
         Get the used decision variable IDs
         """
-    @staticmethod
-    def from_bytes(bytes: bytes) -> EvaluatedConstraint: ...
-    def to_bytes(self) -> bytes: ...
     def violation(self) -> builtins.float:
         r"""
         Calculate the violation (constraint breach) value for this constraint
@@ -3287,9 +3281,6 @@ class RemovedConstraint:
             typing.Mapping[builtins.str, builtins.str]
         ] = None,
     ) -> RemovedConstraint: ...
-    @staticmethod
-    def from_bytes(bytes: bytes) -> RemovedConstraint: ...
-    def to_bytes(self) -> bytes: ...
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> RemovedConstraint: ...
     def __deepcopy__(self, _memo: typing.Any) -> RemovedConstraint: ...
@@ -3701,9 +3692,6 @@ class SampledConstraint:
         r"""
         Get the feasibility status for all samples
         """
-    @staticmethod
-    def from_bytes(bytes: bytes) -> SampledConstraint: ...
-    def to_bytes(self) -> bytes: ...
 
 @typing.final
 class SampledDecisionVariable:

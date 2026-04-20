@@ -1,7 +1,7 @@
 use crate::{Equality, EvaluatedConstraint, Function, State};
 use fnv::FnvHashMap;
-use ommx::{ConstraintID, Evaluate};
-use pyo3::{prelude::*, types::PyBytes, Bound, PyAny};
+use ommx::Evaluate;
+use pyo3::{prelude::*, Bound, PyAny};
 use std::collections::HashMap;
 
 /// Constraint wrapper for Python
@@ -100,17 +100,6 @@ impl Constraint {
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect()
-    }
-
-    #[staticmethod]
-    pub fn from_bytes(bytes: &Bound<PyBytes>) -> PyResult<Self> {
-        let (_id, constraint) = <ommx::Constraint>::from_bytes(bytes.as_bytes())
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-        Ok(Self(constraint))
-    }
-
-    pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
-        PyBytes::new(py, &self.0.to_bytes(ConstraintID::from(0)))
     }
 
     /// Evaluate the constraint with the given state.
@@ -348,29 +337,6 @@ impl RemovedConstraint {
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect()
-    }
-
-    #[staticmethod]
-    pub fn from_bytes(bytes: &Bound<PyBytes>) -> PyResult<Self> {
-        use ommx::{parse::Parse, Message};
-        let v1_removed = ommx::v1::RemovedConstraint::decode(bytes.as_bytes())
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-        let (_id, constraint, reason): (ommx::ConstraintID, ommx::Constraint, ommx::RemovedReason) =
-            v1_removed
-                .parse(&())
-                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-        Ok(Self::from_pair(constraint, reason))
-    }
-
-    pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
-        use ommx::Message;
-        let v1: ommx::v1::RemovedConstraint = (
-            ConstraintID::from(0),
-            self.constraint.clone(),
-            self.removed_reason.clone(),
-        )
-            .into();
-        PyBytes::new(py, &v1.encode_to_vec())
     }
 
     pub fn __repr__(&self) -> String {
