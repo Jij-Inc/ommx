@@ -355,6 +355,37 @@ ids: set[int]  = sample_set.sample_ids()         # method
 ids: list[int] = sample_set.sample_ids_list      # separate property when you need a list
 ```
 
+### 6.5 `evaluate` / `partial_evaluate` raise `ValueError`, not `RuntimeError`
+
+Every `.evaluate(state)` / `.partial_evaluate(state)` method on `Linear`, `Quadratic`, `Polynomial`, `Function`, `Constraint`, `NamedFunction`, and `Instance` now raises `ValueError` (e.g. `ValueError: Missing entry for id: 2`) when the state is missing a required decision-variable ID or the atol is invalid. In v2.5.1 the same error surfaced as `RuntimeError` via anyhow. Update `except` clauses accordingly.
+
+```python
+# v2.5.1
+try:
+    linear.evaluate({1: 1})
+except RuntimeError as e:
+    ...
+
+# v3
+try:
+    linear.evaluate({1: 1})
+except ValueError as e:
+    ...
+```
+
+### 6.6 `ParametricInstance.parameters` returns `list[Parameter]`, use `parameters_df` for the DataFrame
+
+The DataFrame view moved to a separate `_df` property, mirroring `decision_variables` / `decision_variables_df` and `constraints` / `constraints_df`. The bare `parameters` attribute is now an ordered `list[Parameter]`.
+
+```python
+# v2.5.1 (DataFrame view)
+parametric_instance.parameters            # -> pandas.DataFrame
+
+# v3
+parametric_instance.parameters            # -> list[Parameter]
+parametric_instance.parameters_df         # -> pandas.DataFrame
+```
+
 ## 7. Removed helpers
 
 - `Linear.from_object(x)` — construct via `Linear.single_term(...)`, `Linear.constant(...)`, or the arithmetic operators.
@@ -447,6 +478,8 @@ expr = 2 * p + 3  # Linear
 - [ ] Update `constraint.name` / `constraint.description` handling for `None` return (was `""`).
 - [ ] Update code that used `Linear.terms` / `Quadratic.terms` / `Polynomial.terms` as a property — they are methods now.
 - [ ] `SampleSet.sample_ids` is a method returning `set[int]`; use `sample_set.sample_ids_list` if you need a `list`.
+- [ ] Change `except RuntimeError` around `.evaluate(...)` / `.partial_evaluate(...)` calls to `except ValueError`.
+- [ ] Switch `parametric_instance.parameters` DataFrame reads to `parametric_instance.parameters_df` (`.parameters` now returns `list[Parameter]`).
 - [ ] Treat `Constraint.add_name(...)` / `add_description(...)` / `add_subscripts(...)` as returning a new object — assign the result.
 - [ ] Replace `ArtifactArchive` / `ArtifactDir` usage with `Artifact.load_archive(...)` or `Artifact.load(...)`.
 - [ ] Remove any `Linear.from_object(...)` / `Linear.equals_to(...)` calls.
