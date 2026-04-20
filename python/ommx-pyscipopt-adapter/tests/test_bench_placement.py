@@ -1,14 +1,21 @@
-"""Benchmark four Plant Placement Problem formulations end-to-end through the adapter."""
+"""Benchmark four Plant Placement Problem formulations through SCIP only.
+
+The four ``placement_inputs`` are converted to ``ommx.v1.Instance``, then to
+``pyscipopt.Model``, in session-scoped fixtures — i.e. the OMMX construction
+and the OMMX → SCIP translation are *not* in the measurement. Each benchmark
+calls ``model.freeTransform()`` to discard SCIP's transformed problem from
+any previous run, then ``model.optimize()`` to re-run presolve and
+branch-and-bound. The reported time is therefore SCIP's own processing
+time, isolated from adapter overhead.
+"""
 
 from __future__ import annotations
 
 import random
-from typing import List
+from typing import Callable, List
 
+import pyscipopt
 import pytest
-
-from ommx.v1 import Instance
-from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
 from ommx.testing.placement import (
     Input,
@@ -17,6 +24,8 @@ from ommx.testing.placement import (
     build_sos1_on_delta,
     build_sos1_on_delta_with_card,
 )
+from ommx.v1 import Instance
+from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
 _SIZES = [(6 * (i + 1), 10 * (i + 1)) for i in range(5)]
 _INSTANCES_PER_SIZE = 3
@@ -36,52 +45,59 @@ def placement_inputs(request: pytest.FixtureRequest) -> List[Input]:
     ]
 
 
-@pytest.fixture(scope="session")
-def sos1_instances(placement_inputs: List[Input]) -> List[Instance]:
-    return [build_sos1(inp) for inp in placement_inputs]
+def _build_models(
+    inputs: List[Input], builder: Callable[[Input], Instance]
+) -> List[pyscipopt.Model]:
+    return [OMMXPySCIPOptAdapter(builder(inp)).solver_input for inp in inputs]
 
 
 @pytest.fixture(scope="session")
-def sos1_on_delta_instances(placement_inputs: List[Input]) -> List[Instance]:
-    return [build_sos1_on_delta(inp) for inp in placement_inputs]
+def sos1_models(placement_inputs: List[Input]) -> List[pyscipopt.Model]:
+    return _build_models(placement_inputs, build_sos1)
 
 
 @pytest.fixture(scope="session")
-def sos1_on_delta_with_card_instances(
+def sos1_on_delta_models(placement_inputs: List[Input]) -> List[pyscipopt.Model]:
+    return _build_models(placement_inputs, build_sos1_on_delta)
+
+
+@pytest.fixture(scope="session")
+def sos1_on_delta_with_card_models(
     placement_inputs: List[Input],
-) -> List[Instance]:
-    return [build_sos1_on_delta_with_card(inp) for inp in placement_inputs]
+) -> List[pyscipopt.Model]:
+    return _build_models(placement_inputs, build_sos1_on_delta_with_card)
 
 
 @pytest.fixture(scope="session")
-def bigm_instances(placement_inputs: List[Input]) -> List[Instance]:
-    return [build_bigm(inp) for inp in placement_inputs]
+def bigm_models(placement_inputs: List[Input]) -> List[pyscipopt.Model]:
+    return _build_models(placement_inputs, build_bigm)
 
 
-def _solve_all(instances: List[Instance]) -> None:
-    for inst in instances:
-        OMMXPySCIPOptAdapter.solve(inst)
+def _optimize_all(models: List[pyscipopt.Model]) -> None:
+    for m in models:
+        m.freeTransform()
+        m.optimize()
 
 
 @pytest.mark.benchmark
-def test_bench_sos1(benchmark, sos1_instances: List[Instance]) -> None:
-    benchmark(_solve_all, sos1_instances)
+def test_bench_sos1(benchmark, sos1_models: List[pyscipopt.Model]) -> None:
+    benchmark(_optimize_all, sos1_models)
 
 
 @pytest.mark.benchmark
 def test_bench_sos1_on_delta(
-    benchmark, sos1_on_delta_instances: List[Instance]
+    benchmark, sos1_on_delta_models: List[pyscipopt.Model]
 ) -> None:
-    benchmark(_solve_all, sos1_on_delta_instances)
+    benchmark(_optimize_all, sos1_on_delta_models)
 
 
 @pytest.mark.benchmark
 def test_bench_sos1_on_delta_with_card(
-    benchmark, sos1_on_delta_with_card_instances: List[Instance]
+    benchmark, sos1_on_delta_with_card_models: List[pyscipopt.Model]
 ) -> None:
-    benchmark(_solve_all, sos1_on_delta_with_card_instances)
+    benchmark(_optimize_all, sos1_on_delta_with_card_models)
 
 
 @pytest.mark.benchmark
-def test_bench_bigm(benchmark, bigm_instances: List[Instance]) -> None:
-    benchmark(_solve_all, bigm_instances)
+def test_bench_bigm(benchmark, bigm_models: List[pyscipopt.Model]) -> None:
+    benchmark(_optimize_all, bigm_models)
