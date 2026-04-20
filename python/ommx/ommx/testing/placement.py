@@ -55,61 +55,52 @@ Objective (minimize)
     \min \; \sum_{i,j} \operatorname{dist}(i, j) \cdot s_{i,j}
           \;+\; \sum_i c_i
 
-"At most one plant per region" — four formulations
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+"At most one plant per region" — eight formulations
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-All four builders share the decision variables and constraints above and
-encode the same feasible region on :math:`(s, c)`. They differ in how the
-"at most one plant per region" rule reaches the solver and in whether the
-auxiliary opening indicator :math:`\delta_i \in \{0, 1\}` is introduced:
+All eight builders share the decision variables and constraints above and
+encode the same feasible region on :math:`(s, c)`. They differ along three
+orthogonal axes:
 
-**(1) SOS1 on capacity** — :func:`build_sos1`.
+- whether the auxiliary opening indicator :math:`\delta_i \in \{0, 1\}` and
+  the big-M link :math:`c_i \le C_i \, \delta_i` are introduced;
+- whether the per-region cardinality :math:`\sum_{i \in W} \delta_i \le 1`
+  (and the analogous east bound) is added as a plain linear constraint;
+- where SOS1 is declared: on the continuous capacities
+  :math:`\{c_i\}_{i \in W/E}`, on the binary indicators
+  :math:`\{\delta_i\}_{i \in W/E}`, on **both** (redundant), or nowhere.
 
-No :math:`\delta`. The set :math:`\{c_i\}_{i \in W}` is marked as a single
-SOS1 constraint; the same for :math:`\{c_i\}_{i \in E}`. Because
-:math:`c_i \ge 0`, SOS1 directly encodes "at most one capacity is positive".
+The eight builders enumerate every well-defined combination:
 
-**(2) SOS1 on indicator** — :func:`build_sos1_on_delta`.
++---+-----------------------------------------+------------+---------------------+--------------+--------------+
+| # | Builder                                 | δ + big-M  | :math:`\sum δ ≤ 1`  | SOS1 on `c`  | SOS1 on `δ`  |
++===+=========================================+============+=====================+==============+==============+
+| 1 | :func:`build_sos1`                      | –          | –                   | ✓            | –            |
++---+-----------------------------------------+------------+---------------------+--------------+--------------+
+| 2 | :func:`build_sos1_on_c_with_delta`      | ✓          | –                   | ✓            | –            |
++---+-----------------------------------------+------------+---------------------+--------------+--------------+
+| 3 | :func:`build_sos1_on_c_with_delta_with_card` | ✓     | ✓                   | ✓            | –            |
++---+-----------------------------------------+------------+---------------------+--------------+--------------+
+| 4 | :func:`build_sos1_on_delta`             | ✓          | –                   | –            | ✓            |
++---+-----------------------------------------+------------+---------------------+--------------+--------------+
+| 5 | :func:`build_sos1_on_delta_with_card`   | ✓          | ✓                   | –            | ✓            |
++---+-----------------------------------------+------------+---------------------+--------------+--------------+
+| 6 | :func:`build_sos1_on_both_with_delta`   | ✓          | –                   | ✓            | ✓            |
++---+-----------------------------------------+------------+---------------------+--------------+--------------+
+| 7 | :func:`build_sos1_on_both_with_delta_with_card` | ✓  | ✓                   | ✓            | ✓            |
++---+-----------------------------------------+------------+---------------------+--------------+--------------+
+| 8 | :func:`build_bigm`                      | ✓          | ✓                   | –            | –            |
++---+-----------------------------------------+------------+---------------------+--------------+--------------+
 
-Introduce :math:`\delta_i \in \{0, 1\}` and the big-M link :math:`c_i \le
-C_i \, \delta_i`, but encode the per-region cardinality with SOS1 on the
-binaries (no explicit :math:`\sum \delta_i \le 1`):
-
-.. math::
-
-    \begin{aligned}
-    c_i &\le C_i \, \delta_i \qquad \forall i \\
-    \{\delta_i\}_{i \in W} &\text{ is SOS1} \\
-    \{\delta_i\}_{i \in E} &\text{ is SOS1}
-    \end{aligned}
-
-**(3) SOS1 on indicator + cardinality** — :func:`build_sos1_on_delta_with_card`.
-
-Same as (2) but additionally keeps the linear cardinality bounds
-:math:`\sum_{i \in W} \delta_i \le 1` and :math:`\sum_{i \in E} \delta_i \le
-1`. The SOS1 is therefore redundant with the explicit bound — useful as the
-"hint on top of big-M" baseline (i.e. what an SOS1-detection step would
-produce if it added a hint without removing the original linearisation).
-
-**(4) big-M (linearised)** — :func:`build_bigm`.
-
-No SOS1. For each plant introduce :math:`\delta_i` and add the full linear
-encoding:
-
-.. math::
-
-    \begin{aligned}
-    c_i &\le C_i \, \delta_i \qquad \forall i \\
-    \sum_{i \in W} \delta_i &\le 1 \\
-    \sum_{i \in E} \delta_i &\le 1
-    \end{aligned}
-
-The solver sees only plain linear constraints.
+The δ-bearing rows always include the big-M link
+:math:`c_i \le C_i \, \delta_i`. Each region with at least two plants
+contributes one SOS1 set per "✓" in the SOS1 columns; regions with fewer
+than two plants are skipped (the constraint is trivially satisfied).
 
 Intended use
 ------------
 
-These four builders are useful for benchmarking how a solver — and the
+These eight builders are useful for benchmarking how a solver — and the
 adapter forwarding to it — reacts to different ways of expressing the same
 SOS1 structure. Callers should construct :meth:`Input.random` with a fixed
 ``random.seed`` for reproducibility and pass the resulting :class:`Input`
@@ -296,13 +287,18 @@ def build_sos1(input: Input) -> Instance:
 
 
 def _build_with_delta(
-    input: Input, *, with_cardinality: bool, with_sos1_on_delta: bool
+    input: Input,
+    *,
+    with_cardinality: bool,
+    with_sos1_on_c: bool,
+    with_sos1_on_delta: bool,
 ) -> Instance:
-    """Shared backbone for the three builders that introduce ``delta`` binaries.
+    """Shared backbone for the seven builders that introduce ``delta`` binaries.
 
-    All three keep the big-M link ``c[i] <= C[i] * delta[i]``. They differ in
+    All seven keep the big-M link ``c[i] <= C[i] * delta[i]``. They differ in
     whether the per-region cardinality ``sum delta[i] <= 1`` is added as a
-    plain linear constraint and/or as a first-class SOS1 on the binaries.
+    plain linear constraint and where SOS1 is declared (on ``c``, on
+    ``delta``, on both, or nowhere).
     """
     s, c, next_id = _supply_capacity_vars(input)
     N = len(input.plants)
@@ -326,8 +322,15 @@ def _build_with_delta(
                 cid += 1
 
     sos1_constraints: dict = {}
+    sid = 0
+    if with_sos1_on_c:
+        for group in (_west_indices(input), _east_indices(input)):
+            if len(group) >= 2:
+                sos1_constraints[sid] = Sos1Constraint(
+                    variables=[c[i].id for i in group]
+                )
+                sid += 1
     if with_sos1_on_delta:
-        sid = 0
         for group in (_west_indices(input), _east_indices(input)):
             if len(group) >= 2:
                 sos1_constraints[sid] = Sos1Constraint(
@@ -345,21 +348,70 @@ def _build_with_delta(
 
 
 def build_bigm(input: Input) -> Instance:
-    """Pure linear formulation: big-M link plus per-region cardinality bounds, no SOS1."""
+    """Pure linear: big-M link plus per-region cardinality bounds, no SOS1."""
     return _build_with_delta(
-        input, with_cardinality=True, with_sos1_on_delta=False
+        input,
+        with_cardinality=True,
+        with_sos1_on_c=False,
+        with_sos1_on_delta=False,
     )
 
 
 def build_sos1_on_delta(input: Input) -> Instance:
-    """Big-M link kept; per-region cardinality replaced by SOS1 on the binaries."""
+    """δ + big-M; per-region cardinality replaced by SOS1 on the binaries."""
     return _build_with_delta(
-        input, with_cardinality=False, with_sos1_on_delta=True
+        input,
+        with_cardinality=False,
+        with_sos1_on_c=False,
+        with_sos1_on_delta=True,
     )
 
 
 def build_sos1_on_delta_with_card(input: Input) -> Instance:
-    """Big-M link plus cardinality bounds AND a redundant SOS1 hint on the binaries."""
+    """δ + big-M + cardinality bounds AND a redundant SOS1 on the binaries."""
     return _build_with_delta(
-        input, with_cardinality=True, with_sos1_on_delta=True
+        input,
+        with_cardinality=True,
+        with_sos1_on_c=False,
+        with_sos1_on_delta=True,
+    )
+
+
+def build_sos1_on_c_with_delta(input: Input) -> Instance:
+    """δ + big-M; per-region cardinality enforced by SOS1 on the continuous c_i."""
+    return _build_with_delta(
+        input,
+        with_cardinality=False,
+        with_sos1_on_c=True,
+        with_sos1_on_delta=False,
+    )
+
+
+def build_sos1_on_c_with_delta_with_card(input: Input) -> Instance:
+    """δ + big-M + cardinality AND a SOS1 on the continuous c_i (cardinality kept)."""
+    return _build_with_delta(
+        input,
+        with_cardinality=True,
+        with_sos1_on_c=True,
+        with_sos1_on_delta=False,
+    )
+
+
+def build_sos1_on_both_with_delta(input: Input) -> Instance:
+    """δ + big-M; SOS1 declared on both c and δ (no explicit cardinality)."""
+    return _build_with_delta(
+        input,
+        with_cardinality=False,
+        with_sos1_on_c=True,
+        with_sos1_on_delta=True,
+    )
+
+
+def build_sos1_on_both_with_delta_with_card(input: Input) -> Instance:
+    """δ + big-M + cardinality; SOS1 declared on both c and δ (maximum-information)."""
+    return _build_with_delta(
+        input,
+        with_cardinality=True,
+        with_sos1_on_c=True,
+        with_sos1_on_delta=True,
     )

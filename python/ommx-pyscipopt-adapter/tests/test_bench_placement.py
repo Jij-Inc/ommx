@@ -1,12 +1,12 @@
-"""Benchmark four Plant Placement Problem formulations through SCIP only.
+"""Benchmark eight Plant Placement Problem formulations through SCIP only.
 
-The four ``placement_inputs`` are converted to ``ommx.v1.Instance``, then to
-``pyscipopt.Model``, in session-scoped fixtures — i.e. the OMMX construction
+Each ``placement_inputs`` parameterisation is converted to ``ommx.v1.Instance``,
+then to ``pyscipopt.Model``, in session-scoped fixtures — the OMMX construction
 and the OMMX → SCIP translation are *not* in the measurement. Each benchmark
-calls ``model.freeTransform()`` to discard SCIP's transformed problem from
-any previous run, then ``model.optimize()`` to re-run presolve and
-branch-and-bound. The reported time is therefore SCIP's own processing
-time, isolated from adapter overhead.
+calls ``model.freeTransform()`` to discard SCIP's transformed problem from any
+previous run, then ``model.optimize()`` to re-run presolve and
+branch-and-bound. The reported time is therefore SCIP's own processing time,
+isolated from adapter overhead.
 """
 
 from __future__ import annotations
@@ -21,6 +21,10 @@ from ommx.testing.placement import (
     Input,
     build_bigm,
     build_sos1,
+    build_sos1_on_both_with_delta,
+    build_sos1_on_both_with_delta_with_card,
+    build_sos1_on_c_with_delta,
+    build_sos1_on_c_with_delta_with_card,
     build_sos1_on_delta,
     build_sos1_on_delta_with_card,
 )
@@ -57,6 +61,20 @@ def sos1_models(placement_inputs: List[Input]) -> List[pyscipopt.Model]:
 
 
 @pytest.fixture(scope="session")
+def sos1_on_c_with_delta_models(
+    placement_inputs: List[Input],
+) -> List[pyscipopt.Model]:
+    return _build_models(placement_inputs, build_sos1_on_c_with_delta)
+
+
+@pytest.fixture(scope="session")
+def sos1_on_c_with_delta_with_card_models(
+    placement_inputs: List[Input],
+) -> List[pyscipopt.Model]:
+    return _build_models(placement_inputs, build_sos1_on_c_with_delta_with_card)
+
+
+@pytest.fixture(scope="session")
 def sos1_on_delta_models(placement_inputs: List[Input]) -> List[pyscipopt.Model]:
     return _build_models(placement_inputs, build_sos1_on_delta)
 
@@ -66,6 +84,20 @@ def sos1_on_delta_with_card_models(
     placement_inputs: List[Input],
 ) -> List[pyscipopt.Model]:
     return _build_models(placement_inputs, build_sos1_on_delta_with_card)
+
+
+@pytest.fixture(scope="session")
+def sos1_on_both_with_delta_models(
+    placement_inputs: List[Input],
+) -> List[pyscipopt.Model]:
+    return _build_models(placement_inputs, build_sos1_on_both_with_delta)
+
+
+@pytest.fixture(scope="session")
+def sos1_on_both_with_delta_with_card_models(
+    placement_inputs: List[Input],
+) -> List[pyscipopt.Model]:
+    return _build_models(placement_inputs, build_sos1_on_both_with_delta_with_card)
 
 
 @pytest.fixture(scope="session")
@@ -85,6 +117,20 @@ def test_bench_sos1(benchmark, sos1_models: List[pyscipopt.Model]) -> None:
 
 
 @pytest.mark.benchmark
+def test_bench_sos1_on_c_with_delta(
+    benchmark, sos1_on_c_with_delta_models: List[pyscipopt.Model]
+) -> None:
+    benchmark(_optimize_all, sos1_on_c_with_delta_models)
+
+
+@pytest.mark.benchmark
+def test_bench_sos1_on_c_with_delta_with_card(
+    benchmark, sos1_on_c_with_delta_with_card_models: List[pyscipopt.Model]
+) -> None:
+    benchmark(_optimize_all, sos1_on_c_with_delta_with_card_models)
+
+
+@pytest.mark.benchmark
 def test_bench_sos1_on_delta(
     benchmark, sos1_on_delta_models: List[pyscipopt.Model]
 ) -> None:
@@ -96,6 +142,20 @@ def test_bench_sos1_on_delta_with_card(
     benchmark, sos1_on_delta_with_card_models: List[pyscipopt.Model]
 ) -> None:
     benchmark(_optimize_all, sos1_on_delta_with_card_models)
+
+
+@pytest.mark.benchmark
+def test_bench_sos1_on_both_with_delta(
+    benchmark, sos1_on_both_with_delta_models: List[pyscipopt.Model]
+) -> None:
+    benchmark(_optimize_all, sos1_on_both_with_delta_models)
+
+
+@pytest.mark.benchmark
+def test_bench_sos1_on_both_with_delta_with_card(
+    benchmark, sos1_on_both_with_delta_with_card_models: List[pyscipopt.Model]
+) -> None:
+    benchmark(_optimize_all, sos1_on_both_with_delta_with_card_models)
 
 
 @pytest.mark.benchmark

@@ -1,4 +1,4 @@
-"""Verify that the four Plant Placement builders define the same optimum."""
+"""Verify that the eight Plant Placement builders define the same optimum."""
 
 from __future__ import annotations
 
@@ -13,6 +13,10 @@ from ommx.testing.placement import (
     Input,
     build_bigm,
     build_sos1,
+    build_sos1_on_both_with_delta,
+    build_sos1_on_both_with_delta_with_card,
+    build_sos1_on_c_with_delta,
+    build_sos1_on_c_with_delta_with_card,
     build_sos1_on_delta,
     build_sos1_on_delta_with_card,
 )
@@ -27,8 +31,12 @@ def small_input() -> Input:
 def test_all_formulations_match(small_input: Input) -> None:
     builders = {
         "sos1": build_sos1,
+        "sos1_on_c_with_delta": build_sos1_on_c_with_delta,
+        "sos1_on_c_with_delta_with_card": build_sos1_on_c_with_delta_with_card,
         "sos1_on_delta": build_sos1_on_delta,
         "sos1_on_delta_with_card": build_sos1_on_delta_with_card,
+        "sos1_on_both_with_delta": build_sos1_on_both_with_delta,
+        "sos1_on_both_with_delta_with_card": build_sos1_on_both_with_delta_with_card,
         "bigm": build_bigm,
     }
     objectives = {}
