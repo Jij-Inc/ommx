@@ -1150,6 +1150,11 @@ impl Instance {
     /// rule. Returns a dict mapping each original SOS1 ID to the list of regular
     /// constraint IDs it produced.
     ///
+    /// Atomic: every active SOS1 is validated up front, and only if every one is
+    /// convertible are the conversions applied. If any SOS1 fails validation
+    /// (unsupported kind, non-finite bound, domain excludes 0, etc.), no mutation
+    /// happens and the instance is left untouched.
+    ///
     /// # Examples
     ///
     /// ```python

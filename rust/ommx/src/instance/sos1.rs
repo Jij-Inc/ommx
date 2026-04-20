@@ -57,14 +57,64 @@ impl Instance {
         &mut self,
         id: Sos1ConstraintID,
     ) -> Result<Vec<ConstraintID>> {
+        let plans = self.plan_sos1_conversion(id)?;
+        Ok(self.apply_sos1_conversion(id, plans))
+    }
+
+    /// Convert every active SOS1 constraint to regular constraints using Big-M.
+    ///
+    /// See [`Self::convert_sos1_to_constraints`] for the conversion rule.
+    ///
+    /// This is atomic: every active SOS1 is validated up front, and only once all
+    /// validations succeed are the conversions applied. If any SOS1 fails
+    /// validation (unsupported kind, non-finite bound, domain excludes 0, etc.),
+    /// no mutation happens and the instance is left untouched.
+    ///
+    /// Returns a map from each original [`Sos1ConstraintID`] to the IDs of the
+    /// regular constraints it produced.
+    pub fn convert_all_sos1_to_constraints(
+        &mut self,
+    ) -> Result<BTreeMap<Sos1ConstraintID, Vec<ConstraintID>>> {
+        let ids: Vec<_> = self
+            .sos1_constraint_collection
+            .active()
+            .keys()
+            .copied()
+            .collect();
+        // Phase 1: plan every SOS1 up front. Bail on the first validation failure
+        // before any mutation has happened.
+        let mut all_plans: Vec<(Sos1ConstraintID, Vec<(VariableID, IndicatorPlan)>)> =
+            Vec::with_capacity(ids.len());
+        for id in ids {
+            let plans = self.plan_sos1_conversion(id)?;
+            all_plans.push((id, plans));
+        }
+        // Phase 2: apply. Planned state only references variables that existed at
+        // plan time; `apply_sos1_conversion` only adds fresh variables / constraints
+        // and relaxes its own SOS1, so earlier applications cannot invalidate later
+        // plans.
+        let mut result = BTreeMap::new();
+        for (id, plans) in all_plans {
+            result.insert(id, self.apply_sos1_conversion(id, plans));
+        }
+        Ok(result)
+    }
+
+    /// Validate a single SOS1 and build its per-variable conversion plan.
+    ///
+    /// Read-only: never mutates `self`. Errors before producing any plan if the
+    /// SOS1 references an unknown variable, or if a variable has an unsupported
+    /// kind (semi-*), a non-finite bound, or a bound that excludes 0.
+    fn plan_sos1_conversion(
+        &self,
+        id: Sos1ConstraintID,
+    ) -> Result<Vec<(VariableID, IndicatorPlan)>> {
         let sos1 = self
             .sos1_constraint_collection
             .active()
             .get(&id)
-            .with_context(|| format!("SOS1 constraint with ID {id:?} not found"))?
-            .clone();
+            .with_context(|| format!("SOS1 constraint with ID {id:?} not found"))?;
 
-        // Phase 1: plan and validate without mutation.
         let mut plans: Vec<(VariableID, IndicatorPlan)> = Vec::with_capacity(sos1.variables.len());
         for &var_id in &sos1.variables {
             let dv = self.decision_variables.get(&var_id).with_context(|| {
@@ -101,9 +151,20 @@ impl Instance {
             }
             plans.push((var_id, IndicatorPlan::Fresh { bound }));
         }
+        Ok(plans)
+    }
 
-        // Phase 2: mutate.
-        //
+    /// Apply a pre-validated SOS1 conversion plan.
+    ///
+    /// Infallible given a plan returned by [`Self::plan_sos1_conversion`] on the
+    /// current instance: every fallible check (kind, bound finiteness, zero
+    /// inclusion) was performed there, so any failure here indicates an internal
+    /// consistency bug.
+    fn apply_sos1_conversion(
+        &mut self,
+        id: Sos1ConstraintID,
+        plans: Vec<(VariableID, IndicatorPlan)>,
+    ) -> Vec<ConstraintID> {
         // Allocate fresh binary indicators first.
         let mut indicators: BTreeMap<VariableID, VariableID> = BTreeMap::new();
         for (x_id, plan) in &plans {
@@ -132,7 +193,7 @@ impl Instance {
             // Upper Big-M: x_i - u_i y_i <= 0. Skip when u_i == 0 (trivial with l_i <= 0).
             if bound.upper() > 0.0 {
                 let neg_u = Coefficient::try_from(-bound.upper())
-                    .context("Upper Big-M coefficient must be finite and non-zero")?;
+                    .expect("planner guaranteed finite non-zero upper bound");
                 let f = Linear::zero()
                     + linear!(x_id.into_inner())
                     + Linear::single_term(LinearMonomial::Variable(y_id), neg_u);
@@ -146,7 +207,7 @@ impl Instance {
             // Lower Big-M: l_i y_i - x_i <= 0. Skip when l_i == 0 (trivial with u_i >= 0).
             if bound.lower() < 0.0 {
                 let l = Coefficient::try_from(bound.lower())
-                    .context("Lower Big-M coefficient must be finite and non-zero")?;
+                    .expect("planner guaranteed finite non-zero lower bound");
                 let f = Linear::single_term(LinearMonomial::Variable(y_id), l)
                     + Linear::single_term(LinearMonomial::Variable(*x_id), coeff!(-1.0));
                 let new_id = self.insert_sos1_generated_constraint(
@@ -176,37 +237,17 @@ impl Instance {
             .collect::<Vec<_>>()
             .join(",");
         parameters.insert("constraint_ids".to_string(), constraint_ids_str);
-        self.sos1_constraint_collection.relax(
-            id,
-            RemovedReason {
-                reason: "ommx.Instance.convert_sos1_to_constraints".to_string(),
-                parameters,
-            },
-        )?;
+        self.sos1_constraint_collection
+            .relax(
+                id,
+                RemovedReason {
+                    reason: "ommx.Instance.convert_sos1_to_constraints".to_string(),
+                    parameters,
+                },
+            )
+            .expect("SOS1 id was present when the plan was built and hasn't been touched since");
 
-        Ok(new_constraint_ids)
-    }
-
-    /// Convert every active SOS1 constraint to regular constraints using Big-M.
-    ///
-    /// See [`Self::convert_sos1_to_constraints`] for the conversion rule. Returns a
-    /// map from each original [`Sos1ConstraintID`] to the IDs of the regular
-    /// constraints it produced.
-    pub fn convert_all_sos1_to_constraints(
-        &mut self,
-    ) -> Result<BTreeMap<Sos1ConstraintID, Vec<ConstraintID>>> {
-        let ids: Vec<_> = self
-            .sos1_constraint_collection
-            .active()
-            .keys()
-            .copied()
-            .collect();
-        let mut result = BTreeMap::new();
-        for id in ids {
-            let new_ids = self.convert_sos1_to_constraints(id)?;
-            result.insert(id, new_ids);
-        }
-        Ok(result)
+        new_constraint_ids
     }
 
     fn insert_sos1_generated_constraint(
@@ -519,5 +560,47 @@ mod tests {
         }
         assert!(instance.sos1_constraints().is_empty());
         assert_eq!(instance.removed_sos1_constraints().len(), 2);
+    }
+
+    #[test]
+    fn bulk_conversion_is_atomic_on_error() {
+        // Two SOS1 constraints: the first valid (binary reuse), the second invalid
+        // (continuous with default, infinite bound). The bulk call must fail
+        // without applying the valid one either.
+        let decision_variables = btreemap! {
+            VariableID::from(0) => DecisionVariable::binary(VariableID::from(0)),
+            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
+            VariableID::from(2) => DecisionVariable::continuous(VariableID::from(2)),
+        };
+        let valid = Sos1Constraint::new(
+            [VariableID::from(0), VariableID::from(1)]
+                .into_iter()
+                .collect(),
+        );
+        let invalid =
+            Sos1Constraint::new([VariableID::from(2)].into_iter().collect::<BTreeSet<_>>());
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(linear!(0) + linear!(2)))
+            .decision_variables(decision_variables)
+            .constraints(BTreeMap::new())
+            .sos1_constraints(BTreeMap::from([
+                (Sos1ConstraintID::from(1), valid),
+                (Sos1ConstraintID::from(2), invalid),
+            ]))
+            .build()
+            .unwrap();
+        let before_sos1 = instance.sos1_constraints().clone();
+        let before_vars = instance.decision_variables.clone();
+        let before_constraints = instance.constraints().clone();
+
+        let err = instance.convert_all_sos1_to_constraints().unwrap_err();
+        assert!(err.to_string().contains("non-finite"));
+
+        // Atomicity: the earlier valid SOS1 must not have been converted either.
+        assert_eq!(instance.sos1_constraints(), &before_sos1);
+        assert_eq!(instance.decision_variables, before_vars);
+        assert_eq!(instance.constraints(), &before_constraints);
+        assert!(instance.removed_sos1_constraints().is_empty());
     }
 }
