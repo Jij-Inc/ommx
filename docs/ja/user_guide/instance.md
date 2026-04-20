@@ -41,7 +41,7 @@ y = DecisionVariable.binary(2, name='y')
 instance = Instance.from_components(
     decision_variables=[x, y],
     objective=x + y,
-    constraints=[x * y == 0],
+    constraints={0: x * y == 0},
     sense=Instance.MAXIMIZE
 )
 ```
@@ -98,25 +98,20 @@ print(f"{x1.id=}, {x1.name=}")
 instance.constraints_df
 ```
 
-OMMXでは制約条件もIDで管理されます。このIDは決定変数のIDとは独立です。上の例で `x * y == 0` のように制約条件を作った場合は自動的に連番が振られるようになっています。手動でIDを設定するには [`set_id`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Constraint.set_id) メソッドを使うことができます。
+OMMXでは制約条件もIDで管理されます。このIDは決定変数のIDとは独立です。制約条件のIDは `Instance` に登録する際に決まります: [`Instance.from_components`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.from_components) に渡す `constraints` 辞書のキーがそのまま制約条件のIDになります。
 
-```{code-cell} ipython3
-c = (x * y == 0).set_id(100)
-print(f"{c.id=}")
-```
-
-制約条件に必須の情報は `id` と `equality` です。`equality` はその制約条件が等式制約 ([`Constraint.EQUAL_TO_ZERO`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Constraint.EQUAL_TO_ZERO)) か不等式制約 ([`Constraint.LESS_THAN_OR_EQUAL_TO_ZERO`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Constraint.LESS_THAN_OR_EQUAL_TO_ZERO)) かを表します。$f(x) \geq 0$のタイプの制約条件は $-f(x) \leq 0$ として扱われることに注意してくください。
+制約条件に必須の情報は `equality` です。`equality` はその制約条件が等式制約 ([`Constraint.EQUAL_TO_ZERO`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Constraint.EQUAL_TO_ZERO)) か不等式制約 ([`Constraint.LESS_THAN_OR_EQUAL_TO_ZERO`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Constraint.LESS_THAN_OR_EQUAL_TO_ZERO)) かを表します。$f(x) \geq 0$のタイプの制約条件は $-f(x) \leq 0$ として扱われることに注意してくください。
 
 制約条件にも決定変数と同様にメタデータを保存することができます。決定変数と同様に `name`, `description`, `subscripts`, `parameters` が利用できます。これらは [`add_name`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Constraint.add_name), [`add_description`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Constraint.add_description), [`add_subscripts`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Constraint.add_subscripts), [`add_parameters`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Constraint.add_parameters) メソッドで設定できます。
 
 ```{code-cell} ipython3
-c = (x * y == 0).set_id(100).add_name("prod-zero")
-print(f"{c.id=}, {c.name=}")
+c = (x * y == 0).add_name("prod-zero")
+print(f"{c.name=}")
 ```
 
-また [`constraints`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.constraints) プロパティを使うことで直接 [`ommx.v1.Constraint`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Constraint) のリストを取得でき、また制約条件のIDから `ommx.v1.Constraint` を取得するには [`get_constraint_by_id`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.get_constraint_by_id) メソッドを使うことができます
+また [`constraints`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.constraints) プロパティを使うことで制約条件IDをキーとする `dict[int, ommx.v1.Constraint]` を直接取得できます。制約条件のIDから `ommx.v1.Constraint` を取得するには [`get_constraint_by_id`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.get_constraint_by_id) メソッドを使うことができます。
 
 ```{code-cell} ipython3
-for c in instance.constraints:
-    print(c)
+for cid, c in instance.constraints.items():
+    print(f"id={cid}: {c}")
 ```

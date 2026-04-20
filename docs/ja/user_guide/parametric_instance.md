@@ -33,9 +33,9 @@ from ommx.v1 import ParametricInstance, DecisionVariable, Parameter, Instance
 N = 6
 x = [DecisionVariable.binary(id=i, name="x", subscripts=[i]) for i in range(N)]
 
-p = [Parameter.new(id=i+  N, name="Profit", subscripts=[i]) for i in range(N)]
-w = [Parameter.new(id=i+2*N, name="Weight", subscripts=[i]) for i in range(N)]
-W =  Parameter.new(id=  3*N, name="Capacity")
+p = [Parameter(i +   N, name="Profit", subscripts=[i]) for i in range(N)]
+w = [Parameter(i + 2*N, name="Weight", subscripts=[i]) for i in range(N)]
+W =  Parameter(    3*N, name="Capacity")
 ```
 
 `ommx.v1.Parameter` もIDを持ちますが、これは `ommx.v1.DecisionVariable` のIDと共通なので、重複しないようにする必要があります。決定変数と同じようにパラメータにも名前や添え字を付与できます。これらは決定変数と同じように `+` や `<=` で演算して `ommx.v1.Function` や `ommx.v1.Constraint` を作成することができます。
@@ -52,15 +52,15 @@ parametric_instance = ParametricInstance.from_components(
     decision_variables=x,
     parameters=p + w + [W],
     objective=objective,
-    constraints=[constraint],
+    constraints={0: constraint},
     sense=Instance.MAXIMIZE,
 )
 ```
 
-`ommx.v1.Instance`と同様に `decision_variables` 及び `constraints` プロパティで決定変数と制約条件をDataFrameとして取得できますが、加えて `ommx.v1.ParametricInstance` には `parameters` プロパティがあります。これはパラメータの情報をDataFrameとして取得できます。
+`ommx.v1.Instance`と同様に `decision_variables_df` 及び `constraints_df` プロパティで決定変数と制約条件をDataFrameとして取得できますが、加えて `ommx.v1.ParametricInstance` には `parameters_df` プロパティがあります。これはパラメータの情報をDataFrameとして取得できます。
 
 ```{code-cell} ipython3
-parametric_instance.parameters
+parametric_instance.parameters_df
 ```
 
 さて具体的なパラメータを指定してみましょう。それには `ParametricInstance.with_parameters` を使います。これは `ommx.v1.Parameter` のIDをキー、値を値とする辞書を引数に取ります。

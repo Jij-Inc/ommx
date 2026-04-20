@@ -182,8 +182,9 @@ def set_objective(model: pyscipopt.Model, instance: Instance, varname_map: dict)
         
 def set_constraints(model: pyscipopt.Model, instance: Instance, varname_map: dict):
     """Set the constraints for the model"""
-    # Process regular constraints
-    for constraint in instance.constraints:
+    # Process regular constraints. instance.constraints is a dict[int, Constraint]
+    # keyed by constraint ID.
+    for constraint_id, constraint in instance.constraints.items():
         # Generate an expression based on the type of constraint function
         f = constraint.function
         degree = f.degree()
@@ -201,7 +202,7 @@ def set_constraints(model: pyscipopt.Model, instance: Instance, varname_map: dic
                 continue
             else:
                 raise OMMXPySCIPOptAdapterError(
-                    f"Infeasible constant constraint was found: id {constraint.id}"
+                    f"Infeasible constant constraint was found: id {constraint_id}"
                 )
         elif degree == 1:
             expr = make_linear_expr(f, varname_map)
@@ -210,7 +211,7 @@ def set_constraints(model: pyscipopt.Model, instance: Instance, varname_map: dic
         else:
             raise OMMXPySCIPOptAdapterError(
                 f"Constraints must be either `constant`, `linear` or `quadratic`. "
-                f"id: {constraint.id}, "
+                f"id: {constraint_id}, "
                 f"degree: {degree}"
             )
 
@@ -222,11 +223,11 @@ def set_constraints(model: pyscipopt.Model, instance: Instance, varname_map: dic
         else:
             raise OMMXPySCIPOptAdapterError(
                 f"Not supported constraint equality: "
-                f"id: {constraint.id}, equality: {constraint.equality}"
+                f"id: {constraint_id}, equality: {constraint.equality}"
             )
 
         # Add the constraint to the model
-        model.addCons(constr_expr, name=str(constraint.id))
+        model.addCons(constr_expr, name=str(constraint_id))
 ```
 
 Also, if the backend solver supports special constraints (e.g., [SOS constraints](https://en.wikipedia.org/wiki/Special_ordered_set)), you need to add functions to handle them.
@@ -420,7 +421,7 @@ x = [
 instance = Instance.from_components(
     decision_variables=x,
     objective=sum(v[i] * x[i] for i in range(N)),
-    constraints=[sum(w[i] * x[i] for i in range(N)) - W <= 0],
+    constraints={0: sum(w[i] * x[i] for i in range(N)) - W <= 0},
     sense=Instance.MAXIMIZE,
 )
 
@@ -566,7 +567,7 @@ x = [DecisionVariable.binary(id, name="x", subscripts=[id]) for id in range(2)]
 instance = Instance.from_components(
     decision_variables=x,
     objective=x[0] + x[1],
-    constraints=[x[0] * x[1] == 1],
+    constraints={0: x[0] * x[1] == 1},
     sense=Instance.MAXIMIZE,
 )
 

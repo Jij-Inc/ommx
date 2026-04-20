@@ -94,7 +94,7 @@ print(f"{value=}")
 ```{code-cell} ipython3
 try:
     linear.evaluate({1: 1})
-except RuntimeError as e:
+except ValueError as e:
     print(f"Error: {e}")
 ```
 

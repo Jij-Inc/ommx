@@ -44,7 +44,7 @@ y = DecisionVariable.binary(2, name='y')
 instance = Instance.from_components(
     decision_variables=[x, y],
     objective=x + y,
-    constraints=[x * y == 0],
+    constraints={0: x * y == 0},
     sense=Instance.MAXIMIZE
 )
 

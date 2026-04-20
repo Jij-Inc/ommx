@@ -31,7 +31,7 @@ y = DecisionVariable.integer(2, lower=0, upper=5)
 ommx_instance = Instance.from_components(
     decision_variables=[x, y],
     objective=x - y,
-    constraints=[x + y <= 5],
+    constraints={0: x + y <= 5},
     sense=Instance.MAXIMIZE,
 )
 ```
