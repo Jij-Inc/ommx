@@ -341,29 +341,32 @@ impl Instance {
             .collect()
     }
 
-    /// Check that the adapter's supported capabilities cover this instance's requirements.
+    /// The non-standard constraint capabilities this instance currently uses.
     ///
-    /// `supported` is a set of `AdditionalCapability` flags.
+    /// Returns the set of :class:`AdditionalCapability` values corresponding to
+    /// the active (non-removed) constraint collections the instance contains.
+    /// An empty set means the instance only uses regular constraints.
     ///
-    /// Raises an error if the instance uses constraint types not in `supported`.
-    pub fn check_capabilities(
-        &self,
-        supported: std::collections::HashSet<crate::AdditionalCapability>,
-    ) -> anyhow::Result<()> {
-        let rust_supported: fnv::FnvHashSet<ommx::AdditionalCapability> =
-            supported.into_iter().map(|c| c.into()).collect();
-        self.inner.check_capabilities(&rust_supported)?;
-        Ok(())
+    /// Callers can diff this against an adapter's
+    /// ``ADDITIONAL_CAPABILITIES`` to see what would be converted, or use
+    /// :meth:`reduce_capabilities` to perform the conversion.
+    #[getter]
+    pub fn required_capabilities(&self) -> std::collections::HashSet<crate::AdditionalCapability> {
+        self.inner
+            .required_capabilities()
+            .into_iter()
+            .map(|c| c.into())
+            .collect()
     }
 
     /// Convert constraint types not in `supported` into regular constraints.
     ///
-    /// For every capability in ``required_capabilities() - supported``, the
-    /// corresponding bulk conversion is invoked
+    /// For every capability in :attr:`required_capabilities` not in
+    /// ``supported``, the corresponding bulk conversion is invoked
     /// (:meth:`convert_all_indicators_to_constraints`,
     /// :meth:`convert_all_one_hots_to_constraints`, or
     /// :meth:`convert_all_sos1_to_constraints`). The instance is mutated in
-    /// place and its :meth:`required_capabilities` becomes a subset of
+    /// place and :attr:`required_capabilities` becomes a subset of
     /// ``supported`` on success.
     ///
     /// Returns the list of :class:`AdditionalCapability` values that were

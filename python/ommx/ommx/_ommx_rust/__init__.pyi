@@ -1376,6 +1376,19 @@ class Instance:
         Dict of all removed SOS1 constraints in the instance keyed by their IDs.
         """
     @property
+    def required_capabilities(self) -> builtins.set[AdditionalCapability]:
+        r"""
+        The non-standard constraint capabilities this instance currently uses.
+
+        Returns the set of :class:`AdditionalCapability` values corresponding to
+        the active (non-removed) constraint collections the instance contains.
+        An empty set means the instance only uses regular constraints.
+
+        Callers can diff this against an adapter's
+        ``ADDITIONAL_CAPABILITIES`` to see what would be converted, or use
+        :meth:`reduce_capabilities` to perform the conversion.
+        """
+    @property
     def removed_constraints(self) -> builtins.dict[builtins.int, RemovedConstraint]:
         r"""
         Dict of all removed constraints in the instance keyed by their IDs.
@@ -1510,26 +1523,18 @@ class Instance:
         True
         ```
         """
-    def check_capabilities(self, supported: builtins.set[AdditionalCapability]) -> None:
-        r"""
-        Check that the adapter's supported capabilities cover this instance's requirements.
-
-        `supported` is a set of `AdditionalCapability` flags.
-
-        Raises an error if the instance uses constraint types not in `supported`.
-        """
     def reduce_capabilities(
         self, supported: builtins.set[AdditionalCapability]
     ) -> builtins.list[AdditionalCapability]:
         r"""
         Convert constraint types not in `supported` into regular constraints.
 
-        For every capability in ``required_capabilities() - supported``, the
-        corresponding bulk conversion is invoked
+        For every capability in :attr:`required_capabilities` not in
+        ``supported``, the corresponding bulk conversion is invoked
         (:meth:`convert_all_indicators_to_constraints`,
         :meth:`convert_all_one_hots_to_constraints`, or
         :meth:`convert_all_sos1_to_constraints`). The instance is mutated in
-        place and its :meth:`required_capabilities` becomes a subset of
+        place and :attr:`required_capabilities` becomes a subset of
         ``supported`` on success.
 
         Returns the list of :class:`AdditionalCapability` values that were

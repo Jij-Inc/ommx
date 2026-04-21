@@ -58,13 +58,6 @@ pub enum AdditionalCapability {
     Sos1,
 }
 
-/// Error returned when an Instance contains unsupported constraint types.
-#[derive(Debug, Clone, thiserror::Error)]
-#[error("Unsupported constraint types: {unsupported:?}")]
-pub struct UnsupportedCapabilities {
-    pub unsupported: Vec<AdditionalCapability>,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub enum Sense {
     #[default]
@@ -88,7 +81,10 @@ pub enum Sense {
 /// are distinct and do not conflict. Uniqueness is only required within the same type
 /// (i.e. active and removed constraints of the same type must have disjoint IDs).
 ///
-/// Adapter compatibility is checked via [`AdditionalCapability`] and [`Instance::check_capabilities`].
+/// Adapter compatibility is expressed via [`AdditionalCapability`]. Callers can read
+/// [`Instance::required_capabilities`] to see which non-standard types the instance
+/// carries, and use [`Instance::reduce_capabilities`] to convert unsupported types
+/// into regular constraints.
 ///
 /// Invariants
 /// -----------
@@ -235,24 +231,6 @@ impl Instance {
             caps.insert(AdditionalCapability::Sos1);
         }
         caps
-    }
-
-    /// Check that the given supported capabilities cover all constraint types in this instance.
-    ///
-    /// Only active constraints are checked (see [`Self::required_capabilities`]).
-    ///
-    /// Returns an error listing unsupported constraint types if any are found.
-    pub fn check_capabilities(
-        &self,
-        supported: &fnv::FnvHashSet<AdditionalCapability>,
-    ) -> Result<(), UnsupportedCapabilities> {
-        let required = self.required_capabilities();
-        let unsupported: Vec<_> = required.difference(supported).copied().collect();
-        if unsupported.is_empty() {
-            Ok(())
-        } else {
-            Err(UnsupportedCapabilities { unsupported })
-        }
     }
 
     /// Convert constraint types not in `supported` into regular constraints.

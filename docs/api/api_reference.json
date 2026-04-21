@@ -7191,38 +7191,6 @@
               "deprecated": null
             },
             {
-              "name": "check_capabilities",
-              "doc": "Check that the adapter's supported capabilities cover this instance's requirements.\n\n`supported` is a set of `AdditionalCapability` flags.\n\nRaises an error if the instance uses constraint types not in `supported`.",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "supported",
-                      "type_": {
-                        "display": "set[AdditionalCapability]",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "AdditionalCapability",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "None",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
               "name": "convert_all_indicators_to_constraints",
               "doc": "Convert every active indicator constraint to regular constraints using Big-M.\n\nSee {meth}`~ommx.v1.Instance.convert_indicator_to_constraint` for the\nconversion rule. Returns a dict mapping each original indicator ID to the\nlist of regular constraint IDs it produced.\n\nAtomic: every active indicator is validated up front, and only if every\none is convertible are the conversions applied. If any indicator fails\nvalidation (non-finite bound on a required side), no mutation happens and\nthe instance is left untouched.",
               "signatures": [
@@ -8267,7 +8235,7 @@
             },
             {
               "name": "reduce_capabilities",
-              "doc": "Convert constraint types not in `supported` into regular constraints.\n\nFor every capability in ``required_capabilities() - supported``, the\ncorresponding bulk conversion is invoked\n(:meth:`convert_all_indicators_to_constraints`,\n:meth:`convert_all_one_hots_to_constraints`, or\n:meth:`convert_all_sos1_to_constraints`). The instance is mutated in\nplace and its :meth:`required_capabilities` becomes a subset of\n``supported`` on success.\n\nReturns the list of :class:`AdditionalCapability` values that were\nactually converted, in the fixed order ``Indicator``, ``OneHot``,\n``Sos1``. Empty when nothing needed conversion.\n\nRaises if any underlying Big-M conversion fails (e.g. a SOS1 variable\nwith a non-finite bound).",
+              "doc": "Convert constraint types not in `supported` into regular constraints.\n\nFor every capability in :attr:`required_capabilities` not in\n``supported``, the corresponding bulk conversion is invoked\n(:meth:`convert_all_indicators_to_constraints`,\n:meth:`convert_all_one_hots_to_constraints`, or\n:meth:`convert_all_sos1_to_constraints`). The instance is mutated in\nplace and :attr:`required_capabilities` becomes a subset of\n``supported`` on success.\n\nReturns the list of :class:`AdditionalCapability` values that were\nactually converted, in the fixed order ``Indicator``, ``OneHot``,\n``Sos1``. Empty when nothing needed conversion.\n\nRaises if any underlying Big-M conversion fails (e.g. a SOS1 variable\nwith a non-finite bound).",
               "signatures": [
                 {
                   "parameters": [
@@ -9226,6 +9194,23 @@
                 "display": "DataFrame",
                 "link_target": null,
                 "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "required_capabilities",
+              "doc": "The non-standard constraint capabilities this instance currently uses.\n\nReturns the set of :class:`AdditionalCapability` values corresponding to\nthe active (non-removed) constraint collections the instance contains.\nAn empty set means the instance only uses regular constraints.\n\nCallers can diff this against an adapter's\n``ADDITIONAL_CAPABILITIES`` to see what would be converted, or use\n:meth:`reduce_capabilities` to perform the conversion.",
+              "type_": {
+                "display": "set[AdditionalCapability]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "AdditionalCapability",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
               },
               "is_property": true,
               "is_readonly": true

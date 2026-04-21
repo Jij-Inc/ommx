@@ -1,6 +1,6 @@
 use super::{Instance, Sense};
 use crate::{BinaryIdPair, BinaryIds, Evaluate};
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use std::collections::BTreeMap;
 
 impl Instance {
@@ -21,8 +21,12 @@ impl Instance {
         if !self.constraints().is_empty() {
             bail!("The instance still has constraints. Use penalty method or other way to translate into unconstrained problem first.");
         }
-        self.check_capabilities(&fnv::FnvHashSet::default())
-            .context("QUBO format does not support these constraint types. Convert via penalty method or equivalent first.")?;
+        let non_standard = self.required_capabilities();
+        if !non_standard.is_empty() {
+            bail!(
+                "QUBO format does not support these constraint types: {non_standard:?}. Convert via penalty method or equivalent first."
+            );
+        }
         if !self
             .objective()
             .required_ids()
@@ -66,8 +70,12 @@ impl Instance {
         if !self.constraints().is_empty() {
             bail!("The instance still has constraints. Use penalty method or other way to translate into unconstrained problem first.");
         }
-        self.check_capabilities(&fnv::FnvHashSet::default())
-            .context("HUBO format does not support these constraint types. Convert via penalty method or equivalent first.")?;
+        let non_standard = self.required_capabilities();
+        if !non_standard.is_empty() {
+            bail!(
+                "HUBO format does not support these constraint types: {non_standard:?}. Convert via penalty method or equivalent first."
+            );
+        }
         if !self
             .objective()
             .required_ids()

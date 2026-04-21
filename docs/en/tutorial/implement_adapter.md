@@ -285,8 +285,8 @@ class SolverAdapter(ABC):
     ADDITIONAL_CAPABILITIES: set[AdditionalCapability] = set()
 
     def __init__(self, ommx_instance: Instance):
-        """Checks constraint capabilities. Subclasses must call super().__init__()."""
-        ommx_instance.check_capabilities(self.ADDITIONAL_CAPABILITIES)
+        """Reduce the instance to supported capabilities. Subclasses must call super().__init__()."""
+        ommx_instance.reduce_capabilities(self.ADDITIONAL_CAPABILITIES)
 
     @classmethod
     @abstractmethod
@@ -310,14 +310,16 @@ This abstract base class assumes the following two use cases:
 
 #### Constraint Capability Declaration
 
-Each adapter must declare which constraint types it supports via the `ADDITIONAL_CAPABILITIES` class attribute. The base class automatically checks that the given `Instance` only uses supported constraint types when `super().__init__()` is called. Available capabilities are:
+Each adapter must declare which constraint types it supports via the `ADDITIONAL_CAPABILITIES` class attribute. The base class automatically converts any constraint type **not** in that set into regular constraints when `super().__init__()` is called (Big-M for indicator / SOS1, linear equality for one-hot), and logs each conversion at `INFO` level. Available capabilities are:
 
 - `AdditionalCapability.Indicator`: Indicator constraints (`binvar = 1 → f(x) <= 0`)
+- `AdditionalCapability.OneHot`: Exactly one of a set of binary variables is 1
+- `AdditionalCapability.Sos1`: At most one of a set of variables is non-zero
 
-If the adapter does not override `ADDITIONAL_CAPABILITIES`, only standard constraints are supported by default. If an `Instance` contains unsupported constraint types, an error is raised automatically.
+If the adapter does not override `ADDITIONAL_CAPABILITIES`, only standard constraints are kept and all non-standard types are converted automatically. Use {attr}`Instance.required_capabilities <ommx.v1.Instance.required_capabilities>` to inspect which non-standard types an instance currently holds.
 
 ```{important}
-Subclasses **must** call `super().__init__(ommx_instance)` in their `__init__` method to enable the automatic constraint capability check.
+Subclasses **must** call `super().__init__(ommx_instance)` in their `__init__` method to enable the automatic constraint conversion. The instance is mutated in place.
 ```
 
 Using the functions prepared so far, you can implement it as follows:
@@ -334,7 +336,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         self,
         ommx_instance: Instance,
     ):
-        super().__init__(ommx_instance)  # Check constraint capabilities
+        super().__init__(ommx_instance)  # Auto-convert unsupported capabilities
         self.instance = ommx_instance
         self.model = pyscipopt.Model()
         self.model.hideOutput()
@@ -501,7 +503,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     ommx_instance: Instance
     
     def __init__(self, ommx_instance: Instance):
-        super().__init__(ommx_instance)  # Check constraint capabilities
+        super().__init__(ommx_instance)  # Auto-convert unsupported capabilities
         self.ommx_instance = ommx_instance
 
     # Perform sampling
