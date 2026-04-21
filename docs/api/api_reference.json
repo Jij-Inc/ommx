@@ -7191,38 +7191,6 @@
               "deprecated": null
             },
             {
-              "name": "check_capabilities",
-              "doc": "Check that the adapter's supported capabilities cover this instance's requirements.\n\n`supported` is a set of `AdditionalCapability` flags.\n\nRaises an error if the instance uses constraint types not in `supported`.",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "supported",
-                      "type_": {
-                        "display": "set[AdditionalCapability]",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "AdditionalCapability",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "None",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
               "name": "convert_all_indicators_to_constraints",
               "doc": "Convert every active indicator constraint to regular constraints using Big-M.\n\nSee {meth}`~ommx.v1.Instance.convert_indicator_to_constraint` for the\nconversion rule. Returns a dict mapping each original indicator ID to the\nlist of regular constraint IDs it produced.\n\nAtomic: every active indicator is validated up front, and only if every\none is convertible are the conversions applied. If any indicator fails\nvalidation (non-finite bound on a required side), no mutation happens and\nthe instance is left untouched.",
               "signatures": [
@@ -7247,6 +7215,28 @@
                             "children": []
                           }
                         ]
+                      }
+                    ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "convert_all_one_hots_to_constraints",
+              "doc": "Convert every active one-hot constraint to a regular equality constraint.\n\nSee {meth}`~ommx.v1.Instance.convert_one_hot_to_constraint` for the conversion rule.\nReturns the IDs of the newly created regular constraints.\n\n# Examples\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable, OneHotConstraint\n>>> x = [DecisionVariable.binary(i) for i in range(4)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={},\n...     one_hot_constraints={\n...         1: OneHotConstraint(variables=[0, 1]),\n...         2: OneHotConstraint(variables=[2, 3]),\n...     },\n...     sense=Instance.MINIMIZE,\n... )\n>>> instance.convert_all_one_hots_to_constraints()\n[0, 1]\n>>> instance.one_hot_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + x1 - 1 == 0), 1: Constraint(x2 + x3 - 1 == 0)}\n```",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "list[int]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
                       }
                     ]
                   }
@@ -7375,28 +7365,6 @@
                     "display": "int",
                     "link_target": null,
                     "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "convert_one_hots_to_constraints",
-              "doc": "Convert every active one-hot constraint to a regular equality constraint.\n\nSee {meth}`~ommx.v1.Instance.convert_one_hot_to_constraint` for the conversion rule.\nReturns the IDs of the newly created regular constraints.\n\n# Examples\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable, OneHotConstraint\n>>> x = [DecisionVariable.binary(i) for i in range(4)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={},\n...     one_hot_constraints={\n...         1: OneHotConstraint(variables=[0, 1]),\n...         2: OneHotConstraint(variables=[2, 3]),\n...     },\n...     sense=Instance.MINIMIZE,\n... )\n>>> instance.convert_one_hots_to_constraints()\n[0, 1]\n>>> instance.one_hot_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + x1 - 1 == 0), 1: Constraint(x2 + x3 - 1 == 0)}\n```",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "list[int]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
                   }
                 }
               ],
@@ -8259,6 +8227,44 @@
                     "display": "bool",
                     "link_target": null,
                     "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "reduce_capabilities",
+              "doc": "Convert constraint types not in `supported` into regular constraints.\n\nFor every capability in :attr:`required_capabilities` not in\n``supported``, the corresponding bulk conversion is invoked\n(:meth:`convert_all_indicators_to_constraints`,\n:meth:`convert_all_one_hots_to_constraints`, or\n:meth:`convert_all_sos1_to_constraints`). The instance is mutated in\nplace and :attr:`required_capabilities` becomes a subset of\n``supported`` on success.\n\nReturns the set of :class:`AdditionalCapability` values that were\nactually converted. Empty when nothing needed conversion.\n\nRaises if any underlying Big-M conversion fails (e.g. a SOS1 variable\nwith a non-finite bound).",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "supported",
+                      "type_": {
+                        "display": "set[AdditionalCapability]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "AdditionalCapability",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "set[AdditionalCapability]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "AdditionalCapability",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
                   }
                 }
               ],
@@ -9188,6 +9194,23 @@
                 "display": "DataFrame",
                 "link_target": null,
                 "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "required_capabilities",
+              "doc": "The non-standard constraint capabilities this instance currently uses.\n\nReturns the set of :class:`AdditionalCapability` values corresponding to\nthe active (non-removed) constraint collections the instance contains.\nAn empty set means the instance only uses regular constraints.\n\nCallers can diff this against an adapter's\n``ADDITIONAL_CAPABILITIES`` to see what would be converted, or use\n:meth:`reduce_capabilities` to perform the conversion.",
+              "type_": {
+                "display": "set[AdditionalCapability]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "AdditionalCapability",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
               },
               "is_property": true,
               "is_readonly": true

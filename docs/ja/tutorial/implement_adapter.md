@@ -281,8 +281,8 @@ class SolverAdapter(ABC):
     ADDITIONAL_CAPABILITIES: set[AdditionalCapability] = set()
 
     def __init__(self, ommx_instance: Instance):
-        """制約の互換性をチェックする。サブクラスは super().__init__() を呼ぶ必要がある。"""
-        ommx_instance.check_capabilities(self.ADDITIONAL_CAPABILITIES)
+        """サポート外の制約タイプを通常制約に変換する。サブクラスは super().__init__() を呼ぶ必要がある。"""
+        ommx_instance.reduce_capabilities(self.ADDITIONAL_CAPABILITIES)
 
     @classmethod
     @abstractmethod
@@ -306,14 +306,16 @@ class SolverAdapter(ABC):
 
 #### 制約タイプの Capability 宣言
 
-各アダプターは `ADDITIONAL_CAPABILITIES` クラス属性で、サポートする制約タイプを宣言する必要があります。基底クラスは `super().__init__()` の呼び出し時に、与えられた `Instance` がサポートされている制約タイプのみを使用していることを自動的にチェックします。利用可能な capability は以下の通りです：
+各アダプターは `ADDITIONAL_CAPABILITIES` クラス属性で、サポートする制約タイプを宣言します。基底クラスは `super().__init__()` の呼び出し時に、宣言されていない制約タイプを通常の制約へ自動的に変換します（indicator/SOS1 は Big-M、one-hot は線形等式）。変換が行われた capability は `INFO` レベルでログ出力されます。利用可能な capability は以下の通りです：
 
 - `AdditionalCapability.Indicator`: インジケーター制約 (`binvar = 1 → f(x) <= 0`)
+- `AdditionalCapability.OneHot`: バイナリ変数集合のうち丁度1つが1
+- `AdditionalCapability.Sos1`: 変数集合のうち高々1つが非ゼロ
 
-`ADDITIONAL_CAPABILITIES` をオーバーライドしない場合、デフォルトでは通常の制約のみがサポートされます。`Instance` がサポートされていない制約タイプを含む場合、自動的にエラーが発生します。
+`ADDITIONAL_CAPABILITIES` をオーバーライドしない場合、デフォルトでは通常の制約のみが維持され、非標準の制約タイプは全て自動変換されます。`Instance` が現在保持している非標準制約タイプを調べるには {attr}`Instance.required_capabilities <ommx.v1.Instance.required_capabilities>` を使用してください。
 
 ```{important}
-サブクラスは `__init__` メソッドで **必ず** `super().__init__(ommx_instance)` を呼び出してください。これにより、制約 capability の自動チェックが有効になります。
+サブクラスは `__init__` メソッドで **必ず** `super().__init__(ommx_instance)` を呼び出してください。これにより、制約の自動変換が有効になります。`Instance` はこの呼び出しで in-place に書き換えられる点に注意してください。
 ```
 
 ここまでで用意した関数を使って次のように実装することができます：
@@ -330,7 +332,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         self,
         ommx_instance: Instance,
     ):
-        super().__init__(ommx_instance)  # 制約 capability のチェック
+        super().__init__(ommx_instance)  # サポート外の制約タイプを自動変換
         self.instance = ommx_instance
         self.model = pyscipopt.Model()
         self.model.hideOutput()
@@ -495,7 +497,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     ommx_instance: Instance
     
     def __init__(self, ommx_instance: Instance):
-        super().__init__(ommx_instance)  # 制約 capability のチェック
+        super().__init__(ommx_instance)  # サポート外の制約タイプを自動変換
         self.ommx_instance = ommx_instance
 
     # サンプリングを行う

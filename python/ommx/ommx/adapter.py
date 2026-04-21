@@ -21,17 +21,27 @@ class SolverAdapter(ABC):
     Available capabilities:
 
     - ``AdditionalCapability.Indicator``: binvar = 1 → f(x) <= 0
+    - ``AdditionalCapability.OneHot``: exactly one of a set of binary variables is 1
+    - ``AdditionalCapability.Sos1``: at most one of a set of variables is non-zero
 
     The default is an empty set (standard constraints only).
-    Subclasses must call ``super().__init__(ommx_instance)`` to enable
-    automatic constraint capability checking.
+    Subclasses must call ``super().__init__(ommx_instance)`` so that any
+    constraint types the adapter does not support are automatically converted
+    into regular constraints (Big-M for indicator / SOS1, linear equality for
+    one-hot). Conversions mutate ``ommx_instance`` in place and are emitted
+    at ``INFO`` level from the Rust SDK via ``pyo3-log``.
     """
 
     ADDITIONAL_CAPABILITIES: frozenset[AdditionalCapability] = frozenset()
 
     def __init__(self, ommx_instance: Instance):
-        """Check constraint capabilities. Subclasses must call super().__init__()."""
-        ommx_instance.check_capabilities(set(self.ADDITIONAL_CAPABILITIES))
+        """Reduce the instance to the adapter's supported capabilities.
+
+        Subclasses must call ``super().__init__()``. Any constraint type not in
+        ``ADDITIONAL_CAPABILITIES`` is converted to regular constraints in place
+        on ``ommx_instance``.
+        """
+        ommx_instance.reduce_capabilities(set(self.ADDITIONAL_CAPABILITIES))
 
     @classmethod
     @abstractmethod

@@ -341,19 +341,46 @@ impl Instance {
             .collect()
     }
 
-    /// Check that the adapter's supported capabilities cover this instance's requirements.
+    /// The non-standard constraint capabilities this instance currently uses.
     ///
-    /// `supported` is a set of `AdditionalCapability` flags.
+    /// Returns the set of :class:`AdditionalCapability` values corresponding to
+    /// the active (non-removed) constraint collections the instance contains.
+    /// An empty set means the instance only uses regular constraints.
     ///
-    /// Raises an error if the instance uses constraint types not in `supported`.
-    pub fn check_capabilities(
-        &self,
+    /// Callers can diff this against an adapter's
+    /// ``ADDITIONAL_CAPABILITIES`` to see what would be converted, or use
+    /// :meth:`reduce_capabilities` to perform the conversion.
+    #[getter]
+    pub fn required_capabilities(&self) -> std::collections::HashSet<crate::AdditionalCapability> {
+        self.inner
+            .required_capabilities()
+            .into_iter()
+            .map(|c| c.into())
+            .collect()
+    }
+
+    /// Convert constraint types not in `supported` into regular constraints.
+    ///
+    /// For every capability in :attr:`required_capabilities` not in
+    /// ``supported``, the corresponding bulk conversion is invoked
+    /// (:meth:`convert_all_indicators_to_constraints`,
+    /// :meth:`convert_all_one_hots_to_constraints`, or
+    /// :meth:`convert_all_sos1_to_constraints`). The instance is mutated in
+    /// place and :attr:`required_capabilities` becomes a subset of
+    /// ``supported`` on success.
+    ///
+    /// Returns the set of :class:`AdditionalCapability` values that were
+    /// actually converted. Empty when nothing needed conversion.
+    ///
+    /// Raises if any underlying Big-M conversion fails (e.g. a SOS1 variable
+    /// with a non-finite bound).
+    pub fn reduce_capabilities(
+        &mut self,
         supported: std::collections::HashSet<crate::AdditionalCapability>,
-    ) -> anyhow::Result<()> {
-        let rust_supported: fnv::FnvHashSet<ommx::AdditionalCapability> =
-            supported.into_iter().map(|c| c.into()).collect();
-        self.inner.check_capabilities(&rust_supported)?;
-        Ok(())
+    ) -> anyhow::Result<std::collections::HashSet<crate::AdditionalCapability>> {
+        let rust_supported: ommx::Capabilities = supported.into_iter().map(|c| c.into()).collect();
+        let converted = self.inner.reduce_capabilities(&rust_supported)?;
+        Ok(converted.into_iter().map(|c| c.into()).collect())
     }
 
     /// Dict of all removed constraints in the instance keyed by their IDs.
@@ -1091,15 +1118,15 @@ impl Instance {
     /// ...     },
     /// ...     sense=Instance.MINIMIZE,
     /// ... )
-    /// >>> instance.convert_one_hots_to_constraints()
+    /// >>> instance.convert_all_one_hots_to_constraints()
     /// [0, 1]
     /// >>> instance.one_hot_constraints
     /// {}
     /// >>> instance.constraints
     /// {0: Constraint(x0 + x1 - 1 == 0), 1: Constraint(x2 + x3 - 1 == 0)}
     /// ```
-    pub fn convert_one_hots_to_constraints(&mut self) -> Result<Vec<u64>> {
-        let ids = self.inner.convert_one_hots_to_constraints()?;
+    pub fn convert_all_one_hots_to_constraints(&mut self) -> Result<Vec<u64>> {
+        let ids = self.inner.convert_all_one_hots_to_constraints()?;
         Ok(ids.into_iter().map(|id| id.into_inner()).collect())
     }
 
