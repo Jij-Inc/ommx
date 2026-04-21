@@ -26,7 +26,7 @@ Sets and parameters
   :math:`i` and client :math:`j`.
 
 Decision variables (shared by both formulations)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. math::
 
