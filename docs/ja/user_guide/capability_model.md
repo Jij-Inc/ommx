@@ -36,7 +36,7 @@ OMMX は [特殊制約型](./special_constraints.md) として IndicatorConstrai
 {attr}`Instance.required_capabilities <ommx.v1.Instance.required_capabilities>` は、その {class}`~ommx.v1.Instance` が **現在保持している特殊制約** に対応する `AdditionalCapability` の集合を返します。通常制約しか使っていない場合は空集合です。
 
 ```{code-cell} ipython3
-from ommx.v1 import Instance, DecisionVariable, OneHotConstraint
+from ommx.v1 import Instance, DecisionVariable, OneHotConstraint, AdditionalCapability
 
 xs = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
 
@@ -47,7 +47,7 @@ instance = Instance.from_components(
     one_hot_constraints={0: OneHotConstraint(variables=[0, 1, 2])},
     sense=Instance.MAXIMIZE,
 )
-instance.required_capabilities
+assert instance.required_capabilities == {AdditionalCapability.OneHot}
 ```
 
 ## Adapter 側の宣言
@@ -71,19 +71,17 @@ class MySolverAdapter(SolverAdapter):
 `super().__init__` の内部で呼ばれているのが {meth}`Instance.reduce_capabilities() <ommx.v1.Instance.reduce_capabilities>` です。このメソッドは `supported` として渡された Capability 集合に含まれない制約型を、対応する変換 API（後述）を使って通常制約に変換します。
 
 ```{code-cell} ipython3
-from ommx.v1 import AdditionalCapability
-
-converted = instance.reduce_capabilities(supported=frozenset())
-converted
+converted = instance.reduce_capabilities(supported=set())
+assert converted == {AdditionalCapability.OneHot}
 ```
 
 ```{code-cell} ipython3
-instance.required_capabilities, instance.one_hot_constraints, instance.constraints
+assert instance.required_capabilities == set()
+assert instance.one_hot_constraints == {}
+assert len(instance.constraints) == 1
 ```
 
-One-hot 制約が除去され、その代わりに通常の等式制約 $x_0 + x_1 + x_2 - 1 = 0$ が追加されたことが分かります。
-
-`reduce_capabilities` はインスタンスを in-place に変更します。成功時、`required_capabilities` は `supported` の部分集合になります。変換が必要なかった場合は空集合を返します。
+One-hot 制約が除去され、その代わりに通常の等式制約 $x_0 + x_1 + x_2 - 1 = 0$ が1つ追加されたことが分かります。`reduce_capabilities` はインスタンスを in-place に変更します。成功時、`required_capabilities` は `supported` の部分集合になります。変換が必要なかった場合は空集合を返します。
 
 ## 手動変換 API
 
@@ -102,7 +100,9 @@ instance2 = Instance.from_components(
     sense=Instance.MAXIMIZE,
 )
 new_id = instance2.convert_one_hot_to_constraint(1)
-new_id, instance2.constraints
+assert isinstance(new_id, int)
+assert set(instance2.constraints.keys()) == {new_id}
+assert instance2.one_hot_constraints == {}
 ```
 
 全ての OneHot 制約を一括変換するには {meth}`~ommx.v1.Instance.convert_all_one_hots_to_constraints` を使います。
@@ -127,7 +127,10 @@ instance3 = Instance.from_components(
     sense=Instance.MAXIMIZE,
 )
 new_ids = instance3.convert_sos1_to_constraints(1)
-new_ids, instance3.constraints
+# バイナリ変数のみの SOS1 は濃度制約 sum(x_i) - 1 <= 0 1本に変換される
+assert len(new_ids) == 1
+assert set(instance3.constraints.keys()) == set(new_ids)
+assert instance3.sos1_constraints == {}
 ```
 
 全 SOS1 の一括変換は {meth}`~ommx.v1.Instance.convert_all_sos1_to_constraints` です。変数の境界が非有限だったり、$0$ を含まない場合は変換前にエラーを返し、インスタンスは変更されません。
@@ -160,7 +163,8 @@ $$
 それぞれのエントリには `reason` 文字列（例: `"ommx.Instance.convert_one_hot_to_constraint"`）と、変換で新しく生成された通常制約の ID が記録されます。
 
 ```{code-cell} ipython3
-instance2.removed_one_hot_constraints
+removed = instance2.removed_one_hot_constraints
+assert set(removed.keys()) == {1}
 ```
 
 さらに、各変換で生成された通常制約には `Provenance::OneHotConstraint(original_id)` のようなプロヴェナンス情報がメタデータに記録されます。したがって、得られた通常制約がどの特殊制約型から変換されて来たかを後から辿ることができます。
