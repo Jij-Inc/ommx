@@ -16,9 +16,19 @@ tasks:
       - task: lint
 
   pytest:
-    desc: Run pytest tests
+    desc: Run pytest tests (unit only, excluding benchmark tests)
     cmds:
-      - uv run pytest -vv --doctest-modules
+      - uv run pytest -vv --doctest-modules --ignore-glob=tests/test_bench_*.py
+
+  pytest-bench:
+    desc: Run benchmark tests without codspeed measurement
+    cmds:
+      - uv run pytest -vv tests/test_bench_*.py
+
+  bench:
+    desc: Run benchmarks under pytest-codspeed
+    cmds:
+      - uv run pytest tests/test_bench_*.py --codspeed
 
   pyright:
     desc: Run pyright type checking
