@@ -21,6 +21,7 @@ workspace = true
 default = ["remote-artifact"]
 remote-artifact = ["ocipkg/remote", "built"]
 built = ["dep:built"]
+cli = ["dep:tracing-subscriber"]
 
 [dependencies]
 anyhow.workspace = true
@@ -52,7 +53,7 @@ similar.workspace = true
 smallvec.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
-tracing-subscriber.workspace = true
+tracing-subscriber = { workspace = true, optional = true }
 url.workspace = true
 uuid.workspace = true
 
@@ -68,15 +69,15 @@ built = { workspace = true, optional = true }
 [[bin]]
 name = "ommx"
 path = "src/bin/ommx.rs"
-required-features = ["remote-artifact", "built"]
+required-features = ["remote-artifact", "built", "cli"]
 
 [[example]]
 name = "create_artifact"
-required-features = ["remote-artifact", "built"]
+required-features = ["remote-artifact", "built", "cli"]
 
 [[example]]
 name = "pull_artifact"
-required-features = ["remote-artifact"]
+required-features = ["remote-artifact", "cli"]
 
 [[bench]]
 name = "evaluate"

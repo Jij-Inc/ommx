@@ -4,6 +4,7 @@ mod qplib;
 use anyhow::Result;
 use clap::Parser;
 use std::path::PathBuf;
+use tracing::level_filters::LevelFilter;
 use tracing_subscriber::EnvFilter;
 
 /// OMMX Artifact generator for well-known datasets.
@@ -27,7 +28,9 @@ enum Command {
 fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+            EnvFilter::builder()
+                .with_default_directive(LevelFilter::INFO.into())
+                .from_env_lossy(),
         )
         .init();
 
