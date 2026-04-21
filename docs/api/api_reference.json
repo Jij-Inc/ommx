@@ -8235,7 +8235,7 @@
             },
             {
               "name": "reduce_capabilities",
-              "doc": "Convert constraint types not in `supported` into regular constraints.\n\nFor every capability in :attr:`required_capabilities` not in\n``supported``, the corresponding bulk conversion is invoked\n(:meth:`convert_all_indicators_to_constraints`,\n:meth:`convert_all_one_hots_to_constraints`, or\n:meth:`convert_all_sos1_to_constraints`). The instance is mutated in\nplace and :attr:`required_capabilities` becomes a subset of\n``supported`` on success.\n\nReturns the list of :class:`AdditionalCapability` values that were\nactually converted, in the fixed order ``Indicator``, ``OneHot``,\n``Sos1``. Empty when nothing needed conversion.\n\nRaises if any underlying Big-M conversion fails (e.g. a SOS1 variable\nwith a non-finite bound).",
+              "doc": "Convert constraint types not in `supported` into regular constraints.\n\nFor every capability in :attr:`required_capabilities` not in\n``supported``, the corresponding bulk conversion is invoked\n(:meth:`convert_all_indicators_to_constraints`,\n:meth:`convert_all_one_hots_to_constraints`, or\n:meth:`convert_all_sos1_to_constraints`). The instance is mutated in\nplace and :attr:`required_capabilities` becomes a subset of\n``supported`` on success.\n\nReturns the set of :class:`AdditionalCapability` values that were\nactually converted. Empty when nothing needed conversion.\n\nRaises if any underlying Big-M conversion fails (e.g. a SOS1 variable\nwith a non-finite bound).",
               "signatures": [
                 {
                   "parameters": [
@@ -8256,7 +8256,7 @@
                     }
                   ],
                   "return_type": {
-                    "display": "list[AdditionalCapability]",
+                    "display": "set[AdditionalCapability]",
                     "link_target": null,
                     "children": [
                       {

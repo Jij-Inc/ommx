@@ -1525,7 +1525,7 @@ class Instance:
         """
     def reduce_capabilities(
         self, supported: builtins.set[AdditionalCapability]
-    ) -> builtins.list[AdditionalCapability]:
+    ) -> builtins.set[AdditionalCapability]:
         r"""
         Convert constraint types not in `supported` into regular constraints.
 
@@ -1537,9 +1537,8 @@ class Instance:
         place and :attr:`required_capabilities` becomes a subset of
         ``supported`` on success.
 
-        Returns the list of :class:`AdditionalCapability` values that were
-        actually converted, in the fixed order ``Indicator``, ``OneHot``,
-        ``Sos1``. Empty when nothing needed conversion.
+        Returns the set of :class:`AdditionalCapability` values that were
+        actually converted. Empty when nothing needed conversion.
 
         Raises if any underlying Big-M conversion fails (e.g. a SOS1 variable
         with a non-finite bound).

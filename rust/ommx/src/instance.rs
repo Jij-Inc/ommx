@@ -48,7 +48,11 @@ use std::collections::BTreeMap;
 /// Standard constraints (`f(x) = 0` or `f(x) <= 0`) are always supported by all adapters
 /// and do not need a capability flag. This enum only lists capabilities that adapters
 /// must explicitly opt in to.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+///
+/// The [`PartialOrd`] / [`Ord`] derives follow variant declaration order
+/// (`Indicator < OneHot < Sos1`), which is also the order in which
+/// [`Capabilities`] iterates.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum AdditionalCapability {
     /// Indicator constraints: binvar = 1 → f(x) <= 0
     Indicator,
@@ -57,6 +61,12 @@ pub enum AdditionalCapability {
     /// SOS1 constraints: at most one of a set of variables can be non-zero
     Sos1,
 }
+
+/// A set of [`AdditionalCapability`] flags.
+///
+/// Always represented as a [`BTreeSet`] so iteration, formatting, and
+/// comparison are deterministic and sorted by variant order.
+pub type Capabilities = std::collections::BTreeSet<AdditionalCapability>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub enum Sense {
@@ -219,8 +229,8 @@ impl Instance {
     /// Only **active** constraints are considered. Removed (relaxed) constraints are excluded
     /// because they are not passed to solver adapters — adapters only need to handle
     /// constraint types that are actively part of the problem.
-    pub fn required_capabilities(&self) -> fnv::FnvHashSet<AdditionalCapability> {
-        let mut caps = fnv::FnvHashSet::default();
+    pub fn required_capabilities(&self) -> Capabilities {
+        let mut caps = Capabilities::new();
         if !self.indicator_constraint_collection.active().is_empty() {
             caps.insert(AdditionalCapability::Indicator);
         }
@@ -241,10 +251,11 @@ impl Instance {
     /// After this call, the instance's [`Self::required_capabilities`] is a
     /// subset of `supported`.
     ///
-    /// Returns the set of capabilities that were converted, in a stable order
-    /// (`Indicator`, `OneHot`, `Sos1`). The set is empty when nothing needed
-    /// conversion. Each conversion is also emitted as an `INFO`-level
-    /// [`log`] record so it surfaces through `pyo3-log` on the Python side.
+    /// Returns the set of capabilities that were actually converted. Iteration
+    /// order follows [`Capabilities`]'s sorted order (`Indicator`, `OneHot`,
+    /// `Sos1`). The set is empty when nothing needed conversion. Each
+    /// conversion is also emitted as an `INFO`-level [`log`] record so it
+    /// surfaces through `pyo3-log` on the Python side.
     ///
     /// Errors if any underlying conversion fails (e.g. SOS1 / indicator with
     /// non-finite bounds). Each per-type conversion is atomic, but this method
@@ -253,9 +264,9 @@ impl Instance {
     /// validate / clone up front.
     pub fn reduce_capabilities(
         &mut self,
-        supported: &fnv::FnvHashSet<AdditionalCapability>,
-    ) -> anyhow::Result<Vec<AdditionalCapability>> {
-        let mut converted = Vec::new();
+        supported: &Capabilities,
+    ) -> anyhow::Result<Capabilities> {
+        let mut converted = Capabilities::new();
         // Iterate in a fixed order so logs / callers see deterministic output.
         for cap in [
             AdditionalCapability::Indicator,
@@ -295,7 +306,7 @@ impl Instance {
                 log::info!(
                     "reduce_capabilities: {cap:?} is not in supported capabilities; converted to regular constraints"
                 );
-                converted.push(cap);
+                converted.insert(cap);
             }
         }
         Ok(converted)
@@ -463,7 +474,7 @@ mod reduce_capabilities_tests {
         // Every required capability is in `supported` → nothing converted,
         // instance left untouched.
         let mut instance = instance_with_all_capabilities();
-        let supported: fnv::FnvHashSet<_> = [
+        let supported: Capabilities = [
             AdditionalCapability::Indicator,
             AdditionalCapability::OneHot,
             AdditionalCapability::Sos1,
@@ -485,19 +496,18 @@ mod reduce_capabilities_tests {
     #[test]
     fn converts_only_unsupported_capabilities() {
         // Supported = {Sos1}: Indicator and OneHot must be converted, SOS1 kept.
-        // Return order is fixed: Indicator, OneHot, Sos1.
         let mut instance = instance_with_all_capabilities();
-        let supported: fnv::FnvHashSet<_> = [AdditionalCapability::Sos1].into_iter().collect();
+        let supported: Capabilities = [AdditionalCapability::Sos1].into_iter().collect();
 
         let converted = instance.reduce_capabilities(&supported).unwrap();
 
-        assert_eq!(
-            converted,
-            vec![
-                AdditionalCapability::Indicator,
-                AdditionalCapability::OneHot
-            ]
-        );
+        let expected: Capabilities = [
+            AdditionalCapability::Indicator,
+            AdditionalCapability::OneHot,
+        ]
+        .into_iter()
+        .collect();
+        assert_eq!(converted, expected);
         assert!(instance.indicator_constraints().is_empty());
         assert!(instance.one_hot_constraints().is_empty());
         assert!(!instance.sos1_constraints().is_empty());
@@ -507,27 +517,27 @@ mod reduce_capabilities_tests {
 
     #[test]
     fn empty_supported_converts_everything() {
-        // No capabilities supported → all three are converted and return in fixed order.
+        // No capabilities supported → all three are converted.
         let mut instance = instance_with_all_capabilities();
-        let supported = fnv::FnvHashSet::default();
+        let supported = Capabilities::new();
 
         let converted = instance.reduce_capabilities(&supported).unwrap();
 
-        assert_eq!(
-            converted,
-            vec![
-                AdditionalCapability::Indicator,
-                AdditionalCapability::OneHot,
-                AdditionalCapability::Sos1,
-            ]
-        );
+        let expected: Capabilities = [
+            AdditionalCapability::Indicator,
+            AdditionalCapability::OneHot,
+            AdditionalCapability::Sos1,
+        ]
+        .into_iter()
+        .collect();
+        assert_eq!(converted, expected);
         assert!(instance.required_capabilities().is_empty());
     }
 
     #[test]
     fn skips_capabilities_that_are_not_required() {
         // Instance has only a OneHot. Empty `supported` → only OneHot is reported
-        // as converted; Indicator / SOS1 aren't in the returned list since they
+        // as converted; Indicator / SOS1 aren't in the returned set since they
         // were never present to begin with.
         let decision_variables = btreemap! {
             VariableID::from(0) => DecisionVariable::binary(VariableID::from(0)),
@@ -546,11 +556,12 @@ mod reduce_capabilities_tests {
             .one_hot_constraints(BTreeMap::from([(OneHotConstraintID::from(1), one_hot)]))
             .build()
             .unwrap();
-        let supported = fnv::FnvHashSet::default();
+        let supported = Capabilities::new();
 
         let converted = instance.reduce_capabilities(&supported).unwrap();
 
-        assert_eq!(converted, vec![AdditionalCapability::OneHot]);
+        let expected: Capabilities = [AdditionalCapability::OneHot].into_iter().collect();
+        assert_eq!(converted, expected);
         assert!(instance.one_hot_constraints().is_empty());
     }
 
@@ -568,7 +579,7 @@ mod reduce_capabilities_tests {
             .sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(1), sos1)]))
             .build()
             .unwrap();
-        let supported = fnv::FnvHashSet::default();
+        let supported = Capabilities::new();
 
         let err = instance.reduce_capabilities(&supported).unwrap_err();
         assert!(err.to_string().contains("non-finite"));
@@ -597,11 +608,10 @@ mod reduce_capabilities_tests {
             .build()
             .unwrap();
 
-        let converted = instance
-            .reduce_capabilities(&fnv::FnvHashSet::default())
-            .unwrap();
+        let converted = instance.reduce_capabilities(&Capabilities::new()).unwrap();
 
-        assert_eq!(converted, vec![AdditionalCapability::Sos1]);
+        let expected: Capabilities = [AdditionalCapability::Sos1].into_iter().collect();
+        assert_eq!(converted, expected);
         // Fresh binary indicator was allocated → decision variable count went up.
         assert_eq!(instance.decision_variables.len(), 2);
         assert!(instance.sos1_constraints().is_empty());

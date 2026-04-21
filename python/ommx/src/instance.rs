@@ -369,18 +369,16 @@ impl Instance {
     /// place and :attr:`required_capabilities` becomes a subset of
     /// ``supported`` on success.
     ///
-    /// Returns the list of :class:`AdditionalCapability` values that were
-    /// actually converted, in the fixed order ``Indicator``, ``OneHot``,
-    /// ``Sos1``. Empty when nothing needed conversion.
+    /// Returns the set of :class:`AdditionalCapability` values that were
+    /// actually converted. Empty when nothing needed conversion.
     ///
     /// Raises if any underlying Big-M conversion fails (e.g. a SOS1 variable
     /// with a non-finite bound).
     pub fn reduce_capabilities(
         &mut self,
         supported: std::collections::HashSet<crate::AdditionalCapability>,
-    ) -> anyhow::Result<Vec<crate::AdditionalCapability>> {
-        let rust_supported: fnv::FnvHashSet<ommx::AdditionalCapability> =
-            supported.into_iter().map(|c| c.into()).collect();
+    ) -> anyhow::Result<std::collections::HashSet<crate::AdditionalCapability>> {
+        let rust_supported: ommx::Capabilities = supported.into_iter().map(|c| c.into()).collect();
         let converted = self.inner.reduce_capabilities(&rust_supported)?;
         Ok(converted.into_iter().map(|c| c.into()).collect())
     }
