@@ -243,7 +243,8 @@ impl Instance {
     ///
     /// Returns the set of capabilities that were converted, in a stable order
     /// (`Indicator`, `OneHot`, `Sos1`). The set is empty when nothing needed
-    /// conversion.
+    /// conversion. Each conversion is also emitted as an `INFO`-level
+    /// [`log`] record so it surfaces through `pyo3-log` on the Python side.
     ///
     /// Errors if any underlying conversion fails (e.g. SOS1 / indicator with
     /// non-finite bounds). Each per-type conversion is atomic, but this method
@@ -291,6 +292,9 @@ impl Instance {
                 }
             };
             if converted_any {
+                log::info!(
+                    "reduce_capabilities: {cap:?} is not in supported capabilities; converted to regular constraints"
+                );
                 converted.push(cap);
             }
         }

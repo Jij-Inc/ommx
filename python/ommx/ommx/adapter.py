@@ -1,10 +1,6 @@
-import logging
 from abc import ABC, abstractmethod
 from typing import Any
 from ommx.v1 import Instance, Solution, SampleSet, AdditionalCapability
-
-
-logger = logging.getLogger(__name__)
 
 
 SolverInput = Any
@@ -32,8 +28,8 @@ class SolverAdapter(ABC):
     Subclasses must call ``super().__init__(ommx_instance)`` so that any
     constraint types the adapter does not support are automatically converted
     into regular constraints (Big-M for indicator / SOS1, linear equality for
-    one-hot). Conversions mutate ``ommx_instance`` in place and are logged at
-    ``INFO`` level.
+    one-hot). Conversions mutate ``ommx_instance`` in place and are emitted
+    at ``INFO`` level from the Rust SDK via ``pyo3-log``.
     """
 
     ADDITIONAL_CAPABILITIES: frozenset[AdditionalCapability] = frozenset()
@@ -43,15 +39,9 @@ class SolverAdapter(ABC):
 
         Subclasses must call ``super().__init__()``. Any constraint type not in
         ``ADDITIONAL_CAPABILITIES`` is converted to regular constraints in place
-        on ``ommx_instance``; each converted capability is logged at ``INFO``.
+        on ``ommx_instance``.
         """
-        converted = ommx_instance.reduce_capabilities(set(self.ADDITIONAL_CAPABILITIES))
-        for cap in converted:
-            logger.info(
-                "%s does not support %s; converted to regular constraints",
-                type(self).__name__,
-                cap.name,
-            )
+        ommx_instance.reduce_capabilities(set(self.ADDITIONAL_CAPABILITIES))
 
     @classmethod
     @abstractmethod
