@@ -1238,8 +1238,11 @@ impl Instance {
     /// Returns the list of newly created regular constraint IDs in insertion order
     /// (upper first, then lower). The list is empty when both sides are redundant.
     ///
-    /// Raises if the bound needed for an emitted side is non-finite. The instance
-    /// is not mutated on error.
+    /// Raises if the bound needed for an emitted side is non-finite, or if $f(x)$
+    /// references a semi-continuous / semi-integer variable (the split domain
+    /// $\{0\} \cup [l, u]$ is not uniformly implemented, so Big-M conversion could
+    /// silently drop the upper side when $0 \notin [l, u]$). The instance is not
+    /// mutated on error.
     ///
     /// # Examples
     ///

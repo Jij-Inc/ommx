@@ -2,7 +2,7 @@ use super::Instance;
 use crate::{
     constraint::{ConstraintID, Equality, Provenance, RemovedReason},
     indicator_constraint::IndicatorConstraintID,
-    Bounds, Coefficient, Constraint, Function, Linear, LinearMonomial, VariableID,
+    Bounds, Coefficient, Constraint, Evaluate, Function, Kind, Linear, LinearMonomial, VariableID,
 };
 use anyhow::{bail, Context, Result};
 use std::collections::BTreeMap;
@@ -60,7 +60,11 @@ impl Instance {
     ///
     /// Errors if the function's bound is non-finite on a side that would need to be
     /// emitted: `upper` must be finite, and additionally `lower` must be finite for
-    /// equality indicators. The instance is not mutated on error — all validation
+    /// equality indicators. Also errors if $f(x)$ references a variable of kind
+    /// [`Kind::SemiInteger`] or [`Kind::SemiContinuous`]: their split domain
+    /// $\{0\} \cup [l, u]$ is not uniformly implemented across the codebase, and
+    /// [`Function::evaluate_bound`] over $[l, u]$ alone can under-bound $\sup f$
+    /// when $0 \notin [l, u]$. The instance is not mutated on error — all validation
     /// happens before any constraints are inserted.
     ///
     /// If the indicator variable $y$ itself appears in $f(x)$, the interval bound
@@ -127,6 +131,27 @@ impl Instance {
         let function = ic.function().clone();
         let equality = ic.equality;
         let indicator_variable = ic.indicator_variable;
+
+        // Semi-continuous / semi-integer variables carry a split domain `{0} ∪ [l, u]`
+        // that the rest of the codebase does not yet treat uniformly. `evaluate_bound`
+        // would compute `sup/inf f` over the `[l, u]` piece only, silently missing the
+        // `{0}` piece when `0 ∉ [l, u]`; this can under-bound `u` (e.g. `f = -x + 0.5`
+        // with `x ∈ {0} ∪ [2, 5]` gives interval `u = -1.5` but true `sup f = 0.5`),
+        // causing the upper Big-M to be wrongly skipped. Reject these kinds explicitly,
+        // matching `convert_sos1_to_constraints`.
+        for var_id in function.required_ids() {
+            let dv = self.decision_variables.get(&var_id).with_context(|| {
+                format!(
+                    "Decision variable {var_id:?} referenced by indicator constraint {id:?} not found"
+                )
+            })?;
+            if matches!(dv.kind(), Kind::SemiInteger | Kind::SemiContinuous) {
+                bail!(
+                    "Cannot convert indicator constraint {id:?} with Big-M: variable {var_id:?} has kind {:?}; semi-continuous / semi-integer variables are not supported",
+                    dv.kind()
+                );
+            }
+        }
 
         let bounds: Bounds = self
             .decision_variables
@@ -443,6 +468,61 @@ mod tests {
         assert_eq!(instance.decision_variables, before_vars);
         assert_eq!(instance.constraints(), &before_constraints);
         assert_eq!(instance.indicator_constraints(), &before_indicators);
+    }
+
+    #[test]
+    fn semi_continuous_variables_in_function_are_rejected() {
+        // Regression for an issue flagged in review: semi-continuous / semi-integer
+        // variables have a split domain `{0} ∪ [l, u]`. Computing `evaluate_bound`
+        // over `[l, u]` alone can under-bound `sup f`, silently dropping the upper
+        // Big-M. Example from the review: `x ∈ {0} ∪ [2, 5]`, `f = -x + 0.5`.
+        // Interval bound gives `f ∈ [-4.5, -1.5]` (upper ≤ 0 → upper side skipped),
+        // but the true `sup f = 0.5` at `x = 0` means the upper Big-M is needed.
+        // Since this is unsafe, planner must reject semi kinds before using
+        // `evaluate_bound`, matching `convert_sos1_to_constraints`.
+        let x_semi = DecisionVariable::new(
+            VariableID::from(1),
+            Kind::SemiContinuous,
+            Bound::new(2.0, 5.0).unwrap(),
+            None,
+            ATol::default(),
+        )
+        .unwrap();
+        let y = DecisionVariable::binary(VariableID::from(10));
+        let ic = IndicatorConstraint::new(
+            VariableID::from(10),
+            Equality::LessThanOrEqualToZero,
+            Function::from(Linear::single_term(
+                LinearMonomial::Variable(VariableID::from(1)),
+                coeff!(-1.0),
+            )) + coeff!(0.5),
+        );
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(linear!(1)))
+            .decision_variables(btreemap! {
+                VariableID::from(1) => x_semi,
+                VariableID::from(10) => y,
+            })
+            .constraints(BTreeMap::new())
+            .indicator_constraints(BTreeMap::from([(IndicatorConstraintID::from(7), ic)]))
+            .build()
+            .unwrap();
+        let before_constraints = instance.constraints().clone();
+
+        let err = instance
+            .convert_indicator_to_constraint(IndicatorConstraintID::from(7))
+            .unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("semi-continuous") && msg.contains("not supported"),
+            "expected semi-not-supported error, got: {msg}"
+        );
+        // No mutation on error.
+        assert!(instance
+            .indicator_constraints()
+            .contains_key(&IndicatorConstraintID::from(7)));
+        assert_eq!(instance.constraints(), &before_constraints);
     }
 
     #[test]
