@@ -6,7 +6,7 @@ tasks:
   build:
     desc: "Build the Sphinx documentation in docs/ja"
     cmds:
-      - uv run sphinx-build -b html . _build/html
+      - uv run sphinx-build -b html -W --keep-going . _build/html
 
   open:
     desc: "Open the documentation in docs/ja"

@@ -24,83 +24,125 @@ class OMMXHighsAdapter(SolverAdapter):
     The adapter handles the following translations for decision variables:
 
     **ID Management**:
+
     - OMMX: Variables managed by IDs (non-sequential integers)
     - HiGHS: Variables managed by array indices (0-based sequential)
     - Mapping maintained internally for bidirectional conversion
 
     **Variable Types**:
 
-    | OMMX Type | HiGHS Type | Bounds |
-    |-----------|------------|---------|
-    | DecisionVariable.BINARY | HighsVarType.kInteger | [0, 1] |
-    | DecisionVariable.INTEGER | HighsVarType.kInteger | [var.bound.lower, var.bound.upper] |
-    | DecisionVariable.CONTINUOUS | HighsVarType.kContinuous | [var.bound.lower, var.bound.upper] |
-    | DecisionVariable.SEMI_INTEGER | **Not supported** (support planned) | - |
-    | DecisionVariable.SEMI_CONTINUOUS | **Not supported** (support planned) | - |
+    .. list-table::
+       :header-rows: 1
+
+       * - OMMX Type
+         - HiGHS Type
+         - Bounds
+       * - ``DecisionVariable.BINARY``
+         - ``HighsVarType.kInteger``
+         - ``[0, 1]``
+       * - ``DecisionVariable.INTEGER``
+         - ``HighsVarType.kInteger``
+         - ``[var.bound.lower, var.bound.upper]``
+       * - ``DecisionVariable.CONTINUOUS``
+         - ``HighsVarType.kContinuous``
+         - ``[var.bound.lower, var.bound.upper]``
+       * - ``DecisionVariable.SEMI_INTEGER``
+         - **Not supported** (support planned)
+         - \\-
+       * - ``DecisionVariable.SEMI_CONTINUOUS``
+         - **Not supported** (support planned)
+         - \\-
 
     **Note**: Semi-integer and semi-continuous variables are planned for future support but are
-    currently unsupported. Using these variable types will raise an `OMMXHighsAdapterError`.
+    currently unsupported. Using these variable types will raise an ``OMMXHighsAdapterError``.
 
     Constraints
     -----------
     **Supported Function Types**:
+
     - Constant functions (ommx.v1.Function.constant)
     - Linear functions (ommx.v1.Function.linear)
 
     **Constraint Types**:
 
-    | OMMX Constraint | Mathematical Form | HiGHS Constraint |
-    |-----------------|-------------------|------------------|
-    | Constraint.EQUAL_TO_ZERO | f(x) = 0 | const_expr == 0 |
-    | Constraint.LESS_THAN_OR_EQUAL_TO_ZERO | f(x) ≤ 0 | const_expr <= 0 |
+    .. list-table::
+       :header-rows: 1
+
+       * - OMMX Constraint
+         - Mathematical Form
+         - HiGHS Constraint
+       * - ``Constraint.EQUAL_TO_ZERO``
+         - f(x) = 0
+         - ``const_expr == 0``
+       * - ``Constraint.LESS_THAN_OR_EQUAL_TO_ZERO``
+         - f(x) ≤ 0
+         - ``const_expr <= 0``
 
     **Constant Constraint Handling**:
-    - Equality: Skip if |constant| ≤ 1e-10, error if |constant| > 1e-10
+
+    - Equality: Skip if \\|constant\\| ≤ 1e-10, error if \\|constant\\| > 1e-10
     - Inequality: Skip if constant ≤ 1e-10, error if constant > 1e-10
 
     **Constraint ID Management**:
-    - OMMX constraint IDs converted to HiGHS constraint names via str(constraint.id)
+
+    - OMMX constraint IDs converted to HiGHS constraint names via ``str(constraint.id)``
 
     Objective Function
     ------------------
     **Optimization Direction**:
 
-    | OMMX Direction | HiGHS Method |
-    |----------------|--------------|
-    | Instance.MINIMIZE | model.minimize(...) |
-    | Instance.MAXIMIZE | model.maximize(...) |
+    .. list-table::
+       :header-rows: 1
+
+       * - OMMX Direction
+         - HiGHS Method
+       * - ``Instance.MINIMIZE``
+         - ``model.minimize(...)``
+       * - ``Instance.MAXIMIZE``
+         - ``model.maximize(...)``
 
     **Function Types**:
+
     - Constant objectives: Processing skipped
     - Linear objectives: Converted to HiGHS linear expressions
 
     Solution Decoding
     -----------------
-    **Variable Values**: Extracted from HiGHS solution.col_value using maintained ID mapping
-    **Optimality Status**: Set to OPTIMALITY_OPTIMAL when HiGHS returns kOptimal
-    **Dual Variables**: Extracted from solution.row_dual for constraints
+    **Variable Values**: Extracted from HiGHS ``solution.col_value`` using maintained ID mapping
+
+    **Optimality Status**: Set to ``OPTIMALITY_OPTIMAL`` when HiGHS returns ``kOptimal``
+
+    **Dual Variables**: Extracted from ``solution.row_dual`` for constraints
 
     Error Handling
     --------------
     **Unsupported Features**:
+
     - Quadratic functions (HiGHS supports linear problems only)
-    - Semi-integer variables (DecisionVariable.SEMI_INTEGER, kind=4) - support planned
-    - Semi-continuous variables (DecisionVariable.SEMI_CONTINUOUS, kind=5) - support planned
-    - Constraint types other than EQUAL_TO_ZERO/LESS_THAN_OR_EQUAL_TO_ZERO
+    - Semi-integer variables (``DecisionVariable.SEMI_INTEGER``, kind=4) - support planned
+    - Semi-continuous variables (``DecisionVariable.SEMI_CONTINUOUS``, kind=5) - support planned
+    - Constraint types other than ``EQUAL_TO_ZERO``/``LESS_THAN_OR_EQUAL_TO_ZERO``
 
     **Solver Status Mapping**:
 
-    | HiGHS Status | Exception |
-    |--------------|-----------|
-    | kInfeasible | InfeasibleDetected |
-    | kUnbounded | UnboundedDetected |
-    | kNotset | OMMXHighsAdapterError |
+    .. list-table::
+       :header-rows: 1
+
+       * - HiGHS Status
+         - Exception
+       * - ``kInfeasible``
+         - ``InfeasibleDetected``
+       * - ``kUnbounded``
+         - ``UnboundedDetected``
+       * - ``kNotset``
+         - ``OMMXHighsAdapterError``
 
     Limitations
     -----------
     1. Linear problems only (no quadratic constraints or objectives)
     2. Constraint forms limited to equality (= 0) and inequality (≤ 0)
     3. Variable types limited to Binary, Integer, and Continuous
+
        - Semi-integer (SEMI_INTEGER) support is planned but not yet implemented
        - Semi-continuous (SEMI_CONTINUOUS) support is planned but not yet implemented
 
@@ -167,12 +209,12 @@ class OMMXHighsAdapter(SolverAdapter):
         Parameters
         ----------
         ommx_instance : Instance
-            The OMMX optimization problem to solve. Must satisfy HiGHS adapter requirements:
-            - Linear objective function (constant or linear terms only)
-            - Linear constraints (constant or linear terms only)
-            - Variables of type Binary, Integer, or Continuous only
-              (Semi-integer and Semi-continuous support is planned but not yet implemented)
-            - Constraints of type EQUAL_TO_ZERO or LESS_THAN_OR_EQUAL_TO_ZERO only
+            The OMMX optimization problem to solve. Must satisfy HiGHS adapter
+            requirements: linear objective function (constant or linear terms only),
+            linear constraints (constant or linear terms only), variables of type
+            Binary, Integer, or Continuous only (Semi-integer and Semi-continuous
+            support is planned but not yet implemented), and constraints of type
+            ``EQUAL_TO_ZERO`` or ``LESS_THAN_OR_EQUAL_TO_ZERO`` only.
 
         verbose : bool, default=False
             If True, enable HiGHS's console logging for debugging
