@@ -7256,6 +7256,28 @@
               "deprecated": null
             },
             {
+              "name": "convert_all_one_hots_to_constraints",
+              "doc": "Convert every active one-hot constraint to a regular equality constraint.\n\nSee {meth}`~ommx.v1.Instance.convert_one_hot_to_constraint` for the conversion rule.\nReturns the IDs of the newly created regular constraints.\n\n# Examples\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable, OneHotConstraint\n>>> x = [DecisionVariable.binary(i) for i in range(4)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={},\n...     one_hot_constraints={\n...         1: OneHotConstraint(variables=[0, 1]),\n...         2: OneHotConstraint(variables=[2, 3]),\n...     },\n...     sense=Instance.MINIMIZE,\n... )\n>>> instance.convert_all_one_hots_to_constraints()\n[0, 1]\n>>> instance.one_hot_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + x1 - 1 == 0), 1: Constraint(x2 + x3 - 1 == 0)}\n```",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "list[int]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "convert_all_sos1_to_constraints",
               "doc": "Convert every active SOS1 constraint to regular constraints using Big-M.\n\nSee {meth}`~ommx.v1.Instance.convert_sos1_to_constraints` for the conversion\nrule. Returns a dict mapping each original SOS1 ID to the list of regular\nconstraint IDs it produced.\n\nAtomic: every active SOS1 is validated up front, and only if every one is\nconvertible are the conversions applied. If any SOS1 fails validation\n(unsupported kind, non-finite bound, domain excludes 0, etc.), no mutation\nhappens and the instance is left untouched.\n\n# Examples\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable, Sos1Constraint\n>>> x = [DecisionVariable.binary(i) for i in range(4)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={},\n...     sos1_constraints={\n...         1: Sos1Constraint(variables=[0, 1]),\n...         2: Sos1Constraint(variables=[2, 3]),\n...     },\n...     sense=Instance.MINIMIZE,\n... )\n>>> instance.convert_all_sos1_to_constraints()\n{1: [0], 2: [1]}\n>>> instance.sos1_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + x1 - 1 <= 0), 1: Constraint(x2 + x3 - 1 <= 0)}\n```",
               "signatures": [
@@ -7375,28 +7397,6 @@
                     "display": "int",
                     "link_target": null,
                     "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "convert_one_hots_to_constraints",
-              "doc": "Convert every active one-hot constraint to a regular equality constraint.\n\nSee {meth}`~ommx.v1.Instance.convert_one_hot_to_constraint` for the conversion rule.\nReturns the IDs of the newly created regular constraints.\n\n# Examples\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable, OneHotConstraint\n>>> x = [DecisionVariable.binary(i) for i in range(4)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={},\n...     one_hot_constraints={\n...         1: OneHotConstraint(variables=[0, 1]),\n...         2: OneHotConstraint(variables=[2, 3]),\n...     },\n...     sense=Instance.MINIMIZE,\n... )\n>>> instance.convert_one_hots_to_constraints()\n[0, 1]\n>>> instance.one_hot_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + x1 - 1 == 0), 1: Constraint(x2 + x3 - 1 == 0)}\n```",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "list[int]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
                   }
                 }
               ],
@@ -8259,6 +8259,44 @@
                     "display": "bool",
                     "link_target": null,
                     "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "reduce_capabilities",
+              "doc": "Convert constraint types not in `supported` into regular constraints.\n\nFor every capability in ``required_capabilities() - supported``, the\ncorresponding bulk conversion is invoked\n(:meth:`convert_all_indicators_to_constraints`,\n:meth:`convert_all_one_hots_to_constraints`, or\n:meth:`convert_all_sos1_to_constraints`). The instance is mutated in\nplace and its :meth:`required_capabilities` becomes a subset of\n``supported`` on success.\n\nReturns the list of :class:`AdditionalCapability` values that were\nactually converted, in the fixed order ``Indicator``, ``OneHot``,\n``Sos1``. Empty when nothing needed conversion.\n\nRaises if any underlying Big-M conversion fails (e.g. a SOS1 variable\nwith a non-finite bound).",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "supported",
+                      "type_": {
+                        "display": "set[AdditionalCapability]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "AdditionalCapability",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "list[AdditionalCapability]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "AdditionalCapability",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
                   }
                 }
               ],

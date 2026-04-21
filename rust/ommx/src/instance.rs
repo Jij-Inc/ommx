@@ -254,6 +254,70 @@ impl Instance {
             Err(UnsupportedCapabilities { unsupported })
         }
     }
+
+    /// Convert constraint types not in `supported` into regular constraints.
+    ///
+    /// For every capability in `required_capabilities() - supported`, call the
+    /// corresponding bulk conversion (`convert_all_indicators_to_constraints`,
+    /// `convert_all_one_hots_to_constraints`, or `convert_all_sos1_to_constraints`).
+    /// After this call, the instance's [`Self::required_capabilities`] is a
+    /// subset of `supported`.
+    ///
+    /// Returns the set of capabilities that were converted, in a stable order
+    /// (`Indicator`, `OneHot`, `Sos1`). The set is empty when nothing needed
+    /// conversion.
+    ///
+    /// Errors if any underlying conversion fails (e.g. SOS1 / indicator with
+    /// non-finite bounds). Each per-type conversion is atomic, but this method
+    /// is **not** atomic across types: earlier conversions are not rolled back
+    /// if a later one fails. Callers that need cross-type atomicity should
+    /// validate / clone up front.
+    pub fn reduce_capabilities(
+        &mut self,
+        supported: &fnv::FnvHashSet<AdditionalCapability>,
+    ) -> anyhow::Result<Vec<AdditionalCapability>> {
+        let mut converted = Vec::new();
+        // Iterate in a fixed order so logs / callers see deterministic output.
+        for cap in [
+            AdditionalCapability::Indicator,
+            AdditionalCapability::OneHot,
+            AdditionalCapability::Sos1,
+        ] {
+            if supported.contains(&cap) {
+                continue;
+            }
+            let converted_any = match cap {
+                AdditionalCapability::Indicator => {
+                    if self.indicator_constraint_collection.active().is_empty() {
+                        false
+                    } else {
+                        self.convert_all_indicators_to_constraints()?;
+                        true
+                    }
+                }
+                AdditionalCapability::OneHot => {
+                    if self.one_hot_constraint_collection.active().is_empty() {
+                        false
+                    } else {
+                        self.convert_all_one_hots_to_constraints()?;
+                        true
+                    }
+                }
+                AdditionalCapability::Sos1 => {
+                    if self.sos1_constraint_collection.active().is_empty() {
+                        false
+                    } else {
+                        self.convert_all_sos1_to_constraints()?;
+                        true
+                    }
+                }
+            };
+            if converted_any {
+                converted.push(cap);
+            }
+        }
+        Ok(converted)
+    }
 }
 
 /// Optimization problem instance with parameters
@@ -356,5 +420,209 @@ impl ParametricInstance {
         &self,
     ) -> &BTreeMap<crate::Sos1ConstraintID, (Sos1Constraint, RemovedReason)> {
         self.sos1_constraint_collection.removed()
+    }
+}
+
+#[cfg(test)]
+mod reduce_capabilities_tests {
+    use super::*;
+    use crate::{
+        indicator_constraint::{IndicatorConstraint, IndicatorConstraintID},
+        linear,
+        one_hot_constraint::{OneHotConstraint, OneHotConstraintID},
+        sos1_constraint::{Sos1Constraint, Sos1ConstraintID},
+        Bound, DecisionVariable, Equality, Function, Kind, VariableID,
+    };
+    use maplit::btreemap;
+    use std::collections::{BTreeMap, BTreeSet};
+
+    /// Build an instance with one of each non-standard constraint type, suitable
+    /// for Big-M conversion (binary variables have bound [0, 1]).
+    fn instance_with_all_capabilities() -> Instance {
+        let decision_variables = btreemap! {
+            VariableID::from(0) => DecisionVariable::binary(VariableID::from(0)),
+            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
+            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
+            VariableID::from(3) => DecisionVariable::binary(VariableID::from(3)),
+        };
+        let one_hot = OneHotConstraint::new(
+            [VariableID::from(0), VariableID::from(1)]
+                .into_iter()
+                .collect(),
+        );
+        let sos1 = Sos1Constraint::new(
+            [VariableID::from(2), VariableID::from(3)]
+                .into_iter()
+                .collect(),
+        );
+        // Indicator: y=1 => x0 <= 0 (trivially satisfied since x0 in [0,1], upper=1>0 emits upper Big-M)
+        let indicator = IndicatorConstraint::new(
+            VariableID::from(1),
+            Equality::LessThanOrEqualToZero,
+            Function::from(linear!(0)),
+        );
+        Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(linear!(0)))
+            .decision_variables(decision_variables)
+            .constraints(BTreeMap::new())
+            .indicator_constraints(BTreeMap::from([(
+                IndicatorConstraintID::from(1),
+                indicator,
+            )]))
+            .one_hot_constraints(BTreeMap::from([(OneHotConstraintID::from(1), one_hot)]))
+            .sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(1), sos1)]))
+            .build()
+            .unwrap()
+    }
+
+    #[test]
+    fn noop_when_all_required_are_supported() {
+        // Every required capability is in `supported` → nothing converted,
+        // instance left untouched.
+        let mut instance = instance_with_all_capabilities();
+        let supported: fnv::FnvHashSet<_> = [
+            AdditionalCapability::Indicator,
+            AdditionalCapability::OneHot,
+            AdditionalCapability::Sos1,
+        ]
+        .into_iter()
+        .collect();
+        let before_indicators = instance.indicator_constraints().clone();
+        let before_one_hots = instance.one_hot_constraints().clone();
+        let before_sos1 = instance.sos1_constraints().clone();
+
+        let converted = instance.reduce_capabilities(&supported).unwrap();
+
+        assert!(converted.is_empty());
+        assert_eq!(instance.indicator_constraints(), &before_indicators);
+        assert_eq!(instance.one_hot_constraints(), &before_one_hots);
+        assert_eq!(instance.sos1_constraints(), &before_sos1);
+    }
+
+    #[test]
+    fn converts_only_unsupported_capabilities() {
+        // Supported = {Sos1}: Indicator and OneHot must be converted, SOS1 kept.
+        // Return order is fixed: Indicator, OneHot, Sos1.
+        let mut instance = instance_with_all_capabilities();
+        let supported: fnv::FnvHashSet<_> = [AdditionalCapability::Sos1].into_iter().collect();
+
+        let converted = instance.reduce_capabilities(&supported).unwrap();
+
+        assert_eq!(
+            converted,
+            vec![
+                AdditionalCapability::Indicator,
+                AdditionalCapability::OneHot
+            ]
+        );
+        assert!(instance.indicator_constraints().is_empty());
+        assert!(instance.one_hot_constraints().is_empty());
+        assert!(!instance.sos1_constraints().is_empty());
+        // required_capabilities is now a subset of supported.
+        assert!(instance.required_capabilities().is_subset(&supported));
+    }
+
+    #[test]
+    fn empty_supported_converts_everything() {
+        // No capabilities supported → all three are converted and return in fixed order.
+        let mut instance = instance_with_all_capabilities();
+        let supported = fnv::FnvHashSet::default();
+
+        let converted = instance.reduce_capabilities(&supported).unwrap();
+
+        assert_eq!(
+            converted,
+            vec![
+                AdditionalCapability::Indicator,
+                AdditionalCapability::OneHot,
+                AdditionalCapability::Sos1,
+            ]
+        );
+        assert!(instance.required_capabilities().is_empty());
+    }
+
+    #[test]
+    fn skips_capabilities_that_are_not_required() {
+        // Instance has only a OneHot. Empty `supported` → only OneHot is reported
+        // as converted; Indicator / SOS1 aren't in the returned list since they
+        // were never present to begin with.
+        let decision_variables = btreemap! {
+            VariableID::from(0) => DecisionVariable::binary(VariableID::from(0)),
+            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
+        };
+        let one_hot = OneHotConstraint::new(
+            [VariableID::from(0), VariableID::from(1)]
+                .into_iter()
+                .collect(),
+        );
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(linear!(0)))
+            .decision_variables(decision_variables)
+            .constraints(BTreeMap::new())
+            .one_hot_constraints(BTreeMap::from([(OneHotConstraintID::from(1), one_hot)]))
+            .build()
+            .unwrap();
+        let supported = fnv::FnvHashSet::default();
+
+        let converted = instance.reduce_capabilities(&supported).unwrap();
+
+        assert_eq!(converted, vec![AdditionalCapability::OneHot]);
+        assert!(instance.one_hot_constraints().is_empty());
+    }
+
+    #[test]
+    fn conversion_failure_is_propagated() {
+        // SOS1 over a continuous variable with infinite bound cannot be Big-M
+        // converted; reduce_capabilities surfaces the underlying error.
+        let dv = DecisionVariable::continuous(VariableID::from(0));
+        let sos1 = Sos1Constraint::new([VariableID::from(0)].into_iter().collect::<BTreeSet<_>>());
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(linear!(0)))
+            .decision_variables(btreemap! { VariableID::from(0) => dv })
+            .constraints(BTreeMap::new())
+            .sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(1), sos1)]))
+            .build()
+            .unwrap();
+        let supported = fnv::FnvHashSet::default();
+
+        let err = instance.reduce_capabilities(&supported).unwrap_err();
+        assert!(err.to_string().contains("non-finite"));
+    }
+
+    #[test]
+    fn integer_sos1_converts_with_new_indicator() {
+        // A single SOS1 over an integer variable with finite bound [-2, 3]:
+        // reduce_capabilities should invoke the SOS1 Big-M conversion which
+        // allocates a fresh binary indicator.
+        let dv = DecisionVariable::new(
+            VariableID::from(0),
+            Kind::Integer,
+            Bound::new(-2.0, 3.0).unwrap(),
+            None,
+            crate::ATol::default(),
+        )
+        .unwrap();
+        let sos1 = Sos1Constraint::new([VariableID::from(0)].into_iter().collect::<BTreeSet<_>>());
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(linear!(0)))
+            .decision_variables(btreemap! { VariableID::from(0) => dv })
+            .constraints(BTreeMap::new())
+            .sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(1), sos1)]))
+            .build()
+            .unwrap();
+
+        let converted = instance
+            .reduce_capabilities(&fnv::FnvHashSet::default())
+            .unwrap();
+
+        assert_eq!(converted, vec![AdditionalCapability::Sos1]);
+        // Fresh binary indicator was allocated → decision variable count went up.
+        assert_eq!(instance.decision_variables.len(), 2);
+        assert!(instance.sos1_constraints().is_empty());
+        assert!(!instance.constraints().is_empty());
     }
 }

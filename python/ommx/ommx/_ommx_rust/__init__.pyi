@@ -1518,6 +1518,27 @@ class Instance:
 
         Raises an error if the instance uses constraint types not in `supported`.
         """
+    def reduce_capabilities(
+        self, supported: builtins.set[AdditionalCapability]
+    ) -> builtins.list[AdditionalCapability]:
+        r"""
+        Convert constraint types not in `supported` into regular constraints.
+
+        For every capability in ``required_capabilities() - supported``, the
+        corresponding bulk conversion is invoked
+        (:meth:`convert_all_indicators_to_constraints`,
+        :meth:`convert_all_one_hots_to_constraints`, or
+        :meth:`convert_all_sos1_to_constraints`). The instance is mutated in
+        place and its :meth:`required_capabilities` becomes a subset of
+        ``supported`` on success.
+
+        Returns the list of :class:`AdditionalCapability` values that were
+        actually converted, in the fixed order ``Indicator``, ``OneHot``,
+        ``Sos1``. Empty when nothing needed conversion.
+
+        Raises if any underlying Big-M conversion fails (e.g. a SOS1 variable
+        with a non-finite bound).
+        """
     def to_bytes(self) -> bytes: ...
     def required_ids(self) -> builtins.set[builtins.int]:
         r"""
@@ -2034,7 +2055,7 @@ class Instance:
         {1: RemovedOneHotConstraint(OneHotConstraint(exactly one of {x0, x1, x2} = 1), reason=ommx.Instance.convert_one_hot_to_constraint, constraint_id=0)}
         ```
         """
-    def convert_one_hots_to_constraints(self) -> builtins.list[builtins.int]:
+    def convert_all_one_hots_to_constraints(self) -> builtins.list[builtins.int]:
         r"""
         Convert every active one-hot constraint to a regular equality constraint.
 
@@ -2056,7 +2077,7 @@ class Instance:
         ...     },
         ...     sense=Instance.MINIMIZE,
         ... )
-        >>> instance.convert_one_hots_to_constraints()
+        >>> instance.convert_all_one_hots_to_constraints()
         [0, 1]
         >>> instance.one_hot_constraints
         {}

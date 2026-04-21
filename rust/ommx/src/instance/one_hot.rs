@@ -73,7 +73,7 @@ impl Instance {
     /// See [`Self::convert_one_hot_to_constraint`] for the conversion rule.
     /// Returns the IDs of the newly created regular constraints in ascending
     /// order of the original one-hot constraint IDs.
-    pub fn convert_one_hots_to_constraints(&mut self) -> Result<Vec<ConstraintID>> {
+    pub fn convert_all_one_hots_to_constraints(&mut self) -> Result<Vec<ConstraintID>> {
         let ids: Vec<_> = self
             .one_hot_constraint_collection
             .active()
@@ -198,7 +198,7 @@ mod tests {
             .build()
             .unwrap();
 
-        let new_ids = instance.convert_one_hots_to_constraints().unwrap();
+        let new_ids = instance.convert_all_one_hots_to_constraints().unwrap();
         assert_eq!(new_ids.len(), 2);
         assert!(instance.one_hot_constraints().is_empty());
         assert_eq!(instance.removed_one_hot_constraints().len(), 2);
