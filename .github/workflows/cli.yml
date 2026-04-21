@@ -22,7 +22,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --release
+          args: --release --bin ommx --features cli
 
       - uses: actions/upload-artifact@v7
         with:
@@ -97,7 +97,7 @@ jobs:
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
       - name: Build image
-        run: cargo run --release --example create_artifact
+        run: cargo run --release --example create_artifact --features cli
 
       # Push image to GitHub Container Registry
       - name: Push image to ghcr.io
