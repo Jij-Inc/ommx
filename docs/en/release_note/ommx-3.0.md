@@ -63,7 +63,7 @@ df = solution.constraints_df.join(solution.removed_reasons_df)
 df = solution.indicator_constraints_df.join(solution.indicator_removed_reasons_df)
 ```
 
-### Adapter Capability model ([#790](https://github.com/Jij-Inc/ommx/pull/790))
+### Adapter Capability model ([#790](https://github.com/Jij-Inc/ommx/pull/790), [#814](https://github.com/Jij-Inc/ommx/pull/814))
 
 As specialized constraint types (such as {class}`~ommx.v1.IndicatorConstraint`) are added and support varies across solvers, an Adapter Capability model has been introduced. Adapters declare their supported capabilities via `ADDITIONAL_CAPABILITIES`, and {meth}`Instance.reduce_capabilities() <ommx.v1.Instance.reduce_capabilities>` converts any constraint type outside that set into regular constraints (Big-M for indicator / SOS1, linear equality for one-hot) before solving. Callers can inspect {attr}`Instance.required_capabilities <ommx.v1.Instance.required_capabilities>` to see which non-standard types an instance currently carries.
 
