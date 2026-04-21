@@ -33,7 +33,7 @@ OMMX は [特殊制約型](./special_constraints.md) として IndicatorConstrai
 | `AdditionalCapability.OneHot` | {class}`~ommx.v1.OneHotConstraint` |
 | `AdditionalCapability.Sos1` | {class}`~ommx.v1.Sos1Constraint` |
 
-{attr}`Instance.required_capabilities <ommx.v1.Instance.required_capabilities>` は、その {class}`~ommx.v1.Instance` が **現在保持している非標準制約型** に対応する `AdditionalCapability` の集合を返します。通常制約しか使っていない場合は空集合です。
+{attr}`Instance.required_capabilities <ommx.v1.Instance.required_capabilities>` は、その {class}`~ommx.v1.Instance` が **現在保持している特殊制約** に対応する `AdditionalCapability` の集合を返します。通常制約しか使っていない場合は空集合です。
 
 ```{code-cell} ipython3
 from ommx.v1 import Instance, DecisionVariable, OneHotConstraint

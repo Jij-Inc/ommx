@@ -136,7 +136,7 @@ df = solution.indicator_constraints_df.join(solution.indicator_removed_reasons_d
 
 ### Adapter Capabilityモデル ([#790](https://github.com/Jij-Inc/ommx/pull/790), [#805](https://github.com/Jij-Inc/ommx/pull/805), [#810](https://github.com/Jij-Inc/ommx/pull/810), [#811](https://github.com/Jij-Inc/ommx/pull/811), [#814](https://github.com/Jij-Inc/ommx/pull/814))
 
-{class}`~ommx.v1.IndicatorConstraint` のような特殊な制約型が追加されソルバー毎に対応・未対応が分かれるため、Adapter Capabilityモデルが導入されました。Adapterは `ADDITIONAL_CAPABILITIES` でサポートするCapabilityを宣言し、{meth}`Instance.reduce_capabilities() <ommx.v1.Instance.reduce_capabilities>` がその集合に含まれない制約タイプを通常の制約へ変換（indicator/SOS1 は Big-M、one-hot は線形等式）してから solver に渡します。`Instance` が現在保持している非標準制約タイプは {attr}`Instance.required_capabilities <ommx.v1.Instance.required_capabilities>` で確認できます。
+{class}`~ommx.v1.IndicatorConstraint` のような特殊制約が追加されソルバー毎に対応・未対応が分かれるため、Adapter Capabilityモデルが導入されました。Adapterは `ADDITIONAL_CAPABILITIES` でサポートするCapabilityを宣言し、{meth}`Instance.reduce_capabilities() <ommx.v1.Instance.reduce_capabilities>` がその集合に含まれない制約タイプを通常の制約へ変換（indicator/SOS1 は Big-M、one-hot は線形等式）してから solver に渡します。`Instance` が現在保持している特殊制約は {attr}`Instance.required_capabilities <ommx.v1.Instance.required_capabilities>` で確認できます。
 
 ```python
 from ommx.v1 import AdditionalCapability
