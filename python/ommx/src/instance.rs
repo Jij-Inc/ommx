@@ -309,6 +309,21 @@ impl Instance {
             .collect()
     }
 
+    /// Dict of all removed SOS1 constraints in the instance keyed by their IDs.
+    #[getter]
+    pub fn removed_sos1_constraints(&self) -> BTreeMap<u64, crate::RemovedSos1Constraint> {
+        self.inner
+            .removed_sos1_constraints()
+            .iter()
+            .map(|(id, (c, r))| {
+                (
+                    id.into_inner(),
+                    crate::RemovedSos1Constraint::from_pair(c.clone(), r.clone()),
+                )
+            })
+            .collect()
+    }
+
     /// Check that the adapter's supported capabilities cover this instance's requirements.
     ///
     /// `supported` is a set of `AdditionalCapability` flags.
@@ -1006,7 +1021,7 @@ impl Instance {
     /// A one-hot constraint over ``{x_1, ..., x_n}`` is mathematically equivalent to the
     /// linear equality ``x_1 + ... + x_n - 1 == 0``. This method inserts that equality
     /// as a new regular constraint and moves the one-hot constraint into
-    /// :attr:`~ommx.v1.Instance.removed_one_hot_constraints` with
+    /// {attr}`~ommx.v1.Instance.removed_one_hot_constraints` with
     /// ``reason="ommx.Instance.convert_one_hot_to_constraint"`` and a
     /// ``constraint_id`` parameter pointing to the new regular constraint.
     ///
@@ -1041,7 +1056,7 @@ impl Instance {
 
     /// Convert every active one-hot constraint to a regular equality constraint.
     ///
-    /// See :meth:`~ommx.v1.Instance.convert_one_hot_to_constraint` for the conversion rule.
+    /// See {meth}`~ommx.v1.Instance.convert_one_hot_to_constraint` for the conversion rule.
     /// Returns the IDs of the newly created regular constraints.
     ///
     /// # Examples
@@ -1069,6 +1084,110 @@ impl Instance {
     pub fn convert_one_hots_to_constraints(&mut self) -> Result<Vec<u64>> {
         let ids = self.inner.convert_one_hots_to_constraints()?;
         Ok(ids.into_iter().map(|id| id.into_inner()).collect())
+    }
+
+    /// Convert a SOS1 constraint to regular constraints using the Big-M method.
+    ///
+    /// A SOS1 constraint over $\{x_1, \ldots, x_n\}$ with each $x_i \in [l_i, u_i]$
+    /// asserts that at most one $x_i$ is non-zero. Per variable, a binary indicator
+    /// $y_i$ is introduced with the Big-M pair
+    ///
+    /// $$
+    /// x_i - u_i y_i \leq 0, \qquad l_i y_i - x_i \leq 0
+    /// $$
+    ///
+    /// (trivial sides $u_i = 0$ or $l_i = 0$ are skipped), together with the single
+    /// cardinality constraint
+    ///
+    /// $$
+    /// \sum_i y_i - 1 \leq 0.
+    /// $$
+    ///
+    /// If $x_i$ is already binary with bound $[0, 1]$, $x_i$ itself is reused as its
+    /// indicator (no new variable, no Big-M pair).
+    ///
+    /// Returns the list of newly created regular constraint IDs in insertion order
+    /// (Big-M upper/lower pairs per non-binary variable, followed by the cardinality
+    /// sum).
+    ///
+    /// Raises if any $x_i$ has a non-binary bound that is not finite, if its domain
+    /// excludes $0$, or if its kind is semi-continuous / semi-integer (the split
+    /// domain $\{0\} \cup [l, u]$ is not uniformly implemented across the codebase
+    /// yet, so Big-M conversion of these kinds is not supported).
+    /// The instance is not mutated on error.
+    ///
+    /// # Examples
+    ///
+    /// All-binary SOS1 reduces to ``sum(x_i) - 1 <= 0`` without extra variables:
+    ///
+    /// ```python
+    /// >>> from ommx.v1 import Instance, DecisionVariable, Sos1Constraint
+    /// >>> x = [DecisionVariable.binary(i) for i in range(3)]
+    /// >>> instance = Instance.from_components(
+    /// ...     decision_variables=x,
+    /// ...     objective=sum(x),
+    /// ...     constraints={},
+    /// ...     sos1_constraints={1: Sos1Constraint(variables=[0, 1, 2])},
+    /// ...     sense=Instance.MINIMIZE,
+    /// ... )
+    /// >>> instance.convert_sos1_to_constraints(1)
+    /// [0]
+    /// >>> instance.sos1_constraints
+    /// {}
+    /// >>> instance.constraints
+    /// {0: Constraint(x0 + x1 + x2 - 1 <= 0)}
+    /// >>> instance.removed_sos1_constraints
+    /// {1: RemovedSos1Constraint(Sos1Constraint(at most one of {x0, x1, x2} ≠ 0), reason=ommx.Instance.convert_sos1_to_constraints, constraint_ids=0)}
+    /// ```
+    pub fn convert_sos1_to_constraints(&mut self, sos1_id: u64) -> Result<Vec<u64>> {
+        let new_ids = self.inner.convert_sos1_to_constraints(sos1_id.into())?;
+        Ok(new_ids.into_iter().map(|id| id.into_inner()).collect())
+    }
+
+    /// Convert every active SOS1 constraint to regular constraints using Big-M.
+    ///
+    /// See {meth}`~ommx.v1.Instance.convert_sos1_to_constraints` for the conversion
+    /// rule. Returns a dict mapping each original SOS1 ID to the list of regular
+    /// constraint IDs it produced.
+    ///
+    /// Atomic: every active SOS1 is validated up front, and only if every one is
+    /// convertible are the conversions applied. If any SOS1 fails validation
+    /// (unsupported kind, non-finite bound, domain excludes 0, etc.), no mutation
+    /// happens and the instance is left untouched.
+    ///
+    /// # Examples
+    ///
+    /// ```python
+    /// >>> from ommx.v1 import Instance, DecisionVariable, Sos1Constraint
+    /// >>> x = [DecisionVariable.binary(i) for i in range(4)]
+    /// >>> instance = Instance.from_components(
+    /// ...     decision_variables=x,
+    /// ...     objective=sum(x),
+    /// ...     constraints={},
+    /// ...     sos1_constraints={
+    /// ...         1: Sos1Constraint(variables=[0, 1]),
+    /// ...         2: Sos1Constraint(variables=[2, 3]),
+    /// ...     },
+    /// ...     sense=Instance.MINIMIZE,
+    /// ... )
+    /// >>> instance.convert_all_sos1_to_constraints()
+    /// {1: [0], 2: [1]}
+    /// >>> instance.sos1_constraints
+    /// {}
+    /// >>> instance.constraints
+    /// {0: Constraint(x0 + x1 - 1 <= 0), 1: Constraint(x2 + x3 - 1 <= 0)}
+    /// ```
+    pub fn convert_all_sos1_to_constraints(&mut self) -> Result<BTreeMap<u64, Vec<u64>>> {
+        let result = self.inner.convert_all_sos1_to_constraints()?;
+        Ok(result
+            .into_iter()
+            .map(|(id, ids)| {
+                (
+                    id.into_inner(),
+                    ids.into_iter().map(|c| c.into_inner()).collect(),
+                )
+            })
+            .collect())
     }
 
     /// Log-encode the integer decision variables.
@@ -1305,7 +1424,7 @@ impl Instance {
     /// **Returns:**
     /// A dictionary with the following structure:
     ///
-    /// ```json
+    /// ```text
     /// {
     ///     "decision_variables": {
     ///         "total": int,
@@ -1409,6 +1528,32 @@ impl Instance {
             py,
             self.inner
                 .removed_one_hot_constraints()
+                .iter()
+                .map(|(id, pair)| (*id, pair)),
+            "id",
+        )
+    }
+
+    /// DataFrame of SOS1 constraints
+    #[getter]
+    pub fn sos1_constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
+        entries_to_dataframe(
+            py,
+            self.inner.sos1_constraints().iter().map(|(id, c)| (*id, c)),
+            "id",
+        )
+    }
+
+    /// DataFrame of removed SOS1 constraints
+    #[getter]
+    pub fn removed_sos1_constraints_df<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        entries_to_dataframe(
+            py,
+            self.inner
+                .removed_sos1_constraints()
                 .iter()
                 .map(|(id, pair)| (*id, pair)),
             "id",

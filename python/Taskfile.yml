@@ -82,30 +82,30 @@ tasks:
   book:
     desc: Build Sphinx documentation (ja and en)
     cmds:
-      - uv run sphinx-build -b html ../docs/ja ../docs/ja/_build/html
-      - uv run sphinx-build -b html ../docs/en ../docs/en/_build/html
+      - uv run sphinx-build -b html -W --keep-going ../docs/ja ../docs/ja/_build/html
+      - uv run sphinx-build -b html -W --keep-going ../docs/en ../docs/en/_build/html
 
   book:test:
     desc: Build Sphinx documentation with code execution (ja and en)
     env:
       OMMX_NB_EXECUTION: "force"
     cmds:
-      - uv run sphinx-build -b html ../docs/ja ../docs/ja/_build/html
-      - uv run sphinx-build -b html ../docs/en ../docs/en/_build/html
+      - uv run sphinx-build -b html -W --keep-going ../docs/ja ../docs/ja/_build/html
+      - uv run sphinx-build -b html -W --keep-going ../docs/en ../docs/en/_build/html
 
   book:test:ja:
     desc: Build Sphinx documentation with code execution (ja only)
     env:
       OMMX_NB_EXECUTION: "force"
     cmds:
-      - uv run sphinx-build -b html ../docs/ja ../docs/ja/_build/html
+      - uv run sphinx-build -b html -W --keep-going ../docs/ja ../docs/ja/_build/html
 
   book:test:en:
     desc: Build Sphinx documentation with code execution (en only)
     env:
       OMMX_NB_EXECUTION: "force"
     cmds:
-      - uv run sphinx-build -b html ../docs/en ../docs/en/_build/html
+      - uv run sphinx-build -b html -W --keep-going ../docs/en ../docs/en/_build/html
 
   stubgen:
     desc: Generate stubs files for Rust extension
