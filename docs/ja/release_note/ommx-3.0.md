@@ -26,6 +26,24 @@ Instance.from_components(..., constraints={5: c}, ...)
 
 また、{class}`~ommx.v1.Constraint` / {class}`~ommx.v1.EvaluatedConstraint` / {class}`~ommx.v1.SampledConstraint` / {class}`~ommx.v1.RemovedConstraint` 単体の `to_bytes` / `from_bytes` も削除されました（単体ではIDを保持できないため）。シリアライズは包含する {class}`~ommx.v1.Instance` / {class}`~ommx.v1.Solution` / {class}`~ommx.v1.SampleSet` に対して行ってください。
 
+#### 制約種別ごとに独立したID空間
+
+通常制約 (`Constraint`), Indicator Constraint, One-hot Constraint, SOS1 Constraint はそれぞれ独立したID空間を持ちます。Rust 側では `ConstraintID`, `IndicatorConstraintID`, `OneHotConstraintID`, `Sos1ConstraintID` という別々の型として定義されており、Python 側でも {meth}`Instance.from_components <ommx.v1.Instance.from_components>` の `constraints=` / `indicator_constraints=` / `one_hot_constraints=` / `sos1_constraints=` に渡す dict はそれぞれ独立した key 空間を持ちます。したがって、例えば通常制約 ID `1` と Indicator 制約 ID `1` は別々の制約として共存できます。
+
+```python
+instance = Instance.from_components(
+    decision_variables=[...],
+    objective=...,
+    constraints={1: c},                 # 通常制約 ID=1
+    indicator_constraints={1: ic},      # Indicator 制約 ID=1（別空間なので衝突しない）
+    one_hot_constraints={1: oh},        # One-hot 制約 ID=1
+    sos1_constraints={1: s1},           # SOS1 制約 ID=1
+    sense=Instance.MAXIMIZE,
+)
+```
+
+ただし {meth}`Instance.convert_one_hot_to_constraint <ommx.v1.Instance.convert_one_hot_to_constraint>` 等で特殊制約型を通常制約に変換すると、新たに生成される通常制約は `Constraint` 側のID空間から割り当てられます。
+
 ### OneHot / SOS1 を first-class 制約型に昇格 ([#798](https://github.com/Jij-Inc/ommx/pull/798))
 
 これまで `Instance.constraint_hints` のメタデータ（`OneHot` / `Sos1` クラス、`ConstraintHints` ラッパー）として扱っていた one-hot 制約（`sum(x_i) = 1`）と SOS1 制約（高々1変数のみ非ゼロ）を、{class}`~ommx.v1.IndicatorConstraint` と同様の第一級制約型 {class}`~ommx.v1.OneHotConstraint` / {class}`~ommx.v1.Sos1Constraint` に昇格させました。
