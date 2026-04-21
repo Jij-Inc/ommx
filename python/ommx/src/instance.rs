@@ -1526,7 +1526,7 @@ impl Instance {
     /// **Returns:**
     /// A dictionary with the following structure:
     ///
-    /// ```json
+    /// ```text
     /// {
     ///     "decision_variables": {
     ///         "total": int,

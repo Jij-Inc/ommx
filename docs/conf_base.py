@@ -31,6 +31,7 @@ release = version
 extensions = [
     "myst_nb",
     "sphinx.ext.autodoc",
+    "sphinx.ext.doctest",
     "sphinx.ext.intersphinx",
     "sphinx_fontawesome",
     "sphinxcontrib.katex",
@@ -43,7 +44,19 @@ source_suffix = {
 }
 
 templates_path = []
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+exclude_patterns = [
+    "_build",
+    "Thumbs.db",
+    ".DS_Store",
+    # autoapi generates an index page for the top-level `ommx` package,
+    # but we list each submodule explicitly in api/index.rst instead.
+    "autoapi/ommx/index.rst",
+]
+
+# The `ommx.v1`, `ommx._ommx_rust`, and `ommx.artifact` modules are documented
+# via pyo3_stub_gen_ext (not autoapi), so autoapi cannot resolve them when it
+# processes the autoapi-covered submodules. Silence those spurious warnings.
+suppress_warnings = ["autoapi.python_import_resolution"]
 
 # -- MyST / myst-nb settings ------------------------------------------------
 
