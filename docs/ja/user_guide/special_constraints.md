@@ -133,6 +133,81 @@ assert set(instance_mix.sos1_constraints.keys()) == {1}
 
 ただし、特殊制約型を通常制約に変換する（[Capability モデルと変換](./capability_model.md) 参照）と、新たに生成される通常制約は **`Constraint` 側の ID 空間**から割り当てられます。変換後に衝突する可能性があるのは通常制約の ID のみです。
 
+## PySCIPOpt で解く
+
+特殊制約を含んだ {class}`~ommx.v1.Instance` を実際に解くには、[OMMX Adapterで最適化問題を解く](../tutorial/solve_with_ommx_adapter.md) と同様に OMMX Adapter を使います。ここでは PySCIPOpt Adapter を例に、3種類の特殊制約をそれぞれ解いてみます。
+
+```
+pip install ommx-pyscipopt-adapter
+```
+
+PySCIPOpt Adapter は Indicator 制約と SOS1 制約をサポート宣言しており、これらは SCIP の対応する制約（`addConsIndicator` / `addConsSOS1`）にそのまま渡されます。OneHot 制約については宣言がないため、Adapter 内部で通常の等式制約に自動変換されてから SCIP に渡されます（[Adapter Capability モデルと制約変換](./capability_model.md) 参照）。
+
+### IndicatorConstraint
+
+```{code-cell} ipython3
+from ommx.v1 import Instance, DecisionVariable
+from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
+
+b = DecisionVariable.binary(0, name="b")
+x = DecisionVariable.continuous(1, lower=0, upper=10, name="x")
+
+# b = 1 => x <= 3
+instance = Instance.from_components(
+    decision_variables=[b, x],
+    objective=x,
+    constraints={0: b == 1},                          # b を 1 に固定
+    indicator_constraints={0: (x <= 3).with_indicator(b)},
+    sense=Instance.MAXIMIZE,
+)
+solution = OMMXPySCIPOptAdapter.solve(instance)
+# b = 1 が成立しているので制約 x <= 3 が効き、x の最大値 3 が得られる
+assert abs(solution.objective - 3.0) < 1e-6
+```
+
+### OneHotConstraint
+
+```{code-cell} ipython3
+xs = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
+values = [5.0, 10.0, 3.0]
+
+instance = Instance.from_components(
+    decision_variables=xs,
+    objective=sum(v * x for v, x in zip(values, xs)),
+    constraints={},
+    one_hot_constraints={0: OneHotConstraint(variables=[0, 1, 2])},
+    sense=Instance.MAXIMIZE,
+)
+solution = OMMXPySCIPOptAdapter.solve(instance)
+# 3 つのうち丁度 1 つを選ぶので、最大値 10 をもつ x_1 が選ばれる
+assert abs(solution.objective - 10.0) < 1e-6
+```
+
+`solve` の内部で OneHot 制約は通常の等式制約 $x_0 + x_1 + x_2 - 1 = 0$ に自動変換されるため、呼び出し後の `instance` は以下のようになります。
+
+```{code-cell} ipython3
+assert instance.one_hot_constraints == {}
+assert len(instance.constraints) == 1
+assert set(instance.removed_one_hot_constraints.keys()) == {0}
+```
+
+### Sos1Constraint
+
+```{code-cell} ipython3
+ys = [DecisionVariable.continuous(i, lower=0, upper=5, name="y", subscripts=[i]) for i in range(3)]
+
+instance = Instance.from_components(
+    decision_variables=ys,
+    objective=sum(ys),
+    constraints={},
+    sos1_constraints={0: Sos1Constraint(variables=[0, 1, 2])},
+    sense=Instance.MAXIMIZE,
+)
+solution = OMMXPySCIPOptAdapter.solve(instance)
+# 高々 1 つだけが非ゼロなので、1つを上限 5 にして他を 0 にする
+assert abs(solution.objective - 5.0) < 1e-6
+```
+
 ## 評価結果の参照
 
 インスタンスを解いて得られた {class}`~ommx.v1.Solution` や {class}`~ommx.v1.SampleSet` は、通常制約と同様に特殊制約それぞれに対する DataFrame アクセサを提供します。
