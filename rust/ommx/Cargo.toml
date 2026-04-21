@@ -32,14 +32,12 @@ colored.workspace = true
 csv.workspace = true
 derive_more.workspace = true
 directories.workspace = true
-env_logger.workspace = true
 flate2.workspace = true
 fnv.workspace = true
 getset.workspace = true
 indexmap.workspace = true
 itertools.workspace = true
 katexit.workspace = true
-log.workspace = true
 maplit.workspace = true
 num.workspace = true
 ocipkg = { workspace = true }
@@ -53,6 +51,8 @@ serde_json.workspace = true
 similar.workspace = true
 smallvec.workspace = true
 thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
 url.workspace = true
 uuid.workspace = true
 

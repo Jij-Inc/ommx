@@ -89,7 +89,7 @@ impl ParametricInstance {
             let missing_ids: Vec<_> = required_ids.difference(&given_ids).collect();
             for id in &missing_ids {
                 if let Some(param) = self.parameters.get(id) {
-                    log::error!("Missing parameter: {param:?}");
+                    tracing::error!("Missing parameter: {param:?}");
                 }
             }
             bail!(

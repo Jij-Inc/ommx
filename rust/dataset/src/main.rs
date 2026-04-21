@@ -3,8 +3,8 @@ mod qplib;
 
 use anyhow::Result;
 use clap::Parser;
-use env_logger::{Builder, Env};
 use std::path::PathBuf;
+use tracing_subscriber::EnvFilter;
 
 /// OMMX Artifact generator for well-known datasets.
 ///
@@ -25,7 +25,11 @@ enum Command {
 }
 
 fn main() -> Result<()> {
-    Builder::from_env(Env::default().default_filter_or("info")).init();
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+        )
+        .init();
 
     let command = Command::parse();
     match command {

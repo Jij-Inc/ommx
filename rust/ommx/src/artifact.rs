@@ -41,7 +41,7 @@ pub fn set_local_registry_root(path: impl Into<PathBuf>) -> Result<()> {
             path.display()
         )
     })?;
-    log::info!("Local registry root set via API: {}", path.display());
+    tracing::info!("Local registry root set via API: {}", path.display());
     Ok(())
 }
 
@@ -59,7 +59,7 @@ pub fn get_local_registry_root() -> &'static Path {
         // Try environment variable first
         let path = if let Ok(custom_dir) = env::var("OMMX_LOCAL_REGISTRY_ROOT") {
             let path = PathBuf::from(custom_dir);
-            log::info!(
+            tracing::info!(
                 "Local registry root initialized from OMMX_LOCAL_REGISTRY_ROOT: {}",
                 path.display()
             );
@@ -69,7 +69,7 @@ pub fn get_local_registry_root() -> &'static Path {
                 .expect("Failed to get project directories")
                 .data_dir()
                 .to_path_buf();
-            log::info!(
+            tracing::info!(
                 "Local registry root initialized to default: {}",
                 path.display()
             );
@@ -134,7 +134,7 @@ fn auth_from_env() -> Result<(String, String, String)> {
         env::var("OMMX_BASIC_AUTH_USERNAME"),
         env::var("OMMX_BASIC_AUTH_PASSWORD"),
     ) {
-        log::info!(
+        tracing::info!(
             "Detect OMMX_BASIC_AUTH_DOMAIN, OMMX_BASIC_AUTH_USERNAME, OMMX_BASIC_AUTH_PASSWORD for authentication."
         );
         return Ok((domain, username, password));
@@ -181,7 +181,7 @@ impl Artifact<OciArchive> {
     #[cfg(feature = "remote-artifact")]
     pub fn push(&mut self) -> Result<Artifact<Remote>> {
         let name = self.get_name()?;
-        log::info!("Pushing: {name}");
+        tracing::info!("Pushing: {name}");
         let mut remote = RemoteBuilder::new(name)?;
         if let Ok((domain, username, password)) = auth_from_env() {
             remote.add_basic_auth(&domain, &username, &password);
@@ -194,10 +194,10 @@ impl Artifact<OciArchive> {
         let image_name = self.get_name()?;
         let path = get_image_dir(&image_name);
         if path.exists() {
-            log::trace!("Already exists in local registry: {}", path.display());
+            tracing::trace!("Already exists in local registry: {}", path.display());
             return Ok(());
         }
-        log::info!("Loading to local registry: {image_name}");
+        tracing::info!("Loading to local registry: {image_name}");
         ocipkg::image::copy(self.0.deref_mut(), OciDirBuilder::new(path, image_name)?)?;
         Ok(())
     }
@@ -212,7 +212,7 @@ impl Artifact<OciDir> {
     #[cfg(feature = "remote-artifact")]
     pub fn push(&mut self) -> Result<Artifact<Remote>> {
         let name = self.get_name()?;
-        log::info!("Pushing: {name}");
+        tracing::info!("Pushing: {name}");
         let mut remote = RemoteBuilder::new(name)?;
         if let Ok((domain, username, password)) = auth_from_env() {
             remote.add_basic_auth(&domain, &username, &password);
@@ -246,10 +246,10 @@ impl Artifact<Remote> {
         let image_name = self.get_name()?;
         let path = get_image_dir(&image_name);
         if path.exists() {
-            log::trace!("Already exists in local registry: {}", path.display());
+            tracing::trace!("Already exists in local registry: {}", path.display());
             return Ok(Artifact(OciArtifact::from_oci_dir(&path)?));
         }
-        log::info!("Pulling to local registry: {image_name}");
+        tracing::info!("Pulling to local registry: {image_name}");
         if let Ok((domain, username, password)) = auth_from_env() {
             self.0.add_basic_auth(&domain, &username, &password);
         }

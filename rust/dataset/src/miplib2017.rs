@@ -5,7 +5,7 @@ use zip::ZipArchive;
 
 pub fn package(path: &Path) -> Result<()> {
     let annotation_dict = ommx::dataset::miplib2017::instance_annotations();
-    log::info!("Input Archive: {}", path.display());
+    tracing::info!("Input Archive: {}", path.display());
     let f = fs::File::open(path).with_context(|| format!("File not found: {path:?}"))?;
     let mut ar = ZipArchive::new(f).with_context(|| format!("Not a ZIP archive: {path:?}"))?;
 
@@ -16,27 +16,27 @@ pub fn package(path: &Path) -> Result<()> {
             continue;
         };
         let Some(annotations) = annotation_dict.get(&name) else {
-            log::warn!("Skip: No metadata found for '{name}'");
+            tracing::warn!("Skip: No metadata found for '{name}'");
             continue;
         };
 
         let Ok(mut builder) = Builder::for_github("Jij-Inc", "ommx", "miplib2017", &name) else {
-            log::warn!("Skip: container already exists for '{name}'");
+            tracing::warn!("Skip: container already exists for '{name}'");
             continue;
         };
 
-        log::info!("Loading: {name}");
+        tracing::info!("Loading: {name}");
         let instance = match ommx::mps::parse(file) {
             Ok(instance) => instance,
             Err(err) => {
-                log::error!("Skip: Failed to load '{name}' with error: {err}");
+                tracing::error!("Skip: Failed to load '{name}' with error: {err}");
                 continue;
             }
         };
         let expected_count = annotations.variables()?;
         let actual_count = instance.decision_variables().len();
         if actual_count != expected_count {
-            log::error!(
+            tracing::error!(
                 "Skip: Variable count mismatch for '{name}': expected {expected_count}, found {actual_count}"
             );
             continue;

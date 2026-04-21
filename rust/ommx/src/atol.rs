@@ -14,15 +14,15 @@ static DEFAULT_ATOL: LazyLock<RwLock<f64>> = LazyLock::new(|| {
         Ok(s) => {
             match s.parse::<f64>() {
                 Ok(v) if v > 0.0 => {
-                    log::info!("Using OMMX_DEFAULT_ATOL environment variable: {v}");
+                    tracing::info!("Using OMMX_DEFAULT_ATOL environment variable: {v}");
                     v
                 }
                 Ok(v) => {
-                    log::warn!("Invalid OMMX_DEFAULT_ATOL value (must be positive): {v}. Using default 1e-6");
+                    tracing::warn!("Invalid OMMX_DEFAULT_ATOL value (must be positive): {v}. Using default 1e-6");
                     1e-6
                 }
                 Err(_) => {
-                    log::warn!(
+                    tracing::warn!(
                         "Invalid OMMX_DEFAULT_ATOL value (not a number): '{s}'. Using default 1e-6"
                     );
                     1e-6
@@ -63,7 +63,7 @@ impl ATol {
             )
         })?;
         *default = atol.into_inner();
-        log::info!("ATol default value changed to: {value}");
+        tracing::info!("ATol default value changed to: {value}");
         Ok(())
     }
 }
