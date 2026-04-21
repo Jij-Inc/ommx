@@ -2184,6 +2184,14 @@ class Instance:
         - For ``=`` indicators, both sides are considered independently: upper
           emitted iff $u > 0$, lower emitted iff $l < 0$.
 
+        When an equality side is skipped, the remaining constraints still enforce
+        the implication correctly because the skipped inequality is already implied
+        by the variable bounds: e.g. $u \leq 0$ together with the emitted lower side
+        forces $f(x) = 0$ at $y = 1$ when $u = 0$, or renders $y = 1$ infeasible
+        when $u < 0$ (correctly reflecting that $f(x) = 0$ has no solution under the
+        given bounds). When both $u = 0$ and $l = 0$, the bound says $f(x) \equiv 0$
+        so the equality is vacuously satisfied and nothing is emitted.
+
         Returns the list of newly created regular constraint IDs in insertion order
         (upper first, then lower). The list is empty when both sides are redundant.
 

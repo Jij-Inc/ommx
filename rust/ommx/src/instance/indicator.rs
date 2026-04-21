@@ -43,6 +43,18 @@ impl Instance {
     /// - For [`Equality::EqualToZero`], both sides are considered independently.
     ///   The upper side is emitted iff $u > 0$ and the lower side iff $l < 0$.
     ///
+    /// When an equality side is skipped, the remaining constraints still enforce the
+    /// implication correctly because the skipped inequality is already implied by the
+    /// variable bounds:
+    /// - If $u \leq 0$, the bound $f(x) \leq u \leq 0$ substitutes for the skipped
+    ///   upper side. If $l < 0$ is also emitted, it gives $f(x) \geq 0$ at $y = 1$,
+    ///   which combined with $f(x) \leq u$ forces $f(x) = 0$ when $u = 0$ or renders
+    ///   $y = 1$ infeasible when $u < 0$ (correctly reflecting that $f(x) = 0$ has no
+    ///   solution under the given bounds).
+    /// - Symmetrically for $l \geq 0$ with the lower side skipped.
+    /// - If both $u = 0$ and $l = 0$, the interval bound says $f(x) \equiv 0$, so the
+    ///   equality holds vacuously for every $y$ and nothing needs to be emitted.
+    ///
     /// Returns the [`ConstraintID`]s of the newly created regular constraints in
     /// insertion order (upper side first if emitted, then lower side).
     ///
@@ -50,6 +62,10 @@ impl Instance {
     /// emitted: `upper` must be finite, and additionally `lower` must be finite for
     /// equality indicators. The instance is not mutated on error — all validation
     /// happens before any constraints are inserted.
+    ///
+    /// If the indicator variable $y$ itself appears in $f(x)$, the interval bound
+    /// treats it as a free binary in $[0, 1]$; the resulting Big-M is still a valid
+    /// (possibly loose) over-approximation and the implication is preserved.
     ///
     /// The original indicator constraint is moved to
     /// [`Instance::removed_indicator_constraints`] with
