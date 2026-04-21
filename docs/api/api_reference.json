@@ -7223,6 +7223,39 @@
               "deprecated": null
             },
             {
+              "name": "convert_all_indicators_to_constraints",
+              "doc": "Convert every active indicator constraint to regular constraints using Big-M.\n\nSee {meth}`~ommx.v1.Instance.convert_indicator_to_constraint` for the\nconversion rule. Returns a dict mapping each original indicator ID to the\nlist of regular constraint IDs it produced.\n\nAtomic: every active indicator is validated up front, and only if every\none is convertible are the conversions applied. If any indicator fails\nvalidation (non-finite bound on a required side), no mutation happens and\nthe instance is left untouched.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "dict[int, list[int]]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "list[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "convert_all_sos1_to_constraints",
               "doc": "Convert every active SOS1 constraint to regular constraints using Big-M.\n\nSee {meth}`~ommx.v1.Instance.convert_sos1_to_constraints` for the conversion\nrule. Returns a dict mapping each original SOS1 ID to the list of regular\nconstraint IDs it produced.\n\nAtomic: every active SOS1 is validated up front, and only if every one is\nconvertible are the conversions applied. If any SOS1 fails validation\n(unsupported kind, non-finite bound, domain excludes 0, etc.), no mutation\nhappens and the instance is left untouched.\n\n# Examples\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable, Sos1Constraint\n>>> x = [DecisionVariable.binary(i) for i in range(4)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={},\n...     sos1_constraints={\n...         1: Sos1Constraint(variables=[0, 1]),\n...         2: Sos1Constraint(variables=[2, 3]),\n...     },\n...     sense=Instance.MINIMIZE,\n... )\n>>> instance.convert_all_sos1_to_constraints()\n{1: [0], 2: [1]}\n>>> instance.sos1_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + x1 - 1 <= 0), 1: Constraint(x2 + x3 - 1 <= 0)}\n```",
               "signatures": [
@@ -7247,6 +7280,38 @@
                             "children": []
                           }
                         ]
+                      }
+                    ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "convert_indicator_to_constraint",
+              "doc": "Convert an indicator constraint to regular constraints using the Big-M method.\n\nAn indicator constraint ``y = 1 → f(x) <= 0`` (or ``= 0``) is encoded with\nupper and lower Big-M sides computed from the interval bounds of $f(x)$:\n\n$$\nf(x) + u y - u \\leq 0, \\qquad -f(x) - l y + l \\leq 0,\n$$\n\nwhere $u \\geq \\sup f(x)$ and $l \\leq \\inf f(x)$ are the upper and lower\nbounds of $f$ over the decision variables' domains.\n\nSide emission:\n\n- For ``<=`` indicators, only the upper side is considered; it is emitted\n  iff $u > 0$. If $u \\leq 0$ the constraint is already implied by the\n  variable bounds and no Big-M is emitted.\n- For ``=`` indicators, both sides are considered independently: upper\n  emitted iff $u > 0$, lower emitted iff $l < 0$.\n\nWhen an equality side is skipped, the remaining constraints still enforce\nthe implication correctly because the skipped inequality is already implied\nby the variable bounds: e.g. $u \\leq 0$ together with the emitted lower side\nforces $f(x) = 0$ at $y = 1$ when $u = 0$, or renders $y = 1$ infeasible\nwhen $u < 0$ (correctly reflecting that $f(x) = 0$ has no solution under the\ngiven bounds). When both $u = 0$ and $l = 0$, the bound says $f(x) \\equiv 0$\nso the equality is vacuously satisfied and nothing is emitted.\n\nReturns the list of newly created regular constraint IDs in insertion order\n(upper first, then lower). The list is empty when both sides are redundant.\n\nRaises if the bound needed for an emitted side is non-finite, or if $f(x)$\nreferences a semi-continuous / semi-integer variable (the split domain\n$\\{0\\} \\cup [l, u]$ is not uniformly implemented, so Big-M conversion could\nsilently drop the upper side when $0 \\notin [l, u]$). The instance is not\nmutated on error.\n\n# Examples\n\nConvert an inequality indicator where the upper side is active:\n\n```python\n>>> from ommx.v1 import (\n...     Instance, DecisionVariable, IndicatorConstraint, Equality,\n... )\n>>> x = DecisionVariable.continuous(0, lower=0.0, upper=5.0)\n>>> y = DecisionVariable.binary(1)\n>>> ic = IndicatorConstraint(\n...     indicator_variable=y,\n...     function=x - 2,\n...     equality=Equality.LessThanOrEqualToZero,\n... )\n>>> instance = Instance.from_components(\n...     decision_variables=[x, y],\n...     objective=x,\n...     constraints={},\n...     indicator_constraints={1: ic},\n...     sense=Instance.MINIMIZE,\n... )\n>>> instance.convert_indicator_to_constraint(1)\n[0]\n>>> instance.indicator_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + 3*x1 - 5 <= 0)}\n```",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "indicator_id",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "list[int]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
                       }
                     ]
                   }
@@ -9020,6 +9085,39 @@
             {
               "name": "removed_constraints_df",
               "doc": "DataFrame of removed constraints",
+              "type_": {
+                "display": "DataFrame",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "removed_indicator_constraints",
+              "doc": "Dict of all removed indicator constraints in the instance keyed by their IDs.",
+              "type_": {
+                "display": "dict[int, RemovedIndicatorConstraint]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "RemovedIndicatorConstraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "removed_indicator_constraints_df",
+              "doc": "DataFrame of removed indicator constraints",
               "type_": {
                 "display": "DataFrame",
                 "link_target": null,
@@ -15762,6 +15860,115 @@
         },
         {
           "kind": "Class",
+          "name": "RemovedIndicatorConstraint",
+          "doc": "A removed indicator constraint together with the reason it was removed.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "constraint",
+              "doc": "",
+              "type_": {
+                "display": "IndicatorConstraint",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "equality",
+              "doc": "",
+              "type_": {
+                "display": "Equality",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "function",
+              "doc": "",
+              "type_": {
+                "display": "Function",
+                "link_target": {
+                  "fqn": "ommx.v1.Function",
+                  "doc_module": "ommx.v1",
+                  "kind": "Class",
+                  "attribute": null
+                },
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "indicator_variable_id",
+              "doc": "",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "removed_reason",
+              "doc": "",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "removed_reason_parameters",
+              "doc": "",
+              "type_": {
+                "display": "dict[str, str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
           "name": "RemovedOneHotConstraint",
           "doc": "A removed one-hot constraint together with the reason it was removed.",
           "bases": [],
@@ -19608,6 +19815,7 @@
     "ommx.v1.Quadratic": "ommx.v1",
     "ommx.v1.Relaxation": "ommx.v1",
     "ommx.v1.RemovedConstraint": "ommx.v1",
+    "ommx.v1.RemovedIndicatorConstraint": "ommx.v1",
     "ommx.v1.RemovedOneHotConstraint": "ommx.v1",
     "ommx.v1.RemovedSos1Constraint": "ommx.v1",
     "ommx.v1.Rng": "ommx.v1",
