@@ -77,11 +77,9 @@ def test_rust_spans_are_forwarded() -> None:
     instance.reduce_capabilities(set())
 
     provider.force_flush()
-    rust_spans = [
-        s for s in exporter.spans if s.name == "Instance::reduce_capabilities"
-    ]
+    rust_spans = [s for s in exporter.spans if s.name == "reduce_capabilities"]
     assert len(rust_spans) >= 1, (
-        "Expected at least one Rust 'Instance::reduce_capabilities' span, "
+        "Expected at least one Rust 'reduce_capabilities' span, "
         f"got: {[s.name for s in exporter.spans]}"
     )
 
@@ -141,10 +139,8 @@ def test_tracing_info_event_captured_on_rust_span() -> None:
     instance.reduce_capabilities(set())
 
     provider.force_flush()
-    rust_spans = [
-        s for s in exporter.spans if s.name == "Instance::reduce_capabilities"
-    ]
-    assert rust_spans, "Instance::reduce_capabilities span was not exported"
+    rust_spans = [s for s in exporter.spans if s.name == "reduce_capabilities"]
+    assert rust_spans, "reduce_capabilities span was not exported"
 
     events_across_spans = [event for s in rust_spans for event in s.events]
     matched = [

@@ -263,7 +263,7 @@ impl Instance {
     /// is **not** atomic across types: earlier conversions are not rolled back
     /// if a later one fails. Callers that need cross-type atomicity should
     /// validate / clone up front.
-    #[tracing::instrument(skip_all, name = "Instance::reduce_capabilities")]
+    #[tracing::instrument(skip_all)]
     pub fn reduce_capabilities(
         &mut self,
         supported: &Capabilities,
