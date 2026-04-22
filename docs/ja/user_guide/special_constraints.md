@@ -106,7 +106,7 @@ assert set(instance_s1.sos1_constraints.keys()) == {0}
 
 ## 制約種別ごとに独立したID空間
 
-OMMX では、通常制約・Indicator・OneHot・SOS1 の4つはそれぞれ**独立したID空間**を持ちます。Rust SDK では `ConstraintID`, `IndicatorConstraintID`, `OneHotConstraintID`, `Sos1ConstraintID` という別の型として定義されており、Python SDK でも {meth}`Instance.from_components <ommx.v1.Instance.from_components>` に渡す4つの dict のキーはそれぞれ別物として扱われます。
+OMMX では、通常制約・Indicator・OneHot・SOS1 の4つはそれぞれ**独立したID空間**を持ちます。{meth}`Instance.from_components <ommx.v1.Instance.from_components>` に渡す4つの dict はそれぞれ独立したキー空間として扱われるため、異なる制約型同士で同じ整数 ID を使っても衝突しません。
 
 したがって、例えば「通常制約 ID=1」と「Indicator 制約 ID=1」は衝突せず、別々の制約として共存できます。
 
@@ -141,7 +141,7 @@ assert set(instance_mix.sos1_constraints.keys()) == {1}
 pip install ommx-pyscipopt-adapter
 ```
 
-PySCIPOpt Adapter は Indicator 制約と SOS1 制約をサポート宣言しており、これらは SCIP の対応する制約（`addConsIndicator` / `addConsSOS1`）にそのまま渡されます。OneHot 制約については宣言がないため、Adapter 内部で通常の等式制約に自動変換されてから SCIP に渡されます（[Adapter Capability モデルと制約変換](./capability_model.md) 参照）。
+PySCIPOpt Adapter は Indicator 制約と SOS1 制約をサポート宣言しています。SOS1 は SCIP の `addConsSOS1` にそのまま渡され、Indicator は `addConsIndicator` に渡されます（等式 Indicator は上下の不等式 Indicator 2本に分解されます）。OneHot 制約については宣言がないため、Adapter 内部で通常の等式制約に自動変換されてから SCIP に渡されます（[Adapter Capability モデルと制約変換](./capability_model.md) 参照）。
 
 ### IndicatorConstraint
 

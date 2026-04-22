@@ -160,7 +160,11 @@ $$
 | Sos1Constraint | {attr}`~ommx.v1.Instance.removed_sos1_constraints` | {attr}`~ommx.v1.Instance.removed_sos1_constraints_df` |
 | IndicatorConstraint | {attr}`~ommx.v1.Instance.removed_indicator_constraints` | {attr}`~ommx.v1.Instance.removed_indicator_constraints_df` |
 
-それぞれのエントリには `reason` 文字列（例: `"ommx.Instance.convert_one_hot_to_constraint"`）と、変換で新しく生成された通常制約の ID が記録されます。
+それぞれのエントリには {attr}`~ommx.v1.RemovedOneHotConstraint.removed_reason` 文字列（例: `"ommx.Instance.convert_one_hot_to_constraint"`）が記録され、{attr}`~ommx.v1.RemovedOneHotConstraint.removed_reason_parameters` に変換で新しく生成された通常制約の ID が格納されます。ID のキー名と形式は制約型ごとに異なります:
+
+- **OneHot**: `constraint_id` キーに単一の ID
+- **SOS1**: `constraint_ids` キーにカンマ区切りの ID リスト
+- **Indicator**: `constraint_ids` キーにカンマ区切りの ID リスト（Big-M 両側が省略された場合は空）
 
 ```{code-cell} ipython3
 removed = instance2.removed_one_hot_constraints
