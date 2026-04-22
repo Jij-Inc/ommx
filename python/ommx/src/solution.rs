@@ -571,6 +571,89 @@ impl Solution {
         )
     }
 
+    /// DataFrame of evaluated one-hot constraints
+    ///
+    /// Columns: id (index), feasible, active_variable, used_ids, name, subscripts, description
+    #[getter]
+    pub fn one_hot_constraints_df<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        entries_to_dataframe(
+            py,
+            self.inner
+                .evaluated_one_hot_constraints()
+                .iter()
+                .map(|(id, c)| (*id, c)),
+            "id",
+        )
+    }
+
+    /// DataFrame of removed one-hot constraint reasons.
+    ///
+    /// Columns: id (index), removed_reason, removed_reason.{key}
+    ///
+    /// Can be joined with {attr}`one_hot_constraints_df` using the `id` index.
+    #[getter]
+    pub fn one_hot_removed_reasons_df<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        use crate::pandas::RemovedReasonEntry;
+        entries_to_dataframe(
+            py,
+            self.inner
+                .evaluated_one_hot_constraints()
+                .removed_reasons()
+                .iter()
+                .map(|(id, reason)| RemovedReasonEntry {
+                    id: id.into_inner(),
+                    reason,
+                }),
+            "id",
+        )
+    }
+
+    /// DataFrame of evaluated SOS1 constraints
+    ///
+    /// Columns: id (index), feasible, active_variable, used_ids, name, subscripts, description
+    #[getter]
+    pub fn sos1_constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
+        entries_to_dataframe(
+            py,
+            self.inner
+                .evaluated_sos1_constraints()
+                .iter()
+                .map(|(id, c)| (*id, c)),
+            "id",
+        )
+    }
+
+    /// DataFrame of removed SOS1 constraint reasons.
+    ///
+    /// Columns: id (index), removed_reason, removed_reason.{key}
+    ///
+    /// Can be joined with {attr}`sos1_constraints_df` using the `id` index.
+    #[getter]
+    pub fn sos1_removed_reasons_df<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        use crate::pandas::RemovedReasonEntry;
+        entries_to_dataframe(
+            py,
+            self.inner
+                .evaluated_sos1_constraints()
+                .removed_reasons()
+                .iter()
+                .map(|(id, reason)| RemovedReasonEntry {
+                    id: id.into_inner(),
+                    reason,
+                }),
+            "id",
+        )
+    }
+
     /// DataFrame of evaluated named functions
     ///
     /// Columns: id (index), value, used_ids, name, subscripts, description, parameters.{key}

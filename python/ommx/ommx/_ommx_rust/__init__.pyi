@@ -3919,6 +3919,38 @@ class SampleSet:
         Can be joined with {attr}`indicator_constraints_df` using the `id` index.
         """
     @property
+    def one_hot_constraints_df(self) -> pandas.DataFrame:
+        r"""
+        DataFrame of one-hot constraints with per-sample feasibility and active_variable columns.
+        Static columns: id, used_ids, name, subscripts, description.
+        Dynamic columns: feasible.{sample_id}, active_variable.{sample_id} for each sample.
+        """
+    @property
+    def one_hot_removed_reasons_df(self) -> pandas.DataFrame:
+        r"""
+        DataFrame of removed one-hot constraint reasons.
+
+        Columns: id (index), removed_reason, removed_reason.{key}
+
+        Can be joined with {attr}`one_hot_constraints_df` using the `id` index.
+        """
+    @property
+    def sos1_constraints_df(self) -> pandas.DataFrame:
+        r"""
+        DataFrame of SOS1 constraints with per-sample feasibility and active_variable columns.
+        Static columns: id, used_ids, name, subscripts, description.
+        Dynamic columns: feasible.{sample_id}, active_variable.{sample_id} for each sample.
+        """
+    @property
+    def sos1_removed_reasons_df(self) -> pandas.DataFrame:
+        r"""
+        DataFrame of removed SOS1 constraint reasons.
+
+        Columns: id (index), removed_reason, removed_reason.{key}
+
+        Can be joined with {attr}`sos1_constraints_df` using the `id` index.
+        """
+    @property
     def named_functions_df(self) -> pandas.DataFrame:
         r"""
         DataFrame of named functions with per-sample value columns.
@@ -4430,6 +4462,38 @@ class Solution:
         Columns: id (index), removed_reason, removed_reason.{key}
 
         Can be joined with {attr}`indicator_constraints_df` using the `id` index.
+        """
+    @property
+    def one_hot_constraints_df(self) -> pandas.DataFrame:
+        r"""
+        DataFrame of evaluated one-hot constraints
+
+        Columns: id (index), feasible, active_variable, used_ids, name, subscripts, description
+        """
+    @property
+    def one_hot_removed_reasons_df(self) -> pandas.DataFrame:
+        r"""
+        DataFrame of removed one-hot constraint reasons.
+
+        Columns: id (index), removed_reason, removed_reason.{key}
+
+        Can be joined with {attr}`one_hot_constraints_df` using the `id` index.
+        """
+    @property
+    def sos1_constraints_df(self) -> pandas.DataFrame:
+        r"""
+        DataFrame of evaluated SOS1 constraints
+
+        Columns: id (index), feasible, active_variable, used_ids, name, subscripts, description
+        """
+    @property
+    def sos1_removed_reasons_df(self) -> pandas.DataFrame:
+        r"""
+        DataFrame of removed SOS1 constraint reasons.
+
+        Columns: id (index), removed_reason, removed_reason.{key}
+
+        Can be joined with {attr}`sos1_constraints_df` using the `id` index.
         """
     @property
     def named_functions_df(self) -> pandas.DataFrame:
