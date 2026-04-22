@@ -160,7 +160,7 @@ $$
 | Sos1Constraint | {attr}`~ommx.v1.Instance.removed_sos1_constraints` | {attr}`~ommx.v1.Instance.removed_sos1_constraints_df` |
 | IndicatorConstraint | {attr}`~ommx.v1.Instance.removed_indicator_constraints` | {attr}`~ommx.v1.Instance.removed_indicator_constraints_df` |
 
-それぞれのエントリには {attr}`~ommx.v1.RemovedOneHotConstraint.removed_reason` 文字列（例: `"ommx.Instance.convert_one_hot_to_constraint"`）が記録され、{attr}`~ommx.v1.RemovedOneHotConstraint.removed_reason_parameters` に変換で新しく生成された通常制約の ID が格納されます。ID のキー名と形式は制約型ごとに異なります:
+それぞれのエントリ（{class}`~ommx.v1.RemovedOneHotConstraint` / {class}`~ommx.v1.RemovedSos1Constraint` / {class}`~ommx.v1.RemovedIndicatorConstraint`）には `removed_reason` 文字列（例: `"ommx.Instance.convert_one_hot_to_constraint"`）が記録され、`removed_reason_parameters` に変換で新しく生成された通常制約の ID が格納されます。ID のキー名と形式は制約型ごとに異なります:
 
 - **OneHot**: `constraint_id` キーに単一の ID
 - **SOS1**: `constraint_ids` キーにカンマ区切りの ID リスト
@@ -191,4 +191,4 @@ for cid, c in instance2.constraints.items():
 | Adapter でサポート機能を宣言する | `ADDITIONAL_CAPABILITIES` クラス属性 |
 | 未サポートの特殊制約を一括で通常制約に変換する | {meth}`Instance.reduce_capabilities <ommx.v1.Instance.reduce_capabilities>` |
 | 個別に通常制約に変換する | `convert_*_to_constraint(s)` / `convert_all_*_to_constraints` |
-| 変換履歴を確認する | `removed_*_constraints` / `*_df` |
+| 変換履歴を確認する | `Instance.removed_*_constraints(_df)` / `Solution.*_removed_reasons_df` |
