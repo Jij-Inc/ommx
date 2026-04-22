@@ -308,3 +308,191 @@ def test_evaluate_with_sos1_infeasible():
     state = State({1: 1.0, 2: 2.0, 3: 0.0})
     solution = instance.evaluate(state)
     assert not solution.feasible
+
+
+def test_solution_one_hot_constraints_df_surfaces_active_variable():
+    """`Solution.one_hot_constraints_df` exposes feasibility and the active variable
+    ID for each one-hot constraint. Feasible case: active_variable is set. Infeasible:
+    active_variable is NA."""
+    import pandas as pd
+
+    x = [DecisionVariable.binary(i) for i in range(1, 4)]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=sum(x),
+        constraints={},
+        one_hot_constraints={10: OneHotConstraint(variables=[1, 2, 3])},
+        sense=Instance.MAXIMIZE,
+    )
+
+    sol_feas = instance.evaluate({1: 0.0, 2: 1.0, 3: 0.0})
+    df_feas = sol_feas.one_hot_constraints_df
+    assert list(df_feas.index) == [10]
+    assert df_feas.loc[10, "feasible"]
+    assert df_feas.loc[10, "active_variable"] == 2
+    assert df_feas.loc[10, "used_ids"] == {1, 2, 3}
+
+    sol_infeas = instance.evaluate({1: 1.0, 2: 1.0, 3: 0.0})
+    df_infeas = sol_infeas.one_hot_constraints_df
+    assert not df_infeas.loc[10, "feasible"]
+    assert pd.isna(df_infeas.loc[10, "active_variable"])
+
+
+def test_solution_sos1_constraints_df_surfaces_active_variable():
+    """`Solution.sos1_constraints_df` exposes feasibility and the active variable
+    ID. All-zero is feasible for SOS1 and active_variable is NA."""
+    import pandas as pd
+
+    x = [DecisionVariable.continuous(i, lower=0, upper=10) for i in range(1, 4)]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=sum(x),
+        constraints={},
+        sos1_constraints={20: Sos1Constraint(variables=[1, 2, 3])},
+        sense=Instance.MINIMIZE,
+    )
+
+    sol_one_active = instance.evaluate({1: 0.0, 2: 5.0, 3: 0.0})
+    df = sol_one_active.sos1_constraints_df
+    assert list(df.index) == [20]
+    assert df.loc[20, "feasible"]
+    assert df.loc[20, "active_variable"] == 2
+
+    sol_all_zero = instance.evaluate({1: 0.0, 2: 0.0, 3: 0.0})
+    df_zero = sol_all_zero.sos1_constraints_df
+    assert df_zero.loc[20, "feasible"]
+    assert pd.isna(df_zero.loc[20, "active_variable"])
+
+
+def test_solution_one_hot_removed_reasons_df_after_conversion():
+    """After `convert_one_hot_to_constraint`, the one-hot appears in
+    `Solution.one_hot_removed_reasons_df` with the conversion reason."""
+    x = [DecisionVariable.binary(i) for i in range(3)]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=sum(x),
+        constraints={},
+        one_hot_constraints={7: OneHotConstraint(variables=[0, 1, 2])},
+        sense=Instance.MINIMIZE,
+    )
+    instance.convert_one_hot_to_constraint(7)
+
+    sol = instance.evaluate({0: 1.0, 1: 0.0, 2: 0.0})
+
+    active_df = sol.one_hot_constraints_df
+    assert list(active_df.index) == [7]
+
+    removed_df = sol.one_hot_removed_reasons_df
+    assert list(removed_df.index) == [7]
+    assert (
+        removed_df.loc[7, "removed_reason"]
+        == "ommx.Instance.convert_one_hot_to_constraint"
+    )
+
+
+def test_solution_sos1_removed_reasons_df_after_conversion():
+    """After `convert_sos1_to_constraints`, the SOS1 constraint appears in
+    `Solution.sos1_removed_reasons_df` with the conversion reason."""
+    x = [DecisionVariable.binary(i) for i in range(3)]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=sum(x),
+        constraints={},
+        sos1_constraints={7: Sos1Constraint(variables=[0, 1, 2])},
+        sense=Instance.MINIMIZE,
+    )
+    new_ids = instance.convert_sos1_to_constraints(7)
+
+    sol = instance.evaluate({0: 1.0, 1: 0.0, 2: 0.0})
+
+    removed_df = sol.sos1_removed_reasons_df
+    assert list(removed_df.index) == [7]
+    assert (
+        removed_df.loc[7, "removed_reason"]
+        == "ommx.Instance.convert_sos1_to_constraints"
+    )
+    assert removed_df.loc[7, "removed_reason.constraint_ids"] == ",".join(
+        str(i) for i in new_ids
+    )
+
+
+def test_sample_set_one_hot_constraints_df_dynamic_columns():
+    """`SampleSet.one_hot_constraints_df` has static metadata columns plus per-sample
+    `feasible.{sample_id}` and `active_variable.{sample_id}` columns."""
+    import pandas as pd
+
+    x = [DecisionVariable.binary(i) for i in range(1, 4)]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=sum(x),
+        constraints={},
+        one_hot_constraints={10: OneHotConstraint(variables=[1, 2, 3])},
+        sense=Instance.MAXIMIZE,
+    )
+    ss = instance.evaluate_samples(
+        {
+            0: {1: 1.0, 2: 0.0, 3: 0.0},  # feasible, active=1
+            1: {1: 1.0, 2: 1.0, 3: 0.0},  # infeasible
+        }
+    )
+
+    df = ss.one_hot_constraints_df
+    assert list(df.index) == [10]
+    assert df.loc[10, "used_ids"] == {1, 2, 3}
+    assert df.loc[10, "feasible.0"]
+    assert df.loc[10, "active_variable.0"] == 1
+    assert not df.loc[10, "feasible.1"]
+    assert pd.isna(df.loc[10, "active_variable.1"])
+
+
+def test_sample_set_sos1_constraints_df_dynamic_columns():
+    """`SampleSet.sos1_constraints_df` mirrors the one-hot shape with per-sample
+    feasibility and active_variable columns."""
+    import pandas as pd
+
+    x = [DecisionVariable.continuous(i, lower=0, upper=10) for i in range(1, 4)]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=sum(x),
+        constraints={},
+        sos1_constraints={20: Sos1Constraint(variables=[1, 2, 3])},
+        sense=Instance.MINIMIZE,
+    )
+    ss = instance.evaluate_samples(
+        {
+            0: {1: 0.0, 2: 3.0, 3: 0.0},  # feasible, active=2
+            1: {1: 0.0, 2: 0.0, 3: 0.0},  # feasible, no active (NA)
+            2: {1: 1.0, 2: 2.0, 3: 0.0},  # infeasible
+        }
+    )
+
+    df = ss.sos1_constraints_df
+    assert list(df.index) == [20]
+    assert df.loc[20, "feasible.0"]
+    assert df.loc[20, "active_variable.0"] == 2
+    assert df.loc[20, "feasible.1"]
+    assert pd.isna(df.loc[20, "active_variable.1"])
+    assert not df.loc[20, "feasible.2"]
+
+
+def test_sample_set_one_hot_removed_reasons_df_after_conversion():
+    """`SampleSet.one_hot_removed_reasons_df` surfaces conversion reasons the same
+    way the Solution variant does."""
+    x = [DecisionVariable.binary(i) for i in range(3)]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=sum(x),
+        constraints={},
+        one_hot_constraints={7: OneHotConstraint(variables=[0, 1, 2])},
+        sense=Instance.MINIMIZE,
+    )
+    instance.convert_one_hot_to_constraint(7)
+
+    ss = instance.evaluate_samples({0: {0: 1.0, 1: 0.0, 2: 0.0}})
+
+    removed_df = ss.one_hot_removed_reasons_df
+    assert list(removed_df.index) == [7]
+    assert (
+        removed_df.loc[7, "removed_reason"]
+        == "ommx.Instance.convert_one_hot_to_constraint"
+    )
