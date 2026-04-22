@@ -102,6 +102,18 @@ impl Constraint {
             .collect()
     }
 
+    /// The chain of transformations that produced this constraint.
+    ///
+    /// Empty for directly-authored constraints. When a special constraint
+    /// (one-hot / SOS1 / indicator) is converted into a regular constraint,
+    /// a {class}`~ommx.v1.Provenance` entry recording the original constraint
+    /// is appended. Older entries come first, newer last; the immediate
+    /// parent is therefore the last element.
+    #[getter]
+    pub fn provenance(&self) -> Vec<crate::Provenance> {
+        crate::provenance_list(&self.0.metadata)
+    }
+
     /// Evaluate the constraint with the given state.
     ///
     /// **Args:**
@@ -337,6 +349,14 @@ impl RemovedConstraint {
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect()
+    }
+
+    /// Get the provenance chain from the underlying constraint.
+    ///
+    /// See {attr}`~ommx.v1.Constraint.provenance` for semantics.
+    #[getter]
+    pub fn provenance(&self) -> Vec<crate::Provenance> {
+        crate::provenance_list(&self.constraint.metadata)
     }
 
     pub fn __repr__(&self) -> String {

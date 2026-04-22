@@ -392,6 +392,15 @@ impl SampleSetBuilder {
         self
     }
 
+    /// Sets the indicator constraints with a full `SampledCollection` (including removed reasons).
+    pub fn indicator_constraints_collection(
+        mut self,
+        indicator_constraints: SampledCollection<IndicatorConstraint>,
+    ) -> Self {
+        self.indicator_constraints = indicator_constraints;
+        self
+    }
+
     /// Sets the one-hot constraints.
     pub fn one_hot_constraints(
         mut self,
@@ -404,6 +413,15 @@ impl SampleSetBuilder {
         self
     }
 
+    /// Sets the one-hot constraints with a full `SampledCollection` (including removed reasons).
+    pub fn one_hot_constraints_collection(
+        mut self,
+        one_hot_constraints: SampledCollection<crate::OneHotConstraint>,
+    ) -> Self {
+        self.one_hot_constraints = one_hot_constraints;
+        self
+    }
+
     /// Sets the SOS1 constraints.
     pub fn sos1_constraints(
         mut self,
@@ -413,6 +431,15 @@ impl SampleSetBuilder {
         >,
     ) -> Self {
         self.sos1_constraints = SampledCollection::new(sos1_constraints, BTreeMap::new());
+        self
+    }
+
+    /// Sets the SOS1 constraints with a full `SampledCollection` (including removed reasons).
+    pub fn sos1_constraints_collection(
+        mut self,
+        sos1_constraints: SampledCollection<crate::Sos1Constraint>,
+    ) -> Self {
+        self.sos1_constraints = sos1_constraints;
         self
     }
 

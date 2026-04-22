@@ -29,6 +29,8 @@ ommx.v1
    _items/ommx.v1.Sos1Constraint
    _items/ommx.v1.RemovedSos1Constraint
    _items/ommx.v1.RemovedConstraint
+   _items/ommx.v1.Provenance
+   _items/ommx.v1.ProvenanceKind
    _items/ommx.v1.NamedFunction
    _items/ommx.v1.EvaluatedDecisionVariable
    _items/ommx.v1.EvaluatedConstraint

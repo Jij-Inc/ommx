@@ -675,6 +675,97 @@ impl SampleSet {
         )
     }
 
+    /// DataFrame of one-hot constraints with per-sample feasibility and active_variable columns.
+    /// Static columns: id, used_ids, name, subscripts, description.
+    /// Dynamic columns: feasible.{sample_id}, active_variable.{sample_id} for each sample.
+    #[getter]
+    pub fn one_hot_constraints_df<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let sample_ids = sorted_sample_ids(&self.inner);
+        entries_to_dataframe(
+            py,
+            self.inner
+                .one_hot_constraints()
+                .iter()
+                .map(|(id, c)| WithSampleIds {
+                    item: (*id, c),
+                    sample_ids: &sample_ids,
+                }),
+            "id",
+        )
+    }
+
+    /// DataFrame of removed one-hot constraint reasons.
+    ///
+    /// Columns: id (index), removed_reason, removed_reason.{key}
+    ///
+    /// Can be joined with {attr}`one_hot_constraints_df` using the `id` index.
+    #[getter]
+    pub fn one_hot_removed_reasons_df<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        use crate::pandas::RemovedReasonEntry;
+        entries_to_dataframe(
+            py,
+            self.inner
+                .one_hot_constraints()
+                .removed_reasons()
+                .iter()
+                .map(|(id, reason)| RemovedReasonEntry {
+                    id: id.into_inner(),
+                    reason,
+                }),
+            "id",
+        )
+    }
+
+    /// DataFrame of SOS1 constraints with per-sample feasibility and active_variable columns.
+    /// Static columns: id, used_ids, name, subscripts, description.
+    /// Dynamic columns: feasible.{sample_id}, active_variable.{sample_id} for each sample.
+    #[getter]
+    pub fn sos1_constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
+        let sample_ids = sorted_sample_ids(&self.inner);
+        entries_to_dataframe(
+            py,
+            self.inner
+                .sos1_constraints()
+                .iter()
+                .map(|(id, c)| WithSampleIds {
+                    item: (*id, c),
+                    sample_ids: &sample_ids,
+                }),
+            "id",
+        )
+    }
+
+    /// DataFrame of removed SOS1 constraint reasons.
+    ///
+    /// Columns: id (index), removed_reason, removed_reason.{key}
+    ///
+    /// Can be joined with {attr}`sos1_constraints_df` using the `id` index.
+    #[getter]
+    pub fn sos1_removed_reasons_df<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        use crate::pandas::RemovedReasonEntry;
+        entries_to_dataframe(
+            py,
+            self.inner
+                .sos1_constraints()
+                .removed_reasons()
+                .iter()
+                .map(|(id, reason)| RemovedReasonEntry {
+                    id: id.into_inner(),
+                    reason,
+                }),
+            "id",
+        )
+    }
+
     /// DataFrame of named functions with per-sample value columns.
     /// Static columns: id, used_ids, name, subscripts, description, parameters.
     /// Dynamic columns: one per sample_id (int) with the function's evaluated value.
