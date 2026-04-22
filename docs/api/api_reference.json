@@ -17369,6 +17369,28 @@
               "is_readonly": true
             },
             {
+              "name": "one_hot_constraints_df",
+              "doc": "DataFrame of one-hot constraints with per-sample feasibility and active_variable columns.\nStatic columns: id, used_ids, name, subscripts, description.\nDynamic columns: feasible.{sample_id}, active_variable.{sample_id} for each sample.",
+              "type_": {
+                "display": "DataFrame",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "one_hot_removed_reasons_df",
+              "doc": "DataFrame of removed one-hot constraint reasons.\n\nColumns: id (index), removed_reason, removed_reason.{key}\n\nCan be joined with {attr}`one_hot_constraints_df` using the `id` index.",
+              "type_": {
+                "display": "DataFrame",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "parameters",
               "doc": "",
               "type_": {
@@ -17470,6 +17492,28 @@
                 ]
               },
               "is_property": true
+            },
+            {
+              "name": "sos1_constraints_df",
+              "doc": "DataFrame of SOS1 constraints with per-sample feasibility and active_variable columns.\nStatic columns: id, used_ids, name, subscripts, description.\nDynamic columns: feasible.{sample_id}, active_variable.{sample_id} for each sample.",
+              "type_": {
+                "display": "DataFrame",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "sos1_removed_reasons_df",
+              "doc": "DataFrame of removed SOS1 constraint reasons.\n\nColumns: id (index), removed_reason, removed_reason.{key}\n\nCan be joined with {attr}`sos1_constraints_df` using the `id` index.",
+              "type_": {
+                "display": "DataFrame",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
             },
             {
               "name": "start",
@@ -19227,6 +19271,28 @@
               "is_readonly": true
             },
             {
+              "name": "one_hot_constraints_df",
+              "doc": "DataFrame of evaluated one-hot constraints\n\nColumns: id (index), feasible, active_variable, used_ids, name, subscripts, description",
+              "type_": {
+                "display": "DataFrame",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "one_hot_removed_reasons_df",
+              "doc": "DataFrame of removed one-hot constraint reasons.\n\nColumns: id (index), removed_reason, removed_reason.{key}\n\nCan be joined with {attr}`one_hot_constraints_df` using the `id` index.",
+              "type_": {
+                "display": "DataFrame",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "optimality",
               "doc": "Get the optimality status",
               "type_": {
@@ -19331,6 +19397,28 @@
                 ]
               },
               "is_property": true
+            },
+            {
+              "name": "sos1_constraints_df",
+              "doc": "DataFrame of evaluated SOS1 constraints\n\nColumns: id (index), feasible, active_variable, used_ids, name, subscripts, description",
+              "type_": {
+                "display": "DataFrame",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "sos1_removed_reasons_df",
+              "doc": "DataFrame of removed SOS1 constraint reasons.\n\nColumns: id (index), removed_reason, removed_reason.{key}\n\nCan be joined with {attr}`sos1_constraints_df` using the `id` index.",
+              "type_": {
+                "display": "DataFrame",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
             },
             {
               "name": "start",

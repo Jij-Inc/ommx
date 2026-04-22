@@ -379,6 +379,106 @@ impl ToPandasEntry
     }
 }
 
+impl ToPandasEntry for (ommx::OneHotConstraintID, &ommx::EvaluatedOneHotConstraint) {
+    fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let (id, c) = self;
+        let na = get_na(py)?;
+        let dict = PyDict::new(py);
+        dict.set_item("id", id.into_inner())?;
+        dict.set_item("feasible", c.stage.feasible)?;
+        match c.stage.active_variable {
+            Some(v) => dict.set_item("active_variable", v.into_inner())?,
+            None => dict.set_item("active_variable", &na)?,
+        }
+        set_used_ids(&dict, &c.stage.used_decision_variable_ids)?;
+        set_metadata(
+            &dict,
+            c.metadata.name.as_deref(),
+            &c.metadata.subscripts,
+            c.metadata.description.as_deref(),
+        )?;
+        Ok(dict)
+    }
+}
+
+impl<'a> ToPandasEntry
+    for WithSampleIds<'a, (ommx::OneHotConstraintID, &'a ommx::SampledOneHotConstraint)>
+{
+    fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let (id, c) = &self.item;
+        let na = get_na(py)?;
+        let dict = PyDict::new(py);
+        dict.set_item("id", id.into_inner())?;
+        set_used_ids(&dict, &c.stage.used_decision_variable_ids)?;
+        set_metadata(
+            &dict,
+            c.metadata.name.as_deref(),
+            &c.metadata.subscripts,
+            c.metadata.description.as_deref(),
+        )?;
+        for &sample_id in self.sample_ids {
+            let feas = c.stage.feasible.get(&sample_id).copied();
+            dict.set_item(format!("feasible.{}", sample_id.into_inner()), feas)?;
+            let active_col = format!("active_variable.{}", sample_id.into_inner());
+            match c.stage.active_variable.get(&sample_id) {
+                Some(Some(v)) => dict.set_item(active_col, v.into_inner())?,
+                _ => dict.set_item(active_col, &na)?,
+            }
+        }
+        Ok(dict)
+    }
+}
+
+impl ToPandasEntry for (ommx::Sos1ConstraintID, &ommx::EvaluatedSos1Constraint) {
+    fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let (id, c) = self;
+        let na = get_na(py)?;
+        let dict = PyDict::new(py);
+        dict.set_item("id", id.into_inner())?;
+        dict.set_item("feasible", c.stage.feasible)?;
+        match c.stage.active_variable {
+            Some(v) => dict.set_item("active_variable", v.into_inner())?,
+            None => dict.set_item("active_variable", &na)?,
+        }
+        set_used_ids(&dict, &c.stage.used_decision_variable_ids)?;
+        set_metadata(
+            &dict,
+            c.metadata.name.as_deref(),
+            &c.metadata.subscripts,
+            c.metadata.description.as_deref(),
+        )?;
+        Ok(dict)
+    }
+}
+
+impl<'a> ToPandasEntry
+    for WithSampleIds<'a, (ommx::Sos1ConstraintID, &'a ommx::SampledSos1Constraint)>
+{
+    fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let (id, c) = &self.item;
+        let na = get_na(py)?;
+        let dict = PyDict::new(py);
+        dict.set_item("id", id.into_inner())?;
+        set_used_ids(&dict, &c.stage.used_decision_variable_ids)?;
+        set_metadata(
+            &dict,
+            c.metadata.name.as_deref(),
+            &c.metadata.subscripts,
+            c.metadata.description.as_deref(),
+        )?;
+        for &sample_id in self.sample_ids {
+            let feas = c.stage.feasible.get(&sample_id).copied();
+            dict.set_item(format!("feasible.{}", sample_id.into_inner()), feas)?;
+            let active_col = format!("active_variable.{}", sample_id.into_inner());
+            match c.stage.active_variable.get(&sample_id) {
+                Some(Some(v)) => dict.set_item(active_col, v.into_inner())?,
+                _ => dict.set_item(active_col, &na)?,
+            }
+        }
+        Ok(dict)
+    }
+}
+
 impl ToPandasEntry for (ommx::OneHotConstraintID, &ommx::OneHotConstraint) {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let (id, one_hot) = self;
