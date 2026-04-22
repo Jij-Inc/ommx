@@ -99,6 +99,8 @@ user_guide/instance
 user_guide/parametric_instance
 user_guide/solution
 user_guide/sample_set
+user_guide/special_constraints
+user_guide/capability_model
 ```
 
 ```{toctree}
