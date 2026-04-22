@@ -70,6 +70,14 @@ pub use state::*;
 
 use pyo3::prelude::*;
 use pyo3_stub_gen::runtime::PyModuleTypeAliasExt;
+use pyo3_tracing_opentelemetry::TracingBridge;
+
+/// Bridge Rust `tracing` spans/events to Python's OpenTelemetry SDK.
+///
+/// Entry points call `TRACING.attach_parent_context(py)` to initialize the
+/// bridge (once per process) and adopt the Python-side trace context so Rust
+/// spans appear as children of the current Python span.
+pub(crate) const TRACING: TracingBridge = TracingBridge::new("ommx");
 
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
@@ -87,8 +95,6 @@ pub fn get_default_atol() -> f64 {
 /// See <https://pyo3.rs/main/free-threading#supporting-free-threaded-python-with-pyo3>.
 #[pymodule(gil_used = false)]
 fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
-    pyo3_log::init();
-
     // OMMX Artifact
     m.add_class::<PyDescriptor>()?;
     m.add_class::<PyArtifact>()?;
