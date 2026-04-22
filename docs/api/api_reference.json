@@ -2561,6 +2561,23 @@
               "is_readonly": true
             },
             {
+              "name": "provenance",
+              "doc": "The chain of transformations that produced this constraint.\n\nEmpty for directly-authored constraints. When a special constraint\n(one-hot / SOS1 / indicator) is converted into a regular constraint,\na {class}`~ommx.v1.Provenance` entry recording the original constraint\nis appended. Older entries come first, newer last; the immediate\nparent is therefore the last element.",
+              "type_": {
+                "display": "list[Provenance]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "Provenance",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "subscripts",
               "doc": "",
               "type_": {
@@ -4754,6 +4771,23 @@
                   },
                   {
                     "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "provenance",
+              "doc": "Get the provenance chain.\n\nSee {attr}`~ommx.v1.Constraint.provenance` for semantics.",
+              "type_": {
+                "display": "list[Provenance]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "Provenance",
                     "link_target": null,
                     "children": []
                   }
@@ -14400,6 +14434,106 @@
         },
         {
           "kind": "Class",
+          "name": "Provenance",
+          "doc": "One step in a regular constraint's transformation history.\n\nWhen a special constraint (indicator / one-hot / SOS1) is converted into a\nregular {class}`~ommx.v1.Constraint` — for example via\n`Instance.convert_one_hot_to_constraint` or `Instance.reduce_capabilities` —\nthe generated constraint records a {class}`Provenance` entry naming the\noriginal special constraint. This lets callers trace a regular constraint\nback to the special constraint it was derived from.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "kind",
+              "doc": "The kind of special constraint this regular constraint was generated from.",
+              "type_": {
+                "display": "ProvenanceKind",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "original_id",
+              "doc": "The ID of the original special constraint (before transformation).",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "ProvenanceKind",
+          "doc": "Kind of constraint from which a regular {class}`~ommx.v1.Constraint` was generated.\n\nSee {class}`~ommx.v1.Provenance` for details.",
+          "bases": [],
+          "methods": [],
+          "attributes": [
+            {
+              "name": "IndicatorConstraint",
+              "doc": "The regular constraint was generated from an indicator constraint.",
+              "type_": null
+            },
+            {
+              "name": "OneHotConstraint",
+              "doc": "The regular constraint was generated from a one-hot constraint.",
+              "type_": null
+            },
+            {
+              "name": "Sos1Constraint",
+              "doc": "The regular constraint was generated from a SOS1 constraint.",
+              "type_": null
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
           "name": "Quadratic",
           "doc": "Quadratic function of decision variables.\n\nA quadratic function has the form: $c_0 + \\sum_i c_i x_i + \\sum_{ij} q_{ij} x_i x_j$\nwhere $x_i$ are decision variables and $c_i$, $q_{ij}$ are coefficients.\n\n# Examples\n\nCreate via DecisionVariable multiplication:\n\n```python\n>>> x = DecisionVariable.integer(1)\n>>> y = DecisionVariable.integer(2)\n>>> q = x * y + 2*x + 3*y + 1\n```\n\nNote that `==`, `<=`, `>=` create Constraint objects:\n\n```python\n>>> constraint = q <= 10  # Returns Constraint\n```",
           "bases": [],
@@ -15820,6 +15954,23 @@
                   },
                   {
                     "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "provenance",
+              "doc": "Get the provenance chain from the underlying constraint.\n\nSee {attr}`~ommx.v1.Constraint.provenance` for semantics.",
+              "type_": {
+                "display": "list[Provenance]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "Provenance",
                     "link_target": null,
                     "children": []
                   }
@@ -17433,6 +17584,23 @@
                 "children": [
                   {
                     "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "provenance",
+              "doc": "Get the provenance chain.\n\nSee {attr}`~ommx.v1.Constraint.provenance` for semantics.",
+              "type_": {
+                "display": "list[Provenance]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "Provenance",
                     "link_target": null,
                     "children": []
                   }
@@ -19835,6 +20003,8 @@
     "ommx.v1.Parameter": "ommx.v1",
     "ommx.v1.ParametricInstance": "ommx.v1",
     "ommx.v1.Polynomial": "ommx.v1",
+    "ommx.v1.Provenance": "ommx.v1",
+    "ommx.v1.ProvenanceKind": "ommx.v1",
     "ommx.v1.Quadratic": "ommx.v1",
     "ommx.v1.Relaxation": "ommx.v1",
     "ommx.v1.RemovedConstraint": "ommx.v1",
