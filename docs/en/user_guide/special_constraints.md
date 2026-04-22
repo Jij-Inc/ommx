@@ -1,4 +1,10 @@
 ---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.19.1
 kernelspec:
   display_name: ommx-update-books (3.9.23)
   language: python
@@ -106,7 +112,7 @@ assert set(instance_oh.removed_one_hot_constraints.keys()) == {0}
 
 ## Sos1Constraint
 
-A **SOS1 (Special Ordered Set type 1)** constraint over a set of variables $\{x_1, \ldots, x_n\}$ requires that **at most one** of them be non-zero. It differs from one-hot in the following ways:
+An **SOS1 (Special Ordered Set type 1)** constraint over a set of variables $\{x_1, \ldots, x_n\}$ requires that **at most one** of them be non-zero. It differs from one-hot in the following ways:
 
 - One-hot requires $\sum x_i = 1$, so exactly one variable is non-zero.
 - SOS1 permits up to one variable to be non-zero (zero variables non-zero is also allowed).

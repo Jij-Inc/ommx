@@ -1,4 +1,10 @@
 ---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.19.1
 kernelspec:
   display_name: ommx-update-books (3.9.23)
   language: python
@@ -103,7 +109,7 @@ Use {meth}`~ommx.v1.Instance.convert_all_one_hots_to_constraints` to convert eve
 
 ### SOS1 → Big-M constraints
 
-{meth}`Instance.convert_sos1_to_constraints(sos1_id) <ommx.v1.Instance.convert_sos1_to_constraints>` rewrites a SOS1 constraint into regular constraints via the Big-M method. For each variable $x_i \in [l_i, u_i]$:
+{meth}`Instance.convert_sos1_to_constraints(sos1_id) <ommx.v1.Instance.convert_sos1_to_constraints>` rewrites an SOS1 constraint into regular constraints via the Big-M method. For each variable $x_i \in [l_i, u_i]$:
 
 1. If $x_i$ is binary with bounds $[0, 1]$, it is reused directly as its own indicator.
 2. Otherwise a fresh binary indicator $y_i$ is introduced, and the pair $x_i - u_i y_i \leq 0$ and $l_i y_i - x_i \leq 0$ is emitted (trivial sides with $u_i = 0$ or $l_i = 0$ are skipped).
