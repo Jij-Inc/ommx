@@ -70,7 +70,8 @@ crate::annotations::impl_instance_annotations!(Instance, "org.ommx.v1.instance")
 #[pymethods]
 impl Instance {
     #[staticmethod]
-    pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
+    pub fn from_bytes(py: Python<'_>, bytes: &Bound<PyBytes>) -> Result<Self> {
+        let _guard = crate::TRACING.attach_parent_context(py);
         Ok(Self {
             inner: ommx::Instance::from_bytes(bytes.as_bytes())?,
             annotations: HashMap::new(),
@@ -376,8 +377,10 @@ impl Instance {
     /// with a non-finite bound).
     pub fn reduce_capabilities(
         &mut self,
+        py: Python<'_>,
         supported: std::collections::HashSet<crate::AdditionalCapability>,
     ) -> anyhow::Result<std::collections::HashSet<crate::AdditionalCapability>> {
+        let _guard = crate::TRACING.attach_parent_context(py);
         let rust_supported: ommx::Capabilities = supported.into_iter().map(|c| c.into()).collect();
         let converted = self.inner.reduce_capabilities(&rust_supported)?;
         Ok(converted.into_iter().map(|c| c.into()).collect())
@@ -539,6 +542,7 @@ impl Instance {
         penalty_weights: Option<HashMap<u64, f64>>,
         inequality_integer_slack_max_range: u64,
     ) -> Result<(Bound<'py, PyDict>, f64)> {
+        let _guard = crate::TRACING.attach_parent_context(py);
         let is_converted = self.as_minimization_problem();
         self.check_no_continuous_variables("QUBO")?;
         self.qubo_hubo_pipeline(
@@ -587,6 +591,7 @@ impl Instance {
         penalty_weights: Option<HashMap<u64, f64>>,
         inequality_integer_slack_max_range: u64,
     ) -> Result<(Bound<'py, PyDict>, f64)> {
+        let _guard = crate::TRACING.attach_parent_context(py);
         let is_converted = self.as_minimization_problem();
         self.check_no_continuous_variables("HUBO")?;
         self.qubo_hubo_pipeline(
@@ -773,7 +778,8 @@ impl Instance {
     ///     ...
     /// ValueError: The state does not contain some required IDs: {VariableID(2)}
     #[pyo3(signature = (state, *, atol=None))]
-    pub fn evaluate(&self, state: State, atol: Option<f64>) -> PyResult<Solution> {
+    pub fn evaluate(&self, py: Python<'_>, state: State, atol: Option<f64>) -> PyResult<Solution> {
+        let _guard = crate::TRACING.attach_parent_context(py);
         let atol = match atol {
             Some(value) => ommx::ATol::new(value)
                 .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?,
@@ -832,7 +838,13 @@ impl Instance {
     /// 1.0
     /// ```
     #[pyo3(signature = (state, *, atol=None))]
-    pub fn partial_evaluate(&self, state: State, atol: Option<f64>) -> PyResult<Self> {
+    pub fn partial_evaluate(
+        &self,
+        py: Python<'_>,
+        state: State,
+        atol: Option<f64>,
+    ) -> PyResult<Self> {
+        let _guard = crate::TRACING.attach_parent_context(py);
         let atol = match atol {
             Some(value) => ommx::ATol::new(value)
                 .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?,
@@ -849,7 +861,13 @@ impl Instance {
     }
 
     #[pyo3(signature = (samples, *, atol=None))]
-    pub fn evaluate_samples(&self, samples: Samples, atol: Option<f64>) -> Result<SampleSet> {
+    pub fn evaluate_samples(
+        &self,
+        py: Python<'_>,
+        samples: Samples,
+        atol: Option<f64>,
+    ) -> Result<SampleSet> {
+        let _guard = crate::TRACING.attach_parent_context(py);
         let atol = match atol {
             Some(value) => ommx::ATol::new(value)?,
             None => ommx::ATol::default(),

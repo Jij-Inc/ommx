@@ -54,6 +54,7 @@ impl ATol {
         self.0.into_inner()
     }
 
+    #[tracing::instrument(skip_all, name = "ATol::set_default")]
     pub fn set_default(value: f64) -> anyhow::Result<()> {
         let atol = Self::new(value)?;
         let mut default = DEFAULT_ATOL.write().map_err(|e| {

@@ -122,7 +122,8 @@ impl PyArtifact {
     ///
     /// ```
     #[staticmethod]
-    pub fn load_archive(path: PathBuf) -> Result<Self> {
+    pub fn load_archive(py: Python<'_>, path: PathBuf) -> Result<Self> {
+        let _guard = crate::TRACING.attach_parent_context(py);
         if path.is_file() {
             let artifact = Artifact::from_oci_archive(&path)?;
             Ok(Self(ArtifactInner::Archive(Mutex::new(artifact))))
@@ -146,7 +147,8 @@ impl PyArtifact {
     /// ```
     #[cfg(feature = "remote-artifact")]
     #[staticmethod]
-    pub fn load(image_name: &str) -> Result<Self> {
+    pub fn load(py: Python<'_>, image_name: &str) -> Result<Self> {
+        let _guard = crate::TRACING.attach_parent_context(py);
         let image_name_parsed = ocipkg::ImageName::parse(image_name)?;
         let local_path = ommx::artifact::get_image_dir(&image_name_parsed);
         if local_path.exists() {
@@ -160,7 +162,8 @@ impl PyArtifact {
 
     /// Push the artifact to remote registry.
     #[cfg(feature = "remote-artifact")]
-    pub fn push(&mut self) -> Result<()> {
+    pub fn push(&mut self, py: Python<'_>) -> Result<()> {
+        let _guard = crate::TRACING.attach_parent_context(py);
         self.0.push()
     }
 
@@ -856,7 +859,8 @@ impl PyArtifactBuilder {
     }
 
     /// Build the artifact.
-    pub fn build(&mut self) -> Result<PyArtifact> {
+    pub fn build(&mut self, py: Python<'_>) -> Result<PyArtifact> {
+        let _guard = crate::TRACING.attach_parent_context(py);
         let inner = self.0.build()?;
         Ok(PyArtifact(inner))
     }

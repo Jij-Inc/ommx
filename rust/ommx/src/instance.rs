@@ -254,14 +254,16 @@ impl Instance {
     /// Returns the set of capabilities that were actually converted. Iteration
     /// order follows [`Capabilities`]'s sorted order (`Indicator`, `OneHot`,
     /// `Sos1`). The set is empty when nothing needed conversion. Each
-    /// conversion is also emitted as an `INFO`-level [`log`] record so it
-    /// surfaces through `pyo3-log` on the Python side.
+    /// conversion is also emitted as an `INFO`-level [`tracing`] event inside
+    /// the `Instance::reduce_capabilities` span so it surfaces through
+    /// `pyo3-tracing-opentelemetry` on the Python side.
     ///
     /// Errors if any underlying conversion fails (e.g. SOS1 / indicator with
     /// non-finite bounds). Each per-type conversion is atomic, but this method
     /// is **not** atomic across types: earlier conversions are not rolled back
     /// if a later one fails. Callers that need cross-type atomicity should
     /// validate / clone up front.
+    #[tracing::instrument(skip_all, name = "Instance::reduce_capabilities")]
     pub fn reduce_capabilities(
         &mut self,
         supported: &Capabilities,

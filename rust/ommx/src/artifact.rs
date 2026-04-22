@@ -179,6 +179,7 @@ impl Artifact<OciArchive> {
     }
 
     #[cfg(feature = "remote-artifact")]
+    #[tracing::instrument(skip_all, name = "Artifact<OciArchive>::push")]
     pub fn push(&mut self) -> Result<Artifact<Remote>> {
         let name = self.get_name()?;
         tracing::info!("Pushing: {name}");
@@ -190,6 +191,7 @@ impl Artifact<OciArchive> {
         Ok(Artifact(OciArtifact::new(out)))
     }
 
+    #[tracing::instrument(skip_all, name = "Artifact<OciArchive>::load")]
     pub fn load(&mut self) -> Result<()> {
         let image_name = self.get_name()?;
         let path = get_image_dir(&image_name);
@@ -210,6 +212,7 @@ impl Artifact<OciDir> {
     }
 
     #[cfg(feature = "remote-artifact")]
+    #[tracing::instrument(skip_all, name = "Artifact<OciDir>::push")]
     pub fn push(&mut self) -> Result<Artifact<Remote>> {
         let name = self.get_name()?;
         tracing::info!("Pushing: {name}");
@@ -221,6 +224,7 @@ impl Artifact<OciDir> {
         Ok(Artifact(OciArtifact::new(out)))
     }
 
+    #[tracing::instrument(skip_all, name = "Artifact<OciDir>::save")]
     pub fn save(&mut self, output: &Path) -> Result<()> {
         if output.exists() {
             bail!("Output file already exists: {}", output.display());
@@ -242,6 +246,7 @@ impl Artifact<Remote> {
         Self::new(artifact)
     }
 
+    #[tracing::instrument(skip_all, name = "Artifact<Remote>::pull")]
     pub fn pull(&mut self) -> Result<Artifact<OciDir>> {
         let image_name = self.get_name()?;
         let path = get_image_dir(&image_name);

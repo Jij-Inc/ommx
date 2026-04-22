@@ -29,7 +29,9 @@ class SolverAdapter(ABC):
     constraint types the adapter does not support are automatically converted
     into regular constraints (Big-M for indicator / SOS1, linear equality for
     one-hot). Conversions mutate ``ommx_instance`` in place and are emitted
-    at ``INFO`` level from the Rust SDK via ``pyo3-log``.
+    at ``INFO`` level as ``tracing`` events from the Rust SDK; configure a
+    Python OpenTelemetry ``TracerProvider`` before the first call to observe
+    them via ``pyo3-tracing-opentelemetry``.
     """
 
     ADDITIONAL_CAPABILITIES: frozenset[AdditionalCapability] = frozenset()
