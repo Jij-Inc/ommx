@@ -255,8 +255,8 @@ impl Instance {
     /// order follows [`Capabilities`]'s sorted order (`Indicator`, `OneHot`,
     /// `Sos1`). The set is empty when nothing needed conversion. Each
     /// conversion is also emitted as an `INFO`-level [`tracing`] event inside
-    /// the `Instance::reduce_capabilities` span so it surfaces through
-    /// `pyo3-tracing-opentelemetry` on the Python side.
+    /// the `reduce_capabilities` span (target `ommx::instance`) so it surfaces
+    /// through `pyo3-tracing-opentelemetry` on the Python side.
     ///
     /// Errors if any underlying conversion fails (e.g. SOS1 / indicator with
     /// non-finite bounds). Each per-type conversion is atomic, but this method

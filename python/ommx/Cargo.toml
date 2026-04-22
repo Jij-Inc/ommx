@@ -40,4 +40,3 @@ pyo3-tracing-opentelemetry.workspace = true
 pyo3.workspace = true
 serde-pyobject.workspace = true
 serde_json.workspace = true
-tracing.workspace = true
