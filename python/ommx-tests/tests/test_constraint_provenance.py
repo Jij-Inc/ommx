@@ -156,3 +156,8 @@ def test_provenance_equality_and_hash():
     assert p1 == p2
     assert ProvenanceKind.OneHotConstraint == ProvenanceKind.OneHotConstraint
     assert ProvenanceKind.OneHotConstraint != ProvenanceKind.Sos1Constraint
+
+    # Equal values must hash equally — required for dict / set correctness.
+    assert hash(p1) == hash(p2)
+    assert {p1, p2} == {p1}
+    assert {p1: "tag"}[p2] == "tag"

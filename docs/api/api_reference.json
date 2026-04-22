@@ -14465,6 +14465,22 @@
               "deprecated": null
             },
             {
+              "name": "__hash__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "__repr__",
               "doc": "",
               "signatures": [

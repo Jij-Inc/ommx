@@ -36,8 +36,8 @@ impl ProvenanceKind {
 /// original special constraint. This lets callers trace a regular constraint
 /// back to the special constraint it was derived from.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass(eq, frozen)]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[pyclass(eq, hash, frozen)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Provenance {
     kind: ProvenanceKind,
     original_id: u64,
