@@ -303,7 +303,7 @@ impl Instance {
                 }
             };
             if converted_any {
-                log::info!(
+                tracing::info!(
                     "reduce_capabilities: {cap:?} is not in supported capabilities; converted to regular constraints"
                 );
                 converted.insert(cap);

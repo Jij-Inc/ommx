@@ -4,13 +4,13 @@ use std::{fs, path::Path};
 use zip::ZipArchive;
 
 pub fn package(path: &Path) -> Result<()> {
-    log::info!("Input Archive: {}", path.display());
+    tracing::info!("Input Archive: {}", path.display());
     let f = fs::File::open(path).with_context(|| format!("File not found: {path:?}"))?;
     let mut ar = ZipArchive::new(f).with_context(|| format!("Not a ZIP archive: {path:?}"))?;
 
     // Load CSV metadata for validation
     let csv_annotations = ommx::dataset::qplib::instance_annotations();
-    log::info!(
+    tracing::info!(
         "Loaded {} QPLIB metadata entries from CSV",
         csv_annotations.len()
     );
@@ -36,23 +36,23 @@ pub fn package(path: &Path) -> Result<()> {
             .ok_or_else(|| anyhow!("Expected QPLIB_ prefix in filename: {}", name))?;
 
         let Ok(mut builder) = Builder::for_github("Jij-Inc", "ommx", "qplib", tag) else {
-            log::warn!("Skip: container already exists for '{name}'");
+            tracing::warn!("Skip: container already exists for '{name}'");
             continue;
         };
 
-        log::info!("Loading: {name}");
+        tracing::info!("Loading: {name}");
 
         let instance = match ommx::qplib::parse(file) {
             Ok(instance) => instance,
             Err(err) => {
-                log::error!("Skip: Failed to parse '{name}': {err}");
+                tracing::error!("Skip: Failed to parse '{name}': {err}");
                 continue;
             }
         };
 
         // Get CSV metadata for this instance, or create basic annotations
         let mut annotations = csv_annotations.get(tag).cloned().unwrap_or_else(|| {
-            log::warn!("No CSV metadata found for instance '{name}', using basic annotations");
+            tracing::warn!("No CSV metadata found for instance '{name}', using basic annotations");
             let mut ann = ommx::artifact::InstanceAnnotations::default();
             ann.set_title(name.clone());
             ann.set_dataset("QPLIB".to_string());
@@ -68,7 +68,7 @@ pub fn package(path: &Path) -> Result<()> {
         annotations.set_variables(nvars);
         annotations.set_constraints(ncons);
 
-        log::info!(
+        tracing::info!(
             "Packaged '{name}': {} variables, {} constraints",
             nvars,
             ncons

@@ -57,13 +57,13 @@ impl Parse for v1::ConstraintHints {
             .into_iter()
             .filter(|hint| {
                 if removed_constraints.contains_key(&hint.id) {
-                    log::debug!(
+                    tracing::debug!(
                         "Discarding OneHot hint referencing removed constraint (id={:?})",
                         hint.id
                     );
                     false
                 } else if !constraints.contains_key(&hint.id) {
-                    log::debug!(
+                    tracing::debug!(
                         "Discarding OneHot hint referencing unknown constraint (id={:?})",
                         hint.id
                     );
@@ -84,7 +84,7 @@ impl Parse for v1::ConstraintHints {
                     .any(|id| removed_constraints.contains_key(id));
 
                 if binary_removed || big_m_removed {
-                    log::debug!(
+                    tracing::debug!(
                         "Discarding Sos1 hint referencing removed constraint (binary_constraint_id={:?}, big_m_constraint_ids={:?})",
                         hint.binary_constraint_id,
                         hint.big_m_constraint_ids
