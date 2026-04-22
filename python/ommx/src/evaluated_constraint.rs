@@ -68,6 +68,14 @@ impl EvaluatedConstraint {
         self.0.metadata.description.clone()
     }
 
+    /// Get the provenance chain.
+    ///
+    /// See {attr}`~ommx.v1.Constraint.provenance` for semantics.
+    #[getter]
+    pub fn provenance(&self) -> Vec<crate::Provenance> {
+        crate::provenance_list(&self.0.metadata)
+    }
+
     /// Get the used decision variable IDs
     #[getter]
     pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
