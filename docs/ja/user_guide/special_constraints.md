@@ -13,13 +13,19 @@ kernelspec:
 
 # 特殊制約型
 
-OMMX は通常の制約（{class}`~ommx.v1.Constraint`、等式・不等式を持つ {class}`~ommx.v1.Function`）に加えて、数理最適化で頻出するいくつかの特殊な制約を第一級の制約型として扱います。本ページでは以下の3種類の特殊制約型の定義と使い方を説明します。
+OMMX は通常の制約（{class}`~ommx.v1.Constraint`、等式・不等式を持つ {class}`~ommx.v1.Function`）に加えて、数理最適化で頻出するいくつかの特殊な制約を第一級の制約型として扱います。本ページでは以下の3種類の特殊制約型の定義と使い方、および PySCIPOpt Adapter を使って実際に解く手順を説明します。
 
 - {class}`~ommx.v1.IndicatorConstraint`: バイナリ変数による条件付き制約
 - {class}`~ommx.v1.OneHotConstraint`: バイナリ変数集合のうち丁度1つが1
 - {class}`~ommx.v1.Sos1Constraint`: 変数集合のうち高々1つが非ゼロ
 
-これらの制約型を通常制約に変換する方法や、ソルバー側の対応状況を扱う Capability モデルについては [Adapter Capability モデルと制約変換](./capability_model.md) を参照してください。
+以下の例では [OMMX Adapterで最適化問題を解く](../tutorial/solve_with_ommx_adapter.md) と同様に PySCIPOpt Adapter を使うので、事前にインストールしてください。
+
+```
+pip install ommx-pyscipopt-adapter
+```
+
+PySCIPOpt Adapter は Indicator と SOS1 をサポート宣言しており、SCIP の `addConsIndicator` / `addConsSOS1` にそのまま渡します（等式 Indicator は上下2本の不等式 Indicator に分解されます）。OneHot はサポート宣言がないため、Adapter 内部で通常の等式制約に自動変換されてから SCIP に渡されます。Adapter 側のサポート宣言や変換の詳細は [Adapter Capability モデルと制約変換](./capability_model.md) を参照してください。
 
 ## IndicatorConstraint
 
@@ -52,6 +58,16 @@ instance = Instance.from_components(
 assert set(instance.indicator_constraints.keys()) == {0}
 ```
 
+PySCIPOpt Adapter は Indicator 制約をサポート宣言しているので、そのまま求解できます。
+
+```{code-cell} ipython3
+from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
+
+solution = OMMXPySCIPOptAdapter.solve(instance)
+# z = 1 で x <= 5 が効くので x の最大値 5 が目的関数値
+assert abs(solution.objective - 5.0) < 1e-6
+```
+
 ## OneHotConstraint
 
 **One-hot 制約** はバイナリ変数の集合 $\{x_1, \ldots, x_n\}$ に対して $\sum_i x_i = 1$、つまり丁度1つだけが $1$ であることを要求します。
@@ -67,14 +83,31 @@ assert oh.variables == [0, 1, 2]
 `variables` に渡す ID のバイナリ変数はインスタンス構築時の `decision_variables` に含まれている必要があります。数学的には通常の等式制約 $x_0 + x_1 + x_2 - 1 = 0$ と等価ですが、first-class の制約として保持することで、対応するソルバー（MIP系ソルバーの多くは one-hot 制約を直接受け付けます）に効率的に渡すことができます。
 
 ```{code-cell} ipython3
+values = [5.0, 10.0, 3.0]
 instance_oh = Instance.from_components(
     decision_variables=xs,
-    objective=sum(xs),
+    objective=sum(v * x for v, x in zip(values, xs)),
     constraints={},
     one_hot_constraints={0: oh},
     sense=Instance.MAXIMIZE,
 )
 assert set(instance_oh.one_hot_constraints.keys()) == {0}
+```
+
+PySCIPOpt Adapter は OneHot をサポート宣言していないため、`solve` の内部で通常の等式制約 $x_0 + x_1 + x_2 - 1 = 0$ に自動変換されてから SCIP に渡されます。
+
+```{code-cell} ipython3
+solution = OMMXPySCIPOptAdapter.solve(instance_oh)
+# 3 つのうち丁度 1 つを選ぶので、最大値 10 をもつ x_1 が選ばれる
+assert abs(solution.objective - 10.0) < 1e-6
+```
+
+`instance_oh` は `solve` によって in-place に書き換わるため、呼び出し後は OneHot 制約が除去され、通常制約へ変換された痕跡が `removed_one_hot_constraints` に残ります。
+
+```{code-cell} ipython3
+assert instance_oh.one_hot_constraints == {}
+assert len(instance_oh.constraints) == 1
+assert set(instance_oh.removed_one_hot_constraints.keys()) == {0}
 ```
 
 ## Sos1Constraint
@@ -102,6 +135,14 @@ instance_s1 = Instance.from_components(
     sense=Instance.MAXIMIZE,
 )
 assert set(instance_s1.sos1_constraints.keys()) == {0}
+```
+
+PySCIPOpt Adapter は SOS1 制約をサポート宣言しているので、そのまま求解できます。
+
+```{code-cell} ipython3
+solution = OMMXPySCIPOptAdapter.solve(instance_s1)
+# 高々 1 つだけが非ゼロなので、1 つを上限 10 にして他を 0 にする
+assert abs(solution.objective - 10.0) < 1e-6
 ```
 
 ## 制約種別ごとに独立したID空間
@@ -132,81 +173,6 @@ assert set(instance_mix.sos1_constraints.keys()) == {1}
 ```
 
 ただし、特殊制約型を通常制約に変換する（[Capability モデルと変換](./capability_model.md) 参照）と、新たに生成される通常制約は **`Constraint` 側の ID 空間**から割り当てられます。変換後に衝突する可能性があるのは通常制約の ID のみです。
-
-## PySCIPOpt で解く
-
-特殊制約を含んだ {class}`~ommx.v1.Instance` を実際に解くには、[OMMX Adapterで最適化問題を解く](../tutorial/solve_with_ommx_adapter.md) と同様に OMMX Adapter を使います。ここでは PySCIPOpt Adapter を例に、3種類の特殊制約をそれぞれ解いてみます。
-
-```
-pip install ommx-pyscipopt-adapter
-```
-
-PySCIPOpt Adapter は Indicator 制約と SOS1 制約をサポート宣言しています。SOS1 は SCIP の `addConsSOS1` にそのまま渡され、Indicator は `addConsIndicator` に渡されます（等式 Indicator は上下の不等式 Indicator 2本に分解されます）。OneHot 制約については宣言がないため、Adapter 内部で通常の等式制約に自動変換されてから SCIP に渡されます（[Adapter Capability モデルと制約変換](./capability_model.md) 参照）。
-
-### IndicatorConstraint
-
-```{code-cell} ipython3
-from ommx.v1 import Instance, DecisionVariable
-from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
-
-b = DecisionVariable.binary(0, name="b")
-x = DecisionVariable.continuous(1, lower=0, upper=10, name="x")
-
-# b = 1 => x <= 3
-instance = Instance.from_components(
-    decision_variables=[b, x],
-    objective=x,
-    constraints={0: b == 1},                          # b を 1 に固定
-    indicator_constraints={0: (x <= 3).with_indicator(b)},
-    sense=Instance.MAXIMIZE,
-)
-solution = OMMXPySCIPOptAdapter.solve(instance)
-# b = 1 が成立しているので制約 x <= 3 が効き、x の最大値 3 が得られる
-assert abs(solution.objective - 3.0) < 1e-6
-```
-
-### OneHotConstraint
-
-```{code-cell} ipython3
-xs = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
-values = [5.0, 10.0, 3.0]
-
-instance = Instance.from_components(
-    decision_variables=xs,
-    objective=sum(v * x for v, x in zip(values, xs)),
-    constraints={},
-    one_hot_constraints={0: OneHotConstraint(variables=[0, 1, 2])},
-    sense=Instance.MAXIMIZE,
-)
-solution = OMMXPySCIPOptAdapter.solve(instance)
-# 3 つのうち丁度 1 つを選ぶので、最大値 10 をもつ x_1 が選ばれる
-assert abs(solution.objective - 10.0) < 1e-6
-```
-
-`solve` の内部で OneHot 制約は通常の等式制約 $x_0 + x_1 + x_2 - 1 = 0$ に自動変換されるため、呼び出し後の `instance` は以下のようになります。
-
-```{code-cell} ipython3
-assert instance.one_hot_constraints == {}
-assert len(instance.constraints) == 1
-assert set(instance.removed_one_hot_constraints.keys()) == {0}
-```
-
-### Sos1Constraint
-
-```{code-cell} ipython3
-ys = [DecisionVariable.continuous(i, lower=0, upper=5, name="y", subscripts=[i]) for i in range(3)]
-
-instance = Instance.from_components(
-    decision_variables=ys,
-    objective=sum(ys),
-    constraints={},
-    sos1_constraints={0: Sos1Constraint(variables=[0, 1, 2])},
-    sense=Instance.MAXIMIZE,
-)
-solution = OMMXPySCIPOptAdapter.solve(instance)
-# 高々 1 つだけが非ゼロなので、1つを上限 5 にして他を 0 にする
-assert abs(solution.objective - 5.0) < 1e-6
-```
 
 ## 評価結果の参照
 
