@@ -312,7 +312,7 @@ class SolverAdapter(ABC):
 - `AdditionalCapability.OneHot`: バイナリ変数集合のうち丁度1つが1
 - `AdditionalCapability.Sos1`: 変数集合のうち高々1つが非ゼロ
 
-`ADDITIONAL_CAPABILITIES` をオーバーライドしない場合、デフォルトでは通常の制約のみが維持され、非標準の制約タイプは全て自動変換されます。`Instance` が現在保持している非標準制約タイプを調べるには {attr}`Instance.required_capabilities <ommx.v1.Instance.required_capabilities>` を使用してください。
+`ADDITIONAL_CAPABILITIES` をオーバーライドしない場合、デフォルトでは通常の制約のみが維持され、特殊制約は全て自動変換されます。`Instance` が現在保持している特殊制約を調べるには {attr}`Instance.required_capabilities <ommx.v1.Instance.required_capabilities>` を使用してください。
 
 ```{important}
 サブクラスは `__init__` メソッドで **必ず** `super().__init__(ommx_instance)` を呼び出してください。これにより、制約の自動変換が有効になります。`Instance` はこの呼び出しで in-place に書き換えられる点に注意してください。

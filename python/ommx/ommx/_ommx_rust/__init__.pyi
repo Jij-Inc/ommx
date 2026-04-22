@@ -38,6 +38,8 @@ __all__ = [
     "Parameters",
     "ParametricInstance",
     "Polynomial",
+    "Provenance",
+    "ProvenanceKind",
     "Quadratic",
     "Relaxation",
     "RemovedConstraint",
@@ -509,6 +511,17 @@ class Constraint:
     def description(self) -> typing.Optional[builtins.str]: ...
     @property
     def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
+    @property
+    def provenance(self) -> builtins.list[Provenance]:
+        r"""
+        The chain of transformations that produced this constraint.
+
+        Empty for directly-authored constraints. When a special constraint
+        (one-hot / SOS1 / indicator) is converted into a regular constraint,
+        a {class}`~ommx.v1.Provenance` entry recording the original constraint
+        is appended. Older entries come first, newer last; the immediate
+        parent is therefore the last element.
+        """
     def __new__(
         cls,
         *,
@@ -893,6 +906,13 @@ class EvaluatedConstraint:
     def description(self) -> typing.Optional[builtins.str]:
         r"""
         Get the description
+        """
+    @property
+    def provenance(self) -> builtins.list[Provenance]:
+        r"""
+        Get the provenance chain.
+
+        See {attr}`~ommx.v1.Constraint.provenance` for semantics.
         """
     @property
     def used_decision_variable_ids(self) -> builtins.set[builtins.int]:
@@ -3434,6 +3454,32 @@ class Polynomial:
         """
 
 @typing.final
+class Provenance:
+    r"""
+    One step in a regular constraint's transformation history.
+
+    When a special constraint (indicator / one-hot / SOS1) is converted into a
+    regular {class}`~ommx.v1.Constraint` — for example via
+    `Instance.convert_one_hot_to_constraint` or `Instance.reduce_capabilities` —
+    the generated constraint records a {class}`Provenance` entry naming the
+    original special constraint. This lets callers trace a regular constraint
+    back to the special constraint it was derived from.
+    """
+    @property
+    def kind(self) -> ProvenanceKind:
+        r"""
+        The kind of special constraint this regular constraint was generated from.
+        """
+    @property
+    def original_id(self) -> builtins.int:
+        r"""
+        The ID of the original special constraint (before transformation).
+        """
+    def __eq__(self, other: builtins.object) -> builtins.bool: ...
+    def __hash__(self) -> builtins.int: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class Quadratic:
     r"""
     Quadratic function of decision variables.
@@ -3592,6 +3638,13 @@ class RemovedConstraint:
     def parameters(self) -> builtins.dict[builtins.str, builtins.str]:
         r"""
         Get the parameters from the underlying constraint
+        """
+    @property
+    def provenance(self) -> builtins.list[Provenance]:
+        r"""
+        Get the provenance chain from the underlying constraint.
+
+        See {attr}`~ommx.v1.Constraint.provenance` for semantics.
         """
     def __new__(
         cls,
@@ -3919,6 +3972,38 @@ class SampleSet:
         Can be joined with {attr}`indicator_constraints_df` using the `id` index.
         """
     @property
+    def one_hot_constraints_df(self) -> pandas.DataFrame:
+        r"""
+        DataFrame of one-hot constraints with per-sample feasibility and active_variable columns.
+        Static columns: id, used_ids, name, subscripts, description.
+        Dynamic columns: feasible.{sample_id}, active_variable.{sample_id} for each sample.
+        """
+    @property
+    def one_hot_removed_reasons_df(self) -> pandas.DataFrame:
+        r"""
+        DataFrame of removed one-hot constraint reasons.
+
+        Columns: id (index), removed_reason, removed_reason.{key}
+
+        Can be joined with {attr}`one_hot_constraints_df` using the `id` index.
+        """
+    @property
+    def sos1_constraints_df(self) -> pandas.DataFrame:
+        r"""
+        DataFrame of SOS1 constraints with per-sample feasibility and active_variable columns.
+        Static columns: id, used_ids, name, subscripts, description.
+        Dynamic columns: feasible.{sample_id}, active_variable.{sample_id} for each sample.
+        """
+    @property
+    def sos1_removed_reasons_df(self) -> pandas.DataFrame:
+        r"""
+        DataFrame of removed SOS1 constraint reasons.
+
+        Columns: id (index), removed_reason, removed_reason.{key}
+
+        Can be joined with {attr}`sos1_constraints_df` using the `id` index.
+        """
+    @property
     def named_functions_df(self) -> pandas.DataFrame:
         r"""
         DataFrame of named functions with per-sample value columns.
@@ -4051,6 +4136,13 @@ class SampledConstraint:
     def description(self) -> typing.Optional[builtins.str]:
         r"""
         Get the description
+        """
+    @property
+    def provenance(self) -> builtins.list[Provenance]:
+        r"""
+        Get the provenance chain.
+
+        See {attr}`~ommx.v1.Constraint.provenance` for semantics.
         """
     @property
     def used_decision_variable_ids(self) -> builtins.set[builtins.int]:
@@ -4432,6 +4524,38 @@ class Solution:
         Can be joined with {attr}`indicator_constraints_df` using the `id` index.
         """
     @property
+    def one_hot_constraints_df(self) -> pandas.DataFrame:
+        r"""
+        DataFrame of evaluated one-hot constraints
+
+        Columns: id (index), feasible, active_variable, used_ids, name, subscripts, description
+        """
+    @property
+    def one_hot_removed_reasons_df(self) -> pandas.DataFrame:
+        r"""
+        DataFrame of removed one-hot constraint reasons.
+
+        Columns: id (index), removed_reason, removed_reason.{key}
+
+        Can be joined with {attr}`one_hot_constraints_df` using the `id` index.
+        """
+    @property
+    def sos1_constraints_df(self) -> pandas.DataFrame:
+        r"""
+        DataFrame of evaluated SOS1 constraints
+
+        Columns: id (index), feasible, active_variable, used_ids, name, subscripts, description
+        """
+    @property
+    def sos1_removed_reasons_df(self) -> pandas.DataFrame:
+        r"""
+        DataFrame of removed SOS1 constraint reasons.
+
+        Columns: id (index), removed_reason, removed_reason.{key}
+
+        Can be joined with {attr}`sos1_constraints_df` using the `id` index.
+        """
+    @property
     def named_functions_df(self) -> pandas.DataFrame:
         r"""
         DataFrame of evaluated named functions
@@ -4765,6 +4889,29 @@ class Optimality(enum.Enum):
         """
     def __repr__(self) -> builtins.str: ...
     def __str__(self) -> builtins.str: ...
+
+@typing.final
+class ProvenanceKind(enum.Enum):
+    r"""
+    Kind of constraint from which a regular {class}`~ommx.v1.Constraint` was generated.
+
+    See {class}`~ommx.v1.Provenance` for details.
+    """
+
+    IndicatorConstraint = ...
+    r"""
+    The regular constraint was generated from an indicator constraint.
+    """
+    OneHotConstraint = ...
+    r"""
+    The regular constraint was generated from a one-hot constraint.
+    """
+    Sos1Constraint = ...
+    r"""
+    The regular constraint was generated from a SOS1 constraint.
+    """
+
+    def __repr__(self) -> builtins.str: ...
 
 @typing.final
 class Relaxation(enum.Enum):

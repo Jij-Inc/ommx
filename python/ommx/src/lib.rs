@@ -23,6 +23,7 @@ mod parameter;
 mod parameters;
 mod parametric_instance;
 mod polynomial;
+mod provenance;
 mod quadratic;
 mod random;
 mod sample_set;
@@ -55,6 +56,7 @@ pub use parameter::*;
 pub use parameters::*;
 pub use parametric_instance::*;
 pub use polynomial::*;
+pub use provenance::*;
 pub use quadratic::*;
 pub use random::*;
 pub use sample_set::*;
@@ -117,6 +119,8 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<RemovedSos1Constraint>()?;
     m.add_class::<NamedFunction>()?;
     m.add_class::<RemovedConstraint>()?;
+    m.add_class::<Provenance>()?;
+    m.add_class::<ProvenanceKind>()?;
     m.add_class::<ParametricInstance>()?;
     m.add_class::<Parameters>()?;
     m.add_class::<Solution>()?;
@@ -187,6 +191,8 @@ pyo3_stub_gen::reexport_module_members!("ommx.v1" from "ommx._ommx_rust";
     "Sos1Constraint",
     "RemovedSos1Constraint",
     "RemovedConstraint",
+    "Provenance",
+    "ProvenanceKind",
     "NamedFunction",
     // Evaluated types
     "EvaluatedDecisionVariable",

@@ -4,78 +4,65 @@
 Python SDK 3.0.0 contains breaking API changes. A migration guide is available in the [Python SDK v2 to v3 Migration Guide](https://github.com/Jij-Inc/ommx/blob/main/PYTHON_SDK_MIGRATION_GUIDE.md).
 ```
 
-## Unreleased
+## 3.0.0 Alpha 2
 
-### Indicator Constraint support ([#789](https://github.com/Jij-Inc/ommx/pull/789), [#790](https://github.com/Jij-Inc/ommx/pull/790), [#795](https://github.com/Jij-Inc/ommx/pull/795), [#796](https://github.com/Jij-Inc/ommx/pull/796))
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0a2-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0a2)
 
-{class}`~ommx.v1.IndicatorConstraint` is now a first-class feature in OMMX. An indicator constraint expresses a conditional relationship: a constraint `f(x) <= 0` (or `f(x) = 0`) is enforced only when a user-defined binary indicator variable `z = 1`. When `z = 0`, the constraint is unconditionally satisfied.
+See the GitHub Release above for full details. The following summarizes the main changes. This is a pre-release version. APIs may change before the final release.
 
-Use {meth}`Constraint.with_indicator() <ommx.v1.Constraint.with_indicator>` to create an {class}`~ommx.v1.IndicatorConstraint` from an existing constraint. The PySCIPOpt Adapter converts these into SCIP's [`addConsIndicator`](https://pyscipopt.readthedocs.io/en/latest/api/model.html#pyscipopt.scip.Model.addConsIndicator):
+### ⚠ Removal of the `Constraint.id` field ([#806](https://github.com/Jij-Inc/ommx/pull/806))
+
+The `id` field (along with the `.id` getter, `set_id()`, and `id=` constructor argument) is removed from {class}`~ommx.v1.Constraint` and its variants ({class}`~ommx.v1.IndicatorConstraint` / {class}`~ommx.v1.OneHotConstraint` / {class}`~ommx.v1.Sos1Constraint` / {class}`~ommx.v1.EvaluatedConstraint` / {class}`~ommx.v1.SampledConstraint` / {class}`~ommx.v1.RemovedConstraint`). A constraint's ID now exists only as the key of the `dict[int, Constraint]` passed to {meth}`Instance.from_components <ommx.v1.Instance.from_components>`.
 
 ```python
-from ommx.v1 import DecisionVariable, Instance
-from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
+# Before (2.5.1)
+c = Constraint(function=x + y, equality=Constraint.EQUAL_TO_ZERO, id=5)
+Instance.from_components(..., constraints=[c], ...)
 
-b = DecisionVariable.binary(0)
-x = DecisionVariable.continuous(1, lower=0, upper=10)
-
-# b = 1 → x <= 5
-ic = (x <= 5).with_indicator(b)
-
-instance = Instance.from_components(
-    decision_variables=[b, x],
-    objective=x,
-    constraints=[b >= 1],  # Force b = 1
-    indicator_constraints=[ic],
-    sense=Instance.MAXIMIZE,
-)
-
-solution = OMMXPySCIPOptAdapter.solve(instance)
-assert abs(solution.objective - 5.0) < 1e-6
+# After (3.0.0a2)
+c = Constraint(function=x + y, equality=Constraint.EQUAL_TO_ZERO)
+Instance.from_components(..., constraints={5: c}, ...)
 ```
 
-#### Evaluation results
+Global ID counters (`next_constraint_id` and friends) and per-constraint `to_bytes` / `from_bytes` are also removed. For full details and migration steps, see the [Python SDK v2 to v3 Migration Guide](https://github.com/Jij-Inc/ommx/blob/main/PYTHON_SDK_MIGRATION_GUIDE.md).
 
-After solving, {class}`~ommx.v1.Solution` and {class}`~ommx.v1.SampleSet` provide DataFrames for indicator constraints:
+### 🆕 First-class special constraint types ([#789](https://github.com/Jij-Inc/ommx/pull/789), [#790](https://github.com/Jij-Inc/ommx/pull/790), [#795](https://github.com/Jij-Inc/ommx/pull/795), [#796](https://github.com/Jij-Inc/ommx/pull/796), [#798](https://github.com/Jij-Inc/ommx/pull/798))
 
-- {attr}`Solution.indicator_constraints_df <ommx.v1.Solution.indicator_constraints_df>` — columns: id, indicator_variable_id, equality, value, indicator_active, used_ids, name, subscripts, description
-- {attr}`Solution.indicator_removed_reasons_df <ommx.v1.Solution.indicator_removed_reasons_df>` — removal reasons for relaxed indicator constraints
-- {attr}`SampleSet.indicator_constraints_df <ommx.v1.SampleSet.indicator_constraints_df>` / {attr}`SampleSet.indicator_removed_reasons_df <ommx.v1.SampleSet.indicator_removed_reasons_df>` — per-sample versions
+In addition to regular constraints, the following three special constraint types are now first-class citizens — they can be passed to `Instance.from_components` via `indicator_constraints=` / `one_hot_constraints=` / `sos1_constraints=`, and corresponding `*_constraints_df` DataFrames are available on {class}`~ommx.v1.Solution` / {class}`~ommx.v1.SampleSet`.
 
-The `indicator_active` column disambiguates between "the indicator was OFF (constraint trivially satisfied)" and "the indicator was ON and the constraint was satisfied." Note that indicator constraints do not have dual variables, as dual values are not well-defined for conditional constraints.
+- {class}`~ommx.v1.IndicatorConstraint` — conditional constraint on a binary variable (new)
+- {class}`~ommx.v1.OneHotConstraint` — replaces the previous `ConstraintHints.OneHot` metadata
+- {class}`~ommx.v1.Sos1Constraint` — replaces the previous `ConstraintHints.Sos1` metadata
 
-#### Relax and restore
+For concrete usage, evaluation-result access, and the Indicator relax / restore workflow, see [Special Constraints](../user_guide/special_constraints.md).
 
-Indicator constraints support the same relax/restore workflow as regular constraints:
+Accordingly, the legacy `ConstraintHints` / `OneHot` / `Sos1` classes, the `Instance.constraint_hints` property, and the PySCIPOpt Adapter's `use_sos1` flag are removed.
 
-- {meth}`Instance.relax_indicator_constraint() <ommx.v1.Instance.relax_indicator_constraint>` — relax (deactivate) an indicator constraint with a reason
-- {meth}`Instance.restore_indicator_constraint() <ommx.v1.Instance.restore_indicator_constraint>` — restore a previously relaxed indicator constraint, with safety checks (fails if the indicator variable was substituted or fixed)
+### ⚠ `removed_reason` column split into a separate table ([#796](https://github.com/Jij-Inc/ommx/pull/796))
 
-#### {attr}`~ommx.v1.Solution.removed_reasons_df` separation
-
-As part of this work, `removed_reason` is no longer a column in {attr}`~ommx.v1.Solution.constraints_df`. Instead, {attr}`~ommx.v1.Solution.removed_reasons_df` is available as a separate table on both {class}`~ommx.v1.Solution` and {class}`~ommx.v1.SampleSet`, which can be joined with {attr}`~ommx.v1.Solution.constraints_df`:
+In v2.5.1 {attr}`Solution.constraints_df <ommx.v1.Solution.constraints_df>` carried a `removed_reason` column. In v3.0.0a2 that column is split out into a separate {attr}`Solution.removed_reasons_df <ommx.v1.Solution.removed_reasons_df>` table, which you can join on if you need the previous shape. The same change applies to {class}`~ommx.v1.SampleSet`.
 
 ```python
-# Regular constraints
+# Before (2.5.1)
+df = solution.constraints_df  # contains a 'removed_reason' column
+
+# After (3.0.0a2)
 df = solution.constraints_df.join(solution.removed_reasons_df)
-
-# Indicator constraints
-df = solution.indicator_constraints_df.join(solution.indicator_removed_reasons_df)
 ```
 
-### Adapter Capability model ([#790](https://github.com/Jij-Inc/ommx/pull/790), [#814](https://github.com/Jij-Inc/ommx/pull/814))
+Corresponding `*_removed_reasons_df` accessors are also provided for Indicator, OneHot, and SOS1.
 
-As specialized constraint types (such as {class}`~ommx.v1.IndicatorConstraint`) are added and support varies across solvers, an Adapter Capability model has been introduced. Adapters declare their supported capabilities via `ADDITIONAL_CAPABILITIES`, and {meth}`Instance.reduce_capabilities() <ommx.v1.Instance.reduce_capabilities>` converts any constraint type outside that set into regular constraints (Big-M for indicator / SOS1, linear equality for one-hot) before solving. Callers can inspect {attr}`Instance.required_capabilities <ommx.v1.Instance.required_capabilities>` to see which non-standard types an instance currently carries.
+### 🆕 Adapter Capability Model ([#790](https://github.com/Jij-Inc/ommx/pull/790), [#805](https://github.com/Jij-Inc/ommx/pull/805), [#810](https://github.com/Jij-Inc/ommx/pull/810), [#811](https://github.com/Jij-Inc/ommx/pull/811), [#814](https://github.com/Jij-Inc/ommx/pull/814))
 
-```python
-from ommx.v1 import AdditionalCapability
-from ommx.adapter import SolverAdapter
+Alongside the special constraint types, adapters now declare their own supported capabilities via an `ADDITIONAL_CAPABILITIES` class attribute. When `super().__init__(instance)` is called, any undeclared special constraint is automatically converted to regular constraints (Big-M for Indicator / SOS1, linear equality for OneHot) before the instance reaches the solver.
 
-class MySolverAdapter(SolverAdapter):
-    ADDITIONAL_CAPABILITIES = frozenset({AdditionalCapability.Indicator})
-```
+**Existing OMMX Adapters must be updated for Python SDK 3.0.0 to call `super().__init__(instance)`.** Currently the PySCIPOpt Adapter declares support for Indicator and SOS1.
 
-Currently, the PySCIPOpt Adapter declares indicator and SOS1 support. **Each OMMX Adapter will need changes to support Python SDK 3.0.0** — specifically, calling `super().__init__(instance)` so that unsupported capabilities are converted automatically.
+For details and the manual conversion APIs, see [Adapter Capability Model and Conversions](../user_guide/capability_model.md).
+
+### 🔄 numpy scalar support ([#794](https://github.com/Jij-Inc/ommx/pull/794))
+
+The {class}`~ommx.v1.Function` constructor now accepts `numpy.integer` and `numpy.floating` values. In v2.5.1, `Function(numpy.int64(3))` raised `TypeError`.
 
 ## 3.0.0 Alpha 1
 

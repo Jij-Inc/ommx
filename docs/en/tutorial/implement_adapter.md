@@ -316,7 +316,7 @@ Each adapter must declare which constraint types it supports via the `ADDITIONAL
 - `AdditionalCapability.OneHot`: Exactly one of a set of binary variables is 1
 - `AdditionalCapability.Sos1`: At most one of a set of variables is non-zero
 
-If the adapter does not override `ADDITIONAL_CAPABILITIES`, only standard constraints are kept and all non-standard types are converted automatically. Use {attr}`Instance.required_capabilities <ommx.v1.Instance.required_capabilities>` to inspect which non-standard types an instance currently holds.
+If the adapter does not override `ADDITIONAL_CAPABILITIES`, only regular constraints are kept and every special constraint type is converted automatically. Use {attr}`Instance.required_capabilities <ommx.v1.Instance.required_capabilities>` to inspect which special constraints an instance currently holds.
 
 ```{important}
 Subclasses **must** call `super().__init__(ommx_instance)` in their `__init__` method to enable the automatic constraint conversion. The instance is mutated in place.
