@@ -171,7 +171,17 @@ removed = instance2.removed_one_hot_constraints
 assert set(removed.keys()) == {1}
 ```
 
-さらに、各変換で生成された通常制約には `Provenance::OneHotConstraint(original_id)` のようなプロヴェナンス情報がメタデータに記録されます。したがって、得られた通常制約がどの特殊制約型から変換されて来たかを後から辿ることができます。
+さらに、各変換で生成された通常制約は {attr}`Constraint.provenance <ommx.v1.Constraint.provenance>` プロパティで変換元の情報を保持します。各 {class}`~ommx.v1.Provenance` エントリは変換元の種別を表す {attr}`~ommx.v1.Provenance.kind`（{class}`~ommx.v1.ProvenanceKind`）と元の ID {attr}`~ommx.v1.Provenance.original_id` を持つので、得られた通常制約がどの特殊制約型の何番から変換されたかを後から辿ることができます。
+
+```{code-cell} ipython3
+from ommx.v1 import ProvenanceKind
+
+# 先ほど convert_one_hot_to_constraint(1) で生成された通常制約
+for cid, c in instance2.constraints.items():
+    for p in c.provenance:
+        assert p.kind == ProvenanceKind.OneHotConstraint
+        assert p.original_id == 1
+```
 
 ## まとめ
 
