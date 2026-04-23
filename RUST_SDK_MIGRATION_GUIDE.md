@@ -254,14 +254,12 @@ The crate now returns a single error type across its public API:
 ```rust
 // ❌ Before (v2): a mix of anyhow::Result, thiserror enums, and one-off error types
 fn some_public_api() -> Result<Instance, InstanceError> { ... }
-fn other_api() -> anyhow::Result<()> { ... }
 
-// ✅ After (v3): one Result alias
+// ✅ After (v3): no domain-specific enum on the public surface
 fn some_public_api() -> ommx::Result<Instance> { ... }
-fn other_api() -> ommx::Result<()> { ... }
 ```
 
-`ommx::Error` and `ommx::Result` are re-exports of `anyhow::Error` and `anyhow::Result`, so:
+`ommx::Error` and `ommx::Result` are re-exports of `anyhow::Error` and `anyhow::Result`, so `anyhow::Result<T>` and `ommx::Result<T>` are the same type — the v3 change deleted the domain-specific enums, not the anyhow alias. Prefer `ommx::Result<T>` in new code so the crate name is visible on the API surface, but there is no reason to rewrite existing `anyhow::Result<T>` signatures. Equivalently:
 
 ```rust
 // These still work
