@@ -1,40 +1,38 @@
 """``%%ommx_trace`` cell magic implementation.
 
-Registered via ``%load_ext ommx.tracing``. The magic wraps cell execution
-in a single OTel root span, asks :class:`._collector._CellSpanCollector`
-to stash only that trace's spans, and displays the result as HTML.
+Registered via ``%load_ext ommx.tracing``. The magic is a thin wrapper
+around :class:`._capture.capture_trace`: it opens a ``capture_trace``
+block named ``ommx_trace_cell``, executes the cell body through
+``InteractiveShell.run_cell`` so the full IPython pipeline (input
+transforms, top-level ``await``, line magics) applies, and renders
+the collected trace as HTML.
 
-Cell-body execution goes through :meth:`InteractiveShell.run_cell` so
-the full IPython pipeline — input transforms, top-level ``await``, line
-magics, cell-input cleanups — behaves the way it would in an untraced
-cell. The point is that ``%%ommx_trace`` should be observational: a
-user removes the magic, the cell body still does the same thing.
+The only cell-magic-specific extras are:
 
-Re-raising without a double traceback is slightly delicate. ``run_cell``
-catches exceptions internally and calls ``shell.showtraceback()`` before
-returning; if we then re-raise the captured exception, the *outer*
-``run_cell`` (the one that invoked our magic) prints it a second time.
-We work around that by temporarily pointing ``shell.showtraceback`` at
-a no-op during the inner call, so the traceback is shown exactly once —
-by the outer ``run_cell`` when our re-raise reaches it.
+* We suppress ``run_cell``'s inbuilt ``showtraceback`` for the inner
+  call so the *outer* ``run_cell`` (which invoked the magic) prints
+  the traceback exactly once after our re-raise.
+* We re-raise the cell's exception so notebook automation
+  (``nbconvert --execute``, papermill, pytest-nbval, …) still sees
+  traced cells fail when the user code raised.
+
+Everything else (fresh trace context, active-trace collector gating,
+HTML rendering with the ``[ERROR]`` marker) comes from
+``capture_trace`` / ``_render``.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional, Tuple
 
-from opentelemetry import context as otel_context
-from opentelemetry import trace
-
+from ._capture import capture_trace
 from ._render import render_cell_output_html
-from ._setup import ensure_collector_installed
 
 
 if TYPE_CHECKING:  # pragma: no cover - type hints only
     from IPython.core.interactiveshell import InteractiveShell
 
 
-_CELL_TRACER_NAME = "ommx.tracing.cell"
 _CELL_ROOT_SPAN_NAME = "ommx_trace_cell"
 
 
@@ -42,69 +40,60 @@ def run_cell_with_trace(
     shell: "InteractiveShell",
     cell: str,
 ) -> Tuple[str, Optional[BaseException]]:
-    """Execute ``cell`` inside a fresh ``ommx_trace_cell`` root span.
+    """Execute ``cell`` inside an ``ommx_trace_cell`` root span.
 
     Returns ``(html_blob, error)`` where ``html_blob`` is the rendered
-    trace output (always produced, even if the cell raised) and
+    trace HTML (always produced, even if the cell raised) and
     ``error`` is the exception raised during execution or ``None``.
     Splitting rendering from re-raise keeps the function testable
-    without driving IPython's display machinery; the magic entry point
-    (:func:`register_magic`) is what actually re-raises.
-
-    The root span is started with an explicit empty OTel ``Context`` so
-    the cell's ``trace_id`` is always fresh, detached from any ambient
-    span that might be in scope. Without that detach, an ambient span
-    installed by an unrelated extension would share a ``trace_id`` with
-    the cell, and the collector — which keys captures by ``trace_id`` —
-    would pull unrelated spans into the cell's output.
+    without driving IPython's display machinery; the magic entry
+    point (:func:`register_magic`) is what actually re-raises.
     """
-    collector = ensure_collector_installed()
-    tracer = trace.get_tracer(_CELL_TRACER_NAME)
-
     cell_exc: Optional[BaseException] = None
-    trace_id: Optional[int] = None
-    try:
-        with tracer.start_as_current_span(
-            _CELL_ROOT_SPAN_NAME,
-            # ``context=Context()`` detaches from whatever context is
-            # currently active, forcing a brand-new trace. Without this
-            # the cell would inherit an ambient span's trace_id and the
-            # collector's capture window would pull in unrelated spans.
-            context=otel_context.Context(),
-        ) as root:
-            trace_id = root.get_span_context().trace_id
-            collector.begin_capture(trace_id)
+    with capture_trace(_CELL_ROOT_SPAN_NAME) as trace_result:
+        # Suppress the inner ``showtraceback``: ``run_cell`` calls it
+        # unconditionally on error, but the outer ``run_cell`` will
+        # also call it once our re-raise reaches it, and we don't
+        # want the traceback printed twice.
+        original_showtraceback = shell.showtraceback
+        shell.showtraceback = lambda *args, **kwargs: None
+        try:
+            result = shell.run_cell(cell, store_history=False)
+        finally:
+            shell.showtraceback = original_showtraceback
 
-            # Suppress the inner ``showtraceback``: ``run_cell`` calls
-            # it unconditionally on error, but the outer ``run_cell``
-            # will also call it once our re-raise reaches it, and we
-            # don't want the traceback printed twice.
-            original_showtraceback = shell.showtraceback
-            shell.showtraceback = lambda *args, **kwargs: None
-            try:
-                result = shell.run_cell(cell, store_history=False)
-            finally:
-                shell.showtraceback = original_showtraceback
-            # Both parse-time and runtime errors are surfaced.
-            # ``error_before_exec`` is typed as ``BaseException | True |
-            # None`` in IPython's stubs (``True`` was a legacy sentinel)
-            # so narrow through ``isinstance`` before handing it back.
-            err_before = result.error_before_exec
-            cell_exc = (
-                err_before
-                if isinstance(err_before, BaseException)
-                else result.error_in_exec
-            )
-    finally:
-        # Call ``end_capture`` *after* the ``with`` block exits so the
-        # root span's ``on_end`` fires first and lands in the collector.
-        # Moving this into the inner ``finally`` (inside ``with``) would
-        # drop the root span itself from the rendered tree. The outer
-        # ``finally`` also makes sure the collector's active-trace set
-        # is cleared on ``KeyboardInterrupt`` / ``SystemExit``.
-        spans = collector.end_capture(trace_id) if trace_id is not None else []
+        # Surface both parse-time and runtime errors.
+        # ``error_before_exec`` is typed as ``BaseException | True |
+        # None`` in IPython's stubs (``True`` was a legacy sentinel),
+        # so narrow through ``isinstance`` first.
+        err_before = result.error_before_exec
+        cell_exc = (
+            err_before
+            if isinstance(err_before, BaseException)
+            else result.error_in_exec
+        )
 
-    return render_cell_output_html(spans), cell_exc
+        if cell_exc is not None:
+            # ``shell.run_cell`` caught the exception internally rather
+            # than letting it propagate, so the ``capture_trace`` block
+            # is about to exit *normally* and the root span would
+            # close with an OK status — losing the ``[ERROR]`` marker
+            # in the rendered tree even though the cell did fail.
+            # Explicitly mark the root as failed and record the
+            # exception as a span event.
+            from opentelemetry import trace as otel_trace
+            from opentelemetry.trace.status import Status, StatusCode
+
+            root = otel_trace.get_current_span()
+            root.set_status(Status(StatusCode.ERROR, str(cell_exc)))
+            # ``escaped=True`` because :func:`register_magic` below
+            # re-raises ``cell_exc`` so it escapes the root span. Letting
+            # downstream OTel consumers (OTLP, Jaeger, …) see that
+            # distinction — swallowed vs. propagated — matches the
+            # spec's intent for this flag.
+            root.record_exception(cell_exc, escaped=True)
+
+    return render_cell_output_html(trace_result.spans), cell_exc
 
 
 def register_magic(shell: "InteractiveShell") -> None:

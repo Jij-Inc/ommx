@@ -14,6 +14,7 @@ import json
 from typing import Dict, Iterable, List, Optional, Sequence, Set
 
 from opentelemetry.sdk.trace import ReadableSpan
+from opentelemetry.trace.status import StatusCode
 
 
 # ---------------------------------------------------------------------------
@@ -39,6 +40,21 @@ def _format_duration(ms: float) -> str:
     if ms >= 1:
         return f"{ms:.2f} ms"
     return f"{ms * 1000:.1f} µs"
+
+
+def _status_marker(span: ReadableSpan) -> str:
+    """Return ``" [ERROR]"`` when the span recorded a failure, else ``""``.
+
+    OTel sets ``Status(ERROR)`` on spans whose context manager saw an
+    exception (``start_as_current_span`` defaults to
+    ``record_exception=True``). Surfacing that in the tree makes it
+    obvious which leaf failed when the user re-reads a trace for a
+    crashed block.
+    """
+    status = getattr(span, "status", None)
+    if status is not None and status.status_code == StatusCode.ERROR:
+        return " [ERROR]"
+    return ""
 
 
 def _interesting_attributes(span: ReadableSpan) -> str:
@@ -102,6 +118,7 @@ def render_text_tree(spans: Sequence[ReadableSpan]) -> str:
         lines.append(
             f"{prefix}{marker}{span.name} "
             f"({_format_duration(_duration_ms(span))})"
+            f"{_status_marker(span)}"
             f"{_interesting_attributes(span)}"
         )
         ctx = span.context
@@ -147,7 +164,13 @@ def to_chrome_trace(spans: Iterable[ReadableSpan]) -> dict:
             continue
         ts_us = span.start_time // 1_000
         dur_us = max((span.end_time - span.start_time) // 1_000, 1)
-        args = {k: _attribute_to_json(v) for k, v in (span.attributes or {}).items()}
+        attrs = span.attributes or {}
+        args = {k: _attribute_to_json(v) for k, v in attrs.items()}
+        # All events are placed on a single logical thread for the MVP
+        # renderer. ``tracing``-crate spans carry a ``thread.id``
+        # attribute; surfacing it as ``tid`` would let Perfetto /
+        # speedscope lay out concurrent work on parallel tracks. Kept
+        # out of scope until there's a workload that actually benefits.
         events.append(
             {
                 "name": span.name,

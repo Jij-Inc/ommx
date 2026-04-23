@@ -57,21 +57,24 @@ _SESSION_COLLECTOR: _CellSpanCollector | None = None
 def cell_collector():
     """Return a session-wide collector with per-test state cleared.
 
-    Rebuilding the collector every test attaches a new ``SpanProcessor``
-    to the SDK provider — OTel does not expose a clean removal API, so
-    those processors would accumulate. Reuse is both cheaper and
-    exercises the real long-lived notebook behaviour.
+    Points ``_setup._COLLECTOR`` at the shared instance so
+    ``ensure_collector_installed()`` (called indirectly by
+    ``capture_trace`` / ``run_cell_with_trace``) returns it unchanged
+    rather than creating a fresh ``_CellSpanCollector`` + attaching a
+    new ``SpanProcessor`` every test. Without that, processors would
+    pile up across the suite.
     """
     global _SESSION_COLLECTOR
-    _setup.reset_for_testing()
     if _SESSION_COLLECTOR is None:
         _SESSION_COLLECTOR = _CellSpanCollector()
         get_test_provider().add_span_processor(_SESSION_COLLECTOR)
-    # Drop any leftover state from a previous test.
-    _SESSION_COLLECTOR.shutdown()
-    yield _SESSION_COLLECTOR
-    _setup.reset_for_testing()
-    _SESSION_COLLECTOR.shutdown()
+    _setup._COLLECTOR = _SESSION_COLLECTOR
+    _SESSION_COLLECTOR.shutdown()  # drop state from previous test
+    try:
+        yield _SESSION_COLLECTOR
+    finally:
+        _SESSION_COLLECTOR.shutdown()
+        _setup._COLLECTOR = None
 
 
 def _run_and_collect(collector: _CellSpanCollector, cell_fn):
@@ -325,6 +328,31 @@ def test_run_cell_with_trace_exec_user_code(ipython_shell):
         assert exc is None
         assert ipython_shell.user_ns["ommx_trace_test_sentinel"] == 7
         assert "Download Chrome Trace JSON" in html
+    finally:
+        _setup.reset_for_testing()
+
+
+def test_run_cell_with_trace_marks_root_span_error_on_cell_failure(ipython_shell):
+    """When the cell raised, the ``ommx_trace_cell`` root span must
+    carry ``Status(ERROR)`` so the text tree shows ``[ERROR]`` on
+    the root line — otherwise ``shell.run_cell`` would swallow the
+    exception internally, the ``capture_trace`` block would exit
+    normally, and the span would close with the default OK status."""
+    _setup.reset_for_testing()
+    try:
+        html, exc = run_cell_with_trace(
+            ipython_shell,
+            "raise ValueError('root should be marked ERROR')",
+        )
+        assert isinstance(exc, ValueError)
+        # The HTML's text tree must contain [ERROR] next to the
+        # ``ommx_trace_cell`` line, not only on leaf spans.
+        root_line = next(
+            line for line in html.splitlines() if "ommx_trace_cell" in line
+        )
+        assert "[ERROR]" in root_line, (
+            f"Cell magic root span missing ERROR marker. Line was: {root_line}"
+        )
     finally:
         _setup.reset_for_testing()
 
