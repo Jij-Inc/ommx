@@ -281,10 +281,17 @@ The following typed error enums have been removed. Callers that matched on discr
 
 - `ommx::InstanceError` (~20 variants covering `Instance` / `ParametricInstance` invariants)
 - `ommx::MpsParseError`, `ommx::MpsWriteError`
-- `ommx::QplibParseError`, `ommx::ParseErrorReason`
+- `ommx::ParseErrorReason` (the variant enum inside the old `ommx::QplibParseError` — the struct itself has been replaced, see below)
 - `ommx::StateValidationError`, `ommx::LogEncodingError`
 - `ommx::UnknownSampleIDError` (now expressed as `Option<T>` on key-lookup methods)
 - The `ommx::Error` newtype from an earlier v3 alpha; it is now an alias for `anyhow::Error`.
+
+#### Narrow-domain structured errors kept
+
+Two structured error types stay `pub` because they carry *positional* metadata that downstream code can consume programmatically:
+
+- **`ommx::ParseError`** — breadcrumb-bearing proto-tree parse error. The `Parse` trait signature still returns `Result<_, ParseError>`; see the "`Parse` trait and `ParseError`" note in the PR description for the kept-intentionally rationale.
+- **`ommx::qplib::QplibParseError`** — a slimmer replacement for the old `ommx::QplibParseError` + `ommx::ParseErrorReason` pair. Carries a 1-based `line_num` plus a rendered `message`. Callers that used to match on `ParseErrorReason` variants should now inspect `message`, or use `err.downcast_ref::<ommx::qplib::QplibParseError>()` to surface `line_num` for editor-style diagnostics. Note the new type lives under the `ommx::qplib` module (no longer re-exported at the crate root).
 
 #### Signal types (kept)
 

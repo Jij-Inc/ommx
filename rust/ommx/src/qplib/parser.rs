@@ -22,7 +22,7 @@ use anyhow::Context;
 ///
 /// ```ignore
 /// match ommx::qplib::load(path) {
-///     Err(e) => match e.downcast_ref::<ommx::QplibParseError>() {
+///     Err(e) => match e.downcast_ref::<ommx::qplib::QplibParseError>() {
 ///         Some(pe) => eprintln!("{}:{}: {}", path.display(), pe.line_num, pe.message),
 ///         None => eprintln!("{e}"),
 ///     },
@@ -678,7 +678,8 @@ mod test {
     //      `split_whitespace().next()` returning None)
     #[test]
     fn qplib_parse_error_invalid_problem_type() {
-        // Malformed problem-type token on line 2 (after the blank name line).
+        // Line 1 carries the problem name (`MIPBAND`); the malformed
+        // problem-type token is on line 2.
         let file = "MIPBAND\nNOT_A_VALID_TYPE\n";
         let err = QplibFile::from_lines(file.lines().map(|s| s.to_owned())).unwrap_err();
         let downcast = err
