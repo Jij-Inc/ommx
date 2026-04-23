@@ -247,6 +247,102 @@ self.constraint_collection.removed_mut().entry(id)
 
 Methods like `.id()`, `.equality()`, `.evaluated_value()`, `.feasible()` are **removed**. Use field access instead.
 
+### 7. Unified Error Surface (`ommx::Result` + `ommx::Error`)
+
+The crate now returns a single error type across its public API:
+
+```rust
+// ❌ Before (v2): a mix of anyhow::Result, thiserror enums, and one-off error types
+fn some_public_api() -> Result<Instance, InstanceError> { ... }
+fn other_api() -> anyhow::Result<()> { ... }
+
+// ✅ After (v3): one Result alias
+fn some_public_api() -> ommx::Result<Instance> { ... }
+fn other_api() -> ommx::Result<()> { ... }
+```
+
+`ommx::Error` and `ommx::Result` are re-exports of `anyhow::Error` and `anyhow::Result`, so:
+
+```rust
+// These still work
+err.chain()
+err.root_cause()
+err.downcast_ref::<MySignal>()
+err.is::<MySignal>()
+
+// Crate boundary: propagate with `?` as usual
+fn my_fn() -> ommx::Result<()> {
+    let inst = some_public_api()?;  // anyhow-based chain
+    Ok(())
+}
+```
+
+#### Deleted enums
+
+The following typed error enums have been removed. Callers that matched on discriminants should switch to `err.to_string()` inspection or (for signal types) `err.downcast_ref::<T>()`:
+
+- `ommx::InstanceError` (~20 variants covering `Instance` / `ParametricInstance` invariants)
+- `ommx::MpsParseError`, `ommx::MpsWriteError`
+- `ommx::QplibParseError`, `ommx::ParseErrorReason`
+- `ommx::StateValidationError`, `ommx::LogEncodingError`
+- `ommx::UnknownSampleIDError` (now expressed as `Option<T>` on key-lookup methods)
+- The `ommx::Error` newtype from an earlier v3 alpha; it is now an alias for `anyhow::Error`.
+
+#### Signal types (kept)
+
+A small set of structured errors remain `pub` because they encode recoverable conditions callers may want to detect:
+
+- `ommx::InfeasibleDetected`
+- `ommx::DuplicatedSampleIDError`
+- `ommx::CoefficientError`, `ommx::BoundError`, `ommx::AtolError`
+- `ommx::DecisionVariableError`, `ommx::SubstitutionError`, `ommx::SolutionError`, `ommx::SampleSetError`
+
+Recover them by downcast:
+
+```rust
+match instance.propagate(&state, atol) {
+    Err(e) if e.is::<ommx::InfeasibleDetected>() => { /* handle */ }
+    Err(e) => return Err(e),
+    Ok(outcome) => { /* ... */ }
+}
+```
+
+#### Parse trait and `ParseError` (kept)
+
+`ParseError` is intentionally not collapsed into `ommx::Error`. It carries structured `Vec<ParseContext>` breadcrumbs that walk the proto tree field-by-field, which is useful metadata rather than a discriminant downstream code ignores. `ParseError` implements `std::error::Error`, so it flows into `ommx::Result<T>` via `?` at the crate boundary:
+
+```rust
+fn load_something(bytes: &[u8]) -> ommx::Result<Instance> {
+    let v1_inst: v1::Instance = Message::decode(bytes)?;
+    let inst: Instance = v1_inst.parse(&())?;  // ParseError → anyhow::Error
+    Ok(inst)
+}
+```
+
+#### Diagnostic-emitting macros
+
+The crate exposes `ommx::bail!` / `ommx::error!` / `ommx::ensure!` macros that bundle two actions every failure site needs:
+
+1. Emit a `tracing::error!` event (visible to any subscriber).
+2. Produce an `anyhow::Error` with the rendered message.
+
+```rust
+// Plain message — tracing event + anyhow::Error share the format string
+ommx::bail!("invalid OBJSENSE: {s}");
+
+// Structured tracing fields via `{ field = value, … }`
+ommx::bail!(
+    { section, size },
+    "invalid field size ({size}) in MPS section '{section}'",
+);
+
+// Signal-style expression — no tracing event, since the caller typically
+// recovers it by downcast
+ommx::bail!(InfeasibleDetected);
+```
+
+These are mainly for internal fail sites, but downstream crates may use them too.
+
 ## New Types
 
 ### ConstraintType Trait
@@ -372,3 +468,6 @@ pub struct ConstraintMetadata {
 - [ ] Update struct literals to use `stage: CreatedData { ... }` / `EvaluatedData { ... }` / etc.
 - [ ] Update `self.constraints` / `self.removed_constraints` → `self.constraint_collection.active()` / `.removed()`
 - [ ] Remove any `getset` usage for constraint types
+- [ ] Update any `InstanceError` / `MpsParseError` / `QplibParseError` / `StateValidationError` / `LogEncodingError` / `UnknownSampleIDError` matches → inspect `err.to_string()` or use `err.downcast_ref::<T>()` for signal types
+- [ ] Update public function signatures returning the old `ommx::Error` newtype — it is now an alias for `anyhow::Error`, so the type flows through unchanged
+- [ ] Replace `Result<T, UnknownSampleIDError>` key-lookup methods with `Option<T>` on the call site

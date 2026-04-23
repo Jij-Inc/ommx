@@ -91,6 +91,28 @@ from ommx.v1 import Instance, DecisionVariable, Function, Solution  # Good
 from ommx._ommx_rust import Function  # Bad — internal module
 ```
 
+### Rust SDK Error Handling Policy
+
+The Rust SDK uses a single unified error surface:
+
+- **Public APIs return `ommx::Result<T>`** — an alias for `anyhow::Result<T>`. Do not introduce `anyhow::Result<T>` in public signatures; use `ommx::Result<T>` (and `ommx::Error`) instead so the crate name remains on the API surface.
+- **Do not introduce new typed error enums for purely diagnostic purposes.** Previous enums (`InstanceError`, `MpsParseError`, `QplibParseError`, …) were deleted because downstream consumers never matched on discriminants. Failure sites should use `crate::bail!` / `crate::error!` with a clear `Display` message.
+- **Signal types** (`InfeasibleDetected`, `CoefficientError`, `BoundError`, `AtolError`, `DecisionVariableError`, `SubstitutionError`, `SolutionError`, `SampleSetError`) stay typed because callers recover them by downcast. If you add a new recoverable failure mode, consider adding it to this list rather than returning `Err(anyhow::anyhow!(…))`.
+- **`Parse` / `ParseError` is an intentional exception.** Parse impls return `Result<_, ParseError>` and use `.context(message, field)` for breadcrumbs. Keep that shape when adding new Parse impls.
+- **`Option<T>` for key lookups**, not `Result<T, UnknownXXXError>`. Missing keys are not errors.
+
+Use the fail-site macros at every internal `Err(...)` site:
+
+```rust
+crate::bail!("plain message with {interpolated} value");
+crate::bail!({ field = value, id = ?id }, "structured: {id:?}");
+crate::bail!(InfeasibleDetected); // pre-built signal, no tracing event
+crate::ensure!(cond, "message if cond is false");
+let err = crate::error!("inline for .ok_or_else(|| …)");
+```
+
+These emit a `tracing::error!` event alongside producing an `anyhow::Error` from the same format string.
+
 ## Critical Development Rules
 
 ### 🚫 Prohibitions
