@@ -22,8 +22,12 @@ name = "stub_gen"
 doc = false
 
 [features]
-default = ["remote-artifact"]
+default = ["remote-artifact", "tracing-bridge"]
 remote-artifact = ["ommx/remote-artifact"]
+# Bridge Rust `tracing` spans to Python OpenTelemetry via `pyo3-tracing-opentelemetry`.
+# Disabled on pyodide/wasm32-unknown-emscripten builds because the opentelemetry
+# crate pulls in `js-sys`/`wasm-bindgen` on wasm32, which Pyodide cannot load.
+tracing-bridge = ["dep:pyo3-tracing-opentelemetry"]
 
 [dependencies.ommx]
 path = "../../rust/ommx"
@@ -36,7 +40,7 @@ derive_more.workspace = true
 fnv.workspace = true
 ocipkg.workspace = true
 pyo3-stub-gen.workspace = true
-pyo3-tracing-opentelemetry.workspace = true
+pyo3-tracing-opentelemetry = { workspace = true, optional = true }
 pyo3.workspace = true
 serde-pyobject.workspace = true
 serde_json.workspace = true
