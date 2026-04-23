@@ -70,7 +70,29 @@ pub use state::*;
 
 use pyo3::prelude::*;
 use pyo3_stub_gen::runtime::PyModuleTypeAliasExt;
+
+#[cfg(feature = "tracing-bridge")]
 use pyo3_tracing_opentelemetry::TracingBridge;
+
+/// No-op stand-in used when the `tracing-bridge` feature is disabled (e.g.
+/// pyodide/wasm32-unknown-emscripten, where the opentelemetry crate transitively
+/// pulls in `wasm-bindgen` and fails to load).
+#[cfg(not(feature = "tracing-bridge"))]
+pub(crate) struct TracingBridge;
+
+#[cfg(not(feature = "tracing-bridge"))]
+pub(crate) struct TracingBridgeGuard;
+
+#[cfg(not(feature = "tracing-bridge"))]
+impl TracingBridge {
+    pub(crate) const fn new(_name: &'static str) -> Self {
+        Self
+    }
+
+    pub(crate) fn attach_parent_context(&self, _py: Python) -> TracingBridgeGuard {
+        TracingBridgeGuard
+    }
+}
 
 /// Bridge Rust `tracing` spans/events to Python's OpenTelemetry SDK.
 ///
