@@ -69,7 +69,7 @@ impl From<Instance> for ParametricInstance {
 }
 
 impl ParametricInstance {
-    pub fn with_parameters(self, parameters: crate::v1::Parameters) -> anyhow::Result<Instance> {
+    pub fn with_parameters(self, parameters: crate::v1::Parameters) -> crate::Result<Instance> {
         use crate::ATol;
         use anyhow::bail;
         use std::collections::BTreeSet;

@@ -184,24 +184,23 @@ impl DecisionVariableAnalysis {
                 }
             }
         }
-        // Populate the state with dependent variables in topological order
+        // Populate the state with dependent variables in topological order.
+        // Preserve the original error (SubstitutionError / crate::Error) in the
+        // anyhow source chain via `.context(...)`, so callers can still
+        // `err.downcast_ref::<SubstitutionError>()` after propagation.
         let acyclic = AcyclicAssignments::new(
             self.dependent()
                 .iter()
                 .map(|(id, (_kind, _bound, f))| (*id, f.clone())),
         )
         .map_err(|e| {
-            crate::error!(
-                { error = %e },
-                "cyclic dependency among dependent variables: {e}",
-            )
+            tracing::error!(error = %e, "cyclic dependency among dependent variables");
+            anyhow::Error::from(e).context("cyclic dependency among dependent variables")
         })?;
         for (id, f) in acyclic.evaluation_order_iter() {
             let value = f.evaluate(&state, atol).map_err(|e| {
-                crate::error!(
-                    { id = ?id, error = %e },
-                    "failed to evaluate dependent variable {id:?}: {e}",
-                )
+                tracing::error!(?id, error = %e, "failed to evaluate dependent variable");
+                e.context(format!("failed to evaluate dependent variable {id:?}"))
             })?;
             // Note: Bound and kind checking is intentionally omitted here.
             // These constraints will be validated as part of Solution::feasible() instead.

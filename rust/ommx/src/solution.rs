@@ -673,7 +673,7 @@ impl SolutionBuilder {
     /// - Decision variable keys don't match their value's `id()`
     /// - Constraint keys don't match their value's `id()`
     /// - Variables referenced in constraints' `used_decision_variable_ids` are not in `decision_variables`
-    pub fn build(self) -> anyhow::Result<Solution> {
+    pub fn build(self) -> crate::Result<Solution> {
         let objective = self
             .objective
             .ok_or(SolutionError::MissingRequiredField { field: "objective" })?;

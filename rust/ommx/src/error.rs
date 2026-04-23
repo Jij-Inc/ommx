@@ -163,8 +163,41 @@ mod tests {
     }
 
     #[test]
+    fn macro_ensure_with_fields() {
+        fn inner(ok: bool, code: u32) -> Result<()> {
+            crate::ensure!(ok, { code = code }, "not ok: code={code}");
+            Ok(())
+        }
+        assert!(inner(true, 5).is_ok());
+        assert_eq!(inner(false, 5).unwrap_err().to_string(), "not ok: code=5");
+    }
+
+    #[test]
+    fn macro_ensure_with_signal_expression() {
+        fn inner(ok: bool) -> Result<()> {
+            crate::ensure!(ok, TestSignal);
+            Ok(())
+        }
+        assert!(inner(true).is_ok());
+        assert!(inner(false).unwrap_err().is::<TestSignal>());
+    }
+
+    #[test]
     fn macro_error_builds_inline() {
         let err: Error = crate::error!("inline message {}", 42);
         assert_eq!(err.to_string(), "inline message 42");
+    }
+
+    #[test]
+    fn macro_error_with_fields() {
+        let code = 7u32;
+        let err: Error = crate::error!({ code }, "inline: code={code}");
+        assert_eq!(err.to_string(), "inline: code=7");
+    }
+
+    #[test]
+    fn macro_error_with_signal_expression() {
+        let err: Error = crate::error!(TestSignal);
+        assert!(err.is::<TestSignal>());
     }
 }

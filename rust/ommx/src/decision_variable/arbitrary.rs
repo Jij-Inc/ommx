@@ -9,13 +9,12 @@ use std::collections::BTreeMap;
 pub struct KindParameters(FnvHashSet<Kind>);
 
 impl KindParameters {
-    pub fn new(kinds: &[Kind]) -> anyhow::Result<Self> {
+    pub fn new(kinds: &[Kind]) -> crate::Result<Self> {
         let inner: FnvHashSet<_> = kinds.iter().cloned().collect();
         if inner.is_empty() {
-            Err(anyhow::anyhow!("KindParameters must not be empty"))
-        } else {
-            Ok(KindParameters(inner))
+            crate::bail!("KindParameters must not be empty");
         }
+        Ok(KindParameters(inner))
     }
 }
 

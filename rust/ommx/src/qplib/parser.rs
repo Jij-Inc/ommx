@@ -287,13 +287,17 @@ impl FromStr for ProblemType {
             .next()
             .zip(chars.next())
             .zip(chars.next())
-            .ok_or_else(|| crate::error!("invalid QPLIB problem type: {s}"))?;
+            .ok_or_else(|| {
+                crate::error!("invalid QPLIB problem type {s:?}: expected 3 characters")
+            })?;
         let o = match o.to_ascii_uppercase() {
             'L' => ProbObjKind::Linear,
             'D' => ProbObjKind::DiagonalC,
             'C' => ProbObjKind::ConcaveOrConvex,
             'Q' => ProbObjKind::Quadratic,
-            _ => crate::bail!("invalid QPLIB problem type: {s}"),
+            _ => crate::bail!(
+                "invalid QPLIB problem type {s:?}: objective kind character {o:?} must be one of L/D/C/Q",
+            ),
         };
         let v = match v.to_ascii_uppercase() {
             'C' => ProbVarKind::Continuous,
@@ -301,7 +305,9 @@ impl FromStr for ProblemType {
             'M' => ProbVarKind::Mixed,
             'I' => ProbVarKind::Integer,
             'G' => ProbVarKind::General,
-            _ => crate::bail!("invalid QPLIB problem type: {s}"),
+            _ => crate::bail!(
+                "invalid QPLIB problem type {s:?}: variable kind character {v:?} must be one of C/B/M/I/G",
+            ),
         };
         let c = match c.to_ascii_uppercase() {
             'N' => ProbConstrKind::None,
@@ -310,7 +316,9 @@ impl FromStr for ProblemType {
             'D' => ProbConstrKind::DiagonalConvex,
             'C' => ProbConstrKind::Convex,
             'Q' => ProbConstrKind::Quadratic,
-            _ => crate::bail!("invalid QPLIB problem type: {s}"),
+            _ => crate::bail!(
+                "invalid QPLIB problem type {s:?}: constraint kind character {c:?} must be one of N/B/L/D/C/Q",
+            ),
         };
         Ok(ProblemType(o, v, c))
     }

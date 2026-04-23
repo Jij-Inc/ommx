@@ -204,7 +204,7 @@ impl Function {
     /// Get a minimal positive factor `a` which make all coefficients of `a * self` integer.
     ///
     /// This returns `1` for zero function. See also <https://en.wikipedia.org/wiki/Primitive_part_and_content>.
-    pub fn content_factor(&self) -> anyhow::Result<Coefficient> {
+    pub fn content_factor(&self) -> crate::Result<Coefficient> {
         match self {
             Function::Zero => Ok(Coefficient::one()),
             // The factor must be positive so that multiplying it preserves the sign of
