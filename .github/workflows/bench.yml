@@ -47,7 +47,6 @@ jobs:
       - name: Build wheel
         run: |
           pip install python/ommx
-          pip install python/ommx-tests
           pip install pytest-codspeed
 
       - name: Run benchmarks

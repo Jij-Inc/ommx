@@ -23,11 +23,7 @@ classifiers = [
   "License :: OSI Approved :: MIT License",
 ]
 
-dependencies = [
-  "ommx >= 3.0.0a3, < 4.0.0",
-  "opentelemetry-sdk>=1.20.0",
-  "pluggy",
-]
+dependencies = ["ommx >= 3.0.0a3, < 4.0.0","pluggy"]
 
 [project.urls]
 Repository = "https://github.com/Jij-Inc/ommx"
