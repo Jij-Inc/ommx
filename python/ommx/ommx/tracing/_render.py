@@ -164,7 +164,13 @@ def to_chrome_trace(spans: Iterable[ReadableSpan]) -> dict:
             continue
         ts_us = span.start_time // 1_000
         dur_us = max((span.end_time - span.start_time) // 1_000, 1)
-        args = {k: _attribute_to_json(v) for k, v in (span.attributes or {}).items()}
+        attrs = span.attributes or {}
+        args = {k: _attribute_to_json(v) for k, v in attrs.items()}
+        # All events are placed on a single logical thread for the MVP
+        # renderer. ``tracing``-crate spans carry a ``thread.id``
+        # attribute; surfacing it as ``tid`` would let Perfetto /
+        # speedscope lay out concurrent work on parallel tracks. Kept
+        # out of scope until there's a workload that actually benefits.
         events.append(
             {
                 "name": span.name,

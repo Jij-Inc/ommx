@@ -1,10 +1,16 @@
-"""Collect finished OTel spans for active cell traces.
+"""Collect finished OTel spans for explicitly captured traces.
 
-``%%ommx_trace`` brackets each cell with :meth:`begin_capture` and
-:meth:`end_capture` calls on the collector. Spans whose ``trace_id`` is
-not between a matching begin/end pair are dropped immediately — without
-this gate, a long-lived notebook with other instrumentation would leak
+Both the ``%%ommx_trace`` cell magic and the ``capture_trace`` /
+``@traced`` script API bracket their tracked work with
+:meth:`_CellSpanCollector.begin_capture` / :meth:`end_capture` on this
+collector. Spans whose ``trace_id`` falls outside any active
+begin/end pair are dropped immediately — without that gate, a
+long-lived notebook or daemon with other instrumentation would leak
 memory as unrelated traces accumulated in :attr:`_spans_by_trace`.
+
+The ``_Cell`` prefix is a historical holdover from when the collector
+only backed the cell magic; it is shared by every entry point in
+``ommx.tracing`` now.
 """
 
 from __future__ import annotations

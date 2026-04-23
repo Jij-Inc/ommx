@@ -44,6 +44,7 @@ from __future__ import annotations
 
 import functools
 import inspect
+from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, List, Optional, Union, overload
@@ -51,7 +52,9 @@ from typing import Any, Callable, List, Optional, Union, overload
 from opentelemetry import context as otel_context
 from opentelemetry import trace
 from opentelemetry.sdk.trace import ReadableSpan
+from opentelemetry.trace import Span
 
+from ._collector import _CellSpanCollector
 from ._render import chrome_trace_json, render_text_tree
 from ._setup import ensure_collector_installed
 
@@ -110,8 +113,8 @@ class capture_trace:  # noqa: N801 - context-manager factory, lowercase on purpo
         self._name = name
         self._result = TraceResult()
         self._trace_id: Optional[int] = None
-        self._collector = None  # type: Any
-        self._span_cm = None  # type: Any
+        self._collector: Optional[_CellSpanCollector] = None
+        self._span_cm: Optional[AbstractContextManager[Span]] = None
 
     def __enter__(self) -> TraceResult:
         self._collector = ensure_collector_installed()
