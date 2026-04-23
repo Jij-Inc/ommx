@@ -574,7 +574,16 @@ where
         for _ in 0..num {
             let parts = self.next_split_n(segments + 1)?;
             let (m, key, val) = f(parts).map_err(|e| QplibParseError::new(self.line_num, e))?;
-            out[m].insert(key, val);
+            // `m` is a 0-based index already; guard against out-of-range so a
+            // malformed file surfaces as a `QplibParseError` rather than
+            // panicking on the `out[m]` indexing.
+            let slot = out.get_mut(m).ok_or_else(|| {
+                QplibParseError::new(
+                    self.line_num,
+                    format!("index {m} is out of range (valid 0..{size})"),
+                )
+            })?;
+            slot.insert(key, val);
         }
         Ok(out)
     }
@@ -630,6 +639,16 @@ where
                 self.parse_or_err_with_line(&parts[0])?,
                 self.parse_or_err_with_line(&parts[1])?,
             );
+            // QPLIB indices are 1-based; guard both i == 0 (underflow) and
+            // i > size (past the vec) so a malformed file surfaces as a
+            // `QplibParseError` rather than panicking.
+            if i == 0 || i > size {
+                return Err(QplibParseError::new(
+                    self.line_num,
+                    format!("index {i} is out of range (valid 1..={size})"),
+                )
+                .into());
+            }
             out[i - 1] = val;
         }
         Ok(out)

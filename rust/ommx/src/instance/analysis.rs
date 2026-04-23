@@ -193,9 +193,8 @@ impl DecisionVariableAnalysis {
                 .iter()
                 .map(|(id, (_kind, _bound, f))| (*id, f.clone())),
         )
-        .map_err(|e| {
+        .inspect_err(|e| {
             tracing::error!(error = %e, "cyclic dependency among dependent variables");
-            anyhow::Error::from(e)
         })?;
         for (id, f) in acyclic.evaluation_order_iter() {
             let value = f.evaluate(&state, atol).inspect_err(|e| {

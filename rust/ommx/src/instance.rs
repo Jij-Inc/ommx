@@ -261,10 +261,7 @@ impl Instance {
     /// if a later one fails. Callers that need cross-type atomicity should
     /// validate / clone up front.
     #[tracing::instrument(skip_all)]
-    pub fn reduce_capabilities(
-        &mut self,
-        supported: &Capabilities,
-    ) -> anyhow::Result<Capabilities> {
+    pub fn reduce_capabilities(&mut self, supported: &Capabilities) -> crate::Result<Capabilities> {
         let mut converted = Capabilities::new();
         // Iterate in a fixed order so logs / callers see deterministic output.
         for cap in [

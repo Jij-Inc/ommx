@@ -795,7 +795,7 @@ impl SolutionBuilder {
     ///
     /// # Errors
     /// Returns an error only if required fields are not set.
-    pub unsafe fn build_unchecked(self) -> anyhow::Result<Solution> {
+    pub unsafe fn build_unchecked(self) -> crate::Result<Solution> {
         let objective = self
             .objective
             .ok_or(SolutionError::MissingRequiredField { field: "objective" })?;
