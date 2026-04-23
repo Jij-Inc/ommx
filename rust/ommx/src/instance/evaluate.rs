@@ -77,8 +77,7 @@ impl Evaluate for Instance {
                 .evaluated_named_functions(evaluated_named_functions)
                 .decision_variables(decision_variables)
                 .sense(sense)
-                .build_unchecked()
-                .map_err(crate::Error::from_anyhow)?
+                .build_unchecked()?
         };
 
         Ok(solution)

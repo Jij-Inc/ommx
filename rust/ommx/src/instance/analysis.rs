@@ -130,15 +130,19 @@ impl DecisionVariableAnalysis {
         // Check the IDs in the state are subset of all IDs
         let unknown_ids: VariableIDSet = state_ids.difference(&self.all).cloned().collect();
         if !unknown_ids.is_empty() {
-            tracing::error!(?unknown_ids, "state contains unknown variable IDs");
-            crate::bail!("state contains unknown variable IDs: {unknown_ids:?}");
+            crate::bail!(
+                { ?unknown_ids },
+                "state contains unknown variable IDs: {unknown_ids:?}",
+            );
         }
 
         // Check the state contains every used decision variables
         let missing_ids: VariableIDSet = self.used().difference(&state_ids).cloned().collect();
         if !missing_ids.is_empty() {
-            tracing::error!(?missing_ids, "state is missing required variable IDs");
-            crate::bail!("state is missing required variable IDs: {missing_ids:?}");
+            crate::bail!(
+                { ?missing_ids },
+                "state is missing required variable IDs: {missing_ids:?}",
+            );
         }
 
         // Note: Bound and kind checking is intentionally omitted here.
@@ -152,14 +156,9 @@ impl DecisionVariableAnalysis {
                     if (entry.get() - value).abs() > atol {
                         let state_value = *entry.get();
                         let instance_value = *value;
-                        tracing::error!(
-                            id = ?id,
-                            state_value,
-                            instance_value,
-                            "state value inconsistent with instance fixed value"
-                        );
                         crate::bail!(
-                            "state value for variable {id:?} is inconsistent with instance (state={state_value}, instance={instance_value})"
+                            { id = ?id, state_value, instance_value },
+                            "state value for variable {id:?} is inconsistent with instance (state={state_value}, instance={instance_value})",
                         );
                     }
                 }
@@ -192,26 +191,25 @@ impl DecisionVariableAnalysis {
                 .map(|(id, (_kind, _bound, f))| (*id, f.clone())),
         )
         .map_err(|e| {
-            tracing::error!(error = %e, "cyclic dependency among dependent variables");
-            crate::Error::from(e)
+            crate::error!(
+                { error = %e },
+                "cyclic dependency among dependent variables: {e}",
+            )
         })?;
         for (id, f) in acyclic.evaluation_order_iter() {
             let value = f.evaluate(&state, atol).map_err(|e| {
-                tracing::error!(id = ?id, error = %e, "failed to evaluate dependent variable");
-                crate::error!("failed to evaluate dependent variable {id:?}: {e}")
+                crate::error!(
+                    { id = ?id, error = %e },
+                    "failed to evaluate dependent variable {id:?}: {e}",
+                )
             })?;
             // Note: Bound and kind checking is intentionally omitted here.
             // These constraints will be validated as part of Solution::feasible() instead.
             if let Some(v) = state.entries.insert(id.into_inner(), value) {
                 if (v - value).abs() > atol {
-                    tracing::error!(
-                        id = ?id,
-                        state_value = v,
-                        instance_value = value,
-                        "state value inconsistent with evaluated dependent variable"
-                    );
                     crate::bail!(
-                        "state value for variable {id:?} is inconsistent with instance (state={v}, instance={value})"
+                        { id = ?id, state_value = v, instance_value = value },
+                        "state value for variable {id:?} is inconsistent with instance (state={v}, instance={value})",
                     );
                 }
             }

@@ -571,7 +571,7 @@ impl crate::Evaluate for DecisionVariable {
         // Convert to Sampled format
         let ids: Vec<Vec<crate::SampleID>> = grouped_values.values().cloned().collect();
         let values: Vec<f64> = grouped_values.keys().map(|k| k.into_inner()).collect();
-        let samples = crate::Sampled::new(ids, values).map_err(crate::Error::from_anyhow)?;
+        let samples = crate::Sampled::new(ids, values)?;
 
         Ok(SampledDecisionVariable::new(self.clone(), samples, _atol)?)
     }

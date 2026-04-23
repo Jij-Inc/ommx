@@ -1,223 +1,106 @@
-//! Crate-wide error type for OMMX Rust SDK.
+//! Crate-wide error type and diagnostics-emitting macros.
 //!
-//! All fallible public APIs return [`Result<T>`] (alias for `std::result::Result<T, Error>`).
-//! The concrete [`Error`] type is a thin newtype over [`anyhow::Error`], so it carries
-//! arbitrary context and source chains while hiding the `anyhow` dependency from the
-//! crate's public surface.
+//! [`Error`] and [`Result`] are re-exports of [`anyhow::Error`] and
+//! [`anyhow::Result`]. Keeping `ommx::Error` / `ommx::Result` as the public
+//! spelling lets downstream crates avoid depending on `anyhow` directly while
+//! still being able to `err.downcast_ref::<T>()` / `err.is::<T>()` against
+//! **signal types** like [`crate::InfeasibleDetected`],
+//! [`crate::CoefficientError`], or [`crate::BoundError`].
 //!
-//! # Design
+//! # Fail-site macros
 //!
-//! Callers have two ways to consume an [`Error`]:
+//! [`bail!`], [`error!`], and [`ensure!`] bundle two things that virtually
+//! every OMMX failure site does together:
 //!
-//! 1. **Display it.** Most callers propagate with `?` and only ever look at
-//!    [`Display`](std::fmt::Display) output. Structured diagnostic information
-//!    (field names, IDs, breadcrumbs) is emitted via the [`tracing`] crate at
-//!    each failure site, so subscribers pick it up without the `Error` having
-//!    to carry it.
+//! 1. Emit a `tracing::error!` event (so subscribers see a structured record
+//!    with the active span context).
+//! 2. Produce / return an `anyhow::Error` carrying the rendered message.
 //!
-//! 2. **Downcast to a signal type.** A small, curated set of types
-//!    (e.g. [`crate::InfeasibleDetected`], [`crate::CoefficientError`],
-//!    [`crate::BoundError`]) are stable "signal" types that callers can recover
-//!    by downcast:
+//! Callers write the message once — an optional `{ field = value, ... }`
+//! block becomes the event's structured fields; the format string + args
+//! become both the event message and the error's `Display`.
 //!
-//!    ```ignore
-//!    match instance.propagate(&state, atol) {
-//!        Err(e) if e.is::<ommx::InfeasibleDetected>() => { /* handle infeasibility */ }
-//!        Err(e) => return Err(e),
-//!        Ok(outcome) => { /* ... */ }
-//!    }
-//!    ```
+//! ```ignore
+//! // No structured fields — tracing still records the rendered message
+//! // under the active span.
+//! crate::bail!("invalid OBJSENSE: {s}");
 //!
-//! Error *enums* that were once public (`InstanceError`, `SolutionError`,
-//! `ParseError`, ...) are intentionally not part of the v3 API: their
-//! discriminants were never recovered in practice by downstream crates, and
-//! keeping them typed imposes a maintenance tax without a matching benefit.
+//! // With structured fields — `section` and `size` are attached to the
+//! // tracing event; the error message is the rendered format string.
+//! crate::bail!(
+//!     { section, size },
+//!     "invalid field size ({size}) in MPS section '{section}'",
+//! );
+//! ```
+//!
+//! The expression form `bail!(some_err)` still returns a pre-built error
+//! without emitting tracing, since signal-type errors are typically caught
+//! and recovered by the caller rather than observed as diagnostics.
 
-use std::fmt;
+pub use anyhow::{Error, Result};
 
-/// Crate-wide error type. A thin newtype over [`anyhow::Error`].
+/// Emit a `tracing::error!` event and short-circuit the current function with
+/// an [`anyhow::Error`] built from the same format string.
 ///
-/// See the [module-level documentation](self) for usage guidance.
-pub struct Error(anyhow::Error);
-
-/// Convenience alias for `std::result::Result<T, ommx::Error>`.
-pub type Result<T> = std::result::Result<T, Error>;
-
-impl Error {
-    /// Construct an [`Error`] from any type implementing [`std::error::Error`].
-    pub fn new<E>(source: E) -> Self
-    where
-        E: std::error::Error + Send + Sync + 'static,
-    {
-        Self(anyhow::Error::new(source))
-    }
-
-    /// Construct an [`Error`] from a plain display-able message.
-    pub fn msg<M>(message: M) -> Self
-    where
-        M: fmt::Display + fmt::Debug + Send + Sync + 'static,
-    {
-        Self(anyhow::Error::msg(message))
-    }
-
-    /// Returns a reference to the inner value if it is of type `E`.
-    ///
-    /// Use this to recover *signal* types documented at the module level.
-    pub fn downcast_ref<E>(&self) -> Option<&E>
-    where
-        E: fmt::Display + fmt::Debug + Send + Sync + 'static,
-    {
-        self.0.downcast_ref::<E>()
-    }
-
-    /// Attempts to downcast the error to a concrete type `E`.
-    ///
-    /// If the inner error is not of type `E`, the original [`Error`] is
-    /// returned as `Err` so the caller can propagate it unchanged.
-    pub fn downcast<E>(self) -> std::result::Result<E, Self>
-    where
-        E: fmt::Display + fmt::Debug + Send + Sync + 'static,
-    {
-        self.0.downcast::<E>().map_err(Self)
-    }
-
-    /// Returns `true` if the inner value is of type `E`.
-    pub fn is<E>(&self) -> bool
-    where
-        E: fmt::Display + fmt::Debug + Send + Sync + 'static,
-    {
-        self.0.is::<E>()
-    }
-
-    /// Walk the chain of source errors, starting from this one.
-    pub fn chain(&self) -> anyhow::Chain<'_> {
-        self.0.chain()
-    }
-
-    /// Returns the deepest error in the source chain.
-    pub fn root_cause(&self) -> &(dyn std::error::Error + 'static) {
-        self.0.root_cause()
-    }
-
-    /// Consume the [`Error`] and return the inner [`anyhow::Error`].
-    ///
-    /// Provided for interop with code that still uses [`anyhow::Error`]
-    /// directly (e.g. `bin/`, tests, examples).
-    pub fn into_anyhow(self) -> anyhow::Error {
-        self.0
-    }
-
-    /// Borrow the inner [`anyhow::Error`].
-    pub fn as_anyhow(&self) -> &anyhow::Error {
-        &self.0
-    }
-
-    /// Wrap an [`anyhow::Error`] into this crate's [`Error`].
-    ///
-    /// Use this from internal helpers that still produce `anyhow::Result`
-    /// when bubbling out to a public API that returns [`Result`].
-    ///
-    /// Rust's coherence rules forbid providing a `From<anyhow::Error>` impl
-    /// alongside the blanket `From<E: std::error::Error + Send + Sync + 'static>`
-    /// (anyhow may adopt [`std::error::Error`] in a future version), so the
-    /// conversion is exposed as an explicit constructor instead.
-    pub fn from_anyhow(source: anyhow::Error) -> Self {
-        Self(source)
-    }
-}
-
-// Delegating trait impls.
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(&self.0, f)
-    }
-}
-
-impl fmt::Debug for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(&self.0, f)
-    }
-}
-
-// Note: we intentionally do NOT implement `std::error::Error` for `Error`,
-// mirroring `anyhow::Error`. This allows the blanket `From<E: StdError>`
-// below without conflicting with the reflexive `From<T> for T` identity impl.
-
-impl<E> From<E> for Error
-where
-    E: std::error::Error + Send + Sync + 'static,
-{
-    fn from(source: E) -> Self {
-        Self(anyhow::Error::new(source))
-    }
-}
-
-impl AsRef<dyn std::error::Error + Send + Sync + 'static> for Error {
-    fn as_ref(&self) -> &(dyn std::error::Error + Send + Sync + 'static) {
-        self.0.as_ref()
-    }
-}
-
-impl AsRef<dyn std::error::Error + 'static> for Error {
-    fn as_ref(&self) -> &(dyn std::error::Error + 'static) {
-        self.0.as_ref()
-    }
-}
-
-// Forward conversion lets internal helpers that still return `anyhow::Result`
-// absorb a crate-boundary [`ommx::Result`](Result) via `?`.
-impl From<Error> for anyhow::Error {
-    fn from(error: Error) -> Self {
-        error.0
-    }
-}
-
-/// Build an [`Error`] with a formatted message, analogous to [`anyhow::anyhow!`].
+/// See the [module docs](self) for details on the `{ fields }` form and the
+/// signal-type expression form.
 #[macro_export]
 macro_rules! bail {
-    ($msg:literal $(,)?) => {
-        return ::std::result::Result::Err($crate::Error::msg($msg))
-    };
+    // Structured fields + message
+    ({ $($field:tt)+ } $(,)? $fmt:literal $(, $arg:expr)* $(,)?) => {{
+        ::tracing::error!($($field)+, $fmt $(, $arg)*);
+        return ::std::result::Result::Err(::anyhow::anyhow!($fmt $(, $arg)*));
+    }};
+    // Plain format string (and args)
+    ($fmt:literal $(, $arg:expr)* $(,)?) => {{
+        ::tracing::error!($fmt $(, $arg)*);
+        return ::std::result::Result::Err(::anyhow::anyhow!($fmt $(, $arg)*));
+    }};
+    // Signal-style pre-built error — no tracing event, since callers
+    // typically recover these by downcast rather than observe them.
     ($err:expr $(,)?) => {
-        return ::std::result::Result::Err($crate::Error::from($err))
-    };
-    ($fmt:expr, $($arg:tt)*) => {
-        return ::std::result::Result::Err($crate::Error::msg(format!($fmt, $($arg)*)))
+        return ::std::result::Result::Err(::anyhow::Error::from($err))
     };
 }
 
-/// Short-circuit with an [`Error`] if `cond` is false, analogous to [`anyhow::ensure!`].
-#[macro_export]
-macro_rules! ensure {
-    ($cond:expr, $msg:literal $(,)?) => {
-        if !$cond {
-            return ::std::result::Result::Err($crate::Error::msg($msg));
-        }
-    };
-    ($cond:expr, $err:expr $(,)?) => {
-        if !$cond {
-            return ::std::result::Result::Err($crate::Error::from($err));
-        }
-    };
-    ($cond:expr, $fmt:expr, $($arg:tt)*) => {
-        if !$cond {
-            return ::std::result::Result::Err($crate::Error::msg(format!($fmt, $($arg)*)));
-        }
-    };
-}
-
-/// Construct an [`Error`] inline without returning, analogous to [`anyhow::anyhow!`].
+/// Emit a `tracing::error!` event and build an [`anyhow::Error`] inline
+/// (for use in `.ok_or_else(|| ...)` and similar).
+///
+/// Mirrors [`bail!`] without the `return`.
 #[macro_export]
 macro_rules! error {
-    ($msg:literal $(,)?) => {
-        $crate::Error::msg($msg)
-    };
+    ({ $($field:tt)+ } $(,)? $fmt:literal $(, $arg:expr)* $(,)?) => {{
+        ::tracing::error!($($field)+, $fmt $(, $arg)*);
+        ::anyhow::anyhow!($fmt $(, $arg)*)
+    }};
+    ($fmt:literal $(, $arg:expr)* $(,)?) => {{
+        ::tracing::error!($fmt $(, $arg)*);
+        ::anyhow::anyhow!($fmt $(, $arg)*)
+    }};
     ($err:expr $(,)?) => {
-        $crate::Error::from($err)
+        ::anyhow::Error::from($err)
     };
-    ($fmt:expr, $($arg:tt)*) => {
-        $crate::Error::msg(format!($fmt, $($arg)*))
+}
+
+/// Short-circuit if `cond` is false. Mirrors [`bail!`] syntactically.
+#[macro_export]
+macro_rules! ensure {
+    ($cond:expr, { $($field:tt)+ } $(,)? $fmt:literal $(, $arg:expr)* $(,)?) => {{
+        if !$cond {
+            ::tracing::error!($($field)+, $fmt $(, $arg)*);
+            return ::std::result::Result::Err(::anyhow::anyhow!($fmt $(, $arg)*));
+        }
+    }};
+    ($cond:expr, $fmt:literal $(, $arg:expr)* $(,)?) => {{
+        if !$cond {
+            ::tracing::error!($fmt $(, $arg)*);
+            return ::std::result::Result::Err(::anyhow::anyhow!($fmt $(, $arg)*));
+        }
+    }};
+    ($cond:expr, $err:expr $(,)?) => {
+        if !$cond {
+            return ::std::result::Result::Err(::anyhow::Error::from($err));
+        }
     };
 }
 
@@ -230,12 +113,6 @@ mod tests {
     struct TestSignal;
 
     #[test]
-    fn wraps_error() {
-        let e: Error = TestSignal.into();
-        assert_eq!(e.to_string(), "signal variant for testing");
-    }
-
-    #[test]
     fn downcast_recovers_signal() {
         let e: Error = TestSignal.into();
         assert!(e.is::<TestSignal>());
@@ -243,26 +120,36 @@ mod tests {
     }
 
     #[test]
-    fn downcast_wrong_type_returns_self() {
-        let e: Error = TestSignal.into();
-        match e.downcast::<std::io::Error>() {
-            Ok(_) => panic!("unexpected downcast success"),
-            Err(e) => assert!(e.is::<TestSignal>()),
-        }
-    }
-
-    #[test]
-    fn msg_constructs_from_string() {
-        let e = Error::msg("plain message");
-        assert_eq!(e.to_string(), "plain message");
-    }
-
-    #[test]
-    fn macro_bail_returns_err() {
+    fn macro_bail_plain_message() {
         fn inner() -> Result<()> {
             crate::bail!("boom")
         }
-        assert!(inner().is_err());
+        assert_eq!(inner().unwrap_err().to_string(), "boom");
+    }
+
+    #[test]
+    fn macro_bail_formatted_message() {
+        fn inner(code: u32) -> Result<()> {
+            crate::bail!("boom: code={code}")
+        }
+        assert_eq!(inner(7).unwrap_err().to_string(), "boom: code=7");
+    }
+
+    #[test]
+    fn macro_bail_with_fields() {
+        fn inner(code: u32) -> Result<()> {
+            crate::bail!({ code = code }, "boom: code={code}")
+        }
+        assert_eq!(inner(9).unwrap_err().to_string(), "boom: code=9");
+    }
+
+    #[test]
+    fn macro_bail_with_signal_expression() {
+        fn inner() -> Result<()> {
+            crate::bail!(TestSignal)
+        }
+        let err = inner().unwrap_err();
+        assert!(err.is::<TestSignal>());
     }
 
     #[test]
@@ -272,6 +159,12 @@ mod tests {
             Ok(())
         }
         assert!(inner(true).is_ok());
-        assert!(inner(false).is_err());
+        assert_eq!(inner(false).unwrap_err().to_string(), "not ok");
+    }
+
+    #[test]
+    fn macro_error_builds_inline() {
+        let err: Error = crate::error!("inline message {}", 42);
+        assert_eq!(err.to_string(), "inline message 42");
     }
 }

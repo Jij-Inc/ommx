@@ -86,9 +86,7 @@ impl ATol {
     pub fn set_default(value: f64) -> crate::Result<()> {
         let atol = Self::new(value)?;
         let mut default = DEFAULT_ATOL.write().map_err(|e| {
-            crate::Error::msg(format!(
-                "Failed to acquire write lock for DEFAULT_ATOL: poisoned lock: {e}"
-            ))
+            crate::error!("Failed to acquire write lock for DEFAULT_ATOL: poisoned lock: {e}")
         })?;
         *default = atol.into_inner();
         tracing::info!("ATol default value changed to: {value}");

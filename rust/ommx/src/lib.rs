@@ -313,7 +313,7 @@ pub use coefficient::*;
 pub use constraint::*;
 pub use constraint_type::*;
 pub use decision_variable::*;
-pub use error::{Error, Result};
+pub use error::*;
 pub use evaluate::{Evaluate, Propagate, PropagateOutcome};
 pub use function::*;
 pub use indicator_constraint::*;
