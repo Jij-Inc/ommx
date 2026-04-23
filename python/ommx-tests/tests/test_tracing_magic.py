@@ -3,8 +3,8 @@
 The magic is supposed to:
 
 1. Wrap a cell in a single OTel root span.
-2. Collect every span emitted during the cell (including Rust spans
-   forwarded by ``pyo3-tracing-opentelemetry``).
+2. Collect only that cell's spans (including Rust spans forwarded by
+   ``pyo3-tracing-opentelemetry``).
 3. Render a text tree and attach a Chrome Trace JSON download link.
 
 These tests exercise the collector and renderers directly for focused
@@ -41,40 +41,47 @@ from conftest import get_test_provider
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Fixtures
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture
-def fresh_collector():
-    """A collector attached to the session provider for the test's use.
+# A single collector is attached to the session provider and reused by every
+# test to avoid piling ``SpanProcessor`` instances on the provider each run.
+# The collector only retains spans for traces opened via ``begin_capture``,
+# so between-test state only lives inside ``_active_traces`` /
+# ``_spans_by_trace`` — both cleared in the fixture below.
+_SESSION_COLLECTOR: _CellSpanCollector | None = None
 
-    Each test gets its own collector instance so ``pop_trace`` does not
-    have to guard against spans from previous tests. The collector is
-    left attached for the session — we cannot remove processors from an
-    SDK provider without reaching into private attributes, and the
-    session exporter continues to receive spans regardless, so this only
-    costs a little per-span work.
+
+@pytest.fixture
+def cell_collector():
+    """Return a session-wide collector with per-test state cleared.
+
+    Rebuilding the collector every test attaches a new ``SpanProcessor``
+    to the SDK provider — OTel does not expose a clean removal API, so
+    those processors would accumulate. Reuse is both cheaper and
+    exercises the real long-lived notebook behaviour.
     """
+    global _SESSION_COLLECTOR
     _setup.reset_for_testing()
-    provider = get_test_provider()
-    collector = _CellSpanCollector()
-    provider.add_span_processor(collector)
-    yield collector
+    if _SESSION_COLLECTOR is None:
+        _SESSION_COLLECTOR = _CellSpanCollector()
+        get_test_provider().add_span_processor(_SESSION_COLLECTOR)
+    # Drop any leftover state from a previous test.
+    _SESSION_COLLECTOR.shutdown()
+    yield _SESSION_COLLECTOR
     _setup.reset_for_testing()
+    _SESSION_COLLECTOR.shutdown()
 
 
 def _run_and_collect(collector: _CellSpanCollector, cell_fn):
-    """Run ``cell_fn`` inside a fresh root span and return its spans.
-
-    Uses the global tracer so trace-context propagation matches what the
-    real cell magic does.
-    """
+    """Run ``cell_fn`` under a root span, using ``begin/end_capture``."""
     tracer = trace.get_tracer("ommx-tracing-magic-test")
     with tracer.start_as_current_span("root") as root:
         trace_id = root.get_span_context().trace_id
+        collector.begin_capture(trace_id)
         cell_fn(tracer)
-    return collector.pop_trace(trace_id)
+    return collector.end_capture(trace_id)
 
 
 # ---------------------------------------------------------------------------
@@ -82,41 +89,58 @@ def _run_and_collect(collector: _CellSpanCollector, cell_fn):
 # ---------------------------------------------------------------------------
 
 
-def test_collector_groups_spans_by_trace_id(fresh_collector):
-    """``pop_trace`` returns exactly the spans tagged with that ``trace_id``."""
+def test_collector_captures_only_active_traces(cell_collector):
+    """Spans outside a ``begin_capture`` window are dropped immediately —
+    this is the guard that keeps memory bounded in long-lived notebooks."""
     tracer = trace.get_tracer("ommx-tracing-magic-test")
 
-    with tracer.start_as_current_span("cell_a") as a:
-        trace_id_a = a.get_span_context().trace_id
-        with tracer.start_as_current_span("child_a"):
+    # Emit a span with no capture open. It must not be retained.
+    with tracer.start_as_current_span("background"):
+        pass
+
+    # Now open a capture and emit a span — this one should be kept.
+    with tracer.start_as_current_span("cell") as cell:
+        trace_id = cell.get_span_context().trace_id
+        cell_collector.begin_capture(trace_id)
+        with tracer.start_as_current_span("inner"):
             pass
-    with tracer.start_as_current_span("cell_b") as b:
-        trace_id_b = b.get_span_context().trace_id
 
-    assert trace_id_a != trace_id_b
-    spans_a = fresh_collector.pop_trace(trace_id_a)
-    spans_b = fresh_collector.pop_trace(trace_id_b)
-    assert sorted(s.name for s in spans_a) == ["cell_a", "child_a"]
-    assert sorted(s.name for s in spans_b) == ["cell_b"]
-
-    # Second pop for the same trace returns an empty list — the collector
-    # must not accumulate state.
-    assert fresh_collector.pop_trace(trace_id_a) == []
+    captured = cell_collector.end_capture(trace_id)
+    captured_names = sorted(s.name for s in captured)
+    # ``background`` was dropped; ``cell`` + ``inner`` were kept.
+    assert captured_names == ["cell", "inner"]
+    assert not cell_collector._spans_by_trace  # noqa: SLF001 - test-only reach-in
 
 
-def test_collector_is_threadsafe(fresh_collector):
-    """The collector is called from exporter threads; concurrent writes
-    must not lose spans or corrupt the internal dict."""
+def test_collector_pop_is_single_use(cell_collector):
+    """``end_capture`` removes the entries and discards the trace_id from
+    the active set, so a second call returns empty."""
     tracer = trace.get_tracer("ommx-tracing-magic-test")
 
-    root_trace_ids: list[int] = []
+    with tracer.start_as_current_span("cell") as cell:
+        trace_id = cell.get_span_context().trace_id
+        cell_collector.begin_capture(trace_id)
+
+    first = cell_collector.end_capture(trace_id)
+    second = cell_collector.end_capture(trace_id)
+    assert len(first) == 1
+    assert second == []
+
+
+def test_collector_is_threadsafe(cell_collector):
+    """``on_end`` is called from exporter threads; concurrent captures
+    must not lose spans or corrupt internal state."""
+    tracer = trace.get_tracer("ommx-tracing-magic-test")
+    captured: list[int] = []
 
     def worker():
         with tracer.start_as_current_span("worker_root") as root:
-            root_trace_ids.append(root.get_span_context().trace_id)
+            tid = root.get_span_context().trace_id
+            cell_collector.begin_capture(tid)
             for _ in range(20):
                 with tracer.start_as_current_span("work"):
                     time.sleep(0.0001)
+        captured.append(len(cell_collector.end_capture(tid)))
 
     threads = [threading.Thread(target=worker) for _ in range(4)]
     for t in threads:
@@ -124,9 +148,8 @@ def test_collector_is_threadsafe(fresh_collector):
     for t in threads:
         t.join()
 
-    # One root span + 20 inner spans per worker = 21 per thread.
-    total = sum(len(fresh_collector.pop_trace(tid)) for tid in root_trace_ids)
-    assert total == 4 * 21
+    # Each worker sees its root + 20 inner = 21 spans.
+    assert captured == [21] * 4
 
 
 # ---------------------------------------------------------------------------
@@ -134,7 +157,7 @@ def test_collector_is_threadsafe(fresh_collector):
 # ---------------------------------------------------------------------------
 
 
-def test_render_text_tree_reflects_nesting(fresh_collector):
+def test_render_text_tree_reflects_nesting(cell_collector):
     """Children appear indented under their parent, not as siblings."""
 
     def cell(tracer):
@@ -142,12 +165,9 @@ def test_render_text_tree_reflects_nesting(fresh_collector):
             with tracer.start_as_current_span("inner"):
                 pass
 
-    spans = _run_and_collect(fresh_collector, cell)
+    spans = _run_and_collect(cell_collector, cell)
     tree = render_text_tree(spans)
 
-    # ``root`` is the cell's root; ``outer`` is a child; ``inner`` is a
-    # grandchild. The indent on ``inner`` must be strictly greater than
-    # on ``outer`` for the tree to be useful.
     outer_line = next(line for line in tree.splitlines() if "outer" in line)
     inner_line = next(line for line in tree.splitlines() if "inner" in line)
     outer_indent = len(outer_line) - len(outer_line.lstrip())
@@ -159,7 +179,7 @@ def test_render_text_tree_handles_empty():
     assert render_text_tree([]) == "(no spans)"
 
 
-def test_chrome_trace_is_valid_json_with_X_events(fresh_collector):
+def test_chrome_trace_is_valid_json_with_X_events(cell_collector):
     """Chrome-trace JSON must parse, every event has ``ph: 'X'``, and
     durations are in microseconds (positive integers)."""
 
@@ -167,7 +187,7 @@ def test_chrome_trace_is_valid_json_with_X_events(fresh_collector):
         with tracer.start_as_current_span("work") as span:
             span.set_attribute("batch_size", 42)
 
-    spans = _run_and_collect(fresh_collector, cell)
+    spans = _run_and_collect(cell_collector, cell)
     payload = chrome_trace_json(spans)
     parsed = json.loads(payload)
 
@@ -204,20 +224,19 @@ def test_chrome_trace_skips_open_spans():
     assert result["traceEvents"] == []
 
 
-def test_cell_html_contains_download_link(fresh_collector):
+def test_cell_html_contains_download_link(cell_collector):
     """The HTML blob must carry a base64 data URL the browser can download."""
 
     def cell(tracer):
         with tracer.start_as_current_span("work"):
             pass
 
-    spans = _run_and_collect(fresh_collector, cell)
+    spans = _run_and_collect(cell_collector, cell)
     html = render_cell_output_html(spans, download_filename="cell.json")
 
     assert "<pre>" in html
     assert 'download="cell.json"' in html
 
-    # Extract the data URL payload and make sure it roundtrips as JSON.
     marker = 'href="data:application/json;base64,'
     start = html.index(marker) + len(marker)
     end = html.index('"', start)
@@ -225,6 +244,15 @@ def test_cell_html_contains_download_link(fresh_collector):
     decoded = base64.b64decode(urllib.parse.unquote(b64)).decode("utf-8")
     parsed = json.loads(decoded)
     assert parsed["traceEvents"]
+
+
+def test_cell_html_escapes_download_filename_for_attribute():
+    """A filename containing a quote must not break out of the
+    ``download`` attribute — otherwise arbitrary HTML could be injected."""
+    html = render_cell_output_html([], download_filename='"><script>alert(1)</script>')
+    assert "<script>" not in html
+    # Raw quote must not terminate the attribute prematurely.
+    assert 'download=""><script>' not in html
 
 
 # ---------------------------------------------------------------------------
@@ -302,8 +330,9 @@ def test_run_cell_with_trace_exec_user_code(ipython_shell):
 
 
 def test_run_cell_with_trace_reports_cell_exceptions(ipython_shell):
-    """A cell that raises still produces HTML output, and the exception
-    is reported back to the caller so IPython can show a traceback."""
+    """A cell that raises still produces HTML output. ``run_cell`` handles
+    the traceback display; we only need to see the exception surfaced on
+    the return tuple for programmatic inspection."""
     _setup.reset_for_testing()
     try:
         html, exc = run_cell_with_trace(

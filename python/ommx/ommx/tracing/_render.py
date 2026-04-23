@@ -201,10 +201,16 @@ def render_cell_output_html(
     b64 = base64.b64encode(payload.encode("utf-8")).decode("ascii")
     data_url = f"data:application/json;base64,{b64}"
     size_kb = len(payload) / 1024
+    # ``quote=True`` escapes both ``"`` and ``'`` — essential when the
+    # value lands inside an HTML attribute where an un-escaped quote
+    # would terminate the attribute and allow injection. Cell magic
+    # callers currently pass a literal default, but the parameter is
+    # public, so harden it anyway.
+    safe_filename = html.escape(download_filename, quote=True)
     return (
         '<div class="ommx-trace">'
         f"<pre>{tree}</pre>"
-        f'<p><a href="{data_url}" download="{html.escape(download_filename)}">'
+        f'<p><a href="{data_url}" download="{safe_filename}">'
         f"Download Chrome Trace JSON ({size_kb:.1f} KB)"
         "</a> — open in Perfetto, speedscope, or <code>chrome://tracing</code>.</p>"
         "</div>"

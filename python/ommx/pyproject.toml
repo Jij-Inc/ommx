@@ -33,6 +33,16 @@ dependencies = [
   "typing-extensions >= 4.12.2, < 5.0.0",
 ]
 
+[project.optional-dependencies]
+# ``%%ommx_trace`` and ``ommx.tracing`` require the OpenTelemetry Python SDK
+# (for the ``TracerProvider`` / ``SpanProcessor`` types). Users who do not
+# need tracing should not have to pay that cost, hence an optional extra:
+# ``pip install ommx[tracing]``.
+tracing = [
+  "opentelemetry-sdk>=1.20.0",
+  "ipython>=7.0.0",
+]
+
 [project.urls]
 Repository = "https://github.com/Jij-Inc/ommx"
 Issues = "https://github.com/Jij-Inc/ommx/issues"

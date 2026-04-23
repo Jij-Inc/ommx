@@ -1,29 +1,26 @@
-"""Collect finished OTel spans keyed by ``trace_id``.
+"""Collect finished OTel spans for active cell traces.
 
-``%%ommx_trace`` creates a root span for each cell and asks this collector
-for every span that shares that cell's ``trace_id``. The cell magic is
-the only expected caller — this module does not define a public API.
+``%%ommx_trace`` brackets each cell with :meth:`begin_capture` and
+:meth:`end_capture` calls on the collector. Spans whose ``trace_id`` is
+not between a matching begin/end pair are dropped immediately — without
+this gate, a long-lived notebook with other instrumentation would leak
+memory as unrelated traces accumulated in :attr:`_spans_by_trace`.
 """
 
 from __future__ import annotations
 
 import threading
-from typing import Dict, List
+from typing import Dict, List, Set
 
 from opentelemetry.sdk.trace import ReadableSpan, SpanProcessor
 
 
 class _CellSpanCollector(SpanProcessor):
-    """``SpanProcessor`` that stashes finished spans by ``trace_id``.
-
-    The collector is registered once per ``TracerProvider`` (see
-    :func:`._setup.ensure_collector_installed`) and lives for the duration
-    of the notebook session. The cell magic retrieves and then discards
-    the entries for its own ``trace_id`` to keep memory bounded.
-    """
+    """``SpanProcessor`` that stashes spans for explicitly captured traces."""
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
+        self._active_traces: Set[int] = set()
         self._spans_by_trace: Dict[int, List[ReadableSpan]] = {}
 
     # ---- SpanProcessor API -------------------------------------------------
@@ -37,10 +34,15 @@ class _CellSpanCollector(SpanProcessor):
         if ctx is None:
             return
         with self._lock:
+            if ctx.trace_id not in self._active_traces:
+                # Span from unrelated instrumentation; dropping avoids
+                # unbounded memory growth in long-lived notebooks.
+                return
             self._spans_by_trace.setdefault(ctx.trace_id, []).append(span)
 
     def shutdown(self) -> None:  # type: ignore[override]
         with self._lock:
+            self._active_traces.clear()
             self._spans_by_trace.clear()
 
     def force_flush(self, timeout_millis: int = 30_000) -> bool:  # type: ignore[override]
@@ -48,11 +50,21 @@ class _CellSpanCollector(SpanProcessor):
 
     # ---- Cell-magic facing ------------------------------------------------
 
-    def pop_trace(self, trace_id: int) -> List[ReadableSpan]:
-        """Return (and remove) spans collected for ``trace_id``.
+    def begin_capture(self, trace_id: int) -> None:
+        """Start collecting spans tagged with ``trace_id``.
 
-        Entries are removed on retrieval so the collector does not
-        accumulate state across cells.
+        Must be paired with :meth:`end_capture`. Re-registering the same
+        ``trace_id`` while it is still active is a no-op.
         """
         with self._lock:
+            self._active_traces.add(trace_id)
+
+    def end_capture(self, trace_id: int) -> List[ReadableSpan]:
+        """Stop collecting ``trace_id`` and return the spans gathered so far.
+
+        Also drops the trace_id from the active set so any late-arriving
+        spans are discarded rather than retained.
+        """
+        with self._lock:
+            self._active_traces.discard(trace_id)
             return self._spans_by_trace.pop(trace_id, [])
