@@ -309,3 +309,16 @@ def test_function_evaluate_bound():
     unbounded = f.evaluate_bound({})
     assert math.isinf(unbounded.lower) and unbounded.lower < 0
     assert math.isinf(unbounded.upper) and unbounded.upper > 0
+
+
+def test_function_evaluate_bound_is_not_tight():
+    # evaluate_bound is a term-wise (monomial-wise) interval evaluation, which
+    # is a sound over-approximation but not tight when terms share variables.
+    #
+    # f = x^2 - x with x in [0, 1] has true range [-1/4, 0] (minimum at x=1/2,
+    # maximum at x=0 or x=1), but term-wise we get [0,1] + (-[0,1]) = [-1, 1].
+    f = Function(Quadratic(columns=[1], rows=[1], values=[1.0])) + Function(
+        Linear(terms={1: -1})
+    )
+    b = f.evaluate_bound({1: Bound(0.0, 1.0)})
+    assert b == Bound(-1.0, 1.0)  # over-approximation, not the true [-0.25, 0]
