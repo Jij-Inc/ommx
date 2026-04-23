@@ -1,6 +1,6 @@
 use super::*;
 
-use crate::{parse::*, v1, InstanceError};
+use crate::{parse::*, v1};
 use std::collections::BTreeMap;
 
 impl Parse for v1::decision_variable::Kind {
@@ -91,9 +91,10 @@ impl Parse for Vec<v1::DecisionVariable> {
             let v: DecisionVariable = v.parse(&())?;
             let id = v.id;
             if decision_variables.insert(id, v).is_some() {
-                return Err(
-                    RawParseError::InstanceError(InstanceError::DuplicatedVariableID { id }).into(),
-                );
+                return Err(RawParseError::InvalidInstance(format!(
+                    "Duplicated variable ID is found in definition: {id:?}"
+                ))
+                .into());
             }
         }
         Ok(decision_variables)

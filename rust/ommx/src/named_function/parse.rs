@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use super::*;
 use crate::{
     parse::{Parse, ParseError, RawParseError},
-    v1, InstanceError, VariableID,
+    v1, VariableID,
 };
 use anyhow::Result;
 
@@ -40,9 +40,9 @@ impl Parse for Vec<v1::NamedFunction> {
             let named_function = named_function.parse(&())?;
             let id = named_function.id;
             if named_functions.insert(id, named_function).is_some() {
-                return Err(RawParseError::InstanceError(
-                    InstanceError::DuplicatedNamedFunctionID { id },
-                )
+                return Err(RawParseError::InvalidInstance(format!(
+                    "Duplicated named function ID is found in definition: {id:?}"
+                ))
                 .into());
             }
         }

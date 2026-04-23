@@ -1,7 +1,7 @@
 use crate::{
     constraint::RemovedReason, polynomial_base::QuadraticParseError, BoundError, CoefficientError,
-    Constraint, ConstraintID, DecisionVariable, DecisionVariableError, InstanceError, SampleID,
-    SampleSetError, SolutionError, SubstitutionError, VariableID,
+    Constraint, ConstraintID, DecisionVariable, DecisionVariableError, SampleID, SampleSetError,
+    SolutionError, SubstitutionError, VariableID,
 };
 use prost::DecodeError;
 use std::{collections::BTreeMap, fmt};
@@ -88,8 +88,12 @@ pub enum RawParseError {
     #[error("Unknown or unsupported enum value {value} for {enum_name}. This may be due to an unspecified value or a newer version of the protocol.")]
     UnknownEnumValue { enum_name: &'static str, value: i32 },
 
-    #[error(transparent)]
-    InstanceError(#[from] InstanceError),
+    /// Catch-all for [`crate::Instance`] invariant violations discovered during
+    /// parsing (duplicated / undefined / non-unique IDs, etc.). Holds the
+    /// rendered message; we no longer expose a typed enum for this case since
+    /// downstream code never matched on discriminants.
+    #[error("{0}")]
+    InvalidInstance(String),
 
     #[error(transparent)]
     SolutionError(#[from] SolutionError),
@@ -136,9 +140,10 @@ pub(crate) fn as_constraint_id(
 ) -> Result<ConstraintID, ParseError> {
     let id = ConstraintID::from(id);
     if !constraints.contains_key(&id) && !removed_constraints.contains_key(&id) {
-        return Err(
-            RawParseError::InstanceError(InstanceError::UndefinedConstraintID { id }).into(),
-        );
+        return Err(RawParseError::InvalidInstance(format!(
+            "Undefined constraint ID is used: {id:?}"
+        ))
+        .into());
     }
     Ok(id)
 }
@@ -149,7 +154,10 @@ pub(crate) fn as_variable_id(
 ) -> Result<VariableID, ParseError> {
     let id = VariableID::from(id);
     if !decision_variables.contains_key(&id) {
-        return Err(RawParseError::InstanceError(InstanceError::UndefinedVariableID { id }).into());
+        return Err(RawParseError::InvalidInstance(format!(
+            "Undefined variable ID is used: {id:?}"
+        ))
+        .into());
     }
     Ok(id)
 }

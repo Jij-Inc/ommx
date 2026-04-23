@@ -3,7 +3,7 @@
 use crate::{
     constraint::RemovedReason,
     parse::{as_constraint_id, as_variable_id, Parse, ParseError, RawParseError},
-    v1, Constraint, ConstraintID, DecisionVariable, InstanceError, VariableID,
+    v1, Constraint, ConstraintID, DecisionVariable, VariableID,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -32,10 +32,10 @@ impl Parse for v1::OneHot {
             let id = as_variable_id(decision_variable, *v)
                 .map_err(|e| e.context(message, "decision_variables"))?;
             if !variables.insert(id) {
-                return Err(
-                    RawParseError::InstanceError(InstanceError::NonUniqueVariableID { id })
-                        .context(message, "decision_variables"),
-                );
+                return Err(RawParseError::InvalidInstance(format!(
+                    "Non-unique variable ID is found where uniqueness is required: {id:?}"
+                ))
+                .context(message, "decision_variables"));
             }
         }
         Ok(OneHot {

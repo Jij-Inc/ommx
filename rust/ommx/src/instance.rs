@@ -5,7 +5,6 @@ mod builder;
 mod clip_bounds;
 mod convert;
 mod decision_variable;
-mod error;
 mod evaluate;
 mod indicator;
 mod log_encode;
@@ -29,7 +28,6 @@ mod substitute;
 pub use analysis::*;
 pub use arbitrary::InstanceParameters;
 pub use builder::*;
-pub use error::*;
 pub use parametric_builder::*;
 pub use stats::*;
 

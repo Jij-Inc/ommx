@@ -1,8 +1,6 @@
 use fnv::FnvHashMap;
 
-use crate::{
-    Evaluate, Function, Instance, InstanceError, NamedFunction, NamedFunctionID, VariableIDSet,
-};
+use crate::{Evaluate, Function, Instance, NamedFunction, NamedFunctionID, VariableIDSet};
 
 impl Instance {
     /// Get all unique named function names in this instance
@@ -67,12 +65,12 @@ impl Instance {
         subscripts: Vec<i64>,
         parameters: FnvHashMap<String, String>,
         description: Option<String>,
-    ) -> Result<&mut NamedFunction, InstanceError> {
+    ) -> crate::Result<&mut NamedFunction> {
         let variable_ids: VariableIDSet = self.decision_variables.keys().cloned().collect();
 
         for id in function.required_ids() {
             if !variable_ids.contains(&id) {
-                return Err(InstanceError::UndefinedVariableID { id });
+                crate::bail!({ ?id }, "Undefined variable ID is used: {id:?}");
             }
         }
         let id = self.next_named_function_id();
@@ -92,7 +90,7 @@ impl Instance {
 
 #[cfg(test)]
 mod tests {
-    use crate::{coeff, linear, Coefficient, Function, Instance, NamedFunctionID, VariableID};
+    use crate::{coeff, linear, Coefficient, Function, Instance, NamedFunctionID};
 
     #[test]
     fn test_named_function_names() {
@@ -238,22 +236,23 @@ mod tests {
 
     #[test]
     fn test_new_named_function_undefined_variable() {
-        use crate::InstanceError;
-
         let mut instance = Instance::default();
 
         // Try to add a function referencing variable 99 which doesn't exist
-        let result = instance.new_named_function(
-            Function::Linear(coeff!(1.0) * linear!(99)),
-            Some("bad".to_string()),
-            vec![],
-            Default::default(),
-            None,
-        );
+        let err = instance
+            .new_named_function(
+                Function::Linear(coeff!(1.0) * linear!(99)),
+                Some("bad".to_string()),
+                vec![],
+                Default::default(),
+                None,
+            )
+            .unwrap_err();
 
-        assert!(matches!(
-            result,
-            Err(InstanceError::UndefinedVariableID { id }) if id == VariableID::from(99)
-        ));
+        let msg = err.to_string();
+        assert!(
+            msg.contains("Undefined variable ID") && msg.contains("99"),
+            "unexpected error: {msg}"
+        );
     }
 }

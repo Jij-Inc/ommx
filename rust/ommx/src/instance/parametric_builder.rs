@@ -112,46 +112,42 @@ impl ParametricInstanceBuilder {
     /// - The keys of `constraints` and `removed_constraints` are not disjoint
     /// - The keys of `decision_variable_dependency` are not in `decision_variables`
     /// - `used`, `fixed`, and `dependent` are not pairwise disjoint (see [`DecisionVariableAnalysis`])
-    pub fn build(self) -> anyhow::Result<ParametricInstance> {
+    pub fn build(self) -> crate::Result<ParametricInstance> {
         let sense = self
             .sense
-            .ok_or(InstanceError::MissingRequiredField { field: "sense" })?;
+            .ok_or_else(|| crate::error!("Required field is missing: sense"))?;
         let objective = self
             .objective
-            .ok_or(InstanceError::MissingRequiredField { field: "objective" })?;
-        let decision_variables =
-            self.decision_variables
-                .ok_or(InstanceError::MissingRequiredField {
-                    field: "decision_variables",
-                })?;
-        let parameters = self.parameters.ok_or(InstanceError::MissingRequiredField {
-            field: "parameters",
-        })?;
+            .ok_or_else(|| crate::error!("Required field is missing: objective"))?;
+        let decision_variables = self
+            .decision_variables
+            .ok_or_else(|| crate::error!("Required field is missing: decision_variables"))?;
+        let parameters = self
+            .parameters
+            .ok_or_else(|| crate::error!("Required field is missing: parameters"))?;
         let constraints = self
             .constraints
-            .ok_or(InstanceError::MissingRequiredField {
-                field: "constraints",
-            })?;
+            .ok_or_else(|| crate::error!("Required field is missing: constraints"))?;
 
         // Validate that decision variable map keys match their value's id
         for (key, value) in &decision_variables {
             if *key != value.id() {
-                return Err(InstanceError::InconsistentDecisionVariableID {
-                    key: *key,
-                    value_id: value.id(),
-                }
-                .into());
+                let value_id = value.id();
+                crate::bail!(
+                    { ?key, ?value_id },
+                    "Decision variable map key {key:?} does not match value's id {value_id:?}",
+                );
             }
         }
 
         // Validate that parameter map keys match their value's id
         for (key, value) in &parameters {
             if key.into_inner() != value.id {
-                return Err(InstanceError::InconsistentParameterID {
-                    key: *key,
-                    value_id: value.id,
-                }
-                .into());
+                let value_id = value.id;
+                crate::bail!(
+                    { ?key, value_id },
+                    "Parameter map key {key:?} does not match value's id {value_id}",
+                );
             }
         }
 
@@ -164,10 +160,11 @@ impl ParametricInstanceBuilder {
             .cloned()
             .collect();
         if !intersection.is_empty() {
-            return Err(InstanceError::DuplicatedVariableID {
-                id: *intersection.iter().next().unwrap(),
-            }
-            .into());
+            let id = *intersection.iter().next().unwrap();
+            crate::bail!(
+                { ?id },
+                "Duplicated variable ID is found in definition: {id:?}",
+            );
         }
 
         // Combine decision variables and parameters for validation
@@ -179,13 +176,13 @@ impl ParametricInstanceBuilder {
         // Validate that all variable IDs in objective and constraints are defined
         for id in objective.required_ids() {
             if !all_variable_ids.contains(&id) {
-                return Err(InstanceError::UndefinedVariableID { id }.into());
+                crate::bail!({ ?id }, "Undefined variable ID is used: {id:?}");
             }
         }
         for constraint in constraints.values() {
             for id in constraint.required_ids() {
                 if !all_variable_ids.contains(&id) {
-                    return Err(InstanceError::UndefinedVariableID { id }.into());
+                    crate::bail!({ ?id }, "Undefined variable ID is used: {id:?}");
                 }
             }
         }
@@ -194,7 +191,7 @@ impl ParametricInstanceBuilder {
         for (removed, _reason) in self.removed_constraints.values() {
             for id in removed.required_ids() {
                 if !all_variable_ids.contains(&id) {
-                    return Err(InstanceError::UndefinedVariableID { id }.into());
+                    crate::bail!({ ?id }, "Undefined variable ID is used: {id:?}");
                 }
             }
         }
@@ -202,15 +199,15 @@ impl ParametricInstanceBuilder {
         // Validate named_functions: key must match value's id, and all variable IDs must exist
         for (key, nf) in &self.named_functions {
             if *key != nf.id {
-                return Err(InstanceError::InconsistentNamedFunctionID {
-                    key: *key,
-                    id: nf.id,
-                }
-                .into());
+                let id = nf.id;
+                crate::bail!(
+                    { ?key, ?id },
+                    "Named function map key {key:?} does not match value's id {id:?}",
+                );
             }
             for id in nf.function.required_ids() {
                 if !all_variable_ids.contains(&id) {
-                    return Err(InstanceError::UndefinedVariableID { id }.into());
+                    crate::bail!({ ?id }, "Undefined variable ID is used: {id:?}");
                 }
             }
         }
@@ -218,7 +215,10 @@ impl ParametricInstanceBuilder {
         // Validate that constraints and removed_constraints keys are disjoint
         for id in self.removed_constraints.keys() {
             if constraints.contains_key(id) {
-                return Err(InstanceError::OverlappingConstraintID { id: *id }.into());
+                crate::bail!(
+                    { ?id },
+                    "Constraint ID {id:?} is in both constraints and removed_constraints, but they must be disjoint",
+                );
             }
         }
 
@@ -226,7 +226,10 @@ impl ParametricInstanceBuilder {
         // (dependent variables must exist as decision variables to get kind/bound info)
         for id in self.decision_variable_dependency.keys() {
             if !decision_variable_ids.contains(&id) {
-                return Err(InstanceError::UndefinedDependentVariableID { id }.into());
+                crate::bail!(
+                    { ?id },
+                    "Variable ID {id:?} in decision_variable_dependency is not in decision_variables",
+                );
             }
         }
 
@@ -248,17 +251,26 @@ impl ParametricInstanceBuilder {
 
         // Check used ∩ dependent = ∅
         if let Some(id) = used.intersection(&dependent).next() {
-            return Err(InstanceError::DependentVariableUsed { id: *id }.into());
+            crate::bail!(
+                { ?id },
+                "Dependent variable cannot be used in objectives or constraints: {id:?}",
+            );
         }
 
         // Check used ∩ fixed = ∅
         if let Some(id) = used.intersection(&fixed).next() {
-            return Err(InstanceError::FixedVariableUsed { id: *id }.into());
+            crate::bail!(
+                { ?id },
+                "Fixed variable {id:?} (substituted_value set) cannot be used in objectives or constraints",
+            );
         }
 
         // Check fixed ∩ dependent = ∅
         if let Some(id) = fixed.intersection(&dependent).next() {
-            return Err(InstanceError::FixedAndDependentVariable { id: *id }.into());
+            crate::bail!(
+                { ?id },
+                "Variable {id:?} cannot be both fixed (substituted_value set) and dependent",
+            );
         }
 
         Ok(ParametricInstance {
@@ -315,13 +327,10 @@ mod tests {
             .constraints(BTreeMap::new())
             .build()
             .unwrap_err();
-        let instance_err = err.downcast_ref::<InstanceError>().unwrap();
-        assert!(matches!(
-            instance_err,
-            InstanceError::MissingRequiredField {
-                field: "parameters"
-            }
-        ));
+        assert!(
+            err.to_string().contains("missing: parameters"),
+            "unexpected error: {err}"
+        );
     }
 
     #[test]
@@ -344,11 +353,11 @@ mod tests {
             .build()
             .unwrap_err();
 
-        let instance_err = err.downcast_ref::<InstanceError>().unwrap();
-        assert!(matches!(
-            instance_err,
-            InstanceError::DuplicatedVariableID { id } if *id == var_id
-        ));
+        let msg = err.to_string();
+        assert!(
+            msg.contains("Duplicated variable ID") && msg.contains(&format!("{:?}", var_id)),
+            "unexpected error: {msg}"
+        );
     }
 
     #[test]
@@ -378,12 +387,13 @@ mod tests {
             .build()
             .unwrap_err();
 
-        let instance_err = err.downcast_ref::<InstanceError>().unwrap();
-        assert!(matches!(
-            instance_err,
-            InstanceError::InconsistentNamedFunctionID { key, id }
-                if *key == NamedFunctionID::from(2) && *id == NamedFunctionID::from(1)
-        ));
+        let msg = err.to_string();
+        assert!(
+            msg.contains("Named function map key")
+                && msg.contains("NamedFunctionID(2)")
+                && msg.contains("NamedFunctionID(1)"),
+            "unexpected error: {msg}"
+        );
     }
 
     #[test]
@@ -413,11 +423,11 @@ mod tests {
             .build()
             .unwrap_err();
 
-        let instance_err = err.downcast_ref::<InstanceError>().unwrap();
-        assert!(matches!(
-            instance_err,
-            InstanceError::UndefinedVariableID { id } if *id == VariableID::from(999)
-        ));
+        let msg = err.to_string();
+        assert!(
+            msg.contains("Undefined variable ID") && msg.contains("999"),
+            "unexpected error: {msg}"
+        );
     }
 
     #[test]
