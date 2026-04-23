@@ -4,19 +4,26 @@ Registered via ``%load_ext ommx.tracing``. The magic wraps cell execution
 in a single OTel root span, asks :class:`._collector._CellSpanCollector`
 to stash only that trace's spans, and displays the result as HTML.
 
-Cell-body execution goes through :meth:`InteractiveShell.ex` rather
-than :meth:`InteractiveShell.run_cell`: we want the exception raised by
-the user's cell to propagate naturally so the outer (magic-invoking)
-``run_cell`` reports the failure to upstream automation
-(``nbconvert --execute``, papermill, pytest-nbval, …). ``run_cell``
-captures and displays the exception itself, which would either swallow
-it or double-display the traceback once we re-raise.
+Cell-body execution goes through :meth:`InteractiveShell.run_cell` so
+the full IPython pipeline — input transforms, top-level ``await``, line
+magics, cell-input cleanups — behaves the way it would in an untraced
+cell. The point is that ``%%ommx_trace`` should be observational: a
+user removes the magic, the cell body still does the same thing.
+
+Re-raising without a double traceback is slightly delicate. ``run_cell``
+catches exceptions internally and calls ``shell.showtraceback()`` before
+returning; if we then re-raise the captured exception, the *outer*
+``run_cell`` (the one that invoked our magic) prints it a second time.
+We work around that by temporarily pointing ``shell.showtraceback`` at
+a no-op during the inner call, so the traceback is shown exactly once —
+by the outer ``run_cell`` when our re-raise reaches it.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional, Tuple
 
+from opentelemetry import context as otel_context
 from opentelemetry import trace
 
 from ._render import render_cell_output_html
@@ -35,18 +42,21 @@ def run_cell_with_trace(
     shell: "InteractiveShell",
     cell: str,
 ) -> Tuple[str, Optional[BaseException]]:
-    """Execute ``cell`` inside an ``ommx_trace_cell`` root span.
+    """Execute ``cell`` inside a fresh ``ommx_trace_cell`` root span.
 
     Returns ``(html_blob, error)`` where ``html_blob`` is the rendered
-    trace output (always produced, even if the cell raised) and ``error``
-    is the exception raised during execution or ``None``. Splitting
-    rendering from re-raise keeps the function testable without having
-    to drive IPython's display machinery; the cell magic entry point
+    trace output (always produced, even if the cell raised) and
+    ``error`` is the exception raised during execution or ``None``.
+    Splitting rendering from re-raise keeps the function testable
+    without driving IPython's display machinery; the magic entry point
     (:func:`register_magic`) is what actually re-raises.
 
-    ``end_capture`` sits in a ``finally`` so the collector's active-trace
-    set does not leak the trace_id on ``KeyboardInterrupt`` or
-    ``SystemExit``.
+    The root span is started with an explicit empty OTel ``Context`` so
+    the cell's ``trace_id`` is always fresh, detached from any ambient
+    span that might be in scope. Without that detach, an ambient span
+    installed by an unrelated extension would share a ``trace_id`` with
+    the cell, and the collector — which keys captures by ``trace_id`` —
+    would pull unrelated spans into the cell's output.
     """
     collector = ensure_collector_installed()
     tracer = trace.get_tracer(_CELL_TRACER_NAME)
@@ -54,23 +64,44 @@ def run_cell_with_trace(
     cell_exc: Optional[BaseException] = None
     trace_id: Optional[int] = None
     try:
-        with tracer.start_as_current_span(_CELL_ROOT_SPAN_NAME) as root:
+        with tracer.start_as_current_span(
+            _CELL_ROOT_SPAN_NAME,
+            # ``context=Context()`` detaches from whatever context is
+            # currently active, forcing a brand-new trace. Without this
+            # the cell would inherit an ambient span's trace_id and the
+            # collector's capture window would pull in unrelated spans.
+            context=otel_context.Context(),
+        ) as root:
             trace_id = root.get_span_context().trace_id
             collector.begin_capture(trace_id)
+
+            # Suppress the inner ``showtraceback``: ``run_cell`` calls
+            # it unconditionally on error, but the outer ``run_cell``
+            # will also call it once our re-raise reaches it, and we
+            # don't want the traceback printed twice.
+            original_showtraceback = shell.showtraceback
+            shell.showtraceback = lambda *args, **kwargs: None
             try:
-                # ``shell.ex`` exec's the string in the user namespace
-                # with minimal IPython machinery; exceptions propagate
-                # naturally and are caught one layer up.
-                shell.ex(cell)
-            except BaseException as exc:  # noqa: BLE001 - re-raised by caller
-                cell_exc = exc
+                result = shell.run_cell(cell, store_history=False)
+            finally:
+                shell.showtraceback = original_showtraceback
+            # Both parse-time and runtime errors are surfaced.
+            # ``error_before_exec`` is typed as ``BaseException | True |
+            # None`` in IPython's stubs (``True`` was a legacy sentinel)
+            # so narrow through ``isinstance`` before handing it back.
+            err_before = result.error_before_exec
+            cell_exc = (
+                err_before
+                if isinstance(err_before, BaseException)
+                else result.error_in_exec
+            )
     finally:
         # Call ``end_capture`` *after* the ``with`` block exits so the
         # root span's ``on_end`` fires first and lands in the collector.
         # Moving this into the inner ``finally`` (inside ``with``) would
-        # drop the root span itself from the rendered tree. Using an
-        # outer ``finally`` also makes sure the collector's active-trace
-        # set is cleared even on ``KeyboardInterrupt`` or ``SystemExit``.
+        # drop the root span itself from the rendered tree. The outer
+        # ``finally`` also makes sure the collector's active-trace set
+        # is cleared on ``KeyboardInterrupt`` / ``SystemExit``.
         spans = collector.end_capture(trace_id) if trace_id is not None else []
 
     return render_cell_output_html(spans), cell_exc

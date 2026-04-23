@@ -373,3 +373,68 @@ def test_load_ipython_extension_registers_magic(ipython_shell):
     rendering."""
     ipython_shell.extension_manager.load_extension("ommx.tracing")
     assert "ommx_trace" in ipython_shell.magics_manager.magics["cell"]
+
+
+def test_run_cell_with_trace_starts_a_fresh_trace(ipython_shell, cell_collector):
+    """The cell root span must *not* inherit an ambient trace context.
+
+    If ``start_as_current_span`` is called without detaching from the
+    current context, any ambient span (from another extension,
+    instrumentation library, or leftover ``with`` block in the user
+    namespace) bleeds into the cell's ``trace_id`` and the collector
+    captures unrelated spans. This test installs an ambient span,
+    emits a sibling span under it, runs a traced cell, and asserts
+    the cell's rendered tree contains only the cell's own spans.
+    """
+    _setup.reset_for_testing()
+    try:
+        outer_tracer = trace.get_tracer("ommx-tracing-magic-test.ambient")
+        with outer_tracer.start_as_current_span("ambient_parent") as ambient:
+            ambient_trace_id = ambient.get_span_context().trace_id
+            cell_collector.begin_capture(ambient_trace_id)
+            # A sibling span on the ambient trace — must stay out of
+            # the cell's output.
+            with outer_tracer.start_as_current_span("ambient_sibling"):
+                pass
+
+            html, exc = run_cell_with_trace(
+                ipython_shell,
+                "ommx_isolation_sentinel = 1",
+            )
+
+        assert exc is None
+        assert ipython_shell.user_ns.pop("ommx_isolation_sentinel") == 1
+        # The cell got a fresh trace, so neither ``ambient_sibling``
+        # nor the still-open ``ambient_parent`` leak into the rendered
+        # tree.
+        assert "ambient_sibling" not in html
+        assert "ambient_parent" not in html
+        assert "ommx_trace_cell" in html
+        # Defensive: spans produced on the ambient trace are still
+        # captured by the ambient-trace collector slot — they didn't
+        # silently migrate into the cell's slot.
+        ambient_spans = cell_collector.end_capture(ambient_trace_id)
+        assert "ambient_sibling" in {s.name for s in ambient_spans}
+    finally:
+        _setup.reset_for_testing()
+
+
+def test_run_cell_with_trace_supports_top_level_await(ipython_shell):
+    """Using ``shell.run_cell`` (rather than ``shell.ex``) preserves the
+    full IPython cell pipeline, including top-level ``await`` — so
+    ``%%ommx_trace`` stays observational for async cells."""
+    _setup.reset_for_testing()
+    try:
+        ipython_shell.user_ns.pop("ommx_await_sentinel", None)
+        html, exc = run_cell_with_trace(
+            ipython_shell,
+            "import asyncio\n"
+            "async def _probe():\n"
+            "    return 99\n"
+            "ommx_await_sentinel = await _probe()\n",
+        )
+        assert exc is None, exc
+        assert ipython_shell.user_ns["ommx_await_sentinel"] == 99
+        assert "ommx_trace_cell" in html
+    finally:
+        _setup.reset_for_testing()
