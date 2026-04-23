@@ -56,7 +56,10 @@ impl SampleSet {
         let mut result = BTreeMap::new();
         for variable in &variables_with_name {
             let subscripts = variable.metadata.subscripts.clone();
-            let value = *variable.samples().get(sample_id)?;
+            let value = *variable
+                .samples()
+                .get(sample_id)
+                .ok_or(SampleSetError::UnknownSampleID { id: sample_id })?;
             if result.insert(subscripts.clone(), value).is_some() {
                 return Err(SampleSetError::DuplicateSubscripts {
                     name: name.to_string(),
@@ -94,7 +97,10 @@ impl SampleSet {
             };
 
             let subscripts = variable.metadata.subscripts.clone();
-            let value = *variable.samples().get(sample_id)?;
+            let value = *variable
+                .samples()
+                .get(sample_id)
+                .ok_or(SampleSetError::UnknownSampleID { id: sample_id })?;
 
             let vars_map = result.entry(name.clone()).or_default();
             if vars_map.contains_key(&subscripts) {
@@ -131,7 +137,11 @@ impl SampleSet {
                 return Err(SampleSetError::ParameterizedConstraint);
             }
             let subscripts = constraint.metadata.subscripts.clone();
-            let value = *constraint.stage.evaluated_values.get(sample_id)?;
+            let value = *constraint
+                .stage
+                .evaluated_values
+                .get(sample_id)
+                .ok_or(SampleSetError::UnknownSampleID { id: sample_id })?;
             if result.insert(subscripts.clone(), value).is_some() {
                 return Err(SampleSetError::DuplicateSubscripts {
                     name: name.to_string(),
@@ -169,7 +179,10 @@ impl SampleSet {
             };
 
             let subscripts = nf.subscripts.clone();
-            let value = *nf.evaluated_values().get(sample_id)?;
+            let value = *nf
+                .evaluated_values()
+                .get(sample_id)
+                .ok_or(SampleSetError::UnknownSampleID { id: sample_id })?;
 
             let vars_map = result.entry(name.clone()).or_default();
             if vars_map.contains_key(&subscripts) {
@@ -212,7 +225,10 @@ impl SampleSet {
         let mut result = BTreeMap::new();
         for nf in &named_functions_with_name {
             let subscripts = nf.subscripts().clone();
-            let value = *nf.evaluated_values().get(sample_id)?;
+            let value = *nf
+                .evaluated_values()
+                .get(sample_id)
+                .ok_or(SampleSetError::UnknownSampleID { id: sample_id })?;
             if result.insert(subscripts.clone(), value).is_some() {
                 return Err(SampleSetError::DuplicateSubscripts {
                     name: name.to_string(),

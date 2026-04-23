@@ -1,9 +1,32 @@
-use anyhow::bail;
-use ordered_float::NotNan;
+use ordered_float::{FloatIsNan, NotNan};
 use std::ops::{Add, Deref, Neg, Sub};
 use std::sync::{LazyLock, RwLock};
 
 use crate::Coefficient;
+
+/// Error produced when constructing an [`ATol`] or updating its default.
+///
+/// Signal-style typed error — callers may downcast from [`crate::Error`]
+/// when they need to distinguish invalid inputs. See the
+/// [`crate::error`](crate) module for the downcast convention.
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum AtolError {
+    /// `value` was zero or negative. Absolute tolerances must be strictly
+    /// positive.
+    #[error("ATol must be positive: got {value}")]
+    NonPositive { value: f64 },
+
+    /// `value` was NaN.
+    #[error("ATol cannot be NaN")]
+    NaN,
+}
+
+impl From<FloatIsNan> for AtolError {
+    fn from(_: FloatIsNan) -> Self {
+        AtolError::NaN
+    }
+}
 
 /// Absolute tolerance
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -43,11 +66,16 @@ impl Deref for ATol {
 }
 
 impl ATol {
-    pub fn new(value: f64) -> anyhow::Result<Self> {
-        if value <= 0.0 {
-            bail!("ATol must be positive: {value}");
+    pub fn new(value: f64) -> crate::Result<Self> {
+        if value.is_nan() {
+            tracing::error!(value, "ATol cannot be NaN");
+            return Err(AtolError::NaN.into());
         }
-        Ok(ATol(NotNan::new(value)?))
+        if value <= 0.0 {
+            tracing::error!(value, "ATol must be positive");
+            return Err(AtolError::NonPositive { value }.into());
+        }
+        Ok(ATol(NotNan::new(value).map_err(AtolError::from)?))
     }
 
     pub fn into_inner(&self) -> f64 {
@@ -55,13 +83,12 @@ impl ATol {
     }
 
     #[tracing::instrument(skip_all)]
-    pub fn set_default(value: f64) -> anyhow::Result<()> {
+    pub fn set_default(value: f64) -> crate::Result<()> {
         let atol = Self::new(value)?;
         let mut default = DEFAULT_ATOL.write().map_err(|e| {
-            anyhow::anyhow!(
-                "Failed to acquire write lock for DEFAULT_ATOL: poisoned lock: {}",
-                e
-            )
+            crate::Error::msg(format!(
+                "Failed to acquire write lock for DEFAULT_ATOL: poisoned lock: {e}"
+            ))
         })?;
         *default = atol.into_inner();
         tracing::info!("ATol default value changed to: {value}");
@@ -147,5 +174,42 @@ impl Neg for ATol {
     type Output = f64;
     fn neg(self) -> Self::Output {
         -self.into_inner()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejects_non_positive() {
+        let err = ATol::new(0.0).unwrap_err();
+        assert!(err.is::<AtolError>());
+        match err.downcast::<AtolError>() {
+            Ok(AtolError::NonPositive { value }) => assert_eq!(value, 0.0),
+            Ok(other) => panic!("unexpected variant: {other:?}"),
+            Err(_) => panic!("downcast failed"),
+        }
+    }
+
+    #[test]
+    fn rejects_negative() {
+        let err = ATol::new(-1e-9).unwrap_err();
+        assert!(err.is::<AtolError>());
+    }
+
+    #[test]
+    fn rejects_nan() {
+        let err = ATol::new(f64::NAN).unwrap_err();
+        match err.downcast::<AtolError>() {
+            Ok(AtolError::NaN) => {}
+            Ok(other) => panic!("unexpected variant: {other:?}"),
+            Err(_) => panic!("downcast failed"),
+        }
+    }
+
+    #[test]
+    fn accepts_small_positive() {
+        assert!(ATol::new(1e-12).is_ok());
     }
 }

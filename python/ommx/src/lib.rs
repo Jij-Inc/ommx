@@ -104,7 +104,7 @@ pub(crate) const TRACING: TracingBridge = TracingBridge::new("ommx");
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
 pub fn set_default_atol(value: f64) -> anyhow::Result<()> {
-    ommx::ATol::set_default(value)
+    Ok(ommx::ATol::set_default(value)?)
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]

@@ -347,7 +347,7 @@ impl<'a> ToPandasEntry
             ic.metadata.description.as_deref(),
         )?;
         for &sample_id in self.sample_ids {
-            let value = ic.stage.evaluated_values.get(sample_id).ok().copied();
+            let value = ic.stage.evaluated_values.get(sample_id).copied();
             dict.set_item(format!("value.{}", sample_id.into_inner()), value)?;
             let feas = ic.stage.feasible.get(&sample_id).copied();
             dict.set_item(format!("feasible.{}", sample_id.into_inner()), feas)?;
@@ -720,7 +720,7 @@ impl<'a> ToPandasEntry for WithSampleIds<'a, &'a ommx::SampledDecisionVariable> 
             dv.metadata.description.as_deref(),
         )?;
         for &sample_id in self.sample_ids {
-            let value = dv.samples().get(sample_id).ok().copied();
+            let value = dv.samples().get(sample_id).copied();
             dict.set_item(sample_id.into_inner(), value)?;
         }
         Ok(dict)
@@ -741,7 +741,7 @@ impl<'a> ToPandasEntry for WithSampleIds<'a, (ommx::ConstraintID, &'a ommx::Samp
             sc.metadata.description.as_deref(),
         )?;
         for &sample_id in self.sample_ids {
-            let value = sc.stage.evaluated_values.get(sample_id).ok().copied();
+            let value = sc.stage.evaluated_values.get(sample_id).copied();
             dict.set_item(format!("value.{}", sample_id.into_inner()), value)?;
             let feas = sc.stage.feasible.get(&sample_id).copied();
             dict.set_item(format!("feasible.{}", sample_id.into_inner()), feas)?;
@@ -769,7 +769,7 @@ impl<'a> ToPandasEntry for WithSampleIds<'a, &'a ommx::SampledNamedFunction> {
             .collect();
         dict.set_item("parameters", params)?;
         for &sample_id in self.sample_ids {
-            let value = nf.evaluated_values().get(sample_id).ok().copied();
+            let value = nf.evaluated_values().get(sample_id).copied();
             dict.set_item(sample_id.into_inner(), value)?;
         }
         Ok(dict)

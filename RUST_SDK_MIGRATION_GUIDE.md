@@ -291,7 +291,7 @@ pub trait SampledConstraintBehavior {
     type Evaluated;
     fn constraint_id(&self) -> Self::ID;
     fn is_feasible_for(&self, sample_id: SampleID) -> Option<bool>;
-    fn get(&self, sample_id: SampleID) -> Result<Self::Evaluated, UnknownSampleIDError>;
+    fn get(&self, sample_id: SampleID) -> Option<Self::Evaluated>;
 }
 ```
 

@@ -120,7 +120,11 @@ impl Evaluate for IndicatorConstraint<Created> {
         let mut indicator_active = std::collections::BTreeMap::new();
         for (sample_id, state) in samples.iter() {
             let sample_id = *sample_id;
-            let ev = *evaluated_values.get(sample_id)?;
+            let ev = *evaluated_values.get(sample_id).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Sample ID {sample_id:?} missing from evaluated values during indicator-constraint evaluation"
+                )
+            })?;
 
             let indicator_value = state
                 .entries

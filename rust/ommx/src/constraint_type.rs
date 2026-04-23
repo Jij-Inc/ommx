@@ -67,10 +67,9 @@ pub trait SampledConstraintBehavior {
     fn is_feasible_for(&self, sample_id: SampleID) -> Option<bool>;
 
     /// Extract an evaluated constraint for a specific sample.
-    fn get(
-        &self,
-        sample_id: SampleID,
-    ) -> Result<Self::Evaluated, crate::sampled::UnknownSampleIDError>;
+    ///
+    /// Returns [`None`] if `sample_id` is not present in the sampled data.
+    fn get(&self, sample_id: SampleID) -> Option<Self::Evaluated>;
 }
 
 // ===== Blanket-like impls for Constraint<Evaluated> and Constraint<Sampled> =====
@@ -91,25 +90,18 @@ impl SampledConstraintBehavior for SampledConstraint {
     fn is_feasible_for(&self, sample_id: SampleID) -> Option<bool> {
         self.stage.feasible.get(&sample_id).copied()
     }
-    fn get(
-        &self,
-        sample_id: SampleID,
-    ) -> Result<Self::Evaluated, crate::sampled::UnknownSampleIDError> {
+    fn get(&self, sample_id: SampleID) -> Option<Self::Evaluated> {
         use crate::constraint::EvaluatedData;
         let evaluated_value = *self.stage.evaluated_values.get(sample_id)?;
         let dual_variable = self
             .stage
             .dual_variables
             .as_ref()
-            .and_then(|duals| duals.get(sample_id).ok())
+            .and_then(|duals| duals.get(sample_id))
             .copied();
-        let feasible = *self
-            .stage
-            .feasible
-            .get(&sample_id)
-            .ok_or(crate::sampled::UnknownSampleIDError { id: sample_id })?;
+        let feasible = *self.stage.feasible.get(&sample_id)?;
 
-        Ok(crate::Constraint {
+        Some(crate::Constraint {
             equality: self.equality,
             metadata: self.metadata.clone(),
             stage: EvaluatedData {

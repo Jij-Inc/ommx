@@ -7,8 +7,7 @@ use crate::{
     indicator_constraint::IndicatorConstraint,
     Constraint, ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable,
     EvaluatedNamedFunction, NamedFunctionID, SampleID, SampleIDSet, Sampled, SampledConstraint,
-    SampledDecisionVariable, SampledNamedFunction, Sense, Solution, UnknownSampleIDError,
-    VariableID,
+    SampledDecisionVariable, SampledNamedFunction, Sense, Solution, VariableID,
 };
 use getset::Getters;
 use std::collections::BTreeMap;
@@ -55,8 +54,8 @@ pub enum SampleSetError {
     #[error("Constraint with parameters is not supported")]
     ParameterizedConstraint,
 
-    #[error(transparent)]
-    UnknownSampleIDError(#[from] UnknownSampleIDError),
+    #[error("Unknown sample ID: {id:?}")]
+    UnknownSampleID { id: SampleID },
 
     #[error("No feasible solution found")]
     NoFeasibleSolution,
@@ -171,27 +170,24 @@ impl SampleSet {
         self.feasible_ids()
     }
 
-    /// Check if a specific sample is feasible
-    pub fn is_sample_feasible(&self, sample_id: SampleID) -> Result<bool, UnknownSampleIDError> {
-        self.feasible
-            .get(&sample_id)
-            .copied()
-            .ok_or(UnknownSampleIDError { id: sample_id })
+    /// Check if a specific sample is feasible.
+    ///
+    /// Returns [`None`] if `sample_id` is not in this sample set.
+    pub fn is_sample_feasible(&self, sample_id: SampleID) -> Option<bool> {
+        self.feasible.get(&sample_id).copied()
     }
 
-    /// Check if a specific sample is feasible in the relaxed problem
-    pub fn is_sample_feasible_relaxed(
-        &self,
-        sample_id: SampleID,
-    ) -> Result<bool, UnknownSampleIDError> {
-        self.feasible_relaxed
-            .get(&sample_id)
-            .copied()
-            .ok_or(UnknownSampleIDError { id: sample_id })
+    /// Check if a specific sample is feasible in the relaxed problem.
+    ///
+    /// Returns [`None`] if `sample_id` is not in this sample set.
+    pub fn is_sample_feasible_relaxed(&self, sample_id: SampleID) -> Option<bool> {
+        self.feasible_relaxed.get(&sample_id).copied()
     }
 
-    /// Get a specific solution by sample ID
-    pub fn get(&self, sample_id: crate::SampleID) -> Result<Solution, crate::UnknownSampleIDError> {
+    /// Get a specific solution by sample ID.
+    ///
+    /// Returns [`None`] if `sample_id` is not in this sample set.
+    pub fn get(&self, sample_id: crate::SampleID) -> Option<Solution> {
         // Get objective value
         let objective = *self.objectives.get(sample_id)?;
 
@@ -246,7 +242,7 @@ impl SampleSet {
         let sense = *self.sense();
 
         // SAFETY: SampleSet invariants guarantee Solution invariants
-        Ok(unsafe {
+        Some(unsafe {
             Solution::builder()
                 .objective(objective)
                 .evaluated_constraints(evaluated_constraints)
@@ -306,12 +302,12 @@ impl SampleSet {
     /// Get the best feasible solution
     pub fn best_feasible(&self) -> Result<Solution, SampleSetError> {
         let id = self.best_feasible_id()?;
-        self.get(id).map_err(SampleSetError::from)
+        self.get(id).ok_or(SampleSetError::UnknownSampleID { id })
     }
 
     pub fn best_feasible_relaxed(&self) -> Result<Solution, SampleSetError> {
         let id = self.best_feasible_relaxed_id()?;
-        self.get(id).map_err(SampleSetError::from)
+        self.get(id).ok_or(SampleSetError::UnknownSampleID { id })
     }
 
     /// Creates a new [`SampleSetBuilder`].

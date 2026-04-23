@@ -76,7 +76,7 @@ impl Parse for crate::v1::SampleSet {
         // Check the consistency of feasibility maps from the original v1 data
         for (sample_id_u64, provided_feasible) in self.feasible {
             let sample_id = crate::SampleID::from(sample_id_u64);
-            if let Ok(computed_feasible) = sample_set.is_sample_feasible(sample_id) {
+            if let Some(computed_feasible) = sample_set.is_sample_feasible(sample_id) {
                 if provided_feasible != computed_feasible {
                     return Err(crate::RawParseError::SampleSetError(
                         crate::SampleSetError::InconsistentFeasibility {
@@ -93,7 +93,8 @@ impl Parse for crate::v1::SampleSet {
         // Check the consistency of feasible_relaxed maps from the original v1 data
         for (sample_id_u64, provided_feasible_relaxed) in self.feasible_relaxed {
             let sample_id = crate::SampleID::from(sample_id_u64);
-            if let Ok(computed_feasible_relaxed) = sample_set.is_sample_feasible_relaxed(sample_id)
+            if let Some(computed_feasible_relaxed) =
+                sample_set.is_sample_feasible_relaxed(sample_id)
             {
                 if provided_feasible_relaxed != computed_feasible_relaxed {
                     return Err(crate::RawParseError::SampleSetError(
@@ -248,10 +249,10 @@ mod tests {
 
         // Test error handling for unknown sample IDs
         let unknown_sample_id = crate::SampleID::from(999);
-        assert!(parsed.is_sample_feasible(unknown_sample_id).is_err());
+        assert!(parsed.is_sample_feasible(unknown_sample_id).is_none());
         assert!(parsed
             .is_sample_feasible_relaxed(unknown_sample_id)
-            .is_err());
+            .is_none());
 
         // Test round-trip conversion
         let v1_converted: v1::SampleSet = parsed.into();

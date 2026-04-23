@@ -8,7 +8,7 @@ pub use arbitrary::*;
 use getset::CopyGetters;
 
 use crate::logical_memory::LogicalMemoryProfile;
-use crate::{sampled::UnknownSampleIDError, ATol, Bound, Parse, RawParseError, SampleID, Sampled};
+use crate::{ATol, Bound, Parse, RawParseError, SampleID, Sampled};
 use ::approx::AbsDiffEq;
 use derive_more::{Deref, From};
 use fnv::FnvHashMap;
@@ -513,11 +513,10 @@ impl SampledDecisionVariable {
         })
     }
 
-    /// Get a specific evaluated decision variable by sample ID
-    pub fn get(
-        &self,
-        sample_id: SampleID,
-    ) -> Result<EvaluatedDecisionVariable, UnknownSampleIDError> {
+    /// Get a specific evaluated decision variable by sample ID.
+    ///
+    /// Returns [`None`] if `sample_id` is not present in the sampled data.
+    pub fn get(&self, sample_id: SampleID) -> Option<EvaluatedDecisionVariable> {
         let value = *self.samples.get(sample_id)?;
 
         // Create a DecisionVariable to use with EvaluatedDecisionVariable::new
@@ -530,7 +529,7 @@ impl SampledDecisionVariable {
         };
 
         // unwrap is safe here since there's no substituted_value to check
-        Ok(EvaluatedDecisionVariable::new(dv, value, crate::ATol::default()).unwrap())
+        Some(EvaluatedDecisionVariable::new(dv, value, crate::ATol::default()).unwrap())
     }
 }
 

@@ -106,7 +106,10 @@ impl SampleSet {
 
     pub fn get(&self, sample_id: u64) -> Result<Solution> {
         let sample_id = ommx::SampleID::from(sample_id);
-        let solution = self.inner.get(sample_id)?;
+        let solution = self
+            .inner
+            .get(sample_id)
+            .ok_or_else(|| anyhow::anyhow!("Unknown sample ID: {}", sample_id.into_inner()))?;
         Ok(Solution {
             inner: solution,
             annotations: HashMap::new(),

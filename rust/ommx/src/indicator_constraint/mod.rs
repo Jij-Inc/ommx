@@ -128,23 +128,12 @@ impl SampledConstraintBehavior for SampledIndicatorConstraint {
     fn is_feasible_for(&self, sample_id: SampleID) -> Option<bool> {
         self.stage.feasible.get(&sample_id).copied()
     }
-    fn get(
-        &self,
-        sample_id: SampleID,
-    ) -> Result<Self::Evaluated, crate::sampled::UnknownSampleIDError> {
+    fn get(&self, sample_id: SampleID) -> Option<Self::Evaluated> {
         let evaluated_value = *self.stage.evaluated_values.get(sample_id)?;
-        let feasible = *self
-            .stage
-            .feasible
-            .get(&sample_id)
-            .ok_or(crate::sampled::UnknownSampleIDError { id: sample_id })?;
-        let indicator_active = *self
-            .stage
-            .indicator_active
-            .get(&sample_id)
-            .ok_or(crate::sampled::UnknownSampleIDError { id: sample_id })?;
+        let feasible = *self.stage.feasible.get(&sample_id)?;
+        let indicator_active = *self.stage.indicator_active.get(&sample_id)?;
 
-        Ok(IndicatorConstraint {
+        Some(IndicatorConstraint {
             indicator_variable: self.indicator_variable,
             equality: self.equality,
             metadata: self.metadata.clone(),
