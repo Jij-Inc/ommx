@@ -717,11 +717,10 @@ impl SolutionBuilder {
         for (ic_id, ic) in self.evaluated_indicator_constraints.iter() {
             for var_id in &ic.stage.used_decision_variable_ids {
                 if !decision_variables.contains_key(var_id) {
-                    return Err(anyhow::anyhow!(
-                        "Variable {:?} used in indicator constraint {:?} is not defined in decision_variables",
-                        var_id,
-                        ic_id
-                    ));
+                    crate::bail!(
+                        { ?var_id, ?ic_id },
+                        "Variable {var_id:?} used in indicator constraint {ic_id:?} is not defined in decision_variables",
+                    );
                 }
             }
         }
@@ -730,11 +729,10 @@ impl SolutionBuilder {
         for (oh_id, oh) in self.evaluated_one_hot_constraints.iter() {
             for var_id in &oh.stage.used_decision_variable_ids {
                 if !decision_variables.contains_key(var_id) {
-                    return Err(anyhow::anyhow!(
-                        "Variable {:?} used in one-hot constraint {:?} is not defined in decision_variables",
-                        var_id,
-                        oh_id
-                    ));
+                    crate::bail!(
+                        { ?var_id, ?oh_id },
+                        "Variable {var_id:?} used in one-hot constraint {oh_id:?} is not defined in decision_variables",
+                    );
                 }
             }
         }
@@ -743,11 +741,10 @@ impl SolutionBuilder {
         for (s1_id, s1) in self.evaluated_sos1_constraints.iter() {
             for var_id in &s1.stage.used_decision_variable_ids {
                 if !decision_variables.contains_key(var_id) {
-                    return Err(anyhow::anyhow!(
-                        "Variable {:?} used in SOS1 constraint {:?} is not defined in decision_variables",
-                        var_id,
-                        s1_id
-                    ));
+                    crate::bail!(
+                        { ?var_id, ?s1_id },
+                        "Variable {var_id:?} used in SOS1 constraint {s1_id:?} is not defined in decision_variables",
+                    );
                 }
             }
         }

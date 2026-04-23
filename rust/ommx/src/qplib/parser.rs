@@ -321,6 +321,12 @@ impl Display for ProbConstrKind {
     }
 }
 
+// The `FromStr` impls below construct plain `anyhow::Error` messages and do
+// *not* emit `tracing::error!` events themselves. Every caller wraps the
+// result through `parse_or_err_with_line` / `next_parse`, which ultimately
+// runs the error through `QplibParseError::new` — that is where tracing is
+// emitted, with `line_num` attached. Logging here as well would double-emit
+// every in-file parse failure.
 impl FromStr for ProblemType {
     type Err = crate::Error;
 
@@ -331,14 +337,14 @@ impl FromStr for ProblemType {
             .zip(chars.next())
             .zip(chars.next())
             .ok_or_else(|| {
-                crate::error!("invalid QPLIB problem type {s:?}: expected 3 characters")
+                ::anyhow::anyhow!("invalid QPLIB problem type {s:?}: expected 3 characters")
             })?;
         let o = match o.to_ascii_uppercase() {
             'L' => ProbObjKind::Linear,
             'D' => ProbObjKind::DiagonalC,
             'C' => ProbObjKind::ConcaveOrConvex,
             'Q' => ProbObjKind::Quadratic,
-            _ => crate::bail!(
+            _ => ::anyhow::bail!(
                 "invalid QPLIB problem type {s:?}: objective kind character {o:?} must be one of L/D/C/Q",
             ),
         };
@@ -348,7 +354,7 @@ impl FromStr for ProblemType {
             'M' => ProbVarKind::Mixed,
             'I' => ProbVarKind::Integer,
             'G' => ProbVarKind::General,
-            _ => crate::bail!(
+            _ => ::anyhow::bail!(
                 "invalid QPLIB problem type {s:?}: variable kind character {v:?} must be one of C/B/M/I/G",
             ),
         };
@@ -359,7 +365,7 @@ impl FromStr for ProblemType {
             'D' => ProbConstrKind::DiagonalConvex,
             'C' => ProbConstrKind::Convex,
             'Q' => ProbConstrKind::Quadratic,
-            _ => crate::bail!(
+            _ => ::anyhow::bail!(
                 "invalid QPLIB problem type {s:?}: constraint kind character {c:?} must be one of N/B/L/D/C/Q",
             ),
         };
@@ -381,7 +387,7 @@ impl FromStr for ObjSense {
         match s.to_lowercase().as_str() {
             "minimize" => Ok(Self::Minimize),
             "maximize" => Ok(Self::Maximize),
-            _ => crate::bail!({ value = s }, "invalid QPLIB OBJSENSE: {s}"),
+            _ => ::anyhow::bail!("invalid QPLIB OBJSENSE: {s}"),
         }
     }
 }
@@ -402,7 +408,7 @@ impl FromStr for VarType {
             "0" => Ok(VarType::Continuous),
             "1" => Ok(VarType::Integer),
             "2" => Ok(VarType::Binary),
-            _ => crate::bail!({ value = s }, "invalid QPLIB variable type: {s}"),
+            _ => ::anyhow::bail!("invalid QPLIB variable type: {s}"),
         }
     }
 }
