@@ -4,6 +4,7 @@ from typing import Optional
 import pyscipopt
 import math
 
+from opentelemetry import trace
 
 from ommx.adapter import (
     SolverAdapter,
@@ -23,6 +24,8 @@ from ommx.v1 import (
 )
 
 from .exception import OMMXPySCIPOptAdapterError
+
+_tracer = trace.get_tracer("ommx.adapter.pyscipopt")
 
 
 class OMMXPySCIPOptAdapter(SolverAdapter):
@@ -48,13 +51,14 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         self.model = pyscipopt.Model()
         self.model.hideOutput()
 
-        self._set_decision_variables()
-        self._set_objective()
-        self._set_constraints()
+        with _tracer.start_as_current_span("convert"):
+            self._set_decision_variables()
+            self._set_objective()
+            self._set_constraints()
 
-        # Add initial solution if provided
-        if initial_state is not None:
-            self._add_initial_state(initial_state)
+            # Add initial solution if provided
+            if initial_state is not None:
+                self._add_initial_state(initial_state)
 
     @classmethod
     def solve(
@@ -152,7 +156,8 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         """
         adapter = cls(ommx_instance, initial_state=initial_state)
         model = adapter.solver_input
-        model.optimize()
+        with _tracer.start_as_current_span("solve"):
+            model.optimize()
         return adapter.decode(model)
 
     @property
@@ -203,15 +208,16 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
         # TODO: Add the feature to store dual variables in `solution`.
 
-        state = self.decode_to_state(data)
-        solution = self.instance.evaluate(state)
+        with _tracer.start_as_current_span("decode"):
+            state = self.decode_to_state(data)
+            solution = self.instance.evaluate(state)
 
-        if (
-            data.getStatus() == "optimal"
-        ):  # pyscipopt does not appear to have an enum or constant for this
-            solution.optimality = Solution.OPTIMAL
+            if (
+                data.getStatus() == "optimal"
+            ):  # pyscipopt does not appear to have an enum or constant for this
+                solution.optimality = Solution.OPTIMAL
 
-        return solution
+            return solution
 
     def decode_to_state(self, data: pyscipopt.Model) -> State:
         """
