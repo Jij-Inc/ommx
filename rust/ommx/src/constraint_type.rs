@@ -240,14 +240,14 @@ impl<T: ConstraintType> Evaluate for ConstraintCollection<T> {
         let mut results = BTreeMap::new();
         let mut removed_reasons = BTreeMap::new();
         for (id, constraint) in &self.active {
-            let evaluated = constraint.evaluate(state, atol).map_err(|e| {
-                crate::error!("Failed to evaluate active constraint {:?}: {}", id, e)
+            let evaluated = constraint.evaluate(state, atol).inspect_err(|e| {
+                tracing::error!(?id, error = %e, "failed to evaluate active constraint");
             })?;
             results.insert(*id, evaluated);
         }
         for (id, (constraint, reason)) in &self.removed {
-            let evaluated = constraint.evaluate(state, atol).map_err(|e| {
-                crate::error!("Failed to evaluate removed constraint {:?}: {}", id, e)
+            let evaluated = constraint.evaluate(state, atol).inspect_err(|e| {
+                tracing::error!(?id, error = %e, "failed to evaluate removed constraint");
             })?;
             results.insert(*id, evaluated);
             removed_reasons.insert(*id, reason.clone());
@@ -263,22 +263,14 @@ impl<T: ConstraintType> Evaluate for ConstraintCollection<T> {
         let mut results = BTreeMap::new();
         let mut removed_reasons = BTreeMap::new();
         for (id, constraint) in &self.active {
-            let evaluated = constraint.evaluate_samples(samples, atol).map_err(|e| {
-                crate::error!(
-                    "Failed to evaluate_samples active constraint {:?}: {}",
-                    id,
-                    e
-                )
+            let evaluated = constraint.evaluate_samples(samples, atol).inspect_err(|e| {
+                tracing::error!(?id, error = %e, "failed to evaluate_samples active constraint");
             })?;
             results.insert(*id, evaluated);
         }
         for (id, (constraint, reason)) in &self.removed {
-            let evaluated = constraint.evaluate_samples(samples, atol).map_err(|e| {
-                crate::error!(
-                    "Failed to evaluate_samples removed constraint {:?}: {}",
-                    id,
-                    e
-                )
+            let evaluated = constraint.evaluate_samples(samples, atol).inspect_err(|e| {
+                tracing::error!(?id, error = %e, "failed to evaluate_samples removed constraint");
             })?;
             results.insert(*id, evaluated);
             removed_reasons.insert(*id, reason.clone());
@@ -288,8 +280,8 @@ impl<T: ConstraintType> Evaluate for ConstraintCollection<T> {
 
     fn partial_evaluate(&mut self, state: &v1::State, atol: ATol) -> Result<()> {
         for (id, constraint) in self.active.iter_mut() {
-            constraint.partial_evaluate(state, atol).map_err(|e| {
-                crate::error!("Failed to partial_evaluate constraint {:?}: {}", id, e)
+            constraint.partial_evaluate(state, atol).inspect_err(|e| {
+                tracing::error!(?id, error = %e, "failed to partial_evaluate constraint");
             })?;
         }
         Ok(())
