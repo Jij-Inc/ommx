@@ -55,7 +55,12 @@ from ._render import chrome_trace_json, render_text_tree
 from ._setup import ensure_collector_installed
 
 
-_TRACER_NAME = "ommx.tracing.script"
+# One tracer name for every entry point in ``ommx.tracing`` (the cell
+# magic, the context manager, and the decorator). The name is a
+# coarse instrumentation-scope label — the actual span *name* passed
+# to ``tracer.start_as_current_span`` is what appears in the tree, so
+# we don't need a per-entry-point tracer.
+_TRACER_NAME = "ommx.tracing"
 _DEFAULT_ROOT_SPAN_NAME = "ommx_trace_block"
 
 
