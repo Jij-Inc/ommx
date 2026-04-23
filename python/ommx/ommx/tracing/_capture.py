@@ -43,6 +43,7 @@ raises normally — we never swallow. Before the exception propagates:
 from __future__ import annotations
 
 import functools
+import inspect
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, List, Optional, Union, overload
@@ -194,26 +195,80 @@ def traced(
     are easy to tell apart in the rendered tree.
     """
 
+    def _save_if_configured(result: Optional[TraceResult]) -> None:
+        if output is not None and result is not None:
+            result.save_chrome_trace(output)
+
+    def _save_best_effort(result: Optional[TraceResult]) -> None:
+        """Like ``_save_if_configured`` but swallows any I/O failure.
+
+        Used on the exception path: a save failure here would *replace*
+        the user's original exception, which is the signal they care
+        about most. Silently dropping the save is the lesser evil.
+        """
+        if output is None or result is None:
+            return
+        try:
+            result.save_chrome_trace(output)
+        except Exception:  # noqa: BLE001 - intentional swallow
+            pass
+
     def _decorator(fn: _F) -> _F:
         span_name = name if name is not None else fn.__qualname__
+
+        if inspect.iscoroutinefunction(fn):
+            # ``async def`` needs its own wrapper: a plain sync wrapper
+            # would trace only the coroutine-object creation, finish
+            # the ``capture_trace`` block, and return the still-
+            # unawaited coroutine — by the time it runs, the capture
+            # window is closed and every span is silently dropped.
+            @functools.wraps(fn)
+            async def _async_wrapper(*args, **kwargs):
+                capture = capture_trace(span_name)
+                result: Optional[TraceResult] = None
+                # Pre-initialise so pyright can see ``retval`` is
+                # bound in the ``else`` branch even though the
+                # assignment below lives inside a ``with`` whose
+                # ``__exit__`` could theoretically raise.
+                retval: Any = None
+                try:
+                    with capture as r:
+                        result = r
+                        retval = await fn(*args, **kwargs)
+                except BaseException:
+                    # User exception: save best-effort, then propagate
+                    # it unchanged so the signal isn't lost to an I/O
+                    # hiccup from the trace writer.
+                    _save_best_effort(result)
+                    raise
+                else:
+                    # Success: let save errors surface so a broken
+                    # path configuration is noticed.
+                    _save_if_configured(result)
+                    return retval
+
+            return _async_wrapper  # type: ignore[return-value]
 
         @functools.wraps(fn)
         def _wrapper(*args, **kwargs):
             capture = capture_trace(span_name)
             result: Optional[TraceResult] = None
+            retval: Any = None
             try:
                 with capture as r:
                     result = r
-                    return fn(*args, **kwargs)
-            finally:
-                # ``capture.__exit__`` has populated ``result.spans``
-                # by the time this ``finally`` fires (the ``with`` exit
-                # runs before the enclosing try/finally's ``finally``).
-                # Writing the trace here covers both the success and
-                # the exception path, so the file is never missing
-                # when the user expected one.
-                if output is not None and result is not None:
-                    result.save_chrome_trace(output)
+                    retval = fn(*args, **kwargs)
+            except BaseException:
+                # User exception: save best-effort, then propagate
+                # it unchanged so the signal isn't lost to an I/O
+                # hiccup from the trace writer.
+                _save_best_effort(result)
+                raise
+            else:
+                # Success: let save errors surface so a broken path
+                # configuration is noticed.
+                _save_if_configured(result)
+                return retval
 
         return _wrapper
 

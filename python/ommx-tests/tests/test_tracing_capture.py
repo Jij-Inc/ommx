@@ -45,19 +45,30 @@ _SESSION_COLLECTOR: _CellSpanCollector | None = None
 @pytest.fixture
 def capture_collector():
     """Attach a single collector to the session provider and clear its
-    state between tests. Mirrors the pattern used by
-    ``test_tracing_magic.cell_collector``; the two test files can
-    reuse the same underlying collector via the module-global since
-    each test does its own state reset."""
+    state between tests.
+
+    Points ``_setup._COLLECTOR`` at the shared instance so
+    ``ensure_collector_installed()`` returns it unchanged rather than
+    creating a fresh ``_CellSpanCollector`` + attaching a new
+    ``SpanProcessor`` to the provider each test. Without that,
+    processors would pile up across the suite.
+    """
     global _SESSION_COLLECTOR
-    _setup.reset_for_testing()
     if _SESSION_COLLECTOR is None:
         _SESSION_COLLECTOR = _CellSpanCollector()
         get_test_provider().add_span_processor(_SESSION_COLLECTOR)
-    _SESSION_COLLECTOR.shutdown()
-    yield _SESSION_COLLECTOR
-    _setup.reset_for_testing()
-    _SESSION_COLLECTOR.shutdown()
+    # Reuse the shared collector for any ``capture_trace`` /
+    # ``run_cell_with_trace`` call made during the test.
+    _setup._COLLECTOR = _SESSION_COLLECTOR
+    _SESSION_COLLECTOR.shutdown()  # drop state from previous test
+    try:
+        yield _SESSION_COLLECTOR
+    finally:
+        _SESSION_COLLECTOR.shutdown()
+        # Hand the cache back to ``None`` so tests that explicitly
+        # exercise ``ensure_collector_installed`` start from a clean
+        # slate.
+        _setup._COLLECTOR = None
 
 
 # ---------------------------------------------------------------------------
@@ -270,6 +281,75 @@ def test_traced_decorator_uses_function_qualname_by_default(
     assert any("build_qubo" in n for n in names), (
         f"Span name should derive from the function. Got: {names}"
     )
+
+
+def test_traced_decorator_supports_async_functions(capture_collector, tmp_path):
+    """``async def`` must be traced end-to-end, not just coroutine creation.
+
+    A plain sync wrapper would run the decorated call, return the
+    coroutine object, close the capture window, and then the user
+    would ``await`` the coroutine *outside* the capture — every span
+    emitted by the awaited work would be dropped.
+    """
+    import asyncio
+
+    out = tmp_path / "async.json"
+
+    @traced(name="async_op", output=out)
+    async def async_process():
+        await asyncio.sleep(0)
+        return 11
+
+    result = asyncio.run(async_process())
+    assert result == 11
+    assert out.exists()
+    payload = json.loads(out.read_text(encoding="utf-8"))
+    names = {e["name"] for e in payload["traceEvents"]}
+    # The root span from the ``capture_trace`` block is present —
+    # this asserts the capture actually wrapped the awaited body, not
+    # just the coroutine-creation moment.
+    assert "async_op" in names
+
+
+def test_traced_decorator_save_failure_does_not_mask_user_exception(
+    capture_collector, tmp_path
+):
+    """If the wrapped function raised and ``save_chrome_trace`` also
+    fails (e.g. disk full, read-only target, bad path), the user's
+    original exception must win — that's the signal they care about.
+    The save failure is swallowed in the exception path.
+    """
+    bad_path = tmp_path / "nonexistent-directory-that-will-be-a-file"
+    bad_path.write_text("not a directory")
+    # Path whose *parent* exists but is a file, so ``mkdir(parents=True)``
+    # fails → ``save_chrome_trace`` raises.
+    unusable_output = bad_path / "child.json"
+
+    @traced(name="failing_with_bad_output", output=unusable_output)
+    def process():
+        raise ValueError("original user failure")
+
+    with pytest.raises(ValueError, match="original user failure"):
+        process()
+
+
+def test_traced_decorator_save_failure_surfaces_on_success_path(
+    capture_collector, tmp_path
+):
+    """On the success path, a broken ``output`` configuration should
+    still be noticed — otherwise users never learn their trace writer
+    was misconfigured until they go looking for the file.
+    """
+    bad_path = tmp_path / "file_not_dir"
+    bad_path.write_text("not a directory")
+    unusable_output = bad_path / "child.json"
+
+    @traced(name="ok_but_bad_output", output=unusable_output)
+    def process():
+        return 1
+
+    with pytest.raises((OSError, NotADirectoryError, FileNotFoundError)):
+        process()
 
 
 def test_traced_decorator_preserves_metadata(capture_collector):
