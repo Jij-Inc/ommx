@@ -332,6 +332,31 @@ def test_run_cell_with_trace_exec_user_code(ipython_shell):
         _setup.reset_for_testing()
 
 
+def test_run_cell_with_trace_marks_root_span_error_on_cell_failure(ipython_shell):
+    """When the cell raised, the ``ommx_trace_cell`` root span must
+    carry ``Status(ERROR)`` so the text tree shows ``[ERROR]`` on
+    the root line — otherwise ``shell.run_cell`` would swallow the
+    exception internally, the ``capture_trace`` block would exit
+    normally, and the span would close with the default OK status."""
+    _setup.reset_for_testing()
+    try:
+        html, exc = run_cell_with_trace(
+            ipython_shell,
+            "raise ValueError('root should be marked ERROR')",
+        )
+        assert isinstance(exc, ValueError)
+        # The HTML's text tree must contain [ERROR] next to the
+        # ``ommx_trace_cell`` line, not only on leaf spans.
+        root_line = next(
+            line for line in html.splitlines() if "ommx_trace_cell" in line
+        )
+        assert "[ERROR]" in root_line, (
+            f"Cell magic root span missing ERROR marker. Line was: {root_line}"
+        )
+    finally:
+        _setup.reset_for_testing()
+
+
 def test_run_cell_with_trace_reports_cell_exceptions(ipython_shell):
     """A cell that raises still produces HTML output. The caller
     (``register_magic``) is responsible for re-raising so failure

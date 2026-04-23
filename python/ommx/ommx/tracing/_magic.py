@@ -73,6 +73,21 @@ def run_cell_with_trace(
             else result.error_in_exec
         )
 
+        if cell_exc is not None:
+            # ``shell.run_cell`` caught the exception internally rather
+            # than letting it propagate, so the ``capture_trace`` block
+            # is about to exit *normally* and the root span would
+            # close with an OK status — losing the ``[ERROR]`` marker
+            # in the rendered tree even though the cell did fail.
+            # Explicitly mark the root as failed and record the
+            # exception as a span event.
+            from opentelemetry import trace as otel_trace
+            from opentelemetry.trace.status import Status, StatusCode
+
+            root = otel_trace.get_current_span()
+            root.set_status(Status(StatusCode.ERROR, str(cell_exc)))
+            root.record_exception(cell_exc)
+
     return render_cell_output_html(trace_result.spans), cell_exc
 
 

@@ -13,10 +13,13 @@ IPython cell magic. Both APIs share the underlying ``_collector`` and
   the root span, the renderer flags it, and the traced exception
   still propagates to the caller.
 
-The session-scoped ``TracerProvider`` from :mod:`conftest` is reused;
-``_setup.reset_for_testing`` + a fresh ``_CellSpanCollector`` attached
-to the provider give each test isolation without touching the global
-OTel state.
+The session-scoped ``TracerProvider`` from :mod:`conftest` is reused,
+and a single module-level ``_CellSpanCollector`` is attached to it
+once and re-used across every test. The :func:`capture_collector`
+fixture swaps ``_setup._COLLECTOR`` to that shared instance for the
+duration of each test (so ``ensure_collector_installed`` returns it
+rather than piling up new processors on the provider) and clears the
+collector's internal state between tests via ``.shutdown()``.
 """
 
 from __future__ import annotations
