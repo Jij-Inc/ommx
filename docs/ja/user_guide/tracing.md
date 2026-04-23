@@ -88,10 +88,12 @@ print(trace.text_tree())
 ブロック内で例外が発生した場合でも `trace.spans` は埋められており（失敗したスパンには `[ERROR]` マーカーが付く）、外側の `except` や `finally` から内容を調査・保存できます。元の例外はそのまま伝播します。OMMXが例外を握り潰すことはありません。
 
 ```{code-cell} ipython3
+import tempfile
 from pathlib import Path
 
-trace.save_chrome_trace("/tmp/ommx_trace.json")
-print(f"書き出しサイズ: {Path('/tmp/ommx_trace.json').stat().st_size} bytes")
+output_path = Path(tempfile.gettempdir()) / "ommx_trace.json"
+trace.save_chrome_trace(output_path)
+print(f"{output_path} に {output_path.stat().st_size} bytes 書き出しました")
 ```
 
 ### デコレータ (`@traced`)
@@ -99,14 +101,19 @@ print(f"書き出しサイズ: {Path('/tmp/ommx_trace.json').stat().st_size} byt
 `@traced` は `capture_trace` の糖衣構文です。
 
 ```{code-cell} ipython3
+import tempfile
+from pathlib import Path
+
 from ommx.tracing import traced
 
-@traced(output="/tmp/evaluate_trace.json")
+evaluate_output = Path(tempfile.gettempdir()) / "evaluate_trace.json"
+
+@traced(output=str(evaluate_output))
 def evaluate_once(inst):
     return inst.evaluate({0: 1.0, 1: 1.0})
 
 solution = evaluate_once(instance)
-print("トレースを /tmp/evaluate_trace.json に書き出しました")
+print(f"トレースを {evaluate_output} に書き出しました")
 ```
 
 3つの呼び出し形式すべてがサポートされています。
@@ -125,7 +132,7 @@ def f(): ...
 主な挙動:
 
 - `name` を省略するとルートスパン名は `fn.__qualname__` になります。複数のデコレート関数のトレースを区別しやすくするためです。
-- `output` を指定した場合、**正常終了時も例外発生時も** Chrome Trace JSONが書き出されます。情報は捨てられません。
+- `output` を指定した場合、正常終了時はChrome Trace JSONが書き出されます。例外発生時も書き出しを試みますが、保存時のI/Oエラーなどは元の例外を上書きしないよう抑制されるため、例外パスでの保存は best-effort です。
 - `async def` もサポートされています。`inspect.iscoroutinefunction` でコルーチン関数を検知し、トレースブロック内で `await` します。この検知がないと、コルーチン生成直後にキャプチャウィンドウが閉じてしまい、スパンが全て失われます。
 
 ## スパン命名規則
@@ -157,7 +164,7 @@ from ommx.v1 import Instance
 
 注意点が2つあります。
 
-1. **OpenTelemetryは最初の `set_tracer_provider` 呼び出しのみ採用します。** 最初の `Instance.from_bytes(...)` など計測対象の呼び出しの後にproviderを設定しても無視されます。OTel設定はスクリプトやノートブックの最上部で行うようにしてください。
+1. **providerの設定は `ommx.tracing` の初回利用前、かつRust拡張の最初の呼び出し前に行ってください。** Python OTel APIでは最初の `set_tracer_provider` 呼び出しのみが有効で、かつ `ommx.tracing` は初回利用時にproviderが未設定であればデフォルトの `SdkTracerProvider` を自らインストールします。このため、そのあとでユーザーが `set_tracer_provider(your_provider)` を呼んでも無視されます。また、Rust→Pythonブリッジは最初の計測対象Rust呼び出し時に初期化されるため、OTel設定はスクリプトやノートブックの最上部で行うようにしてください。
 2. **`ommx.tracing` はアクティブなproviderにコレクタを追加するだけで、置き換えは行いません。** スパンはOMMXのレンダラと指定したOTLPエクスポータの両方に到達します。
 
 `add_span_processor` をサポートしない非SDKのproviderがアクティブな場合（稀ですが一部のベンダーSDKはこの挙動です）、`capture_trace` は `__enter__` 時点で `RuntimeError` を送出します。エラーメッセージに記載されているとおり、`opentelemetry.sdk.trace.TracerProvider` を自前でインストールし、エクスポータをもう一つの `SpanProcessor` として同じproviderに追加してください。
@@ -188,4 +195,9 @@ from ommx.v1 import Instance
 
 ### 最初の呼び出しの挙動について
 
-Rust → Python OTelブリッジはエクスポートのたびにアクティブな `TracerProvider` を解決するので、プログラム実行中にprovider を切り替えるのは安全です。ただし**pyo3拡張は最初の呼び出し時に計測済みのsubscriberをキャッシュします**。providerを設定しない状態で最初に `ommx` をimportしたあとにOTLPエクスポータを追加しようとしても、後続の呼び出しから出るスパンはすでにインストール済みのsubscriberを経由してしまいます。OTLPエクスポートが必要な場合は、**OMMXへの最初の呼び出し前に**providerを設定してください。
+`ommx.tracing` やRust→Pythonブリッジの初期化後に、アクティブな `TracerProvider` の**差し替え**を前提にしないでください。初回利用時に以下の2つの状態が固定され、後から取り消せません。
+
+1. `ommx.tracing` は `capture_trace.__enter__` や最初の `%%ommx_trace` セル実行時、providerが未設定であれば `set_tracer_provider(SdkTracerProvider())` を呼び出します。Python OTelは最初の `set_tracer_provider` のみを採用するため、そのあとにユーザーがproviderを設定しても無視されます。
+2. pyo3拡張は最初の計測対象Rust呼び出しの時点でtracing subscriberをキャッシュします。providerを後から差し替えても、後続の呼び出しのスパンはすでにインストール済みのsubscriberを経由して流れます。
+
+OTLPエクスポートが必要な場合は、**OMMXへの最初の呼び出し前に**providerを設定してください。実行中に挙動を調整したい場合は、providerを差し替えるのではなく、既存のSDK providerに `provider.add_span_processor(new_processor)` のように `SpanProcessor` を追加してください。

@@ -88,10 +88,12 @@ print(trace.text_tree())
 If the block raises, `trace.spans` is still populated (with the failing span flagged as `[ERROR]`), so you can inspect or save it from an outer `except` or `finally`. The original exception propagates unchanged — OMMX never swallows.
 
 ```{code-cell} ipython3
+import tempfile
 from pathlib import Path
 
-trace.save_chrome_trace("/tmp/ommx_trace.json")
-print(f"Wrote {Path('/tmp/ommx_trace.json').stat().st_size} bytes")
+output_path = Path(tempfile.gettempdir()) / "ommx_trace.json"
+trace.save_chrome_trace(output_path)
+print(f"Wrote {output_path.stat().st_size} bytes to {output_path}")
 ```
 
 ### Decorator (`@traced`)
@@ -99,14 +101,19 @@ print(f"Wrote {Path('/tmp/ommx_trace.json').stat().st_size} bytes")
 `@traced` is sugar on top of `capture_trace`:
 
 ```{code-cell} ipython3
+import tempfile
+from pathlib import Path
+
 from ommx.tracing import traced
 
-@traced(output="/tmp/evaluate_trace.json")
+evaluate_output = Path(tempfile.gettempdir()) / "evaluate_trace.json"
+
+@traced(output=str(evaluate_output))
 def evaluate_once(inst):
     return inst.evaluate({0: 1.0, 1: 1.0})
 
 solution = evaluate_once(instance)
-print("Wrote trace to /tmp/evaluate_trace.json")
+print(f"Wrote trace to {evaluate_output}")
 ```
 
 All three call shapes are supported:
@@ -125,7 +132,7 @@ def f(): ...
 Key properties:
 
 - If `name` is omitted, the root span name defaults to `fn.__qualname__`, so traces from multiple decorated functions are easy to tell apart.
-- When `output` is set, the Chrome Trace JSON is written **on return *and* on exception** — information is never dropped.
+- When `output` is set, the Chrome Trace JSON is written on normal return, and the decorator also **attempts** to write it on exception. On the exception path, save errors (e.g. I/O failures) are intentionally suppressed so they do not replace the original exception — so saving on exception is best-effort.
 - `async def` is supported. The decorator detects coroutine functions with `inspect.iscoroutinefunction` and awaits them inside the trace block; without that detection, the capture window would close before the coroutine ran and every span would be dropped.
 
 ## Span Naming Convention
@@ -156,7 +163,7 @@ from ommx.v1 import Instance
 
 Two things to keep in mind:
 
-1. **OpenTelemetry only honours the first `set_tracer_provider` call.** If you set the provider after the first `Instance.from_bytes(...)` (or any other instrumented call), your provider is ignored. Configure OTel at the very top of your script / notebook.
+1. **Configure your provider before the first call to `ommx.tracing` and before the first call into the Rust extension.** OpenTelemetry's Python API only honours the first `set_tracer_provider` call, and on first use `ommx.tracing` installs a default `SdkTracerProvider` itself if nothing is set — after that point, a later `set_tracer_provider(your_provider)` is silently ignored. The Rust → Python tracing bridge is also initialized on the first instrumented Rust call, so configure OTel at the very top of your script / notebook.
 2. **`ommx.tracing` attaches its collector to whichever provider is active** — it does not replace yours. Spans reach both the OMMX renderer and your OTLP exporter.
 
 If you run with a non-SDK provider that does not support `add_span_processor` (rare, but some vendor SDKs do this), `capture_trace` raises a `RuntimeError` at `__enter__` with a pointer to the fix. Install an `opentelemetry.sdk.trace.TracerProvider` yourself, and add your exporter as another `SpanProcessor` on the same provider.
@@ -187,4 +194,9 @@ If a span's duration is listed as `0.0 µs`, the span almost always reached the 
 
 ### First-call semantics
 
-The Rust → Python OTel bridge resolves the active `TracerProvider` on each export, so changing providers mid-program is safe — but **the pyo3 extension still caches the tracing subscriber installed on the first call into it**. If you first import `ommx` from a test harness that installs no provider, then try to add an OTLP exporter afterwards, spans from subsequent calls still flow through the already-installed subscriber. Install your provider *before* the first OMMX call when OTLP export matters.
+Do **not** rely on swapping out the active `TracerProvider` after `ommx.tracing` or the Rust → Python tracing bridge has been initialized. Two things lock in on first use and cannot be undone:
+
+1. `ommx.tracing` calls `set_tracer_provider(SdkTracerProvider())` during `capture_trace.__enter__` / the first `%%ommx_trace` cell if no provider is set yet. Since Python OTel only honours the first `set_tracer_provider` call, a later user-supplied provider is silently ignored.
+2. The pyo3 extension caches the tracing subscriber installed on the first instrumented Rust call. Spans from later calls continue to flow through that subscriber, even if you change providers afterwards.
+
+If OTLP export matters, configure your provider *before* the first OMMX call. If you need to adjust behavior later, mutate the existing SDK provider (for example, `provider.add_span_processor(new_processor)`) rather than replacing it.
