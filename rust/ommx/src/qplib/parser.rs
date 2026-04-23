@@ -114,7 +114,9 @@ impl QplibFile {
             .split_whitespace()
             .next()
             .map(|s| s.to_string())
-            .ok_or_else(|| crate::error!({ line_num }, "invalid QPLIB line at line {line_num}"))?;
+            .ok_or_else(|| {
+                crate::Error::from(QplibParseError::new(line_num, "name line has no fields"))
+            })?;
         let ProblemType(okind, vkind, ckind) = cursor.next_parse()?;
         let sense = cursor.next_parse()?;
         let num_vars = cursor.next_parse()?;
@@ -454,11 +456,7 @@ where
                 return Ok(s);
             }
         }
-        let line_num = self.line_num;
-        crate::bail!(
-            { line_num },
-            "unexpected end of QPLIB file at line {line_num}"
-        );
+        Err(QplibParseError::new(self.line_num, "unexpected end of file").into())
     }
 
     fn parse_or_err_with_line<T, E>(&self, raw: &str) -> Result<T>
@@ -479,10 +477,9 @@ where
     {
         let line = self.expect_next()?;
         let line_num = self.line_num;
-        let val = line
-            .split_whitespace()
-            .next()
-            .ok_or_else(|| crate::error!({ line_num }, "invalid QPLIB line at line {line_num}"))?;
+        let val = line.split_whitespace().next().ok_or_else(|| {
+            crate::Error::from(QplibParseError::new(line_num, "line has no fields"))
+        })?;
         self.parse_or_err_with_line(val)
     }
 
@@ -648,8 +645,14 @@ mod test {
     // carrying the 1-based line number of the offending row and a rendered
     // `message`. This is the one piece of programmatic diagnostics the QPLIB
     // parser exposes — see its docstring for the caller-side recovery pattern.
+    //
+    // Every in-file parse failure path must hit this contract:
+    //   1. invalid token via `parse_or_err_with_line` / `next_parse`
+    //   2. cursor EOF via `expect_next`
+    //   3. a non-comment line that yields no fields (`next_parse`'s
+    //      `split_whitespace().next()` returning None)
     #[test]
-    fn qplib_parse_error_preserves_line_num() {
+    fn qplib_parse_error_invalid_problem_type() {
         // Malformed problem-type token on line 2 (after the blank name line).
         let file = "MIPBAND\nNOT_A_VALID_TYPE\n";
         let err = QplibFile::from_lines(file.lines().map(|s| s.to_owned())).unwrap_err();
@@ -659,6 +662,25 @@ mod test {
         assert_eq!(downcast.line_num, 2);
         assert!(
             downcast.message.contains("problem type"),
+            "unexpected message: {}",
+            downcast.message
+        );
+    }
+
+    #[test]
+    fn qplib_parse_error_on_eof() {
+        // Truncated file — EOF before the problem type is read. Exactly one
+        // non-comment line exists (line 1, the name). `expect_next` should
+        // surface a QplibParseError with line_num pointing at the last line
+        // consumed.
+        let file = "MIPBAND\n";
+        let err = QplibFile::from_lines(file.lines().map(|s| s.to_owned())).unwrap_err();
+        let downcast = err
+            .downcast_ref::<QplibParseError>()
+            .expect("EOF should surface as QplibParseError");
+        assert_eq!(downcast.line_num, 1);
+        assert!(
+            downcast.message.contains("end of file"),
             "unexpected message: {}",
             downcast.message
         );

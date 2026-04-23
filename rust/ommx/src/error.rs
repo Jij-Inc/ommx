@@ -48,13 +48,18 @@ pub use anyhow::{Error, Result};
 macro_rules! bail {
     // Structured fields + message
     ({ $($field:tt)+ } $(,)? $fmt:literal $(, $arg:expr)* $(,)?) => {{
-        ::tracing::error!($($field)+, $fmt $(, $arg)*);
-        return ::std::result::Result::Err(::anyhow::anyhow!($fmt $(, $arg)*));
+        // Render the message once so format arguments with side effects (or
+        // move-only values) are evaluated exactly once across both the
+        // `tracing::error!` event and the resulting `anyhow::Error`.
+        let __ommx_msg = ::std::format!($fmt $(, $arg)*);
+        ::tracing::error!($($field)+, "{}", __ommx_msg);
+        return ::std::result::Result::Err(::anyhow::Error::msg(__ommx_msg));
     }};
     // Plain format string (and args)
     ($fmt:literal $(, $arg:expr)* $(,)?) => {{
-        ::tracing::error!($fmt $(, $arg)*);
-        return ::std::result::Result::Err(::anyhow::anyhow!($fmt $(, $arg)*));
+        let __ommx_msg = ::std::format!($fmt $(, $arg)*);
+        ::tracing::error!("{}", __ommx_msg);
+        return ::std::result::Result::Err(::anyhow::Error::msg(__ommx_msg));
     }};
     // Signal-style pre-built error — no tracing event, since callers
     // typically recover these by downcast rather than observe them.
@@ -70,12 +75,14 @@ macro_rules! bail {
 #[macro_export]
 macro_rules! error {
     ({ $($field:tt)+ } $(,)? $fmt:literal $(, $arg:expr)* $(,)?) => {{
-        ::tracing::error!($($field)+, $fmt $(, $arg)*);
-        ::anyhow::anyhow!($fmt $(, $arg)*)
+        let __ommx_msg = ::std::format!($fmt $(, $arg)*);
+        ::tracing::error!($($field)+, "{}", __ommx_msg);
+        ::anyhow::Error::msg(__ommx_msg)
     }};
     ($fmt:literal $(, $arg:expr)* $(,)?) => {{
-        ::tracing::error!($fmt $(, $arg)*);
-        ::anyhow::anyhow!($fmt $(, $arg)*)
+        let __ommx_msg = ::std::format!($fmt $(, $arg)*);
+        ::tracing::error!("{}", __ommx_msg);
+        ::anyhow::Error::msg(__ommx_msg)
     }};
     ($err:expr $(,)?) => {
         ::anyhow::Error::from($err)
@@ -87,14 +94,16 @@ macro_rules! error {
 macro_rules! ensure {
     ($cond:expr, { $($field:tt)+ } $(,)? $fmt:literal $(, $arg:expr)* $(,)?) => {{
         if !$cond {
-            ::tracing::error!($($field)+, $fmt $(, $arg)*);
-            return ::std::result::Result::Err(::anyhow::anyhow!($fmt $(, $arg)*));
+            let __ommx_msg = ::std::format!($fmt $(, $arg)*);
+            ::tracing::error!($($field)+, "{}", __ommx_msg);
+            return ::std::result::Result::Err(::anyhow::Error::msg(__ommx_msg));
         }
     }};
     ($cond:expr, $fmt:literal $(, $arg:expr)* $(,)?) => {{
         if !$cond {
-            ::tracing::error!($fmt $(, $arg)*);
-            return ::std::result::Result::Err(::anyhow::anyhow!($fmt $(, $arg)*));
+            let __ommx_msg = ::std::format!($fmt $(, $arg)*);
+            ::tracing::error!("{}", __ommx_msg);
+            return ::std::result::Result::Err(::anyhow::Error::msg(__ommx_msg));
         }
     }};
     ($cond:expr, $err:expr $(,)?) => {
@@ -199,5 +208,54 @@ mod tests {
     fn macro_error_with_signal_expression() {
         let err: Error = crate::error!(TestSignal);
         assert!(err.is::<TestSignal>());
+    }
+
+    // Each of the three macros renders the format string + args into a
+    // single message that is shared with both `tracing::error!` and the
+    // produced `anyhow::Error`. A format argument with observable side
+    // effects must be evaluated exactly once. Regression tests for this
+    // guarantee follow.
+
+    #[test]
+    fn macro_bail_evaluates_args_once() {
+        use std::cell::Cell;
+        let counter: Cell<u32> = Cell::new(0);
+        fn inner(counter: &Cell<u32>) -> Result<()> {
+            crate::bail!("count={}", {
+                counter.set(counter.get() + 1);
+                42
+            });
+        }
+        let err = inner(&counter).unwrap_err();
+        assert_eq!(counter.get(), 1, "arg evaluated {} times", counter.get());
+        assert_eq!(err.to_string(), "count=42");
+    }
+
+    #[test]
+    fn macro_error_evaluates_args_once() {
+        use std::cell::Cell;
+        let counter: Cell<u32> = Cell::new(0);
+        let err: Error = crate::error!("count={}", {
+            counter.set(counter.get() + 1);
+            42
+        });
+        assert_eq!(counter.get(), 1, "arg evaluated {} times", counter.get());
+        assert_eq!(err.to_string(), "count=42");
+    }
+
+    #[test]
+    fn macro_ensure_evaluates_args_once() {
+        use std::cell::Cell;
+        let counter: Cell<u32> = Cell::new(0);
+        fn inner(counter: &Cell<u32>) -> Result<()> {
+            crate::ensure!(false, "count={}", {
+                counter.set(counter.get() + 1);
+                42
+            });
+            Ok(())
+        }
+        let err = inner(&counter).unwrap_err();
+        assert_eq!(counter.get(), 1, "arg evaluated {} times", counter.get());
+        assert_eq!(err.to_string(), "count=42");
     }
 }
