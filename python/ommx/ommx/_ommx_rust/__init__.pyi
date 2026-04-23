@@ -1155,6 +1155,28 @@ class Function:
     def partial_evaluate(
         self, state: ToState, *, atol: typing.Optional[builtins.float] = None
     ) -> Function: ...
+    def evaluate_bound(self, bounds: typing.Mapping[builtins.int, Bound]) -> Bound:
+        r"""
+        Compute the interval bound of this function given variable bounds.
+
+        Missing IDs in `bounds` are treated as unbounded (`Bound.unbounded()`).
+
+        **Args:**
+
+        - `bounds`: Mapping from variable ID to its {class}`~ommx.v1.Bound`.
+
+        **Returns:** A {class}`~ommx.v1.Bound` representing $[\inf f, \sup f]$ over the given variable bounds.
+
+        # Examples
+
+        ```python
+        >>> from ommx.v1 import Function, Linear, Bound
+        >>> f = Function(Linear(terms={1: 2}, constant=3))  # 2*x1 + 3
+        >>> b = f.evaluate_bound({1: Bound(0.0, 2.0)})
+        >>> (b.lower, b.upper)
+        (3.0, 7.0)
+        ```
+        """
     def __copy__(self) -> Function: ...
     def __deepcopy__(self, _memo: typing.Any) -> Function: ...
     def reduce_binary_power(

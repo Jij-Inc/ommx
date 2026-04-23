@@ -1,4 +1,7 @@
-use crate::{Constraint, DecisionVariable, Linear, Parameter, Polynomial, Quadratic, Rng, State};
+use crate::{
+    Constraint, DecisionVariable, Linear, Parameter, Polynomial, Quadratic, Rng, State,
+    VariableBound,
+};
 
 use anyhow::{anyhow, Result};
 use approx::AbsDiffEq;
@@ -455,6 +458,33 @@ impl Function {
             .partial_evaluate(&state.0, atol)
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
         Ok(Function(inner))
+    }
+
+    /// Compute the interval bound of this function given variable bounds.
+    ///
+    /// Missing IDs in `bounds` are treated as unbounded (`Bound.unbounded()`).
+    ///
+    /// **Args:**
+    ///
+    /// - `bounds`: Mapping from variable ID to its {class}`~ommx.v1.Bound`.
+    ///
+    /// **Returns:** A {class}`~ommx.v1.Bound` representing $[\inf f, \sup f]$ over the given variable bounds.
+    ///
+    /// # Examples
+    ///
+    /// ```python
+    /// >>> from ommx.v1 import Function, Linear, Bound
+    /// >>> f = Function(Linear(terms={1: 2}, constant=3))  # 2*x1 + 3
+    /// >>> b = f.evaluate_bound({1: Bound(0.0, 2.0)})
+    /// >>> (b.lower, b.upper)
+    /// (3.0, 7.0)
+    /// ```
+    pub fn evaluate_bound(&self, bounds: BTreeMap<u64, VariableBound>) -> VariableBound {
+        let bounds: ommx::Bounds = bounds
+            .into_iter()
+            .map(|(id, b)| (ommx::VariableID::from(id), b.0))
+            .collect();
+        VariableBound(self.0.evaluate_bound(&bounds))
     }
 
     fn __copy__(&self) -> Self {

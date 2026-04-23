@@ -6027,6 +6027,43 @@
               "deprecated": null
             },
             {
+              "name": "evaluate_bound",
+              "doc": "Compute the interval bound of this function given variable bounds.\n\nMissing IDs in `bounds` are treated as unbounded (`Bound.unbounded()`).\n\n**Args:**\n\n- `bounds`: Mapping from variable ID to its {class}`~ommx.v1.Bound`.\n\n**Returns:** A {class}`~ommx.v1.Bound` representing $[\\inf f, \\sup f]$ over the given variable bounds.\n\n# Examples\n\n```python\n>>> from ommx.v1 import Function, Linear, Bound\n>>> f = Function(Linear(terms={1: 2}, constant=3))  # 2*x1 + 3\n>>> b = f.evaluate_bound({1: Bound(0.0, 2.0)})\n>>> (b.lower, b.upper)\n(3.0, 7.0)\n```",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "bounds",
+                      "type_": {
+                        "display": "Mapping[int, Bound]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Bound",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Bound",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "from_bytes",
               "doc": "",
               "signatures": [

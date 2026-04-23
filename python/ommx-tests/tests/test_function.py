@@ -1,8 +1,10 @@
 # FIXME: Use test case generator like Hypothesis
 
+import math
+
 import numpy as np
 
-from ommx.v1 import Linear, DecisionVariable, Quadratic, Polynomial, Function
+from ommx.v1 import Bound, Linear, DecisionVariable, Quadratic, Polynomial, Function
 
 
 def assert_eq(lhs, rhs):
@@ -288,3 +290,22 @@ def test_function_from_numpy_float64():
     x = np.float64(2.5)
     f = Function(x)
     assert_eq(f, Function(2.5))
+
+
+def test_function_evaluate_bound():
+    # Constant: bound is a degenerate interval at the constant value.
+    assert Function(3.5).evaluate_bound({}) == Bound(3.5, 3.5)
+
+    # Linear: 2*x1 + 3 over x1 in [0, 2] -> [3, 7].
+    f = Function(Linear(terms={1: 2}, constant=3))
+    assert f.evaluate_bound({1: Bound(0.0, 2.0)}) == Bound(3.0, 7.0)
+
+    # Squared term via interval-power semantics, not naive interval square.
+    # x1 * x1 with x1 in [-2, 3] -> [0, 9] (not [-6, 9]).
+    q = Function(Quadratic(columns=[1], rows=[1], values=[1.0]))
+    assert q.evaluate_bound({1: Bound(-2.0, 3.0)}) == Bound(0.0, 9.0)
+
+    # Missing variable ID is treated as unbounded.
+    unbounded = f.evaluate_bound({})
+    assert math.isinf(unbounded.lower) and unbounded.lower < 0
+    assert math.isinf(unbounded.upper) and unbounded.upper > 0
