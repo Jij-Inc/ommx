@@ -1,4 +1,5 @@
-use super::{is_gzipped, MpsParseError};
+use super::is_gzipped;
+use crate::Result;
 use derive_more::Deref;
 use indexmap::{IndexMap, IndexSet};
 use std::{
@@ -8,8 +9,6 @@ use std::{
     path::Path,
     str::FromStr,
 };
-
-type Result<T> = std::result::Result<T, MpsParseError>;
 
 /// A linear optimization problem loaded from MPS format
 ///
@@ -81,12 +80,12 @@ pub enum ObjSense {
 }
 
 impl FromStr for ObjSense {
-    type Err = MpsParseError;
+    type Err = crate::Error;
     fn from_str(s: &str) -> Result<Self> {
         match s {
             "MIN" => Ok(Self::Min),
             "MAX" => Ok(Self::Max),
-            _ => Err(MpsParseError::InvalidObjSense(s.to_string())),
+            _ => crate::bail!({ value = s }, "invalid OBJSENSE: {s}"),
         }
     }
 }
@@ -136,7 +135,7 @@ enum Cursor {
 }
 
 impl FromStr for Cursor {
-    type Err = MpsParseError;
+    type Err = crate::Error;
     fn from_str(s: &str) -> Result<Self> {
         match s {
             "ROWS" => Ok(Self::Rows),
@@ -147,7 +146,7 @@ impl FromStr for Cursor {
             "QUADOBJ" => Ok(Self::QuadObj),
             "QCMATRIX" => Ok(Self::QcMatrix),
             "ENDATA" => Ok(Self::End),
-            _ => Err(MpsParseError::InvalidHeader(s.to_string())),
+            _ => crate::bail!({ header = s }, "invalid MPS header: {s}"),
         }
     }
 }
@@ -169,10 +168,11 @@ fn ensure_field_size(
     pred: impl Fn(usize) -> bool,
 ) -> Result<()> {
     if !pred(fields.len()) {
-        return Err(MpsParseError::InvalidFieldSize {
-            section,
-            size: fields.len(),
-        });
+        let size = fields.len();
+        crate::bail!(
+            { section, size },
+            "invalid field size ({size}) in MPS section '{section}'",
+        );
     }
     Ok(())
 }
@@ -224,7 +224,9 @@ impl State {
                     self.mps.objective_name = row_name
                 } else {
                     // This means the MPS file has multiple objective names, which is not supported.
-                    return Err(MpsParseError::MultipleObjectiveNames);
+                    crate::bail!(
+                        "multiple objective names found; multi-objective MPS is not supported"
+                    );
                 }
                 // skip adding this row to `a` matrix
                 return Ok(());
@@ -238,9 +240,7 @@ impl State {
             "L" => {
                 self.mps.le.insert(row_name.clone());
             }
-            _ => {
-                return Err(MpsParseError::InvalidRowType(fields[0].to_string()));
-            }
+            row_type => crate::bail!({ row_type }, "invalid ROWS type: {row_type}"),
         }
         self.mps.a.insert(row_name, HashMap::new());
         Ok(())
@@ -266,7 +266,7 @@ impl State {
             match fields[2] {
                 "'INTORG'" => self.is_integer_variable = true,
                 "'INTEND'" => self.is_integer_variable = false,
-                _ => return Err(MpsParseError::InvalidMarker(fields[2].to_string())),
+                marker => crate::bail!({ marker }, "invalid marker in COLUMNS section: {marker}"),
             }
             return Ok(());
         }
@@ -285,11 +285,14 @@ impl State {
             if row_name == self.mps.objective_name {
                 self.mps.c.insert(col_name.clone(), coefficient);
             } else {
-                self.mps
-                    .a
-                    .get_mut(&row_name)
-                    .ok_or(MpsParseError::UnknownRowName(row_name.0.clone()))?
-                    .insert(col_name.clone(), coefficient);
+                let row = self.mps.a.get_mut(&row_name).ok_or_else(|| {
+                    crate::error!(
+                        { row_name = %row_name.0 },
+                        "unknown row name: {}",
+                        row_name.0,
+                    )
+                })?;
+                row.insert(col_name.clone(), coefficient);
             }
         }
         Ok(())
@@ -326,7 +329,7 @@ impl State {
             let row_name = RowName(chunk[0].to_string());
             let range: f64 = chunk[1].parse()?;
             if range == 0.0 {
-                return Err(MpsParseError::ZeroRange);
+                crate::bail!({ row_name = %row_name.0 }, "RANGES with 0 is not supported");
             }
             let mut new_row_name_candidate = RowName(format!("{}_", row_name.0));
             let new_row_name = loop {
@@ -339,7 +342,13 @@ impl State {
                 .mps
                 .a
                 .get_mut(&row_name)
-                .ok_or(MpsParseError::UnknownRowName(row_name.0.clone()))?
+                .ok_or_else(|| {
+                    crate::error!(
+                        { row_name = %row_name.0 },
+                        "unknown row name: {}",
+                        row_name.0,
+                    )
+                })?
                 .clone();
             self.mps.a.insert(new_row_name.clone(), constraint);
             // row type       sign of r       h          u
@@ -447,9 +456,7 @@ impl State {
                 self.mps.real.remove(&column_name);
                 self.mps.l.insert(column_name, bound);
             }
-            _ => {
-                return Err(MpsParseError::InvalidBoundType(fields[0].to_string()));
-            }
+            bound_type => crate::bail!({ bound_type }, "invalid BOUNDS type: {bound_type}"),
         }
         Ok(())
     }
@@ -487,9 +494,7 @@ impl State {
         ensure_field_size("QCMATRIX", &fields, |len| len == 3)?;
 
         let Some(ref constraint_name) = self.current_qcmatrix_constraint else {
-            return Err(MpsParseError::InvalidHeader(
-                "QCMATRIX quadratic term without constraint name".to_string(),
-            ));
+            crate::bail!("QCMATRIX quadratic term without constraint name");
         };
 
         let var1 = ColumnName(fields[0].to_string());
@@ -596,7 +601,7 @@ impl Mps {
                 Cursor::Bounds => state.read_bound_field(fields)?,
                 Cursor::QuadObj => state.read_quadobj_field(fields)?,
                 Cursor::QcMatrix => state.read_qcmatrix_field(fields)?,
-                Cursor::Name => return Err(MpsParseError::InvalidHeader(line)),
+                Cursor::Name => crate::bail!({ line = %line }, "invalid MPS header: {line}"),
                 Cursor::End => break,
             }
         }
