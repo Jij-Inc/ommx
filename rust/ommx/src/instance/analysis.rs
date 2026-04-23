@@ -124,19 +124,21 @@ impl DecisionVariableAnalysis {
     /// Post-condition
     /// --------------
     /// - The IDs of returned [`State`] are the same as [`Self::all`].
-    pub fn populate(&self, mut state: State, atol: ATol) -> Result<State, StateValidationError> {
+    pub fn populate(&self, mut state: State, atol: ATol) -> crate::Result<State> {
         let state_ids: VariableIDSet = state.entries.keys().map(|id| (*id).into()).collect();
 
         // Check the IDs in the state are subset of all IDs
         let unknown_ids: VariableIDSet = state_ids.difference(&self.all).cloned().collect();
         if !unknown_ids.is_empty() {
-            return Err(StateValidationError::UnknownIDs { unknown_ids });
+            tracing::error!(?unknown_ids, "state contains unknown variable IDs");
+            crate::bail!("state contains unknown variable IDs: {unknown_ids:?}");
         }
 
         // Check the state contains every used decision variables
         let missing_ids: VariableIDSet = self.used().difference(&state_ids).cloned().collect();
         if !missing_ids.is_empty() {
-            return Err(StateValidationError::MissingRequiredIDs { missing_ids });
+            tracing::error!(?missing_ids, "state is missing required variable IDs");
+            crate::bail!("state is missing required variable IDs: {missing_ids:?}");
         }
 
         // Note: Bound and kind checking is intentionally omitted here.
@@ -148,11 +150,17 @@ impl DecisionVariableAnalysis {
             match state.entries.entry(id.into_inner()) {
                 Entry::Occupied(entry) => {
                     if (entry.get() - value).abs() > atol {
-                        return Err(StateValidationError::StateValueInconsistent {
-                            id: *id,
-                            state_value: *entry.get(),
-                            instance_value: *value,
-                        });
+                        let state_value = *entry.get();
+                        let instance_value = *value;
+                        tracing::error!(
+                            id = ?id,
+                            state_value,
+                            instance_value,
+                            "state value inconsistent with instance fixed value"
+                        );
+                        crate::bail!(
+                            "state value for variable {id:?} is inconsistent with instance (state={state_value}, instance={instance_value})"
+                        );
                     }
                 }
                 Entry::Vacant(entry) => {
@@ -183,66 +191,34 @@ impl DecisionVariableAnalysis {
                 .iter()
                 .map(|(id, (_kind, _bound, f))| (*id, f.clone())),
         )
-        .map_err(|error| StateValidationError::CyclicDependency { error })?;
+        .map_err(|e| {
+            tracing::error!(error = %e, "cyclic dependency among dependent variables");
+            crate::Error::from(e)
+        })?;
         for (id, f) in acyclic.evaluation_order_iter() {
-            let value = f.evaluate(&state, atol).map_err(|error| {
-                StateValidationError::FailedToEvaluateDependentVariable { id, error }
+            let value = f.evaluate(&state, atol).map_err(|e| {
+                tracing::error!(id = ?id, error = %e, "failed to evaluate dependent variable");
+                crate::error!("failed to evaluate dependent variable {id:?}: {e}")
             })?;
             // Note: Bound and kind checking is intentionally omitted here.
             // These constraints will be validated as part of Solution::feasible() instead.
             if let Some(v) = state.entries.insert(id.into_inner(), value) {
                 if (v - value).abs() > atol {
-                    return Err(StateValidationError::StateValueInconsistent {
-                        id,
-                        state_value: v,
-                        instance_value: value,
-                    });
+                    tracing::error!(
+                        id = ?id,
+                        state_value = v,
+                        instance_value = value,
+                        "state value inconsistent with evaluated dependent variable"
+                    );
+                    crate::bail!(
+                        "state value for variable {id:?} is inconsistent with instance (state={v}, instance={value})"
+                    );
                 }
             }
         }
 
         Ok(state)
     }
-}
-
-#[non_exhaustive]
-#[derive(Debug, thiserror::Error)]
-pub enum StateValidationError {
-    #[error("The state contains some unknown IDs: {unknown_ids:?}")]
-    UnknownIDs { unknown_ids: VariableIDSet },
-    #[error("The state does not contain some required IDs: {missing_ids:?}")]
-    MissingRequiredIDs { missing_ids: VariableIDSet },
-    #[deprecated(
-        since = "2.2.0",
-        note = "Bound and kind constraints are no longer checked during state population. Use Solution::feasible_decision_variables() instead."
-    )]
-    #[error(
-        "Value for {kind:?} variable {id:?} is out of bounds. Value: {value}, Bound: {bound:?}"
-    )]
-    ValueOutOfBounds {
-        id: VariableID,
-        value: f64,
-        bound: Bound,
-        kind: Kind,
-    },
-    #[deprecated(
-        since = "2.2.0",
-        note = "Bound and kind constraints are no longer checked during state population. Use Solution::feasible_decision_variables() instead."
-    )]
-    #[error("Value for integer variable {id:?} is not an integer. Value: {value}")]
-    NotAnInteger { id: VariableID, value: f64 },
-    #[error("State's value for variable {id:?} is inconsistent to instance. State value: {state_value}, Instance value: {instance_value}")]
-    StateValueInconsistent {
-        id: VariableID,
-        /// Value in the state
-        state_value: f64,
-        /// Value determined from instance
-        instance_value: f64,
-    },
-    #[error("Evaluation of dependent variable {id:?} failed. Error: {error:?}")]
-    FailedToEvaluateDependentVariable { id: VariableID, error: crate::Error },
-    #[error("Cyclic dependency detected in dependent variables: {error}")]
-    CyclicDependency { error: crate::SubstitutionError },
 }
 
 impl Instance {

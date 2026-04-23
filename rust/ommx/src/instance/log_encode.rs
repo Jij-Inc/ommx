@@ -1,21 +1,7 @@
 use super::Instance;
 use crate::{substitute_one, Bound, Coefficient, Linear, VariableID};
 
-#[non_exhaustive]
-#[derive(Debug, thiserror::Error)]
-pub enum LogEncodingError {
-    #[error("Unknown variable with ID: {0}")]
-    UnknownVariable(VariableID),
-    #[error("Bound must be finite for log-encoding: {0}")]
-    NonFiniteBound(Bound),
-    #[error("No feasible integer values found in the bound: {0}")]
-    NoFeasibleInteger(Bound),
-}
-
 /// Calculate log-encoding coefficients for a given bound.
-///
-/// This function computes the coefficients needed for logarithmic encoding
-/// of an integer variable with the given bounds without modifying any Instance.
 ///
 /// Returns `(coefficients, constant_offset)` where:
 /// - `coefficients`: Vector of coefficients for binary variables as `Coefficient` values
@@ -27,20 +13,13 @@ pub enum LogEncodingError {
 ///
 /// # Errors
 ///
-/// Returns [`anyhow::Error`] in the following cases:
-/// - The bound is not finite
-/// - No feasible integer values exist within the bounds
-///
-/// # Examples
-///
-/// ```rust
-/// use ommx::{coeff, Bound};
-///
-/// ```
-fn log_encoding_coefficients(bound: Bound) -> Result<(Vec<Coefficient>, f64), LogEncodingError> {
+/// Returns an error if the bound is not finite, or if no feasible integer
+/// values exist within the bound.
+fn log_encoding_coefficients(bound: Bound) -> crate::Result<(Vec<Coefficient>, f64)> {
     // Check bounds are finite
     if !bound.lower().is_finite() || !bound.upper().is_finite() {
-        return Err(LogEncodingError::NonFiniteBound(bound));
+        tracing::error!(?bound, "bound must be finite for log-encoding");
+        crate::bail!("bound must be finite for log-encoding: {bound}");
     }
 
     // Bound of integer may be non-integer value, so floor/ceil to get valid integer range
@@ -49,7 +28,8 @@ fn log_encoding_coefficients(bound: Bound) -> Result<(Vec<Coefficient>, f64), Lo
     let u_l = upper - lower;
     if u_l < 0.0 {
         // No feasible integer values in the range
-        return Err(LogEncodingError::NoFeasibleInteger(bound));
+        tracing::error!(?bound, "no feasible integer value in bound");
+        crate::bail!("no feasible integer values in bound for log-encoding: {bound}");
     }
 
     // There is only one feasible integer, and no need to encode
@@ -79,11 +59,11 @@ fn log_encoding_coefficients(bound: Bound) -> Result<(Vec<Coefficient>, f64), Lo
 impl Instance {
     /// Encode an integer decision variable into binary decision variables.
     #[tracing::instrument(skip(self))]
-    pub fn log_encode(&mut self, id: VariableID) -> Result<Linear, LogEncodingError> {
-        let v = self
-            .decision_variables
-            .get(&id)
-            .ok_or(LogEncodingError::UnknownVariable(id))?;
+    pub fn log_encode(&mut self, id: VariableID) -> crate::Result<Linear> {
+        let v = self.decision_variables.get(&id).ok_or_else(|| {
+            tracing::error!(?id, "unknown variable for log-encoding");
+            crate::error!("unknown variable for log-encoding: {id:?}")
+        })?;
         let (coefficients, offset) = log_encoding_coefficients(v.bound())?;
         // Safe unwrap: offset is always finite from log_encoding_coefficients
         let mut linear = Linear::try_from(offset).unwrap();
