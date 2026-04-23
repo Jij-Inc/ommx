@@ -66,12 +66,17 @@ use parser::*;
 use std::{io::Read, path::Path};
 
 /// Reads and parses the MPS file from the given [`Read`] source with automatic gzipped detection.
+#[tracing::instrument(skip_all)]
 pub fn parse(reader: impl Read) -> anyhow::Result<crate::Instance> {
     let mps_data = Mps::parse(reader)?;
     convert::convert(mps_data)
 }
 
 /// Reads and parses the file at the given path. Gzipped files are automatically detected and decompressed.
+//
+// Note: the caller's path is intentionally not recorded as a span field to
+// avoid leaking local directory structure through exported telemetry.
+#[tracing::instrument(skip_all)]
 pub fn load(path: impl AsRef<Path>) -> anyhow::Result<crate::Instance> {
     let mps_data = Mps::load(path)?;
     convert::convert(mps_data)
@@ -85,6 +90,9 @@ pub fn load(path: impl AsRef<Path>) -> anyhow::Result<crate::Instance> {
 /// ----------
 /// Only linear problems are supported. See [`format()`] for detailed information about information loss,
 /// removed constraints handling, and variable filtering behavior.
+// Note: the caller's output path is intentionally not recorded as a span
+// field to avoid leaking local directory structure through exported telemetry.
+#[tracing::instrument(skip_all, fields(compress))]
 pub fn save(
     instance: &crate::Instance,
     out_path: impl AsRef<Path>,

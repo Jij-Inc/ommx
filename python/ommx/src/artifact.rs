@@ -184,7 +184,8 @@ impl PyArtifact {
     }
 
     /// Look up a layer descriptor by digest.
-    pub fn get_layer_descriptor(&mut self, digest: &str) -> Result<PyDescriptor> {
+    pub fn get_layer_descriptor(&mut self, py: Python<'_>, digest: &str) -> Result<PyDescriptor> {
+        let _guard = crate::TRACING.attach_parent_context(py);
         let layers = self.0.layers()?;
         for layer in layers {
             if layer.digest() == digest {
@@ -200,6 +201,7 @@ impl PyArtifact {
         py: Python<'py>,
         digest_or_descriptor: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyBytes>> {
+        let _guard = crate::TRACING.attach_parent_context(py);
         let digest: String = if let Ok(desc) = digest_or_descriptor.extract::<PyRef<PyDescriptor>>()
         {
             desc.digest()
@@ -218,8 +220,8 @@ impl PyArtifact {
     /// Raises `ValueError` if no instance layer is found.
     /// For multiple instance layers, use {meth}`get_instance` with a descriptor.
     #[getter(instance)]
-    pub fn instance_(&mut self) -> Result<crate::Instance> {
-        Ok(self.get_instance(None)?)
+    pub fn instance_(&mut self, py: Python<'_>) -> Result<crate::Instance> {
+        Ok(self.get_instance(py, None)?)
     }
 
     /// The first solution layer in the artifact.
@@ -227,8 +229,8 @@ impl PyArtifact {
     /// Raises `ValueError` if no solution layer is found.
     /// For multiple solution layers, use {meth}`get_solution` with a descriptor.
     #[getter(solution)]
-    pub fn solution_(&mut self) -> Result<crate::Solution> {
-        Ok(self.get_solution(None)?)
+    pub fn solution_(&mut self, py: Python<'_>) -> Result<crate::Solution> {
+        Ok(self.get_solution(py, None)?)
     }
 
     /// The first parametric instance layer in the artifact.
@@ -236,8 +238,8 @@ impl PyArtifact {
     /// Raises `ValueError` if no parametric instance layer is found.
     /// For multiple parametric instance layers, use {meth}`get_parametric_instance` with a descriptor.
     #[getter(parametric_instance)]
-    pub fn parametric_instance_(&mut self) -> Result<crate::ParametricInstance> {
-        Ok(self.get_parametric_instance(None)?)
+    pub fn parametric_instance_(&mut self, py: Python<'_>) -> Result<crate::ParametricInstance> {
+        Ok(self.get_parametric_instance(py, None)?)
     }
 
     /// The first sample set layer in the artifact.
@@ -245,8 +247,8 @@ impl PyArtifact {
     /// Raises `ValueError` if no sample set layer is found.
     /// For multiple sample set layers, use {meth}`get_sample_set` with a descriptor.
     #[getter(sample_set)]
-    pub fn sample_set_(&mut self) -> Result<crate::SampleSet> {
-        Ok(self.get_sample_set(None)?)
+    pub fn sample_set_(&mut self, py: Python<'_>) -> Result<crate::SampleSet> {
+        Ok(self.get_sample_set(py, None)?)
     }
 
     /// Get the layer object corresponding to the descriptor.
@@ -260,6 +262,7 @@ impl PyArtifact {
         py: Python<'py>,
         descriptor: &PyDescriptor,
     ) -> PyResult<Bound<'py, PyAny>> {
+        let _guard = crate::TRACING.attach_parent_context(py);
         let media_type = descriptor.media_type();
         match media_type.as_str() {
             "application/org.ommx.v1.instance" => {
@@ -297,7 +300,12 @@ impl PyArtifact {
     ///
     /// Raises `ValueError` if no instance layer is found.
     #[pyo3(signature = (descriptor = None))]
-    pub fn get_instance(&mut self, descriptor: Option<&PyDescriptor>) -> PyResult<crate::Instance> {
+    pub fn get_instance(
+        &mut self,
+        py: Python<'_>,
+        descriptor: Option<&PyDescriptor>,
+    ) -> PyResult<crate::Instance> {
+        let _guard = crate::TRACING.attach_parent_context(py);
         match descriptor {
             Some(desc) => self
                 .get_instance_inner(desc)
@@ -328,7 +336,12 @@ impl PyArtifact {
     ///
     /// Raises `ValueError` if no solution layer is found.
     #[pyo3(signature = (descriptor = None))]
-    pub fn get_solution(&mut self, descriptor: Option<&PyDescriptor>) -> PyResult<crate::Solution> {
+    pub fn get_solution(
+        &mut self,
+        py: Python<'_>,
+        descriptor: Option<&PyDescriptor>,
+    ) -> PyResult<crate::Solution> {
+        let _guard = crate::TRACING.attach_parent_context(py);
         match descriptor {
             Some(desc) => self
                 .get_solution_inner(desc)
@@ -361,8 +374,10 @@ impl PyArtifact {
     #[pyo3(signature = (descriptor = None))]
     pub fn get_parametric_instance(
         &mut self,
+        py: Python<'_>,
         descriptor: Option<&PyDescriptor>,
     ) -> PyResult<crate::ParametricInstance> {
+        let _guard = crate::TRACING.attach_parent_context(py);
         match descriptor {
             Some(desc) => self
                 .get_parametric_instance_inner(desc)
@@ -395,8 +410,10 @@ impl PyArtifact {
     #[pyo3(signature = (descriptor = None))]
     pub fn get_sample_set(
         &mut self,
+        py: Python<'_>,
         descriptor: Option<&PyDescriptor>,
     ) -> PyResult<crate::SampleSet> {
+        let _guard = crate::TRACING.attach_parent_context(py);
         match descriptor {
             Some(desc) => self
                 .get_sample_set_inner(desc)
@@ -426,6 +443,7 @@ impl PyArtifact {
         py: Python<'py>,
         descriptor: &PyDescriptor,
     ) -> PyResult<Bound<'py, PyAny>> {
+        let _guard = crate::TRACING.attach_parent_context(py);
         self.get_ndarray_inner(py, descriptor)
     }
 
@@ -435,6 +453,7 @@ impl PyArtifact {
         py: Python<'py>,
         descriptor: &PyDescriptor,
     ) -> PyResult<Bound<'py, PyAny>> {
+        let _guard = crate::TRACING.attach_parent_context(py);
         assert_media_type(descriptor, "application/vnd.apache.parquet")?;
         let blob = self
             .0
@@ -452,6 +471,7 @@ impl PyArtifact {
         py: Python<'py>,
         descriptor: &PyDescriptor,
     ) -> PyResult<Bound<'py, PyAny>> {
+        let _guard = crate::TRACING.attach_parent_context(py);
         assert_media_type(descriptor, "application/json")?;
         let blob = self
             .0
@@ -713,7 +733,12 @@ impl PyArtifactBuilder {
     /// test instance
     ///
     /// ```
-    pub fn add_instance(&mut self, instance: &crate::Instance) -> Result<PyDescriptor> {
+    pub fn add_instance(
+        &mut self,
+        py: Python<'_>,
+        instance: &crate::Instance,
+    ) -> Result<PyDescriptor> {
+        let _guard = crate::TRACING.attach_parent_context(py);
         let blob = instance.inner.to_bytes();
         self.0.add_layer(
             "application/org.ommx.v1.instance",
@@ -725,8 +750,10 @@ impl PyArtifactBuilder {
     /// Add a {class}`~ommx.v1.ParametricInstance` to the artifact with annotations.
     pub fn add_parametric_instance(
         &mut self,
+        py: Python<'_>,
         instance: &crate::ParametricInstance,
     ) -> Result<PyDescriptor> {
+        let _guard = crate::TRACING.attach_parent_context(py);
         let blob = instance.inner.to_bytes();
         self.0.add_layer(
             "application/org.ommx.v1.parametric-instance",
@@ -736,7 +763,12 @@ impl PyArtifactBuilder {
     }
 
     /// Add a {class}`~ommx.v1.Solution` to the artifact with annotations.
-    pub fn add_solution(&mut self, solution: &crate::Solution) -> Result<PyDescriptor> {
+    pub fn add_solution(
+        &mut self,
+        py: Python<'_>,
+        solution: &crate::Solution,
+    ) -> Result<PyDescriptor> {
+        let _guard = crate::TRACING.attach_parent_context(py);
         let blob = solution.inner.to_bytes();
         self.0.add_layer(
             "application/org.ommx.v1.solution",
@@ -746,7 +778,12 @@ impl PyArtifactBuilder {
     }
 
     /// Add a {class}`~ommx.v1.SampleSet` to the artifact with annotations.
-    pub fn add_sample_set(&mut self, sample_set: &crate::SampleSet) -> Result<PyDescriptor> {
+    pub fn add_sample_set(
+        &mut self,
+        py: Python<'_>,
+        sample_set: &crate::SampleSet,
+    ) -> Result<PyDescriptor> {
+        let _guard = crate::TRACING.attach_parent_context(py);
         let blob = sample_set.inner.to_bytes();
         self.0.add_layer(
             "application/org.ommx.v1.sample-set",
@@ -778,6 +815,7 @@ impl PyArtifactBuilder {
         annotation_namespace: &str,
         annotations: Option<&Bound<pyo3::types::PyDict>>,
     ) -> Result<PyDescriptor> {
+        let _guard = crate::TRACING.attach_parent_context(py);
         let io = py.import("io")?;
         let numpy = py.import("numpy")?;
         let bytes_io = io.call_method0("BytesIO")?;
@@ -807,6 +845,7 @@ impl PyArtifactBuilder {
         annotation_namespace: &str,
         annotations: Option<&Bound<pyo3::types::PyDict>>,
     ) -> Result<PyDescriptor> {
+        let _guard = crate::TRACING.attach_parent_context(df.py());
         let blob: Vec<u8> = df.call_method0("to_parquet")?.extract()?;
         let ann = build_annotations(annotation_namespace, annotations)?;
         self.0
@@ -833,6 +872,7 @@ impl PyArtifactBuilder {
         annotation_namespace: &str,
         annotations: Option<&Bound<pyo3::types::PyDict>>,
     ) -> Result<PyDescriptor> {
+        let _guard = crate::TRACING.attach_parent_context(py);
         let json = py.import("json")?;
         let blob_str: String = json.call_method1("dumps", (obj,))?.extract()?;
         let ann = build_annotations(annotation_namespace, annotations)?;

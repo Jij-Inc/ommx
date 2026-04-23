@@ -37,6 +37,7 @@ impl Evaluate for Instance {
     type Output = crate::Solution;
     type SampledOutput = crate::SampleSet;
 
+    #[tracing::instrument(skip_all)]
     fn evaluate(&self, state: &v1::State, atol: ATol) -> Result<Self::Output> {
         let state = self
             .analyze_decision_variables()
@@ -82,6 +83,7 @@ impl Evaluate for Instance {
         Ok(solution)
     }
 
+    #[tracing::instrument(skip_all)]
     fn evaluate_samples(
         &self,
         samples: &crate::Sampled<v1::State>,
@@ -146,6 +148,7 @@ impl Evaluate for Instance {
             .build()?)
     }
 
+    #[tracing::instrument(skip_all)]
     fn partial_evaluate(&mut self, state: &v1::State, atol: ATol) -> Result<()> {
         // Operate on a clone so that any failure leaves `self` unchanged (atomic).
         // Propagation consumes constraints via `self` in `Propagate`, so even a

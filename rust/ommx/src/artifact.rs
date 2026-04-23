@@ -298,6 +298,7 @@ impl<Base: Image> Artifact<Base> {
             .collect())
     }
 
+    #[tracing::instrument(skip_all, fields(digest = %digest))]
     pub fn get_layer(&mut self, digest: &Digest) -> Result<(Descriptor, Vec<u8>)> {
         for (desc, blob) in self.0.get_layers()? {
             if desc.digest() == digest {
@@ -307,6 +308,7 @@ impl<Base: Image> Artifact<Base> {
         bail!("Layer of digest {} not found", digest)
     }
 
+    #[tracing::instrument(skip_all, fields(digest = %digest))]
     pub fn get_solution(&mut self, digest: &Digest) -> Result<(v1::State, SolutionAnnotations)> {
         let (desc, blob) = self.get_layer(digest)?;
         ensure!(
@@ -320,6 +322,7 @@ impl<Base: Image> Artifact<Base> {
         ))
     }
 
+    #[tracing::instrument(skip_all, fields(digest = %digest))]
     pub fn get_sample_set(
         &mut self,
         digest: &Digest,
@@ -336,6 +339,7 @@ impl<Base: Image> Artifact<Base> {
         ))
     }
 
+    #[tracing::instrument(skip_all, fields(digest = %digest))]
     pub fn get_instance(&mut self, digest: &Digest) -> Result<(v1::Instance, InstanceAnnotations)> {
         let (desc, blob) = self.get_layer(digest)?;
         ensure!(
@@ -349,6 +353,7 @@ impl<Base: Image> Artifact<Base> {
         ))
     }
 
+    #[tracing::instrument(skip_all, fields(digest = %digest))]
     pub fn get_parametric_instance(
         &mut self,
         digest: &Digest,

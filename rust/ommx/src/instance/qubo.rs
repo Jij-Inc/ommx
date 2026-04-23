@@ -14,6 +14,7 @@ impl Instance {
     ///   - TODO: Binary encoding will be added.
     /// - The degree of the objective is at most 2.
     ///
+    #[tracing::instrument(skip_all)]
     pub fn as_qubo_format(&self) -> Result<(BTreeMap<BinaryIdPair, f64>, f64)> {
         if self.sense() == Sense::Maximize {
             bail!("QUBO format is only for minimization problems.");
@@ -63,6 +64,7 @@ impl Instance {
     /// - The objective function uses only binary decision variables.
     ///   - TODO: Binary encoding will be added.
     ///
+    #[tracing::instrument(skip_all)]
     pub fn as_hubo_format(&self) -> Result<(BTreeMap<BinaryIds, f64>, f64)> {
         if self.sense() == Sense::Maximize {
             bail!("HUBO format is only for minimization problems.");

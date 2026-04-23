@@ -26,6 +26,7 @@ crate::annotations::impl_instance_annotations!(
 impl ParametricInstance {
     #[staticmethod]
     pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
+        let _guard = crate::TRACING.attach_parent_context(bytes.py());
         let inner = ommx::ParametricInstance::from_bytes(bytes.as_bytes())?;
         Ok(Self {
             inner,
@@ -34,6 +35,7 @@ impl ParametricInstance {
     }
 
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+        let _guard = crate::TRACING.attach_parent_context(py);
         PyBytes::new(py, &self.inner.to_bytes())
     }
 

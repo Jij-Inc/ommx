@@ -92,6 +92,7 @@ crate::annotations::impl_solution_annotations!(SampleSet, "org.ommx.v1.sample-se
 impl SampleSet {
     #[staticmethod]
     pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
+        let _guard = crate::TRACING.attach_parent_context(bytes.py());
         Ok(Self {
             inner: ommx::SampleSet::from_bytes(bytes.as_bytes())?,
             annotations: HashMap::new(),
@@ -99,6 +100,7 @@ impl SampleSet {
     }
 
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+        let _guard = crate::TRACING.attach_parent_context(py);
         PyBytes::new(py, &self.inner.to_bytes())
     }
 

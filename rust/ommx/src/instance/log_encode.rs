@@ -78,6 +78,7 @@ fn log_encoding_coefficients(bound: Bound) -> Result<(Vec<Coefficient>, f64), Lo
 
 impl Instance {
     /// Encode an integer decision variable into binary decision variables.
+    #[tracing::instrument(skip(self))]
     pub fn log_encode(&mut self, id: VariableID) -> Result<Linear, LogEncodingError> {
         let v = self
             .decision_variables

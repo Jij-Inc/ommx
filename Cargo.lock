@@ -17,6 +17,7 @@ dependencies = [
  "pyo3-tracing-opentelemetry",
  "serde-pyobject",
  "serde_json",
+ "tracing",
 ]
 
 [[package]]
@@ -2147,9 +2148,9 @@ dependencies = [
 
 [[package]]
 name = "pyo3-tracing-opentelemetry"
-version = "0.1.2"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9653bcd0c9cbc8330b02e1b7239a879a04ee1fe09e83c6f8f3f421ddcb08ebe9"
+checksum = "af5a0530c5bfa1f2e02ef047c31fab60a33d692068b60fb3357feea9c192dd03"
 dependencies = [
  "anyhow",
  "futures-util",
