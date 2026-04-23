@@ -141,9 +141,9 @@ Key properties:
 
 ## Span Naming Convention
 
-OMMX relies on `tracing`'s default span names (the bare function name, e.g. `from_bytes`, `evaluate`, `reduce_capabilities`). The fully-qualified module path is carried in the OTel **instrumentation scope** and the span attribute `code.namespace`, so you can still disambiguate two `evaluate` spans from different modules by looking at the scope name or the attributes, not by munging the span name.
+OMMX relies on `tracing`'s default span names — the bare function name (e.g. `evaluate`, `reduce_capabilities`, `push`, `pull`). The fully-qualified module path is carried by the OTel **instrumentation scope**, so you can still tell two `evaluate` spans from different modules apart by looking at the scope name rather than by munging the span name.
 
-When the same method exists on multiple types (for example `Instance.evaluate` vs `SampleSet.evaluate`), the Rust side disambiguates via span **fields** — e.g. `fields(artifact_storage = ...)` — rather than bespoke span names. Those fields show up as OTel attributes in the tree and in the Chrome Trace `args` dict.
+When the same method exists on multiple types (for example `Artifact::push` on `OciArchive` vs `Remote` storage backends), the Rust side disambiguates via span **fields** — e.g. `fields(artifact_storage = "oci_archive")` — rather than bespoke span names. Those fields show up as OTel attributes in the tree and in the Chrome Trace `args` dict.
 
 (own-tracer-provider)=
 ## Using Your Own TracerProvider
@@ -176,7 +176,7 @@ If you run with a non-SDK provider that does not support `add_span_processor` (r
 
 ### I see `(no spans)` in the tree
 
-Most commonly: the traced block didn't actually call into any instrumented OMMX code. The collector captures spans whose `trace_id` falls inside the `capture_trace` window, and only instrumented call sites produce spans — raw Python control flow does not. Double-check that the block contains an actual OMMX call (`Instance.from_bytes`, `Instance.evaluate`, adapter `solve`, etc.).
+Most commonly: the traced block didn't actually call into any instrumented OMMX code path. The collector captures spans whose `trace_id` falls inside the `capture_trace` window, and only instrumented call sites produce spans — raw Python control flow does not. Not every OMMX method is instrumented; constructors and simple accessors typically are not. Double-check that the block reaches an instrumented call (`Instance.evaluate`, `Instance.evaluate_samples`, `Instance.reduce_capabilities`, the `Artifact` `push` / `pull` / `load` / `save` entry points, adapter `solve`, etc.).
 
 A second possibility: a non-SDK `TracerProvider` is active and `ommx.tracing` couldn't attach its collector. If that were the case, the first `capture_trace` call would have raised `RuntimeError` — see the message for the remediation.
 
@@ -201,6 +201,6 @@ If a span's duration is listed as `0.0 µs`, the span almost always reached the 
 Do **not** rely on swapping out the active `TracerProvider` after `ommx.tracing` or the Rust → Python tracing bridge has been initialized. Two things lock in on first use and cannot be undone:
 
 1. `ommx.tracing` calls `set_tracer_provider(SdkTracerProvider())` during `capture_trace.__enter__` / the first `%%ommx_trace` cell if no provider is set yet. Since Python OTel only honours the first `set_tracer_provider` call, a later user-supplied provider is silently ignored.
-2. The pyo3 extension caches the tracing subscriber installed on the first instrumented Rust call. Spans from later calls continue to flow through that subscriber, even if you change providers afterwards.
+2. The underlying `pyo3-tracing-opentelemetry` bridge installs its `tracing` subscriber process-wide on the first instrumented Rust call. Spans from later calls continue to flow through that subscriber even if you try to swap providers afterwards.
 
 If OTLP export matters, configure your provider *before* the first OMMX call. If you need to adjust behavior later, mutate the existing SDK provider (for example, `provider.add_span_processor(new_processor)`) rather than replacing it.

@@ -141,9 +141,9 @@ def f(): ...
 
 ## スパン命名規則
 
-OMMXは `tracing` のデフォルトのスパン名（`from_bytes`、`evaluate`、`reduce_capabilities` などの関数名そのまま）を採用しています。モジュールパスはOTelの**インストルメンテーションスコープ**とスパン属性 `code.namespace` に記録されるので、同じ関数名でもスコープ名や属性から区別可能です。
+OMMXは `tracing` のデフォルトのスパン名（`evaluate`、`reduce_capabilities`、`push`、`pull` などの関数名そのまま）を採用しています。モジュールパスはOTelの**インストルメンテーションスコープ**に記録されるので、同じ関数名でもスコープ名から区別可能です。
 
-複数の型で同名のメソッドが存在する場合（例: `Instance.evaluate` と `SampleSet.evaluate`）、Rust側では独自のスパン名ではなくスパン**フィールド** (`fields(artifact_storage = ...)` など) で区別します。これらのフィールドはツリー表示ではOTel属性として、Chrome Traceでは `args` 辞書として表示されます。
+複数の型で同名のメソッドが存在する場合（例: `OciArchive` と `Remote` ストレージバックエンドでの `Artifact::push`）、Rust側では独自のスパン名ではなくスパン**フィールド** (`fields(artifact_storage = "oci_archive")` など) で区別します。これらのフィールドはツリー表示ではOTel属性として、Chrome Traceでは `args` 辞書として表示されます。
 
 (own-tracer-provider)=
 ## 独自のTracerProviderを使う
@@ -177,7 +177,7 @@ from ommx.v1 import Instance
 
 ### ツリーに `(no spans)` としか表示されない
 
-最も多い原因は、トレース対象のブロック内で計測対象のOMMX関数が呼ばれていないことです。コレクタは `capture_trace` ウィンドウ内で発生した `trace_id` のスパンのみをキャプチャしますが、スパンは計測されたコールサイトからのみ生成されます（素のPythonの制御フローからは生成されません）。ブロックの中に実際のOMMX呼び出し（`Instance.from_bytes`、`Instance.evaluate`、アダプタの `solve` など）が含まれているか確認してください。
+最も多い原因は、トレース対象のブロック内で計測対象のOMMXコールサイトに到達していないことです。コレクタは `capture_trace` ウィンドウ内で発生した `trace_id` のスパンのみをキャプチャしますが、スパンは計測されたコールサイトからのみ生成されます（素のPythonの制御フローからは生成されません）。OMMXのすべてのメソッドが計測対象というわけではなく、コンストラクタや単純なアクセサは通常計測されません。ブロックが計測対象呼び出し（`Instance.evaluate`、`Instance.evaluate_samples`、`Instance.reduce_capabilities`、`Artifact` の `push` / `pull` / `load` / `save` 等のエントリポイント、アダプタの `solve` など）に到達しているか確認してください。
 
 もう1つの可能性は、非SDKの `TracerProvider` がアクティブで `ommx.tracing` がコレクタを取り付けられなかったケースです。この場合は `capture_trace` が `RuntimeError` を投げるので、そのメッセージに従って修正してください。
 
@@ -202,6 +202,6 @@ from ommx.v1 import Instance
 `ommx.tracing` やRust→Pythonブリッジの初期化後に、アクティブな `TracerProvider` の**差し替え**を前提にしないでください。初回利用時に以下の2つの状態が固定され、後から取り消せません。
 
 1. `ommx.tracing` は `capture_trace.__enter__` や最初の `%%ommx_trace` セル実行時、providerが未設定であれば `set_tracer_provider(SdkTracerProvider())` を呼び出します。Python OTelは最初の `set_tracer_provider` のみを採用するため、そのあとにユーザーがproviderを設定しても無視されます。
-2. pyo3拡張は最初の計測対象Rust呼び出しの時点でtracing subscriberをキャッシュします。providerを後から差し替えても、後続の呼び出しのスパンはすでにインストール済みのsubscriberを経由して流れます。
+2. 基盤となる `pyo3-tracing-opentelemetry` ブリッジは、最初の計測対象Rust呼び出しの時点で `tracing` subscriberをプロセス全体にインストールします。providerを後から差し替えても、後続の呼び出しのスパンはすでにインストール済みのsubscriberを経由して流れます。
 
 OTLPエクスポートが必要な場合は、**OMMXへの最初の呼び出し前に**providerを設定してください。実行中に挙動を調整したい場合は、providerを差し替えるのではなく、既存のSDK providerに `provider.add_span_processor(new_processor)` のように `SpanProcessor` を追加してください。
