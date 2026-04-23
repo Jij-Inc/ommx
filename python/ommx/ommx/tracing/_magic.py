@@ -86,7 +86,12 @@ def run_cell_with_trace(
 
             root = otel_trace.get_current_span()
             root.set_status(Status(StatusCode.ERROR, str(cell_exc)))
-            root.record_exception(cell_exc)
+            # ``escaped=True`` because :func:`register_magic` below
+            # re-raises ``cell_exc`` so it escapes the root span. Letting
+            # downstream OTel consumers (OTLP, Jaeger, …) see that
+            # distinction — swallowed vs. propagated — matches the
+            # spec's intent for this flag.
+            root.record_exception(cell_exc, escaped=True)
 
     return render_cell_output_html(trace_result.spans), cell_exc
 
