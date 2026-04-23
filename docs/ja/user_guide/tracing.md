@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# OMMXワークロードのトレースとプロファイリング
+# トレースとプロファイリング
 
 OMMXはRustコア (`tracing` + `pyo3-tracing-opentelemetry`) とPython側の主要エントリポイントから [OpenTelemetry](https://opentelemetry.io/) のスパンを出力します。これを人間が読める形にまとめるための薄いラッパーが `ommx.tracing` に2つ用意されています。
 

@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Tracing and Profiling OMMX Workloads
+# Tracing and Profiling
 
 OMMX emits [OpenTelemetry](https://opentelemetry.io/) spans from the Rust core (via `tracing` + `pyo3-tracing-opentelemetry`) and from selected Python entry points. Two thin wrappers in `ommx.tracing` turn that stream into something you can actually read:
 
