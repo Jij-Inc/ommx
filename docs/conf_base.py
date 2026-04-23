@@ -94,6 +94,7 @@ autoapi_options = [
     "members",
     "inherited-members",
     "undoc-members",
+    "imported-members",
     "show-module-summary",
 ]
 autoapi_member_order = "groupwise"
@@ -114,4 +115,5 @@ intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
     "numpy": ("https://numpy.org/doc/stable", None),
     "pandas": ("https://pandas.pydata.org/docs", None),
+    "opentelemetry": ("https://opentelemetry-python.readthedocs.io/en/latest", None),
 }
