@@ -6,17 +6,20 @@ impl Instance {
         required_ids: &VariableIDSet,
         variable_ids: &VariableIDSet,
         dependency_keys: &VariableIDSet,
-    ) -> anyhow::Result<()> {
+    ) -> crate::Result<()> {
         // Check if all required IDs are defined
         if !required_ids.is_subset(variable_ids) {
-            let undefined_id = required_ids.difference(variable_ids).next().unwrap();
-            return Err(InstanceError::UndefinedVariableID { id: *undefined_id }.into());
+            let id = *required_ids.difference(variable_ids).next().unwrap();
+            crate::bail!({ ?id }, "Undefined variable ID is used: {id:?}");
         }
 
         // Check if any required ID is a dependent variable (used as a key in decision_variable_dependency)
         let mut intersection = required_ids.intersection(dependency_keys);
         if let Some(&id) = intersection.next() {
-            return Err(InstanceError::DependentVariableUsed { id }.into());
+            crate::bail!(
+                { ?id },
+                "Dependent variable cannot be used in objectives or constraints: {id:?}",
+            );
         }
 
         Ok(())
@@ -24,14 +27,14 @@ impl Instance {
 
     /// Validate that all required variable IDs are defined in the instance
     /// and are not dependent variables (i.e., not used as keys in decision_variable_dependency)
-    fn validate_required_ids(&self, required_ids: VariableIDSet) -> anyhow::Result<()> {
+    fn validate_required_ids(&self, required_ids: VariableIDSet) -> crate::Result<()> {
         let variable_ids: VariableIDSet = self.decision_variables.keys().cloned().collect();
         let dependency_keys: VariableIDSet = self.decision_variable_dependency.keys().collect();
         Self::validate_required_ids_with_sets(&required_ids, &variable_ids, &dependency_keys)
     }
 
     /// Set the objective function
-    pub fn set_objective(&mut self, objective: Function) -> anyhow::Result<()> {
+    pub fn set_objective(&mut self, objective: Function) -> crate::Result<()> {
         // Validate that all variables in the objective are defined
         self.validate_required_ids(objective.required_ids())?;
         self.objective = objective;
@@ -48,7 +51,7 @@ impl Instance {
         &mut self,
         id: ConstraintID,
         constraint: Constraint,
-    ) -> anyhow::Result<Option<Constraint>> {
+    ) -> crate::Result<Option<Constraint>> {
         // Validate that all variables in the constraints are defined
         self.validate_required_ids(constraint.required_ids())?;
         use std::collections::btree_map::Entry;
@@ -91,7 +94,7 @@ impl Instance {
     pub fn insert_constraints(
         &mut self,
         constraints: Vec<(ConstraintID, Constraint)>,
-    ) -> anyhow::Result<BTreeMap<ConstraintID, Constraint>> {
+    ) -> crate::Result<BTreeMap<ConstraintID, Constraint>> {
         // Build validation sets once
         let variable_ids: VariableIDSet = self.decision_variables.keys().cloned().collect();
         let dependency_keys: VariableIDSet = self.decision_variable_dependency.keys().collect();

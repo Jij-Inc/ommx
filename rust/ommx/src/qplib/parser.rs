@@ -1,4 +1,4 @@
-use super::{ParseErrorReason, QplibParseError};
+use crate::Result;
 use std::collections::HashMap;
 use std::{
     fmt::Display,
@@ -8,7 +8,48 @@ use std::{
     str::FromStr,
 };
 
-use anyhow::{Context, Result};
+// `Context::with_context` is used to attach the file path at the
+// `fs::File::open` origin below. Line-number context for in-file parse
+// failures is handled by [`QplibParseError`] instead — see its docstring.
+use anyhow::Context;
+
+/// Failure to parse a QPLIB file at a known line number.
+///
+/// This is the one structured error the QPLIB parser surfaces. It carries
+/// the 1-based `line_num` and a rendered `message` describing what went
+/// wrong on that line. Callers who want to report the position
+/// programmatically (editor squiggles, etc.) can recover it via:
+///
+/// ```ignore
+/// match ommx::qplib::load(path) {
+///     Err(e) => match e.downcast_ref::<ommx::qplib::QplibParseError>() {
+///         Some(pe) => eprintln!("{}:{}: {}", path.display(), pe.line_num, pe.message),
+///         None => eprintln!("{e}"),
+///     },
+///     Ok(inst) => { /* ... */ }
+/// }
+/// ```
+///
+/// Every [`QplibParseError`] constructed by this module also emits a
+/// structured `tracing::error!` event with `line_num` and `message` fields.
+#[derive(Debug, thiserror::Error)]
+#[error("QPLIB parse error at line {line_num}: {message}")]
+pub struct QplibParseError {
+    pub line_num: usize,
+    pub message: String,
+}
+
+impl QplibParseError {
+    /// Build a [`QplibParseError`] from a line number plus any error the
+    /// low-level parser produced, emitting a `tracing::error!` for the
+    /// combination. The returned value plugs straight into
+    /// [`crate::Error`] via the blanket `From<E: std::error::Error>` impl.
+    fn new(line_num: usize, cause: impl Display) -> Self {
+        let message = cause.to_string();
+        tracing::error!(line_num, %message, "QPLIB parse error");
+        Self { line_num, message }
+    }
+}
 
 #[derive(Default, Debug)]
 pub struct QplibFile {
@@ -66,13 +107,16 @@ impl QplibFile {
         use ProbObjKind as O;
         use ProbVarKind as V;
         let mut cursor = FileCursor::new(lines);
-        let name = cursor
-            .expect_next()?
+        let name_line = cursor.expect_next()?;
+        let line_num = cursor.line_num;
+        let name = name_line
             // take only first word
             .split_whitespace()
             .next()
             .map(|s| s.to_string())
-            .ok_or(QplibParseError::invalid_line(cursor.line_num))?;
+            .ok_or_else(|| {
+                crate::Error::from(QplibParseError::new(line_num, "name line has no fields"))
+            })?;
         let ProblemType(okind, vkind, ckind) = cursor.next_parse()?;
         let sense = cursor.next_parse()?;
         let num_vars = cursor.next_parse()?;
@@ -277,23 +321,32 @@ impl Display for ProbConstrKind {
     }
 }
 
+// The `FromStr` impls below construct plain `anyhow::Error` messages and do
+// *not* emit `tracing::error!` events themselves. Every caller wraps the
+// result through `parse_or_err_with_line` / `next_parse`, which ultimately
+// runs the error through `QplibParseError::new` — that is where tracing is
+// emitted, with `line_num` attached. Logging here as well would double-emit
+// every in-file parse failure.
 impl FromStr for ProblemType {
-    type Err = ParseErrorReason;
+    type Err = crate::Error;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let err_out = || ParseErrorReason::InvalidProblemType(s.to_owned());
+    fn from_str(s: &str) -> Result<Self> {
         let mut chars = s.chars();
         let ((o, v), c) = chars
             .next()
             .zip(chars.next())
             .zip(chars.next())
-            .ok_or_else(err_out)?;
+            .ok_or_else(|| {
+                ::anyhow::anyhow!("invalid QPLIB problem type {s:?}: expected 3 characters")
+            })?;
         let o = match o.to_ascii_uppercase() {
             'L' => ProbObjKind::Linear,
             'D' => ProbObjKind::DiagonalC,
             'C' => ProbObjKind::ConcaveOrConvex,
             'Q' => ProbObjKind::Quadratic,
-            _ => return Err(err_out()),
+            _ => ::anyhow::bail!(
+                "invalid QPLIB problem type {s:?}: objective kind character {o:?} must be one of L/D/C/Q",
+            ),
         };
         let v = match v.to_ascii_uppercase() {
             'C' => ProbVarKind::Continuous,
@@ -301,7 +354,9 @@ impl FromStr for ProblemType {
             'M' => ProbVarKind::Mixed,
             'I' => ProbVarKind::Integer,
             'G' => ProbVarKind::General,
-            _ => return Err(err_out()),
+            _ => ::anyhow::bail!(
+                "invalid QPLIB problem type {s:?}: variable kind character {v:?} must be one of C/B/M/I/G",
+            ),
         };
         let c = match c.to_ascii_uppercase() {
             'N' => ProbConstrKind::None,
@@ -310,7 +365,9 @@ impl FromStr for ProblemType {
             'D' => ProbConstrKind::DiagonalConvex,
             'C' => ProbConstrKind::Convex,
             'Q' => ProbConstrKind::Quadratic,
-            _ => return Err(err_out()),
+            _ => ::anyhow::bail!(
+                "invalid QPLIB problem type {s:?}: constraint kind character {c:?} must be one of N/B/L/D/C/Q",
+            ),
         };
         Ok(ProblemType(o, v, c))
     }
@@ -324,13 +381,13 @@ pub enum ObjSense {
 }
 
 impl FromStr for ObjSense {
-    type Err = ParseErrorReason;
+    type Err = crate::Error;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> Result<Self> {
         match s.to_lowercase().as_str() {
             "minimize" => Ok(Self::Minimize),
             "maximize" => Ok(Self::Maximize),
-            _ => Err(ParseErrorReason::InvalidObjSense(s.to_owned())),
+            _ => ::anyhow::bail!("invalid QPLIB OBJSENSE: {s}"),
         }
     }
 }
@@ -344,14 +401,14 @@ pub enum VarType {
 }
 
 impl FromStr for VarType {
-    type Err = ParseErrorReason;
+    type Err = crate::Error;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> Result<Self> {
         match s {
             "0" => Ok(VarType::Continuous),
             "1" => Ok(VarType::Integer),
             "2" => Ok(VarType::Binary),
-            _ => Err(ParseErrorReason::InvalidVarType(s.to_owned())),
+            _ => ::anyhow::bail!("invalid QPLIB variable type: {s}"),
         }
     }
 }
@@ -405,16 +462,16 @@ where
                 return Ok(s);
             }
         }
-        Err(QplibParseError::unexpected_eof(self.line_num).into())
+        Err(QplibParseError::new(self.line_num, "unexpected end of file").into())
     }
 
     fn parse_or_err_with_line<T, E>(&self, raw: &str) -> Result<T>
     where
         T: FromStr<Err = E>,
-        E: Into<ParseErrorReason>,
+        E: Into<crate::Error>,
     {
         raw.parse::<T>()
-            .map_err(|e| e.into().with_line(self.line_num).into())
+            .map_err(|e| QplibParseError::new(self.line_num, e.into()).into())
     }
 
     /// Consumes the next line and tries to parse the first value
@@ -422,13 +479,13 @@ where
     fn next_parse<T, E>(&mut self) -> Result<T>
     where
         T: FromStr<Err = E>,
-        E: Into<ParseErrorReason>,
+        E: Into<crate::Error>,
     {
         let line = self.expect_next()?;
-        let val = line
-            .split_whitespace()
-            .next()
-            .ok_or(QplibParseError::invalid_line(self.line_num))?;
+        let line_num = self.line_num;
+        let val = line.split_whitespace().next().ok_or_else(|| {
+            crate::Error::from(QplibParseError::new(line_num, "line has no fields"))
+        })?;
         self.parse_or_err_with_line(val)
     }
 
@@ -452,19 +509,19 @@ where
         &mut self,
         // number of "segments" to split line into.
         segments: usize,
-        f: impl Fn(Vec<String>) -> Result<(K, V), ParseErrorReason>,
+        f: impl Fn(Vec<String>) -> crate::Result<(K, V)>,
     ) -> Result<HashMap<K, V>>
     where
         K: Eq + std::hash::Hash,
         V: FromStr<Err = E>,
-        ParseErrorReason: From<E>,
+        E: Into<crate::Error>,
     {
         let num = self.next_parse()?;
         let mut out = HashMap::with_capacity(num);
         for _ in 0..num {
             // we add one so that comments are left a the end of the line.
             let parts = self.next_split_n(segments + 1)?;
-            let (key, val) = f(parts).map_err(|e| e.with_line(self.line_num))?;
+            let (key, val) = f(parts).map_err(|e| QplibParseError::new(self.line_num, e))?;
             out.insert(key, val);
         }
         Ok(out)
@@ -477,11 +534,11 @@ where
     fn collect_i_val<V, E>(&mut self) -> Result<HashMap<usize, V>>
     where
         V: FromStr<Err = E>,
-        ParseErrorReason: From<E>,
+        E: Into<crate::Error>,
     {
         self.consume_map(2, |parts| {
             let key = parts[0].parse::<usize>()? - 1;
-            let val: V = parts[1].parse()?;
+            let val: V = parts[1].parse().map_err(Into::into)?;
             Ok((key, val))
         })
     }
@@ -513,7 +570,7 @@ where
         size: usize,
         // number of "segments" to split line into.
         segments: usize,
-        f: impl Fn(Vec<String>) -> Result<(usize, K, f64), ParseErrorReason>,
+        f: impl Fn(Vec<String>) -> crate::Result<(usize, K, f64)>,
     ) -> Result<Vec<HashMap<K, f64>>>
     where
         K: Eq + std::hash::Hash + Clone,
@@ -522,8 +579,17 @@ where
         let mut out = vec![HashMap::default(); size];
         for _ in 0..num {
             let parts = self.next_split_n(segments + 1)?;
-            let (m, key, val) = f(parts).map_err(|e| e.with_line(self.line_num))?;
-            out[m].insert(key, val);
+            let (m, key, val) = f(parts).map_err(|e| QplibParseError::new(self.line_num, e))?;
+            // `m` is a 0-based index already; guard against out-of-range so a
+            // malformed file surfaces as a `QplibParseError` rather than
+            // panicking on the `out[m]` indexing.
+            let slot = out.get_mut(m).ok_or_else(|| {
+                QplibParseError::new(
+                    self.line_num,
+                    format!("index {m} is out of range (valid 0..{size})"),
+                )
+            })?;
+            slot.insert(key, val);
         }
         Ok(out)
     }
@@ -568,7 +634,7 @@ where
     fn collect_list<V, E>(&mut self, size: usize) -> Result<Vec<V>>
     where
         V: FromStr<Err = E> + Clone,
-        E: Into<ParseErrorReason>,
+        E: Into<crate::Error>,
     {
         let default: V = self.next_parse()?;
         let mut out = vec![default; size];
@@ -579,6 +645,16 @@ where
                 self.parse_or_err_with_line(&parts[0])?,
                 self.parse_or_err_with_line(&parts[1])?,
             );
+            // QPLIB indices are 1-based; guard both i == 0 (underflow) and
+            // i > size (past the vec) so a malformed file surfaces as a
+            // `QplibParseError` rather than panicking.
+            if i == 0 || i > size {
+                return Err(QplibParseError::new(
+                    self.line_num,
+                    format!("index {i} is out of range (valid 1..={size})"),
+                )
+                .into());
+            }
             out[i - 1] = val;
         }
         Ok(out)
@@ -589,6 +665,52 @@ where
 mod test {
     use super::*;
     use maplit::*;
+
+    // Parsing a malformed file should surface a downcastable [`QplibParseError`]
+    // carrying the 1-based line number of the offending row and a rendered
+    // `message`. This is the one piece of programmatic diagnostics the QPLIB
+    // parser exposes — see its docstring for the caller-side recovery pattern.
+    //
+    // Every in-file parse failure path must hit this contract:
+    //   1. invalid token via `parse_or_err_with_line` / `next_parse`
+    //   2. cursor EOF via `expect_next`
+    //   3. a non-comment line that yields no fields (`next_parse`'s
+    //      `split_whitespace().next()` returning None)
+    #[test]
+    fn qplib_parse_error_invalid_problem_type() {
+        // Line 1 carries the problem name (`MIPBAND`); the malformed
+        // problem-type token is on line 2.
+        let file = "MIPBAND\nNOT_A_VALID_TYPE\n";
+        let err = QplibFile::from_lines(file.lines().map(|s| s.to_owned())).unwrap_err();
+        let downcast = err
+            .downcast_ref::<QplibParseError>()
+            .expect("should be a QplibParseError");
+        assert_eq!(downcast.line_num, 2);
+        assert!(
+            downcast.message.contains("problem type"),
+            "unexpected message: {}",
+            downcast.message
+        );
+    }
+
+    #[test]
+    fn qplib_parse_error_on_eof() {
+        // Truncated file — EOF before the problem type is read. Exactly one
+        // non-comment line exists (line 1, the name). `expect_next` should
+        // surface a QplibParseError with line_num pointing at the last line
+        // consumed.
+        let file = "MIPBAND\n";
+        let err = QplibFile::from_lines(file.lines().map(|s| s.to_owned())).unwrap_err();
+        let downcast = err
+            .downcast_ref::<QplibParseError>()
+            .expect("EOF should surface as QplibParseError");
+        assert_eq!(downcast.line_num, 1);
+        assert!(
+            downcast.message.contains("end of file"),
+            "unexpected message: {}",
+            downcast.message
+        );
+    }
 
     #[test]
     fn cursor_collect() -> Result<()> {

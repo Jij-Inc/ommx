@@ -69,9 +69,8 @@ impl From<Instance> for ParametricInstance {
 }
 
 impl ParametricInstance {
-    pub fn with_parameters(self, parameters: crate::v1::Parameters) -> anyhow::Result<Instance> {
+    pub fn with_parameters(self, parameters: crate::v1::Parameters) -> crate::Result<Instance> {
         use crate::ATol;
-        use anyhow::bail;
         use std::collections::BTreeSet;
 
         // Convert v1::Parameters to BTreeMap for validation and processing
@@ -86,16 +85,11 @@ impl ParametricInstance {
         let given_ids: BTreeSet<VariableID> = param_map.keys().cloned().collect();
 
         if !required_ids.is_subset(&given_ids) {
-            let missing_ids: Vec<_> = required_ids.difference(&given_ids).collect();
-            for id in &missing_ids {
-                if let Some(param) = self.parameters.get(id) {
-                    tracing::error!("Missing parameter: {param:?}");
-                }
-            }
-            bail!(
-                "Missing parameters: Required IDs {:?}, got {:?}",
-                required_ids,
-                given_ids
+            let missing_ids: Vec<VariableID> =
+                required_ids.difference(&given_ids).cloned().collect();
+            crate::bail!(
+                { ?missing_ids },
+                "Missing parameters: required IDs {required_ids:?}, got {given_ids:?}",
             );
         }
 

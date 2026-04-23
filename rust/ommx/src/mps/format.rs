@@ -1,4 +1,3 @@
-use super::MpsWriteError;
 use crate::decision_variable::Kind as DecisionVariableKind;
 use crate::{
     mps::ObjSense, Coefficient, ConstraintID, Equality, Instance, Sense, VariableID, VariableIDSet,
@@ -38,7 +37,7 @@ pub(crate) const VAR_PREFIX: &str = "OMMX_VAR_";
 ///
 /// This ensures that variables from removed constraints are preserved in
 /// the MPS output even though the constraint information is lost.
-pub fn format<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWriteError> {
+pub fn format<W: Write>(instance: &Instance, out: &mut W) -> crate::Result<()> {
     write_beginning(instance, out)?;
     write_rows(instance, out)?;
     write_columns(instance, out)?;
@@ -51,13 +50,13 @@ pub fn format<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWrite
 }
 
 /// Converts the instance to a string in MPS format via [`format()`].
-pub fn to_string(instance: &Instance) -> Result<String, MpsWriteError> {
+pub fn to_string(instance: &Instance) -> crate::Result<String> {
     let mut buffer = Vec::new();
     format(instance, &mut buffer)?;
     Ok(String::from_utf8(buffer).unwrap())
 }
 
-fn write_beginning<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWriteError> {
+fn write_beginning<W: Write>(instance: &Instance, out: &mut W) -> crate::Result<()> {
     let name = instance
         .description
         .clone()
@@ -72,7 +71,7 @@ fn write_beginning<W: Write>(instance: &Instance, out: &mut W) -> Result<(), Mps
     Ok(())
 }
 
-fn write_rows<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWriteError> {
+fn write_rows<W: Write>(instance: &Instance, out: &mut W) -> crate::Result<()> {
     writeln!(out, "ROWS")?;
     // each line must be ` Kind  constr_name`, and include objective
     writeln!(out, " N OBJ")?;
@@ -96,7 +95,7 @@ struct IntorgTracker {
 }
 
 impl IntorgTracker {
-    fn intorg<W: Write>(&mut self, out: &mut W) -> Result<(), MpsWriteError> {
+    fn intorg<W: Write>(&mut self, out: &mut W) -> crate::Result<()> {
         // only print marker if not already in INTORG block
         if !self.intorg_block {
             self.intorg_block = true;
@@ -105,7 +104,7 @@ impl IntorgTracker {
         }
         Ok(())
     }
-    fn intend<W: Write>(&mut self, out: &mut W) -> Result<(), MpsWriteError> {
+    fn intend<W: Write>(&mut self, out: &mut W) -> crate::Result<()> {
         // only print marker if in INTORG block
         if self.intorg_block {
             self.intorg_block = false;
@@ -116,7 +115,7 @@ impl IntorgTracker {
     }
 }
 
-fn write_columns<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWriteError> {
+fn write_columns<W: Write>(instance: &Instance, out: &mut W) -> crate::Result<()> {
     writeln!(out, "COLUMNS")?;
     let mut marker_tracker = IntorgTracker::default();
 
@@ -193,7 +192,7 @@ fn write_columns<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWr
     Ok(())
 }
 
-fn write_rhs<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWriteError> {
+fn write_rhs<W: Write>(instance: &Instance, out: &mut W) -> crate::Result<()> {
     writeln!(out, "RHS")?;
     // write out a RHS entry for the objective function if a non-zero constant is present
     let constant = if let Some(linear) = instance.objective().as_linear() {
@@ -202,9 +201,11 @@ fn write_rhs<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWriteE
         quadratic.constant_term()
     } else {
         // Higher degree functions not supported
-        return Err(MpsWriteError::InvalidObjectiveType {
-            degree: (*instance.objective().degree()),
-        });
+        let degree = *instance.objective().degree();
+        crate::bail!(
+            { degree },
+            "MPS format does not support nonlinear objective: objective has {degree}-degree term",
+        );
     };
 
     if constant != 0.0 {
@@ -220,10 +221,11 @@ fn write_rhs<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWriteE
             quadratic.constant_term()
         } else {
             // Higher degree functions not supported
-            return Err(MpsWriteError::InvalidConstraintType {
-                name: name.to_string(),
-                degree: (*constr.function().degree()),
-            });
+            let degree = *constr.function().degree();
+            crate::bail!(
+                { name = %name, degree },
+                "MPS format does not support nonlinear constraint: constraint ({name}) has {degree}-degree term",
+            );
         };
 
         if constant != 0.0 {
@@ -234,7 +236,7 @@ fn write_rhs<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWriteE
     Ok(())
 }
 
-fn write_bounds<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWriteError> {
+fn write_bounds<W: Write>(instance: &Instance, out: &mut W) -> crate::Result<()> {
     writeln!(out, "BOUNDS")?;
 
     for (var_id, dvar) in instance.used_decision_variables() {
@@ -290,7 +292,7 @@ fn dvar_name(var_id: VariableID) -> String {
     format!("{VAR_PREFIX}{}", var_id.into_inner())
 }
 
-fn write_quadobj<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWriteError> {
+fn write_quadobj<W: Write>(instance: &Instance, out: &mut W) -> crate::Result<()> {
     // Only write QUADOBJ section if the objective has quadratic terms
     if let Some(quadratic) = instance.objective().as_quadratic() {
         let has_quadratic_terms = quadratic
@@ -327,7 +329,7 @@ fn write_quadobj<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWr
     Ok(())
 }
 
-fn write_qcmatrix<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWriteError> {
+fn write_qcmatrix<W: Write>(instance: &Instance, out: &mut W) -> crate::Result<()> {
     // Write QCMATRIX sections for each constraint that has quadratic terms
     for (constr_id, constr) in instance.constraints().iter() {
         if let Some(quadratic) = constr.function().as_quadratic() {

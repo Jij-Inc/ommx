@@ -61,12 +61,6 @@ pub struct DuplicatedSampleIDError {
     id: SampleID,
 }
 
-#[derive(Debug, thiserror::Error)]
-#[error("Unknown sample ID: {id:?}")]
-pub struct UnknownSampleIDError {
-    pub id: SampleID,
-}
-
 impl<T> Sampled<T> {
     pub fn constants(ids: impl Iterator<Item = SampleID>, value: T) -> Self {
         let map = ids.map(|id| (id, 0)).collect();
@@ -188,8 +182,15 @@ impl<T> Sampled<T> {
     /// Applies `f` to each unique stored value once; sample-id grouping is
     /// preserved. Useful when evaluating per-sample-state like in
     /// `Evaluate::evaluate_samples`.
-    pub fn try_map_ref<U>(&self, mut f: impl FnMut(&T) -> Result<U>) -> Result<Sampled<U>> {
-        let data = self.data.iter().map(&mut f).collect::<Result<Vec<_>>>()?;
+    pub fn try_map_ref<U, E>(
+        &self,
+        mut f: impl FnMut(&T) -> std::result::Result<U, E>,
+    ) -> std::result::Result<Sampled<U>, E> {
+        let data = self
+            .data
+            .iter()
+            .map(&mut f)
+            .collect::<std::result::Result<Vec<_>, E>>()?;
         Ok(Sampled {
             offsets: self.offsets.clone(),
             data,
@@ -200,15 +201,14 @@ impl<T> Sampled<T> {
         self.offsets.len()
     }
 
-    /// Get a reference to the value for a specific sample ID
-    pub fn get(&self, sample_id: SampleID) -> Result<&T, UnknownSampleIDError> {
-        self.offsets
-            .get(&sample_id)
-            .map(|&offset| {
-                debug_assert!(offset < self.data.len());
-                &self.data[offset]
-            })
-            .ok_or(UnknownSampleIDError { id: sample_id })
+    /// Get a reference to the value for a specific sample ID.
+    ///
+    /// Returns [`None`] if the sample ID is not known to this [`Sampled`].
+    pub fn get(&self, sample_id: SampleID) -> Option<&T> {
+        self.offsets.get(&sample_id).map(|&offset| {
+            debug_assert!(offset < self.data.len());
+            &self.data[offset]
+        })
     }
 
     /// Gather up the sample ID for each sample.
@@ -275,7 +275,7 @@ mod tests {
         assert_eq!(sampled.get(SampleID(7)).unwrap(), &20);
 
         // Test get with unknown sample ID
-        assert!(sampled.get(SampleID(999)).is_err());
+        assert!(sampled.get(SampleID(999)).is_none());
     }
 
     #[test]

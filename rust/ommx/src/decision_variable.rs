@@ -8,7 +8,7 @@ pub use arbitrary::*;
 use getset::CopyGetters;
 
 use crate::logical_memory::LogicalMemoryProfile;
-use crate::{sampled::UnknownSampleIDError, ATol, Bound, Parse, RawParseError, SampleID, Sampled};
+use crate::{ATol, Bound, Parse, RawParseError, SampleID, Sampled};
 use ::approx::AbsDiffEq;
 use derive_more::{Deref, From};
 use fnv::FnvHashMap;
@@ -513,11 +513,10 @@ impl SampledDecisionVariable {
         })
     }
 
-    /// Get a specific evaluated decision variable by sample ID
-    pub fn get(
-        &self,
-        sample_id: SampleID,
-    ) -> Result<EvaluatedDecisionVariable, UnknownSampleIDError> {
+    /// Get a specific evaluated decision variable by sample ID.
+    ///
+    /// Returns [`None`] if `sample_id` is not present in the sampled data.
+    pub fn get(&self, sample_id: SampleID) -> Option<EvaluatedDecisionVariable> {
         let value = *self.samples.get(sample_id)?;
 
         // Create a DecisionVariable to use with EvaluatedDecisionVariable::new
@@ -530,7 +529,7 @@ impl SampledDecisionVariable {
         };
 
         // unwrap is safe here since there's no substituted_value to check
-        Ok(EvaluatedDecisionVariable::new(dv, value, crate::ATol::default()).unwrap())
+        Some(EvaluatedDecisionVariable::new(dv, value, crate::ATol::default()).unwrap())
     }
 }
 
@@ -538,16 +537,12 @@ impl crate::Evaluate for DecisionVariable {
     type Output = EvaluatedDecisionVariable;
     type SampledOutput = SampledDecisionVariable;
 
-    fn evaluate(
-        &self,
-        state: &crate::v1::State,
-        atol: crate::ATol,
-    ) -> anyhow::Result<Self::Output> {
+    fn evaluate(&self, state: &crate::v1::State, atol: crate::ATol) -> crate::Result<Self::Output> {
         let value = state
             .entries
             .get(&self.id.into_inner())
             .copied()
-            .ok_or_else(|| anyhow::anyhow!("Variable ID {} not found in state", self.id))?;
+            .ok_or_else(|| crate::error!("Variable ID {} not found in state", self.id))?;
 
         Ok(EvaluatedDecisionVariable::new(self.clone(), value, atol)?)
     }
@@ -556,7 +551,7 @@ impl crate::Evaluate for DecisionVariable {
         &self,
         samples: &crate::Sampled<crate::v1::State>,
         _atol: crate::ATol,
-    ) -> anyhow::Result<Self::SampledOutput> {
+    ) -> crate::Result<Self::SampledOutput> {
         let variable_id = self.id.into_inner();
 
         // Extract values for this variable from all samples
@@ -585,7 +580,7 @@ impl crate::Evaluate for DecisionVariable {
         &mut self,
         state: &crate::v1::State,
         atol: crate::ATol,
-    ) -> anyhow::Result<()> {
+    ) -> crate::Result<()> {
         if let Some(value) = state.entries.get(&self.id.into_inner()) {
             self.substitute(*value, atol)?;
         }

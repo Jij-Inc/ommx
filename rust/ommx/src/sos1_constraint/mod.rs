@@ -127,22 +127,11 @@ impl SampledConstraintBehavior for SampledSos1Constraint {
     fn is_feasible_for(&self, sample_id: SampleID) -> Option<bool> {
         self.stage.feasible.get(&sample_id).copied()
     }
-    fn get(
-        &self,
-        sample_id: SampleID,
-    ) -> Result<Self::Evaluated, crate::sampled::UnknownSampleIDError> {
-        let feasible = *self
-            .stage
-            .feasible
-            .get(&sample_id)
-            .ok_or(crate::sampled::UnknownSampleIDError { id: sample_id })?;
-        let active_variable = *self
-            .stage
-            .active_variable
-            .get(&sample_id)
-            .ok_or(crate::sampled::UnknownSampleIDError { id: sample_id })?;
+    fn get(&self, sample_id: SampleID) -> Option<Self::Evaluated> {
+        let feasible = *self.stage.feasible.get(&sample_id)?;
+        let active_variable = *self.stage.active_variable.get(&sample_id)?;
 
-        Ok(Sos1Constraint {
+        Some(Sos1Constraint {
             variables: self.variables.clone(),
             metadata: self.metadata.clone(),
             stage: Sos1EvaluatedData {

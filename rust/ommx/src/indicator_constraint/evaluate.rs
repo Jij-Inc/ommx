@@ -8,7 +8,7 @@ impl Propagate for IndicatorConstraint<Created> {
         mut self,
         state: &crate::v1::State,
         atol: ATol,
-    ) -> anyhow::Result<(PropagateOutcome<Self>, crate::v1::State)> {
+    ) -> crate::Result<(PropagateOutcome<Self>, crate::v1::State)> {
         let empty_state = crate::v1::State::default();
 
         if let Some(&indicator_value) = state.entries.get(&self.indicator_variable.into_inner()) {
@@ -37,7 +37,7 @@ impl Propagate for IndicatorConstraint<Created> {
                 // Indicator OFF (~0) → vacuously satisfied; the constraint is consumed.
                 Ok((PropagateOutcome::Consumed(self), empty_state))
             } else {
-                anyhow::bail!(
+                crate::bail!(
                     "Indicator variable {:?} of indicator constraint has invalid value {} (must be 0 or 1)",
                     self.indicator_variable,
                     indicator_value
@@ -55,7 +55,7 @@ impl Evaluate for IndicatorConstraint<Created> {
     type Output = EvaluatedIndicatorConstraint;
     type SampledOutput = SampledIndicatorConstraint;
 
-    fn evaluate(&self, state: &crate::v1::State, atol: ATol) -> anyhow::Result<Self::Output> {
+    fn evaluate(&self, state: &crate::v1::State, atol: ATol) -> crate::Result<Self::Output> {
         let evaluated_value = self.stage.function.evaluate(state, atol)?;
         let used_decision_variable_ids = self.required_ids();
 
@@ -64,7 +64,7 @@ impl Evaluate for IndicatorConstraint<Created> {
             .entries
             .get(&self.indicator_variable.into_inner())
             .ok_or_else(|| {
-                anyhow::anyhow!(
+                crate::error!(
                     "Indicator variable {:?} not found in state for indicator constraint",
                     self.indicator_variable,
                 )
@@ -75,7 +75,7 @@ impl Evaluate for IndicatorConstraint<Created> {
         } else if indicator_value.abs() < *atol {
             false
         } else {
-            anyhow::bail!(
+            crate::bail!(
                 "Indicator variable {:?} of indicator constraint has invalid value {} (must be 0 or 1)",
                 self.indicator_variable,
                 indicator_value
@@ -110,7 +110,7 @@ impl Evaluate for IndicatorConstraint<Created> {
         &self,
         samples: &crate::Sampled<crate::v1::State>,
         atol: ATol,
-    ) -> anyhow::Result<Self::SampledOutput> {
+    ) -> crate::Result<Self::SampledOutput> {
         let evaluated_values = self.stage.function.evaluate_samples(samples, atol)?;
 
         // Compute feasibility per sample.
@@ -120,13 +120,17 @@ impl Evaluate for IndicatorConstraint<Created> {
         let mut indicator_active = std::collections::BTreeMap::new();
         for (sample_id, state) in samples.iter() {
             let sample_id = *sample_id;
-            let ev = *evaluated_values.get(sample_id)?;
+            let ev = *evaluated_values.get(sample_id).ok_or_else(|| {
+                crate::error!(
+                    "Sample ID {sample_id:?} missing from evaluated values during indicator-constraint evaluation"
+                )
+            })?;
 
             let indicator_value = state
                 .entries
                 .get(&self.indicator_variable.into_inner())
                 .ok_or_else(|| {
-                    anyhow::anyhow!(
+                    crate::error!(
                         "Indicator variable {:?} not found in sample {:?} for indicator constraint",
                         self.indicator_variable,
                         sample_id,
@@ -137,7 +141,7 @@ impl Evaluate for IndicatorConstraint<Created> {
             } else if indicator_value.abs() < *atol {
                 false
             } else {
-                anyhow::bail!(
+                crate::bail!(
                     "Indicator variable {:?} of indicator constraint has invalid value {} in sample {:?} (must be 0 or 1)",
                     self.indicator_variable,
                     indicator_value,
@@ -170,12 +174,12 @@ impl Evaluate for IndicatorConstraint<Created> {
         })
     }
 
-    fn partial_evaluate(&mut self, state: &crate::v1::State, atol: ATol) -> anyhow::Result<()> {
+    fn partial_evaluate(&mut self, state: &crate::v1::State, atol: ATol) -> crate::Result<()> {
         if state
             .entries
             .contains_key(&self.indicator_variable.into_inner())
         {
-            anyhow::bail!(
+            crate::bail!(
                 "Cannot partially evaluate indicator variable {:?} of indicator constraint. \
                  Fixing an indicator variable would change the constraint type.",
                 self.indicator_variable,

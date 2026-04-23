@@ -8,7 +8,7 @@ impl Instance {
         objective: Function,
         decision_variables: BTreeMap<VariableID, DecisionVariable>,
         constraints: BTreeMap<ConstraintID, Constraint>,
-    ) -> anyhow::Result<Self> {
+    ) -> crate::Result<Self> {
         Self::builder()
             .sense(sense)
             .objective(objective)
@@ -25,7 +25,7 @@ impl ParametricInstance {
         decision_variables: BTreeMap<VariableID, DecisionVariable>,
         parameters: BTreeMap<VariableID, v1::Parameter>,
         constraints: BTreeMap<ConstraintID, Constraint>,
-    ) -> anyhow::Result<Self> {
+    ) -> crate::Result<Self> {
         Self::builder()
             .sense(sense)
             .objective(objective)

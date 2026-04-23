@@ -4,7 +4,7 @@ use crate::{
     constraint_type::ConstraintCollection,
     parse::{as_variable_id, Parse, ParseError, RawParseError},
     v1::{self},
-    Constraint, InstanceError, VariableID,
+    Constraint, VariableID,
 };
 
 /// Convert parsed `ConstraintHints` to first-class OneHot/SOS1 constraint collections,
@@ -135,10 +135,10 @@ impl Parse for v1::Instance {
         let decision_variable_ids: VariableIDSet = decision_variables.keys().cloned().collect();
         for id in objective.required_ids() {
             if !decision_variable_ids.contains(&id) {
-                return Err(
-                    RawParseError::from(InstanceError::UndefinedVariableID { id })
-                        .context(message, "objective"),
-                );
+                return Err(RawParseError::InvalidInstance(format!(
+                    "Undefined variable ID is used: {id:?}"
+                ))
+                .context(message, "objective"));
             }
         }
 
@@ -148,10 +148,10 @@ impl Parse for v1::Instance {
         for constraint in constraints.values() {
             for id in constraint.required_ids() {
                 if !decision_variable_ids.contains(&id) {
-                    return Err(
-                        RawParseError::from(InstanceError::UndefinedVariableID { id })
-                            .context(message, "constraints"),
-                    );
+                    return Err(RawParseError::InvalidInstance(format!(
+                        "Undefined variable ID is used: {id:?}"
+                    ))
+                    .context(message, "constraints"));
                 }
             }
         }
@@ -167,10 +167,10 @@ impl Parse for v1::Instance {
         for named_function in named_functions.values() {
             for id in named_function.function.required_ids() {
                 if !decision_variable_ids.contains(&id) {
-                    return Err(
-                        RawParseError::from(InstanceError::UndefinedVariableID { id })
-                            .context(message, "named_functions"),
-                    );
+                    return Err(RawParseError::InvalidInstance(format!(
+                        "Undefined variable ID is used: {id:?}"
+                    ))
+                    .context(message, "named_functions"));
                 }
             }
         }
@@ -306,9 +306,10 @@ impl Parse for v1::ParametricInstance {
             .cloned()
             .collect();
         if !intersection.is_empty() {
-            return Err(RawParseError::from(InstanceError::DuplicatedVariableID {
-                id: *intersection.iter().next().unwrap(),
-            })
+            let id = *intersection.iter().next().unwrap();
+            return Err(RawParseError::InvalidInstance(format!(
+                "Duplicated variable ID is found in definition: {id:?}"
+            ))
             .context(message, "parameters"));
         }
 
@@ -327,10 +328,10 @@ impl Parse for v1::ParametricInstance {
             .collect();
         for id in objective.required_ids() {
             if !all_variable_ids.contains(&id) {
-                return Err(
-                    RawParseError::from(InstanceError::UndefinedVariableID { id })
-                        .context(message, "objective"),
-                );
+                return Err(RawParseError::InvalidInstance(format!(
+                    "Undefined variable ID is used: {id:?}"
+                ))
+                .context(message, "objective"));
             }
         }
 
@@ -340,10 +341,10 @@ impl Parse for v1::ParametricInstance {
         for constraint in constraints.values() {
             for id in constraint.required_ids() {
                 if !all_variable_ids.contains(&id) {
-                    return Err(
-                        RawParseError::from(InstanceError::UndefinedVariableID { id })
-                            .context(message, "constraints"),
-                    );
+                    return Err(RawParseError::InvalidInstance(format!(
+                        "Undefined variable ID is used: {id:?}"
+                    ))
+                    .context(message, "constraints"));
                 }
             }
         }
@@ -360,10 +361,10 @@ impl Parse for v1::ParametricInstance {
         for named_function in named_functions.values() {
             for id in named_function.function.required_ids() {
                 if !all_variable_ids.contains(&id) {
-                    return Err(
-                        RawParseError::from(InstanceError::UndefinedVariableID { id })
-                            .context(message, "named_functions"),
-                    );
+                    return Err(RawParseError::InvalidInstance(format!(
+                        "Undefined variable ID is used: {id:?}"
+                    ))
+                    .context(message, "named_functions"));
                 }
             }
         }

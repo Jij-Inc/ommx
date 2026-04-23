@@ -8,17 +8,16 @@ impl Instance {
     /// All variable IDs in the bounds map must exist in the instance.
     ///
     /// If any operation fails, all changes are rolled back to maintain consistency.
-    pub fn clip_bounds(&mut self, bounds: &Bounds, atol: ATol) -> anyhow::Result<()> {
+    pub fn clip_bounds(&mut self, bounds: &Bounds, atol: ATol) -> crate::Result<()> {
         // Track original bounds for potential rollback
         let mut original_bounds = BTreeMap::new();
 
         // Attempt to apply all bound changes
-        let result: anyhow::Result<()> = (|| {
+        let result: crate::Result<()> = (|| {
             for (id, new_bound) in bounds {
-                let decision_variable = self
-                    .decision_variables
-                    .get_mut(id)
-                    .ok_or(InstanceError::UndefinedVariableID { id: *id })?;
+                let decision_variable = self.decision_variables.get_mut(id).ok_or_else(
+                    || crate::error!({ ?id }, "Undefined variable ID is used: {id:?}"),
+                )?;
 
                 // Store original bound only if it actually changes
                 let original_bound = decision_variable.bound();

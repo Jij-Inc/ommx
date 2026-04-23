@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use super::*;
 use crate::{
     parse::{Parse, ParseError, RawParseError},
-    v1, InstanceError,
+    v1,
 };
 use anyhow::Result;
 
@@ -100,10 +100,10 @@ impl Parse for Vec<v1::Constraint> {
         for c in self {
             let (id, c): (ConstraintID, Constraint<Created>) = c.parse(&())?;
             if constraints.insert(id, c).is_some() {
-                return Err(
-                    RawParseError::InstanceError(InstanceError::DuplicatedConstraintID { id })
-                        .into(),
-                );
+                return Err(RawParseError::InvalidInstance(format!(
+                    "Duplicated constraint ID is found in definition: {id:?}"
+                ))
+                .into());
             }
         }
         Ok(constraints)
@@ -119,19 +119,19 @@ impl Parse for Vec<v1::RemovedConstraint> {
             let (id, constraint, reason): (ConstraintID, Constraint<Created>, RemovedReason) =
                 c.parse(&())?;
             if constraints.contains_key(&id) {
-                return Err(
-                    RawParseError::InstanceError(InstanceError::DuplicatedConstraintID { id })
-                        .into(),
-                );
+                return Err(RawParseError::InvalidInstance(format!(
+                    "Duplicated constraint ID is found in definition: {id:?}"
+                ))
+                .into());
             }
             if removed_constraints
                 .insert(id, (constraint, reason))
                 .is_some()
             {
-                return Err(
-                    RawParseError::InstanceError(InstanceError::DuplicatedConstraintID { id })
-                        .into(),
-                );
+                return Err(RawParseError::InvalidInstance(format!(
+                    "Duplicated constraint ID is found in definition: {id:?}"
+                ))
+                .into());
             }
         }
         Ok(removed_constraints)

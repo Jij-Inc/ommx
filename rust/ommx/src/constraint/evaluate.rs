@@ -9,7 +9,7 @@ impl Evaluate for Constraint<Created> {
         &self,
         solution: &crate::v1::State,
         atol: crate::ATol,
-    ) -> anyhow::Result<Self::Output> {
+    ) -> crate::Result<Self::Output> {
         let evaluated_value = self.stage.function.evaluate(solution, atol)?;
         let used_decision_variable_ids = self.stage.function.required_ids();
 
@@ -34,7 +34,7 @@ impl Evaluate for Constraint<Created> {
         &self,
         samples: &crate::Sampled<crate::v1::State>,
         atol: crate::ATol,
-    ) -> anyhow::Result<Self::SampledOutput> {
+    ) -> crate::Result<Self::SampledOutput> {
         let evaluated_values = self.stage.function.evaluate_samples(samples, atol)?;
 
         let feasible: std::collections::BTreeMap<crate::SampleID, bool> = evaluated_values
@@ -61,7 +61,7 @@ impl Evaluate for Constraint<Created> {
         &mut self,
         state: &crate::v1::State,
         atol: crate::ATol,
-    ) -> anyhow::Result<()> {
+    ) -> crate::Result<()> {
         self.stage.function.partial_evaluate(state, atol)
     }
 

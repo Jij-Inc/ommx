@@ -12,7 +12,7 @@ use crate::{
     VariableID,
 };
 
-pub fn convert(mps: Mps) -> anyhow::Result<Instance> {
+pub fn convert(mps: Mps) -> crate::Result<Instance> {
     let (decision_variables, name_id_map) = convert_dvars(&mps);
     let objective = convert_objective(&mps, &name_id_map)?;
     let constraints = convert_constraints(&mps, &name_id_map)?;
@@ -112,7 +112,7 @@ fn parse_id_tag(prefix: &str, name: &str) -> Option<u64> {
 fn convert_objective(
     mps: &Mps,
     name_id_map: &HashMap<ColumnName, VariableID>,
-) -> anyhow::Result<Function> {
+) -> crate::Result<Function> {
     let Mps { b, c, quad_obj, .. } = mps;
     let constant = -b.get(&OBJ_NAME.into()).copied().unwrap_or_default();
 
@@ -176,7 +176,7 @@ fn convert_objective(
 fn convert_constraints(
     mps: &Mps,
     name_id_map: &HashMap<ColumnName, VariableID>,
-) -> anyhow::Result<BTreeMap<ConstraintID, Constraint>> {
+) -> crate::Result<BTreeMap<ConstraintID, Constraint>> {
     let Mps {
         a,
         b,
@@ -239,7 +239,7 @@ fn convert_inequality(
     le: &HashSet<RowName>,
     name_id_map: &HashMap<ColumnName, VariableID>,
     quad_terms: Option<&HashMap<(ColumnName, ColumnName), f64>>,
-) -> anyhow::Result<(Function, Equality)> {
+) -> crate::Result<(Function, Equality)> {
     let mut negate = false;
 
     let equality = if eq.contains(name) {

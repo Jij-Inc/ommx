@@ -61,13 +61,12 @@ mod tests;
 pub use compressed::is_gzipped;
 pub use format::{format, to_string};
 
-use crate::VariableID;
 use parser::*;
 use std::{io::Read, path::Path};
 
 /// Reads and parses the MPS file from the given [`Read`] source with automatic gzipped detection.
 #[tracing::instrument(skip_all)]
-pub fn parse(reader: impl Read) -> anyhow::Result<crate::Instance> {
+pub fn parse(reader: impl Read) -> crate::Result<crate::Instance> {
     let mps_data = Mps::parse(reader)?;
     convert::convert(mps_data)
 }
@@ -77,7 +76,7 @@ pub fn parse(reader: impl Read) -> anyhow::Result<crate::Instance> {
 // Note: the caller's path is intentionally not recorded as a span field to
 // avoid leaking local directory structure through exported telemetry.
 #[tracing::instrument(skip_all)]
-pub fn load(path: impl AsRef<Path>) -> anyhow::Result<crate::Instance> {
+pub fn load(path: impl AsRef<Path>) -> crate::Result<crate::Instance> {
     let mps_data = Mps::load(path)?;
     convert::convert(mps_data)
 }
@@ -97,7 +96,7 @@ pub fn save(
     instance: &crate::Instance,
     out_path: impl AsRef<Path>,
     compress: bool,
-) -> Result<(), MpsWriteError> {
+) -> crate::Result<()> {
     let path = std::path::absolute(out_path.as_ref())?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
@@ -115,56 +114,4 @@ pub fn save(
         format::format(instance, &mut file)?;
     }
     Ok(())
-}
-
-#[non_exhaustive]
-#[derive(Debug, thiserror::Error)]
-pub enum MpsParseError {
-    #[error("Unknown row name: {0}")]
-    UnknownRowName(String),
-
-    #[error("Invalid row type: {0}")]
-    InvalidRowType(String),
-
-    #[error("Multiple objective names found. This means the MPS file is for a multi-objective problem, which is not supported.")]
-    MultipleObjectiveNames,
-
-    #[error("Invalid bound type: {0}")]
-    InvalidBoundType(String),
-
-    #[error("Invalid header line: {0}")]
-    InvalidHeader(String),
-
-    #[error("Invalid marker in COLUMN section: {0}")]
-    InvalidMarker(String),
-
-    #[error("Invalid OBJSENSE: {0}")]
-    InvalidObjSense(String),
-
-    #[error(transparent)]
-    Io(#[from] std::io::Error),
-
-    #[error(transparent)]
-    ParseFloat(#[from] std::num::ParseFloatError),
-
-    #[error("Invalid size ({size}) of field in section '{section}'")]
-    InvalidFieldSize { section: &'static str, size: usize },
-
-    #[error("RANGES with 0 is not supported")]
-    ZeroRange,
-}
-
-#[non_exhaustive]
-#[derive(Debug, thiserror::Error)]
-pub enum MpsWriteError {
-    #[error("MPS format does not support nonlinear constraint: Constraint ({name}) has {degree}-degree term")]
-    InvalidConstraintType { name: String, degree: u32 },
-    #[error( "MPS format does not support nonlinear objective: Objective function has {degree}-degree term")]
-    InvalidObjectiveType { degree: u32 },
-    #[error(
-        "Invalid variable ID: Functions in Instance used a variable id {0} that doesn't exist"
-    )]
-    InvalidVariableId(VariableID),
-    #[error(transparent)]
-    Io(#[from] std::io::Error),
 }

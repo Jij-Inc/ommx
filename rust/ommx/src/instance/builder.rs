@@ -160,32 +160,28 @@ impl InstanceBuilder {
     /// - The keys of `constraints` and `removed_constraints` are not disjoint
     /// - The keys of `decision_variable_dependency` are not in `decision_variables`
     /// - `used`, `fixed`, and `dependent` are not pairwise disjoint (see [`DecisionVariableAnalysis`])
-    pub fn build(self) -> anyhow::Result<Instance> {
+    pub fn build(self) -> crate::Result<Instance> {
         let sense = self
             .sense
-            .ok_or(InstanceError::MissingRequiredField { field: "sense" })?;
+            .ok_or_else(|| crate::error!("Required field is missing: sense"))?;
         let objective = self
             .objective
-            .ok_or(InstanceError::MissingRequiredField { field: "objective" })?;
-        let decision_variables =
-            self.decision_variables
-                .ok_or(InstanceError::MissingRequiredField {
-                    field: "decision_variables",
-                })?;
+            .ok_or_else(|| crate::error!("Required field is missing: objective"))?;
+        let decision_variables = self
+            .decision_variables
+            .ok_or_else(|| crate::error!("Required field is missing: decision_variables"))?;
         let constraints = self
             .constraints
-            .ok_or(InstanceError::MissingRequiredField {
-                field: "constraints",
-            })?;
+            .ok_or_else(|| crate::error!("Required field is missing: constraints"))?;
 
         // Validate that decision variable map keys match their value's id
         for (key, value) in &decision_variables {
             if *key != value.id() {
-                return Err(InstanceError::InconsistentDecisionVariableID {
-                    key: *key,
-                    value_id: value.id(),
-                }
-                .into());
+                let value_id = value.id();
+                crate::bail!(
+                    { ?key, ?value_id },
+                    "Decision variable map key {key:?} does not match value's id {value_id:?}",
+                );
             }
         }
 
@@ -195,13 +191,13 @@ impl InstanceBuilder {
         // Validate that all variable IDs in objective and constraints are defined
         for id in objective.required_ids() {
             if !variable_ids.contains(&id) {
-                return Err(InstanceError::UndefinedVariableID { id }.into());
+                crate::bail!({ ?id }, "Undefined variable ID is used: {id:?}");
             }
         }
         for constraint in constraints.values() {
             for id in constraint.required_ids() {
                 if !variable_ids.contains(&id) {
-                    return Err(InstanceError::UndefinedVariableID { id }.into());
+                    crate::bail!({ ?id }, "Undefined variable ID is used: {id:?}");
                 }
             }
         }
@@ -210,7 +206,7 @@ impl InstanceBuilder {
         for (constraint, _reason) in self.removed_constraints.values() {
             for id in constraint.required_ids() {
                 if !variable_ids.contains(&id) {
-                    return Err(InstanceError::UndefinedVariableID { id }.into());
+                    crate::bail!({ ?id }, "Undefined variable ID is used: {id:?}");
                 }
             }
         }
@@ -218,15 +214,15 @@ impl InstanceBuilder {
         // Validate named_functions: key must match value's id, and all variable IDs must exist
         for (key, nf) in &self.named_functions {
             if *key != nf.id {
-                return Err(InstanceError::InconsistentNamedFunctionID {
-                    key: *key,
-                    id: nf.id,
-                }
-                .into());
+                let id = nf.id;
+                crate::bail!(
+                    { ?key, ?id },
+                    "Named function map key {key:?} does not match value's id {id:?}",
+                );
             }
             for id in nf.function.required_ids() {
                 if !variable_ids.contains(&id) {
-                    return Err(InstanceError::UndefinedVariableID { id }.into());
+                    crate::bail!({ ?id }, "Undefined variable ID is used: {id:?}");
                 }
             }
         }
@@ -236,15 +232,21 @@ impl InstanceBuilder {
             // Check that indicator_variable exists and is binary
             let indicator_id = value.indicator_variable;
             let Some(dv) = decision_variables.get(&indicator_id) else {
-                return Err(InstanceError::UndefinedIndicatorVariable { id: indicator_id }.into());
+                crate::bail!(
+                    { ?indicator_id },
+                    "Indicator variable {indicator_id:?} is not defined in decision_variables",
+                );
             };
             if dv.kind() != crate::decision_variable::Kind::Binary {
-                return Err(InstanceError::IndicatorVariableNotBinary { id: indicator_id }.into());
+                crate::bail!(
+                    { ?indicator_id },
+                    "Indicator variable {indicator_id:?} must be binary",
+                );
             }
             // Check that all variable IDs in function are defined
             for id in value.required_ids() {
                 if !variable_ids.contains(&id) {
-                    return Err(InstanceError::UndefinedVariableID { id }.into());
+                    crate::bail!({ ?id }, "Undefined variable ID is used: {id:?}");
                 }
             }
         }
@@ -252,21 +254,30 @@ impl InstanceBuilder {
             // Check that indicator_variable exists and is binary
             let indicator_id = ic.indicator_variable;
             let Some(dv) = decision_variables.get(&indicator_id) else {
-                return Err(InstanceError::UndefinedIndicatorVariable { id: indicator_id }.into());
+                crate::bail!(
+                    { ?indicator_id },
+                    "Indicator variable {indicator_id:?} is not defined in decision_variables",
+                );
             };
             if dv.kind() != crate::decision_variable::Kind::Binary {
-                return Err(InstanceError::IndicatorVariableNotBinary { id: indicator_id }.into());
+                crate::bail!(
+                    { ?indicator_id },
+                    "Indicator variable {indicator_id:?} must be binary",
+                );
             }
             for id in ic.required_ids() {
                 if !variable_ids.contains(&id) {
-                    return Err(InstanceError::UndefinedVariableID { id }.into());
+                    crate::bail!({ ?id }, "Undefined variable ID is used: {id:?}");
                 }
             }
         }
         // Validate disjointness of indicator active/removed
         for id in self.removed_indicator_constraints.keys() {
             if self.indicator_constraints.contains_key(id) {
-                return Err(InstanceError::OverlappingIndicatorConstraintID { id: *id }.into());
+                crate::bail!(
+                    { ?id },
+                    "Indicator constraint ID {id:?} is in both indicator_constraints and removed_indicator_constraints, but they must be disjoint",
+                );
             }
         }
 
@@ -274,10 +285,13 @@ impl InstanceBuilder {
         for value in self.one_hot_constraints.values() {
             for var_id in &value.variables {
                 let Some(dv) = decision_variables.get(var_id) else {
-                    return Err(InstanceError::UndefinedOneHotVariable { id: *var_id }.into());
+                    crate::bail!(
+                        { ?var_id },
+                        "One-hot variable {var_id:?} is not defined in decision_variables",
+                    );
                 };
                 if dv.kind() != crate::decision_variable::Kind::Binary {
-                    return Err(InstanceError::OneHotVariableNotBinary { id: *var_id }.into());
+                    crate::bail!({ ?var_id }, "One-hot variable {var_id:?} must be binary");
                 }
             }
         }
@@ -285,11 +299,17 @@ impl InstanceBuilder {
         // Validate SOS1 constraints
         for (id, value) in &self.sos1_constraints {
             if value.variables.is_empty() {
-                return Err(InstanceError::EmptySos1Constraint { id: *id }.into());
+                crate::bail!(
+                    { ?id },
+                    "SOS1 constraint {id:?} has no variables; SOS1 constraints must contain at least one variable",
+                );
             }
             for var_id in &value.variables {
                 if !variable_ids.contains(var_id) {
-                    return Err(InstanceError::UndefinedSos1Variable { id: *var_id }.into());
+                    crate::bail!(
+                        { ?var_id },
+                        "SOS1 variable {var_id:?} is not defined in decision_variables",
+                    );
                 }
             }
         }
@@ -297,7 +317,10 @@ impl InstanceBuilder {
         // Validate that constraints and removed_constraints keys are disjoint
         for id in self.removed_constraints.keys() {
             if constraints.contains_key(id) {
-                return Err(InstanceError::OverlappingConstraintID { id: *id }.into());
+                crate::bail!(
+                    { ?id },
+                    "Constraint ID {id:?} is in both constraints and removed_constraints, but they must be disjoint",
+                );
             }
         }
 
@@ -305,7 +328,10 @@ impl InstanceBuilder {
         // (dependent variables must exist as decision variables to get kind/bound info)
         for id in self.decision_variable_dependency.keys() {
             if !variable_ids.contains(&id) {
-                return Err(InstanceError::UndefinedDependentVariableID { id }.into());
+                crate::bail!(
+                    { ?id },
+                    "Variable ID {id:?} in decision_variable_dependency is not in decision_variables",
+                );
             }
         }
 
@@ -336,17 +362,26 @@ impl InstanceBuilder {
 
         // Check used ∩ dependent = ∅
         if let Some(id) = used.intersection(&dependent).next() {
-            return Err(InstanceError::DependentVariableUsed { id: *id }.into());
+            crate::bail!(
+                { ?id },
+                "Dependent variable cannot be used in objectives or constraints: {id:?}",
+            );
         }
 
         // Check used ∩ fixed = ∅
         if let Some(id) = used.intersection(&fixed).next() {
-            return Err(InstanceError::FixedVariableUsed { id: *id }.into());
+            crate::bail!(
+                { ?id },
+                "Fixed variable {id:?} (substituted_value set) cannot be used in objectives or constraints",
+            );
         }
 
         // Check fixed ∩ dependent = ∅
         if let Some(id) = fixed.intersection(&dependent).next() {
-            return Err(InstanceError::FixedAndDependentVariable { id: *id }.into());
+            crate::bail!(
+                { ?id },
+                "Variable {id:?} cannot be both fixed (substituted_value set) and dependent",
+            );
         }
 
         Ok(Instance {
@@ -410,11 +445,10 @@ mod tests {
             .constraints(BTreeMap::new())
             .build()
             .unwrap_err();
-        let instance_err = err.downcast_ref::<InstanceError>().unwrap();
-        assert!(matches!(
-            instance_err,
-            InstanceError::MissingRequiredField { field: "sense" }
-        ));
+        assert!(
+            err.to_string().contains("missing: sense"),
+            "unexpected error: {err}"
+        );
 
         // Missing objective
         let err = Instance::builder()
@@ -423,11 +457,10 @@ mod tests {
             .constraints(BTreeMap::new())
             .build()
             .unwrap_err();
-        let instance_err = err.downcast_ref::<InstanceError>().unwrap();
-        assert!(matches!(
-            instance_err,
-            InstanceError::MissingRequiredField { field: "objective" }
-        ));
+        assert!(
+            err.to_string().contains("missing: objective"),
+            "unexpected error: {err}"
+        );
     }
 
     #[test]
@@ -463,13 +496,11 @@ mod tests {
             .build()
             .unwrap_err();
 
-        let instance_err = err.downcast_ref::<InstanceError>().unwrap();
-        assert!(matches!(
-            instance_err,
-            InstanceError::UndefinedVariableID {
-                id
-            } if *id == VariableID::from(999)
-        ));
+        let msg = err.to_string();
+        assert!(
+            msg.contains("Undefined variable ID") && msg.contains("999"),
+            "unexpected error: {msg}"
+        );
     }
 
     #[test]
@@ -497,11 +528,12 @@ mod tests {
             .build()
             .unwrap_err();
 
-        let instance_err = err.downcast_ref::<InstanceError>().unwrap();
-        assert!(matches!(
-            instance_err,
-            InstanceError::OverlappingConstraintID { id } if *id == constraint_id
-        ));
+        let msg = err.to_string();
+        assert!(
+            msg.contains("both constraints and removed_constraints")
+                && msg.contains(&format!("{:?}", constraint_id)),
+            "unexpected error: {msg}"
+        );
     }
 
     #[test]
@@ -529,11 +561,12 @@ mod tests {
             .build()
             .unwrap_err();
 
-        let instance_err = err.downcast_ref::<InstanceError>().unwrap();
-        assert!(matches!(
-            instance_err,
-            InstanceError::UndefinedDependentVariableID { id } if *id == undefined_var_id
-        ));
+        let msg = err.to_string();
+        assert!(
+            msg.contains("decision_variable_dependency is not in decision_variables")
+                && msg.contains(&format!("{:?}", undefined_var_id)),
+            "unexpected error: {msg}"
+        );
     }
 
     #[test]
@@ -590,11 +623,12 @@ mod tests {
             .build()
             .unwrap_err();
 
-        let instance_err = err.downcast_ref::<InstanceError>().unwrap();
-        assert!(matches!(
-            instance_err,
-            InstanceError::DependentVariableUsed { id } if *id == var_id
-        ));
+        let msg = err.to_string();
+        assert!(
+            msg.contains("Dependent variable cannot be used")
+                && msg.contains(&format!("{:?}", var_id)),
+            "unexpected error: {msg}"
+        );
     }
 
     #[test]
@@ -625,11 +659,12 @@ mod tests {
             .build()
             .unwrap_err();
 
-        let instance_err = err.downcast_ref::<InstanceError>().unwrap();
-        assert!(matches!(
-            instance_err,
-            InstanceError::DependentVariableUsed { id } if *id == var_id
-        ));
+        let msg = err.to_string();
+        assert!(
+            msg.contains("Dependent variable cannot be used")
+                && msg.contains(&format!("{:?}", var_id)),
+            "unexpected error: {msg}"
+        );
     }
 
     #[test]
@@ -659,11 +694,11 @@ mod tests {
             .build()
             .unwrap_err();
 
-        let instance_err = err.downcast_ref::<InstanceError>().unwrap();
-        assert!(matches!(
-            instance_err,
-            InstanceError::FixedAndDependentVariable { id } if *id == var_id
-        ));
+        let msg = err.to_string();
+        assert!(
+            msg.contains("cannot be both fixed") && msg.contains(&format!("{:?}", var_id)),
+            "unexpected error: {msg}"
+        );
     }
 
     #[test]
@@ -690,11 +725,11 @@ mod tests {
             .build()
             .unwrap_err();
 
-        let instance_err = err.downcast_ref::<InstanceError>().unwrap();
-        assert!(matches!(
-            instance_err,
-            InstanceError::UndefinedVariableID { id } if *id == VariableID::from(999)
-        ));
+        let msg = err.to_string();
+        assert!(
+            msg.contains("Undefined variable ID") && msg.contains("999"),
+            "unexpected error: {msg}"
+        );
     }
 
     #[test]
@@ -718,11 +753,11 @@ mod tests {
             .build()
             .unwrap_err();
 
-        let instance_err = err.downcast_ref::<InstanceError>().unwrap();
-        assert!(matches!(
-            instance_err,
-            InstanceError::FixedVariableUsed { id } if *id == var_id
-        ));
+        let msg = err.to_string();
+        assert!(
+            msg.contains("Fixed variable") && msg.contains(&format!("{:?}", var_id)),
+            "unexpected error: {msg}"
+        );
     }
 
     #[test]
@@ -751,12 +786,13 @@ mod tests {
             .build()
             .unwrap_err();
 
-        let instance_err = err.downcast_ref::<InstanceError>().unwrap();
-        assert!(matches!(
-            instance_err,
-            InstanceError::InconsistentNamedFunctionID { key, id }
-                if *key == NamedFunctionID::from(2) && *id == NamedFunctionID::from(1)
-        ));
+        let msg = err.to_string();
+        assert!(
+            msg.contains("Named function map key")
+                && msg.contains("NamedFunctionID(2)")
+                && msg.contains("NamedFunctionID(1)"),
+            "unexpected error: {msg}"
+        );
     }
 
     #[test]
@@ -785,10 +821,10 @@ mod tests {
             .build()
             .unwrap_err();
 
-        let instance_err = err.downcast_ref::<InstanceError>().unwrap();
-        assert!(matches!(
-            instance_err,
-            InstanceError::UndefinedVariableID { id } if *id == VariableID::from(999)
-        ));
+        let msg = err.to_string();
+        assert!(
+            msg.contains("Undefined variable ID") && msg.contains("999"),
+            "unexpected error: {msg}"
+        );
     }
 }

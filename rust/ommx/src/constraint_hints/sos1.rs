@@ -3,7 +3,7 @@
 use crate::{
     constraint::RemovedReason,
     parse::{as_constraint_id, as_variable_id, Parse, ParseError, RawParseError},
-    v1, Constraint, ConstraintID, DecisionVariable, InstanceError, VariableID,
+    v1, Constraint, ConstraintID, DecisionVariable, VariableID,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -34,10 +34,10 @@ impl Parse for v1::Sos1 {
             let id = as_constraint_id(constraints, removed_constraints, *id)
                 .map_err(|e| e.context(message, "big_m_constraint_ids"))?;
             if !big_m_constraint_ids.insert(id) {
-                return Err(
-                    RawParseError::InstanceError(InstanceError::NonUniqueConstraintID { id })
-                        .context(message, "big_m_constraint_ids"),
-                );
+                return Err(RawParseError::InvalidInstance(format!(
+                    "Non-unique constraint ID is found where uniqueness is required: {id:?}"
+                ))
+                .context(message, "big_m_constraint_ids"));
             }
         }
         let mut variables = BTreeSet::new();
@@ -45,10 +45,10 @@ impl Parse for v1::Sos1 {
             let id = as_variable_id(decision_variable, *id)
                 .map_err(|e| e.context(message, "decision_variables"))?;
             if !variables.insert(id) {
-                return Err(
-                    RawParseError::InstanceError(InstanceError::NonUniqueVariableID { id })
-                        .context(message, "decision_variables"),
-                );
+                return Err(RawParseError::InvalidInstance(format!(
+                    "Non-unique variable ID is found where uniqueness is required: {id:?}"
+                ))
+                .context(message, "decision_variables"));
             }
         }
         Ok(Sos1 {

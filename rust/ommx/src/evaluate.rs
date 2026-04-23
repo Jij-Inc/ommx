@@ -1,5 +1,4 @@
 use crate::{v1::State, Sampled, VariableIDSet};
-use anyhow::Result;
 
 /// Evaluate with a [State]
 pub trait Evaluate {
@@ -7,17 +6,17 @@ pub trait Evaluate {
     type SampledOutput;
 
     /// Evaluate to return the output with used variable ids
-    fn evaluate(&self, state: &State, atol: crate::ATol) -> Result<Self::Output>;
+    fn evaluate(&self, state: &State, atol: crate::ATol) -> crate::Result<Self::Output>;
 
     /// Evaluate for each sample
     fn evaluate_samples(
         &self,
         samples: &Sampled<State>,
         atol: crate::ATol,
-    ) -> Result<Self::SampledOutput>;
+    ) -> crate::Result<Self::SampledOutput>;
 
     /// Partially evaluate the function to return the used variable ids
-    fn partial_evaluate(&mut self, state: &State, atol: crate::ATol) -> Result<()>;
+    fn partial_evaluate(&mut self, state: &State, atol: crate::ATol) -> crate::Result<()>;
 
     /// Decision variable IDs required for evaluation
     fn required_ids(&self) -> VariableIDSet;
@@ -54,6 +53,9 @@ pub trait Propagate: Sized {
     ///
     /// Returns `(outcome, additional_fixings)` where `additional_fixings`
     /// contains newly discovered variable values.
-    fn propagate(self, state: &State, atol: crate::ATol)
-        -> Result<(PropagateOutcome<Self>, State)>;
+    fn propagate(
+        self,
+        state: &State,
+        atol: crate::ATol,
+    ) -> crate::Result<(PropagateOutcome<Self>, State)>;
 }

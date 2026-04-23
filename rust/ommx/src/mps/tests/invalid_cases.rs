@@ -1,5 +1,6 @@
 use crate::{
     mps::*, quadratic, Constraint, ConstraintID, DecisionVariable, Function, Instance, Sense,
+    VariableID,
 };
 use maplit::btreemap;
 use std::collections::BTreeMap;
@@ -22,11 +23,12 @@ fn test_nonlinear_objective_error() {
     .unwrap();
 
     let mut buffer = Vec::new();
-    let result = format::format(&instance, &mut buffer);
-    assert!(matches!(
-        result.unwrap_err(),
-        MpsWriteError::InvalidObjectiveType { degree: 3 }
-    ));
+    let err = format::format(&instance, &mut buffer).unwrap_err();
+    let msg = err.to_string();
+    assert!(
+        msg.contains("nonlinear objective") && msg.contains("3-degree"),
+        "unexpected error: {msg}"
+    );
 }
 
 #[test]
@@ -51,9 +53,12 @@ fn test_nonlinear_constraint_error() {
     .unwrap();
 
     let mut buffer = Vec::new();
-    let result = format::format(&instance, &mut buffer);
-    assert!(matches!(
-        result.unwrap_err(),
-        MpsWriteError::InvalidConstraintType { name, degree: 3 } if name == "OMMX_CONSTR_0"
-    ));
+    let err = format::format(&instance, &mut buffer).unwrap_err();
+    let msg = err.to_string();
+    assert!(
+        msg.contains("nonlinear constraint")
+            && msg.contains("OMMX_CONSTR_0")
+            && msg.contains("3-degree"),
+        "unexpected error: {msg}"
+    );
 }

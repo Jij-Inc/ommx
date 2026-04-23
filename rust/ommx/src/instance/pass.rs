@@ -67,9 +67,9 @@ impl Instance {
             .indicator_constraint_collection
             .removed()
             .get(&id)
-            .ok_or_else(|| {
-                anyhow::anyhow!("Removed indicator constraint with ID {:?} not found", id)
-            })?
+            .ok_or_else(
+                || crate::error!({ ?id }, "Removed indicator constraint with ID {id:?} not found"),
+            )?
             .0
             .indicator_variable;
 
@@ -78,10 +78,9 @@ impl Instance {
             .get(&indicator_variable)
             .is_some()
         {
-            anyhow::bail!(
-                "Cannot restore indicator constraint {:?}: indicator variable {:?} has been substituted",
-                id,
-                indicator_variable
+            crate::bail!(
+                { ?id, ?indicator_variable },
+                "Cannot restore indicator constraint {id:?}: indicator variable {indicator_variable:?} has been substituted",
             );
         }
 
@@ -91,10 +90,9 @@ impl Instance {
             .and_then(|dv| dv.substituted_value())
             .is_some()
         {
-            anyhow::bail!(
-                "Cannot restore indicator constraint {:?}: indicator variable {:?} has been fixed",
-                id,
-                indicator_variable
+            crate::bail!(
+                { ?id, ?indicator_variable },
+                "Cannot restore indicator constraint {id:?}: indicator variable {indicator_variable:?} has been fixed",
             );
         }
 

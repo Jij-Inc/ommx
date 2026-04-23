@@ -5,7 +5,6 @@ mod builder;
 mod clip_bounds;
 mod convert;
 mod decision_variable;
-mod error;
 mod evaluate;
 mod indicator;
 mod log_encode;
@@ -29,8 +28,6 @@ mod substitute;
 pub use analysis::*;
 pub use arbitrary::InstanceParameters;
 pub use builder::*;
-pub use error::*;
-pub use log_encode::*;
 pub use parametric_builder::*;
 pub use stats::*;
 
@@ -264,10 +261,7 @@ impl Instance {
     /// if a later one fails. Callers that need cross-type atomicity should
     /// validate / clone up front.
     #[tracing::instrument(skip_all)]
-    pub fn reduce_capabilities(
-        &mut self,
-        supported: &Capabilities,
-    ) -> anyhow::Result<Capabilities> {
+    pub fn reduce_capabilities(&mut self, supported: &Capabilities) -> crate::Result<Capabilities> {
         let mut converted = Capabilities::new();
         // Iterate in a fixed order so logs / callers see deterministic output.
         for cap in [

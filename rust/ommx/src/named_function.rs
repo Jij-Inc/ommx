@@ -8,7 +8,7 @@ use fnv::FnvHashMap;
 use getset::*;
 
 use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
-use crate::{Function, SampleID, Sampled, UnknownSampleIDError, VariableIDSet};
+use crate::{Function, SampleID, Sampled, VariableIDSet};
 pub use arbitrary::*;
 
 /// ID for named function
@@ -202,11 +202,13 @@ impl std::fmt::Display for SampledNamedFunction {
 }
 
 impl SampledNamedFunction {
-    /// Get an evaluated named function for a specific sample ID
-    pub fn get(&self, sample_id: SampleID) -> Result<EvaluatedNamedFunction, UnknownSampleIDError> {
+    /// Get an evaluated named function for a specific sample ID.
+    ///
+    /// Returns [`None`] if `sample_id` is not present in the sampled data.
+    pub fn get(&self, sample_id: SampleID) -> Option<EvaluatedNamedFunction> {
         let evaluated_value = *self.evaluated_values.get(sample_id)?;
 
-        Ok(EvaluatedNamedFunction {
+        Some(EvaluatedNamedFunction {
             id: *self.id(),
             evaluated_value,
             name: self.name.clone(),

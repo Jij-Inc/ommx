@@ -8,7 +8,7 @@ mod serialize;
 pub(crate) mod stage;
 
 use crate::logical_memory::LogicalMemoryProfile;
-use crate::{sampled::UnknownSampleIDError, Function, SampleID, VariableID};
+use crate::{Function, SampleID, VariableID};
 pub use arbitrary::*;
 use derive_more::{Deref, From};
 use fnv::{FnvHashMap, FnvHashSet};
@@ -219,15 +219,13 @@ impl From<(ConstraintID, EvaluatedConstraint)> for crate::v1::EvaluatedConstrain
 pub type SampledConstraint = Constraint<stage::Sampled>;
 
 impl SampledConstraint {
-    /// Check feasibility for a specific sample
-    pub fn is_feasible(
-        &self,
-        sample_id: SampleID,
-        atol: crate::ATol,
-    ) -> Result<bool, UnknownSampleIDError> {
+    /// Check feasibility for a specific sample.
+    ///
+    /// Returns [`None`] if `sample_id` is not present in the sampled data.
+    pub fn is_feasible(&self, sample_id: SampleID, atol: crate::ATol) -> Option<bool> {
         let evaluated_value = *self.stage.evaluated_values.get(sample_id)?;
 
-        Ok(match self.equality {
+        Some(match self.equality {
             Equality::EqualToZero => evaluated_value.abs() < *atol,
             Equality::LessThanOrEqualToZero => evaluated_value < *atol,
         })

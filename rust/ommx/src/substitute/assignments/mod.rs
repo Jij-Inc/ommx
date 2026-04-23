@@ -5,7 +5,6 @@ use crate::{
     check_self_assignment, decision_variable::VariableID, substitute_acyclic_via_one, v1::State,
     ATol, Evaluate, Function, Substitute, VariableIDSet,
 };
-use anyhow::Result;
 use fnv::FnvHashMap;
 use petgraph::algo;
 use petgraph::prelude::DiGraphMap;
@@ -213,7 +212,7 @@ impl Evaluate for AcyclicAssignments {
     type Output = State;
     type SampledOutput = FnvHashMap<VariableID, crate::Sampled<f64>>;
 
-    fn evaluate(&self, state: &State, atol: ATol) -> Result<Self::Output> {
+    fn evaluate(&self, state: &State, atol: ATol) -> crate::Result<Self::Output> {
         let mut extended_state = state.clone();
 
         // Evaluate assignments in topological order
@@ -227,7 +226,7 @@ impl Evaluate for AcyclicAssignments {
         Ok(extended_state)
     }
 
-    fn partial_evaluate(&mut self, state: &State, atol: ATol) -> Result<()> {
+    fn partial_evaluate(&mut self, state: &State, atol: ATol) -> crate::Result<()> {
         // Create new assignments with partial evaluation applied
         let mut new_assignments = Vec::new();
 
@@ -246,7 +245,7 @@ impl Evaluate for AcyclicAssignments {
         &self,
         samples: &crate::Sampled<State>,
         atol: ATol,
-    ) -> Result<Self::SampledOutput> {
+    ) -> crate::Result<Self::SampledOutput> {
         let mut result = FnvHashMap::default();
 
         // For each assignment in topological order

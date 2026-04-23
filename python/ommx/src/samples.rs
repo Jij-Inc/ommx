@@ -246,7 +246,7 @@ impl Samples {
         Ok(crate::State(
             self.0
                 .get(id)
-                .map_err(|e| PyKeyError::new_err(e.to_string()))?
+                .ok_or_else(|| PyKeyError::new_err(format!("Unknown sample ID: {sample_id}")))?
                 .clone(),
         ))
     }

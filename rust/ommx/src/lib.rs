@@ -261,6 +261,62 @@
 //! );
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
+//!
+//! ## Error handling
+//!
+//! All public fallible APIs return [`Result<T>`] (alias for
+//! [`std::result::Result<T, Error>`]). [`Error`] is a re-export of
+//! [`anyhow::Error`], so downstream crates can propagate with `?` without
+//! taking an `anyhow` dependency themselves. Diagnostic context is emitted
+//! via the [`tracing`] crate at each failure site rather than carried in
+//! typed enum variants — subscribers pick it up via span context and
+//! structured fields.
+//!
+//! A curated set of **signal types** remain `pub` for callers that need to
+//! recover a particular failure by downcast:
+//!
+//! - [`InfeasibleDetected`] — produced by [`Propagate`] when a constraint
+//!   becomes infeasible after substitution.
+//! - [`CoefficientError`], [`BoundError`], [`AtolError`] — numeric-domain
+//!   validation failures.
+//! - [`DecisionVariableError`], [`SubstitutionError`], [`SolutionError`],
+//!   [`SampleSetError`] — domain-specific structured errors consumed by
+//!   in-crate tests and downstream code that wants to react programmatically.
+//!
+//! Recover them with [`Error::downcast_ref`] / [`Error::is`]:
+//!
+//! ```ignore
+//! match instance.propagate(&state, atol) {
+//!     Err(e) if e.is::<ommx::InfeasibleDetected>() => { /* handle */ }
+//!     Err(e) => return Err(e),
+//!     Ok(outcome) => { /* ... */ }
+//! }
+//! ```
+//!
+//! The [`Parse`] trait is an intentional exception. It keeps its own
+//! [`ParseError`] type because the structured
+//! [`Vec<ParseContext>`](parse::ParseContext) breadcrumb carries useful
+//! proto-tree metadata. [`ParseError`] implements [`std::error::Error`], so
+//! it flows into [`Result<T>`] via `?` at the crate boundary.
+//!
+//! ### Fail-site macros
+//!
+//! [`bail!`], [`error!`], and [`ensure!`] fuse a `tracing::error!` event
+//! with an [`Error`] built from the same format string:
+//!
+//! ```ignore
+//! // Plain message
+//! ommx::bail!("invalid OBJSENSE: {s}");
+//!
+//! // Structured tracing fields via `{ field = value, … }`
+//! ommx::bail!(
+//!     { section, size },
+//!     "invalid field size ({size}) in MPS section '{section}'",
+//! );
+//!
+//! // Signal expression — no tracing event, since callers recover it
+//! ommx::bail!(InfeasibleDetected);
+//! ```
 
 // Allow the `ommx-derive` proc-macro to refer to this crate as `::ommx` when
 // its generated code is compiled inside this crate itself.
@@ -290,6 +346,7 @@ mod constraint;
 mod constraint_hints;
 mod constraint_type;
 mod decision_variable;
+mod error;
 mod evaluate;
 mod format;
 mod function;
@@ -312,6 +369,7 @@ pub use coefficient::*;
 pub use constraint::*;
 pub use constraint_type::*;
 pub use decision_variable::*;
+pub use error::*;
 pub use evaluate::{Evaluate, Propagate, PropagateOutcome};
 pub use function::*;
 pub use indicator_constraint::*;

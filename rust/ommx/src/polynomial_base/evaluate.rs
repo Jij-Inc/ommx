@@ -1,6 +1,5 @@
 use super::*;
-use crate::{v1::State, Evaluate, Sampled, VariableIDSet};
-use anyhow::{anyhow, Result};
+use crate::{v1::State, Evaluate, Result, Sampled, VariableIDSet};
 
 impl<M: Monomial> Evaluate for PolynomialBase<M> {
     type Output = f64;
@@ -14,7 +13,7 @@ impl<M: Monomial> Evaluate for PolynomialBase<M> {
                 out *= state
                     .entries
                     .get(&id.into_inner())
-                    .ok_or_else(|| anyhow!("Missing entry for id: {}", id.into_inner()))?;
+                    .ok_or_else(|| crate::error!("Missing entry for id: {}", id.into_inner()))?;
             }
             result += coefficient.into_inner() * out;
         }
@@ -36,7 +35,7 @@ impl<M: Monomial> Evaluate for PolynomialBase<M> {
                     continue;
                 }
                 Err(e) => {
-                    return Err(anyhow!(
+                    return Err(crate::error!(
                         "Partial evaluation yields non-finite coefficient: {}",
                         e
                     ));
