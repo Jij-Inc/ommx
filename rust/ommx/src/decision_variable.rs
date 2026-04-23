@@ -537,16 +537,12 @@ impl crate::Evaluate for DecisionVariable {
     type Output = EvaluatedDecisionVariable;
     type SampledOutput = SampledDecisionVariable;
 
-    fn evaluate(
-        &self,
-        state: &crate::v1::State,
-        atol: crate::ATol,
-    ) -> anyhow::Result<Self::Output> {
+    fn evaluate(&self, state: &crate::v1::State, atol: crate::ATol) -> crate::Result<Self::Output> {
         let value = state
             .entries
             .get(&self.id.into_inner())
             .copied()
-            .ok_or_else(|| anyhow::anyhow!("Variable ID {} not found in state", self.id))?;
+            .ok_or_else(|| crate::error!("Variable ID {} not found in state", self.id))?;
 
         Ok(EvaluatedDecisionVariable::new(self.clone(), value, atol)?)
     }
@@ -555,7 +551,7 @@ impl crate::Evaluate for DecisionVariable {
         &self,
         samples: &crate::Sampled<crate::v1::State>,
         _atol: crate::ATol,
-    ) -> anyhow::Result<Self::SampledOutput> {
+    ) -> crate::Result<Self::SampledOutput> {
         let variable_id = self.id.into_inner();
 
         // Extract values for this variable from all samples
@@ -575,7 +571,7 @@ impl crate::Evaluate for DecisionVariable {
         // Convert to Sampled format
         let ids: Vec<Vec<crate::SampleID>> = grouped_values.values().cloned().collect();
         let values: Vec<f64> = grouped_values.keys().map(|k| k.into_inner()).collect();
-        let samples = crate::Sampled::new(ids, values)?;
+        let samples = crate::Sampled::new(ids, values).map_err(crate::Error::from_anyhow)?;
 
         Ok(SampledDecisionVariable::new(self.clone(), samples, _atol)?)
     }
@@ -584,7 +580,7 @@ impl crate::Evaluate for DecisionVariable {
         &mut self,
         state: &crate::v1::State,
         atol: crate::ATol,
-    ) -> anyhow::Result<()> {
+    ) -> crate::Result<()> {
         if let Some(value) = state.entries.get(&self.id.into_inner()) {
             self.substitute(*value, atol)?;
         }

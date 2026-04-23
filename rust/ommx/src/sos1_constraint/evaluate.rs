@@ -8,7 +8,7 @@ impl Propagate for Sos1Constraint<Created> {
         mut self,
         state: &crate::v1::State,
         atol: ATol,
-    ) -> anyhow::Result<(PropagateOutcome<Self>, crate::v1::State)> {
+    ) -> crate::Result<(PropagateOutcome<Self>, crate::v1::State)> {
         let mut fixed_nonzero: Option<VariableID> = None;
         let mut unfixed = BTreeSet::new();
 
@@ -23,7 +23,7 @@ impl Propagate for Sos1Constraint<Created> {
             } else {
                 // Variable is non-zero
                 if let Some(first) = fixed_nonzero {
-                    anyhow::bail!(
+                    crate::bail!(
                         "Multiple variables fixed to non-zero in SOS1 constraint: {:?} and {:?}",
                         first,
                         var_id
@@ -58,7 +58,7 @@ impl Evaluate for Sos1Constraint<Created> {
     type Output = EvaluatedSos1Constraint;
     type SampledOutput = SampledSos1Constraint;
 
-    fn evaluate(&self, state: &crate::v1::State, atol: ATol) -> anyhow::Result<Self::Output> {
+    fn evaluate(&self, state: &crate::v1::State, atol: ATol) -> crate::Result<Self::Output> {
         let used_decision_variable_ids = self.required_ids();
         let (feasible, active_variable) = check_sos1(&self.variables, state, atol)?;
 
@@ -77,7 +77,7 @@ impl Evaluate for Sos1Constraint<Created> {
         &self,
         samples: &crate::Sampled<crate::v1::State>,
         atol: ATol,
-    ) -> anyhow::Result<Self::SampledOutput> {
+    ) -> crate::Result<Self::SampledOutput> {
         let mut feasible = BTreeMap::new();
         let mut active_variable = BTreeMap::new();
 
@@ -98,10 +98,10 @@ impl Evaluate for Sos1Constraint<Created> {
         })
     }
 
-    fn partial_evaluate(&mut self, state: &crate::v1::State, _atol: ATol) -> anyhow::Result<()> {
+    fn partial_evaluate(&mut self, state: &crate::v1::State, _atol: ATol) -> crate::Result<()> {
         for var_id in &self.variables {
             if state.entries.contains_key(&var_id.into_inner()) {
-                anyhow::bail!(
+                crate::bail!(
                     "Cannot partially evaluate variable {:?} of SOS1 constraint. \
                      Fixing a SOS1 variable would change the constraint type.",
                     var_id
@@ -125,12 +125,12 @@ fn check_sos1(
     variables: &BTreeSet<VariableID>,
     state: &crate::v1::State,
     atol: ATol,
-) -> anyhow::Result<(bool, Option<VariableID>)> {
+) -> crate::Result<(bool, Option<VariableID>)> {
     let mut active: Option<VariableID> = None;
 
     for &var_id in variables {
         let value = state.entries.get(&var_id.into_inner()).ok_or_else(|| {
-            anyhow::anyhow!(
+            crate::error!(
                 "Variable {:?} not found in state for SOS1 constraint",
                 var_id,
             )

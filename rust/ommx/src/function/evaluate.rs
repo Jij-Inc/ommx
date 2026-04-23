@@ -9,7 +9,7 @@ impl Evaluate for Function {
         &self,
         solution: &crate::v1::State,
         atol: crate::ATol,
-    ) -> anyhow::Result<Self::Output> {
+    ) -> crate::Result<Self::Output> {
         match self {
             Function::Zero => Ok(0.0),
             Function::Constant(c) => Ok(c.into_inner()),
@@ -23,7 +23,7 @@ impl Evaluate for Function {
         &mut self,
         state: &crate::v1::State,
         atol: crate::ATol,
-    ) -> anyhow::Result<()> {
+    ) -> crate::Result<()> {
         match self {
             Function::Linear(f) => f.partial_evaluate(state, atol),
             Function::Quadratic(f) => f.partial_evaluate(state, atol),
@@ -45,7 +45,7 @@ impl Evaluate for Function {
         &self,
         samples: &Sampled<crate::v1::State>,
         atol: crate::ATol,
-    ) -> anyhow::Result<Self::SampledOutput> {
+    ) -> crate::Result<Self::SampledOutput> {
         match self {
             Function::Zero => Ok(Sampled::constants(samples.ids().into_iter(), 0.0)),
             Function::Constant(c) => Ok(Sampled::constants(

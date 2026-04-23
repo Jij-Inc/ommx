@@ -9,7 +9,7 @@ impl Evaluate for NamedFunction {
         &self,
         solution: &crate::v1::State,
         atol: crate::ATol,
-    ) -> anyhow::Result<Self::Output> {
+    ) -> crate::Result<Self::Output> {
         let evaluated_value = self.function.evaluate(solution, atol)?;
         let used_decision_variable_ids = self.function.required_ids();
         Ok(EvaluatedNamedFunction {
@@ -27,7 +27,7 @@ impl Evaluate for NamedFunction {
         &mut self,
         state: &crate::v1::State,
         atol: crate::ATol,
-    ) -> anyhow::Result<()> {
+    ) -> crate::Result<()> {
         self.function.partial_evaluate(state, atol)
     }
 
@@ -39,7 +39,7 @@ impl Evaluate for NamedFunction {
         &self,
         samples: &crate::Sampled<crate::v1::State>,
         atol: crate::ATol,
-    ) -> anyhow::Result<Self::SampledOutput> {
+    ) -> crate::Result<Self::SampledOutput> {
         let evaluated_values = self.function.evaluate_samples(samples, atol)?;
         let used_decision_variable_ids = self.function.required_ids();
         Ok(SampledNamedFunction {

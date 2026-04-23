@@ -8,7 +8,7 @@ impl Propagate for OneHotConstraint<Created> {
         mut self,
         state: &crate::v1::State,
         atol: ATol,
-    ) -> anyhow::Result<(PropagateOutcome<Self>, crate::v1::State)> {
+    ) -> crate::Result<(PropagateOutcome<Self>, crate::v1::State)> {
         let mut fixed_to_one: Option<VariableID> = None;
         let mut unfixed = BTreeSet::new();
 
@@ -21,7 +21,7 @@ impl Propagate for OneHotConstraint<Created> {
             if (value - 1.0).abs() < *atol {
                 // Variable is ~1
                 if let Some(first) = fixed_to_one {
-                    anyhow::bail!(
+                    crate::bail!(
                         "Multiple variables fixed to 1 in one-hot constraint: {:?} and {:?}",
                         first,
                         var_id
@@ -31,7 +31,7 @@ impl Propagate for OneHotConstraint<Created> {
             } else if value.abs() < *atol {
                 // Variable is ~0, removed from set
             } else {
-                anyhow::bail!(
+                crate::bail!(
                     "Variable {:?} in one-hot constraint fixed to invalid value {} (must be 0 or 1)",
                     var_id,
                     value
@@ -48,7 +48,7 @@ impl Propagate for OneHotConstraint<Created> {
             Ok((PropagateOutcome::Consumed(self), additional))
         } else if unfixed.is_empty() {
             // All variables fixed to 0 → infeasible
-            anyhow::bail!(
+            crate::bail!(
                 "All variables in one-hot constraint are fixed to 0, constraint cannot be satisfied"
             );
         } else if unfixed.len() == 1 {
@@ -69,7 +69,7 @@ impl Evaluate for OneHotConstraint<Created> {
     type Output = EvaluatedOneHotConstraint;
     type SampledOutput = SampledOneHotConstraint;
 
-    fn evaluate(&self, state: &crate::v1::State, atol: ATol) -> anyhow::Result<Self::Output> {
+    fn evaluate(&self, state: &crate::v1::State, atol: ATol) -> crate::Result<Self::Output> {
         let used_decision_variable_ids = self.required_ids();
         let (feasible, active_variable) = check_one_hot(&self.variables, state, atol)?;
 
@@ -88,7 +88,7 @@ impl Evaluate for OneHotConstraint<Created> {
         &self,
         samples: &crate::Sampled<crate::v1::State>,
         atol: ATol,
-    ) -> anyhow::Result<Self::SampledOutput> {
+    ) -> crate::Result<Self::SampledOutput> {
         let mut feasible = BTreeMap::new();
         let mut active_variable = BTreeMap::new();
 
@@ -109,10 +109,10 @@ impl Evaluate for OneHotConstraint<Created> {
         })
     }
 
-    fn partial_evaluate(&mut self, state: &crate::v1::State, _atol: ATol) -> anyhow::Result<()> {
+    fn partial_evaluate(&mut self, state: &crate::v1::State, _atol: ATol) -> crate::Result<()> {
         for var_id in &self.variables {
             if state.entries.contains_key(&var_id.into_inner()) {
-                anyhow::bail!(
+                crate::bail!(
                     "Cannot partially evaluate variable {:?} of one-hot constraint. \
                      Fixing a one-hot variable would change the constraint type.",
                     var_id
@@ -136,12 +136,12 @@ fn check_one_hot(
     variables: &BTreeSet<VariableID>,
     state: &crate::v1::State,
     atol: ATol,
-) -> anyhow::Result<(bool, Option<VariableID>)> {
+) -> crate::Result<(bool, Option<VariableID>)> {
     let mut active: Option<VariableID> = None;
 
     for &var_id in variables {
         let value = state.entries.get(&var_id.into_inner()).ok_or_else(|| {
-            anyhow::anyhow!(
+            crate::error!(
                 "Variable {:?} not found in state for one-hot constraint",
                 var_id,
             )

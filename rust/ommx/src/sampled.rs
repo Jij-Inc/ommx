@@ -182,8 +182,15 @@ impl<T> Sampled<T> {
     /// Applies `f` to each unique stored value once; sample-id grouping is
     /// preserved. Useful when evaluating per-sample-state like in
     /// `Evaluate::evaluate_samples`.
-    pub fn try_map_ref<U>(&self, mut f: impl FnMut(&T) -> Result<U>) -> Result<Sampled<U>> {
-        let data = self.data.iter().map(&mut f).collect::<Result<Vec<_>>>()?;
+    pub fn try_map_ref<U, E>(
+        &self,
+        mut f: impl FnMut(&T) -> std::result::Result<U, E>,
+    ) -> std::result::Result<Sampled<U>, E> {
+        let data = self
+            .data
+            .iter()
+            .map(&mut f)
+            .collect::<std::result::Result<Vec<_>, E>>()?;
         Ok(Sampled {
             offsets: self.offsets.clone(),
             data,

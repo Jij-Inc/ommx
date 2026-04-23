@@ -1,8 +1,8 @@
 use super::*;
+use crate::Result;
 use crate::{
     constraint::RemovedReason, ATol, Evaluate, Propagate, PropagateOutcome, VariableIDSet,
 };
-use anyhow::{anyhow, Result};
 use std::collections::BTreeMap;
 
 /// Merge additional variable fixings from propagation into `expanded` state.
@@ -19,7 +19,7 @@ fn merge_state(
     for (var_id, value) in additional.entries {
         if let Some(&existing) = expanded.entries.get(&var_id) {
             if (existing - value).abs() > *atol {
-                return Err(anyhow!(
+                return Err(crate::error!(
                     "Conflicting variable fixings for ID={var_id}: \
                      existing={existing}, new={value}"
                 ));
@@ -77,7 +77,8 @@ impl Evaluate for Instance {
                 .evaluated_named_functions(evaluated_named_functions)
                 .decision_variables(decision_variables)
                 .sense(sense)
-                .build_unchecked()?
+                .build_unchecked()
+                .map_err(crate::Error::from_anyhow)?
         };
 
         Ok(solution)
@@ -161,7 +162,9 @@ impl Evaluate for Instance {
         // Phase 2: Substitute fixed values into decision variables.
         for (id, value) in expanded_state.entries.iter() {
             let Some(dv) = working.decision_variables.get_mut(&VariableID::from(*id)) else {
-                return Err(anyhow!("Unknown decision variable (ID={id}) in state."));
+                return Err(crate::error!(
+                    "Unknown decision variable (ID={id}) in state."
+                ));
             };
             dv.substitute(*value, atol)?;
         }

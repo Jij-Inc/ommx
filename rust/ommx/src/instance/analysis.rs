@@ -240,10 +240,7 @@ pub enum StateValidationError {
         instance_value: f64,
     },
     #[error("Evaluation of dependent variable {id:?} failed. Error: {error:?}")]
-    FailedToEvaluateDependentVariable {
-        id: VariableID,
-        error: anyhow::Error,
-    },
+    FailedToEvaluateDependentVariable { id: VariableID, error: crate::Error },
     #[error("Cyclic dependency detected in dependent variables: {error}")]
     CyclicDependency { error: crate::SubstitutionError },
 }
