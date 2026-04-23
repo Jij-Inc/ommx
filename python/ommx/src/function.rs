@@ -1,4 +1,7 @@
-use crate::{Constraint, DecisionVariable, Linear, Parameter, Polynomial, Quadratic, Rng, State};
+use crate::{
+    Constraint, DecisionVariable, Linear, Parameter, Polynomial, Quadratic, Rng, State,
+    VariableBound,
+};
 
 use anyhow::{anyhow, Result};
 use approx::AbsDiffEq;
@@ -455,6 +458,41 @@ impl Function {
             .partial_evaluate(&state.0, atol)
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
         Ok(Function(inner))
+    }
+
+    /// Compute an interval bound of this function given variable bounds.
+    ///
+    /// Missing IDs in `bounds` are treated as unbounded (`Bound.unbounded()`).
+    ///
+    /// **Args:**
+    ///
+    /// - `bounds`: Mapping from variable ID to its {class}`~ommx.v1.Bound`.
+    ///
+    /// **Returns:** A {class}`~ommx.v1.Bound` that contains $[\inf f, \sup f]$ over the given variable bounds.
+    ///
+    /// **Tightness:** This evaluates the bound **term by term** (monomial-wise)
+    /// and sums the per-term intervals. The result is a **sound
+    /// over-approximation** of the true range $[\inf f, \sup f]$ but is **not
+    /// guaranteed to be tight**, because it ignores dependencies between terms
+    /// that share variables. For example, $f = x^2 - x$ with $x \in [0, 1]$
+    /// has true range $[-1/4, 0]$ (minimum at $x = 1/2$), but term-wise
+    /// evaluation yields $[0, 1] + (-[0, 1]) = [-1, 1]$.
+    ///
+    /// # Examples
+    ///
+    /// ```python
+    /// >>> from ommx.v1 import Function, Linear, Bound
+    /// >>> f = Function(Linear(terms={1: 2}, constant=3))  # 2*x1 + 3
+    /// >>> b = f.evaluate_bound({1: Bound(0.0, 2.0)})
+    /// >>> (b.lower, b.upper)
+    /// (3.0, 7.0)
+    /// ```
+    pub fn evaluate_bound(&self, bounds: BTreeMap<u64, VariableBound>) -> VariableBound {
+        let bounds: ommx::Bounds = bounds
+            .into_iter()
+            .map(|(id, b)| (ommx::VariableID::from(id), b.0))
+            .collect();
+        VariableBound(self.0.evaluate_bound(&bounds))
     }
 
     fn __copy__(&self) -> Self {

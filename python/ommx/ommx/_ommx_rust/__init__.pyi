@@ -1155,6 +1155,36 @@ class Function:
     def partial_evaluate(
         self, state: ToState, *, atol: typing.Optional[builtins.float] = None
     ) -> Function: ...
+    def evaluate_bound(self, bounds: typing.Mapping[builtins.int, Bound]) -> Bound:
+        r"""
+        Compute an interval bound of this function given variable bounds.
+
+        Missing IDs in `bounds` are treated as unbounded (`Bound.unbounded()`).
+
+        **Args:**
+
+        - `bounds`: Mapping from variable ID to its {class}`~ommx.v1.Bound`.
+
+        **Returns:** A {class}`~ommx.v1.Bound` that contains $[\inf f, \sup f]$ over the given variable bounds.
+
+        **Tightness:** This evaluates the bound **term by term** (monomial-wise)
+        and sums the per-term intervals. The result is a **sound
+        over-approximation** of the true range $[\inf f, \sup f]$ but is **not
+        guaranteed to be tight**, because it ignores dependencies between terms
+        that share variables. For example, $f = x^2 - x$ with $x \in [0, 1]$
+        has true range $[-1/4, 0]$ (minimum at $x = 1/2$), but term-wise
+        evaluation yields $[0, 1] + (-[0, 1]) = [-1, 1]$.
+
+        # Examples
+
+        ```python
+        >>> from ommx.v1 import Function, Linear, Bound
+        >>> f = Function(Linear(terms={1: 2}, constant=3))  # 2*x1 + 3
+        >>> b = f.evaluate_bound({1: Bound(0.0, 2.0)})
+        >>> (b.lower, b.upper)
+        (3.0, 7.0)
+        ```
+        """
     def __copy__(self) -> Function: ...
     def __deepcopy__(self, _memo: typing.Any) -> Function: ...
     def reduce_binary_power(

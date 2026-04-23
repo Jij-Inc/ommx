@@ -17,6 +17,20 @@ Two entry points ship under `ommx.tracing`:
 
 See [Tracing and Profiling](../user_guide/tracing.md) for the full walkthrough, configuring your own `TracerProvider`, and troubleshooting.
 
+### 🆕 `Function.evaluate_bound` is now available from Python ([#831](https://github.com/Jij-Inc/ommx/pull/831))
+
+{meth}`Function.evaluate_bound <ommx.v1.Function.evaluate_bound>` is now exposed on {class}`~ommx.v1.Function`. Given per-variable bounds, it returns a {class}`~ommx.v1.Bound` that contains the range of the function value — useful when deriving feasibility bounds or doing simple presolve on the Python side.
+
+```python
+from ommx.v1 import Function, Linear, Bound
+
+f = Function(Linear(terms={1: 2}, constant=3))  # 2*x1 + 3
+b = f.evaluate_bound({1: Bound(0.0, 2.0)})
+# b.lower == 3.0, b.upper == 7.0
+```
+
+The bound is computed monomial-wise and summed, so it is a sound over-approximation of the true range but is **not guaranteed to be tight** when multiple terms share variables (the classic dependency problem in interval arithmetic). Variable IDs missing from `bounds` are treated as unbounded.
+
 ## 3.0.0 Alpha 2
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0a2-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0a2)
