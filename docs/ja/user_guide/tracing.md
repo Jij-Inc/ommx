@@ -13,7 +13,7 @@ kernelspec:
 
 # トレースとプロファイリング
 
-OMMXはRustコア (`tracing` + `pyo3-tracing-opentelemetry`) とPython側の主要エントリポイントから [OpenTelemetry](https://opentelemetry.io/) のスパンを出力します。これを人間が読める形にまとめるための薄いラッパーが `ommx.tracing` に2つ用意されています。
+OMMXは主要なエントリポイントから [OpenTelemetry](https://opentelemetry.io/) のスパンを出力します。これを人間が読める形にまとめるための薄いラッパーが `ommx.tracing` に2つ用意されています。
 
 - **`%%ommx_trace`** — 単一セルの実行中に発生したスパンをネストしたテキストツリーとして表示するJupyterセルマジック。加えてChrome Trace Event Format形式のJSONダウンロードリンクも表示されます。
 - **`capture_trace` / `@traced`** — 同じ仕組みを通常のPythonスクリプト、テスト、CIから利用するためのコンテキストマネージャとデコレータ。
@@ -49,8 +49,12 @@ solution = instance.evaluate({0: 1.0, 1: 1.0})
 
 セルの出力として以下の2つが表示されます。
 
-1. セル内で発生した全スパン（RustおよびPython双方）を**ネストしたテキストツリー**として描画。各ノードには持続時間と代表的な属性が付与されます。
+1. セル内で発生した全スパンを**ネストしたテキストツリー**として描画。各ノードには持続時間と代表的な属性が付与されます。
 2. Chrome Trace Event Format形式のトレース全体の**ダウンロードリンク**。生成されたJSONファイルを [Perfetto](https://ui.perfetto.dev/) / [speedscope](https://www.speedscope.app/) / `chrome://tracing` に読み込ませることでフレームグラフとして閲覧できます。
+
+```{note}
+このセル出力（テキストツリー+ダウンロードリンク）は最小限の開始点として提供しているものであり、今後改善される予定です（例: セル内へのインタラクティブなフレームグラフの埋め込みなど）。レイアウトやマークアップの細部は不安定として扱ってください。
+```
 
 セル内で例外が発生した場合も、トレースのHTMLは通常どおり描画されます（失敗したスパンには `[ERROR]` マーカーが付きます）。そしてその後例外は再送出されるので、`nbconvert --execute`、papermill、pytest-nbval などのノートブック自動化ツールから見てもセルは失敗扱いとなります。
 

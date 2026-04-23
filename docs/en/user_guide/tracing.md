@@ -13,7 +13,7 @@ kernelspec:
 
 # Tracing and Profiling
 
-OMMX emits [OpenTelemetry](https://opentelemetry.io/) spans from the Rust core (via `tracing` + `pyo3-tracing-opentelemetry`) and from selected Python entry points. Two thin wrappers in `ommx.tracing` turn that stream into something you can actually read:
+OMMX emits [OpenTelemetry](https://opentelemetry.io/) spans at selected entry points. Two thin wrappers in `ommx.tracing` turn that stream into something you can actually read:
 
 - **`%%ommx_trace`** — a Jupyter cell magic that renders the spans produced during a single cell as a nested text tree, plus a download link for the full trace in Chrome Trace Event Format.
 - **`capture_trace` / `@traced`** — a context manager and decorator for the same workflow from plain Python scripts, tests, and CI.
@@ -49,8 +49,12 @@ solution = instance.evaluate({0: 1.0, 1: 1.0})
 
 The cell output shows two things:
 
-1. A nested **text tree** of every span produced in the cell (Rust and Python), annotated with duration and the most useful span attributes.
+1. A nested **text tree** of every span produced in the cell, annotated with duration and the most useful span attributes.
 2. A **download link** for the full trace in [Chrome Trace Event Format](https://docs.google.com/document/d/1CvAClvFfyA5R-PhYUmn5OOQtYMH4h6I0nSsKchNAySU/preview). Drop that JSON file into [Perfetto](https://ui.perfetto.dev/), [speedscope](https://www.speedscope.app/), or `chrome://tracing` to explore the trace as a flame graph.
+
+```{note}
+The rendered cell output (text tree + download link) is a minimal starting point and is expected to evolve — for example, an inline interactive flame graph is on the roadmap. Treat the exact layout and markup as unstable.
+```
 
 When the cell raises, the trace HTML is still rendered (with `[ERROR]` marking the failing span) *and* the exception is re-raised so notebook automation — `nbconvert --execute`, papermill, pytest-nbval — still sees the failure.
 
