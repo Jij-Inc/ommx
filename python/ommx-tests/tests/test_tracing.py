@@ -128,6 +128,65 @@ def test_trace_context_propagation() -> None:
     )
 
 
+def test_evaluate_emits_rust_span_under_python_parent() -> None:
+    """``Instance.evaluate`` forwards the Rust ``Instance::evaluate`` span,
+    and it attaches under the Python parent span via trace-context propagation."""
+    exporter = get_test_exporter()
+    provider = get_test_provider()
+    exporter.clear()
+
+    tracer = trace.get_tracer("ommx-tracing-test")
+    x = DecisionVariable.binary(0)
+    y = DecisionVariable.binary(1)
+    instance = Instance.from_components(
+        decision_variables=[x, y],
+        objective=x + y,
+        constraints={},
+        sense=Instance.MAXIMIZE,
+    )
+
+    with tracer.start_as_current_span("python_parent") as parent_span:
+        parent_trace_id = parent_span.get_span_context().trace_id
+        instance.evaluate({0: 1.0, 1: 0.0})
+
+    provider.force_flush()
+    rust_spans = [s for s in exporter.spans if s.name == "evaluate"]
+    assert rust_spans, (
+        f"No 'evaluate' span exported. Got: {[s.name for s in exporter.spans]}"
+    )
+    for s in rust_spans:
+        assert s.context is not None
+        assert s.context.trace_id == parent_trace_id
+
+
+def test_to_qubo_emits_pipeline_spans() -> None:
+    """``Instance.to_qubo`` exercises the nested QUBO conversion pipeline,
+    producing the expected span names on the Rust side."""
+    exporter = get_test_exporter()
+    provider = get_test_provider()
+    exporter.clear()
+
+    x = [DecisionVariable.binary(i) for i in range(3)]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=sum(x),
+        constraints={},
+        sense=Instance.MINIMIZE,
+    )
+
+    instance.to_qubo()
+
+    provider.force_flush()
+    names = {s.name for s in exporter.spans}
+    # The PyO3 pipeline wrapper and the Rust-side formatter both emit spans.
+    assert "qubo_hubo_pipeline" in names, (
+        f"Missing 'qubo_hubo_pipeline' span. Got: {sorted(names)}"
+    )
+    assert "as_qubo_format" in names, (
+        f"Missing 'as_qubo_format' span. Got: {sorted(names)}"
+    )
+
+
 def test_tracing_info_event_captured_on_rust_span() -> None:
     """``tracing::info!`` inside ``reduce_capabilities`` becomes a span event
     on the Rust span, not a separate span."""

@@ -430,6 +430,7 @@ impl Instance {
     }
 
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+        let _guard = crate::TRACING.attach_parent_context(py);
         let buf = self.inner.to_bytes();
         PyBytes::new(py, &buf)
     }
@@ -459,6 +460,7 @@ impl Instance {
     }
 
     pub fn as_qubo_format<'py>(&self, py: Python<'py>) -> Result<(Bound<'py, PyDict>, f64)> {
+        let _guard = crate::TRACING.attach_parent_context(py);
         let (qubo, constant) = self.inner.as_qubo_format()?;
         Ok((
             serde_pyobject::to_pyobject(py, &qubo)?
@@ -469,6 +471,7 @@ impl Instance {
     }
 
     pub fn as_hubo_format<'py>(&self, py: Python<'py>) -> Result<(Bound<'py, PyDict>, f64)> {
+        let _guard = crate::TRACING.attach_parent_context(py);
         let (hubo, constant) = self.inner.as_hubo_format()?;
         Ok((
             serde_pyobject::to_pyobject(py, &hubo)?
@@ -550,7 +553,7 @@ impl Instance {
             penalty_weights,
             inequality_integer_slack_max_range,
         )?;
-        self.log_encode(BTreeSet::new())?;
+        self.log_encode(py, BTreeSet::new())?;
         let result = self.as_qubo_format(py)?;
         if is_converted {
             self.as_maximization_problem();
@@ -599,7 +602,7 @@ impl Instance {
             penalty_weights,
             inequality_integer_slack_max_range,
         )?;
-        self.log_encode(BTreeSet::new())?;
+        self.log_encode(py, BTreeSet::new())?;
         let result = self.as_hubo_format(py)?;
         if is_converted {
             self.as_maximization_problem();
@@ -661,7 +664,8 @@ impl Instance {
     /// >>> pi.removed_constraints[1]
     /// RemovedConstraint(x1 + x2 - 1 == 0, reason=ommx.Instance.penalty_method, parameter_id=4)
     /// ```
-    pub fn penalty_method(&self) -> Result<ParametricInstance> {
+    pub fn penalty_method(&self, py: Python<'_>) -> Result<ParametricInstance> {
+        let _guard = crate::TRACING.attach_parent_context(py);
         let parametric_instance = self.inner.clone().penalty_method()?;
         Ok(ParametricInstance {
             inner: parametric_instance,
@@ -725,7 +729,8 @@ impl Instance {
     /// >>> p.name
     /// 'uniform_penalty_weight'
     /// ```
-    pub fn uniform_penalty_method(&self) -> Result<ParametricInstance> {
+    pub fn uniform_penalty_method(&self, py: Python<'_>) -> Result<ParametricInstance> {
+        let _guard = crate::TRACING.attach_parent_context(py);
         let parametric_instance = self.inner.clone().uniform_penalty_method()?;
         Ok(ParametricInstance {
             inner: parametric_instance,
@@ -1397,7 +1402,12 @@ impl Instance {
     /// Function(x1 + x3 + 2*x4 + x5 + 2*x6)
     /// ```
     #[pyo3(signature = (decision_variable_ids=BTreeSet::new()))]
-    pub fn log_encode(&mut self, decision_variable_ids: BTreeSet<u64>) -> Result<()> {
+    pub fn log_encode(
+        &mut self,
+        py: Python<'_>,
+        decision_variable_ids: BTreeSet<u64>,
+    ) -> Result<()> {
+        let _guard = crate::TRACING.attach_parent_context(py);
         let ids: BTreeSet<u64> = if decision_variable_ids.is_empty() {
             // Auto-detect: find all used integer decision variables
             let analysis = self.inner.analyze_decision_variables();
@@ -1952,7 +1962,8 @@ impl Instance {
     }
 
     #[staticmethod]
-    pub fn load_mps(path: String) -> Result<Self> {
+    pub fn load_mps(py: Python<'_>, path: String) -> Result<Self> {
+        let _guard = crate::TRACING.attach_parent_context(py);
         let instance = ommx::mps::load(path)?;
         Ok(Self {
             inner: instance,
@@ -1961,13 +1972,15 @@ impl Instance {
     }
 
     #[pyo3(signature = (path, compress = true))]
-    pub fn save_mps(&self, path: String, compress: bool) -> Result<()> {
+    pub fn save_mps(&self, py: Python<'_>, path: String, compress: bool) -> Result<()> {
+        let _guard = crate::TRACING.attach_parent_context(py);
         ommx::mps::save(&self.inner, path, compress)?;
         Ok(())
     }
 
     #[staticmethod]
-    pub fn load_qplib(path: String) -> Result<Self> {
+    pub fn load_qplib(py: Python<'_>, path: String) -> Result<Self> {
+        let _guard = crate::TRACING.attach_parent_context(py);
         let instance = ommx::qplib::load(path)?;
         Ok(Self {
             inner: instance,
@@ -2033,6 +2046,7 @@ impl Instance {
     }
 
     /// Shared pipeline for to_qubo/to_hubo: handle inequality constraints, apply penalty method.
+    #[tracing::instrument(skip_all)]
     pub(crate) fn qubo_hubo_pipeline(
         &mut self,
         uniform_penalty_weight: Option<f64>,

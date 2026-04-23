@@ -8,6 +8,7 @@ pub use parser::QplibFile;
 use std::{io::Read, path::Path};
 
 /// Reads and parses the file into a [`Instance`].
+#[tracing::instrument(skip_all, fields(path = %path.as_ref().display()))]
 pub fn load(path: impl AsRef<Path>) -> anyhow::Result<Instance> {
     let data = QplibFile::load(path)?;
     let converted = convert::convert(data)?;
@@ -15,6 +16,7 @@ pub fn load(path: impl AsRef<Path>) -> anyhow::Result<Instance> {
 }
 
 /// Parses QPLIB data from a reader into a [`Instance`].
+#[tracing::instrument(skip_all)]
 pub fn parse(reader: impl Read) -> anyhow::Result<Instance> {
     let data = QplibFile::parse(reader)?;
     let converted = convert::convert(data)?;
