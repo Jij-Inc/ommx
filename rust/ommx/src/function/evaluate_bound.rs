@@ -3,6 +3,7 @@ use crate::{Bound, Bounds};
 use num::Zero;
 
 impl Function {
+    #[cfg_attr(doc, katexit::katexit)]
     /// Compute an interval bound of this function given variable bounds.
     ///
     /// Missing IDs in `bounds` are treated as `Bound::default()` (unbounded).
