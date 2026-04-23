@@ -15,9 +15,11 @@ plus a download link for the full trace in Chrome Trace Event Format.
 The public surface is intentionally tiny:
 
 * :func:`load_ipython_extension` — wired by ``%load_ext ommx.tracing``;
-  installs the ``%%ommx_trace`` cell magic and attaches a collector to
-  the active OpenTelemetry ``TracerProvider`` (creating one if none
-  exists).
+  registers the ``%%ommx_trace`` cell magic. The collector itself is
+  attached to the active OpenTelemetry ``TracerProvider`` lazily, on
+  the first traced cell, so ``%load_ext`` stays cheap and cannot fail
+  due to provider state that is still being configured further up the
+  notebook.
 * :func:`unload_ipython_extension` — pair for ``%unload_ext``. Kept as a
   no-op because IPython magics cannot be cleanly unregistered without
   disturbing user state; leaving the collector installed costs nothing.

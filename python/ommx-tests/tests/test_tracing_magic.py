@@ -330,9 +330,10 @@ def test_run_cell_with_trace_exec_user_code(ipython_shell):
 
 
 def test_run_cell_with_trace_reports_cell_exceptions(ipython_shell):
-    """A cell that raises still produces HTML output. ``run_cell`` handles
-    the traceback display; we only need to see the exception surfaced on
-    the return tuple for programmatic inspection."""
+    """A cell that raises still produces HTML output. The caller
+    (``register_magic``) is responsible for re-raising so failure
+    semantics propagate to outer automation; :func:`run_cell_with_trace`
+    itself surfaces the exception on the return tuple."""
     _setup.reset_for_testing()
     try:
         html, exc = run_cell_with_trace(
@@ -344,6 +345,23 @@ def test_run_cell_with_trace_reports_cell_exceptions(ipython_shell):
         # The root span closes even when the cell body raised, so its
         # name must appear in the rendered text tree.
         assert "ommx_trace_cell" in html
+    finally:
+        _setup.reset_for_testing()
+
+
+def test_magic_reraises_cell_exception(ipython_shell):
+    """The registered ``%%ommx_trace`` magic must propagate exceptions
+    from the cell body; otherwise notebook automation
+    (``nbconvert --execute``, papermill) would silently treat failed
+    traced cells as successful."""
+    import pytest
+
+    _setup.reset_for_testing()
+    try:
+        ipython_shell.extension_manager.load_extension("ommx.tracing")
+        magic_fn = ipython_shell.magics_manager.magics["cell"]["ommx_trace"]
+        with pytest.raises(ValueError, match="boom"):
+            magic_fn("", "raise ValueError('boom')")
     finally:
         _setup.reset_for_testing()
 

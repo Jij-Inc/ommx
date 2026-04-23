@@ -46,14 +46,14 @@ def ensure_collector_installed() -> _CellSpanCollector:
             return _COLLECTOR
 
         provider = trace.get_tracer_provider()
-        if not hasattr(provider, "add_span_processor"):
+        if not isinstance(provider, SdkTracerProvider):
             # Typically the default ``ProxyTracerProvider`` — we have a
             # licence to install a real one. If the user installed a
             # custom non-SDK provider, ``set_tracer_provider`` below is
             # silently ignored and we'll detect that on the re-read.
             trace.set_tracer_provider(SdkTracerProvider())
             provider = trace.get_tracer_provider()
-            if not hasattr(provider, "add_span_processor"):
+            if not isinstance(provider, SdkTracerProvider):
                 raise RuntimeError(
                     "ommx.tracing could not install an SDK TracerProvider: "
                     f"a {type(provider).__name__!s} is already active and "

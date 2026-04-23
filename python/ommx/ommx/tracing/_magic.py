@@ -4,11 +4,13 @@ Registered via ``%load_ext ommx.tracing``. The magic wraps cell execution
 in a single OTel root span, asks :class:`._collector._CellSpanCollector`
 to stash only that trace's spans, and displays the result as HTML.
 
-Execution goes through :meth:`InteractiveShell.run_cell` rather than
-``shell.ex`` so that input transforms, display hooks, and error
-formatting all behave the same way they would in a normal cell. The
-cell-magic call site has already stored the raw cell in history, so we
-pass ``store_history=False`` to avoid logging the body twice.
+Cell-body execution goes through :meth:`InteractiveShell.ex` rather
+than :meth:`InteractiveShell.run_cell`: we want the exception raised by
+the user's cell to propagate naturally so the outer (magic-invoking)
+``run_cell`` reports the failure to upstream automation
+(``nbconvert --execute``, papermill, pytest-nbval, …). ``run_cell``
+captures and displays the exception itself, which would either swallow
+it or double-display the traceback once we re-raise.
 """
 
 from __future__ import annotations
@@ -37,31 +39,41 @@ def run_cell_with_trace(
 
     Returns ``(html_blob, error)`` where ``html_blob`` is the rendered
     trace output (always produced, even if the cell raised) and ``error``
-    is the exception raised during execution or ``None``. IPython's
-    ``run_cell`` has already displayed the traceback when ``error`` is
-    non-None; the caller uses it only for test assertions and does not
-    need to re-raise.
+    is the exception raised during execution or ``None``. Splitting
+    rendering from re-raise keeps the function testable without having
+    to drive IPython's display machinery; the cell magic entry point
+    (:func:`register_magic`) is what actually re-raises.
+
+    ``end_capture`` sits in a ``finally`` so the collector's active-trace
+    set does not leak the trace_id on ``KeyboardInterrupt`` or
+    ``SystemExit``.
     """
     collector = ensure_collector_installed()
     tracer = trace.get_tracer(_CELL_TRACER_NAME)
 
-    with tracer.start_as_current_span(_CELL_ROOT_SPAN_NAME) as root:
-        trace_id = root.get_span_context().trace_id
-        collector.begin_capture(trace_id)
-        try:
-            # ``store_history=False`` avoids duplicating the cell body in
-            # ``In[...]`` (the magic invocation itself is already stored).
-            result = shell.run_cell(cell, store_history=False)
-        finally:
-            # ``end_capture`` must run even on SystemExit/KeyboardInterrupt
-            # so the collector doesn't leak this trace's entries.
-            pass
+    cell_exc: Optional[BaseException] = None
+    trace_id: Optional[int] = None
+    try:
+        with tracer.start_as_current_span(_CELL_ROOT_SPAN_NAME) as root:
+            trace_id = root.get_span_context().trace_id
+            collector.begin_capture(trace_id)
+            try:
+                # ``shell.ex`` exec's the string in the user namespace
+                # with minimal IPython machinery; exceptions propagate
+                # naturally and are caught one layer up.
+                shell.ex(cell)
+            except BaseException as exc:  # noqa: BLE001 - re-raised by caller
+                cell_exc = exc
+    finally:
+        # Call ``end_capture`` *after* the ``with`` block exits so the
+        # root span's ``on_end`` fires first and lands in the collector.
+        # Moving this into the inner ``finally`` (inside ``with``) would
+        # drop the root span itself from the rendered tree. Using an
+        # outer ``finally`` also makes sure the collector's active-trace
+        # set is cleared even on ``KeyboardInterrupt`` or ``SystemExit``.
+        spans = collector.end_capture(trace_id) if trace_id is not None else []
 
-    spans = collector.end_capture(trace_id)
-    # ``run_cell`` surfaces errors on the result object rather than
-    # raising; IPython has already printed the traceback via its normal
-    # display hooks by the time we get here.
-    return render_cell_output_html(spans), result.error_in_exec
+    return render_cell_output_html(spans), cell_exc
 
 
 def register_magic(shell: "InteractiveShell") -> None:
@@ -74,10 +86,20 @@ def register_magic(shell: "InteractiveShell") -> None:
         # ``line`` is unused in the MVP; reserved for future flags
         # (e.g. a filename override for the download link).
         del line
-        html_blob, _exc = run_cell_with_trace(shell, cell)
-        # No re-raise: ``shell.run_cell`` already reported the error via
-        # IPython's normal traceback UI, preserving the user-cell frames.
+        html_blob, cell_exc = run_cell_with_trace(shell, cell)
+        # Display the trace first so the user sees it above any
+        # traceback that IPython will print when we re-raise.
         display(HTML(html_blob))
+        if cell_exc is not None:
+            # Propagate so the outer ``run_cell`` records the failure.
+            # Without this, notebook automation (``nbconvert --execute``,
+            # papermill, pytest-nbval) would silently treat traced cells
+            # as successful even when the user code raised.
+            #
+            # Python preserves the original traceback on ``cell_exc``
+            # via ``__traceback__``, so IPython's display will still
+            # show the frames inside the user's cell.
+            raise cell_exc
 
     # Reference for static analysers; decorator already installed the magic.
     del _ommx_trace
