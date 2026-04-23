@@ -21,6 +21,7 @@ Utilities
    ../autoapi/ommx/testing/index
    ../autoapi/ommx/mps/index
    ../autoapi/ommx/qplib/index
+   ../autoapi/ommx/tracing/index
 
 Adapters
 --------

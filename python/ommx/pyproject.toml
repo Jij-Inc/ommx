@@ -26,6 +26,13 @@ classifiers = [
 
 requires-python = ">=3.10"
 dependencies = [
+  # ``ipython`` and ``opentelemetry-sdk`` back the ``ommx.tracing`` module
+  # (``%%ommx_trace`` cell magic). They are declared as hard runtime deps
+  # rather than an optional extra because the feature is part of the
+  # main user-facing surface and the ``pip install ommx[extra]`` dance is
+  # a known source of footguns for users who only ever see the feature
+  # error out at ``%load_ext`` time.
+  "ipython>=7.0.0",
   "numpy>=1.23.0, <3.0.0",
   "opentelemetry-sdk>=1.20.0",
   "pandas>=2.0.0, <3.0.0",
