@@ -10,9 +10,14 @@ The `ommx` crate uses a single unified error surface. New code should follow the
 ## Rules
 
 - **Public APIs return `ommx::Result<T>`** — an alias for `anyhow::Result<T>`. Do not introduce `anyhow::Result<T>` in public signatures; use `ommx::Result<T>` (and `ommx::Error`) so the crate name stays on the API surface.
-- **Do not introduce new typed error enums for purely diagnostic purposes.** Previous enums (`InstanceError`, `MpsParseError`, `QplibParseError`, `StateValidationError`, `LogEncodingError`, …) were deleted because downstream consumers never matched on discriminants. Failure sites should use `crate::bail!` / `crate::error!` with a clear `Display` message.
+- **Do not introduce new typed error enums for purely diagnostic purposes.** Previous enums that only existed to give each failure mode a variant name (`InstanceError`, `MpsParseError`, `StateValidationError`, `LogEncodingError`, …) were deleted because downstream consumers never matched on discriminants. Failure sites should use `crate::bail!` / `crate::error!` with a clear `Display` message.
 - **Signal types** (`InfeasibleDetected`, `CoefficientError`, `BoundError`, `AtolError`, `DecisionVariableError`, `SubstitutionError`, `SolutionError`, `SampleSetError`) stay typed because callers recover them via `err.downcast_ref::<T>()`. If you add a new recoverable failure mode, consider adding it to this list rather than returning `Err(anyhow::anyhow!(…))`.
-- **`Parse` / `ParseError` is an intentional exception.** Parse impls return `Result<_, ParseError>` and use `.context(message, field)` for breadcrumbs. Keep that shape when adding new Parse impls.
+- **Narrow-domain parsers may keep a small structured error type** that carries position / path information and is converted to `ommx::Error` at the domain boundary. The typed form lets callers report the failure programmatically (e.g. editor squiggles); the boundary conversion emits a `tracing::error!` event with the same information. The canonical examples are:
+  - `ommx::ParseError` (proto-tree breadcrumbs — `Vec<ParseContext>`).
+  - `ommx::QplibParseError` (1-based line number + rendered message, with `tracing::error!` emitted on construction).
+
+  Keep the scope tight: one structured type per small domain, only when there is concrete programmatic value (a position, a path) beyond the rendered message. Don't reintroduce large discriminant-enum error types in the name of "structure".
+- **Diagnostic context flows through `tracing`, not through `anyhow::Error::context(...)`.** The fail-site macros below already emit a `tracing::error!` event alongside the `anyhow::Error` they build, so there is no need to stack context via `anyhow::Context`. When propagating a caught error, `.inspect_err(|e| tracing::error!(…))` + `?` keeps the original error chain intact for downcast; wrapping through `.context(...)` is reserved for the narrow-domain cases above.
 - **`Option<T>` for key lookups**, not `Result<T, UnknownXXXError>`. Missing keys are not errors.
 
 ## Fail-site macros

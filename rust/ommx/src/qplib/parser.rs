@@ -8,7 +8,48 @@ use std::{
     str::FromStr,
 };
 
+// `Context::with_context` is used to attach the file path at the
+// `fs::File::open` origin below. Line-number context for in-file parse
+// failures is handled by [`QplibParseError`] instead — see its docstring.
 use anyhow::Context;
+
+/// Failure to parse a QPLIB file at a known line number.
+///
+/// This is the one structured error the QPLIB parser surfaces. It carries
+/// the 1-based `line_num` and a rendered `message` describing what went
+/// wrong on that line. Callers who want to report the position
+/// programmatically (editor squiggles, etc.) can recover it via:
+///
+/// ```ignore
+/// match ommx::qplib::load(path) {
+///     Err(e) => match e.downcast_ref::<ommx::QplibParseError>() {
+///         Some(pe) => eprintln!("{}:{}: {}", path.display(), pe.line_num, pe.message),
+///         None => eprintln!("{e}"),
+///     },
+///     Ok(inst) => { /* ... */ }
+/// }
+/// ```
+///
+/// Every [`QplibParseError`] constructed by this module also emits a
+/// structured `tracing::error!` event with `line_num` and `message` fields.
+#[derive(Debug, thiserror::Error)]
+#[error("QPLIB parse error at line {line_num}: {message}")]
+pub struct QplibParseError {
+    pub line_num: usize,
+    pub message: String,
+}
+
+impl QplibParseError {
+    /// Build a [`QplibParseError`] from a line number plus any error the
+    /// low-level parser produced, emitting a `tracing::error!` for the
+    /// combination. The returned value plugs straight into
+    /// [`crate::Error`] via the blanket `From<E: std::error::Error>` impl.
+    fn new(line_num: usize, cause: impl Display) -> Self {
+        let message = cause.to_string();
+        tracing::error!(line_num, %message, "QPLIB parse error");
+        Self { line_num, message }
+    }
+}
 
 #[derive(Default, Debug)]
 pub struct QplibFile {
@@ -426,8 +467,7 @@ where
         E: Into<crate::Error>,
     {
         raw.parse::<T>()
-            .map_err(|e| e.into())
-            .with_context(|| format!("at line {}", self.line_num))
+            .map_err(|e| QplibParseError::new(self.line_num, e.into()).into())
     }
 
     /// Consumes the next line and tries to parse the first value
@@ -478,7 +518,7 @@ where
         for _ in 0..num {
             // we add one so that comments are left a the end of the line.
             let parts = self.next_split_n(segments + 1)?;
-            let (key, val) = f(parts).with_context(|| format!("at line {}", self.line_num))?;
+            let (key, val) = f(parts).map_err(|e| QplibParseError::new(self.line_num, e))?;
             out.insert(key, val);
         }
         Ok(out)
@@ -536,7 +576,7 @@ where
         let mut out = vec![HashMap::default(); size];
         for _ in 0..num {
             let parts = self.next_split_n(segments + 1)?;
-            let (m, key, val) = f(parts).with_context(|| format!("at line {}", self.line_num))?;
+            let (m, key, val) = f(parts).map_err(|e| QplibParseError::new(self.line_num, e))?;
             out[m].insert(key, val);
         }
         Ok(out)
@@ -603,6 +643,26 @@ where
 mod test {
     use super::*;
     use maplit::*;
+
+    // Parsing a malformed file should surface a downcastable [`QplibParseError`]
+    // carrying the 1-based line number of the offending row and a rendered
+    // `message`. This is the one piece of programmatic diagnostics the QPLIB
+    // parser exposes — see its docstring for the caller-side recovery pattern.
+    #[test]
+    fn qplib_parse_error_preserves_line_num() {
+        // Malformed problem-type token on line 2 (after the blank name line).
+        let file = "MIPBAND\nNOT_A_VALID_TYPE\n";
+        let err = QplibFile::from_lines(file.lines().map(|s| s.to_owned())).unwrap_err();
+        let downcast = err
+            .downcast_ref::<QplibParseError>()
+            .expect("should be a QplibParseError");
+        assert_eq!(downcast.line_num, 2);
+        assert!(
+            downcast.message.contains("problem type"),
+            "unexpected message: {}",
+            downcast.message
+        );
+    }
 
     #[test]
     fn cursor_collect() -> Result<()> {

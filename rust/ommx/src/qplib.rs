@@ -4,7 +4,7 @@ mod convert;
 mod parser;
 
 use crate::Instance;
-pub use parser::QplibFile;
+pub use parser::{QplibFile, QplibParseError};
 use std::{io::Read, path::Path};
 
 /// Reads and parses the file into a [`Instance`].
