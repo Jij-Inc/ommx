@@ -1,26 +1,23 @@
 use itertools::izip;
 
-use super::{
-    parser::{ObjSense, QplibFile, VarType},
-    QplibParseError,
-};
+use super::parser::{ObjSense, QplibFile, VarType};
 use crate::v1;
 use std::collections::HashMap;
 
-pub fn convert(mut qplib: QplibFile) -> Result<v1::Instance, QplibParseError> {
+pub fn convert(mut qplib: QplibFile) -> v1::Instance {
     qplib.apply_infinity_threshold();
     let description = convert_description(&qplib);
     let decision_variables = convert_dvars(&qplib);
     let objective = convert_objective(&qplib);
     let constraints = convert_constraints(&qplib);
-    Ok(v1::Instance {
+    v1::Instance {
         description: Some(description),
         decision_variables,
         objective: Some(objective),
         constraints,
         sense: convert_sense(qplib.sense),
         ..Default::default()
-    })
+    }
 }
 
 fn convert_description(qplib: &QplibFile) -> v1::instance::Description {
