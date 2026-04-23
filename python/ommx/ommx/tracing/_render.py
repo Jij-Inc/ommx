@@ -11,7 +11,7 @@ from __future__ import annotations
 import base64
 import html
 import json
-from typing import Dict, Iterable, List, Optional, Sequence
+from typing import Dict, Iterable, List, Optional, Sequence, Set
 
 from opentelemetry.sdk.trace import ReadableSpan
 
@@ -76,13 +76,13 @@ def render_text_tree(spans: Sequence[ReadableSpan]) -> str:
     if not spans:
         return "(no spans)"
 
-    by_id: Dict[int, ReadableSpan] = {}
+    span_ids: Set[int] = set()
     children: Dict[Optional[int], List[ReadableSpan]] = {}
     for span in spans:
         ctx = span.context
         if ctx is None:
             continue
-        by_id[ctx.span_id] = span
+        span_ids.add(ctx.span_id)
         parent_id = span.parent.span_id if span.parent is not None else None
         children.setdefault(parent_id, []).append(span)
 
@@ -91,7 +91,7 @@ def render_text_tree(spans: Sequence[ReadableSpan]) -> str:
     # branches on the floor.
     roots: List[ReadableSpan] = []
     for parent_id, kids in children.items():
-        if parent_id is None or parent_id not in by_id:
+        if parent_id is None or parent_id not in span_ids:
             roots.extend(kids)
     roots.sort(key=lambda s: s.start_time or 0)
 
@@ -104,29 +104,17 @@ def render_text_tree(spans: Sequence[ReadableSpan]) -> str:
             f"({_format_duration(_duration_ms(span))})"
             f"{_interesting_attributes(span)}"
         )
-        next_prefix = prefix + ("    " if is_last else "│   ")
         ctx = span.context
         if ctx is None:
             return
         kids = children.get(ctx.span_id, [])
         kids.sort(key=lambda s: s.start_time or 0)
+        next_prefix = prefix + ("    " if is_last else "│   ")
         for i, kid in enumerate(kids):
             walk(kid, next_prefix, i == len(kids) - 1)
 
     for i, root in enumerate(roots):
-        marker = "└── " if i == len(roots) - 1 else "├── "
-        lines.append(
-            f"{marker}{root.name} ({_format_duration(_duration_ms(root))})"
-            f"{_interesting_attributes(root)}"
-        )
-        next_prefix = "    " if i == len(roots) - 1 else "│   "
-        ctx = root.context
-        if ctx is None:
-            continue
-        kids = children.get(ctx.span_id, [])
-        kids.sort(key=lambda s: s.start_time or 0)
-        for j, kid in enumerate(kids):
-            walk(kid, next_prefix, j == len(kids) - 1)
+        walk(root, "", i == len(roots) - 1)
 
     return "\n".join(lines)
 

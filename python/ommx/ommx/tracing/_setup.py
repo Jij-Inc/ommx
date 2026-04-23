@@ -70,11 +70,6 @@ def ensure_collector_installed() -> _CellSpanCollector:
         return collector
 
 
-def get_collector() -> Optional[_CellSpanCollector]:
-    """Return the cached collector, or ``None`` if not yet installed."""
-    return _COLLECTOR
-
-
 def reset_for_testing() -> None:
     """Drop the cached collector. Only intended for unit tests."""
     global _COLLECTOR
