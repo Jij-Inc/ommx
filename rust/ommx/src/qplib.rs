@@ -8,7 +8,10 @@ pub use parser::QplibFile;
 use std::{io::Read, path::Path};
 
 /// Reads and parses the file into a [`Instance`].
-#[tracing::instrument(skip_all, fields(path = %path.as_ref().display()))]
+//
+// Note: the caller's path is intentionally not recorded as a span field to
+// avoid leaking local directory structure through exported telemetry.
+#[tracing::instrument(skip_all)]
 pub fn load(path: impl AsRef<Path>) -> anyhow::Result<Instance> {
     let data = QplibFile::load(path)?;
     let converted = convert::convert(data)?;

@@ -73,7 +73,10 @@ pub fn parse(reader: impl Read) -> anyhow::Result<crate::Instance> {
 }
 
 /// Reads and parses the file at the given path. Gzipped files are automatically detected and decompressed.
-#[tracing::instrument(skip_all, fields(path = %path.as_ref().display()))]
+//
+// Note: the caller's path is intentionally not recorded as a span field to
+// avoid leaking local directory structure through exported telemetry.
+#[tracing::instrument(skip_all)]
 pub fn load(path: impl AsRef<Path>) -> anyhow::Result<crate::Instance> {
     let mps_data = Mps::load(path)?;
     convert::convert(mps_data)
@@ -87,10 +90,9 @@ pub fn load(path: impl AsRef<Path>) -> anyhow::Result<crate::Instance> {
 /// ----------
 /// Only linear problems are supported. See [`format()`] for detailed information about information loss,
 /// removed constraints handling, and variable filtering behavior.
-#[tracing::instrument(
-    skip_all,
-    fields(path = %out_path.as_ref().display(), compress),
-)]
+// Note: the caller's output path is intentionally not recorded as a span
+// field to avoid leaking local directory structure through exported telemetry.
+#[tracing::instrument(skip_all, fields(compress))]
 pub fn save(
     instance: &crate::Instance,
     out_path: impl AsRef<Path>,
