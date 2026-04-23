@@ -14,6 +14,7 @@ import json
 from typing import Dict, Iterable, List, Optional, Sequence, Set
 
 from opentelemetry.sdk.trace import ReadableSpan
+from opentelemetry.trace.status import StatusCode
 
 
 # ---------------------------------------------------------------------------
@@ -39,6 +40,21 @@ def _format_duration(ms: float) -> str:
     if ms >= 1:
         return f"{ms:.2f} ms"
     return f"{ms * 1000:.1f} µs"
+
+
+def _status_marker(span: ReadableSpan) -> str:
+    """Return ``" [ERROR]"`` when the span recorded a failure, else ``""``.
+
+    OTel sets ``Status(ERROR)`` on spans whose context manager saw an
+    exception (``start_as_current_span`` defaults to
+    ``record_exception=True``). Surfacing that in the tree makes it
+    obvious which leaf failed when the user re-reads a trace for a
+    crashed block.
+    """
+    status = getattr(span, "status", None)
+    if status is not None and status.status_code == StatusCode.ERROR:
+        return " [ERROR]"
+    return ""
 
 
 def _interesting_attributes(span: ReadableSpan) -> str:
@@ -102,6 +118,7 @@ def render_text_tree(spans: Sequence[ReadableSpan]) -> str:
         lines.append(
             f"{prefix}{marker}{span.name} "
             f"({_format_duration(_duration_ms(span))})"
+            f"{_status_marker(span)}"
             f"{_interesting_attributes(span)}"
         )
         ctx = span.context
