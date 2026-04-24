@@ -21,16 +21,16 @@ This feature is useful for:
 
 ### Format version field for forward compatibility (2.5.2, [#835](https://github.com/Jij-Inc/ommx/pull/835))
 
-A `format_version` field (`uint32`, field number 100) has been added to the four top-level OMMX exchange messages: `Instance`, `Solution`, `SampleSet`, and `ParametricInstance`. Readers now check this field and reject data whose `format_version` exceeds the accepted version with a clear `UnsupportedFormatVersion` error, preventing silent misinterpretation of future semantic-breaking format changes.
+A `format_version` field has been added to the four top-level OMMX exchange messages: `Instance`, `Solution`, `SampleSet`, and `ParametricInstance`. This prevents silent misinterpretation of future data with semantic-breaking format changes — for example, in Python SDK v3 `OneHot` and `SOS1` are promoted to special constraints and will no longer be represented as v2 `ConstraintHints`.
 
 This is the v2 maintenance release that must ship before v3, so that users upgrading to v3-produced data get a clear error rather than a silently-wrong parse.
 
 Policy summary:
 
-- `ommx.v1` backward compatibility is unchanged — old data remains readable by new SDKs.
+- `ommx.v1` backward compatibility is unchanged — data produced by older SDKs is always readable by newer SDKs.
 - Non-semantic-breaking proto additions continue to rely on protobuf's standard forward compatibility (unknown fields are ignored).
-- Semantic-breaking format changes bump `format_version` (major-only, single `uint32`; no minor/patch).
-- This SDK sets `ACCEPTED_FORMAT_VERSION = 0`; data produced by older SDKs (field unset, defaults to 0) remains readable.
+- Semantic-breaking format changes bump `format_version`. This *may* only happen on an SDK major version update.
+  In that case, data produced by the newer SDK cannot be read by older SDKs, which will raise an error prompting an SDK upgrade.
 
 ## Bug Fixes
 
