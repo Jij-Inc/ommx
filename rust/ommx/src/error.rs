@@ -9,7 +9,8 @@
 //!
 //! # Fail-site macros
 //!
-//! [`bail!`], [`error!`], and [`ensure!`] bundle two things that virtually
+//! [`crate::bail!`], [`crate::error!`], and [`crate::ensure!`] bundle two
+//! things that virtually
 //! every OMMX failure site does together:
 //!
 //! 1. Emit a `tracing::error!` event (so subscribers see a structured record
@@ -71,7 +72,7 @@ macro_rules! bail {
 /// Emit a `tracing::error!` event and build an [`anyhow::Error`] inline
 /// (for use in `.ok_or_else(|| ...)` and similar).
 ///
-/// Mirrors [`bail!`] without the `return`.
+/// Mirrors [`crate::bail!`] without the `return`.
 #[macro_export]
 macro_rules! error {
     ({ $($field:tt)+ } $(,)? $fmt:literal $(, $arg:expr)* $(,)?) => {{
@@ -89,7 +90,7 @@ macro_rules! error {
     };
 }
 
-/// Short-circuit if `cond` is false. Mirrors [`bail!`] syntactically.
+/// Short-circuit if `cond` is false. Mirrors [`crate::bail!`] syntactically.
 #[macro_export]
 macro_rules! ensure {
     ($cond:expr, { $($field:tt)+ } $(,)? $fmt:literal $(, $arg:expr)* $(,)?) => {{

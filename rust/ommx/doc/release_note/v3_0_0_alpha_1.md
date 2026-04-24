@@ -72,7 +72,7 @@ and rendered message).
 
 Diagnostic context flows through `tracing`, not through
 `anyhow::Error::context(...)`. The fail-site macros
-[`bail!`](crate::bail) / [`error!`](crate::error) / [`ensure!`](crate::ensure)
+[`bail!`](crate::bail) / [`error!`](crate::error!) / [`ensure!`](crate::ensure)
 emit a `tracing::error!` event alongside producing an `anyhow::Error` from the
 same format string.
 

@@ -35,7 +35,7 @@ mod constraint;
 mod constraint_hints;
 mod constraint_type;
 mod decision_variable;
-mod error;
+pub mod error;
 mod evaluate;
 mod format;
 mod function;

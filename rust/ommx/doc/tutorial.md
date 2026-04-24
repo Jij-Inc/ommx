@@ -300,7 +300,7 @@ it flows into [`Result<T>`](crate::Result) via `?` at the crate boundary.
 
 ### Fail-site macros
 
-[`bail!`](crate::bail), [`error!`](crate::error), and [`ensure!`](crate::ensure) fuse a `tracing::error!` event
+[`bail!`](crate::bail), [`error!`](crate::error!), and [`ensure!`](crate::ensure) fuse a `tracing::error!` event
 with an [`Error`](crate::Error) built from the same format string:
 
 ```ignore
