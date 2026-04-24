@@ -172,6 +172,7 @@ impl From<SampleSet> for crate::v1::SampleSet {
             feasible_relaxed,
             feasible,
             sense,
+            format_version: crate::CURRENT_FORMAT_VERSION,
             ..Default::default()
         }
     }
