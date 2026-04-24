@@ -196,7 +196,7 @@ impl From<Solution> for crate::v1::Solution {
             relaxation,
             feasible_unrelaxed,
             sense,
-            format_version: 0,
+            format_version: crate::CURRENT_FORMAT_VERSION,
         }
     }
 }

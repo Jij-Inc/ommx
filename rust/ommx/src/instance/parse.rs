@@ -279,7 +279,7 @@ impl From<Instance> for v1::Instance {
             parameters: value.parameters,
             description: value.description,
             constraint_hints: None,
-            format_version: 0,
+            format_version: crate::CURRENT_FORMAT_VERSION,
         }
     }
 }
@@ -473,7 +473,7 @@ impl From<ParametricInstance> for v1::ParametricInstance {
                 .map(|(id, dep)| (id.into(), dep.into()))
                 .collect(),
             constraint_hints: None,
-            format_version: 0,
+            format_version: crate::CURRENT_FORMAT_VERSION,
         }
     }
 }

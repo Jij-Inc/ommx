@@ -78,11 +78,11 @@ pub enum RawParseError {
     /// The message's `format_version` exceeds what this SDK supports.
     /// The data was produced by a newer SDK whose format is not backward compatible with this one.
     #[error(
-        "Unsupported ommx format version: data has format_version={data_version}, but this SDK supports up to {accepted_version}. Please upgrade the OMMX SDK."
+        "Unsupported ommx format version: data has format_version={data_version}, but this SDK supports up to {current_version}. Please upgrade the OMMX SDK."
     )]
     UnsupportedFormatVersion {
         data_version: u32,
-        accepted_version: u32,
+        current_version: u32,
     },
 
     /// In proto3, all fields of message types are implicitly optional even if explicit `optional` flag is absent.
@@ -148,10 +148,10 @@ pub(crate) fn check_format_version(
     format_version: u32,
     message: &'static str,
 ) -> Result<(), ParseError> {
-    if format_version > crate::ACCEPTED_FORMAT_VERSION {
+    if format_version > crate::CURRENT_FORMAT_VERSION {
         return Err(RawParseError::UnsupportedFormatVersion {
             data_version: format_version,
-            accepted_version: crate::ACCEPTED_FORMAT_VERSION,
+            current_version: crate::CURRENT_FORMAT_VERSION,
         }
         .context(message, "format_version"));
     }

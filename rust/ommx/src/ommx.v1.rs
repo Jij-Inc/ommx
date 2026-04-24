@@ -496,7 +496,7 @@ pub struct Instance {
     ///
     /// - 0 means the format as of OMMX Python SDK 2.5.1 and earlier.
     /// - This is only bumped by semantic-breaking format changes (major-only; no minor/patch).
-    /// - Each SDK declares an accepted maximum; reading data with a higher version fails with an "upgrade the SDK" error.
+    /// - Each SDK declares a current version; it writes that value and accepts any `<= current`. Data with a higher version fails with an "upgrade the SDK" error.
     /// - Non-semantic-breaking additions keep protobuf's standard forward compatibility (unknown fields ignored) and do not bump this.
     #[prost(uint32, tag = "100")]
     pub format_version: u32,
