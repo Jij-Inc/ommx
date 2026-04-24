@@ -394,11 +394,11 @@ class OMMXHighsAdapter(SolverAdapter):
             solution = self.instance.evaluate(state)
 
             # set optimality
-            if self.model.getModelStatus() == highspy.HighsModelStatus.kOptimal:
+            if data.getModelStatus() == highspy.HighsModelStatus.kOptimal:
                 solution.optimality = Solution.OPTIMAL
 
             # dual variables
-            solution_info = self.model.getSolution()
+            solution_info = data.getSolution()
             row_dual = solution_info.row_dual
             row_dual_len = len(row_dual)
 
