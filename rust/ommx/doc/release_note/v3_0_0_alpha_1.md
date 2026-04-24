@@ -34,7 +34,7 @@ See the [migration guide](crate::doc::migration_guide) for the detailed
 v2 → v3 upgrade path. This page is a topic-oriented summary of what changed and
 why.
 
-## First-class special constraint types
+## First-class special constraint types ([#790](https://github.com/Jij-Inc/ommx/pull/790), [#798](https://github.com/Jij-Inc/ommx/pull/798))
 
 Special-structure constraints are now first-class domain objects, parallel to
 the regular [`Constraint`](crate::Constraint) rather than metadata hanging off
@@ -56,7 +56,7 @@ Each kind has its own ID type
 cross-type lookups, and lives in its own collection slot on
 [`Instance`](crate::Instance).
 
-## Stage parameter and the `ConstraintType` trait
+## Stage parameter and the `ConstraintType` trait ([#789](https://github.com/Jij-Inc/ommx/pull/789), [#795](https://github.com/Jij-Inc/ommx/pull/795), [#796](https://github.com/Jij-Inc/ommx/pull/796), [#806](https://github.com/Jij-Inc/ommx/pull/806))
 
 Promoting indicator / one-hot / SOS1 to first-class types alongside regular
 `Constraint` multiplies the number of concrete constraint structs by the
@@ -115,7 +115,7 @@ Two knock-on simplifications fall out:
   single source of truth, so standalone constraints are identity-less
   until inserted into a collection.
 
-## Collections and serialization
+## Collections and serialization ([#789](https://github.com/Jij-Inc/ommx/pull/789), [#806](https://github.com/Jij-Inc/ommx/pull/806))
 
 The trait above is only half the story. The other half is a trio of
 generic collection wrappers that hold constraints uniformly across every
@@ -162,7 +162,7 @@ mapping). Concretely:
   per-constraint `to_bytes` / `from_bytes`; they are only serialized as
   part of an `Instance`, `Solution`, or `SampleSet`.
 
-## Capability model
+## Capability model ([#790](https://github.com/Jij-Inc/ommx/pull/790), [#805](https://github.com/Jij-Inc/ommx/pull/805), [#810](https://github.com/Jij-Inc/ommx/pull/810), [#811](https://github.com/Jij-Inc/ommx/pull/811), [#814](https://github.com/Jij-Inc/ommx/pull/814))
 
 First-class special constraints raise a deployment question: not every
 solver supports indicator / one-hot / SOS1 natively, and some only
@@ -190,7 +190,7 @@ users to manually encode special constraints themselves. Each conversion
 is also emitted as an INFO-level `tracing` event in the
 `reduce_capabilities` span for observability.
 
-## Unified error surface
+## Unified error surface ([#832](https://github.com/Jij-Inc/ommx/pull/832))
 
 The public API of the crate now returns a single error type.
 [`ommx::Result<T>`](crate::Result) and [`ommx::Error`](crate::Error) are
@@ -223,7 +223,7 @@ Diagnostic context flows through `tracing`, not through
 emit a `tracing::error!` event alongside producing an `anyhow::Error` from the
 same format string.
 
-## Tracing-first observability
+## Tracing-first observability ([#816](https://github.com/Jij-Inc/ommx/pull/816), [#826](https://github.com/Jij-Inc/ommx/pull/826))
 
 Internal logging has moved off `log` to `tracing`, and span coverage has been
 broadened across parsing, evaluation, substitution, and solver adapter
@@ -231,7 +231,7 @@ entry points. Subscribers (including `tracing-opentelemetry`) pick up
 structured fields and span context directly from the crate — no ad-hoc context
 stacking via `anyhow::Error::context(...)` is needed.
 
-## Domain types replace `v1_ext`
+## Domain types replace `v1_ext` ([#799](https://github.com/Jij-Inc/ommx/pull/799), [#801](https://github.com/Jij-Inc/ommx/pull/801), [#803](https://github.com/Jij-Inc/ommx/pull/803), [#804](https://github.com/Jij-Inc/ommx/pull/804))
 
 The proto-generated `v1::Instance` / `v1::Constraint` / `v1::Function` types
 are now reserved for wire-format interop. All in-memory operations — QUBO/HUBO
@@ -251,7 +251,8 @@ Two new domain traits accompany this shift:
 ## Other notable changes
 
 - `ommx-derive` introduces `#[derive(LogicalMemoryProfile)]` for structural
-  memory profiling.
+  memory profiling
+  ([#800](https://github.com/Jij-Inc/ommx/pull/800)).
 - `ommx::doc` is now the entry point on docs.rs for long-form prose
   (this page, the [migration guide](crate::doc::migration_guide), and the
   [tutorial](crate::doc::tutorial)).
