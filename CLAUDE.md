@@ -40,7 +40,7 @@ OMMX (Open Mathematical prograMming eXchange) is an open ecosystem for mathemati
 
 Migration guides:
 - `PYTHON_SDK_MIGRATION_GUIDE.md` — v1→v2 and v2→v3
-- `RUST_SDK_MIGRATION_GUIDE.md` — v3 Stage Pattern
+- `rust/ommx/doc/migration_guide.md` — v3 Stage Pattern (rendered as `ommx::doc::migration_guide` on docs.rs)
 
 ## Development Commands
 

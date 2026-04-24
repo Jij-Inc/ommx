@@ -392,3 +392,21 @@ pub mod v1 {
 }
 
 mod v1_io;
+
+/// Supplementary documentation bundled with the crate.
+///
+/// Each submodule renders a Markdown file from `rust/ommx/doc/` as rustdoc
+/// so it is browsable on docs.rs alongside the API reference.
+pub mod doc {
+    #[doc = include_str!("../doc/tutorial.md")]
+    pub mod tutorial {}
+
+    #[doc = include_str!("../doc/migration_guide.md")]
+    pub mod migration_guide {}
+
+    #[doc = include_str!("../doc/release_note.md")]
+    pub mod release_note {
+        #[doc = include_str!("../doc/release_note/v3_0_0_alpha_1.md")]
+        pub mod v3_0_0_alpha_1 {}
+    }
+}
