@@ -80,9 +80,12 @@ with three inhabited stages — `Created`, `Evaluated`, and `Sampled`. Each
 stage swaps in different `stage` data (the function for `Created`, the
 evaluated value and feasibility for `Evaluated`, per-sample vectors for
 `Sampled`). The type aliases `EvaluatedConstraint = Constraint<Evaluated>`
-and `SampledConstraint = Constraint<Sampled>` keep the common names as
-entry points. `IndicatorConstraint`, `OneHotConstraint`, and
-`Sos1Constraint` follow the exact same shape.
+and `SampledConstraint = Constraint<stage::Sampled>` keep the common
+names as entry points. `IndicatorConstraint`, `OneHotConstraint`, and
+`Sos1Constraint` share the same `Stage` / `ConstraintType` pattern,
+though their `Created`-stage data differs (an `indicator_variable` on
+`IndicatorConstraint`, a `variables` set on `OneHotConstraint` /
+`Sos1Constraint`).
 
 The unifying abstraction is the
 [`ConstraintType`](crate::ConstraintType) trait, a defunctionalization of
@@ -115,7 +118,7 @@ Two knock-on simplifications fall out:
   single source of truth, so standalone constraints are identity-less
   until inserted into a collection.
 
-## Collections and serialization ([#789](https://github.com/Jij-Inc/ommx/pull/789), [#806](https://github.com/Jij-Inc/ommx/pull/806))
+## Collections and serialization ([#789](https://github.com/Jij-Inc/ommx/pull/789), [#795](https://github.com/Jij-Inc/ommx/pull/795), [#806](https://github.com/Jij-Inc/ommx/pull/806))
 
 The trait above is only half the story. The other half is a trio of
 generic collection wrappers that hold constraints uniformly across every
@@ -127,20 +130,26 @@ kind and every stage:
   [`Instance`](crate::Instance); replaces the old flat
   `Instance.constraints` + `Instance.removed_constraints` fields with
   one typed slot per constraint kind
-  (`constraint_collection()`,`indicator_constraint_collection()`,
-  `one_hot_constraint_collection()`,
-  `sos1_constraint_collection()`).
+  (`constraint_collection()`, `indicator_constraint_collection()`,
+  `one_hot_constraint_collection()`, `sos1_constraint_collection()`).
+  Exposes `active()` / `removed()`, `relax(id, reason)` /
+  `restore(id)`, and `required_ids()`.
 - [`EvaluatedCollection<T>`](crate::EvaluatedCollection) — evaluated
   constraints plus a map of `RemovedReason`s for any that were relaxed
-  before evaluation. Used by [`Solution`](crate::Solution).
+  before evaluation. Used by [`Solution`](crate::Solution). Exposes
+  `is_feasible()` / `is_feasible_relaxed()` / `removed_reasons()` /
+  `is_removed(&id)`.
 - [`SampledCollection<T>`](crate::SampledCollection) — sampled
   constraints plus the corresponding `RemovedReason`s. Used by
-  [`SampleSet`](crate::SampleSet).
+  [`SampleSet`](crate::SampleSet). Exposes `is_feasible_for(sample_id)`
+  / `is_feasible_relaxed_for(sample_id)` / `removed_reasons()` /
+  `is_removed(&id)` — the per-sample variants of the `Evaluated`
+  versions, since feasibility is decided per draw.
 
-All three expose `is_feasible()` / `is_feasible_relaxed()` /
-`removed_reasons()` / `is_removed(&id)` with the same signatures,
-so code that iterates over evaluation results does not need to
-special-case each constraint kind.
+Iterating and RemovedReason handling work the same way across every
+kind at each stage, so code on the adapter / Solution / SampleSet side
+doesn't need to special-case `Constraint` vs `IndicatorConstraint` vs
+`OneHotConstraint` vs `Sos1Constraint`.
 
 **Serialization moves to the collection level.** Because constraints no
 longer carry their own `id` field, the natural unit of serialization is
@@ -161,6 +170,10 @@ mapping). Concretely:
   `OneHotConstraint`, `Sos1Constraint`) intentionally have no
   per-constraint `to_bytes` / `from_bytes`; they are only serialized as
   part of an `Instance`, `Solution`, or `SampleSet`.
+
+[`ParametricInstance`](crate::ParametricInstance) follows the same
+shape: the same typed collection slots per constraint kind, and its
+own `to_bytes` / `from_bytes` at the instance level.
 
 ## Capability model ([#790](https://github.com/Jij-Inc/ommx/pull/790), [#805](https://github.com/Jij-Inc/ommx/pull/805), [#810](https://github.com/Jij-Inc/ommx/pull/810), [#811](https://github.com/Jij-Inc/ommx/pull/811), [#814](https://github.com/Jij-Inc/ommx/pull/814))
 
