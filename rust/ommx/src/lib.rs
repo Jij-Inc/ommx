@@ -85,7 +85,10 @@ mod v1_io;
 /// Supplementary documentation bundled with the crate.
 ///
 /// Each submodule renders a Markdown file from `rust/ommx/doc/` as rustdoc
-/// so it is browsable on docs.rs alongside the API reference.
+/// so it is browsable on docs.rs alongside the API reference. Gated behind
+/// `#[cfg(doc)]` — present only when rustdoc runs, absent from normal
+/// `cargo build` / `cargo check` output.
+#[cfg(doc)]
 pub mod doc {
     #[doc = include_str!("../doc/tutorial.md")]
     pub mod tutorial {}
