@@ -184,19 +184,19 @@ class OMMXHighsAdapter(SolverAdapter):
         verbose : bool, default=False
             If True, enable HiGHS's console logging
         """
-        super().__init__(ommx_instance)
-        self.instance = ommx_instance
-        self.model = highspy.Highs()
-
-        # the default is for `log_to_console` to be True, so we
-        # turn it off unless user requests it
-        if not verbose:
-            self.model.setOptionValue("log_to_console", False)
-
-        self.var_ids = {}
-        self.highs_vars = []
-
         with _tracer.start_as_current_span("convert"):
+            super().__init__(ommx_instance)
+            self.instance = ommx_instance
+            self.model = highspy.Highs()
+
+            # the default is for `log_to_console` to be True, so we
+            # turn it off unless user requests it
+            if not verbose:
+                self.model.setOptionValue("log_to_console", False)
+
+            self.var_ids = {}
+            self.highs_vars = []
+
             self._set_decision_variables()
             self._set_objective()
             self._set_constraints()

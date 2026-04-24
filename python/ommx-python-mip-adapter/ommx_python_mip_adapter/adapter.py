@@ -35,25 +35,27 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         :param solver: Passes a specific solver to the Python-MIP model.
         :param verbose: If True, enable Python-MIP's verbose mode
         """
-        super().__init__(ommx_instance)
-        if ommx_instance.sense == Instance.MAXIMIZE:
-            sense = mip.MAXIMIZE
-        elif ommx_instance.sense == Instance.MINIMIZE:
-            sense = mip.MINIMIZE
-        else:
-            raise OMMXPythonMIPAdapterError(f"Unsupported sense: {ommx_instance.sense}")
-        self.instance = ommx_instance
-        self.model = mip.Model(
-            sense=sense,
-            solver_name=solver_name,
-            solver=solver,
-        )
-        if verbose:
-            self.model.verbose = 1
-        else:
-            self.model.verbose = 0
-
         with _tracer.start_as_current_span("convert"):
+            super().__init__(ommx_instance)
+            if ommx_instance.sense == Instance.MAXIMIZE:
+                sense = mip.MAXIMIZE
+            elif ommx_instance.sense == Instance.MINIMIZE:
+                sense = mip.MINIMIZE
+            else:
+                raise OMMXPythonMIPAdapterError(
+                    f"Unsupported sense: {ommx_instance.sense}"
+                )
+            self.instance = ommx_instance
+            self.model = mip.Model(
+                sense=sense,
+                solver_name=solver_name,
+                solver=solver,
+            )
+            if verbose:
+                self.model.verbose = 1
+            else:
+                self.model.verbose = 0
+
             self._set_decision_variables()
             self._set_objective()
             self._set_constraints()

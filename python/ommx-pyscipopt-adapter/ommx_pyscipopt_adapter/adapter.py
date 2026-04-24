@@ -46,12 +46,12 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         :param ommx_instance: The ommx.v1.Instance to solve.
         :param initial_state: Optional initial solution state.
         """
-        super().__init__(ommx_instance)
-        self.instance = ommx_instance
-        self.model = pyscipopt.Model()
-        self.model.hideOutput()
-
         with _tracer.start_as_current_span("convert"):
+            super().__init__(ommx_instance)
+            self.instance = ommx_instance
+            self.model = pyscipopt.Model()
+            self.model.hideOutput()
+
             self._set_decision_variables()
             self._set_objective()
             self._set_constraints()
