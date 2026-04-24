@@ -8,15 +8,17 @@ This document covers migration of the OMMX Rust SDK (`ommx` crate) across major 
 
 # Rust SDK v3 Stage Pattern Migration Guide
 
-This section covers the migration to stage-parameterized constraints, introduced in the `refactor/constraint-stage-pattern` branch.
+This section covers the migration to stage-parameterized constraints
+landed in `3.0.0-alpha.1`.
 
 ## Overview
 
-`Constraint` is now generic over a lifecycle stage:
+`Constraint` is now generic over a lifecycle stage, and its
+`ConstraintID` lives on the enclosing collection key rather than on the
+struct itself:
 
-```rust
+```rust,ignore
 pub struct Constraint<S: Stage<Self> = Created> {
-    pub id: ConstraintID,
     pub equality: Equality,
     pub metadata: ConstraintMetadata,
     pub stage: S::Data,
@@ -31,22 +33,34 @@ Three lifecycle stages are defined:
 | `EvaluatedConstraint` | `Constraint<Evaluated>` | `EvaluatedData { evaluated_value, feasible, ... }` |
 | `SampledConstraint` | `Constraint<stage::Sampled>` | `SampledData { evaluated_values, feasible, ... }` |
 
-Removed constraints are managed at the collection level — `ConstraintCollection` stores them as `(Constraint<Created>, RemovedReason)` pairs.
+Removed constraints are managed at the collection level —
+`ConstraintCollection` stores them as `(Constraint<Created>, RemovedReason)`
+pairs. "Removed" is not itself a stage.
 
 ## Breaking Changes
 
 ### 1. Constraint Field Access
 
-Fields that were previously on the struct directly are now split between common fields and stage-specific data.
+Fields that were previously on the struct directly are now split
+between common fields and stage-specific data. The `id` field is gone
+entirely — look it up via the enclosing `BTreeMap` key.
 
-**Common fields** (unchanged access):
-```rust
+**Common fields**:
+```rust,ignore
+// ❌ Before
 constraint.id        // ConstraintID
+
+// ✅ After — IDs live on collection keys
+for (id, constraint) in instance.constraints() {
+    // `id: &ConstraintID`, `constraint: &Constraint`
+}
+
+// ✅ Unchanged
 constraint.equality  // Equality
 ```
 
 **Metadata fields** (moved to `metadata`):
-```rust
+```rust,ignore
 // ❌ Before
 constraint.name
 constraint.subscripts
@@ -61,7 +75,7 @@ constraint.metadata.description
 ```
 
 **Created stage** — function access:
-```rust
+```rust,ignore
 // ❌ Before
 constraint.function
 
@@ -74,7 +88,7 @@ constraint.stage.function   // Function
 ```
 
 **Evaluated stage** — evaluation result access:
-```rust
+```rust,ignore
 // ❌ Before (getset methods)
 *evaluated.evaluated_value()
 *evaluated.feasible()
@@ -92,7 +106,7 @@ evaluated.stage.used_decision_variable_ids
 `removed_reason` is no longer on evaluated/sampled constraints — it's managed by `EvaluatedCollection` / `SampledCollection` via `collection.removed_reasons()` and `collection.is_removed(&id)`.
 
 **Sampled stage** — same pattern:
-```rust
+```rust,ignore
 // ❌ Before
 *sampled.evaluated_values()
 sampled.feasible()
@@ -107,7 +121,7 @@ sampled.stage.dual_variables
 ### 2. Struct Literal Construction
 
 **Constraint (Created)**:
-```rust
+```rust,ignore
 // ❌ Before
 Constraint {
     id: ConstraintID::from(1),
@@ -119,21 +133,24 @@ Constraint {
     description: None,
 }
 
-// ✅ After
+// ✅ After — no `id` field
 Constraint {
-    id: ConstraintID::from(1),
     equality: Equality::EqualToZero,
     metadata: ConstraintMetadata::default(),
     stage: CreatedData { function },
 }
 
-// ✅ Or use factory methods (unchanged)
-Constraint::equal_to_zero(ConstraintID::from(1), function)
-Constraint::less_than_or_equal_to_zero(ConstraintID::from(1), function)
+// ✅ Factory methods no longer take an ID
+Constraint::equal_to_zero(function)
+Constraint::less_than_or_equal_to_zero(function)
+
+// ✅ The ID attaches when you insert into a BTreeMap
+let mut constraints = BTreeMap::new();
+constraints.insert(ConstraintID::from(1), Constraint::equal_to_zero(function));
 ```
 
 **Removed constraints** are no longer constructed as `Constraint<Removed>`. They are stored as `(Constraint<Created>, RemovedReason)` tuples in `ConstraintCollection`:
-```rust
+```rust,ignore
 // ❌ Before (v2)
 let removed = RemovedConstraint {
     constraint: inner_constraint,
@@ -155,7 +172,7 @@ let removed: (Constraint, RemovedReason) = (
 ```
 
 **EvaluatedConstraint**:
-```rust
+```rust,ignore
 // ❌ Before
 EvaluatedConstraint {
     id, equality, metadata,
@@ -167,9 +184,9 @@ EvaluatedConstraint {
     removed_reason_parameters: FnvHashMap::default(),
 }
 
-// ✅ After
+// ✅ After — no `id` field; insert with the key when storing
 Constraint {
-    id, equality, metadata,
+    equality, metadata,
     stage: EvaluatedData {
         evaluated_value,
         feasible,
@@ -183,7 +200,7 @@ Constraint {
 
 `RemovedConstraint` type alias no longer exists. Removed constraints are stored as `(Constraint<Created>, RemovedReason)` tuples in `ConstraintCollection`.
 
-```rust
+```rust,ignore
 // ❌ Before (v2)
 removed.constraint.id
 removed.constraint.equality
@@ -191,9 +208,9 @@ removed.constraint.function
 removed.removed_reason              // String
 removed.removed_reason_parameters   // FnvHashMap<String, String>
 
-// ✅ After — access via the tuple
+// ✅ After — access via the tuple; the ID comes from the map key
 let (constraint, reason) = collection.removed().get(&id).unwrap();
-constraint.id
+// id is the BTreeMap key you looked it up by
 constraint.equality
 constraint.function()
 reason.reason
@@ -204,7 +221,7 @@ reason.parameters
 
 `removed_reason: String` + `removed_reason_parameters: FnvHashMap<String, String>` are consolidated into a single struct:
 
-```rust
+```rust,ignore
 pub struct RemovedReason {
     pub reason: String,
     pub parameters: FnvHashMap<String, String>,
@@ -221,7 +238,7 @@ pub struct RemovedReason {
 `Instance.constraints` and `Instance.removed_constraints` fields are replaced by `constraint_collection: ConstraintCollection<Constraint>`.
 
 Accessor methods are preserved for backward compatibility:
-```rust
+```rust,ignore
 // These still work
 instance.constraints()           // &BTreeMap<ConstraintID, Constraint>
 instance.removed_constraints()   // &BTreeMap<ConstraintID, (Constraint, RemovedReason)>
@@ -231,7 +248,7 @@ instance.constraint_collection() // &ConstraintCollection<Constraint>
 ```
 
 For internal/mutable access:
-```rust
+```rust,ignore
 // ❌ Before
 self.constraints.values_mut()
 self.removed_constraints.entry(id)
@@ -247,64 +264,61 @@ self.constraint_collection.removed_mut().entry(id)
 
 Methods like `.id()`, `.equality()`, `.evaluated_value()`, `.feasible()` are **removed**. Use field access instead.
 
-### 7. Unified Error Surface (`ommx::Result` + `ommx::Error`)
+### 7. Error Surface Call-Site Rewrites
 
-The crate now returns a single error type across its public API:
+See the [release note](crate::doc::release_note::v3_0_0_alpha_1) for the
+rationale and the [error handling tutorial](crate::doc::tutorial::error_handling)
+for the `ommx::Result` / signal-type / fail-site-macro story. This
+section only lists the mechanical call-site rewrites you need to apply
+when upgrading a crate that was on v2.
 
-```rust
-// ❌ Before (v2): a mix of anyhow::Result, thiserror enums, and one-off error types
-fn some_public_api() -> Result<Instance, InstanceError> { ... }
+**Deleted error enums.** The types below no longer exist. Match arms
+that inspected their variants should switch to string inspection (if
+you really cared) or just propagate via `?`:
 
-// ✅ After (v3): no domain-specific enum on the public surface
-fn some_public_api() -> ommx::Result<Instance> { ... }
-```
-
-`ommx::Error` and `ommx::Result` are re-exports of `anyhow::Error` and `anyhow::Result`, so `anyhow::Result<T>` and `ommx::Result<T>` are the same type — the v3 change deleted the domain-specific enums, not the anyhow alias. Prefer `ommx::Result<T>` in new code so the crate name is visible on the API surface, but there is no reason to rewrite existing `anyhow::Result<T>` signatures. Equivalently:
-
-```rust
-// These still work
-err.chain()
-err.root_cause()
-err.downcast_ref::<MySignal>()
-err.is::<MySignal>()
-
-// Crate boundary: propagate with `?` as usual
-fn my_fn() -> ommx::Result<()> {
-    let inst = some_public_api()?;  // anyhow-based chain
-    Ok(())
-}
-```
-
-#### Deleted enums
-
-The following typed error enums have been removed. Callers that matched on discriminants should switch to `err.to_string()` inspection or (for signal types) `err.downcast_ref::<T>()`:
-
-- `ommx::InstanceError` (~20 variants covering `Instance` / `ParametricInstance` invariants)
+- `ommx::InstanceError`
 - `ommx::MpsParseError`, `ommx::MpsWriteError`
-- `ommx::ParseErrorReason` (the variant enum inside the old `ommx::QplibParseError` — the struct itself has been replaced, see below)
 - `ommx::StateValidationError`, `ommx::LogEncodingError`
-- `ommx::UnknownSampleIDError` (now expressed as `Option<T>` on key-lookup methods)
-- The `ommx::Error` newtype from an earlier v3 alpha; it is now an alias for `anyhow::Error`.
+- `ommx::UnknownSampleIDError` — replaced by `Option<T>` on key-lookup methods
+- `ommx::ParseErrorReason` — the variant enum inside the old `ommx::QplibParseError`
 
-#### Narrow-domain structured errors kept
+```rust,ignore
+// ❌ Before (v2)
+match decode(bytes) {
+    Err(InstanceError::DuplicateConstraintID(id)) => { ... }
+    Err(InstanceError::UndefinedVariable(v)) => { ... }
+    Err(e) => return Err(e),
+    Ok(x) => x,
+}
 
-Two structured error types stay `pub` because they carry *positional* metadata that downstream code can consume programmatically:
+// ✅ After (v3) — either propagate, or inspect the rendered message
+let instance = decode(bytes)?;
+```
 
-- **`ommx::ParseError`** — breadcrumb-bearing proto-tree parse error. The `Parse` trait signature still returns `Result<_, ParseError>`; see the "`Parse` trait and `ParseError`" note in the PR description for the kept-intentionally rationale.
-- **`ommx::qplib::QplibParseError`** — a slimmer replacement for the old `ommx::QplibParseError` + `ommx::ParseErrorReason` pair. Carries a 1-based `line_num` plus a rendered `message`. Callers that used to match on `ParseErrorReason` variants should now inspect `message`, or use `err.downcast_ref::<ommx::qplib::QplibParseError>()` to surface `line_num` for editor-style diagnostics. Note the new type lives under the `ommx::qplib` module (no longer re-exported at the crate root).
+**Moved / renamed error types:**
 
-#### Signal types (kept)
+- `ommx::QplibParseError` → `ommx::qplib::QplibParseError`. The type is
+  slimmer (1-based `line_num` + rendered `message`, no variant enum),
+  and no longer re-exported at the crate root.
 
-A small set of structured errors remain `pub` because they encode recoverable conditions callers may want to detect:
+**Key lookups now return `Option<T>`:**
 
-- `ommx::InfeasibleDetected`
-- `ommx::DuplicatedSampleIDError`
-- `ommx::CoefficientError`, `ommx::BoundError`, `ommx::AtolError`
-- `ommx::DecisionVariableError`, `ommx::SubstitutionError`, `ommx::SolutionError`, `ommx::SampleSetError`
+```rust,ignore
+// ❌ Before — typed Err when the key was missing
+let solution: Solution = sample_set
+    .get(id)
+    .map_err(|UnknownSampleIDError { .. }| /* handle */)?;
 
-Recover them by downcast:
+// ✅ After — Option, lifted at the boundary if your caller wants Result
+let solution: Solution = sample_set
+    .get(id)
+    .ok_or_else(|| ommx::error!("unknown sample id {id:?}"))?;
+```
 
-```rust
+**Signal-type recovery is unchanged in syntax** — it just now flows
+through `ommx::Error` instead of a bespoke enum:
+
+```rust,ignore
 match instance.propagate(&state, atol) {
     Err(e) if e.is::<ommx::InfeasibleDetected>() => { /* handle */ }
     Err(e) => return Err(e),
@@ -312,49 +326,13 @@ match instance.propagate(&state, atol) {
 }
 ```
 
-#### Parse trait and `ParseError` (kept)
-
-`ParseError` is intentionally not collapsed into `ommx::Error`. It carries structured `Vec<ParseContext>` breadcrumbs that walk the proto tree field-by-field, which is useful metadata rather than a discriminant downstream code ignores. `ParseError` implements `std::error::Error`, so it flows into `ommx::Result<T>` via `?` at the crate boundary:
-
-```rust
-fn load_something(bytes: &[u8]) -> ommx::Result<Instance> {
-    let v1_inst: v1::Instance = Message::decode(bytes)?;
-    let inst: Instance = v1_inst.parse(&())?;  // ParseError → anyhow::Error
-    Ok(inst)
-}
-```
-
-#### Diagnostic-emitting macros
-
-The crate exposes `ommx::bail!` / `ommx::error!` / `ommx::ensure!` macros that bundle two actions every failure site needs:
-
-1. Emit a `tracing::error!` event (visible to any subscriber).
-2. Produce an `anyhow::Error` with the rendered message.
-
-```rust
-// Plain message — tracing event + anyhow::Error share the format string
-ommx::bail!("invalid OBJSENSE: {s}");
-
-// Structured tracing fields via `{ field = value, … }`
-ommx::bail!(
-    { section, size },
-    "invalid field size ({size}) in MPS section '{section}'",
-);
-
-// Signal-style expression — no tracing event, since the caller typically
-// recovers it by downcast
-ommx::bail!(InfeasibleDetected);
-```
-
-These are mainly for internal fail sites, but downstream crates may use them too.
-
 ## New Types
 
 ### ConstraintType Trait
 
 A type family mapping lifecycle stages to concrete types (HKT defunctionalization):
 
-```rust
+```rust,ignore
 pub trait ConstraintType {
     type ID: Clone + Copy + Ord + Hash + Debug;
     type Created: Evaluate<Output = Self::Evaluated, SampledOutput = Self::Sampled>
@@ -380,29 +358,30 @@ impl ConstraintType for IndicatorConstraint {
 
 Two traits define common behavior for evaluated and sampled constraints:
 
-```rust
+```rust,ignore
 pub trait EvaluatedConstraintBehavior {
     type ID;
-    fn constraint_id(&self) -> Self::ID;
     fn is_feasible(&self) -> bool;
 }
 
 pub trait SampledConstraintBehavior {
     type ID;
     type Evaluated;
-    fn constraint_id(&self) -> Self::ID;
     fn is_feasible_for(&self, sample_id: SampleID) -> Option<bool>;
     fn get(&self, sample_id: SampleID) -> Option<Self::Evaluated>;
 }
 ```
 
-`is_removed()` has been removed from these traits — use `EvaluatedCollection::is_removed(&id)` or `SampledCollection::is_removed(&id)` instead.
+Neither trait exposes the constraint's ID — it lives on the enclosing
+`BTreeMap` key. `is_removed()` is similarly absent from the traits;
+use `EvaluatedCollection::is_removed(&id)` or
+`SampledCollection::is_removed(&id)` instead.
 
 ### ConstraintCollection
 
 Generic collection of active + removed constraints. Also implements `Evaluate`:
 
-```rust
+```rust,ignore
 pub struct ConstraintCollection<T: ConstraintType> {
     active: BTreeMap<T::ID, T::Created>,
     removed: BTreeMap<T::ID, (T::Created, RemovedReason)>,
@@ -428,7 +407,7 @@ Removed constraints are just `Created` constraints paired with a `RemovedReason`
 
 Generic wrappers for evaluation results, used in `Solution` and `SampleSet`:
 
-```rust
+```rust,ignore
 pub struct EvaluatedCollection<T: ConstraintType> {
     constraints: BTreeMap<T::ID, T::Evaluated>,
     removed_reasons: BTreeMap<T::ID, RemovedReason>,
@@ -452,17 +431,23 @@ collection.into_parts()                // (constraints, removed_reasons)
 
 Common metadata extracted from the constraint:
 
-```rust
+```rust,ignore
 pub struct ConstraintMetadata {
     pub name: Option<String>,
     pub subscripts: Vec<i64>,
     pub parameters: FnvHashMap<String, String>,
     pub description: Option<String>,
+    /// Chain of transformations that produced this constraint.
+    /// Empty for directly-authored constraints; populated when e.g. an
+    /// IndicatorConstraint is promoted to a regular Constraint.
+    pub provenance: Vec<Provenance>,
 }
 ```
 
 ## Migration Checklist
 
+- [ ] Remove `constraint.id` reads — look up the ID via the enclosing `BTreeMap<ConstraintID, _>` key instead
+- [ ] Update `Constraint::equal_to_zero(id, function)` / `Constraint::less_than_or_equal_to_zero(id, function)` → drop the ID argument (`Constraint::equal_to_zero(function)`), insert with the key
 - [ ] Update `constraint.function` → `constraint.function()` or `constraint.stage.function`
 - [ ] Update `constraint.name` → `constraint.metadata.name` (and `subscripts`, `parameters`, `description`)
 - [ ] Update `evaluated.evaluated_value()` → `evaluated.stage.evaluated_value` (and other getset methods)

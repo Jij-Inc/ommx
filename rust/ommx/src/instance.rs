@@ -61,8 +61,8 @@ pub enum AdditionalCapability {
 
 /// A set of [`AdditionalCapability`] flags.
 ///
-/// Always represented as a [`BTreeSet`] so iteration, formatting, and
-/// comparison are deterministic and sorted by variant order.
+/// Always represented as a [`std::collections::BTreeSet`] so iteration,
+/// formatting, and comparison are deterministic and sorted by variant order.
 pub type Capabilities = std::collections::BTreeSet<AdditionalCapability>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
