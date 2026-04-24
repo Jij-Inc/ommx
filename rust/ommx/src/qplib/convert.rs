@@ -16,6 +16,7 @@ pub fn convert(mut qplib: QplibFile) -> v1::Instance {
         objective: Some(objective),
         constraints,
         sense: convert_sense(qplib.sense),
+        format_version: crate::CURRENT_FORMAT_VERSION,
         ..Default::default()
     }
 }
