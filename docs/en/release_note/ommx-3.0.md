@@ -17,6 +17,35 @@ Two entry points ship under `ommx.tracing`:
 
 See [Tracing and Profiling](../user_guide/tracing.md) for the full walkthrough, configuring your own `TracerProvider`, and troubleshooting.
 
+### 🆕 Tracing spans in solver/sampler adapters ([#833](https://github.com/Jij-Inc/ommx/pull/833))
+
+Every OMMX adapter now emits three OpenTelemetry spans per solve/sample call, so the OTel tracing pipeline above can attribute wall-clock time to the three phases an adapter actually spends time in:
+
+- **`convert`** — OMMX `Instance` → solver-native problem translation
+- **`solve`** / **`sample`** — the call into the underlying solver / sampler itself
+- **`decode`** — decoding the solver's response back to `Solution` / `SampleSet` (Rust-side `evaluate` spans nest underneath)
+
+Each adapter uses its own tracer name, so runs from different solvers are easy to distinguish in the tree view:
+
+| Adapter | Tracer | Spans |
+|---|---|---|
+| `ommx-pyscipopt-adapter` | `ommx.adapter.pyscipopt` | `convert` / `solve` / `decode` |
+| `ommx-highs-adapter` | `ommx.adapter.highs` | `convert` / `solve` / `decode` |
+| `ommx-python-mip-adapter` | `ommx.adapter.python_mip` | `convert` / `solve` / `decode` |
+| `ommx-openjij-adapter` | `ommx.adapter.openjij` | `convert` / `sample` / `decode` |
+
+```python
+from ommx.tracing import capture_trace
+from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
+
+with capture_trace() as trace:
+    solution = OMMXPySCIPOptAdapter.solve(instance)
+
+print(trace.text_tree())  # shows convert / solve / decode with durations
+```
+
+Spans are emitted through the standard OpenTelemetry API, so they are a no-op when no `TracerProvider` is installed — there is no runtime cost for users who do not opt in.
+
 ### 🆕 `Function.evaluate_bound` is now available from Python ([#831](https://github.com/Jij-Inc/ommx/pull/831))
 
 {meth}`Function.evaluate_bound <ommx.v1.Function.evaluate_bound>` is now exposed on {class}`~ommx.v1.Function`. Given per-variable bounds, it returns a {class}`~ommx.v1.Bound` that contains the range of the function value — useful when deriving feasibility bounds or doing simple presolve on the Python side.
