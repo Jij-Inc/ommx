@@ -19,7 +19,6 @@ why.
 
 ```rust,ignore
 pub struct Constraint<S: Stage<Self> = Created> {
-    pub id: ConstraintID,
     pub equality: Equality,
     pub metadata: ConstraintMetadata,
     pub stage: S::Data,
@@ -28,7 +27,12 @@ pub struct Constraint<S: Stage<Self> = Created> {
 
 with three inhabited stages — `Created`, `Evaluated`, and `Sampled` — and
 stage-specific data (`function`, `evaluated_value`/`feasible`,
-`evaluated_values`/`feasible`). The same pattern applies uniformly to
+`evaluated_values`/`feasible`). The constraint's `ConstraintID` is held
+by the enclosing `BTreeMap` key rather than stored on the struct itself,
+so standalone constraints are identity-less until inserted into a
+collection.
+
+The same pattern applies uniformly to
 [`IndicatorConstraint`](crate::IndicatorConstraint),
 [`OneHotConstraint`](crate::OneHotConstraint), and
 [`Sos1Constraint`](crate::Sos1Constraint), all of which are now first-class
