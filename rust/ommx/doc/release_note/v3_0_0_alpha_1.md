@@ -9,7 +9,7 @@ migration away from the proto-generated `v1_ext` helpers: domain types
 (`Instance`, `Constraint`, `DecisionVariable`, …) are now the primary API, and
 `v1::*` is reserved for wire-format interop.
 
-See the [migration guide](../../migration_guide/index.html) for the detailed
+See the [migration guide](crate::doc::migration_guide) for the detailed
 v2 → v3 upgrade path. This page is a topic-oriented summary of what changed and
 why.
 
@@ -110,5 +110,5 @@ Two new domain traits accompany this shift:
 - `ommx-derive` introduces `#[derive(LogicalMemoryProfile)]` for structural
   memory profiling.
 - `ommx::doc` is now the entry point on docs.rs for long-form prose
-  (this page, the [migration guide](../../migration_guide/index.html), and the
-  [tutorial](../../tutorial/index.html)).
+  (this page, the [migration guide](crate::doc::migration_guide), and the
+  [tutorial](crate::doc::tutorial)).
