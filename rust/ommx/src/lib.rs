@@ -91,7 +91,31 @@ mod v1_io;
 #[cfg(doc)]
 pub mod doc {
     #[doc = include_str!("../doc/tutorial.md")]
-    pub mod tutorial {}
+    pub mod tutorial {
+        #[doc = include_str!("../doc/tutorial/expressions.md")]
+        pub mod expressions {}
+
+        #[doc = include_str!("../doc/tutorial/decision_variables.md")]
+        pub mod decision_variables {}
+
+        #[doc = include_str!("../doc/tutorial/constraints.md")]
+        pub mod constraints {}
+
+        #[doc = include_str!("../doc/tutorial/instance.md")]
+        pub mod instance {}
+
+        #[doc = include_str!("../doc/tutorial/evaluate.md")]
+        pub mod evaluate {}
+
+        #[doc = include_str!("../doc/tutorial/solution.md")]
+        pub mod solution {}
+
+        #[doc = include_str!("../doc/tutorial/substitute.md")]
+        pub mod substitute {}
+
+        #[doc = include_str!("../doc/tutorial/error_handling.md")]
+        pub mod error_handling {}
+    }
 
     #[doc = include_str!("../doc/migration_guide.md")]
     pub mod migration_guide {}
