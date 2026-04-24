@@ -82,6 +82,7 @@ impl Parse for v1::Instance {
     type Context = ();
     fn parse(self, _context: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v1.Instance";
+        crate::parse::check_format_version(self.format_version, message)?;
         let sense = self.sense().parse_as(&(), message, "sense")?;
 
         let decision_variables =
@@ -215,6 +216,7 @@ impl From<Instance> for v1::Instance {
             parameters: value.parameters,
             description: value.description,
             constraint_hints: Some(value.constraint_hints.into()),
+            format_version: 0,
         }
     }
 }
@@ -224,6 +226,7 @@ impl Parse for v1::ParametricInstance {
     type Context = ();
     fn parse(self, _context: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v1.ParametricInstance";
+        crate::parse::check_format_version(self.format_version, message)?;
         let sense = self.sense().parse_as(&(), message, "sense")?;
 
         let decision_variables =
@@ -378,6 +381,7 @@ impl From<ParametricInstance> for v1::ParametricInstance {
             } else {
                 Some(constraint_hints.into())
             },
+            format_version: 0,
         }
     }
 }
@@ -418,6 +422,7 @@ mod tests {
             decision_variable_dependency: HashMap::new(),
             constraint_hints: None,
             description: None,
+            ..Default::default()
         };
 
         // This should fail because variable ID 999 is used in objective but not defined
@@ -456,6 +461,7 @@ mod tests {
             decision_variable_dependency: HashMap::new(),
             constraint_hints: None,
             description: None,
+            ..Default::default()
         };
 
         // This should fail because variable ID 999 is used in constraint but not defined
@@ -484,6 +490,7 @@ mod tests {
             parameters: None,
             description: None,
             constraint_hints: None,
+            ..Default::default()
         };
 
         // This should fail because variable ID 999 is used in objective but not defined
@@ -518,6 +525,7 @@ mod tests {
             parameters: None,
             description: None,
             constraint_hints: None,
+            ..Default::default()
         };
 
         // This should fail because variable ID 999 is used in constraint but not defined
@@ -563,6 +571,7 @@ mod tests {
             decision_variable_dependency: HashMap::new(),
             constraint_hints: None,
             description: None,
+            ..Default::default()
         };
 
         // This should fail because constraint ID 1 appears in both constraints and removed_constraints
@@ -604,6 +613,7 @@ mod tests {
             parameters: None,
             description: None,
             constraint_hints: None,
+            ..Default::default()
         };
 
         // This should fail because constraint ID 1 appears in both constraints and removed_constraints
@@ -636,6 +646,7 @@ mod tests {
             decision_variable_dependency: HashMap::new(),
             constraint_hints: None,
             description: None,
+            ..Default::default()
         };
 
         // Invalid sense value should be converted to default (Minimize)
@@ -662,6 +673,7 @@ mod tests {
             parameters: None,
             description: None,
             constraint_hints: None,
+            ..Default::default()
         };
 
         // Invalid sense value should be converted to default (Minimize)
@@ -692,6 +704,7 @@ mod tests {
             decision_variable_dependency: HashMap::new(),
             constraint_hints: None,
             description: None,
+            ..Default::default()
         };
 
         // This should fail because objective is missing
@@ -719,6 +732,7 @@ mod tests {
             parameters: None,
             description: None,
             constraint_hints: None,
+            ..Default::default()
         };
 
         // This should fail because objective is missing
@@ -750,6 +764,7 @@ mod tests {
             decision_variable_dependency: HashMap::new(),
             constraint_hints: None,
             description: None,
+            ..Default::default()
         };
 
         // This should fail because ID 1 is used for both decision variable and parameter
@@ -793,6 +808,7 @@ mod tests {
             decision_variable_dependency: HashMap::new(),
             constraint_hints: None,
             description: None,
+            ..Default::default()
         };
 
         // This should fail because constraint ID 1 appears twice in constraints
@@ -832,6 +848,7 @@ mod tests {
             parameters: None,
             description: None,
             constraint_hints: None,
+            ..Default::default()
         };
 
         // This should fail because constraint ID 1 appears twice in constraints
@@ -840,6 +857,40 @@ mod tests {
         Traceback for OMMX Message parse error:
         └─ommx.v1.Instance[constraints]
         Duplicated constraint ID is found in definition: ConstraintID(1)
+        "###);
+    }
+
+    // Data produced by a future SDK whose format version exceeds what this SDK supports
+    // must be rejected with a clear upgrade-the-SDK error rather than silently misread.
+    #[test]
+    fn test_instance_parse_rejects_future_format_version() {
+        let v1_instance = v1::Instance {
+            sense: v1::instance::Sense::Minimize as i32,
+            objective: Some(Default::default()),
+            format_version: 1,
+            ..Default::default()
+        };
+        let result = v1_instance.parse(&());
+        insta::assert_snapshot!(result.unwrap_err(), @r###"
+        Traceback for OMMX Message parse error:
+        └─ommx.v1.Instance[format_version]
+        Unsupported ommx format version: data has format_version=1, but this SDK supports up to 0. Please upgrade the OMMX SDK.
+        "###);
+    }
+
+    #[test]
+    fn test_parametric_instance_parse_rejects_future_format_version() {
+        let v1_parametric_instance = v1::ParametricInstance {
+            sense: v1::instance::Sense::Minimize as i32,
+            objective: Some(Default::default()),
+            format_version: 1,
+            ..Default::default()
+        };
+        let result = v1_parametric_instance.parse(&());
+        insta::assert_snapshot!(result.unwrap_err(), @r###"
+        Traceback for OMMX Message parse error:
+        └─ommx.v1.ParametricInstance[format_version]
+        Unsupported ommx format version: data has format_version=1, but this SDK supports up to 0. Please upgrade the OMMX SDK.
         "###);
     }
 }
