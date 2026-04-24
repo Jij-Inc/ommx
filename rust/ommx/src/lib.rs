@@ -74,6 +74,15 @@ pub use solution::*;
 pub use sos1_constraint::*;
 pub use substitute::*;
 
+/// The `format_version` this SDK produces and the maximum it can read.
+///
+/// This SDK writes `format_version = CURRENT_FORMAT_VERSION` on all top-level
+/// messages and accepts any value `<= CURRENT_FORMAT_VERSION` on parse. Data
+/// whose `format_version` exceeds this value was produced by a newer SDK with
+/// semantic-breaking format changes and cannot be read correctly.
+/// See `proto/ommx/v1/instance.proto` for the full policy.
+pub const CURRENT_FORMAT_VERSION: u32 = 0;
+
 /// Module created from `ommx.v1` proto files
 #[allow(clippy::doc_overindented_list_items)] // prost breaks markdown indents
 pub mod v1 {

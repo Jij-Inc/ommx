@@ -7,6 +7,7 @@ impl Parse for crate::v1::Solution {
 
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v1.Solution";
+        crate::parse::check_format_version(self.format_version, message)?;
 
         let provided_feasible = match self.feasible_relaxed {
             Some(_) => self.feasible,
@@ -195,6 +196,7 @@ impl From<Solution> for crate::v1::Solution {
             relaxation,
             feasible_unrelaxed,
             sense,
+            format_version: crate::CURRENT_FORMAT_VERSION,
         }
     }
 }
@@ -428,6 +430,22 @@ mod tests {
         Traceback for OMMX Message parse error:
         └─ommx.v1.Solution[decision_variables]
         Missing value for variable 1: not found in state and no substituted_value
+        "###);
+    }
+
+    // Data produced by a future SDK whose format version exceeds what this SDK supports
+    // must be rejected with a clear upgrade-the-SDK error rather than silently misread.
+    #[test]
+    fn test_solution_parse_rejects_future_format_version() {
+        let v1_solution = v1::Solution {
+            format_version: 1,
+            ..Default::default()
+        };
+        let result: Result<Solution, ParseError> = v1_solution.parse(&());
+        insta::assert_snapshot!(result.unwrap_err().to_string(), @r###"
+        Traceback for OMMX Message parse error:
+        └─ommx.v1.Solution[format_version]
+        Unsupported ommx format version: data has format_version=1, but this SDK supports up to 0. Please upgrade the OMMX SDK.
         "###);
     }
 }

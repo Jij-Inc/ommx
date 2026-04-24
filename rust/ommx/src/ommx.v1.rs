@@ -492,6 +492,14 @@ pub struct Instance {
     pub decision_variable_dependency: ::std::collections::HashMap<u64, Function>,
     #[prost(message, repeated, tag = "10")]
     pub named_functions: ::prost::alloc::vec::Vec<NamedFunction>,
+    /// Format version of this message for forward compatibility checks.
+    ///
+    /// - 0 means the format as of OMMX Python SDK 2.5.1 and earlier.
+    /// - This is only bumped by semantic-breaking format changes (major-only; no minor/patch).
+    /// - Each SDK declares a current version; it writes that value and accepts any `<= current`. Data with a higher version fails with an "upgrade the SDK" error.
+    /// - Non-semantic-breaking additions keep protobuf's standard forward compatibility (unknown fields ignored) and do not bump this.
+    #[prost(uint32, tag = "100")]
+    pub format_version: u32,
 }
 /// Nested message and enum types in `Instance`.
 pub mod instance {
@@ -602,6 +610,10 @@ pub struct ParametricInstance {
     pub decision_variable_dependency: ::std::collections::HashMap<u64, Function>,
     #[prost(message, repeated, tag = "10")]
     pub named_functions: ::prost::alloc::vec::Vec<NamedFunction>,
+    /// Format version of this message for forward compatibility checks.
+    /// See `Instance.format_version` for semantics.
+    #[prost(uint32, tag = "100")]
+    pub format_version: u32,
 }
 /// A set of values of decision variables, without any evaluation, even the
 /// feasiblity of the solution.
@@ -655,6 +667,10 @@ pub struct Solution {
     /// Whether the problem is a minimization or maximization problem.
     #[prost(enumeration = "instance::Sense", tag = "10")]
     pub sense: i32,
+    /// Format version of this message for forward compatibility checks.
+    /// See `Instance.format_version` for semantics.
+    #[prost(uint32, tag = "100")]
+    pub format_version: u32,
 }
 /// The solver proved that the problem is infeasible.
 ///
@@ -933,4 +949,8 @@ pub struct SampleSet {
     /// Minimize or Maximize
     #[prost(enumeration = "instance::Sense", tag = "5")]
     pub sense: i32,
+    /// Format version of this message for forward compatibility checks.
+    /// See `Instance.format_version` for semantics.
+    #[prost(uint32, tag = "100")]
+    pub format_version: u32,
 }
