@@ -17,8 +17,7 @@ let eq_constraint = Constraint::equal_to_zero(Function::from(eq_expr));
 
 ## Constraint Type System
 
-OMMX supports four first-class constraint types beyond standard
-`f(x) = 0` / `f(x) <= 0`:
+OMMX supports four first-class constraint types:
 
 - **[`Constraint`](crate::Constraint)** — standard equality / inequality
   constraints on a [`Function`](crate::Function).

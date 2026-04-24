@@ -304,11 +304,15 @@ let instance = decode(bytes)?;
 **Key lookups now return `Option<T>`:**
 
 ```rust,ignore
-// ❌ Before
-sample_set.get_sample(id).map_err(|UnknownSampleIDError { .. }| ...)
+// ❌ Before — typed Err when the key was missing
+let solution: Solution = sample_set
+    .get(id)
+    .map_err(|UnknownSampleIDError { .. }| /* handle */)?;
 
-// ✅ After
-let sample = sample_set.get_sample(id)?; // from Option::ok_or_else at the boundary
+// ✅ After — Option, lifted at the boundary if your caller wants Result
+let solution: Solution = sample_set
+    .get(id)
+    .ok_or_else(|| ommx::error!("unknown sample id {id:?}"))?;
 ```
 
 **Signal-type recovery is unchanged in syntax** — it just now flows
