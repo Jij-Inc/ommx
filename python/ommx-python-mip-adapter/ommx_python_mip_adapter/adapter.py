@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Optional
 
 import mip
+from opentelemetry import trace
 
 from ommx.adapter import (
     SolverAdapter,
@@ -13,6 +14,8 @@ from ommx.adapter import (
 from ommx.v1 import Instance, Constraint, DecisionVariable, Solution, State, Function
 
 from .exception import OMMXPythonMIPAdapterError
+
+_tracer = trace.get_tracer("ommx.adapter.python_mip")
 
 
 class OMMXPythonMIPAdapter(SolverAdapter):
@@ -32,33 +35,36 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         :param solver: Passes a specific solver to the Python-MIP model.
         :param verbose: If True, enable Python-MIP's verbose mode
         """
-        super().__init__(ommx_instance)
-        if ommx_instance.sense == Instance.MAXIMIZE:
-            sense = mip.MAXIMIZE
-        elif ommx_instance.sense == Instance.MINIMIZE:
-            sense = mip.MINIMIZE
-        else:
-            raise OMMXPythonMIPAdapterError(f"Unsupported sense: {ommx_instance.sense}")
-        self.instance = ommx_instance
-        self.model = mip.Model(
-            sense=sense,
-            solver_name=solver_name,
-            solver=solver,
-        )
-        if verbose:
-            self.model.verbose = 1
-        else:
-            self.model.verbose = 0
+        with _tracer.start_as_current_span("convert"):
+            super().__init__(ommx_instance)
+            if ommx_instance.sense == Instance.MAXIMIZE:
+                sense = mip.MAXIMIZE
+            elif ommx_instance.sense == Instance.MINIMIZE:
+                sense = mip.MINIMIZE
+            else:
+                raise OMMXPythonMIPAdapterError(
+                    f"Unsupported sense: {ommx_instance.sense}"
+                )
+            self.instance = ommx_instance
+            self.model = mip.Model(
+                sense=sense,
+                solver_name=solver_name,
+                solver=solver,
+            )
+            if verbose:
+                self.model.verbose = 1
+            else:
+                self.model.verbose = 0
 
-        self._set_decision_variables()
-        self._set_objective()
-        self._set_constraints()
+            self._set_decision_variables()
+            self._set_objective()
+            self._set_constraints()
 
-        if relax:
-            self.model.relax()
-            self._relax = True
-        else:
-            self._relax = False
+            if relax:
+                self.model.relax()
+                self._relax = True
+            else:
+                self._relax = False
 
     @classmethod
     def solve(
@@ -177,7 +183,8 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         """
         adapter = cls(ommx_instance, relax=relax, verbose=verbose)
         model = adapter.solver_input
-        model.optimize(relax=relax)
+        with _tracer.start_as_current_span("solve"):
+            model.optimize(relax=relax)
         return adapter.decode(model)
 
     @property
@@ -234,24 +241,25 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             42.0
 
         """
-        state = self.decode_to_state(data)
-        solution = self.instance.evaluate(state)
+        with _tracer.start_as_current_span("decode"):
+            state = self.decode_to_state(data)
+            solution = self.instance.evaluate(state)
 
-        dual_variables = {}
-        for constraint in data.constrs:
-            pi = constraint.pi
-            if pi is not None:
-                id = int(constraint.name)
-                dual_variables[id] = pi
-        for constraint_id, dual_value in dual_variables.items():
-            solution.set_dual_variable(constraint_id, dual_value)
+            dual_variables = {}
+            for constraint in data.constrs:
+                pi = constraint.pi
+                if pi is not None:
+                    id = int(constraint.name)
+                    dual_variables[id] = pi
+            for constraint_id, dual_value in dual_variables.items():
+                solution.set_dual_variable(constraint_id, dual_value)
 
-        if data.status == mip.OptimizationStatus.OPTIMAL:
-            solution.optimality = Solution.OPTIMAL
+            if data.status == mip.OptimizationStatus.OPTIMAL:
+                solution.optimality = Solution.OPTIMAL
 
-        if self._relax:
-            solution.relaxation = Solution.LP_RELAXED
-        return solution
+            if self._relax:
+                solution.relaxation = Solution.LP_RELAXED
+            return solution
 
     def decode_to_state(self, data: mip.Model) -> State:
         """

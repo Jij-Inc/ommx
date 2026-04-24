@@ -11,9 +11,12 @@ from ommx.v1 import (
 )
 from ommx.adapter import SamplerAdapter
 import openjij as oj
+from opentelemetry import trace
 from typing_extensions import deprecated
 from typing import Optional
 import copy
+
+_tracer = trace.get_tracer("ommx.adapter.openjij")
 
 
 class OMMXOpenJijSAAdapter(SamplerAdapter):
@@ -175,8 +178,9 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         return sample_set.best_feasible
 
     def decode_to_sampleset(self, data: oj.Response) -> SampleSet:
-        samples = decode_to_samples(data)
-        return self.ommx_instance.evaluate_samples(samples)
+        with _tracer.start_as_current_span("decode"):
+            samples = decode_to_samples(data)
+            return self.ommx_instance.evaluate_samples(samples)
 
     def decode_to_samples(self, data: oj.Response) -> Samples:
         """
@@ -205,33 +209,34 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     def _sample(self) -> oj.Response:
         sampler = oj.SASampler()
         input = self.sampler_input
-        if self._is_hubo:
-            return sampler.sample_hubo(
-                input,  # type: ignore
-                vartype="BINARY",
-                beta_min=self.beta_min,
-                beta_max=self.beta_max,
-                # maintaining default parameters in openjij impl if None passed
-                num_sweeps=self.num_sweeps or 1000,
-                num_reads=self.num_reads or 1,
-                updater=self.updater or "METROPOLIS",
-                seed=self.seed,
-            )
+        with _tracer.start_as_current_span("sample"):
+            if self._is_hubo:
+                return sampler.sample_hubo(
+                    input,  # type: ignore
+                    vartype="BINARY",
+                    beta_min=self.beta_min,
+                    beta_max=self.beta_max,
+                    # maintaining default parameters in openjij impl if None passed
+                    num_sweeps=self.num_sweeps or 1000,
+                    num_reads=self.num_reads or 1,
+                    updater=self.updater or "METROPOLIS",
+                    seed=self.seed,
+                )
 
-        else:
-            return sampler.sample_qubo(
-                input,  # type: ignore
-                beta_min=self.beta_min,
-                beta_max=self.beta_max,
-                num_sweeps=self.num_sweeps,
-                num_reads=self.num_reads,
-                schedule=self.schedule,
-                initial_state=self.initial_state,
-                updater=self.updater,
-                sparse=self.sparse,
-                reinitialize_state=self.reinitialize_state,
-                seed=self.seed,
-            )
+            else:
+                return sampler.sample_qubo(
+                    input,  # type: ignore
+                    beta_min=self.beta_min,
+                    beta_max=self.beta_max,
+                    num_sweeps=self.num_sweeps,
+                    num_reads=self.num_reads,
+                    schedule=self.schedule,
+                    initial_state=self.initial_state,
+                    updater=self.updater,
+                    sparse=self.sparse,
+                    reinitialize_state=self.reinitialize_state,
+                    seed=self.seed,
+                )
 
     # Manually perform the conversion process to QUBO/HUBO, instead of using
     # `to_hubo` or `to_qubo`.
@@ -249,71 +254,73 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         if self._instance_prepared:
             return
 
-        is_converted = self.ommx_instance.as_minimization_problem()
+        with _tracer.start_as_current_span("convert"):
+            is_converted = self.ommx_instance.as_minimization_problem()
 
-        continuous_variables = [
-            var.id
-            for var in self.ommx_instance.used_decision_variables
-            if var.kind == DecisionVariable.CONTINUOUS
-        ]
-        if len(continuous_variables) > 0:
-            raise ValueError(
-                f"Continuous variables are not supported in HUBO conversion: IDs={continuous_variables}"
-            )
-
-        # Prepare inequality constraints
-        ineq_ids = [
-            cid
-            for cid, c in self.ommx_instance.constraints.items()
-            if c.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
-        ]
-        for ineq_id in ineq_ids:
-            try:
-                self.ommx_instance.convert_inequality_to_equality_with_integer_slack(
-                    ineq_id, self.inequality_integer_slack_max_range
-                )
-            except RuntimeError:
-                self.ommx_instance.add_integer_slack_to_inequality(
-                    ineq_id, self.inequality_integer_slack_max_range
-                )
-
-        # Penalty method
-        if self.ommx_instance.constraints:
-            if self.uniform_penalty_weight is not None and self.penalty_weights:
+            continuous_variables = [
+                var.id
+                for var in self.ommx_instance.used_decision_variables
+                if var.kind == DecisionVariable.CONTINUOUS
+            ]
+            if len(continuous_variables) > 0:
                 raise ValueError(
-                    "Both uniform_penalty_weight and penalty_weights are specified. Please choose one."
+                    f"Continuous variables are not supported in HUBO conversion: IDs={continuous_variables}"
                 )
-            if self.penalty_weights:
-                pi = self.ommx_instance.penalty_method()
-                weights = {
-                    p.id: self.penalty_weights[p.subscripts[0]] for p in pi.parameters
-                }
-                self.ommx_instance = pi.with_parameters(weights)
+
+            # Prepare inequality constraints
+            ineq_ids = [
+                cid
+                for cid, c in self.ommx_instance.constraints.items()
+                if c.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
+            ]
+            for ineq_id in ineq_ids:
+                try:
+                    self.ommx_instance.convert_inequality_to_equality_with_integer_slack(
+                        ineq_id, self.inequality_integer_slack_max_range
+                    )
+                except RuntimeError:
+                    self.ommx_instance.add_integer_slack_to_inequality(
+                        ineq_id, self.inequality_integer_slack_max_range
+                    )
+
+            # Penalty method
+            if self.ommx_instance.constraints:
+                if self.uniform_penalty_weight is not None and self.penalty_weights:
+                    raise ValueError(
+                        "Both uniform_penalty_weight and penalty_weights are specified. Please choose one."
+                    )
+                if self.penalty_weights:
+                    pi = self.ommx_instance.penalty_method()
+                    weights = {
+                        p.id: self.penalty_weights[p.subscripts[0]]
+                        for p in pi.parameters
+                    }
+                    self.ommx_instance = pi.with_parameters(weights)
+                else:
+                    if self.uniform_penalty_weight is None:
+                        # If both are None, defaults to uniform_penalty_weight = 1.0
+                        self.uniform_penalty_weight = 1.0
+                    pi = self.ommx_instance.uniform_penalty_method()
+                    weight = pi.parameters[0]
+                    self.ommx_instance = pi.with_parameters(
+                        {weight.id: self.uniform_penalty_weight}
+                    )
+
+            self.ommx_instance.log_encode()
+
+            hubo, _ = self.ommx_instance.as_hubo_format()
+            if any(len(k) > 2 for k in hubo.keys()):
+                self._is_hubo = True
+                self._hubo = hubo
             else:
-                if self.uniform_penalty_weight is None:
-                    # If both are None, defaults to uniform_penalty_weight = 1.0
-                    self.uniform_penalty_weight = 1.0
-                pi = self.ommx_instance.uniform_penalty_method()
-                weight = pi.parameters[0]
-                self.ommx_instance = pi.with_parameters(
-                    {weight.id: self.uniform_penalty_weight}
-                )
+                self._is_hubo = False
+                qubo, _ = self.ommx_instance.as_qubo_format()
+                self._qubo = qubo
 
-        self.ommx_instance.log_encode()
+            self._instance_prepared = True
 
-        hubo, _ = self.ommx_instance.as_hubo_format()
-        if any(len(k) > 2 for k in hubo.keys()):
-            self._is_hubo = True
-            self._hubo = hubo
-        else:
-            self._is_hubo = False
-            qubo, _ = self.ommx_instance.as_qubo_format()
-            self._qubo = qubo
-
-        self._instance_prepared = True
-
-        if is_converted:
-            self.ommx_instance.as_maximization_problem()
+            if is_converted:
+                self.ommx_instance.as_maximization_problem()
 
 
 @deprecated("Renamed to `decode_to_samples`")

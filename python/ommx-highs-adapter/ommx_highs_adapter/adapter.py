@@ -2,11 +2,14 @@ import highspy
 import numpy as np
 
 from highspy.highs import highs_linear_expression
+from opentelemetry import trace
 
 from ommx.v1 import Instance, DecisionVariable, Solution, Constraint, State, Function
 from ommx.adapter import SolverAdapter, InfeasibleDetected, UnboundedDetected
 
 from .exception import OMMXHighsAdapterError
+
+_tracer = trace.get_tracer("ommx.adapter.highs")
 
 
 class OMMXHighsAdapter(SolverAdapter):
@@ -181,21 +184,22 @@ class OMMXHighsAdapter(SolverAdapter):
         verbose : bool, default=False
             If True, enable HiGHS's console logging
         """
-        super().__init__(ommx_instance)
-        self.instance = ommx_instance
-        self.model = highspy.Highs()
+        with _tracer.start_as_current_span("convert"):
+            super().__init__(ommx_instance)
+            self.instance = ommx_instance
+            self.model = highspy.Highs()
 
-        # the default is for `log_to_console` to be True, so we
-        # turn it off unless user requests it
-        if not verbose:
-            self.model.setOptionValue("log_to_console", False)
+            # the default is for `log_to_console` to be True, so we
+            # turn it off unless user requests it
+            if not verbose:
+                self.model.setOptionValue("log_to_console", False)
 
-        self.var_ids = {}
-        self.highs_vars = []
+            self.var_ids = {}
+            self.highs_vars = []
 
-        self._set_decision_variables()
-        self._set_objective()
-        self._set_constraints()
+            self._set_decision_variables()
+            self._set_objective()
+            self._set_constraints()
 
     @classmethod
     def solve(cls, ommx_instance: Instance, *, verbose: bool = False) -> Solution:
@@ -303,7 +307,8 @@ class OMMXHighsAdapter(SolverAdapter):
         # ````
         adapter = cls(ommx_instance, verbose=verbose)
         model = adapter.solver_input
-        model.run()
+        with _tracer.start_as_current_span("solve"):
+            model.run()
         return adapter.decode(model)
 
     @property
@@ -384,23 +389,24 @@ class OMMXHighsAdapter(SolverAdapter):
         1.0
         """
         # TODO check if model is optimized
-        state = self.decode_to_state(data)
-        solution = self.instance.evaluate(state)
+        with _tracer.start_as_current_span("decode"):
+            state = self.decode_to_state(data)
+            solution = self.instance.evaluate(state)
 
-        # set optimality
-        if self.model.getModelStatus() == highspy.HighsModelStatus.kOptimal:
-            solution.optimality = Solution.OPTIMAL
+            # set optimality
+            if data.getModelStatus() == highspy.HighsModelStatus.kOptimal:
+                solution.optimality = Solution.OPTIMAL
 
-        # dual variables
-        solution_info = self.model.getSolution()
-        row_dual = solution_info.row_dual
-        row_dual_len = len(row_dual)
+            # dual variables
+            solution_info = data.getSolution()
+            row_dual = solution_info.row_dual
+            row_dual_len = len(row_dual)
 
-        for constraint_id in solution.constraint_ids:
-            if constraint_id < row_dual_len:
-                solution.set_dual_variable(constraint_id, row_dual[constraint_id])
+            for constraint_id in solution.constraint_ids:
+                if constraint_id < row_dual_len:
+                    solution.set_dual_variable(constraint_id, row_dual[constraint_id])
 
-        return solution
+            return solution
 
     def decode_to_state(self, data: highspy.Highs) -> State:
         """
