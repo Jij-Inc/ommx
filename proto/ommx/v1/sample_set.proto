@@ -134,4 +134,8 @@ message SampleSet {
 
   // Minimize or Maximize
   Instance.Sense sense = 5;
+
+  // Format version of this message for forward compatibility checks.
+  // See `Instance.format_version` for semantics.
+  uint32 format_version = 100;
 }

@@ -162,8 +162,13 @@ class ParametricInstance(google.protobuf.message.Message):
     REMOVED_CONSTRAINTS_FIELD_NUMBER: builtins.int
     DECISION_VARIABLE_DEPENDENCY_FIELD_NUMBER: builtins.int
     NAMED_FUNCTIONS_FIELD_NUMBER: builtins.int
+    FORMAT_VERSION_FIELD_NUMBER: builtins.int
     sense: ommx.v1.instance_pb2.Instance.Sense.ValueType
     """The sense of this problem, i.e. minimize the objective or maximize it."""
+    format_version: builtins.int
+    """Format version of this message for forward compatibility checks.
+    See `Instance.format_version` for semantics.
+    """
     @property
     def description(self) -> ommx.v1.instance_pb2.Instance.Description: ...
     @property
@@ -249,6 +254,7 @@ class ParametricInstance(google.protobuf.message.Message):
             ommx.v1.named_function_pb2.NamedFunction
         ]
         | None = ...,
+        format_version: builtins.int = ...,
     ) -> None: ...
     def HasField(
         self,
@@ -274,6 +280,8 @@ class ParametricInstance(google.protobuf.message.Message):
             b"decision_variables",
             "description",
             b"description",
+            "format_version",
+            b"format_version",
             "named_functions",
             b"named_functions",
             "objective",

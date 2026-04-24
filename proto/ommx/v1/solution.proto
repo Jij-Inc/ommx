@@ -64,6 +64,10 @@ message Solution {
 
   // Whether the problem is a minimization or maximization problem.
   Instance.Sense sense = 10;
+
+  // Format version of this message for forward compatibility checks.
+  // See `Instance.format_version` for semantics.
+  uint32 format_version = 100;
 }
 
 // The solver proved that the problem is infeasible.

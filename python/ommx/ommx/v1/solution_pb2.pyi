@@ -131,6 +131,7 @@ class Solution(google.protobuf.message.Message):
     OPTIMALITY_FIELD_NUMBER: builtins.int
     RELAXATION_FIELD_NUMBER: builtins.int
     SENSE_FIELD_NUMBER: builtins.int
+    FORMAT_VERSION_FIELD_NUMBER: builtins.int
     objective: builtins.float
     feasible: builtins.bool
     """The feasibility of the solution for all, remaining and removed constraints.
@@ -155,6 +156,10 @@ class Solution(google.protobuf.message.Message):
     """Whether the solution is obtained by a relaxed linear programming solver."""
     sense: ommx.v1.instance_pb2.Instance.Sense.ValueType
     """Whether the problem is a minimization or maximization problem."""
+    format_version: builtins.int
+    """Format version of this message for forward compatibility checks.
+    See `Instance.format_version` for semantics.
+    """
     @property
     def state(self) -> global___State: ...
     @property
@@ -198,6 +203,7 @@ class Solution(google.protobuf.message.Message):
         optimality: global___Optimality.ValueType = ...,
         relaxation: global___Relaxation.ValueType = ...,
         sense: ommx.v1.instance_pb2.Instance.Sense.ValueType = ...,
+        format_version: builtins.int = ...,
     ) -> None: ...
     def HasField(
         self,
@@ -227,6 +233,8 @@ class Solution(google.protobuf.message.Message):
             b"feasible_relaxed",
             "feasible_unrelaxed",
             b"feasible_unrelaxed",
+            "format_version",
+            b"format_version",
             "objective",
             b"objective",
             "optimality",

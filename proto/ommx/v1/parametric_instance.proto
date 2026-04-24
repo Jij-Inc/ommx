@@ -62,4 +62,8 @@ message ParametricInstance {
   map<uint64, Function> decision_variable_dependency = 9;
 
   repeated NamedFunction named_functions = 10;
+
+  // Format version of this message for forward compatibility checks.
+  // See `Instance.format_version` for semantics.
+  uint32 format_version = 100;
 }

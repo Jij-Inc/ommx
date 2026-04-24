@@ -568,8 +568,13 @@ class SampleSet(google.protobuf.message.Message):
     FEASIBLE_UNRELAXED_FIELD_NUMBER: builtins.int
     FEASIBLE_RELAXED_FIELD_NUMBER: builtins.int
     SENSE_FIELD_NUMBER: builtins.int
+    FORMAT_VERSION_FIELD_NUMBER: builtins.int
     sense: ommx.v1.instance_pb2.Instance.Sense.ValueType
     """Minimize or Maximize"""
+    format_version: builtins.int
+    """Format version of this message for forward compatibility checks.
+    See `Instance.format_version` for semantics.
+    """
     @property
     def objectives(self) -> global___SampledValues: ...
     @property
@@ -636,6 +641,7 @@ class SampleSet(google.protobuf.message.Message):
         feasible_relaxed: collections.abc.Mapping[builtins.int, builtins.bool]
         | None = ...,
         sense: ommx.v1.instance_pb2.Instance.Sense.ValueType = ...,
+        format_version: builtins.int = ...,
     ) -> None: ...
     def HasField(
         self, field_name: typing.Literal["objectives", b"objectives"]
@@ -653,6 +659,8 @@ class SampleSet(google.protobuf.message.Message):
             b"feasible_relaxed",
             "feasible_unrelaxed",
             b"feasible_unrelaxed",
+            "format_version",
+            b"format_version",
             "named_functions",
             b"named_functions",
             "objectives",

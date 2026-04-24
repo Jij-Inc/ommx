@@ -301,6 +301,13 @@ pub use sampled::*;
 pub use solution::*;
 pub use substitute::*;
 
+/// Maximum `format_version` this SDK accepts when parsing top-level messages.
+///
+/// Data whose `format_version` exceeds this value was produced by a newer SDK
+/// with semantic-breaking format changes and cannot be read correctly.
+/// See `proto/ommx/v1/instance.proto` for the full policy.
+pub const ACCEPTED_FORMAT_VERSION: u32 = 0;
+
 /// Module created from `ommx.v1` proto files
 #[allow(clippy::doc_overindented_list_items)] // prost breaks markdown indents
 pub mod v1 {
