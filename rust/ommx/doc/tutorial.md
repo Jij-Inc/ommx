@@ -1,17 +1,318 @@
 # Tutorial
 
-*This tutorial is a work in progress.*
+A guided tour of the `ommx` crate's public API.
 
-This document will walk through the `ommx` crate with runnable examples covering:
+## [`Linear`](crate::Linear), [`Quadratic`](crate::Quadratic), [`Polynomial`](crate::Polynomial), and [`Function`](crate::Function)
 
-- Building expressions with [`linear!`](../macro.linear.html),
-  [`quadratic!`](../macro.quadratic.html), and [`coeff!`](../macro.coeff.html)
-- Defining decision variables, constraints, and an
-  [`Instance`](../struct.Instance.html)
-- Evaluating an instance against a
-  [`State`](../v1/struct.State.html) to produce a
-  [`Solution`](../struct.Solution.html)
-- Interchanging problems via MPS / QPLIB / OMMX Artifact
+These types represent mathematical expressions in optimization problems with different degree characteristics:
 
-For a high-level overview of the public API, see the
-[crate-level documentation](../index.html).
+- **[`Linear`](crate::Linear)**: Up to degree 1 polynomials (linear terms + constant)
+- **[`Quadratic`](crate::Quadratic)**: Up to degree 2 polynomials (may contain only linear terms, no quadratic terms required)
+- **[`Function`](crate::Function)**: Dynamic degree handling, can represent any polynomial degree at runtime
+
+Use the convenience macros [`linear!`](crate::linear), [`quadratic!`](crate::quadratic), [`coeff!`](crate::coeff), and [`monomial!`](crate::monomial) for easy expression building.
+
+```rust
+use ommx::{Linear, Quadratic, Function, linear, quadratic, coeff};
+
+// Linear expressions: 2*x1 + 3*x2 + 5 (fixed degree 1)
+let linear_expr = coeff!(2.0) * linear!(1) + coeff!(3.0) * linear!(2) + coeff!(5.0);
+
+// Quadratic expressions: x1*x2 + 2*x1 + 1 (up to degree 2)
+let quad_expr = coeff!(1.0) * quadratic!(1, 2) + coeff!(2.0) * quadratic!(1) + coeff!(1.0);
+assert_eq!(quad_expr.degree(), 2);
+
+// Quadratic with only linear terms (no quadratic terms): 3*x1 + 2
+let linear_only_quad = coeff!(3.0) * quadratic!(1) + coeff!(2.0);
+assert_eq!(linear_only_quad.degree(), 1);
+
+// Functions can dynamically handle any degree
+let linear_func = Function::from(linear_expr);  // Degree 1
+assert_eq!(linear_func.degree(), 1);
+let quad_func = Function::from(quad_expr);      // Degree 2
+assert_eq!(quad_func.degree(), 2);
+```
+
+See also [`PolynomialBase`](crate::PolynomialBase) which is a base for [`Linear`](crate::Linear), [`Quadratic`](crate::Quadratic), and [`Polynomial`](crate::Polynomial).
+
+## [`Bound`](crate::Bound), [`Kind`](crate::Kind), and [`DecisionVariable`](crate::DecisionVariable)
+
+Decision variables define the unknowns in optimization problems. Each variable has a [`Kind`](crate::Kind)
+(continuous, binary, integer, etc.) and [`Bound`](crate::Bound) (lower/upper limits).
+
+```rust
+use ommx::{DecisionVariable, Kind, Bound, VariableID, ATol};
+
+// Binary decision variable with ID 1
+let binary_var = DecisionVariable::binary(VariableID::from(1));
+assert_eq!(binary_var.kind(), Kind::Binary);
+assert_eq!(binary_var.bound(), Bound::new(0.0, 1.0)?); // Default binary bound is [0, 1]
+
+// Integer variable with bound [0, 3]
+let integer_var = DecisionVariable::integer(VariableID::from(2))
+    .with_bound(Bound::new(0.0, 3.0)?, ATol::default())?;
+assert_eq!(integer_var.kind(), Kind::Integer);
+assert_eq!(integer_var.bound(), Bound::new(0.0, 3.0)?);
+
+// Continuous variable with ID 3
+let continuous_var = DecisionVariable::continuous(VariableID::from(3));
+assert_eq!(continuous_var.kind(), Kind::Continuous);
+assert_eq!(continuous_var.bound(), Bound::unbounded()); // Default is unbounded (-inf, inf)
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
+
+## [`Constraint`](crate::Constraint)
+
+Constraints define the feasible region of optimization problems. Constraints can be equality
+or inequality types, and can be temporarily removed while preserving their definition.
+
+```rust
+use ommx::{Constraint, Function, Linear, linear, coeff};
+
+// Create constraints: x1 + x2 <= 10 (as x1 + x2 - 10 <= 0)
+let constraint_expr = coeff!(1.0) * linear!(1) + coeff!(1.0) * linear!(2) + Linear::from(coeff!(-10.0));
+let constraint = Constraint::less_than_or_equal_to_zero(Function::from(constraint_expr));
+
+// Equality constraint: x1 - x2 = 0 (as f(x) = 0)
+let eq_expr = coeff!(1.0) * linear!(1) - coeff!(1.0) * linear!(2);
+let eq_constraint = Constraint::equal_to_zero(Function::from(eq_expr));
+```
+
+## Constraint Type System
+
+OMMX supports multiple constraint types beyond standard `f(x) = 0` / `f(x) <= 0`:
+
+- **[`Constraint`](crate::Constraint)**: Standard constraints
+- **[`IndicatorConstraint`](crate::IndicatorConstraint)**: `indicator_variable = 1 → f(x) <= 0`
+
+Each constraint type follows the **Stage pattern** — parameterized by lifecycle phase
+(`Created`, `Removed`, `Evaluated`, `Sampled`) — and implements the
+[`ConstraintType`](crate::ConstraintType) trait, which maps all four stages
+as associated types (a defunctionalization of `Stage → Type` since Rust lacks HKTs).
+
+Each constraint type also has its own independent ID type
+([`ConstraintID`](crate::ConstraintID), [`IndicatorConstraintID`](crate::IndicatorConstraintID)) to prevent accidental cross-type lookups.
+
+Three generic collection wrappers handle constraints uniformly:
+
+- [`ConstraintCollection`](crate::ConstraintCollection): active + removed (used in [`Instance`](crate::Instance))
+- [`EvaluatedCollection`](crate::EvaluatedCollection): evaluation results (used in [`Solution`](crate::Solution))
+- [`SampledCollection`](crate::SampledCollection): sampled results (used in [`SampleSet`](crate::SampleSet))
+
+To add a new constraint type, see the docs on [`ConstraintType`](crate::ConstraintType).
+
+## [`Instance`](crate::Instance)
+
+The [`Instance`](crate::Instance) type represents a complete optimization problem with objective, variables,
+and constraints. All variables used in the objective and constraints must be defined in the
+decision variables map.
+
+```rust
+use ommx::{Instance, DecisionVariable, VariableID, Constraint, ConstraintID, Function, Sense, Linear, linear, coeff};
+use maplit::btreemap;
+use std::collections::BTreeMap;
+
+// Create decision variables
+let decision_variables = btreemap! {
+    VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
+    VariableID::from(2) => DecisionVariable::continuous(VariableID::from(2)),
+};
+
+// Create objective function: minimize x1 + 2*x2
+let objective = Function::from(linear!(1) + coeff!(2.0) * linear!(2));
+
+// Create constraints
+let constraints = btreemap! {
+    // x1 + x2 = 1
+    ConstraintID::from(1) => Constraint::equal_to_zero(
+        Function::from(linear!(1) + linear!(2) + Linear::from(coeff!(-1.0)))
+    ),
+    // x2 <= 5
+    ConstraintID::from(2) => Constraint::less_than_or_equal_to_zero(
+        Function::from(linear!(2) + Linear::from(coeff!(-5.0)))
+    ),
+};
+
+// Create the instance
+let instance = Instance::new(
+    Sense::Minimize,
+    objective,
+    decision_variables,
+    constraints,
+)?;
+
+assert_eq!(instance.sense(), Sense::Minimize);
+assert_eq!(instance.decision_variables().len(), 2);
+assert_eq!(instance.constraints().len(), 2);
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
+
+The `new` method validates that all variable IDs used in the objective function and
+constraints are defined in the decision variables map, returning an error if any
+undefined variables are referenced.
+
+## [`Evaluate`](crate::Evaluate) trait
+
+The [`Evaluate`](crate::Evaluate) trait allows evaluation of expressions and functions given variable assignments.
+This is essential for solution verification and constraint checking.
+
+```rust
+use ommx::{Evaluate, Function, linear, coeff, ATol};
+use ommx::v1::State;
+use std::collections::HashMap;
+
+// Create a function: 2*x1 + 3*x2
+let func = Function::from(coeff!(2.0) * linear!(1) + coeff!(3.0) * linear!(2));
+
+// Create variable assignments
+let state = State::from(HashMap::from([(1, 4.0), (2, 5.0)]));
+
+// Evaluate: 2*4 + 3*5 = 23
+let result = func.evaluate(&state, ATol::default())?;
+assert_eq!(result, 23.0);
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
+
+## [`Solution`](crate::Solution) and [`SampleSet`](crate::SampleSet)
+
+Solutions represent the results of optimization, including variable values, objective value,
+and solution metadata. [`SampleSet`](crate::SampleSet) contains multiple solutions for stochastic methods.
+
+```rust
+use ommx::{Instance, DecisionVariable, VariableID, Constraint, ConstraintID, Function, Sense, Linear, Evaluate, ATol, linear, coeff};
+use ommx::v1::State;
+use maplit::btreemap;
+use std::collections::{BTreeMap, HashMap};
+
+// Create an instance with variables and constraints
+let decision_variables = btreemap! {
+    VariableID::from(1) => DecisionVariable::continuous(VariableID::from(1)),
+    VariableID::from(2) => DecisionVariable::continuous(VariableID::from(2)),
+};
+
+let objective = Function::from(linear!(1) + coeff!(2.0) * linear!(2));
+
+let constraints = btreemap! {
+    // x1 + x2 <= 10
+    ConstraintID::from(1) => Constraint::less_than_or_equal_to_zero(
+        Function::from(linear!(1) + linear!(2) + Linear::from(coeff!(-10.0)))
+    ),
+    // x1 >= 1 (as -x1 + 1 <= 0)
+    ConstraintID::from(2) => Constraint::less_than_or_equal_to_zero(
+        Function::from(coeff!(-1.0) * linear!(1) + Linear::from(coeff!(1.0)))
+    ),
+};
+
+let instance = Instance::new(
+    Sense::Minimize,
+    objective,
+    decision_variables,
+    constraints,
+)?;
+
+// Create a state with variable values that satisfy constraints
+let state = State::from(HashMap::from([(1, 3.0), (2, 4.0)]));
+
+// Evaluate the instance to get a solution
+let solution = instance.evaluate(&state, ATol::default())?;
+
+// Access solution properties
+assert_eq!(*solution.objective(), 11.0); // 3 + 2*4 = 11
+assert!(solution.feasible()); // All constraints satisfied
+
+// Check evaluated constraints
+let evaluated_constraints = solution.evaluated_constraints();
+assert_eq!(evaluated_constraints.len(), 2);
+
+// Constraint 1: x1 + x2 - 10 <= 0, evaluated to 3 + 4 - 10 = -3
+let constraint1 = &evaluated_constraints[&ConstraintID::from(1)];
+assert_eq!(constraint1.stage.evaluated_value, -3.0);
+assert!(constraint1.stage.feasible); // -3 <= 0 ✓
+
+// Constraint 2: -x1 + 1 <= 0, evaluated to -3 + 1 = -2
+let constraint2 = &evaluated_constraints[&ConstraintID::from(2)];
+assert_eq!(constraint2.stage.evaluated_value, -2.0);
+assert!(constraint2.stage.feasible); // -2 <= 0 ✓
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
+
+## [`Substitute`](crate::Substitute) trait
+
+The [`Substitute`](crate::Substitute) trait enables symbolic substitution of variables with expressions,
+allowing for problem transformation and preprocessing.
+
+```rust
+use ommx::{Substitute, Function, Linear, linear, coeff, assign, ATol};
+use approx::assert_abs_diff_eq;
+
+// Original expression: 2*x1 + 1
+let expr = coeff!(2.0) * linear!(1) + Linear::one();
+
+// Substitute x1 = 0.5*x2 + 1
+let assignments = assign! {
+    1 <- coeff!(0.5) * linear!(2) + Linear::one()
+};
+
+let substituted = expr.substitute_acyclic(&assignments)?;
+assert_abs_diff_eq!(
+  substituted,
+  Function::from(linear!(2) + coeff!(3.0))  // Result: 2*(0.5*x2 + 1) + 1 = x2 + 3
+);
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
+
+## Error handling
+
+All public fallible APIs return [`Result<T>`](crate::Result) (alias for
+`std::result::Result<T, Error>`). [`Error`](crate::Error) is a re-export of
+`anyhow::Error`, so downstream crates can propagate with `?` without
+taking an `anyhow` dependency themselves. Diagnostic context is emitted
+via the [`tracing`](https://docs.rs/tracing) crate at each failure site rather than carried in
+typed enum variants — subscribers pick it up via span context and
+structured fields.
+
+A curated set of **signal types** remain `pub` for callers that need to
+recover a particular failure by downcast:
+
+- [`InfeasibleDetected`](crate::InfeasibleDetected) — produced by [`Propagate`](crate::Propagate) when a constraint
+  becomes infeasible after substitution.
+- [`CoefficientError`](crate::CoefficientError), [`BoundError`](crate::BoundError), [`AtolError`](crate::AtolError) — numeric-domain
+  validation failures.
+- [`DecisionVariableError`](crate::DecisionVariableError), [`SubstitutionError`](crate::SubstitutionError), [`SolutionError`](crate::SolutionError),
+  [`SampleSetError`](crate::SampleSetError) — domain-specific structured errors consumed by
+  in-crate tests and downstream code that wants to react programmatically.
+
+Recover them with [`Error::downcast_ref`](crate::Error::downcast_ref) / [`Error::is`](crate::Error::is):
+
+```ignore
+match instance.propagate(&state, atol) {
+    Err(e) if e.is::<ommx::InfeasibleDetected>() => { /* handle */ }
+    Err(e) => return Err(e),
+    Ok(outcome) => { /* ... */ }
+}
+```
+
+The [`Parse`](crate::Parse) trait is an intentional exception. It keeps its own
+[`ParseError`](crate::ParseError) type because the structured
+[`Vec<ParseContext>`](crate::parse::ParseContext) breadcrumb carries useful
+proto-tree metadata. [`ParseError`](crate::ParseError) implements [`std::error::Error`], so
+it flows into [`Result<T>`](crate::Result) via `?` at the crate boundary.
+
+### Fail-site macros
+
+[`bail!`](crate::bail), [`error!`](crate::error), and [`ensure!`](crate::ensure) fuse a `tracing::error!` event
+with an [`Error`](crate::Error) built from the same format string:
+
+```ignore
+// Plain message
+ommx::bail!("invalid OBJSENSE: {s}");
+
+// Structured tracing fields via `{ field = value, … }`
+ommx::bail!(
+    { section, size },
+    "invalid field size ({size}) in MPS section '{section}'",
+);
+
+// Signal expression — no tracing event, since callers recover it
+ommx::bail!(InfeasibleDetected);
+```

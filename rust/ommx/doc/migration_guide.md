@@ -14,7 +14,7 @@ This section covers the migration to stage-parameterized constraints, introduced
 
 `Constraint` is now generic over a lifecycle stage:
 
-```rust
+```rust,ignore
 pub struct Constraint<S: Stage<Self> = Created> {
     pub id: ConstraintID,
     pub equality: Equality,
@@ -40,13 +40,13 @@ Removed constraints are managed at the collection level — `ConstraintCollectio
 Fields that were previously on the struct directly are now split between common fields and stage-specific data.
 
 **Common fields** (unchanged access):
-```rust
+```rust,ignore
 constraint.id        // ConstraintID
 constraint.equality  // Equality
 ```
 
 **Metadata fields** (moved to `metadata`):
-```rust
+```rust,ignore
 // ❌ Before
 constraint.name
 constraint.subscripts
@@ -61,7 +61,7 @@ constraint.metadata.description
 ```
 
 **Created stage** — function access:
-```rust
+```rust,ignore
 // ❌ Before
 constraint.function
 
@@ -74,7 +74,7 @@ constraint.stage.function   // Function
 ```
 
 **Evaluated stage** — evaluation result access:
-```rust
+```rust,ignore
 // ❌ Before (getset methods)
 *evaluated.evaluated_value()
 *evaluated.feasible()
@@ -92,7 +92,7 @@ evaluated.stage.used_decision_variable_ids
 `removed_reason` is no longer on evaluated/sampled constraints — it's managed by `EvaluatedCollection` / `SampledCollection` via `collection.removed_reasons()` and `collection.is_removed(&id)`.
 
 **Sampled stage** — same pattern:
-```rust
+```rust,ignore
 // ❌ Before
 *sampled.evaluated_values()
 sampled.feasible()
@@ -107,7 +107,7 @@ sampled.stage.dual_variables
 ### 2. Struct Literal Construction
 
 **Constraint (Created)**:
-```rust
+```rust,ignore
 // ❌ Before
 Constraint {
     id: ConstraintID::from(1),
@@ -133,7 +133,7 @@ Constraint::less_than_or_equal_to_zero(ConstraintID::from(1), function)
 ```
 
 **Removed constraints** are no longer constructed as `Constraint<Removed>`. They are stored as `(Constraint<Created>, RemovedReason)` tuples in `ConstraintCollection`:
-```rust
+```rust,ignore
 // ❌ Before (v2)
 let removed = RemovedConstraint {
     constraint: inner_constraint,
@@ -155,7 +155,7 @@ let removed: (Constraint, RemovedReason) = (
 ```
 
 **EvaluatedConstraint**:
-```rust
+```rust,ignore
 // ❌ Before
 EvaluatedConstraint {
     id, equality, metadata,
@@ -183,7 +183,7 @@ Constraint {
 
 `RemovedConstraint` type alias no longer exists. Removed constraints are stored as `(Constraint<Created>, RemovedReason)` tuples in `ConstraintCollection`.
 
-```rust
+```rust,ignore
 // ❌ Before (v2)
 removed.constraint.id
 removed.constraint.equality
@@ -204,7 +204,7 @@ reason.parameters
 
 `removed_reason: String` + `removed_reason_parameters: FnvHashMap<String, String>` are consolidated into a single struct:
 
-```rust
+```rust,ignore
 pub struct RemovedReason {
     pub reason: String,
     pub parameters: FnvHashMap<String, String>,
@@ -221,7 +221,7 @@ pub struct RemovedReason {
 `Instance.constraints` and `Instance.removed_constraints` fields are replaced by `constraint_collection: ConstraintCollection<Constraint>`.
 
 Accessor methods are preserved for backward compatibility:
-```rust
+```rust,ignore
 // These still work
 instance.constraints()           // &BTreeMap<ConstraintID, Constraint>
 instance.removed_constraints()   // &BTreeMap<ConstraintID, (Constraint, RemovedReason)>
@@ -231,7 +231,7 @@ instance.constraint_collection() // &ConstraintCollection<Constraint>
 ```
 
 For internal/mutable access:
-```rust
+```rust,ignore
 // ❌ Before
 self.constraints.values_mut()
 self.removed_constraints.entry(id)
@@ -251,7 +251,7 @@ Methods like `.id()`, `.equality()`, `.evaluated_value()`, `.feasible()` are **r
 
 The crate now returns a single error type across its public API:
 
-```rust
+```rust,ignore
 // ❌ Before (v2): a mix of anyhow::Result, thiserror enums, and one-off error types
 fn some_public_api() -> Result<Instance, InstanceError> { ... }
 
@@ -261,7 +261,7 @@ fn some_public_api() -> ommx::Result<Instance> { ... }
 
 `ommx::Error` and `ommx::Result` are re-exports of `anyhow::Error` and `anyhow::Result`, so `anyhow::Result<T>` and `ommx::Result<T>` are the same type — the v3 change deleted the domain-specific enums, not the anyhow alias. Prefer `ommx::Result<T>` in new code so the crate name is visible on the API surface, but there is no reason to rewrite existing `anyhow::Result<T>` signatures. Equivalently:
 
-```rust
+```rust,ignore
 // These still work
 err.chain()
 err.root_cause()
@@ -304,7 +304,7 @@ A small set of structured errors remain `pub` because they encode recoverable co
 
 Recover them by downcast:
 
-```rust
+```rust,ignore
 match instance.propagate(&state, atol) {
     Err(e) if e.is::<ommx::InfeasibleDetected>() => { /* handle */ }
     Err(e) => return Err(e),
@@ -316,7 +316,7 @@ match instance.propagate(&state, atol) {
 
 `ParseError` is intentionally not collapsed into `ommx::Error`. It carries structured `Vec<ParseContext>` breadcrumbs that walk the proto tree field-by-field, which is useful metadata rather than a discriminant downstream code ignores. `ParseError` implements `std::error::Error`, so it flows into `ommx::Result<T>` via `?` at the crate boundary:
 
-```rust
+```rust,ignore
 fn load_something(bytes: &[u8]) -> ommx::Result<Instance> {
     let v1_inst: v1::Instance = Message::decode(bytes)?;
     let inst: Instance = v1_inst.parse(&())?;  // ParseError → anyhow::Error
@@ -331,7 +331,7 @@ The crate exposes `ommx::bail!` / `ommx::error!` / `ommx::ensure!` macros that b
 1. Emit a `tracing::error!` event (visible to any subscriber).
 2. Produce an `anyhow::Error` with the rendered message.
 
-```rust
+```rust,ignore
 // Plain message — tracing event + anyhow::Error share the format string
 ommx::bail!("invalid OBJSENSE: {s}");
 
@@ -354,7 +354,7 @@ These are mainly for internal fail sites, but downstream crates may use them too
 
 A type family mapping lifecycle stages to concrete types (HKT defunctionalization):
 
-```rust
+```rust,ignore
 pub trait ConstraintType {
     type ID: Clone + Copy + Ord + Hash + Debug;
     type Created: Evaluate<Output = Self::Evaluated, SampledOutput = Self::Sampled>
@@ -380,7 +380,7 @@ impl ConstraintType for IndicatorConstraint {
 
 Two traits define common behavior for evaluated and sampled constraints:
 
-```rust
+```rust,ignore
 pub trait EvaluatedConstraintBehavior {
     type ID;
     fn constraint_id(&self) -> Self::ID;
@@ -402,7 +402,7 @@ pub trait SampledConstraintBehavior {
 
 Generic collection of active + removed constraints. Also implements `Evaluate`:
 
-```rust
+```rust,ignore
 pub struct ConstraintCollection<T: ConstraintType> {
     active: BTreeMap<T::ID, T::Created>,
     removed: BTreeMap<T::ID, (T::Created, RemovedReason)>,
@@ -428,7 +428,7 @@ Removed constraints are just `Created` constraints paired with a `RemovedReason`
 
 Generic wrappers for evaluation results, used in `Solution` and `SampleSet`:
 
-```rust
+```rust,ignore
 pub struct EvaluatedCollection<T: ConstraintType> {
     constraints: BTreeMap<T::ID, T::Evaluated>,
     removed_reasons: BTreeMap<T::ID, RemovedReason>,
@@ -452,7 +452,7 @@ collection.into_parts()                // (constraints, removed_reasons)
 
 Common metadata extracted from the constraint:
 
-```rust
+```rust,ignore
 pub struct ConstraintMetadata {
     pub name: Option<String>,
     pub subscripts: Vec<i64>,
