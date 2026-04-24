@@ -2,20 +2,63 @@
 
 *Draft — not yet released.*
 
-The 3.0.0 line is a major revision of the Rust SDK that rebuilds the core domain
-types around a **lifecycle-stage type parameter** on constraints and collapses
-the public error surface to a single type. It also finishes the long-running
-migration away from the proto-generated `v1_ext` helpers: domain types
-(`Instance`, `Constraint`, `DecisionVariable`, …) are now the primary API, and
-`v1::*` is reserved for wire-format interop.
+The 3.0.0 line is a major revision of the Rust SDK:
+
+- **Indicator / one-hot / SOS1** are first-class constraint types alongside
+  regular `Constraint`, with their own ID types and collection slots on
+  `Instance`.
+- The resulting constraint-kind × lifecycle combinatorics is tamed by a
+  shared [`ConstraintType`](crate::ConstraintType) abstraction and a
+  [`Stage`](crate::Stage) type parameter, so each kind is one generic
+  struct rather than four hand-written ones.
+- A **capability model** lets adapters declare what they natively support
+  and auto-converts unsupported kinds at the boundary, so any OMMX
+  instance can be fed to any adapter.
+- The public **error surface** collapses to a single type, with diagnostic
+  context emitted through `tracing` rather than stacked via
+  `anyhow::Context`.
+- The long-running migration away from the proto-generated `v1_ext`
+  helpers finishes: domain types (`Instance`, `Constraint`,
+  `DecisionVariable`, …) are the primary API, and `v1::*` is reserved for
+  wire-format interop.
 
 See the [migration guide](crate::doc::migration_guide) for the detailed
 v2 → v3 upgrade path. This page is a topic-oriented summary of what changed and
 why.
 
-## Constraint lifecycle as a type parameter
+## First-class special constraint types
 
-`Constraint` is now generic over a [`Stage`](crate::Stage) marker:
+Special-structure constraints are now first-class domain objects, parallel to
+the regular [`Constraint`](crate::Constraint) rather than metadata hanging off
+it:
+
+- [`IndicatorConstraint`](crate::IndicatorConstraint) — encoding
+  `indicator_variable = 1 → f(x) {=,≤} 0`. **New in v3.**
+- [`OneHotConstraint`](crate::OneHotConstraint) — exactly one of a set of
+  binary variables is 1. Previously expressed as a
+  `ConstraintHints::OneHot` hint on a regular equality constraint; now a
+  constraint type in its own right.
+- [`Sos1Constraint`](crate::Sos1Constraint) — at most one of a set of
+  variables is non-zero. Previously `ConstraintHints::Sos1`; now first-class.
+
+Each kind has its own ID type
+([`IndicatorConstraintID`](crate::IndicatorConstraintID),
+[`OneHotConstraintID`](crate::OneHotConstraintID),
+[`Sos1ConstraintID`](crate::Sos1ConstraintID)) to prevent accidental
+cross-type lookups, and lives in its own collection slot on
+[`Instance`](crate::Instance).
+
+## Stage parameter and the `ConstraintType` trait
+
+Promoting indicator / one-hot / SOS1 to first-class types alongside regular
+`Constraint` multiplies the number of concrete constraint structs by the
+number of lifecycle states each kind can be in — created, evaluated,
+sampled, and (before v3) removed. Hand-writing four-kind × four-state = 16
+concrete struct definitions was never going to scale; the core refactor of
+3.0.0 is the abstraction that collapses that matrix.
+
+Every constraint kind is now a single generic struct parameterized by a
+[`Stage`](crate::Stage) marker. For the regular constraint:
 
 ```rust,ignore
 pub struct Constraint<S: Stage<Self> = Created> {
@@ -25,27 +68,76 @@ pub struct Constraint<S: Stage<Self> = Created> {
 }
 ```
 
-with three inhabited stages — `Created`, `Evaluated`, and `Sampled` — and
-stage-specific data (`function`, `evaluated_value`/`feasible`,
-`evaluated_values`/`feasible`). The constraint's `ConstraintID` is held
-by the enclosing `BTreeMap` key rather than stored on the struct itself,
-so standalone constraints are identity-less until inserted into a
-collection.
+with three inhabited stages — `Created`, `Evaluated`, and `Sampled`. Each
+stage swaps in different `stage` data (the function for `Created`, the
+evaluated value and feasibility for `Evaluated`, per-sample vectors for
+`Sampled`). The type aliases `EvaluatedConstraint = Constraint<Evaluated>`
+and `SampledConstraint = Constraint<Sampled>` keep the common names as
+entry points. `IndicatorConstraint`, `OneHotConstraint`, and
+`Sos1Constraint` follow the exact same shape.
 
-The same pattern applies uniformly to
-[`IndicatorConstraint`](crate::IndicatorConstraint),
-[`OneHotConstraint`](crate::OneHotConstraint), and
-[`Sos1Constraint`](crate::Sos1Constraint), all of which are now first-class
-constraint types registered through the
-[`ConstraintType`](crate::ConstraintType) trait (a defunctionalization of the
-`Stage → Type` mapping since Rust lacks higher-kinded types).
+The unifying abstraction is the
+[`ConstraintType`](crate::ConstraintType) trait, a defunctionalization of
+`Stage → Type` that names each kind's concrete stage types:
 
-Removed constraints no longer have a `Removed` stage. They are stored as
-`(Constraint<Created>, RemovedReason)` tuples at the collection level — three
-generic wrappers ([`ConstraintCollection`](crate::ConstraintCollection),
-[`EvaluatedCollection`](crate::EvaluatedCollection),
-[`SampledCollection`](crate::SampledCollection)) handle every constraint type
-uniformly.
+```rust,ignore
+pub trait ConstraintType {
+    type ID;
+    type Created;     // e.g. Constraint, IndicatorConstraint, …
+    type Evaluated;   // e.g. EvaluatedConstraint, EvaluatedIndicatorConstraint, …
+    type Sampled;     // e.g. SampledConstraint, SampledIndicatorConstraint, …
+}
+```
+
+`ConstraintCollection<T>` / `EvaluatedCollection<T>` / `SampledCollection<T>`
+(used by `Instance`, `Solution`, and `SampleSet` respectively) are
+parameterized by `T: ConstraintType`, so generic code — iteration,
+feasibility checks, DataFrame rendering, adapter conversion — is written
+once and applied uniformly across every constraint kind. The
+[`EvaluatedConstraintBehavior`](crate::EvaluatedConstraintBehavior) and
+[`SampledConstraintBehavior`](crate::SampledConstraintBehavior) traits
+expose the per-kind feasibility surface in the same style.
+
+Two knock-on simplifications fall out:
+
+- **No `Removed` stage.** Removal is collection-level state, not a stage:
+  `ConstraintCollection<T>` stores removed constraints as
+  `(T::Created, RemovedReason)` pairs, and
+  `EvaluatedCollection<T>::removed_reasons()` /
+  `is_feasible_relaxed()` surface the same notion uniformly without
+  growing a fourth stage.
+- **No `id` field on the struct.** The constraint's ID lives on the
+  enclosing `BTreeMap<T::ID, T::Created>` key, which was already the
+  single source of truth, so standalone constraints are identity-less
+  until inserted into a collection.
+
+## Capability model
+
+First-class special constraints raise a deployment question: not every
+solver supports indicator / one-hot / SOS1 natively, and some only
+support a subset. v3 answers this with an explicit capability model
+built into the domain layer.
+
+[`AdditionalCapability`](crate::AdditionalCapability) is an enum of the
+non-standard constraint kinds, and [`Capabilities`](crate::Capabilities)
+is a sorted set of them. Two `Instance` methods anchor the model:
+
+- [`Instance::required_capabilities()`](crate::Instance::required_capabilities)
+  returns the capabilities an instance actually uses (only active
+  constraints are considered; removed constraints are excluded since
+  they are never passed to the solver).
+- [`Instance::reduce_capabilities(&supported)`](crate::Instance::reduce_capabilities)
+  takes the capabilities a given solver can handle and converts every
+  unsupported kind into regular constraints via the canonical encodings
+  (Big-M for indicator / SOS1, linear equality for one-hot). On return,
+  `required_capabilities()` is a subset of `supported`.
+
+Adapters declare what they natively support and call
+`reduce_capabilities` before handing the instance to the underlying
+solver, so an adapter can accept any OMMX `Instance` without asking
+users to manually encode special constraints themselves. Each conversion
+is also emitted as an INFO-level `tracing` event in the
+`reduce_capabilities` span for observability.
 
 ## Unified error surface
 
@@ -107,10 +199,6 @@ Two new domain traits accompany this shift:
 
 ## Other notable changes
 
-- Unsupported constraint types are now automatically converted at the
-  `SolverAdapter` boundary (Big-M for indicator / SOS1, equality for one-hot).
-- The `id` field has been removed from concrete constraint structs; the
-  `BTreeMap<ID, _>` key is the sole source of truth.
 - `ommx-derive` introduces `#[derive(LogicalMemoryProfile)]` for structural
   memory profiling.
 - `ommx::doc` is now the entry point on docs.rs for long-form prose
