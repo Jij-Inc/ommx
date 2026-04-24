@@ -11,6 +11,14 @@ The 3.0.0 line is a major revision of the Rust SDK:
   shared [`ConstraintType`](crate::ConstraintType) abstraction and a
   [`Stage`](crate::Stage) type parameter, so each kind is one generic
   struct rather than four hand-written ones.
+- Constraints are grouped into generic
+  [`ConstraintCollection<T>`](crate::ConstraintCollection) /
+  [`EvaluatedCollection<T>`](crate::EvaluatedCollection) /
+  [`SampledCollection<T>`](crate::SampledCollection) wrappers on
+  `Instance`, `Solution`, and `SampleSet`; because the `id` field is
+  gone from individual constraints, the **collection is the natural
+  unit of serialization** (`Instance::to_bytes`, `Solution::to_bytes`,
+  `SampleSet::to_bytes`).
 - A **capability model** lets adapters declare what they natively support
   and auto-converts unsupported kinds at the boundary, so any OMMX
   instance can be fed to any adapter.
@@ -100,16 +108,59 @@ expose the per-kind feasibility surface in the same style.
 
 Two knock-on simplifications fall out:
 
-- **No `Removed` stage.** Removal is collection-level state, not a stage:
-  `ConstraintCollection<T>` stores removed constraints as
-  `(T::Created, RemovedReason)` pairs, and
-  `EvaluatedCollection<T>::removed_reasons()` /
-  `is_feasible_relaxed()` surface the same notion uniformly without
-  growing a fourth stage.
+- **No `Removed` stage.** Removal is collection-level state, not a
+  stage (see "Collections and serialization" below).
 - **No `id` field on the struct.** The constraint's ID lives on the
   enclosing `BTreeMap<T::ID, T::Created>` key, which was already the
   single source of truth, so standalone constraints are identity-less
   until inserted into a collection.
+
+## Collections and serialization
+
+The trait above is only half the story. The other half is a trio of
+generic collection wrappers that hold constraints uniformly across every
+kind and every stage:
+
+- [`ConstraintCollection<T>`](crate::ConstraintCollection) — active
+  constraints plus removed ones paired with a
+  [`RemovedReason`](crate::RemovedReason). Used by
+  [`Instance`](crate::Instance); replaces the old flat
+  `Instance.constraints` + `Instance.removed_constraints` fields with
+  one typed slot per constraint kind
+  (`constraint_collection()`,`indicator_constraint_collection()`,
+  `one_hot_constraint_collection()`,
+  `sos1_constraint_collection()`).
+- [`EvaluatedCollection<T>`](crate::EvaluatedCollection) — evaluated
+  constraints plus a map of `RemovedReason`s for any that were relaxed
+  before evaluation. Used by [`Solution`](crate::Solution).
+- [`SampledCollection<T>`](crate::SampledCollection) — sampled
+  constraints plus the corresponding `RemovedReason`s. Used by
+  [`SampleSet`](crate::SampleSet).
+
+All three expose `is_feasible()` / `is_feasible_relaxed()` /
+`removed_reasons()` / `is_removed(&id)` with the same signatures,
+so code that iterates over evaluation results does not need to
+special-case each constraint kind.
+
+**Serialization moves to the collection level.** Because constraints no
+longer carry their own `id` field, the natural unit of serialization is
+the enclosing collection (which owns the `ConstraintID → Constraint`
+mapping). Concretely:
+
+- [`Instance::to_bytes`](crate::Instance::to_bytes) /
+  [`from_bytes`](crate::Instance::from_bytes), `Solution::to_bytes` /
+  `from_bytes`, and `SampleSet::to_bytes` / `from_bytes` are the
+  recommended entry points. Each encodes every constraint kind together
+  with its IDs in one `v1::*` protobuf message.
+- Per-constraint `to_bytes` / `from_bytes` on the regular
+  `Constraint`, `EvaluatedConstraint`, and `SampledConstraint` still
+  exist but now require an explicit `ConstraintID` argument and return
+  `(ConstraintID, T)` on decode — the type can no longer round-trip on
+  its own.
+- The new special-constraint types (`IndicatorConstraint`,
+  `OneHotConstraint`, `Sos1Constraint`) intentionally have no
+  per-constraint `to_bytes` / `from_bytes`; they are only serialized as
+  part of an `Instance`, `Solution`, or `SampleSet`.
 
 ## Capability model
 
