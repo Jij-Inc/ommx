@@ -183,6 +183,11 @@ impl Instance {
         &self.constraint_collection
     }
 
+    /// Mutable access to the full constraint collection (active + removed).
+    pub fn constraint_collection_mut(&mut self) -> &mut ConstraintCollection<Constraint> {
+        &mut self.constraint_collection
+    }
+
     /// Active indicator constraints.
     pub fn indicator_constraints(
         &self,

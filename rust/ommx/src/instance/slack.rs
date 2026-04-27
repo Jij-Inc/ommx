@@ -80,8 +80,11 @@ impl Instance {
 
         let slack = self.new_decision_variable(Kind::Integer, slack_bound, None, atol)?;
         let slack_id = slack.id();
-        slack.metadata.name = Some("ommx.slack".to_string());
-        slack.metadata.subscripts = vec![constraint_id.into_inner() as i64];
+        // Drop borrow before writing to the metadata store on `self`.
+        let _ = slack;
+        let metadata = self.variable_metadata_mut();
+        metadata.set_name(slack_id, "ommx.slack");
+        metadata.set_subscripts(slack_id, vec![constraint_id.into_inner() as i64]);
 
         let slack_term = Linear::single_term(LinearMonomial::Variable(slack_id), a.inv());
         let new_function = function + slack_term;
@@ -170,8 +173,10 @@ impl Instance {
         let slack =
             self.new_decision_variable(Kind::Integer, slack_bound, None, ATol::default())?;
         let slack_id = slack.id();
-        slack.metadata.name = Some("ommx.slack".to_string());
-        slack.metadata.subscripts = vec![constraint_id.into_inner() as i64];
+        let _ = slack;
+        let metadata = self.variable_metadata_mut();
+        metadata.set_name(slack_id, "ommx.slack");
+        metadata.set_subscripts(slack_id, vec![constraint_id.into_inner() as i64]);
 
         let new_function = match b_coeff {
             Some(c) => {
@@ -243,10 +248,11 @@ mod tests {
             .expect("constraint should still be present");
         assert_eq!(constraint.equality, Equality::EqualToZero);
         // Slack var should have been added
+        let store = instance.variable_metadata();
         assert!(instance
             .decision_variables
-            .values()
-            .any(|dv| dv.metadata.name.as_deref() == Some("ommx.slack")));
+            .keys()
+            .any(|id| store.name(*id) == Some("ommx.slack")));
     }
 
     #[test]

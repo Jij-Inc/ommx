@@ -59,10 +59,8 @@ impl Instance {
             let (rc, _reason) = o.get_mut();
             let old_function = std::mem::replace(&mut rc.stage.function, constraint.stage.function);
             let old_equality = std::mem::replace(&mut rc.equality, constraint.equality);
-            let old_metadata = std::mem::replace(&mut rc.metadata, constraint.metadata);
             let removed = Constraint {
                 equality: old_equality,
-                metadata: old_metadata,
                 stage: crate::constraint::CreatedData {
                     function: old_function,
                 },
@@ -116,10 +114,8 @@ impl Instance {
                 let old_function =
                     std::mem::replace(&mut rc.stage.function, constraint.stage.function);
                 let old_equality = std::mem::replace(&mut rc.equality, constraint.equality);
-                let old_metadata = std::mem::replace(&mut rc.metadata, constraint.metadata);
                 Some(Constraint {
                     equality: old_equality,
-                    metadata: old_metadata,
                     stage: crate::constraint::CreatedData {
                         function: old_function,
                     },
@@ -463,7 +459,6 @@ mod tests {
             .get(&ConstraintID::from(2))
             .unwrap();
         assert_eq!(removed.equality, new_constraint.equality);
-        assert_eq!(removed.metadata, new_constraint.metadata);
         assert_eq!(removed.stage.function, new_constraint.stage.function);
     }
 

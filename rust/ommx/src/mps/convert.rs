@@ -13,12 +13,24 @@ use crate::{
 };
 
 pub fn convert(mps: Mps) -> crate::Result<Instance> {
-    let (decision_variables, name_id_map) = convert_dvars(&mps);
+    let (decision_variables, var_names, name_id_map) = convert_dvars(&mps);
     let objective = convert_objective(&mps, &name_id_map)?;
-    let constraints = convert_constraints(&mps, &name_id_map)?;
+    let (constraints, constraint_names) = convert_constraints(&mps, &name_id_map)?;
     let sense = convert_sense(mps.obj_sense);
 
     let mut instance = Instance::new(sense, objective, decision_variables, constraints)?;
+
+    // Drain name metadata into the SoA stores; per-element metadata storage
+    // was retired in v3.
+    for (id, name) in var_names {
+        instance.variable_metadata_mut().set_name(id, name);
+    }
+    for (id, name) in constraint_names {
+        instance
+            .constraint_collection_mut()
+            .metadata_mut()
+            .set_name(id, name);
+    }
 
     instance.description = convert_description(&mps);
 
@@ -41,6 +53,7 @@ fn convert_dvars(
     mps: &Mps,
 ) -> (
     BTreeMap<VariableID, DecisionVariable>,
+    Vec<(VariableID, String)>,
     HashMap<ColumnName, VariableID>,
 ) {
     let Mps {
@@ -52,6 +65,7 @@ fn convert_dvars(
         ..
     } = mps;
     let mut dvars = BTreeMap::new();
+    let mut var_names: Vec<(VariableID, String)> = Vec::new();
     // Will be used to keep track of dvar ids throughout the conversion. might
     // not be strictly necessary if we make it so parser.rs and this file
     // guarantee a strict and consistent ordering, but it's less error-prone
@@ -76,10 +90,10 @@ fn convert_dvars(
             // in the future
             let id = VariableID::from(i as u64);
             name_id_map.insert(var_name.clone(), id);
-            let mut dvar = DecisionVariable::new(id, kind, bound, None, crate::ATol::default())
+            let dvar = DecisionVariable::new(id, kind, bound, None, crate::ATol::default())
                 .expect("Failed to create decision variable");
-            dvar.metadata.name = Some(var_name.0.clone());
             dvars.insert(id, dvar);
+            var_names.push((id, var_name.0.clone()));
         }
     } else {
         // recover IDs case
@@ -97,7 +111,7 @@ fn convert_dvars(
             dvars.insert(id, dvar);
         }
     }
-    (dvars, name_id_map)
+    (dvars, var_names, name_id_map)
 }
 
 /// Strips the prefix of a variable/constraint name, and parses the following id number.
@@ -176,7 +190,10 @@ fn convert_objective(
 fn convert_constraints(
     mps: &Mps,
     name_id_map: &HashMap<ColumnName, VariableID>,
-) -> crate::Result<BTreeMap<ConstraintID, Constraint>> {
+) -> crate::Result<(
+    BTreeMap<ConstraintID, Constraint>,
+    Vec<(ConstraintID, String)>,
+)> {
     let Mps {
         a,
         b,
@@ -187,6 +204,7 @@ fn convert_constraints(
         ..
     } = mps;
     let mut constrs = BTreeMap::new();
+    let mut constraint_names: Vec<(ConstraintID, String)> = Vec::new();
 
     // as with decision variables, we're trying to recover IDs whenever all constraints match the naming scheme
     if a.keys().any(|name| !name.starts_with(CONSTR_PREFIX)) {
@@ -197,12 +215,12 @@ fn convert_constraints(
             let (function, equality) =
                 convert_inequality(row, b_value, row_name, eq, ge, le, name_id_map, quad_terms)?;
             let id = ConstraintID::from(i as u64);
-            let mut constraint = match equality {
+            let constraint = match equality {
                 Equality::EqualToZero => Constraint::equal_to_zero(function),
                 Equality::LessThanOrEqualToZero => Constraint::less_than_or_equal_to_zero(function),
             };
-            constraint.metadata.name = Some(row_name.0.clone());
             constrs.insert(id, constraint);
+            constraint_names.push((id, row_name.0.clone()));
         }
     } else {
         // recover IDs case
@@ -222,7 +240,7 @@ fn convert_constraints(
             constrs.insert(id, constraint);
         }
     }
-    Ok(constrs)
+    Ok((constrs, constraint_names))
 }
 
 /// Handles passing the `b` constant part to the left-hand side, as we only

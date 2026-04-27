@@ -173,8 +173,13 @@ impl Instance {
                 IndicatorPlan::Fresh { .. } => {
                     let y = self.new_binary();
                     let y_id = y.id();
-                    y.metadata.name = Some("ommx.sos1_indicator".to_string());
-                    y.metadata.subscripts = vec![id.into_inner() as i64, x_id.into_inner() as i64];
+                    let _ = y;
+                    let metadata = self.variable_metadata_mut();
+                    metadata.set_name(y_id, "ommx.sos1_indicator");
+                    metadata.set_subscripts(
+                        y_id,
+                        vec![id.into_inner() as i64, x_id.into_inner() as i64],
+                    );
                     y_id
                 }
             };
@@ -261,16 +266,15 @@ impl Instance {
     fn insert_sos1_generated_constraint(
         &mut self,
         sos1_id: Sos1ConstraintID,
-        mut constraint: Constraint,
+        constraint: Constraint,
     ) -> ConstraintID {
         let new_id = self.constraint_collection.unused_id();
-        constraint
-            .metadata
-            .provenance
-            .push(Provenance::Sos1Constraint(sos1_id));
         self.constraint_collection
             .active_mut()
             .insert(new_id, constraint);
+        self.constraint_collection
+            .metadata_mut()
+            .push_provenance(new_id, Provenance::Sos1Constraint(sos1_id));
         new_id
     }
 }
@@ -348,8 +352,11 @@ mod tests {
         let expected = Function::from(linear!(0) + linear!(1) + Linear::from(coeff!(-1.0)));
         assert_abs_diff_eq!(cardinality.function(), &expected);
         assert_eq!(
-            cardinality.metadata.provenance,
-            vec![Provenance::Sos1Constraint(Sos1ConstraintID::from(5))]
+            instance
+                .constraint_collection()
+                .metadata()
+                .provenance(new_ids[0]),
+            &[Provenance::Sos1Constraint(Sos1ConstraintID::from(5))]
         );
 
         // Original SOS1 is recorded as removed with the new constraint ID.
@@ -382,7 +389,10 @@ mod tests {
             .get(&y_id)
             .expect("fresh indicator should exist");
         assert_eq!(y.kind(), Kind::Binary);
-        assert_eq!(y.metadata.name.as_deref(), Some("ommx.sos1_indicator"));
+        assert_eq!(
+            instance.variable_metadata().name(y_id),
+            Some("ommx.sos1_indicator")
+        );
 
         // Upper Big-M: x0 - 3 y == x0 + (-3) y <= 0
         let upper = instance.constraints().get(&new_ids[0]).unwrap();
