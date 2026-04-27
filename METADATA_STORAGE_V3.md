@@ -309,7 +309,19 @@ The boundaries currently work per-element and need to move to per-collection:
   below needs the `gen_stub_pymethods` decorator and the corresponding
   `ommx.v1.__init__.py` regen via `task python:stubgen`. The stores are
   not exposed to Python directly; they surface via wrapper getters,
-  Series accessors, and DataFrames.
+  Series accessors, and DataFrames. For the `Series[ID -> Object]`
+  return signatures, hand-written stub overrides cover whatever the
+  derive doesn't emit automatically.
+- **`Evaluate` / Sampled construction paths**:
+  `EvaluatedCollection<T>` and `SampledCollection<T>` currently
+  carry no metadata (`rust/ommx/src/constraint_type.rs`). To realize
+  the "Solution and SampleSet share the metadata store" guarantee,
+  every constructor of these collections — and every call site that
+  evaluates or samples constraints (the `Evaluate` impls in
+  `rust/ommx/src/constraint/evaluate.rs`, `instance/evaluate.rs`,
+  and the per-special-constraint evaluate modules) — has to thread
+  the source `ConstraintMetadataStore<T::ID>` through. This is a
+  required implementation task, not a separate optimization.
 
 ## Python SDK design
 
@@ -790,6 +802,18 @@ traceability with earlier review comments.
    a future version ever needs a `drop_constraint`, it lands as a
    separate feature with its own invalidation story; v3 does not
    need it.
+
+   **Parse-time normalization is the one explicit exception.**
+   `From<v1::Instance>` already absorbs constraint hints into the
+   first-class collections (`rust/ommx/src/instance/parse.rs`'s
+   hint-absorption path), which can drop "absorbed" regular
+   constraints during parsing. This is part of the parse step, not
+   a runtime mutation of an existing `ConstraintCollection`, so the
+   invariant above still holds at the runtime API. The practical
+   consequence is that a v2 proto round-tripped through v3 parse
+   may have fewer regular constraints than the input — an existing
+   v2 behavior, called out here so it isn't mistaken for a runtime
+   `drop` slipping in.
 8. **Attached wrapper `Py<Instance>` lifetime — documented behavior,
    no code-level mitigation in this proposal.** The wrapper holds a
    refcounted handle to the Instance; there's no cycle (wrapper →
