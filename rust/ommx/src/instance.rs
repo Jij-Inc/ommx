@@ -33,10 +33,10 @@ pub use stats::*;
 
 use crate::{
     constraint::RemovedReason, constraint_type::ConstraintCollection,
-    indicator_constraint::IndicatorConstraint, named_function::NamedFunctionID,
-    one_hot_constraint::OneHotConstraint, sos1_constraint::Sos1Constraint, v1, AcyclicAssignments,
-    Constraint, ConstraintID, DecisionVariable, Evaluate, Function, NamedFunction, VariableID,
-    VariableIDSet,
+    decision_variable::VariableMetadataStore, indicator_constraint::IndicatorConstraint,
+    named_function::NamedFunctionID, one_hot_constraint::OneHotConstraint,
+    sos1_constraint::Sos1Constraint, v1, AcyclicAssignments, Constraint, ConstraintID,
+    DecisionVariable, Evaluate, Function, NamedFunction, VariableID, VariableIDSet,
 };
 use std::collections::BTreeMap;
 
@@ -129,6 +129,11 @@ pub struct Instance {
     #[getset(get = "pub")]
     decision_variables: BTreeMap<VariableID, DecisionVariable>,
 
+    /// Per-variable auxiliary metadata (`name`, `subscripts`, `parameters`,
+    /// `description`). Sibling field of [`Self::decision_variables`]; together
+    /// they form the canonical decision-variable storage.
+    variable_metadata: VariableMetadataStore,
+
     /// Regular constraints collection (active + removed).
     constraint_collection: ConstraintCollection<Constraint>,
 
@@ -153,6 +158,16 @@ pub struct Instance {
 }
 
 impl Instance {
+    /// Access the per-variable metadata store.
+    pub fn variable_metadata(&self) -> &VariableMetadataStore {
+        &self.variable_metadata
+    }
+
+    /// Mutable access to the per-variable metadata store.
+    pub fn variable_metadata_mut(&mut self) -> &mut VariableMetadataStore {
+        &mut self.variable_metadata
+    }
+
     /// Active constraints.
     pub fn constraints(&self) -> &BTreeMap<ConstraintID, Constraint> {
         self.constraint_collection.active()
@@ -340,6 +355,12 @@ pub struct ParametricInstance {
     #[getset(get = "pub")]
     parameters: BTreeMap<VariableID, v1::Parameter>,
 
+    /// Per-variable auxiliary metadata (sibling of [`Self::decision_variables`]).
+    /// The (unrelated) parametric `parameters` field above stores
+    /// per-id [`v1::Parameter`] data for parameterized instances and is
+    /// independent from this metadata store.
+    variable_metadata: VariableMetadataStore,
+
     /// Regular constraints collection (active + removed).
     constraint_collection: ConstraintCollection<Constraint>,
 
@@ -363,6 +384,16 @@ pub struct ParametricInstance {
 }
 
 impl ParametricInstance {
+    /// Access the per-variable metadata store.
+    pub fn variable_metadata(&self) -> &VariableMetadataStore {
+        &self.variable_metadata
+    }
+
+    /// Mutable access to the per-variable metadata store.
+    pub fn variable_metadata_mut(&mut self) -> &mut VariableMetadataStore {
+        &mut self.variable_metadata
+    }
+
     /// Active constraints.
     pub fn constraints(&self) -> &BTreeMap<ConstraintID, Constraint> {
         self.constraint_collection.active()

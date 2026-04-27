@@ -24,7 +24,10 @@
 
 use crate::Result;
 use crate::{
-    constraint::{ConstraintID, EvaluatedConstraint, RemovedReason, SampledConstraint},
+    constraint::{
+        ConstraintID, ConstraintMetadata, ConstraintMetadataStore, EvaluatedConstraint,
+        RemovedReason, SampledConstraint,
+    },
     v1, ATol, Constraint, Evaluate, SampleID, VariableIDSet,
 };
 use std::collections::BTreeMap;
@@ -126,10 +129,18 @@ impl ConstraintType for Constraint {
 ///
 /// Removed constraints are stored as `(T::Created, RemovedReason)` pairs.
 /// The `RemovedReason` is collection-level metadata, not part of the constraint itself.
+///
+/// Per-constraint auxiliary metadata (`name`, `subscripts`, `parameters`,
+/// `description`, `provenance`) is held by [`Self::metadata`] in a
+/// Struct-of-Arrays form keyed by `T::ID`. The store rides through to
+/// [`EvaluatedCollection`] / [`SampledCollection`] on evaluation, so the
+/// modeling, Solution, and SampleSet layers all read from one canonical
+/// metadata source per collection.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConstraintCollection<T: ConstraintType> {
     active: BTreeMap<T::ID, T::Created>,
     removed: BTreeMap<T::ID, (T::Created, RemovedReason)>,
+    metadata: ConstraintMetadataStore<T::ID>,
 }
 
 impl<T: ConstraintType> Default for ConstraintCollection<T> {
@@ -137,6 +148,7 @@ impl<T: ConstraintType> Default for ConstraintCollection<T> {
         Self {
             active: BTreeMap::new(),
             removed: BTreeMap::new(),
+            metadata: ConstraintMetadataStore::default(),
         }
     }
 }
@@ -146,7 +158,38 @@ impl<T: ConstraintType> ConstraintCollection<T> {
         active: BTreeMap<T::ID, T::Created>,
         removed: BTreeMap<T::ID, (T::Created, RemovedReason)>,
     ) -> Self {
-        Self { active, removed }
+        Self {
+            active,
+            removed,
+            metadata: ConstraintMetadataStore::default(),
+        }
+    }
+
+    /// Construct a collection together with its metadata store. Used by the
+    /// parse boundary, where metadata for both active and removed entries is
+    /// drained from the per-element protobuf messages into a single store.
+    pub fn with_metadata(
+        active: BTreeMap<T::ID, T::Created>,
+        removed: BTreeMap<T::ID, (T::Created, RemovedReason)>,
+        metadata: ConstraintMetadataStore<T::ID>,
+    ) -> Self {
+        Self {
+            active,
+            removed,
+            metadata,
+        }
+    }
+
+    /// Access the per-constraint metadata store.
+    pub fn metadata(&self) -> &ConstraintMetadataStore<T::ID> {
+        &self.metadata
+    }
+
+    /// Mutable access to the per-constraint metadata store. Used by setters
+    /// (e.g. `instance.add_name(id, ...)`) and by adapters that want to
+    /// rewrite metadata in bulk.
+    pub fn metadata_mut(&mut self) -> &mut ConstraintMetadataStore<T::ID> {
+        &mut self.metadata
     }
 
     /// Access active constraints.
@@ -167,6 +210,16 @@ impl<T: ConstraintType> ConstraintCollection<T> {
     /// Mutable access to removed constraints.
     pub fn removed_mut(&mut self) -> &mut BTreeMap<T::ID, (T::Created, RemovedReason)> {
         &mut self.removed
+    }
+
+    /// Insert an active constraint along with its metadata in one step.
+    ///
+    /// `id` must not already be present in either the active or removed map.
+    /// The metadata is written to the store; empty metadata fields are stored
+    /// sparsely (i.e. omitted) by [`ConstraintMetadataStore::insert`].
+    pub fn insert_with(&mut self, id: T::ID, constraint: T::Created, metadata: ConstraintMetadata) {
+        self.active.insert(id, constraint);
+        self.metadata.insert(id, metadata);
     }
 
     /// Return an ID that is not used by any active or removed constraint in this collection.
@@ -191,15 +244,16 @@ impl<T: ConstraintType> ConstraintCollection<T> {
         T::ID::from(next)
     }
 
-    /// Consume the collection and return the active and removed maps.
+    /// Consume the collection and return the active map, removed map, and metadata store.
     #[allow(clippy::type_complexity)]
     pub fn into_parts(
         self,
     ) -> (
         BTreeMap<T::ID, T::Created>,
         BTreeMap<T::ID, (T::Created, RemovedReason)>,
+        ConstraintMetadataStore<T::ID>,
     ) {
-        (self.active, self.removed)
+        (self.active, self.removed, self.metadata)
     }
 
     /// Move an active constraint to the removed set with a reason.
@@ -252,7 +306,11 @@ impl<T: ConstraintType> Evaluate for ConstraintCollection<T> {
             results.insert(*id, evaluated);
             removed_reasons.insert(*id, reason.clone());
         }
-        Ok(EvaluatedCollection::new(results, removed_reasons))
+        Ok(EvaluatedCollection::with_metadata(
+            results,
+            removed_reasons,
+            self.metadata.clone(),
+        ))
     }
 
     fn evaluate_samples(
@@ -275,7 +333,11 @@ impl<T: ConstraintType> Evaluate for ConstraintCollection<T> {
             results.insert(*id, evaluated);
             removed_reasons.insert(*id, reason.clone());
         }
-        Ok(SampledCollection::new(results, removed_reasons))
+        Ok(SampledCollection::with_metadata(
+            results,
+            removed_reasons,
+            self.metadata.clone(),
+        ))
     }
 
     fn partial_evaluate(&mut self, state: &v1::State, atol: ATol) -> Result<()> {
@@ -296,10 +358,15 @@ impl<T: ConstraintType> Evaluate for ConstraintCollection<T> {
 ///
 /// This is the Solution-side counterpart of [`ConstraintCollection`],
 /// providing generic feasibility checks via [`EvaluatedConstraintBehavior`].
+///
+/// Carries the source [`ConstraintCollection`]'s metadata store so that the
+/// Solution layer reads the same canonical metadata as the originating
+/// instance.
 #[derive(Debug, Clone, PartialEq)]
 pub struct EvaluatedCollection<T: ConstraintType> {
     constraints: BTreeMap<T::ID, T::Evaluated>,
     removed_reasons: BTreeMap<T::ID, RemovedReason>,
+    metadata: ConstraintMetadataStore<T::ID>,
 }
 
 impl<T: ConstraintType> std::ops::Deref for EvaluatedCollection<T> {
@@ -320,6 +387,7 @@ impl<T: ConstraintType> Default for EvaluatedCollection<T> {
         Self {
             constraints: BTreeMap::new(),
             removed_reasons: BTreeMap::new(),
+            metadata: ConstraintMetadataStore::default(),
         }
     }
 }
@@ -332,6 +400,22 @@ impl<T: ConstraintType> EvaluatedCollection<T> {
         Self {
             constraints,
             removed_reasons,
+            metadata: ConstraintMetadataStore::default(),
+        }
+    }
+
+    /// Construct an evaluated collection together with its metadata store.
+    /// Used by [`ConstraintCollection::evaluate`] to thread the source
+    /// collection's metadata through unchanged.
+    pub fn with_metadata(
+        constraints: BTreeMap<T::ID, T::Evaluated>,
+        removed_reasons: BTreeMap<T::ID, RemovedReason>,
+        metadata: ConstraintMetadataStore<T::ID>,
+    ) -> Self {
+        Self {
+            constraints,
+            removed_reasons,
+            metadata,
         }
     }
 
@@ -348,15 +432,26 @@ impl<T: ConstraintType> EvaluatedCollection<T> {
         &self.removed_reasons
     }
 
-    /// Consume and return both the constraints and removed reasons.
+    /// Access the per-constraint metadata store.
+    pub fn metadata(&self) -> &ConstraintMetadataStore<T::ID> {
+        &self.metadata
+    }
+
+    /// Mutable access to the per-constraint metadata store.
+    pub fn metadata_mut(&mut self) -> &mut ConstraintMetadataStore<T::ID> {
+        &mut self.metadata
+    }
+
+    /// Consume and return constraints, removed reasons, and metadata store.
     #[allow(clippy::type_complexity)]
     pub fn into_parts(
         self,
     ) -> (
         BTreeMap<T::ID, T::Evaluated>,
         BTreeMap<T::ID, RemovedReason>,
+        ConstraintMetadataStore<T::ID>,
     ) {
-        (self.constraints, self.removed_reasons)
+        (self.constraints, self.removed_reasons, self.metadata)
     }
 
     /// Check if a constraint was removed.
@@ -386,10 +481,15 @@ impl<T: ConstraintType> EvaluatedCollection<T> {
 ///
 /// This is the SampleSet-side counterpart of [`ConstraintCollection`],
 /// providing generic per-sample feasibility checks via [`SampledConstraintBehavior`].
+///
+/// Carries the source [`ConstraintCollection`]'s metadata store so that the
+/// SampleSet layer reads the same canonical metadata as the originating
+/// instance.
 #[derive(Debug, Clone)]
 pub struct SampledCollection<T: ConstraintType> {
     constraints: BTreeMap<T::ID, T::Sampled>,
     removed_reasons: BTreeMap<T::ID, RemovedReason>,
+    metadata: ConstraintMetadataStore<T::ID>,
 }
 
 impl<T: ConstraintType> std::ops::Deref for SampledCollection<T> {
@@ -404,6 +504,7 @@ impl<T: ConstraintType> Default for SampledCollection<T> {
         Self {
             constraints: BTreeMap::new(),
             removed_reasons: BTreeMap::new(),
+            metadata: ConstraintMetadataStore::default(),
         }
     }
 }
@@ -416,6 +517,22 @@ impl<T: ConstraintType> SampledCollection<T> {
         Self {
             constraints,
             removed_reasons,
+            metadata: ConstraintMetadataStore::default(),
+        }
+    }
+
+    /// Construct a sampled collection together with its metadata store.
+    /// Used by [`ConstraintCollection::evaluate_samples`] to thread the
+    /// source collection's metadata through unchanged.
+    pub fn with_metadata(
+        constraints: BTreeMap<T::ID, T::Sampled>,
+        removed_reasons: BTreeMap<T::ID, RemovedReason>,
+        metadata: ConstraintMetadataStore<T::ID>,
+    ) -> Self {
+        Self {
+            constraints,
+            removed_reasons,
+            metadata,
         }
     }
 
@@ -432,10 +549,26 @@ impl<T: ConstraintType> SampledCollection<T> {
         &self.removed_reasons
     }
 
-    /// Consume and return both the constraints and removed reasons.
+    /// Access the per-constraint metadata store.
+    pub fn metadata(&self) -> &ConstraintMetadataStore<T::ID> {
+        &self.metadata
+    }
+
+    /// Mutable access to the per-constraint metadata store.
+    pub fn metadata_mut(&mut self) -> &mut ConstraintMetadataStore<T::ID> {
+        &mut self.metadata
+    }
+
+    /// Consume and return constraints, removed reasons, and metadata store.
     #[allow(clippy::type_complexity)]
-    pub fn into_parts(self) -> (BTreeMap<T::ID, T::Sampled>, BTreeMap<T::ID, RemovedReason>) {
-        (self.constraints, self.removed_reasons)
+    pub fn into_parts(
+        self,
+    ) -> (
+        BTreeMap<T::ID, T::Sampled>,
+        BTreeMap<T::ID, RemovedReason>,
+        ConstraintMetadataStore<T::ID>,
+    ) {
+        (self.constraints, self.removed_reasons, self.metadata)
     }
 
     /// Check if a constraint was removed.

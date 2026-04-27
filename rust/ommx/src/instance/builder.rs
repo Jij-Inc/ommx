@@ -388,6 +388,7 @@ impl InstanceBuilder {
             sense,
             objective,
             decision_variables,
+            variable_metadata: Default::default(),
             constraint_collection: ConstraintCollection::new(constraints, self.removed_constraints),
             indicator_constraint_collection: ConstraintCollection::new(
                 self.indicator_constraints,

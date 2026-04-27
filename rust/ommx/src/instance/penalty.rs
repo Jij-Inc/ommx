@@ -74,7 +74,8 @@ impl Instance {
         let mut parameters = BTreeMap::new();
         let mut removed_constraints = BTreeMap::new();
 
-        let (active_constraints, existing_removed) = self.constraint_collection.into_parts();
+        let (active_constraints, existing_removed, constraint_metadata) =
+            self.constraint_collection.into_parts();
         removed_constraints.extend(existing_removed);
         for (i, (constraint_id, constraint)) in active_constraints.into_iter().enumerate() {
             let parameter_id = VariableID::from(id_base + i as u64);
@@ -112,7 +113,12 @@ impl Instance {
             objective,
             decision_variables: self.decision_variables,
             parameters,
-            constraint_collection: ConstraintCollection::new(BTreeMap::new(), removed_constraints),
+            variable_metadata: self.variable_metadata,
+            constraint_collection: ConstraintCollection::with_metadata(
+                BTreeMap::new(),
+                removed_constraints,
+                constraint_metadata,
+            ),
             indicator_constraint_collection: self.indicator_constraint_collection,
             one_hot_constraint_collection: self.one_hot_constraint_collection,
             sos1_constraint_collection: self.sos1_constraint_collection,
@@ -175,13 +181,19 @@ impl Instance {
 
         // Early return if no active constraints (preserve any existing removed constraints)
         if self.constraints().is_empty() {
-            let (_active, existing_removed) = self.constraint_collection.into_parts();
+            let (_active, existing_removed, constraint_metadata) =
+                self.constraint_collection.into_parts();
             return Ok(ParametricInstance {
                 sense: self.sense,
                 objective: self.objective,
                 decision_variables: self.decision_variables,
                 parameters: BTreeMap::new(),
-                constraint_collection: ConstraintCollection::new(BTreeMap::new(), existing_removed),
+                variable_metadata: self.variable_metadata,
+                constraint_collection: ConstraintCollection::with_metadata(
+                    BTreeMap::new(),
+                    existing_removed,
+                    constraint_metadata,
+                ),
                 indicator_constraint_collection: self.indicator_constraint_collection,
                 one_hot_constraint_collection: self.one_hot_constraint_collection,
                 sos1_constraint_collection: self.sos1_constraint_collection,
@@ -215,7 +227,8 @@ impl Instance {
 
         let mut removed_constraints = BTreeMap::new();
         let mut quad_sum = Function::zero();
-        let (active_constraints, existing_removed) = self.constraint_collection.into_parts();
+        let (active_constraints, existing_removed, constraint_metadata) =
+            self.constraint_collection.into_parts();
         removed_constraints.extend(existing_removed);
 
         for (constraint_id, constraint) in active_constraints.into_iter() {
@@ -240,7 +253,12 @@ impl Instance {
             objective,
             decision_variables: self.decision_variables,
             parameters,
-            constraint_collection: ConstraintCollection::new(BTreeMap::new(), removed_constraints),
+            variable_metadata: self.variable_metadata,
+            constraint_collection: ConstraintCollection::with_metadata(
+                BTreeMap::new(),
+                removed_constraints,
+                constraint_metadata,
+            ),
             indicator_constraint_collection: self.indicator_constraint_collection,
             one_hot_constraint_collection: self.one_hot_constraint_collection,
             sos1_constraint_collection: self.sos1_constraint_collection,

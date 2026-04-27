@@ -42,6 +42,7 @@ impl From<Instance> for ParametricInstance {
             sense,
             objective,
             decision_variables,
+            variable_metadata,
             constraint_collection,
             indicator_constraint_collection,
             one_hot_constraint_collection,
@@ -57,6 +58,7 @@ impl From<Instance> for ParametricInstance {
             objective,
             decision_variables,
             parameters: BTreeMap::default(),
+            variable_metadata,
             constraint_collection,
             indicator_constraint_collection,
             one_hot_constraint_collection,
@@ -103,7 +105,8 @@ impl ParametricInstance {
         let mut objective = self.objective;
         objective.partial_evaluate(&state, atol)?;
 
-        let (mut constraints, removed_constraints) = self.constraint_collection.into_parts();
+        let (mut constraints, removed_constraints, constraint_metadata) =
+            self.constraint_collection.into_parts();
         for (_, constraint) in constraints.iter_mut() {
             constraint.stage.function.partial_evaluate(&state, atol)?;
         }
@@ -117,7 +120,12 @@ impl ParametricInstance {
             sense: self.sense,
             objective,
             decision_variables: self.decision_variables,
-            constraint_collection: ConstraintCollection::new(constraints, removed_constraints),
+            variable_metadata: self.variable_metadata,
+            constraint_collection: ConstraintCollection::with_metadata(
+                constraints,
+                removed_constraints,
+                constraint_metadata,
+            ),
             indicator_constraint_collection: self.indicator_constraint_collection,
             one_hot_constraint_collection: self.one_hot_constraint_collection,
             sos1_constraint_collection: self.sos1_constraint_collection,

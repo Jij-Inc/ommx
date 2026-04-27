@@ -206,6 +206,7 @@ impl Parse for v1::Instance {
             sense,
             objective,
             decision_variables,
+            variable_metadata: VariableMetadataStore::default(),
             constraint_collection: ConstraintCollection::new(constraints, removed_constraints),
             indicator_constraint_collection: Default::default(),
             one_hot_constraint_collection: ConstraintCollection::new(
@@ -235,7 +236,7 @@ impl From<Instance> for v1::Instance {
             .into_values()
             .map(|dv| dv.into())
             .collect();
-        let (active, removed) = value.constraint_collection.into_parts();
+        let (active, removed, _metadata) = value.constraint_collection.into_parts();
         let constraints = active.into_iter().map(|(id, c)| (id, c).into()).collect();
         let named_functions = value
             .named_functions
@@ -403,6 +404,7 @@ impl Parse for v1::ParametricInstance {
             objective,
             decision_variables,
             parameters,
+            variable_metadata: VariableMetadataStore::default(),
             constraint_collection: ConstraintCollection::new(constraints, removed_constraints),
             indicator_constraint_collection: Default::default(),
             one_hot_constraint_collection: ConstraintCollection::new(
@@ -424,6 +426,7 @@ impl From<ParametricInstance> for v1::ParametricInstance {
             objective,
             decision_variables,
             parameters,
+            variable_metadata: _,
             constraint_collection,
             indicator_constraint_collection,
             one_hot_constraint_collection,
@@ -449,7 +452,7 @@ impl From<ParametricInstance> for v1::ParametricInstance {
         {
             unimplemented!("Serialization of Sos1Constraint to v1 proto is not yet supported");
         }
-        let (constraints, removed_constraints) = constraint_collection.into_parts();
+        let (constraints, removed_constraints, _metadata) = constraint_collection.into_parts();
         Self {
             description,
             sense: v1::instance::Sense::from(sense) as i32,
