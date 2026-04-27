@@ -123,7 +123,7 @@ impl Parse for Vec<v1::DecisionVariable> {
 }
 
 /// Build a v1 `DecisionVariable` from its intrinsic data plus drained metadata.
-pub fn decision_variable_to_v1(
+pub(crate) fn decision_variable_to_v1(
     DecisionVariable {
         id,
         kind,
@@ -198,7 +198,7 @@ impl TryFrom<v1::SampledDecisionVariable> for SampledDecisionVariable {
 }
 
 /// Build a v1 `SampledDecisionVariable` from its intrinsic data plus drained metadata.
-pub fn sampled_decision_variable_to_v1(
+pub(crate) fn sampled_decision_variable_to_v1(
     sampled_dv: SampledDecisionVariable,
     metadata: DecisionVariableMetadata,
 ) -> v1::SampledDecisionVariable {

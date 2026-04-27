@@ -1,6 +1,6 @@
 use crate::{Constraint, EvaluatedNamedFunction, Function, State};
 use ommx::{Evaluate, NamedFunctionID};
-use pyo3::{prelude::*, types::PyBytes, Bound, PyAny};
+use pyo3::{prelude::*, Bound, PyAny};
 use std::collections::HashMap;
 
 /// NamedFunction wrapper for Python
@@ -75,17 +75,6 @@ impl NamedFunction {
     #[getter]
     pub fn description(&self) -> Option<String> {
         self.0.description.clone()
-    }
-
-    #[staticmethod]
-    pub fn from_bytes(bytes: &Bound<PyBytes>) -> PyResult<Self> {
-        ommx::NamedFunction::from_bytes(bytes.as_bytes())
-            .map(Self)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
-    }
-
-    pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
-        PyBytes::new(py, &self.0.to_bytes())
     }
 
     /// Evaluate the named function with the given state.

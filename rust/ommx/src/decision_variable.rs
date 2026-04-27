@@ -2,16 +2,13 @@ mod approx;
 mod arbitrary;
 mod logical_memory;
 mod metadata_store;
-pub mod parse;
-mod serialize;
+pub(crate) mod parse;
 
 pub use arbitrary::*;
 use getset::CopyGetters;
 pub use metadata_store::VariableMetadataStore;
 
-pub(crate) use parse::{
-    sampled_decision_variable_to_v1, ParsedDecisionVariable, ParsedSampledDecisionVariable,
-};
+pub(crate) use parse::sampled_decision_variable_to_v1;
 
 use crate::logical_memory::LogicalMemoryProfile;
 use crate::{ATol, Bound, Parse, RawParseError, SampleID, Sampled};
@@ -600,7 +597,7 @@ impl crate::Evaluate for DecisionVariable {
 /// Build a v1 `DecisionVariable` from an evaluated variable plus its
 /// metadata. The metadata comes from the enclosing collection's
 /// [`VariableMetadataStore`]; the per-element struct no longer carries it.
-pub fn evaluated_decision_variable_to_v1(
+pub(crate) fn evaluated_decision_variable_to_v1(
     eval_dv: EvaluatedDecisionVariable,
     metadata: DecisionVariableMetadata,
 ) -> crate::v1::DecisionVariable {
@@ -616,39 +613,15 @@ pub fn evaluated_decision_variable_to_v1(
     }
 }
 
-/// Build a v1 `DecisionVariable` from intrinsic data only.
-///
-/// Metadata fields (name / subscripts / parameters / description) are left at
-/// their defaults; the collection-level serializer overlays them from the
-/// [`VariableMetadataStore`] before emitting the final proto message.
-impl From<DecisionVariable> for crate::v1::DecisionVariable {
-    fn from(dv: DecisionVariable) -> Self {
-        crate::decision_variable::parse::decision_variable_to_v1(
-            dv,
-            DecisionVariableMetadata::default(),
-        )
-    }
-}
-
-/// Build a v1 `DecisionVariable` from an evaluated variable, with metadata
-/// fields left at their defaults. Used by call sites that don't have access
-/// to the SoA store; the collection-level serializer overlays metadata
-/// before emitting the final proto.
-impl From<EvaluatedDecisionVariable> for crate::v1::DecisionVariable {
-    fn from(eval_dv: EvaluatedDecisionVariable) -> Self {
-        evaluated_decision_variable_to_v1(eval_dv, DecisionVariableMetadata::default())
-    }
-}
-
-/// Build a v1 `SampledDecisionVariable` with metadata fields defaulted.
-impl From<SampledDecisionVariable> for crate::v1::SampledDecisionVariable {
-    fn from(sampled_dv: SampledDecisionVariable) -> Self {
-        crate::decision_variable::parse::sampled_decision_variable_to_v1(
-            sampled_dv,
-            DecisionVariableMetadata::default(),
-        )
-    }
-}
+// NOTE: There are intentionally no `impl From<DecisionVariable> for
+// v1::DecisionVariable` (or the Evaluated / Sampled variants). v3 keeps
+// metadata at the collection layer, so a per-element conversion would
+// have to default every metadata field — silently dropping any
+// caller-supplied metadata. Callers must instead go through
+// [`decision_variable::parse::decision_variable_to_v1`] (and the Evaluated
+// / Sampled siblings), which take the metadata explicitly. Top-level
+// container serialization (`From<Instance> for v1::Instance` etc.) drains
+// the SoA store and threads the metadata through these helpers.
 
 impl std::convert::TryFrom<crate::v1::DecisionVariable> for EvaluatedDecisionVariable {
     type Error = crate::ParseError;
@@ -815,8 +788,9 @@ mod tests {
         // Note: per-element metadata is gone in v3; the standalone TryFrom
         // path drops metadata. End-to-end name preservation flows through
         // Solution / SampleSet, which carry a VariableMetadataStore.
-        // Test round-trip conversion at the intrinsic-data level.
-        let v1_converted: v1::DecisionVariable = evaluated_dv.into();
+        // Test round-trip conversion at the intrinsic-data level via the
+        // explicit `evaluated_decision_variable_to_v1` helper.
+        let v1_converted = evaluated_decision_variable_to_v1(evaluated_dv, Default::default());
         assert_eq!(v1_converted.id, 42);
         assert_eq!(v1_converted.substituted_value, Some(5.0));
     }

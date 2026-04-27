@@ -1,8 +1,7 @@
 use crate::{Constraint, Function, Linear, Parameter, Polynomial, Quadratic, VariableBound};
 use anyhow::Result;
-use ommx::decision_variable::parse::decision_variable_to_v1;
-use ommx::{v1, ATol, LinearMonomial, Message, Parse, VariableID};
-use pyo3::{prelude::*, types::PyBytes, Bound, PyAny};
+use ommx::{v1, ATol, LinearMonomial, VariableID};
+use pyo3::{prelude::*, Bound, PyAny};
 use std::collections::HashMap;
 
 /// Decision variable in an optimization problem.
@@ -291,19 +290,6 @@ impl DecisionVariable {
             parameters,
             description,
         )
-    }
-
-    #[staticmethod]
-    pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
-        let inner = v1::DecisionVariable::decode(bytes.as_bytes())?;
-        let parsed: ommx::decision_variable::parse::ParsedDecisionVariable =
-            Parse::parse(inner, &())?;
-        Ok(Self(parsed.variable, parsed.metadata))
-    }
-
-    pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
-        let v1_dv = decision_variable_to_v1(self.0.clone(), self.1.clone());
-        PyBytes::new(py, &v1_dv.encode_to_vec())
     }
 
     pub fn __repr__(&self) -> String {

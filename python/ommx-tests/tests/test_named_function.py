@@ -87,23 +87,6 @@ class TestNamedFunctionConstruction:
         assert nf.parameters == {}
 
 
-class TestNamedFunctionSerialization:
-    def test_roundtrip(self):
-        x = DecisionVariable.integer(1)
-        nf = NamedFunction(
-            id=7,
-            function=2 * x + 1,
-            name="test",
-            subscripts=[3],
-        )
-        data = nf.to_bytes()
-        nf2 = NamedFunction.from_bytes(data)
-        assert nf2.id == 7
-        assert nf2.name == "test"
-        assert nf2.subscripts == [3]
-        assert nf2.function.evaluate({1: 5.0}) == 11.0
-
-
 class TestNamedFunctionArithmetic:
     def test_add(self):
         x = DecisionVariable.integer(1)

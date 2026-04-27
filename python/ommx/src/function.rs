@@ -6,12 +6,7 @@ use crate::{
 use anyhow::{anyhow, Result};
 use approx::AbsDiffEq;
 use ommx::{ATol, Coefficient, CoefficientError, Evaluate, LinearMonomial};
-use pyo3::{
-    exceptions::PyTypeError,
-    prelude::*,
-    types::{PyBytes, PyDict},
-    Bound, PyAny,
-};
+use pyo3::{exceptions::PyTypeError, prelude::*, types::PyDict, Bound, PyAny};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// General mathematical function of decision variables.
@@ -216,15 +211,6 @@ impl Function {
     #[staticmethod]
     pub fn from_polynomial(polynomial: &Polynomial) -> Self {
         Self(ommx::Function::from(polynomial.0.clone()))
-    }
-
-    #[staticmethod]
-    pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
-        Ok(Self(ommx::Function::from_bytes(bytes.as_bytes())?))
-    }
-
-    pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
-        PyBytes::new(py, &self.0.to_bytes())
     }
 
     /// Try to convert this function to a linear function.

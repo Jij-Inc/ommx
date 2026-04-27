@@ -7,10 +7,16 @@
 //!
 //! # Adding new constraint types
 //!
-//! To add a new constraint type (e.g. Disjunction, SOS1, OneHot):
+//! To add a new constraint type (e.g. Disjunction):
 //!
-//! 1. Define a new struct `NewConstraint<S: Stage<Self> = Created>` with common fields
-//!    (`id`, `equality`, `metadata`, `stage`) plus type-specific fields.
+//! 1. Define a new struct `NewConstraint<S: Stage<Self> = Created>` with the
+//!    type's intrinsic fields (`equality`, `stage`, plus anything specific to
+//!    the new type). **Do not add a `metadata` field**: auxiliary metadata
+//!    (`name`, `subscripts`, `parameters`, `description`, `provenance`) lives
+//!    on the enclosing `ConstraintCollection<NewConstraint>`'s
+//!    [`ConstraintMetadataStore`](crate::ConstraintMetadataStore) keyed by id.
+//!    The constraint's `ConstraintID` is also held by the collection rather
+//!    than the struct itself.
 //! 2. Implement `Stage<NewConstraint<S>>` for each stage marker (reuse `CreatedData`,
 //!    `EvaluatedData`, etc. if the stage data is the same as regular constraints).
 //! 3. Implement `ConstraintType for NewConstraint` mapping all three stages.

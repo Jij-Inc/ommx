@@ -1,6 +1,4 @@
-use anyhow::Result;
-use ommx::{evaluated_decision_variable_to_v1, v1, Message, Parse};
-use pyo3::{prelude::*, types::PyBytes, Bound};
+use pyo3::prelude::*;
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
@@ -25,26 +23,6 @@ impl EvaluatedDecisionVariable {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl EvaluatedDecisionVariable {
-    #[staticmethod]
-    pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
-        let inner = v1::DecisionVariable::decode(bytes.as_bytes())?;
-        let parsed: ommx::decision_variable::parse::ParsedDecisionVariable =
-            Parse::parse(inner, &())?;
-        let metadata = parsed.metadata;
-        let parsed_dv = parsed.variable;
-        let value = parsed_dv
-            .substituted_value()
-            .ok_or_else(|| anyhow::anyhow!("Missing value for EvaluatedDecisionVariable"))?;
-        let evaluated =
-            ommx::EvaluatedDecisionVariable::new(parsed_dv, value, ommx::ATol::default())?;
-        Ok(Self(evaluated, metadata))
-    }
-
-    pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
-        let v1_dv = evaluated_decision_variable_to_v1(self.0.clone(), self.1.clone());
-        PyBytes::new(py, &v1_dv.encode_to_vec())
-    }
-
     /// Get the variable ID
     #[getter]
     pub fn id(&self) -> u64 {

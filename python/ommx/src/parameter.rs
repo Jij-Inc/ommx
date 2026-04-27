@@ -1,7 +1,6 @@
 use crate::{Constraint, Function, Linear, Polynomial, Quadratic};
-use anyhow::Result;
-use ommx::{LinearMonomial, Message, VariableID};
-use pyo3::{prelude::*, types::PyBytes, Bound, PyAny};
+use ommx::{LinearMonomial, VariableID};
+use pyo3::{prelude::*, Bound, PyAny};
 use std::collections::HashMap;
 
 /// Parameter in an optimization problem.
@@ -138,16 +137,6 @@ impl Parameter {
     #[getter]
     pub fn description(&self) -> String {
         self.0.description.clone().unwrap_or_default()
-    }
-
-    #[staticmethod]
-    pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
-        let inner = ommx::v1::Parameter::decode(bytes.as_bytes())?;
-        Ok(Self(inner))
-    }
-
-    pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
-        PyBytes::new(py, &self.0.encode_to_vec())
     }
 
     pub fn __repr__(&self) -> String {

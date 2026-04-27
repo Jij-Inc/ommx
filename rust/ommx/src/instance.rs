@@ -13,7 +13,7 @@ mod named_function;
 mod new;
 mod one_hot;
 mod parametric_builder;
-pub mod parse;
+mod parse;
 mod pass;
 mod penalty;
 mod qubo;

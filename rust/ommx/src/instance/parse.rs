@@ -89,7 +89,7 @@ impl From<Sense> for i32 {
 /// collection is the canonical source. Serialization paths fetch the
 /// metadata from the collection's [`ConstraintMetadataStore`] and join it
 /// at this boundary.
-pub fn constraint_to_v1(
+pub(crate) fn constraint_to_v1(
     id: ConstraintID,
     value: Constraint,
     metadata: ConstraintMetadata,
@@ -105,7 +105,7 @@ pub fn constraint_to_v1(
     }
 }
 
-pub fn removed_constraint_to_v1(
+pub(crate) fn removed_constraint_to_v1(
     id: ConstraintID,
     constraint: Constraint,
     metadata: ConstraintMetadata,
@@ -118,20 +118,14 @@ pub fn removed_constraint_to_v1(
     }
 }
 
-/// Build a v1 `Constraint` from intrinsic data only; metadata defaulted.
-/// Used by call sites that don't have access to the SoA store; the
-/// collection-level serializer overlays metadata before emitting.
-impl From<(ConstraintID, Constraint)> for v1::Constraint {
-    fn from((id, c): (ConstraintID, Constraint)) -> Self {
-        constraint_to_v1(id, c, ConstraintMetadata::default())
-    }
-}
-
-impl From<(ConstraintID, Constraint, RemovedReason)> for v1::RemovedConstraint {
-    fn from((id, c, r): (ConstraintID, Constraint, RemovedReason)) -> Self {
-        removed_constraint_to_v1(id, c, ConstraintMetadata::default(), r)
-    }
-}
+// NOTE: There are intentionally no `impl From<(ConstraintID, Constraint)>
+// for v1::Constraint` (or `v1::RemovedConstraint`). v3 keeps metadata at
+// the collection layer, so a per-element conversion would have to default
+// every metadata field — silently dropping any caller-supplied metadata.
+// Callers must instead go through [`constraint_to_v1`] /
+// [`removed_constraint_to_v1`], which take the metadata explicitly.
+// `From<Instance> for v1::Instance` (above) drains the SoA store and
+// threads the metadata through these helpers.
 
 impl Parse for v1::Instance {
     type Output = Instance;
@@ -498,7 +492,7 @@ impl From<ParametricInstance> for v1::ParametricInstance {
             objective,
             decision_variables,
             parameters,
-            variable_metadata: _,
+            variable_metadata,
             constraint_collection,
             indicator_constraint_collection,
             one_hot_constraint_collection,
@@ -524,25 +518,34 @@ impl From<ParametricInstance> for v1::ParametricInstance {
         {
             unimplemented!("Serialization of Sos1Constraint to v1 proto is not yet supported");
         }
-        let (constraints, removed_constraints, _metadata) = constraint_collection.into_parts();
+        // Drain per-element data and join with metadata from the SoA stores.
+        // (Same shape as `From<Instance> for v1::Instance` above; a stale
+        // version of this conversion silently dropped both metadata stores.)
+        let v1_decision_variables = decision_variables
+            .into_iter()
+            .map(|(id, dv)| {
+                let metadata = variable_metadata.collect_for(id);
+                crate::decision_variable::parse::decision_variable_to_v1(dv, metadata)
+            })
+            .collect();
+        let (active, removed, mut constraint_metadata) = constraint_collection.into_parts();
+        let v1_constraints = active
+            .into_iter()
+            .map(|(id, c)| constraint_to_v1(id, c, constraint_metadata.remove(id)))
+            .collect();
+        let v1_removed_constraints = removed
+            .into_iter()
+            .map(|(id, (c, r))| removed_constraint_to_v1(id, c, constraint_metadata.remove(id), r))
+            .collect();
         Self {
             description,
             sense: v1::instance::Sense::from(sense) as i32,
             objective: Some(objective.into()),
-            decision_variables: decision_variables
-                .into_values()
-                .map(|dv| dv.into())
-                .collect(),
+            decision_variables: v1_decision_variables,
             parameters: parameters.into_values().collect(),
-            constraints: constraints
-                .into_iter()
-                .map(|(id, c)| (id, c).into())
-                .collect(),
+            constraints: v1_constraints,
             named_functions: named_functions.into_values().map(|nf| nf.into()).collect(),
-            removed_constraints: removed_constraints
-                .into_iter()
-                .map(|(id, (c, r))| (id, c, r).into())
-                .collect(),
+            removed_constraints: v1_removed_constraints,
             decision_variable_dependency: decision_variable_dependency
                 .into_iter()
                 .map(|(id, dep)| (id.into(), dep.into()))
@@ -577,7 +580,10 @@ mod tests {
         let v1_parametric_instance = v1::ParametricInstance {
             sense: v1::instance::Sense::Minimize as i32,
             objective: Some(Function::from(linear!(999) + coeff!(1.0)).into()),
-            decision_variables: vec![DecisionVariable::binary(VariableID::from(1)).into()],
+            decision_variables: vec![crate::decision_variable::parse::decision_variable_to_v1(
+                DecisionVariable::binary(VariableID::from(1)),
+                Default::default(),
+            )],
             parameters: vec![v1::Parameter {
                 id: 100,
                 name: Some("p1".to_string()),
@@ -612,17 +618,20 @@ mod tests {
         let v1_parametric_instance = v1::ParametricInstance {
             sense: v1::instance::Sense::Minimize as i32,
             objective: Some(Function::from(linear!(1) + coeff!(1.0)).into()),
-            decision_variables: vec![DecisionVariable::binary(VariableID::from(1)).into()],
+            decision_variables: vec![crate::decision_variable::parse::decision_variable_to_v1(
+                DecisionVariable::binary(VariableID::from(1)),
+                Default::default(),
+            )],
             parameters: vec![v1::Parameter {
                 id: 100,
                 name: Some("p1".to_string()),
                 ..Default::default()
             }],
-            constraints: vec![(
+            constraints: vec![constraint_to_v1(
                 ConstraintID::from(1),
                 Constraint::equal_to_zero(Function::from(linear!(999) + coeff!(1.0))),
-            )
-                .into()],
+                Default::default(),
+            )],
             named_functions: vec![],
             removed_constraints: vec![],
             decision_variable_dependency: HashMap::new(),
@@ -649,7 +658,10 @@ mod tests {
         let v1_instance = v1::Instance {
             sense: v1::instance::Sense::Minimize as i32,
             objective: Some(Function::from(linear!(999) + coeff!(1.0)).into()),
-            decision_variables: vec![DecisionVariable::binary(VariableID::from(1)).into()],
+            decision_variables: vec![crate::decision_variable::parse::decision_variable_to_v1(
+                DecisionVariable::binary(VariableID::from(1)),
+                Default::default(),
+            )],
             constraints: vec![],
             named_functions: vec![],
             removed_constraints: vec![],
@@ -680,12 +692,15 @@ mod tests {
         let v1_instance = v1::Instance {
             sense: v1::instance::Sense::Minimize as i32,
             objective: Some(Function::from(linear!(1) + coeff!(1.0)).into()),
-            decision_variables: vec![DecisionVariable::binary(VariableID::from(1)).into()],
-            constraints: vec![(
+            decision_variables: vec![crate::decision_variable::parse::decision_variable_to_v1(
+                DecisionVariable::binary(VariableID::from(1)),
+                Default::default(),
+            )],
+            constraints: vec![constraint_to_v1(
                 ConstraintID::from(1),
                 Constraint::equal_to_zero(Function::from(linear!(999) + coeff!(1.0))),
-            )
-                .into()],
+                Default::default(),
+            )],
             named_functions: vec![],
             removed_constraints: vec![],
             decision_variable_dependency: HashMap::new(),
@@ -718,19 +733,22 @@ mod tests {
             reason: "test".to_string(),
             parameters: Default::default(),
         };
-        let removed_constraint: v1::RemovedConstraint =
-            (cid, constraint.clone(), removed_reason).into();
+        let removed_constraint =
+            removed_constraint_to_v1(cid, constraint.clone(), Default::default(), removed_reason);
 
         let v1_parametric_instance = v1::ParametricInstance {
             sense: v1::instance::Sense::Minimize as i32,
             objective: Some(Function::from(linear!(1) + coeff!(1.0)).into()),
-            decision_variables: vec![DecisionVariable::binary(VariableID::from(1)).into()],
+            decision_variables: vec![crate::decision_variable::parse::decision_variable_to_v1(
+                DecisionVariable::binary(VariableID::from(1)),
+                Default::default(),
+            )],
             parameters: vec![v1::Parameter {
                 id: 100,
                 name: Some("p1".to_string()),
                 ..Default::default()
             }],
-            constraints: vec![(cid, constraint).into()],
+            constraints: vec![constraint_to_v1(cid, constraint, Default::default())],
             named_functions: vec![],
             removed_constraints: vec![removed_constraint],
             decision_variable_dependency: HashMap::new(),
@@ -762,14 +780,17 @@ mod tests {
             reason: "test".to_string(),
             parameters: Default::default(),
         };
-        let removed_constraint: v1::RemovedConstraint =
-            (cid, constraint.clone(), removed_reason).into();
+        let removed_constraint =
+            removed_constraint_to_v1(cid, constraint.clone(), Default::default(), removed_reason);
 
         let v1_instance = v1::Instance {
             sense: v1::instance::Sense::Minimize as i32,
             objective: Some(Function::from(linear!(1) + coeff!(1.0)).into()),
-            decision_variables: vec![DecisionVariable::binary(VariableID::from(1)).into()],
-            constraints: vec![(cid, constraint).into()],
+            decision_variables: vec![crate::decision_variable::parse::decision_variable_to_v1(
+                DecisionVariable::binary(VariableID::from(1)),
+                Default::default(),
+            )],
+            constraints: vec![constraint_to_v1(cid, constraint, Default::default())],
             named_functions: vec![],
             removed_constraints: vec![removed_constraint],
             decision_variable_dependency: HashMap::new(),
@@ -797,7 +818,10 @@ mod tests {
         let v1_parametric_instance = v1::ParametricInstance {
             sense: 999, // Invalid sense value
             objective: Some(Function::from(linear!(1) + coeff!(1.0)).into()),
-            decision_variables: vec![DecisionVariable::binary(VariableID::from(1)).into()],
+            decision_variables: vec![crate::decision_variable::parse::decision_variable_to_v1(
+                DecisionVariable::binary(VariableID::from(1)),
+                Default::default(),
+            )],
             parameters: vec![v1::Parameter {
                 id: 100,
                 name: Some("p1".to_string()),
@@ -828,7 +852,10 @@ mod tests {
         let v1_instance = v1::Instance {
             sense: 999, // Invalid sense value
             objective: Some(Function::from(linear!(1) + coeff!(1.0)).into()),
-            decision_variables: vec![DecisionVariable::binary(VariableID::from(1)).into()],
+            decision_variables: vec![crate::decision_variable::parse::decision_variable_to_v1(
+                DecisionVariable::binary(VariableID::from(1)),
+                Default::default(),
+            )],
             constraints: vec![],
             named_functions: vec![],
             removed_constraints: vec![],
@@ -855,7 +882,10 @@ mod tests {
         let v1_parametric_instance = v1::ParametricInstance {
             sense: v1::instance::Sense::Minimize as i32,
             objective: None, // Missing objective
-            decision_variables: vec![DecisionVariable::binary(VariableID::from(1)).into()],
+            decision_variables: vec![crate::decision_variable::parse::decision_variable_to_v1(
+                DecisionVariable::binary(VariableID::from(1)),
+                Default::default(),
+            )],
             parameters: vec![v1::Parameter {
                 id: 100,
                 name: Some("p1".to_string()),
@@ -887,7 +917,10 @@ mod tests {
         let v1_instance = v1::Instance {
             sense: v1::instance::Sense::Minimize as i32,
             objective: None, // Missing objective
-            decision_variables: vec![DecisionVariable::binary(VariableID::from(1)).into()],
+            decision_variables: vec![crate::decision_variable::parse::decision_variable_to_v1(
+                DecisionVariable::binary(VariableID::from(1)),
+                Default::default(),
+            )],
             constraints: vec![],
             named_functions: vec![],
             removed_constraints: vec![],
@@ -915,7 +948,10 @@ mod tests {
         let v1_parametric_instance = v1::ParametricInstance {
             sense: v1::instance::Sense::Minimize as i32,
             objective: Some(Function::from(linear!(1) + coeff!(1.0)).into()),
-            decision_variables: vec![DecisionVariable::binary(VariableID::from(1)).into()],
+            decision_variables: vec![crate::decision_variable::parse::decision_variable_to_v1(
+                DecisionVariable::binary(VariableID::from(1)),
+                Default::default(),
+            )],
             parameters: vec![v1::Parameter {
                 id: 1,
                 name: Some("p1".to_string()),
@@ -954,13 +990,19 @@ mod tests {
         let v1_parametric_instance = v1::ParametricInstance {
             sense: v1::instance::Sense::Minimize as i32,
             objective: Some(Function::from(linear!(1) + coeff!(1.0)).into()),
-            decision_variables: vec![DecisionVariable::binary(VariableID::from(1)).into()],
+            decision_variables: vec![crate::decision_variable::parse::decision_variable_to_v1(
+                DecisionVariable::binary(VariableID::from(1)),
+                Default::default(),
+            )],
             parameters: vec![v1::Parameter {
                 id: 100,
                 name: Some("p1".to_string()),
                 ..Default::default()
             }],
-            constraints: vec![(cid, constraint1).into(), (cid, constraint2).into()],
+            constraints: vec![
+                constraint_to_v1(cid, constraint1, Default::default()),
+                constraint_to_v1(cid, constraint2, Default::default()),
+            ],
             named_functions: vec![],
             removed_constraints: vec![],
             decision_variable_dependency: HashMap::new(),
@@ -993,8 +1035,14 @@ mod tests {
         let v1_instance = v1::Instance {
             sense: v1::instance::Sense::Minimize as i32,
             objective: Some(Function::from(linear!(1) + coeff!(1.0)).into()),
-            decision_variables: vec![DecisionVariable::binary(VariableID::from(1)).into()],
-            constraints: vec![(cid, constraint1).into(), (cid, constraint2).into()],
+            decision_variables: vec![crate::decision_variable::parse::decision_variable_to_v1(
+                DecisionVariable::binary(VariableID::from(1)),
+                Default::default(),
+            )],
+            constraints: vec![
+                constraint_to_v1(cid, constraint1, Default::default()),
+                constraint_to_v1(cid, constraint2, Default::default()),
+            ],
             named_functions: vec![],
             removed_constraints: vec![],
             decision_variable_dependency: HashMap::new(),
@@ -1045,5 +1093,65 @@ mod tests {
         └─ommx.v1.ParametricInstance[format_version]
         Unsupported ommx format version: data has format_version=1, but this SDK supports up to 0. Please upgrade the OMMX SDK.
         "###);
+    }
+
+    /// Regression: `From<ParametricInstance> for v1::ParametricInstance`
+    /// must drain both the variable and the constraint metadata stores
+    /// onto each per-element proto, the same way `Instance` does. A
+    /// previous version of this conversion bound `variable_metadata: _`
+    /// and `let (.., _metadata) = into_parts()`, silently dropping every
+    /// name / subscript / parameter / description across a bytes
+    /// round-trip.
+    #[test]
+    fn test_parametric_instance_roundtrip_preserves_metadata() {
+        use crate::{
+            coeff, linear, Constraint, ConstraintID, DecisionVariable, Function, Sense, VariableID,
+        };
+
+        let var_id = VariableID::from(1);
+        let cid = ConstraintID::from(10);
+
+        let mut instance = ParametricInstance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(linear!(1)))
+            .decision_variables(maplit::btreemap! {
+                var_id => DecisionVariable::binary(var_id),
+            })
+            .parameters(BTreeMap::new())
+            .constraints(maplit::btreemap! {
+                cid => Constraint::equal_to_zero(Function::from(linear!(1) + coeff!(-1.0))),
+            })
+            .build()
+            .unwrap();
+
+        instance.variable_metadata_mut().set_name(var_id, "x");
+        instance
+            .variable_metadata_mut()
+            .set_subscripts(var_id, vec![0]);
+        instance
+            .constraint_collection_mut()
+            .metadata_mut()
+            .set_name(cid, "balance");
+        instance
+            .constraint_collection_mut()
+            .metadata_mut()
+            .set_description(cid, "demand-balance row");
+
+        let bytes = instance.to_bytes();
+        let recovered = ParametricInstance::from_bytes(&bytes).unwrap();
+
+        assert_eq!(recovered.variable_metadata().name(var_id), Some("x"));
+        assert_eq!(recovered.variable_metadata().subscripts(var_id), &[0]);
+        assert_eq!(
+            recovered.constraint_collection().metadata().name(cid),
+            Some("balance"),
+        );
+        assert_eq!(
+            recovered
+                .constraint_collection()
+                .metadata()
+                .description(cid),
+            Some("demand-balance row"),
+        );
     }
 }

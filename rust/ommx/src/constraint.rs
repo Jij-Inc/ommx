@@ -3,9 +3,8 @@ mod arbitrary;
 mod evaluate;
 mod logical_memory;
 mod metadata_store;
-pub mod parse;
+mod parse;
 mod reduce_binary_power;
-mod serialize;
 pub(crate) mod stage;
 
 pub use metadata_store::ConstraintMetadataStore;
@@ -193,25 +192,20 @@ impl EvaluatedConstraint {
     }
 }
 
-/// Build a v1 `EvaluatedConstraint` with metadata fields defaulted.
-/// Used by call sites that don't have access to the SoA store; the
-/// collection-level serializer overlays metadata before emitting.
-impl From<(ConstraintID, EvaluatedConstraint)> for crate::v1::EvaluatedConstraint {
-    fn from((id, c): (ConstraintID, EvaluatedConstraint)) -> Self {
-        evaluated_constraint_to_v1(id, c, ConstraintMetadata::default())
-    }
-}
-
-impl From<(ConstraintID, SampledConstraint)> for crate::v1::SampledConstraint {
-    fn from((id, c): (ConstraintID, SampledConstraint)) -> Self {
-        sampled_constraint_to_v1(id, c, ConstraintMetadata::default())
-    }
-}
+// NOTE: There are intentionally no `impl From<(ConstraintID,
+// EvaluatedConstraint)> for v1::EvaluatedConstraint` (or the Sampled
+// variant). v3 keeps metadata at the collection layer, so a per-element
+// conversion would have to default every metadata field — silently
+// dropping any caller-supplied metadata. Callers must instead go through
+// [`evaluated_constraint_to_v1`] / [`sampled_constraint_to_v1`], which
+// take the metadata explicitly. Top-level container serialization
+// (`From<Solution> for v1::Solution`, etc.) drains the SoA store and
+// threads the metadata through these helpers.
 
 /// Build a v1 `EvaluatedConstraint` from a per-element constraint plus its
 /// metadata. The metadata comes from the enclosing collection's
 /// [`ConstraintMetadataStore`]; the per-element struct no longer carries it.
-pub fn evaluated_constraint_to_v1(
+pub(crate) fn evaluated_constraint_to_v1(
     id: ConstraintID,
     c: EvaluatedConstraint,
     metadata: ConstraintMetadata,
@@ -296,7 +290,7 @@ impl SampledConstraint {
 /// Build a v1 `SampledConstraint` from a per-element sampled constraint plus
 /// its metadata. The metadata comes from the enclosing collection's
 /// [`ConstraintMetadataStore`]; the per-element struct no longer carries it.
-pub fn sampled_constraint_to_v1(
+pub(crate) fn sampled_constraint_to_v1(
     id: ConstraintID,
     c: SampledConstraint,
     metadata: ConstraintMetadata,

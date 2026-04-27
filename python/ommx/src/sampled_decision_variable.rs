@@ -1,7 +1,4 @@
-use anyhow::Result;
-use ommx::decision_variable::parse::sampled_decision_variable_to_v1;
-use ommx::{v1, Message, Parse};
-use pyo3::{prelude::*, types::PyBytes, Bound};
+use pyo3::prelude::*;
 use std::collections::BTreeMap;
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
@@ -27,19 +24,6 @@ impl SampledDecisionVariable {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl SampledDecisionVariable {
-    #[staticmethod]
-    pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
-        let inner = v1::SampledDecisionVariable::decode(bytes.as_bytes())?;
-        let parsed: ommx::decision_variable::parse::ParsedSampledDecisionVariable =
-            Parse::parse(inner, &())?;
-        Ok(Self(parsed.variable, parsed.metadata))
-    }
-
-    pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
-        let v1_sampled_dv = sampled_decision_variable_to_v1(self.0.clone(), self.1.clone());
-        PyBytes::new(py, &v1_sampled_dv.encode_to_vec())
-    }
-
     /// Get the decision variable ID
     #[getter]
     pub fn id(&self) -> u64 {
