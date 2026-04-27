@@ -103,6 +103,9 @@ pub enum SampleSetError {
 pub struct SampleSet {
     #[getset(get = "pub")]
     decision_variables: BTreeMap<VariableID, SampledDecisionVariable>,
+    /// Per-variable auxiliary metadata (sibling of [`Self::decision_variables`]).
+    #[getset(get = "pub")]
+    variable_metadata: crate::decision_variable::VariableMetadataStore,
     #[getset(get = "pub")]
     objectives: Sampled<f64>,
     #[getset(get = "pub")]
@@ -334,6 +337,7 @@ impl SampleSet {
 #[derive(Debug, Clone, Default)]
 pub struct SampleSetBuilder {
     decision_variables: Option<BTreeMap<VariableID, SampledDecisionVariable>>,
+    variable_metadata: crate::decision_variable::VariableMetadataStore,
     objectives: Option<Sampled<f64>>,
     constraints: Option<SampledCollection<Constraint>>,
     indicator_constraints: SampledCollection<IndicatorConstraint>,
@@ -347,6 +351,15 @@ impl SampleSetBuilder {
     /// Creates a new `SampleSetBuilder` with all fields unset.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Sets the per-variable metadata store.
+    pub fn variable_metadata(
+        mut self,
+        variable_metadata: crate::decision_variable::VariableMetadataStore,
+    ) -> Self {
+        self.variable_metadata = variable_metadata;
+        self
     }
 
     /// Sets the decision variables.
@@ -561,6 +574,7 @@ impl SampleSetBuilder {
 
         Ok(SampleSet {
             decision_variables,
+            variable_metadata: self.variable_metadata.clone(),
             objectives,
             constraints,
             indicator_constraints: self.indicator_constraints,
@@ -620,6 +634,7 @@ impl SampleSetBuilder {
 
         Ok(SampleSet {
             decision_variables,
+            variable_metadata: self.variable_metadata.clone(),
             objectives,
             constraints,
             indicator_constraints: self.indicator_constraints,

@@ -10,8 +10,8 @@ impl SampleSet {
     /// Variables without names are not included.
     pub fn decision_variable_names(&self) -> std::collections::BTreeSet<String> {
         self.decision_variables
-            .values()
-            .filter_map(|v| v.metadata.name.clone())
+            .keys()
+            .filter_map(|id| self.variable_metadata.name(*id).map(|s| s.to_owned()))
             .collect()
     }
 
@@ -42,11 +42,12 @@ impl SampleSet {
         name: &str,
         sample_id: SampleID,
     ) -> Result<BTreeMap<Vec<i64>, f64>, SampleSetError> {
-        // Collect all variables with the given name
-        let variables_with_name: Vec<&SampledDecisionVariable> = self
+        // Collect all variables with the given name (looked up via the metadata store)
+        let variables_with_name: Vec<(VariableID, &SampledDecisionVariable)> = self
             .decision_variables
-            .values()
-            .filter(|v| v.metadata.name.as_deref() == Some(name))
+            .iter()
+            .filter(|(id, _)| self.variable_metadata.name(**id) == Some(name))
+            .map(|(id, v)| (*id, v))
             .collect();
         if variables_with_name.is_empty() {
             return Err(SampleSetError::UnknownVariableName {
@@ -54,8 +55,8 @@ impl SampleSet {
             });
         }
         let mut result = BTreeMap::new();
-        for variable in &variables_with_name {
-            let subscripts = variable.metadata.subscripts.clone();
+        for (id, variable) in &variables_with_name {
+            let subscripts = self.variable_metadata.subscripts(*id).to_vec();
             let value = *variable
                 .samples()
                 .get(sample_id)
@@ -90,13 +91,13 @@ impl SampleSet {
     ) -> Result<BTreeMap<String, BTreeMap<Vec<i64>, f64>>, SampleSetError> {
         let mut result: BTreeMap<String, BTreeMap<Vec<i64>, f64>> = BTreeMap::new();
 
-        for variable in self.decision_variables.values() {
-            let name = match &variable.metadata.name {
-                Some(n) => n.clone(),
+        for (id, variable) in self.decision_variables.iter() {
+            let name = match self.variable_metadata.name(*id) {
+                Some(n) => n.to_owned(),
                 None => continue, // Skip variables without names
             };
 
-            let subscripts = variable.metadata.subscripts.clone();
+            let subscripts = self.variable_metadata.subscripts(*id).to_vec();
             let value = *variable
                 .samples()
                 .get(sample_id)
@@ -120,23 +121,25 @@ impl SampleSet {
         name: &str,
         sample_id: SampleID,
     ) -> Result<BTreeMap<Vec<i64>, f64>, SampleSetError> {
-        // Collect all constraints with the given name
-        let constraints_with_name: Vec<&SampledConstraint> = self
+        // Collect all constraints with the given name (via the collection's metadata store)
+        let metadata = self.constraints.metadata();
+        let matches: Vec<(crate::ConstraintID, &SampledConstraint)> = self
             .constraints
-            .values()
-            .filter(|c| c.metadata.name.as_deref() == Some(name))
+            .iter()
+            .filter(|(id, _)| metadata.name(**id) == Some(name))
+            .map(|(id, c)| (*id, c))
             .collect();
-        if constraints_with_name.is_empty() {
+        if matches.is_empty() {
             return Err(SampleSetError::UnknownConstraintName {
                 name: name.to_string(),
             });
         }
         let mut result = BTreeMap::new();
-        for constraint in &constraints_with_name {
-            if !constraint.metadata.parameters.is_empty() {
+        for (id, constraint) in &matches {
+            if !metadata.parameters(*id).is_empty() {
                 return Err(SampleSetError::ParameterizedConstraint);
             }
-            let subscripts = constraint.metadata.subscripts.clone();
+            let subscripts = metadata.subscripts(*id).to_vec();
             let value = *constraint
                 .stage
                 .evaluated_values
