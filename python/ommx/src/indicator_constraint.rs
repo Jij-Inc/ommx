@@ -7,7 +7,20 @@ use crate::{DecisionVariable, Equality, Function};
 #[gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
-pub struct IndicatorConstraint(pub ommx::IndicatorConstraint);
+pub struct IndicatorConstraint(pub ommx::IndicatorConstraint, pub ommx::ConstraintMetadata);
+
+impl IndicatorConstraint {
+    pub fn standalone(inner: ommx::IndicatorConstraint) -> Self {
+        Self(inner, ommx::ConstraintMetadata::default())
+    }
+
+    pub fn from_parts(
+        inner: ommx::IndicatorConstraint,
+        metadata: ommx::ConstraintMetadata,
+    ) -> Self {
+        Self(inner, metadata)
+    }
+}
 
 #[gen_stub_pymethods]
 #[pymethods]
@@ -36,16 +49,16 @@ impl IndicatorConstraint {
         description: Option<String>,
         parameters: HashMap<String, String>,
     ) -> PyResult<Self> {
-        let mut ic =
+        let ic =
             ommx::IndicatorConstraint::new(indicator_variable.0.id(), equality.into(), function.0);
-        ic.metadata = ommx::ConstraintMetadata {
+        let metadata = ommx::ConstraintMetadata {
             name,
             subscripts,
             parameters: parameters.into_iter().collect(),
             description,
             provenance: Vec::new(),
         };
-        Ok(Self(ic))
+        Ok(Self(ic, metadata))
     }
 
     #[getter]
@@ -65,28 +78,28 @@ impl IndicatorConstraint {
 
     #[getter]
     pub fn name(&self) -> Option<String> {
-        self.0.metadata.name.clone()
+        self.1.name.clone()
     }
 
     #[getter]
     pub fn subscripts(&self) -> Vec<i64> {
-        self.0.metadata.subscripts.clone()
+        self.1.subscripts.clone()
     }
 
     #[getter]
     pub fn description(&self) -> Option<String> {
-        self.0.metadata.description.clone()
+        self.1.description.clone()
     }
 
     #[getter]
     pub fn parameters(&self) -> HashMap<String, String> {
-        self.0.metadata.parameters.clone().into_iter().collect()
+        self.1.parameters.clone().into_iter().collect()
     }
 
     /// Set the constraint name. Returns a new IndicatorConstraint.
     pub fn set_name(&self, name: String) -> Self {
         let mut ic = self.clone();
-        ic.0.metadata.name = Some(name);
+        ic.1.name = Some(name);
         ic
     }
 
@@ -109,16 +122,19 @@ impl IndicatorConstraint {
 #[derive(Clone)]
 pub struct RemovedIndicatorConstraint {
     pub constraint: ommx::IndicatorConstraint,
+    pub metadata: ommx::ConstraintMetadata,
     pub removed_reason: ommx::RemovedReason,
 }
 
 impl RemovedIndicatorConstraint {
-    pub fn from_pair(
+    pub fn from_parts(
         constraint: ommx::IndicatorConstraint,
+        metadata: ommx::ConstraintMetadata,
         removed_reason: ommx::RemovedReason,
     ) -> Self {
         Self {
             constraint,
+            metadata,
             removed_reason,
         }
     }
@@ -129,7 +145,7 @@ impl RemovedIndicatorConstraint {
 impl RemovedIndicatorConstraint {
     #[getter]
     pub fn constraint(&self) -> IndicatorConstraint {
-        IndicatorConstraint(self.constraint.clone())
+        IndicatorConstraint(self.constraint.clone(), self.metadata.clone())
     }
 
     #[getter]

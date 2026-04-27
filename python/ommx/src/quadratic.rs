@@ -491,11 +491,13 @@ impl Quadratic {
     pub fn py_eq(&self, other: Function) -> Constraint {
         let mut function = -other.0;
         function += &self.0;
-        Constraint(ommx::Constraint {
-            equality: ommx::Equality::EqualToZero,
-            metadata: ommx::ConstraintMetadata::default(),
-            stage: ommx::CreatedData { function },
-        })
+        Constraint(
+            ommx::Constraint {
+                equality: ommx::Equality::EqualToZero,
+                stage: ommx::CreatedData { function },
+            },
+            ommx::ConstraintMetadata::default(),
+        )
     }
 
     /// Create a less-than-or-equal constraint: self <= other → Constraint
@@ -503,21 +505,25 @@ impl Quadratic {
     pub fn py_le(&self, other: Function) -> Constraint {
         let mut function = -other.0;
         function += &self.0;
-        Constraint(ommx::Constraint {
-            equality: ommx::Equality::LessThanOrEqualToZero,
-            metadata: ommx::ConstraintMetadata::default(),
-            stage: ommx::CreatedData { function },
-        })
+        Constraint(
+            ommx::Constraint {
+                equality: ommx::Equality::LessThanOrEqualToZero,
+                stage: ommx::CreatedData { function },
+            },
+            ommx::ConstraintMetadata::default(),
+        )
     }
 
     /// Create a greater-than-or-equal constraint: self >= other → Constraint
     #[pyo3(name = "__ge__")]
     pub fn py_ge(&self, other: Function) -> Constraint {
         let function = other.0 - &self.0;
-        Constraint(ommx::Constraint {
-            equality: ommx::Equality::LessThanOrEqualToZero,
-            metadata: ommx::ConstraintMetadata::default(),
-            stage: ommx::CreatedData { function },
-        })
+        Constraint(
+            ommx::Constraint {
+                equality: ommx::Equality::LessThanOrEqualToZero,
+                stage: ommx::CreatedData { function },
+            },
+            ommx::ConstraintMetadata::default(),
+        )
     }
 }

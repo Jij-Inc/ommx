@@ -89,7 +89,7 @@ impl From<Sense> for i32 {
 /// collection is the canonical source. Serialization paths fetch the
 /// metadata from the collection's [`ConstraintMetadataStore`] and join it
 /// at this boundary.
-pub(crate) fn constraint_to_v1(
+pub fn constraint_to_v1(
     id: ConstraintID,
     value: Constraint,
     metadata: ConstraintMetadata,
@@ -105,7 +105,7 @@ pub(crate) fn constraint_to_v1(
     }
 }
 
-pub(crate) fn removed_constraint_to_v1(
+pub fn removed_constraint_to_v1(
     id: ConstraintID,
     constraint: Constraint,
     metadata: ConstraintMetadata,

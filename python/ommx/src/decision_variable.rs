@@ -1,6 +1,7 @@
 use crate::{Constraint, Function, Linear, Parameter, Polynomial, Quadratic, VariableBound};
 use anyhow::Result;
-use ommx::{v1, ATol, LinearMonomial, VariableID};
+use ommx::decision_variable::parse::decision_variable_to_v1;
+use ommx::{v1, ATol, LinearMonomial, Message, Parse, VariableID};
 use pyo3::{prelude::*, types::PyBytes, Bound, PyAny};
 use std::collections::HashMap;
 
@@ -30,12 +31,26 @@ use std::collections::HashMap;
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
-pub struct DecisionVariable(pub ommx::DecisionVariable);
+pub struct DecisionVariable(
+    pub ommx::DecisionVariable,
+    pub ommx::DecisionVariableMetadata,
+);
 
 impl DecisionVariable {
     /// Helper to create a Linear term from this decision variable with coefficient 1
     fn as_linear(&self) -> ommx::Linear {
         ommx::Linear::single_term(LinearMonomial::Variable(self.0.id()), ommx::coeff!(1.0))
+    }
+
+    pub fn standalone(inner: ommx::DecisionVariable) -> Self {
+        Self(inner, ommx::DecisionVariableMetadata::default())
+    }
+
+    pub fn from_parts(
+        inner: ommx::DecisionVariable,
+        metadata: ommx::DecisionVariableMetadata,
+    ) -> Self {
+        Self(inner, metadata)
     }
 }
 
@@ -107,7 +122,7 @@ impl DecisionVariable {
         let variable_id = VariableID::from(id);
         let kind = v1::decision_variable::Kind::try_from(kind)?.try_into()?;
 
-        let mut decision_variable = ommx::DecisionVariable::new(
+        let decision_variable = ommx::DecisionVariable::new(
             variable_id,
             kind,
             bound.0,
@@ -115,12 +130,14 @@ impl DecisionVariable {
             ATol::default(),
         )?;
 
-        decision_variable.metadata.name = name;
-        decision_variable.metadata.subscripts = subscripts;
-        decision_variable.metadata.parameters = parameters.into_iter().collect();
-        decision_variable.metadata.description = description;
+        let metadata = ommx::DecisionVariableMetadata {
+            name,
+            subscripts,
+            parameters: parameters.into_iter().collect(),
+            description,
+        };
 
-        Ok(Self(decision_variable))
+        Ok(Self(decision_variable, metadata))
     }
 
     #[getter]
@@ -141,18 +158,17 @@ impl DecisionVariable {
 
     #[getter]
     pub fn name(&self) -> String {
-        self.0.metadata.name.clone().unwrap_or_default()
+        self.1.name.clone().unwrap_or_default()
     }
 
     #[getter]
     pub fn subscripts(&self) -> Vec<i64> {
-        self.0.metadata.subscripts.clone()
+        self.1.subscripts.clone()
     }
 
     #[getter]
     pub fn parameters(&self) -> HashMap<String, String> {
-        self.0
-            .metadata
+        self.1
             .parameters
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
@@ -161,7 +177,7 @@ impl DecisionVariable {
 
     #[getter]
     pub fn description(&self) -> String {
-        self.0.metadata.description.clone().unwrap_or_default()
+        self.1.description.clone().unwrap_or_default()
     }
 
     #[getter]
@@ -279,11 +295,15 @@ impl DecisionVariable {
 
     #[staticmethod]
     pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
-        Ok(Self(ommx::DecisionVariable::from_bytes(bytes.as_bytes())?))
+        let inner = v1::DecisionVariable::decode(bytes.as_bytes())?;
+        let parsed: ommx::decision_variable::parse::ParsedDecisionVariable =
+            Parse::parse(inner, &())?;
+        Ok(Self(parsed.variable, parsed.metadata))
     }
 
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
-        PyBytes::new(py, &self.0.to_bytes())
+        let v1_dv = decision_variable_to_v1(self.0.clone(), self.1.clone());
+        PyBytes::new(py, &v1_dv.encode_to_vec())
     }
 
     pub fn __repr__(&self) -> String {
@@ -617,11 +637,13 @@ impl DecisionVariable {
     pub fn py_eq(&self, other: Function) -> Constraint {
         let mut function = -other.0;
         function += &self.as_linear();
-        Constraint(ommx::Constraint {
-            equality: ommx::Equality::EqualToZero,
-            metadata: ommx::ConstraintMetadata::default(),
-            stage: ommx::CreatedData { function },
-        })
+        Constraint(
+            ommx::Constraint {
+                equality: ommx::Equality::EqualToZero,
+                stage: ommx::CreatedData { function },
+            },
+            ommx::ConstraintMetadata::default(),
+        )
     }
 
     /// Create a less-than-or-equal constraint: self <= other → Constraint
@@ -629,21 +651,25 @@ impl DecisionVariable {
     pub fn py_le(&self, other: Function) -> Constraint {
         let mut function = -other.0;
         function += &self.as_linear();
-        Constraint(ommx::Constraint {
-            equality: ommx::Equality::LessThanOrEqualToZero,
-            metadata: ommx::ConstraintMetadata::default(),
-            stage: ommx::CreatedData { function },
-        })
+        Constraint(
+            ommx::Constraint {
+                equality: ommx::Equality::LessThanOrEqualToZero,
+                stage: ommx::CreatedData { function },
+            },
+            ommx::ConstraintMetadata::default(),
+        )
     }
 
     /// Create a greater-than-or-equal constraint: self >= other → Constraint
     #[pyo3(name = "__ge__")]
     pub fn py_ge(&self, other: Function) -> Constraint {
         let function = other.0 - &self.as_linear();
-        Constraint(ommx::Constraint {
-            equality: ommx::Equality::LessThanOrEqualToZero,
-            metadata: ommx::ConstraintMetadata::default(),
-            stage: ommx::CreatedData { function },
-        })
+        Constraint(
+            ommx::Constraint {
+                equality: ommx::Equality::LessThanOrEqualToZero,
+                stage: ommx::CreatedData { function },
+            },
+            ommx::ConstraintMetadata::default(),
+        )
     }
 }

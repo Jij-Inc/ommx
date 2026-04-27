@@ -13,7 +13,7 @@ mod named_function;
 mod new;
 mod one_hot;
 mod parametric_builder;
-mod parse;
+pub mod parse;
 mod pass;
 mod penalty;
 mod qubo;
@@ -207,6 +207,13 @@ impl Instance {
         &self.indicator_constraint_collection
     }
 
+    /// Mutable access to the full indicator constraint collection.
+    pub fn indicator_constraint_collection_mut(
+        &mut self,
+    ) -> &mut ConstraintCollection<IndicatorConstraint> {
+        &mut self.indicator_constraint_collection
+    }
+
     /// Active one-hot constraints.
     pub fn one_hot_constraints(&self) -> &BTreeMap<crate::OneHotConstraintID, OneHotConstraint> {
         self.one_hot_constraint_collection.active()
@@ -224,6 +231,13 @@ impl Instance {
         &self.one_hot_constraint_collection
     }
 
+    /// Mutable access to the full one-hot constraint collection.
+    pub fn one_hot_constraint_collection_mut(
+        &mut self,
+    ) -> &mut ConstraintCollection<OneHotConstraint> {
+        &mut self.one_hot_constraint_collection
+    }
+
     /// Active SOS1 constraints.
     pub fn sos1_constraints(&self) -> &BTreeMap<crate::Sos1ConstraintID, Sos1Constraint> {
         self.sos1_constraint_collection.active()
@@ -239,6 +253,11 @@ impl Instance {
     /// The full SOS1 constraint collection (active + removed).
     pub fn sos1_constraint_collection(&self) -> &ConstraintCollection<Sos1Constraint> {
         &self.sos1_constraint_collection
+    }
+
+    /// Mutable access to the full SOS1 constraint collection.
+    pub fn sos1_constraint_collection_mut(&mut self) -> &mut ConstraintCollection<Sos1Constraint> {
+        &mut self.sos1_constraint_collection
     }
 
     /// Returns the set of non-standard constraint capabilities required by this instance.

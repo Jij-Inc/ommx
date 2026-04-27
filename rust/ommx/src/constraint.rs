@@ -3,7 +3,7 @@ mod arbitrary;
 mod evaluate;
 mod logical_memory;
 mod metadata_store;
-mod parse;
+pub mod parse;
 mod reduce_binary_power;
 mod serialize;
 pub(crate) mod stage;
@@ -211,7 +211,7 @@ impl From<(ConstraintID, SampledConstraint)> for crate::v1::SampledConstraint {
 /// Build a v1 `EvaluatedConstraint` from a per-element constraint plus its
 /// metadata. The metadata comes from the enclosing collection's
 /// [`ConstraintMetadataStore`]; the per-element struct no longer carries it.
-pub(crate) fn evaluated_constraint_to_v1(
+pub fn evaluated_constraint_to_v1(
     id: ConstraintID,
     c: EvaluatedConstraint,
     metadata: ConstraintMetadata,
@@ -296,7 +296,7 @@ impl SampledConstraint {
 /// Build a v1 `SampledConstraint` from a per-element sampled constraint plus
 /// its metadata. The metadata comes from the enclosing collection's
 /// [`ConstraintMetadataStore`]; the per-element struct no longer carries it.
-pub(crate) fn sampled_constraint_to_v1(
+pub fn sampled_constraint_to_v1(
     id: ConstraintID,
     c: SampledConstraint,
     metadata: ConstraintMetadata,

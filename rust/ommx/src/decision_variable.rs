@@ -2,7 +2,7 @@ mod approx;
 mod arbitrary;
 mod logical_memory;
 mod metadata_store;
-pub(crate) mod parse;
+pub mod parse;
 mod serialize;
 
 pub use arbitrary::*;
@@ -601,7 +601,7 @@ impl crate::Evaluate for DecisionVariable {
 /// Build a v1 `DecisionVariable` from an evaluated variable plus its
 /// metadata. The metadata comes from the enclosing collection's
 /// [`VariableMetadataStore`]; the per-element struct no longer carries it.
-pub(crate) fn evaluated_decision_variable_to_v1(
+pub fn evaluated_decision_variable_to_v1(
     eval_dv: EvaluatedDecisionVariable,
     metadata: DecisionVariableMetadata,
 ) -> crate::v1::DecisionVariable {

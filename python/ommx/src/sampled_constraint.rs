@@ -3,7 +3,17 @@ use std::collections::{BTreeMap, BTreeSet};
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
-pub struct SampledConstraint(pub ommx::SampledConstraint);
+pub struct SampledConstraint(pub ommx::SampledConstraint, pub ommx::ConstraintMetadata);
+
+impl SampledConstraint {
+    pub fn standalone(inner: ommx::SampledConstraint) -> Self {
+        Self(inner, ommx::ConstraintMetadata::default())
+    }
+
+    pub fn from_parts(inner: ommx::SampledConstraint, metadata: ommx::ConstraintMetadata) -> Self {
+        Self(inner, metadata)
+    }
+}
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
@@ -17,19 +27,19 @@ impl SampledConstraint {
     /// Get the constraint name
     #[getter]
     pub fn name(&self) -> Option<String> {
-        self.0.metadata.name.clone()
+        self.1.name.clone()
     }
 
     /// Get the subscripts
     #[getter]
     pub fn subscripts(&self) -> Vec<i64> {
-        self.0.metadata.subscripts.clone()
+        self.1.subscripts.clone()
     }
 
     /// Get the description
     #[getter]
     pub fn description(&self) -> Option<String> {
-        self.0.metadata.description.clone()
+        self.1.description.clone()
     }
 
     /// Get the provenance chain.
@@ -37,7 +47,7 @@ impl SampledConstraint {
     /// See {attr}`~ommx.v1.Constraint.provenance` for semantics.
     #[getter]
     pub fn provenance(&self) -> Vec<crate::Provenance> {
-        crate::provenance_list(&self.0.metadata)
+        crate::provenance_list(&self.1)
     }
 
     /// Get the used decision variable IDs

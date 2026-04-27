@@ -496,11 +496,13 @@ impl Linear {
         // self - other == 0
         let mut function = -other.0;
         function += &self.0;
-        Constraint(ommx::Constraint {
-            equality: ommx::Equality::EqualToZero,
-            metadata: ommx::ConstraintMetadata::default(),
-            stage: ommx::CreatedData { function },
-        })
+        Constraint(
+            ommx::Constraint {
+                equality: ommx::Equality::EqualToZero,
+                stage: ommx::CreatedData { function },
+            },
+            ommx::ConstraintMetadata::default(),
+        )
     }
 
     /// Create a less-than-or-equal constraint: self <= other → Constraint
@@ -509,11 +511,13 @@ impl Linear {
         // self - other <= 0: compute as -(other) + self
         let mut function = -other.0;
         function += &self.0;
-        Constraint(ommx::Constraint {
-            equality: ommx::Equality::LessThanOrEqualToZero,
-            metadata: ommx::ConstraintMetadata::default(),
-            stage: ommx::CreatedData { function },
-        })
+        Constraint(
+            ommx::Constraint {
+                equality: ommx::Equality::LessThanOrEqualToZero,
+                stage: ommx::CreatedData { function },
+            },
+            ommx::ConstraintMetadata::default(),
+        )
     }
 
     /// Create a greater-than-or-equal constraint: self >= other → Constraint
@@ -521,10 +525,12 @@ impl Linear {
     pub fn py_ge(&self, other: Function) -> Constraint {
         // self >= other ⇔ other - self <= 0
         let function = other.0 - &self.0;
-        Constraint(ommx::Constraint {
-            equality: ommx::Equality::LessThanOrEqualToZero,
-            metadata: ommx::ConstraintMetadata::default(),
-            stage: ommx::CreatedData { function },
-        })
+        Constraint(
+            ommx::Constraint {
+                equality: ommx::Equality::LessThanOrEqualToZero,
+                stage: ommx::CreatedData { function },
+            },
+            ommx::ConstraintMetadata::default(),
+        )
     }
 }
