@@ -106,7 +106,6 @@ impl SampledConstraintBehavior for SampledConstraint {
 
         Some(crate::Constraint {
             equality: self.equality,
-            metadata: self.metadata.clone(),
             stage: EvaluatedData {
                 evaluated_value,
                 dual_variable,

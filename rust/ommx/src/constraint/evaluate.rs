@@ -20,7 +20,6 @@ impl Evaluate for Constraint<Created> {
 
         Ok(EvaluatedConstraint {
             equality: self.equality,
-            metadata: self.metadata.clone(),
             stage: EvaluatedData {
                 evaluated_value,
                 dual_variable: None,
@@ -47,7 +46,6 @@ impl Evaluate for Constraint<Created> {
 
         Ok(SampledConstraint {
             equality: self.equality,
-            metadata: self.metadata.clone(),
             stage: SampledData {
                 evaluated_values,
                 dual_variables: None,

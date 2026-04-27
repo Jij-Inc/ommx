@@ -1,7 +1,7 @@
 mod evaluate;
 
 use crate::{
-    constraint::{stage, ConstraintMetadata, Created, Evaluated, Stage},
+    constraint::{stage, Created, Evaluated, Stage},
     constraint_type::{ConstraintType, EvaluatedConstraintBehavior, SampledConstraintBehavior},
     SampleID, VariableID, VariableIDSet,
 };
@@ -55,14 +55,14 @@ impl From<OneHotConstraintID> for u64 {
 /// The implicit constraint is `sum(x_i) = 1` where all `x_i` are binary.
 ///
 /// The constraint's [`OneHotConstraintID`] is not stored in this struct — it is held
-/// by the enclosing collection (e.g. the `BTreeMap` key in [`Instance`]).
+/// by the enclosing collection. Auxiliary metadata also lives on the enclosing
+/// collection's [`ConstraintMetadataStore`](crate::ConstraintMetadataStore).
 ///
 /// [`Instance`]: crate::Instance
 #[derive(Debug, Clone, PartialEq)]
 pub struct OneHotConstraint<S: Stage<Self> = Created> {
     /// The binary decision variables, exactly one of which must be 1.
     pub variables: BTreeSet<VariableID>,
-    pub metadata: ConstraintMetadata,
     pub stage: S::Data,
 }
 
@@ -133,7 +133,6 @@ impl SampledConstraintBehavior for SampledOneHotConstraint {
 
         Some(OneHotConstraint {
             variables: self.variables.clone(),
-            metadata: self.metadata.clone(),
             stage: OneHotEvaluatedData {
                 feasible,
                 active_variable,
@@ -159,7 +158,6 @@ impl OneHotConstraint<Created> {
     pub fn new(variables: BTreeSet<VariableID>) -> Self {
         Self {
             variables,
-            metadata: ConstraintMetadata::default(),
             stage: OneHotCreatedData,
         }
     }

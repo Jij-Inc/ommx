@@ -39,7 +39,7 @@ impl From<Equality> for i32 {
 }
 
 impl Parse for v1::Constraint {
-    type Output = (ConstraintID, Constraint<Created>);
+    type Output = (ConstraintID, Constraint<Created>, ConstraintMetadata);
     type Context = ();
 
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
@@ -64,20 +64,25 @@ impl Parse for v1::Constraint {
             id,
             Constraint {
                 equality,
-                metadata,
                 stage: CreatedData { function },
             },
+            metadata,
         ))
     }
 }
 
 impl Parse for v1::RemovedConstraint {
-    type Output = (ConstraintID, Constraint<Created>, RemovedReason);
+    type Output = (
+        ConstraintID,
+        Constraint<Created>,
+        ConstraintMetadata,
+        RemovedReason,
+    );
     type Context = ();
 
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v1.RemovedConstraint";
-        let (id, constraint): (ConstraintID, Constraint<Created>) = self
+        let (id, constraint, metadata) = self
             .constraint
             .ok_or(RawParseError::MissingField {
                 message,
@@ -88,36 +93,41 @@ impl Parse for v1::RemovedConstraint {
             reason: self.removed_reason,
             parameters: self.removed_reason_parameters.into_iter().collect(),
         };
-        Ok((id, constraint, removed_reason))
+        Ok((id, constraint, metadata, removed_reason))
     }
 }
 
 impl Parse for Vec<v1::Constraint> {
-    type Output = BTreeMap<ConstraintID, Constraint<Created>>;
+    type Output = (
+        BTreeMap<ConstraintID, Constraint<Created>>,
+        ConstraintMetadataStore<ConstraintID>,
+    );
     type Context = ();
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let mut constraints = BTreeMap::default();
+        let mut metadata_store = ConstraintMetadataStore::default();
         for c in self {
-            let (id, c): (ConstraintID, Constraint<Created>) = c.parse(&())?;
+            let (id, c, metadata): (ConstraintID, Constraint<Created>, ConstraintMetadata) =
+                c.parse(&())?;
             if constraints.insert(id, c).is_some() {
                 return Err(RawParseError::InvalidInstance(format!(
                     "Duplicated constraint ID is found in definition: {id:?}"
                 ))
                 .into());
             }
+            metadata_store.insert(id, metadata);
         }
-        Ok(constraints)
+        Ok((constraints, metadata_store))
     }
 }
 
 impl Parse for Vec<v1::RemovedConstraint> {
-    type Output = BTreeMap<ConstraintID, (Constraint<Created>, RemovedReason)>;
+    type Output = BTreeMap<ConstraintID, (Constraint<Created>, ConstraintMetadata, RemovedReason)>;
     type Context = BTreeMap<ConstraintID, Constraint<Created>>;
     fn parse(self, constraints: &Self::Context) -> Result<Self::Output, ParseError> {
         let mut removed_constraints = BTreeMap::default();
         for c in self {
-            let (id, constraint, reason): (ConstraintID, Constraint<Created>, RemovedReason) =
-                c.parse(&())?;
+            let (id, constraint, metadata, reason) = c.parse(&())?;
             if constraints.contains_key(&id) {
                 return Err(RawParseError::InvalidInstance(format!(
                     "Duplicated constraint ID is found in definition: {id:?}"
@@ -125,7 +135,7 @@ impl Parse for Vec<v1::RemovedConstraint> {
                 .into());
             }
             if removed_constraints
-                .insert(id, (constraint, reason))
+                .insert(id, (constraint, metadata, reason))
                 .is_some()
             {
                 return Err(RawParseError::InvalidInstance(format!(
@@ -139,7 +149,12 @@ impl Parse for Vec<v1::RemovedConstraint> {
 }
 
 impl Parse for v1::EvaluatedConstraint {
-    type Output = (ConstraintID, EvaluatedConstraint, Option<RemovedReason>);
+    type Output = (
+        ConstraintID,
+        EvaluatedConstraint,
+        ConstraintMetadata,
+        Option<RemovedReason>,
+    );
     type Context = ();
 
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
@@ -169,7 +184,6 @@ impl Parse for v1::EvaluatedConstraint {
             ConstraintID(self.id),
             Constraint {
                 equality,
-                metadata,
                 stage: EvaluatedData {
                     evaluated_value: self.evaluated_value,
                     dual_variable: self.dual_variable,
@@ -181,13 +195,19 @@ impl Parse for v1::EvaluatedConstraint {
                         .collect(),
                 },
             },
+            metadata,
             removed_reason,
         ))
     }
 }
 
 impl Parse for v1::SampledConstraint {
-    type Output = (ConstraintID, SampledConstraint, Option<RemovedReason>);
+    type Output = (
+        ConstraintID,
+        SampledConstraint,
+        ConstraintMetadata,
+        Option<RemovedReason>,
+    );
     type Context = ();
 
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
@@ -221,7 +241,6 @@ impl Parse for v1::SampledConstraint {
             ConstraintID(self.id),
             Constraint {
                 equality,
-                metadata,
                 stage: SampledData {
                     evaluated_values,
                     dual_variables: None,
@@ -237,6 +256,7 @@ impl Parse for v1::SampledConstraint {
                         .collect(),
                 },
             },
+            metadata,
             removed_reason,
         ))
     }

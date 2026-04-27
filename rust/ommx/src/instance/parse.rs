@@ -1,10 +1,11 @@
 use super::*;
 use crate::{
+    constraint::{ConstraintMetadata, RemovedReason},
     constraint_hints::ConstraintHints,
     constraint_type::ConstraintCollection,
     parse::{as_variable_id, Parse, ParseError, RawParseError},
     v1::{self},
-    Constraint, VariableID,
+    Constraint, ConstraintID, VariableID,
 };
 
 /// Convert parsed `ConstraintHints` to first-class OneHot/SOS1 constraint collections,
@@ -82,33 +83,53 @@ impl From<Sense> for i32 {
     }
 }
 
-impl From<(ConstraintID, Constraint)> for v1::Constraint {
-    fn from((id, value): (ConstraintID, Constraint)) -> Self {
-        Self {
-            id: id.into_inner(),
-            equality: value.equality.into(),
-            function: Some(value.stage.function.into()),
-            name: value.metadata.name,
-            subscripts: value.metadata.subscripts,
-            parameters: value.metadata.parameters.into_iter().collect(),
-            description: value.metadata.description,
-        }
+/// Build a v1 `Constraint` from per-element data plus drained metadata.
+///
+/// Per-element constraint structs no longer carry metadata; the enclosing
+/// collection is the canonical source. Serialization paths fetch the
+/// metadata from the collection's [`ConstraintMetadataStore`] and join it
+/// at this boundary.
+pub(crate) fn constraint_to_v1(
+    id: ConstraintID,
+    value: Constraint,
+    metadata: ConstraintMetadata,
+) -> v1::Constraint {
+    v1::Constraint {
+        id: id.into_inner(),
+        equality: value.equality.into(),
+        function: Some(value.stage.function.into()),
+        name: metadata.name,
+        subscripts: metadata.subscripts,
+        parameters: metadata.parameters.into_iter().collect(),
+        description: metadata.description,
     }
 }
 
-impl From<(ConstraintID, Constraint, crate::constraint::RemovedReason)> for v1::RemovedConstraint {
-    fn from(
-        (id, constraint, removed_reason): (
-            ConstraintID,
-            Constraint,
-            crate::constraint::RemovedReason,
-        ),
-    ) -> Self {
-        Self {
-            constraint: Some((id, constraint).into()),
-            removed_reason: removed_reason.reason,
-            removed_reason_parameters: removed_reason.parameters.into_iter().collect(),
-        }
+pub(crate) fn removed_constraint_to_v1(
+    id: ConstraintID,
+    constraint: Constraint,
+    metadata: ConstraintMetadata,
+    removed_reason: RemovedReason,
+) -> v1::RemovedConstraint {
+    v1::RemovedConstraint {
+        constraint: Some(constraint_to_v1(id, constraint, metadata)),
+        removed_reason: removed_reason.reason,
+        removed_reason_parameters: removed_reason.parameters.into_iter().collect(),
+    }
+}
+
+/// Build a v1 `Constraint` from intrinsic data only; metadata defaulted.
+/// Used by call sites that don't have access to the SoA store; the
+/// collection-level serializer overlays metadata before emitting.
+impl From<(ConstraintID, Constraint)> for v1::Constraint {
+    fn from((id, c): (ConstraintID, Constraint)) -> Self {
+        constraint_to_v1(id, c, ConstraintMetadata::default())
+    }
+}
+
+impl From<(ConstraintID, Constraint, RemovedReason)> for v1::RemovedConstraint {
+    fn from((id, c, r): (ConstraintID, Constraint, RemovedReason)) -> Self {
+        removed_constraint_to_v1(id, c, ConstraintMetadata::default(), r)
     }
 }
 
@@ -120,9 +141,12 @@ impl Parse for v1::Instance {
         crate::parse::check_format_version(self.format_version, message)?;
         let sense = self.sense().parse_as(&(), message, "sense")?;
 
-        let decision_variables =
-            self.decision_variables
-                .parse_as(&(), message, "decision_variables")?;
+        let (decision_variables, variable_metadata): (
+            BTreeMap<VariableID, DecisionVariable>,
+            crate::VariableMetadataStore,
+        ) = self
+            .decision_variables
+            .parse_as(&(), message, "decision_variables")?;
 
         let objective = self
             .objective
@@ -143,7 +167,10 @@ impl Parse for v1::Instance {
             }
         }
 
-        let constraints = self.constraints.parse_as(&(), message, "constraints")?;
+        let (constraints, mut constraint_metadata): (
+            BTreeMap<ConstraintID, Constraint>,
+            crate::ConstraintMetadataStore<ConstraintID>,
+        ) = self.constraints.parse_as(&(), message, "constraints")?;
 
         // Validate that all variables used in constraints are defined as decision variables
         for constraint in constraints.values() {
@@ -156,9 +183,21 @@ impl Parse for v1::Instance {
                 }
             }
         }
-        let removed_constraints =
-            self.removed_constraints
-                .parse_as(&constraints, message, "removed_constraints")?;
+        // `parse_as` for `Vec<v1::RemovedConstraint>` returns the active constraints
+        // joined with metadata + removed reason. Strip metadata into the SoA store
+        // so the collection-level `(active, removed)` shape stays uniform.
+        let removed_constraints_with_metadata: BTreeMap<
+            ConstraintID,
+            (Constraint, ConstraintMetadata, RemovedReason),
+        > = self
+            .removed_constraints
+            .parse_as(&constraints, message, "removed_constraints")?;
+        let mut removed_constraints: BTreeMap<ConstraintID, (Constraint, RemovedReason)> =
+            BTreeMap::new();
+        for (id, (c, metadata, reason)) in removed_constraints_with_metadata {
+            constraint_metadata.insert(id, metadata);
+            removed_constraints.insert(id, (c, reason));
+        }
 
         let named_functions = self
             .named_functions
@@ -206,8 +245,12 @@ impl Parse for v1::Instance {
             sense,
             objective,
             decision_variables,
-            variable_metadata: VariableMetadataStore::default(),
-            constraint_collection: ConstraintCollection::new(constraints, removed_constraints),
+            variable_metadata,
+            constraint_collection: ConstraintCollection::with_metadata(
+                constraints,
+                removed_constraints,
+                constraint_metadata,
+            ),
             indicator_constraint_collection: Default::default(),
             one_hot_constraint_collection: ConstraintCollection::new(
                 one_hot_active,
@@ -231,13 +274,21 @@ impl TryFrom<v1::Instance> for Instance {
 
 impl From<Instance> for v1::Instance {
     fn from(value: Instance) -> Self {
+        // Drain per-element data and join with metadata from the SoA stores.
+        let variable_metadata = value.variable_metadata;
         let decision_variables = value
             .decision_variables
-            .into_values()
-            .map(|dv| dv.into())
+            .into_iter()
+            .map(|(id, dv)| {
+                let metadata = variable_metadata.collect_for(id);
+                crate::decision_variable::parse::decision_variable_to_v1(dv, metadata)
+            })
             .collect();
-        let (active, removed, _metadata) = value.constraint_collection.into_parts();
-        let constraints = active.into_iter().map(|(id, c)| (id, c).into()).collect();
+        let (active, removed, mut constraint_metadata) = value.constraint_collection.into_parts();
+        let constraints = active
+            .into_iter()
+            .map(|(id, c)| constraint_to_v1(id, c, constraint_metadata.remove(id)))
+            .collect();
         let named_functions = value
             .named_functions
             .into_values()
@@ -245,7 +296,7 @@ impl From<Instance> for v1::Instance {
             .collect();
         let removed_constraints = removed
             .into_iter()
-            .map(|(id, (c, r))| (id, c, r).into())
+            .map(|(id, (c, r))| removed_constraint_to_v1(id, c, constraint_metadata.remove(id), r))
             .collect();
         let decision_variable_dependency = value
             .decision_variable_dependency
@@ -293,9 +344,12 @@ impl Parse for v1::ParametricInstance {
         crate::parse::check_format_version(self.format_version, message)?;
         let sense = self.sense().parse_as(&(), message, "sense")?;
 
-        let decision_variables =
-            self.decision_variables
-                .parse_as(&(), message, "decision_variables")?;
+        let (decision_variables, variable_metadata): (
+            BTreeMap<VariableID, DecisionVariable>,
+            crate::VariableMetadataStore,
+        ) = self
+            .decision_variables
+            .parse_as(&(), message, "decision_variables")?;
 
         let parameters: BTreeMap<VariableID, v1::Parameter> = self
             .parameters

@@ -51,7 +51,6 @@ impl Arbitrary for DecisionVariable {
                 kind,
                 bound,
                 substituted_value: None, // To keep consistency in Instance level, keep this None here.
-                metadata: DecisionVariableMetadata::default(),
             })
             .boxed()
     }

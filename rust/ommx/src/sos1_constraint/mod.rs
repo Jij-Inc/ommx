@@ -1,7 +1,7 @@
 mod evaluate;
 
 use crate::{
-    constraint::{stage, ConstraintMetadata, Created, Evaluated, Stage},
+    constraint::{stage, Created, Evaluated, Stage},
     constraint_type::{ConstraintType, EvaluatedConstraintBehavior, SampledConstraintBehavior},
     SampleID, VariableID, VariableIDSet,
 };
@@ -55,14 +55,14 @@ impl From<Sos1ConstraintID> for u64 {
 /// Unlike [`OneHotConstraint`](crate::OneHotConstraint), SOS1 allows all variables to be zero.
 ///
 /// The constraint's [`Sos1ConstraintID`] is not stored in this struct — it is held
-/// by the enclosing collection (e.g. the `BTreeMap` key in [`Instance`]).
+/// by the enclosing collection. Auxiliary metadata also lives on the enclosing
+/// collection's [`ConstraintMetadataStore`](crate::ConstraintMetadataStore).
 ///
 /// [`Instance`]: crate::Instance
 #[derive(Debug, Clone, PartialEq)]
 pub struct Sos1Constraint<S: Stage<Self> = Created> {
     /// The decision variables, at most one of which can be non-zero.
     pub variables: BTreeSet<VariableID>,
-    pub metadata: ConstraintMetadata,
     pub stage: S::Data,
 }
 
@@ -133,7 +133,6 @@ impl SampledConstraintBehavior for SampledSos1Constraint {
 
         Some(Sos1Constraint {
             variables: self.variables.clone(),
-            metadata: self.metadata.clone(),
             stage: Sos1EvaluatedData {
                 feasible,
                 active_variable,
@@ -159,7 +158,6 @@ impl Sos1Constraint<Created> {
     pub fn new(variables: BTreeSet<VariableID>) -> Self {
         Self {
             variables,
-            metadata: ConstraintMetadata::default(),
             stage: Sos1CreatedData,
         }
     }

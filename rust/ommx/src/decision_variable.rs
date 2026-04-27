@@ -2,12 +2,17 @@ mod approx;
 mod arbitrary;
 mod logical_memory;
 mod metadata_store;
-mod parse;
+pub(crate) mod parse;
 mod serialize;
 
 pub use arbitrary::*;
 use getset::CopyGetters;
 pub use metadata_store::VariableMetadataStore;
+
+pub(crate) use parse::{
+    decision_variable_to_v1, sampled_decision_variable_to_v1, ParsedDecisionVariable,
+    ParsedSampledDecisionVariable,
+};
 
 use crate::logical_memory::LogicalMemoryProfile;
 use crate::{ATol, Bound, Parse, RawParseError, SampleID, Sampled};
@@ -146,7 +151,14 @@ impl Kind {
     }
 }
 
-/// The decision variable with metadata.
+/// The decision variable's intrinsic data.
+///
+/// Holds only `id`, `kind`, `bound`, and `substituted_value`. Auxiliary
+/// metadata (`name`, `subscripts`, `parameters`, `description`) lives on
+/// the enclosing [`Instance`](crate::Instance)'s
+/// [`VariableMetadataStore`](crate::VariableMetadataStore) keyed by
+/// [`VariableID`]; per-element metadata storage was retired in the v3
+/// redesign.
 ///
 /// Invariants
 /// ----------
@@ -164,8 +176,6 @@ pub struct DecisionVariable {
     bound: Bound,
     #[getset(get_copy = "pub")]
     substituted_value: Option<f64>,
-
-    pub metadata: DecisionVariableMetadata,
 }
 
 impl DecisionVariable {
@@ -184,7 +194,6 @@ impl DecisionVariable {
                 .consistent_bound(bound, atol)
                 .ok_or(DecisionVariableError::BoundInconsistentToKind { id, kind, bound })?,
             substituted_value: None, // will be set later
-            metadata: DecisionVariableMetadata::default(),
         };
         if let Some(substituted_value) = substituted_value {
             new.check_value_consistency(substituted_value, atol)?;
@@ -408,7 +417,6 @@ pub struct EvaluatedDecisionVariable {
     bound: Bound,
     #[getset(get = "pub")]
     value: f64,
-    pub metadata: DecisionVariableMetadata,
 }
 
 impl EvaluatedDecisionVariable {
@@ -442,7 +450,6 @@ impl EvaluatedDecisionVariable {
             kind: decision_variable.kind,
             bound: decision_variable.bound,
             value,
-            metadata: decision_variable.metadata,
         })
     }
 
@@ -473,7 +480,6 @@ pub struct SampledDecisionVariable {
     kind: Kind,
     #[getset(get = "pub")]
     bound: Bound,
-    pub metadata: DecisionVariableMetadata,
     #[getset(get = "pub")]
     samples: Sampled<f64>,
 }
@@ -510,7 +516,6 @@ impl SampledDecisionVariable {
             id: decision_variable.id,
             kind: decision_variable.kind,
             bound: decision_variable.bound,
-            metadata: decision_variable.metadata,
             samples,
         })
     }
@@ -527,7 +532,6 @@ impl SampledDecisionVariable {
             kind: self.kind,
             bound: self.bound,
             substituted_value: None, // No substituted value when getting from samples
-            metadata: self.metadata.clone(),
         };
 
         // unwrap is safe here since there's no substituted_value to check
@@ -594,18 +598,56 @@ impl crate::Evaluate for DecisionVariable {
     }
 }
 
+/// Build a v1 `DecisionVariable` from an evaluated variable plus its
+/// metadata. The metadata comes from the enclosing collection's
+/// [`VariableMetadataStore`]; the per-element struct no longer carries it.
+pub(crate) fn evaluated_decision_variable_to_v1(
+    eval_dv: EvaluatedDecisionVariable,
+    metadata: DecisionVariableMetadata,
+) -> crate::v1::DecisionVariable {
+    crate::v1::DecisionVariable {
+        id: eval_dv.id.into_inner(),
+        kind: eval_dv.kind.into(),
+        bound: Some(eval_dv.bound.into()),
+        substituted_value: Some(eval_dv.value),
+        name: metadata.name,
+        subscripts: metadata.subscripts,
+        parameters: metadata.parameters.into_iter().collect(),
+        description: metadata.description,
+    }
+}
+
+/// Build a v1 `DecisionVariable` from intrinsic data only.
+///
+/// Metadata fields (name / subscripts / parameters / description) are left at
+/// their defaults; the collection-level serializer overlays them from the
+/// [`VariableMetadataStore`] before emitting the final proto message.
+impl From<DecisionVariable> for crate::v1::DecisionVariable {
+    fn from(dv: DecisionVariable) -> Self {
+        crate::decision_variable::parse::decision_variable_to_v1(
+            dv,
+            DecisionVariableMetadata::default(),
+        )
+    }
+}
+
+/// Build a v1 `DecisionVariable` from an evaluated variable, with metadata
+/// fields left at their defaults. Used by call sites that don't have access
+/// to the SoA store; the collection-level serializer overlays metadata
+/// before emitting the final proto.
 impl From<EvaluatedDecisionVariable> for crate::v1::DecisionVariable {
     fn from(eval_dv: EvaluatedDecisionVariable) -> Self {
-        crate::v1::DecisionVariable {
-            id: eval_dv.id.into_inner(),
-            kind: eval_dv.kind.into(),
-            bound: Some(eval_dv.bound.into()),
-            substituted_value: Some(eval_dv.value),
-            name: eval_dv.metadata.name,
-            subscripts: eval_dv.metadata.subscripts,
-            parameters: eval_dv.metadata.parameters.into_iter().collect(),
-            description: eval_dv.metadata.description,
-        }
+        evaluated_decision_variable_to_v1(eval_dv, DecisionVariableMetadata::default())
+    }
+}
+
+/// Build a v1 `SampledDecisionVariable` with metadata fields defaulted.
+impl From<SampledDecisionVariable> for crate::v1::SampledDecisionVariable {
+    fn from(sampled_dv: SampledDecisionVariable) -> Self {
+        crate::decision_variable::parse::sampled_decision_variable_to_v1(
+            sampled_dv,
+            DecisionVariableMetadata::default(),
+        )
     }
 }
 

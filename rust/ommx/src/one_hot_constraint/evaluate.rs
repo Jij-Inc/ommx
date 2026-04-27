@@ -75,7 +75,6 @@ impl Evaluate for OneHotConstraint<Created> {
 
         Ok(OneHotConstraint {
             variables: self.variables.clone(),
-            metadata: self.metadata.clone(),
             stage: OneHotEvaluatedData {
                 feasible,
                 active_variable,
@@ -100,7 +99,6 @@ impl Evaluate for OneHotConstraint<Created> {
 
         Ok(OneHotConstraint {
             variables: self.variables.clone(),
-            metadata: self.metadata.clone(),
             stage: OneHotSampledData {
                 feasible,
                 active_variable,
