@@ -76,6 +76,7 @@ impl Evaluate for Instance {
                 .evaluated_sos1_constraints_collection(evaluated_sos1_constraints)
                 .evaluated_named_functions(evaluated_named_functions)
                 .decision_variables(decision_variables)
+                .variable_metadata(self.variable_metadata.clone())
                 .sense(sense)
                 .build_unchecked()?
         };
@@ -138,6 +139,7 @@ impl Evaluate for Instance {
 
         Ok(crate::SampleSet::builder()
             .decision_variables(decision_variables)
+            .variable_metadata(self.variable_metadata.clone())
             .objectives(objectives)
             .constraints_collection(sampled_constraints)
             .indicator_constraints_collection(sampled_indicator_constraints)

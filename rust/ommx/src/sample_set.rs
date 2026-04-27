@@ -260,6 +260,7 @@ impl SampleSet {
                 ))
                 .evaluated_named_functions(evaluated_named_functions)
                 .decision_variables(decision_variables)
+                .variable_metadata(self.variable_metadata.clone())
                 .sense(sense)
                 .build_unchecked()
                 .expect("SampleSet invariants guarantee Solution invariants")
