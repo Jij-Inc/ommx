@@ -79,12 +79,20 @@ SoA store; the behavior they implement is unchanged.
 - `instance.constraints`, `decision_variables`, `*_constraints` become
   `pandas.Series[ID -> Object]` — index = ID, value = the PyO3 wrapper
   object. Series indexing replaces dict / list APIs.
-- `*_df` methods are explicitly **derived views**: type-specific core
-  columns extracted from the SoA, joined with sidecar metadata /
-  parameters / provenance / removed-reason dfs.
-- Sidecar DataFrames (`*_metadata_df`, `*_parameters_df` long format,
-  `*_provenance_df` long format, `*_removed_reasons_df` long format) are
-  bulk-built from the Rust SoA store, one column allocation per field.
+- `*_df` methods are explicitly **derived views**: each one returns
+  type-specific core columns extracted from the SoA store, with no
+  metadata columns inlined. They do **not** join sidecars themselves;
+  callers either join the sidecar dfs explicitly or use the
+  `*_full_df` helper covered below.
+- Sidecar DataFrames are bulk-built from the Rust SoA store with one
+  column allocation per field. Constraint-side methods take a
+  `kind: Literal["regular","indicator","one_hot","sos1"]` argument
+  (`constraint_metadata_df(kind=...)`,
+  `constraint_parameters_df(kind=...)`,
+  `constraint_provenance_df(kind=...)`,
+  `constraint_removed_reasons_df(kind=...)`); decision-variable-side
+  methods need no kind (`variable_metadata_df`,
+  `variable_parameters_df`).
 - **Wrapper objects keep their metadata getters** (`Constraint.name`,
   `.subscripts`, `.parameters`, `.description`; same on the other
   wrappers). For wrappers obtained from a collection ("attached"), the
@@ -212,7 +220,9 @@ let id = collection.insert(Constraint::equal_to_zero(f));
 collection.metadata_mut().set_name(id, "demand_balance");
 collection.metadata_mut().push_subscripts(id, [i, j]);
 
-// or via the convenience builder:
+// or via the convenience builder. Builder methods correspond to the
+// existing Python `set_*` semantics (replace, not extend) since the
+// builder always starts from an empty store:
 collection.insert_with(
     Constraint::equal_to_zero(f),
     |m| m.name("demand_balance").subscripts([i, j]),
@@ -306,11 +316,11 @@ The boundaries currently work per-element and need to move to per-collection:
                     │
        ┌────────────┼─────────────────────┐
        ▼            ▼                     ▼
-  Series         Constraint object     *_df / *_metadata_df / *_parameters_df
-  (per-id        (with .name / .       (bulk-built from the SoA store via
-   wrapper       subscripts / …        column-wise builders; not via
-   handles)      back-referenced       per-row dict construction)
-                 to the store)
+  Series         Constraint object     constraints_df / constraint_metadata_df /
+  (per-id        (with .name /         constraint_parameters_df / etc.
+   wrapper       .subscripts / …       (bulk-built from the SoA store via
+   handles)      back-referenced       column-wise builders; kind dispatched
+                 to the store)         via Literal + @overload)
 ```
 
 Wrapper objects, Series, and DataFrames are three views over the same
@@ -349,8 +359,21 @@ enum ConstraintInner {
 
 `Instance.add_constraint(c)` (and the special-constraint equivalents)
 takes a Standalone wrapper, drains its staging bag into the SoA store,
-and returns an Attached wrapper bound to that `id`. Series-derived
-wrappers (`s.loc[id]`) are also Attached.
+and returns a fresh Attached wrapper bound to that `id`. The original
+Standalone wrapper is **transitioned in place**: its `inner` flips to
+`Attached { instance, kind, id }` so subsequent `c.name`,
+`c.add_name(...)`, etc. read / write the SoA store. Calling
+`add_constraint(c)` a second time on an already-Attached wrapper
+raises `ValueError("constraint already inserted")` rather than
+silently re-inserting. Series-derived wrappers (`s.loc[id]`) are
+also Attached, sharing the `Py<Instance>` of the parent.
+
+Two Attached wrappers that point at the same id observe the same
+state: a write through one (`a.name = "x"`) is visible through any
+other (`b.name == "x"`) and through the metadata df on the next
+call. Concurrency-wise this is the standard PyO3 borrow rule — the
+SoA store is mutated through `Bound<'py, Instance>` borrowing, which
+the runtime checks at `&mut` boundaries.
 
 ```python
 # Standalone modeling — staging bag in the wrapper
@@ -405,6 +428,14 @@ instance.sos1_constraints                 # Series[Sos1ConstraintID -> Sos1Const
 
 solution.constraints                      # Series[ConstraintID -> EvaluatedConstraint]
 sample_set.constraints                    # Series[ConstraintID -> SampledConstraint]
+
+# ParametricInstance follows the same surface as Instance: Series
+# accessors for variables / constraints / special constraints, the
+# corresponding *_df / *_metadata_df / *_full_df family, and back-
+# referenced wrappers for individual elements. The (unrelated)
+# parametric `parameters` field stays on its own dedicated accessor.
+parametric_instance.constraints           # Series[ConstraintID -> Constraint]
+parametric_instance.decision_variables    # Series[VariableID -> DecisionVariable]
 ```
 
 The Series carries Attached wrapper objects (object dtype). Per-element
@@ -459,10 +490,40 @@ removed  = instance.constraint_removed_reasons_df(kind="regular")
 df.join(meta, how="left")
 ```
 
-`*_df` is what users call when they want a single rectangular table for
-analysis; the Series is what users call when they want individual
-wrapper objects; the wrapper getters are what users call when they
-already hold one wrapper. Three surfaces, one canonical store.
+`Solution` and `SampleSet` expose the same `*_df` family with stage-
+appropriate column schemas. The method names match `Instance`:
+
+```python
+# Solution — evaluated stage
+df = solution.constraints_df(kind="regular")
+                                            # index name=regular_constraint_id;
+                                            # equality, evaluated_value, feasible,
+                                            # used_ids, dual_variable
+df = solution.decision_variables_df()       # index name=variable_id;
+                                            # kind, lower, upper, value
+solution.constraint_metadata_df(kind=...)   # same metadata schema as Instance
+solution.constraint_full_df(kind=...)       # core + metadata join
+# … same family for solution.variable_*_df / solution.constraint_*_df
+
+# SampleSet — sampled stage; columns are per-sample (value.{sid},
+# feasible.{sid}, …) where sid is each SampleID.
+df = sample_set.constraints_df(kind="regular")
+df = sample_set.decision_variables_df()
+sample_set.constraint_metadata_df(kind=...)
+sample_set.constraint_full_df(kind=...)
+```
+
+The metadata / parameters / provenance / removed-reasons sidecar dfs
+are stage-independent (they describe the same constraint), so on
+`Solution` and `SampleSet` they return the same data they would on
+the source `Instance` — there's no per-stage divergence to manage.
+
+`*_df` (core only) is what users call when they want a single
+rectangular table for analysis; `*_full_df` is the convenience
+join (see "Avoiding cross-ID-space joins"); the Series is what users
+call when they want individual wrapper objects; the wrapper getters
+are what users call when they already hold one wrapper. Four
+surfaces, one canonical store.
 
 ### Avoiding cross-ID-space joins
 
@@ -493,16 +554,33 @@ naming and helper layers:
    columns plus name/subscripts/description in one frame" case, expose:
 
    ```python
-   instance.constraints_full_df(kind="regular")
-   instance.decision_variables_full_df()
+   instance.constraints_full_df(
+       kind="regular",
+       include=("metadata",),     # default — name / subscripts / description
+                                  # joined as columns on the core df
+   )
+   instance.constraints_full_df(
+       kind="regular",
+       include=("metadata", "parameters", "provenance",
+                "removed_reasons"),
+   )
+   instance.decision_variables_full_df(
+       include=("metadata", "parameters"),
+   )
    ```
 
-   These are convenience wrappers that perform the right join internally
-   (core ⨝ metadata, optionally also parameters / provenance via
-   keyword args). Users who only want a quick analysis frame call the
-   `*_full_df` form and never write a manual `.join()` at all. Users
-   who want the constituent dfs separately still get them via the
-   primary `*_df` family — the helper is purely additive.
+   `include` is a tuple of literal strings (typed via `Literal[...]`)
+   selecting which sidecars to fold in. `"metadata"` is left-joined as
+   columns; `"parameters"` / `"provenance"` / `"removed_reasons"` are
+   left-joined after pivoting their long-format keys back to wide
+   columns under namespaced prefixes (`parameters.{key}`,
+   `provenance.{step}.source_id`, `removed_reasons.{key}`) — the
+   resulting df is heterogeneous-column-shaped, so this form is
+   strictly the convenience surface. Users who want clean long-form
+   data for analysis still go through the primary `*_df` family.
+
+   Users who only want a quick analysis frame call `*_full_df` and
+   never write a manual `.join()` at all.
 
 3. **Wrapper-object access stays the safest path for single-id
    lookups.** `s.loc[id].name` reads metadata via the back-reference
@@ -554,11 +632,25 @@ User-visible breakage relative to v3 alpha 2:
   - `s.values()` (method call) → `s.tolist()` or `list(s)`.
   - List-positional reliance on the old `decision_variables: list[…]`
     ordering breaks; index by `VariableID` instead.
-- `*_df` methods no longer carry `name`, `subscripts`, `description`,
-  or `parameters.{key}` columns. Users `df.join(meta_df)` or pivot the
-  long parameters df.
-- New `*_metadata_df`, `*_parameters_df`, `*_provenance_df`,
-  `*_removed_reasons_df` methods are added per collection kind.
+- `*_df` methods (`constraints_df(kind=...)`,
+  `decision_variables_df()`, and the Solution / SampleSet
+  counterparts) no longer carry `name`, `subscripts`, `description`,
+  or `parameters.{key}` columns. Users join the relevant metadata /
+  parameters df explicitly or call `*_full_df` for the joined form.
+- New methods on `Instance`, `Solution`, and `SampleSet`:
+  `constraint_metadata_df(kind=...)`,
+  `constraint_parameters_df(kind=...)`,
+  `constraint_provenance_df(kind=...)`,
+  `constraint_removed_reasons_df(kind=...)`,
+  `variable_metadata_df()`,
+  `variable_parameters_df()`,
+  plus `constraints_full_df(kind=...)` /
+  `decision_variables_full_df()` joined helpers.
+- Per-kind `indicator_constraints_df()`,
+  `one_hot_constraints_df()`, `sos1_constraints_df()`, and
+  `removed_*_constraints_df()` collapse into the single
+  `constraints_df(kind=...)` overload set; same for the corresponding
+  removed-reasons methods.
 - The Rust `metadata` field on `DecisionVariable` and `Constraint<S>`
   is removed. Downstream Rust crates that touched `c.metadata.*`
   directly switch to `collection.metadata()` accessors.
@@ -592,11 +684,18 @@ before implementation.
      exposes `removed_reasons_df` / `indicator_removed_reasons_df`
      this way, and `RemovedReason` is collection-level metadata in
      Rust, not part of the constraint.
-3. **Builder-style metadata setter**: flat
-   (`metadata_mut().set_name(id, ...)`) only, vs. also
-   `collection.insert_with(c, |m| m.name(...))` sugar.
-   - **Recommendation: add `insert_with`** on the Rust side. The
-     Python staging bag covers the equivalent Python ergonomics.
+3. **Builder-style metadata setter on the Rust side**: flat
+   (`collection.insert(c)` followed by `metadata_mut().set_name(id,
+   ...)`) only, vs. also `collection.insert_with(c, |m|
+   m.name(...))` sugar.
+   - **Recommendation: add `insert_with`.** Pure Rust callers
+     (algorithms, adapters, tests) construct constraints in loops
+     where the two-step form is easy to forget — the constraint goes
+     in but the metadata silently doesn't. The closure-based form
+     keeps insertion atomic at the call site. This is independent of
+     the Python staging bag, which serves the modeling chain on the
+     Python side; both surfaces exist for their own ergonomics
+     reasons.
 4. **`parameters` storage on the Rust side**: `FnvHashMap<ID,
    FnvHashMap<String, String>>` vs. transposed `FnvHashMap<(ID,
    String), String>`.
