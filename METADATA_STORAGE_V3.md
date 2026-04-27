@@ -431,20 +431,29 @@ directly via column-wise builders (no per-row dict construction).
 
 ```python
 # Decision variables
-df       = instance.decision_variables_df()       # index=id; kind, lower, upper, substituted_value
-meta     = instance.variable_metadata_df()        # index=id; name, subscripts, description
-params   = instance.variable_parameters_df()      # columns: id, key, value (long format)
+df       = instance.decision_variables_df()       # index name=variable_id;
+                                                  # kind, lower, upper, substituted_value
+meta     = instance.variable_metadata_df()        # index name=variable_id;
+                                                  # name, subscripts, description
+params   = instance.variable_parameters_df()      # columns: variable_id, key, value (long format)
 
-# Constraints (per kind)
-df       = instance.regular_constraints_df()      # index=id; equality, function_type, used_ids
-meta     = instance.regular_constraint_metadata_df()
-                                                  # index=id; name, subscripts, description
-provenance_df = instance.regular_constraint_provenance_df()
-                                                  # columns: id, step, source_kind, source_id (long)
-params   = instance.regular_constraint_parameters_df()
-                                                  # columns: id, key, value (long format)
-removed  = instance.regular_constraint_removed_reasons_df()
-                                                  # columns: id, reason, key, value (long format)
+# Constraints — kind dispatched via Literal + @overload so the IDE / type
+# checker still sees the kind-specific column schema for each call.
+df       = instance.constraints_df(kind="regular")
+                                                  # index name=regular_constraint_id;
+                                                  # equality, function_type, used_ids
+meta     = instance.constraint_metadata_df(kind="regular")
+                                                  # index name=regular_constraint_id;
+                                                  # name, subscripts, description
+provenance_df = instance.constraint_provenance_df(kind="regular")
+                                                  # columns: regular_constraint_id, step,
+                                                  # source_kind, source_id (long)
+params   = instance.constraint_parameters_df(kind="regular")
+                                                  # columns: regular_constraint_id, key,
+                                                  # value (long format)
+removed  = instance.constraint_removed_reasons_df(kind="regular")
+                                                  # columns: regular_constraint_id, reason,
+                                                  # key, value (long format)
 
 # Joining is explicit
 df.join(meta, how="left")
@@ -454,6 +463,59 @@ df.join(meta, how="left")
 analysis; the Series is what users call when they want individual
 wrapper objects; the wrapper getters are what users call when they
 already hold one wrapper. Three surfaces, one canonical store.
+
+### Avoiding cross-ID-space joins
+
+Each constraint kind has its own ID space (regular ID 5 ≠ indicator ID 5),
+and decision variable IDs live in yet another space. With every df sharing
+an `int64` index, `df.join()` between mismatched-kind dfs would silently
+produce an incorrect-but-shaped result. We ward off that mistake at the
+naming and helper layers:
+
+1. **Distinct index names per ID space.** All dfs returned by the API set
+   their index name to a kind-qualified label:
+
+   ```
+   variable_id                   # decision variables
+   regular_constraint_id         # regular constraints
+   indicator_constraint_id       # indicator constraints
+   one_hot_constraint_id         # one-hot constraints
+   sos1_constraint_id            # SOS1 constraints
+   ```
+
+   pandas `df.join(other)` aligns by index but does *not* enforce that
+   the index names match. The qualified names alone won't stop a wrong
+   join — but they're visible in `df.head()`, `df.info()`, IDE
+   inspection, and migration-guide examples, so users see the mismatch
+   immediately rather than chasing a silent bug downstream.
+
+2. **One-step joined helpers per kind.** For the common "I want core
+   columns plus name/subscripts/description in one frame" case, expose:
+
+   ```python
+   instance.constraints_full_df(kind="regular")
+   instance.decision_variables_full_df()
+   ```
+
+   These are convenience wrappers that perform the right join internally
+   (core ⨝ metadata, optionally also parameters / provenance via
+   keyword args). Users who only want a quick analysis frame call the
+   `*_full_df` form and never write a manual `.join()` at all. Users
+   who want the constituent dfs separately still get them via the
+   primary `*_df` family — the helper is purely additive.
+
+3. **Wrapper-object access stays the safest path for single-id
+   lookups.** `s.loc[id].name` reads metadata via the back-reference
+   without any join, so any code that operates a constraint at a time
+   sidesteps the issue entirely. `*_df` joins are reserved for bulk
+   analysis, where (1) and (2) cover the realistic mistake modes.
+
+A stronger guarantee — encoding kind in the index dtype itself
+(MultiIndex `(kind, id)`, or a custom ExtensionArray) — was considered
+and rejected. MultiIndex is intrusive on every analysis call; a custom
+ExtensionArray is a meaningful pandas integration and a maintenance
+burden disproportionate to the failure mode it prevents. The qualified
+index name + `*_full_df` helpers are sufficient.
 
 ### `ToPandasEntry` restructuring
 
@@ -513,12 +575,17 @@ Each item lists a working recommendation; flagged for explicit sign-off
 before implementation.
 
 1. **Constraint kind dispatch in Python**:
-   `constraint_metadata_df(kind="regular")` (one method, runtime kind)
-   vs. `regular_constraint_metadata_df()` (four methods).
-   - **Recommendation: four explicit methods.** `pyo3-stub-gen`
-     produces concrete pymethod stubs per method, so explicit names
-     give better IDE / type-checker discoverability than a runtime
-     `kind` arg.
+   `constraint_metadata_df(kind="regular")` (one method,
+   `Literal["regular","indicator","one_hot","sos1"]` overloads) vs.
+   `regular_constraint_metadata_df()` (four explicit methods).
+   - **Recommendation: single method with `Literal` + `@overload`.**
+     `pyo3-stub-gen` supports emitting `typing.overload` stubs keyed
+     on `Literal[…]` arguments, so a `kind` parameter gives the same
+     IDE / type-checker discoverability as four explicit methods
+     while keeping the API surface compact. Each kind's overload
+     advertises its specific column schema (e.g. only the regular and
+     indicator overloads include the `provenance` / `function_type`
+     columns where relevant).
 2. **`removed_reason` placement**: inline columns on the core df vs. a
    separate long-format `*_removed_reasons_df`.
    - **Recommendation: separate long-format df.** `Solution` already
