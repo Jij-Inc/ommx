@@ -720,6 +720,19 @@ traceability with earlier review comments.
 6. **Polars as primary in Python — no, pandas stays primary for v3.**
    `PyDataFrame` is pandas-backed; polars promotion is a separate
    v3.x discussion.
+7. **No API to remove constraints from a collection.** Once a
+   constraint has been added to a collection, it stays in either
+   the active or the removed map for the lifetime of the
+   `Instance`. `relax(id)` moves it from active to removed;
+   `restore(id)` moves it back. There is no operation that drops a
+   constraint from the collection entirely. Users whose workflow
+   needs to "forget" a constraint construct a fresh `Instance`
+   instead. This keeps Attached wrappers always valid (the id they
+   reference is guaranteed to be in one of the two maps), so
+   wrapper getters never panic or raise an invalidation error. If
+   a future version ever needs a `drop_constraint`, it lands as a
+   separate feature with its own invalidation story; v3 does not
+   need it.
 8. **Attached wrapper `Py<Instance>` lifetime — documented behavior,
    no code-level mitigation in this proposal.** The wrapper holds a
    refcounted handle to the Instance; there's no cycle (wrapper →
@@ -745,17 +758,3 @@ Items still requiring sign-off before implementation.
      This is independent of the Python staging bag, which serves the
      modeling chain on the Python side; both surfaces exist for
      their own ergonomics reasons.
-7. **`drop_constraint` / wrapper invalidation**: Attached wrappers
-   stay valid as long as the id is in either the active or removed
-   map. There's no `drop_constraint` API today, so the question is
-   moot — but if one is added later, it has to invalidate Attached
-   wrappers (panicking getters or `IsDroppedError`).
-   - **Working recommendation: do not add `drop_constraint` in
-     v3.** `relax` is sufficient for the existing use cases. Defer
-     wrapper invalidation semantics to whenever `drop_constraint`
-     actually becomes necessary. The risk to weigh: deferring means
-     that whoever adds `drop_constraint` later has to retrofit
-     invalidation onto Attached wrappers across every consumer (PR
-     scope balloons). Explicitly closing the door now ("v3 has no
-     drop") makes that future migration a separate feature, not a
-     compatibility break.
