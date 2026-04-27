@@ -721,6 +721,48 @@ traceability with earlier review comments.
    collection-level metadata in Rust, not part of the constraint.
    Wide pivoting is available on opt-in via
    `constraints_df(kind=..., include=("removed_reasons",))`.
+3. **Atomic insert-with-metadata on the Rust side — `insert_with`
+   takes the existing owned `ConstraintMetadata` struct.** The pre-
+   v3 `ConstraintMetadata` (owned struct with `name`, `subscripts`,
+   `parameters`, `description`, `provenance`) stays as the I/O type
+   even though it no longer lives inside `Constraint<S>`. The SoA
+   store and `ConstraintMetadata` are mutually convertible:
+   `store.collect_for(id) -> ConstraintMetadata` for owned reads,
+   `store.insert(id, ConstraintMetadata)` for owned writes.
+
+   ```rust
+   impl<T: ConstraintType> ConstraintCollection<T> {
+       pub fn insert(&mut self, c: T::Created) -> T::ID;
+       pub fn insert_with(
+           &mut self,
+           c: T::Created,
+           metadata: ConstraintMetadata,
+       ) -> T::ID;
+   }
+
+   let id = collection.insert_with(
+       c,
+       ConstraintMetadata {
+           name: Some("demand_balance".into()),
+           subscripts: vec![i, j],
+           ..Default::default()
+       },
+   );
+   ```
+
+   Two types in the metadata layer cover all cases:
+   - `ConstraintMetadataStore<ID>` — internal SoA store, with
+     per-field borrowing getters (`name(id) -> Option<&str>`,
+     `subscripts(id) -> &[i64]`, …) and a `collect_for(id) ->
+     ConstraintMetadata` for one-shot owned reconstruction.
+   - `ConstraintMetadata` — owned struct used for I/O (insert,
+     owned read, modeling-chain staging). Same shape as the pre-v3
+     struct.
+
+   Pure Rust callers (algorithms, adapters, tests) constructing
+   constraints in loops use `insert_with` to avoid the silent-
+   metadata-loss footgun of the two-step form. Independent of the
+   Python staging bag, which serves the modeling chain.
 4. **`parameters` Rust storage — nested
    `FnvHashMap<ID, FnvHashMap<String, String>>`.** Matches the
    existing per-object metadata shape, makes "all parameters of one
@@ -759,53 +801,4 @@ traceability with earlier review comments.
 
 ## Open questions
 
-Items still requiring sign-off before implementation.
-
-3. **Atomic insert-with-metadata on the Rust side**: provide
-   `collection.insert_with(c, metadata: ConstraintMetadata)`
-   alongside the flat
-   `collection.insert(c) + metadata_mut().set_name(id, ...)` form.
-   - **Working recommendation: add `insert_with` taking the existing
-     owned `ConstraintMetadata` struct.**
-
-     The pre-v3 `ConstraintMetadata` (owned struct with `name`,
-     `subscripts`, `parameters`, `description`, `provenance`) stays
-     as the I/O type even though it no longer lives inside
-     `Constraint<S>`. The SoA store and `ConstraintMetadata` are
-     mutually convertible: `store.collect_for(id) ->
-     ConstraintMetadata` for owned reads,
-     `store.insert(id, ConstraintMetadata)` for owned writes.
-
-     ```rust
-     impl<T: ConstraintType> ConstraintCollection<T> {
-         pub fn insert(&mut self, c: T::Created) -> T::ID;
-         pub fn insert_with(
-             &mut self,
-             c: T::Created,
-             metadata: ConstraintMetadata,
-         ) -> T::ID;
-     }
-
-     let id = collection.insert_with(
-         c,
-         ConstraintMetadata {
-             name: Some("demand_balance".into()),
-             subscripts: vec![i, j],
-             ..Default::default()
-         },
-     );
-     ```
-
-     Two types in the metadata layer cover all cases:
-     - `ConstraintMetadataStore<ID>` — internal SoA store, with
-       per-field borrowing getters (`name(id) -> Option<&str>`,
-       `subscripts(id) -> &[i64]`, …) and a `collect_for(id) ->
-       ConstraintMetadata` for one-shot owned reconstruction.
-     - `ConstraintMetadata` — owned struct used for I/O (insert,
-       owned read, modeling-chain staging). Same shape as the pre-v3
-       struct.
-
-     Pure Rust callers (algorithms, adapters, tests) constructing
-     constraints in loops use `insert_with` to avoid the silent-
-     metadata-loss footgun of the two-step form. Independent of the
-     Python staging bag, which serves the modeling chain.
+None remaining. All eight items are resolved above.
