@@ -79,20 +79,19 @@ SoA store; the behavior they implement is unchanged.
 - `instance.constraints`, `decision_variables`, `*_constraints` become
   `pandas.Series[ID -> Object]` — index = ID, value = the PyO3 wrapper
   object. Series indexing replaces dict / list APIs.
-- `*_df` methods are explicitly **derived views**: each one returns
-  type-specific core columns extracted from the SoA store, with no
-  metadata columns inlined. They do **not** join sidecars themselves;
-  callers either join the sidecar dfs explicitly or use the
-  `*_full_df` helper covered below.
+- `*_df` methods are explicitly **derived views** with an `include`
+  parameter that controls which sidecars are folded in. The default
+  `include` keeps the v2-style wide DataFrame shape, so existing user
+  code only needs to add the `kind=...` argument to keep working.
 - Sidecar DataFrames are bulk-built from the Rust SoA store with one
-  column allocation per field. Constraint-side methods take a
-  `kind: Literal["regular","indicator","one_hot","sos1"]` argument
+  column allocation per field. They are still exposed individually
   (`constraint_metadata_df(kind=...)`,
   `constraint_parameters_df(kind=...)`,
   `constraint_provenance_df(kind=...)`,
-  `constraint_removed_reasons_df(kind=...)`); decision-variable-side
-  methods need no kind (`variable_metadata_df`,
-  `variable_parameters_df`).
+  `constraint_removed_reasons_df(kind=...)`,
+  `variable_metadata_df`, `variable_parameters_df`) for users who
+  want long-format data, but the `*_df` family covers the common
+  "give me a wide table" case directly.
 - **Wrapper objects keep their metadata getters** (`Constraint.name`,
   `.subscripts`, `.parameters`, `.description`; same on the other
   wrappers). For wrappers obtained from a collection ("attached"), the
@@ -316,11 +315,13 @@ The boundaries currently work per-element and need to move to per-collection:
                     │
        ┌────────────┼─────────────────────┐
        ▼            ▼                     ▼
-  Series         Constraint object     constraints_df / constraint_metadata_df /
-  (per-id        (with .name /         constraint_parameters_df / etc.
-   wrapper       .subscripts / …       (bulk-built from the SoA store via
-   handles)      back-referenced       column-wise builders; kind dispatched
-                 to the store)         via Literal + @overload)
+  Series         Constraint object     constraints_df(kind=..., include=...) /
+  (per-id        (with .name /         constraint_metadata_df(kind=...) /
+   wrapper       .subscripts / …       constraint_parameters_df(kind=...) /
+   handles)      back-referenced       constraint_provenance_df(kind=...) /
+                 to the store)         constraint_removed_reasons_df(kind=...)
+                                       (bulk-built from the SoA via column-wise
+                                       builders; kind via Literal + @overload)
 ```
 
 Wrapper objects, Series, and DataFrames are three views over the same
@@ -431,9 +432,10 @@ sample_set.constraints                    # Series[ConstraintID -> SampledConstr
 
 # ParametricInstance follows the same surface as Instance: Series
 # accessors for variables / constraints / special constraints, the
-# corresponding *_df / *_metadata_df / *_full_df family, and back-
-# referenced wrappers for individual elements. The (unrelated)
-# parametric `parameters` field stays on its own dedicated accessor.
+# corresponding constraints_df / constraint_metadata_df / etc.
+# family with the same `include=` parameter, and back-referenced
+# wrappers for individual elements. The (unrelated) parametric
+# `parameters` field stays on its own dedicated accessor.
 parametric_instance.constraints           # Series[ConstraintID -> Constraint]
 parametric_instance.decision_variables    # Series[VariableID -> DecisionVariable]
 ```
@@ -455,75 +457,95 @@ indexing, `.items()`, `.index`. Operations users lose vs. dict:
   The right answer is `instance.constraints_df()["equality"]`, which
   is bulk-built from the SoA. Document this; do not enforce.
 
-### `*_df` methods → derived views
+### `*_df` methods → derived views with `include`
 
-Each `*_df` is a derived view. Implementation reads the SoA store
-directly via column-wise builders (no per-row dict construction).
+Each `*_df` is a derived view: type-specific core columns extracted
+from the SoA store, plus whichever sidecars the caller asks for via
+`include`. The default `include` matches v2's wide-DataFrame shape
+(`metadata` + `parameters`), so v2 user code keeps working with only
+a `kind=...` argument added.
 
 ```python
-# Decision variables
-df       = instance.decision_variables_df()       # index name=variable_id;
-                                                  # kind, lower, upper, substituted_value
-meta     = instance.variable_metadata_df()        # index name=variable_id;
-                                                  # name, subscripts, description
-params   = instance.variable_parameters_df()      # columns: variable_id, key, value (long format)
+# === v2-style wide DataFrame (default include) ===
+df = instance.constraints_df(kind="regular")
+# ≡ instance.constraints_df(kind="regular", include=("metadata", "parameters"))
+# index name = regular_constraint_id
+# columns: equality, function_type, used_ids,
+#          name, subscripts, description, parameters.{key}, ...
 
-# Constraints — kind dispatched via Literal + @overload so the IDE / type
-# checker still sees the kind-specific column schema for each call.
-df       = instance.constraints_df(kind="regular")
-                                                  # index name=regular_constraint_id;
-                                                  # equality, function_type, used_ids
+df = instance.decision_variables_df()
+# ≡ instance.decision_variables_df(include=("metadata", "parameters"))
+# index name = variable_id
+# columns: kind, lower, upper, substituted_value,
+#          name, subscripts, description, parameters.{key}, ...
+
+# === Core only — pass include=() ===
+df = instance.constraints_df(kind="regular", include=())
+# columns: equality, function_type, used_ids
+
+df = instance.decision_variables_df(include=())
+# columns: kind, lower, upper, substituted_value
+
+# === Add removed_reasons (not in v2 default) ===
+df = instance.constraints_df(
+    kind="regular",
+    include=("metadata", "parameters", "removed_reasons"),
+)
+# … plus removed_reasons.reason, removed_reasons.{key}
+
+# === Long-format sidecars when wide pivoting isn't what you want ===
 meta     = instance.constraint_metadata_df(kind="regular")
-                                                  # index name=regular_constraint_id;
-                                                  # name, subscripts, description
-provenance_df = instance.constraint_provenance_df(kind="regular")
-                                                  # columns: regular_constraint_id, step,
-                                                  # source_kind, source_id (long)
+                                            # index name=regular_constraint_id;
+                                            # name, subscripts, description
+provs    = instance.constraint_provenance_df(kind="regular")
+                                            # columns: regular_constraint_id, step,
+                                            # source_kind, source_id (long format)
 params   = instance.constraint_parameters_df(kind="regular")
-                                                  # columns: regular_constraint_id, key,
-                                                  # value (long format)
+                                            # columns: regular_constraint_id, key, value
 removed  = instance.constraint_removed_reasons_df(kind="regular")
-                                                  # columns: regular_constraint_id, reason,
-                                                  # key, value (long format)
-
-# Joining is explicit
-df.join(meta, how="left")
+                                            # columns: regular_constraint_id, reason,
+                                            # key, value
 ```
 
+`include` accepts a tuple of `Literal["metadata","parameters","removed_reasons"]`
+values. `provenance` is intentionally absent from `include`: chains
+have variable length, so a wide pivot would either explode the column
+space (`provenance.0.*`, `provenance.1.*`, …) or produce an
+object-dtype list column. Users who want provenance pivot the long-
+format `constraint_provenance_df()` themselves.
+
 `Solution` and `SampleSet` expose the same `*_df` family with stage-
-appropriate column schemas. The method names match `Instance`:
+appropriate core-column schemas and the same `include` parameter:
 
 ```python
-# Solution — evaluated stage
+# Solution — evaluated stage; v2-style default
 df = solution.constraints_df(kind="regular")
-                                            # index name=regular_constraint_id;
-                                            # equality, evaluated_value, feasible,
+                                            # core: equality, evaluated_value, feasible,
                                             # used_ids, dual_variable
-df = solution.decision_variables_df()       # index name=variable_id;
-                                            # kind, lower, upper, value
-solution.constraint_metadata_df(kind=...)   # same metadata schema as Instance
-solution.constraint_full_df(kind=...)       # core + metadata join
-# … same family for solution.variable_*_df / solution.constraint_*_df
+                                            # + metadata, parameters columns by default
 
-# SampleSet — sampled stage; columns are per-sample (value.{sid},
-# feasible.{sid}, …) where sid is each SampleID.
+df = solution.decision_variables_df()       # core: kind, lower, upper, value
+                                            # + metadata, parameters columns by default
+
+# SampleSet — sampled stage; per-sample core columns (value.{sid},
+# feasible.{sid}, …); same include defaults
 df = sample_set.constraints_df(kind="regular")
 df = sample_set.decision_variables_df()
-sample_set.constraint_metadata_df(kind=...)
-sample_set.constraint_full_df(kind=...)
 ```
 
 The metadata / parameters / provenance / removed-reasons sidecar dfs
-are stage-independent (they describe the same constraint), so on
-`Solution` and `SampleSet` they return the same data they would on
-the source `Instance` — there's no per-stage divergence to manage.
+are stage-independent — they describe the same constraint, so
+`solution.constraint_metadata_df(kind=...)` returns the same data as
+`instance.constraint_metadata_df(kind=...)` (and the `include=` columns
+folded into `*_df` are identical across stages too). There's no per-
+stage divergence to manage.
 
-`*_df` (core only) is what users call when they want a single
-rectangular table for analysis; `*_full_df` is the convenience
-join (see "Avoiding cross-ID-space joins"); the Series is what users
+`*_df` (with `include=`) is what users call when they want a wide
+table for analysis; the long-format sidecars are what they call when
+they want tidy data for joins or aggregation; the Series is what they
 call when they want individual wrapper objects; the wrapper getters
-are what users call when they already hold one wrapper. Four
-surfaces, one canonical store.
+are what they call when they already hold one wrapper. Four surfaces,
+one canonical store.
 
 ### Avoiding cross-ID-space joins
 
@@ -550,37 +572,30 @@ naming and helper layers:
    inspection, and migration-guide examples, so users see the mismatch
    immediately rather than chasing a silent bug downstream.
 
-2. **One-step joined helpers per kind.** For the common "I want core
-   columns plus name/subscripts/description in one frame" case, expose:
+2. **`include=` covers the common "wide" case without manual join.**
+   The `*_df` methods themselves accept an `include` parameter that
+   folds sidecars into the result, so most users never write a
+   `df.join(other_df)` at all:
 
    ```python
-   instance.constraints_full_df(
-       kind="regular",
-       include=("metadata",),     # default — name / subscripts / description
-                                  # joined as columns on the core df
-   )
-   instance.constraints_full_df(
-       kind="regular",
-       include=("metadata", "parameters", "provenance",
-                "removed_reasons"),
-   )
-   instance.decision_variables_full_df(
-       include=("metadata", "parameters"),
-   )
+   instance.constraints_df(kind="regular")
+   # default include=("metadata","parameters") — v2-equivalent shape
+
+   instance.constraints_df(kind="regular",
+                           include=("metadata","parameters","removed_reasons"))
+   # core + metadata + pivoted parameters + pivoted removed_reasons
    ```
 
-   `include` is a tuple of literal strings (typed via `Literal[...]`)
-   selecting which sidecars to fold in. `"metadata"` is left-joined as
-   columns; `"parameters"` / `"provenance"` / `"removed_reasons"` are
-   left-joined after pivoting their long-format keys back to wide
-   columns under namespaced prefixes (`parameters.{key}`,
-   `provenance.{step}.source_id`, `removed_reasons.{key}`) — the
-   resulting df is heterogeneous-column-shaped, so this form is
-   strictly the convenience surface. Users who want clean long-form
-   data for analysis still go through the primary `*_df` family.
-
-   Users who only want a quick analysis frame call `*_full_df` and
-   never write a manual `.join()` at all.
+   `include` is a tuple of literal strings (typed via `Literal[...]`).
+   `"metadata"` is left-joined as columns; `"parameters"` and
+   `"removed_reasons"` are left-joined after pivoting their long-
+   format keys back to wide columns under namespaced prefixes
+   (`parameters.{key}`, `removed_reasons.{key}`). Cross-ID-space
+   mistakes are impossible inside `include=` because the helper
+   knows the right kind to look up internally. Users who need a
+   manual cross-df `join` go through the long-format sidecars,
+   where the qualified index names (point 1) make the mistake
+   visible.
 
 3. **Wrapper-object access stays the safest path for single-id
    lookups.** `s.loc[id].name` reads metadata via the back-reference
@@ -593,7 +608,7 @@ A stronger guarantee — encoding kind in the index dtype itself
 and rejected. MultiIndex is intrusive on every analysis call; a custom
 ExtensionArray is a meaningful pandas integration and a maintenance
 burden disproportionate to the failure mode it prevents. The qualified
-index name + `*_full_df` helpers are sufficient.
+index name + `include=` covering the common wide case are sufficient.
 
 ### `ToPandasEntry` restructuring
 
@@ -634,23 +649,26 @@ User-visible breakage relative to v3 alpha 2:
     ordering breaks; index by `VariableID` instead.
 - `*_df` methods (`constraints_df(kind=...)`,
   `decision_variables_df()`, and the Solution / SampleSet
-  counterparts) no longer carry `name`, `subscripts`, `description`,
-  or `parameters.{key}` columns. Users join the relevant metadata /
-  parameters df explicitly or call `*_full_df` for the joined form.
-- New methods on `Instance`, `Solution`, and `SampleSet`:
-  `constraint_metadata_df(kind=...)`,
+  counterparts) gain an `include=` parameter selecting which
+  sidecars to fold in. The default
+  (`include=("metadata","parameters")`) reproduces the v2 wide-
+  DataFrame shape, so v2 user code keeps working with only a
+  `kind=...` argument added — `df["name"]`,
+  `df["parameters.{key}"]`, etc. continue to resolve. Users who
+  want only the core columns pass `include=()`.
+- New long-format sidecar methods on `Instance`, `Solution`, and
+  `SampleSet`: `constraint_metadata_df(kind=...)`,
   `constraint_parameters_df(kind=...)`,
   `constraint_provenance_df(kind=...)`,
   `constraint_removed_reasons_df(kind=...)`,
-  `variable_metadata_df()`,
-  `variable_parameters_df()`,
-  plus `constraints_full_df(kind=...)` /
-  `decision_variables_full_df()` joined helpers.
+  `variable_metadata_df()`, `variable_parameters_df()`. These
+  expose the SoA store as tidy long-format DataFrames for users
+  who want pivot / aggregation / cross-instance union beyond what
+  `include=` covers.
 - Per-kind `indicator_constraints_df()`,
   `one_hot_constraints_df()`, `sos1_constraints_df()`, and
   `removed_*_constraints_df()` collapse into the single
-  `constraints_df(kind=...)` overload set; same for the corresponding
-  removed-reasons methods.
+  `constraints_df(kind=...)` overload set.
 - The Rust `metadata` field on `DecisionVariable` and `Constraint<S>`
   is removed. Downstream Rust crates that touched `c.metadata.*`
   directly switch to `collection.metadata()` accessors.
