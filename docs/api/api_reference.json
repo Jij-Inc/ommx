@@ -1878,7 +1878,7 @@
         {
           "kind": "Class",
           "name": "Constraint",
-          "doc": "Constraint wrapper for Python",
+          "doc": "Constraint wrapper for Python.\n\nCarries the inner Rust `Constraint<Created>` plus a snapshot of its\nauxiliary metadata. When this wrapper is read from an [`Instance`], the\nsnapshot is filled from the instance's `ConstraintMetadataStore`. When the\nwrapper is handed back to an instance (e.g. via `from_components`), the\nsnapshot is drained into that instance's metadata store. Mutations on a\nwrapper retrieved from an instance therefore do not propagate back; the\ncaller must re-add the constraint to apply changes.",
           "bases": [],
           "methods": [
             {
@@ -15794,7 +15794,7 @@
         {
           "kind": "Class",
           "name": "RemovedConstraint",
-          "doc": "RemovedConstraint wrapper for Python.\n\nInternally holds `(ommx::Constraint, ommx::RemovedReason)`.",
+          "doc": "RemovedConstraint wrapper for Python.\n\nHolds the inner `Constraint`, a snapshot of its metadata, and the removal\nreason. As with [`Constraint`], the metadata snapshot does not propagate\nback to the originating instance — it is read-only context for inspection.",
           "bases": [],
           "methods": [
             {

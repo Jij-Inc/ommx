@@ -488,7 +488,15 @@ class Bound:
 @typing.final
 class Constraint:
     r"""
-    Constraint wrapper for Python
+    Constraint wrapper for Python.
+
+    Carries the inner Rust `Constraint<Created>` plus a snapshot of its
+    auxiliary metadata. When this wrapper is read from an [`Instance`], the
+    snapshot is filled from the instance's `ConstraintMetadataStore`. When the
+    wrapper is handed back to an instance (e.g. via `from_components`), the
+    snapshot is drained into that instance's metadata store. Mutations on a
+    wrapper retrieved from an instance therefore do not propagate back; the
+    caller must re-add the constraint to apply changes.
     """
 
     EQUAL_TO_ZERO: Equality
@@ -3632,7 +3640,9 @@ class RemovedConstraint:
     r"""
     RemovedConstraint wrapper for Python.
 
-    Internally holds `(ommx::Constraint, ommx::RemovedReason)`.
+    Holds the inner `Constraint`, a snapshot of its metadata, and the removal
+    reason. As with [`Constraint`], the metadata snapshot does not propagate
+    back to the originating instance — it is read-only context for inspection.
     """
     @property
     def constraint(self) -> Constraint: ...
