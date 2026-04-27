@@ -8,9 +8,13 @@ impl DecisionVariable {
         v1_decision_variable.encode_to_vec()
     }
 
+    /// Deserialize bytes into a `DecisionVariable`. Per-element parsing also
+    /// yields a `DecisionVariableMetadata`; the standalone `from_bytes`
+    /// drops it (the v3 redesign keeps metadata at the Instance layer).
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
         let inner = v1::DecisionVariable::decode(bytes)?;
-        Ok(Parse::parse(inner, &())?)
+        let parsed: ParsedDecisionVariable = Parse::parse(inner, &())?;
+        Ok(parsed.variable)
     }
 }
 
@@ -22,7 +26,8 @@ impl EvaluatedDecisionVariable {
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
         let inner = v1::DecisionVariable::decode(bytes)?;
-        let parsed_dv: DecisionVariable = Parse::parse(inner, &())?;
+        let parsed: ParsedDecisionVariable = Parse::parse(inner, &())?;
+        let parsed_dv = parsed.variable;
         // Convert DecisionVariable to EvaluatedDecisionVariable
         // We need the value from substituted_value field
         let value = parsed_dv
@@ -44,6 +49,7 @@ impl SampledDecisionVariable {
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
         let inner = v1::SampledDecisionVariable::decode(bytes)?;
-        Ok(Parse::parse(inner, &())?)
+        let parsed: ParsedSampledDecisionVariable = Parse::parse(inner, &())?;
+        Ok(parsed.variable)
     }
 }

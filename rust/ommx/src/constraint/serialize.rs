@@ -13,9 +13,15 @@ impl Constraint<Created> {
     }
 
     /// Deserialize bytes into a `(ConstraintID, Constraint)` pair.
+    ///
+    /// Per-element parsing now also yields a `ConstraintMetadata`; for the
+    /// standalone `from_bytes` API we drop it (the v3 metadata redesign
+    /// keeps metadata at the collection layer, so a bare per-element
+    /// round-trip cannot preserve it).
     pub fn from_bytes(bytes: &[u8]) -> Result<(ConstraintID, Self)> {
         let inner = v1::Constraint::decode(bytes)?;
-        Ok(Parse::parse(inner, &())?)
+        let (id, c, _metadata) = Parse::parse(inner, &())?;
+        Ok((id, c))
     }
 }
 
@@ -29,7 +35,7 @@ impl EvaluatedConstraint {
     /// Deserialize bytes into a `(ConstraintID, EvaluatedConstraint)` pair.
     pub fn from_bytes(bytes: &[u8]) -> Result<(ConstraintID, Self)> {
         let inner = v1::EvaluatedConstraint::decode(bytes)?;
-        let (id, constraint, _removed_reason) = Parse::parse(inner, &())?;
+        let (id, constraint, _metadata, _removed_reason) = Parse::parse(inner, &())?;
         Ok((id, constraint))
     }
 }
@@ -44,7 +50,7 @@ impl SampledConstraint {
     /// Deserialize bytes into a `(ConstraintID, SampledConstraint)` pair.
     pub fn from_bytes(bytes: &[u8]) -> Result<(ConstraintID, Self)> {
         let inner = v1::SampledConstraint::decode(bytes)?;
-        let (id, constraint, _removed_reason) = Parse::parse(inner, &())?;
+        let (id, constraint, _metadata, _removed_reason) = Parse::parse(inner, &())?;
         Ok((id, constraint))
     }
 }
