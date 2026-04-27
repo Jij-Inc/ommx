@@ -658,7 +658,9 @@ impl std::convert::TryFrom<crate::v1::DecisionVariable> for EvaluatedDecisionVar
         let message = "ommx.v1.DecisionVariable";
 
         // Parse the DecisionVariable first to get strongly typed fields
-        let dv: DecisionVariable = v1_dv.clone().parse_as(&(), message, "decision_variable")?;
+        let parsed: parse::ParsedDecisionVariable =
+            v1_dv.clone().parse_as(&(), message, "decision_variable")?;
+        let dv = parsed.variable;
 
         // Extract the value from substituted_value (required for EvaluatedDecisionVariable)
         let value = v1_dv.substituted_value.ok_or(

@@ -393,7 +393,10 @@ impl Parse for v1::ParametricInstance {
             }
         }
 
-        let constraints = self.constraints.parse_as(&(), message, "constraints")?;
+        let (constraints, mut constraint_metadata): (
+            BTreeMap<ConstraintID, Constraint>,
+            crate::ConstraintMetadataStore<ConstraintID>,
+        ) = self.constraints.parse_as(&(), message, "constraints")?;
 
         // Validate that all variables used in constraints are defined (either as decision variables or parameters)
         for constraint in constraints.values() {
@@ -407,9 +410,20 @@ impl Parse for v1::ParametricInstance {
             }
         }
 
-        let removed_constraints =
-            self.removed_constraints
-                .parse_as(&constraints, message, "removed_constraints")?;
+        // Drain removed-constraint metadata into the SoA store, then keep
+        // (active, removed) tuples without metadata for the collection.
+        let removed_constraints_with_metadata: BTreeMap<
+            ConstraintID,
+            (Constraint, ConstraintMetadata, RemovedReason),
+        > = self
+            .removed_constraints
+            .parse_as(&constraints, message, "removed_constraints")?;
+        let mut removed_constraints: BTreeMap<ConstraintID, (Constraint, RemovedReason)> =
+            BTreeMap::new();
+        for (id, (c, metadata, reason)) in removed_constraints_with_metadata {
+            constraint_metadata.insert(id, metadata);
+            removed_constraints.insert(id, (c, reason));
+        }
 
         let named_functions = self
             .named_functions
@@ -458,8 +472,12 @@ impl Parse for v1::ParametricInstance {
             objective,
             decision_variables,
             parameters,
-            variable_metadata: VariableMetadataStore::default(),
-            constraint_collection: ConstraintCollection::new(constraints, removed_constraints),
+            variable_metadata,
+            constraint_collection: ConstraintCollection::with_metadata(
+                constraints,
+                removed_constraints,
+                constraint_metadata,
+            ),
             indicator_constraint_collection: Default::default(),
             one_hot_constraint_collection: ConstraintCollection::new(
                 one_hot_active,

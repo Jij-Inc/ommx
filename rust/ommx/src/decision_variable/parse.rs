@@ -54,7 +54,7 @@ impl From<Kind> for i32 {
 /// Per-element parse no longer attaches metadata to the [`DecisionVariable`]
 /// itself — the metadata is returned alongside so the collection-level
 /// parse can drain it into the [`VariableMetadataStore`].
-pub(crate) struct ParsedDecisionVariable {
+pub struct ParsedDecisionVariable {
     pub variable: DecisionVariable,
     pub metadata: DecisionVariableMetadata,
 }
@@ -144,7 +144,7 @@ pub(crate) fn decision_variable_to_v1(
 }
 
 /// Parsed v1 `SampledDecisionVariable` together with its drained metadata.
-pub(crate) struct ParsedSampledDecisionVariable {
+pub struct ParsedSampledDecisionVariable {
     pub variable: SampledDecisionVariable,
     pub metadata: DecisionVariableMetadata,
 }

@@ -10,12 +10,15 @@ impl Parse for crate::v1::SampleSet {
         let message = "ommx.v1.SampleSet";
         crate::parse::check_format_version(self.format_version, message)?;
 
-        // Parse decision variables into BTreeMap
+        // Parse decision variables into BTreeMap and drain metadata into the SoA store
         let mut decision_variables = BTreeMap::new();
+        let mut variable_metadata = crate::VariableMetadataStore::default();
         for v1_sampled_dv in self.decision_variables {
-            let sampled_dv = v1_sampled_dv.parse_as(&(), message, "decision_variables")?;
-            let dv_id = *sampled_dv.id();
-            decision_variables.insert(dv_id, sampled_dv);
+            let parsed: crate::decision_variable::parse::ParsedSampledDecisionVariable =
+                v1_sampled_dv.parse_as(&(), message, "decision_variables")?;
+            let dv_id = *parsed.variable.id();
+            variable_metadata.insert(dv_id, parsed.metadata);
+            decision_variables.insert(dv_id, parsed.variable);
         }
 
         // Parse objectives - required, not optional
@@ -30,18 +33,22 @@ impl Parse for crate::v1::SampleSet {
             )?
             .parse_as(&(), message, "objectives")?;
 
-        // Parse constraints and extract removed reasons
+        // Parse constraints and extract removed reasons + metadata
         let mut constraints = std::collections::BTreeMap::new();
         let mut constraint_removed_reasons = std::collections::BTreeMap::new();
+        let mut constraint_metadata =
+            crate::ConstraintMetadataStore::<crate::ConstraintID>::default();
         for v1_constraint in self.constraints {
-            let (id, parsed_constraint, removed_reason): (
+            let (id, parsed_constraint, metadata, removed_reason): (
                 crate::ConstraintID,
                 crate::SampledConstraint,
+                crate::ConstraintMetadata,
                 Option<crate::RemovedReason>,
             ) = v1_constraint.parse_as(&(), message, "constraints")?;
             if let Some(reason) = removed_reason {
                 constraint_removed_reasons.insert(id, reason);
             }
+            constraint_metadata.insert(id, metadata);
             constraints.insert(id, parsed_constraint);
         }
 
@@ -64,10 +71,12 @@ impl Parse for crate::v1::SampleSet {
         // Create SampleSet with validation
         let sample_set = SampleSet::builder()
             .decision_variables(decision_variables)
+            .variable_metadata(variable_metadata)
             .objectives(objectives)
-            .constraints_collection(crate::constraint_type::SampledCollection::new(
+            .constraints_collection(crate::constraint_type::SampledCollection::with_metadata(
                 constraints,
                 constraint_removed_reasons,
+                constraint_metadata,
             ))
             .named_functions(named_functions)
             .sense(sense)
@@ -116,18 +125,26 @@ impl Parse for crate::v1::SampleSet {
 
 impl From<SampleSet> for crate::v1::SampleSet {
     fn from(sample_set: SampleSet) -> Self {
+        // Drain metadata stores and overlay onto per-element messages.
+        let variable_metadata = sample_set.variable_metadata().clone();
         let decision_variables: Vec<crate::v1::SampledDecisionVariable> = sample_set
             .decision_variables()
-            .values()
-            .map(|dv| dv.clone().into())
+            .iter()
+            .map(|(id, dv)| {
+                let metadata = variable_metadata.collect_for(*id);
+                crate::decision_variable::sampled_decision_variable_to_v1(dv.clone(), metadata)
+            })
             .collect();
         let objectives = Some(sample_set.objectives().clone().into());
-        let removed_reasons = sample_set.constraints().removed_reasons();
+        let constraint_metadata = sample_set.constraints().metadata().clone();
+        let removed_reasons = sample_set.constraints().removed_reasons().clone();
         let constraints: Vec<crate::v1::SampledConstraint> = sample_set
             .constraints()
             .iter()
             .map(|(id, sc)| {
-                let mut v1_sc = crate::v1::SampledConstraint::from((*id, sc.clone()));
+                let metadata = constraint_metadata.collect_for(*id);
+                let mut v1_sc =
+                    crate::constraint::sampled_constraint_to_v1(*id, sc.clone(), metadata);
                 if let Some(reason) = removed_reasons.get(id) {
                     v1_sc.removed_reason = Some(reason.reason.clone());
                     v1_sc.removed_reason_parameters = reason

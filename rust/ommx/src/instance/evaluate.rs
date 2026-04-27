@@ -274,19 +274,21 @@ impl Instance {
                     }
                     PropagateOutcome::Transformed {
                         original,
-                        new: mut constraint,
+                        new: constraint,
                     } => {
                         // Indicator=1 → promote inner constraint to regular constraint.
-                        // Record the promotion in the new constraint's provenance so that
-                        // downstream consumers can trace it back to the original indicator.
+                        // Carry over the indicator's metadata into the regular collection's
+                        // store and record the promotion in provenance.
                         let cid = self.constraint_collection.unused_id();
-                        constraint
-                            .metadata
+                        let mut new_metadata = self
+                            .indicator_constraint_collection
+                            .metadata()
+                            .collect_for(id);
+                        new_metadata
                             .provenance
                             .push(crate::constraint::Provenance::IndicatorConstraint(id));
                         self.constraint_collection
-                            .active_mut()
-                            .insert(cid, constraint);
+                            .insert_with(cid, constraint, new_metadata);
                         self.indicator_constraint_collection
                             .removed_mut()
                             .insert(id, (original, propagation_reason.clone()));

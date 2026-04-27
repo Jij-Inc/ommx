@@ -34,18 +34,22 @@ impl Parse for crate::v1::Solution {
             crate::v1::instance::Sense::Maximize => Some(crate::Sense::Maximize),
         };
 
-        // Parse evaluated constraints and extract removed reasons
+        // Parse evaluated constraints and extract removed reasons + metadata
         let mut evaluated_constraints = std::collections::BTreeMap::default();
         let mut removed_reasons = std::collections::BTreeMap::default();
+        let mut constraint_metadata =
+            crate::ConstraintMetadataStore::<crate::ConstraintID>::default();
         for ec in self.evaluated_constraints {
-            let (id, parsed_constraint, removed_reason): (
+            let (id, parsed_constraint, metadata, removed_reason): (
                 crate::ConstraintID,
                 crate::EvaluatedConstraint,
+                crate::ConstraintMetadata,
                 Option<crate::RemovedReason>,
             ) = ec.parse_as(&(), message, "evaluated_constraints")?;
             if let Some(reason) = removed_reason {
                 removed_reasons.insert(id, reason);
             }
+            constraint_metadata.insert(id, metadata);
             evaluated_constraints.insert(id, parsed_constraint);
         }
         let mut evaluated_named_functions = std::collections::BTreeMap::default();
@@ -55,17 +59,23 @@ impl Parse for crate::v1::Solution {
         }
 
         let mut decision_variables = std::collections::BTreeMap::default();
+        let mut variable_metadata = crate::VariableMetadataStore::default();
         for dv in self.decision_variables {
-            // Parse the DecisionVariable to get strongly-typed version
-            let parsed_dv = dv.clone().parse_as(&(), message, "decision_variables")?;
+            let dv_id = dv.id;
+            let dv_substituted_value = dv.substituted_value;
+            // Parse the DecisionVariable to get strongly-typed version + drained metadata
+            let parsed: crate::decision_variable::parse::ParsedDecisionVariable =
+                dv.parse_as(&(), message, "decision_variables")?;
+            let parsed_dv = parsed.variable;
+            let metadata = parsed.metadata;
 
             // Get the value from state or substituted_value
-            let value = match (state.entries.get(&dv.id), dv.substituted_value.as_ref()) {
+            let value = match (state.entries.get(&dv_id), dv_substituted_value.as_ref()) {
                 (Some(value), None) | (None, Some(value)) => *value,
                 (Some(value), Some(_substituted_value)) => *value, // EvaluatedDecisionVariable::new will check consistency
                 (None, None) => {
                     return Err(crate::RawParseError::SolutionError(
-                        SolutionError::MissingVariableValue { id: dv.id },
+                        SolutionError::MissingVariableValue { id: dv_id },
                     )
                     .context(message, "decision_variables"));
                 }
@@ -77,7 +87,9 @@ impl Parse for crate::v1::Solution {
                     .map_err(crate::RawParseError::InvalidDecisionVariable)
                     .map_err(|e| ParseError::from(e).context(message, "decision_variables"))?;
 
-            decision_variables.insert(*evaluated_dv.id(), evaluated_dv);
+            let id = *evaluated_dv.id();
+            variable_metadata.insert(id, metadata);
+            decision_variables.insert(id, evaluated_dv);
         }
         let optimality = self
             .optimality
@@ -98,15 +110,17 @@ impl Parse for crate::v1::Solution {
 
         let solution = Solution {
             objective,
-            evaluated_constraints: crate::constraint_type::EvaluatedCollection::new(
+            evaluated_constraints: crate::constraint_type::EvaluatedCollection::with_metadata(
                 evaluated_constraints,
                 removed_reasons,
+                constraint_metadata,
             ),
             evaluated_indicator_constraints: Default::default(),
             evaluated_one_hot_constraints: Default::default(),
             evaluated_sos1_constraints: Default::default(),
             evaluated_named_functions,
             decision_variables,
+            variable_metadata,
             optimality,
             relaxation,
             sense,
@@ -144,12 +158,17 @@ impl From<Solution> for crate::v1::Solution {
     fn from(solution: Solution) -> Self {
         let state = solution.state();
         let objective = *solution.objective();
-        let removed_reasons = solution.evaluated_constraints().removed_reasons();
+        // Drain metadata from the SoA stores and overlay it on per-element
+        // proto messages.
+        let constraint_metadata_store = solution.evaluated_constraints().metadata().clone();
+        let removed_reasons = solution.evaluated_constraints().removed_reasons().clone();
         let evaluated_constraints: Vec<crate::v1::EvaluatedConstraint> = solution
             .evaluated_constraints()
             .iter()
             .map(|(id, ec)| {
-                let mut v1_ec = crate::v1::EvaluatedConstraint::from((*id, ec.clone()));
+                let metadata = constraint_metadata_store.collect_for(*id);
+                let mut v1_ec =
+                    crate::constraint::evaluated_constraint_to_v1(*id, ec.clone(), metadata);
                 if let Some(reason) = removed_reasons.get(id) {
                     v1_ec.removed_reason = Some(reason.reason.clone());
                     v1_ec.removed_reason_parameters = reason
@@ -166,10 +185,14 @@ impl From<Solution> for crate::v1::Solution {
             .values()
             .map(|enf| enf.clone().into())
             .collect();
+        let variable_metadata_store = solution.variable_metadata().clone();
         let decision_variables: Vec<crate::v1::DecisionVariable> = solution
             .decision_variables()
-            .values()
-            .map(|dv| dv.clone().into())
+            .iter()
+            .map(|(id, dv)| {
+                let metadata = variable_metadata_store.collect_for(*id);
+                crate::decision_variable::evaluated_decision_variable_to_v1(dv.clone(), metadata)
+            })
             .collect();
         let feasible = solution.feasible();
         let feasible_relaxed = Some(solution.feasible_relaxed());
