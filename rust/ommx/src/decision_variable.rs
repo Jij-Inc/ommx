@@ -1,11 +1,13 @@
 mod approx;
 mod arbitrary;
 mod logical_memory;
+mod metadata_store;
 mod parse;
 mod serialize;
 
 pub use arbitrary::*;
 use getset::CopyGetters;
+pub use metadata_store::VariableMetadataStore;
 
 use crate::logical_memory::LogicalMemoryProfile;
 use crate::{ATol, Bound, Parse, RawParseError, SampleID, Sampled};

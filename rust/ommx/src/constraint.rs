@@ -2,10 +2,13 @@ mod approx;
 mod arbitrary;
 mod evaluate;
 mod logical_memory;
+mod metadata_store;
 mod parse;
 mod reduce_binary_power;
 mod serialize;
 pub(crate) mod stage;
+
+pub use metadata_store::ConstraintMetadataStore;
 
 use crate::logical_memory::LogicalMemoryProfile;
 use crate::{Function, SampleID, VariableID};
