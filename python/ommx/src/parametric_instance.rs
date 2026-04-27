@@ -51,16 +51,25 @@ impl ParametricInstance {
         description: Option<crate::InstanceDescription>,
     ) -> Result<Self> {
         let mut rust_decision_variables = BTreeMap::new();
+        let mut variable_metadata_pairs: Vec<(VariableID, ommx::DecisionVariableMetadata)> =
+            Vec::new();
         for var in decision_variables {
             let id = var.0.id();
+            variable_metadata_pairs.push((id, var.1.clone()));
             if rust_decision_variables.insert(id, var.0).is_some() {
                 anyhow::bail!("Duplicate decision variable ID: {}", id.into_inner());
             }
         }
 
+        let mut constraint_metadata_pairs: Vec<(ConstraintID, ommx::ConstraintMetadata)> =
+            Vec::new();
         let rust_constraints: BTreeMap<ConstraintID, ommx::Constraint> = constraints
             .into_iter()
-            .map(|(id, c)| (ConstraintID::from(id), c.0))
+            .map(|(id, c)| {
+                let cid = ConstraintID::from(id);
+                constraint_metadata_pairs.push((cid, c.1));
+                (cid, c.0)
+            })
             .collect();
 
         let mut rust_parameters = BTreeMap::new();
@@ -93,8 +102,18 @@ impl ParametricInstance {
             builder = builder.description(desc.0);
         }
 
+        let mut inner = builder.build()?;
+        let var_meta = inner.variable_metadata_mut();
+        for (id, m) in variable_metadata_pairs {
+            var_meta.insert(id, m);
+        }
+        let constraint_meta = inner.constraint_collection_mut().metadata_mut();
+        for (id, m) in constraint_metadata_pairs {
+            constraint_meta.insert(id, m);
+        }
+
         Ok(Self {
-            inner: builder.build()?,
+            inner,
             annotations: HashMap::new(),
         })
     }
@@ -138,31 +157,39 @@ impl ParametricInstance {
 
     #[getter]
     pub fn decision_variables(&self) -> Vec<DecisionVariable> {
+        let metadata = self.inner.variable_metadata();
         self.inner
             .decision_variables()
-            .values()
-            .map(|var| DecisionVariable(var.clone()))
+            .iter()
+            .map(|(id, var)| DecisionVariable::from_parts(var.clone(), metadata.collect_for(*id)))
             .collect()
     }
 
     #[getter]
     pub fn constraints(&self) -> BTreeMap<u64, Constraint> {
+        let metadata = self.inner.constraint_collection().metadata();
         self.inner
             .constraints()
             .iter()
-            .map(|(id, constraint)| (id.into_inner(), Constraint(constraint.clone())))
+            .map(|(id, constraint)| {
+                (
+                    id.into_inner(),
+                    Constraint::from_parts(constraint.clone(), metadata.collect_for(*id)),
+                )
+            })
             .collect()
     }
 
     #[getter]
     pub fn removed_constraints(&self) -> BTreeMap<u64, RemovedConstraint> {
+        let metadata = self.inner.constraint_collection().metadata();
         self.inner
             .removed_constraints()
             .iter()
             .map(|(id, (c, r))| {
                 (
                     id.into_inner(),
-                    RemovedConstraint::from_pair(c.clone(), r.clone()),
+                    RemovedConstraint::from_parts(c.clone(), metadata.collect_for(*id), r.clone()),
                 )
             })
             .collect()
@@ -214,10 +241,12 @@ impl ParametricInstance {
 
     /// Get a specific decision variable by ID
     pub fn get_decision_variable_by_id(&self, variable_id: u64) -> PyResult<DecisionVariable> {
+        let var_id = VariableID::from(variable_id);
+        let metadata = self.inner.variable_metadata();
         self.inner
             .decision_variables()
-            .get(&VariableID::from(variable_id))
-            .map(|var| DecisionVariable(var.clone()))
+            .get(&var_id)
+            .map(|var| DecisionVariable::from_parts(var.clone(), metadata.collect_for(var_id)))
             .ok_or_else(|| {
                 PyKeyError::new_err(format!("Decision variable with ID {variable_id} not found"))
             })
@@ -225,10 +254,12 @@ impl ParametricInstance {
 
     /// Get a specific constraint by ID
     pub fn get_constraint_by_id(&self, constraint_id: u64) -> PyResult<Constraint> {
+        let cid = ConstraintID::from(constraint_id);
+        let metadata = self.inner.constraint_collection().metadata();
         self.inner
             .constraints()
-            .get(&ConstraintID::from(constraint_id))
-            .map(|c| Constraint(c.clone()))
+            .get(&cid)
+            .map(|c| Constraint::from_parts(c.clone(), metadata.collect_for(cid)))
             .ok_or_else(|| {
                 PyKeyError::new_err(format!("Constraint with ID {constraint_id} not found"))
             })
@@ -236,10 +267,14 @@ impl ParametricInstance {
 
     /// Get a specific removed constraint by ID
     pub fn get_removed_constraint_by_id(&self, constraint_id: u64) -> PyResult<RemovedConstraint> {
+        let cid = ConstraintID::from(constraint_id);
+        let metadata = self.inner.constraint_collection().metadata();
         self.inner
             .removed_constraints()
-            .get(&ConstraintID::from(constraint_id))
-            .map(|(c, r)| RemovedConstraint::from_pair(c.clone(), r.clone()))
+            .get(&cid)
+            .map(|(c, r)| {
+                RemovedConstraint::from_parts(c.clone(), metadata.collect_for(cid), r.clone())
+            })
             .ok_or_else(|| {
                 PyKeyError::new_err(format!(
                     "Removed constraint with ID {constraint_id} not found"
@@ -274,15 +309,39 @@ impl ParametricInstance {
     /// DataFrame of decision variables
     #[getter]
     pub fn decision_variables_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
-        entries_to_dataframe(py, self.inner.decision_variables().values(), "id")
+        let var_meta_store = self.inner.variable_metadata().clone();
+        let view: Vec<(ommx::DecisionVariableMetadata, &ommx::DecisionVariable)> = self
+            .inner
+            .decision_variables()
+            .iter()
+            .map(|(id, dv)| (var_meta_store.collect_for(*id), dv))
+            .collect();
+        entries_to_dataframe(
+            py,
+            view.iter()
+                .map(|(m, dv)| crate::pandas::WithMetadata::new(*dv, m)),
+            "id",
+        )
     }
 
     /// DataFrame of constraints
     #[getter]
     pub fn constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
+        let meta_store = self.inner.constraint_collection().metadata().clone();
+        let view: Vec<(
+            ommx::ConstraintMetadata,
+            ommx::ConstraintID,
+            &ommx::Constraint,
+        )> = self
+            .inner
+            .constraints()
+            .iter()
+            .map(|(id, c)| (meta_store.collect_for(*id), *id, c))
+            .collect();
         entries_to_dataframe(
             py,
-            self.inner.constraints().iter().map(|(id, c)| (*id, c)),
+            view.iter()
+                .map(|(m, id, c)| crate::pandas::WithMetadata::new((*id, *c), m)),
             "id",
         )
     }
@@ -293,12 +352,21 @@ impl ParametricInstance {
         &self,
         py: Python<'py>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let meta_store = self.inner.constraint_collection().metadata().clone();
+        let view: Vec<(
+            ommx::ConstraintMetadata,
+            ommx::ConstraintID,
+            &(ommx::Constraint, ommx::RemovedReason),
+        )> = self
+            .inner
+            .removed_constraints()
+            .iter()
+            .map(|(id, pair)| (meta_store.collect_for(*id), *id, pair))
+            .collect();
         entries_to_dataframe(
             py,
-            self.inner
-                .removed_constraints()
-                .iter()
-                .map(|(id, pair)| (*id, pair)),
+            view.iter()
+                .map(|(m, id, pair)| crate::pandas::WithMetadata::new((*id, *pair), m)),
             "id",
         )
     }

@@ -1693,15 +1693,40 @@ impl Instance {
     /// DataFrame of decision variables
     #[getter]
     pub fn decision_variables_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
-        entries_to_dataframe(py, self.inner.decision_variables().values(), "id")
+        let var_meta_store = self.inner.variable_metadata().clone();
+        let var_meta_view: Vec<(ommx::DecisionVariableMetadata, &ommx::DecisionVariable)> = self
+            .inner
+            .decision_variables()
+            .iter()
+            .map(|(id, dv)| (var_meta_store.collect_for(*id), dv))
+            .collect();
+        entries_to_dataframe(
+            py,
+            var_meta_view
+                .iter()
+                .map(|(m, dv)| crate::pandas::WithMetadata::new(*dv, m)),
+            "id",
+        )
     }
 
     /// DataFrame of constraints
     #[getter]
     pub fn constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
+        let meta_store = self.inner.constraint_collection().metadata().clone();
+        let view: Vec<(
+            ommx::ConstraintMetadata,
+            ommx::ConstraintID,
+            &ommx::Constraint,
+        )> = self
+            .inner
+            .constraints()
+            .iter()
+            .map(|(id, c)| (meta_store.collect_for(*id), *id, c))
+            .collect();
         entries_to_dataframe(
             py,
-            self.inner.constraints().iter().map(|(id, c)| (*id, c)),
+            view.iter()
+                .map(|(m, id, c)| crate::pandas::WithMetadata::new((*id, *c), m)),
             "id",
         )
     }
@@ -1712,12 +1737,25 @@ impl Instance {
         &self,
         py: Python<'py>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let meta_store = self
+            .inner
+            .indicator_constraint_collection()
+            .metadata()
+            .clone();
+        let view: Vec<(
+            ommx::ConstraintMetadata,
+            ommx::IndicatorConstraintID,
+            &ommx::IndicatorConstraint,
+        )> = self
+            .inner
+            .indicator_constraints()
+            .iter()
+            .map(|(id, c)| (meta_store.collect_for(*id), *id, c))
+            .collect();
         entries_to_dataframe(
             py,
-            self.inner
-                .indicator_constraints()
-                .iter()
-                .map(|(id, c)| (*id, c)),
+            view.iter()
+                .map(|(m, id, c)| crate::pandas::WithMetadata::new((*id, *c), m)),
             "id",
         )
     }
@@ -1728,12 +1766,25 @@ impl Instance {
         &self,
         py: Python<'py>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let meta_store = self
+            .inner
+            .indicator_constraint_collection()
+            .metadata()
+            .clone();
+        let view: Vec<(
+            ommx::ConstraintMetadata,
+            ommx::IndicatorConstraintID,
+            &(ommx::IndicatorConstraint, ommx::RemovedReason),
+        )> = self
+            .inner
+            .removed_indicator_constraints()
+            .iter()
+            .map(|(id, pair)| (meta_store.collect_for(*id), *id, pair))
+            .collect();
         entries_to_dataframe(
             py,
-            self.inner
-                .removed_indicator_constraints()
-                .iter()
-                .map(|(id, pair)| (*id, pair)),
+            view.iter()
+                .map(|(m, id, pair)| crate::pandas::WithMetadata::new((*id, *pair), m)),
             "id",
         )
     }
@@ -1744,12 +1795,25 @@ impl Instance {
         &self,
         py: Python<'py>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let meta_store = self
+            .inner
+            .one_hot_constraint_collection()
+            .metadata()
+            .clone();
+        let view: Vec<(
+            ommx::ConstraintMetadata,
+            ommx::OneHotConstraintID,
+            &ommx::OneHotConstraint,
+        )> = self
+            .inner
+            .one_hot_constraints()
+            .iter()
+            .map(|(id, c)| (meta_store.collect_for(*id), *id, c))
+            .collect();
         entries_to_dataframe(
             py,
-            self.inner
-                .one_hot_constraints()
-                .iter()
-                .map(|(id, c)| (*id, c)),
+            view.iter()
+                .map(|(m, id, c)| crate::pandas::WithMetadata::new((*id, *c), m)),
             "id",
         )
     }
@@ -1760,12 +1824,25 @@ impl Instance {
         &self,
         py: Python<'py>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let meta_store = self
+            .inner
+            .one_hot_constraint_collection()
+            .metadata()
+            .clone();
+        let view: Vec<(
+            ommx::ConstraintMetadata,
+            ommx::OneHotConstraintID,
+            &(ommx::OneHotConstraint, ommx::RemovedReason),
+        )> = self
+            .inner
+            .removed_one_hot_constraints()
+            .iter()
+            .map(|(id, pair)| (meta_store.collect_for(*id), *id, pair))
+            .collect();
         entries_to_dataframe(
             py,
-            self.inner
-                .removed_one_hot_constraints()
-                .iter()
-                .map(|(id, pair)| (*id, pair)),
+            view.iter()
+                .map(|(m, id, pair)| crate::pandas::WithMetadata::new((*id, *pair), m)),
             "id",
         )
     }
@@ -1773,9 +1850,21 @@ impl Instance {
     /// DataFrame of SOS1 constraints
     #[getter]
     pub fn sos1_constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
+        let meta_store = self.inner.sos1_constraint_collection().metadata().clone();
+        let view: Vec<(
+            ommx::ConstraintMetadata,
+            ommx::Sos1ConstraintID,
+            &ommx::Sos1Constraint,
+        )> = self
+            .inner
+            .sos1_constraints()
+            .iter()
+            .map(|(id, c)| (meta_store.collect_for(*id), *id, c))
+            .collect();
         entries_to_dataframe(
             py,
-            self.inner.sos1_constraints().iter().map(|(id, c)| (*id, c)),
+            view.iter()
+                .map(|(m, id, c)| crate::pandas::WithMetadata::new((*id, *c), m)),
             "id",
         )
     }
@@ -1786,12 +1875,21 @@ impl Instance {
         &self,
         py: Python<'py>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let meta_store = self.inner.sos1_constraint_collection().metadata().clone();
+        let view: Vec<(
+            ommx::ConstraintMetadata,
+            ommx::Sos1ConstraintID,
+            &(ommx::Sos1Constraint, ommx::RemovedReason),
+        )> = self
+            .inner
+            .removed_sos1_constraints()
+            .iter()
+            .map(|(id, pair)| (meta_store.collect_for(*id), *id, pair))
+            .collect();
         entries_to_dataframe(
             py,
-            self.inner
-                .removed_sos1_constraints()
-                .iter()
-                .map(|(id, pair)| (*id, pair)),
+            view.iter()
+                .map(|(m, id, pair)| crate::pandas::WithMetadata::new((*id, *pair), m)),
             "id",
         )
     }
@@ -1802,12 +1900,21 @@ impl Instance {
         &self,
         py: Python<'py>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let meta_store = self.inner.constraint_collection().metadata().clone();
+        let view: Vec<(
+            ommx::ConstraintMetadata,
+            ommx::ConstraintID,
+            &(ommx::Constraint, ommx::RemovedReason),
+        )> = self
+            .inner
+            .removed_constraints()
+            .iter()
+            .map(|(id, pair)| (meta_store.collect_for(*id), *id, pair))
+            .collect();
         entries_to_dataframe(
             py,
-            self.inner
-                .removed_constraints()
-                .iter()
-                .map(|(id, pair)| (*id, pair)),
+            view.iter()
+                .map(|(m, id, pair)| crate::pandas::WithMetadata::new((*id, *pair), m)),
             "id",
         )
     }

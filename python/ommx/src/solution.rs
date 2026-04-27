@@ -138,20 +138,29 @@ impl Solution {
     #[getter]
     pub fn decision_variables(&self) -> Vec<crate::EvaluatedDecisionVariable> {
         // BTreeMap is already sorted by key
+        let metadata = self.inner.variable_metadata();
         self.inner
             .decision_variables()
-            .values()
-            .map(|dv| crate::EvaluatedDecisionVariable(dv.clone()))
+            .iter()
+            .map(|(id, dv)| {
+                crate::EvaluatedDecisionVariable::from_parts(dv.clone(), metadata.collect_for(*id))
+            })
             .collect()
     }
 
     /// Get evaluated constraints as a dict keyed by constraint ID
     #[getter]
     pub fn constraints(&self) -> std::collections::BTreeMap<u64, crate::EvaluatedConstraint> {
+        let metadata = self.inner.evaluated_constraints().metadata();
         self.inner
             .evaluated_constraints()
             .iter()
-            .map(|(id, ec)| (id.into_inner(), crate::EvaluatedConstraint(ec.clone())))
+            .map(|(id, ec)| {
+                (
+                    id.into_inner(),
+                    crate::EvaluatedConstraint::from_parts(ec.clone(), metadata.collect_for(*id)),
+                )
+            })
             .collect()
     }
 
@@ -375,10 +384,16 @@ impl Solution {
         variable_id: u64,
     ) -> PyResult<crate::EvaluatedDecisionVariable> {
         let var_id = ommx::VariableID::from(variable_id);
+        let metadata = self.inner.variable_metadata();
         self.inner
             .decision_variables()
             .get(&var_id)
-            .map(|dv| crate::EvaluatedDecisionVariable(dv.clone()))
+            .map(|dv| {
+                crate::EvaluatedDecisionVariable::from_parts(
+                    dv.clone(),
+                    metadata.collect_for(var_id),
+                )
+            })
             .ok_or_else(|| {
                 PyKeyError::new_err(format!("Unknown decision variable ID: {variable_id}"))
             })
@@ -417,10 +432,16 @@ impl Solution {
     /// Get a specific evaluated constraint by ID
     pub fn get_constraint_by_id(&self, constraint_id: u64) -> PyResult<crate::EvaluatedConstraint> {
         let constraint_id = ommx::ConstraintID::from(constraint_id);
+        let metadata = self.inner.evaluated_constraints().metadata();
         self.inner
             .evaluated_constraints()
             .get(&constraint_id)
-            .map(|ec| crate::EvaluatedConstraint(ec.clone()))
+            .map(|ec| {
+                crate::EvaluatedConstraint::from_parts(
+                    ec.clone(),
+                    metadata.collect_for(constraint_id),
+                )
+            })
             .ok_or_else(|| {
                 PyKeyError::new_err(format!(
                     "Unknown constraint ID: {}",
@@ -452,7 +473,22 @@ impl Solution {
     /// Columns: id (index), kind, lower, upper, name, subscripts, description, substituted_value, value
     #[getter]
     pub fn decision_variables_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
-        entries_to_dataframe(py, self.inner.decision_variables().values(), "id")
+        let var_meta_store = self.inner.variable_metadata().clone();
+        let view: Vec<(
+            ommx::DecisionVariableMetadata,
+            &ommx::EvaluatedDecisionVariable,
+        )> = self
+            .inner
+            .decision_variables()
+            .iter()
+            .map(|(id, dv)| (var_meta_store.collect_for(*id), dv))
+            .collect();
+        entries_to_dataframe(
+            py,
+            view.iter()
+                .map(|(m, dv)| crate::pandas::WithMetadata::new(*dv, m)),
+            "id",
+        )
     }
 
     /// DataFrame of evaluated constraints
@@ -460,12 +496,21 @@ impl Solution {
     /// Columns: id (index), equality, value, used_ids, name, subscripts, description, dual_variable
     #[getter]
     pub fn constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
+        let meta_store = self.inner.evaluated_constraints().metadata().clone();
+        let view: Vec<(
+            ommx::ConstraintMetadata,
+            ommx::ConstraintID,
+            &ommx::EvaluatedConstraint,
+        )> = self
+            .inner
+            .evaluated_constraints()
+            .iter()
+            .map(|(id, c)| (meta_store.collect_for(*id), *id, c))
+            .collect();
         entries_to_dataframe(
             py,
-            self.inner
-                .evaluated_constraints()
-                .iter()
-                .map(|(id, c)| (*id, c)),
+            view.iter()
+                .map(|(m, id, c)| crate::pandas::WithMetadata::new((*id, *c), m)),
             "id",
         )
     }
@@ -538,12 +583,25 @@ impl Solution {
         &self,
         py: Python<'py>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let meta_store = self
+            .inner
+            .evaluated_indicator_constraints()
+            .metadata()
+            .clone();
+        let view: Vec<(
+            ommx::ConstraintMetadata,
+            ommx::IndicatorConstraintID,
+            &ommx::EvaluatedIndicatorConstraint,
+        )> = self
+            .inner
+            .evaluated_indicator_constraints()
+            .iter()
+            .map(|(id, c)| (meta_store.collect_for(*id), *id, c))
+            .collect();
         entries_to_dataframe(
             py,
-            self.inner
-                .evaluated_indicator_constraints()
-                .iter()
-                .map(|(id, c)| (*id, c)),
+            view.iter()
+                .map(|(m, id, c)| crate::pandas::WithMetadata::new((*id, *c), m)),
             "id",
         )
     }
@@ -581,12 +639,25 @@ impl Solution {
         &self,
         py: Python<'py>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let meta_store = self
+            .inner
+            .evaluated_one_hot_constraints()
+            .metadata()
+            .clone();
+        let view: Vec<(
+            ommx::ConstraintMetadata,
+            ommx::OneHotConstraintID,
+            &ommx::EvaluatedOneHotConstraint,
+        )> = self
+            .inner
+            .evaluated_one_hot_constraints()
+            .iter()
+            .map(|(id, c)| (meta_store.collect_for(*id), *id, c))
+            .collect();
         entries_to_dataframe(
             py,
-            self.inner
-                .evaluated_one_hot_constraints()
-                .iter()
-                .map(|(id, c)| (*id, c)),
+            view.iter()
+                .map(|(m, id, c)| crate::pandas::WithMetadata::new((*id, *c), m)),
             "id",
         )
     }
@@ -621,12 +692,21 @@ impl Solution {
     /// Columns: id (index), feasible, active_variable, used_ids, name, subscripts, description
     #[getter]
     pub fn sos1_constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
+        let meta_store = self.inner.evaluated_sos1_constraints().metadata().clone();
+        let view: Vec<(
+            ommx::ConstraintMetadata,
+            ommx::Sos1ConstraintID,
+            &ommx::EvaluatedSos1Constraint,
+        )> = self
+            .inner
+            .evaluated_sos1_constraints()
+            .iter()
+            .map(|(id, c)| (meta_store.collect_for(*id), *id, c))
+            .collect();
         entries_to_dataframe(
             py,
-            self.inner
-                .evaluated_sos1_constraints()
-                .iter()
-                .map(|(id, c)| (*id, c)),
+            view.iter()
+                .map(|(m, id, c)| crate::pandas::WithMetadata::new((*id, *c), m)),
             "id",
         )
     }

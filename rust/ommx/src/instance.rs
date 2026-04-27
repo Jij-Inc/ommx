@@ -428,6 +428,16 @@ impl ParametricInstance {
         self.constraint_collection.removed()
     }
 
+    /// The full constraint collection (active + removed).
+    pub fn constraint_collection(&self) -> &ConstraintCollection<Constraint> {
+        &self.constraint_collection
+    }
+
+    /// Mutable access to the full constraint collection.
+    pub fn constraint_collection_mut(&mut self) -> &mut ConstraintCollection<Constraint> {
+        &mut self.constraint_collection
+    }
+
     /// Active indicator constraints.
     pub fn indicator_constraints(
         &self,
@@ -442,6 +452,18 @@ impl ParametricInstance {
         self.indicator_constraint_collection.removed()
     }
 
+    /// The full indicator constraint collection.
+    pub fn indicator_constraint_collection(&self) -> &ConstraintCollection<IndicatorConstraint> {
+        &self.indicator_constraint_collection
+    }
+
+    /// Mutable access to the full indicator constraint collection.
+    pub fn indicator_constraint_collection_mut(
+        &mut self,
+    ) -> &mut ConstraintCollection<IndicatorConstraint> {
+        &mut self.indicator_constraint_collection
+    }
+
     /// Active one-hot constraints.
     pub fn one_hot_constraints(&self) -> &BTreeMap<crate::OneHotConstraintID, OneHotConstraint> {
         self.one_hot_constraint_collection.active()
@@ -454,6 +476,18 @@ impl ParametricInstance {
         self.one_hot_constraint_collection.removed()
     }
 
+    /// The full one-hot constraint collection.
+    pub fn one_hot_constraint_collection(&self) -> &ConstraintCollection<OneHotConstraint> {
+        &self.one_hot_constraint_collection
+    }
+
+    /// Mutable access to the full one-hot constraint collection.
+    pub fn one_hot_constraint_collection_mut(
+        &mut self,
+    ) -> &mut ConstraintCollection<OneHotConstraint> {
+        &mut self.one_hot_constraint_collection
+    }
+
     /// Active SOS1 constraints.
     pub fn sos1_constraints(&self) -> &BTreeMap<crate::Sos1ConstraintID, Sos1Constraint> {
         self.sos1_constraint_collection.active()
@@ -464,6 +498,16 @@ impl ParametricInstance {
         &self,
     ) -> &BTreeMap<crate::Sos1ConstraintID, (Sos1Constraint, RemovedReason)> {
         self.sos1_constraint_collection.removed()
+    }
+
+    /// The full SOS1 constraint collection.
+    pub fn sos1_constraint_collection(&self) -> &ConstraintCollection<Sos1Constraint> {
+        &self.sos1_constraint_collection
+    }
+
+    /// Mutable access to the full SOS1 constraint collection.
+    pub fn sos1_constraint_collection_mut(&mut self) -> &mut ConstraintCollection<Sos1Constraint> {
+        &mut self.sos1_constraint_collection
     }
 }
 

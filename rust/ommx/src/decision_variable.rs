@@ -10,8 +10,7 @@ use getset::CopyGetters;
 pub use metadata_store::VariableMetadataStore;
 
 pub(crate) use parse::{
-    decision_variable_to_v1, sampled_decision_variable_to_v1, ParsedDecisionVariable,
-    ParsedSampledDecisionVariable,
+    sampled_decision_variable_to_v1, ParsedDecisionVariable, ParsedSampledDecisionVariable,
 };
 
 use crate::logical_memory::LogicalMemoryProfile;
