@@ -219,50 +219,65 @@ let id = collection.insert(Constraint::equal_to_zero(f));
 collection.metadata_mut().set_name(id, "demand_balance");
 collection.metadata_mut().push_subscripts(id, [i, j]);
 
-// or via the convenience builder. Builder methods correspond to the
-// existing Python `set_*` semantics (replace, not extend) since the
-// builder always starts from an empty store:
+// or atomically with metadata via insert_with, taking the existing
+// owned ConstraintMetadata struct directly (the SoA store and the
+// owned struct are mutually convertible):
 collection.insert_with(
     Constraint::equal_to_zero(f),
-    |m| m.name("demand_balance").subscripts([i, j]),
+    ConstraintMetadata {
+        name: Some("demand_balance".into()),
+        subscripts: vec![i, j],
+        ..Default::default()
+    },
 );
 ```
 
 ### Access patterns
 
+`ConstraintMetadataStore<ID>` exposes per-field borrowing getters
+plus a one-shot owned reconstructor. There is no separate "view"
+type: callers either read one field at a time (cheap borrow) or
+collect the full set into the existing `ConstraintMetadata` struct
+(owned).
+
 ```rust
+impl<ID: Eq + Hash> ConstraintMetadataStore<ID> {
+    // Per-field borrows. Static EMPTY_* sentinels cover the absent
+    // case so the Option<FnvHashMap<…>> storage doesn't leak through
+    // the public API.
+    pub fn name(&self, id: ID)        -> Option<&str>;
+    pub fn subscripts(&self, id: ID)  -> &[i64];                          // empty slice if absent
+    pub fn parameters(&self, id: ID)  -> &FnvHashMap<String, String>;     // &EMPTY_MAP if absent
+    pub fn description(&self, id: ID) -> Option<&str>;
+    pub fn provenance(&self, id: ID)  -> &[Provenance];
+
+    // One-shot owned reconstruction.
+    pub fn collect_for(&self, id: ID) -> ConstraintMetadata;
+
+    // Setters (write-through to the SoA store).
+    pub fn set_name(&mut self, id: ID, name: impl Into<String>);
+    pub fn set_subscripts(&mut self, id: ID, s: impl Into<Vec<i64>>);
+    pub fn push_subscripts(&mut self, id: ID, s: impl IntoIterator<Item = i64>);
+    pub fn set_parameter(&mut self, id: ID, key: impl Into<String>, value: impl Into<String>);
+    pub fn set_description(&mut self, id: ID, desc: impl Into<String>);
+    pub fn push_provenance(&mut self, id: ID, p: Provenance);
+
+    // Bulk owned exchange with the I/O struct.
+    pub fn insert(&mut self, id: ID, metadata: ConstraintMetadata);
+    pub fn remove(&mut self, id: ID) -> ConstraintMetadata;  // for cleanup symmetry
+}
+
 impl<T: ConstraintType> ConstraintCollection<T> {
     pub fn metadata(&self) -> &ConstraintMetadataStore<T::ID> { ... }
     pub fn metadata_mut(&mut self) -> &mut ConstraintMetadataStore<T::ID> { ... }
-
-    /// Convenience view bundling constraint + metadata for a single ID.
-    pub fn view(&self, id: T::ID) -> Option<ConstraintView<'_, T>> { ... }
-}
-
-pub struct ConstraintView<'a, T: ConstraintType> {
-    pub id: T::ID,
-    pub constraint: &'a T::Created,
-    pub metadata: ConstraintMetadataView<'a>,
-}
-
-pub struct ConstraintMetadataView<'a> {
-    name:        Option<&'a str>,
-    subscripts:  &'a [i64],         // empty slice if absent
-    parameters:  &'a FnvHashMap<String, String>,   // &EMPTY if absent
-    description: Option<&'a str>,
-    provenance:  &'a [Provenance],
 }
 ```
 
-`ConstraintMetadataView::parameters()` returns `&EMPTY_MAP` for absent
-keys (static const) so the `Option<FnvHashMap<…>>` storage doesn't leak
-through the public API.
-
-The internal call sites that used to read `c.metadata.*` directly (e.g.
-`rust/ommx/src/sample_set/extract.rs`'s `metadata.name`,
+The internal call sites that used to read `c.metadata.*` directly
+(e.g. `rust/ommx/src/sample_set/extract.rs`'s `metadata.name`,
 `metadata.subscripts`, `metadata.parameters` filters) switch to
-`collection.metadata().name(id)` / `.subscripts(id)` / `.parameters(id)`
-accessors. Behavior unchanged.
+`collection.metadata().name(id)` / `.subscripts(id)` /
+`.parameters(id)` getters. Behavior unchanged.
 
 ### Parse / serialize boundaries
 
@@ -746,15 +761,51 @@ traceability with earlier review comments.
 
 Items still requiring sign-off before implementation.
 
-3. **Builder-style metadata setter on the Rust side**: flat
-   (`collection.insert(c)` followed by `metadata_mut().set_name(id,
-   ...)`) only, vs. also `collection.insert_with(c, |m|
-   m.name(...))` sugar.
-   - **Working recommendation: add `insert_with`.** Pure Rust
-     callers (algorithms, adapters, tests) construct constraints in
-     loops where the two-step form is easy to forget — the
-     constraint goes in but the metadata silently doesn't. The
-     closure-based form keeps insertion atomic at the call site.
-     This is independent of the Python staging bag, which serves the
-     modeling chain on the Python side; both surfaces exist for
-     their own ergonomics reasons.
+3. **Atomic insert-with-metadata on the Rust side**: provide
+   `collection.insert_with(c, metadata: ConstraintMetadata)`
+   alongside the flat
+   `collection.insert(c) + metadata_mut().set_name(id, ...)` form.
+   - **Working recommendation: add `insert_with` taking the existing
+     owned `ConstraintMetadata` struct.**
+
+     The pre-v3 `ConstraintMetadata` (owned struct with `name`,
+     `subscripts`, `parameters`, `description`, `provenance`) stays
+     as the I/O type even though it no longer lives inside
+     `Constraint<S>`. The SoA store and `ConstraintMetadata` are
+     mutually convertible: `store.collect_for(id) ->
+     ConstraintMetadata` for owned reads,
+     `store.insert(id, ConstraintMetadata)` for owned writes.
+
+     ```rust
+     impl<T: ConstraintType> ConstraintCollection<T> {
+         pub fn insert(&mut self, c: T::Created) -> T::ID;
+         pub fn insert_with(
+             &mut self,
+             c: T::Created,
+             metadata: ConstraintMetadata,
+         ) -> T::ID;
+     }
+
+     let id = collection.insert_with(
+         c,
+         ConstraintMetadata {
+             name: Some("demand_balance".into()),
+             subscripts: vec![i, j],
+             ..Default::default()
+         },
+     );
+     ```
+
+     Two types in the metadata layer cover all cases:
+     - `ConstraintMetadataStore<ID>` — internal SoA store, with
+       per-field borrowing getters (`name(id) -> Option<&str>`,
+       `subscripts(id) -> &[i64]`, …) and a `collect_for(id) ->
+       ConstraintMetadata` for one-shot owned reconstruction.
+     - `ConstraintMetadata` — owned struct used for I/O (insert,
+       owned read, modeling-chain staging). Same shape as the pre-v3
+       struct.
+
+     Pure Rust callers (algorithms, adapters, tests) constructing
+     constraints in loops use `insert_with` to avoid the silent-
+     metadata-loss footgun of the two-step form. Independent of the
+     Python staging bag, which serves the modeling chain.
