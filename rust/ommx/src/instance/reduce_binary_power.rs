@@ -65,7 +65,6 @@ mod tests {
             ConstraintID::from(1),
             Constraint {
                 equality: Equality::LessThanOrEqualToZero,
-                metadata: ConstraintMetadata::default(),
                 stage: CreatedData {
                     function: constraint_func,
                 },

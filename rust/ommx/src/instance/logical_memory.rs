@@ -233,10 +233,6 @@ mod tests {
         Instance.decision_variables;DecisionVariable.bound 32
         Instance.decision_variables;DecisionVariable.id 16
         Instance.decision_variables;DecisionVariable.kind 2
-        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.description;Option[stack] 48
-        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.name;Option[stack] 48
-        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.parameters;FnvHashMap[stack] 64
-        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.subscripts;Vec[stack] 48
         Instance.decision_variables;DecisionVariable.substituted_value;Option[stack] 32
         Instance.description;Option[stack] 96
         Instance.indicator_constraint_collection;indicator_constraints;BTreeMap[stack] 24
@@ -284,7 +280,6 @@ mod tests {
 
         let constraint = Constraint {
             equality: Equality::LessThanOrEqualToZero,
-            metadata: ConstraintMetadata::default(),
             stage: CreatedData {
                 function: Function::Linear(linear!(1) + linear!(2)),
             },
@@ -306,11 +301,6 @@ mod tests {
         Instance.constraint_collection;constraints;BTreeMap[key] 8
         Instance.constraint_collection;constraints;BTreeMap[stack] 24
         Instance.constraint_collection;constraints;Constraint.equality 1
-        Instance.constraint_collection;constraints;Constraint.metadata;ConstraintMetadata.description;Option[stack] 24
-        Instance.constraint_collection;constraints;Constraint.metadata;ConstraintMetadata.name;Option[stack] 24
-        Instance.constraint_collection;constraints;Constraint.metadata;ConstraintMetadata.parameters;FnvHashMap[stack] 32
-        Instance.constraint_collection;constraints;Constraint.metadata;ConstraintMetadata.provenance;Vec[stack] 24
-        Instance.constraint_collection;constraints;Constraint.metadata;ConstraintMetadata.subscripts;Vec[stack] 24
         Instance.constraint_collection;constraints;Constraint.stage;CreatedData.function;Linear;PolynomialBase.terms 80
         Instance.constraint_collection;metadata;ConstraintMetadataStore.description;FnvHashMap[stack] 32
         Instance.constraint_collection;metadata;ConstraintMetadataStore.name;FnvHashMap[stack] 32
@@ -325,10 +315,6 @@ mod tests {
         Instance.decision_variables;DecisionVariable.bound 32
         Instance.decision_variables;DecisionVariable.id 16
         Instance.decision_variables;DecisionVariable.kind 2
-        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.description;Option[stack] 48
-        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.name;Option[stack] 48
-        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.parameters;FnvHashMap[stack] 64
-        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.subscripts;Vec[stack] 48
         Instance.decision_variables;DecisionVariable.substituted_value;Option[stack] 32
         Instance.description;Option[stack] 96
         Instance.indicator_constraint_collection;indicator_constraints;BTreeMap[stack] 24
@@ -365,28 +351,28 @@ mod tests {
 
     #[test]
     fn test_instance_with_multiple_variables_with_metadata_snapshot() {
-        // Create 3 decision variables with names to demonstrate aggregation
-        let mut dv1 = DecisionVariable::continuous(1.into());
-        dv1.metadata.name = Some("x1".to_string());
-
-        let mut dv2 = DecisionVariable::continuous(2.into());
-        dv2.metadata.name = Some("x2".to_string());
-
-        let mut dv3 = DecisionVariable::continuous(3.into());
-        dv3.metadata.name = Some("x3_with_longer_name".to_string());
+        // Create 3 decision variables with names (stored in the SoA store)
+        let dv1 = DecisionVariable::continuous(1.into());
+        let dv2 = DecisionVariable::continuous(2.into());
+        let dv3 = DecisionVariable::continuous(3.into());
 
         let mut decision_variables = BTreeMap::new();
         decision_variables.insert(dv1.id(), dv1);
         decision_variables.insert(dv2.id(), dv2);
         decision_variables.insert(dv3.id(), dv3);
 
-        let instance = Instance::new(
+        let mut instance = Instance::new(
             crate::instance::Sense::Minimize,
             Function::Zero,
             decision_variables,
             BTreeMap::new(),
         )
         .unwrap();
+        instance.variable_metadata_mut().set_name(1.into(), "x1");
+        instance.variable_metadata_mut().set_name(2.into(), "x2");
+        instance
+            .variable_metadata_mut()
+            .set_name(3.into(), "x3_with_longer_name");
 
         let folded = logical_memory_to_folded(&instance);
         // Note: Same path appears multiple times, flamegraph tools will aggregate them
@@ -405,10 +391,6 @@ mod tests {
         Instance.decision_variables;DecisionVariable.bound 48
         Instance.decision_variables;DecisionVariable.id 24
         Instance.decision_variables;DecisionVariable.kind 3
-        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.description;Option[stack] 72
-        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.name 95
-        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.parameters;FnvHashMap[stack] 96
-        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.subscripts;Vec[stack] 72
         Instance.decision_variables;DecisionVariable.substituted_value;Option[stack] 48
         Instance.description;Option[stack] 96
         Instance.indicator_constraint_collection;indicator_constraints;BTreeMap[stack] 24
@@ -437,6 +419,8 @@ mod tests {
         Instance.sos1_constraint_collection;removed_sos1_constraints;BTreeMap[stack] 24
         Instance.sos1_constraint_collection;sos1_constraints;BTreeMap[stack] 24
         Instance.variable_metadata;VariableMetadataStore.description;FnvHashMap[stack] 32
+        Instance.variable_metadata;VariableMetadataStore.name 95
+        Instance.variable_metadata;VariableMetadataStore.name;FnvHashMap[key] 24
         Instance.variable_metadata;VariableMetadataStore.name;FnvHashMap[stack] 32
         Instance.variable_metadata;VariableMetadataStore.parameters;FnvHashMap[stack] 32
         Instance.variable_metadata;VariableMetadataStore.subscripts;FnvHashMap[stack] 32
@@ -490,10 +474,6 @@ mod tests {
         Instance.decision_variables;DecisionVariable.bound 16
         Instance.decision_variables;DecisionVariable.id 8
         Instance.decision_variables;DecisionVariable.kind 1
-        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.description;Option[stack] 24
-        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.name;Option[stack] 24
-        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.parameters;FnvHashMap[stack] 32
-        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.subscripts;Vec[stack] 24
         Instance.decision_variables;DecisionVariable.substituted_value;Option[stack] 16
         Instance.description;Description.authors 56
         Instance.description;Description.authors;Vec[stack] 24

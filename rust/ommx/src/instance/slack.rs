@@ -282,10 +282,11 @@ mod tests {
             .get(&ConstraintID::from(0))
             .expect("constraint should still be present");
         assert_eq!(constraint.equality, Equality::LessThanOrEqualToZero);
+        let store = instance.variable_metadata();
         assert!(instance
             .decision_variables
-            .values()
-            .any(|dv| dv.metadata.name.as_deref() == Some("ommx.slack")));
+            .keys()
+            .any(|id| store.name(*id) == Some("ommx.slack")));
     }
 
     #[test]

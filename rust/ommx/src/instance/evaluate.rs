@@ -641,15 +641,15 @@ mod tests {
         // should reference the original IndicatorConstraintID so that the
         // transformation lineage is preserved.
         assert_eq!(instance.constraint_collection.active().len(), 1);
-        let (_, promoted) = instance
+        let (cid, _promoted) = instance
             .constraint_collection
             .active()
             .iter()
             .next()
             .unwrap();
         assert_eq!(
-            promoted.metadata.provenance,
-            vec![crate::constraint::Provenance::IndicatorConstraint(
+            instance.constraint_collection.metadata().provenance(*cid),
+            &[crate::constraint::Provenance::IndicatorConstraint(
                 IndicatorConstraintID::from(100)
             )]
         );

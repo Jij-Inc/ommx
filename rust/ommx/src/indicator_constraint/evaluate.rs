@@ -367,8 +367,9 @@ mod tests {
         match outcome {
             PropagateOutcome::Transformed { original, new } => {
                 assert_eq!(new.equality, Equality::LessThanOrEqualToZero);
-                // Provenance is added by the caller (Instance) that owns the original ID.
-                assert!(new.metadata.provenance.is_empty());
+                // Per-element metadata is gone in v3; provenance and other
+                // metadata are added by the caller (Instance) into its
+                // ConstraintMetadataStore at the collection level.
                 // Original indicator constraint preserved for removed set
                 assert_eq!(original.indicator_variable, VariableID::from(10));
             }

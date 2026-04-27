@@ -134,7 +134,6 @@ mod tests {
         let mut constraints = BTreeMap::new();
         let constraint = Constraint {
             equality: Equality::LessThanOrEqualToZero,
-            metadata: crate::constraint::ConstraintMetadata::default(),
             stage: crate::constraint::CreatedData {
                 function: constraint_function,
             },

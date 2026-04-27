@@ -54,6 +54,7 @@ impl From<Kind> for i32 {
 /// Per-element parse no longer attaches metadata to the [`DecisionVariable`]
 /// itself — the metadata is returned alongside so the collection-level
 /// parse can drain it into the [`VariableMetadataStore`].
+#[derive(Debug)]
 pub struct ParsedDecisionVariable {
     pub variable: DecisionVariable,
     pub metadata: DecisionVariableMetadata,
@@ -144,6 +145,7 @@ pub(crate) fn decision_variable_to_v1(
 }
 
 /// Parsed v1 `SampledDecisionVariable` together with its drained metadata.
+#[derive(Debug)]
 pub struct ParsedSampledDecisionVariable {
     pub variable: SampledDecisionVariable,
     pub metadata: DecisionVariableMetadata,
@@ -228,7 +230,8 @@ mod tests {
             }),
             ..Default::default()
         };
-        insta::assert_snapshot!(dv.parse(&()).unwrap_err(), @r###"
+        let res: Result<ParsedDecisionVariable, _> = dv.parse(&());
+        insta::assert_snapshot!(res.unwrap_err(), @r###"
         Traceback for OMMX Message parse error:
         └─ommx.v1.DecisionVariable[bound]
         Bound for ID=1 is inconsistent to kind: kind=Integer, bound=[1.1, 1.9]
@@ -267,19 +270,19 @@ mod tests {
             }),
         };
 
-        let sampled_dv: SampledDecisionVariable = v1_sampled_dv.parse(&()).unwrap();
+        let parsed: ParsedSampledDecisionVariable = v1_sampled_dv.parse(&()).unwrap();
+        let sampled_dv = parsed.variable;
+        let metadata = parsed.metadata;
 
         assert_eq!(*sampled_dv.id(), VariableID::from(42));
         assert_eq!(*sampled_dv.kind(), Kind::Continuous);
-        assert_eq!(sampled_dv.metadata.name, Some("test_var".to_string()));
-        assert_eq!(sampled_dv.metadata.subscripts, vec![1, 2]);
-        assert_eq!(
-            sampled_dv.metadata.description,
-            Some("A test variable".to_string())
-        );
+        assert_eq!(metadata.name, Some("test_var".to_string()));
+        assert_eq!(metadata.subscripts, vec![1, 2]);
+        assert_eq!(metadata.description, Some("A test variable".to_string()));
 
-        // Test round-trip conversion
-        let v1_converted: v1::SampledDecisionVariable = sampled_dv.into();
+        // Test round-trip conversion: name is reattached at serialize time
+        // by `sampled_decision_variable_to_v1`.
+        let v1_converted = sampled_decision_variable_to_v1(sampled_dv, metadata);
         let decision_variable = v1_converted.decision_variable.unwrap();
         assert_eq!(decision_variable.id, 42);
         assert_eq!(decision_variable.name, Some("test_var".to_string()));
@@ -297,7 +300,7 @@ mod tests {
             }),
         };
 
-        let result: Result<SampledDecisionVariable, _> = v1_sampled_dv.parse(&());
+        let result: Result<ParsedSampledDecisionVariable, _> = v1_sampled_dv.parse(&());
         insta::assert_snapshot!(result.unwrap_err(), @r###"
         Traceback for OMMX Message parse error:
         Field decision_variable in ommx.v1.SampledDecisionVariable is missing.
@@ -315,7 +318,7 @@ mod tests {
             samples: None, // Missing samples should cause error
         };
 
-        let result: Result<SampledDecisionVariable, _> = v1_sampled_dv.parse(&());
+        let result: Result<ParsedSampledDecisionVariable, _> = v1_sampled_dv.parse(&());
         insta::assert_snapshot!(result.unwrap_err(), @r###"
         Traceback for OMMX Message parse error:
         Field samples in ommx.v1.SampledDecisionVariable is missing.

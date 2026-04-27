@@ -812,18 +812,14 @@ mod tests {
         assert_eq!(*evaluated_dv.id(), VariableID::from(42));
         assert_eq!(*evaluated_dv.kind(), crate::Kind::Integer);
         assert_eq!(*evaluated_dv.value(), 5.0);
-        assert_eq!(evaluated_dv.metadata.name, Some("test_var".to_string()));
-        assert_eq!(evaluated_dv.metadata.subscripts, vec![1, 2]);
-        assert_eq!(
-            evaluated_dv.metadata.description,
-            Some("A test variable".to_string())
-        );
 
-        // Test round-trip conversion
+        // Note: per-element metadata is gone in v3; the standalone TryFrom
+        // path drops metadata. End-to-end name preservation flows through
+        // Solution / SampleSet, which carry a VariableMetadataStore.
+        // Test round-trip conversion at the intrinsic-data level.
         let v1_converted: v1::DecisionVariable = evaluated_dv.into();
         assert_eq!(v1_converted.id, 42);
         assert_eq!(v1_converted.substituted_value, Some(5.0));
-        assert_eq!(v1_converted.name, Some("test_var".to_string()));
     }
 
     #[test]

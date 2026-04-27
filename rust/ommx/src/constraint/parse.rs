@@ -270,18 +270,25 @@ mod tests {
 
     #[test]
     fn error_message() {
-        let out: Result<(ConstraintID, Constraint<Created>, RemovedReason), ParseError> =
-            v1::RemovedConstraint {
-                constraint: Some(v1::Constraint {
-                    id: 1,
-                    function: Some(v1::Function { function: None }),
-                    equality: v1::Equality::EqualToZero as i32,
-                    ..Default::default()
-                }),
-                removed_reason: "reason".to_string(),
-                removed_reason_parameters: Default::default(),
-            }
-            .parse(&());
+        let out: Result<
+            (
+                ConstraintID,
+                Constraint<Created>,
+                ConstraintMetadata,
+                RemovedReason,
+            ),
+            ParseError,
+        > = v1::RemovedConstraint {
+            constraint: Some(v1::Constraint {
+                id: 1,
+                function: Some(v1::Function { function: None }),
+                equality: v1::Equality::EqualToZero as i32,
+                ..Default::default()
+            }),
+            removed_reason: "reason".to_string(),
+            removed_reason_parameters: Default::default(),
+        }
+        .parse(&());
 
         insta::assert_snapshot!(out.unwrap_err(), @r###"
         Traceback for OMMX Message parse error:
@@ -310,8 +317,12 @@ mod tests {
             removed_reason_parameters: Default::default(),
         };
 
-        let (id, parsed, removed_reason): (ConstraintID, EvaluatedConstraint, _) =
-            v1_constraint.parse(&()).unwrap();
+        let (id, parsed, metadata, removed_reason): (
+            ConstraintID,
+            EvaluatedConstraint,
+            ConstraintMetadata,
+            _,
+        ) = v1_constraint.parse(&()).unwrap();
         assert!(removed_reason.is_none());
 
         assert_eq!(id, ConstraintID(42));
@@ -322,12 +333,11 @@ mod tests {
             parsed.stage.used_decision_variable_ids,
             btreeset! {1.into(), 2.into(), 3.into()}
         );
-        assert_eq!(parsed.metadata.name, Some("test_constraint".to_string()));
-        assert_eq!(
-            parsed.metadata.description,
-            Some("A test constraint".to_string())
-        );
-        assert_eq!(parsed.metadata.subscripts, vec![10, 20]);
+        // Metadata is now returned as a separate value alongside the parsed
+        // constraint (drained into the SoA store at the collection level).
+        assert_eq!(metadata.name, Some("test_constraint".to_string()));
+        assert_eq!(metadata.description, Some("A test constraint".to_string()));
+        assert_eq!(metadata.subscripts, vec![10, 20]);
         // feasible should be false because 1.5 > ATol::default() for EqualToZero constraint
         assert!(!parsed.stage.feasible);
     }

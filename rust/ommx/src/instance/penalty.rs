@@ -294,7 +294,6 @@ mod tests {
             ConstraintID::from(1),
             Constraint {
                 equality: Equality::LessThanOrEqualToZero,
-                metadata: crate::constraint::ConstraintMetadata::default(),
                 stage: crate::constraint::CreatedData {
                     function: Function::from(linear!(1) + linear!(2) + coeff!(-1.0)),
                 },
@@ -304,7 +303,6 @@ mod tests {
             ConstraintID::from(2),
             Constraint {
                 equality: Equality::EqualToZero,
-                metadata: crate::constraint::ConstraintMetadata::default(),
                 stage: crate::constraint::CreatedData {
                     function: Function::from(linear!(1) + coeff!(-1.0) * linear!(2)),
                 },

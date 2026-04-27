@@ -152,7 +152,6 @@ mod tests {
         let mut constraints = BTreeMap::new();
         let constraint = Constraint {
             equality: Equality::LessThanOrEqualToZero,
-            metadata: crate::constraint::ConstraintMetadata::default(),
             stage: crate::constraint::CreatedData {
                 function: constraint_function,
             },
@@ -201,7 +200,6 @@ mod tests {
             ConstraintID::from(1),
             Constraint {
                 equality: Equality::LessThanOrEqualToZero,
-                metadata: Default::default(),
                 stage: crate::constraint::CreatedData {
                     function: Function::from(linear!(3) + coeff!(-10.0)),
                 },
@@ -249,7 +247,6 @@ mod tests {
             ConstraintID::from(1),
             Constraint {
                 equality: Equality::LessThanOrEqualToZero,
-                metadata: Default::default(),
                 stage: crate::constraint::CreatedData {
                     function: Function::from(linear!(3) + coeff!(-10.0)),
                 },

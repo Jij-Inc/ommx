@@ -26,7 +26,6 @@ mod tests {
 
         let mut constraint: Constraint<Created> = Constraint {
             equality: Equality::LessThanOrEqualToZero,
-            metadata: ConstraintMetadata::default(),
             stage: CreatedData { function },
         };
 
