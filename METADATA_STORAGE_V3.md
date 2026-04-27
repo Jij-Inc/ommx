@@ -631,11 +631,20 @@ each producing a wide row dict.
 
 ### `subscripts` / `provenance` representation
 
-- `subscripts`: `List<Int64>` column on the metadata df (one row per
-  id). Part of the variable / constraint identity, consumed as a
-  tuple, not aggregated cross-row.
+- `subscripts`: a single `List<Int64>` value per id — exposed as a
+  list column on `*_metadata_df` and as `wrapper.subscripts: list[int]`
+  via the back-reference. **Not** offered in long format. `subscripts`
+  is part of the variable / constraint identity (the "tuple index" in
+  `x[i, j, k]`-style expressions), and exploding it across rows would
+  invite treating positions as first-class entities — which is the
+  wrong mental model. Users who genuinely want to filter on
+  `subscripts[0]` do it in Python (`df[df.subscripts.str[0] == i]`)
+  rather than via a long-format API.
 - `provenance`: long format `(id, step, source_kind, source_id)` — one
-  row per `(id, step)` pair.
+  row per `(id, step)` pair. Unlike `subscripts`, provenance steps
+  *are* first-class entities (each step is one transformation event),
+  and chains have variable length, so the long shape is the natural
+  one.
 
 ## Breaking changes
 
@@ -724,9 +733,13 @@ before implementation.
 5. **`subscripts` long format option**: in addition to the
    `List<Int64>` column, offer a `subscripts_df` with `(id, position,
    value)`.
-   - **Recommendation: not in this proposal.** List column is enough
-     for identity-style use. Add later if demand for positional
-     filtering emerges.
+   - **Recommendation: reject.** `subscripts` is part of the
+     variable / constraint identity (the "tuple index" in expressions
+     like `x[i, j, k]`), not a collection that users meaningfully
+     iterate or aggregate over. Exposing it in long form would invite
+     treating positions as first-class entities, which is the wrong
+     mental model. Always serve `subscripts` as a single `List<Int64>`
+     value per id — both on the metadata df and on the wrapper getter.
 6. **Polars as primary in Python**: out of scope here, but the
    JOIN-based API is polars-friendly.
    - **Recommendation: pandas stays primary for v3.** `PyDataFrame`
