@@ -144,7 +144,7 @@ impl Instance {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::constraint::{ConstraintMetadata, CreatedData};
+    use crate::constraint::CreatedData;
     use crate::logical_memory::logical_memory_to_folded;
     use crate::{coeff, linear, Constraint, ConstraintID, DecisionVariable, Equality, Function};
     use std::collections::BTreeMap;

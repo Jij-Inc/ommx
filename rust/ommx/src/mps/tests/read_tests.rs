@@ -560,7 +560,7 @@ ENDATA
     let x2_id = x2.id();
 
     // The constraint should be quadratic
-    let (cid, constraint) = instance.constraints().iter().next().unwrap();
+    let (_cid, constraint) = instance.constraints().iter().next().unwrap();
     assert_eq!(constraint.function().degree(), 2);
 
     // Build expected constraint function: 2*x1 + 4*x2 + 0.5*x1^2 + x1*x2 - 10 <= 0
