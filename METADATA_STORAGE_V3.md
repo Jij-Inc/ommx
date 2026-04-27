@@ -688,75 +688,74 @@ User-visible breakage relative to v3 alpha 2:
 A new section in `PYTHON_SDK_MIGRATION_GUIDE.md` covers the Python side
 in detail.
 
+## Resolved decisions
+
+Numbering preserved from the original Open Questions list for
+traceability with earlier review comments.
+
+1. **Kind dispatch in Python — single method with `Literal` +
+   `@overload`.** `constraint_metadata_df(kind="regular")` and the
+   sibling `*_df(kind=...)` family use a `kind:
+   Literal["regular","indicator","one_hot","sos1"]` parameter rather
+   than four separate methods. `pyo3-stub-gen` supports emitting
+   `typing.overload` stubs keyed on `Literal[…]` arguments, so each
+   kind's overload still advertises its specific column schema in
+   the IDE / type checker.
+2. **`removed_reason` — separate long-format
+   `constraint_removed_reasons_df(kind=...)`.** `RemovedReason` is
+   collection-level metadata in Rust, not part of the constraint.
+   Wide pivoting is available on opt-in via
+   `constraints_df(kind=..., include=("removed_reasons",))`.
+4. **`parameters` Rust storage — nested
+   `FnvHashMap<ID, FnvHashMap<String, String>>`.** Matches the
+   existing per-object metadata shape, makes "all parameters of one
+   id" a natural O(1) lookup, and the long-format Python export is a
+   one-pass flatten anyway.
+5. **`subscripts` long format — reject.** `subscripts` is part of the
+   variable / constraint identity (the "tuple index" in `x[i, j, k]`-
+   style expressions), not a collection that users meaningfully
+   iterate or aggregate over. Always served as a single
+   `List<Int64>` value per id, both on the metadata df and on the
+   wrapper getter.
+6. **Polars as primary in Python — no, pandas stays primary for v3.**
+   `PyDataFrame` is pandas-backed; polars promotion is a separate
+   v3.x discussion.
+8. **Attached wrapper `Py<Instance>` lifetime — documented behavior,
+   no code-level mitigation in this proposal.** The wrapper holds a
+   refcounted handle to the Instance; there's no cycle (wrapper →
+   Instance, Instance → store, no back-pointer from store to
+   wrapper), but heavy use of Series can keep an Instance alive
+   longer than expected. Users who care drop the Series. Whether the
+   pattern needs revisiting (e.g. weak-handle variant of the wrapper)
+   is a question to take up at implementation time, not before.
+
 ## Open questions
 
-Each item lists a working recommendation; flagged for explicit sign-off
-before implementation.
+Items still requiring sign-off before implementation.
 
-1. **Constraint kind dispatch in Python**:
-   `constraint_metadata_df(kind="regular")` (one method,
-   `Literal["regular","indicator","one_hot","sos1"]` overloads) vs.
-   `regular_constraint_metadata_df()` (four explicit methods).
-   - **Recommendation: single method with `Literal` + `@overload`.**
-     `pyo3-stub-gen` supports emitting `typing.overload` stubs keyed
-     on `Literal[…]` arguments, so a `kind` parameter gives the same
-     IDE / type-checker discoverability as four explicit methods
-     while keeping the API surface compact. Each kind's overload
-     advertises its specific column schema (e.g. only the regular and
-     indicator overloads include the `provenance` / `function_type`
-     columns where relevant).
-2. **`removed_reason` placement**: inline columns on the core df vs. a
-   separate long-format `*_removed_reasons_df`.
-   - **Recommendation: separate long-format df.** `Solution` already
-     exposes `removed_reasons_df` / `indicator_removed_reasons_df`
-     this way, and `RemovedReason` is collection-level metadata in
-     Rust, not part of the constraint.
 3. **Builder-style metadata setter on the Rust side**: flat
    (`collection.insert(c)` followed by `metadata_mut().set_name(id,
    ...)`) only, vs. also `collection.insert_with(c, |m|
    m.name(...))` sugar.
-   - **Recommendation: add `insert_with`.** Pure Rust callers
-     (algorithms, adapters, tests) construct constraints in loops
-     where the two-step form is easy to forget — the constraint goes
-     in but the metadata silently doesn't. The closure-based form
-     keeps insertion atomic at the call site. This is independent of
-     the Python staging bag, which serves the modeling chain on the
-     Python side; both surfaces exist for their own ergonomics
-     reasons.
-4. **`parameters` storage on the Rust side**: `FnvHashMap<ID,
-   FnvHashMap<String, String>>` vs. transposed `FnvHashMap<(ID,
-   String), String>`.
-   - **Recommendation: nested `FnvHashMap<ID, FnvHashMap<String,
-     String>>`.** Matches the existing per-object metadata shape,
-     makes "all parameters of one id" a natural lookup, and the
-     long-format Python export is a one-pass flatten anyway.
-5. **`subscripts` long format option**: in addition to the
-   `List<Int64>` column, offer a `subscripts_df` with `(id, position,
-   value)`.
-   - **Recommendation: reject.** `subscripts` is part of the
-     variable / constraint identity (the "tuple index" in expressions
-     like `x[i, j, k]`), not a collection that users meaningfully
-     iterate or aggregate over. Exposing it in long form would invite
-     treating positions as first-class entities, which is the wrong
-     mental model. Always serve `subscripts` as a single `List<Int64>`
-     value per id — both on the metadata df and on the wrapper getter.
-6. **Polars as primary in Python**: out of scope here, but the
-   JOIN-based API is polars-friendly.
-   - **Recommendation: pandas stays primary for v3.** `PyDataFrame`
-     is pandas-backed; polars promotion is a separate v3.x discussion.
+   - **Working recommendation: add `insert_with`.** Pure Rust
+     callers (algorithms, adapters, tests) construct constraints in
+     loops where the two-step form is easy to forget — the
+     constraint goes in but the metadata silently doesn't. The
+     closure-based form keeps insertion atomic at the call site.
+     This is independent of the Python staging bag, which serves the
+     modeling chain on the Python side; both surfaces exist for
+     their own ergonomics reasons.
 7. **`drop_constraint` / wrapper invalidation**: Attached wrappers
    stay valid as long as the id is in either the active or removed
    map. There's no `drop_constraint` API today, so the question is
    moot — but if one is added later, it has to invalidate Attached
    wrappers (panicking getters or `IsDroppedError`).
-   - **Recommendation: do not add `drop_constraint` in v3.** `relax`
-     is sufficient for the existing use cases. Defer wrapper
-     invalidation semantics to whenever `drop_constraint` actually
-     becomes necessary.
-8. **Attached wrapper `Py<Instance>` cycles**: the wrapper holds a
-   handle to the Instance; the Instance's collections own the SoA
-   store. There's no cycle (wrapper → Instance, Instance → store, no
-   back-pointer from store to wrapper), but heavy use of Series can
-   keep an Instance alive longer than expected.
-   - **Recommendation: documented behavior, no code-level mitigation.**
-     Users who care about lifetime drop the Series.
+   - **Working recommendation: do not add `drop_constraint` in
+     v3.** `relax` is sufficient for the existing use cases. Defer
+     wrapper invalidation semantics to whenever `drop_constraint`
+     actually becomes necessary. The risk to weigh: deferring means
+     that whoever adds `drop_constraint` later has to retrofit
+     invalidation onto Attached wrappers across every consumer (PR
+     scope balloons). Explicitly closing the door now ("v3 has no
+     drop") makes that future migration a separate feature, not a
+     compatibility break.
