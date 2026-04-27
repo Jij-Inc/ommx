@@ -154,6 +154,14 @@ impl Parse for crate::v1::Solution {
     }
 }
 
+/// Lossy: `v1::Solution` only has a `evaluated_constraints` field for
+/// regular constraints — it has no fields for indicator / one-hot / sos1
+/// evaluated constraints, so any data the in-memory [`Solution`] holds
+/// in those collections is dropped on serialization. This is a wire-format
+/// limitation that pre-dates the metadata SoA refactor; the matching
+/// `Parse` impl above initializes those collections to
+/// `Default::default()` for symmetry. Round-trip through `to_bytes` /
+/// `from_bytes` preserves variable and regular-constraint metadata.
 impl From<Solution> for crate::v1::Solution {
     fn from(solution: Solution) -> Self {
         let state = solution.state();
@@ -470,5 +478,73 @@ mod tests {
         └─ommx.v1.Solution[format_version]
         Unsupported ommx format version: data has format_version=1, but this SDK supports up to 0. Please upgrade the OMMX SDK.
         "###);
+    }
+
+    /// Regression: `Solution::to_bytes` / `from_bytes` must preserve the
+    /// variable and (regular-constraint) metadata stores. Indicator /
+    /// one-hot / sos1 evaluated metadata is dropped because `v1::Solution`
+    /// has no fields for those collections — that's a wire-format
+    /// limitation older than the SoA refactor and is out of scope here.
+    #[test]
+    fn test_solution_roundtrip_preserves_metadata() {
+        use crate::{
+            constraint::EvaluatedData, constraint_type::EvaluatedCollection, ATol, ConstraintID,
+            DecisionVariable, Equality, EvaluatedConstraint, EvaluatedDecisionVariable, Sense,
+            VariableID,
+        };
+        use std::collections::BTreeMap;
+
+        let var_id = VariableID::from(1);
+        let cid = ConstraintID::from(10);
+
+        let dv = DecisionVariable::binary(var_id);
+        let evaluated_dv = EvaluatedDecisionVariable::new(dv, 1.0, ATol::default()).unwrap();
+        let mut decision_variables = BTreeMap::new();
+        decision_variables.insert(var_id, evaluated_dv);
+
+        let mut variable_metadata = crate::VariableMetadataStore::default();
+        variable_metadata.set_name(var_id, "x");
+        variable_metadata.set_subscripts(var_id, vec![0]);
+
+        let evaluated = EvaluatedConstraint {
+            equality: Equality::EqualToZero,
+            stage: EvaluatedData {
+                evaluated_value: 0.0,
+                dual_variable: None,
+                feasible: true,
+                used_decision_variable_ids: [var_id].into_iter().collect(),
+            },
+        };
+        let mut evaluated_map = BTreeMap::new();
+        evaluated_map.insert(cid, evaluated);
+        let mut constraint_metadata = crate::ConstraintMetadataStore::<ConstraintID>::default();
+        constraint_metadata.set_name(cid, "balance");
+        constraint_metadata.set_description(cid, "demand-balance row");
+        let evaluated_constraints =
+            EvaluatedCollection::with_metadata(evaluated_map, BTreeMap::new(), constraint_metadata);
+
+        // SAFETY: the inputs above satisfy Solution invariants (one DV,
+        // one evaluated constraint over that DV, value 1.0 satisfies the
+        // equality, no removed reasons).
+        let solution = unsafe {
+            Solution::builder()
+                .objective(1.0)
+                .evaluated_constraints_collection(evaluated_constraints)
+                .evaluated_named_functions(BTreeMap::new())
+                .decision_variables(decision_variables)
+                .variable_metadata(variable_metadata)
+                .sense(Sense::Minimize)
+                .build_unchecked()
+                .unwrap()
+        };
+
+        let bytes = solution.to_bytes();
+        let recovered = Solution::from_bytes(&bytes).unwrap();
+
+        assert_eq!(recovered.variable_metadata().name(var_id), Some("x"));
+        assert_eq!(recovered.variable_metadata().subscripts(var_id), &[0]);
+        let constraint_meta = recovered.evaluated_constraints().metadata();
+        assert_eq!(constraint_meta.name(cid), Some("balance"));
+        assert_eq!(constraint_meta.description(cid), Some("demand-balance row"));
     }
 }
