@@ -1,5 +1,4 @@
-use anyhow::Result;
-use pyo3::{prelude::*, types::PyBytes, Bound};
+use pyo3::{prelude::*, Bound};
 use std::collections::{BTreeMap, HashSet};
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
@@ -10,17 +9,6 @@ pub struct SampledNamedFunction(pub ommx::SampledNamedFunction);
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl SampledNamedFunction {
-    #[staticmethod]
-    pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
-        Ok(Self(ommx::SampledNamedFunction::from_bytes(
-            bytes.as_bytes(),
-        )?))
-    }
-
-    pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
-        PyBytes::new(py, &self.0.to_bytes())
-    }
-
     /// Get the named function ID
     #[getter]
     pub fn id(&self) -> u64 {

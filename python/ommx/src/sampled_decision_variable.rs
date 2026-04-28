@@ -1,5 +1,4 @@
-use anyhow::Result;
-use pyo3::{prelude::*, types::PyBytes, Bound};
+use pyo3::prelude::*;
 use std::collections::BTreeMap;
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
@@ -9,17 +8,6 @@ pub struct SampledDecisionVariable(pub ommx::SampledDecisionVariable);
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl SampledDecisionVariable {
-    #[staticmethod]
-    pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
-        Ok(Self(ommx::SampledDecisionVariable::from_bytes(
-            bytes.as_bytes(),
-        )?))
-    }
-
-    pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
-        PyBytes::new(py, &self.0.to_bytes())
-    }
-
     /// Get the decision variable ID
     #[getter]
     pub fn id(&self) -> u64 {
