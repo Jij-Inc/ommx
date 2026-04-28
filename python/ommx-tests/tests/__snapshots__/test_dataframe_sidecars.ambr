@@ -1,0 +1,77 @@
+# serializer version: 1
+# name: test_constraint_metadata_df_default_kind_is_regular
+  '''
+                            name subscripts         description
+  regular_constraint_id                                        
+  10                     balance     [0, 1]  demand-balance row
+  '''
+# ---
+# name: test_constraint_parameters_df
+  '''
+     regular_constraint_id     key    value
+  0                     10  region  us-east
+  1                     10    tier     gold
+  '''
+# ---
+# name: test_indicator_kind_metadata_df
+  '''
+                           name subscripts description
+  indicator_constraint_id                             
+  5                        <NA>         []        <NA>
+  '''
+# ---
+# name: test_one_hot_kind_metadata_df
+  '''
+                         name subscripts description
+  one_hot_constraint_id                             
+  6                      <NA>         []        <NA>
+  '''
+# ---
+# name: test_provenance_after_one_hot_conversion
+  '''
+     regular_constraint_id  step       source_kind  source_id
+  0                      0     0  OneHotConstraint          7
+  '''
+# ---
+# name: test_provenance_empty_when_no_chain
+  '''
+  Empty DataFrame
+  Columns: []
+  Index: []
+  '''
+# ---
+# name: test_removed_reasons_df_after_relax
+  '''
+     regular_constraint_id       reason   key value
+  0                     10  test_reason  <NA>  <NA>
+  '''
+# ---
+# name: test_removed_reasons_df_with_parameters_after_one_hot_conversion
+  '''
+     one_hot_constraint_id                                       reason            key value
+  0                      7  ommx.Instance.convert_one_hot_to_constraint  constraint_id     0
+  '''
+# ---
+# name: test_sos1_kind_metadata_df
+  '''
+                      name subscripts description
+  sos1_constraint_id                             
+  7                   <NA>         []        <NA>
+  '''
+# ---
+# name: test_variable_metadata_df
+  '''
+              name subscripts   description
+  variable_id                              
+  0             x0        [0]  primary slot
+  1             x1        [1]          <NA>
+  2             x2        [2]          <NA>
+  '''
+# ---
+# name: test_variable_parameters_df
+  '''
+     variable_id    key    value
+  0            0   role  primary
+  1            0  shard        a
+  '''
+# ---

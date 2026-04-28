@@ -5,13 +5,16 @@ SampleSet are derived views over the SoA metadata stores. They expose
 metadata in shapes that the wide `*_df` cannot represent without
 column-space explosion (provenance chains, per-id parameter maps with
 arbitrary keys).
+
+Most assertions are snapshot-based (syrupy) — the `.ambr` file is the
+authoritative description of each accessor's column / index schema.
+Update via `pytest --snapshot-update` after a deliberate API change.
 """
 
 from __future__ import annotations
 
-import math
-import pytest
 import pandas as pd
+import pytest
 from ommx.v1 import (
     Constraint,
     DecisionVariable,
@@ -52,31 +55,24 @@ def _instance_with_metadata() -> Instance:
     )
 
 
+def _df_snap(df: pd.DataFrame) -> str:
+    """Deterministic, snapshot-friendly rendering of a DataFrame."""
+    return df.to_string(na_rep="<NA>")
+
+
 # ---------------------------------------------------------------------------
 # variable_metadata_df / variable_parameters_df
 # ---------------------------------------------------------------------------
 
 
-def test_variable_metadata_df_is_id_indexed_with_columns():
-    df = _instance_with_metadata().variable_metadata_df()
-    assert df.index.name == "variable_id"
-    assert list(df.index) == [0, 1, 2]
-    assert {"name", "subscripts", "description"} <= set(df.columns)
-    assert df.loc[0, "name"] == "x0"
-    assert df.loc[0, "description"] == "primary slot"
-    # name is set on every variable in the fixture but description only on 0.
-    assert pd.isna(df.loc[1, "description"])
+def test_variable_metadata_df(snapshot):
+    """id-indexed wide; columns name / subscripts / description; index = variable_id."""
+    assert _df_snap(_instance_with_metadata().variable_metadata_df()) == snapshot
 
 
-def test_variable_parameters_df_long_format_only_emits_present_keys():
-    df = _instance_with_metadata().variable_parameters_df()
-    assert list(df.columns) == ["variable_id", "key", "value"]
-    # Variable 0 has 2 parameters, 1 and 2 have none.
-    rows = {
-        (int(vid), key): val
-        for vid, key, val in zip(df["variable_id"], df["key"], df["value"])
-    }
-    assert rows == {(0, "role"): "primary", (0, "shard"): "a"}
+def test_variable_parameters_df(snapshot):
+    """Long format. Variable 0 has 2 parameters, 1 and 2 have none → 2 rows."""
+    assert _df_snap(_instance_with_metadata().variable_parameters_df()) == snapshot
 
 
 # ---------------------------------------------------------------------------
@@ -84,23 +80,14 @@ def test_variable_parameters_df_long_format_only_emits_present_keys():
 # ---------------------------------------------------------------------------
 
 
-def test_constraint_metadata_df_default_kind_is_regular():
-    df = _instance_with_metadata().constraint_metadata_df()
-    assert df.index.name == "regular_constraint_id"
-    assert list(df.index) == [10]
-    assert df.loc[10, "name"] == "balance"
-    assert df.loc[10, "subscripts"] == [0, 1]
-    assert df.loc[10, "description"] == "demand-balance row"
+def test_constraint_metadata_df_default_kind_is_regular(snapshot):
+    """No kind= argument → kind="regular"; index = regular_constraint_id."""
+    assert _df_snap(_instance_with_metadata().constraint_metadata_df()) == snapshot
 
 
-def test_constraint_parameters_df_long_format():
-    df = _instance_with_metadata().constraint_parameters_df()
-    assert list(df.columns) == ["regular_constraint_id", "key", "value"]
-    rows = {
-        (int(cid), key): val
-        for cid, key, val in zip(df["regular_constraint_id"], df["key"], df["value"])
-    }
-    assert rows == {(10, "region"): "us-east", (10, "tier"): "gold"}
+def test_constraint_parameters_df(snapshot):
+    """Long format with regular_constraint_id, key, value columns."""
+    assert _df_snap(_instance_with_metadata().constraint_parameters_df()) == snapshot
 
 
 def test_unknown_kind_raises_value_error():
@@ -109,12 +96,28 @@ def test_unknown_kind_raises_value_error():
         instance.constraint_metadata_df(kind="bogus")
 
 
-def test_each_kind_uses_qualified_index_name():
-    """Each constraint family's id column carries a kind-qualified name so
-    cross-kind joins are visible. Verifies the column / index naming on
-    indicator / one_hot / sos1 dispatch paths."""
+def test_indicator_kind_metadata_df(snapshot):
+    """Each constraint family's id column carries a kind-qualified index name."""
+    assert (
+        _df_snap(_special_instance().constraint_metadata_df(kind="indicator"))
+        == snapshot
+    )
+
+
+def test_one_hot_kind_metadata_df(snapshot):
+    assert (
+        _df_snap(_special_instance().constraint_metadata_df(kind="one_hot")) == snapshot
+    )
+
+
+def test_sos1_kind_metadata_df(snapshot):
+    assert _df_snap(_special_instance().constraint_metadata_df(kind="sos1")) == snapshot
+
+
+def _special_instance() -> Instance:
+    """Instance with one of each special constraint kind."""
     x = [DecisionVariable.binary(i) for i in range(4)]
-    instance = Instance.from_components(
+    return Instance.from_components(
         decision_variables=x,
         objective=sum(x),
         constraints={},
@@ -129,17 +132,6 @@ def test_each_kind_uses_qualified_index_name():
         sos1_constraints={7: Sos1Constraint(variables=[0, 1, 2, 3])},
         sense=Instance.MAXIMIZE,
     )
-    assert (
-        instance.constraint_metadata_df(kind="indicator").index.name
-        == "indicator_constraint_id"
-    )
-    assert (
-        instance.constraint_metadata_df(kind="one_hot").index.name
-        == "one_hot_constraint_id"
-    )
-    assert (
-        instance.constraint_metadata_df(kind="sos1").index.name == "sos1_constraint_id"
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -147,17 +139,12 @@ def test_each_kind_uses_qualified_index_name():
 # ---------------------------------------------------------------------------
 
 
-def test_provenance_empty_when_no_chain():
-    df = _instance_with_metadata().constraint_provenance_df()
-    assert df.empty or list(df.columns) == [
-        "regular_constraint_id",
-        "step",
-        "source_kind",
-        "source_id",
-    ]
+def test_provenance_empty_when_no_chain(snapshot):
+    """Directly-authored constraints have no provenance chain."""
+    assert _df_snap(_instance_with_metadata().constraint_provenance_df()) == snapshot
 
 
-def test_provenance_after_one_hot_conversion():
+def test_provenance_after_one_hot_conversion(snapshot):
     """`convert_one_hot_to_constraint` promotes a OneHot row into a regular
     constraint; the new constraint records `OneHotConstraint(7)` in its
     provenance chain."""
@@ -169,18 +156,8 @@ def test_provenance_after_one_hot_conversion():
         one_hot_constraints={7: OneHotConstraint(variables=[0, 1, 2])},
         sense=Instance.MINIMIZE,
     )
-    new_id = instance.convert_one_hot_to_constraint(7)
-    df = instance.constraint_provenance_df()
-    rows = [
-        (int(cid), int(step), src_kind, int(src_id))
-        for cid, step, src_kind, src_id in zip(
-            df["regular_constraint_id"],
-            df["step"],
-            df["source_kind"],
-            df["source_id"],
-        )
-    ]
-    assert (int(new_id), 0, "OneHotConstraint", 7) in rows
+    instance.convert_one_hot_to_constraint(7)
+    assert _df_snap(instance.constraint_provenance_df()) == snapshot
 
 
 # ---------------------------------------------------------------------------
@@ -188,30 +165,16 @@ def test_provenance_after_one_hot_conversion():
 # ---------------------------------------------------------------------------
 
 
-def test_removed_reasons_df_after_relax():
+def test_removed_reasons_df_after_relax(snapshot):
+    """relax_constraint with no extra parameters → 1 row, key/value = NA."""
     instance = _instance_with_metadata()
     instance.relax_constraint(10, "test_reason")
-    df = instance.constraint_removed_reasons_df()
-    assert list(df.columns) == [
-        "regular_constraint_id",
-        "reason",
-        "key",
-        "value",
-    ]
-    # The relax_constraint call provided no extra parameters → 1 row with
-    # NA key/value.
-    assert len(df) == 1
-    assert int(df["regular_constraint_id"].iloc[0]) == 10
-    assert df["reason"].iloc[0] == "test_reason"
-    key0 = df["key"].iloc[0]
-    assert (
-        key0 is None or (isinstance(key0, float) and math.isnan(key0)) or pd.isna(key0)
-    )
+    assert _df_snap(instance.constraint_removed_reasons_df()) == snapshot
 
 
-def test_removed_reasons_df_with_parameters_after_one_hot_conversion():
+def test_removed_reasons_df_with_parameters_after_one_hot_conversion(snapshot):
     """`convert_one_hot_to_constraint` records the conversion reason with a
-    `constraint_ids` parameter — verifies the long-format expansion of the
+    `constraint_id` parameter — verifies the long-format expansion of the
     parameter map."""
     x = [DecisionVariable.binary(i) for i in range(3)]
     instance = Instance.from_components(
@@ -222,32 +185,27 @@ def test_removed_reasons_df_with_parameters_after_one_hot_conversion():
         sense=Instance.MINIMIZE,
     )
     instance.convert_one_hot_to_constraint(7)
-    df = instance.constraint_removed_reasons_df(kind="one_hot")
-    assert len(df) == 1
-    assert int(df["one_hot_constraint_id"].iloc[0]) == 7
-    assert df["reason"].iloc[0] == "ommx.Instance.convert_one_hot_to_constraint"
-    # The reason carries a single `constraint_id` parameter naming the
-    # promoted regular constraint id.
-    assert df["key"].iloc[0] == "constraint_id"
-    assert isinstance(df["value"].iloc[0], str)
+    assert _df_snap(instance.constraint_removed_reasons_df(kind="one_hot")) == snapshot
 
 
 # ---------------------------------------------------------------------------
-# Solution / SampleSet expose the same surface; sanity-check the parity.
+# Solution / SampleSet expose the same surface; the metadata stores are
+# stage-independent so the rendered DataFrame is byte-identical to
+# Instance's.
 # ---------------------------------------------------------------------------
 
 
 def test_solution_constraint_metadata_df_matches_instance():
     instance = _instance_with_metadata()
     sol = instance.evaluate({0: 1, 1: 0, 2: 0})
-    df_inst = instance.constraint_metadata_df()
-    df_sol = sol.constraint_metadata_df()
-    pd.testing.assert_frame_equal(df_inst, df_sol)
+    pd.testing.assert_frame_equal(
+        instance.constraint_metadata_df(), sol.constraint_metadata_df()
+    )
 
 
 def test_sample_set_variable_metadata_df_matches_instance():
     instance = _instance_with_metadata()
     ss = instance.evaluate_samples({0: {0: 1, 1: 0, 2: 0}})
-    df_inst = instance.variable_metadata_df()
-    df_ss = ss.variable_metadata_df()
-    pd.testing.assert_frame_equal(df_inst, df_ss)
+    pd.testing.assert_frame_equal(
+        instance.variable_metadata_df(), ss.variable_metadata_df()
+    )

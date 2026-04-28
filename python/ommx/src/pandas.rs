@@ -197,7 +197,9 @@ where
 /// Long-format parameters DataFrame for constraints.
 ///
 /// One row per (id, key) pair where `store.parameters(id)` is non-empty.
-/// Columns: `id_col`, `key`, `value`. Default RangeIndex (no `set_index`).
+/// Rows are sorted by `(id, key)` so the rendered output is deterministic
+/// regardless of upstream insertion order. Columns: `id_col`, `key`,
+/// `value`. Default RangeIndex (no `set_index`).
 pub fn constraint_parameters_dataframe<'py, ID>(
     py: Python<'py>,
     store: &ConstraintMetadataStore<ID>,
@@ -207,17 +209,24 @@ pub fn constraint_parameters_dataframe<'py, ID>(
 where
     ID: IDType + Into<u64>,
 {
-    let mut entries: Vec<Bound<'py, PyAny>> = Vec::new();
+    let mut rows: Vec<(u64, &str, &str)> = Vec::new();
     for id in ids {
-        let params = store.parameters(id);
-        for (key, value) in params {
-            let dict = PyDict::new(py);
-            dict.set_item(id_col, Into::<u64>::into(id))?;
-            dict.set_item("key", key)?;
-            dict.set_item("value", value)?;
-            entries.push(dict.into_any());
+        let id_u64: u64 = id.into();
+        for (key, value) in store.parameters(id) {
+            rows.push((id_u64, key.as_str(), value.as_str()));
         }
     }
+    rows.sort_by(|a, b| (a.0, a.1).cmp(&(b.0, b.1)));
+    let entries: Vec<Bound<'py, PyAny>> = rows
+        .into_iter()
+        .map(|(id, key, value)| -> PyResult<_> {
+            let dict = PyDict::new(py);
+            dict.set_item(id_col, id)?;
+            dict.set_item("key", key)?;
+            dict.set_item("value", value)?;
+            Ok(dict.into_any())
+        })
+        .collect::<PyResult<_>>()?;
     long_format_dataframe(py, entries)
 }
 
@@ -255,8 +264,9 @@ where
 ///
 /// One row per (id, parameter_key) pair when the removed reason has
 /// parameters; ids without parameters get one row with `key`/`value` set to
-/// `pandas.NA`. Columns: `id_col`, `reason`, `key`, `value`. Default
-/// RangeIndex.
+/// `pandas.NA`. Rows are sorted by `(id, key)` (NA-keyed rows sort first
+/// for ids with no parameters). Columns: `id_col`, `reason`, `key`,
+/// `value`. Default RangeIndex.
 pub fn constraint_removed_reasons_dataframe<'py, 'a, ID>(
     py: Python<'py>,
     removed: impl Iterator<Item = (ID, &'a RemovedReason)>,
@@ -265,27 +275,73 @@ pub fn constraint_removed_reasons_dataframe<'py, 'a, ID>(
 where
     ID: IDType + Into<u64>,
 {
-    let na = get_na(py)?;
-    let mut entries: Vec<Bound<'py, PyAny>> = Vec::new();
-    for (id, reason) in removed {
-        if reason.parameters.is_empty() {
-            let dict = PyDict::new(py);
-            dict.set_item(id_col, Into::<u64>::into(id))?;
-            dict.set_item("reason", &reason.reason)?;
-            dict.set_item("key", &na)?;
-            dict.set_item("value", &na)?;
-            entries.push(dict.into_any());
-        } else {
-            for (key, value) in &reason.parameters {
-                let dict = PyDict::new(py);
-                dict.set_item(id_col, Into::<u64>::into(id))?;
-                dict.set_item("reason", &reason.reason)?;
-                dict.set_item("key", key)?;
-                dict.set_item("value", value)?;
-                entries.push(dict.into_any());
+    enum Row<'a> {
+        WithParam {
+            id: u64,
+            reason: &'a str,
+            key: &'a str,
+            value: &'a str,
+        },
+        Bare {
+            id: u64,
+            reason: &'a str,
+        },
+    }
+    impl<'a> Row<'a> {
+        fn sort_key(&self) -> (u64, Option<&'a str>) {
+            match self {
+                Row::Bare { id, .. } => (*id, None),
+                Row::WithParam { id, key, .. } => (*id, Some(*key)),
             }
         }
     }
+    let mut rows: Vec<Row<'a>> = Vec::new();
+    for (id, reason) in removed {
+        let id_u64: u64 = id.into();
+        if reason.parameters.is_empty() {
+            rows.push(Row::Bare {
+                id: id_u64,
+                reason: &reason.reason,
+            });
+        } else {
+            for (key, value) in &reason.parameters {
+                rows.push(Row::WithParam {
+                    id: id_u64,
+                    reason: &reason.reason,
+                    key: key.as_str(),
+                    value: value.as_str(),
+                });
+            }
+        }
+    }
+    rows.sort_by(|a, b| a.sort_key().cmp(&b.sort_key()));
+    let na = get_na(py)?;
+    let entries: Vec<Bound<'py, PyAny>> = rows
+        .into_iter()
+        .map(|row| -> PyResult<_> {
+            let dict = PyDict::new(py);
+            match row {
+                Row::WithParam {
+                    id,
+                    reason,
+                    key,
+                    value,
+                } => {
+                    dict.set_item(id_col, id)?;
+                    dict.set_item("reason", reason)?;
+                    dict.set_item("key", key)?;
+                    dict.set_item("value", value)?;
+                }
+                Row::Bare { id, reason } => {
+                    dict.set_item(id_col, id)?;
+                    dict.set_item("reason", reason)?;
+                    dict.set_item("key", &na)?;
+                    dict.set_item("value", &na)?;
+                }
+            }
+            Ok(dict.into_any())
+        })
+        .collect::<PyResult<_>>()?;
     long_format_dataframe(py, entries)
 }
 
@@ -316,23 +372,32 @@ pub fn variable_metadata_dataframe<'py>(
 }
 
 /// Long-format parameters DataFrame for decision variables.
+///
+/// Rows sorted by `(id, key)` for deterministic rendering.
 pub fn variable_parameters_dataframe<'py>(
     py: Python<'py>,
     store: &VariableMetadataStore,
     ids: impl Iterator<Item = VariableID>,
     id_col: &str,
 ) -> PyResult<Bound<'py, PyDataFrame>> {
-    let mut entries: Vec<Bound<'py, PyAny>> = Vec::new();
+    let mut rows: Vec<(u64, &str, &str)> = Vec::new();
     for id in ids {
-        let params = store.parameters(id);
-        for (key, value) in params {
-            let dict = PyDict::new(py);
-            dict.set_item(id_col, Into::<u64>::into(id))?;
-            dict.set_item("key", key)?;
-            dict.set_item("value", value)?;
-            entries.push(dict.into_any());
+        let id_u64: u64 = id.into();
+        for (key, value) in store.parameters(id) {
+            rows.push((id_u64, key.as_str(), value.as_str()));
         }
     }
+    rows.sort_by(|a, b| (a.0, a.1).cmp(&(b.0, b.1)));
+    let entries: Vec<Bound<'py, PyAny>> = rows
+        .into_iter()
+        .map(|(id, key, value)| -> PyResult<_> {
+            let dict = PyDict::new(py);
+            dict.set_item(id_col, id)?;
+            dict.set_item("key", key)?;
+            dict.set_item("value", value)?;
+            Ok(dict.into_any())
+        })
+        .collect::<PyResult<_>>()?;
     long_format_dataframe(py, entries)
 }
 
