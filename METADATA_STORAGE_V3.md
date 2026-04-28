@@ -297,18 +297,25 @@ pub struct Constraint<S: Stage<Self> = Created> {
 
 Standalone constraints (`Constraint::equal_to_zero(f)`,
 `OneHotConstraint::new(...)`, etc.) carry no metadata at the Rust
-level. Insertion drains a staging bag (Python wrappers) or accepts an
-explicit metadata argument:
+level. Insertion picks an unused id and writes element + metadata
+through `insert_with`:
 
 ```rust
-let id = collection.insert(Constraint::equal_to_zero(f));
+let id = collection.unused_id();
+collection.insert_with(
+    id,
+    Constraint::equal_to_zero(f),
+    ConstraintMetadata::default(),
+);
 collection.metadata_mut().set_name(id, "demand_balance");
 collection.metadata_mut().push_subscripts(id, [i, j]);
 
-// or atomically with metadata via insert_with, taking the existing
-// owned ConstraintMetadata struct directly (the SoA store and the
-// owned struct are mutually convertible):
+// or atomically — the SoA store and the owned ConstraintMetadata
+// struct are mutually convertible, so the metadata can be supplied
+// up-front:
+let id = collection.unused_id();
 collection.insert_with(
+    id,
     Constraint::equal_to_zero(f),
     ConstraintMetadata {
         name: Some("demand_balance".into()),
@@ -358,6 +365,42 @@ impl<T: ConstraintType> ConstraintCollection<T> {
     pub fn metadata_mut(&mut self) -> &mut ConstraintMetadataStore<T::ID> { ... }
 }
 ```
+
+`Instance` and `ParametricInstance` expose narrow per-collection
+accessors so callers don't have to go through
+`constraint_collection_mut()` (which would hand out raw `&mut` on
+the active / removed maps and break the collection's invariants):
+
+```rust
+impl Instance {
+    // immutable: full collection (active / removed / metadata) is fine.
+    pub fn constraint_collection(&self) -> &ConstraintCollection<Constraint>;
+    pub fn indicator_constraint_collection(&self) -> &ConstraintCollection<IndicatorConstraint>;
+    pub fn one_hot_constraint_collection(&self) -> &ConstraintCollection<OneHotConstraint>;
+    pub fn sos1_constraint_collection(&self) -> &ConstraintCollection<Sos1Constraint>;
+
+    // metadata-only mut: invariant-safe, since metadata is keyed by id
+    // independent of active / removed membership.
+    pub fn variable_metadata(&self) -> &VariableMetadataStore;
+    pub fn variable_metadata_mut(&mut self) -> &mut VariableMetadataStore;
+    pub fn constraint_metadata(&self) -> &ConstraintMetadataStore<ConstraintID>;
+    pub fn constraint_metadata_mut(&mut self) -> &mut ConstraintMetadataStore<ConstraintID>;
+    pub fn indicator_constraint_metadata(&self) -> &ConstraintMetadataStore<IndicatorConstraintID>;
+    pub fn indicator_constraint_metadata_mut(&mut self) -> &mut ConstraintMetadataStore<IndicatorConstraintID>;
+    pub fn one_hot_constraint_metadata(&self) -> &ConstraintMetadataStore<OneHotConstraintID>;
+    pub fn one_hot_constraint_metadata_mut(&mut self) -> &mut ConstraintMetadataStore<OneHotConstraintID>;
+    pub fn sos1_constraint_metadata(&self) -> &ConstraintMetadataStore<Sos1ConstraintID>;
+    pub fn sos1_constraint_metadata_mut(&mut self) -> &mut ConstraintMetadataStore<Sos1ConstraintID>;
+}
+// `ParametricInstance` mirrors the same surface.
+```
+
+Active / removed transitions go through dedicated invariant-safe
+operations on the collection (`relax(id, reason)` / `restore(id)`).
+There is intentionally no `constraint_collection_mut()`. Callers that
+need to add a constraint use the existing `Instance::add_*` family,
+which routes through `ConstraintCollection::insert_with` while
+keeping the variable-id registration check.
 
 The internal call sites that used to read `c.metadata.*` directly
 (e.g. `rust/ommx/src/sample_set/extract.rs`'s `metadata.name`,
@@ -453,12 +496,15 @@ pub struct DecisionVariable(
   `ParametricInstance` / `Solution` / `SampleSet` pre-snapshot the SoA
   store and zip the metadata in alongside each item before handing the
   iterator to `entries_to_dataframe`.
-- **Parse helpers exposed.** `decision_variable_to_v1`,
+- **Parse helpers stay `pub(crate)`.** `decision_variable_to_v1`,
   `evaluated_decision_variable_to_v1`, `sampled_decision_variable_to_v1`,
   `constraint_to_v1`, `removed_constraint_to_v1`,
-  `evaluated_constraint_to_v1`, `sampled_constraint_to_v1` are now `pub`
-  in the Rust crate so the wrappers' `from_bytes` / `to_bytes` cycles
-  preserve metadata across serialization.
+  `evaluated_constraint_to_v1`, `sampled_constraint_to_v1` reconstruct
+  the v1 wire shape from a per-element value plus its metadata, but
+  they are crate-internal — element-level `from_bytes` / `to_bytes`
+  on the Python wrappers were removed in PR #845, so the only callers
+  are the `Instance` / `ParametricInstance` / `Solution` / `SampleSet`
+  serialize paths inside this crate.
 
 The semantic consequence is that mutations on a snapshot wrapper do not
 propagate back to the originating instance: `c = instance.constraints[5];
@@ -835,10 +881,19 @@ shape is:
 - The Rust `metadata` field on `DecisionVariable`, `Constraint<S>`,
   `IndicatorConstraint<S>`, `OneHotConstraint<S>`, `Sos1Constraint<S>`,
   and the `Evaluated*` / `Sampled*` siblings is **removed**. Downstream
-  Rust crates that touched `c.metadata.*` directly switch to the
-  collection-level accessors (`instance.constraint_collection().metadata()`,
-  `instance.variable_metadata()`, …) or the per-element-with-metadata
-  helpers (`store.collect_for(id) -> ConstraintMetadata`).
+  Rust crates that touched `c.metadata.*` directly switch to the narrow
+  per-collection accessors on `Instance` /
+  `ParametricInstance` — `constraint_metadata()` / `_mut()`,
+  `indicator_constraint_metadata()` / `_mut()`,
+  `one_hot_constraint_metadata()` / `_mut()`,
+  `sos1_constraint_metadata()` / `_mut()`,
+  `variable_metadata()` / `_mut()` — or the per-element-with-metadata
+  helper `store.collect_for(id) -> ConstraintMetadata`. There is no
+  `constraint_collection_mut()`: handing out raw `&mut` on the active /
+  removed maps would let callers break the collection's invariants
+  (variable-id registration, active/removed disjointness), so mutation
+  goes through the dedicated `Instance::add_*` / `relax` / `restore`
+  operations and the metadata-only `_mut` accessors above.
 - Python wrapper-object metadata getters (`.name`, `.subscripts`,
   `.parameters`, `.description`) are **preserved**; the user-visible
   surface is unchanged. Internally each wrapper now carries an owned
@@ -926,15 +981,18 @@ traceability with earlier review comments.
 
    ```rust
    impl<T: ConstraintType> ConstraintCollection<T> {
-       pub fn insert(&mut self, c: T::Created) -> T::ID;
+       pub fn unused_id(&self) -> T::ID;
        pub fn insert_with(
            &mut self,
+           id: T::ID,
            c: T::Created,
            metadata: ConstraintMetadata,
-       ) -> T::ID;
+       );
    }
 
-   let id = collection.insert_with(
+   let id = collection.unused_id();
+   collection.insert_with(
+       id,
        c,
        ConstraintMetadata {
            name: Some("demand_balance".into()),
@@ -1004,6 +1062,22 @@ traceability with earlier review comments.
    longer than expected. Users who care drop the Series. Whether the
    pattern needs revisiting (e.g. weak-handle variant of the wrapper)
    is a question to take up at implementation time, not before.
+
+## Follow-ups (post-#843)
+
+- **Tighten `ConstraintCollection<T>` mutation surface.**
+  `active_mut()` / `removed_mut()` / `insert_with()` are still `pub`
+  on `ConstraintCollection<T>` itself, even though no public caller
+  outside the crate needs them — `Instance` now exposes only
+  invariant-safe operations (`add_*`, `relax`, `restore`,
+  `*_metadata_mut`). These three methods should be narrowed to
+  `pub(crate)` (or smaller) in a follow-up so the only way to break
+  the collection's invariants is from inside the crate.
+- **`NamedFunction` SoA migration.** Track the
+  `NamedFunctionMetadataStore` work described under
+  "NamedFunction (deferred — separate PR)" above.
+- **Python Series / `include=` / sidecar dfs.** Wave 2 of the Python
+  surface, blocked on the snapshot-vs-attached decision.
 
 ## Open questions
 
