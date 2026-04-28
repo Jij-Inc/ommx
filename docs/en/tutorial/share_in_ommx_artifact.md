@@ -86,7 +86,7 @@ instance = Instance.from_components(
 solution = OMMXPySCIPOptAdapter.solve(instance)
 
 # Analyze the optimal solution
-df_vars = solution.decision_variables_df
+df_vars = solution.decision_variables_df()
 df = pd.DataFrame.from_dict(
     {
         "Item Number": df_vars.index,

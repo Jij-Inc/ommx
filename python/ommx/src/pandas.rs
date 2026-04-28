@@ -1,9 +1,15 @@
 //! Thin wrapper around `pandas.DataFrame` for type-safe PyO3 bindings,
 //! plus shared helpers for building DataFrames from domain objects.
 
-use fnv::FnvHashMap;
-use ommx::{ConstraintMetadata, DecisionVariableMetadata, Evaluate, VariableIDSet};
+use std::collections::HashMap;
+use std::hash::BuildHasher;
+
+use ommx::{
+    ConstraintMetadata, ConstraintMetadataStore, DecisionVariableMetadata, Evaluate, IDType,
+    Provenance, RemovedReason, VariableID, VariableIDSet, VariableMetadataStore,
+};
 use pyo3::{
+    exceptions::PyValueError,
     prelude::*,
     sync::PyOnceLock,
     types::{PyAny, PyDict, PyList, PySet, PyType},
@@ -65,6 +71,437 @@ impl pyo3_stub_gen::PyStubType for PyDataFrame {
 }
 
 // ---------------------------------------------------------------------------
+// IncludeFlags — gates optional column families on wide `*_df` methods
+// ---------------------------------------------------------------------------
+
+/// Which optional column families to fold into a wide `*_df` DataFrame.
+///
+/// `metadata` toggles the `name` / `subscripts` / `description` columns.
+/// `parameters` toggles the `parameters.{key}` columns. The default
+/// (`Self::default_wide()`) preserves the v2-equivalent wide shape.
+#[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
+pub struct IncludeFlags {
+    pub metadata: bool,
+    pub parameters: bool,
+}
+
+impl IncludeFlags {
+    /// Default for wide `*_df` — both metadata and parameters columns on.
+    pub fn default_wide() -> Self {
+        Self {
+            metadata: true,
+            parameters: true,
+        }
+    }
+
+    /// Parse `include=[...]` arg from Python. `None` returns the wide default.
+    pub fn from_optional(include: Option<Vec<String>>) -> PyResult<Self> {
+        match include {
+            None => Ok(Self::default_wide()),
+            Some(values) => {
+                let mut flags = Self::default();
+                for v in &values {
+                    match v.as_str() {
+                        "metadata" => flags.metadata = true,
+                        "parameters" => flags.parameters = true,
+                        other => {
+                            return Err(PyValueError::new_err(format!(
+                                "unknown include flag: {other:?} (expected one of \"metadata\", \"parameters\")"
+                            )));
+                        }
+                    }
+                }
+                Ok(flags)
+            }
+        }
+    }
+}
+
+const METADATA_KEYS: &[&str] = &["name", "subscripts", "description"];
+
+// ---------------------------------------------------------------------------
+// kind= dispatch — shared by the 4 constraint sidecar accessors
+// ---------------------------------------------------------------------------
+
+/// Constraint family selector for `kind=` arguments on sidecar DataFrames.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum ConstraintKind {
+    Regular,
+    Indicator,
+    OneHot,
+    Sos1,
+}
+
+/// Parse the `kind=` string argument. Returns `ValueError` on unknown values.
+pub fn parse_constraint_kind(kind: &str) -> PyResult<ConstraintKind> {
+    match kind {
+        "regular" => Ok(ConstraintKind::Regular),
+        "indicator" => Ok(ConstraintKind::Indicator),
+        "one_hot" => Ok(ConstraintKind::OneHot),
+        "sos1" => Ok(ConstraintKind::Sos1),
+        other => Err(PyValueError::new_err(format!(
+            "unknown constraint kind: {other:?} (expected one of \"regular\", \"indicator\", \"one_hot\", \"sos1\")"
+        ))),
+    }
+}
+
+/// Index column name for the chosen constraint kind. Each kind has a
+/// distinct ID space, so the qualified name keeps cross-kind joins
+/// visible (`regular_constraint_id` ≠ `indicator_constraint_id` etc.).
+pub fn constraint_id_col(kind: ConstraintKind) -> &'static str {
+    match kind {
+        ConstraintKind::Regular => "regular_constraint_id",
+        ConstraintKind::Indicator => "indicator_constraint_id",
+        ConstraintKind::OneHot => "one_hot_constraint_id",
+        ConstraintKind::Sos1 => "sos1_constraint_id",
+    }
+}
+
+/// Dispatch on `ConstraintKind` and bind `coll` to the per-kind constraint
+/// collection on `$container`. Used by the four `constraint_*_df` sidecar
+/// accessors so the four `ConstraintKind` arms collapse to a single call site.
+///
+/// Each host (`Instance` / `ParametricInstance` / `Solution` / `SampleSet`)
+/// passes its own accessor names because the underlying collection types
+/// differ — `ConstraintCollection` for Instance/ParametricInstance,
+/// `EvaluatedConstraintCollection` for Solution, `SampledConstraintCollection`
+/// for SampleSet. Centralising the match shape here avoids drift when adding a
+/// new constraint kind.
+macro_rules! constraint_kind_collection {
+    (
+        $container:expr, $kind:expr,
+        [$regular:ident, $indicator:ident, $one_hot:ident, $sos1:ident],
+        |$coll:ident| $body:block
+    ) => {
+        match $kind {
+            $crate::pandas::ConstraintKind::Regular => {
+                let $coll = $container.$regular();
+                $body
+            }
+            $crate::pandas::ConstraintKind::Indicator => {
+                let $coll = $container.$indicator();
+                $body
+            }
+            $crate::pandas::ConstraintKind::OneHot => {
+                let $coll = $container.$one_hot();
+                $body
+            }
+            $crate::pandas::ConstraintKind::Sos1 => {
+                let $coll = $container.$sos1();
+                $body
+            }
+        }
+    };
+}
+
+pub(crate) use constraint_kind_collection;
+
+// ---------------------------------------------------------------------------
+// Sidecar DataFrame builders
+//
+// Long-format / id-indexed views over the SoA metadata stores. Each builder
+// reads the store directly and produces a DataFrame with a documented column
+// schema. Used by the `*_metadata_df`, `*_parameters_df`, `*_provenance_df`,
+// and `*_removed_reasons_df` accessors on Instance / ParametricInstance /
+// Solution / SampleSet.
+// ---------------------------------------------------------------------------
+
+/// Wide id-indexed metadata DataFrame for constraints.
+///
+/// One row per id from `ids`, in iteration order. Columns: `name`,
+/// `subscripts`, `description`. Index column = `id_col`.
+pub fn constraint_metadata_dataframe<'py, ID>(
+    py: Python<'py>,
+    store: &ConstraintMetadataStore<ID>,
+    ids: impl Iterator<Item = ID>,
+    id_col: &str,
+) -> PyResult<Bound<'py, PyDataFrame>>
+where
+    ID: IDType + Into<u64>,
+{
+    let entries: Vec<Bound<'py, PyAny>> = ids
+        .map(|id| -> PyResult<_> {
+            let dict = PyDict::new(py);
+            dict.set_item(id_col, Into::<u64>::into(id))?;
+            set_metadata(
+                &dict,
+                store.name(id),
+                store.subscripts(id),
+                store.description(id),
+            )?;
+            Ok(dict.into_any())
+        })
+        .collect::<PyResult<_>>()?;
+    raw_entries_to_dataframe(py, entries, id_col)
+}
+
+/// Long-format parameters DataFrame for constraints.
+///
+/// One row per (id, key) pair where `store.parameters(id)` is non-empty.
+/// Rows are sorted by `(id, key)` so the rendered output is deterministic
+/// regardless of upstream insertion order. Columns: `id_col`, `key`,
+/// `value`. Default RangeIndex (no `set_index`).
+pub fn constraint_parameters_dataframe<'py, ID>(
+    py: Python<'py>,
+    store: &ConstraintMetadataStore<ID>,
+    ids: impl Iterator<Item = ID>,
+    id_col: &str,
+) -> PyResult<Bound<'py, PyDataFrame>>
+where
+    ID: IDType + Into<u64>,
+{
+    let mut rows: Vec<(u64, &str, &str)> = Vec::new();
+    for id in ids {
+        let id_u64: u64 = id.into();
+        for (key, value) in store.parameters(id) {
+            rows.push((id_u64, key.as_str(), value.as_str()));
+        }
+    }
+    rows.sort_by(|a, b| (a.0, a.1).cmp(&(b.0, b.1)));
+    let entries: Vec<Bound<'py, PyAny>> = rows
+        .into_iter()
+        .map(|(id, key, value)| -> PyResult<_> {
+            let dict = PyDict::new(py);
+            dict.set_item(id_col, id)?;
+            dict.set_item("key", key)?;
+            dict.set_item("value", value)?;
+            Ok(dict.into_any())
+        })
+        .collect::<PyResult<_>>()?;
+    long_format_dataframe(py, entries, &[id_col, "key", "value"])
+}
+
+/// Long-format provenance DataFrame for constraints.
+///
+/// One row per (id, step) pair where `store.provenance(id)` is non-empty.
+/// Columns: `id_col`, `step` (0-based), `source_kind`
+/// (`"IndicatorConstraint"` / `"OneHotConstraint"` / `"Sos1Constraint"`),
+/// `source_id`. Default RangeIndex.
+pub fn constraint_provenance_dataframe<'py, ID>(
+    py: Python<'py>,
+    store: &ConstraintMetadataStore<ID>,
+    ids: impl Iterator<Item = ID>,
+    id_col: &str,
+) -> PyResult<Bound<'py, PyDataFrame>>
+where
+    ID: IDType + Into<u64>,
+{
+    let mut entries: Vec<Bound<'py, PyAny>> = Vec::new();
+    for id in ids {
+        for (step, p) in store.provenance(id).iter().enumerate() {
+            let (source_kind, source_id) = provenance_parts(p);
+            let dict = PyDict::new(py);
+            dict.set_item(id_col, Into::<u64>::into(id))?;
+            dict.set_item("step", step as u64)?;
+            dict.set_item("source_kind", source_kind)?;
+            dict.set_item("source_id", source_id)?;
+            entries.push(dict.into_any());
+        }
+    }
+    long_format_dataframe(py, entries, &[id_col, "step", "source_kind", "source_id"])
+}
+
+/// Long-format removed-reasons DataFrame for constraints.
+///
+/// One row per (id, parameter_key) pair when the removed reason has
+/// parameters; ids without parameters get one row with `key`/`value` set to
+/// `pandas.NA`. Rows are sorted by `(id, key)` (NA-keyed rows sort first
+/// for ids with no parameters). Columns: `id_col`, `reason`, `key`,
+/// `value`. Default RangeIndex.
+pub fn constraint_removed_reasons_dataframe<'py, 'a, ID>(
+    py: Python<'py>,
+    removed: impl Iterator<Item = (ID, &'a RemovedReason)>,
+    id_col: &str,
+) -> PyResult<Bound<'py, PyDataFrame>>
+where
+    ID: IDType + Into<u64>,
+{
+    enum Row<'a> {
+        WithParam {
+            id: u64,
+            reason: &'a str,
+            key: &'a str,
+            value: &'a str,
+        },
+        Bare {
+            id: u64,
+            reason: &'a str,
+        },
+    }
+    impl<'a> Row<'a> {
+        fn sort_key(&self) -> (u64, Option<&'a str>) {
+            match self {
+                Row::Bare { id, .. } => (*id, None),
+                Row::WithParam { id, key, .. } => (*id, Some(*key)),
+            }
+        }
+    }
+    let mut rows: Vec<Row<'a>> = Vec::new();
+    for (id, reason) in removed {
+        let id_u64: u64 = id.into();
+        if reason.parameters.is_empty() {
+            rows.push(Row::Bare {
+                id: id_u64,
+                reason: &reason.reason,
+            });
+        } else {
+            for (key, value) in &reason.parameters {
+                rows.push(Row::WithParam {
+                    id: id_u64,
+                    reason: &reason.reason,
+                    key: key.as_str(),
+                    value: value.as_str(),
+                });
+            }
+        }
+    }
+    rows.sort_by(|a, b| a.sort_key().cmp(&b.sort_key()));
+    let na = get_na(py)?;
+    let entries: Vec<Bound<'py, PyAny>> = rows
+        .into_iter()
+        .map(|row| -> PyResult<_> {
+            let dict = PyDict::new(py);
+            match row {
+                Row::WithParam {
+                    id,
+                    reason,
+                    key,
+                    value,
+                } => {
+                    dict.set_item(id_col, id)?;
+                    dict.set_item("reason", reason)?;
+                    dict.set_item("key", key)?;
+                    dict.set_item("value", value)?;
+                }
+                Row::Bare { id, reason } => {
+                    dict.set_item(id_col, id)?;
+                    dict.set_item("reason", reason)?;
+                    dict.set_item("key", &na)?;
+                    dict.set_item("value", &na)?;
+                }
+            }
+            Ok(dict.into_any())
+        })
+        .collect::<PyResult<_>>()?;
+    long_format_dataframe(py, entries, &[id_col, "reason", "key", "value"])
+}
+
+/// Wide id-indexed metadata DataFrame for decision variables.
+///
+/// Identical column shape to [`constraint_metadata_dataframe`], reading from
+/// a [`VariableMetadataStore`] instead.
+pub fn variable_metadata_dataframe<'py>(
+    py: Python<'py>,
+    store: &VariableMetadataStore,
+    ids: impl Iterator<Item = VariableID>,
+    id_col: &str,
+) -> PyResult<Bound<'py, PyDataFrame>> {
+    let entries: Vec<Bound<'py, PyAny>> = ids
+        .map(|id| -> PyResult<_> {
+            let dict = PyDict::new(py);
+            dict.set_item(id_col, Into::<u64>::into(id))?;
+            set_metadata(
+                &dict,
+                store.name(id),
+                store.subscripts(id),
+                store.description(id),
+            )?;
+            Ok(dict.into_any())
+        })
+        .collect::<PyResult<_>>()?;
+    raw_entries_to_dataframe(py, entries, id_col)
+}
+
+/// Long-format parameters DataFrame for decision variables.
+///
+/// Rows sorted by `(id, key)` for deterministic rendering.
+pub fn variable_parameters_dataframe<'py>(
+    py: Python<'py>,
+    store: &VariableMetadataStore,
+    ids: impl Iterator<Item = VariableID>,
+    id_col: &str,
+) -> PyResult<Bound<'py, PyDataFrame>> {
+    let mut rows: Vec<(u64, &str, &str)> = Vec::new();
+    for id in ids {
+        let id_u64: u64 = id.into();
+        for (key, value) in store.parameters(id) {
+            rows.push((id_u64, key.as_str(), value.as_str()));
+        }
+    }
+    rows.sort_by(|a, b| (a.0, a.1).cmp(&(b.0, b.1)));
+    let entries: Vec<Bound<'py, PyAny>> = rows
+        .into_iter()
+        .map(|(id, key, value)| -> PyResult<_> {
+            let dict = PyDict::new(py);
+            dict.set_item(id_col, id)?;
+            dict.set_item("key", key)?;
+            dict.set_item("value", value)?;
+            Ok(dict.into_any())
+        })
+        .collect::<PyResult<_>>()?;
+    long_format_dataframe(py, entries, &[id_col, "key", "value"])
+}
+
+fn provenance_parts(p: &Provenance) -> (&'static str, u64) {
+    match *p {
+        Provenance::IndicatorConstraint(id) => ("IndicatorConstraint", id.into()),
+        Provenance::OneHotConstraint(id) => ("OneHotConstraint", id.into()),
+        Provenance::Sos1Constraint(id) => ("Sos1Constraint", id.into()),
+    }
+}
+
+/// Build a long-format DataFrame from pre-built entry dicts.
+///
+/// No `set_index` call, so the DataFrame keeps its default RangeIndex.
+/// `columns` is the explicit schema used when `entries` is empty —
+/// without it pandas would return a column-less DataFrame, breaking
+/// `pd.concat` and any code that consumes the documented schema. Used
+/// by the `*_parameters_df` / `*_provenance_df` / `*_removed_reasons_df`
+/// builders.
+fn long_format_dataframe<'py>(
+    py: Python<'py>,
+    entries: Vec<Bound<'py, PyAny>>,
+    columns: &[&str],
+) -> PyResult<Bound<'py, PyDataFrame>> {
+    let pandas = py.import("pandas")?;
+    if entries.is_empty() {
+        let kwargs = PyDict::new(py);
+        kwargs.set_item("columns", columns.to_vec())?;
+        let df = pandas.call_method("DataFrame", (), Some(&kwargs))?;
+        return df.cast_into().map_err(Into::into);
+    }
+    let df = pandas.call_method1("DataFrame", (entries,))?;
+    df.cast_into().map_err(Into::into)
+}
+
+/// Drop columns from a per-row dict according to the include flags.
+///
+/// `metadata` columns are dropped by name; `parameters.*` columns are
+/// dropped by prefix. Missing keys are silently skipped (some impls don't
+/// emit every key).
+fn apply_include_filter(dict: &Bound<PyDict>, include: IncludeFlags) -> PyResult<()> {
+    if !include.metadata {
+        for key in METADATA_KEYS {
+            if dict.contains(key)? {
+                dict.del_item(key)?;
+            }
+        }
+    }
+    if !include.parameters {
+        let to_drop: Vec<String> = dict
+            .keys()
+            .iter()
+            .filter_map(|k| k.extract::<String>().ok())
+            .filter(|k| k.starts_with("parameters."))
+            .collect();
+        for key in to_drop {
+            dict.del_item(key)?;
+        }
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // pandas.NA cache
 // ---------------------------------------------------------------------------
 
@@ -115,13 +552,22 @@ impl<T: ToPandasEntry> ToPandasEntry for &T {
 }
 
 /// Build a `pandas.DataFrame` from an iterator of domain objects, indexed by `index_col`.
+///
+/// `include` selects which optional column families to keep on each row;
+/// dropped columns never reach the constructed DataFrame. Pass
+/// [`IncludeFlags::default_wide()`] to preserve the v2-equivalent shape.
 pub fn entries_to_dataframe<'py, T: ToPandasEntry>(
     py: Python<'py>,
     items: impl Iterator<Item = T>,
     index_col: &str,
+    include: IncludeFlags,
 ) -> PyResult<Bound<'py, PyDataFrame>> {
     let entries: Vec<Bound<'py, PyAny>> = items
-        .map(|item| item.to_pandas_entry(py).map(|d| d.into_any()))
+        .map(|item| {
+            let dict = item.to_pandas_entry(py)?;
+            apply_include_filter(&dict, include)?;
+            Ok(dict.into_any())
+        })
         .collect::<PyResult<_>>()?;
     raw_entries_to_dataframe(py, entries, index_col)
 }
@@ -197,11 +643,25 @@ pub fn set_metadata<'py>(
 }
 
 /// Set `parameters.{key}` columns from a string-string map.
-pub fn set_parameter_columns(
+///
+/// Keys are emitted in lexicographic order so the column order is
+/// deterministic across runs (the underlying hashmap iteration order is
+/// stable per insertion sequence for `FnvHashMap` but not for
+/// `std::HashMap`, and upstream `Constraint.set_parameters` accepts a
+/// `std::HashMap` whose iteration is randomized per process). Matches
+/// the `(id, key)` sort used by the long-format `*_parameters_df`
+/// builders.
+///
+/// Generic over the hasher so callers can pass either an SoA-store
+/// `FnvHashMap` or a `std::HashMap` from a `v1::Parameter`.
+pub fn set_parameter_columns<S: BuildHasher>(
     dict: &Bound<PyDict>,
-    parameters: &FnvHashMap<String, String>,
+    parameters: &HashMap<String, String, S>,
 ) -> PyResult<()> {
-    for (key, value) in parameters {
+    let mut keys: Vec<&str> = parameters.keys().map(String::as_str).collect();
+    keys.sort_unstable();
+    for key in keys {
+        let value = &parameters[key];
         dict.set_item(format!("parameters.{key}"), value)?;
     }
     Ok(())
@@ -690,9 +1150,7 @@ impl ToPandasEntry for ommx::v1::Parameter {
             &self.subscripts,
             self.description.as_deref(),
         )?;
-        for (key, value) in &self.parameters {
-            dict.set_item(format!("parameters.{key}"), value)?;
-        }
+        set_parameter_columns(&dict, &self.parameters)?;
         Ok(dict)
     }
 }
@@ -722,6 +1180,7 @@ impl<'m> ToPandasEntry
         // EvaluatedDecisionVariable has no substituted_value field
         dict.set_item("substituted_value", &na)?;
         dict.set_item("value", *dv.value())?;
+        set_parameter_columns(&dict, &m.parameters)?;
         Ok(dict)
     }
 }
@@ -819,6 +1278,7 @@ impl<'a, 'm> ToPandasEntry
             &m.subscripts,
             m.description.as_deref(),
         )?;
+        set_parameter_columns(&dict, &m.parameters)?;
         for &sample_id in self.item.sample_ids {
             let value = dv.samples().get(sample_id).copied();
             dict.set_item(sample_id.into_inner(), value)?;
@@ -869,12 +1329,7 @@ impl<'a> ToPandasEntry for WithSampleIds<'a, &'a ommx::SampledNamedFunction> {
             &nf.subscripts,
             nf.description.as_deref(),
         )?;
-        let params: Vec<String> = nf
-            .parameters
-            .iter()
-            .map(|(k, v)| format!("{k}={v}"))
-            .collect();
-        dict.set_item("parameters", params)?;
+        set_parameter_columns(&dict, &nf.parameters)?;
         for &sample_id in self.sample_ids {
             let value = nf.evaluated_values().get(sample_id).copied();
             dict.set_item(sample_id.into_inner(), value)?;

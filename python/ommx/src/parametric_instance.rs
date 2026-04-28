@@ -1,5 +1,8 @@
 use crate::{
-    pandas::{entries_to_dataframe, PyDataFrame},
+    pandas::{
+        constraint_id_col, constraint_kind_collection, entries_to_dataframe, parse_constraint_kind,
+        PyDataFrame,
+    },
     Constraint, DecisionVariable, Function, Instance, NamedFunction, Parameter, RemovedConstraint,
     Sense,
 };
@@ -307,8 +310,13 @@ impl ParametricInstance {
     }
 
     /// DataFrame of decision variables
-    #[getter]
-    pub fn decision_variables_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
+    #[pyo3(signature = (include = None))]
+    pub fn decision_variables_df<'py>(
+        &self,
+        py: Python<'py>,
+        include: Option<Vec<String>>,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
         let var_meta_store = self.inner.variable_metadata().clone();
         let view: Vec<(ommx::DecisionVariableMetadata, &ommx::DecisionVariable)> = self
             .inner
@@ -321,12 +329,18 @@ impl ParametricInstance {
             view.iter()
                 .map(|(m, dv)| crate::pandas::WithMetadata::new(*dv, m)),
             "id",
+            flags,
         )
     }
 
     /// DataFrame of constraints
-    #[getter]
-    pub fn constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
+    #[pyo3(signature = (include = None))]
+    pub fn constraints_df<'py>(
+        &self,
+        py: Python<'py>,
+        include: Option<Vec<String>>,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
         let meta_store = self.inner.constraint_collection().metadata().clone();
         let view: Vec<(
             ommx::ConstraintMetadata,
@@ -343,15 +357,18 @@ impl ParametricInstance {
             view.iter()
                 .map(|(m, id, c)| crate::pandas::WithMetadata::new((*id, *c), m)),
             "id",
+            flags,
         )
     }
 
     /// DataFrame of removed constraints
-    #[getter]
+    #[pyo3(signature = (include = None))]
     pub fn removed_constraints_df<'py>(
         &self,
         py: Python<'py>,
+        include: Option<Vec<String>>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
         let meta_store = self.inner.constraint_collection().metadata().clone();
         let view: Vec<(
             ommx::ConstraintMetadata,
@@ -368,19 +385,170 @@ impl ParametricInstance {
             view.iter()
                 .map(|(m, id, pair)| crate::pandas::WithMetadata::new((*id, *pair), m)),
             "id",
+            flags,
         )
     }
 
     /// DataFrame of named functions
-    #[getter]
-    pub fn named_functions_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
-        entries_to_dataframe(py, self.inner.named_functions().values(), "id")
+    #[pyo3(signature = (include = None))]
+    pub fn named_functions_df<'py>(
+        &self,
+        py: Python<'py>,
+        include: Option<Vec<String>>,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
+        entries_to_dataframe(py, self.inner.named_functions().values(), "id", flags)
     }
 
     /// DataFrame of parameters
-    #[getter]
-    pub fn parameters_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
-        entries_to_dataframe(py, self.inner.parameters().values(), "id")
+    #[pyo3(signature = (include = None))]
+    pub fn parameters_df<'py>(
+        &self,
+        py: Python<'py>,
+        include: Option<Vec<String>>,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
+        entries_to_dataframe(py, self.inner.parameters().values(), "id", flags)
+    }
+
+    /// Constraint metadata DataFrame (id-indexed). See
+    /// {meth}`ommx.v1.Instance.constraint_metadata_df` for column / `kind=`
+    /// semantics.
+    #[pyo3(signature = (kind = String::from("regular")))]
+    pub fn constraint_metadata_df<'py>(
+        &self,
+        py: Python<'py>,
+        kind: String,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let kind = parse_constraint_kind(&kind)?;
+        let id_col = constraint_id_col(kind);
+        constraint_kind_collection!(
+            self.inner,
+            kind,
+            [
+                constraint_collection,
+                indicator_constraint_collection,
+                one_hot_constraint_collection,
+                sos1_constraint_collection
+            ],
+            |coll| {
+                crate::pandas::constraint_metadata_dataframe(
+                    py,
+                    coll.metadata(),
+                    coll.active().keys().chain(coll.removed().keys()).copied(),
+                    id_col,
+                )
+            }
+        )
+    }
+
+    /// Constraint parameters DataFrame (long format).
+    #[pyo3(signature = (kind = String::from("regular")))]
+    pub fn constraint_parameters_df<'py>(
+        &self,
+        py: Python<'py>,
+        kind: String,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let kind = parse_constraint_kind(&kind)?;
+        let id_col = constraint_id_col(kind);
+        constraint_kind_collection!(
+            self.inner,
+            kind,
+            [
+                constraint_collection,
+                indicator_constraint_collection,
+                one_hot_constraint_collection,
+                sos1_constraint_collection
+            ],
+            |coll| {
+                crate::pandas::constraint_parameters_dataframe(
+                    py,
+                    coll.metadata(),
+                    coll.active().keys().chain(coll.removed().keys()).copied(),
+                    id_col,
+                )
+            }
+        )
+    }
+
+    /// Constraint provenance DataFrame (long format).
+    #[pyo3(signature = (kind = String::from("regular")))]
+    pub fn constraint_provenance_df<'py>(
+        &self,
+        py: Python<'py>,
+        kind: String,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let kind = parse_constraint_kind(&kind)?;
+        let id_col = constraint_id_col(kind);
+        constraint_kind_collection!(
+            self.inner,
+            kind,
+            [
+                constraint_collection,
+                indicator_constraint_collection,
+                one_hot_constraint_collection,
+                sos1_constraint_collection
+            ],
+            |coll| {
+                crate::pandas::constraint_provenance_dataframe(
+                    py,
+                    coll.metadata(),
+                    coll.active().keys().chain(coll.removed().keys()).copied(),
+                    id_col,
+                )
+            }
+        )
+    }
+
+    /// Removed-constraint reasons DataFrame (long format).
+    #[pyo3(signature = (kind = String::from("regular")))]
+    pub fn constraint_removed_reasons_df<'py>(
+        &self,
+        py: Python<'py>,
+        kind: String,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let kind = parse_constraint_kind(&kind)?;
+        let id_col = constraint_id_col(kind);
+        constraint_kind_collection!(
+            self.inner,
+            kind,
+            [
+                constraint_collection,
+                indicator_constraint_collection,
+                one_hot_constraint_collection,
+                sos1_constraint_collection
+            ],
+            |coll| {
+                crate::pandas::constraint_removed_reasons_dataframe(
+                    py,
+                    coll.removed().iter().map(|(id, (_, r))| (*id, r)),
+                    id_col,
+                )
+            }
+        )
+    }
+
+    /// Decision-variable metadata DataFrame (id-indexed).
+    pub fn variable_metadata_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
+        crate::pandas::variable_metadata_dataframe(
+            py,
+            self.inner.variable_metadata(),
+            self.inner.decision_variables().keys().copied(),
+            "variable_id",
+        )
+    }
+
+    /// Decision-variable parameters DataFrame (long format).
+    pub fn variable_parameters_df<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        crate::pandas::variable_parameters_dataframe(
+            py,
+            self.inner.variable_metadata(),
+            self.inner.decision_variables().keys().copied(),
+            "variable_id",
+        )
     }
 
     fn __copy__(&self) -> Self {

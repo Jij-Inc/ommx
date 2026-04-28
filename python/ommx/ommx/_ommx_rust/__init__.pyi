@@ -1448,56 +1448,6 @@ class Instance:
     def description(self) -> typing.Optional[InstanceDescription]: ...
     @property
     def used_decision_variables(self) -> builtins.list[DecisionVariable]: ...
-    @property
-    def decision_variables_df(self) -> pandas.DataFrame:
-        r"""
-        DataFrame of decision variables
-        """
-    @property
-    def constraints_df(self) -> pandas.DataFrame:
-        r"""
-        DataFrame of constraints
-        """
-    @property
-    def indicator_constraints_df(self) -> pandas.DataFrame:
-        r"""
-        DataFrame of indicator constraints
-        """
-    @property
-    def removed_indicator_constraints_df(self) -> pandas.DataFrame:
-        r"""
-        DataFrame of removed indicator constraints
-        """
-    @property
-    def one_hot_constraints_df(self) -> pandas.DataFrame:
-        r"""
-        DataFrame of one-hot constraints
-        """
-    @property
-    def removed_one_hot_constraints_df(self) -> pandas.DataFrame:
-        r"""
-        DataFrame of removed one-hot constraints
-        """
-    @property
-    def sos1_constraints_df(self) -> pandas.DataFrame:
-        r"""
-        DataFrame of SOS1 constraints
-        """
-    @property
-    def removed_sos1_constraints_df(self) -> pandas.DataFrame:
-        r"""
-        DataFrame of removed SOS1 constraints
-        """
-    @property
-    def removed_constraints_df(self) -> pandas.DataFrame:
-        r"""
-        DataFrame of removed constraints
-        """
-    @property
-    def named_functions_df(self) -> pandas.DataFrame:
-        r"""
-        DataFrame of named functions
-        """
     def add_user_annotation(
         self,
         key: builtins.str,
@@ -2559,6 +2509,119 @@ class Instance:
         0
         ```
         """
+    def decision_variables_df(
+        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
+    ) -> pandas.DataFrame:
+        r"""
+        DataFrame of decision variables
+        """
+    def constraints_df(
+        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
+    ) -> pandas.DataFrame:
+        r"""
+        DataFrame of constraints
+        """
+    def indicator_constraints_df(
+        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
+    ) -> pandas.DataFrame:
+        r"""
+        DataFrame of indicator constraints
+        """
+    def removed_indicator_constraints_df(
+        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
+    ) -> pandas.DataFrame:
+        r"""
+        DataFrame of removed indicator constraints
+        """
+    def one_hot_constraints_df(
+        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
+    ) -> pandas.DataFrame:
+        r"""
+        DataFrame of one-hot constraints
+        """
+    def removed_one_hot_constraints_df(
+        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
+    ) -> pandas.DataFrame:
+        r"""
+        DataFrame of removed one-hot constraints
+        """
+    def sos1_constraints_df(
+        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
+    ) -> pandas.DataFrame:
+        r"""
+        DataFrame of SOS1 constraints
+        """
+    def removed_sos1_constraints_df(
+        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
+    ) -> pandas.DataFrame:
+        r"""
+        DataFrame of removed SOS1 constraints
+        """
+    def removed_constraints_df(
+        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
+    ) -> pandas.DataFrame:
+        r"""
+        DataFrame of removed constraints
+        """
+    def named_functions_df(
+        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
+    ) -> pandas.DataFrame:
+        r"""
+        DataFrame of named functions
+        """
+    def constraint_metadata_df(
+        self, kind: builtins.str = "regular"
+    ) -> pandas.DataFrame:
+        r"""
+        Constraint metadata DataFrame (id-indexed wide format).
+
+        One row per constraint id (active + removed) with columns
+        `name`, `subscripts`, `description`. Index column is
+        `{kind}_constraint_id`. `kind` selects which constraint family
+        to read: `"regular"`, `"indicator"`, `"one_hot"`, or `"sos1"`.
+        """
+    def constraint_parameters_df(
+        self, kind: builtins.str = "regular"
+    ) -> pandas.DataFrame:
+        r"""
+        Constraint parameters DataFrame (long format).
+
+        One row per (constraint_id, parameter_key) pair. Columns:
+        `{kind}_constraint_id`, `key`, `value`. Default RangeIndex.
+        """
+    def constraint_provenance_df(
+        self, kind: builtins.str = "regular"
+    ) -> pandas.DataFrame:
+        r"""
+        Constraint provenance DataFrame (long format).
+
+        One row per (constraint_id, step) pair. Columns:
+        `{kind}_constraint_id`, `step`, `source_kind`, `source_id`.
+        """
+    def constraint_removed_reasons_df(
+        self, kind: builtins.str = "regular"
+    ) -> pandas.DataFrame:
+        r"""
+        Removed-constraint reasons DataFrame (long format).
+
+        One row per (constraint_id, parameter_key) pair, plus one row with
+        `key`/`value` set to NA when the reason has no parameters. Columns:
+        `{kind}_constraint_id`, `reason`, `key`, `value`.
+        """
+    def variable_metadata_df(self) -> pandas.DataFrame:
+        r"""
+        Decision-variable metadata DataFrame (id-indexed wide format).
+
+        Columns: `name`, `subscripts`, `description`. Index column =
+        `variable_id`.
+        """
+    def variable_parameters_df(self) -> pandas.DataFrame:
+        r"""
+        Decision-variable parameters DataFrame (long format).
+
+        One row per (variable_id, parameter_key) pair. Columns:
+        `variable_id`, `key`, `value`.
+        """
     def __copy__(self) -> Instance: ...
     def __deepcopy__(self, _memo: typing.Any) -> Instance: ...
     def as_minimization_problem(self) -> builtins.bool:
@@ -3232,31 +3295,6 @@ class ParametricInstance:
     def decision_variable_ids(self) -> builtins.set[builtins.int]: ...
     @property
     def parameter_ids(self) -> builtins.set[builtins.int]: ...
-    @property
-    def decision_variables_df(self) -> pandas.DataFrame:
-        r"""
-        DataFrame of decision variables
-        """
-    @property
-    def constraints_df(self) -> pandas.DataFrame:
-        r"""
-        DataFrame of constraints
-        """
-    @property
-    def removed_constraints_df(self) -> pandas.DataFrame:
-        r"""
-        DataFrame of removed constraints
-        """
-    @property
-    def named_functions_df(self) -> pandas.DataFrame:
-        r"""
-        DataFrame of named functions
-        """
-    @property
-    def parameters_df(self) -> pandas.DataFrame:
-        r"""
-        DataFrame of parameters
-        """
     def add_user_annotation(
         self,
         key: builtins.str,
@@ -3331,6 +3369,70 @@ class ParametricInstance:
     def get_parameter_by_id(self, parameter_id: builtins.int) -> Parameter:
         r"""
         Get a specific parameter by ID
+        """
+    def decision_variables_df(
+        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
+    ) -> pandas.DataFrame:
+        r"""
+        DataFrame of decision variables
+        """
+    def constraints_df(
+        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
+    ) -> pandas.DataFrame:
+        r"""
+        DataFrame of constraints
+        """
+    def removed_constraints_df(
+        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
+    ) -> pandas.DataFrame:
+        r"""
+        DataFrame of removed constraints
+        """
+    def named_functions_df(
+        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
+    ) -> pandas.DataFrame:
+        r"""
+        DataFrame of named functions
+        """
+    def parameters_df(
+        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
+    ) -> pandas.DataFrame:
+        r"""
+        DataFrame of parameters
+        """
+    def constraint_metadata_df(
+        self, kind: builtins.str = "regular"
+    ) -> pandas.DataFrame:
+        r"""
+        Constraint metadata DataFrame (id-indexed). See
+        {meth}`ommx.v1.Instance.constraint_metadata_df` for column / `kind=`
+        semantics.
+        """
+    def constraint_parameters_df(
+        self, kind: builtins.str = "regular"
+    ) -> pandas.DataFrame:
+        r"""
+        Constraint parameters DataFrame (long format).
+        """
+    def constraint_provenance_df(
+        self, kind: builtins.str = "regular"
+    ) -> pandas.DataFrame:
+        r"""
+        Constraint provenance DataFrame (long format).
+        """
+    def constraint_removed_reasons_df(
+        self, kind: builtins.str = "regular"
+    ) -> pandas.DataFrame:
+        r"""
+        Removed-constraint reasons DataFrame (long format).
+        """
+    def variable_metadata_df(self) -> pandas.DataFrame:
+        r"""
+        Decision-variable metadata DataFrame (id-indexed).
+        """
+    def variable_parameters_df(self) -> pandas.DataFrame:
+        r"""
+        Decision-variable parameters DataFrame (long format).
         """
     def __copy__(self) -> ParametricInstance: ...
     def __deepcopy__(self, _memo: typing.Any) -> ParametricInstance: ...
@@ -3945,84 +4047,6 @@ class SampleSet:
         Summary DataFrame with per-constraint feasibility columns.
         Index is sample_id.
         """
-    @property
-    def decision_variables_df(self) -> pandas.DataFrame:
-        r"""
-        DataFrame of decision variables with per-sample value columns.
-        Static columns: id, kind, lower, upper, name, subscripts, description.
-        Dynamic columns: one per sample_id (int) with the variable's value.
-        """
-    @property
-    def constraints_df(self) -> pandas.DataFrame:
-        r"""
-        DataFrame of constraints with per-sample value and feasibility columns.
-        Static columns: id, equality, used_ids, name, subscripts, description.
-        Dynamic columns: value.{sample_id} and feasible.{sample_id} for each sample.
-        """
-    @property
-    def removed_reasons_df(self) -> pandas.DataFrame:
-        r"""
-        DataFrame of removed constraint reasons.
-
-        Columns: id (index), removed_reason, removed_reason.{key}
-
-        Can be joined with {attr}`constraints_df` using the `id` index.
-        """
-    @property
-    def indicator_constraints_df(self) -> pandas.DataFrame:
-        r"""
-        DataFrame of indicator constraints with per-sample value, feasibility, and indicator_active columns.
-        Static columns: id, indicator_variable_id, equality, used_ids, name, subscripts, description.
-        Dynamic columns: value.{sample_id}, feasible.{sample_id}, indicator_active.{sample_id} for each sample.
-        """
-    @property
-    def indicator_removed_reasons_df(self) -> pandas.DataFrame:
-        r"""
-        DataFrame of removed indicator constraint reasons.
-
-        Columns: id (index), removed_reason, removed_reason.{key}
-
-        Can be joined with {attr}`indicator_constraints_df` using the `id` index.
-        """
-    @property
-    def one_hot_constraints_df(self) -> pandas.DataFrame:
-        r"""
-        DataFrame of one-hot constraints with per-sample feasibility and active_variable columns.
-        Static columns: id, used_ids, name, subscripts, description.
-        Dynamic columns: feasible.{sample_id}, active_variable.{sample_id} for each sample.
-        """
-    @property
-    def one_hot_removed_reasons_df(self) -> pandas.DataFrame:
-        r"""
-        DataFrame of removed one-hot constraint reasons.
-
-        Columns: id (index), removed_reason, removed_reason.{key}
-
-        Can be joined with {attr}`one_hot_constraints_df` using the `id` index.
-        """
-    @property
-    def sos1_constraints_df(self) -> pandas.DataFrame:
-        r"""
-        DataFrame of SOS1 constraints with per-sample feasibility and active_variable columns.
-        Static columns: id, used_ids, name, subscripts, description.
-        Dynamic columns: feasible.{sample_id}, active_variable.{sample_id} for each sample.
-        """
-    @property
-    def sos1_removed_reasons_df(self) -> pandas.DataFrame:
-        r"""
-        DataFrame of removed SOS1 constraint reasons.
-
-        Columns: id (index), removed_reason, removed_reason.{key}
-
-        Can be joined with {attr}`sos1_constraints_df` using the `id` index.
-        """
-    @property
-    def named_functions_df(self) -> pandas.DataFrame:
-        r"""
-        DataFrame of named functions with per-sample value columns.
-        Static columns: id, used_ids, name, subscripts, description, parameters.
-        Dynamic columns: one per sample_id (int) with the function's evaluated value.
-        """
     def add_user_annotation(
         self,
         key: builtins.str,
@@ -4127,6 +4151,120 @@ class SampleSet:
         """
     def __copy__(self) -> SampleSet: ...
     def __deepcopy__(self, _memo: typing.Any) -> SampleSet: ...
+    def decision_variables_df(
+        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
+    ) -> pandas.DataFrame:
+        r"""
+        DataFrame of decision variables with per-sample value columns.
+        Static columns: id, kind, lower, upper, name, subscripts, description.
+        Dynamic columns: one per sample_id (int) with the variable's value.
+        """
+    def constraints_df(
+        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
+    ) -> pandas.DataFrame:
+        r"""
+        DataFrame of constraints with per-sample value and feasibility columns.
+        Static columns: id, equality, used_ids, name, subscripts, description.
+        Dynamic columns: value.{sample_id} and feasible.{sample_id} for each sample.
+        """
+    def removed_reasons_df(self) -> pandas.DataFrame:
+        r"""
+        DataFrame of removed constraint reasons.
+
+        Columns: id (index), removed_reason, removed_reason.{key}
+
+        Can be joined with {meth}`constraints_df` using the `id` index.
+        """
+    def indicator_constraints_df(
+        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
+    ) -> pandas.DataFrame:
+        r"""
+        DataFrame of indicator constraints with per-sample value, feasibility, and indicator_active columns.
+        Static columns: id, indicator_variable_id, equality, used_ids, name, subscripts, description.
+        Dynamic columns: value.{sample_id}, feasible.{sample_id}, indicator_active.{sample_id} for each sample.
+        """
+    def indicator_removed_reasons_df(self) -> pandas.DataFrame:
+        r"""
+        DataFrame of removed indicator constraint reasons.
+
+        Columns: id (index), removed_reason, removed_reason.{key}
+
+        Can be joined with {meth}`indicator_constraints_df` using the `id` index.
+        """
+    def one_hot_constraints_df(
+        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
+    ) -> pandas.DataFrame:
+        r"""
+        DataFrame of one-hot constraints with per-sample feasibility and active_variable columns.
+        Static columns: id, used_ids, name, subscripts, description.
+        Dynamic columns: feasible.{sample_id}, active_variable.{sample_id} for each sample.
+        """
+    def one_hot_removed_reasons_df(self) -> pandas.DataFrame:
+        r"""
+        DataFrame of removed one-hot constraint reasons.
+
+        Columns: id (index), removed_reason, removed_reason.{key}
+
+        Can be joined with {meth}`one_hot_constraints_df` using the `id` index.
+        """
+    def sos1_constraints_df(
+        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
+    ) -> pandas.DataFrame:
+        r"""
+        DataFrame of SOS1 constraints with per-sample feasibility and active_variable columns.
+        Static columns: id, used_ids, name, subscripts, description.
+        Dynamic columns: feasible.{sample_id}, active_variable.{sample_id} for each sample.
+        """
+    def sos1_removed_reasons_df(self) -> pandas.DataFrame:
+        r"""
+        DataFrame of removed SOS1 constraint reasons.
+
+        Columns: id (index), removed_reason, removed_reason.{key}
+
+        Can be joined with {meth}`sos1_constraints_df` using the `id` index.
+        """
+    def named_functions_df(
+        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
+    ) -> pandas.DataFrame:
+        r"""
+        DataFrame of named functions with per-sample value columns.
+        Static columns: id, used_ids, name, subscripts, description, parameters.{key}.
+        Dynamic columns: one per sample_id (int) with the function's evaluated value.
+        """
+    def constraint_metadata_df(
+        self, kind: builtins.str = "regular"
+    ) -> pandas.DataFrame:
+        r"""
+        Constraint metadata DataFrame (id-indexed). See
+        {meth}`ommx.v1.Instance.constraint_metadata_df` for column / `kind=`
+        semantics. Reads from the sampled collection's metadata store.
+        """
+    def constraint_parameters_df(
+        self, kind: builtins.str = "regular"
+    ) -> pandas.DataFrame:
+        r"""
+        Constraint parameters DataFrame (long format).
+        """
+    def constraint_provenance_df(
+        self, kind: builtins.str = "regular"
+    ) -> pandas.DataFrame:
+        r"""
+        Constraint provenance DataFrame (long format).
+        """
+    def constraint_removed_reasons_df(
+        self, kind: builtins.str = "regular"
+    ) -> pandas.DataFrame:
+        r"""
+        Removed-constraint reasons DataFrame (long format).
+        """
+    def variable_metadata_df(self) -> pandas.DataFrame:
+        r"""
+        Decision-variable metadata DataFrame (id-indexed).
+        """
+    def variable_parameters_df(self) -> pandas.DataFrame:
+        r"""
+        Decision-variable parameters DataFrame (long format).
+        """
 
 @typing.final
 class SampledConstraint:
@@ -4453,122 +4591,6 @@ class Solution:
         r"""
         Get all unique named function names in this solution
         """
-    @property
-    def decision_variables_df(self) -> pandas.DataFrame:
-        r"""
-        DataFrame of evaluated decision variables
-
-        Columns: id (index), kind, lower, upper, name, subscripts, description, substituted_value, value
-        """
-    @property
-    def constraints_df(self) -> pandas.DataFrame:
-        r"""
-        DataFrame of evaluated constraints
-
-        Columns: id (index), equality, value, used_ids, name, subscripts, description, dual_variable
-        """
-    @property
-    def removed_reasons_df(self) -> pandas.DataFrame:
-        r"""
-        DataFrame of removed constraint reasons.
-
-        Columns: id (index), removed_reason, removed_reason.{key}
-
-        Can be joined with {attr}`constraints_df` on the `id` index.
-
-        # Examples
-
-        ```python
-        >>> from ommx.v1 import Instance, DecisionVariable
-        >>> x = [DecisionVariable.binary(i) for i in range(3)]
-        >>> instance = Instance.from_components(
-        ...     decision_variables=x,
-        ...     objective=sum(x),
-        ...     constraints=[
-        ...         (x[0] + x[1] == 1).set_id(10),
-        ...         (x[1] + x[2] == 1).set_id(20),
-        ...     ],
-        ...     sense=Instance.MAXIMIZE,
-        ... )
-        >>> instance.relax_constraint(10, "test_reason")
-        >>> solution = instance.evaluate({0: 1, 1: 0, 2: 1})
-        ```
-
-        `removed_reasons_df` contains only removed constraints:
-
-        ```python
-        >>> solution.removed_reasons_df
-            removed_reason
-        id
-        10    test_reason
-        ```
-
-        Join with `constraints_df` to get full information:
-
-        ```python
-        >>> df = solution.constraints_df.join(solution.removed_reasons_df)
-        >>> df[["value", "removed_reason"]]
-            value removed_reason
-        id
-        10    0.0   test_reason
-        20    0.0           NaN
-        ```
-        """
-    @property
-    def indicator_constraints_df(self) -> pandas.DataFrame:
-        r"""
-        DataFrame of evaluated indicator constraints
-
-        Columns: id (index), indicator_variable_id, equality, value, indicator_active, used_ids, name, subscripts, description
-        """
-    @property
-    def indicator_removed_reasons_df(self) -> pandas.DataFrame:
-        r"""
-        DataFrame of removed indicator constraint reasons.
-
-        Columns: id (index), removed_reason, removed_reason.{key}
-
-        Can be joined with {attr}`indicator_constraints_df` using the `id` index.
-        """
-    @property
-    def one_hot_constraints_df(self) -> pandas.DataFrame:
-        r"""
-        DataFrame of evaluated one-hot constraints
-
-        Columns: id (index), feasible, active_variable, used_ids, name, subscripts, description
-        """
-    @property
-    def one_hot_removed_reasons_df(self) -> pandas.DataFrame:
-        r"""
-        DataFrame of removed one-hot constraint reasons.
-
-        Columns: id (index), removed_reason, removed_reason.{key}
-
-        Can be joined with {attr}`one_hot_constraints_df` using the `id` index.
-        """
-    @property
-    def sos1_constraints_df(self) -> pandas.DataFrame:
-        r"""
-        DataFrame of evaluated SOS1 constraints
-
-        Columns: id (index), feasible, active_variable, used_ids, name, subscripts, description
-        """
-    @property
-    def sos1_removed_reasons_df(self) -> pandas.DataFrame:
-        r"""
-        DataFrame of removed SOS1 constraint reasons.
-
-        Columns: id (index), removed_reason, removed_reason.{key}
-
-        Can be joined with {attr}`sos1_constraints_df` using the `id` index.
-        """
-    @property
-    def named_functions_df(self) -> pandas.DataFrame:
-        r"""
-        DataFrame of evaluated named functions
-
-        Columns: id (index), value, used_ids, name, subscripts, description, parameters.{key}
-        """
     def add_user_annotation(
         self,
         key: builtins.str,
@@ -4710,6 +4732,158 @@ class Solution:
     ) -> EvaluatedNamedFunction:
         r"""
         Get a specific evaluated named function by ID
+        """
+    def decision_variables_df(
+        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
+    ) -> pandas.DataFrame:
+        r"""
+        DataFrame of evaluated decision variables
+
+        Columns: id (index), kind, lower, upper, name, subscripts, description, substituted_value, value
+        """
+    def constraints_df(
+        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
+    ) -> pandas.DataFrame:
+        r"""
+        DataFrame of evaluated constraints
+
+        Columns: id (index), equality, value, used_ids, name, subscripts, description, dual_variable
+        """
+    def removed_reasons_df(self) -> pandas.DataFrame:
+        r"""
+        DataFrame of removed constraint reasons.
+
+        Columns: id (index), removed_reason, removed_reason.{key}
+
+        Can be joined with {meth}`constraints_df` on the `id` index.
+
+        # Examples
+
+        ```python
+        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> x = [DecisionVariable.binary(i) for i in range(3)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints=[
+        ...         (x[0] + x[1] == 1).set_id(10),
+        ...         (x[1] + x[2] == 1).set_id(20),
+        ...     ],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+        >>> instance.relax_constraint(10, "test_reason")
+        >>> solution = instance.evaluate({0: 1, 1: 0, 2: 1})
+        ```
+
+        `removed_reasons_df` contains only removed constraints:
+
+        ```python
+        >>> solution.removed_reasons_df()
+            removed_reason
+        id
+        10    test_reason
+        ```
+
+        Join with `constraints_df` to get full information:
+
+        ```python
+        >>> df = solution.constraints_df().join(solution.removed_reasons_df())
+        >>> df[["value", "removed_reason"]]
+            value removed_reason
+        id
+        10    0.0   test_reason
+        20    0.0           NaN
+        ```
+        """
+    def indicator_constraints_df(
+        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
+    ) -> pandas.DataFrame:
+        r"""
+        DataFrame of evaluated indicator constraints
+
+        Columns: id (index), indicator_variable_id, equality, value, indicator_active, used_ids, name, subscripts, description
+        """
+    def indicator_removed_reasons_df(self) -> pandas.DataFrame:
+        r"""
+        DataFrame of removed indicator constraint reasons.
+
+        Columns: id (index), removed_reason, removed_reason.{key}
+
+        Can be joined with {meth}`indicator_constraints_df` using the `id` index.
+        """
+    def one_hot_constraints_df(
+        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
+    ) -> pandas.DataFrame:
+        r"""
+        DataFrame of evaluated one-hot constraints
+
+        Columns: id (index), feasible, active_variable, used_ids, name, subscripts, description
+        """
+    def one_hot_removed_reasons_df(self) -> pandas.DataFrame:
+        r"""
+        DataFrame of removed one-hot constraint reasons.
+
+        Columns: id (index), removed_reason, removed_reason.{key}
+
+        Can be joined with {meth}`one_hot_constraints_df` using the `id` index.
+        """
+    def sos1_constraints_df(
+        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
+    ) -> pandas.DataFrame:
+        r"""
+        DataFrame of evaluated SOS1 constraints
+
+        Columns: id (index), feasible, active_variable, used_ids, name, subscripts, description
+        """
+    def sos1_removed_reasons_df(self) -> pandas.DataFrame:
+        r"""
+        DataFrame of removed SOS1 constraint reasons.
+
+        Columns: id (index), removed_reason, removed_reason.{key}
+
+        Can be joined with {meth}`sos1_constraints_df` using the `id` index.
+        """
+    def named_functions_df(
+        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
+    ) -> pandas.DataFrame:
+        r"""
+        DataFrame of evaluated named functions
+
+        Columns: id (index), value, used_ids, name, subscripts, description, parameters.{key}
+        """
+    def constraint_metadata_df(
+        self, kind: builtins.str = "regular"
+    ) -> pandas.DataFrame:
+        r"""
+        Constraint metadata DataFrame (id-indexed). See
+        {meth}`ommx.v1.Instance.constraint_metadata_df` for column / `kind=`
+        semantics. Reads from the evaluated collection's metadata store.
+        """
+    def constraint_parameters_df(
+        self, kind: builtins.str = "regular"
+    ) -> pandas.DataFrame:
+        r"""
+        Constraint parameters DataFrame (long format).
+        """
+    def constraint_provenance_df(
+        self, kind: builtins.str = "regular"
+    ) -> pandas.DataFrame:
+        r"""
+        Constraint provenance DataFrame (long format).
+        """
+    def constraint_removed_reasons_df(
+        self, kind: builtins.str = "regular"
+    ) -> pandas.DataFrame:
+        r"""
+        Removed-constraint reasons DataFrame (long format).
+        """
+    def variable_metadata_df(self) -> pandas.DataFrame:
+        r"""
+        Decision-variable metadata DataFrame (id-indexed).
+        """
+    def variable_parameters_df(self) -> pandas.DataFrame:
+        r"""
+        Decision-variable parameters DataFrame (long format).
         """
     def __copy__(self) -> Solution: ...
     def __deepcopy__(self, _memo: typing.Any) -> Solution: ...

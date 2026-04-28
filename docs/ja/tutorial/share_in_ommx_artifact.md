@@ -86,7 +86,7 @@ instance = Instance.from_components(
 solution = OMMXPySCIPOptAdapter.solve(instance)
 
 # 最適解の分析をする
-df_vars = solution.decision_variables_df
+df_vars = solution.decision_variables_df()
 df = pd.DataFrame.from_dict(
     {
         "アイテムの番号": df_vars.index,

@@ -99,7 +99,7 @@ It would be convenient to concatenate the `pandas.DataFrame` obtained with `deci
 import pandas
 
 decision_variables = pandas.concat([
-    solution.decision_variables_df.assign(solver=solver)
+    solution.decision_variables_df().assign(solver=solver)
     for solver, solution in solutions.items()
 ])
 decision_variables

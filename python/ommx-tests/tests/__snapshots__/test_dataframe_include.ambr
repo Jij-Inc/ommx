@@ -1,0 +1,69 @@
+# serializer version: 1
+# name: test_constraints_df_default
+  '''
+     equality    type   used_ids     name subscripts description
+  id                                                            
+  10       =0  Linear  {0, 1, 2}  balance         []        <NA>
+  '''
+# ---
+# name: test_constraints_df_include_empty
+  '''
+     equality    type   used_ids
+  id                            
+  10       =0  Linear  {0, 1, 2}
+  '''
+# ---
+# name: test_decision_variables_df_default
+  '''
+        kind  lower  upper name subscripts description substituted_value parameters.role parameters.shard
+  id                                                                                                     
+  0   Binary    0.0    1.0   x0        [0]  variable 0              <NA>         primary                0
+  1   Binary    0.0    1.0   x1        [1]  variable 1              <NA>         primary                1
+  2   Binary    0.0    1.0   x2        [2]  variable 2              <NA>         primary                2
+  '''
+# ---
+# name: test_decision_variables_df_include_empty
+  '''
+        kind  lower  upper substituted_value
+  id                                        
+  0   Binary    0.0    1.0              <NA>
+  1   Binary    0.0    1.0              <NA>
+  2   Binary    0.0    1.0              <NA>
+  '''
+# ---
+# name: test_decision_variables_df_include_metadata_only
+  '''
+        kind  lower  upper name subscripts description substituted_value
+  id                                                                    
+  0   Binary    0.0    1.0   x0        [0]  variable 0              <NA>
+  1   Binary    0.0    1.0   x1        [1]  variable 1              <NA>
+  2   Binary    0.0    1.0   x2        [2]  variable 2              <NA>
+  '''
+# ---
+# name: test_decision_variables_df_include_parameters_only
+  '''
+        kind  lower  upper substituted_value parameters.role parameters.shard
+  id                                                                         
+  0   Binary    0.0    1.0              <NA>         primary                0
+  1   Binary    0.0    1.0              <NA>         primary                1
+  2   Binary    0.0    1.0              <NA>         primary                2
+  '''
+# ---
+# name: test_sample_set_decision_variables_df_include_empty
+  '''
+        kind  lower  upper    0    1
+  id                                
+  0   Binary    0.0    1.0  1.0  0.0
+  1   Binary    0.0    1.0  0.0  1.0
+  2   Binary    0.0    1.0  0.0  0.0
+  '''
+# ---
+# name: test_solution_decision_variables_df_include_empty
+  '''
+        kind  lower  upper substituted_value  value
+  id                                               
+  0   Binary    0.0    1.0              <NA>    1.0
+  1   Binary    0.0    1.0              <NA>    0.0
+  2   Binary    0.0    1.0              <NA>    0.0
+  '''
+# ---

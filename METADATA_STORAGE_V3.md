@@ -1,7 +1,8 @@
 # Metadata Storage in OMMX v3 — Design Proposal
 
 Status: **Rust SDK landed; Python wrappers landed (snapshot model);
-Series + `include=` + sidecar dfs deferred to follow-up PRs**
+`include=` + long-format sidecar dfs landed; Series accessors and
+two-mode Attached wrappers deferred to follow-up PRs**
 
 This proposal is a **prerequisite** for `SPECIAL_CONSTRAINTS_V3.md` (PR #841).
 The proto-schema redesign in #841 cannot be finalized without first deciding
@@ -14,7 +15,7 @@ discussion was split out of #841 and runs first.
 This is a single connected redesign covering Rust SDK runtime layout and
 Python SDK API surface. The document describes the target shape; phasing of
 the implementation across PRs is decided in the implementation issues, not
-here. The implementation actually shipped in two waves:
+here. The implementation shipped in three waves:
 
 - **Wave 1 (PR #843, landed):** Rust SDK SoA stores at the collection
   layer, parse / serialize boundary moved to per-collection, per-element
@@ -25,12 +26,22 @@ here. The implementation actually shipped in two waves:
   store, `from_components` drains snapshots back). `*_df` rendering kept
   working via a `WithMetadata<'a, T, M>` wrapper inside `pandas.rs` —
   call sites pre-snapshot the SoA and zip it alongside each item.
-- **Wave 2 (deferred):** `Series[ID -> Object]` accessors, `*_df`
-  `include=` parameter, long-format sidecar dfs
-  (`constraint_metadata_df` / `constraint_parameters_df` /
-  `constraint_provenance_df` / `constraint_removed_reasons_df` /
-  `variable_metadata_df` / `variable_parameters_df`), and the two-mode
-  Standalone / Attached wrappers with `Py<Instance>` back-references.
+- **Wave 1.5 (PR #846, landed):** `include=` parameter on every wide
+  `*_df` accessor (default preserves the v2 wide shape; `include=[]`
+  drops metadata + parameters columns). Long-format sidecar dataframes
+  on Instance / ParametricInstance / Solution / SampleSet, reading
+  directly from the SoA stores: `constraint_metadata_df(kind=...)`,
+  `constraint_parameters_df(kind=...)`,
+  `constraint_provenance_df(kind=...)`,
+  `constraint_removed_reasons_df(kind=...)`,
+  `variable_metadata_df()`, `variable_parameters_df()`. Mechanical
+  v3-alpha breaking change: every `*_df` accessor is now a method
+  (`instance.constraints_df` → `instance.constraints_df()`).
+- **Wave 2 (deferred):** `Series[ID -> Object]` collection accessors,
+  the two-mode Standalone / Attached wrappers with `Py<Instance>`
+  back-references and write-through metadata setters, and the
+  `kind=Literal[...]` consolidation that collapses today's per-kind
+  `*_constraints_df` family into one `constraints_df(kind=...)`.
 
 Sections below mark each item with **(landed)** or **(deferred)** so it
 is clear which parts are live in v3 alpha and which are still proposal.
@@ -115,11 +126,23 @@ SoA store; the behavior they implement is unchanged.
 - `instance.constraints`, `decision_variables`, `*_constraints` are
   still `dict` / `list` of wrapper objects. The proposed
   `pandas.Series[ID -> Object]` shape is **deferred** to a follow-up PR.
-- `*_df` methods still take the v2-style positional shape. The proposed
-  `include=` parameter and the long-format sidecar dfs are **deferred**
-  to a follow-up PR. Internally the rendering path now reads metadata
-  from the SoA store via a `WithMetadata<'a, T, M>` wrapper, so the
-  switch to the new shape is mechanical.
+- `*_df` accessors are now methods (not `#[getter]` properties), each
+  with an `include=` parameter that gates the metadata / parameters
+  column families. Default `include=("metadata", "parameters")`
+  preserves the v2 wide shape; `include=[]` drops both, single-element
+  forms keep the named family. **(landed in PR #846)** Internally the
+  rendering path uses a `WithMetadata<'a, T, M>` wrapper to pair items
+  with snapshots; a post-filter in `entries_to_dataframe` drops the
+  gated columns before the DataFrame is built.
+- Six long-format / id-indexed sidecar dataframes read directly from
+  the SoA stores: `constraint_metadata_df(kind=...)`,
+  `constraint_parameters_df(kind=...)`,
+  `constraint_provenance_df(kind=...)`,
+  `constraint_removed_reasons_df(kind=...)`,
+  `variable_metadata_df()`, `variable_parameters_df()`. Index column
+  names are kind-qualified (`regular_constraint_id` ≠
+  `indicator_constraint_id`) to keep cross-id-space mistakes visible.
+  **(landed in PR #846)**
 
 ### Proto
 
@@ -297,18 +320,25 @@ pub struct Constraint<S: Stage<Self> = Created> {
 
 Standalone constraints (`Constraint::equal_to_zero(f)`,
 `OneHotConstraint::new(...)`, etc.) carry no metadata at the Rust
-level. Insertion drains a staging bag (Python wrappers) or accepts an
-explicit metadata argument:
+level. Insertion picks an unused id and writes element + metadata
+through `insert_with`:
 
 ```rust
-let id = collection.insert(Constraint::equal_to_zero(f));
+let id = collection.unused_id();
+collection.insert_with(
+    id,
+    Constraint::equal_to_zero(f),
+    ConstraintMetadata::default(),
+);
 collection.metadata_mut().set_name(id, "demand_balance");
 collection.metadata_mut().push_subscripts(id, [i, j]);
 
-// or atomically with metadata via insert_with, taking the existing
-// owned ConstraintMetadata struct directly (the SoA store and the
-// owned struct are mutually convertible):
+// or atomically — the SoA store and the owned ConstraintMetadata
+// struct are mutually convertible, so the metadata can be supplied
+// up-front:
+let id = collection.unused_id();
 collection.insert_with(
+    id,
     Constraint::equal_to_zero(f),
     ConstraintMetadata {
         name: Some("demand_balance".into()),
@@ -358,6 +388,42 @@ impl<T: ConstraintType> ConstraintCollection<T> {
     pub fn metadata_mut(&mut self) -> &mut ConstraintMetadataStore<T::ID> { ... }
 }
 ```
+
+`Instance` and `ParametricInstance` expose narrow per-collection
+accessors so callers don't have to go through
+`constraint_collection_mut()` (which would hand out raw `&mut` on
+the active / removed maps and break the collection's invariants):
+
+```rust
+impl Instance {
+    // immutable: full collection (active / removed / metadata) is fine.
+    pub fn constraint_collection(&self) -> &ConstraintCollection<Constraint>;
+    pub fn indicator_constraint_collection(&self) -> &ConstraintCollection<IndicatorConstraint>;
+    pub fn one_hot_constraint_collection(&self) -> &ConstraintCollection<OneHotConstraint>;
+    pub fn sos1_constraint_collection(&self) -> &ConstraintCollection<Sos1Constraint>;
+
+    // metadata-only mut: invariant-safe, since metadata is keyed by id
+    // independent of active / removed membership.
+    pub fn variable_metadata(&self) -> &VariableMetadataStore;
+    pub fn variable_metadata_mut(&mut self) -> &mut VariableMetadataStore;
+    pub fn constraint_metadata(&self) -> &ConstraintMetadataStore<ConstraintID>;
+    pub fn constraint_metadata_mut(&mut self) -> &mut ConstraintMetadataStore<ConstraintID>;
+    pub fn indicator_constraint_metadata(&self) -> &ConstraintMetadataStore<IndicatorConstraintID>;
+    pub fn indicator_constraint_metadata_mut(&mut self) -> &mut ConstraintMetadataStore<IndicatorConstraintID>;
+    pub fn one_hot_constraint_metadata(&self) -> &ConstraintMetadataStore<OneHotConstraintID>;
+    pub fn one_hot_constraint_metadata_mut(&mut self) -> &mut ConstraintMetadataStore<OneHotConstraintID>;
+    pub fn sos1_constraint_metadata(&self) -> &ConstraintMetadataStore<Sos1ConstraintID>;
+    pub fn sos1_constraint_metadata_mut(&mut self) -> &mut ConstraintMetadataStore<Sos1ConstraintID>;
+}
+// `ParametricInstance` mirrors the same surface.
+```
+
+Active / removed transitions go through dedicated invariant-safe
+operations on the collection (`relax(id, reason)` / `restore(id)`).
+There is intentionally no `constraint_collection_mut()`. Callers that
+need to add a constraint use the existing `Instance::add_*` family,
+which routes through `ConstraintCollection::insert_with` while
+keeping the variable-id registration check.
 
 The internal call sites that used to read `c.metadata.*` directly
 (e.g. `rust/ommx/src/sample_set/extract.rs`'s `metadata.name`,
@@ -453,12 +519,15 @@ pub struct DecisionVariable(
   `ParametricInstance` / `Solution` / `SampleSet` pre-snapshot the SoA
   store and zip the metadata in alongside each item before handing the
   iterator to `entries_to_dataframe`.
-- **Parse helpers exposed.** `decision_variable_to_v1`,
+- **Parse helpers stay `pub(crate)`.** `decision_variable_to_v1`,
   `evaluated_decision_variable_to_v1`, `sampled_decision_variable_to_v1`,
   `constraint_to_v1`, `removed_constraint_to_v1`,
-  `evaluated_constraint_to_v1`, `sampled_constraint_to_v1` are now `pub`
-  in the Rust crate so the wrappers' `from_bytes` / `to_bytes` cycles
-  preserve metadata across serialization.
+  `evaluated_constraint_to_v1`, `sampled_constraint_to_v1` reconstruct
+  the v1 wire shape from a per-element value plus its metadata, but
+  they are crate-internal — element-level `from_bytes` / `to_bytes`
+  on the Python wrappers were removed in PR #845, so the only callers
+  are the `Instance` / `ParametricInstance` / `Solution` / `SampleSet`
+  serialize paths inside this crate.
 
 The semantic consequence is that mutations on a snapshot wrapper do not
 propagate back to the originating instance: `c = instance.constraints[5];
@@ -470,10 +539,13 @@ or use the Rust SoA setters.
 The two-mode design described next is the long-term replacement for the
 snapshot model — it would let `c.set_name("x")` write through to the
 instance's SoA store. Adopting it requires `Py<Instance>` back-references
-on every wrapper and is gated behind the deferred Series / `include=`
-work.
+on every wrapper and is gated behind the deferred Series accessor work.
 
-### Layered views over the Rust SoA store **(deferred)**
+### Layered views over the Rust SoA store **(partially landed)**
+
+`include=` and the long-format sidecar dfs are landed (PR #846); the
+Series accessor and the `kind=Literal` consolidation of per-kind
+`*_constraints_df` remain deferred.
 
 ```
                   Rust SoA store (canonical)
@@ -632,43 +704,38 @@ indexing, `.items()`, `.index`. Operations users lose vs. dict:
   The right answer is `instance.constraints_df()["equality"]`, which
   is bulk-built from the SoA. Document this; do not enforce.
 
-### `*_df` methods → derived views with `include` **(deferred)**
+### `*_df` methods → derived views with `include` **(landed in PR #846; `kind=` consolidation deferred)**
 
 Each `*_df` is a derived view: type-specific core columns extracted
 from the SoA store, plus whichever sidecars the caller asks for via
 `include`. The default `include` matches v2's wide-DataFrame shape
-(`metadata` + `parameters`), so v2 user code keeps working with only
-a `kind=...` argument added.
+(`metadata` + `parameters`), so v2 user code keeps working unchanged
+on the per-kind methods that exist today.
 
 ```python
-# === v2-style wide DataFrame (default include) ===
-df = instance.constraints_df(kind="regular")
-# ≡ instance.constraints_df(kind="regular", include=("metadata", "parameters"))
-# index name = regular_constraint_id
+# === v2-equivalent wide DataFrame (default include) — landed ===
+df = instance.constraints_df()
+# ≡ instance.constraints_df(include=("metadata", "parameters"))
 # columns: equality, function_type, used_ids,
 #          name, subscripts, description, parameters.{key}, ...
+# (Note: today's per-kind `constraints_df` / `indicator_constraints_df`
+# / `one_hot_constraints_df` / `sos1_constraints_df` family is kept
+# intact in PR #846; the `kind=Literal[...]` consolidation that
+# collapses these into one is deferred to a follow-up PR.)
 
 df = instance.decision_variables_df()
 # ≡ instance.decision_variables_df(include=("metadata", "parameters"))
-# index name = variable_id
 # columns: kind, lower, upper, substituted_value,
 #          name, subscripts, description, parameters.{key}, ...
 
-# === Core only — pass include=() ===
-df = instance.constraints_df(kind="regular", include=())
+# === Core only — pass include=[] (landed) ===
+df = instance.constraints_df(include=[])
 # columns: equality, function_type, used_ids
 
-df = instance.decision_variables_df(include=())
+df = instance.decision_variables_df(include=[])
 # columns: kind, lower, upper, substituted_value
 
-# === Add removed_reasons (not in v2 default) ===
-df = instance.constraints_df(
-    kind="regular",
-    include=("metadata", "parameters", "removed_reasons"),
-)
-# … plus removed_reasons.reason, removed_reasons.{key}
-
-# === Long-format sidecars when wide pivoting isn't what you want ===
+# === Long-format sidecars (landed in PR #846) ===
 meta     = instance.constraint_metadata_df(kind="regular")
                                             # index name=regular_constraint_id;
                                             # name, subscripts, description
@@ -680,14 +747,26 @@ params   = instance.constraint_parameters_df(kind="regular")
 removed  = instance.constraint_removed_reasons_df(kind="regular")
                                             # columns: regular_constraint_id, reason,
                                             # key, value
+
+# Variable-side sidecars omit the kind= dispatch (one ID space):
+vmeta    = instance.variable_metadata_df()
+vparams  = instance.variable_parameters_df()
 ```
 
-`include` accepts a tuple of `Literal["metadata","parameters","removed_reasons"]`
-values. `provenance` is intentionally absent from `include`: chains
-have variable length, so a wide pivot would either explode the column
-space (`provenance.0.*`, `provenance.1.*`, …) or produce an
-object-dtype list column. Users who want provenance pivot the long-
-format `constraint_provenance_df()` themselves.
+The shipping `include=` accepts `Sequence[str]` containing
+`"metadata"` and/or `"parameters"`. Unknown values raise
+`ValueError`. The originally-proposed `"removed_reasons"` flag is
+**not** part of the landed shape — folding removed reasons into the
+active wide df would require unifying the active + removed iteration
+paths, which is deferred along with the `kind=` consolidation. Users
+who want removed-reason data go through the dedicated
+`constraint_removed_reasons_df(kind=...)` long-format sidecar.
+
+`provenance` is intentionally absent from `include` for the long-term
+shape too: chains have variable length, so a wide pivot would either
+explode the column space (`provenance.0.*`, `provenance.1.*`, …) or
+produce an object-dtype list column. Users who want provenance pivot
+the long-format `constraint_provenance_df()` themselves.
 
 `Solution` and `SampleSet` expose the same `*_df` family with stage-
 appropriate core-column schemas and the same `include` parameter:
@@ -722,7 +801,7 @@ call when they want individual wrapper objects; the wrapper getters
 are what they call when they already hold one wrapper. Four surfaces,
 one canonical store.
 
-### Avoiding cross-ID-space joins **(deferred — applies to the Series / `include=` shape)**
+### Avoiding cross-ID-space joins **(partially landed)**
 
 Each constraint kind has its own ID space (regular ID 5 ≠ indicator ID 5),
 and decision variable IDs live in yet another space. With every df sharing
@@ -730,8 +809,9 @@ an `int64` index, `df.join()` between mismatched-kind dfs would silently
 produce an incorrect-but-shaped result. We ward off that mistake at the
 naming and helper layers:
 
-1. **Distinct index names per ID space.** All dfs returned by the API set
-   their index name to a kind-qualified label:
+1. **Distinct index names per ID space (landed in PR #846 for sidecars).**
+   The new long-format / id-indexed sidecar dfs set their index column
+   to a kind-qualified label:
 
    ```
    variable_id                   # decision variables
@@ -741,42 +821,40 @@ naming and helper layers:
    sos1_constraint_id            # SOS1 constraints
    ```
 
+   The wide per-kind `*_df` accessors still index by the unqualified
+   `id` column (a v2 carry-over). Renaming those is bundled with the
+   `kind=Literal[...]` consolidation that turns
+   `indicator_constraints_df()` etc. into `constraints_df(kind=...)`,
+   and is therefore deferred along with that work.
+
    pandas `df.join(other)` aligns by index but does *not* enforce that
    the index names match. The qualified names alone won't stop a wrong
    join — but they're visible in `df.head()`, `df.info()`, IDE
    inspection, and migration-guide examples, so users see the mismatch
    immediately rather than chasing a silent bug downstream.
 
-2. **`include=` covers the common "wide" case without manual join.**
-   The `*_df` methods themselves accept an `include` parameter that
-   folds sidecars into the result, so most users never write a
-   `df.join(other_df)` at all:
+2. **`include=` covers the common "wide" case without manual join
+   (landed).** The wide `*_df` methods accept an `include` parameter
+   that gates the metadata / parameters column families, so most users
+   never write a `df.join(other_df)` at all:
 
    ```python
-   instance.constraints_df(kind="regular")
+   instance.constraints_df()
    # default include=("metadata","parameters") — v2-equivalent shape
-
-   instance.constraints_df(kind="regular",
-                           include=("metadata","parameters","removed_reasons"))
-   # core + metadata + pivoted parameters + pivoted removed_reasons
    ```
 
-   `include` is a tuple of literal strings (typed via `Literal[...]`).
-   `"metadata"` is left-joined as columns; `"parameters"` and
-   `"removed_reasons"` are left-joined after pivoting their long-
-   format keys back to wide columns under namespaced prefixes
-   (`parameters.{key}`, `removed_reasons.{key}`). Cross-ID-space
-   mistakes are impossible inside `include=` because the helper
-   knows the right kind to look up internally. Users who need a
-   manual cross-df `join` go through the long-format sidecars,
-   where the qualified index names (point 1) make the mistake
-   visible.
+   `include` is a `Sequence[str]` containing `"metadata"` and/or
+   `"parameters"`. The originally-proposed `"removed_reasons"` flag is
+   not part of the landed shape — for removed-reason data, users go
+   through `constraint_removed_reasons_df(kind=...)` (long format),
+   where the qualified index name (point 1) makes the kind explicit.
 
 3. **Wrapper-object access stays the safest path for single-id
-   lookups.** `s.loc[id].name` reads metadata via the back-reference
-   without any join, so any code that operates a constraint at a time
-   sidesteps the issue entirely. `*_df` joins are reserved for bulk
-   analysis, where (1) and (2) cover the realistic mistake modes.
+   lookups.** `instance.constraints[id].name` reads metadata directly
+   off the snapshot wrapper without any join, so any code that
+   operates a constraint at a time sidesteps the issue entirely.
+   `*_df` joins are reserved for bulk analysis, where (1) and (2)
+   cover the realistic mistake modes.
 
 A stronger guarantee — encoding kind in the index dtype itself
 (MultiIndex `(kind, id)`, or a custom ExtensionArray) — was considered
@@ -785,28 +863,34 @@ ExtensionArray is a meaningful pandas integration and a maintenance
 burden disproportionate to the failure mode it prevents. The qualified
 index name + `include=` covering the common wide case are sufficient.
 
-### `ToPandasEntry` restructuring **(landed for snapshot model; deferred parts noted)**
+### `ToPandasEntry` restructuring **(landed for snapshot model + sidecars; Series deferred)**
 
 `python/ommx/src/pandas.rs` previously had ~16 `ToPandasEntry` impls
 that read `self.metadata.X` directly off each element. The shipping
 shape is:
 
-- **Core + metadata dfs (landed).** The `ToPandasEntry` trait stays.
-  Every impl that needed metadata is rewritten to consume
+- **Core + metadata dfs (landed in PR #843).** The `ToPandasEntry`
+  trait stays. Every impl that needed metadata is rewritten to consume
   `WithMetadata<'_, T, ConstraintMetadata | DecisionVariableMetadata>`
   rather than the bare element. Call sites in Instance /
   ParametricInstance / Solution / SampleSet pre-snapshot the SoA
   store, build a `Vec<(metadata, item)>`, and zip the snapshot in via
   `WithMetadata::new` before passing the iterator to
-  `entries_to_dataframe`. The user-visible DataFrame shape is
-  unchanged from v2.
-- **Metadata dfs as bulk column-wise builders (deferred).** The
-  proposed `metadata_store_to_dataframe(store)` that walks fields
-  and emits one column allocation per field is part of the long-
-  format sidecar work and lands with the Series / `include=` PR.
-- **Long-format dfs (deferred).** `constraint_parameters_df` /
-  `constraint_provenance_df` / `constraint_removed_reasons_df` etc.
-  are not yet exposed.
+  `entries_to_dataframe`.
+- **`include=` filter (landed in PR #846).** `entries_to_dataframe`
+  takes an `IncludeFlags` and post-filters per-row dicts to drop the
+  gated columns before the DataFrame is built. The `ToPandasEntry`
+  impls themselves are unchanged — they still emit every column
+  unconditionally; the gating happens one layer up. Trades a small
+  per-row cost for a near-zero refactor footprint on the impls.
+- **Long-format / id-indexed sidecar builders (landed in PR #846).**
+  `constraint_metadata_dataframe`, `constraint_parameters_dataframe`,
+  `constraint_provenance_dataframe`,
+  `constraint_removed_reasons_dataframe`,
+  `variable_metadata_dataframe`, `variable_parameters_dataframe`
+  read directly from the SoA stores (via `store.name(id)` /
+  `.parameters(id)` / `.provenance(id)`) and don't go through
+  `ToPandasEntry` at all — they're bulk column-wise builders.
 - **Series accessors (deferred).** The current accessors still return
   `dict` / `list`; the `pandas.Series[ID -> Object]` shape with
   Attached wrappers is part of the deferred wave.
@@ -835,10 +919,19 @@ shape is:
 - The Rust `metadata` field on `DecisionVariable`, `Constraint<S>`,
   `IndicatorConstraint<S>`, `OneHotConstraint<S>`, `Sos1Constraint<S>`,
   and the `Evaluated*` / `Sampled*` siblings is **removed**. Downstream
-  Rust crates that touched `c.metadata.*` directly switch to the
-  collection-level accessors (`instance.constraint_collection().metadata()`,
-  `instance.variable_metadata()`, …) or the per-element-with-metadata
-  helpers (`store.collect_for(id) -> ConstraintMetadata`).
+  Rust crates that touched `c.metadata.*` directly switch to the narrow
+  per-collection accessors on `Instance` /
+  `ParametricInstance` — `constraint_metadata()` / `_mut()`,
+  `indicator_constraint_metadata()` / `_mut()`,
+  `one_hot_constraint_metadata()` / `_mut()`,
+  `sos1_constraint_metadata()` / `_mut()`,
+  `variable_metadata()` / `_mut()` — or the per-element-with-metadata
+  helper `store.collect_for(id) -> ConstraintMetadata`. There is no
+  `constraint_collection_mut()`: handing out raw `&mut` on the active /
+  removed maps would let callers break the collection's invariants
+  (variable-id registration, active/removed disjointness), so mutation
+  goes through the dedicated `Instance::add_*` / `relax` / `restore`
+  operations and the metadata-only `_mut` accessors above.
 - Python wrapper-object metadata getters (`.name`, `.subscripts`,
   `.parameters`, `.description`) are **preserved**; the user-visible
   surface is unchanged. Internally each wrapper now carries an owned
@@ -854,6 +947,31 @@ shape is:
   standalone with `set_name(...)` etc. continue to round-trip their
   metadata through the Instance.
 
+### Landed in PR #846
+
+- Every `*_df` accessor on `Instance` / `ParametricInstance` /
+  `Solution` / `SampleSet` is now a method, not a `#[getter]`
+  property. Migration: `instance.constraints_df` →
+  `instance.constraints_df()`. Affects every `*_df` including
+  `removed_reasons_df` / `*_removed_reasons_df` (those don't take
+  `include=` since they have no metadata / parameters columns to
+  filter, but the method-call form is required for API consistency).
+- Wide `*_df` methods take `include: Sequence[str] | None = None`.
+  Default (`None` → `("metadata", "parameters")`) preserves the v2
+  wide shape; `include=[]` drops both column families;
+  `include=["metadata"]` / `include=["parameters"]` keep just the
+  named family. Unknown values raise `ValueError`.
+- New long-format / id-indexed sidecar methods on `Instance`,
+  `ParametricInstance`, `Solution`, and `SampleSet`:
+  `constraint_metadata_df(kind=...)`,
+  `constraint_parameters_df(kind=...)`,
+  `constraint_provenance_df(kind=...)`,
+  `constraint_removed_reasons_df(kind=...)`,
+  `variable_metadata_df()`, `variable_parameters_df()`. `kind`
+  accepts `"regular"` / `"indicator"` / `"one_hot"` / `"sos1"`
+  (default `"regular"`); unknown values raise `ValueError`. Index
+  column names are kind-qualified.
+
 ### Deferred to follow-up wave
 
 - `instance.constraints`, `decision_variables`, `*_constraints` change
@@ -862,28 +980,11 @@ shape is:
   - `s.values()` (method call) → `s.tolist()` or `list(s)`.
   - List-positional reliance on the old `decision_variables: list[…]`
     ordering breaks; index by `VariableID` instead.
-- `*_df` methods (`constraints_df(kind=...)`,
-  `decision_variables_df()`, and the Solution / SampleSet
-  counterparts) gain an `include=` parameter selecting which
-  sidecars to fold in. The default
-  (`include=("metadata","parameters")`) reproduces the v2 wide-
-  DataFrame shape, so v2 user code keeps working with only a
-  `kind=...` argument added — `df["name"]`,
-  `df["parameters.{key}"]`, etc. continue to resolve. Users who
-  want only the core columns pass `include=()`.
-- New long-format sidecar methods on `Instance`, `Solution`, and
-  `SampleSet`: `constraint_metadata_df(kind=...)`,
-  `constraint_parameters_df(kind=...)`,
-  `constraint_provenance_df(kind=...)`,
-  `constraint_removed_reasons_df(kind=...)`,
-  `variable_metadata_df()`, `variable_parameters_df()`. These
-  expose the SoA store as tidy long-format DataFrames for users
-  who want pivot / aggregation / cross-instance union beyond what
-  `include=` covers.
 - Per-kind `indicator_constraints_df()`,
   `one_hot_constraints_df()`, `sos1_constraints_df()`, and
   `removed_*_constraints_df()` collapse into the single
-  `constraints_df(kind=...)` overload set.
+  `constraints_df(kind=...)` overload set (with `kind=Literal[...]`
+  + `pyo3-stub-gen` `@overload` for per-kind column schemas).
 - Wrapper-object metadata setters become write-through to the SoA
   store via the Standalone / Attached two-mode design.
 - `NamedFunction` / `EvaluatedNamedFunction` /
@@ -902,19 +1003,24 @@ side in detail once the deferred wave lands.
 Numbering preserved from the original Open Questions list for
 traceability with earlier review comments.
 
-1. **Kind dispatch in Python — single method with `Literal` +
-   `@overload`.** `constraint_metadata_df(kind="regular")` and the
-   sibling `*_df(kind=...)` family use a `kind:
-   Literal["regular","indicator","one_hot","sos1"]` parameter rather
-   than four separate methods. `pyo3-stub-gen` supports emitting
-   `typing.overload` stubs keyed on `Literal[…]` arguments, so each
-   kind's overload still advertises its specific column schema in
-   the IDE / type checker.
+1. **Kind dispatch in Python — single method with `kind=...`
+   parameter.** The new sidecar accessors
+   (`constraint_metadata_df(kind="regular")` and siblings) take a
+   `kind: str` argument validated at runtime against
+   `{"regular", "indicator", "one_hot", "sos1"}`. The originally-
+   proposed `Literal[...]` typing + `pyo3-stub-gen` `@overload`
+   stubs are deferred along with the consolidation of today's
+   per-kind `constraints_df` / `indicator_constraints_df` /
+   `one_hot_constraints_df` / `sos1_constraints_df` family — when
+   that consolidation lands, the `Literal` typing covers both the
+   wide and the sidecar accessors uniformly.
 2. **`removed_reason` — separate long-format
    `constraint_removed_reasons_df(kind=...)`.** `RemovedReason` is
    collection-level metadata in Rust, not part of the constraint.
-   Wide pivoting is available on opt-in via
-   `constraints_df(kind=..., include=("removed_reasons",))`.
+   It is exposed only via the dedicated long-format sidecar; the
+   originally-proposed `include=("removed_reasons",)` pivot into
+   the wide `*_df` is deferred along with the active+removed
+   unification.
 3. **Atomic insert-with-metadata on the Rust side — `insert_with`
    takes the existing owned `ConstraintMetadata` struct.** The pre-
    v3 `ConstraintMetadata` (owned struct with `name`, `subscripts`,
@@ -926,15 +1032,18 @@ traceability with earlier review comments.
 
    ```rust
    impl<T: ConstraintType> ConstraintCollection<T> {
-       pub fn insert(&mut self, c: T::Created) -> T::ID;
+       pub fn unused_id(&self) -> T::ID;
        pub fn insert_with(
            &mut self,
+           id: T::ID,
            c: T::Created,
            metadata: ConstraintMetadata,
-       ) -> T::ID;
+       );
    }
 
-   let id = collection.insert_with(
+   let id = collection.unused_id();
+   collection.insert_with(
+       id,
        c,
        ConstraintMetadata {
            name: Some("demand_balance".into()),
@@ -1004,6 +1113,45 @@ traceability with earlier review comments.
    longer than expected. Users who care drop the Series. Whether the
    pattern needs revisiting (e.g. weak-handle variant of the wrapper)
    is a question to take up at implementation time, not before.
+
+## Follow-ups (post-#843, post-#846)
+
+- **Tighten `ConstraintCollection<T>` mutation surface.**
+  `active_mut()` / `removed_mut()` / `insert_with()` are still `pub`
+  on `ConstraintCollection<T>` itself, even though no public caller
+  outside the crate needs them — `Instance` now exposes only
+  invariant-safe operations (`add_*`, `relax`, `restore`,
+  `*_metadata_mut`). These three methods should be narrowed to
+  `pub(crate)` (or smaller) in a follow-up so the only way to break
+  the collection's invariants is from inside the crate.
+- **`kind=Literal[...]` + `@overload` consolidation.** Today's
+  per-kind `*_constraints_df` family
+  (`indicator_constraints_df()` / `one_hot_constraints_df()` /
+  `sos1_constraints_df()` / `removed_*_constraints_df()`)
+  collapses into one `constraints_df(kind=...)` overload set,
+  with the `kind` parameter typed as `Literal[...]` and the
+  per-kind column schemas surfaced via
+  `pyo3-stub-gen`-emitted `@overload` stubs. The new sidecar
+  accessors landed in PR #846 already follow the `kind=...`
+  shape but still take `kind: str` validated at runtime; this
+  follow-up tightens the typing on both surfaces in one go and
+  adds a `_constraint_id` qualified index name on the wide
+  `*_df` accessors as part of the API rename.
+- **`include=("removed_reasons",)` on the wide `*_df`.**
+  Currently removed-reason data is only available via the
+  dedicated `constraint_removed_reasons_df(kind=...)` long-format
+  sidecar. Folding it into `constraints_df` requires unifying the
+  active + removed iteration paths and is bundled with the
+  consolidation above.
+- **`NamedFunction` SoA migration.** Track the
+  `NamedFunctionMetadataStore` work described under
+  "NamedFunction (deferred — separate PR)" above.
+- **Python Series + Attached two-mode wrappers.** Wave 2 of the
+  Python surface — `instance.constraints` returns a
+  `pandas.Series[ID -> Object]`, wrappers gain a `Py<Instance>`
+  back-reference and write-through metadata setters. Blocked on
+  the snapshot-vs-attached decision; the `Py<Instance>` lifetime
+  question is documented in resolved decision #8.
 
 ## Open questions
 

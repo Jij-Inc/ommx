@@ -144,10 +144,10 @@ solution = OMMXPySCIPOptAdapter.solve(instance)
 
 ### 最適解の分析
 
-`decision_variables` プロパティは、決定変数のID、種類、名前、値などの情報を含む `pandas.DataFrame` オブジェクトを返します：
+`decision_variables_df()` メソッドは、決定変数のID、種類、名前、値などの情報を含む `pandas.DataFrame` オブジェクトを返します：
 
 ```{code-cell} ipython3
-solution.decision_variables_df
+solution.decision_variables_df()
 ```
 
 この `pandas.DataFrame` オブジェクトを使うことで、例えば「アイテムをナップサックに入れるかどうか」という判断をまとめた表を pandas で簡単に作成できます：
@@ -155,7 +155,7 @@ solution.decision_variables_df
 ```{code-cell} ipython3
 import pandas as pd
 
-df = solution.decision_variables_df
+df = solution.decision_variables_df()
 pd.DataFrame.from_dict(
     {
         "アイテムの番号": df.index,
@@ -179,10 +179,10 @@ assert np.isclose(solution.objective, expected)
 
 ### 制約条件の分析
 
-`constraints` プロパティは、制約条件の等号不等号、左辺の値 (`"value"`)、名前などの情報を含む `pandas.DataFrame` オブジェクトを返します：
+`constraints_df()` メソッドは、制約条件の等号不等号、左辺の値 (`"value"`)、名前などの情報を含む `pandas.DataFrame` オブジェクトを返します：
 
 ```{code-cell} ipython3
-solution.constraints_df
+solution.constraints_df()
 ```
 
 特に `"value"` は制約条件にどの程度の余裕があるのかを知るために便利です。今回のケースでは、0番目のアイテム $w_0$ の重さが `11`、3番目のアイテムの重さ $w_3$ が `35` であり、ナップサックの耐荷重 $W$ は `47` なので、重量制約

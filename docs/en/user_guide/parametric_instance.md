@@ -57,10 +57,10 @@ parametric_instance = ParametricInstance.from_components(
 )
 ```
 
-Like `ommx.v1.Instance`, you can view the decision variables and constraints as DataFrames through the `decision_variables_df` and `constraints_df` properties. In addition, `ommx.v1.ParametricInstance` has a `parameters_df` property for viewing parameter information in a DataFrame.
+Like `ommx.v1.Instance`, you can view the decision variables and constraints as DataFrames through the `decision_variables_df()` and `constraints_df()` methods. In addition, `ommx.v1.ParametricInstance` has a `parameters_df()` method for viewing parameter information in a DataFrame.
 
 ```{code-cell} ipython3
-parametric_instance.parameters_df
+parametric_instance.parameters_df()
 ```
 
 Next, let’s assign specific values to the parameters. Use `ParametricInstance.with_parameters`, which takes a dictionary mapping each `ommx.v1.Parameter` ID to its corresponding value.

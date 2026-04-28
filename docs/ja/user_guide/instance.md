@@ -63,7 +63,7 @@ instance.sense == Instance.MAXIMIZE
 決定変数と制約条件については [`pandas.DataFrame`](https://pandas.pydata.org/pandas-docs/stable/reference/frame.html) の形式で取得できます
 
 ```{code-cell} ipython3
-instance.decision_variables
+instance.decision_variables_df()
 ```
 
 まず `kind` と `lower`, `upper` は数理モデルとして必須の情報です。
@@ -95,7 +95,7 @@ print(f"{x1.id=}, {x1.name=}")
 次に制約条件を見てみましょう
 
 ```{code-cell} ipython3
-instance.constraints_df
+instance.constraints_df()
 ```
 
 OMMXでは制約条件もIDで管理されます。このIDは決定変数のIDとは独立です。制約条件のIDは `Instance` に登録する際に決まります: [`Instance.from_components`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.from_components) に渡す `constraints` 辞書のキーがそのまま制約条件のIDになります。

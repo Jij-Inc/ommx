@@ -66,7 +66,10 @@ myst_update_mathjax = False
 # Allow overriding execution mode via environment variable (e.g. OMMX_NB_EXECUTION=force)
 nb_execution_mode = os.environ.get("OMMX_NB_EXECUTION", "off")
 nb_execution_timeout = 300
-nb_execution_excludepatterns = ["release_note/ommx-1.*.md"]
+nb_execution_excludepatterns = [
+    "release_note/ommx-1.*.md",
+    "release_note/ommx-2.*.md",
+]
 nb_execution_raise_on_error = True
 
 # -- Options for HTML output -------------------------------------------------

@@ -7088,6 +7088,163 @@
               "deprecated": null
             },
             {
+              "name": "constraint_metadata_df",
+              "doc": "Constraint metadata DataFrame (id-indexed wide format).\n\nOne row per constraint id (active + removed) with columns\n`name`, `subscripts`, `description`. Index column is\n`{kind}_constraint_id`. `kind` selects which constraint family\nto read: `\"regular\"`, `\"indicator\"`, `\"one_hot\"`, or `\"sos1\"`.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "kind",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "'regular'"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "constraint_parameters_df",
+              "doc": "Constraint parameters DataFrame (long format).\n\nOne row per (constraint_id, parameter_key) pair. Columns:\n`{kind}_constraint_id`, `key`, `value`. Default RangeIndex.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "kind",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "'regular'"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "constraint_provenance_df",
+              "doc": "Constraint provenance DataFrame (long format).\n\nOne row per (constraint_id, step) pair. Columns:\n`{kind}_constraint_id`, `step`, `source_kind`, `source_id`.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "kind",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "'regular'"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "constraint_removed_reasons_df",
+              "doc": "Removed-constraint reasons DataFrame (long format).\n\nOne row per (constraint_id, parameter_key) pair, plus one row with\n`key`/`value` set to NA when the reason has no parameters. Columns:\n`{kind}_constraint_id`, `reason`, `key`, `value`.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "kind",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "'regular'"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "constraints_df",
+              "doc": "DataFrame of constraints",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "include",
+                      "type_": {
+                        "display": "Optional[Sequence[str]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Sequence[str]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "str",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "convert_all_indicators_to_constraints",
               "doc": "Convert every active indicator constraint to regular constraints using Big-M.\n\nSee {meth}`~ommx.v1.Instance.convert_indicator_to_constraint` for the\nconversion rule. Returns a dict mapping each original indicator ID to the\nlist of regular constraint IDs it produced.\n\nAtomic: every active indicator is validated up front, and only if every\none is convertible are the conversions applied. If any indicator fails\nvalidation (non-finite bound on a required side), no mutation happens and\nthe instance is left untouched.",
               "signatures": [
@@ -7308,6 +7465,47 @@
                   "parameters": [],
                   "return_type": {
                     "display": "DecisionVariableAnalysis",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "decision_variables_df",
+              "doc": "DataFrame of decision variables",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "include",
+                      "type_": {
+                        "display": "Optional[Sequence[str]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Sequence[str]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "str",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DataFrame",
                     "link_target": null,
                     "children": []
                   }
@@ -7843,6 +8041,47 @@
               "deprecated": null
             },
             {
+              "name": "indicator_constraints_df",
+              "doc": "DataFrame of indicator constraints",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "include",
+                      "type_": {
+                        "display": "Optional[Sequence[str]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Sequence[str]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "str",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "load_mps",
               "doc": "",
               "signatures": [
@@ -7937,6 +8176,88 @@
                   "parameters": [],
                   "return_type": {
                     "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "named_functions_df",
+              "doc": "DataFrame of named functions",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "include",
+                      "type_": {
+                        "display": "Optional[Sequence[str]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Sequence[str]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "str",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "one_hot_constraints_df",
+              "doc": "DataFrame of one-hot constraints",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "include",
+                      "type_": {
+                        "display": "Optional[Sequence[str]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Sequence[str]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "str",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DataFrame",
                     "link_target": null,
                     "children": []
                   }
@@ -8257,6 +8578,170 @@
               "deprecated": null
             },
             {
+              "name": "removed_constraints_df",
+              "doc": "DataFrame of removed constraints",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "include",
+                      "type_": {
+                        "display": "Optional[Sequence[str]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Sequence[str]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "str",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "removed_indicator_constraints_df",
+              "doc": "DataFrame of removed indicator constraints",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "include",
+                      "type_": {
+                        "display": "Optional[Sequence[str]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Sequence[str]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "str",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "removed_one_hot_constraints_df",
+              "doc": "DataFrame of removed one-hot constraints",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "include",
+                      "type_": {
+                        "display": "Optional[Sequence[str]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Sequence[str]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "str",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "removed_sos1_constraints_df",
+              "doc": "DataFrame of removed SOS1 constraints",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "include",
+                      "type_": {
+                        "display": "Optional[Sequence[str]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Sequence[str]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "str",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "required_ids",
               "doc": "Get the set of decision variable IDs used in the objective and remaining constraints.\n\n# Examples\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.required_ids()\n{0, 1, 2}\n```",
               "signatures": [
@@ -8360,6 +8845,47 @@
                   ],
                   "return_type": {
                     "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "sos1_constraints_df",
+              "doc": "DataFrame of SOS1 constraints",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "include",
+                      "type_": {
+                        "display": "Optional[Sequence[str]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Sequence[str]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "str",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DataFrame",
                     "link_target": null,
                     "children": []
                   }
@@ -8589,6 +9115,38 @@
               ],
               "is_async": false,
               "deprecated": null
+            },
+            {
+              "name": "variable_metadata_df",
+              "doc": "Decision-variable metadata DataFrame (id-indexed wide format).\n\nColumns: `name`, `subscripts`, `description`. Index column =\n`variable_id`.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "variable_parameters_df",
+              "doc": "Decision-variable parameters DataFrame (long format).\n\nOne row per (variable_id, parameter_key) pair. Columns:\n`variable_id`, `key`, `value`.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
             }
           ],
           "attributes": [
@@ -8685,17 +9243,6 @@
               "is_readonly": true
             },
             {
-              "name": "constraints_df",
-              "doc": "DataFrame of constraints",
-              "type_": {
-                "display": "DataFrame",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
               "name": "created",
               "doc": "",
               "type_": {
@@ -8762,17 +9309,6 @@
               "is_readonly": true
             },
             {
-              "name": "decision_variables_df",
-              "doc": "DataFrame of decision variables",
-              "type_": {
-                "display": "DataFrame",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
               "name": "description",
               "doc": "",
               "type_": {
@@ -8807,17 +9343,6 @@
                     "children": []
                   }
                 ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "indicator_constraints_df",
-              "doc": "DataFrame of indicator constraints",
-              "type_": {
-                "display": "DataFrame",
-                "link_target": null,
-                "children": []
               },
               "is_property": true,
               "is_readonly": true
@@ -8868,17 +9393,6 @@
                     "children": []
                   }
                 ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "named_functions_df",
-              "doc": "DataFrame of named functions",
-              "type_": {
-                "display": "DataFrame",
-                "link_target": null,
-                "children": []
               },
               "is_property": true,
               "is_readonly": true
@@ -8953,17 +9467,6 @@
               "is_readonly": true
             },
             {
-              "name": "one_hot_constraints_df",
-              "doc": "DataFrame of one-hot constraints",
-              "type_": {
-                "display": "DataFrame",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
               "name": "removed_constraints",
               "doc": "Dict of all removed constraints in the instance keyed by their IDs.",
               "type_": {
@@ -8981,17 +9484,6 @@
                     "children": []
                   }
                 ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "removed_constraints_df",
-              "doc": "DataFrame of removed constraints",
-              "type_": {
-                "display": "DataFrame",
-                "link_target": null,
-                "children": []
               },
               "is_property": true,
               "is_readonly": true
@@ -9019,17 +9511,6 @@
               "is_readonly": true
             },
             {
-              "name": "removed_indicator_constraints_df",
-              "doc": "DataFrame of removed indicator constraints",
-              "type_": {
-                "display": "DataFrame",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
               "name": "removed_one_hot_constraints",
               "doc": "Dict of all removed one-hot constraints in the instance keyed by their IDs.",
               "type_": {
@@ -9052,17 +9533,6 @@
               "is_readonly": true
             },
             {
-              "name": "removed_one_hot_constraints_df",
-              "doc": "DataFrame of removed one-hot constraints",
-              "type_": {
-                "display": "DataFrame",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
               "name": "removed_sos1_constraints",
               "doc": "Dict of all removed SOS1 constraints in the instance keyed by their IDs.",
               "type_": {
@@ -9080,17 +9550,6 @@
                     "children": []
                   }
                 ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "removed_sos1_constraints_df",
-              "doc": "DataFrame of removed SOS1 constraints",
-              "type_": {
-                "display": "DataFrame",
-                "link_target": null,
-                "children": []
               },
               "is_property": true,
               "is_readonly": true
@@ -9141,17 +9600,6 @@
                     "children": []
                   }
                 ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "sos1_constraints_df",
-              "doc": "DataFrame of SOS1 constraints",
-              "type_": {
-                "display": "DataFrame",
-                "link_target": null,
-                "children": []
               },
               "is_property": true,
               "is_readonly": true
@@ -12313,6 +12761,204 @@
               "deprecated": null
             },
             {
+              "name": "constraint_metadata_df",
+              "doc": "Constraint metadata DataFrame (id-indexed). See\n{meth}`ommx.v1.Instance.constraint_metadata_df` for column / `kind=`\nsemantics.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "kind",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "'regular'"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "constraint_parameters_df",
+              "doc": "Constraint parameters DataFrame (long format).",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "kind",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "'regular'"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "constraint_provenance_df",
+              "doc": "Constraint provenance DataFrame (long format).",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "kind",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "'regular'"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "constraint_removed_reasons_df",
+              "doc": "Removed-constraint reasons DataFrame (long format).",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "kind",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "'regular'"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "constraints_df",
+              "doc": "DataFrame of constraints",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "include",
+                      "type_": {
+                        "display": "Optional[Sequence[str]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Sequence[str]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "str",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "decision_variables_df",
+              "doc": "DataFrame of decision variables",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "include",
+                      "type_": {
+                        "display": "Optional[Sequence[str]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Sequence[str]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "str",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "empty",
               "doc": "Create trivial empty instance of minimization with zero objective, no constraints, and no decision variables and parameters.",
               "signatures": [
@@ -12695,6 +13341,129 @@
               "deprecated": null
             },
             {
+              "name": "named_functions_df",
+              "doc": "DataFrame of named functions",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "include",
+                      "type_": {
+                        "display": "Optional[Sequence[str]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Sequence[str]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "str",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "parameters_df",
+              "doc": "DataFrame of parameters",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "include",
+                      "type_": {
+                        "display": "Optional[Sequence[str]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Sequence[str]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "str",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "removed_constraints_df",
+              "doc": "DataFrame of removed constraints",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "include",
+                      "type_": {
+                        "display": "Optional[Sequence[str]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Sequence[str]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "str",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "to_bytes",
               "doc": "",
               "signatures": [
@@ -12702,6 +13471,38 @@
                   "parameters": [],
                   "return_type": {
                     "display": "bytes",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "variable_metadata_df",
+              "doc": "Decision-variable metadata DataFrame (id-indexed).",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "variable_parameters_df",
+              "doc": "Decision-variable parameters DataFrame (long format).",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "DataFrame",
                     "link_target": null,
                     "children": []
                   }
@@ -12809,17 +13610,6 @@
               "is_readonly": true
             },
             {
-              "name": "constraints_df",
-              "doc": "DataFrame of constraints",
-              "type_": {
-                "display": "DataFrame",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
               "name": "created",
               "doc": "",
               "type_": {
@@ -12886,17 +13676,6 @@
               "is_readonly": true
             },
             {
-              "name": "decision_variables_df",
-              "doc": "DataFrame of decision variables",
-              "type_": {
-                "display": "DataFrame",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
               "name": "description",
               "doc": "",
               "type_": {
@@ -12942,17 +13721,6 @@
                     "children": []
                   }
                 ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "named_functions_df",
-              "doc": "DataFrame of named functions",
-              "type_": {
-                "display": "DataFrame",
-                "link_target": null,
-                "children": []
               },
               "is_property": true,
               "is_readonly": true
@@ -13040,17 +13808,6 @@
               "is_readonly": true
             },
             {
-              "name": "parameters_df",
-              "doc": "DataFrame of parameters",
-              "type_": {
-                "display": "DataFrame",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
               "name": "removed_constraints",
               "doc": "",
               "type_": {
@@ -13068,17 +13825,6 @@
                     "children": []
                   }
                 ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "removed_constraints_df",
-              "doc": "DataFrame of removed constraints",
-              "type_": {
-                "display": "DataFrame",
-                "link_target": null,
-                "children": []
               },
               "is_property": true,
               "is_readonly": true
@@ -16157,6 +16903,204 @@
               "deprecated": null
             },
             {
+              "name": "constraint_metadata_df",
+              "doc": "Constraint metadata DataFrame (id-indexed). See\n{meth}`ommx.v1.Instance.constraint_metadata_df` for column / `kind=`\nsemantics. Reads from the sampled collection's metadata store.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "kind",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "'regular'"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "constraint_parameters_df",
+              "doc": "Constraint parameters DataFrame (long format).",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "kind",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "'regular'"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "constraint_provenance_df",
+              "doc": "Constraint provenance DataFrame (long format).",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "kind",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "'regular'"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "constraint_removed_reasons_df",
+              "doc": "Removed-constraint reasons DataFrame (long format).",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "kind",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "'regular'"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "constraints_df",
+              "doc": "DataFrame of constraints with per-sample value and feasibility columns.\nStatic columns: id, equality, used_ids, name, subscripts, description.\nDynamic columns: value.{sample_id} and feasible.{sample_id} for each sample.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "include",
+                      "type_": {
+                        "display": "Optional[Sequence[str]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Sequence[str]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "str",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "decision_variables_df",
+              "doc": "DataFrame of decision variables with per-sample value columns.\nStatic columns: id, kind, lower, upper, name, subscripts, description.\nDynamic columns: one per sample_id (int) with the variable's value.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "include",
+                      "type_": {
+                        "display": "Optional[Sequence[str]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Sequence[str]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "str",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "extract_all_decision_variables",
               "doc": "Extract all decision variables grouped by name for a given sample ID.\n\nReturns a mapping from variable name to a mapping from subscripts to values.\nThis is useful for extracting all variables at once in a structured format.\nVariables without names are not included in the result.\n\nRaises ValueError if a decision variable with parameters is found, or if the same\nname and subscript combination is found multiple times, or if the sample ID is invalid.\n\n# Examples\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i, name=\"x\", subscripts=[i]) for i in range(3)]\n>>> y = [DecisionVariable.binary(i+3, name=\"y\", subscripts=[i]) for i in range(2)]\n>>> instance = Instance.from_components(\n...     decision_variables=x + y,\n...     objective=sum(x) + sum(y),\n...     constraints=[],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> sample_set = instance.evaluate_samples({0: {i: 1 for i in range(5)}})\n>>> all_vars = sample_set.extract_all_decision_variables(0)\n>>> all_vars[\"x\"]\n{(0,): 1.0, (1,): 1.0, (2,): 1.0}\n>>> all_vars[\"y\"]\n{(0,): 1.0, (1,): 1.0}\n```",
               "signatures": [
@@ -16614,6 +17558,104 @@
               "deprecated": null
             },
             {
+              "name": "indicator_constraints_df",
+              "doc": "DataFrame of indicator constraints with per-sample value, feasibility, and indicator_active columns.\nStatic columns: id, indicator_variable_id, equality, used_ids, name, subscripts, description.\nDynamic columns: value.{sample_id}, feasible.{sample_id}, indicator_active.{sample_id} for each sample.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "include",
+                      "type_": {
+                        "display": "Optional[Sequence[str]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Sequence[str]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "str",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "indicator_removed_reasons_df",
+              "doc": "DataFrame of removed indicator constraint reasons.\n\nColumns: id (index), removed_reason, removed_reason.{key}\n\nCan be joined with {meth}`indicator_constraints_df` using the `id` index.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "named_functions_df",
+              "doc": "DataFrame of named functions with per-sample value columns.\nStatic columns: id, used_ids, name, subscripts, description, parameters.{key}.\nDynamic columns: one per sample_id (int) with the function's evaluated value.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "include",
+                      "type_": {
+                        "display": "Optional[Sequence[str]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Sequence[str]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "str",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "num_samples",
               "doc": "",
               "signatures": [
@@ -16621,6 +17663,79 @@
                   "parameters": [],
                   "return_type": {
                     "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "one_hot_constraints_df",
+              "doc": "DataFrame of one-hot constraints with per-sample feasibility and active_variable columns.\nStatic columns: id, used_ids, name, subscripts, description.\nDynamic columns: feasible.{sample_id}, active_variable.{sample_id} for each sample.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "include",
+                      "type_": {
+                        "display": "Optional[Sequence[str]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Sequence[str]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "str",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "one_hot_removed_reasons_df",
+              "doc": "DataFrame of removed one-hot constraint reasons.\n\nColumns: id (index), removed_reason, removed_reason.{key}\n\nCan be joined with {meth}`one_hot_constraints_df` using the `id` index.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "removed_reasons_df",
+              "doc": "DataFrame of removed constraint reasons.\n\nColumns: id (index), removed_reason, removed_reason.{key}\n\nCan be joined with {meth}`constraints_df` using the `id` index.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "DataFrame",
                     "link_target": null,
                     "children": []
                   }
@@ -16652,6 +17767,63 @@
               "deprecated": null
             },
             {
+              "name": "sos1_constraints_df",
+              "doc": "DataFrame of SOS1 constraints with per-sample feasibility and active_variable columns.\nStatic columns: id, used_ids, name, subscripts, description.\nDynamic columns: feasible.{sample_id}, active_variable.{sample_id} for each sample.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "include",
+                      "type_": {
+                        "display": "Optional[Sequence[str]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Sequence[str]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "str",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "sos1_removed_reasons_df",
+              "doc": "DataFrame of removed SOS1 constraint reasons.\n\nColumns: id (index), removed_reason, removed_reason.{key}\n\nCan be joined with {meth}`sos1_constraints_df` using the `id` index.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "to_bytes",
               "doc": "",
               "signatures": [
@@ -16659,6 +17831,38 @@
                   "parameters": [],
                   "return_type": {
                     "display": "bytes",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "variable_metadata_df",
+              "doc": "Decision-variable metadata DataFrame (id-indexed).",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "variable_parameters_df",
+              "doc": "Decision-variable parameters DataFrame (long format).",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "DataFrame",
                     "link_target": null,
                     "children": []
                   }
@@ -16763,17 +17967,6 @@
               "is_readonly": true
             },
             {
-              "name": "constraints_df",
-              "doc": "DataFrame of constraints with per-sample value and feasibility columns.\nStatic columns: id, equality, used_ids, name, subscripts, description.\nDynamic columns: value.{sample_id} and feasible.{sample_id} for each sample.",
-              "type_": {
-                "display": "DataFrame",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
               "name": "decision_variable_names",
               "doc": "Get all unique decision variable names in this sample set.\n\nReturns a set of all unique variable names. Variables without names are not included.\n\n# Examples\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i, name=\"x\", subscripts=[i]) for i in range(3)]\n>>> y = [DecisionVariable.binary(i+3, name=\"y\", subscripts=[i]) for i in range(2)]\n>>> instance = Instance.from_components(\n...     decision_variables=x + y,\n...     objective=sum(x) + sum(y),\n...     constraints=[],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> sample_set = instance.evaluate_samples({0: {i: 1 for i in range(5)}})\n>>> sorted(sample_set.decision_variable_names)\n['x', 'y']\n```",
               "type_": {
@@ -16803,17 +17996,6 @@
                     "children": []
                   }
                 ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "decision_variables_df",
-              "doc": "DataFrame of decision variables with per-sample value columns.\nStatic columns: id, kind, lower, upper, name, subscripts, description.\nDynamic columns: one per sample_id (int) with the variable's value.",
-              "type_": {
-                "display": "DataFrame",
-                "link_target": null,
-                "children": []
               },
               "is_property": true,
               "is_readonly": true
@@ -16901,28 +18083,6 @@
               "is_readonly": true
             },
             {
-              "name": "indicator_constraints_df",
-              "doc": "DataFrame of indicator constraints with per-sample value, feasibility, and indicator_active columns.\nStatic columns: id, indicator_variable_id, equality, used_ids, name, subscripts, description.\nDynamic columns: value.{sample_id}, feasible.{sample_id}, indicator_active.{sample_id} for each sample.",
-              "type_": {
-                "display": "DataFrame",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "indicator_removed_reasons_df",
-              "doc": "DataFrame of removed indicator constraint reasons.\n\nColumns: id (index), removed_reason, removed_reason.{key}\n\nCan be joined with {attr}`indicator_constraints_df` using the `id` index.",
-              "type_": {
-                "display": "DataFrame",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
               "name": "instance",
               "doc": "",
               "type_": {
@@ -16989,17 +18149,6 @@
               "is_readonly": true
             },
             {
-              "name": "named_functions_df",
-              "doc": "DataFrame of named functions with per-sample value columns.\nStatic columns: id, used_ids, name, subscripts, description, parameters.\nDynamic columns: one per sample_id (int) with the function's evaluated value.",
-              "type_": {
-                "display": "DataFrame",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
               "name": "objectives",
               "doc": "Get objectives for all samples",
               "type_": {
@@ -17017,28 +18166,6 @@
                     "children": []
                   }
                 ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "one_hot_constraints_df",
-              "doc": "DataFrame of one-hot constraints with per-sample feasibility and active_variable columns.\nStatic columns: id, used_ids, name, subscripts, description.\nDynamic columns: feasible.{sample_id}, active_variable.{sample_id} for each sample.",
-              "type_": {
-                "display": "DataFrame",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "one_hot_removed_reasons_df",
-              "doc": "DataFrame of removed one-hot constraint reasons.\n\nColumns: id (index), removed_reason, removed_reason.{key}\n\nCan be joined with {attr}`one_hot_constraints_df` using the `id` index.",
-              "type_": {
-                "display": "DataFrame",
-                "link_target": null,
-                "children": []
               },
               "is_property": true,
               "is_readonly": true
@@ -17074,17 +18201,6 @@
                 ]
               },
               "is_property": true
-            },
-            {
-              "name": "removed_reasons_df",
-              "doc": "DataFrame of removed constraint reasons.\n\nColumns: id (index), removed_reason, removed_reason.{key}\n\nCan be joined with {attr}`constraints_df` using the `id` index.",
-              "type_": {
-                "display": "DataFrame",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
             },
             {
               "name": "sample_ids_list",
@@ -17145,28 +18261,6 @@
                 ]
               },
               "is_property": true
-            },
-            {
-              "name": "sos1_constraints_df",
-              "doc": "DataFrame of SOS1 constraints with per-sample feasibility and active_variable columns.\nStatic columns: id, used_ids, name, subscripts, description.\nDynamic columns: feasible.{sample_id}, active_variable.{sample_id} for each sample.",
-              "type_": {
-                "display": "DataFrame",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "sos1_removed_reasons_df",
-              "doc": "DataFrame of removed SOS1 constraint reasons.\n\nColumns: id (index), removed_reason, removed_reason.{key}\n\nCan be joined with {attr}`sos1_constraints_df` using the `id` index.",
-              "type_": {
-                "display": "DataFrame",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
             },
             {
               "name": "start",
@@ -18062,6 +19156,204 @@
               "deprecated": null
             },
             {
+              "name": "constraint_metadata_df",
+              "doc": "Constraint metadata DataFrame (id-indexed). See\n{meth}`ommx.v1.Instance.constraint_metadata_df` for column / `kind=`\nsemantics. Reads from the evaluated collection's metadata store.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "kind",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "'regular'"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "constraint_parameters_df",
+              "doc": "Constraint parameters DataFrame (long format).",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "kind",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "'regular'"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "constraint_provenance_df",
+              "doc": "Constraint provenance DataFrame (long format).",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "kind",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "'regular'"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "constraint_removed_reasons_df",
+              "doc": "Removed-constraint reasons DataFrame (long format).",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "kind",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "'regular'"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "constraints_df",
+              "doc": "DataFrame of evaluated constraints\n\nColumns: id (index), equality, value, used_ids, name, subscripts, description, dual_variable",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "include",
+                      "type_": {
+                        "display": "Optional[Sequence[str]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Sequence[str]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "str",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "decision_variables_df",
+              "doc": "DataFrame of evaluated decision variables\n\nColumns: id (index), kind, lower, upper, name, subscripts, description, substituted_value, value",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "include",
+                      "type_": {
+                        "display": "Optional[Sequence[str]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Sequence[str]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "str",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "extract_all_decision_variables",
               "doc": "Extract all decision variables grouped by name.\n\nReturns a mapping from variable name to a mapping from subscripts to values.\nThis is useful for extracting all variables at once in a structured format.\nVariables without names are not included in the result.\n\nRaises ValueError if a decision variable with parameters is found, or if the same\nname and subscript combination is found multiple times.\n\n# Examples\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i, name=\"x\", subscripts=[i]) for i in range(3)]\n>>> y = [DecisionVariable.binary(i+3, name=\"y\", subscripts=[i]) for i in range(2)]\n>>> instance = Instance.from_components(\n...     decision_variables=x + y,\n...     objective=sum(x) + sum(y),\n...     constraints=[],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> solution = instance.evaluate({i: 1 for i in range(5)})\n>>> all_vars = solution.extract_all_decision_variables()\n>>> all_vars[\"x\"]\n{(0,): 1.0, (1,): 1.0, (2,): 1.0}\n>>> all_vars[\"y\"]\n{(0,): 1.0, (1,): 1.0}\n```",
               "signatures": [
@@ -18412,6 +19704,177 @@
               "deprecated": null
             },
             {
+              "name": "indicator_constraints_df",
+              "doc": "DataFrame of evaluated indicator constraints\n\nColumns: id (index), indicator_variable_id, equality, value, indicator_active, used_ids, name, subscripts, description",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "include",
+                      "type_": {
+                        "display": "Optional[Sequence[str]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Sequence[str]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "str",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "indicator_removed_reasons_df",
+              "doc": "DataFrame of removed indicator constraint reasons.\n\nColumns: id (index), removed_reason, removed_reason.{key}\n\nCan be joined with {meth}`indicator_constraints_df` using the `id` index.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "named_functions_df",
+              "doc": "DataFrame of evaluated named functions\n\nColumns: id (index), value, used_ids, name, subscripts, description, parameters.{key}",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "include",
+                      "type_": {
+                        "display": "Optional[Sequence[str]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Sequence[str]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "str",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "one_hot_constraints_df",
+              "doc": "DataFrame of evaluated one-hot constraints\n\nColumns: id (index), feasible, active_variable, used_ids, name, subscripts, description",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "include",
+                      "type_": {
+                        "display": "Optional[Sequence[str]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Sequence[str]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "str",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "one_hot_removed_reasons_df",
+              "doc": "DataFrame of removed one-hot constraint reasons.\n\nColumns: id (index), removed_reason, removed_reason.{key}\n\nCan be joined with {meth}`one_hot_constraints_df` using the `id` index.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "removed_reasons_df",
+              "doc": "DataFrame of removed constraint reasons.\n\nColumns: id (index), removed_reason, removed_reason.{key}\n\nCan be joined with {meth}`constraints_df` on the `id` index.\n\n# Examples\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[\n...         (x[0] + x[1] == 1).set_id(10),\n...         (x[1] + x[2] == 1).set_id(20),\n...     ],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.relax_constraint(10, \"test_reason\")\n>>> solution = instance.evaluate({0: 1, 1: 0, 2: 1})\n```\n\n`removed_reasons_df` contains only removed constraints:\n\n```python\n>>> solution.removed_reasons_df()\n    removed_reason\nid\n10    test_reason\n```\n\nJoin with `constraints_df` to get full information:\n\n```python\n>>> df = solution.constraints_df().join(solution.removed_reasons_df())\n>>> df[[\"value\", \"removed_reason\"]]\n    value removed_reason\nid\n10    0.0   test_reason\n20    0.0           NaN\n```",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "set_dual_variable",
               "doc": "Set the dual variable value for a specific constraint by ID",
               "signatures": [
@@ -18444,6 +19907,63 @@
                   ],
                   "return_type": {
                     "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "sos1_constraints_df",
+              "doc": "DataFrame of evaluated SOS1 constraints\n\nColumns: id (index), feasible, active_variable, used_ids, name, subscripts, description",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "include",
+                      "type_": {
+                        "display": "Optional[Sequence[str]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Sequence[str]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "str",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "sos1_removed_reasons_df",
+              "doc": "DataFrame of removed SOS1 constraint reasons.\n\nColumns: id (index), removed_reason, removed_reason.{key}\n\nCan be joined with {meth}`sos1_constraints_df` using the `id` index.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "DataFrame",
                     "link_target": null,
                     "children": []
                   }
@@ -18492,6 +20012,38 @@
                   "parameters": [],
                   "return_type": {
                     "display": "float",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "variable_metadata_df",
+              "doc": "Decision-variable metadata DataFrame (id-indexed).",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "variable_parameters_df",
+              "doc": "Decision-variable parameters DataFrame (long format).",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "DataFrame",
                     "link_target": null,
                     "children": []
                   }
@@ -18590,17 +20142,6 @@
               "is_readonly": true
             },
             {
-              "name": "constraints_df",
-              "doc": "DataFrame of evaluated constraints\n\nColumns: id (index), equality, value, used_ids, name, subscripts, description, dual_variable",
-              "type_": {
-                "display": "DataFrame",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
               "name": "decision_variable_ids",
               "doc": "",
               "type_": {
@@ -18652,17 +20193,6 @@
               "is_readonly": true
             },
             {
-              "name": "decision_variables_df",
-              "doc": "DataFrame of evaluated decision variables\n\nColumns: id (index), kind, lower, upper, name, subscripts, description, substituted_value, value",
-              "type_": {
-                "display": "DataFrame",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
               "name": "end",
               "doc": "",
               "type_": {
@@ -18705,28 +20235,6 @@
               "doc": "Feasibility of the solution in terms of all constraints, including relaxed (removed) constraints.",
               "type_": {
                 "display": "bool",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "indicator_constraints_df",
-              "doc": "DataFrame of evaluated indicator constraints\n\nColumns: id (index), indicator_variable_id, equality, value, indicator_active, used_ids, name, subscripts, description",
-              "type_": {
-                "display": "DataFrame",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "indicator_removed_reasons_df",
-              "doc": "DataFrame of removed indicator constraint reasons.\n\nColumns: id (index), removed_reason, removed_reason.{key}\n\nCan be joined with {attr}`indicator_constraints_df` using the `id` index.",
-              "type_": {
-                "display": "DataFrame",
                 "link_target": null,
                 "children": []
               },
@@ -18817,43 +20325,10 @@
               "is_readonly": true
             },
             {
-              "name": "named_functions_df",
-              "doc": "DataFrame of evaluated named functions\n\nColumns: id (index), value, used_ids, name, subscripts, description, parameters.{key}",
-              "type_": {
-                "display": "DataFrame",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
               "name": "objective",
               "doc": "Get the objective function value",
               "type_": {
                 "display": "float",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "one_hot_constraints_df",
-              "doc": "DataFrame of evaluated one-hot constraints\n\nColumns: id (index), feasible, active_variable, used_ids, name, subscripts, description",
-              "type_": {
-                "display": "DataFrame",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "one_hot_removed_reasons_df",
-              "doc": "DataFrame of removed one-hot constraint reasons.\n\nColumns: id (index), removed_reason, removed_reason.{key}\n\nCan be joined with {attr}`one_hot_constraints_df` using the `id` index.",
-              "type_": {
-                "display": "DataFrame",
                 "link_target": null,
                 "children": []
               },
@@ -18913,17 +20388,6 @@
               "is_property": true
             },
             {
-              "name": "removed_reasons_df",
-              "doc": "DataFrame of removed constraint reasons.\n\nColumns: id (index), removed_reason, removed_reason.{key}\n\nCan be joined with {attr}`constraints_df` on the `id` index.\n\n# Examples\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[\n...         (x[0] + x[1] == 1).set_id(10),\n...         (x[1] + x[2] == 1).set_id(20),\n...     ],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.relax_constraint(10, \"test_reason\")\n>>> solution = instance.evaluate({0: 1, 1: 0, 2: 1})\n```\n\n`removed_reasons_df` contains only removed constraints:\n\n```python\n>>> solution.removed_reasons_df\n    removed_reason\nid\n10    test_reason\n```\n\nJoin with `constraints_df` to get full information:\n\n```python\n>>> df = solution.constraints_df.join(solution.removed_reasons_df)\n>>> df[[\"value\", \"removed_reason\"]]\n    value removed_reason\nid\n10    0.0   test_reason\n20    0.0           NaN\n```",
-              "type_": {
-                "display": "DataFrame",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
               "name": "sense",
               "doc": "Get the optimization sense (minimize or maximize)",
               "type_": {
@@ -18965,28 +20429,6 @@
                 ]
               },
               "is_property": true
-            },
-            {
-              "name": "sos1_constraints_df",
-              "doc": "DataFrame of evaluated SOS1 constraints\n\nColumns: id (index), feasible, active_variable, used_ids, name, subscripts, description",
-              "type_": {
-                "display": "DataFrame",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "sos1_removed_reasons_df",
-              "doc": "DataFrame of removed SOS1 constraint reasons.\n\nColumns: id (index), removed_reason, removed_reason.{key}\n\nCan be joined with {attr}`sos1_constraints_df` using the `id` index.",
-              "type_": {
-                "display": "DataFrame",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
             },
             {
               "name": "start",

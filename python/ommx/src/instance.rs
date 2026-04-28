@@ -1,5 +1,8 @@
 use crate::{
-    pandas::{entries_to_dataframe, PyDataFrame},
+    pandas::{
+        constraint_id_col, constraint_kind_collection, entries_to_dataframe, parse_constraint_kind,
+        PyDataFrame,
+    },
     Constraint, DecisionVariable, Function, NamedFunction, ParametricInstance, RemovedConstraint,
     Rng, SampleSet, Samples, Sense, Solution, State, VariableBound,
 };
@@ -1691,8 +1694,13 @@ impl Instance {
     }
 
     /// DataFrame of decision variables
-    #[getter]
-    pub fn decision_variables_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
+    #[pyo3(signature = (include = None))]
+    pub fn decision_variables_df<'py>(
+        &self,
+        py: Python<'py>,
+        include: Option<Vec<String>>,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
         let var_meta_store = self.inner.variable_metadata().clone();
         let var_meta_view: Vec<(ommx::DecisionVariableMetadata, &ommx::DecisionVariable)> = self
             .inner
@@ -1706,12 +1714,18 @@ impl Instance {
                 .iter()
                 .map(|(m, dv)| crate::pandas::WithMetadata::new(*dv, m)),
             "id",
+            flags,
         )
     }
 
     /// DataFrame of constraints
-    #[getter]
-    pub fn constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
+    #[pyo3(signature = (include = None))]
+    pub fn constraints_df<'py>(
+        &self,
+        py: Python<'py>,
+        include: Option<Vec<String>>,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
         let meta_store = self.inner.constraint_collection().metadata().clone();
         let view: Vec<(
             ommx::ConstraintMetadata,
@@ -1728,15 +1742,18 @@ impl Instance {
             view.iter()
                 .map(|(m, id, c)| crate::pandas::WithMetadata::new((*id, *c), m)),
             "id",
+            flags,
         )
     }
 
     /// DataFrame of indicator constraints
-    #[getter]
+    #[pyo3(signature = (include = None))]
     pub fn indicator_constraints_df<'py>(
         &self,
         py: Python<'py>,
+        include: Option<Vec<String>>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
         let meta_store = self
             .inner
             .indicator_constraint_collection()
@@ -1757,15 +1774,18 @@ impl Instance {
             view.iter()
                 .map(|(m, id, c)| crate::pandas::WithMetadata::new((*id, *c), m)),
             "id",
+            flags,
         )
     }
 
     /// DataFrame of removed indicator constraints
-    #[getter]
+    #[pyo3(signature = (include = None))]
     pub fn removed_indicator_constraints_df<'py>(
         &self,
         py: Python<'py>,
+        include: Option<Vec<String>>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
         let meta_store = self
             .inner
             .indicator_constraint_collection()
@@ -1786,15 +1806,18 @@ impl Instance {
             view.iter()
                 .map(|(m, id, pair)| crate::pandas::WithMetadata::new((*id, *pair), m)),
             "id",
+            flags,
         )
     }
 
     /// DataFrame of one-hot constraints
-    #[getter]
+    #[pyo3(signature = (include = None))]
     pub fn one_hot_constraints_df<'py>(
         &self,
         py: Python<'py>,
+        include: Option<Vec<String>>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
         let meta_store = self
             .inner
             .one_hot_constraint_collection()
@@ -1815,15 +1838,18 @@ impl Instance {
             view.iter()
                 .map(|(m, id, c)| crate::pandas::WithMetadata::new((*id, *c), m)),
             "id",
+            flags,
         )
     }
 
     /// DataFrame of removed one-hot constraints
-    #[getter]
+    #[pyo3(signature = (include = None))]
     pub fn removed_one_hot_constraints_df<'py>(
         &self,
         py: Python<'py>,
+        include: Option<Vec<String>>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
         let meta_store = self
             .inner
             .one_hot_constraint_collection()
@@ -1844,12 +1870,18 @@ impl Instance {
             view.iter()
                 .map(|(m, id, pair)| crate::pandas::WithMetadata::new((*id, *pair), m)),
             "id",
+            flags,
         )
     }
 
     /// DataFrame of SOS1 constraints
-    #[getter]
-    pub fn sos1_constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
+    #[pyo3(signature = (include = None))]
+    pub fn sos1_constraints_df<'py>(
+        &self,
+        py: Python<'py>,
+        include: Option<Vec<String>>,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
         let meta_store = self.inner.sos1_constraint_collection().metadata().clone();
         let view: Vec<(
             ommx::ConstraintMetadata,
@@ -1866,15 +1898,18 @@ impl Instance {
             view.iter()
                 .map(|(m, id, c)| crate::pandas::WithMetadata::new((*id, *c), m)),
             "id",
+            flags,
         )
     }
 
     /// DataFrame of removed SOS1 constraints
-    #[getter]
+    #[pyo3(signature = (include = None))]
     pub fn removed_sos1_constraints_df<'py>(
         &self,
         py: Python<'py>,
+        include: Option<Vec<String>>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
         let meta_store = self.inner.sos1_constraint_collection().metadata().clone();
         let view: Vec<(
             ommx::ConstraintMetadata,
@@ -1891,15 +1926,18 @@ impl Instance {
             view.iter()
                 .map(|(m, id, pair)| crate::pandas::WithMetadata::new((*id, *pair), m)),
             "id",
+            flags,
         )
     }
 
     /// DataFrame of removed constraints
-    #[getter]
+    #[pyo3(signature = (include = None))]
     pub fn removed_constraints_df<'py>(
         &self,
         py: Python<'py>,
+        include: Option<Vec<String>>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
         let meta_store = self.inner.constraint_collection().metadata().clone();
         let view: Vec<(
             ommx::ConstraintMetadata,
@@ -1916,13 +1954,178 @@ impl Instance {
             view.iter()
                 .map(|(m, id, pair)| crate::pandas::WithMetadata::new((*id, *pair), m)),
             "id",
+            flags,
         )
     }
 
     /// DataFrame of named functions
-    #[getter]
-    pub fn named_functions_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
-        entries_to_dataframe(py, self.inner.named_functions().values(), "id")
+    #[pyo3(signature = (include = None))]
+    pub fn named_functions_df<'py>(
+        &self,
+        py: Python<'py>,
+        include: Option<Vec<String>>,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
+        entries_to_dataframe(py, self.inner.named_functions().values(), "id", flags)
+    }
+
+    /// Constraint metadata DataFrame (id-indexed wide format).
+    ///
+    /// One row per constraint id (active + removed) with columns
+    /// `name`, `subscripts`, `description`. Index column is
+    /// `{kind}_constraint_id`. `kind` selects which constraint family
+    /// to read: `"regular"`, `"indicator"`, `"one_hot"`, or `"sos1"`.
+    #[pyo3(signature = (kind = String::from("regular")))]
+    pub fn constraint_metadata_df<'py>(
+        &self,
+        py: Python<'py>,
+        kind: String,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let kind = parse_constraint_kind(&kind)?;
+        let id_col = constraint_id_col(kind);
+        constraint_kind_collection!(
+            self.inner,
+            kind,
+            [
+                constraint_collection,
+                indicator_constraint_collection,
+                one_hot_constraint_collection,
+                sos1_constraint_collection
+            ],
+            |coll| {
+                crate::pandas::constraint_metadata_dataframe(
+                    py,
+                    coll.metadata(),
+                    coll.active().keys().chain(coll.removed().keys()).copied(),
+                    id_col,
+                )
+            }
+        )
+    }
+
+    /// Constraint parameters DataFrame (long format).
+    ///
+    /// One row per (constraint_id, parameter_key) pair. Columns:
+    /// `{kind}_constraint_id`, `key`, `value`. Default RangeIndex.
+    #[pyo3(signature = (kind = String::from("regular")))]
+    pub fn constraint_parameters_df<'py>(
+        &self,
+        py: Python<'py>,
+        kind: String,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let kind = parse_constraint_kind(&kind)?;
+        let id_col = constraint_id_col(kind);
+        constraint_kind_collection!(
+            self.inner,
+            kind,
+            [
+                constraint_collection,
+                indicator_constraint_collection,
+                one_hot_constraint_collection,
+                sos1_constraint_collection
+            ],
+            |coll| {
+                crate::pandas::constraint_parameters_dataframe(
+                    py,
+                    coll.metadata(),
+                    coll.active().keys().chain(coll.removed().keys()).copied(),
+                    id_col,
+                )
+            }
+        )
+    }
+
+    /// Constraint provenance DataFrame (long format).
+    ///
+    /// One row per (constraint_id, step) pair. Columns:
+    /// `{kind}_constraint_id`, `step`, `source_kind`, `source_id`.
+    #[pyo3(signature = (kind = String::from("regular")))]
+    pub fn constraint_provenance_df<'py>(
+        &self,
+        py: Python<'py>,
+        kind: String,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let kind = parse_constraint_kind(&kind)?;
+        let id_col = constraint_id_col(kind);
+        constraint_kind_collection!(
+            self.inner,
+            kind,
+            [
+                constraint_collection,
+                indicator_constraint_collection,
+                one_hot_constraint_collection,
+                sos1_constraint_collection
+            ],
+            |coll| {
+                crate::pandas::constraint_provenance_dataframe(
+                    py,
+                    coll.metadata(),
+                    coll.active().keys().chain(coll.removed().keys()).copied(),
+                    id_col,
+                )
+            }
+        )
+    }
+
+    /// Removed-constraint reasons DataFrame (long format).
+    ///
+    /// One row per (constraint_id, parameter_key) pair, plus one row with
+    /// `key`/`value` set to NA when the reason has no parameters. Columns:
+    /// `{kind}_constraint_id`, `reason`, `key`, `value`.
+    #[pyo3(signature = (kind = String::from("regular")))]
+    pub fn constraint_removed_reasons_df<'py>(
+        &self,
+        py: Python<'py>,
+        kind: String,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let kind = parse_constraint_kind(&kind)?;
+        let id_col = constraint_id_col(kind);
+        constraint_kind_collection!(
+            self.inner,
+            kind,
+            [
+                constraint_collection,
+                indicator_constraint_collection,
+                one_hot_constraint_collection,
+                sos1_constraint_collection
+            ],
+            |coll| {
+                crate::pandas::constraint_removed_reasons_dataframe(
+                    py,
+                    coll.removed().iter().map(|(id, (_, r))| (*id, r)),
+                    id_col,
+                )
+            }
+        )
+    }
+
+    /// Decision-variable metadata DataFrame (id-indexed wide format).
+    ///
+    /// Columns: `name`, `subscripts`, `description`. Index column =
+    /// `variable_id`.
+    pub fn variable_metadata_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
+        crate::pandas::variable_metadata_dataframe(
+            py,
+            self.inner.variable_metadata(),
+            self.inner.decision_variables().keys().copied(),
+            "variable_id",
+        )
+    }
+
+    /// Decision-variable parameters DataFrame (long format).
+    ///
+    /// One row per (variable_id, parameter_key) pair. Columns:
+    /// `variable_id`, `key`, `value`.
+    pub fn variable_parameters_df<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        crate::pandas::variable_parameters_dataframe(
+            py,
+            self.inner.variable_metadata(),
+            self.inner.decision_variables().keys().copied(),
+            "variable_id",
+        )
     }
 
     fn __copy__(&self) -> Self {

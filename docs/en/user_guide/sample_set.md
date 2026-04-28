@@ -97,7 +97,7 @@ solution = sample_set.get(sample_id=0)
 assert isinstance(solution, Solution)
 
 print(f"{solution.objective=}")
-solution.decision_variables_df
+solution.decision_variables_df()
 ```
 
 Retrieving the best solution
@@ -108,7 +108,7 @@ Retrieving the best solution
 solution = sample_set.best_feasible
 
 print(f"{solution.objective=}")
-solution.decision_variables_df
+solution.decision_variables_df()
 ```
 
 Of course, if the problem is a minimization, the sample with the smallest objective value will be returned. If no feasible samples exist, an error will be raised.
