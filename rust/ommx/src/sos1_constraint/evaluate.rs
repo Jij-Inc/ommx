@@ -64,7 +64,6 @@ impl Evaluate for Sos1Constraint<Created> {
 
         Ok(Sos1Constraint {
             variables: self.variables.clone(),
-            metadata: self.metadata.clone(),
             stage: Sos1EvaluatedData {
                 feasible,
                 active_variable,
@@ -89,7 +88,6 @@ impl Evaluate for Sos1Constraint<Created> {
 
         Ok(Sos1Constraint {
             variables: self.variables.clone(),
-            metadata: self.metadata.clone(),
             stage: Sos1SampledData {
                 feasible,
                 active_variable,

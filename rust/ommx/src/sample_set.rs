@@ -103,6 +103,9 @@ pub enum SampleSetError {
 pub struct SampleSet {
     #[getset(get = "pub")]
     decision_variables: BTreeMap<VariableID, SampledDecisionVariable>,
+    /// Per-variable auxiliary metadata (sibling of [`Self::decision_variables`]).
+    #[getset(get = "pub")]
+    variable_metadata: crate::decision_variable::VariableMetadataStore,
     #[getset(get = "pub")]
     objectives: Sampled<f64>,
     #[getset(get = "pub")]
@@ -241,22 +244,36 @@ impl SampleSet {
 
         let sense = *self.sense();
 
-        // SAFETY: SampleSet invariants guarantee Solution invariants
+        // SAFETY: SampleSet invariants guarantee Solution invariants.
+        // Constraint metadata stores ride along from the source SampledCollection
+        // so per-sample Solutions retain names / descriptions / parameters /
+        // provenance that were attached at the SampleSet level.
         Some(unsafe {
             Solution::builder()
-                .objective(objective)
-                .evaluated_constraints(evaluated_constraints)
-                .evaluated_indicator_constraints(evaluated_indicator_constraints)
-                .evaluated_one_hot_constraints_collection(EvaluatedCollection::new(
+                .evaluated_constraints_collection(EvaluatedCollection::with_metadata(
+                    evaluated_constraints,
+                    BTreeMap::new(),
+                    self.constraints.metadata().clone(),
+                ))
+                .evaluated_indicator_constraints_collection(EvaluatedCollection::with_metadata(
+                    evaluated_indicator_constraints,
+                    BTreeMap::new(),
+                    self.indicator_constraints.metadata().clone(),
+                ))
+                .evaluated_one_hot_constraints_collection(EvaluatedCollection::with_metadata(
                     evaluated_one_hot_constraints,
                     BTreeMap::new(),
+                    self.one_hot_constraints.metadata().clone(),
                 ))
-                .evaluated_sos1_constraints_collection(EvaluatedCollection::new(
+                .evaluated_sos1_constraints_collection(EvaluatedCollection::with_metadata(
                     evaluated_sos1_constraints,
                     BTreeMap::new(),
+                    self.sos1_constraints.metadata().clone(),
                 ))
+                .objective(objective)
                 .evaluated_named_functions(evaluated_named_functions)
                 .decision_variables(decision_variables)
+                .variable_metadata(self.variable_metadata.clone())
                 .sense(sense)
                 .build_unchecked()
                 .expect("SampleSet invariants guarantee Solution invariants")
@@ -334,6 +351,7 @@ impl SampleSet {
 #[derive(Debug, Clone, Default)]
 pub struct SampleSetBuilder {
     decision_variables: Option<BTreeMap<VariableID, SampledDecisionVariable>>,
+    variable_metadata: crate::decision_variable::VariableMetadataStore,
     objectives: Option<Sampled<f64>>,
     constraints: Option<SampledCollection<Constraint>>,
     indicator_constraints: SampledCollection<IndicatorConstraint>,
@@ -347,6 +365,15 @@ impl SampleSetBuilder {
     /// Creates a new `SampleSetBuilder` with all fields unset.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Sets the per-variable metadata store.
+    pub fn variable_metadata(
+        mut self,
+        variable_metadata: crate::decision_variable::VariableMetadataStore,
+    ) -> Self {
+        self.variable_metadata = variable_metadata;
+        self
     }
 
     /// Sets the decision variables.
@@ -561,6 +588,7 @@ impl SampleSetBuilder {
 
         Ok(SampleSet {
             decision_variables,
+            variable_metadata: self.variable_metadata.clone(),
             objectives,
             constraints,
             indicator_constraints: self.indicator_constraints,
@@ -620,6 +648,7 @@ impl SampleSetBuilder {
 
         Ok(SampleSet {
             decision_variables,
+            variable_metadata: self.variable_metadata.clone(),
             objectives,
             constraints,
             indicator_constraints: self.indicator_constraints,
@@ -657,5 +686,100 @@ impl SampleSetBuilder {
         }
 
         (feasible, feasible_relaxed)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::constraint::EvaluatedData;
+    use crate::{
+        ATol, ConstraintID, DecisionVariable, Equality, EvaluatedConstraint, SampleID,
+        SampledDecisionVariable, Sense, VariableID,
+    };
+    use std::collections::BTreeMap;
+
+    /// Regression: `SampleSet::get(sid)` must propagate the variable AND
+    /// constraint metadata stores into the returned per-sample `Solution`.
+    /// A previous version threaded `variable_metadata` only and rebuilt
+    /// the constraint collections via `EvaluatedCollection::new(map,
+    /// BTreeMap::new())`, silently discarding all constraint names /
+    /// descriptions / parameters / provenance for sampled solutions.
+    #[test]
+    fn test_sample_set_get_preserves_metadata() {
+        let var_id = VariableID::from(1);
+        let cid = ConstraintID::from(10);
+        let sample_id = SampleID::from(0);
+
+        // Decision variable + sample
+        let dv = DecisionVariable::binary(var_id);
+        let mut x_samples = crate::Sampled::default();
+        x_samples.append([sample_id], 1.0).unwrap();
+        let mut decision_variables = BTreeMap::new();
+        decision_variables.insert(
+            var_id,
+            SampledDecisionVariable::new(dv, x_samples, ATol::default()).unwrap(),
+        );
+
+        let mut variable_metadata = crate::VariableMetadataStore::default();
+        variable_metadata.set_name(var_id, "x");
+        variable_metadata.set_subscripts(var_id, vec![0]);
+
+        // Sampled constraint (constructed directly without going through evaluate)
+        let evaluated_per_sample = EvaluatedConstraint {
+            equality: Equality::EqualToZero,
+            stage: EvaluatedData {
+                evaluated_value: 0.0,
+                dual_variable: None,
+                feasible: true,
+                used_decision_variable_ids: [var_id].into_iter().collect(),
+            },
+        };
+        let mut evaluated_values = crate::Sampled::default();
+        evaluated_values
+            .append([sample_id], evaluated_per_sample.stage.evaluated_value)
+            .unwrap();
+        let mut feasible = BTreeMap::new();
+        feasible.insert(sample_id, true);
+        let sampled_constraint = crate::Constraint {
+            equality: Equality::EqualToZero,
+            stage: crate::constraint::SampledData {
+                evaluated_values,
+                dual_variables: None,
+                feasible,
+                used_decision_variable_ids: [var_id].into_iter().collect(),
+            },
+        };
+        let mut constraints_map = BTreeMap::new();
+        constraints_map.insert(cid, sampled_constraint);
+
+        // Build a SampledCollection<Constraint> with metadata via builder
+        let mut constraint_metadata = crate::ConstraintMetadataStore::<ConstraintID>::default();
+        constraint_metadata.set_name(cid, "balance");
+        constraint_metadata.set_description(cid, "demand-balance row");
+        let constraints = crate::constraint_type::SampledCollection::with_metadata(
+            constraints_map,
+            BTreeMap::new(),
+            constraint_metadata,
+        );
+
+        let mut objectives = crate::Sampled::default();
+        objectives.append([sample_id], 1.0).unwrap();
+
+        let sample_set = SampleSet::builder()
+            .decision_variables(decision_variables)
+            .variable_metadata(variable_metadata)
+            .objectives(objectives)
+            .constraints_collection(constraints)
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
+
+        let solution = sample_set.get(sample_id).unwrap();
+        assert_eq!(solution.variable_metadata().name(var_id), Some("x"));
+        assert_eq!(solution.variable_metadata().subscripts(var_id), &[0]);
+        let constraint_meta = solution.evaluated_constraints().metadata();
+        assert_eq!(constraint_meta.name(cid), Some("balance"));
+        assert_eq!(constraint_meta.description(cid), Some("demand-balance row"));
     }
 }

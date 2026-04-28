@@ -45,15 +45,18 @@ impl Instance {
             .fold(Linear::zero(), |acc, v| acc + linear!(v.into_inner()));
         let function = Function::from(sum + Linear::from(coeff!(-1.0)));
 
-        let mut new_constraint = Constraint::equal_to_zero(function);
-        new_constraint.metadata = one_hot.metadata.clone();
-        new_constraint
-            .metadata
+        let new_constraint = Constraint::equal_to_zero(function);
+        // Carry over the one-hot's metadata into the new regular constraint,
+        // appending the OneHot promotion to provenance.
+        let mut new_metadata = self
+            .one_hot_constraint_collection
+            .metadata()
+            .collect_for(id);
+        new_metadata
             .provenance
             .push(Provenance::OneHotConstraint(id));
         self.constraint_collection
-            .active_mut()
-            .insert(new_id, new_constraint);
+            .insert_with(new_id, new_constraint, new_metadata);
 
         let mut parameters = fnv::FnvHashMap::default();
         parameters.insert("constraint_id".to_string(), new_id.into_inner().to_string());
@@ -152,8 +155,11 @@ mod tests {
 
         // The conversion step is recorded in the new constraint's provenance.
         assert_eq!(
-            new_constraint.metadata.provenance,
-            vec![Provenance::OneHotConstraint(OneHotConstraintID::from(7))],
+            instance
+                .constraint_collection()
+                .metadata()
+                .provenance(new_id),
+            &[Provenance::OneHotConstraint(OneHotConstraintID::from(7))],
         );
     }
 

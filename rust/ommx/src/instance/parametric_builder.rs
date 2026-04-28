@@ -278,6 +278,7 @@ impl ParametricInstanceBuilder {
             objective,
             decision_variables,
             parameters,
+            variable_metadata: Default::default(),
             constraint_collection: ConstraintCollection::new(constraints, self.removed_constraints),
             indicator_constraint_collection: Default::default(),
             one_hot_constraint_collection: Default::default(),

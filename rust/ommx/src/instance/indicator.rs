@@ -261,16 +261,15 @@ impl Instance {
     fn insert_indicator_generated_constraint(
         &mut self,
         indicator_id: IndicatorConstraintID,
-        mut constraint: Constraint,
+        constraint: Constraint,
     ) -> ConstraintID {
         let new_id = self.constraint_collection.unused_id();
-        constraint
-            .metadata
-            .provenance
-            .push(Provenance::IndicatorConstraint(indicator_id));
         self.constraint_collection
             .active_mut()
             .insert(new_id, constraint);
+        self.constraint_collection
+            .metadata_mut()
+            .push_provenance(new_id, Provenance::IndicatorConstraint(indicator_id));
         new_id
     }
 }
@@ -344,8 +343,11 @@ mod tests {
         );
         assert_abs_diff_eq!(c.function(), &expected);
         assert_eq!(
-            c.metadata.provenance,
-            vec![Provenance::IndicatorConstraint(
+            instance
+                .constraint_collection()
+                .metadata()
+                .provenance(new_ids[0]),
+            &[Provenance::IndicatorConstraint(
                 IndicatorConstraintID::from(7)
             )]
         );

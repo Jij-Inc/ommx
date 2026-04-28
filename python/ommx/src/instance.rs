@@ -104,16 +104,25 @@ impl Instance {
         description: Option<InstanceDescription>,
     ) -> Result<Self> {
         let mut rust_decision_variables = BTreeMap::new();
+        let mut variable_metadata_pairs: Vec<(VariableID, ommx::DecisionVariableMetadata)> =
+            Vec::new();
         for var in decision_variables {
             let id = var.0.id();
+            variable_metadata_pairs.push((id, var.1.clone()));
             if rust_decision_variables.insert(id, var.0).is_some() {
                 anyhow::bail!("Duplicate decision variable ID: {}", id.into_inner());
             }
         }
 
+        let mut constraint_metadata_pairs: Vec<(ConstraintID, ommx::ConstraintMetadata)> =
+            Vec::new();
         let rust_constraints: BTreeMap<ConstraintID, ommx::Constraint> = constraints
             .into_iter()
-            .map(|(id, c)| (ConstraintID::from(id), c.0))
+            .map(|(id, c)| {
+                let cid = ConstraintID::from(id);
+                constraint_metadata_pairs.push((cid, c.1));
+                (cid, c.0)
+            })
             .collect();
 
         let mut builder = ommx::Instance::builder()
@@ -122,13 +131,21 @@ impl Instance {
             .decision_variables(rust_decision_variables)
             .constraints(rust_constraints);
 
+        let mut indicator_metadata_pairs: Vec<(
+            ommx::IndicatorConstraintID,
+            ommx::ConstraintMetadata,
+        )> = Vec::new();
         if let Some(ics) = indicator_constraints {
             let rust_indicator_constraints: BTreeMap<
                 ommx::IndicatorConstraintID,
                 ommx::IndicatorConstraint,
             > = ics
                 .into_iter()
-                .map(|(id, ic)| (ommx::IndicatorConstraintID::from(id), ic.0))
+                .map(|(id, ic)| {
+                    let iid = ommx::IndicatorConstraintID::from(id);
+                    indicator_metadata_pairs.push((iid, ic.1));
+                    (iid, ic.0)
+                })
                 .collect();
             builder = builder.indicator_constraints(rust_indicator_constraints);
         }
@@ -167,8 +184,23 @@ impl Instance {
             builder = builder.description(desc.0);
         }
 
+        let mut inner = builder.build()?;
+        // Drain wrapper-side metadata snapshots into the instance's SoA stores.
+        let var_meta = inner.variable_metadata_mut();
+        for (id, m) in variable_metadata_pairs {
+            var_meta.insert(id, m);
+        }
+        let constraint_meta = inner.constraint_metadata_mut();
+        for (id, m) in constraint_metadata_pairs {
+            constraint_meta.insert(id, m);
+        }
+        let indicator_meta = inner.indicator_constraint_metadata_mut();
+        for (id, m) in indicator_metadata_pairs {
+            indicator_meta.insert(id, m);
+        }
+
         Ok(Self {
-            inner: builder.build()?,
+            inner,
             annotations: HashMap::new(),
         })
     }
@@ -248,30 +280,43 @@ impl Instance {
     /// List of all decision variables in the instance sorted by their IDs.
     #[getter]
     pub fn decision_variables(&self) -> Vec<DecisionVariable> {
+        let metadata = self.inner.variable_metadata();
         self.inner
             .decision_variables()
-            .values()
-            .map(|var| DecisionVariable(var.clone()))
+            .iter()
+            .map(|(id, var)| DecisionVariable::from_parts(var.clone(), metadata.collect_for(*id)))
             .collect()
     }
 
     /// Dict of all constraints in the instance keyed by their IDs.
     #[getter]
     pub fn constraints(&self) -> BTreeMap<u64, Constraint> {
+        let metadata = self.inner.constraint_collection().metadata();
         self.inner
             .constraints()
             .iter()
-            .map(|(id, constraint)| (id.into_inner(), Constraint(constraint.clone())))
+            .map(|(id, constraint)| {
+                (
+                    id.into_inner(),
+                    Constraint::from_parts(constraint.clone(), metadata.collect_for(*id)),
+                )
+            })
             .collect()
     }
 
     /// Dict of all indicator constraints in the instance keyed by their IDs.
     #[getter]
     pub fn indicator_constraints(&self) -> BTreeMap<u64, crate::IndicatorConstraint> {
+        let metadata = self.inner.indicator_constraint_collection().metadata();
         self.inner
             .indicator_constraints()
             .iter()
-            .map(|(id, ic)| (id.into_inner(), crate::IndicatorConstraint(ic.clone())))
+            .map(|(id, ic)| {
+                (
+                    id.into_inner(),
+                    crate::IndicatorConstraint::from_parts(ic.clone(), metadata.collect_for(*id)),
+                )
+            })
             .collect()
     }
 
@@ -280,13 +325,18 @@ impl Instance {
     pub fn removed_indicator_constraints(
         &self,
     ) -> BTreeMap<u64, crate::RemovedIndicatorConstraint> {
+        let metadata = self.inner.indicator_constraint_collection().metadata();
         self.inner
             .removed_indicator_constraints()
             .iter()
             .map(|(id, (c, r))| {
                 (
                     id.into_inner(),
-                    crate::RemovedIndicatorConstraint::from_pair(c.clone(), r.clone()),
+                    crate::RemovedIndicatorConstraint::from_parts(
+                        c.clone(),
+                        metadata.collect_for(*id),
+                        r.clone(),
+                    ),
                 )
             })
             .collect()
@@ -389,13 +439,14 @@ impl Instance {
     /// Dict of all removed constraints in the instance keyed by their IDs.
     #[getter]
     pub fn removed_constraints(&self) -> BTreeMap<u64, RemovedConstraint> {
+        let metadata = self.inner.constraint_collection().metadata();
         self.inner
             .removed_constraints()
             .iter()
             .map(|(id, (c, r))| {
                 (
                     id.into_inner(),
-                    RemovedConstraint::from_pair(c.clone(), r.clone()),
+                    RemovedConstraint::from_parts(c.clone(), metadata.collect_for(*id), r.clone()),
                 )
             })
             .collect()
@@ -422,10 +473,11 @@ impl Instance {
 
     #[getter]
     pub fn used_decision_variables(&self) -> Vec<DecisionVariable> {
+        let metadata = self.inner.variable_metadata();
         self.inner
             .used_decision_variables()
-            .values()
-            .map(|&var| DecisionVariable(var.clone()))
+            .iter()
+            .map(|(id, &var)| DecisionVariable::from_parts(var.clone(), metadata.collect_for(*id)))
             .collect()
     }
 
@@ -1641,15 +1693,40 @@ impl Instance {
     /// DataFrame of decision variables
     #[getter]
     pub fn decision_variables_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
-        entries_to_dataframe(py, self.inner.decision_variables().values(), "id")
+        let var_meta_store = self.inner.variable_metadata().clone();
+        let var_meta_view: Vec<(ommx::DecisionVariableMetadata, &ommx::DecisionVariable)> = self
+            .inner
+            .decision_variables()
+            .iter()
+            .map(|(id, dv)| (var_meta_store.collect_for(*id), dv))
+            .collect();
+        entries_to_dataframe(
+            py,
+            var_meta_view
+                .iter()
+                .map(|(m, dv)| crate::pandas::WithMetadata::new(*dv, m)),
+            "id",
+        )
     }
 
     /// DataFrame of constraints
     #[getter]
     pub fn constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
+        let meta_store = self.inner.constraint_collection().metadata().clone();
+        let view: Vec<(
+            ommx::ConstraintMetadata,
+            ommx::ConstraintID,
+            &ommx::Constraint,
+        )> = self
+            .inner
+            .constraints()
+            .iter()
+            .map(|(id, c)| (meta_store.collect_for(*id), *id, c))
+            .collect();
         entries_to_dataframe(
             py,
-            self.inner.constraints().iter().map(|(id, c)| (*id, c)),
+            view.iter()
+                .map(|(m, id, c)| crate::pandas::WithMetadata::new((*id, *c), m)),
             "id",
         )
     }
@@ -1660,12 +1737,25 @@ impl Instance {
         &self,
         py: Python<'py>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let meta_store = self
+            .inner
+            .indicator_constraint_collection()
+            .metadata()
+            .clone();
+        let view: Vec<(
+            ommx::ConstraintMetadata,
+            ommx::IndicatorConstraintID,
+            &ommx::IndicatorConstraint,
+        )> = self
+            .inner
+            .indicator_constraints()
+            .iter()
+            .map(|(id, c)| (meta_store.collect_for(*id), *id, c))
+            .collect();
         entries_to_dataframe(
             py,
-            self.inner
-                .indicator_constraints()
-                .iter()
-                .map(|(id, c)| (*id, c)),
+            view.iter()
+                .map(|(m, id, c)| crate::pandas::WithMetadata::new((*id, *c), m)),
             "id",
         )
     }
@@ -1676,12 +1766,25 @@ impl Instance {
         &self,
         py: Python<'py>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let meta_store = self
+            .inner
+            .indicator_constraint_collection()
+            .metadata()
+            .clone();
+        let view: Vec<(
+            ommx::ConstraintMetadata,
+            ommx::IndicatorConstraintID,
+            &(ommx::IndicatorConstraint, ommx::RemovedReason),
+        )> = self
+            .inner
+            .removed_indicator_constraints()
+            .iter()
+            .map(|(id, pair)| (meta_store.collect_for(*id), *id, pair))
+            .collect();
         entries_to_dataframe(
             py,
-            self.inner
-                .removed_indicator_constraints()
-                .iter()
-                .map(|(id, pair)| (*id, pair)),
+            view.iter()
+                .map(|(m, id, pair)| crate::pandas::WithMetadata::new((*id, *pair), m)),
             "id",
         )
     }
@@ -1692,12 +1795,25 @@ impl Instance {
         &self,
         py: Python<'py>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let meta_store = self
+            .inner
+            .one_hot_constraint_collection()
+            .metadata()
+            .clone();
+        let view: Vec<(
+            ommx::ConstraintMetadata,
+            ommx::OneHotConstraintID,
+            &ommx::OneHotConstraint,
+        )> = self
+            .inner
+            .one_hot_constraints()
+            .iter()
+            .map(|(id, c)| (meta_store.collect_for(*id), *id, c))
+            .collect();
         entries_to_dataframe(
             py,
-            self.inner
-                .one_hot_constraints()
-                .iter()
-                .map(|(id, c)| (*id, c)),
+            view.iter()
+                .map(|(m, id, c)| crate::pandas::WithMetadata::new((*id, *c), m)),
             "id",
         )
     }
@@ -1708,12 +1824,25 @@ impl Instance {
         &self,
         py: Python<'py>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let meta_store = self
+            .inner
+            .one_hot_constraint_collection()
+            .metadata()
+            .clone();
+        let view: Vec<(
+            ommx::ConstraintMetadata,
+            ommx::OneHotConstraintID,
+            &(ommx::OneHotConstraint, ommx::RemovedReason),
+        )> = self
+            .inner
+            .removed_one_hot_constraints()
+            .iter()
+            .map(|(id, pair)| (meta_store.collect_for(*id), *id, pair))
+            .collect();
         entries_to_dataframe(
             py,
-            self.inner
-                .removed_one_hot_constraints()
-                .iter()
-                .map(|(id, pair)| (*id, pair)),
+            view.iter()
+                .map(|(m, id, pair)| crate::pandas::WithMetadata::new((*id, *pair), m)),
             "id",
         )
     }
@@ -1721,9 +1850,21 @@ impl Instance {
     /// DataFrame of SOS1 constraints
     #[getter]
     pub fn sos1_constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
+        let meta_store = self.inner.sos1_constraint_collection().metadata().clone();
+        let view: Vec<(
+            ommx::ConstraintMetadata,
+            ommx::Sos1ConstraintID,
+            &ommx::Sos1Constraint,
+        )> = self
+            .inner
+            .sos1_constraints()
+            .iter()
+            .map(|(id, c)| (meta_store.collect_for(*id), *id, c))
+            .collect();
         entries_to_dataframe(
             py,
-            self.inner.sos1_constraints().iter().map(|(id, c)| (*id, c)),
+            view.iter()
+                .map(|(m, id, c)| crate::pandas::WithMetadata::new((*id, *c), m)),
             "id",
         )
     }
@@ -1734,12 +1875,21 @@ impl Instance {
         &self,
         py: Python<'py>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let meta_store = self.inner.sos1_constraint_collection().metadata().clone();
+        let view: Vec<(
+            ommx::ConstraintMetadata,
+            ommx::Sos1ConstraintID,
+            &(ommx::Sos1Constraint, ommx::RemovedReason),
+        )> = self
+            .inner
+            .removed_sos1_constraints()
+            .iter()
+            .map(|(id, pair)| (meta_store.collect_for(*id), *id, pair))
+            .collect();
         entries_to_dataframe(
             py,
-            self.inner
-                .removed_sos1_constraints()
-                .iter()
-                .map(|(id, pair)| (*id, pair)),
+            view.iter()
+                .map(|(m, id, pair)| crate::pandas::WithMetadata::new((*id, *pair), m)),
             "id",
         )
     }
@@ -1750,12 +1900,21 @@ impl Instance {
         &self,
         py: Python<'py>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let meta_store = self.inner.constraint_collection().metadata().clone();
+        let view: Vec<(
+            ommx::ConstraintMetadata,
+            ommx::ConstraintID,
+            &(ommx::Constraint, ommx::RemovedReason),
+        )> = self
+            .inner
+            .removed_constraints()
+            .iter()
+            .map(|(id, pair)| (meta_store.collect_for(*id), *id, pair))
+            .collect();
         entries_to_dataframe(
             py,
-            self.inner
-                .removed_constraints()
-                .iter()
-                .map(|(id, pair)| (*id, pair)),
+            view.iter()
+                .map(|(m, id, pair)| crate::pandas::WithMetadata::new((*id, *pair), m)),
             "id",
         )
     }
@@ -1866,10 +2025,12 @@ impl Instance {
 
     /// Get a specific decision variable by ID
     pub fn get_decision_variable_by_id(&self, variable_id: u64) -> PyResult<DecisionVariable> {
+        let var_id = VariableID::from(variable_id);
+        let metadata = self.inner.variable_metadata();
         self.inner
             .decision_variables()
-            .get(&VariableID::from(variable_id))
-            .map(|var| DecisionVariable(var.clone()))
+            .get(&var_id)
+            .map(|var| DecisionVariable::from_parts(var.clone(), metadata.collect_for(var_id)))
             .ok_or_else(|| {
                 PyKeyError::new_err(format!("Decision variable with ID {variable_id} not found"))
             })
@@ -1877,10 +2038,12 @@ impl Instance {
 
     /// Get a specific constraint by ID
     pub fn get_constraint_by_id(&self, constraint_id: u64) -> PyResult<Constraint> {
+        let cid = ConstraintID::from(constraint_id);
+        let metadata = self.inner.constraint_collection().metadata();
         self.inner
             .constraints()
-            .get(&ConstraintID::from(constraint_id))
-            .map(|constraint| Constraint(constraint.clone()))
+            .get(&cid)
+            .map(|constraint| Constraint::from_parts(constraint.clone(), metadata.collect_for(cid)))
             .ok_or_else(|| {
                 PyKeyError::new_err(format!("Constraint with ID {constraint_id} not found"))
             })
@@ -1888,12 +2051,14 @@ impl Instance {
 
     /// Get a specific removed constraint by ID
     pub fn get_removed_constraint_by_id(&self, constraint_id: u64) -> PyResult<RemovedConstraint> {
+        let cid = ConstraintID::from(constraint_id);
+        let metadata = self.inner.constraint_collection().metadata();
         self.inner
             .removed_constraints()
-            .get(&ConstraintID::from(constraint_id))
+            .get(&cid)
             .map(|removed_constraint| {
                 let (c, r) = removed_constraint;
-                RemovedConstraint::from_pair(c.clone(), r.clone())
+                RemovedConstraint::from_parts(c.clone(), metadata.collect_for(cid), r.clone())
             })
             .ok_or_else(|| {
                 PyKeyError::new_err(format!(

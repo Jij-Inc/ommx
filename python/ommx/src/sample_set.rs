@@ -244,20 +244,29 @@ impl SampleSet {
     /// Get constraints for compatibility with existing Python code
     #[getter]
     pub fn constraints(&self) -> Vec<crate::SampledConstraint> {
+        let metadata = self.inner.constraints().metadata();
         self.inner
             .constraints()
-            .values()
-            .map(|constraint| crate::SampledConstraint(constraint.clone()))
+            .iter()
+            .map(|(id, constraint)| {
+                crate::SampledConstraint::from_parts(constraint.clone(), metadata.collect_for(*id))
+            })
             .collect()
     }
 
     /// Get decision variables for compatibility with existing Python code
     #[getter]
     pub fn decision_variables(&self) -> Vec<crate::SampledDecisionVariable> {
+        let metadata = self.inner.variable_metadata();
         self.inner
             .decision_variables()
-            .values()
-            .map(|variable| crate::SampledDecisionVariable(variable.clone()))
+            .iter()
+            .map(|(id, variable)| {
+                crate::SampledDecisionVariable::from_parts(
+                    variable.clone(),
+                    metadata.collect_for(*id),
+                )
+            })
             .collect()
     }
 
@@ -425,10 +434,13 @@ impl SampleSet {
         variable_id: u64,
     ) -> PyResult<crate::SampledDecisionVariable> {
         let var_id = ommx::VariableID::from(variable_id);
+        let metadata = self.inner.variable_metadata();
         self.inner
             .decision_variables()
             .get(&var_id)
-            .map(|dv| crate::SampledDecisionVariable(dv.clone()))
+            .map(|dv| {
+                crate::SampledDecisionVariable::from_parts(dv.clone(), metadata.collect_for(var_id))
+            })
             .ok_or_else(|| {
                 pyo3::exceptions::PyKeyError::new_err(format!(
                     "Unknown decision variable ID: {variable_id}"
@@ -436,13 +448,19 @@ impl SampleSet {
             })
     }
 
-    /// Get a specific sampled constraint by ID  
+    /// Get a specific sampled constraint by ID
     pub fn get_constraint_by_id(&self, constraint_id: u64) -> PyResult<crate::SampledConstraint> {
         let constraint_id = ommx::ConstraintID::from(constraint_id);
+        let metadata = self.inner.constraints().metadata();
         self.inner
             .constraints()
             .get(&constraint_id)
-            .map(|sc| crate::SampledConstraint(sc.clone()))
+            .map(|sc| {
+                crate::SampledConstraint::from_parts(
+                    sc.clone(),
+                    metadata.collect_for(constraint_id),
+                )
+            })
             .ok_or_else(|| {
                 pyo3::exceptions::PyKeyError::new_err(format!(
                     "Unknown constraint ID: {constraint_id}"
@@ -517,21 +535,19 @@ impl SampleSet {
         let ascending = matches!(self.inner.sense(), ommx::Sense::Minimize);
 
         // Build constraint labels
+        let constraint_metadata = self.inner.constraints().metadata();
         let constraint_labels: Vec<(ommx::ConstraintID, String)> = constraints
             .iter()
-            .map(|(&id, sc)| {
-                let label = match sc.metadata.name.as_deref().filter(|n| !n.is_empty()) {
+            .map(|(&id, _sc)| {
+                let label = match constraint_metadata.name(id).filter(|n| !n.is_empty()) {
                     Some(name) => {
-                        if sc.metadata.subscripts.is_empty() {
+                        let subs = constraint_metadata.subscripts(id);
+                        if subs.is_empty() {
                             name.to_string()
                         } else {
-                            let subs: Vec<String> = sc
-                                .metadata
-                                .subscripts
-                                .iter()
-                                .map(|s| s.to_string())
-                                .collect();
-                            format!("{}[{}]", name, subs.join(", "))
+                            let subs_strs: Vec<String> =
+                                subs.iter().map(|s| s.to_string()).collect();
+                            format!("{}[{}]", name, subs_strs.join(", "))
                         }
                     }
                     None => id.into_inner().to_string(),
@@ -579,15 +595,27 @@ impl SampleSet {
     #[getter]
     pub fn decision_variables_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
         let sample_ids = sorted_sample_ids(&self.inner);
+        let var_meta_store = self.inner.variable_metadata().clone();
+        let view: Vec<(
+            ommx::DecisionVariableMetadata,
+            &ommx::SampledDecisionVariable,
+        )> = self
+            .inner
+            .decision_variables()
+            .iter()
+            .map(|(id, dv)| (var_meta_store.collect_for(*id), dv))
+            .collect();
         entries_to_dataframe(
             py,
-            self.inner
-                .decision_variables()
-                .values()
-                .map(|item| WithSampleIds {
-                    item,
-                    sample_ids: &sample_ids,
-                }),
+            view.iter().map(|(m, dv)| {
+                crate::pandas::WithMetadata::new(
+                    WithSampleIds {
+                        item: *dv,
+                        sample_ids: &sample_ids,
+                    },
+                    m,
+                )
+            }),
             "id",
         )
     }
@@ -598,15 +626,28 @@ impl SampleSet {
     #[getter]
     pub fn constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
         let sample_ids = sorted_sample_ids(&self.inner);
+        let meta_store = self.inner.constraints().metadata().clone();
+        let view: Vec<(
+            ommx::ConstraintMetadata,
+            ommx::ConstraintID,
+            &ommx::SampledConstraint,
+        )> = self
+            .inner
+            .constraints()
+            .iter()
+            .map(|(id, c)| (meta_store.collect_for(*id), *id, c))
+            .collect();
         entries_to_dataframe(
             py,
-            self.inner
-                .constraints()
-                .iter()
-                .map(|(id, c)| WithSampleIds {
-                    item: (*id, c),
-                    sample_ids: &sample_ids,
-                }),
+            view.iter().map(|(m, id, c)| {
+                crate::pandas::WithMetadata::new(
+                    WithSampleIds {
+                        item: (*id, *c),
+                        sample_ids: &sample_ids,
+                    },
+                    m,
+                )
+            }),
             "id",
         )
     }
@@ -642,15 +683,28 @@ impl SampleSet {
         py: Python<'py>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let sample_ids = sorted_sample_ids(&self.inner);
+        let meta_store = self.inner.indicator_constraints().metadata().clone();
+        let view: Vec<(
+            ommx::ConstraintMetadata,
+            ommx::IndicatorConstraintID,
+            &ommx::SampledIndicatorConstraint,
+        )> = self
+            .inner
+            .indicator_constraints()
+            .iter()
+            .map(|(id, c)| (meta_store.collect_for(*id), *id, c))
+            .collect();
         entries_to_dataframe(
             py,
-            self.inner
-                .indicator_constraints()
-                .iter()
-                .map(|(id, c)| WithSampleIds {
-                    item: (*id, c),
-                    sample_ids: &sample_ids,
-                }),
+            view.iter().map(|(m, id, c)| {
+                crate::pandas::WithMetadata::new(
+                    WithSampleIds {
+                        item: (*id, *c),
+                        sample_ids: &sample_ids,
+                    },
+                    m,
+                )
+            }),
             "id",
         )
     }
@@ -689,15 +743,28 @@ impl SampleSet {
         py: Python<'py>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let sample_ids = sorted_sample_ids(&self.inner);
+        let meta_store = self.inner.one_hot_constraints().metadata().clone();
+        let view: Vec<(
+            ommx::ConstraintMetadata,
+            ommx::OneHotConstraintID,
+            &ommx::SampledOneHotConstraint,
+        )> = self
+            .inner
+            .one_hot_constraints()
+            .iter()
+            .map(|(id, c)| (meta_store.collect_for(*id), *id, c))
+            .collect();
         entries_to_dataframe(
             py,
-            self.inner
-                .one_hot_constraints()
-                .iter()
-                .map(|(id, c)| WithSampleIds {
-                    item: (*id, c),
-                    sample_ids: &sample_ids,
-                }),
+            view.iter().map(|(m, id, c)| {
+                crate::pandas::WithMetadata::new(
+                    WithSampleIds {
+                        item: (*id, *c),
+                        sample_ids: &sample_ids,
+                    },
+                    m,
+                )
+            }),
             "id",
         )
     }
@@ -733,15 +800,28 @@ impl SampleSet {
     #[getter]
     pub fn sos1_constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
         let sample_ids = sorted_sample_ids(&self.inner);
+        let meta_store = self.inner.sos1_constraints().metadata().clone();
+        let view: Vec<(
+            ommx::ConstraintMetadata,
+            ommx::Sos1ConstraintID,
+            &ommx::SampledSos1Constraint,
+        )> = self
+            .inner
+            .sos1_constraints()
+            .iter()
+            .map(|(id, c)| (meta_store.collect_for(*id), *id, c))
+            .collect();
         entries_to_dataframe(
             py,
-            self.inner
-                .sos1_constraints()
-                .iter()
-                .map(|(id, c)| WithSampleIds {
-                    item: (*id, c),
-                    sample_ids: &sample_ids,
-                }),
+            view.iter().map(|(m, id, c)| {
+                crate::pandas::WithMetadata::new(
+                    WithSampleIds {
+                        item: (*id, *c),
+                        sample_ids: &sample_ids,
+                    },
+                    m,
+                )
+            }),
             "id",
         )
     }

@@ -10,8 +10,8 @@ impl SampleSet {
     /// Variables without names are not included.
     pub fn decision_variable_names(&self) -> std::collections::BTreeSet<String> {
         self.decision_variables
-            .values()
-            .filter_map(|v| v.metadata.name.clone())
+            .keys()
+            .filter_map(|id| self.variable_metadata.name(*id).map(|s| s.to_owned()))
             .collect()
     }
 
@@ -42,11 +42,12 @@ impl SampleSet {
         name: &str,
         sample_id: SampleID,
     ) -> Result<BTreeMap<Vec<i64>, f64>, SampleSetError> {
-        // Collect all variables with the given name
-        let variables_with_name: Vec<&SampledDecisionVariable> = self
+        // Collect all variables with the given name (looked up via the metadata store)
+        let variables_with_name: Vec<(VariableID, &SampledDecisionVariable)> = self
             .decision_variables
-            .values()
-            .filter(|v| v.metadata.name.as_deref() == Some(name))
+            .iter()
+            .filter(|(id, _)| self.variable_metadata.name(**id) == Some(name))
+            .map(|(id, v)| (*id, v))
             .collect();
         if variables_with_name.is_empty() {
             return Err(SampleSetError::UnknownVariableName {
@@ -54,8 +55,8 @@ impl SampleSet {
             });
         }
         let mut result = BTreeMap::new();
-        for variable in &variables_with_name {
-            let subscripts = variable.metadata.subscripts.clone();
+        for (id, variable) in &variables_with_name {
+            let subscripts = self.variable_metadata.subscripts(*id).to_vec();
             let value = *variable
                 .samples()
                 .get(sample_id)
@@ -90,13 +91,13 @@ impl SampleSet {
     ) -> Result<BTreeMap<String, BTreeMap<Vec<i64>, f64>>, SampleSetError> {
         let mut result: BTreeMap<String, BTreeMap<Vec<i64>, f64>> = BTreeMap::new();
 
-        for variable in self.decision_variables.values() {
-            let name = match &variable.metadata.name {
-                Some(n) => n.clone(),
+        for (id, variable) in self.decision_variables.iter() {
+            let name = match self.variable_metadata.name(*id) {
+                Some(n) => n.to_owned(),
                 None => continue, // Skip variables without names
             };
 
-            let subscripts = variable.metadata.subscripts.clone();
+            let subscripts = self.variable_metadata.subscripts(*id).to_vec();
             let value = *variable
                 .samples()
                 .get(sample_id)
@@ -120,23 +121,25 @@ impl SampleSet {
         name: &str,
         sample_id: SampleID,
     ) -> Result<BTreeMap<Vec<i64>, f64>, SampleSetError> {
-        // Collect all constraints with the given name
-        let constraints_with_name: Vec<&SampledConstraint> = self
+        // Collect all constraints with the given name (via the collection's metadata store)
+        let metadata = self.constraints.metadata();
+        let matches: Vec<(crate::ConstraintID, &SampledConstraint)> = self
             .constraints
-            .values()
-            .filter(|c| c.metadata.name.as_deref() == Some(name))
+            .iter()
+            .filter(|(id, _)| metadata.name(**id) == Some(name))
+            .map(|(id, c)| (*id, c))
             .collect();
-        if constraints_with_name.is_empty() {
+        if matches.is_empty() {
             return Err(SampleSetError::UnknownConstraintName {
                 name: name.to_string(),
             });
         }
         let mut result = BTreeMap::new();
-        for constraint in &constraints_with_name {
-            if !constraint.metadata.parameters.is_empty() {
+        for (id, constraint) in &matches {
+            if !metadata.parameters(*id).is_empty() {
                 return Err(SampleSetError::ParameterizedConstraint);
             }
-            let subscripts = constraint.metadata.subscripts.clone();
+            let subscripts = metadata.subscripts(*id).to_vec();
             let value = *constraint
                 .stage
                 .evaluated_values
@@ -250,11 +253,12 @@ mod tests {
 
     #[test]
     fn test_extract_decision_variables() {
-        // Create sample decision variables with metadata
+        // Create sample decision variables with metadata stored in the SoA store
         let mut decision_variables = BTreeMap::new();
+        let mut variable_metadata = crate::VariableMetadataStore::default();
 
         // Variable x[0]
-        let mut dv1 = DecisionVariable::new(
+        let dv1 = DecisionVariable::new(
             VariableID::from(1),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
@@ -262,14 +266,17 @@ mod tests {
             crate::ATol::default(),
         )
         .unwrap();
-        dv1.metadata = DecisionVariableMetadata {
-            name: Some("x".to_string()),
-            subscripts: vec![0],
-            ..Default::default()
-        };
+        variable_metadata.insert(
+            VariableID::from(1),
+            DecisionVariableMetadata {
+                name: Some("x".to_string()),
+                subscripts: vec![0],
+                ..Default::default()
+            },
+        );
 
         // Variable x[1]
-        let mut dv2 = DecisionVariable::new(
+        let dv2 = DecisionVariable::new(
             VariableID::from(2),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
@@ -277,14 +284,17 @@ mod tests {
             crate::ATol::default(),
         )
         .unwrap();
-        dv2.metadata = DecisionVariableMetadata {
-            name: Some("x".to_string()),
-            subscripts: vec![1],
-            ..Default::default()
-        };
+        variable_metadata.insert(
+            VariableID::from(2),
+            DecisionVariableMetadata {
+                name: Some("x".to_string()),
+                subscripts: vec![1],
+                ..Default::default()
+            },
+        );
 
         // Variable y[0]
-        let mut dv3 = DecisionVariable::new(
+        let dv3 = DecisionVariable::new(
             VariableID::from(3),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
@@ -292,11 +302,14 @@ mod tests {
             crate::ATol::default(),
         )
         .unwrap();
-        dv3.metadata = DecisionVariableMetadata {
-            name: Some("y".to_string()),
-            subscripts: vec![0],
-            ..Default::default()
-        };
+        variable_metadata.insert(
+            VariableID::from(3),
+            DecisionVariableMetadata {
+                name: Some("y".to_string()),
+                subscripts: vec![0],
+                ..Default::default()
+            },
+        );
 
         // Create sampled values
         let mut x0_samples = crate::Sampled::default();
@@ -332,6 +345,7 @@ mod tests {
         // Create sample set
         let sample_set = SampleSet::builder()
             .decision_variables(decision_variables)
+            .variable_metadata(variable_metadata)
             .objectives(objectives)
             .constraints(BTreeMap::new())
             .sense(Sense::Minimize)
@@ -385,8 +399,9 @@ mod tests {
 
         // Create two decision variables with the same name and subscripts (should cause error)
         let mut decision_variables = BTreeMap::new();
+        let mut variable_metadata = crate::VariableMetadataStore::default();
 
-        let mut dv1 = DecisionVariable::new(
+        let dv1 = DecisionVariable::new(
             VariableID::from(1),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
@@ -394,13 +409,16 @@ mod tests {
             crate::ATol::default(),
         )
         .unwrap();
-        dv1.metadata = DecisionVariableMetadata {
-            name: Some("x".to_string()),
-            subscripts: vec![0],
-            ..Default::default()
-        };
+        variable_metadata.insert(
+            VariableID::from(1),
+            DecisionVariableMetadata {
+                name: Some("x".to_string()),
+                subscripts: vec![0],
+                ..Default::default()
+            },
+        );
 
-        let mut dv2 = DecisionVariable::new(
+        let dv2 = DecisionVariable::new(
             VariableID::from(2),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
@@ -408,11 +426,14 @@ mod tests {
             crate::ATol::default(),
         )
         .unwrap();
-        dv2.metadata = DecisionVariableMetadata {
-            name: Some("x".to_string()),
-            subscripts: vec![0], // Same subscripts as dv1
-            ..Default::default()
-        };
+        variable_metadata.insert(
+            VariableID::from(2),
+            DecisionVariableMetadata {
+                name: Some("x".to_string()),
+                subscripts: vec![0], // Same subscripts as dv1
+                ..Default::default()
+            },
+        );
 
         // Create sampled values
         let mut samples1 = crate::Sampled::default();
@@ -437,6 +458,7 @@ mod tests {
         // Create sample set
         let sample_set = SampleSet::builder()
             .decision_variables(decision_variables)
+            .variable_metadata(variable_metadata)
             .objectives(objectives)
             .constraints(BTreeMap::new())
             .sense(Sense::Minimize)
@@ -483,8 +505,9 @@ mod tests {
 
         // Create sample decision variables with different names
         let mut decision_variables = BTreeMap::new();
+        let mut variable_metadata = crate::VariableMetadataStore::default();
 
-        let mut dv1 = DecisionVariable::new(
+        let dv1 = DecisionVariable::new(
             VariableID::from(1),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
@@ -492,13 +515,16 @@ mod tests {
             crate::ATol::default(),
         )
         .unwrap();
-        dv1.metadata = DecisionVariableMetadata {
-            name: Some("x".to_string()),
-            subscripts: vec![0],
-            ..Default::default()
-        };
+        variable_metadata.insert(
+            VariableID::from(1),
+            DecisionVariableMetadata {
+                name: Some("x".to_string()),
+                subscripts: vec![0],
+                ..Default::default()
+            },
+        );
 
-        let mut dv2 = DecisionVariable::new(
+        let dv2 = DecisionVariable::new(
             VariableID::from(2),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
@@ -506,13 +532,16 @@ mod tests {
             crate::ATol::default(),
         )
         .unwrap();
-        dv2.metadata = DecisionVariableMetadata {
-            name: Some("x".to_string()),
-            subscripts: vec![1],
-            ..Default::default()
-        };
+        variable_metadata.insert(
+            VariableID::from(2),
+            DecisionVariableMetadata {
+                name: Some("x".to_string()),
+                subscripts: vec![1],
+                ..Default::default()
+            },
+        );
 
-        let mut dv3 = DecisionVariable::new(
+        let dv3 = DecisionVariable::new(
             VariableID::from(3),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
@@ -520,11 +549,14 @@ mod tests {
             crate::ATol::default(),
         )
         .unwrap();
-        dv3.metadata = DecisionVariableMetadata {
-            name: Some("y".to_string()),
-            subscripts: vec![0],
-            ..Default::default()
-        };
+        variable_metadata.insert(
+            VariableID::from(3),
+            DecisionVariableMetadata {
+                name: Some("y".to_string()),
+                subscripts: vec![0],
+                ..Default::default()
+            },
+        );
 
         let mut samples1 = crate::Sampled::default();
         samples1.append([SampleID::from(0)], 1.0).unwrap();
@@ -553,6 +585,7 @@ mod tests {
 
         let sample_set = SampleSet::builder()
             .decision_variables(decision_variables)
+            .variable_metadata(variable_metadata.clone())
             .objectives(objectives)
             .constraints(BTreeMap::new())
             .sense(Sense::Minimize)
@@ -575,8 +608,9 @@ mod tests {
 
         // Create sample decision variables with different names
         let mut decision_variables = BTreeMap::new();
+        let mut variable_metadata = crate::VariableMetadataStore::default();
 
-        let mut dv1 = DecisionVariable::new(
+        let dv1 = DecisionVariable::new(
             VariableID::from(1),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
@@ -584,13 +618,16 @@ mod tests {
             crate::ATol::default(),
         )
         .unwrap();
-        dv1.metadata = DecisionVariableMetadata {
-            name: Some("x".to_string()),
-            subscripts: vec![0],
-            ..Default::default()
-        };
+        variable_metadata.insert(
+            VariableID::from(1),
+            DecisionVariableMetadata {
+                name: Some("x".to_string()),
+                subscripts: vec![0],
+                ..Default::default()
+            },
+        );
 
-        let mut dv2 = DecisionVariable::new(
+        let dv2 = DecisionVariable::new(
             VariableID::from(2),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
@@ -598,13 +635,16 @@ mod tests {
             crate::ATol::default(),
         )
         .unwrap();
-        dv2.metadata = DecisionVariableMetadata {
-            name: Some("x".to_string()),
-            subscripts: vec![1],
-            ..Default::default()
-        };
+        variable_metadata.insert(
+            VariableID::from(2),
+            DecisionVariableMetadata {
+                name: Some("x".to_string()),
+                subscripts: vec![1],
+                ..Default::default()
+            },
+        );
 
-        let mut dv3 = DecisionVariable::new(
+        let dv3 = DecisionVariable::new(
             VariableID::from(3),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
@@ -612,11 +652,14 @@ mod tests {
             crate::ATol::default(),
         )
         .unwrap();
-        dv3.metadata = DecisionVariableMetadata {
-            name: Some("y".to_string()),
-            subscripts: vec![0],
-            ..Default::default()
-        };
+        variable_metadata.insert(
+            VariableID::from(3),
+            DecisionVariableMetadata {
+                name: Some("y".to_string()),
+                subscripts: vec![0],
+                ..Default::default()
+            },
+        );
 
         let mut samples1 = crate::Sampled::default();
         samples1.append([SampleID::from(0)], 1.0).unwrap();
@@ -645,6 +688,7 @@ mod tests {
 
         let sample_set = SampleSet::builder()
             .decision_variables(decision_variables)
+            .variable_metadata(variable_metadata.clone())
             .objectives(objectives)
             .constraints(BTreeMap::new())
             .sense(Sense::Minimize)
@@ -682,8 +726,9 @@ mod tests {
 
         // Create a parameterized decision variable (should succeed - parameters are ignored)
         let mut decision_variables = BTreeMap::new();
+        let mut variable_metadata = crate::VariableMetadataStore::default();
 
-        let mut dv = DecisionVariable::new(
+        let dv = DecisionVariable::new(
             VariableID::from(1),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
@@ -691,16 +736,19 @@ mod tests {
             crate::ATol::default(),
         )
         .unwrap();
-        dv.metadata = DecisionVariableMetadata {
-            name: Some("x".to_string()),
-            subscripts: vec![0],
-            parameters: {
-                let mut params = fnv::FnvHashMap::default();
-                params.insert("param1".to_string(), "value1".to_string());
-                params
-            }, // Parameters are ignored
-            ..Default::default()
-        };
+        variable_metadata.insert(
+            VariableID::from(1),
+            DecisionVariableMetadata {
+                name: Some("x".to_string()),
+                subscripts: vec![0],
+                parameters: {
+                    let mut params = fnv::FnvHashMap::default();
+                    params.insert("param1".to_string(), "value1".to_string());
+                    params
+                }, // Parameters are ignored
+                ..Default::default()
+            },
+        );
 
         // Create sampled values
         let mut samples = crate::Sampled::default();
@@ -718,6 +766,7 @@ mod tests {
         // Create sample set
         let sample_set = SampleSet::builder()
             .decision_variables(decision_variables)
+            .variable_metadata(variable_metadata)
             .objectives(objectives)
             .constraints(BTreeMap::new())
             .sense(Sense::Minimize)
@@ -742,9 +791,10 @@ mod tests {
         // Create two variables with same name and subscripts but different parameters
         // This should cause a DuplicateSubscripts error
         let mut decision_variables = BTreeMap::new();
+        let mut variable_metadata = crate::VariableMetadataStore::default();
 
         // First variable with param1
-        let mut dv1 = DecisionVariable::new(
+        let dv1 = DecisionVariable::new(
             VariableID::from(1),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
@@ -752,16 +802,19 @@ mod tests {
             crate::ATol::default(),
         )
         .unwrap();
-        dv1.metadata = DecisionVariableMetadata {
-            name: Some("x".to_string()),
-            subscripts: vec![0],
-            parameters: {
-                let mut params = fnv::FnvHashMap::default();
-                params.insert("param".to_string(), "value1".to_string());
-                params
+        variable_metadata.insert(
+            VariableID::from(1),
+            DecisionVariableMetadata {
+                name: Some("x".to_string()),
+                subscripts: vec![0],
+                parameters: {
+                    let mut params = fnv::FnvHashMap::default();
+                    params.insert("param".to_string(), "value1".to_string());
+                    params
+                },
+                ..Default::default()
             },
-            ..Default::default()
-        };
+        );
 
         let mut samples1 = crate::Sampled::default();
         samples1.append([SampleID::from(0)], 1.0).unwrap();
@@ -772,7 +825,7 @@ mod tests {
         );
 
         // Second variable with param2 but same name and subscripts
-        let mut dv2 = DecisionVariable::new(
+        let dv2 = DecisionVariable::new(
             VariableID::from(2),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
@@ -780,16 +833,19 @@ mod tests {
             crate::ATol::default(),
         )
         .unwrap();
-        dv2.metadata = DecisionVariableMetadata {
-            name: Some("x".to_string()),
-            subscripts: vec![0], // Same subscripts as dv1
-            parameters: {
-                let mut params = fnv::FnvHashMap::default();
-                params.insert("param".to_string(), "value2".to_string()); // Different parameter value
-                params
+        variable_metadata.insert(
+            VariableID::from(2),
+            DecisionVariableMetadata {
+                name: Some("x".to_string()),
+                subscripts: vec![0], // Same subscripts as dv1
+                parameters: {
+                    let mut params = fnv::FnvHashMap::default();
+                    params.insert("param".to_string(), "value2".to_string()); // Different parameter value
+                    params
+                },
+                ..Default::default()
             },
-            ..Default::default()
-        };
+        );
 
         let mut samples2 = crate::Sampled::default();
         samples2.append([SampleID::from(0)], 2.0).unwrap();
@@ -806,6 +862,7 @@ mod tests {
         // Create sample set
         let sample_set = SampleSet::builder()
             .decision_variables(decision_variables)
+            .variable_metadata(variable_metadata.clone())
             .objectives(objectives)
             .constraints(BTreeMap::new())
             .sense(Sense::Minimize)

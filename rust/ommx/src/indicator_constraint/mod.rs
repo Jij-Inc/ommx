@@ -1,7 +1,7 @@
 mod evaluate;
 
 use crate::{
-    constraint::{stage, ConstraintMetadata, Created, CreatedData, Equality, Evaluated, Stage},
+    constraint::{stage, Created, CreatedData, Equality, Evaluated, Stage},
     constraint_type::{ConstraintType, EvaluatedConstraintBehavior, SampledConstraintBehavior},
     Function, SampleID, VariableID, VariableIDSet,
 };
@@ -55,7 +55,10 @@ impl From<IndicatorConstraintID> for u64 {
 /// When it is 1, the constraint `f(x) <= 0` (or `f(x) = 0`) must hold.
 ///
 /// The constraint's [`IndicatorConstraintID`] is not stored in this struct — it is held
-/// by the enclosing collection (e.g. the `BTreeMap` key in [`Instance`]).
+/// by the enclosing collection (e.g. the `BTreeMap` key in [`Instance`]). Auxiliary
+/// metadata also lives on the enclosing collection's
+/// [`ConstraintMetadataStore`](crate::ConstraintMetadataStore); per-element
+/// metadata storage was retired in the v3 redesign.
 ///
 /// [`Instance`]: crate::Instance
 #[derive(Debug, Clone, PartialEq)]
@@ -63,7 +66,6 @@ pub struct IndicatorConstraint<S: Stage<Self> = Created> {
     /// The binary decision variable that activates this constraint.
     pub indicator_variable: VariableID,
     pub equality: Equality,
-    pub metadata: ConstraintMetadata,
     pub stage: S::Data,
 }
 
@@ -136,7 +138,6 @@ impl SampledConstraintBehavior for SampledIndicatorConstraint {
         Some(IndicatorConstraint {
             indicator_variable: self.indicator_variable,
             equality: self.equality,
-            metadata: self.metadata.clone(),
             stage: IndicatorEvaluatedData {
                 evaluated_value,
                 feasible,
@@ -164,7 +165,6 @@ impl IndicatorConstraint<Created> {
         Self {
             indicator_variable,
             equality,
-            metadata: ConstraintMetadata::default(),
             stage: CreatedData { function },
         }
     }

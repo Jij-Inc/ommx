@@ -1,10 +1,15 @@
 //! Example: Creating a QUBO instance manually
 //!
 //! This example demonstrates how to manually construct a QUBO (Quadratic Unconstrained Binary Optimization)
-//! instance using the OMMX Rust SDK v2 API.
+//! instance using the OMMX Rust SDK v3 API.
 //!
 //! Note: OMMX also provides functionality to convert general instances to QUBO format.
 //! This example shows the manual construction approach.
+//!
+//! In v3, per-variable auxiliary metadata (name, subscripts, …) lives in
+//! the [`VariableMetadataStore`] sibling field of [`Instance`] rather
+//! than on each [`DecisionVariable`]. Set it via
+//! [`Instance::variable_metadata_mut`] after construction.
 
 use anyhow::Result;
 use ommx::{coeff, quadratic, Constraint, DecisionVariable, Function, Instance, Sense, VariableID};
@@ -14,20 +19,15 @@ fn main() -> Result<()> {
     let mut decision_variables = BTreeMap::new();
 
     // Binary variable x_{0, 0}
-    {
-        let mut var = DecisionVariable::binary(VariableID::from(0));
-        var.metadata.name = Some("x".to_string());
-        var.metadata.subscripts = vec![0, 0];
-        decision_variables.insert(VariableID::from(0), var);
-    }
-
+    decision_variables.insert(
+        VariableID::from(0),
+        DecisionVariable::binary(VariableID::from(0)),
+    );
     // Binary variable x_{1, 0}
-    {
-        let mut var = DecisionVariable::binary(VariableID::from(1));
-        var.metadata.name = Some("x".to_string());
-        var.metadata.subscripts = vec![1, 0];
-        decision_variables.insert(VariableID::from(1), var);
-    }
+    decision_variables.insert(
+        VariableID::from(1),
+        DecisionVariable::binary(VariableID::from(1)),
+    );
 
     // Objective function: 2.0 * x_{0, 0} * x_{1, 0} - x_{0, 0} - x_{1, 0} + 3.0
     let objective = Function::Quadratic(
@@ -45,7 +45,16 @@ fn main() -> Result<()> {
     let constraints: BTreeMap<_, Constraint> = BTreeMap::new();
 
     // Minimize the objective function
-    let instance = Instance::new(Sense::Minimize, objective, decision_variables, constraints)?;
+    let mut instance = Instance::new(Sense::Minimize, objective, decision_variables, constraints)?;
+
+    // Attach per-variable metadata via the SoA store on the instance.
+    {
+        let meta = instance.variable_metadata_mut();
+        meta.set_name(VariableID::from(0), "x");
+        meta.set_subscripts(VariableID::from(0), vec![0, 0]);
+        meta.set_name(VariableID::from(1), "x");
+        meta.set_subscripts(VariableID::from(1), vec![1, 0]);
+    }
 
     // Display instance information
     println!("Sense: {:?}", instance.sense());
@@ -58,10 +67,13 @@ fn main() -> Result<()> {
 
     // Display decision variable metadata
     println!("\nDecision variables:");
-    for (id, var) in instance.decision_variables() {
+    let meta = instance.variable_metadata();
+    for (id, _var) in instance.decision_variables() {
         println!(
             "  Variable {}: name={:?}, subscripts={:?}",
-            id, var.metadata.name, var.metadata.subscripts
+            id,
+            meta.name(*id),
+            meta.subscripts(*id),
         );
     }
 

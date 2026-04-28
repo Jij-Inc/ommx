@@ -2,9 +2,9 @@ mod parse;
 mod serialize;
 
 use crate::{
-    constraint_type::EvaluatedCollection, indicator_constraint::IndicatorConstraint, Constraint,
-    ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable, EvaluatedNamedFunction,
-    NamedFunctionID, Sense, VariableID,
+    constraint_type::EvaluatedCollection, decision_variable::VariableMetadataStore,
+    indicator_constraint::IndicatorConstraint, Constraint, ConstraintID, EvaluatedConstraint,
+    EvaluatedDecisionVariable, EvaluatedNamedFunction, NamedFunctionID, Sense, VariableID,
 };
 use getset::Getters;
 use std::collections::{BTreeMap, BTreeSet};
@@ -121,6 +121,9 @@ pub struct Solution {
     evaluated_named_functions: BTreeMap<NamedFunctionID, EvaluatedNamedFunction>,
     #[getset(get = "pub")]
     decision_variables: BTreeMap<VariableID, EvaluatedDecisionVariable>,
+    /// Per-variable auxiliary metadata (sibling of [`Self::decision_variables`]).
+    #[getset(get = "pub")]
+    variable_metadata: VariableMetadataStore,
     /// Optimality status - not guaranteed by Solution itself
     pub optimality: crate::v1::Optimality,
     /// Relaxation status - not guaranteed by Solution itself
@@ -276,8 +279,8 @@ impl Solution {
     /// Variables without names are not included.
     pub fn decision_variable_names(&self) -> BTreeSet<String> {
         self.decision_variables
-            .values()
-            .filter_map(|dv| dv.metadata.name.clone())
+            .keys()
+            .filter_map(|id| self.variable_metadata.name(*id).map(|s| s.to_owned()))
             .collect()
     }
 
@@ -298,11 +301,12 @@ impl Solution {
         &self,
         name: &str,
     ) -> Result<BTreeMap<Vec<i64>, f64>, SolutionError> {
-        // Collect all variables with the given name
+        // Collect all variables with the given name (looked up via the metadata store)
         let variables_with_name: Vec<&EvaluatedDecisionVariable> = self
             .decision_variables
-            .values()
-            .filter(|v| v.metadata.name.as_deref() == Some(name))
+            .iter()
+            .filter(|(id, _)| self.variable_metadata.name(**id) == Some(name))
+            .map(|(_, v)| v)
             .collect();
         if variables_with_name.is_empty() {
             return Err(SolutionError::UnknownVariableName {
@@ -312,7 +316,7 @@ impl Solution {
 
         let mut result = BTreeMap::new();
         for dv in &variables_with_name {
-            let key = dv.metadata.subscripts.clone();
+            let key = self.variable_metadata.subscripts(*dv.id()).to_vec();
             if result.contains_key(&key) {
                 return Err(SolutionError::DuplicateSubscript { subscripts: key });
             }
@@ -339,13 +343,13 @@ impl Solution {
     ) -> Result<BTreeMap<String, BTreeMap<Vec<i64>, f64>>, SolutionError> {
         let mut result: BTreeMap<String, BTreeMap<Vec<i64>, f64>> = BTreeMap::new();
 
-        for dv in self.decision_variables.values() {
-            let name = match &dv.metadata.name {
-                Some(n) => n.clone(),
+        for (id, dv) in self.decision_variables.iter() {
+            let name = match self.variable_metadata.name(*id) {
+                Some(n) => n.to_owned(),
                 None => continue, // Skip variables without names
             };
 
-            let subscripts = dv.metadata.subscripts.clone();
+            let subscripts = self.variable_metadata.subscripts(*id).to_vec();
             let value = *dv.value();
 
             let vars_map = result.entry(name).or_default();
@@ -374,24 +378,27 @@ impl Solution {
         &self,
         name: &str,
     ) -> Result<BTreeMap<Vec<i64>, f64>, SolutionError> {
-        // Collect all constraints with the given name
-        let constraints_with_name: Vec<&EvaluatedConstraint> = self
+        // Collect all constraints with the given name (looked up via the
+        // collection's metadata store)
+        let metadata = self.evaluated_constraints.metadata();
+        let matches: Vec<(ConstraintID, &EvaluatedConstraint)> = self
             .evaluated_constraints
-            .values()
-            .filter(|c| c.metadata.name.as_deref() == Some(name))
+            .iter()
+            .filter(|(id, _)| metadata.name(**id) == Some(name))
+            .map(|(id, c)| (*id, c))
             .collect();
-        if constraints_with_name.is_empty() {
+        if matches.is_empty() {
             return Err(SolutionError::UnknownConstraintName {
                 name: name.to_string(),
             });
         }
 
         let mut result = BTreeMap::new();
-        for ec in &constraints_with_name {
-            if !ec.metadata.parameters.is_empty() {
+        for (id, ec) in &matches {
+            if !metadata.parameters(*id).is_empty() {
                 return Err(SolutionError::ParameterizedConstraint);
             }
-            let key = ec.metadata.subscripts.clone();
+            let key = metadata.subscripts(*id).to_vec();
             if result.contains_key(&key) {
                 return Err(SolutionError::DuplicateSubscript { subscripts: key });
             }
@@ -547,6 +554,7 @@ pub struct SolutionBuilder {
     evaluated_sos1_constraints: EvaluatedCollection<crate::Sos1Constraint>,
     evaluated_named_functions: BTreeMap<NamedFunctionID, EvaluatedNamedFunction>,
     decision_variables: Option<BTreeMap<VariableID, EvaluatedDecisionVariable>>,
+    variable_metadata: VariableMetadataStore,
     sense: Option<Sense>,
     optimality: crate::v1::Optimality,
     relaxation: crate::v1::Relaxation,
@@ -644,6 +652,12 @@ impl SolutionBuilder {
         decision_variables: BTreeMap<VariableID, EvaluatedDecisionVariable>,
     ) -> Self {
         self.decision_variables = Some(decision_variables);
+        self
+    }
+
+    /// Sets the per-variable metadata store.
+    pub fn variable_metadata(mut self, variable_metadata: VariableMetadataStore) -> Self {
+        self.variable_metadata = variable_metadata;
         self
     }
 
@@ -770,6 +784,7 @@ impl SolutionBuilder {
             evaluated_sos1_constraints: self.evaluated_sos1_constraints,
             evaluated_named_functions: self.evaluated_named_functions,
             decision_variables,
+            variable_metadata: self.variable_metadata.clone(),
             optimality: self.optimality,
             relaxation: self.relaxation,
             sense: Some(sense),
@@ -818,6 +833,7 @@ impl SolutionBuilder {
             evaluated_sos1_constraints: self.evaluated_sos1_constraints,
             evaluated_named_functions: self.evaluated_named_functions,
             decision_variables,
+            variable_metadata: self.variable_metadata.clone(),
             optimality: self.optimality,
             relaxation: self.relaxation,
             sense: Some(sense),
@@ -1019,7 +1035,7 @@ mod tests {
         // Create a parameterized decision variable (should succeed - parameters are ignored)
         let mut decision_variables = BTreeMap::new();
 
-        let mut dv = DecisionVariable::new(
+        let dv = DecisionVariable::new(
             VariableID::from(1),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
@@ -1027,16 +1043,20 @@ mod tests {
             crate::ATol::default(),
         )
         .unwrap();
-        dv.metadata = DecisionVariableMetadata {
-            name: Some("x".to_string()),
-            subscripts: vec![0],
-            parameters: {
-                let mut params = fnv::FnvHashMap::default();
-                params.insert("param1".to_string(), "value1".to_string());
-                params
+        let mut variable_metadata = VariableMetadataStore::default();
+        variable_metadata.insert(
+            VariableID::from(1),
+            DecisionVariableMetadata {
+                name: Some("x".to_string()),
+                subscripts: vec![0],
+                parameters: {
+                    let mut params = fnv::FnvHashMap::default();
+                    params.insert("param1".to_string(), "value1".to_string());
+                    params
+                },
+                ..Default::default()
             },
-            ..Default::default()
-        };
+        );
 
         decision_variables.insert(
             VariableID::from(1),
@@ -1049,6 +1069,7 @@ mod tests {
                 .objective(0.0)
                 .evaluated_constraints(BTreeMap::new())
                 .decision_variables(decision_variables)
+                .variable_metadata(variable_metadata)
                 .sense(Sense::Minimize)
                 .build_unchecked()
                 .unwrap()
@@ -1071,9 +1092,10 @@ mod tests {
 
         // Create two variables with same name and subscripts but different parameters
         let mut decision_variables = BTreeMap::new();
+        let mut variable_metadata = VariableMetadataStore::default();
 
         // First variable
-        let mut dv1 = DecisionVariable::new(
+        let dv1 = DecisionVariable::new(
             VariableID::from(1),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
@@ -1081,16 +1103,19 @@ mod tests {
             crate::ATol::default(),
         )
         .unwrap();
-        dv1.metadata = DecisionVariableMetadata {
-            name: Some("x".to_string()),
-            subscripts: vec![0],
-            parameters: {
-                let mut params = fnv::FnvHashMap::default();
-                params.insert("param".to_string(), "value1".to_string());
-                params
+        variable_metadata.insert(
+            VariableID::from(1),
+            DecisionVariableMetadata {
+                name: Some("x".to_string()),
+                subscripts: vec![0],
+                parameters: {
+                    let mut params = fnv::FnvHashMap::default();
+                    params.insert("param".to_string(), "value1".to_string());
+                    params
+                },
+                ..Default::default()
             },
-            ..Default::default()
-        };
+        );
 
         decision_variables.insert(
             VariableID::from(1),
@@ -1098,7 +1123,7 @@ mod tests {
         );
 
         // Second variable with same name and subscripts
-        let mut dv2 = DecisionVariable::new(
+        let dv2 = DecisionVariable::new(
             VariableID::from(2),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
@@ -1106,16 +1131,19 @@ mod tests {
             crate::ATol::default(),
         )
         .unwrap();
-        dv2.metadata = DecisionVariableMetadata {
-            name: Some("x".to_string()),
-            subscripts: vec![0], // Same subscripts
-            parameters: {
-                let mut params = fnv::FnvHashMap::default();
-                params.insert("param".to_string(), "value2".to_string());
-                params
+        variable_metadata.insert(
+            VariableID::from(2),
+            DecisionVariableMetadata {
+                name: Some("x".to_string()),
+                subscripts: vec![0], // Same subscripts
+                parameters: {
+                    let mut params = fnv::FnvHashMap::default();
+                    params.insert("param".to_string(), "value2".to_string());
+                    params
+                },
+                ..Default::default()
             },
-            ..Default::default()
-        };
+        );
 
         decision_variables.insert(
             VariableID::from(2),
@@ -1128,6 +1156,7 @@ mod tests {
                 .objective(0.0)
                 .evaluated_constraints(BTreeMap::new())
                 .decision_variables(decision_variables)
+                .variable_metadata(variable_metadata)
                 .sense(Sense::Minimize)
                 .build_unchecked()
                 .unwrap()

@@ -76,6 +76,7 @@ impl Evaluate for Instance {
                 .evaluated_sos1_constraints_collection(evaluated_sos1_constraints)
                 .evaluated_named_functions(evaluated_named_functions)
                 .decision_variables(decision_variables)
+                .variable_metadata(self.variable_metadata.clone())
                 .sense(sense)
                 .build_unchecked()?
         };
@@ -138,6 +139,7 @@ impl Evaluate for Instance {
 
         Ok(crate::SampleSet::builder()
             .decision_variables(decision_variables)
+            .variable_metadata(self.variable_metadata.clone())
             .objectives(objectives)
             .constraints_collection(sampled_constraints)
             .indicator_constraints_collection(sampled_indicator_constraints)
@@ -274,19 +276,21 @@ impl Instance {
                     }
                     PropagateOutcome::Transformed {
                         original,
-                        new: mut constraint,
+                        new: constraint,
                     } => {
                         // Indicator=1 → promote inner constraint to regular constraint.
-                        // Record the promotion in the new constraint's provenance so that
-                        // downstream consumers can trace it back to the original indicator.
+                        // Carry over the indicator's metadata into the regular collection's
+                        // store and record the promotion in provenance.
                         let cid = self.constraint_collection.unused_id();
-                        constraint
-                            .metadata
+                        let mut new_metadata = self
+                            .indicator_constraint_collection
+                            .metadata()
+                            .collect_for(id);
+                        new_metadata
                             .provenance
                             .push(crate::constraint::Provenance::IndicatorConstraint(id));
                         self.constraint_collection
-                            .active_mut()
-                            .insert(cid, constraint);
+                            .insert_with(cid, constraint, new_metadata);
                         self.indicator_constraint_collection
                             .removed_mut()
                             .insert(id, (original, propagation_reason.clone()));
@@ -639,15 +643,15 @@ mod tests {
         // should reference the original IndicatorConstraintID so that the
         // transformation lineage is preserved.
         assert_eq!(instance.constraint_collection.active().len(), 1);
-        let (_, promoted) = instance
+        let (cid, _promoted) = instance
             .constraint_collection
             .active()
             .iter()
             .next()
             .unwrap();
         assert_eq!(
-            promoted.metadata.provenance,
-            vec![crate::constraint::Provenance::IndicatorConstraint(
+            instance.constraint_collection.metadata().provenance(*cid),
+            &[crate::constraint::Provenance::IndicatorConstraint(
                 IndicatorConstraintID::from(100)
             )]
         );

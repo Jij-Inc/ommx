@@ -27,22 +27,24 @@ mod tests {
     fn test_decision_variable_minimal_snapshot() {
         let dv = DecisionVariable::binary(VariableID::from(1));
         let folded = logical_memory_to_folded(&dv);
-        // Empty metadata should produce no output
+        // Per-element metadata storage was retired in v3 — only the
+        // intrinsic fields appear here; per-variable metadata lives at
+        // `Instance::variable_metadata` (see `instance/logical_memory.rs`).
         insta::assert_snapshot!(folded, @r###"
         DecisionVariable.bound 16
         DecisionVariable.id 8
         DecisionVariable.kind 1
-        DecisionVariable.metadata;DecisionVariableMetadata.description;Option[stack] 24
-        DecisionVariable.metadata;DecisionVariableMetadata.name;Option[stack] 24
-        DecisionVariable.metadata;DecisionVariableMetadata.parameters;FnvHashMap[stack] 32
-        DecisionVariable.metadata;DecisionVariableMetadata.subscripts;Vec[stack] 24
         DecisionVariable.substituted_value;Option[stack] 16
         "###);
     }
 
+    // The previous `test_decision_variable_with_metadata_snapshot` exercised
+    // per-element `DecisionVariable.metadata` storage, which was retired
+    // in v3. Per-variable metadata is now accounted for at the
+    // `Instance::variable_metadata` SoA-store level.
     #[test]
-    fn test_decision_variable_with_metadata_snapshot() {
-        let mut dv = DecisionVariable::new(
+    fn test_decision_variable_minimal_no_metadata_snapshot() {
+        let dv = DecisionVariable::new(
             VariableID::from(1),
             Kind::Integer,
             Bound::new(0.0, 10.0).unwrap(),
@@ -51,20 +53,11 @@ mod tests {
         )
         .unwrap();
 
-        dv.metadata.name = Some("x1".to_string());
-        dv.metadata.description = Some("First variable".to_string());
-        dv.metadata.subscripts = vec![1, 2, 3];
-
         let folded = logical_memory_to_folded(&dv);
         insta::assert_snapshot!(folded, @r###"
         DecisionVariable.bound 16
         DecisionVariable.id 8
         DecisionVariable.kind 1
-        DecisionVariable.metadata;DecisionVariableMetadata.description 38
-        DecisionVariable.metadata;DecisionVariableMetadata.name 26
-        DecisionVariable.metadata;DecisionVariableMetadata.parameters;FnvHashMap[stack] 32
-        DecisionVariable.metadata;DecisionVariableMetadata.subscripts 24
-        DecisionVariable.metadata;DecisionVariableMetadata.subscripts;Vec[stack] 24
         DecisionVariable.substituted_value;Option[stack] 16
         "###);
     }

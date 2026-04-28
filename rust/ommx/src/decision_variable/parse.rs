@@ -49,8 +49,19 @@ impl From<Kind> for i32 {
     }
 }
 
+/// Parsed v1 `DecisionVariable` together with its drained metadata.
+///
+/// Per-element parse no longer attaches metadata to the [`DecisionVariable`]
+/// itself — the metadata is returned alongside so the collection-level
+/// parse can drain it into the [`VariableMetadataStore`].
+#[derive(Debug)]
+pub struct ParsedDecisionVariable {
+    pub variable: DecisionVariable,
+    pub metadata: DecisionVariableMetadata,
+}
+
 impl Parse for v1::DecisionVariable {
-    type Output = DecisionVariable;
+    type Output = ParsedDecisionVariable;
     type Context = ();
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v1.DecisionVariable";
@@ -59,7 +70,7 @@ impl Parse for v1::DecisionVariable {
             .bound
             .unwrap_or_default()
             .parse_as(&(), message, "bound")?;
-        let mut dv = DecisionVariable::new(
+        let dv = DecisionVariable::new(
             VariableID(self.id),
             kind,
             bound,
@@ -67,72 +78,88 @@ impl Parse for v1::DecisionVariable {
             ATol::default(), // FIXME: user should provide this
         )
         .map_err(|e| RawParseError::InvalidDecisionVariable(e).context(message, "bound"))?;
-        dv.metadata.name = self.name;
-        dv.metadata.subscripts = self.subscripts;
-        dv.metadata.parameters = self.parameters.into_iter().collect();
-        dv.metadata.description = self.description;
-        Ok(dv)
+        let metadata = DecisionVariableMetadata {
+            name: self.name,
+            subscripts: self.subscripts,
+            parameters: self.parameters.into_iter().collect(),
+            description: self.description,
+        };
+        Ok(ParsedDecisionVariable {
+            variable: dv,
+            metadata,
+        })
     }
 }
 
 impl TryFrom<v1::DecisionVariable> for DecisionVariable {
     type Error = ParseError;
     fn try_from(value: v1::DecisionVariable) -> Result<Self, Self::Error> {
-        value.parse(&())
+        value.parse(&()).map(|p| p.variable)
     }
 }
 
 impl Parse for Vec<v1::DecisionVariable> {
-    type Output = BTreeMap<VariableID, DecisionVariable>;
+    type Output = (
+        BTreeMap<VariableID, DecisionVariable>,
+        crate::VariableMetadataStore,
+    );
     type Context = ();
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let mut decision_variables = BTreeMap::default();
+        let mut metadata_store = crate::VariableMetadataStore::default();
         for v in self {
-            let v: DecisionVariable = v.parse(&())?;
-            let id = v.id;
-            if decision_variables.insert(id, v).is_some() {
+            let parsed: ParsedDecisionVariable = v.parse(&())?;
+            let id = parsed.variable.id;
+            if decision_variables.insert(id, parsed.variable).is_some() {
                 return Err(RawParseError::InvalidInstance(format!(
                     "Duplicated variable ID is found in definition: {id:?}"
                 ))
                 .into());
             }
+            metadata_store.insert(id, parsed.metadata);
         }
-        Ok(decision_variables)
+        Ok((decision_variables, metadata_store))
     }
 }
 
-impl From<DecisionVariable> for v1::DecisionVariable {
-    fn from(
-        DecisionVariable {
-            id,
-            kind,
-            bound,
-            substituted_value,
-            metadata,
-        }: DecisionVariable,
-    ) -> Self {
-        Self {
-            id: id.into_inner(),
-            kind: kind.into(),
-            bound: Some(bound.into()),
-            substituted_value,
-            name: metadata.name,
-            subscripts: metadata.subscripts,
-            parameters: metadata.parameters.into_iter().collect(),
-            description: metadata.description,
-        }
+/// Build a v1 `DecisionVariable` from its intrinsic data plus drained metadata.
+pub(crate) fn decision_variable_to_v1(
+    DecisionVariable {
+        id,
+        kind,
+        bound,
+        substituted_value,
+    }: DecisionVariable,
+    metadata: DecisionVariableMetadata,
+) -> v1::DecisionVariable {
+    v1::DecisionVariable {
+        id: id.into_inner(),
+        kind: kind.into(),
+        bound: Some(bound.into()),
+        substituted_value,
+        name: metadata.name,
+        subscripts: metadata.subscripts,
+        parameters: metadata.parameters.into_iter().collect(),
+        description: metadata.description,
     }
+}
+
+/// Parsed v1 `SampledDecisionVariable` together with its drained metadata.
+#[derive(Debug)]
+pub struct ParsedSampledDecisionVariable {
+    pub variable: SampledDecisionVariable,
+    pub metadata: DecisionVariableMetadata,
 }
 
 impl Parse for v1::SampledDecisionVariable {
-    type Output = SampledDecisionVariable;
+    type Output = ParsedSampledDecisionVariable;
     type Context = ();
 
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v1.SampledDecisionVariable";
 
         // Parse the DecisionVariable
-        let dv = self
+        let parsed_dv: ParsedDecisionVariable = self
             .decision_variable
             .ok_or(RawParseError::MissingField {
                 message,
@@ -150,33 +177,41 @@ impl Parse for v1::SampledDecisionVariable {
             .parse_as(&(), message, "samples")?;
 
         // Create SampledDecisionVariable with validation
-        crate::SampledDecisionVariable::new(dv, samples, crate::ATol::default())
-            .map_err(|e| RawParseError::InvalidDecisionVariable(e).into())
+        let sampled = crate::SampledDecisionVariable::new(
+            parsed_dv.variable,
+            samples,
+            crate::ATol::default(),
+        )
+        .map_err(|e| RawParseError::InvalidDecisionVariable(e))?;
+        Ok(ParsedSampledDecisionVariable {
+            variable: sampled,
+            metadata: parsed_dv.metadata,
+        })
     }
 }
 
 impl TryFrom<v1::SampledDecisionVariable> for SampledDecisionVariable {
     type Error = ParseError;
     fn try_from(value: v1::SampledDecisionVariable) -> Result<Self, Self::Error> {
-        value.parse(&())
+        value.parse(&()).map(|p| p.variable)
     }
 }
 
-impl From<SampledDecisionVariable> for v1::SampledDecisionVariable {
-    fn from(sampled_dv: SampledDecisionVariable) -> Self {
-        // Convert back to DecisionVariable
-        let dv = DecisionVariable {
-            id: sampled_dv.id,
-            kind: sampled_dv.kind,
-            bound: sampled_dv.bound,
-            substituted_value: None, // SampledDecisionVariable doesn't have substituted_value
-            metadata: sampled_dv.metadata,
-        };
+/// Build a v1 `SampledDecisionVariable` from its intrinsic data plus drained metadata.
+pub(crate) fn sampled_decision_variable_to_v1(
+    sampled_dv: SampledDecisionVariable,
+    metadata: DecisionVariableMetadata,
+) -> v1::SampledDecisionVariable {
+    let dv = DecisionVariable {
+        id: sampled_dv.id,
+        kind: sampled_dv.kind,
+        bound: sampled_dv.bound,
+        substituted_value: None, // SampledDecisionVariable doesn't have substituted_value
+    };
 
-        Self {
-            decision_variable: Some(dv.into()),
-            samples: Some(sampled_dv.samples.into()),
-        }
+    v1::SampledDecisionVariable {
+        decision_variable: Some(decision_variable_to_v1(dv, metadata)),
+        samples: Some(sampled_dv.samples.into()),
     }
 }
 
@@ -195,7 +230,8 @@ mod tests {
             }),
             ..Default::default()
         };
-        insta::assert_snapshot!(dv.parse(&()).unwrap_err(), @r###"
+        let res: Result<ParsedDecisionVariable, _> = dv.parse(&());
+        insta::assert_snapshot!(res.unwrap_err(), @r###"
         Traceback for OMMX Message parse error:
         └─ommx.v1.DecisionVariable[bound]
         Bound for ID=1 is inconsistent to kind: kind=Integer, bound=[1.1, 1.9]
@@ -234,19 +270,19 @@ mod tests {
             }),
         };
 
-        let sampled_dv: SampledDecisionVariable = v1_sampled_dv.parse(&()).unwrap();
+        let parsed: ParsedSampledDecisionVariable = v1_sampled_dv.parse(&()).unwrap();
+        let sampled_dv = parsed.variable;
+        let metadata = parsed.metadata;
 
         assert_eq!(*sampled_dv.id(), VariableID::from(42));
         assert_eq!(*sampled_dv.kind(), Kind::Continuous);
-        assert_eq!(sampled_dv.metadata.name, Some("test_var".to_string()));
-        assert_eq!(sampled_dv.metadata.subscripts, vec![1, 2]);
-        assert_eq!(
-            sampled_dv.metadata.description,
-            Some("A test variable".to_string())
-        );
+        assert_eq!(metadata.name, Some("test_var".to_string()));
+        assert_eq!(metadata.subscripts, vec![1, 2]);
+        assert_eq!(metadata.description, Some("A test variable".to_string()));
 
-        // Test round-trip conversion
-        let v1_converted: v1::SampledDecisionVariable = sampled_dv.into();
+        // Test round-trip conversion: name is reattached at serialize time
+        // by `sampled_decision_variable_to_v1`.
+        let v1_converted = sampled_decision_variable_to_v1(sampled_dv, metadata);
         let decision_variable = v1_converted.decision_variable.unwrap();
         assert_eq!(decision_variable.id, 42);
         assert_eq!(decision_variable.name, Some("test_var".to_string()));
@@ -264,7 +300,7 @@ mod tests {
             }),
         };
 
-        let result: Result<SampledDecisionVariable, _> = v1_sampled_dv.parse(&());
+        let result: Result<ParsedSampledDecisionVariable, _> = v1_sampled_dv.parse(&());
         insta::assert_snapshot!(result.unwrap_err(), @r###"
         Traceback for OMMX Message parse error:
         Field decision_variable in ommx.v1.SampledDecisionVariable is missing.
@@ -282,7 +318,7 @@ mod tests {
             samples: None, // Missing samples should cause error
         };
 
-        let result: Result<SampledDecisionVariable, _> = v1_sampled_dv.parse(&());
+        let result: Result<ParsedSampledDecisionVariable, _> = v1_sampled_dv.parse(&());
         insta::assert_snapshot!(result.unwrap_err(), @r###"
         Traceback for OMMX Message parse error:
         Field samples in ommx.v1.SampledDecisionVariable is missing.

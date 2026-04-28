@@ -1,11 +1,14 @@
 mod approx;
 mod arbitrary;
 mod logical_memory;
-mod parse;
-mod serialize;
+mod metadata_store;
+pub(crate) mod parse;
 
 pub use arbitrary::*;
 use getset::CopyGetters;
+pub use metadata_store::VariableMetadataStore;
+
+pub(crate) use parse::sampled_decision_variable_to_v1;
 
 use crate::logical_memory::LogicalMemoryProfile;
 use crate::{ATol, Bound, Parse, RawParseError, SampleID, Sampled};
@@ -144,7 +147,14 @@ impl Kind {
     }
 }
 
-/// The decision variable with metadata.
+/// The decision variable's intrinsic data.
+///
+/// Holds only `id`, `kind`, `bound`, and `substituted_value`. Auxiliary
+/// metadata (`name`, `subscripts`, `parameters`, `description`) lives on
+/// the enclosing [`Instance`](crate::Instance)'s
+/// [`VariableMetadataStore`](crate::VariableMetadataStore) keyed by
+/// [`VariableID`]; per-element metadata storage was retired in the v3
+/// redesign.
 ///
 /// Invariants
 /// ----------
@@ -162,8 +172,6 @@ pub struct DecisionVariable {
     bound: Bound,
     #[getset(get_copy = "pub")]
     substituted_value: Option<f64>,
-
-    pub metadata: DecisionVariableMetadata,
 }
 
 impl DecisionVariable {
@@ -182,7 +190,6 @@ impl DecisionVariable {
                 .consistent_bound(bound, atol)
                 .ok_or(DecisionVariableError::BoundInconsistentToKind { id, kind, bound })?,
             substituted_value: None, // will be set later
-            metadata: DecisionVariableMetadata::default(),
         };
         if let Some(substituted_value) = substituted_value {
             new.check_value_consistency(substituted_value, atol)?;
@@ -406,7 +413,6 @@ pub struct EvaluatedDecisionVariable {
     bound: Bound,
     #[getset(get = "pub")]
     value: f64,
-    pub metadata: DecisionVariableMetadata,
 }
 
 impl EvaluatedDecisionVariable {
@@ -440,7 +446,6 @@ impl EvaluatedDecisionVariable {
             kind: decision_variable.kind,
             bound: decision_variable.bound,
             value,
-            metadata: decision_variable.metadata,
         })
     }
 
@@ -471,7 +476,6 @@ pub struct SampledDecisionVariable {
     kind: Kind,
     #[getset(get = "pub")]
     bound: Bound,
-    pub metadata: DecisionVariableMetadata,
     #[getset(get = "pub")]
     samples: Sampled<f64>,
 }
@@ -508,7 +512,6 @@ impl SampledDecisionVariable {
             id: decision_variable.id,
             kind: decision_variable.kind,
             bound: decision_variable.bound,
-            metadata: decision_variable.metadata,
             samples,
         })
     }
@@ -525,7 +528,6 @@ impl SampledDecisionVariable {
             kind: self.kind,
             bound: self.bound,
             substituted_value: None, // No substituted value when getting from samples
-            metadata: self.metadata.clone(),
         };
 
         // unwrap is safe here since there's no substituted_value to check
@@ -592,20 +594,34 @@ impl crate::Evaluate for DecisionVariable {
     }
 }
 
-impl From<EvaluatedDecisionVariable> for crate::v1::DecisionVariable {
-    fn from(eval_dv: EvaluatedDecisionVariable) -> Self {
-        crate::v1::DecisionVariable {
-            id: eval_dv.id.into_inner(),
-            kind: eval_dv.kind.into(),
-            bound: Some(eval_dv.bound.into()),
-            substituted_value: Some(eval_dv.value),
-            name: eval_dv.metadata.name,
-            subscripts: eval_dv.metadata.subscripts,
-            parameters: eval_dv.metadata.parameters.into_iter().collect(),
-            description: eval_dv.metadata.description,
-        }
+/// Build a v1 `DecisionVariable` from an evaluated variable plus its
+/// metadata. The metadata comes from the enclosing collection's
+/// [`VariableMetadataStore`]; the per-element struct no longer carries it.
+pub(crate) fn evaluated_decision_variable_to_v1(
+    eval_dv: EvaluatedDecisionVariable,
+    metadata: DecisionVariableMetadata,
+) -> crate::v1::DecisionVariable {
+    crate::v1::DecisionVariable {
+        id: eval_dv.id.into_inner(),
+        kind: eval_dv.kind.into(),
+        bound: Some(eval_dv.bound.into()),
+        substituted_value: Some(eval_dv.value),
+        name: metadata.name,
+        subscripts: metadata.subscripts,
+        parameters: metadata.parameters.into_iter().collect(),
+        description: metadata.description,
     }
 }
+
+// NOTE: There are intentionally no `impl From<DecisionVariable> for
+// v1::DecisionVariable` (or the Evaluated / Sampled variants). v3 keeps
+// metadata at the collection layer, so a per-element conversion would
+// have to default every metadata field — silently dropping any
+// caller-supplied metadata. Callers must instead go through
+// [`decision_variable::parse::decision_variable_to_v1`] (and the Evaluated
+// / Sampled siblings), which take the metadata explicitly. Top-level
+// container serialization (`From<Instance> for v1::Instance` etc.) drains
+// the SoA store and threads the metadata through these helpers.
 
 impl std::convert::TryFrom<crate::v1::DecisionVariable> for EvaluatedDecisionVariable {
     type Error = crate::ParseError;
@@ -614,7 +630,9 @@ impl std::convert::TryFrom<crate::v1::DecisionVariable> for EvaluatedDecisionVar
         let message = "ommx.v1.DecisionVariable";
 
         // Parse the DecisionVariable first to get strongly typed fields
-        let dv: DecisionVariable = v1_dv.clone().parse_as(&(), message, "decision_variable")?;
+        let parsed: parse::ParsedDecisionVariable =
+            v1_dv.clone().parse_as(&(), message, "decision_variable")?;
+        let dv = parsed.variable;
 
         // Extract the value from substituted_value (required for EvaluatedDecisionVariable)
         let value = v1_dv.substituted_value.ok_or(
@@ -766,18 +784,15 @@ mod tests {
         assert_eq!(*evaluated_dv.id(), VariableID::from(42));
         assert_eq!(*evaluated_dv.kind(), crate::Kind::Integer);
         assert_eq!(*evaluated_dv.value(), 5.0);
-        assert_eq!(evaluated_dv.metadata.name, Some("test_var".to_string()));
-        assert_eq!(evaluated_dv.metadata.subscripts, vec![1, 2]);
-        assert_eq!(
-            evaluated_dv.metadata.description,
-            Some("A test variable".to_string())
-        );
 
-        // Test round-trip conversion
-        let v1_converted: v1::DecisionVariable = evaluated_dv.into();
+        // Note: per-element metadata is gone in v3; the standalone TryFrom
+        // path drops metadata. End-to-end name preservation flows through
+        // Solution / SampleSet, which carry a VariableMetadataStore.
+        // Test round-trip conversion at the intrinsic-data level via the
+        // explicit `evaluated_decision_variable_to_v1` helper.
+        let v1_converted = evaluated_decision_variable_to_v1(evaluated_dv, Default::default());
         assert_eq!(v1_converted.id, 42);
         assert_eq!(v1_converted.substituted_value, Some(5.0));
-        assert_eq!(v1_converted.name, Some("test_var".to_string()));
     }
 
     #[test]

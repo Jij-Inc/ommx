@@ -68,9 +68,12 @@ impl Instance {
         for (i, coefficient) in coefficients.iter().enumerate() {
             // Create binary variables for each coefficient
             let binary = self.new_binary();
-            binary.metadata.name = Some("ommx.log_encode".to_string());
-            binary.metadata.subscripts = vec![id.into_inner() as i64, i as i64];
-            linear.add_term(binary.id().into(), *coefficient);
+            let binary_id = binary.id();
+            let _ = binary;
+            let metadata = self.variable_metadata_mut();
+            metadata.set_name(binary_id, "ommx.log_encode");
+            metadata.set_subscripts(binary_id, vec![id.into_inner() as i64, i as i64]);
+            linear.add_term(binary_id.into(), *coefficient);
         }
         let f = linear.clone().into();
         // Safe unwrap: there is no recursive assignment and self-assignment
@@ -106,13 +109,15 @@ mod tests {
         assert!(instance.decision_variables.contains_key(&id));
 
         // Check binary variables were created with correct metadata
+        let store = instance.variable_metadata();
         let binary_vars: Vec<_> = instance
             .decision_variables
-            .values()
-            .filter(|dv| {
-                dv.metadata.name == Some("ommx.log_encode".to_string())
-                    && dv.metadata.subscripts[0] == 0
+            .iter()
+            .filter(|(id, _)| {
+                store.name(**id) == Some("ommx.log_encode")
+                    && store.subscripts(**id).first().copied() == Some(0)
             })
+            .map(|(_, dv)| dv)
             .collect();
 
         // For range [2, 7] (6 values), we need ceil(log2(6)) = 3 bits

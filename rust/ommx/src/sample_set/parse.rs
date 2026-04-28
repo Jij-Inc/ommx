@@ -10,12 +10,15 @@ impl Parse for crate::v1::SampleSet {
         let message = "ommx.v1.SampleSet";
         crate::parse::check_format_version(self.format_version, message)?;
 
-        // Parse decision variables into BTreeMap
+        // Parse decision variables into BTreeMap and drain metadata into the SoA store
         let mut decision_variables = BTreeMap::new();
+        let mut variable_metadata = crate::VariableMetadataStore::default();
         for v1_sampled_dv in self.decision_variables {
-            let sampled_dv = v1_sampled_dv.parse_as(&(), message, "decision_variables")?;
-            let dv_id = *sampled_dv.id();
-            decision_variables.insert(dv_id, sampled_dv);
+            let parsed: crate::decision_variable::parse::ParsedSampledDecisionVariable =
+                v1_sampled_dv.parse_as(&(), message, "decision_variables")?;
+            let dv_id = *parsed.variable.id();
+            variable_metadata.insert(dv_id, parsed.metadata);
+            decision_variables.insert(dv_id, parsed.variable);
         }
 
         // Parse objectives - required, not optional
@@ -30,18 +33,22 @@ impl Parse for crate::v1::SampleSet {
             )?
             .parse_as(&(), message, "objectives")?;
 
-        // Parse constraints and extract removed reasons
+        // Parse constraints and extract removed reasons + metadata
         let mut constraints = std::collections::BTreeMap::new();
         let mut constraint_removed_reasons = std::collections::BTreeMap::new();
+        let mut constraint_metadata =
+            crate::ConstraintMetadataStore::<crate::ConstraintID>::default();
         for v1_constraint in self.constraints {
-            let (id, parsed_constraint, removed_reason): (
+            let (id, parsed_constraint, metadata, removed_reason): (
                 crate::ConstraintID,
                 crate::SampledConstraint,
+                crate::ConstraintMetadata,
                 Option<crate::RemovedReason>,
             ) = v1_constraint.parse_as(&(), message, "constraints")?;
             if let Some(reason) = removed_reason {
                 constraint_removed_reasons.insert(id, reason);
             }
+            constraint_metadata.insert(id, metadata);
             constraints.insert(id, parsed_constraint);
         }
 
@@ -64,10 +71,12 @@ impl Parse for crate::v1::SampleSet {
         // Create SampleSet with validation
         let sample_set = SampleSet::builder()
             .decision_variables(decision_variables)
+            .variable_metadata(variable_metadata)
             .objectives(objectives)
-            .constraints_collection(crate::constraint_type::SampledCollection::new(
+            .constraints_collection(crate::constraint_type::SampledCollection::with_metadata(
                 constraints,
                 constraint_removed_reasons,
+                constraint_metadata,
             ))
             .named_functions(named_functions)
             .sense(sense)
@@ -114,20 +123,36 @@ impl Parse for crate::v1::SampleSet {
     }
 }
 
+/// Lossy: `v1::SampleSet` only has a `constraints` field for regular
+/// sampled constraints — it has no fields for indicator / one-hot / sos1
+/// sampled constraints, so any data the in-memory [`SampleSet`] holds in
+/// those collections is dropped on serialization. This is a wire-format
+/// limitation that pre-dates the metadata SoA refactor; the matching
+/// `Parse` impl above initializes those collections to
+/// `Default::default()` for symmetry. Round-trip through `to_bytes` /
+/// `from_bytes` preserves variable and regular-constraint metadata.
 impl From<SampleSet> for crate::v1::SampleSet {
     fn from(sample_set: SampleSet) -> Self {
+        // Drain metadata stores and overlay onto per-element messages.
+        let variable_metadata = sample_set.variable_metadata().clone();
         let decision_variables: Vec<crate::v1::SampledDecisionVariable> = sample_set
             .decision_variables()
-            .values()
-            .map(|dv| dv.clone().into())
+            .iter()
+            .map(|(id, dv)| {
+                let metadata = variable_metadata.collect_for(*id);
+                crate::decision_variable::sampled_decision_variable_to_v1(dv.clone(), metadata)
+            })
             .collect();
         let objectives = Some(sample_set.objectives().clone().into());
-        let removed_reasons = sample_set.constraints().removed_reasons();
+        let constraint_metadata = sample_set.constraints().metadata().clone();
+        let removed_reasons = sample_set.constraints().removed_reasons().clone();
         let constraints: Vec<crate::v1::SampledConstraint> = sample_set
             .constraints()
             .iter()
             .map(|(id, sc)| {
-                let mut v1_sc = crate::v1::SampledConstraint::from((*id, sc.clone()));
+                let metadata = constraint_metadata.collect_for(*id);
+                let mut v1_sc =
+                    crate::constraint::sampled_constraint_to_v1(*id, sc.clone(), metadata);
                 if let Some(reason) = removed_reasons.get(id) {
                     v1_sc.removed_reason = Some(reason.reason.clone());
                     v1_sc.removed_reason_parameters = reason
@@ -339,5 +364,82 @@ mod tests {
         └─ommx.v1.SampleSet[format_version]
         Unsupported ommx format version: data has format_version=1, but this SDK supports up to 0. Please upgrade the OMMX SDK.
         "###);
+    }
+
+    /// Regression: `SampleSet::to_bytes` / `from_bytes` must preserve the
+    /// variable and (regular-constraint) metadata stores. Indicator /
+    /// one-hot / sos1 sampled metadata is dropped because `v1::SampleSet`
+    /// has no fields for those collections — that's a wire-format
+    /// limitation older than the SoA refactor and is out of scope here.
+    #[test]
+    fn test_sample_set_roundtrip_preserves_metadata() {
+        use crate::constraint::SampledData;
+        use crate::{
+            ATol, ConstraintID, DecisionVariable, Equality, SampleID, SampledDecisionVariable,
+            Sense, VariableID,
+        };
+        use std::collections::BTreeMap;
+
+        let var_id = VariableID::from(1);
+        let cid = ConstraintID::from(10);
+        let sample_id = SampleID::from(0);
+
+        let dv = DecisionVariable::binary(var_id);
+        let mut x_samples = crate::Sampled::default();
+        x_samples.append([sample_id], 1.0).unwrap();
+        let mut decision_variables = BTreeMap::new();
+        decision_variables.insert(
+            var_id,
+            SampledDecisionVariable::new(dv, x_samples, ATol::default()).unwrap(),
+        );
+
+        let mut variable_metadata = crate::VariableMetadataStore::default();
+        variable_metadata.set_name(var_id, "x");
+        variable_metadata.set_subscripts(var_id, vec![0]);
+
+        let mut evaluated_values = crate::Sampled::default();
+        evaluated_values.append([sample_id], 0.0).unwrap();
+        let mut feasible = BTreeMap::new();
+        feasible.insert(sample_id, true);
+        let sampled_constraint = crate::Constraint {
+            equality: Equality::EqualToZero,
+            stage: SampledData {
+                evaluated_values,
+                dual_variables: None,
+                feasible,
+                used_decision_variable_ids: [var_id].into_iter().collect(),
+            },
+        };
+        let mut constraints_map = BTreeMap::new();
+        constraints_map.insert(cid, sampled_constraint);
+        let mut constraint_metadata = crate::ConstraintMetadataStore::<ConstraintID>::default();
+        constraint_metadata.set_name(cid, "balance");
+        constraint_metadata.set_description(cid, "demand-balance row");
+        let constraints = crate::constraint_type::SampledCollection::with_metadata(
+            constraints_map,
+            BTreeMap::new(),
+            constraint_metadata,
+        );
+
+        let mut objectives = crate::Sampled::default();
+        objectives.append([sample_id], 1.0).unwrap();
+
+        let sample_set = SampleSet::builder()
+            .decision_variables(decision_variables)
+            .variable_metadata(variable_metadata)
+            .objectives(objectives)
+            .constraints_collection(constraints)
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
+
+        let bytes = sample_set.to_bytes();
+        let recovered = SampleSet::from_bytes(&bytes).unwrap();
+
+        assert_eq!(recovered.variable_metadata().name(var_id), Some("x"));
+        assert_eq!(recovered.variable_metadata().subscripts(var_id), &[0]);
+        let constraint_meta = recovered.constraints().metadata();
+        assert_eq!(constraint_meta.name(cid), Some("balance"));
+        assert_eq!(constraint_meta.description(cid), Some("demand-balance row"));
     }
 }

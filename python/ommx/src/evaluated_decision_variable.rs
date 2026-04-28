@@ -2,7 +2,23 @@ use pyo3::prelude::*;
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
-pub struct EvaluatedDecisionVariable(pub ommx::EvaluatedDecisionVariable);
+pub struct EvaluatedDecisionVariable(
+    pub ommx::EvaluatedDecisionVariable,
+    pub ommx::DecisionVariableMetadata,
+);
+
+impl EvaluatedDecisionVariable {
+    pub fn standalone(inner: ommx::EvaluatedDecisionVariable) -> Self {
+        Self(inner, ommx::DecisionVariableMetadata::default())
+    }
+
+    pub fn from_parts(
+        inner: ommx::EvaluatedDecisionVariable,
+        metadata: ommx::DecisionVariableMetadata,
+    ) -> Self {
+        Self(inner, metadata)
+    }
+}
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
@@ -40,20 +56,19 @@ impl EvaluatedDecisionVariable {
     /// Get the variable name
     #[getter]
     pub fn name(&self) -> Option<String> {
-        self.0.metadata.name.clone()
+        self.1.name.clone()
     }
 
     /// Get the subscripts
     #[getter]
     pub fn subscripts(&self) -> Vec<i64> {
-        self.0.metadata.subscripts.clone()
+        self.1.subscripts.clone()
     }
 
     /// Get the parameters
     #[getter]
     pub fn parameters(&self) -> std::collections::HashMap<String, String> {
-        self.0
-            .metadata
+        self.1
             .parameters
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
@@ -63,6 +78,6 @@ impl EvaluatedDecisionVariable {
     /// Get the description
     #[getter]
     pub fn description(&self) -> Option<String> {
-        self.0.metadata.description.clone()
+        self.1.description.clone()
     }
 }

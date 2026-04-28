@@ -25,7 +25,6 @@ impl Arbitrary for Constraint<Created> {
         (Function::arbitrary_with(params), Equality::arbitrary())
             .prop_map(|(function, equality)| Constraint {
                 equality,
-                metadata: ConstraintMetadata::default(),
                 stage: CreatedData { function },
             })
             .boxed()

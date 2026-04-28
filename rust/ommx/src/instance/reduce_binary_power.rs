@@ -26,9 +26,8 @@ impl Instance {
 mod tests {
     use super::*;
     use crate::{
-        coeff,
-        constraint::{ConstraintMetadata, CreatedData},
-        quadratic, ATol, Bound, Constraint, DecisionVariable, Equality, Kind, Sense,
+        coeff, constraint::CreatedData, quadratic, ATol, Bound, Constraint, DecisionVariable,
+        Equality, Kind, Sense,
     };
     use ::approx::assert_abs_diff_eq;
     use proptest::prelude::*;
@@ -65,7 +64,6 @@ mod tests {
             ConstraintID::from(1),
             Constraint {
                 equality: Equality::LessThanOrEqualToZero,
-                metadata: ConstraintMetadata::default(),
                 stage: CreatedData {
                     function: constraint_func,
                 },

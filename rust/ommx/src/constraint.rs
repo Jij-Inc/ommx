@@ -2,10 +2,12 @@ mod approx;
 mod arbitrary;
 mod evaluate;
 mod logical_memory;
+mod metadata_store;
 mod parse;
 mod reduce_binary_power;
-mod serialize;
 pub(crate) mod stage;
+
+pub use metadata_store::ConstraintMetadataStore;
 
 use crate::logical_memory::LogicalMemoryProfile;
 use crate::{Function, SampleID, VariableID};
@@ -100,20 +102,22 @@ pub struct ConstraintMetadata {
 
 /// A constraint parameterized by its lifecycle stage.
 ///
-/// Common fields (`equality`, `metadata`) are always present.
-/// Stage-specific data (e.g. `function` for [`Created`], evaluation results for [`Evaluated`])
-/// is stored in the `stage` field, whose type is determined by `S::Data`.
+/// Holds only the constraint's intrinsic data (`equality` plus stage-specific
+/// data in `stage`). Auxiliary metadata (`name`, `subscripts`, `parameters`,
+/// `description`, `provenance`) lives on the enclosing collection's
+/// [`ConstraintMetadataStore`] keyed by id; per-element storage was retired
+/// in the v3 metadata redesign.
 ///
-/// The constraint's [`ConstraintID`] is not stored in this struct — it is held
-/// by the enclosing collection (e.g. the `BTreeMap` key in [`Instance`]), which
-/// is the single source of truth. Standalone constraints are identity-less until
-/// inserted into a collection.
+/// The constraint's [`ConstraintID`] is not stored in this struct — it is
+/// held by the enclosing collection (e.g. the `BTreeMap` key in
+/// [`Instance`]), which is the single source of truth. Standalone
+/// constraints are identity-less until inserted into a collection.
 ///
 /// [`Instance`]: crate::Instance
+/// [`ConstraintMetadataStore`]: crate::ConstraintMetadataStore
 #[derive(Debug, Clone, PartialEq)]
 pub struct Constraint<S: Stage<Self> = Created> {
     pub equality: Equality,
-    pub metadata: ConstraintMetadata,
     pub stage: S::Data,
 }
 
@@ -133,7 +137,6 @@ impl Constraint<Created> {
     pub fn equal_to_zero(function: Function) -> Self {
         Self {
             equality: Equality::EqualToZero,
-            metadata: ConstraintMetadata::default(),
             stage: CreatedData { function },
         }
     }
@@ -141,7 +144,6 @@ impl Constraint<Created> {
     pub fn less_than_or_equal_to_zero(function: Function) -> Self {
         Self {
             equality: Equality::LessThanOrEqualToZero,
-            metadata: ConstraintMetadata::default(),
             stage: CreatedData { function },
         }
     }
@@ -190,26 +192,41 @@ impl EvaluatedConstraint {
     }
 }
 
-impl From<(ConstraintID, EvaluatedConstraint)> for crate::v1::EvaluatedConstraint {
-    fn from((id, c): (ConstraintID, EvaluatedConstraint)) -> Self {
-        crate::v1::EvaluatedConstraint {
-            id: id.into_inner(),
-            equality: c.equality.into(),
-            evaluated_value: c.stage.evaluated_value,
-            used_decision_variable_ids: c
-                .stage
-                .used_decision_variable_ids
-                .into_iter()
-                .map(|id| id.into_inner())
-                .collect(),
-            subscripts: c.metadata.subscripts,
-            parameters: c.metadata.parameters.into_iter().collect(),
-            name: c.metadata.name,
-            description: c.metadata.description,
-            dual_variable: c.stage.dual_variable,
-            removed_reason: None,
-            removed_reason_parameters: Default::default(),
-        }
+// NOTE: There are intentionally no `impl From<(ConstraintID,
+// EvaluatedConstraint)> for v1::EvaluatedConstraint` (or the Sampled
+// variant). v3 keeps metadata at the collection layer, so a per-element
+// conversion would have to default every metadata field — silently
+// dropping any caller-supplied metadata. Callers must instead go through
+// [`evaluated_constraint_to_v1`] / [`sampled_constraint_to_v1`], which
+// take the metadata explicitly. Top-level container serialization
+// (`From<Solution> for v1::Solution`, etc.) drains the SoA store and
+// threads the metadata through these helpers.
+
+/// Build a v1 `EvaluatedConstraint` from a per-element constraint plus its
+/// metadata. The metadata comes from the enclosing collection's
+/// [`ConstraintMetadataStore`]; the per-element struct no longer carries it.
+pub(crate) fn evaluated_constraint_to_v1(
+    id: ConstraintID,
+    c: EvaluatedConstraint,
+    metadata: ConstraintMetadata,
+) -> crate::v1::EvaluatedConstraint {
+    crate::v1::EvaluatedConstraint {
+        id: id.into_inner(),
+        equality: c.equality.into(),
+        evaluated_value: c.stage.evaluated_value,
+        used_decision_variable_ids: c
+            .stage
+            .used_decision_variable_ids
+            .into_iter()
+            .map(|id| id.into_inner())
+            .collect(),
+        subscripts: metadata.subscripts,
+        parameters: metadata.parameters.into_iter().collect(),
+        name: metadata.name,
+        description: metadata.description,
+        dual_variable: c.stage.dual_variable,
+        removed_reason: None,
+        removed_reason_parameters: Default::default(),
     }
 }
 
@@ -270,34 +287,39 @@ impl SampledConstraint {
     }
 }
 
-impl From<(ConstraintID, SampledConstraint)> for crate::v1::SampledConstraint {
-    fn from((id, c): (ConstraintID, SampledConstraint)) -> Self {
-        let evaluated_values: crate::v1::SampledValues = c.stage.evaluated_values.into();
-        let feasible = c
-            .stage
-            .feasible
-            .into_iter()
-            .map(|(id, value)| (id.into_inner(), value))
-            .collect();
+/// Build a v1 `SampledConstraint` from a per-element sampled constraint plus
+/// its metadata. The metadata comes from the enclosing collection's
+/// [`ConstraintMetadataStore`]; the per-element struct no longer carries it.
+pub(crate) fn sampled_constraint_to_v1(
+    id: ConstraintID,
+    c: SampledConstraint,
+    metadata: ConstraintMetadata,
+) -> crate::v1::SampledConstraint {
+    let evaluated_values: crate::v1::SampledValues = c.stage.evaluated_values.into();
+    let feasible = c
+        .stage
+        .feasible
+        .into_iter()
+        .map(|(id, value)| (id.into_inner(), value))
+        .collect();
 
-        crate::v1::SampledConstraint {
-            id: id.into_inner(),
-            equality: c.equality.into(),
-            name: c.metadata.name,
-            subscripts: c.metadata.subscripts,
-            parameters: c.metadata.parameters.into_iter().collect(),
-            description: c.metadata.description,
-            removed_reason: None,
-            removed_reason_parameters: Default::default(),
-            evaluated_values: Some(evaluated_values),
-            used_decision_variable_ids: c
-                .stage
-                .used_decision_variable_ids
-                .into_iter()
-                .map(|id| id.into_inner())
-                .collect(),
-            feasible,
-        }
+    crate::v1::SampledConstraint {
+        id: id.into_inner(),
+        equality: c.equality.into(),
+        name: metadata.name,
+        subscripts: metadata.subscripts,
+        parameters: metadata.parameters.into_iter().collect(),
+        description: metadata.description,
+        removed_reason: None,
+        removed_reason_parameters: Default::default(),
+        evaluated_values: Some(evaluated_values),
+        used_decision_variable_ids: c
+            .stage
+            .used_decision_variable_ids
+            .into_iter()
+            .map(|id| id.into_inner())
+            .collect(),
+        feasible,
     }
 }
 

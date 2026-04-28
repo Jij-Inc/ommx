@@ -19,9 +19,13 @@ impl Propagate for IndicatorConstraint<Created> {
                 promoted_function.partial_evaluate(state, atol)?;
 
                 // Provenance is added by the caller that has the original IndicatorConstraintID.
+                // NOTE: per-element metadata is gone in v3; the caller is
+                // responsible for moving the IndicatorConstraint's metadata
+                // (looked up via the IndicatorConstraintCollection's
+                // ConstraintMetadataStore) into the regular ConstraintCollection's
+                // store under the new id at insertion time.
                 let new = Constraint {
                     equality: self.equality,
-                    metadata: self.metadata.clone(),
                     stage: CreatedData {
                         function: promoted_function,
                     },
@@ -96,7 +100,6 @@ impl Evaluate for IndicatorConstraint<Created> {
         Ok(IndicatorConstraint {
             indicator_variable: self.indicator_variable,
             equality: self.equality,
-            metadata: self.metadata.clone(),
             stage: IndicatorEvaluatedData {
                 evaluated_value,
                 feasible,
@@ -164,7 +167,6 @@ impl Evaluate for IndicatorConstraint<Created> {
         Ok(IndicatorConstraint {
             indicator_variable: self.indicator_variable,
             equality: self.equality,
-            metadata: self.metadata.clone(),
             stage: IndicatorSampledData {
                 evaluated_values,
                 feasible,
@@ -365,8 +367,9 @@ mod tests {
         match outcome {
             PropagateOutcome::Transformed { original, new } => {
                 assert_eq!(new.equality, Equality::LessThanOrEqualToZero);
-                // Provenance is added by the caller (Instance) that owns the original ID.
-                assert!(new.metadata.provenance.is_empty());
+                // Per-element metadata is gone in v3; provenance and other
+                // metadata are added by the caller (Instance) into its
+                // ConstraintMetadataStore at the collection level.
                 // Original indicator constraint preserved for removed set
                 assert_eq!(original.indicator_variable, VariableID::from(10));
             }
