@@ -2,7 +2,7 @@
 
 Status: **Rust SDK landed; Python wrappers landed (snapshot model);
 `include=` + long-format sidecar dfs landed (Wave 1.5); per-kind
-`*_df` consolidation in progress (Wave 2); Series accessors,
+`*_df` consolidation landed (Wave 2, PR #847); Series accessors,
 two-mode Attached wrappers, and `Literal[...]` typing deferred to
 follow-up PRs**
 
@@ -39,19 +39,23 @@ here. The implementation shipped in three waves:
   `variable_metadata_df()`, `variable_parameters_df()`. Mechanical
   v3-alpha breaking change: every `*_df` accessor is now a method
   (`instance.constraints_df` → `instance.constraints_df()`).
-- **Wave 2 (proposed, this PR):** Per-kind `*_constraints_df`,
+- **Wave 2 (PR #847, landed):** Per-kind `*_constraints_df`,
   `removed_*_constraints_df`, and `*_removed_reasons_df` families
   on every host collapse into a single `constraints_df(kind=...)`.
   `Instance` / `ParametricInstance` gain a new `removed: bool = False`
-  parameter that expands rows to include the removed map and auto-
-  adds `removed_reason` / `removed_reason.{key}` columns (NA on
-  active rows). `Solution` / `SampleSet` always return all rows
-  (no active/removed distinction at the evaluated / sampled
-  stage); reason columns are gated by `"removed_reason"` in
-  `include=`. Wide `*_df` index column renamed from unqualified
-  `id` to `{kind}_constraint_id`, matching the Wave 1.5 sidecars.
-  `kind` stays `str` at runtime; `Literal[...]` typing + `@overload`
-  stubs are kept as a follow-up.
+  parameter that expands rows to include the removed map (active and
+  removed merged in **globally id-sorted** order) and auto-adds
+  `removed_reason` / `removed_reason.{key}` columns (NA on active
+  rows). `Solution` / `SampleSet` always return all rows (no
+  active/removed distinction at the evaluated / sampled stage);
+  reason columns are gated by `"removed_reason"` in `include=`,
+  and the `removed_reason` column always appears with NA values
+  when the flag is on but no row in the view carries a reason.
+  Wide `*_df` index column renamed from unqualified `id` to
+  `{kind}_constraint_id`, matching the Wave 1.5 sidecars; empty
+  collections still produce a DataFrame whose `df.index.name` is
+  the kind-qualified label. `kind` stays `str` at runtime;
+  `Literal[...]` typing + `@overload` stubs are kept as a follow-up.
 - **Future (deferred):** `Series[ID -> Object]` collection
   accessors, the two-mode Standalone / Attached wrappers with
   `Py<Instance>` back-references and write-through metadata setters,
@@ -785,11 +789,16 @@ df = instance.constraints_df(include=[])
 
 # === Active + removed in one table ===
 df = instance.constraints_df(removed=True)
-# rows: active + removed (in regular_constraint_id order)
+# rows: active + removed merged into a single globally id-sorted
+#       sequence (a removed id between two active ids interleaves
+#       in id order, not "active section then removed section").
 # columns: equality, function_type, used_ids,
 #          name, subscripts, description, parameters.{key},
 #          removed_reason, removed_reason.{key}
-# (active rows have NA in the removed_reason columns)
+# (active rows have NA in the removed_reason columns; the
+#  removed_reason column is guaranteed to appear whenever the
+#  "removed_reason" flag is active, even if every row happens to
+#  have NA — useful for downstream code that branches on schema.)
 
 # === Per-kind dispatch ===
 df = instance.constraints_df(kind="indicator")
@@ -842,7 +851,11 @@ df = solution.constraints_df(kind="regular",
                              include=("metadata", "parameters",
                                       "removed_reason"))
                                             # + removed_reason / removed_reason.{key}
-                                            # columns (NA for non-removed rows)
+                                            # columns (NA for non-removed rows; the
+                                            # `removed_reason` column appears even when
+                                            # no constraint was removed before evaluation,
+                                            # so the schema only depends on `include=`,
+                                            # not on the actual data.)
 
 df = solution.decision_variables_df()       # core: kind, lower, upper, value
                                             # + metadata, parameters columns by default
@@ -1061,7 +1074,7 @@ shape is:
   (default `"regular"`); unknown values raise `ValueError`. Index
   column names are kind-qualified.
 
-### Wave 2 (proposed)
+### Landed in Wave 2 (PR #847)
 
 - Per-kind `*_constraints_df`, `removed_*_constraints_df`
   (`Instance` / `ParametricInstance`), and `*_removed_reasons_df`
@@ -1069,14 +1082,15 @@ shape is:
   `constraints_df(kind=...)` per host replaces them. `kind` is
   validated at runtime against
   `{"regular", "indicator", "one_hot", "sos1"}` (default
-  `"regular"`).
+  `"regular"`); unknown values raise `ValueError`.
 - `Instance.constraints_df` / `ParametricInstance.constraints_df`
   accept a new `removed: bool = False` parameter. `removed=False`
   returns active rows only (the today's-default behavior);
-  `removed=True` returns active + removed rows in the same
-  DataFrame and **auto-sets `"removed_reason"`** so the reason
-  columns (`removed_reason` and `removed_reason.{key}`) appear,
-  with NA on active rows.
+  `removed=True` returns active + removed rows merged into a
+  **globally id-sorted** sequence in the same DataFrame and
+  **auto-sets `"removed_reason"`** so the reason columns
+  (`removed_reason` and `removed_reason.{key}`) appear, with NA
+  on active rows.
 - `Solution.constraints_df` / `SampleSet.constraints_df` always
   return all rows (no active/removed distinction at the evaluated
   / sampled stage). `"removed_reason"` in `include=` adds reason
@@ -1086,9 +1100,18 @@ shape is:
   — it gates both the reason name and the reason parameter columns
   together. `"parameters"` continues to gate only the constraint's
   own metadata parameters; the two `parameters` namespaces stay
-  independent.
+  independent. Unknown flags raise `ValueError`.
+- The `removed_reason` column is **schema-stable**: when the flag
+  is on, the column appears in the resulting DataFrame regardless
+  of whether any row carries a reason (NA-filled rows otherwise).
+  The `removed_reason.{key}` parameter columns remain
+  data-dependent — their key set is too. Keys within the
+  `removed_reason.{key}` family are emitted in lexicographic
+  order, matching the existing `*_parameters_df` sidecar shape.
 - Wide `*_df` index column renamed from unqualified `id` to
-  `{kind}_constraint_id` (matching the Wave 1.5 sidecars).
+  `{kind}_constraint_id` (matching the Wave 1.5 sidecars). Empty
+  collections still produce a DataFrame whose `df.index.name` is
+  the kind-qualified label.
 - `kind` typing stays `str` at runtime; `Literal[...]` typing +
   `@overload` stubs are deferred to a follow-up.
 
