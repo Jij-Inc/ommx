@@ -157,14 +157,14 @@ To view the feasibility for each constraint, use the `summary_with_constraints` 
 sample_set.summary_with_constraints
 ```
 
-For more detailed information, you can use the `SampleSet.decision_variables` and `SampleSet.constraints` properties.
+For more detailed information, you can use the `SampleSet.decision_variables_df()` and `SampleSet.constraints_df()` methods.
 
 ```{code-cell} ipython3
-sample_set.decision_variables_df.head(2)
+sample_set.decision_variables_df().head(2)
 ```
 
 ```{code-cell} ipython3
-sample_set.constraints_df.head(2)
+sample_set.constraints_df().head(2)
 ```
 
 To obtain the samples, use the `SampleSet.extract_decision_variables` method. This interprets the samples using the `name` and `subscripts` registered when creating `ommx.v1.DecisionVariables`. For example, to get the value of the decision variable named `x` with `sample_id=1`, use the following to obtain it in the form of `dict[subscripts, value]`.

@@ -180,19 +180,19 @@ assert set(instance_mix.sos1_constraints.keys()) == {1}
 
 | 制約型 | アクセサ（Solution） |
 |---|---|
-| 通常制約 | {attr}`~ommx.v1.Solution.constraints_df` |
-| Indicator | {attr}`~ommx.v1.Solution.indicator_constraints_df` |
-| OneHot | {attr}`~ommx.v1.Solution.one_hot_constraints_df` |
-| SOS1 | {attr}`~ommx.v1.Solution.sos1_constraints_df` |
+| 通常制約 | {meth}`~ommx.v1.Solution.constraints_df` |
+| Indicator | {meth}`~ommx.v1.Solution.indicator_constraints_df` |
+| OneHot | {meth}`~ommx.v1.Solution.one_hot_constraints_df` |
+| SOS1 | {meth}`~ommx.v1.Solution.sos1_constraints_df` |
 
 Indicator 制約の DataFrame には、`indicator_active` というカラムが含まれます。これにより「インジケータが OFF だった（制約は自明に満たされた）」ケースと「インジケータが ON で制約が本当に満たされた」ケースを区別できます。なお、Indicator 制約には双対変数の値は定義されない（条件付き制約に対する双対値は一般に well-defined ではない）ため、`dual_variable` は含まれません。
 
 ### removed_reasons_df の分離
 
-通常制約の `removed_reason` は {attr}`~ommx.v1.Solution.constraints_df` のカラムとしては持たず、{attr}`~ommx.v1.Solution.removed_reasons_df` という別テーブルとして提供されます。必要なら join して使います。
+通常制約の `removed_reason` は {meth}`~ommx.v1.Solution.constraints_df` のカラムとしては持たず、{meth}`~ommx.v1.Solution.removed_reasons_df` という別テーブルとして提供されます。必要なら join して使います。
 
 ```python
-df = solution.constraints_df.join(solution.removed_reasons_df)
+df = solution.constraints_df().join(solution.removed_reasons_df())
 ```
 
 Indicator・OneHot・SOS1 についても、それぞれ対応する `indicator_removed_reasons_df` / `one_hot_removed_reasons_df` / `sos1_removed_reasons_df` が {class}`~ommx.v1.Solution` および {class}`~ommx.v1.SampleSet` で利用できます。

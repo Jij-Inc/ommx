@@ -55,13 +55,13 @@ solution = instance.evaluate({1: 1, 2: 0})  # x=1, y=0
 生成された `ommx.v1.Soluiton` は `ommx.v1.Instance` からほとんどの情報を引き継ぎます。まず決定変数を見てみましょう。
 
 ```{code-cell} ipython3
-solution.decision_variables_df
+solution.decision_variables_df()
 ```
 
 必須であるIDと `kind`, `lower`, `upper` に加えて `name` などのメタデータも引き継ぎます。加えて `value` には `evaluate` で代入された値が追加されます。同様に制約条件にも `value` として評価値が追加されます。
 
 ```{code-cell} ipython3
-solution.constraints_df
+solution.constraints_df()
 ```
 
 `objective` プロパティには目的関数の値が、`feasible` プロパティには制約条件を満たしているかどうかが格納されます。

@@ -143,10 +143,10 @@ To do this, we use the properties implemented in the `ommx.v1.Solution` class.
 
 ### Analyzing the Optimal Solution
 
-The `decision_variables_df` property returns a `pandas.DataFrame` object containing information on each variable, such as ID, type, name, and value:
+The `decision_variables_df()` method returns a `pandas.DataFrame` object containing information on each variable, such as ID, type, name, and value:
 
 ```{code-cell} ipython3
-solution.decision_variables_df
+solution.decision_variables_df()
 ```
 
 Using this `pandas.DataFrame` object, you can easily create a table in pandas that shows, for example, "whether to put items in the knapsack":
@@ -154,7 +154,7 @@ Using this `pandas.DataFrame` object, you can easily create a table in pandas th
 ```{code-cell} ipython3
 import pandas as pd
 
-df = solution.decision_variables_df
+df = solution.decision_variables_df()
 pd.DataFrame.from_dict(
     {
         "Item number": df.index,
@@ -178,10 +178,10 @@ assert np.isclose(solution.objective, expected)
 
 ### Analyzing Constraints
 
-The `constraints_df` property returns a `pandas.DataFrame` object that includes details about each constraint's equality or inequality, its left-hand-side value (`"value"`), name, and more:
+The `constraints_df()` method returns a `pandas.DataFrame` object that includes details about each constraint's equality or inequality, its left-hand-side value (`"value"`), name, and more:
 
 ```{code-cell} ipython3
-solution.constraints_df
+solution.constraints_df()
 ```
 
 Specifically, the `"value"` is helpful for understanding how much slack remains in each constraint. In this case, item 0 has weight $w_0 = 11$, item 3 has weight $w_3 = 35$, and the knapsack's capacity $W$ is $47$. Therefore, for the weight constraint 

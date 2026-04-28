@@ -63,7 +63,7 @@ instance.sense == Instance.MAXIMIZE
 Decision variables and constraints can be obtained in the form of [`pandas.DataFrame`](https://pandas.pydata.org/pandas-docs/stable/reference/frame.html).
 
 ```{code-cell} ipython3
-instance.decision_variables_df
+instance.decision_variables_df()
 ```
 
 First, `kind`, `lower`, and `upper` are essential information for the mathematical model.
@@ -95,7 +95,7 @@ print(f"{x1.id=}, {x1.name=}")
 Next, let's look at the constraints.
 
 ```{code-cell} ipython3
-instance.constraints_df
+instance.constraints_df()
 ```
 
 In OMMX, constraints are also managed by ID, and this ID is independent of the decision variable ID. The ID is assigned when a constraint is attached to an `Instance`: the key you use in the `constraints` dictionary passed to [`Instance.from_components`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.from_components) becomes the constraint ID.

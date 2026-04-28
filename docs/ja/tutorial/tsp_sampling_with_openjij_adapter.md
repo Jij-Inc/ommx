@@ -157,14 +157,14 @@ sample_set.summary
 sample_set.summary_with_constraints
 ```
 
-より詳しい情報は `SampleSet.decision_variables_df` 及び `SampleSet.constraints_df` プロパティを使って取得できます。
+より詳しい情報は `SampleSet.decision_variables_df()` 及び `SampleSet.constraints_df()` メソッドを使って取得できます。
 
 ```{code-cell} ipython3
-sample_set.decision_variables_df.head(2)
+sample_set.decision_variables_df().head(2)
 ```
 
 ```{code-cell} ipython3
-sample_set.constraints_df.head(2)
+sample_set.constraints_df().head(2)
 ```
 
 得られたサンプルを取得するには `SampleSet.extract_decision_variables` メソッドを使います。これは `ommx.v1.DecisionVariables` を作る時に登録した `name` と `subscripts` を使ってサンプルを解釈します。例えば `sample_id=1` の `x` という名前の決定変数の値を取得するには次のようにすると `dict[subscripts, value]` の形で取得できます。

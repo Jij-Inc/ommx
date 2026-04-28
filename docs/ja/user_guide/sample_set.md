@@ -97,7 +97,7 @@ solution = sample_set.get(sample_id=0)
 assert isinstance(solution, Solution)
 
 print(f"{solution.objective=}")
-solution.decision_variables_df
+solution.decision_variables_df()
 ```
 
 最適解の取り出し
@@ -109,7 +109,7 @@ solution = sample_set.best_feasible
 assert solution is not None  # 最適な解が存在しない場合は None
 
 print(f"{solution.objective=}")
-solution.decision_variables_df
+solution.decision_variables_df()
 ```
 
 もちろん、最小化問題の場合は最小の目的値のサンプルが返されます。

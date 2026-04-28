@@ -6,6 +6,38 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
+### ⚠ `*_df` accessors are methods + `include=` filter + sidecar DataFrames ([#846](https://github.com/Jij-Inc/ommx/pull/846))
+
+Every `*_df` accessor on `Instance` / `ParametricInstance` / `Solution` / `SampleSet` is now a regular method instead of a `#[getter]` property. Existing call sites need parentheses:
+
+```python
+# Before
+df = solution.constraints_df
+
+# After
+df = solution.constraints_df()
+```
+
+The wide `*_df` methods take an `include` argument that gates the metadata / parameters column families. The default `include=("metadata", "parameters")` preserves the v2-equivalent wide shape:
+
+```python
+solution.decision_variables_df()                       # core + metadata + parameters
+solution.decision_variables_df(include=[])             # core only
+solution.decision_variables_df(include=["metadata"])   # core + metadata
+solution.decision_variables_df(include=["parameters"]) # core + parameters
+```
+
+Six new long-format / id-indexed sidecar accessors read directly from the SoA metadata stores. `kind=` selects the constraint family (`"regular"` / `"indicator"` / `"one_hot"` / `"sos1"`, default `"regular"`):
+
+- `constraint_metadata_df(kind=...)` — id-indexed (`name` / `subscripts` / `description`)
+- `constraint_parameters_df(kind=...)` — long format (`{kind}_constraint_id` / `key` / `value`)
+- `constraint_provenance_df(kind=...)` — long format (`{kind}_constraint_id` / `step` / `source_kind` / `source_id`)
+- `constraint_removed_reasons_df(kind=...)` — long format (`{kind}_constraint_id` / `reason` / `key` / `value`)
+- `variable_metadata_df()` — id-indexed
+- `variable_parameters_df()` — long format
+
+Sidecar index names are kind-qualified (`regular_constraint_id` / `indicator_constraint_id` / `one_hot_constraint_id` / `sos1_constraint_id` / `variable_id`) so accidental cross-id-space `df.join()` mistakes surface in `df.head()` and friends. Long-format `*_parameters_df` / `*_removed_reasons_df` rows are sorted by `(id, key)`, and empty long-format DataFrames keep their column schema instead of returning a column-less frame.
+
 ### ⚠ `to_bytes` / `from_bytes` removed from non-top-level types ([#845](https://github.com/Jij-Inc/ommx/pull/845))
 
 Bytes serialization is removed from the following component-level types:
@@ -107,14 +139,14 @@ Accordingly, the legacy `ConstraintHints` / `OneHot` / `Sos1` classes, the `Inst
 
 ### ⚠ `removed_reason` column split into a separate table ([#796](https://github.com/Jij-Inc/ommx/pull/796))
 
-In v2.5.1 {attr}`Solution.constraints_df <ommx.v1.Solution.constraints_df>` carried a `removed_reason` column. In v3.0.0a2 that column is split out into a separate {attr}`Solution.removed_reasons_df <ommx.v1.Solution.removed_reasons_df>` table, which you can join on if you need the previous shape. The same change applies to {class}`~ommx.v1.SampleSet`.
+In v2.5.1 {meth}`Solution.constraints_df <ommx.v1.Solution.constraints_df>` carried a `removed_reason` column. In v3.0.0a2 that column is split out into a separate {meth}`Solution.removed_reasons_df <ommx.v1.Solution.removed_reasons_df>` table, which you can join on if you need the previous shape. The same change applies to {class}`~ommx.v1.SampleSet`.
 
 ```python
 # Before (2.5.1)
 df = solution.constraints_df  # contains a 'removed_reason' column
 
-# After (3.0.0a2)
-df = solution.constraints_df.join(solution.removed_reasons_df)
+# After (3.0.0a3 — `*_df` are now methods)
+df = solution.constraints_df().join(solution.removed_reasons_df())
 ```
 
 Corresponding `*_removed_reasons_df` accessors are also provided for Indicator, OneHot, and SOS1.

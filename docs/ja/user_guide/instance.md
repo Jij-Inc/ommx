@@ -95,7 +95,7 @@ print(f"{x1.id=}, {x1.name=}")
 次に制約条件を見てみましょう
 
 ```{code-cell} ipython3
-instance.constraints_df
+instance.constraints_df()
 ```
 
 OMMXでは制約条件もIDで管理されます。このIDは決定変数のIDとは独立です。制約条件のIDは `Instance` に登録する際に決まります: [`Instance.from_components`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.from_components) に渡す `constraints` 辞書のキーがそのまま制約条件のIDになります。

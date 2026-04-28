@@ -156,9 +156,9 @@ $$
 
 | 元の制約型 | 除去先 | DataFrame |
 |---|---|---|
-| OneHotConstraint | {attr}`~ommx.v1.Instance.removed_one_hot_constraints` | {attr}`~ommx.v1.Instance.removed_one_hot_constraints_df` |
-| Sos1Constraint | {attr}`~ommx.v1.Instance.removed_sos1_constraints` | {attr}`~ommx.v1.Instance.removed_sos1_constraints_df` |
-| IndicatorConstraint | {attr}`~ommx.v1.Instance.removed_indicator_constraints` | {attr}`~ommx.v1.Instance.removed_indicator_constraints_df` |
+| OneHotConstraint | {attr}`~ommx.v1.Instance.removed_one_hot_constraints` | {meth}`~ommx.v1.Instance.removed_one_hot_constraints_df` |
+| Sos1Constraint | {attr}`~ommx.v1.Instance.removed_sos1_constraints` | {meth}`~ommx.v1.Instance.removed_sos1_constraints_df` |
+| IndicatorConstraint | {attr}`~ommx.v1.Instance.removed_indicator_constraints` | {meth}`~ommx.v1.Instance.removed_indicator_constraints_df` |
 
 それぞれのエントリ（{class}`~ommx.v1.RemovedOneHotConstraint` / {class}`~ommx.v1.RemovedSos1Constraint` / {class}`~ommx.v1.RemovedIndicatorConstraint`）には `removed_reason` 文字列（例: `"ommx.Instance.convert_one_hot_to_constraint"`）が記録され、`removed_reason_parameters` に変換で新しく生成された通常制約の ID が格納されます。ID のキー名と形式は制約型ごとに異なります:
 

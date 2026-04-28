@@ -57,10 +57,10 @@ parametric_instance = ParametricInstance.from_components(
 )
 ```
 
-`ommx.v1.Instance`と同様に `decision_variables_df` 及び `constraints_df` プロパティで決定変数と制約条件をDataFrameとして取得できますが、加えて `ommx.v1.ParametricInstance` には `parameters_df` プロパティがあります。これはパラメータの情報をDataFrameとして取得できます。
+`ommx.v1.Instance`と同様に `decision_variables_df()` 及び `constraints_df()` メソッドで決定変数と制約条件をDataFrameとして取得できますが、加えて `ommx.v1.ParametricInstance` には `parameters_df()` メソッドがあります。これはパラメータの情報をDataFrameとして取得できます。
 
 ```{code-cell} ipython3
-parametric_instance.parameters_df
+parametric_instance.parameters_df()
 ```
 
 さて具体的なパラメータを指定してみましょう。それには `ParametricInstance.with_parameters` を使います。これは `ommx.v1.Parameter` のIDをキー、値を値とする辞書を引数に取ります。

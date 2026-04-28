@@ -156,9 +156,9 @@ The original special constraints are not discarded; they are kept as "removed" e
 
 | Original type | Removed dict | DataFrame |
 |---|---|---|
-| OneHotConstraint | {attr}`~ommx.v1.Instance.removed_one_hot_constraints` | {attr}`~ommx.v1.Instance.removed_one_hot_constraints_df` |
-| Sos1Constraint | {attr}`~ommx.v1.Instance.removed_sos1_constraints` | {attr}`~ommx.v1.Instance.removed_sos1_constraints_df` |
-| IndicatorConstraint | {attr}`~ommx.v1.Instance.removed_indicator_constraints` | {attr}`~ommx.v1.Instance.removed_indicator_constraints_df` |
+| OneHotConstraint | {attr}`~ommx.v1.Instance.removed_one_hot_constraints` | {meth}`~ommx.v1.Instance.removed_one_hot_constraints_df` |
+| Sos1Constraint | {attr}`~ommx.v1.Instance.removed_sos1_constraints` | {meth}`~ommx.v1.Instance.removed_sos1_constraints_df` |
+| IndicatorConstraint | {attr}`~ommx.v1.Instance.removed_indicator_constraints` | {meth}`~ommx.v1.Instance.removed_indicator_constraints_df` |
 
 Each entry ({class}`~ommx.v1.RemovedOneHotConstraint` / {class}`~ommx.v1.RemovedSos1Constraint` / {class}`~ommx.v1.RemovedIndicatorConstraint`) records a `removed_reason` string (for example, `"ommx.Instance.convert_one_hot_to_constraint"`) and stores the generated regular-constraint IDs in `removed_reason_parameters`. The key name and shape differ by constraint type:
 

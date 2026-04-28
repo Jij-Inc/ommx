@@ -180,19 +180,19 @@ The {class}`~ommx.v1.Solution` or {class}`~ommx.v1.SampleSet` obtained after sol
 
 | Constraint type | Accessor (on `Solution`) |
 |---|---|
-| Regular | {attr}`~ommx.v1.Solution.constraints_df` |
-| Indicator | {attr}`~ommx.v1.Solution.indicator_constraints_df` |
-| OneHot | {attr}`~ommx.v1.Solution.one_hot_constraints_df` |
-| SOS1 | {attr}`~ommx.v1.Solution.sos1_constraints_df` |
+| Regular | {meth}`~ommx.v1.Solution.constraints_df` |
+| Indicator | {meth}`~ommx.v1.Solution.indicator_constraints_df` |
+| OneHot | {meth}`~ommx.v1.Solution.one_hot_constraints_df` |
+| SOS1 | {meth}`~ommx.v1.Solution.sos1_constraints_df` |
 
 The Indicator DataFrame includes an `indicator_active` column that disambiguates "the indicator was OFF (constraint trivially satisfied)" from "the indicator was ON and the constraint was actually satisfied". Indicator constraints do not carry a dual variable — a dual value is not well-defined for a conditional constraint — so `dual_variable` is omitted.
 
 ### removed_reasons_df separation
 
-For regular constraints, `removed_reason` is no longer a column of {attr}`~ommx.v1.Solution.constraints_df`. It lives in {attr}`~ommx.v1.Solution.removed_reasons_df` as a separate table, which you can join as needed:
+For regular constraints, `removed_reason` is no longer a column of {meth}`~ommx.v1.Solution.constraints_df`. It lives in {meth}`~ommx.v1.Solution.removed_reasons_df` as a separate table, which you can join as needed:
 
 ```python
-df = solution.constraints_df.join(solution.removed_reasons_df)
+df = solution.constraints_df().join(solution.removed_reasons_df())
 ```
 
 The same split applies to Indicator, OneHot, and SOS1: each has its own `indicator_removed_reasons_df` / `one_hot_removed_reasons_df` / `sos1_removed_reasons_df` on both {class}`~ommx.v1.Solution` and {class}`~ommx.v1.SampleSet`.
