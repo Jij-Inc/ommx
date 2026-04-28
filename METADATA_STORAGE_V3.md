@@ -1,8 +1,10 @@
 # Metadata Storage in OMMX v3 — Design Proposal
 
 Status: **Rust SDK landed; Python wrappers landed (snapshot model);
-`include=` + long-format sidecar dfs landed; Series accessors and
-two-mode Attached wrappers deferred to follow-up PRs**
+`include=` + long-format sidecar dfs landed (Wave 1.5); per-kind
+`*_df` consolidation in progress (Wave 2); Series accessors,
+two-mode Attached wrappers, and `Literal[...]` typing deferred to
+follow-up PRs**
 
 This proposal is a **prerequisite** for `SPECIAL_CONSTRAINTS_V3.md` (PR #841).
 The proto-schema redesign in #841 cannot be finalized without first deciding
@@ -37,11 +39,24 @@ here. The implementation shipped in three waves:
   `variable_metadata_df()`, `variable_parameters_df()`. Mechanical
   v3-alpha breaking change: every `*_df` accessor is now a method
   (`instance.constraints_df` → `instance.constraints_df()`).
-- **Wave 2 (deferred):** `Series[ID -> Object]` collection accessors,
-  the two-mode Standalone / Attached wrappers with `Py<Instance>`
-  back-references and write-through metadata setters, and the
-  `kind=Literal[...]` consolidation that collapses today's per-kind
-  `*_constraints_df` family into one `constraints_df(kind=...)`.
+- **Wave 2 (proposed, this PR):** Per-kind `*_constraints_df`,
+  `removed_*_constraints_df`, and `*_removed_reasons_df` families
+  on every host collapse into a single `constraints_df(kind=...)`.
+  `Instance` / `ParametricInstance` gain a new `removed: bool = False`
+  parameter that expands rows to include the removed map and auto-
+  adds `removed_reason` / `removed_reason.{key}` columns (NA on
+  active rows). `Solution` / `SampleSet` always return all rows
+  (no active/removed distinction at the evaluated / sampled
+  stage); reason columns are gated by `"removed_reason"` in
+  `include=`. Wide `*_df` index column renamed from unqualified
+  `id` to `{kind}_constraint_id`, matching the Wave 1.5 sidecars.
+  `kind` stays `str` at runtime; `Literal[...]` typing + `@overload`
+  stubs are kept as a follow-up.
+- **Future (deferred):** `Series[ID -> Object]` collection
+  accessors, the two-mode Standalone / Attached wrappers with
+  `Py<Instance>` back-references and write-through metadata setters,
+  `Literal[...]` typing on `kind=`, and the `NamedFunction` SoA
+  migration.
 
 Sections below mark each item with **(landed)** or **(deferred)** so it
 is clear which parts are live in v3 alpha and which are still proposal.
@@ -128,12 +143,19 @@ SoA store; the behavior they implement is unchanged.
   `pandas.Series[ID -> Object]` shape is **deferred** to a follow-up PR.
 - `*_df` accessors are now methods (not `#[getter]` properties), each
   with an `include=` parameter that gates the metadata / parameters
-  column families. Default `include=("metadata", "parameters")`
-  preserves the v2 wide shape; `include=[]` drops both, single-element
-  forms keep the named family. **(landed in PR #846)** Internally the
-  rendering path uses a `WithMetadata<'a, T, M>` wrapper to pair items
-  with snapshots; a post-filter in `entries_to_dataframe` drops the
-  gated columns before the DataFrame is built.
+  / removed-reason column families. Default
+  `include=("metadata", "parameters")` preserves the v2 wide shape;
+  `include=[]` drops everything; single-element forms keep just the
+  named family. **(`include=` for metadata / parameters landed in
+  PR #846; `"removed_reason"` joins them in Wave 2.)** Internally
+  the rendering path uses a `WithMetadata<'a, T, M>` wrapper to pair
+  items with snapshots; a post-filter in `entries_to_dataframe`
+  drops the gated columns before the DataFrame is built.
+- Per-kind `*_constraints_df` / `removed_*_constraints_df` /
+  `*_removed_reasons_df` collapse into one `constraints_df(kind=...)`
+  per host. On `Instance` / `ParametricInstance` a new
+  `removed: bool = False` parameter expands rows to include the
+  removed map and auto-adds reason columns. **(Wave 2 — proposed.)**
 - Six long-format / id-indexed sidecar dataframes read directly from
   the SoA stores: `constraint_metadata_df(kind=...)`,
   `constraint_parameters_df(kind=...)`,
@@ -704,36 +726,78 @@ indexing, `.items()`, `.index`. Operations users lose vs. dict:
   The right answer is `instance.constraints_df()["equality"]`, which
   is bulk-built from the SoA. Document this; do not enforce.
 
-### `*_df` methods → derived views with `include` **(landed in PR #846; `kind=` consolidation deferred)**
+### `*_df` methods → derived views with `include` and `kind=` **(Wave 1.5 + Wave 2)**
 
 Each `*_df` is a derived view: type-specific core columns extracted
 from the SoA store, plus whichever sidecars the caller asks for via
 `include`. The default `include` matches v2's wide-DataFrame shape
-(`metadata` + `parameters`), so v2 user code keeps working unchanged
-on the per-kind methods that exist today.
+(`metadata` + `parameters`).
+
+The per-kind `constraints_df` / `indicator_constraints_df` /
+`one_hot_constraints_df` / `sos1_constraints_df` family — and the
+parallel `removed_*_constraints_df` (`Instance` / `ParametricInstance`)
+and `*_removed_reasons_df` (`Solution` / `SampleSet`) families —
+collapse into one method per host:
 
 ```python
-# === v2-equivalent wide DataFrame (default include) — landed ===
+# Wave 2 — unified API on every host
+instance.constraints_df(
+    kind: str = "regular",        # "regular" | "indicator" | "one_hot" | "sos1"
+    include: Sequence[str] | None = None,  # default ("metadata", "parameters")
+    removed: bool = False,        # Instance / ParametricInstance only
+)
+
+solution.constraints_df(
+    kind: str = "regular",
+    include: Sequence[str] | None = None,  # default ("metadata", "parameters")
+)
+# (Solution / SampleSet have no `removed=` parameter — at the
+# evaluated / sampled stage there is no active/removed distinction.)
+```
+
+`include` accepts a `Sequence[str]` containing `"metadata"` /
+`"parameters"` / `"removed_reason"` (singular). Unknown values
+raise `ValueError`. `"removed_reason"` is a unit flag — it gates
+both the reason-name column (`removed_reason`) and the reason-
+parameter columns (`removed_reason.{key}`) together, since the name
+without its parameters is rarely useful. `"parameters"` continues
+to gate only the constraint's own metadata parameters
+(`parameters.{key}`); the two `parameters` namespaces stay
+independent.
+
+On `Instance` / `ParametricInstance`, `removed=False` (default)
+returns active rows only; `removed=True` returns active + removed
+rows in the same DataFrame and **auto-sets `"removed_reason"`** so
+that removed rows are distinguishable (active rows have NA in the
+reason columns).
+
+```python
+# === v2-equivalent wide DataFrame (default include) ===
 df = instance.constraints_df()
-# ≡ instance.constraints_df(include=("metadata", "parameters"))
+# ≡ instance.constraints_df(kind="regular", include=("metadata", "parameters"))
 # columns: equality, function_type, used_ids,
 #          name, subscripts, description, parameters.{key}, ...
-# (Note: today's per-kind `constraints_df` / `indicator_constraints_df`
-# / `one_hot_constraints_df` / `sos1_constraints_df` family is kept
-# intact in PR #846; the `kind=Literal[...]` consolidation that
-# collapses these into one is deferred to a follow-up PR.)
+# index: regular_constraint_id
 
-df = instance.decision_variables_df()
-# ≡ instance.decision_variables_df(include=("metadata", "parameters"))
-# columns: kind, lower, upper, substituted_value,
-#          name, subscripts, description, parameters.{key}, ...
-
-# === Core only — pass include=[] (landed) ===
+# === Core only — pass include=[] ===
 df = instance.constraints_df(include=[])
 # columns: equality, function_type, used_ids
 
-df = instance.decision_variables_df(include=[])
-# columns: kind, lower, upper, substituted_value
+# === Active + removed in one table ===
+df = instance.constraints_df(removed=True)
+# rows: active + removed (in regular_constraint_id order)
+# columns: equality, function_type, used_ids,
+#          name, subscripts, description, parameters.{key},
+#          removed_reason, removed_reason.{key}
+# (active rows have NA in the removed_reason columns)
+
+# === Per-kind dispatch ===
+df = instance.constraints_df(kind="indicator")
+# index: indicator_constraint_id
+
+# === decision_variables_df takes include= (no kind= or removed=) ===
+df = instance.decision_variables_df()
+# ≡ instance.decision_variables_df(include=("metadata", "parameters"))
 
 # === Long-format sidecars (landed in PR #846) ===
 meta     = instance.constraint_metadata_df(kind="regular")
@@ -753,23 +817,18 @@ vmeta    = instance.variable_metadata_df()
 vparams  = instance.variable_parameters_df()
 ```
 
-The shipping `include=` accepts `Sequence[str]` containing
-`"metadata"` and/or `"parameters"`. Unknown values raise
-`ValueError`. The originally-proposed `"removed_reasons"` flag is
-**not** part of the landed shape — folding removed reasons into the
-active wide df would require unifying the active + removed iteration
-paths, which is deferred along with the `kind=` consolidation. Users
-who want removed-reason data go through the dedicated
-`constraint_removed_reasons_df(kind=...)` long-format sidecar.
+`provenance` is intentionally absent from `include` for the long-
+term shape: chains have variable length, so a wide pivot would
+either explode the column space (`provenance.0.*`,
+`provenance.1.*`, …) or produce an object-dtype list column. Users
+who want provenance pivot the long-format
+`constraint_provenance_df()` themselves.
 
-`provenance` is intentionally absent from `include` for the long-term
-shape too: chains have variable length, so a wide pivot would either
-explode the column space (`provenance.0.*`, `provenance.1.*`, …) or
-produce an object-dtype list column. Users who want provenance pivot
-the long-format `constraint_provenance_df()` themselves.
-
-`Solution` and `SampleSet` expose the same `*_df` family with stage-
-appropriate core-column schemas and the same `include` parameter:
+`Solution` and `SampleSet` expose the same `constraints_df` shape
+with stage-appropriate core-column schemas. They have no
+`removed=` parameter (no active/removed distinction at the
+evaluated / sampled stage); reason data is gated by
+`"removed_reason"` in `include=`:
 
 ```python
 # Solution — evaluated stage; v2-style default
@@ -777,6 +836,13 @@ df = solution.constraints_df(kind="regular")
                                             # core: equality, evaluated_value, feasible,
                                             # used_ids, dual_variable
                                             # + metadata, parameters columns by default
+                                            # index: regular_constraint_id
+
+df = solution.constraints_df(kind="regular",
+                             include=("metadata", "parameters",
+                                      "removed_reason"))
+                                            # + removed_reason / removed_reason.{key}
+                                            # columns (NA for non-removed rows)
 
 df = solution.decision_variables_df()       # core: kind, lower, upper, value
                                             # + metadata, parameters columns by default
@@ -794,6 +860,24 @@ are stage-independent — they describe the same constraint, so
 folded into `*_df` are identical across stages too). There's no per-
 stage divergence to manage.
 
+#### Why `removed=` lives on `Instance` but not on `Solution`
+
+At the `Instance` / `ParametricInstance` stage, active and removed
+constraints are the same data — the constraint definition (function,
+equality, metadata) is identical, only the lifecycle stage differs.
+Putting them in separate DataFrames (`constraints_df` vs.
+`removed_constraints_df`) duplicates the schema and forces users to
+`pd.concat` to see the whole picture. The `removed=True` flag puts
+both into one table with a `removed_reason` column to distinguish.
+
+At the `Solution` / `SampleSet` stage there's no such distinction:
+the evaluated / sampled value is what each row carries, and removal
+already happened upstream. Constraints that were removed before
+evaluation simply have no value to report; surfacing them as a
+separate row family doesn't add information. The reason data, if
+the user wants it, comes through `"removed_reason"` in `include=` —
+a column-level concern, not a row-level one.
+
 `*_df` (with `include=`) is what users call when they want a wide
 table for analysis; the long-format sidecars are what they call when
 they want tidy data for joins or aggregation; the Series is what they
@@ -801,7 +885,7 @@ call when they want individual wrapper objects; the wrapper getters
 are what they call when they already hold one wrapper. Four surfaces,
 one canonical store.
 
-### Avoiding cross-ID-space joins **(partially landed)**
+### Avoiding cross-ID-space joins
 
 Each constraint kind has its own ID space (regular ID 5 ≠ indicator ID 5),
 and decision variable IDs live in yet another space. With every df sharing
@@ -809,9 +893,8 @@ an `int64` index, `df.join()` between mismatched-kind dfs would silently
 produce an incorrect-but-shaped result. We ward off that mistake at the
 naming and helper layers:
 
-1. **Distinct index names per ID space (landed in PR #846 for sidecars).**
-   The new long-format / id-indexed sidecar dfs set their index column
-   to a kind-qualified label:
+1. **Distinct index names per ID space.** Every constraint / variable
+   df sets its index column to a kind-qualified label:
 
    ```
    variable_id                   # decision variables
@@ -821,11 +904,10 @@ naming and helper layers:
    sos1_constraint_id            # SOS1 constraints
    ```
 
-   The wide per-kind `*_df` accessors still index by the unqualified
-   `id` column (a v2 carry-over). Renaming those is bundled with the
-   `kind=Literal[...]` consolidation that turns
-   `indicator_constraints_df()` etc. into `constraints_df(kind=...)`,
-   and is therefore deferred along with that work.
+   The Wave 1.5 long-format sidecars used these names from the
+   start; the wide `constraints_df(kind=...)` adopts the same scheme
+   in Wave 2 (replacing the unqualified `id` column from the PR #846
+   era).
 
    pandas `df.join(other)` aligns by index but does *not* enforce that
    the index names match. The qualified names alone won't stop a wrong
@@ -833,21 +915,28 @@ naming and helper layers:
    inspection, and migration-guide examples, so users see the mismatch
    immediately rather than chasing a silent bug downstream.
 
-2. **`include=` covers the common "wide" case without manual join
-   (landed).** The wide `*_df` methods accept an `include` parameter
-   that gates the metadata / parameters column families, so most users
-   never write a `df.join(other_df)` at all:
+2. **`include=` covers the common "wide" case without manual join.**
+   The wide `*_df` methods accept an `include` parameter that gates
+   the metadata / parameters / removed-reason column families, so
+   most users never write a `df.join(other_df)` at all:
 
    ```python
    instance.constraints_df()
    # default include=("metadata","parameters") — v2-equivalent shape
+
+   instance.constraints_df(removed=True)
+   # active + removed in one DataFrame; reason columns auto-added
+
+   solution.constraints_df(include=("metadata","parameters",
+                                    "removed_reason"))
+   # same shape on Solution; reason columns gated by include= flag
    ```
 
-   `include` is a `Sequence[str]` containing `"metadata"` and/or
-   `"parameters"`. The originally-proposed `"removed_reasons"` flag is
-   not part of the landed shape — for removed-reason data, users go
-   through `constraint_removed_reasons_df(kind=...)` (long format),
-   where the qualified index name (point 1) makes the kind explicit.
+   `include` is a `Sequence[str]` containing `"metadata"` /
+   `"parameters"` / `"removed_reason"`. Long-format access for
+   merge / aggregate workflows continues through the dedicated
+   sidecars (where the qualified index name above makes the kind
+   explicit).
 
 3. **Wrapper-object access stays the safest path for single-id
    lookups.** `instance.constraints[id].name` reads metadata directly
@@ -972,6 +1061,37 @@ shape is:
   (default `"regular"`); unknown values raise `ValueError`. Index
   column names are kind-qualified.
 
+### Wave 2 (proposed)
+
+- Per-kind `*_constraints_df`, `removed_*_constraints_df`
+  (`Instance` / `ParametricInstance`), and `*_removed_reasons_df`
+  (`Solution` / `SampleSet`) families are removed; one
+  `constraints_df(kind=...)` per host replaces them. `kind` is
+  validated at runtime against
+  `{"regular", "indicator", "one_hot", "sos1"}` (default
+  `"regular"`).
+- `Instance.constraints_df` / `ParametricInstance.constraints_df`
+  accept a new `removed: bool = False` parameter. `removed=False`
+  returns active rows only (the today's-default behavior);
+  `removed=True` returns active + removed rows in the same
+  DataFrame and **auto-sets `"removed_reason"`** so the reason
+  columns (`removed_reason` and `removed_reason.{key}`) appear,
+  with NA on active rows.
+- `Solution.constraints_df` / `SampleSet.constraints_df` always
+  return all rows (no active/removed distinction at the evaluated
+  / sampled stage). `"removed_reason"` in `include=` adds reason
+  columns; otherwise reason data is omitted.
+- `include=` accepts `"metadata"` / `"parameters"` /
+  `"removed_reason"` (singular). `"removed_reason"` is a unit flag
+  — it gates both the reason name and the reason parameter columns
+  together. `"parameters"` continues to gate only the constraint's
+  own metadata parameters; the two `parameters` namespaces stay
+  independent.
+- Wide `*_df` index column renamed from unqualified `id` to
+  `{kind}_constraint_id` (matching the Wave 1.5 sidecars).
+- `kind` typing stays `str` at runtime; `Literal[...]` typing +
+  `@overload` stubs are deferred to a follow-up.
+
 ### Deferred to follow-up wave
 
 - `instance.constraints`, `decision_variables`, `*_constraints` change
@@ -980,11 +1100,11 @@ shape is:
   - `s.values()` (method call) → `s.tolist()` or `list(s)`.
   - List-positional reliance on the old `decision_variables: list[…]`
     ordering breaks; index by `VariableID` instead.
-- Per-kind `indicator_constraints_df()`,
-  `one_hot_constraints_df()`, `sos1_constraints_df()`, and
-  `removed_*_constraints_df()` collapse into the single
-  `constraints_df(kind=...)` overload set (with `kind=Literal[...]`
-  + `pyo3-stub-gen` `@overload` for per-kind column schemas).
+- `Literal[...]` typing on `kind=` (both the wide
+  `constraints_df(kind=...)` and the sidecars) plus the
+  `@overload` stubs that surface per-kind column schemas. The
+  runtime semantics land in Wave 2; this follow-up tightens the
+  static typing.
 - Wrapper-object metadata setters become write-through to the SoA
   store via the Standalone / Attached two-mode design.
 - `NamedFunction` / `EvaluatedNamedFunction` /
@@ -1004,23 +1124,29 @@ Numbering preserved from the original Open Questions list for
 traceability with earlier review comments.
 
 1. **Kind dispatch in Python — single method with `kind=...`
-   parameter.** The new sidecar accessors
-   (`constraint_metadata_df(kind="regular")` and siblings) take a
+   parameter.** Both the wide `constraints_df(kind=...)` (Wave 2)
+   and the long-format sidecar accessors (Wave 1.5) take a
    `kind: str` argument validated at runtime against
-   `{"regular", "indicator", "one_hot", "sos1"}`. The originally-
-   proposed `Literal[...]` typing + `pyo3-stub-gen` `@overload`
-   stubs are deferred along with the consolidation of today's
-   per-kind `constraints_df` / `indicator_constraints_df` /
-   `one_hot_constraints_df` / `sos1_constraints_df` family — when
-   that consolidation lands, the `Literal` typing covers both the
-   wide and the sidecar accessors uniformly.
-2. **`removed_reason` — separate long-format
-   `constraint_removed_reasons_df(kind=...)`.** `RemovedReason` is
-   collection-level metadata in Rust, not part of the constraint.
-   It is exposed only via the dedicated long-format sidecar; the
-   originally-proposed `include=("removed_reasons",)` pivot into
-   the wide `*_df` is deferred along with the active+removed
-   unification.
+   `{"regular", "indicator", "one_hot", "sos1"}` (default
+   `"regular"`). `Literal[...]` typing + `pyo3-stub-gen`
+   `@overload` stubs are deferred to a separate follow-up so the
+   runtime semantics could be settled first; once landed, the
+   `Literal` typing covers both the wide and the sidecar accessors
+   uniformly.
+2. **`removed_reason` — surfaced both via wide df and via long-
+   format sidecar.** `RemovedReason` is collection-level metadata
+   in Rust, not part of the constraint. Wave 1.5 shipped the
+   long-format `constraint_removed_reasons_df(kind=...)` sidecar.
+   Wave 2 also folds reason data into the wide `constraints_df`
+   via a `"removed_reason"` flag in `include=` (singular, unit
+   flag — turns on both `removed_reason` and
+   `removed_reason.{key}` columns together, since the reason name
+   without its parameters is rarely useful). On `Instance` /
+   `ParametricInstance`, `removed=True` auto-sets the
+   `"removed_reason"` flag because rows from the removed map need
+   a column that distinguishes them from active. On `Solution` /
+   `SampleSet`, the same flag is the only knob since there is no
+   active/removed distinction at those stages.
 3. **Atomic insert-with-metadata on the Rust side — `insert_with`
    takes the existing owned `ConstraintMetadata` struct.** The pre-
    v3 `ConstraintMetadata` (owned struct with `name`, `subscripts`,
@@ -1124,25 +1250,19 @@ traceability with earlier review comments.
   `*_metadata_mut`). These three methods should be narrowed to
   `pub(crate)` (or smaller) in a follow-up so the only way to break
   the collection's invariants is from inside the crate.
-- **`kind=Literal[...]` + `@overload` consolidation.** Today's
-  per-kind `*_constraints_df` family
-  (`indicator_constraints_df()` / `one_hot_constraints_df()` /
-  `sos1_constraints_df()` / `removed_*_constraints_df()`)
-  collapses into one `constraints_df(kind=...)` overload set,
-  with the `kind` parameter typed as `Literal[...]` and the
-  per-kind column schemas surfaced via
-  `pyo3-stub-gen`-emitted `@overload` stubs. The new sidecar
-  accessors landed in PR #846 already follow the `kind=...`
-  shape but still take `kind: str` validated at runtime; this
-  follow-up tightens the typing on both surfaces in one go and
-  adds a `_constraint_id` qualified index name on the wide
-  `*_df` accessors as part of the API rename.
-- **`include=("removed_reasons",)` on the wide `*_df`.**
-  Currently removed-reason data is only available via the
-  dedicated `constraint_removed_reasons_df(kind=...)` long-format
-  sidecar. Folding it into `constraints_df` requires unifying the
-  active + removed iteration paths and is bundled with the
-  consolidation above.
+- **`kind=Literal[...]` + `@overload` typing.** Wave 2 lands the
+  runtime semantics — single `constraints_df(kind=...)` per host,
+  `kind` validated at runtime against the four kind strings, and a
+  `{kind}_constraint_id` qualified index name on the wide df. The
+  static typing — `Literal["regular","indicator","one_hot","sos1"]`
+  on `kind` plus optional `pyo3-stub-gen`-emitted `@overload`
+  stubs that surface per-kind column schemas — is held off until
+  the runtime API has soaked. The hook to emit these is already in
+  pyo3-stub-gen (the `python_overload` parameter on
+  `gen_stub_pyfunction` / the `submit!` + `gen_methods_from_python!`
+  pattern); whether the per-kind column-schema overloads are worth
+  the maintenance, or only the `Literal[...]` input typing is, is a
+  question for the follow-up.
 - **`NamedFunction` SoA migration.** Track the
   `NamedFunctionMetadataStore` work described under
   "NamedFunction (deferred — separate PR)" above.
