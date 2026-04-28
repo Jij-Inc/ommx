@@ -4173,7 +4173,7 @@ class SampleSet:
 
         Columns: id (index), removed_reason, removed_reason.{key}
 
-        Can be joined with {attr}`constraints_df` using the `id` index.
+        Can be joined with {meth}`constraints_df` using the `id` index.
         """
     def indicator_constraints_df(
         self, include: typing.Optional[typing.Sequence[builtins.str]] = None
@@ -4189,7 +4189,7 @@ class SampleSet:
 
         Columns: id (index), removed_reason, removed_reason.{key}
 
-        Can be joined with {attr}`indicator_constraints_df` using the `id` index.
+        Can be joined with {meth}`indicator_constraints_df` using the `id` index.
         """
     def one_hot_constraints_df(
         self, include: typing.Optional[typing.Sequence[builtins.str]] = None
@@ -4205,7 +4205,7 @@ class SampleSet:
 
         Columns: id (index), removed_reason, removed_reason.{key}
 
-        Can be joined with {attr}`one_hot_constraints_df` using the `id` index.
+        Can be joined with {meth}`one_hot_constraints_df` using the `id` index.
         """
     def sos1_constraints_df(
         self, include: typing.Optional[typing.Sequence[builtins.str]] = None
@@ -4221,14 +4221,14 @@ class SampleSet:
 
         Columns: id (index), removed_reason, removed_reason.{key}
 
-        Can be joined with {attr}`sos1_constraints_df` using the `id` index.
+        Can be joined with {meth}`sos1_constraints_df` using the `id` index.
         """
     def named_functions_df(
         self, include: typing.Optional[typing.Sequence[builtins.str]] = None
     ) -> pandas.DataFrame:
         r"""
         DataFrame of named functions with per-sample value columns.
-        Static columns: id, used_ids, name, subscripts, description, parameters.
+        Static columns: id, used_ids, name, subscripts, description, parameters.{key}.
         Dynamic columns: one per sample_id (int) with the function's evaluated value.
         """
     def constraint_metadata_df(
@@ -4755,7 +4755,7 @@ class Solution:
 
         Columns: id (index), removed_reason, removed_reason.{key}
 
-        Can be joined with {attr}`constraints_df` on the `id` index.
+        Can be joined with {meth}`constraints_df` on the `id` index.
 
         # Examples
 
@@ -4809,7 +4809,7 @@ class Solution:
 
         Columns: id (index), removed_reason, removed_reason.{key}
 
-        Can be joined with {attr}`indicator_constraints_df` using the `id` index.
+        Can be joined with {meth}`indicator_constraints_df` using the `id` index.
         """
     def one_hot_constraints_df(
         self, include: typing.Optional[typing.Sequence[builtins.str]] = None
@@ -4825,7 +4825,7 @@ class Solution:
 
         Columns: id (index), removed_reason, removed_reason.{key}
 
-        Can be joined with {attr}`one_hot_constraints_df` using the `id` index.
+        Can be joined with {meth}`one_hot_constraints_df` using the `id` index.
         """
     def sos1_constraints_df(
         self, include: typing.Optional[typing.Sequence[builtins.str]] = None
@@ -4841,7 +4841,7 @@ class Solution:
 
         Columns: id (index), removed_reason, removed_reason.{key}
 
-        Can be joined with {attr}`sos1_constraints_df` using the `id` index.
+        Can be joined with {meth}`sos1_constraints_df` using the `id` index.
         """
     def named_functions_df(
         self, include: typing.Optional[typing.Sequence[builtins.str]] = None

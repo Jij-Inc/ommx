@@ -157,6 +157,45 @@ pub fn constraint_id_col(kind: ConstraintKind) -> &'static str {
     }
 }
 
+/// Dispatch on `ConstraintKind` and bind `coll` to the per-kind constraint
+/// collection on `$container`. Used by the four `constraint_*_df` sidecar
+/// accessors so the four `ConstraintKind` arms collapse to a single call site.
+///
+/// Each host (`Instance` / `ParametricInstance` / `Solution` / `SampleSet`)
+/// passes its own accessor names because the underlying collection types
+/// differ — `ConstraintCollection` for Instance/ParametricInstance,
+/// `EvaluatedConstraintCollection` for Solution, `SampledConstraintCollection`
+/// for SampleSet. Centralising the match shape here avoids drift when adding a
+/// new constraint kind.
+macro_rules! constraint_kind_collection {
+    (
+        $container:expr, $kind:expr,
+        [$regular:ident, $indicator:ident, $one_hot:ident, $sos1:ident],
+        |$coll:ident| $body:block
+    ) => {
+        match $kind {
+            $crate::pandas::ConstraintKind::Regular => {
+                let $coll = $container.$regular();
+                $body
+            }
+            $crate::pandas::ConstraintKind::Indicator => {
+                let $coll = $container.$indicator();
+                $body
+            }
+            $crate::pandas::ConstraintKind::OneHot => {
+                let $coll = $container.$one_hot();
+                $body
+            }
+            $crate::pandas::ConstraintKind::Sos1 => {
+                let $coll = $container.$sos1();
+                $body
+            }
+        }
+    };
+}
+
+pub(crate) use constraint_kind_collection;
+
 // ---------------------------------------------------------------------------
 // Sidecar DataFrame builders
 //

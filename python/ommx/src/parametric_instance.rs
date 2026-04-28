@@ -1,6 +1,7 @@
 use crate::{
     pandas::{
-        constraint_id_col, entries_to_dataframe, parse_constraint_kind, ConstraintKind, PyDataFrame,
+        constraint_id_col, constraint_kind_collection, entries_to_dataframe, parse_constraint_kind,
+        PyDataFrame,
     },
     Constraint, DecisionVariable, Function, Instance, NamedFunction, Parameter, RemovedConstraint,
     Sense,
@@ -9,32 +10,6 @@ use anyhow::Result;
 use ommx::{ConstraintID, NamedFunctionID, VariableID};
 use pyo3::{exceptions::PyKeyError, prelude::*, types::PyBytes, Bound, PyAny};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-
-/// Bind `coll` to the per-kind constraint collection on `self.inner` and
-/// evaluate `body`. Mirror of the macro in `instance.rs` — `ParametricInstance`
-/// shares the same `*_constraint_collection()` accessor names as `Instance`.
-macro_rules! constraint_kind_collection {
-    ($self:expr, $kind:expr, |$coll:ident| $body:block) => {
-        match $kind {
-            ConstraintKind::Regular => {
-                let $coll = $self.inner.constraint_collection();
-                $body
-            }
-            ConstraintKind::Indicator => {
-                let $coll = $self.inner.indicator_constraint_collection();
-                $body
-            }
-            ConstraintKind::OneHot => {
-                let $coll = $self.inner.one_hot_constraint_collection();
-                $body
-            }
-            ConstraintKind::Sos1 => {
-                let $coll = $self.inner.sos1_constraint_collection();
-                $body
-            }
-        }
-    };
-}
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
@@ -447,14 +422,24 @@ impl ParametricInstance {
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let kind = parse_constraint_kind(&kind)?;
         let id_col = constraint_id_col(kind);
-        constraint_kind_collection!(self, kind, |coll| {
-            crate::pandas::constraint_metadata_dataframe(
-                py,
-                coll.metadata(),
-                coll.active().keys().chain(coll.removed().keys()).copied(),
-                id_col,
-            )
-        })
+        constraint_kind_collection!(
+            self.inner,
+            kind,
+            [
+                constraint_collection,
+                indicator_constraint_collection,
+                one_hot_constraint_collection,
+                sos1_constraint_collection
+            ],
+            |coll| {
+                crate::pandas::constraint_metadata_dataframe(
+                    py,
+                    coll.metadata(),
+                    coll.active().keys().chain(coll.removed().keys()).copied(),
+                    id_col,
+                )
+            }
+        )
     }
 
     /// Constraint parameters DataFrame (long format).
@@ -466,14 +451,24 @@ impl ParametricInstance {
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let kind = parse_constraint_kind(&kind)?;
         let id_col = constraint_id_col(kind);
-        constraint_kind_collection!(self, kind, |coll| {
-            crate::pandas::constraint_parameters_dataframe(
-                py,
-                coll.metadata(),
-                coll.active().keys().chain(coll.removed().keys()).copied(),
-                id_col,
-            )
-        })
+        constraint_kind_collection!(
+            self.inner,
+            kind,
+            [
+                constraint_collection,
+                indicator_constraint_collection,
+                one_hot_constraint_collection,
+                sos1_constraint_collection
+            ],
+            |coll| {
+                crate::pandas::constraint_parameters_dataframe(
+                    py,
+                    coll.metadata(),
+                    coll.active().keys().chain(coll.removed().keys()).copied(),
+                    id_col,
+                )
+            }
+        )
     }
 
     /// Constraint provenance DataFrame (long format).
@@ -485,14 +480,24 @@ impl ParametricInstance {
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let kind = parse_constraint_kind(&kind)?;
         let id_col = constraint_id_col(kind);
-        constraint_kind_collection!(self, kind, |coll| {
-            crate::pandas::constraint_provenance_dataframe(
-                py,
-                coll.metadata(),
-                coll.active().keys().chain(coll.removed().keys()).copied(),
-                id_col,
-            )
-        })
+        constraint_kind_collection!(
+            self.inner,
+            kind,
+            [
+                constraint_collection,
+                indicator_constraint_collection,
+                one_hot_constraint_collection,
+                sos1_constraint_collection
+            ],
+            |coll| {
+                crate::pandas::constraint_provenance_dataframe(
+                    py,
+                    coll.metadata(),
+                    coll.active().keys().chain(coll.removed().keys()).copied(),
+                    id_col,
+                )
+            }
+        )
     }
 
     /// Removed-constraint reasons DataFrame (long format).
@@ -504,13 +509,23 @@ impl ParametricInstance {
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let kind = parse_constraint_kind(&kind)?;
         let id_col = constraint_id_col(kind);
-        constraint_kind_collection!(self, kind, |coll| {
-            crate::pandas::constraint_removed_reasons_dataframe(
-                py,
-                coll.removed().iter().map(|(id, (_, r))| (*id, r)),
-                id_col,
-            )
-        })
+        constraint_kind_collection!(
+            self.inner,
+            kind,
+            [
+                constraint_collection,
+                indicator_constraint_collection,
+                one_hot_constraint_collection,
+                sos1_constraint_collection
+            ],
+            |coll| {
+                crate::pandas::constraint_removed_reasons_dataframe(
+                    py,
+                    coll.removed().iter().map(|(id, (_, r))| (*id, r)),
+                    id_col,
+                )
+            }
+        )
     }
 
     /// Decision-variable metadata DataFrame (id-indexed).

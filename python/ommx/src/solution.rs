@@ -1,5 +1,6 @@
 use crate::pandas::{
-    constraint_id_col, entries_to_dataframe, parse_constraint_kind, ConstraintKind, PyDataFrame,
+    constraint_id_col, constraint_kind_collection, entries_to_dataframe, parse_constraint_kind,
+    PyDataFrame,
 };
 use anyhow::Result;
 use pyo3::{
@@ -10,33 +11,6 @@ use pyo3::{
     Bound,
 };
 use std::collections::{BTreeSet, HashMap};
-
-/// Bind `coll` to the per-kind evaluated constraint collection on
-/// `self.inner` and evaluate `body`. `EvaluatedCollection.inner()` already
-/// includes removed ids alongside active ones, so the body iterates
-/// `coll.inner().keys()` (no `.chain(removed_reasons())`).
-macro_rules! constraint_kind_collection {
-    ($self:expr, $kind:expr, |$coll:ident| $body:block) => {
-        match $kind {
-            ConstraintKind::Regular => {
-                let $coll = $self.inner.evaluated_constraints();
-                $body
-            }
-            ConstraintKind::Indicator => {
-                let $coll = $self.inner.evaluated_indicator_constraints();
-                $body
-            }
-            ConstraintKind::OneHot => {
-                let $coll = $self.inner.evaluated_one_hot_constraints();
-                $body
-            }
-            ConstraintKind::Sos1 => {
-                let $coll = $self.inner.evaluated_sos1_constraints();
-                $body
-            }
-        }
-    };
-}
 
 /// Idiomatic wrapper of `ommx.v1.Solution` protobuf message.
 ///
@@ -560,7 +534,7 @@ impl Solution {
     ///
     /// Columns: id (index), removed_reason, removed_reason.{key}
     ///
-    /// Can be joined with {attr}`constraints_df` on the `id` index.
+    /// Can be joined with {meth}`constraints_df` on the `id` index.
     ///
     /// # Examples
     ///
@@ -654,7 +628,7 @@ impl Solution {
     ///
     /// Columns: id (index), removed_reason, removed_reason.{key}
     ///
-    /// Can be joined with {attr}`indicator_constraints_df` using the `id` index.
+    /// Can be joined with {meth}`indicator_constraints_df` using the `id` index.
     pub fn indicator_removed_reasons_df<'py>(
         &self,
         py: Python<'py>,
@@ -713,7 +687,7 @@ impl Solution {
     ///
     /// Columns: id (index), removed_reason, removed_reason.{key}
     ///
-    /// Can be joined with {attr}`one_hot_constraints_df` using the `id` index.
+    /// Can be joined with {meth}`one_hot_constraints_df` using the `id` index.
     pub fn one_hot_removed_reasons_df<'py>(
         &self,
         py: Python<'py>,
@@ -768,7 +742,7 @@ impl Solution {
     ///
     /// Columns: id (index), removed_reason, removed_reason.{key}
     ///
-    /// Can be joined with {attr}`sos1_constraints_df` using the `id` index.
+    /// Can be joined with {meth}`sos1_constraints_df` using the `id` index.
     pub fn sos1_removed_reasons_df<'py>(
         &self,
         py: Python<'py>,
@@ -818,14 +792,24 @@ impl Solution {
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let kind = parse_constraint_kind(&kind)?;
         let id_col = constraint_id_col(kind);
-        constraint_kind_collection!(self, kind, |coll| {
-            crate::pandas::constraint_metadata_dataframe(
-                py,
-                coll.metadata(),
-                coll.inner().keys().copied(),
-                id_col,
-            )
-        })
+        constraint_kind_collection!(
+            self.inner,
+            kind,
+            [
+                evaluated_constraints,
+                evaluated_indicator_constraints,
+                evaluated_one_hot_constraints,
+                evaluated_sos1_constraints
+            ],
+            |coll| {
+                crate::pandas::constraint_metadata_dataframe(
+                    py,
+                    coll.metadata(),
+                    coll.inner().keys().copied(),
+                    id_col,
+                )
+            }
+        )
     }
 
     /// Constraint parameters DataFrame (long format).
@@ -837,14 +821,24 @@ impl Solution {
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let kind = parse_constraint_kind(&kind)?;
         let id_col = constraint_id_col(kind);
-        constraint_kind_collection!(self, kind, |coll| {
-            crate::pandas::constraint_parameters_dataframe(
-                py,
-                coll.metadata(),
-                coll.inner().keys().copied(),
-                id_col,
-            )
-        })
+        constraint_kind_collection!(
+            self.inner,
+            kind,
+            [
+                evaluated_constraints,
+                evaluated_indicator_constraints,
+                evaluated_one_hot_constraints,
+                evaluated_sos1_constraints
+            ],
+            |coll| {
+                crate::pandas::constraint_parameters_dataframe(
+                    py,
+                    coll.metadata(),
+                    coll.inner().keys().copied(),
+                    id_col,
+                )
+            }
+        )
     }
 
     /// Constraint provenance DataFrame (long format).
@@ -856,14 +850,24 @@ impl Solution {
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let kind = parse_constraint_kind(&kind)?;
         let id_col = constraint_id_col(kind);
-        constraint_kind_collection!(self, kind, |coll| {
-            crate::pandas::constraint_provenance_dataframe(
-                py,
-                coll.metadata(),
-                coll.inner().keys().copied(),
-                id_col,
-            )
-        })
+        constraint_kind_collection!(
+            self.inner,
+            kind,
+            [
+                evaluated_constraints,
+                evaluated_indicator_constraints,
+                evaluated_one_hot_constraints,
+                evaluated_sos1_constraints
+            ],
+            |coll| {
+                crate::pandas::constraint_provenance_dataframe(
+                    py,
+                    coll.metadata(),
+                    coll.inner().keys().copied(),
+                    id_col,
+                )
+            }
+        )
     }
 
     /// Removed-constraint reasons DataFrame (long format).
@@ -875,13 +879,23 @@ impl Solution {
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let kind = parse_constraint_kind(&kind)?;
         let id_col = constraint_id_col(kind);
-        constraint_kind_collection!(self, kind, |coll| {
-            crate::pandas::constraint_removed_reasons_dataframe(
-                py,
-                coll.removed_reasons().iter().map(|(id, r)| (*id, r)),
-                id_col,
-            )
-        })
+        constraint_kind_collection!(
+            self.inner,
+            kind,
+            [
+                evaluated_constraints,
+                evaluated_indicator_constraints,
+                evaluated_one_hot_constraints,
+                evaluated_sos1_constraints
+            ],
+            |coll| {
+                crate::pandas::constraint_removed_reasons_dataframe(
+                    py,
+                    coll.removed_reasons().iter().map(|(id, r)| (*id, r)),
+                    id_col,
+                )
+            }
+        )
     }
 
     /// Decision-variable metadata DataFrame (id-indexed).

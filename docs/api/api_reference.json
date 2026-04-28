@@ -17600,7 +17600,7 @@
             },
             {
               "name": "indicator_removed_reasons_df",
-              "doc": "DataFrame of removed indicator constraint reasons.\n\nColumns: id (index), removed_reason, removed_reason.{key}\n\nCan be joined with {attr}`indicator_constraints_df` using the `id` index.",
+              "doc": "DataFrame of removed indicator constraint reasons.\n\nColumns: id (index), removed_reason, removed_reason.{key}\n\nCan be joined with {meth}`indicator_constraints_df` using the `id` index.",
               "signatures": [
                 {
                   "parameters": [],
@@ -17616,7 +17616,7 @@
             },
             {
               "name": "named_functions_df",
-              "doc": "DataFrame of named functions with per-sample value columns.\nStatic columns: id, used_ids, name, subscripts, description, parameters.\nDynamic columns: one per sample_id (int) with the function's evaluated value.",
+              "doc": "DataFrame of named functions with per-sample value columns.\nStatic columns: id, used_ids, name, subscripts, description, parameters.{key}.\nDynamic columns: one per sample_id (int) with the function's evaluated value.",
               "signatures": [
                 {
                   "parameters": [
@@ -17714,7 +17714,7 @@
             },
             {
               "name": "one_hot_removed_reasons_df",
-              "doc": "DataFrame of removed one-hot constraint reasons.\n\nColumns: id (index), removed_reason, removed_reason.{key}\n\nCan be joined with {attr}`one_hot_constraints_df` using the `id` index.",
+              "doc": "DataFrame of removed one-hot constraint reasons.\n\nColumns: id (index), removed_reason, removed_reason.{key}\n\nCan be joined with {meth}`one_hot_constraints_df` using the `id` index.",
               "signatures": [
                 {
                   "parameters": [],
@@ -17730,7 +17730,7 @@
             },
             {
               "name": "removed_reasons_df",
-              "doc": "DataFrame of removed constraint reasons.\n\nColumns: id (index), removed_reason, removed_reason.{key}\n\nCan be joined with {attr}`constraints_df` using the `id` index.",
+              "doc": "DataFrame of removed constraint reasons.\n\nColumns: id (index), removed_reason, removed_reason.{key}\n\nCan be joined with {meth}`constraints_df` using the `id` index.",
               "signatures": [
                 {
                   "parameters": [],
@@ -17809,7 +17809,7 @@
             },
             {
               "name": "sos1_removed_reasons_df",
-              "doc": "DataFrame of removed SOS1 constraint reasons.\n\nColumns: id (index), removed_reason, removed_reason.{key}\n\nCan be joined with {attr}`sos1_constraints_df` using the `id` index.",
+              "doc": "DataFrame of removed SOS1 constraint reasons.\n\nColumns: id (index), removed_reason, removed_reason.{key}\n\nCan be joined with {meth}`sos1_constraints_df` using the `id` index.",
               "signatures": [
                 {
                   "parameters": [],
@@ -19746,7 +19746,7 @@
             },
             {
               "name": "indicator_removed_reasons_df",
-              "doc": "DataFrame of removed indicator constraint reasons.\n\nColumns: id (index), removed_reason, removed_reason.{key}\n\nCan be joined with {attr}`indicator_constraints_df` using the `id` index.",
+              "doc": "DataFrame of removed indicator constraint reasons.\n\nColumns: id (index), removed_reason, removed_reason.{key}\n\nCan be joined with {meth}`indicator_constraints_df` using the `id` index.",
               "signatures": [
                 {
                   "parameters": [],
@@ -19844,7 +19844,7 @@
             },
             {
               "name": "one_hot_removed_reasons_df",
-              "doc": "DataFrame of removed one-hot constraint reasons.\n\nColumns: id (index), removed_reason, removed_reason.{key}\n\nCan be joined with {attr}`one_hot_constraints_df` using the `id` index.",
+              "doc": "DataFrame of removed one-hot constraint reasons.\n\nColumns: id (index), removed_reason, removed_reason.{key}\n\nCan be joined with {meth}`one_hot_constraints_df` using the `id` index.",
               "signatures": [
                 {
                   "parameters": [],
@@ -19860,7 +19860,7 @@
             },
             {
               "name": "removed_reasons_df",
-              "doc": "DataFrame of removed constraint reasons.\n\nColumns: id (index), removed_reason, removed_reason.{key}\n\nCan be joined with {attr}`constraints_df` on the `id` index.\n\n# Examples\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[\n...         (x[0] + x[1] == 1).set_id(10),\n...         (x[1] + x[2] == 1).set_id(20),\n...     ],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.relax_constraint(10, \"test_reason\")\n>>> solution = instance.evaluate({0: 1, 1: 0, 2: 1})\n```\n\n`removed_reasons_df` contains only removed constraints:\n\n```python\n>>> solution.removed_reasons_df()\n    removed_reason\nid\n10    test_reason\n```\n\nJoin with `constraints_df` to get full information:\n\n```python\n>>> df = solution.constraints_df().join(solution.removed_reasons_df())\n>>> df[[\"value\", \"removed_reason\"]]\n    value removed_reason\nid\n10    0.0   test_reason\n20    0.0           NaN\n```",
+              "doc": "DataFrame of removed constraint reasons.\n\nColumns: id (index), removed_reason, removed_reason.{key}\n\nCan be joined with {meth}`constraints_df` on the `id` index.\n\n# Examples\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[\n...         (x[0] + x[1] == 1).set_id(10),\n...         (x[1] + x[2] == 1).set_id(20),\n...     ],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.relax_constraint(10, \"test_reason\")\n>>> solution = instance.evaluate({0: 1, 1: 0, 2: 1})\n```\n\n`removed_reasons_df` contains only removed constraints:\n\n```python\n>>> solution.removed_reasons_df()\n    removed_reason\nid\n10    test_reason\n```\n\nJoin with `constraints_df` to get full information:\n\n```python\n>>> df = solution.constraints_df().join(solution.removed_reasons_df())\n>>> df[[\"value\", \"removed_reason\"]]\n    value removed_reason\nid\n10    0.0   test_reason\n20    0.0           NaN\n```",
               "signatures": [
                 {
                   "parameters": [],
@@ -19958,7 +19958,7 @@
             },
             {
               "name": "sos1_removed_reasons_df",
-              "doc": "DataFrame of removed SOS1 constraint reasons.\n\nColumns: id (index), removed_reason, removed_reason.{key}\n\nCan be joined with {attr}`sos1_constraints_df` using the `id` index.",
+              "doc": "DataFrame of removed SOS1 constraint reasons.\n\nColumns: id (index), removed_reason, removed_reason.{key}\n\nCan be joined with {meth}`sos1_constraints_df` using the `id` index.",
               "signatures": [
                 {
                   "parameters": [],
