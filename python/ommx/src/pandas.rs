@@ -879,6 +879,7 @@ impl<'m> ToPandasEntry for WithMetadata<'m, &ommx::DecisionVariable, DecisionVar
             &m.subscripts,
             m.description.as_deref(),
         )?;
+        set_parameter_columns(&dict, &m.parameters)?;
         match dv.substituted_value() {
             Some(v) => dict.set_item("substituted_value", v)?,
             None => dict.set_item("substituted_value", &na)?,
@@ -905,6 +906,7 @@ impl<'m> ToPandasEntry
             &m.subscripts,
             m.description.as_deref(),
         )?;
+        set_parameter_columns(&dict, &m.parameters)?;
         Ok(dict)
     }
 }
@@ -934,6 +936,7 @@ impl<'m> ToPandasEntry
             &m.subscripts,
             m.description.as_deref(),
         )?;
+        set_parameter_columns(&dict, &m.parameters)?;
         Ok(dict)
     }
 }
@@ -964,6 +967,7 @@ impl<'m> ToPandasEntry
             &m.subscripts,
             m.description.as_deref(),
         )?;
+        set_parameter_columns(&dict, &m.parameters)?;
         Ok(dict)
     }
 }
@@ -995,6 +999,7 @@ impl<'a, 'm> ToPandasEntry
             &m.subscripts,
             m.description.as_deref(),
         )?;
+        set_parameter_columns(&dict, &m.parameters)?;
         for &sample_id in self.item.sample_ids {
             let value = ic.stage.evaluated_values.get(sample_id).copied();
             dict.set_item(format!("value.{}", sample_id.into_inner()), value)?;
@@ -1054,6 +1059,7 @@ impl<'m> ToPandasEntry
             &m.subscripts,
             m.description.as_deref(),
         )?;
+        set_parameter_columns(&dict, &m.parameters)?;
         Ok(dict)
     }
 }
@@ -1078,6 +1084,7 @@ impl<'a, 'm> ToPandasEntry
             &m.subscripts,
             m.description.as_deref(),
         )?;
+        set_parameter_columns(&dict, &m.parameters)?;
         for &sample_id in self.item.sample_ids {
             let feas = c.stage.feasible.get(&sample_id).copied();
             dict.set_item(format!("feasible.{}", sample_id.into_inner()), feas)?;
@@ -1116,6 +1123,7 @@ impl<'m> ToPandasEntry
             &m.subscripts,
             m.description.as_deref(),
         )?;
+        set_parameter_columns(&dict, &m.parameters)?;
         Ok(dict)
     }
 }
@@ -1140,6 +1148,7 @@ impl<'a, 'm> ToPandasEntry
             &m.subscripts,
             m.description.as_deref(),
         )?;
+        set_parameter_columns(&dict, &m.parameters)?;
         for &sample_id in self.item.sample_ids {
             let feas = c.stage.feasible.get(&sample_id).copied();
             dict.set_item(format!("feasible.{}", sample_id.into_inner()), feas)?;
@@ -1171,6 +1180,7 @@ impl<'m> ToPandasEntry
             &m.subscripts,
             m.description.as_deref(),
         )?;
+        set_parameter_columns(&dict, &m.parameters)?;
         Ok(dict)
     }
 }
@@ -1212,6 +1222,7 @@ impl<'m> ToPandasEntry
             &m.subscripts,
             m.description.as_deref(),
         )?;
+        set_parameter_columns(&dict, &m.parameters)?;
         Ok(dict)
     }
 }
@@ -1306,6 +1317,7 @@ impl<'m> ToPandasEntry
             &m.subscripts,
             m.description.as_deref(),
         )?;
+        set_parameter_columns(&dict, &m.parameters)?;
         // EvaluatedDecisionVariable has no substituted_value field
         dict.set_item("substituted_value", &na)?;
         dict.set_item("value", *dv.value())?;
@@ -1332,6 +1344,7 @@ impl<'m> ToPandasEntry
             &m.subscripts,
             m.description.as_deref(),
         )?;
+        set_parameter_columns(&dict, &m.parameters)?;
         match c.stage.dual_variable {
             Some(v) => dict.set_item("dual_variable", v)?,
             None => dict.set_item("dual_variable", &na)?,
@@ -1418,6 +1431,7 @@ impl<'a, 'm> ToPandasEntry
             &m.subscripts,
             m.description.as_deref(),
         )?;
+        set_parameter_columns(&dict, &m.parameters)?;
         for &sample_id in self.item.sample_ids {
             let value = sc.stage.evaluated_values.get(sample_id).copied();
             dict.set_item(format!("value.{}", sample_id.into_inner()), value)?;

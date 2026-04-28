@@ -15,9 +15,9 @@
 # ---
 # name: test_instance_constraints_df_include_parameters_only
   '''
-                        equality    type   used_ids
-  regular_constraint_id                            
-  10                          =0  Linear  {0, 1, 2}
+                        equality    type   used_ids parameters.region
+  regular_constraint_id                                              
+  10                          =0  Linear  {0, 1, 2}           us-east
   '''
 # ---
 # name: test_instance_constraints_df_kind[indicator]
@@ -36,9 +36,9 @@
 # ---
 # name: test_instance_constraints_df_kind[regular]
   '''
-                        equality    type   used_ids     name subscripts description
-  regular_constraint_id                                                            
-  10                          =0  Linear  {0, 1, 2}  balance     [0, 1]  demand row
+                        equality    type   used_ids     name subscripts description parameters.region
+  regular_constraint_id                                                                              
+  10                          =0  Linear  {0, 1, 2}  balance     [0, 1]  demand row           us-east
   '''
 # ---
 # name: test_instance_constraints_df_kind[sos1]
@@ -81,9 +81,9 @@
 # ---
 # name: test_instance_constraints_df_removed_true_includes_both
   '''
-                        equality    type   used_ids     name subscripts description removed_reason removed_reason.phase
-  regular_constraint_id                                                                                                
-  10                          =0  Linear  {0, 1, 2}  balance     [0, 1]  demand row   manual_relax              warm-up
+                        equality    type   used_ids     name subscripts description parameters.region removed_reason removed_reason.phase
+  regular_constraint_id                                                                                                                  
+  10                          =0  Linear  {0, 1, 2}  balance     [0, 1]  demand row           us-east   manual_relax              warm-up
   '''
 # ---
 # name: test_instance_constraints_df_removed_true_no_metadata
@@ -137,9 +137,9 @@
 # ---
 # name: test_sample_set_constraints_df_kind[regular]
   '''
-                        equality   used_ids     name subscripts description  value.0  feasible.0  value.1  feasible.1
-  regular_constraint_id                                                                                              
-  10                          =0  {0, 1, 2}  balance     [0, 1]  demand row      0.0        True      1.0       False
+                        equality   used_ids     name subscripts description parameters.region  value.0  feasible.0  value.1  feasible.1
+  regular_constraint_id                                                                                                                
+  10                          =0  {0, 1, 2}  balance     [0, 1]  demand row           us-east      0.0        True      1.0       False
   '''
 # ---
 # name: test_sample_set_constraints_df_kind[sos1]
@@ -165,9 +165,9 @@
 # ---
 # name: test_solution_constraints_df_kind[regular]
   '''
-                        equality  value   used_ids     name subscripts description dual_variable
-  regular_constraint_id                                                                         
-  10                          =0    0.0  {0, 1, 2}  balance     [0, 1]  demand row          <NA>
+                        equality  value   used_ids     name subscripts description parameters.region dual_variable
+  regular_constraint_id                                                                                           
+  10                          =0    0.0  {0, 1, 2}  balance     [0, 1]  demand row           us-east          <NA>
   '''
 # ---
 # name: test_solution_constraints_df_kind[sos1]

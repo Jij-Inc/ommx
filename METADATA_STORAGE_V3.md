@@ -161,7 +161,8 @@ SoA store; the behavior they implement is unchanged.
   `*_removed_reasons_df` collapse into one `constraints_df(kind=...)`
   per host. On `Instance` / `ParametricInstance` a new
   `removed: bool = False` parameter expands rows to include the
-  removed map and auto-adds reason columns. **(Wave 2 — proposed.)**
+  removed map and auto-adds reason columns.
+  **(landed in Wave 2, PR #847.)**
 - Six long-format / id-indexed sidecar dataframes read directly from
   the SoA stores: `constraint_metadata_df(kind=...)`,
   `constraint_parameters_df(kind=...)`,
