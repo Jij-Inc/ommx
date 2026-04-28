@@ -7123,7 +7123,7 @@
                       },
                       "default": {
                         "kind": "Simple",
-                        "value": "\"regular\""
+                        "value": "'regular'"
                       }
                     }
                   ],
@@ -7173,7 +7173,7 @@
                       },
                       "default": {
                         "kind": "Simple",
-                        "value": "\"regular\""
+                        "value": "'regular'"
                       }
                     }
                   ],
@@ -7223,7 +7223,7 @@
                       },
                       "default": {
                         "kind": "Simple",
-                        "value": "\"regular\""
+                        "value": "'regular'"
                       }
                     }
                   ],
@@ -7273,7 +7273,7 @@
                       },
                       "default": {
                         "kind": "Simple",
-                        "value": "\"regular\""
+                        "value": "'regular'"
                       }
                     }
                   ],
@@ -7323,7 +7323,7 @@
                       },
                       "default": {
                         "kind": "Simple",
-                        "value": "\"regular\""
+                        "value": "'regular'"
                       }
                     },
                     {
@@ -12638,7 +12638,7 @@
                       },
                       "default": {
                         "kind": "Simple",
-                        "value": "\"regular\""
+                        "value": "'regular'"
                       }
                     }
                   ],
@@ -12688,7 +12688,7 @@
                       },
                       "default": {
                         "kind": "Simple",
-                        "value": "\"regular\""
+                        "value": "'regular'"
                       }
                     }
                   ],
@@ -12738,7 +12738,7 @@
                       },
                       "default": {
                         "kind": "Simple",
-                        "value": "\"regular\""
+                        "value": "'regular'"
                       }
                     }
                   ],
@@ -12788,7 +12788,7 @@
                       },
                       "default": {
                         "kind": "Simple",
-                        "value": "\"regular\""
+                        "value": "'regular'"
                       }
                     }
                   ],
@@ -12838,7 +12838,7 @@
                       },
                       "default": {
                         "kind": "Simple",
-                        "value": "\"regular\""
+                        "value": "'regular'"
                       }
                     },
                     {
@@ -16868,7 +16868,7 @@
                       },
                       "default": {
                         "kind": "Simple",
-                        "value": "\"regular\""
+                        "value": "'regular'"
                       }
                     }
                   ],
@@ -16918,7 +16918,7 @@
                       },
                       "default": {
                         "kind": "Simple",
-                        "value": "\"regular\""
+                        "value": "'regular'"
                       }
                     }
                   ],
@@ -16968,7 +16968,7 @@
                       },
                       "default": {
                         "kind": "Simple",
-                        "value": "\"regular\""
+                        "value": "'regular'"
                       }
                     }
                   ],
@@ -17018,7 +17018,7 @@
                       },
                       "default": {
                         "kind": "Simple",
-                        "value": "\"regular\""
+                        "value": "'regular'"
                       }
                     }
                   ],
@@ -17068,7 +17068,7 @@
                       },
                       "default": {
                         "kind": "Simple",
-                        "value": "\"regular\""
+                        "value": "'regular'"
                       }
                     },
                     {
@@ -19051,7 +19051,7 @@
                       },
                       "default": {
                         "kind": "Simple",
-                        "value": "\"regular\""
+                        "value": "'regular'"
                       }
                     }
                   ],
@@ -19101,7 +19101,7 @@
                       },
                       "default": {
                         "kind": "Simple",
-                        "value": "\"regular\""
+                        "value": "'regular'"
                       }
                     }
                   ],
@@ -19151,7 +19151,7 @@
                       },
                       "default": {
                         "kind": "Simple",
-                        "value": "\"regular\""
+                        "value": "'regular'"
                       }
                     }
                   ],
@@ -19201,7 +19201,7 @@
                       },
                       "default": {
                         "kind": "Simple",
-                        "value": "\"regular\""
+                        "value": "'regular'"
                       }
                     }
                   ],
@@ -19251,7 +19251,7 @@
                       },
                       "default": {
                         "kind": "Simple",
-                        "value": "\"regular\""
+                        "value": "'regular'"
                       }
                     },
                     {

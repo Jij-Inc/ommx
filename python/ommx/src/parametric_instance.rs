@@ -1,6 +1,6 @@
 use crate::{
     pandas::{
-        constraint_id_col, constraint_kind_collection, entries_to_dataframe, parse_constraint_kind,
+        constraint_id_col, constraint_kind_collection, entries_to_dataframe, ConstraintKind,
         PyDataFrame, ToPandasEntry,
     },
     Constraint, DecisionVariable, Function, Instance, NamedFunction, Parameter, RemovedConstraint,
@@ -336,27 +336,22 @@ impl ParametricInstance {
     /// DataFrame of constraints, dispatched on `kind=`. See
     /// {meth}`ommx.v1.Instance.constraints_df` for column / `kind=` /
     /// `include=` / `removed=` semantics.
-    #[pyo3(signature = (kind = "regular", include = None, removed = false))]
+    #[pyo3(signature = (kind = ConstraintKind::Regular, include = None, removed = false))]
     pub fn constraints_df<'py>(
         &self,
         py: Python<'py>,
-        #[gen_stub(override_type(
-            type_repr = "typing.Literal[\"regular\", \"indicator\", \"one_hot\", \"sos1\"]",
-            imports = ("typing")
-        ))]
-        kind: &str,
+        kind: ConstraintKind,
         include: Option<Vec<String>>,
         removed: bool,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
-        let kind_enum = parse_constraint_kind(kind)?;
-        let id_col = constraint_id_col(kind_enum);
+        let id_col = constraint_id_col(kind);
         let mut flags = crate::pandas::IncludeFlags::from_optional(include)?;
         if removed {
             flags.removed_reason = true;
         }
         constraint_kind_collection!(
             self.inner,
-            kind_enum,
+            kind,
             [
                 constraint_collection,
                 indicator_constraint_collection,
@@ -440,17 +435,12 @@ impl ParametricInstance {
     /// Constraint metadata DataFrame (id-indexed). See
     /// {meth}`ommx.v1.Instance.constraint_metadata_df` for column / `kind=`
     /// semantics.
-    #[pyo3(signature = (kind = "regular"))]
+    #[pyo3(signature = (kind = ConstraintKind::Regular))]
     pub fn constraint_metadata_df<'py>(
         &self,
         py: Python<'py>,
-        #[gen_stub(override_type(
-            type_repr = "typing.Literal[\"regular\", \"indicator\", \"one_hot\", \"sos1\"]",
-            imports = ("typing")
-        ))]
-        kind: &str,
+        kind: ConstraintKind,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
-        let kind = parse_constraint_kind(kind)?;
         let id_col = constraint_id_col(kind);
         constraint_kind_collection!(
             self.inner,
@@ -473,17 +463,12 @@ impl ParametricInstance {
     }
 
     /// Constraint parameters DataFrame (long format).
-    #[pyo3(signature = (kind = "regular"))]
+    #[pyo3(signature = (kind = ConstraintKind::Regular))]
     pub fn constraint_parameters_df<'py>(
         &self,
         py: Python<'py>,
-        #[gen_stub(override_type(
-            type_repr = "typing.Literal[\"regular\", \"indicator\", \"one_hot\", \"sos1\"]",
-            imports = ("typing")
-        ))]
-        kind: &str,
+        kind: ConstraintKind,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
-        let kind = parse_constraint_kind(kind)?;
         let id_col = constraint_id_col(kind);
         constraint_kind_collection!(
             self.inner,
@@ -506,17 +491,12 @@ impl ParametricInstance {
     }
 
     /// Constraint provenance DataFrame (long format).
-    #[pyo3(signature = (kind = "regular"))]
+    #[pyo3(signature = (kind = ConstraintKind::Regular))]
     pub fn constraint_provenance_df<'py>(
         &self,
         py: Python<'py>,
-        #[gen_stub(override_type(
-            type_repr = "typing.Literal[\"regular\", \"indicator\", \"one_hot\", \"sos1\"]",
-            imports = ("typing")
-        ))]
-        kind: &str,
+        kind: ConstraintKind,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
-        let kind = parse_constraint_kind(kind)?;
         let id_col = constraint_id_col(kind);
         constraint_kind_collection!(
             self.inner,
@@ -539,17 +519,12 @@ impl ParametricInstance {
     }
 
     /// Removed-constraint reasons DataFrame (long format).
-    #[pyo3(signature = (kind = "regular"))]
+    #[pyo3(signature = (kind = ConstraintKind::Regular))]
     pub fn constraint_removed_reasons_df<'py>(
         &self,
         py: Python<'py>,
-        #[gen_stub(override_type(
-            type_repr = "typing.Literal[\"regular\", \"indicator\", \"one_hot\", \"sos1\"]",
-            imports = ("typing")
-        ))]
-        kind: &str,
+        kind: ConstraintKind,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
-        let kind = parse_constraint_kind(kind)?;
         let id_col = constraint_id_col(kind);
         constraint_kind_collection!(
             self.inner,

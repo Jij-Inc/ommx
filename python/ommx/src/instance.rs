@@ -1,6 +1,6 @@
 use crate::{
     pandas::{
-        constraint_id_col, constraint_kind_collection, entries_to_dataframe, parse_constraint_kind,
+        constraint_id_col, constraint_kind_collection, entries_to_dataframe, ConstraintKind,
         PyDataFrame, ToPandasEntry,
     },
     Constraint, DecisionVariable, Function, NamedFunction, ParametricInstance, RemovedConstraint,
@@ -1735,27 +1735,22 @@ impl Instance {
     /// `removed=True` returns active + removed rows in the same DataFrame
     /// and auto-sets `"removed_reason"` so removed rows are
     /// distinguishable (active rows have NA in the reason columns).
-    #[pyo3(signature = (kind = "regular", include = None, removed = false))]
+    #[pyo3(signature = (kind = ConstraintKind::Regular, include = None, removed = false))]
     pub fn constraints_df<'py>(
         &self,
         py: Python<'py>,
-        #[gen_stub(override_type(
-            type_repr = "typing.Literal[\"regular\", \"indicator\", \"one_hot\", \"sos1\"]",
-            imports = ("typing")
-        ))]
-        kind: &str,
+        kind: ConstraintKind,
         include: Option<Vec<String>>,
         removed: bool,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
-        let kind_enum = parse_constraint_kind(kind)?;
-        let id_col = constraint_id_col(kind_enum);
+        let id_col = constraint_id_col(kind);
         let mut flags = crate::pandas::IncludeFlags::from_optional(include)?;
         if removed {
             flags.removed_reason = true;
         }
         constraint_kind_collection!(
             self.inner,
-            kind_enum,
+            kind,
             [
                 constraint_collection,
                 indicator_constraint_collection,
@@ -1839,17 +1834,12 @@ impl Instance {
     /// `name`, `subscripts`, `description`. Index column is
     /// `{kind}_constraint_id`. `kind` selects which constraint family
     /// to read: `"regular"`, `"indicator"`, `"one_hot"`, or `"sos1"`.
-    #[pyo3(signature = (kind = "regular"))]
+    #[pyo3(signature = (kind = ConstraintKind::Regular))]
     pub fn constraint_metadata_df<'py>(
         &self,
         py: Python<'py>,
-        #[gen_stub(override_type(
-            type_repr = "typing.Literal[\"regular\", \"indicator\", \"one_hot\", \"sos1\"]",
-            imports = ("typing")
-        ))]
-        kind: &str,
+        kind: ConstraintKind,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
-        let kind = parse_constraint_kind(kind)?;
         let id_col = constraint_id_col(kind);
         constraint_kind_collection!(
             self.inner,
@@ -1875,17 +1865,12 @@ impl Instance {
     ///
     /// One row per (constraint_id, parameter_key) pair. Columns:
     /// `{kind}_constraint_id`, `key`, `value`. Default RangeIndex.
-    #[pyo3(signature = (kind = "regular"))]
+    #[pyo3(signature = (kind = ConstraintKind::Regular))]
     pub fn constraint_parameters_df<'py>(
         &self,
         py: Python<'py>,
-        #[gen_stub(override_type(
-            type_repr = "typing.Literal[\"regular\", \"indicator\", \"one_hot\", \"sos1\"]",
-            imports = ("typing")
-        ))]
-        kind: &str,
+        kind: ConstraintKind,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
-        let kind = parse_constraint_kind(kind)?;
         let id_col = constraint_id_col(kind);
         constraint_kind_collection!(
             self.inner,
@@ -1911,17 +1896,12 @@ impl Instance {
     ///
     /// One row per (constraint_id, step) pair. Columns:
     /// `{kind}_constraint_id`, `step`, `source_kind`, `source_id`.
-    #[pyo3(signature = (kind = "regular"))]
+    #[pyo3(signature = (kind = ConstraintKind::Regular))]
     pub fn constraint_provenance_df<'py>(
         &self,
         py: Python<'py>,
-        #[gen_stub(override_type(
-            type_repr = "typing.Literal[\"regular\", \"indicator\", \"one_hot\", \"sos1\"]",
-            imports = ("typing")
-        ))]
-        kind: &str,
+        kind: ConstraintKind,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
-        let kind = parse_constraint_kind(kind)?;
         let id_col = constraint_id_col(kind);
         constraint_kind_collection!(
             self.inner,
@@ -1948,17 +1928,12 @@ impl Instance {
     /// One row per (constraint_id, parameter_key) pair, plus one row with
     /// `key`/`value` set to NA when the reason has no parameters. Columns:
     /// `{kind}_constraint_id`, `reason`, `key`, `value`.
-    #[pyo3(signature = (kind = "regular"))]
+    #[pyo3(signature = (kind = ConstraintKind::Regular))]
     pub fn constraint_removed_reasons_df<'py>(
         &self,
         py: Python<'py>,
-        #[gen_stub(override_type(
-            type_repr = "typing.Literal[\"regular\", \"indicator\", \"one_hot\", \"sos1\"]",
-            imports = ("typing")
-        ))]
-        kind: &str,
+        kind: ConstraintKind,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
-        let kind = parse_constraint_kind(kind)?;
         let id_col = constraint_id_col(kind);
         constraint_kind_collection!(
             self.inner,
