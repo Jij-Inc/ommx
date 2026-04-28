@@ -137,7 +137,7 @@ Instance.from_components(..., constraints={5: c}, ...)
 
 これに伴い旧 API である `ConstraintHints` / `OneHot` / `Sos1` クラス、`Instance.constraint_hints` プロパティ、PySCIPOpt Adapter の `use_sos1` フラグは削除されています。
 
-### ⚠ `removed_reason` カラムを `include=` でゲート ([#796](https://github.com/Jij-Inc/ommx/pull/796))
+### ⚠ `removed_reason` カラムを `include=` でゲート ([#796](https://github.com/Jij-Inc/ommx/pull/796), [#847](https://github.com/Jij-Inc/ommx/pull/847))
 
 v2.5.1 までは {meth}`Solution.constraints_df <ommx.v1.Solution.constraints_df>` に `removed_reason` カラムが常に含まれていましたが、v3.0.0a4 では `include=` の `"removed_reason"` フラグでゲートします（reason 名と `removed_reason.{key}` パラメータカラムをまとめて制御するユニットフラグ）。評価前に削除されていなかった行はそれらのカラムが NA になります。
 

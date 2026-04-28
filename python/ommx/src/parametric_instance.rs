@@ -361,20 +361,46 @@ impl ParametricInstance {
             ],
             |coll| {
                 let meta = coll.metadata().clone();
+                let active = coll.active();
+                let removed_map = coll.removed();
                 let mut entries: Vec<Bound<'py, pyo3::types::PyAny>> = Vec::new();
-                for (id, c) in coll.active().iter() {
-                    let m = meta.collect_for(*id);
-                    let dict =
-                        crate::pandas::WithMetadata::new((*id, c), &m).to_pandas_entry(py)?;
-                    crate::pandas::apply_include_filter(&dict, flags)?;
-                    crate::pandas::rename_id_column(&dict, id_col)?;
-                    entries.push(dict.into_any());
-                }
                 if removed {
-                    for (id, pair) in coll.removed().iter() {
+                    let mut ai = active.iter().peekable();
+                    let mut ri = removed_map.iter().peekable();
+                    loop {
+                        let pick_active = match (ai.peek(), ri.peek()) {
+                            (Some((aid, _)), Some((rid, _))) => aid <= rid,
+                            (Some(_), None) => true,
+                            (None, Some(_)) => false,
+                            (None, None) => break,
+                        };
+                        if pick_active {
+                            let (id, c) = ai.next().unwrap();
+                            let m = meta.collect_for(*id);
+                            let dict = crate::pandas::WithMetadata::new((*id, c), &m)
+                                .to_pandas_entry(py)?;
+                            crate::pandas::set_removed_reason_na(&dict)?;
+                            crate::pandas::apply_include_filter(&dict, flags)?;
+                            crate::pandas::rename_id_column(&dict, id_col)?;
+                            entries.push(dict.into_any());
+                        } else {
+                            let (id, pair) = ri.next().unwrap();
+                            let m = meta.collect_for(*id);
+                            let dict = crate::pandas::WithMetadata::new((*id, pair), &m)
+                                .to_pandas_entry(py)?;
+                            crate::pandas::apply_include_filter(&dict, flags)?;
+                            crate::pandas::rename_id_column(&dict, id_col)?;
+                            entries.push(dict.into_any());
+                        }
+                    }
+                } else {
+                    for (id, c) in active.iter() {
                         let m = meta.collect_for(*id);
-                        let dict = crate::pandas::WithMetadata::new((*id, pair), &m)
-                            .to_pandas_entry(py)?;
+                        let dict =
+                            crate::pandas::WithMetadata::new((*id, c), &m).to_pandas_entry(py)?;
+                        if flags.removed_reason {
+                            crate::pandas::set_removed_reason_na(&dict)?;
+                        }
                         crate::pandas::apply_include_filter(&dict, flags)?;
                         crate::pandas::rename_id_column(&dict, id_col)?;
                         entries.push(dict.into_any());

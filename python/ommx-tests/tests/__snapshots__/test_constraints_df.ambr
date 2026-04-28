@@ -55,6 +55,22 @@
   Index: []
   '''
 # ---
+# name: test_instance_constraints_df_removed_reason_active_only_keeps_column
+  '''
+                        equality    type   used_ids     name subscripts description removed_reason
+  regular_constraint_id                                                                           
+  10                          =0  Linear  {0, 1, 2}  balance     [0, 1]  demand row           <NA>
+  '''
+# ---
+# name: test_instance_constraints_df_removed_true_id_sorted
+  '''
+                        equality    type used_ids  name subscripts description removed_reason
+  regular_constraint_id                                                                      
+  5                           =0  Linear   {0, 1}  <NA>         []        <NA>           <NA>
+  20                          =0  Linear   {0, 2}  <NA>         []        <NA>   relax_middle
+  30                          =0  Linear   {1, 2}  <NA>         []        <NA>           <NA>
+  '''
+# ---
 # name: test_instance_constraints_df_removed_true_includes_both
   '''
                         equality    type   used_ids     name subscripts description removed_reason removed_reason.phase
@@ -74,6 +90,27 @@
                         equality       type       used_ids  name subscripts description
   regular_constraint_id                                                                
   10                          =0  Quadratic  {0, 1, 2, 99}  <NA>         []        <NA>
+  '''
+# ---
+# name: test_parametric_instance_constraints_df_special_kinds_empty[indicator]
+  '''
+  Empty DataFrame
+  Columns: []
+  Index: []
+  '''
+# ---
+# name: test_parametric_instance_constraints_df_special_kinds_empty[one_hot]
+  '''
+  Empty DataFrame
+  Columns: []
+  Index: []
+  '''
+# ---
+# name: test_parametric_instance_constraints_df_special_kinds_empty[sos1]
+  '''
+  Empty DataFrame
+  Columns: []
+  Index: []
   '''
 # ---
 # name: test_sample_set_constraints_df_kind[indicator]
@@ -137,5 +174,12 @@
                         equality  value   used_ids     name subscripts description dual_variable removed_reason removed_reason.phase
   regular_constraint_id                                                                                                             
   10                          =0    0.0  {0, 1, 2}  balance     [0, 1]  demand row          <NA>   manual_relax              warm-up
+  '''
+# ---
+# name: test_solution_constraints_df_removed_reason_no_removals_keeps_column
+  '''
+                        equality  value   used_ids     name subscripts description dual_variable removed_reason
+  regular_constraint_id                                                                                        
+  10                          =0    0.0  {0, 1, 2}  balance     [0, 1]  demand row          <NA>           <NA>
   '''
 # ---

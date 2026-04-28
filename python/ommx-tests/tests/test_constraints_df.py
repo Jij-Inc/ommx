@@ -184,6 +184,45 @@ def test_instance_constraints_df_removed_true_no_metadata(snapshot):
     )
 
 
+def test_instance_constraints_df_removed_true_id_sorted(snapshot):
+    """`removed=True` returns a globally id-sorted union of active and
+    removed rows. With active ids {5, 30} and removed id 20 in the
+    middle, the output is [5, 20, 30] — not [5, 30, 20] (active first
+    then removed). Regression guard for the merge-sort path; the
+    naive `chain(active, removed)` would order rows by section
+    rather than by id."""
+    x = [DecisionVariable.binary(i) for i in range(3)]
+    inst = Instance.from_components(
+        decision_variables=x,
+        objective=sum(x),
+        constraints={
+            5: x[0] + x[1] == 1,
+            30: x[1] + x[2] == 1,
+            20: x[0] + x[2] == 1,
+        },
+        sense=Instance.MAXIMIZE,
+    )
+    inst.relax_constraint(20, "relax_middle")
+    df = inst.constraints_df(kind="regular", removed=True)
+    assert list(df.index) == [5, 20, 30]
+    assert _df_snap(df) == snapshot
+
+
+def test_instance_constraints_df_removed_reason_active_only_keeps_column(
+    snapshot,
+):
+    """Edge case: `include=("removed_reason",)` on an active-only view
+    (no `removed=True`, no actually-removed constraints) must still
+    surface the `removed_reason` column with NA values. Regression
+    guard against the column silently disappearing when no row in
+    the view carries a reason."""
+    df = _instance_all_kinds().constraints_df(
+        kind="regular", include=["metadata", "removed_reason"]
+    )
+    assert "removed_reason" in df.columns
+    assert _df_snap(df) == snapshot
+
+
 # ---------------------------------------------------------------------------
 # ParametricInstance.constraints_df
 # ---------------------------------------------------------------------------
@@ -192,6 +231,19 @@ def test_instance_constraints_df_removed_true_no_metadata(snapshot):
 def test_parametric_instance_constraints_df_default(snapshot):
     """`ParametricInstance.constraints_df()` uses the same wide shape as Instance."""
     assert _df_snap(_parametric_instance().constraints_df()) == snapshot
+
+
+@pytest.mark.parametrize("kind", ["indicator", "one_hot", "sos1"])
+def test_parametric_instance_constraints_df_special_kinds_empty(snapshot, kind):
+    """Python `ParametricInstance.from_components` only accepts regular
+    constraints, so the special-kind collections are always empty —
+    but the dispatch path must still return a DataFrame with the
+    correct kind-qualified index name.
+
+    Regression guard for the Wave 2 macro dispatch on the three
+    special-kind ParametricInstance accessors that the public Python
+    surface cannot populate."""
+    assert _df_snap(_parametric_instance().constraints_df(kind=kind)) == snapshot
 
 
 # ---------------------------------------------------------------------------
@@ -223,6 +275,19 @@ def test_solution_constraints_df_removed_reason_include(snapshot):
         )
         == snapshot
     )
+
+
+def test_solution_constraints_df_removed_reason_no_removals_keeps_column(snapshot):
+    """`include=("removed_reason",)` on a Solution where no constraint
+    was removed before evaluation must still surface the
+    `removed_reason` column with NA values. Regression guard for the
+    column silently disappearing when no row in the view carries a
+    reason."""
+    df = _solution_basic().constraints_df(
+        kind="regular", include=["metadata", "removed_reason"]
+    )
+    assert "removed_reason" in df.columns
+    assert _df_snap(df) == snapshot
 
 
 # ---------------------------------------------------------------------------

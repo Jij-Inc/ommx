@@ -566,6 +566,20 @@ pub(crate) fn set_removed_reason_columns(
     Ok(())
 }
 
+/// Emit a placeholder NA `removed_reason` column on a row with no
+/// removed reason. Without this, a wide `*_df` requested with
+/// `include=("removed_reason",)` would silently drop the column when
+/// no row in the view actually carries a reason — pandas keys columns
+/// off whatever appears in any row dict. Calling this on the
+/// reason-less rows guarantees the column appears with `<NA>` values.
+/// `removed_reason.{key}` columns are intentionally not pre-emitted —
+/// their key set is data-dependent.
+pub(crate) fn set_removed_reason_na(dict: &Bound<PyDict>) -> PyResult<()> {
+    let na = get_na(dict.py())?;
+    dict.set_item(REMOVED_REASON_KEY, &na)?;
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // pandas.NA cache
 // ---------------------------------------------------------------------------
