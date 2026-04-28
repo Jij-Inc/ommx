@@ -63,7 +63,7 @@ instance.sense == Instance.MAXIMIZE
 決定変数と制約条件については [`pandas.DataFrame`](https://pandas.pydata.org/pandas-docs/stable/reference/frame.html) の形式で取得できます
 
 ```{code-cell} ipython3
-instance.decision_variables
+instance.decision_variables_df()
 ```
 
 まず `kind` と `lower`, `upper` は数理モデルとして必須の情報です。
