@@ -225,6 +225,30 @@ def test_instance_constraints_df_removed_reason_active_only_keeps_column(
     assert _df_snap(df) == snapshot
 
 
+def test_instance_constraints_df_one_hot_removed_true(snapshot):
+    """`removed=True` on `kind="one_hot"` exercises the merge-sort and
+    reason-column path on a special-kind constraint. The capability-
+    model docs advertise this surface for auditing OneHot →
+    regular-constraint conversion (see capability_model.md), so it
+    deserves its own snapshot anchor."""
+    x = [DecisionVariable.binary(i) for i in range(3)]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=sum(x),
+        constraints={},
+        one_hot_constraints={
+            5: OneHotConstraint(variables=[0, 1]),
+            7: OneHotConstraint(variables=[1, 2]),
+        },
+        sense=Instance.MAXIMIZE,
+    )
+    instance.convert_one_hot_to_constraint(7)
+    df = instance.constraints_df(kind="one_hot", removed=True)
+    # Globally id-sorted: active id 5, then removed id 7.
+    assert list(df.index) == [5, 7]
+    assert _df_snap(df) == snapshot
+
+
 # ---------------------------------------------------------------------------
 # ParametricInstance.constraints_df
 # ---------------------------------------------------------------------------

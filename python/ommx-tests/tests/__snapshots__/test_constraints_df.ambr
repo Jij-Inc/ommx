@@ -48,6 +48,14 @@
   40                  {0, 1, 2}              3  {0, 1, 2}  <NA>         []        <NA>
   '''
 # ---
+# name: test_instance_constraints_df_one_hot_removed_true
+  '''
+                        variables  num_variables used_ids  name subscripts description                               removed_reason removed_reason.constraint_id
+  one_hot_constraint_id                                                                                                                                         
+  5                        {0, 1}              2   {0, 1}  <NA>         []        <NA>                                         <NA>                         <NA>
+  7                        {1, 2}              2   {1, 2}  <NA>         []        <NA>  ommx.Instance.convert_one_hot_to_constraint                            0
+  '''
+# ---
 # name: test_instance_constraints_df_removed_default_excludes_removed
   '''
   Empty DataFrame

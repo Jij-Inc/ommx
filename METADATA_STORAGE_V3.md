@@ -571,9 +571,10 @@ on every wrapper and is gated behind the deferred Series accessor work.
 
 ### Layered views over the Rust SoA store **(partially landed)**
 
-`include=` and the long-format sidecar dfs are landed (PR #846); the
-Series accessor and the `kind=Literal` consolidation of per-kind
-`*_constraints_df` remain deferred.
+`include=` and the long-format sidecar dfs landed in PR #846; the
+`kind=Literal[...]` consolidation of per-kind `*_constraints_df`
+landed in PR #847 (Wave 2). Only the Series accessor remains
+deferred.
 
 ```
                   Rust SoA store (canonical)
@@ -885,12 +886,15 @@ Putting them in separate DataFrames (`constraints_df` vs.
 `pd.concat` to see the whole picture. The `removed=True` flag puts
 both into one table with a `removed_reason` column to distinguish.
 
-At the `Solution` / `SampleSet` stage there's no such distinction:
-the evaluated / sampled value is what each row carries, and removal
-already happened upstream. Constraints that were removed before
-evaluation simply have no value to report; surfacing them as a
-separate row family doesn't add information. The reason data, if
-the user wants it, comes through `"removed_reason"` in `include=` —
+At the `Solution` / `SampleSet` stage there's no such row-level
+distinction: the underlying `EvaluatedCollection<T>` (and its
+sampled counterpart) keeps both active and previously-removed
+constraints in a single `constraints` map and tracks removal
+status alongside in `removed_reasons`. Both kinds of row carry an
+evaluated / sampled value, used_ids, etc., so `constraints_df`
+emits a single row per id without an active/removed split. The
+reason data, if the user wants to tell which rows came from a
+removed entry, comes through `"removed_reason"` in `include=` —
 a column-level concern, not a row-level one.
 
 `*_df` (with `include=`) is what users call when they want a wide
