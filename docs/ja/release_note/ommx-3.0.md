@@ -127,7 +127,7 @@ Instance.from_components(..., constraints={5: c}, ...)
 
 ### 🆕 特殊制約型の整備 ([#789](https://github.com/Jij-Inc/ommx/pull/789), [#790](https://github.com/Jij-Inc/ommx/pull/790), [#795](https://github.com/Jij-Inc/ommx/pull/795), [#796](https://github.com/Jij-Inc/ommx/pull/796), [#798](https://github.com/Jij-Inc/ommx/pull/798))
 
-通常制約に加えて以下の3種類の特殊制約を、すべて第一級の制約型として `Instance.from_components` に `indicator_constraints=` / `one_hot_constraints=` / `sos1_constraints=` として渡せるようになりました。{class}`~ommx.v1.Solution` / {class}`~ommx.v1.SampleSet` にも対応する DataFrame (`*_constraints_df`) が提供されます。
+通常制約に加えて以下の3種類の特殊制約を、すべて第一級の制約型として `Instance.from_components` に `indicator_constraints=` / `one_hot_constraints=` / `sos1_constraints=` として渡せるようになりました。{class}`~ommx.v1.Solution` / {class}`~ommx.v1.SampleSet` でも、{meth}`~ommx.v1.Solution.constraints_df` を `kind=` で切り替えるだけで参照できます。
 
 - {class}`~ommx.v1.IndicatorConstraint` — バイナリ変数による条件付き制約 (新規追加)
 - {class}`~ommx.v1.OneHotConstraint` — 従来 `ConstraintHints.OneHot` として扱われていた one-hot 制約
@@ -137,19 +137,21 @@ Instance.from_components(..., constraints={5: c}, ...)
 
 これに伴い旧 API である `ConstraintHints` / `OneHot` / `Sos1` クラス、`Instance.constraint_hints` プロパティ、PySCIPOpt Adapter の `use_sos1` フラグは削除されています。
 
-### ⚠ `removed_reason` カラムを別テーブルに分離 ([#796](https://github.com/Jij-Inc/ommx/pull/796))
+### ⚠ `removed_reason` カラムを `include=` でゲート ([#796](https://github.com/Jij-Inc/ommx/pull/796), [#847](https://github.com/Jij-Inc/ommx/pull/847))
 
-v2.5.1 までは {meth}`Solution.constraints_df <ommx.v1.Solution.constraints_df>` に `removed_reason` カラムが含まれていましたが、v3.0.0a2 ではこれを {meth}`Solution.removed_reasons_df <ommx.v1.Solution.removed_reasons_df>` という別テーブルに分離しました。従来の形が必要な場合は join してください。同じ変更が {class}`~ommx.v1.SampleSet` にも適用されています。
+v2.5.1 までは {meth}`Solution.constraints_df <ommx.v1.Solution.constraints_df>` に `removed_reason` カラムが常に含まれていましたが、v3.0.0a4 では `include=` の `"removed_reason"` フラグでゲートします（reason 名と `removed_reason.{key}` パラメータカラムをまとめて制御するユニットフラグ）。評価前に削除されていなかった行はそれらのカラムが NA になります。
 
 ```python
 # Before (2.5.1)
 df = solution.constraints_df  # 'removed_reason' カラムを含む
 
-# After (3.0.0a3 — `*_df` はメソッドになりました)
-df = solution.constraints_df().join(solution.removed_reasons_df())
+# After (3.0.0a4 — `*_df` はメソッドになりました)
+df = solution.constraints_df()  # removed_reason カラムなし
+df = solution.constraints_df(include=("metadata", "parameters", "removed_reason"))
+# ↳ removed_reason / removed_reason.{key} が追加（active 行は NA）
 ```
 
-Indicator / OneHot / SOS1 それぞれに対応する `*_removed_reasons_df` も提供されています。
+`kind=` / `include=` の形は {class}`~ommx.v1.SampleSet` でも同じです。{class}`~ommx.v1.Instance` / {class}`~ommx.v1.ParametricInstance` では、`removed=True` を渡すと active と removed の両方が同じ DataFrame に並び、`"removed_reason"` が自動的に有効化されるので、active 行と removed 行を見分けることができます。
 
 ### 🆕 Adapter Capability モデル ([#790](https://github.com/Jij-Inc/ommx/pull/790), [#805](https://github.com/Jij-Inc/ommx/pull/805), [#810](https://github.com/Jij-Inc/ommx/pull/810), [#811](https://github.com/Jij-Inc/ommx/pull/811), [#814](https://github.com/Jij-Inc/ommx/pull/814))
 

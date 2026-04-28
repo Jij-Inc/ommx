@@ -1,0 +1,8 @@
+# serializer version: 1
+# name: test_removed_indicator_constraints_df_surfaces_reason_and_ids
+  '''
+                           indicator_variable_id equality    type used_ids  name subscripts description                                 removed_reason removed_reason.constraint_ids
+  indicator_constraint_id                                                                                                                                                           
+  7                                            1       =0  Linear   {0, 1}  <NA>         []        <NA>  ommx.Instance.convert_indicator_to_constraint                           0,1
+  '''
+# ---

@@ -1,7 +1,7 @@
 use crate::{
     pandas::{
-        constraint_id_col, constraint_kind_collection, entries_to_dataframe, parse_constraint_kind,
-        PyDataFrame,
+        constraint_id_col, constraint_kind_collection, entries_to_dataframe, ConstraintKind,
+        PyDataFrame, ToPandasEntry,
     },
     Constraint, DecisionVariable, Function, Instance, NamedFunction, Parameter, RemovedConstraint,
     Sense,
@@ -333,59 +333,80 @@ impl ParametricInstance {
         )
     }
 
-    /// DataFrame of constraints
-    #[pyo3(signature = (include = None))]
+    /// DataFrame of constraints, dispatched on `kind=`. See
+    /// {meth}`ommx.v1.Instance.constraints_df` for column / `kind=` /
+    /// `include=` / `removed=` semantics.
+    #[pyo3(signature = (kind = ConstraintKind::Regular, include = None, removed = false))]
     pub fn constraints_df<'py>(
         &self,
         py: Python<'py>,
+        kind: ConstraintKind,
         include: Option<Vec<String>>,
+        removed: bool,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
-        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
-        let meta_store = self.inner.constraint_collection().metadata().clone();
-        let view: Vec<(
-            ommx::ConstraintMetadata,
-            ommx::ConstraintID,
-            &ommx::Constraint,
-        )> = self
-            .inner
-            .constraints()
-            .iter()
-            .map(|(id, c)| (meta_store.collect_for(*id), *id, c))
-            .collect();
-        entries_to_dataframe(
-            py,
-            view.iter()
-                .map(|(m, id, c)| crate::pandas::WithMetadata::new((*id, *c), m)),
-            "id",
-            flags,
-        )
-    }
-
-    /// DataFrame of removed constraints
-    #[pyo3(signature = (include = None))]
-    pub fn removed_constraints_df<'py>(
-        &self,
-        py: Python<'py>,
-        include: Option<Vec<String>>,
-    ) -> PyResult<Bound<'py, PyDataFrame>> {
-        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
-        let meta_store = self.inner.constraint_collection().metadata().clone();
-        let view: Vec<(
-            ommx::ConstraintMetadata,
-            ommx::ConstraintID,
-            &(ommx::Constraint, ommx::RemovedReason),
-        )> = self
-            .inner
-            .removed_constraints()
-            .iter()
-            .map(|(id, pair)| (meta_store.collect_for(*id), *id, pair))
-            .collect();
-        entries_to_dataframe(
-            py,
-            view.iter()
-                .map(|(m, id, pair)| crate::pandas::WithMetadata::new((*id, *pair), m)),
-            "id",
-            flags,
+        let id_col = constraint_id_col(kind);
+        let mut flags = crate::pandas::IncludeFlags::from_optional(include)?;
+        if removed {
+            flags.removed_reason = true;
+        }
+        constraint_kind_collection!(
+            self.inner,
+            kind,
+            [
+                constraint_collection,
+                indicator_constraint_collection,
+                one_hot_constraint_collection,
+                sos1_constraint_collection
+            ],
+            |coll| {
+                let meta = coll.metadata().clone();
+                let active = coll.active();
+                let removed_map = coll.removed();
+                let mut entries: Vec<Bound<'py, pyo3::types::PyAny>> = Vec::new();
+                if removed {
+                    let mut ai = active.iter().peekable();
+                    let mut ri = removed_map.iter().peekable();
+                    loop {
+                        let pick_active = match (ai.peek(), ri.peek()) {
+                            (Some((aid, _)), Some((rid, _))) => aid <= rid,
+                            (Some(_), None) => true,
+                            (None, Some(_)) => false,
+                            (None, None) => break,
+                        };
+                        if pick_active {
+                            let (id, c) = ai.next().unwrap();
+                            let m = meta.collect_for(*id);
+                            let dict = crate::pandas::WithMetadata::new((*id, c), &m)
+                                .to_pandas_entry(py)?;
+                            crate::pandas::set_removed_reason_na(&dict)?;
+                            crate::pandas::apply_include_filter(&dict, flags)?;
+                            crate::pandas::rename_id_column(&dict, id_col)?;
+                            entries.push(dict.into_any());
+                        } else {
+                            let (id, pair) = ri.next().unwrap();
+                            let m = meta.collect_for(*id);
+                            let dict = crate::pandas::WithMetadata::new((*id, pair), &m)
+                                .to_pandas_entry(py)?;
+                            crate::pandas::apply_include_filter(&dict, flags)?;
+                            crate::pandas::rename_id_column(&dict, id_col)?;
+                            entries.push(dict.into_any());
+                        }
+                    }
+                } else {
+                    for (id, c) in active.iter() {
+                        let m = meta.collect_for(*id);
+                        let dict =
+                            crate::pandas::WithMetadata::new((*id, c), &m).to_pandas_entry(py)?;
+                        if flags.removed_reason {
+                            crate::pandas::set_removed_reason_na(&dict)?;
+                        }
+                        crate::pandas::apply_include_filter(&dict, flags)?;
+                        crate::pandas::rename_id_column(&dict, id_col)?;
+                        entries.push(dict.into_any());
+                    }
+                }
+                crate::pandas::raw_entries_to_dataframe(py, entries, id_col)
+            }
         )
     }
 
@@ -414,13 +435,12 @@ impl ParametricInstance {
     /// Constraint metadata DataFrame (id-indexed). See
     /// {meth}`ommx.v1.Instance.constraint_metadata_df` for column / `kind=`
     /// semantics.
-    #[pyo3(signature = (kind = String::from("regular")))]
+    #[pyo3(signature = (kind = ConstraintKind::Regular))]
     pub fn constraint_metadata_df<'py>(
         &self,
         py: Python<'py>,
-        kind: String,
+        kind: ConstraintKind,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
-        let kind = parse_constraint_kind(&kind)?;
         let id_col = constraint_id_col(kind);
         constraint_kind_collection!(
             self.inner,
@@ -443,13 +463,12 @@ impl ParametricInstance {
     }
 
     /// Constraint parameters DataFrame (long format).
-    #[pyo3(signature = (kind = String::from("regular")))]
+    #[pyo3(signature = (kind = ConstraintKind::Regular))]
     pub fn constraint_parameters_df<'py>(
         &self,
         py: Python<'py>,
-        kind: String,
+        kind: ConstraintKind,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
-        let kind = parse_constraint_kind(&kind)?;
         let id_col = constraint_id_col(kind);
         constraint_kind_collection!(
             self.inner,
@@ -472,13 +491,12 @@ impl ParametricInstance {
     }
 
     /// Constraint provenance DataFrame (long format).
-    #[pyo3(signature = (kind = String::from("regular")))]
+    #[pyo3(signature = (kind = ConstraintKind::Regular))]
     pub fn constraint_provenance_df<'py>(
         &self,
         py: Python<'py>,
-        kind: String,
+        kind: ConstraintKind,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
-        let kind = parse_constraint_kind(&kind)?;
         let id_col = constraint_id_col(kind);
         constraint_kind_collection!(
             self.inner,
@@ -501,13 +519,12 @@ impl ParametricInstance {
     }
 
     /// Removed-constraint reasons DataFrame (long format).
-    #[pyo3(signature = (kind = String::from("regular")))]
+    #[pyo3(signature = (kind = ConstraintKind::Regular))]
     pub fn constraint_removed_reasons_df<'py>(
         &self,
         py: Python<'py>,
-        kind: String,
+        kind: ConstraintKind,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
-        let kind = parse_constraint_kind(&kind)?;
         let id_col = constraint_id_col(kind);
         constraint_kind_collection!(
             self.inner,

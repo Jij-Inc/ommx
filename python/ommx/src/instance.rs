@@ -1,7 +1,7 @@
 use crate::{
     pandas::{
-        constraint_id_col, constraint_kind_collection, entries_to_dataframe, parse_constraint_kind,
-        PyDataFrame,
+        constraint_id_col, constraint_kind_collection, entries_to_dataframe, ConstraintKind,
+        PyDataFrame, ToPandasEntry,
     },
     Constraint, DecisionVariable, Function, NamedFunction, ParametricInstance, RemovedConstraint,
     Rng, SampleSet, Samples, Sense, Solution, State, VariableBound,
@@ -1718,243 +1718,102 @@ impl Instance {
         )
     }
 
-    /// DataFrame of constraints
-    #[pyo3(signature = (include = None))]
+    /// DataFrame of constraints, dispatched on `kind=`.
+    ///
+    /// `kind` selects the constraint family — `"regular"`, `"indicator"`,
+    /// `"one_hot"`, or `"sos1"`. The DataFrame is indexed by the kind-
+    /// qualified id column (`{kind}_constraint_id`).
+    ///
+    /// `include` selects which optional column families to fold in. It
+    /// accepts a sequence of `"metadata"` / `"parameters"` /
+    /// `"removed_reason"`; passing `None` (the default) yields the
+    /// v2-equivalent shape (`metadata` + `parameters`). `"removed_reason"`
+    /// is a unit flag that gates both the `removed_reason` column and the
+    /// `removed_reason.{key}` parameter columns together.
+    ///
+    /// `removed=False` (default) returns active constraints only.
+    /// `removed=True` returns active + removed rows in the same DataFrame
+    /// and auto-sets `"removed_reason"` so removed rows are
+    /// distinguishable (active rows have NA in the reason columns).
+    #[pyo3(signature = (kind = ConstraintKind::Regular, include = None, removed = false))]
     pub fn constraints_df<'py>(
         &self,
         py: Python<'py>,
+        kind: ConstraintKind,
         include: Option<Vec<String>>,
+        removed: bool,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
-        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
-        let meta_store = self.inner.constraint_collection().metadata().clone();
-        let view: Vec<(
-            ommx::ConstraintMetadata,
-            ommx::ConstraintID,
-            &ommx::Constraint,
-        )> = self
-            .inner
-            .constraints()
-            .iter()
-            .map(|(id, c)| (meta_store.collect_for(*id), *id, c))
-            .collect();
-        entries_to_dataframe(
-            py,
-            view.iter()
-                .map(|(m, id, c)| crate::pandas::WithMetadata::new((*id, *c), m)),
-            "id",
-            flags,
-        )
-    }
-
-    /// DataFrame of indicator constraints
-    #[pyo3(signature = (include = None))]
-    pub fn indicator_constraints_df<'py>(
-        &self,
-        py: Python<'py>,
-        include: Option<Vec<String>>,
-    ) -> PyResult<Bound<'py, PyDataFrame>> {
-        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
-        let meta_store = self
-            .inner
-            .indicator_constraint_collection()
-            .metadata()
-            .clone();
-        let view: Vec<(
-            ommx::ConstraintMetadata,
-            ommx::IndicatorConstraintID,
-            &ommx::IndicatorConstraint,
-        )> = self
-            .inner
-            .indicator_constraints()
-            .iter()
-            .map(|(id, c)| (meta_store.collect_for(*id), *id, c))
-            .collect();
-        entries_to_dataframe(
-            py,
-            view.iter()
-                .map(|(m, id, c)| crate::pandas::WithMetadata::new((*id, *c), m)),
-            "id",
-            flags,
-        )
-    }
-
-    /// DataFrame of removed indicator constraints
-    #[pyo3(signature = (include = None))]
-    pub fn removed_indicator_constraints_df<'py>(
-        &self,
-        py: Python<'py>,
-        include: Option<Vec<String>>,
-    ) -> PyResult<Bound<'py, PyDataFrame>> {
-        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
-        let meta_store = self
-            .inner
-            .indicator_constraint_collection()
-            .metadata()
-            .clone();
-        let view: Vec<(
-            ommx::ConstraintMetadata,
-            ommx::IndicatorConstraintID,
-            &(ommx::IndicatorConstraint, ommx::RemovedReason),
-        )> = self
-            .inner
-            .removed_indicator_constraints()
-            .iter()
-            .map(|(id, pair)| (meta_store.collect_for(*id), *id, pair))
-            .collect();
-        entries_to_dataframe(
-            py,
-            view.iter()
-                .map(|(m, id, pair)| crate::pandas::WithMetadata::new((*id, *pair), m)),
-            "id",
-            flags,
-        )
-    }
-
-    /// DataFrame of one-hot constraints
-    #[pyo3(signature = (include = None))]
-    pub fn one_hot_constraints_df<'py>(
-        &self,
-        py: Python<'py>,
-        include: Option<Vec<String>>,
-    ) -> PyResult<Bound<'py, PyDataFrame>> {
-        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
-        let meta_store = self
-            .inner
-            .one_hot_constraint_collection()
-            .metadata()
-            .clone();
-        let view: Vec<(
-            ommx::ConstraintMetadata,
-            ommx::OneHotConstraintID,
-            &ommx::OneHotConstraint,
-        )> = self
-            .inner
-            .one_hot_constraints()
-            .iter()
-            .map(|(id, c)| (meta_store.collect_for(*id), *id, c))
-            .collect();
-        entries_to_dataframe(
-            py,
-            view.iter()
-                .map(|(m, id, c)| crate::pandas::WithMetadata::new((*id, *c), m)),
-            "id",
-            flags,
-        )
-    }
-
-    /// DataFrame of removed one-hot constraints
-    #[pyo3(signature = (include = None))]
-    pub fn removed_one_hot_constraints_df<'py>(
-        &self,
-        py: Python<'py>,
-        include: Option<Vec<String>>,
-    ) -> PyResult<Bound<'py, PyDataFrame>> {
-        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
-        let meta_store = self
-            .inner
-            .one_hot_constraint_collection()
-            .metadata()
-            .clone();
-        let view: Vec<(
-            ommx::ConstraintMetadata,
-            ommx::OneHotConstraintID,
-            &(ommx::OneHotConstraint, ommx::RemovedReason),
-        )> = self
-            .inner
-            .removed_one_hot_constraints()
-            .iter()
-            .map(|(id, pair)| (meta_store.collect_for(*id), *id, pair))
-            .collect();
-        entries_to_dataframe(
-            py,
-            view.iter()
-                .map(|(m, id, pair)| crate::pandas::WithMetadata::new((*id, *pair), m)),
-            "id",
-            flags,
-        )
-    }
-
-    /// DataFrame of SOS1 constraints
-    #[pyo3(signature = (include = None))]
-    pub fn sos1_constraints_df<'py>(
-        &self,
-        py: Python<'py>,
-        include: Option<Vec<String>>,
-    ) -> PyResult<Bound<'py, PyDataFrame>> {
-        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
-        let meta_store = self.inner.sos1_constraint_collection().metadata().clone();
-        let view: Vec<(
-            ommx::ConstraintMetadata,
-            ommx::Sos1ConstraintID,
-            &ommx::Sos1Constraint,
-        )> = self
-            .inner
-            .sos1_constraints()
-            .iter()
-            .map(|(id, c)| (meta_store.collect_for(*id), *id, c))
-            .collect();
-        entries_to_dataframe(
-            py,
-            view.iter()
-                .map(|(m, id, c)| crate::pandas::WithMetadata::new((*id, *c), m)),
-            "id",
-            flags,
-        )
-    }
-
-    /// DataFrame of removed SOS1 constraints
-    #[pyo3(signature = (include = None))]
-    pub fn removed_sos1_constraints_df<'py>(
-        &self,
-        py: Python<'py>,
-        include: Option<Vec<String>>,
-    ) -> PyResult<Bound<'py, PyDataFrame>> {
-        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
-        let meta_store = self.inner.sos1_constraint_collection().metadata().clone();
-        let view: Vec<(
-            ommx::ConstraintMetadata,
-            ommx::Sos1ConstraintID,
-            &(ommx::Sos1Constraint, ommx::RemovedReason),
-        )> = self
-            .inner
-            .removed_sos1_constraints()
-            .iter()
-            .map(|(id, pair)| (meta_store.collect_for(*id), *id, pair))
-            .collect();
-        entries_to_dataframe(
-            py,
-            view.iter()
-                .map(|(m, id, pair)| crate::pandas::WithMetadata::new((*id, *pair), m)),
-            "id",
-            flags,
-        )
-    }
-
-    /// DataFrame of removed constraints
-    #[pyo3(signature = (include = None))]
-    pub fn removed_constraints_df<'py>(
-        &self,
-        py: Python<'py>,
-        include: Option<Vec<String>>,
-    ) -> PyResult<Bound<'py, PyDataFrame>> {
-        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
-        let meta_store = self.inner.constraint_collection().metadata().clone();
-        let view: Vec<(
-            ommx::ConstraintMetadata,
-            ommx::ConstraintID,
-            &(ommx::Constraint, ommx::RemovedReason),
-        )> = self
-            .inner
-            .removed_constraints()
-            .iter()
-            .map(|(id, pair)| (meta_store.collect_for(*id), *id, pair))
-            .collect();
-        entries_to_dataframe(
-            py,
-            view.iter()
-                .map(|(m, id, pair)| crate::pandas::WithMetadata::new((*id, *pair), m)),
-            "id",
-            flags,
+        let id_col = constraint_id_col(kind);
+        let mut flags = crate::pandas::IncludeFlags::from_optional(include)?;
+        if removed {
+            flags.removed_reason = true;
+        }
+        constraint_kind_collection!(
+            self.inner,
+            kind,
+            [
+                constraint_collection,
+                indicator_constraint_collection,
+                one_hot_constraint_collection,
+                sos1_constraint_collection
+            ],
+            |coll| {
+                let meta = coll.metadata().clone();
+                let active = coll.active();
+                let removed_map = coll.removed();
+                let mut entries: Vec<Bound<'py, pyo3::types::PyAny>> = Vec::new();
+                if removed {
+                    // Globally id-sorted merge of active and removed.
+                    // Both BTreeMaps are individually sorted; ids are
+                    // disjoint between the two maps.
+                    let mut ai = active.iter().peekable();
+                    let mut ri = removed_map.iter().peekable();
+                    loop {
+                        let pick_active = match (ai.peek(), ri.peek()) {
+                            (Some((aid, _)), Some((rid, _))) => aid <= rid,
+                            (Some(_), None) => true,
+                            (None, Some(_)) => false,
+                            (None, None) => break,
+                        };
+                        if pick_active {
+                            let (id, c) = ai.next().unwrap();
+                            let m = meta.collect_for(*id);
+                            let dict = crate::pandas::WithMetadata::new((*id, c), &m)
+                                .to_pandas_entry(py)?;
+                            // Active rows in a removed=True view get NA
+                            // in the (always-present) removed_reason column.
+                            crate::pandas::set_removed_reason_na(&dict)?;
+                            crate::pandas::apply_include_filter(&dict, flags)?;
+                            crate::pandas::rename_id_column(&dict, id_col)?;
+                            entries.push(dict.into_any());
+                        } else {
+                            let (id, pair) = ri.next().unwrap();
+                            let m = meta.collect_for(*id);
+                            let dict = crate::pandas::WithMetadata::new((*id, pair), &m)
+                                .to_pandas_entry(py)?;
+                            crate::pandas::apply_include_filter(&dict, flags)?;
+                            crate::pandas::rename_id_column(&dict, id_col)?;
+                            entries.push(dict.into_any());
+                        }
+                    }
+                } else {
+                    for (id, c) in active.iter() {
+                        let m = meta.collect_for(*id);
+                        let dict =
+                            crate::pandas::WithMetadata::new((*id, c), &m).to_pandas_entry(py)?;
+                        // User-requested removed_reason on an active-only
+                        // view: ensure the column survives even when no
+                        // row carries a reason.
+                        if flags.removed_reason {
+                            crate::pandas::set_removed_reason_na(&dict)?;
+                        }
+                        crate::pandas::apply_include_filter(&dict, flags)?;
+                        crate::pandas::rename_id_column(&dict, id_col)?;
+                        entries.push(dict.into_any());
+                    }
+                }
+                crate::pandas::raw_entries_to_dataframe(py, entries, id_col)
+            }
         )
     }
 
@@ -1975,13 +1834,12 @@ impl Instance {
     /// `name`, `subscripts`, `description`. Index column is
     /// `{kind}_constraint_id`. `kind` selects which constraint family
     /// to read: `"regular"`, `"indicator"`, `"one_hot"`, or `"sos1"`.
-    #[pyo3(signature = (kind = String::from("regular")))]
+    #[pyo3(signature = (kind = ConstraintKind::Regular))]
     pub fn constraint_metadata_df<'py>(
         &self,
         py: Python<'py>,
-        kind: String,
+        kind: ConstraintKind,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
-        let kind = parse_constraint_kind(&kind)?;
         let id_col = constraint_id_col(kind);
         constraint_kind_collection!(
             self.inner,
@@ -2007,13 +1865,12 @@ impl Instance {
     ///
     /// One row per (constraint_id, parameter_key) pair. Columns:
     /// `{kind}_constraint_id`, `key`, `value`. Default RangeIndex.
-    #[pyo3(signature = (kind = String::from("regular")))]
+    #[pyo3(signature = (kind = ConstraintKind::Regular))]
     pub fn constraint_parameters_df<'py>(
         &self,
         py: Python<'py>,
-        kind: String,
+        kind: ConstraintKind,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
-        let kind = parse_constraint_kind(&kind)?;
         let id_col = constraint_id_col(kind);
         constraint_kind_collection!(
             self.inner,
@@ -2039,13 +1896,12 @@ impl Instance {
     ///
     /// One row per (constraint_id, step) pair. Columns:
     /// `{kind}_constraint_id`, `step`, `source_kind`, `source_id`.
-    #[pyo3(signature = (kind = String::from("regular")))]
+    #[pyo3(signature = (kind = ConstraintKind::Regular))]
     pub fn constraint_provenance_df<'py>(
         &self,
         py: Python<'py>,
-        kind: String,
+        kind: ConstraintKind,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
-        let kind = parse_constraint_kind(&kind)?;
         let id_col = constraint_id_col(kind);
         constraint_kind_collection!(
             self.inner,
@@ -2072,13 +1928,12 @@ impl Instance {
     /// One row per (constraint_id, parameter_key) pair, plus one row with
     /// `key`/`value` set to NA when the reason has no parameters. Columns:
     /// `{kind}_constraint_id`, `reason`, `key`, `value`.
-    #[pyo3(signature = (kind = String::from("regular")))]
+    #[pyo3(signature = (kind = ConstraintKind::Regular))]
     pub fn constraint_removed_reasons_df<'py>(
         &self,
         py: Python<'py>,
-        kind: String,
+        kind: ConstraintKind,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
-        let kind = parse_constraint_kind(&kind)?;
         let id_col = constraint_id_col(kind);
         constraint_kind_collection!(
             self.inner,

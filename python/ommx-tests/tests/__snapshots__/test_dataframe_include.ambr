@@ -1,25 +1,25 @@
 # serializer version: 1
 # name: test_constraints_df_default
   '''
-     equality    type   used_ids     name subscripts description
-  id                                                            
-  10       =0  Linear  {0, 1, 2}  balance         []        <NA>
+                        equality    type   used_ids     name subscripts description
+  regular_constraint_id                                                            
+  10                          =0  Linear  {0, 1, 2}  balance         []        <NA>
   '''
 # ---
 # name: test_constraints_df_include_empty
   '''
-     equality    type   used_ids
-  id                            
-  10       =0  Linear  {0, 1, 2}
+                        equality    type   used_ids
+  regular_constraint_id                            
+  10                          =0  Linear  {0, 1, 2}
   '''
 # ---
 # name: test_decision_variables_df_default
   '''
-        kind  lower  upper name subscripts description substituted_value parameters.role parameters.shard
+        kind  lower  upper name subscripts description parameters.role parameters.shard substituted_value
   id                                                                                                     
-  0   Binary    0.0    1.0   x0        [0]  variable 0              <NA>         primary                0
-  1   Binary    0.0    1.0   x1        [1]  variable 1              <NA>         primary                1
-  2   Binary    0.0    1.0   x2        [2]  variable 2              <NA>         primary                2
+  0   Binary    0.0    1.0   x0        [0]  variable 0         primary                0              <NA>
+  1   Binary    0.0    1.0   x1        [1]  variable 1         primary                1              <NA>
+  2   Binary    0.0    1.0   x2        [2]  variable 2         primary                2              <NA>
   '''
 # ---
 # name: test_decision_variables_df_include_empty
@@ -42,11 +42,11 @@
 # ---
 # name: test_decision_variables_df_include_parameters_only
   '''
-        kind  lower  upper substituted_value parameters.role parameters.shard
+        kind  lower  upper parameters.role parameters.shard substituted_value
   id                                                                         
-  0   Binary    0.0    1.0              <NA>         primary                0
-  1   Binary    0.0    1.0              <NA>         primary                1
-  2   Binary    0.0    1.0              <NA>         primary                2
+  0   Binary    0.0    1.0         primary                0              <NA>
+  1   Binary    0.0    1.0         primary                1              <NA>
+  2   Binary    0.0    1.0         primary                2              <NA>
   '''
 # ---
 # name: test_sample_set_decision_variables_df_include_empty

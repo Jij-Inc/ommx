@@ -156,9 +156,11 @@ $$
 
 | 元の制約型 | 除去先 | DataFrame |
 |---|---|---|
-| OneHotConstraint | {attr}`~ommx.v1.Instance.removed_one_hot_constraints` | {meth}`~ommx.v1.Instance.removed_one_hot_constraints_df` |
-| Sos1Constraint | {attr}`~ommx.v1.Instance.removed_sos1_constraints` | {meth}`~ommx.v1.Instance.removed_sos1_constraints_df` |
-| IndicatorConstraint | {attr}`~ommx.v1.Instance.removed_indicator_constraints` | {meth}`~ommx.v1.Instance.removed_indicator_constraints_df` |
+| OneHotConstraint | {attr}`~ommx.v1.Instance.removed_one_hot_constraints` | `instance.constraints_df(kind="one_hot", removed=True)` |
+| Sos1Constraint | {attr}`~ommx.v1.Instance.removed_sos1_constraints` | `instance.constraints_df(kind="sos1", removed=True)` |
+| IndicatorConstraint | {attr}`~ommx.v1.Instance.removed_indicator_constraints` | `instance.constraints_df(kind="indicator", removed=True)` |
+
+`removed=True` を付けると、active と removed が同じ DataFrame に並び、`removed_reason` / `removed_reason.{key}` カラムが自動的に追加されるので、active 行と removed 行を見分けることができます。
 
 それぞれのエントリ（{class}`~ommx.v1.RemovedOneHotConstraint` / {class}`~ommx.v1.RemovedSos1Constraint` / {class}`~ommx.v1.RemovedIndicatorConstraint`）には `removed_reason` 文字列（例: `"ommx.Instance.convert_one_hot_to_constraint"`）が記録され、`removed_reason_parameters` に変換で新しく生成された通常制約の ID が格納されます。ID のキー名と形式は制約型ごとに異なります:
 
@@ -191,4 +193,4 @@ for cid, c in instance2.constraints.items():
 | Adapter でサポート機能を宣言する | `ADDITIONAL_CAPABILITIES` クラス属性 |
 | 未サポートの特殊制約を一括で通常制約に変換する | {meth}`Instance.reduce_capabilities <ommx.v1.Instance.reduce_capabilities>` |
 | 個別に通常制約に変換する | `convert_*_to_constraint(s)` / `convert_all_*_to_constraints` |
-| 変換履歴を確認する | `Instance.removed_*_constraints(_df)` / `Solution.*_removed_reasons_df` |
+| 変換履歴を確認する | `instance.constraints_df(kind=..., removed=True)` / `solution.constraints_df(kind=..., include=("...","removed_reason"))` |

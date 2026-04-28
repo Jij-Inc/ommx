@@ -1,0 +1,193 @@
+# serializer version: 1
+# name: test_instance_constraints_df_include_empty
+  '''
+                        equality    type   used_ids
+  regular_constraint_id                            
+  10                          =0  Linear  {0, 1, 2}
+  '''
+# ---
+# name: test_instance_constraints_df_include_metadata_only
+  '''
+                        equality    type   used_ids     name subscripts description
+  regular_constraint_id                                                            
+  10                          =0  Linear  {0, 1, 2}  balance     [0, 1]  demand row
+  '''
+# ---
+# name: test_instance_constraints_df_include_parameters_only
+  '''
+                        equality    type   used_ids parameters.region
+  regular_constraint_id                                              
+  10                          =0  Linear  {0, 1, 2}           us-east
+  '''
+# ---
+# name: test_instance_constraints_df_kind[indicator]
+  '''
+                           indicator_variable_id equality    type   used_ids  name subscripts description
+  indicator_constraint_id                                                                                
+  20                                           0       =0  Linear  {0, 1, 2}  <NA>         []        <NA>
+  '''
+# ---
+# name: test_instance_constraints_df_kind[one_hot]
+  '''
+                         variables  num_variables   used_ids  name subscripts description
+  one_hot_constraint_id                                                                  
+  30                     {0, 1, 2}              3  {0, 1, 2}  <NA>         []        <NA>
+  '''
+# ---
+# name: test_instance_constraints_df_kind[regular]
+  '''
+                        equality    type   used_ids     name subscripts description parameters.region
+  regular_constraint_id                                                                              
+  10                          =0  Linear  {0, 1, 2}  balance     [0, 1]  demand row           us-east
+  '''
+# ---
+# name: test_instance_constraints_df_kind[sos1]
+  '''
+                      variables  num_variables   used_ids  name subscripts description
+  sos1_constraint_id                                                                  
+  40                  {0, 1, 2}              3  {0, 1, 2}  <NA>         []        <NA>
+  '''
+# ---
+# name: test_instance_constraints_df_one_hot_removed_true
+  '''
+                        variables  num_variables used_ids  name subscripts description                               removed_reason removed_reason.constraint_id
+  one_hot_constraint_id                                                                                                                                         
+  5                        {0, 1}              2   {0, 1}  <NA>         []        <NA>                                         <NA>                         <NA>
+  7                        {1, 2}              2   {1, 2}  <NA>         []        <NA>  ommx.Instance.convert_one_hot_to_constraint                            0
+  '''
+# ---
+# name: test_instance_constraints_df_removed_default_excludes_removed
+  '''
+  Empty DataFrame
+  Columns: []
+  Index: []
+  '''
+# ---
+# name: test_instance_constraints_df_removed_reason_active_only_keeps_column
+  '''
+                        equality    type   used_ids     name subscripts description removed_reason
+  regular_constraint_id                                                                           
+  10                          =0  Linear  {0, 1, 2}  balance     [0, 1]  demand row           <NA>
+  '''
+# ---
+# name: test_instance_constraints_df_removed_true_id_sorted
+  '''
+                        equality    type used_ids  name subscripts description removed_reason
+  regular_constraint_id                                                                      
+  5                           =0  Linear   {0, 1}  <NA>         []        <NA>           <NA>
+  20                          =0  Linear   {0, 2}  <NA>         []        <NA>   relax_middle
+  30                          =0  Linear   {1, 2}  <NA>         []        <NA>           <NA>
+  '''
+# ---
+# name: test_instance_constraints_df_removed_true_includes_both
+  '''
+                        equality    type   used_ids     name subscripts description parameters.region removed_reason removed_reason.phase
+  regular_constraint_id                                                                                                                  
+  10                          =0  Linear  {0, 1, 2}  balance     [0, 1]  demand row           us-east   manual_relax              warm-up
+  '''
+# ---
+# name: test_instance_constraints_df_removed_true_no_metadata
+  '''
+                        equality    type   used_ids removed_reason removed_reason.phase
+  regular_constraint_id                                                                
+  10                          =0  Linear  {0, 1, 2}   manual_relax              warm-up
+  '''
+# ---
+# name: test_parametric_instance_constraints_df_default
+  '''
+                        equality       type       used_ids  name subscripts description
+  regular_constraint_id                                                                
+  10                          =0  Quadratic  {0, 1, 2, 99}  <NA>         []        <NA>
+  '''
+# ---
+# name: test_parametric_instance_constraints_df_special_kinds_empty[indicator-indicator_constraint_id]
+  '''
+  Empty DataFrame
+  Columns: []
+  Index: []
+  '''
+# ---
+# name: test_parametric_instance_constraints_df_special_kinds_empty[one_hot-one_hot_constraint_id]
+  '''
+  Empty DataFrame
+  Columns: []
+  Index: []
+  '''
+# ---
+# name: test_parametric_instance_constraints_df_special_kinds_empty[sos1-sos1_constraint_id]
+  '''
+  Empty DataFrame
+  Columns: []
+  Index: []
+  '''
+# ---
+# name: test_sample_set_constraints_df_kind[indicator]
+  '''
+                           indicator_variable_id equality   used_ids  name subscripts description  value.0  feasible.0  indicator_active.0  value.1  feasible.1  indicator_active.1
+  indicator_constraint_id                                                                                                                                                          
+  20                                           0       =0  {0, 1, 2}  <NA>         []        <NA>      0.0        True               False      0.0        True                True
+  '''
+# ---
+# name: test_sample_set_constraints_df_kind[one_hot]
+  '''
+                          used_ids  name subscripts description  feasible.0  active_variable.0  feasible.1 active_variable.1
+  one_hot_constraint_id                                                                                                     
+  30                     {0, 1, 2}  <NA>         []        <NA>        True                  1       False              <NA>
+  '''
+# ---
+# name: test_sample_set_constraints_df_kind[regular]
+  '''
+                        equality   used_ids     name subscripts description parameters.region  value.0  feasible.0  value.1  feasible.1
+  regular_constraint_id                                                                                                                
+  10                          =0  {0, 1, 2}  balance     [0, 1]  demand row           us-east      0.0        True      1.0       False
+  '''
+# ---
+# name: test_sample_set_constraints_df_kind[sos1]
+  '''
+                       used_ids  name subscripts description  feasible.0  active_variable.0  feasible.1 active_variable.1
+  sos1_constraint_id                                                                                                     
+  40                  {0, 1, 2}  <NA>         []        <NA>        True                  1       False              <NA>
+  '''
+# ---
+# name: test_solution_constraints_df_kind[indicator]
+  '''
+                           indicator_variable_id equality  value  indicator_active   used_ids  name subscripts description
+  indicator_constraint_id                                                                                                 
+  20                                           0       =0    0.0             False  {0, 1, 2}  <NA>         []        <NA>
+  '''
+# ---
+# name: test_solution_constraints_df_kind[one_hot]
+  '''
+                         feasible  active_variable   used_ids  name subscripts description
+  one_hot_constraint_id                                                                   
+  30                         True                1  {0, 1, 2}  <NA>         []        <NA>
+  '''
+# ---
+# name: test_solution_constraints_df_kind[regular]
+  '''
+                        equality  value   used_ids     name subscripts description parameters.region dual_variable
+  regular_constraint_id                                                                                           
+  10                          =0    0.0  {0, 1, 2}  balance     [0, 1]  demand row           us-east          <NA>
+  '''
+# ---
+# name: test_solution_constraints_df_kind[sos1]
+  '''
+                      feasible  active_variable   used_ids  name subscripts description
+  sos1_constraint_id                                                                   
+  40                      True                1  {0, 1, 2}  <NA>         []        <NA>
+  '''
+# ---
+# name: test_solution_constraints_df_removed_reason_include
+  '''
+                        equality  value   used_ids     name subscripts description dual_variable removed_reason removed_reason.phase
+  regular_constraint_id                                                                                                             
+  10                          =0    0.0  {0, 1, 2}  balance     [0, 1]  demand row          <NA>   manual_relax              warm-up
+  '''
+# ---
+# name: test_solution_constraints_df_removed_reason_no_removals_keeps_column
+  '''
+                        equality  value   used_ids     name subscripts description dual_variable removed_reason
+  regular_constraint_id                                                                                        
+  10                          =0    0.0  {0, 1, 2}  balance     [0, 1]  demand row          <NA>           <NA>
+  '''
+# ---

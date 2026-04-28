@@ -156,9 +156,11 @@ The original special constraints are not discarded; they are kept as "removed" e
 
 | Original type | Removed dict | DataFrame |
 |---|---|---|
-| OneHotConstraint | {attr}`~ommx.v1.Instance.removed_one_hot_constraints` | {meth}`~ommx.v1.Instance.removed_one_hot_constraints_df` |
-| Sos1Constraint | {attr}`~ommx.v1.Instance.removed_sos1_constraints` | {meth}`~ommx.v1.Instance.removed_sos1_constraints_df` |
-| IndicatorConstraint | {attr}`~ommx.v1.Instance.removed_indicator_constraints` | {meth}`~ommx.v1.Instance.removed_indicator_constraints_df` |
+| OneHotConstraint | {attr}`~ommx.v1.Instance.removed_one_hot_constraints` | `instance.constraints_df(kind="one_hot", removed=True)` |
+| Sos1Constraint | {attr}`~ommx.v1.Instance.removed_sos1_constraints` | `instance.constraints_df(kind="sos1", removed=True)` |
+| IndicatorConstraint | {attr}`~ommx.v1.Instance.removed_indicator_constraints` | `instance.constraints_df(kind="indicator", removed=True)` |
+
+`removed=True` returns active + removed rows in the same DataFrame and auto-adds the `removed_reason` / `removed_reason.{key}` columns so removed rows are distinguishable from active ones.
 
 Each entry ({class}`~ommx.v1.RemovedOneHotConstraint` / {class}`~ommx.v1.RemovedSos1Constraint` / {class}`~ommx.v1.RemovedIndicatorConstraint`) records a `removed_reason` string (for example, `"ommx.Instance.convert_one_hot_to_constraint"`) and stores the generated regular-constraint IDs in `removed_reason_parameters`. The key name and shape differ by constraint type:
 
@@ -191,4 +193,4 @@ for cid, c in instance2.constraints.items():
 | Declare supported capabilities on an adapter | The `ADDITIONAL_CAPABILITIES` class attribute |
 | Auto-convert every unsupported special constraint | {meth}`Instance.reduce_capabilities <ommx.v1.Instance.reduce_capabilities>` |
 | Convert individually to regular constraints | `convert_*_to_constraint(s)` / `convert_all_*_to_constraints` |
-| Audit conversion history | `Instance.removed_*_constraints(_df)` / `Solution.*_removed_reasons_df` |
+| Audit conversion history | `instance.constraints_df(kind=..., removed=True)` / `solution.constraints_df(kind=..., include=("...","removed_reason"))` |

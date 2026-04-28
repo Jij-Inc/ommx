@@ -127,7 +127,7 @@ Global ID counters (`next_constraint_id` and friends) and per-constraint `to_byt
 
 ### 🆕 First-class special constraint types ([#789](https://github.com/Jij-Inc/ommx/pull/789), [#790](https://github.com/Jij-Inc/ommx/pull/790), [#795](https://github.com/Jij-Inc/ommx/pull/795), [#796](https://github.com/Jij-Inc/ommx/pull/796), [#798](https://github.com/Jij-Inc/ommx/pull/798))
 
-In addition to regular constraints, the following three special constraint types are now first-class citizens — they can be passed to `Instance.from_components` via `indicator_constraints=` / `one_hot_constraints=` / `sos1_constraints=`, and corresponding `*_constraints_df` DataFrames are available on {class}`~ommx.v1.Solution` / {class}`~ommx.v1.SampleSet`.
+In addition to regular constraints, the following three special constraint types are now first-class citizens — they can be passed to `Instance.from_components` via `indicator_constraints=` / `one_hot_constraints=` / `sos1_constraints=`, and read back through {meth}`~ommx.v1.Solution.constraints_df` / {meth}`~ommx.v1.SampleSet.constraints_df` with `kind=` selecting the family.
 
 - {class}`~ommx.v1.IndicatorConstraint` — conditional constraint on a binary variable (new)
 - {class}`~ommx.v1.OneHotConstraint` — replaces the previous `ConstraintHints.OneHot` metadata
@@ -137,19 +137,21 @@ For concrete usage, evaluation-result access, and the Indicator relax / restore 
 
 Accordingly, the legacy `ConstraintHints` / `OneHot` / `Sos1` classes, the `Instance.constraint_hints` property, and the PySCIPOpt Adapter's `use_sos1` flag are removed.
 
-### ⚠ `removed_reason` column split into a separate table ([#796](https://github.com/Jij-Inc/ommx/pull/796))
+### ⚠ `removed_reason` column gated by `include=` ([#796](https://github.com/Jij-Inc/ommx/pull/796), [#847](https://github.com/Jij-Inc/ommx/pull/847))
 
-In v2.5.1 {meth}`Solution.constraints_df <ommx.v1.Solution.constraints_df>` carried a `removed_reason` column. In v3.0.0a2 that column is split out into a separate {meth}`Solution.removed_reasons_df <ommx.v1.Solution.removed_reasons_df>` table, which you can join on if you need the previous shape. The same change applies to {class}`~ommx.v1.SampleSet`.
+In v2.5.1 {meth}`Solution.constraints_df <ommx.v1.Solution.constraints_df>` carried a `removed_reason` column unconditionally. In v3.0.0a4 that column is gated by `"removed_reason"` in `include=` (a unit flag that controls both the reason name and `removed_reason.{key}` parameter columns). Rows whose constraint was not removed before evaluation get NA in those columns.
 
 ```python
 # Before (2.5.1)
 df = solution.constraints_df  # contains a 'removed_reason' column
 
-# After (3.0.0a3 — `*_df` are now methods)
-df = solution.constraints_df().join(solution.removed_reasons_df())
+# After (3.0.0a4 — `*_df` are now methods)
+df = solution.constraints_df()  # no removed_reason column
+df = solution.constraints_df(include=("metadata", "parameters", "removed_reason"))
+# ↳ adds removed_reason / removed_reason.{key} (NA for active rows)
 ```
 
-Corresponding `*_removed_reasons_df` accessors are also provided for Indicator, OneHot, and SOS1.
+The same `kind=` / `include=` shape applies on {class}`~ommx.v1.SampleSet`. On {class}`~ommx.v1.Instance` and {class}`~ommx.v1.ParametricInstance`, `removed=True` returns active + removed rows in one DataFrame and auto-sets `"removed_reason"` so removed rows are distinguishable.
 
 ### 🆕 Adapter Capability Model ([#790](https://github.com/Jij-Inc/ommx/pull/790), [#805](https://github.com/Jij-Inc/ommx/pull/805), [#810](https://github.com/Jij-Inc/ommx/pull/810), [#811](https://github.com/Jij-Inc/ommx/pull/811), [#814](https://github.com/Jij-Inc/ommx/pull/814))
 

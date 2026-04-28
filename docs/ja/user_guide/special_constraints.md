@@ -176,26 +176,36 @@ assert set(instance_mix.sos1_constraints.keys()) == {1}
 
 ## 評価結果の参照
 
-インスタンスを解いて得られた {class}`~ommx.v1.Solution` や {class}`~ommx.v1.SampleSet` は、通常制約と同様に特殊制約それぞれに対する DataFrame アクセサを提供します。
+インスタンスを解いて得られた {class}`~ommx.v1.Solution` や {class}`~ommx.v1.SampleSet` は、共通の {meth}`~ommx.v1.Solution.constraints_df` を `kind=` で切り替えて使います。
 
-| 制約型 | アクセサ（Solution） |
+| 制約型 | `kind=` の値 |
 |---|---|
-| 通常制約 | {meth}`~ommx.v1.Solution.constraints_df` |
-| Indicator | {meth}`~ommx.v1.Solution.indicator_constraints_df` |
-| OneHot | {meth}`~ommx.v1.Solution.one_hot_constraints_df` |
-| SOS1 | {meth}`~ommx.v1.Solution.sos1_constraints_df` |
+| 通常制約 | `"regular"`（デフォルト） |
+| Indicator | `"indicator"` |
+| OneHot | `"one_hot"` |
+| SOS1 | `"sos1"` |
+
+```python
+solution.constraints_df()                  # regular（デフォルト）
+solution.constraints_df(kind="indicator")  # Indicator
+sample_set.constraints_df(kind="one_hot")  # OneHot
+```
+
+DataFrame の index 名は kind ごとに qualified（`regular_constraint_id` / `indicator_constraint_id` / `one_hot_constraint_id` / `sos1_constraint_id`）になっており、別 ID 空間どうしを誤って `df.join()` した場合に `df.head()` 等で気づきやすくなっています。
 
 Indicator 制約の DataFrame には、`indicator_active` というカラムが含まれます。これにより「インジケータが OFF だった（制約は自明に満たされた）」ケースと「インジケータが ON で制約が本当に満たされた」ケースを区別できます。なお、Indicator 制約には双対変数の値は定義されない（条件付き制約に対する双対値は一般に well-defined ではない）ため、`dual_variable` は含まれません。
 
-### removed_reasons_df の分離
+### `include=` で removed_reason カラムを追加する
 
-通常制約の `removed_reason` は {meth}`~ommx.v1.Solution.constraints_df` のカラムとしては持たず、{meth}`~ommx.v1.Solution.removed_reasons_df` という別テーブルとして提供されます。必要なら join して使います。
+`removed_reason` は {meth}`~ommx.v1.Solution.constraints_df` のデフォルトカラムには含まれません。`include=` に `"removed_reason"` を渡すと、reason 名と `removed_reason.{key}` パラメータカラムがまとめて追加されます（評価前に削除された制約の行のみ値が入り、それ以外の行は NA）。
 
 ```python
-df = solution.constraints_df().join(solution.removed_reasons_df())
+df = solution.constraints_df(
+    include=("metadata", "parameters", "removed_reason"),
+)
 ```
 
-Indicator・OneHot・SOS1 についても、それぞれ対応する `indicator_removed_reasons_df` / `one_hot_removed_reasons_df` / `sos1_removed_reasons_df` が {class}`~ommx.v1.Solution` および {class}`~ommx.v1.SampleSet` で利用できます。
+Indicator / OneHot / SOS1 でも同じく、対応する `kind=` と一緒に `"removed_reason"` を `include=` に渡せば取得できます。long-format で（id, parameter_key）の組合せごとに 1 行を得たい場合は、`kind=` で切り替えられる {meth}`~ommx.v1.Solution.constraint_removed_reasons_df` サイドカーを引き続き利用できます。
 
 ## Relax / Restore
 

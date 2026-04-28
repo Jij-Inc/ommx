@@ -73,3 +73,21 @@ impl From<TypeName> for ommx::TypeName { ... }
 ## Free-threaded Python support
 
 The module uses `#[pymodule(gil_used = false)]` for Python 3.13t compatibility. Avoid storing Python objects in global state.
+
+## Stub-side type customization: define a Rust type, not `override_type`
+
+`pyo3-stub-gen` exposes a per-argument `#[gen_stub(override_type(type_repr = "...", imports = (...)))]` attribute that lets you write a Python type expression directly into the generated stub. **Reserve this for one-shot cases only** — typically when a single argument needs a fully ad-hoc Python type that has no first-class meaning in the Rust codebase (e.g. a `**kwargs` HashMap rendered as `str`).
+
+For any type that appears at multiple call sites — `Literal[...]`, union of accepted Python types, etc. — define a Rust type instead and put the stub representation on the type itself:
+
+1. **`FromPyObject`** — runtime validation / conversion (`Borrowed<'_, 'py, PyAny>` → `Self`).
+2. **`IntoPyObject`** (when the value can appear as a default or be returned) — so `pyo3-stub-gen` can render defaults via `fmt_py_obj`.
+3. **`pyo3_stub_gen::PyStubType`** — owns the `type_input()` / `type_output()` `Literal[...]` / union representation and any required `imports`.
+
+Existing examples:
+
+- `ConstraintKind` in `python/ommx/src/pandas.rs` — string `Literal[...]` on the way in, normalised to a Rust `enum` before downstream `match` arms see it.
+- `Function` / `ToFunction` in `python/ommx/src/function.rs` — multi-type union (`int | float | DecisionVariable | … | Function`) with `pyo3_stub_gen::type_alias!` for the Python-side alias.
+- `Samples` / `ToSamples` in `python/ommx/src/samples.rs` — same pattern with extra `Mapping[int, ToState]` / `Iterable[ToState]` marker types.
+
+Why: `override_type` duplicates the same `type_repr` / `imports` literal at every call site, which breaks both DRY (changing the literal means hunting through N annotations) and exhaustiveness (a Rust `enum` gets compile-time `match` checks; a `&str` argument validated ad-hoc does not). One Rust type, one set of impls, one source of truth.
