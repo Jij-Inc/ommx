@@ -592,8 +592,13 @@ impl SampleSet {
     /// DataFrame of decision variables with per-sample value columns.
     /// Static columns: id, kind, lower, upper, name, subscripts, description.
     /// Dynamic columns: one per sample_id (int) with the variable's value.
-    #[getter]
-    pub fn decision_variables_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
+    #[pyo3(signature = (include = None))]
+    pub fn decision_variables_df<'py>(
+        &self,
+        py: Python<'py>,
+        include: Option<Vec<String>>,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
         let sample_ids = sorted_sample_ids(&self.inner);
         let var_meta_store = self.inner.variable_metadata().clone();
         let view: Vec<(
@@ -617,14 +622,20 @@ impl SampleSet {
                 )
             }),
             "id",
+            flags,
         )
     }
 
     /// DataFrame of constraints with per-sample value and feasibility columns.
     /// Static columns: id, equality, used_ids, name, subscripts, description.
     /// Dynamic columns: value.{sample_id} and feasible.{sample_id} for each sample.
-    #[getter]
-    pub fn constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
+    #[pyo3(signature = (include = None))]
+    pub fn constraints_df<'py>(
+        &self,
+        py: Python<'py>,
+        include: Option<Vec<String>>,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
         let sample_ids = sorted_sample_ids(&self.inner);
         let meta_store = self.inner.constraints().metadata().clone();
         let view: Vec<(
@@ -649,6 +660,7 @@ impl SampleSet {
                 )
             }),
             "id",
+            flags,
         )
     }
 
@@ -657,9 +669,8 @@ impl SampleSet {
     /// Columns: id (index), removed_reason, removed_reason.{key}
     ///
     /// Can be joined with {attr}`constraints_df` using the `id` index.
-    #[getter]
     pub fn removed_reasons_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
-        use crate::pandas::RemovedReasonEntry;
+        use crate::pandas::{IncludeFlags, RemovedReasonEntry};
         entries_to_dataframe(
             py,
             self.inner
@@ -671,17 +682,20 @@ impl SampleSet {
                     reason,
                 }),
             "id",
+            IncludeFlags::default_wide(),
         )
     }
 
     /// DataFrame of indicator constraints with per-sample value, feasibility, and indicator_active columns.
     /// Static columns: id, indicator_variable_id, equality, used_ids, name, subscripts, description.
     /// Dynamic columns: value.{sample_id}, feasible.{sample_id}, indicator_active.{sample_id} for each sample.
-    #[getter]
+    #[pyo3(signature = (include = None))]
     pub fn indicator_constraints_df<'py>(
         &self,
         py: Python<'py>,
+        include: Option<Vec<String>>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
         let sample_ids = sorted_sample_ids(&self.inner);
         let meta_store = self.inner.indicator_constraints().metadata().clone();
         let view: Vec<(
@@ -706,6 +720,7 @@ impl SampleSet {
                 )
             }),
             "id",
+            flags,
         )
     }
 
@@ -714,12 +729,11 @@ impl SampleSet {
     /// Columns: id (index), removed_reason, removed_reason.{key}
     ///
     /// Can be joined with {attr}`indicator_constraints_df` using the `id` index.
-    #[getter]
     pub fn indicator_removed_reasons_df<'py>(
         &self,
         py: Python<'py>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
-        use crate::pandas::RemovedReasonEntry;
+        use crate::pandas::{IncludeFlags, RemovedReasonEntry};
         entries_to_dataframe(
             py,
             self.inner
@@ -731,17 +745,20 @@ impl SampleSet {
                     reason,
                 }),
             "id",
+            IncludeFlags::default_wide(),
         )
     }
 
     /// DataFrame of one-hot constraints with per-sample feasibility and active_variable columns.
     /// Static columns: id, used_ids, name, subscripts, description.
     /// Dynamic columns: feasible.{sample_id}, active_variable.{sample_id} for each sample.
-    #[getter]
+    #[pyo3(signature = (include = None))]
     pub fn one_hot_constraints_df<'py>(
         &self,
         py: Python<'py>,
+        include: Option<Vec<String>>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
         let sample_ids = sorted_sample_ids(&self.inner);
         let meta_store = self.inner.one_hot_constraints().metadata().clone();
         let view: Vec<(
@@ -766,6 +783,7 @@ impl SampleSet {
                 )
             }),
             "id",
+            flags,
         )
     }
 
@@ -774,12 +792,11 @@ impl SampleSet {
     /// Columns: id (index), removed_reason, removed_reason.{key}
     ///
     /// Can be joined with {attr}`one_hot_constraints_df` using the `id` index.
-    #[getter]
     pub fn one_hot_removed_reasons_df<'py>(
         &self,
         py: Python<'py>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
-        use crate::pandas::RemovedReasonEntry;
+        use crate::pandas::{IncludeFlags, RemovedReasonEntry};
         entries_to_dataframe(
             py,
             self.inner
@@ -791,14 +808,20 @@ impl SampleSet {
                     reason,
                 }),
             "id",
+            IncludeFlags::default_wide(),
         )
     }
 
     /// DataFrame of SOS1 constraints with per-sample feasibility and active_variable columns.
     /// Static columns: id, used_ids, name, subscripts, description.
     /// Dynamic columns: feasible.{sample_id}, active_variable.{sample_id} for each sample.
-    #[getter]
-    pub fn sos1_constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
+    #[pyo3(signature = (include = None))]
+    pub fn sos1_constraints_df<'py>(
+        &self,
+        py: Python<'py>,
+        include: Option<Vec<String>>,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
         let sample_ids = sorted_sample_ids(&self.inner);
         let meta_store = self.inner.sos1_constraints().metadata().clone();
         let view: Vec<(
@@ -823,6 +846,7 @@ impl SampleSet {
                 )
             }),
             "id",
+            flags,
         )
     }
 
@@ -831,12 +855,11 @@ impl SampleSet {
     /// Columns: id (index), removed_reason, removed_reason.{key}
     ///
     /// Can be joined with {attr}`sos1_constraints_df` using the `id` index.
-    #[getter]
     pub fn sos1_removed_reasons_df<'py>(
         &self,
         py: Python<'py>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
-        use crate::pandas::RemovedReasonEntry;
+        use crate::pandas::{IncludeFlags, RemovedReasonEntry};
         entries_to_dataframe(
             py,
             self.inner
@@ -848,14 +871,20 @@ impl SampleSet {
                     reason,
                 }),
             "id",
+            IncludeFlags::default_wide(),
         )
     }
 
     /// DataFrame of named functions with per-sample value columns.
     /// Static columns: id, used_ids, name, subscripts, description, parameters.
     /// Dynamic columns: one per sample_id (int) with the function's evaluated value.
-    #[getter]
-    pub fn named_functions_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
+    #[pyo3(signature = (include = None))]
+    pub fn named_functions_df<'py>(
+        &self,
+        py: Python<'py>,
+        include: Option<Vec<String>>,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
         let sample_ids = sorted_sample_ids(&self.inner);
         entries_to_dataframe(
             py,
@@ -867,6 +896,7 @@ impl SampleSet {
                     sample_ids: &sample_ids,
                 }),
             "id",
+            flags,
         )
     }
 }

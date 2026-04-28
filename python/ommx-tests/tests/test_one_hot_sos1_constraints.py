@@ -273,10 +273,10 @@ def test_sos1_constraints_df_roundtrips_removed_metadata():
     )
     new_ids = instance.convert_sos1_to_constraints(7)
 
-    active_df = instance.sos1_constraints_df
+    active_df = instance.sos1_constraints_df()
     assert active_df.empty
 
-    removed_df = instance.removed_sos1_constraints_df
+    removed_df = instance.removed_sos1_constraints_df()
     assert list(removed_df.index) == [7]
     assert (
         removed_df.loc[7, "removed_reason"]
@@ -326,14 +326,14 @@ def test_solution_one_hot_constraints_df_surfaces_active_variable():
     )
 
     sol_feas = instance.evaluate({1: 0.0, 2: 1.0, 3: 0.0})
-    df_feas = sol_feas.one_hot_constraints_df
+    df_feas = sol_feas.one_hot_constraints_df()
     assert list(df_feas.index) == [10]
     assert df_feas.loc[10, "feasible"]
     assert df_feas.loc[10, "active_variable"] == 2
     assert df_feas.loc[10, "used_ids"] == {1, 2, 3}
 
     sol_infeas = instance.evaluate({1: 1.0, 2: 1.0, 3: 0.0})
-    df_infeas = sol_infeas.one_hot_constraints_df
+    df_infeas = sol_infeas.one_hot_constraints_df()
     assert not df_infeas.loc[10, "feasible"]
     assert pd.isna(df_infeas.loc[10, "active_variable"])
 
@@ -353,13 +353,13 @@ def test_solution_sos1_constraints_df_surfaces_active_variable():
     )
 
     sol_one_active = instance.evaluate({1: 0.0, 2: 5.0, 3: 0.0})
-    df = sol_one_active.sos1_constraints_df
+    df = sol_one_active.sos1_constraints_df()
     assert list(df.index) == [20]
     assert df.loc[20, "feasible"]
     assert df.loc[20, "active_variable"] == 2
 
     sol_all_zero = instance.evaluate({1: 0.0, 2: 0.0, 3: 0.0})
-    df_zero = sol_all_zero.sos1_constraints_df
+    df_zero = sol_all_zero.sos1_constraints_df()
     assert df_zero.loc[20, "feasible"]
     assert pd.isna(df_zero.loc[20, "active_variable"])
 
@@ -379,10 +379,10 @@ def test_solution_one_hot_removed_reasons_df_after_conversion():
 
     sol = instance.evaluate({0: 1.0, 1: 0.0, 2: 0.0})
 
-    active_df = sol.one_hot_constraints_df
+    active_df = sol.one_hot_constraints_df()
     assert list(active_df.index) == [7]
 
-    removed_df = sol.one_hot_removed_reasons_df
+    removed_df = sol.one_hot_removed_reasons_df()
     assert list(removed_df.index) == [7]
     assert (
         removed_df.loc[7, "removed_reason"]
@@ -405,7 +405,7 @@ def test_solution_sos1_removed_reasons_df_after_conversion():
 
     sol = instance.evaluate({0: 1.0, 1: 0.0, 2: 0.0})
 
-    removed_df = sol.sos1_removed_reasons_df
+    removed_df = sol.sos1_removed_reasons_df()
     assert list(removed_df.index) == [7]
     assert (
         removed_df.loc[7, "removed_reason"]
@@ -436,7 +436,7 @@ def test_sample_set_one_hot_constraints_df_dynamic_columns():
         }
     )
 
-    df = ss.one_hot_constraints_df
+    df = ss.one_hot_constraints_df()
     assert list(df.index) == [10]
     assert df.loc[10, "used_ids"] == {1, 2, 3}
     assert df.loc[10, "feasible.0"]
@@ -466,7 +466,7 @@ def test_sample_set_sos1_constraints_df_dynamic_columns():
         }
     )
 
-    df = ss.sos1_constraints_df
+    df = ss.sos1_constraints_df()
     assert list(df.index) == [20]
     assert df.loc[20, "feasible.0"]
     assert df.loc[20, "active_variable.0"] == 2
@@ -490,7 +490,7 @@ def test_sample_set_one_hot_removed_reasons_df_after_conversion():
 
     ss = instance.evaluate_samples({0: {0: 1.0, 1: 0.0, 2: 0.0}})
 
-    removed_df = ss.one_hot_removed_reasons_df
+    removed_df = ss.one_hot_removed_reasons_df()
     assert list(removed_df.index) == [7]
     assert (
         removed_df.loc[7, "removed_reason"]

@@ -471,8 +471,13 @@ impl Solution {
     /// DataFrame of evaluated decision variables
     ///
     /// Columns: id (index), kind, lower, upper, name, subscripts, description, substituted_value, value
-    #[getter]
-    pub fn decision_variables_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
+    #[pyo3(signature = (include = None))]
+    pub fn decision_variables_df<'py>(
+        &self,
+        py: Python<'py>,
+        include: Option<Vec<String>>,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
         let var_meta_store = self.inner.variable_metadata().clone();
         let view: Vec<(
             ommx::DecisionVariableMetadata,
@@ -488,14 +493,20 @@ impl Solution {
             view.iter()
                 .map(|(m, dv)| crate::pandas::WithMetadata::new(*dv, m)),
             "id",
+            flags,
         )
     }
 
     /// DataFrame of evaluated constraints
     ///
     /// Columns: id (index), equality, value, used_ids, name, subscripts, description, dual_variable
-    #[getter]
-    pub fn constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
+    #[pyo3(signature = (include = None))]
+    pub fn constraints_df<'py>(
+        &self,
+        py: Python<'py>,
+        include: Option<Vec<String>>,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
         let meta_store = self.inner.evaluated_constraints().metadata().clone();
         let view: Vec<(
             ommx::ConstraintMetadata,
@@ -512,6 +523,7 @@ impl Solution {
             view.iter()
                 .map(|(m, id, c)| crate::pandas::WithMetadata::new((*id, *c), m)),
             "id",
+            flags,
         )
     }
 
@@ -542,7 +554,7 @@ impl Solution {
     /// `removed_reasons_df` contains only removed constraints:
     ///
     /// ```python
-    /// >>> solution.removed_reasons_df
+    /// >>> solution.removed_reasons_df()
     ///     removed_reason
     /// id
     /// 10    test_reason
@@ -551,16 +563,15 @@ impl Solution {
     /// Join with `constraints_df` to get full information:
     ///
     /// ```python
-    /// >>> df = solution.constraints_df.join(solution.removed_reasons_df)
+    /// >>> df = solution.constraints_df().join(solution.removed_reasons_df())
     /// >>> df[["value", "removed_reason"]]
     ///     value removed_reason
     /// id
     /// 10    0.0   test_reason
     /// 20    0.0           NaN
     /// ```
-    #[getter]
     pub fn removed_reasons_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
-        use crate::pandas::RemovedReasonEntry;
+        use crate::pandas::{IncludeFlags, RemovedReasonEntry};
         entries_to_dataframe(
             py,
             self.inner
@@ -572,17 +583,20 @@ impl Solution {
                     reason,
                 }),
             "id",
+            IncludeFlags::default_wide(),
         )
     }
 
     /// DataFrame of evaluated indicator constraints
     ///
     /// Columns: id (index), indicator_variable_id, equality, value, indicator_active, used_ids, name, subscripts, description
-    #[getter]
+    #[pyo3(signature = (include = None))]
     pub fn indicator_constraints_df<'py>(
         &self,
         py: Python<'py>,
+        include: Option<Vec<String>>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
         let meta_store = self
             .inner
             .evaluated_indicator_constraints()
@@ -603,6 +617,7 @@ impl Solution {
             view.iter()
                 .map(|(m, id, c)| crate::pandas::WithMetadata::new((*id, *c), m)),
             "id",
+            flags,
         )
     }
 
@@ -611,12 +626,11 @@ impl Solution {
     /// Columns: id (index), removed_reason, removed_reason.{key}
     ///
     /// Can be joined with {attr}`indicator_constraints_df` using the `id` index.
-    #[getter]
     pub fn indicator_removed_reasons_df<'py>(
         &self,
         py: Python<'py>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
-        use crate::pandas::RemovedReasonEntry;
+        use crate::pandas::{IncludeFlags, RemovedReasonEntry};
         entries_to_dataframe(
             py,
             self.inner
@@ -628,17 +642,20 @@ impl Solution {
                     reason,
                 }),
             "id",
+            IncludeFlags::default_wide(),
         )
     }
 
     /// DataFrame of evaluated one-hot constraints
     ///
     /// Columns: id (index), feasible, active_variable, used_ids, name, subscripts, description
-    #[getter]
+    #[pyo3(signature = (include = None))]
     pub fn one_hot_constraints_df<'py>(
         &self,
         py: Python<'py>,
+        include: Option<Vec<String>>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
         let meta_store = self
             .inner
             .evaluated_one_hot_constraints()
@@ -659,6 +676,7 @@ impl Solution {
             view.iter()
                 .map(|(m, id, c)| crate::pandas::WithMetadata::new((*id, *c), m)),
             "id",
+            flags,
         )
     }
 
@@ -667,12 +685,11 @@ impl Solution {
     /// Columns: id (index), removed_reason, removed_reason.{key}
     ///
     /// Can be joined with {attr}`one_hot_constraints_df` using the `id` index.
-    #[getter]
     pub fn one_hot_removed_reasons_df<'py>(
         &self,
         py: Python<'py>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
-        use crate::pandas::RemovedReasonEntry;
+        use crate::pandas::{IncludeFlags, RemovedReasonEntry};
         entries_to_dataframe(
             py,
             self.inner
@@ -684,14 +701,20 @@ impl Solution {
                     reason,
                 }),
             "id",
+            IncludeFlags::default_wide(),
         )
     }
 
     /// DataFrame of evaluated SOS1 constraints
     ///
     /// Columns: id (index), feasible, active_variable, used_ids, name, subscripts, description
-    #[getter]
-    pub fn sos1_constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
+    #[pyo3(signature = (include = None))]
+    pub fn sos1_constraints_df<'py>(
+        &self,
+        py: Python<'py>,
+        include: Option<Vec<String>>,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
         let meta_store = self.inner.evaluated_sos1_constraints().metadata().clone();
         let view: Vec<(
             ommx::ConstraintMetadata,
@@ -708,6 +731,7 @@ impl Solution {
             view.iter()
                 .map(|(m, id, c)| crate::pandas::WithMetadata::new((*id, *c), m)),
             "id",
+            flags,
         )
     }
 
@@ -716,12 +740,11 @@ impl Solution {
     /// Columns: id (index), removed_reason, removed_reason.{key}
     ///
     /// Can be joined with {attr}`sos1_constraints_df` using the `id` index.
-    #[getter]
     pub fn sos1_removed_reasons_df<'py>(
         &self,
         py: Python<'py>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
-        use crate::pandas::RemovedReasonEntry;
+        use crate::pandas::{IncludeFlags, RemovedReasonEntry};
         entries_to_dataframe(
             py,
             self.inner
@@ -733,15 +756,26 @@ impl Solution {
                     reason,
                 }),
             "id",
+            IncludeFlags::default_wide(),
         )
     }
 
     /// DataFrame of evaluated named functions
     ///
     /// Columns: id (index), value, used_ids, name, subscripts, description, parameters.{key}
-    #[getter]
-    pub fn named_functions_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
-        entries_to_dataframe(py, self.inner.evaluated_named_functions().values(), "id")
+    #[pyo3(signature = (include = None))]
+    pub fn named_functions_df<'py>(
+        &self,
+        py: Python<'py>,
+        include: Option<Vec<String>>,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
+        entries_to_dataframe(
+            py,
+            self.inner.evaluated_named_functions().values(),
+            "id",
+            flags,
+        )
     }
 
     fn __copy__(&self) -> Self {

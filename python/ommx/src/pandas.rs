@@ -4,6 +4,7 @@
 use fnv::FnvHashMap;
 use ommx::{ConstraintMetadata, DecisionVariableMetadata, Evaluate, VariableIDSet};
 use pyo3::{
+    exceptions::PyValueError,
     prelude::*,
     sync::PyOnceLock,
     types::{PyAny, PyDict, PyList, PySet, PyType},
@@ -65,6 +66,82 @@ impl pyo3_stub_gen::PyStubType for PyDataFrame {
 }
 
 // ---------------------------------------------------------------------------
+// IncludeFlags — gates optional column families on wide `*_df` methods
+// ---------------------------------------------------------------------------
+
+/// Which optional column families to fold into a wide `*_df` DataFrame.
+///
+/// `metadata` toggles the `name` / `subscripts` / `description` columns.
+/// `parameters` toggles the `parameters.{key}` columns. The default
+/// (`Self::default_wide()`) preserves the v2-equivalent wide shape.
+#[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
+pub struct IncludeFlags {
+    pub metadata: bool,
+    pub parameters: bool,
+}
+
+impl IncludeFlags {
+    /// Default for wide `*_df` — both metadata and parameters columns on.
+    pub fn default_wide() -> Self {
+        Self {
+            metadata: true,
+            parameters: true,
+        }
+    }
+
+    /// Parse `include=[...]` arg from Python. `None` returns the wide default.
+    pub fn from_optional(include: Option<Vec<String>>) -> PyResult<Self> {
+        match include {
+            None => Ok(Self::default_wide()),
+            Some(values) => {
+                let mut flags = Self::default();
+                for v in &values {
+                    match v.as_str() {
+                        "metadata" => flags.metadata = true,
+                        "parameters" => flags.parameters = true,
+                        other => {
+                            return Err(PyValueError::new_err(format!(
+                                "unknown include flag: {other:?} (expected one of \"metadata\", \"parameters\")"
+                            )));
+                        }
+                    }
+                }
+                Ok(flags)
+            }
+        }
+    }
+}
+
+const METADATA_KEYS: &[&str] = &["name", "subscripts", "description"];
+
+/// Drop columns from a per-row dict according to the include flags.
+///
+/// `metadata` columns are dropped by name; `parameters.*` columns are
+/// dropped by prefix. Missing keys are silently skipped (some impls don't
+/// emit every key).
+fn apply_include_filter(dict: &Bound<PyDict>, include: IncludeFlags) -> PyResult<()> {
+    if !include.metadata {
+        for key in METADATA_KEYS {
+            if dict.contains(key)? {
+                dict.del_item(key)?;
+            }
+        }
+    }
+    if !include.parameters {
+        let to_drop: Vec<String> = dict
+            .keys()
+            .iter()
+            .filter_map(|k| k.extract::<String>().ok())
+            .filter(|k| k.starts_with("parameters."))
+            .collect();
+        for key in to_drop {
+            dict.del_item(key)?;
+        }
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // pandas.NA cache
 // ---------------------------------------------------------------------------
 
@@ -115,13 +192,22 @@ impl<T: ToPandasEntry> ToPandasEntry for &T {
 }
 
 /// Build a `pandas.DataFrame` from an iterator of domain objects, indexed by `index_col`.
+///
+/// `include` selects which optional column families to keep on each row;
+/// dropped columns never reach the constructed DataFrame. Pass
+/// [`IncludeFlags::default_wide()`] to preserve the v2-equivalent shape.
 pub fn entries_to_dataframe<'py, T: ToPandasEntry>(
     py: Python<'py>,
     items: impl Iterator<Item = T>,
     index_col: &str,
+    include: IncludeFlags,
 ) -> PyResult<Bound<'py, PyDataFrame>> {
     let entries: Vec<Bound<'py, PyAny>> = items
-        .map(|item| item.to_pandas_entry(py).map(|d| d.into_any()))
+        .map(|item| {
+            let dict = item.to_pandas_entry(py)?;
+            apply_include_filter(&dict, include)?;
+            Ok(dict.into_any())
+        })
         .collect::<PyResult<_>>()?;
     raw_entries_to_dataframe(py, entries, index_col)
 }

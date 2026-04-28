@@ -1691,8 +1691,13 @@ impl Instance {
     }
 
     /// DataFrame of decision variables
-    #[getter]
-    pub fn decision_variables_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
+    #[pyo3(signature = (include = None))]
+    pub fn decision_variables_df<'py>(
+        &self,
+        py: Python<'py>,
+        include: Option<Vec<String>>,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
         let var_meta_store = self.inner.variable_metadata().clone();
         let var_meta_view: Vec<(ommx::DecisionVariableMetadata, &ommx::DecisionVariable)> = self
             .inner
@@ -1706,12 +1711,18 @@ impl Instance {
                 .iter()
                 .map(|(m, dv)| crate::pandas::WithMetadata::new(*dv, m)),
             "id",
+            flags,
         )
     }
 
     /// DataFrame of constraints
-    #[getter]
-    pub fn constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
+    #[pyo3(signature = (include = None))]
+    pub fn constraints_df<'py>(
+        &self,
+        py: Python<'py>,
+        include: Option<Vec<String>>,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
         let meta_store = self.inner.constraint_collection().metadata().clone();
         let view: Vec<(
             ommx::ConstraintMetadata,
@@ -1728,15 +1739,18 @@ impl Instance {
             view.iter()
                 .map(|(m, id, c)| crate::pandas::WithMetadata::new((*id, *c), m)),
             "id",
+            flags,
         )
     }
 
     /// DataFrame of indicator constraints
-    #[getter]
+    #[pyo3(signature = (include = None))]
     pub fn indicator_constraints_df<'py>(
         &self,
         py: Python<'py>,
+        include: Option<Vec<String>>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
         let meta_store = self
             .inner
             .indicator_constraint_collection()
@@ -1757,15 +1771,18 @@ impl Instance {
             view.iter()
                 .map(|(m, id, c)| crate::pandas::WithMetadata::new((*id, *c), m)),
             "id",
+            flags,
         )
     }
 
     /// DataFrame of removed indicator constraints
-    #[getter]
+    #[pyo3(signature = (include = None))]
     pub fn removed_indicator_constraints_df<'py>(
         &self,
         py: Python<'py>,
+        include: Option<Vec<String>>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
         let meta_store = self
             .inner
             .indicator_constraint_collection()
@@ -1786,15 +1803,18 @@ impl Instance {
             view.iter()
                 .map(|(m, id, pair)| crate::pandas::WithMetadata::new((*id, *pair), m)),
             "id",
+            flags,
         )
     }
 
     /// DataFrame of one-hot constraints
-    #[getter]
+    #[pyo3(signature = (include = None))]
     pub fn one_hot_constraints_df<'py>(
         &self,
         py: Python<'py>,
+        include: Option<Vec<String>>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
         let meta_store = self
             .inner
             .one_hot_constraint_collection()
@@ -1815,15 +1835,18 @@ impl Instance {
             view.iter()
                 .map(|(m, id, c)| crate::pandas::WithMetadata::new((*id, *c), m)),
             "id",
+            flags,
         )
     }
 
     /// DataFrame of removed one-hot constraints
-    #[getter]
+    #[pyo3(signature = (include = None))]
     pub fn removed_one_hot_constraints_df<'py>(
         &self,
         py: Python<'py>,
+        include: Option<Vec<String>>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
         let meta_store = self
             .inner
             .one_hot_constraint_collection()
@@ -1844,12 +1867,18 @@ impl Instance {
             view.iter()
                 .map(|(m, id, pair)| crate::pandas::WithMetadata::new((*id, *pair), m)),
             "id",
+            flags,
         )
     }
 
     /// DataFrame of SOS1 constraints
-    #[getter]
-    pub fn sos1_constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
+    #[pyo3(signature = (include = None))]
+    pub fn sos1_constraints_df<'py>(
+        &self,
+        py: Python<'py>,
+        include: Option<Vec<String>>,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
         let meta_store = self.inner.sos1_constraint_collection().metadata().clone();
         let view: Vec<(
             ommx::ConstraintMetadata,
@@ -1866,15 +1895,18 @@ impl Instance {
             view.iter()
                 .map(|(m, id, c)| crate::pandas::WithMetadata::new((*id, *c), m)),
             "id",
+            flags,
         )
     }
 
     /// DataFrame of removed SOS1 constraints
-    #[getter]
+    #[pyo3(signature = (include = None))]
     pub fn removed_sos1_constraints_df<'py>(
         &self,
         py: Python<'py>,
+        include: Option<Vec<String>>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
         let meta_store = self.inner.sos1_constraint_collection().metadata().clone();
         let view: Vec<(
             ommx::ConstraintMetadata,
@@ -1891,15 +1923,18 @@ impl Instance {
             view.iter()
                 .map(|(m, id, pair)| crate::pandas::WithMetadata::new((*id, *pair), m)),
             "id",
+            flags,
         )
     }
 
     /// DataFrame of removed constraints
-    #[getter]
+    #[pyo3(signature = (include = None))]
     pub fn removed_constraints_df<'py>(
         &self,
         py: Python<'py>,
+        include: Option<Vec<String>>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
         let meta_store = self.inner.constraint_collection().metadata().clone();
         let view: Vec<(
             ommx::ConstraintMetadata,
@@ -1916,13 +1951,19 @@ impl Instance {
             view.iter()
                 .map(|(m, id, pair)| crate::pandas::WithMetadata::new((*id, *pair), m)),
             "id",
+            flags,
         )
     }
 
     /// DataFrame of named functions
-    #[getter]
-    pub fn named_functions_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
-        entries_to_dataframe(py, self.inner.named_functions().values(), "id")
+    #[pyo3(signature = (include = None))]
+    pub fn named_functions_df<'py>(
+        &self,
+        py: Python<'py>,
+        include: Option<Vec<String>>,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
+        entries_to_dataframe(py, self.inner.named_functions().values(), "id", flags)
     }
 
     fn __copy__(&self) -> Self {

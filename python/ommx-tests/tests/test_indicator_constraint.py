@@ -155,7 +155,7 @@ def test_removed_indicator_constraints_df_surfaces_reason_and_ids():
 
     new_ids = instance.convert_indicator_to_constraint(7)
 
-    df = instance.removed_indicator_constraints_df
+    df = instance.removed_indicator_constraints_df()
     assert list(df.index) == [7]
     assert (
         df.loc[7, "removed_reason"] == "ommx.Instance.convert_indicator_to_constraint"
