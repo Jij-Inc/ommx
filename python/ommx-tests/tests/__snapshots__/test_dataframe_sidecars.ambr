@@ -36,7 +36,7 @@
 # name: test_provenance_empty_when_no_chain
   '''
   Empty DataFrame
-  Columns: []
+  Columns: [regular_constraint_id, step, source_kind, source_id]
   Index: []
   '''
 # ---

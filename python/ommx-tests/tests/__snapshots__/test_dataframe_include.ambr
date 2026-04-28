@@ -15,11 +15,11 @@
 # ---
 # name: test_decision_variables_df_default
   '''
-        kind  lower  upper name subscripts description substituted_value parameters.shard parameters.role
+        kind  lower  upper name subscripts description substituted_value parameters.role parameters.shard
   id                                                                                                     
-  0   Binary    0.0    1.0   x0        [0]  variable 0              <NA>                0         primary
-  1   Binary    0.0    1.0   x1        [1]  variable 1              <NA>                1         primary
-  2   Binary    0.0    1.0   x2        [2]  variable 2              <NA>                2         primary
+  0   Binary    0.0    1.0   x0        [0]  variable 0              <NA>         primary                0
+  1   Binary    0.0    1.0   x1        [1]  variable 1              <NA>         primary                1
+  2   Binary    0.0    1.0   x2        [2]  variable 2              <NA>         primary                2
   '''
 # ---
 # name: test_decision_variables_df_include_empty
@@ -42,11 +42,11 @@
 # ---
 # name: test_decision_variables_df_include_parameters_only
   '''
-        kind  lower  upper substituted_value parameters.shard parameters.role
+        kind  lower  upper substituted_value parameters.role parameters.shard
   id                                                                         
-  0   Binary    0.0    1.0              <NA>                0         primary
-  1   Binary    0.0    1.0              <NA>                1         primary
-  2   Binary    0.0    1.0              <NA>                2         primary
+  0   Binary    0.0    1.0              <NA>         primary                0
+  1   Binary    0.0    1.0              <NA>         primary                1
+  2   Binary    0.0    1.0              <NA>         primary                2
   '''
 # ---
 # name: test_sample_set_decision_variables_df_include_empty

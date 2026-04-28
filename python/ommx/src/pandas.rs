@@ -1,7 +1,9 @@
 //! Thin wrapper around `pandas.DataFrame` for type-safe PyO3 bindings,
 //! plus shared helpers for building DataFrames from domain objects.
 
-use fnv::FnvHashMap;
+use std::collections::HashMap;
+use std::hash::BuildHasher;
+
 use ommx::{
     ConstraintMetadata, ConstraintMetadataStore, DecisionVariableMetadata, Evaluate, IDType,
     Provenance, RemovedReason, VariableID, VariableIDSet, VariableMetadataStore,
@@ -227,7 +229,7 @@ where
             Ok(dict.into_any())
         })
         .collect::<PyResult<_>>()?;
-    long_format_dataframe(py, entries)
+    long_format_dataframe(py, entries, &[id_col, "key", "value"])
 }
 
 /// Long-format provenance DataFrame for constraints.
@@ -257,7 +259,7 @@ where
             entries.push(dict.into_any());
         }
     }
-    long_format_dataframe(py, entries)
+    long_format_dataframe(py, entries, &[id_col, "step", "source_kind", "source_id"])
 }
 
 /// Long-format removed-reasons DataFrame for constraints.
@@ -342,7 +344,7 @@ where
             Ok(dict.into_any())
         })
         .collect::<PyResult<_>>()?;
-    long_format_dataframe(py, entries)
+    long_format_dataframe(py, entries, &[id_col, "reason", "key", "value"])
 }
 
 /// Wide id-indexed metadata DataFrame for decision variables.
@@ -398,7 +400,7 @@ pub fn variable_parameters_dataframe<'py>(
             Ok(dict.into_any())
         })
         .collect::<PyResult<_>>()?;
-    long_format_dataframe(py, entries)
+    long_format_dataframe(py, entries, &[id_col, "key", "value"])
 }
 
 fn provenance_parts(p: &Provenance) -> (&'static str, u64) {
@@ -412,13 +414,23 @@ fn provenance_parts(p: &Provenance) -> (&'static str, u64) {
 /// Build a long-format DataFrame from pre-built entry dicts.
 ///
 /// No `set_index` call, so the DataFrame keeps its default RangeIndex.
-/// Used by the `*_parameters_df` / `*_provenance_df` /
-/// `*_removed_reasons_df` builders.
+/// `columns` is the explicit schema used when `entries` is empty —
+/// without it pandas would return a column-less DataFrame, breaking
+/// `pd.concat` and any code that consumes the documented schema. Used
+/// by the `*_parameters_df` / `*_provenance_df` / `*_removed_reasons_df`
+/// builders.
 fn long_format_dataframe<'py>(
     py: Python<'py>,
     entries: Vec<Bound<'py, PyAny>>,
+    columns: &[&str],
 ) -> PyResult<Bound<'py, PyDataFrame>> {
     let pandas = py.import("pandas")?;
+    if entries.is_empty() {
+        let kwargs = PyDict::new(py);
+        kwargs.set_item("columns", columns.to_vec())?;
+        let df = pandas.call_method("DataFrame", (), Some(&kwargs))?;
+        return df.cast_into().map_err(Into::into);
+    }
     let df = pandas.call_method1("DataFrame", (entries,))?;
     df.cast_into().map_err(Into::into)
 }
@@ -592,11 +604,25 @@ pub fn set_metadata<'py>(
 }
 
 /// Set `parameters.{key}` columns from a string-string map.
-pub fn set_parameter_columns(
+///
+/// Keys are emitted in lexicographic order so the column order is
+/// deterministic across runs (the underlying hashmap iteration order is
+/// stable per insertion sequence for `FnvHashMap` but not for
+/// `std::HashMap`, and upstream `Constraint.set_parameters` accepts a
+/// `std::HashMap` whose iteration is randomized per process). Matches
+/// the `(id, key)` sort used by the long-format `*_parameters_df`
+/// builders.
+///
+/// Generic over the hasher so callers can pass either an SoA-store
+/// `FnvHashMap` or a `std::HashMap` from a `v1::Parameter`.
+pub fn set_parameter_columns<S: BuildHasher>(
     dict: &Bound<PyDict>,
-    parameters: &FnvHashMap<String, String>,
+    parameters: &HashMap<String, String, S>,
 ) -> PyResult<()> {
-    for (key, value) in parameters {
+    let mut keys: Vec<&str> = parameters.keys().map(String::as_str).collect();
+    keys.sort_unstable();
+    for key in keys {
+        let value = &parameters[key];
         dict.set_item(format!("parameters.{key}"), value)?;
     }
     Ok(())
@@ -1085,9 +1111,7 @@ impl ToPandasEntry for ommx::v1::Parameter {
             &self.subscripts,
             self.description.as_deref(),
         )?;
-        for (key, value) in &self.parameters {
-            dict.set_item(format!("parameters.{key}"), value)?;
-        }
+        set_parameter_columns(&dict, &self.parameters)?;
         Ok(dict)
     }
 }
