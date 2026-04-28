@@ -1128,13 +1128,9 @@ mod tests {
         instance
             .variable_metadata_mut()
             .set_subscripts(var_id, vec![0]);
+        instance.constraint_metadata_mut().set_name(cid, "balance");
         instance
-            .constraint_collection_mut()
-            .metadata_mut()
-            .set_name(cid, "balance");
-        instance
-            .constraint_collection_mut()
-            .metadata_mut()
+            .constraint_metadata_mut()
             .set_description(cid, "demand-balance row");
 
         let bytes = instance.to_bytes();

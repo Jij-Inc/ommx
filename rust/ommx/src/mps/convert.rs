@@ -26,10 +26,7 @@ pub fn convert(mps: Mps) -> crate::Result<Instance> {
         instance.variable_metadata_mut().set_name(id, name);
     }
     for (id, name) in constraint_names {
-        instance
-            .constraint_collection_mut()
-            .metadata_mut()
-            .set_name(id, name);
+        instance.constraint_metadata_mut().set_name(id, name);
     }
 
     instance.description = convert_description(&mps);

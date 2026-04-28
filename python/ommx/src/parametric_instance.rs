@@ -107,7 +107,7 @@ impl ParametricInstance {
         for (id, m) in variable_metadata_pairs {
             var_meta.insert(id, m);
         }
-        let constraint_meta = inner.constraint_collection_mut().metadata_mut();
+        let constraint_meta = inner.constraint_metadata_mut();
         for (id, m) in constraint_metadata_pairs {
             constraint_meta.insert(id, m);
         }

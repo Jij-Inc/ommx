@@ -32,11 +32,15 @@ pub use parametric_builder::*;
 pub use stats::*;
 
 use crate::{
-    constraint::RemovedReason, constraint_type::ConstraintCollection,
-    decision_variable::VariableMetadataStore, indicator_constraint::IndicatorConstraint,
-    named_function::NamedFunctionID, one_hot_constraint::OneHotConstraint,
-    sos1_constraint::Sos1Constraint, v1, AcyclicAssignments, Constraint, ConstraintID,
-    DecisionVariable, Evaluate, Function, NamedFunction, VariableID, VariableIDSet,
+    constraint::{ConstraintMetadataStore, RemovedReason},
+    constraint_type::ConstraintCollection,
+    decision_variable::VariableMetadataStore,
+    indicator_constraint::IndicatorConstraint,
+    named_function::NamedFunctionID,
+    one_hot_constraint::OneHotConstraint,
+    sos1_constraint::Sos1Constraint,
+    v1, AcyclicAssignments, Constraint, ConstraintID, DecisionVariable, Evaluate, Function,
+    NamedFunction, VariableID, VariableIDSet,
 };
 use std::collections::BTreeMap;
 
@@ -183,9 +187,21 @@ impl Instance {
         &self.constraint_collection
     }
 
-    /// Mutable access to the full constraint collection (active + removed).
-    pub fn constraint_collection_mut(&mut self) -> &mut ConstraintCollection<Constraint> {
-        &mut self.constraint_collection
+    /// Access the per-constraint metadata store.
+    pub fn constraint_metadata(&self) -> &ConstraintMetadataStore<ConstraintID> {
+        self.constraint_collection.metadata()
+    }
+
+    /// Mutable access to the per-constraint metadata store.
+    ///
+    /// Metadata is outside the constraint-collection invariants (it is a sparse
+    /// ID-keyed store of names / subscripts / parameters / description /
+    /// provenance), so exposing it as `&mut` is safe. For invariant-affecting
+    /// operations like adding or removing constraints, use the dedicated
+    /// `Instance` methods instead — there is no public mutable accessor for the
+    /// full [`ConstraintCollection`].
+    pub fn constraint_metadata_mut(&mut self) -> &mut ConstraintMetadataStore<ConstraintID> {
+        self.constraint_collection.metadata_mut()
     }
 
     /// Active indicator constraints.
@@ -207,11 +223,20 @@ impl Instance {
         &self.indicator_constraint_collection
     }
 
-    /// Mutable access to the full indicator constraint collection.
-    pub fn indicator_constraint_collection_mut(
+    /// Access the per-indicator-constraint metadata store.
+    pub fn indicator_constraint_metadata(
+        &self,
+    ) -> &ConstraintMetadataStore<crate::IndicatorConstraintID> {
+        self.indicator_constraint_collection.metadata()
+    }
+
+    /// Mutable access to the per-indicator-constraint metadata store. See
+    /// [`Self::constraint_metadata_mut`] for the rationale on exposing only
+    /// metadata mutation publicly.
+    pub fn indicator_constraint_metadata_mut(
         &mut self,
-    ) -> &mut ConstraintCollection<IndicatorConstraint> {
-        &mut self.indicator_constraint_collection
+    ) -> &mut ConstraintMetadataStore<crate::IndicatorConstraintID> {
+        self.indicator_constraint_collection.metadata_mut()
     }
 
     /// Active one-hot constraints.
@@ -231,11 +256,20 @@ impl Instance {
         &self.one_hot_constraint_collection
     }
 
-    /// Mutable access to the full one-hot constraint collection.
-    pub fn one_hot_constraint_collection_mut(
+    /// Access the per-one-hot-constraint metadata store.
+    pub fn one_hot_constraint_metadata(
+        &self,
+    ) -> &ConstraintMetadataStore<crate::OneHotConstraintID> {
+        self.one_hot_constraint_collection.metadata()
+    }
+
+    /// Mutable access to the per-one-hot-constraint metadata store. See
+    /// [`Self::constraint_metadata_mut`] for the rationale on exposing only
+    /// metadata mutation publicly.
+    pub fn one_hot_constraint_metadata_mut(
         &mut self,
-    ) -> &mut ConstraintCollection<OneHotConstraint> {
-        &mut self.one_hot_constraint_collection
+    ) -> &mut ConstraintMetadataStore<crate::OneHotConstraintID> {
+        self.one_hot_constraint_collection.metadata_mut()
     }
 
     /// Active SOS1 constraints.
@@ -255,9 +289,18 @@ impl Instance {
         &self.sos1_constraint_collection
     }
 
-    /// Mutable access to the full SOS1 constraint collection.
-    pub fn sos1_constraint_collection_mut(&mut self) -> &mut ConstraintCollection<Sos1Constraint> {
-        &mut self.sos1_constraint_collection
+    /// Access the per-SOS1-constraint metadata store.
+    pub fn sos1_constraint_metadata(&self) -> &ConstraintMetadataStore<crate::Sos1ConstraintID> {
+        self.sos1_constraint_collection.metadata()
+    }
+
+    /// Mutable access to the per-SOS1-constraint metadata store. See
+    /// [`Self::constraint_metadata_mut`] for the rationale on exposing only
+    /// metadata mutation publicly.
+    pub fn sos1_constraint_metadata_mut(
+        &mut self,
+    ) -> &mut ConstraintMetadataStore<crate::Sos1ConstraintID> {
+        self.sos1_constraint_collection.metadata_mut()
     }
 
     /// Returns the set of non-standard constraint capabilities required by this instance.
@@ -433,9 +476,16 @@ impl ParametricInstance {
         &self.constraint_collection
     }
 
-    /// Mutable access to the full constraint collection.
-    pub fn constraint_collection_mut(&mut self) -> &mut ConstraintCollection<Constraint> {
-        &mut self.constraint_collection
+    /// Access the per-constraint metadata store.
+    pub fn constraint_metadata(&self) -> &ConstraintMetadataStore<ConstraintID> {
+        self.constraint_collection.metadata()
+    }
+
+    /// Mutable access to the per-constraint metadata store. See
+    /// [`Instance::constraint_metadata_mut`] for the rationale on exposing only
+    /// metadata mutation publicly.
+    pub fn constraint_metadata_mut(&mut self) -> &mut ConstraintMetadataStore<ConstraintID> {
+        self.constraint_collection.metadata_mut()
     }
 
     /// Active indicator constraints.
@@ -457,11 +507,20 @@ impl ParametricInstance {
         &self.indicator_constraint_collection
     }
 
-    /// Mutable access to the full indicator constraint collection.
-    pub fn indicator_constraint_collection_mut(
+    /// Access the per-indicator-constraint metadata store.
+    pub fn indicator_constraint_metadata(
+        &self,
+    ) -> &ConstraintMetadataStore<crate::IndicatorConstraintID> {
+        self.indicator_constraint_collection.metadata()
+    }
+
+    /// Mutable access to the per-indicator-constraint metadata store. See
+    /// [`Instance::constraint_metadata_mut`] for the rationale on exposing only
+    /// metadata mutation publicly.
+    pub fn indicator_constraint_metadata_mut(
         &mut self,
-    ) -> &mut ConstraintCollection<IndicatorConstraint> {
-        &mut self.indicator_constraint_collection
+    ) -> &mut ConstraintMetadataStore<crate::IndicatorConstraintID> {
+        self.indicator_constraint_collection.metadata_mut()
     }
 
     /// Active one-hot constraints.
@@ -481,11 +540,20 @@ impl ParametricInstance {
         &self.one_hot_constraint_collection
     }
 
-    /// Mutable access to the full one-hot constraint collection.
-    pub fn one_hot_constraint_collection_mut(
+    /// Access the per-one-hot-constraint metadata store.
+    pub fn one_hot_constraint_metadata(
+        &self,
+    ) -> &ConstraintMetadataStore<crate::OneHotConstraintID> {
+        self.one_hot_constraint_collection.metadata()
+    }
+
+    /// Mutable access to the per-one-hot-constraint metadata store. See
+    /// [`Instance::constraint_metadata_mut`] for the rationale on exposing only
+    /// metadata mutation publicly.
+    pub fn one_hot_constraint_metadata_mut(
         &mut self,
-    ) -> &mut ConstraintCollection<OneHotConstraint> {
-        &mut self.one_hot_constraint_collection
+    ) -> &mut ConstraintMetadataStore<crate::OneHotConstraintID> {
+        self.one_hot_constraint_collection.metadata_mut()
     }
 
     /// Active SOS1 constraints.
@@ -505,9 +573,18 @@ impl ParametricInstance {
         &self.sos1_constraint_collection
     }
 
-    /// Mutable access to the full SOS1 constraint collection.
-    pub fn sos1_constraint_collection_mut(&mut self) -> &mut ConstraintCollection<Sos1Constraint> {
-        &mut self.sos1_constraint_collection
+    /// Access the per-SOS1-constraint metadata store.
+    pub fn sos1_constraint_metadata(&self) -> &ConstraintMetadataStore<crate::Sos1ConstraintID> {
+        self.sos1_constraint_collection.metadata()
+    }
+
+    /// Mutable access to the per-SOS1-constraint metadata store. See
+    /// [`Instance::constraint_metadata_mut`] for the rationale on exposing only
+    /// metadata mutation publicly.
+    pub fn sos1_constraint_metadata_mut(
+        &mut self,
+    ) -> &mut ConstraintMetadataStore<crate::Sos1ConstraintID> {
+        self.sos1_constraint_collection.metadata_mut()
     }
 }
 
