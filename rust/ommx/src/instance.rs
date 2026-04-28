@@ -155,6 +155,11 @@ pub struct Instance {
     #[getset(get = "pub")]
     named_functions: BTreeMap<NamedFunctionID, NamedFunction>,
 
+    /// Per-named-function auxiliary metadata. Sibling field of
+    /// [`Self::named_functions`]; together they form the canonical
+    /// named-function storage.
+    named_function_metadata: crate::named_function::NamedFunctionMetadataStore,
+
     // Optional fields for additional metadata.
     // These fields are public since arbitrary values can be set without validation.
     pub parameters: Option<v1::Parameters>,
@@ -170,6 +175,18 @@ impl Instance {
     /// Mutable access to the per-variable metadata store.
     pub fn variable_metadata_mut(&mut self) -> &mut VariableMetadataStore {
         &mut self.variable_metadata
+    }
+
+    /// Access the per-named-function metadata store.
+    pub fn named_function_metadata(&self) -> &crate::named_function::NamedFunctionMetadataStore {
+        &self.named_function_metadata
+    }
+
+    /// Mutable access to the per-named-function metadata store.
+    pub fn named_function_metadata_mut(
+        &mut self,
+    ) -> &mut crate::named_function::NamedFunctionMetadataStore {
+        &mut self.named_function_metadata
     }
 
     /// Active constraints.
@@ -445,6 +462,11 @@ pub struct ParametricInstance {
     #[getset(get = "pub")]
     named_functions: BTreeMap<NamedFunctionID, NamedFunction>,
 
+    /// Per-named-function auxiliary metadata. Sibling field of
+    /// [`Self::named_functions`]; together they form the canonical
+    /// named-function storage.
+    named_function_metadata: crate::named_function::NamedFunctionMetadataStore,
+
     // Optional fields for additional metadata.
     // These fields are public since arbitrary values can be set without validation.
     pub description: Option<v1::instance::Description>,
@@ -459,6 +481,18 @@ impl ParametricInstance {
     /// Mutable access to the per-variable metadata store.
     pub fn variable_metadata_mut(&mut self) -> &mut VariableMetadataStore {
         &mut self.variable_metadata
+    }
+
+    /// Access the per-named-function metadata store.
+    pub fn named_function_metadata(&self) -> &crate::named_function::NamedFunctionMetadataStore {
+        &self.named_function_metadata
+    }
+
+    /// Mutable access to the per-named-function metadata store.
+    pub fn named_function_metadata_mut(
+        &mut self,
+    ) -> &mut crate::named_function::NamedFunctionMetadataStore {
+        &mut self.named_function_metadata
     }
 
     /// Active constraints.

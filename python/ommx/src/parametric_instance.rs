@@ -90,10 +90,15 @@ impl ParametricInstance {
             .constraints(rust_constraints)
             .parameters(rust_parameters);
 
+        let mut named_function_metadata_pairs: Vec<(
+            ommx::NamedFunctionID,
+            ommx::NamedFunctionMetadata,
+        )> = Vec::new();
         if let Some(nfs) = named_functions {
             let mut rust_named_functions = BTreeMap::new();
             for nf in nfs {
                 let id = nf.0.id;
+                named_function_metadata_pairs.push((id, nf.1));
                 if rust_named_functions.insert(id, nf.0).is_some() {
                     anyhow::bail!("Duplicate named function ID: {}", id.into_inner());
                 }
@@ -113,6 +118,10 @@ impl ParametricInstance {
         let constraint_meta = inner.constraint_metadata_mut();
         for (id, m) in constraint_metadata_pairs {
             constraint_meta.insert(id, m);
+        }
+        let nf_meta = inner.named_function_metadata_mut();
+        for (id, m) in named_function_metadata_pairs {
+            nf_meta.insert(id, m);
         }
 
         Ok(Self {
@@ -200,10 +209,11 @@ impl ParametricInstance {
 
     #[getter]
     pub fn named_functions(&self) -> Vec<NamedFunction> {
+        let metadata = self.inner.named_function_metadata();
         self.inner
             .named_functions()
-            .values()
-            .map(|nf| NamedFunction(nf.clone()))
+            .iter()
+            .map(|(id, nf)| NamedFunction(nf.clone(), metadata.collect_for(*id)))
             .collect()
     }
 
@@ -287,10 +297,16 @@ impl ParametricInstance {
 
     /// Get a specific named function by ID
     pub fn get_named_function_by_id(&self, named_function_id: u64) -> PyResult<NamedFunction> {
+        let id = NamedFunctionID::from(named_function_id);
         self.inner
             .named_functions()
-            .get(&NamedFunctionID::from(named_function_id))
-            .map(|nf| NamedFunction(nf.clone()))
+            .get(&id)
+            .map(|nf| {
+                NamedFunction(
+                    nf.clone(),
+                    self.inner.named_function_metadata().collect_for(id),
+                )
+            })
             .ok_or_else(|| {
                 PyKeyError::new_err(format!(
                     "Named function with ID {named_function_id} not found"
@@ -418,7 +434,21 @@ impl ParametricInstance {
         include: Option<Vec<String>>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let flags = crate::pandas::IncludeFlags::from_optional(include)?;
-        entries_to_dataframe(py, self.inner.named_functions().values(), "id", flags)
+        let nf_meta_store = self.inner.named_function_metadata().clone();
+        let nf_meta_view: Vec<(ommx::NamedFunctionMetadata, &ommx::NamedFunction)> = self
+            .inner
+            .named_functions()
+            .iter()
+            .map(|(id, nf)| (nf_meta_store.collect_for(*id), nf))
+            .collect();
+        entries_to_dataframe(
+            py,
+            nf_meta_view
+                .iter()
+                .map(|(m, nf)| crate::pandas::WithMetadata::new(*nf, m)),
+            "id",
+            flags,
+        )
     }
 
     /// DataFrame of parameters

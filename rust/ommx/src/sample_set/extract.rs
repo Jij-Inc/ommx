@@ -20,8 +20,8 @@ impl SampleSet {
     /// Returns a set of all unique named function names that have at least one named function.
     pub fn named_function_names(&self) -> std::collections::BTreeSet<String> {
         self.named_functions
-            .values()
-            .filter_map(|nf| nf.name.clone())
+            .keys()
+            .filter_map(|id| self.named_function_metadata.name(*id).map(str::to_owned))
             .collect()
     }
 
@@ -175,13 +175,13 @@ impl SampleSet {
     ) -> Result<BTreeMap<String, BTreeMap<Vec<i64>, f64>>, SampleSetError> {
         let mut result: BTreeMap<String, BTreeMap<Vec<i64>, f64>> = BTreeMap::new();
 
-        for nf in self.named_functions.values() {
-            let name = match &nf.name {
-                Some(n) => n.clone(),
+        for (id, nf) in &self.named_functions {
+            let name = match self.named_function_metadata.name(*id) {
+                Some(n) => n.to_string(),
                 None => continue, // Skip functions without names
             };
 
-            let subscripts = nf.subscripts.clone();
+            let subscripts = self.named_function_metadata.subscripts(*id).to_vec();
             let value = *nf
                 .evaluated_values()
                 .get(sample_id)
@@ -215,10 +215,11 @@ impl SampleSet {
         sample_id: SampleID,
     ) -> Result<BTreeMap<Vec<i64>, f64>, SampleSetError> {
         // Collect all named functions with the given name
-        let named_functions_with_name: Vec<&SampledNamedFunction> = self
+        let named_functions_with_name: Vec<(NamedFunctionID, &SampledNamedFunction)> = self
             .named_functions
-            .values()
-            .filter(|nf| nf.name.as_deref() == Some(name))
+            .iter()
+            .filter(|(id, _)| self.named_function_metadata.name(**id) == Some(name))
+            .map(|(id, nf)| (*id, nf))
             .collect();
         if named_functions_with_name.is_empty() {
             return Err(SampleSetError::UnknownNamedFunctionName {
@@ -226,8 +227,8 @@ impl SampleSet {
             });
         }
         let mut result = BTreeMap::new();
-        for nf in &named_functions_with_name {
-            let subscripts = nf.subscripts().clone();
+        for (id, nf) in &named_functions_with_name {
+            let subscripts = self.named_function_metadata.subscripts(*id).to_vec();
             let value = *nf
                 .evaluated_values()
                 .get(sample_id)
@@ -878,6 +879,8 @@ mod tests {
     }
 
     /// Helper to create a SampledNamedFunction via the Parse trait from v1 types.
+    /// Returns the parsed function plus its drained metadata snapshot, which the
+    /// caller is responsible for inserting into a host store.
     fn make_sampled_named_function(
         id: u64,
         entries: Vec<(Vec<u64>, f64)>,
@@ -885,7 +888,7 @@ mod tests {
         subscripts: Vec<i64>,
         parameters: std::collections::HashMap<String, String>,
         description: Option<&str>,
-    ) -> crate::SampledNamedFunction {
+    ) -> (crate::SampledNamedFunction, crate::NamedFunctionMetadata) {
         use crate::parse::Parse;
         let v1_entries = entries
             .into_iter()
@@ -902,16 +905,20 @@ mod tests {
             description: description.map(|s| s.to_string()),
             used_decision_variable_ids: vec![],
         };
-        v1_snf.parse(&()).unwrap()
+        let parsed: crate::named_function::parse::ParsedSampledNamedFunction =
+            v1_snf.parse(&()).unwrap();
+        (parsed.sampled_named_function, parsed.metadata)
     }
 
     #[test]
     fn test_extract_named_functions() {
         // SampleSet with named functions: extract by name + sample_id
         let mut named_functions = BTreeMap::new();
+        let mut named_function_metadata =
+            crate::named_function::NamedFunctionMetadataStore::default();
 
         // Named function "cost" with subscript [0]
-        let snf1 = make_sampled_named_function(
+        let (snf1, meta1) = make_sampled_named_function(
             1,
             vec![(vec![0], 10.0), (vec![1], 11.0)],
             Some("cost"),
@@ -919,10 +926,12 @@ mod tests {
             Default::default(),
             None,
         );
-        named_functions.insert(crate::NamedFunctionID::from(1), snf1);
+        let id1 = crate::NamedFunctionID::from(1);
+        named_functions.insert(id1, snf1);
+        named_function_metadata.insert(id1, meta1);
 
         // Named function "cost" with subscript [1]
-        let snf2 = make_sampled_named_function(
+        let (snf2, meta2) = make_sampled_named_function(
             2,
             vec![(vec![0], 20.0), (vec![1], 21.0)],
             Some("cost"),
@@ -930,7 +939,9 @@ mod tests {
             Default::default(),
             None,
         );
-        named_functions.insert(crate::NamedFunctionID::from(2), snf2);
+        let id2 = crate::NamedFunctionID::from(2);
+        named_functions.insert(id2, snf2);
+        named_function_metadata.insert(id2, meta2);
 
         let mut objectives = crate::Sampled::default();
         objectives.append([SampleID::from(0)], 0.0).unwrap();
@@ -941,6 +952,7 @@ mod tests {
             .objectives(objectives)
             .constraints(BTreeMap::new())
             .named_functions(named_functions)
+            .named_function_metadata(named_function_metadata)
             .sense(Sense::Minimize)
             .build()
             .unwrap();
@@ -985,8 +997,10 @@ mod tests {
     fn test_extract_named_functions_with_parameters() {
         // Parameters are now allowed (ignored) - only subscripts are used as keys
         let mut named_functions = BTreeMap::new();
+        let mut named_function_metadata =
+            crate::named_function::NamedFunctionMetadataStore::default();
 
-        let snf = make_sampled_named_function(
+        let (snf, meta) = make_sampled_named_function(
             1,
             vec![(vec![0], 5.0)],
             Some("f"),
@@ -996,7 +1010,9 @@ mod tests {
                 .collect(),
             None,
         );
-        named_functions.insert(crate::NamedFunctionID::from(1), snf);
+        let id = crate::NamedFunctionID::from(1);
+        named_functions.insert(id, snf);
+        named_function_metadata.insert(id, meta);
 
         let mut objectives = crate::Sampled::default();
         objectives.append([SampleID::from(0)], 0.0).unwrap();
@@ -1006,6 +1022,7 @@ mod tests {
             .objectives(objectives)
             .constraints(BTreeMap::new())
             .named_functions(named_functions)
+            .named_function_metadata(named_function_metadata)
             .sense(Sense::Minimize)
             .build()
             .unwrap();
@@ -1021,9 +1038,11 @@ mod tests {
     #[test]
     fn test_extract_all_named_functions() {
         let mut named_functions = BTreeMap::new();
+        let mut named_function_metadata =
+            crate::named_function::NamedFunctionMetadataStore::default();
 
         // "cost" [0]
-        let snf1 = make_sampled_named_function(
+        let (snf1, meta1) = make_sampled_named_function(
             1,
             vec![(vec![0], 10.0)],
             Some("cost"),
@@ -1031,10 +1050,12 @@ mod tests {
             Default::default(),
             None,
         );
-        named_functions.insert(crate::NamedFunctionID::from(1), snf1);
+        let id1 = crate::NamedFunctionID::from(1);
+        named_functions.insert(id1, snf1);
+        named_function_metadata.insert(id1, meta1);
 
         // "penalty" [0]
-        let snf2 = make_sampled_named_function(
+        let (snf2, meta2) = make_sampled_named_function(
             2,
             vec![(vec![0], 5.0)],
             Some("penalty"),
@@ -1042,10 +1063,12 @@ mod tests {
             Default::default(),
             None,
         );
-        named_functions.insert(crate::NamedFunctionID::from(2), snf2);
+        let id2 = crate::NamedFunctionID::from(2);
+        named_functions.insert(id2, snf2);
+        named_function_metadata.insert(id2, meta2);
 
         // Unnamed (should be skipped)
-        let snf3 = make_sampled_named_function(
+        let (snf3, meta3) = make_sampled_named_function(
             3,
             vec![(vec![0], 99.0)],
             None,
@@ -1053,7 +1076,9 @@ mod tests {
             Default::default(),
             None,
         );
-        named_functions.insert(crate::NamedFunctionID::from(3), snf3);
+        let id3 = crate::NamedFunctionID::from(3);
+        named_functions.insert(id3, snf3);
+        named_function_metadata.insert(id3, meta3);
 
         let mut objectives = crate::Sampled::default();
         objectives.append([SampleID::from(0)], 0.0).unwrap();
@@ -1063,6 +1088,7 @@ mod tests {
             .objectives(objectives)
             .constraints(BTreeMap::new())
             .named_functions(named_functions)
+            .named_function_metadata(named_function_metadata)
             .sense(Sense::Minimize)
             .build()
             .unwrap();
@@ -1078,8 +1104,10 @@ mod tests {
     #[test]
     fn test_named_function_names() {
         let mut named_functions = BTreeMap::new();
+        let mut named_function_metadata =
+            crate::named_function::NamedFunctionMetadataStore::default();
 
-        let snf1 = make_sampled_named_function(
+        let (snf1, meta1) = make_sampled_named_function(
             1,
             vec![(vec![0], 1.0)],
             Some("alpha"),
@@ -1087,9 +1115,11 @@ mod tests {
             Default::default(),
             None,
         );
-        named_functions.insert(crate::NamedFunctionID::from(1), snf1);
+        let id1 = crate::NamedFunctionID::from(1);
+        named_functions.insert(id1, snf1);
+        named_function_metadata.insert(id1, meta1);
 
-        let snf2 = make_sampled_named_function(
+        let (snf2, meta2) = make_sampled_named_function(
             2,
             vec![(vec![0], 2.0)],
             Some("beta"),
@@ -1097,7 +1127,9 @@ mod tests {
             Default::default(),
             None,
         );
-        named_functions.insert(crate::NamedFunctionID::from(2), snf2);
+        let id2 = crate::NamedFunctionID::from(2);
+        named_functions.insert(id2, snf2);
+        named_function_metadata.insert(id2, meta2);
 
         let mut objectives = crate::Sampled::default();
         objectives.append([SampleID::from(0)], 0.0).unwrap();
@@ -1107,6 +1139,7 @@ mod tests {
             .objectives(objectives)
             .constraints(BTreeMap::new())
             .named_functions(named_functions)
+            .named_function_metadata(named_function_metadata)
             .sense(Sense::Minimize)
             .build()
             .unwrap();

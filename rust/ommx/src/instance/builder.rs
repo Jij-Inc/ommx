@@ -403,6 +403,7 @@ impl InstanceBuilder {
                 BTreeMap::new(),
             ),
             named_functions: self.named_functions,
+            named_function_metadata: Default::default(),
             decision_variable_dependency: self.decision_variable_dependency,
             parameters: self.parameters,
             description: self.description,
@@ -770,10 +771,6 @@ mod tests {
         let named_function = NamedFunction {
             id: NamedFunctionID::from(1),
             function: Function::Zero,
-            name: Some("f".to_string()),
-            subscripts: vec![],
-            parameters: Default::default(),
-            description: None,
         };
 
         let err = Instance::builder()
@@ -805,10 +802,6 @@ mod tests {
         let named_function = NamedFunction {
             id: NamedFunctionID::from(1),
             function: Function::from(linear!(999) + coeff!(1.0)),
-            name: Some("f".to_string()),
-            subscripts: vec![],
-            parameters: Default::default(),
-            description: None,
         };
 
         let err = Instance::builder()

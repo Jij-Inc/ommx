@@ -1,7 +1,7 @@
 mod arbitrary;
 mod evaluate;
-mod parse;
-mod serialize;
+mod metadata_store;
+pub(crate) mod parse;
 
 use derive_more::{Deref, From};
 use fnv::FnvHashMap;
@@ -10,6 +10,7 @@ use getset::*;
 use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
 use crate::{Function, SampleID, Sampled, VariableIDSet};
 pub use arbitrary::*;
+pub use metadata_store::NamedFunctionMetadataStore;
 
 /// ID for named function
 #[derive(
@@ -68,45 +69,40 @@ impl LogicalMemoryProfile for NamedFunctionID {
 /// Named function IDs are managed separately from decision variable IDs and constraint IDs,
 /// so the same ID value can be used across these different namespaces.
 ///
+/// Metadata (`name`, `subscripts`, `parameters`, `description`) is stored in a
+/// per-collection [`NamedFunctionMetadataStore`] keyed by [`NamedFunctionID`];
+/// the per-element struct no longer carries it.
+///
 /// Corresponds to `ommx.v1.NamedFunction`.
 #[derive(Debug, Clone, PartialEq, LogicalMemoryProfile)]
 pub struct NamedFunction {
     pub id: NamedFunctionID,
     pub function: Function,
+}
+
+impl std::fmt::Display for NamedFunction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "NamedFunction(id={}, {})", self.id, self.function)
+    }
+}
+
+/// Auxiliary metadata for named functions (excluding intrinsic id and function).
+///
+/// Sibling type to [`DecisionVariableMetadata`](crate::DecisionVariableMetadata).
+/// Stored ID-keyed in [`NamedFunctionMetadataStore`].
+#[derive(Debug, Clone, PartialEq, Default, LogicalMemoryProfile)]
+pub struct NamedFunctionMetadata {
     pub name: Option<String>,
     pub subscripts: Vec<i64>,
     pub parameters: FnvHashMap<String, String>,
     pub description: Option<String>,
 }
 
-impl std::fmt::Display for NamedFunction {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let name_str = self
-            .name
-            .as_ref()
-            .map(|n| format!("name=\"{n}\""))
-            .unwrap_or_else(|| "name=None".to_string());
-
-        let mut parts = vec![name_str];
-
-        if !self.subscripts.is_empty() {
-            parts.push(format!("subscripts={:?}", self.subscripts));
-        }
-
-        if !self.parameters.is_empty() {
-            let params: Vec<String> = self
-                .parameters
-                .iter()
-                .map(|(k, v)| format!("{k}={v}"))
-                .collect();
-            parts.push(format!("parameters={{{}}}", params.join(", ")));
-        }
-
-        write!(f, "NamedFunction({}, {})", self.function, parts.join(", "))
-    }
-}
-
 /// `ommx.v1.EvaluatedNamedFunction` with validated, typed fields.
+///
+/// Metadata moved to a per-collection
+/// [`NamedFunctionMetadataStore`] on `Solution`; the struct only carries
+/// intrinsic evaluated data.
 #[derive(Debug, Clone, PartialEq, CopyGetters, Getters)]
 pub struct EvaluatedNamedFunction {
     #[getset(get_copy = "pub")]
@@ -114,45 +110,24 @@ pub struct EvaluatedNamedFunction {
     #[getset(get_copy = "pub")]
     pub evaluated_value: f64,
     #[getset(get = "pub")]
-    pub name: Option<String>,
-    #[getset(get = "pub")]
-    pub subscripts: Vec<i64>,
-    #[getset(get = "pub")]
-    pub parameters: FnvHashMap<String, String>,
-    #[getset(get = "pub")]
-    pub description: Option<String>,
-    #[getset(get = "pub")]
     used_decision_variable_ids: VariableIDSet,
 }
 
 impl std::fmt::Display for EvaluatedNamedFunction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let name_str = self
-            .name
-            .as_ref()
-            .map(|n| format!("name=\"{n}\""))
-            .unwrap_or_else(|| "name=None".to_string());
-
-        let mut parts = vec![name_str, format!("value={}", self.evaluated_value)];
-
-        if !self.subscripts.is_empty() {
-            parts.push(format!("subscripts={:?}", self.subscripts));
-        }
-
-        if !self.parameters.is_empty() {
-            let params: Vec<String> = self
-                .parameters
-                .iter()
-                .map(|(k, v)| format!("{k}={v}"))
-                .collect();
-            parts.push(format!("parameters={{{}}}", params.join(", ")));
-        }
-
-        write!(f, "EvaluatedNamedFunction({})", parts.join(", "))
+        write!(
+            f,
+            "EvaluatedNamedFunction(id={}, value={})",
+            self.id, self.evaluated_value
+        )
     }
 }
 
-/// Multiple sample evaluation results with deduplication
+/// Multiple sample evaluation results with deduplication.
+///
+/// Metadata moved to a per-collection
+/// [`NamedFunctionMetadataStore`] on `SampleSet`; the struct only carries
+/// intrinsic sampled data.
 #[derive(Debug, Clone, PartialEq, Getters)]
 pub struct SampledNamedFunction {
     #[getset(get = "pub")]
@@ -160,44 +135,17 @@ pub struct SampledNamedFunction {
     #[getset(get = "pub")]
     evaluated_values: Sampled<f64>,
     #[getset(get = "pub")]
-    pub name: Option<String>,
-    #[getset(get = "pub")]
-    pub subscripts: Vec<i64>,
-    #[getset(get = "pub")]
-    pub parameters: FnvHashMap<String, String>,
-    #[getset(get = "pub")]
-    pub description: Option<String>,
-    #[getset(get = "pub")]
     used_decision_variable_ids: VariableIDSet,
 }
 
 impl std::fmt::Display for SampledNamedFunction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let name_str = self
-            .name
-            .as_ref()
-            .map(|n| format!("name=\"{n}\""))
-            .unwrap_or_else(|| "name=None".to_string());
-
-        let mut parts = vec![
-            name_str,
-            format!("num_samples={}", self.evaluated_values.num_samples()),
-        ];
-
-        if !self.subscripts.is_empty() {
-            parts.push(format!("subscripts={:?}", self.subscripts));
-        }
-
-        if !self.parameters.is_empty() {
-            let params: Vec<String> = self
-                .parameters
-                .iter()
-                .map(|(k, v)| format!("{k}={v}"))
-                .collect();
-            parts.push(format!("parameters={{{}}}", params.join(", ")));
-        }
-
-        write!(f, "SampledNamedFunction({})", parts.join(", "))
+        write!(
+            f,
+            "SampledNamedFunction(id={}, num_samples={})",
+            self.id,
+            self.evaluated_values.num_samples()
+        )
     }
 }
 
@@ -211,10 +159,6 @@ impl SampledNamedFunction {
         Some(EvaluatedNamedFunction {
             id: *self.id(),
             evaluated_value,
-            name: self.name.clone(),
-            subscripts: self.subscripts.clone(),
-            parameters: self.parameters.clone(),
-            description: self.description.clone(),
             used_decision_variable_ids: self.used_decision_variable_ids.clone(),
         })
     }

@@ -52,12 +52,16 @@ impl Parse for crate::v1::SampleSet {
             constraints.insert(id, parsed_constraint);
         }
 
-        // Parse named functions into BTreeMap
+        // Parse named functions into BTreeMap, draining metadata into the SoA store
         let mut named_functions = std::collections::BTreeMap::new();
+        let mut named_function_metadata =
+            crate::named_function::NamedFunctionMetadataStore::default();
         for v1_named_function in self.named_functions {
-            let parsed_named_function: crate::SampledNamedFunction =
+            let parsed: crate::named_function::parse::ParsedSampledNamedFunction =
                 v1_named_function.parse_as(&(), message, "named_functions")?;
-            named_functions.insert(*parsed_named_function.id(), parsed_named_function);
+            let id = *parsed.sampled_named_function.id();
+            named_functions.insert(id, parsed.sampled_named_function);
+            named_function_metadata.insert(id, parsed.metadata);
         }
 
         let sense = self.sense.try_into().map_err(|_| {
@@ -79,6 +83,7 @@ impl Parse for crate::v1::SampleSet {
                 constraint_metadata,
             ))
             .named_functions(named_functions)
+            .named_function_metadata(named_function_metadata)
             .sense(sense)
             .build()
             .map_err(crate::RawParseError::SampleSetError)?;
@@ -164,10 +169,14 @@ impl From<SampleSet> for crate::v1::SampleSet {
                 v1_sc
             })
             .collect();
+        let named_function_metadata_store = sample_set.named_function_metadata().clone();
         let named_functions: Vec<crate::v1::SampledNamedFunction> = sample_set
             .named_functions()
-            .values()
-            .map(|nf| nf.clone().into())
+            .iter()
+            .map(|(id, nf)| {
+                let metadata = named_function_metadata_store.collect_for(*id);
+                crate::named_function::parse::sampled_named_function_to_v1(nf.clone(), metadata)
+            })
             .collect();
         let sense = (*sample_set.sense()).into();
 

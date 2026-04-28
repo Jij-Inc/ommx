@@ -1,11 +1,17 @@
 use pyo3::{prelude::*, Bound};
 use std::collections::{HashMap, HashSet};
 
-/// EvaluatedNamedFunction wrapper for Python
+/// EvaluatedNamedFunction wrapper for Python.
+///
+/// Holds the Rust `EvaluatedNamedFunction` plus an owned snapshot of its
+/// metadata. See `NamedFunction` for the snapshot-model rationale.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
-pub struct EvaluatedNamedFunction(pub ommx::EvaluatedNamedFunction);
+pub struct EvaluatedNamedFunction(
+    pub ommx::EvaluatedNamedFunction,
+    pub ommx::NamedFunctionMetadata,
+);
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
@@ -22,22 +28,22 @@ impl EvaluatedNamedFunction {
 
     #[getter]
     pub fn name(&self) -> Option<String> {
-        self.0.name.clone()
+        self.1.name.clone()
     }
 
     #[getter]
     pub fn subscripts(&self) -> Vec<i64> {
-        self.0.subscripts.clone()
+        self.1.subscripts.clone()
     }
 
     #[getter]
     pub fn parameters(&self) -> HashMap<String, String> {
-        self.0.parameters.clone().into_iter().collect()
+        self.1.parameters.clone().into_iter().collect()
     }
 
     #[getter]
     pub fn description(&self) -> Option<String> {
-        self.0.description.clone()
+        self.1.description.clone()
     }
 
     #[getter]

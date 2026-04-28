@@ -9,8 +9,8 @@ impl Instance {
     /// Named functions without names are not included.
     pub fn named_function_names(&self) -> std::collections::BTreeSet<String> {
         self.named_functions
-            .values()
-            .filter_map(|var| var.name.clone())
+            .keys()
+            .filter_map(|id| self.named_function_metadata().name(*id).map(str::to_owned))
             .collect()
     }
 
@@ -39,9 +39,14 @@ impl Instance {
         name: &str,
         subscripts: Vec<i64>,
     ) -> Option<&NamedFunction> {
-        self.named_functions
-            .values()
-            .find(|var| var.name.as_deref() == Some(name) && var.subscripts == subscripts)
+        self.named_functions.iter().find_map(|(id, nf)| {
+            let store = self.named_function_metadata();
+            if store.name(*id) == Some(name) && store.subscripts(*id) == subscripts.as_slice() {
+                Some(nf)
+            } else {
+                None
+            }
+        })
     }
 
     /// Returns the next available NamedFunctionID.
@@ -75,15 +80,15 @@ impl Instance {
         }
         let id = self.next_named_function_id();
 
-        let named_function = NamedFunction {
-            id,
-            function,
+        let named_function = NamedFunction { id, function };
+        self.named_functions.insert(id, named_function);
+        let metadata = crate::named_function::NamedFunctionMetadata {
             name,
             subscripts,
             parameters,
             description,
         };
-        self.named_functions.insert(id, named_function);
+        self.named_function_metadata_mut().insert(id, metadata);
         Ok(self.named_functions.get_mut(&id).unwrap())
     }
 }
@@ -162,8 +167,12 @@ mod tests {
         // Lookup by correct name and subscripts
         let found = instance.get_named_function_by_name("f", vec![1, 2]);
         assert!(found.is_some());
-        assert_eq!(found.unwrap().name, Some("f".to_string()));
-        assert_eq!(found.unwrap().subscripts, vec![1, 2]);
+        let found_id = found.unwrap().id;
+        assert_eq!(instance.named_function_metadata().name(found_id), Some("f"));
+        assert_eq!(
+            instance.named_function_metadata().subscripts(found_id),
+            &[1, 2]
+        );
 
         // Wrong subscripts → None
         let not_found = instance.get_named_function_by_name("f", vec![3]);
@@ -228,10 +237,12 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(nf.id, NamedFunctionID::from(0));
-        assert_eq!(nf.name, Some("obj".to_string()));
-        assert_eq!(nf.subscripts, vec![0]);
-        assert_eq!(nf.description, Some("test function".to_string()));
+        let nf_id = nf.id;
+        assert_eq!(nf_id, NamedFunctionID::from(0));
+        let store = instance.named_function_metadata();
+        assert_eq!(store.name(nf_id), Some("obj"));
+        assert_eq!(store.subscripts(nf_id), &[0]);
+        assert_eq!(store.description(nf_id), Some("test function"));
     }
 
     #[test]

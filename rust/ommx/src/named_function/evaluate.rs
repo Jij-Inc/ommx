@@ -15,10 +15,6 @@ impl Evaluate for NamedFunction {
         Ok(EvaluatedNamedFunction {
             id: self.id,
             evaluated_value,
-            name: self.name.clone(),
-            subscripts: self.subscripts.clone(),
-            parameters: self.parameters.clone(),
-            description: self.description.clone(),
             used_decision_variable_ids,
         })
     }
@@ -45,10 +41,6 @@ impl Evaluate for NamedFunction {
         Ok(SampledNamedFunction {
             id: self.id,
             evaluated_values,
-            name: self.name.clone(),
-            subscripts: self.subscripts.clone(),
-            parameters: self.parameters.clone(),
-            description: self.description.clone(),
             used_decision_variable_ids,
         })
     }
@@ -66,10 +58,6 @@ mod tests {
         let nf = NamedFunction {
             id: NamedFunctionID::from(1),
             function: Function::Constant(Coefficient::try_from(42.0).unwrap()),
-            name: Some("my_func".to_string()),
-            subscripts: vec![1, 2],
-            parameters: Default::default(),
-            description: Some("constant function".to_string()),
         };
 
         let state = crate::v1::State::default();
@@ -77,9 +65,6 @@ mod tests {
 
         assert_eq!(result.id(), NamedFunctionID::from(1));
         assert_eq!(result.evaluated_value(), 42.0);
-        assert_eq!(*result.name(), Some("my_func".to_string()));
-        assert_eq!(*result.subscripts(), vec![1, 2]);
-        assert_eq!(*result.description(), Some("constant function".to_string()));
         assert!(result.used_decision_variable_ids().is_empty());
     }
 
@@ -89,10 +74,6 @@ mod tests {
         let nf = NamedFunction {
             id: NamedFunctionID::from(2),
             function: Function::Linear(coeff!(2.0) * linear!(1) + coeff!(3.0) * linear!(2)),
-            name: Some("linear_func".to_string()),
-            subscripts: vec![],
-            parameters: Default::default(),
-            description: None,
         };
 
         // x1 = 5.0, x2 = 10.0 => 2*5 + 3*10 = 40.0
@@ -114,10 +95,6 @@ mod tests {
         let nf = NamedFunction {
             id: NamedFunctionID::from(3),
             function: Function::Linear(coeff!(2.0) * linear!(1) + coeff!(3.0) * linear!(2)),
-            name: None,
-            subscripts: vec![],
-            parameters: Default::default(),
-            description: None,
         };
 
         let ids = nf.required_ids();

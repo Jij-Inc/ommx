@@ -237,10 +237,11 @@ impl SampleSet {
     /// Get named functions for compatibility with existing Python code
     #[getter]
     pub fn named_functions(&self) -> Vec<crate::SampledNamedFunction> {
+        let metadata = self.inner.named_function_metadata();
         self.inner
             .named_functions()
-            .values()
-            .map(|nf| crate::SampledNamedFunction(nf.clone()))
+            .iter()
+            .map(|(id, nf)| crate::SampledNamedFunction(nf.clone(), metadata.collect_for(*id)))
             .collect()
     }
 
@@ -480,7 +481,14 @@ impl SampleSet {
         self.inner
             .named_functions()
             .get(&named_function_id)
-            .map(|nf| crate::SampledNamedFunction(nf.clone()))
+            .map(|nf| {
+                crate::SampledNamedFunction(
+                    nf.clone(),
+                    self.inner
+                        .named_function_metadata()
+                        .collect_for(named_function_id),
+                )
+            })
             .ok_or_else(|| {
                 pyo3::exceptions::PyKeyError::new_err(format!(
                     "Unknown named function ID: {named_function_id}"
@@ -698,15 +706,24 @@ impl SampleSet {
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let flags = crate::pandas::IncludeFlags::from_optional(include)?;
         let sample_ids = sorted_sample_ids(&self.inner);
+        let nf_meta_store = self.inner.named_function_metadata().clone();
+        let nf_meta_view: Vec<(ommx::NamedFunctionMetadata, &ommx::SampledNamedFunction)> = self
+            .inner
+            .named_functions()
+            .iter()
+            .map(|(id, nf)| (nf_meta_store.collect_for(*id), nf))
+            .collect();
         entries_to_dataframe(
             py,
-            self.inner
-                .named_functions()
-                .values()
-                .map(|item| WithSampleIds {
-                    item,
-                    sample_ids: &sample_ids,
-                }),
+            nf_meta_view.iter().map(|(m, nf)| {
+                crate::pandas::WithMetadata::new(
+                    WithSampleIds {
+                        item: *nf,
+                        sample_ids: &sample_ids,
+                    },
+                    m,
+                )
+            }),
             "id",
             flags,
         )

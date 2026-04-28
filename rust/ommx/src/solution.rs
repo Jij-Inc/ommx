@@ -124,6 +124,9 @@ pub struct Solution {
     /// Per-variable auxiliary metadata (sibling of [`Self::decision_variables`]).
     #[getset(get = "pub")]
     variable_metadata: VariableMetadataStore,
+    /// Per-named-function auxiliary metadata (sibling of [`Self::evaluated_named_functions`]).
+    #[getset(get = "pub")]
+    named_function_metadata: crate::named_function::NamedFunctionMetadataStore,
     /// Optimality status - not guaranteed by Solution itself
     pub optimality: crate::v1::Optimality,
     /// Relaxation status - not guaranteed by Solution itself
@@ -446,8 +449,8 @@ impl Solution {
     /// Named functions without names are not included.
     pub fn named_function_names(&self) -> BTreeSet<String> {
         self.evaluated_named_functions
-            .values()
-            .filter_map(|nf| nf.name().clone())
+            .keys()
+            .filter_map(|id| self.named_function_metadata.name(*id).map(str::to_owned))
             .collect()
     }
 
@@ -470,8 +473,9 @@ impl Solution {
         // Collect all named functions with the given name
         let functions_with_name: Vec<&EvaluatedNamedFunction> = self
             .evaluated_named_functions
-            .values()
-            .filter(|nf| nf.name().as_deref() == Some(name))
+            .iter()
+            .filter(|(id, _)| self.named_function_metadata.name(**id) == Some(name))
+            .map(|(_, nf)| nf)
             .collect();
         if functions_with_name.is_empty() {
             return Err(SolutionError::UnknownNamedFunctionName {
@@ -481,7 +485,7 @@ impl Solution {
 
         let mut result = BTreeMap::new();
         for nf in &functions_with_name {
-            let key = nf.subscripts().clone();
+            let key = self.named_function_metadata.subscripts(nf.id()).to_vec();
             if result.contains_key(&key) {
                 return Err(SolutionError::DuplicateSubscript { subscripts: key });
             }
@@ -505,13 +509,13 @@ impl Solution {
     ) -> Result<BTreeMap<String, BTreeMap<Vec<i64>, f64>>, SolutionError> {
         let mut result: BTreeMap<String, BTreeMap<Vec<i64>, f64>> = BTreeMap::new();
 
-        for nf in self.evaluated_named_functions.values() {
-            let name = match nf.name() {
-                Some(n) => n.clone(),
+        for (id, nf) in &self.evaluated_named_functions {
+            let name = match self.named_function_metadata.name(*id) {
+                Some(n) => n.to_string(),
                 None => continue, // Skip named functions without names
             };
 
-            let subscripts = nf.subscripts().clone();
+            let subscripts = self.named_function_metadata.subscripts(*id).to_vec();
             let value = nf.evaluated_value();
 
             let funcs_map = result.entry(name).or_default();
@@ -555,6 +559,7 @@ pub struct SolutionBuilder {
     evaluated_named_functions: BTreeMap<NamedFunctionID, EvaluatedNamedFunction>,
     decision_variables: Option<BTreeMap<VariableID, EvaluatedDecisionVariable>>,
     variable_metadata: VariableMetadataStore,
+    named_function_metadata: crate::named_function::NamedFunctionMetadataStore,
     sense: Option<Sense>,
     optimality: crate::v1::Optimality,
     relaxation: crate::v1::Relaxation,
@@ -658,6 +663,15 @@ impl SolutionBuilder {
     /// Sets the per-variable metadata store.
     pub fn variable_metadata(mut self, variable_metadata: VariableMetadataStore) -> Self {
         self.variable_metadata = variable_metadata;
+        self
+    }
+
+    /// Sets the per-named-function metadata store.
+    pub fn named_function_metadata(
+        mut self,
+        named_function_metadata: crate::named_function::NamedFunctionMetadataStore,
+    ) -> Self {
+        self.named_function_metadata = named_function_metadata;
         self
     }
 
@@ -785,6 +799,7 @@ impl SolutionBuilder {
             evaluated_named_functions: self.evaluated_named_functions,
             decision_variables,
             variable_metadata: self.variable_metadata.clone(),
+            named_function_metadata: self.named_function_metadata.clone(),
             optimality: self.optimality,
             relaxation: self.relaxation,
             sense: Some(sense),
@@ -834,6 +849,7 @@ impl SolutionBuilder {
             evaluated_named_functions: self.evaluated_named_functions,
             decision_variables,
             variable_metadata: self.variable_metadata.clone(),
+            named_function_metadata: self.named_function_metadata.clone(),
             optimality: self.optimality,
             relaxation: self.relaxation,
             sense: Some(sense),

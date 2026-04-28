@@ -3,8 +3,11 @@
 Status: **Rust SDK landed; Python wrappers landed (snapshot model);
 `include=` + long-format sidecar dfs landed (Wave 1.5); per-kind
 `*_df` consolidation + `kind: Literal[...]` typing landed (Wave 2,
-PR #847); Series accessors and two-mode Attached wrappers deferred
-to follow-up PRs**
+PR #847); `NamedFunction` SoA migration landed (this PR — same
+snapshot-model shape as `DecisionVariable` / `Constraint`).
+`Series[ID -> Object]` collection accessors are dropped from the
+plan (rationale below). Two-mode Attached wrappers remain deferred
+to a follow-up PR.**
 
 This proposal is a **prerequisite** for `SPECIAL_CONSTRAINTS_V3.md` (PR #841).
 The proto-schema redesign in #841 cannot be finalized without first deciding
@@ -59,10 +62,19 @@ here. The implementation shipped in three waves:
   type checkers catch typos at edit time; runtime continues to
   validate against the same set and raise `ValueError` on unknown
   values for callers without a type checker.
-- **Future (deferred):** `Series[ID -> Object]` collection
-  accessors, the two-mode Standalone / Attached wrappers with
-  `Py<Instance>` back-references and write-through metadata setters,
-  and the `NamedFunction` SoA migration.
+- **Future (deferred):** the two-mode Standalone / Attached
+  wrappers with `Py<Instance>` back-references and write-through
+  metadata setters.
+- **Dropped:** the `Series[ID -> Object]` collection accessors.
+  Their original draw was hosting Attached wrappers with bulk
+  pandas indexing on top; with `*_df` (wide via `include=`, long
+  via the sidecars) covering bulk analysis from the SoA store
+  directly and `instance.constraints[id]` covering single-id
+  access, a Series layer of snapshot wrappers in between would
+  duplicate the dict accessor without adding a real capability.
+  The two-mode wrapper work, if it lands, exposes write-through
+  via the existing `instance.constraints[id]` getter — Series is
+  not a prerequisite.
 
 Sections below mark each item with **(landed)** or **(deferred)** so it
 is clear which parts are live in v3 alpha and which are still proposal.
@@ -80,9 +92,9 @@ hand:
    metadata replicated as columns next to the type-specific data.
 
 We want one **canonical storage** in Rust and well-defined **derived views**
-on top of it. The user-visible surfaces (the PyO3 wrapper objects, the new
-`Series` collection accessors, the `*_df` methods) all stay — but they
-all read from the same SoA store rather than each carrying its own copy.
+on top of it. The user-visible surfaces (the PyO3 wrapper objects and
+the `*_df` methods) all stay — but they all read from the same SoA
+store rather than each carrying its own copy.
 
 The duplication shows up in memory accounting (`logical_memory.rs`
 reports per-row `Option`/`Vec`/`FnvHashMap` headers under
@@ -144,9 +156,13 @@ SoA store; the behavior they implement is unchanged.
     "Wrapper objects with back-reference" below is the long-term target
     but is **not yet implemented** — the snapshot model is what ships in
     v3 alpha.
-- `instance.constraints`, `decision_variables`, `*_constraints` are
-  still `dict` / `list` of wrapper objects. The proposed
-  `pandas.Series[ID -> Object]` shape is **deferred** to a follow-up PR.
+- `instance.constraints`, `decision_variables`, `*_constraints` stay
+  `dict` / `list` of wrapper objects. The earlier proposal to migrate
+  them to `pandas.Series[ID -> Object]` is **dropped** — bulk analysis
+  goes through `*_df` (wide via `include=`, long via the sidecars),
+  which read directly from the SoA store; `dict[id]` still covers
+  single-id wrapper access. A Series of snapshot wrappers in between
+  duplicates the dict accessor without adding a real capability.
 - `*_df` accessors are now methods (not `#[getter]` properties), each
   with an `include=` parameter that gates the metadata / parameters
   / removed-reason column families. Default
@@ -261,27 +277,15 @@ Why these levels:
   and `ParametricInstance` already own `BTreeMap<VariableID,
   DecisionVariable>` directly. We just add a sibling field.
 
-#### NamedFunction **(deferred — separate PR)**
+#### NamedFunction **(landed — this PR)**
 
-`NamedFunction` currently inlines its metadata as plain fields on the
-struct rather than via a `metadata: ConstraintMetadata`-style substruct,
-so the v1 → v3 alpha cutover did not include it. The shape today:
+`NamedFunction` followed the same SoA migration path as
+`DecisionVariable` / `Constraint`, just shipped as a separate PR
+because the structural shape was distinct enough that bundling both
+diffs would have made the constraint / variable refactor harder to
+review.
 
-```rust
-pub struct NamedFunction {
-    pub id:          NamedFunctionID,
-    pub function:    Function,
-    pub name:        Option<String>,
-    pub subscripts:  Vec<i64>,
-    pub parameters:  FnvHashMap<String, String>,
-    pub description: Option<String>,
-}
-// EvaluatedNamedFunction / SampledNamedFunction follow the same shape.
-```
-
-For consistency with the rest of the SoA migration, the metadata fields
-should move off the per-element struct onto a sibling store on the
-enclosing collection — same pattern as `VariableMetadataStore`:
+Shape after this PR:
 
 ```rust
 pub struct NamedFunctionMetadataStore {
@@ -300,32 +304,28 @@ pub struct NamedFunction {
 
 pub struct Instance {
     named_functions:          BTreeMap<NamedFunctionID, NamedFunction>,
-    named_function_metadata:  NamedFunctionMetadataStore,   // new
+    named_function_metadata:  NamedFunctionMetadataStore,
     // …
 }
-// ParametricInstance, Solution, SampleSet get the same sibling field
+// ParametricInstance, Solution, SampleSet got the same sibling field
 // next to their named_functions map.
 ```
 
 The store, the per-field getters, and the parse / serialize drain
-pattern are mechanical — they mirror `VariableMetadataStore`
-verbatim, with `VariableID` swapped for `NamedFunctionID` and the
-provenance field omitted. Pythonside snapshot wrappers
-(`NamedFunction`, `EvaluatedNamedFunction`, `SampledNamedFunction`)
-gain a second tuple slot for the snapshot, exactly like the
-constraint and decision-variable wrappers in PR #843. Pandas
-rendering reuses the existing `WithMetadata<'a, T,
-NamedFunctionMetadata>` plumbing.
-
-Scope-wise this is a separate PR from the constraint / variable
-migration in #843. The shape of `NamedFunction` is structurally
-distinct (no per-element `metadata` substruct to peel off, no
-generic `*Collection<T>` to put a store inside, named functions
-have no `Created → Evaluated → Sampled` lifecycle), and bundling
-both migrations into one diff would have made the constraint /
-variable refactor harder to review. The store and per-field
-helpers, however, are already in scope of this proposal so the
-follow-up has a concrete spec to land against.
+pattern mirror `VariableMetadataStore` verbatim, with `VariableID`
+swapped for `NamedFunctionID` and the provenance field omitted.
+Python-side snapshot wrappers (`NamedFunction`,
+`EvaluatedNamedFunction`, `SampledNamedFunction`) gained a second
+tuple slot for the snapshot, exactly like the constraint and
+decision-variable wrappers in PR #843. Pandas rendering went through
+`WithMetadata<'a, T, NamedFunctionMetadata>` to reuse the existing
+plumbing. `Instance::evaluate` / `evaluate_samples` thread the
+`NamedFunctionMetadataStore` clone onto the produced
+`Solution` / `SampleSet`. Element-level `to_bytes` / `from_bytes`
+on `NamedFunction` / `EvaluatedNamedFunction` / `SampledNamedFunction`
+were removed (same rationale as PR #845: they predate the SoA split
+and a per-element wire round-trip can no longer carry the host-stored
+metadata).
 
 ### Per-object struct changes
 
@@ -489,10 +489,8 @@ The boundaries currently work per-element and need to move to per-collection:
 - **`pyo3-stub-gen`**: every renamed / removed / added Python method
   below needs the `gen_stub_pymethods` decorator and the corresponding
   `ommx.v1.__init__.py` regen via `task python:stubgen`. The stores are
-  not exposed to Python directly; they surface via wrapper getters,
-  Series accessors, and DataFrames. For the `Series[ID -> Object]`
-  return signatures, hand-written stub overrides cover whatever the
-  derive doesn't emit automatically.
+  not exposed to Python directly; they surface via wrapper getters and
+  DataFrames.
 - **`Evaluate` / Sampled construction paths**:
   `EvaluatedCollection<T>` and `SampledCollection<T>` currently
   carry no metadata (`rust/ommx/src/constraint_type.rs`). To realize
@@ -506,11 +504,12 @@ The boundaries currently work per-element and need to move to per-collection:
 
 ## Python SDK design
 
-The shipping v3 alpha currently exposes only the wrapper-object surface
-described under **Snapshot wrappers (landed)** below. The remaining
-sections describe the long-term target shape and are explicitly
-**deferred** to follow-up PRs; their structure is preserved here so the
-Series / `include=` / sidecar work has a concrete spec to land against.
+The shipping v3 alpha exposes the snapshot wrapper surface
+described under **Snapshot wrappers (landed)** below, plus the
+`*_df` family with `include=` / `kind=` / `removed=` covering bulk
+analysis. The remaining section on two-mode wrappers describes the
+long-term target shape for write-through metadata mutation and is
+explicitly **deferred** to follow-up PRs.
 
 ### Snapshot wrappers (landed)
 
@@ -568,14 +567,15 @@ or use the Rust SoA setters.
 The two-mode design described next is the long-term replacement for the
 snapshot model — it would let `c.set_name("x")` write through to the
 instance's SoA store. Adopting it requires `Py<Instance>` back-references
-on every wrapper and is gated behind the deferred Series accessor work.
+on every wrapper and is independent of the dropped Series accessor
+plan; write-through plugs into the existing `instance.constraints[id]`
+getter.
 
-### Layered views over the Rust SoA store **(partially landed)**
+### Layered views over the Rust SoA store **(landed)**
 
 `include=` and the long-format sidecar dfs landed in PR #846; the
 `kind=Literal[...]` consolidation of per-kind `*_constraints_df`
-landed in PR #847 (Wave 2). Only the Series accessor remains
-deferred.
+landed in PR #847 (Wave 2).
 
 ```
                   Rust SoA store (canonical)
@@ -590,20 +590,21 @@ deferred.
               │ ConstraintCollection (Py wrapper) │
               └─────┬─────────────────────────────┘
                     │
-       ┌────────────┼─────────────────────┐
-       ▼            ▼                     ▼
-  Series         Constraint object     constraints_df(kind=..., include=...) /
-  (per-id        (with .name /         constraint_metadata_df(kind=...) /
-   wrapper       .subscripts / …       constraint_parameters_df(kind=...) /
-   handles)      back-referenced       constraint_provenance_df(kind=...) /
-                 to the store)         constraint_removed_reasons_df(kind=...)
-                                       (bulk-built from the SoA via column-wise
-                                       builders; kind typed Literal[...])
+              ┌─────┴──────────────────────┐
+              ▼                            ▼
+  instance.constraints[id]       constraints_df(kind=..., include=...) /
+  (snapshot Constraint object    constraint_metadata_df(kind=...) /
+   with .name / .subscripts /    constraint_parameters_df(kind=...) /
+   …; v3-alpha snapshot model,   constraint_provenance_df(kind=...) /
+   future two-mode wrappers      constraint_removed_reasons_df(kind=...)
+   write through to the store)   (bulk-built from the SoA via column-wise
+                                 builders; kind typed Literal[...])
 ```
 
-Wrapper objects, Series, and DataFrames are three views over the same
-store. The wrapper getters and the DataFrame columns produce the same
-values for the same ID; the difference is bulk vs. per-id ergonomics.
+Wrapper objects and DataFrames are two views over the same store.
+The wrapper getters and the DataFrame columns produce the same
+values for the same ID; the difference is per-id wrapper ergonomics
+vs. bulk DataFrame ergonomics.
 
 ### Wrapper objects with back-reference **(deferred)**
 
@@ -643,8 +644,8 @@ Standalone wrapper is **transitioned in place**: its `inner` flips to
 `c.add_name(...)`, etc. read / write the SoA store. Calling
 `add_constraint(c)` a second time on an already-Attached wrapper
 raises `ValueError("constraint already inserted")` rather than
-silently re-inserting. Series-derived wrappers (`s.loc[id]`) are
-also Attached, sharing the `Py<Instance>` of the parent.
+silently re-inserting. Wrappers obtained from `instance.constraints[id]`
+are also Attached, sharing the `Py<Instance>` of the parent.
 
 Two Attached wrappers that point at the same id observe the same
 state: a write through one (`a.name = "x"`) is visible through any
@@ -662,9 +663,9 @@ print(c.name)        # "balance" — read from staging bag
 attached = instance.add_constraint(c)
 print(attached.name) # "balance" — read from SoA via back-reference
 
-# Series access — Attached wrappers
-s = instance.constraints
-print(s.loc[5].name) # back-reference lookup; same value as the metadata df
+# Single-id access — Attached wrapper
+print(instance.constraints[5].name)
+# back-reference lookup; same value as the metadata df
 
 # Mutation — write-through to SoA
 attached.name = "demand_balance"
@@ -687,52 +688,43 @@ reference can't dangle. Open semantic question:
 The simple rule: a wrapper's `id` stays in either the active or removed
 map for the lifetime of the parent `Instance`, so getters never panic.
 
-### Series-based collection accessors **(deferred)**
+### Series-based collection accessors **(dropped)**
 
-```python
-s = instance.constraints                  # pandas.Series[ConstraintID -> Constraint]
-s.loc[5]                                  # individual Constraint object (Attached)
-s.loc[5].equality                         # type-intrinsic getter
-s.loc[5].name                             # metadata getter via back-reference
+The earlier waves of this proposal positioned
+`instance.constraints: pandas.Series[ConstraintID -> Constraint]`
+(and the parallel accessors on `decision_variables`, the special
+constraint kinds, and the Solution / SampleSet hosts) as a
+third surface alongside the wrapper objects and the `*_df` methods.
+After Wave 1.5 + Wave 2 the proposal no longer pays for itself:
 
-list(s.index)                             # all constraint IDs
-for cid, c in s.items(): ...              # iteration
+- **Bulk analysis already reads from the SoA store directly.**
+  `instance.constraints_df(kind=..., include=...)` (wide) and
+  `constraint_metadata_df(kind=...)` / `constraint_parameters_df` /
+  `constraint_provenance_df` / `constraint_removed_reasons_df`
+  (long-format sidecars) are the right place to do bulk filtering,
+  joins, and aggregation. They are column-wise builders over the
+  SoA; a Series of snapshot wrappers would force users back into
+  per-row Python-side loops, which is the antipattern we want to
+  steer them away from.
+- **Per-id access already has a clean shape.**
+  `instance.constraints[id]` returns a wrapper today and would keep
+  doing so once two-mode wrappers land (the Attached mode plugs
+  into the same getter). `s.loc[id]` would be a second spelling
+  of the same thing.
+- **The bulk indexing primitives Series adds are not load-bearing
+  here.** `.loc` / `.iloc` / boolean indexing on a Series of object
+  dtype iterates in Python and rebuilds the result row-by-row;
+  the natural answer in this codebase is "ask the DataFrame," not
+  "iterate the Series."
+- **The `.values()` migration cost is real.** `pandas.Series.values`
+  is a property, not a method; making `instance.constraints` a
+  Series breaks every existing `.values()` call loudly with no
+  upside on the bulk-analysis path.
 
-# decision variables and the other constraint kinds get the same treatment
-instance.decision_variables               # Series[VariableID -> DecisionVariable]
-instance.indicator_constraints            # Series[IndicatorConstraintID -> IndicatorConstraint]
-instance.one_hot_constraints              # Series[OneHotConstraintID -> OneHotConstraint]
-instance.sos1_constraints                 # Series[Sos1ConstraintID -> Sos1Constraint]
-
-solution.constraints                      # Series[ConstraintID -> EvaluatedConstraint]
-sample_set.constraints                    # Series[ConstraintID -> SampledConstraint]
-
-# ParametricInstance follows the same surface as Instance: Series
-# accessors for variables / constraints / special constraints, the
-# corresponding constraints_df / constraint_metadata_df / etc.
-# family with the same `include=` parameter, and back-referenced
-# wrappers for individual elements. The (unrelated) parametric
-# `parameters` field stays on its own dedicated accessor.
-parametric_instance.constraints           # Series[ConstraintID -> Constraint]
-parametric_instance.decision_variables    # Series[VariableID -> DecisionVariable]
-```
-
-The Series carries Attached wrapper objects (object dtype). Per-element
-efficiency is the same as the old `dict[ID, Constraint]`. Indexing
-operations users get for free vs. dict: `.loc`, `.iloc`, boolean
-indexing, `.items()`, `.index`. Operations users lose vs. dict:
-
-- **`s.values()` is NOT a method**; pandas `Series.values` is a
-  property returning a numpy array. Existing `.values()` calls break
-  loudly. Migration: `s.tolist()`, `list(s)`, or `for c in s:`.
-- **`s[id]` works for an integer id** because Series allows index-by-
-  label lookup with `[]`, but `.loc[id]` is the explicit form.
-  Documentation should prefer `.loc[id]` to avoid the
-  position-vs-label ambiguity.
-- **`s.apply(lambda c: c.equality)` is an attractive nuisance**: it
-  iterates Python-side and rebuilds the equality column row-by-row.
-  The right answer is `instance.constraints_df()["equality"]`, which
-  is bulk-built from the SoA. Document this; do not enforce.
+So `instance.constraints` etc. stay as `dict[ID, Wrapper]` / `list`
+in v3. The two-mode wrapper work is independent of this decision —
+write-through metadata mutation plugs into `instance.constraints[id]`
+directly, without a Series detour.
 
 ### `*_df` methods → derived views with `include` and `kind=` **(Wave 1.5 + Wave 2)**
 
@@ -900,10 +892,11 @@ a column-level concern, not a row-level one.
 
 `*_df` (with `include=`) is what users call when they want a wide
 table for analysis; the long-format sidecars are what they call when
-they want tidy data for joins or aggregation; the Series is what they
-call when they want individual wrapper objects; the wrapper getters
-are what they call when they already hold one wrapper. Four surfaces,
-one canonical store.
+they want tidy data for joins or aggregation; the dict accessor
+(`instance.constraints[id]`) is what they call when they want an
+individual wrapper object; the wrapper getters are what they call
+when they already hold one wrapper. Three surfaces, one canonical
+store.
 
 ### Avoiding cross-ID-space joins
 
@@ -972,7 +965,7 @@ ExtensionArray is a meaningful pandas integration and a maintenance
 burden disproportionate to the failure mode it prevents. The qualified
 index name + `include=` covering the common wide case are sufficient.
 
-### `ToPandasEntry` restructuring **(landed for snapshot model + sidecars; Series deferred)**
+### `ToPandasEntry` restructuring **(landed)**
 
 `python/ommx/src/pandas.rs` previously had ~16 `ToPandasEntry` impls
 that read `self.metadata.X` directly off each element. The shipping
@@ -1000,9 +993,11 @@ shape is:
   read directly from the SoA stores (via `store.name(id)` /
   `.parameters(id)` / `.provenance(id)`) and don't go through
   `ToPandasEntry` at all — they're bulk column-wise builders.
-- **Series accessors (deferred).** The current accessors still return
-  `dict` / `list`; the `pandas.Series[ID -> Object]` shape with
-  Attached wrappers is part of the deferred wave.
+- **Collection accessors stay `dict` / `list`.** The earlier
+  proposal to migrate `instance.constraints` etc. to
+  `pandas.Series[ID -> Object]` is dropped — see the
+  "Series-based collection accessors **(dropped)**" section above
+  for the rationale.
 
 ### `subscripts` / `provenance` representation
 
@@ -1129,23 +1124,55 @@ shape is:
   `*_df` accessor returns a uniform `pandas.DataFrame`, so
   overload-style typing has no return-type variation to express.
 
+### Landed in NamedFunction SoA migration (this PR)
+
+- `NamedFunction`, `EvaluatedNamedFunction`, and
+  `SampledNamedFunction` lose their inline `name` / `subscripts` /
+  `parameters` / `description` fields. Metadata moves to a
+  `NamedFunctionMetadataStore` SoA store kept as a sibling field on
+  `Instance`, `ParametricInstance`, `Solution`, and `SampleSet`.
+  `Instance::evaluate` / `evaluate_samples` thread the store onto
+  the produced `Solution` / `SampleSet` so per-element metadata
+  reads through the same channel as decision-variable and
+  constraint metadata.
+- Element-level `to_bytes` / `from_bytes` methods on the three
+  per-element types are removed (same rationale as PR #845: a
+  per-element wire round-trip can no longer carry the host-stored
+  metadata, so the methods became misleading rather than safe).
+- Python wrappers (`NamedFunction`, `EvaluatedNamedFunction`,
+  `SampledNamedFunction`) gain the snapshot tuple slot and read
+  metadata from it, mirroring `DecisionVariable` / `Constraint`
+  post-PR #843. `Instance.from_components(named_functions=...)`
+  drains each wrapper's snapshot into the host's
+  `NamedFunctionMetadataStore`.
+- `*_df` rendering for named functions goes through the existing
+  `WithMetadata<'a, T, NamedFunctionMetadata>` plumbing: the host
+  pre-snapshots the SoA store and zips metadata in alongside each
+  element before handing the iterator to `entries_to_dataframe`.
+- Rust SDK call sites that previously read
+  `named_function.name` / `.subscripts` / `.description`
+  (e.g. `Instance::named_function_names`,
+  `Instance::get_named_function_by_name`,
+  `Solution::extract_named_functions`,
+  `SampleSet::extract_all_named_functions`) now read from the
+  per-host `named_function_metadata` store. Behavior is unchanged.
+
 ### Deferred to follow-up wave
 
-- `instance.constraints`, `decision_variables`, `*_constraints` change
-  type from `dict` / `list` to `pandas.Series`. Most usage (`s.loc[id]`,
-  iteration, `.items()`, `.index`) keeps working. Specific breakage:
-  - `s.values()` (method call) → `s.tolist()` or `list(s)`.
-  - List-positional reliance on the old `decision_variables: list[…]`
-    ordering breaks; index by `VariableID` instead.
 - Wrapper-object metadata setters become write-through to the SoA
-  store via the Standalone / Attached two-mode design.
-- `NamedFunction` / `EvaluatedNamedFunction` /
-  `SampledNamedFunction` lose their inline `name` / `subscripts` /
-  `parameters` / `description` fields; metadata moves to a
-  `NamedFunctionMetadataStore` sibling field on `Instance` /
-  `ParametricInstance` / `Solution` / `SampleSet`. Same shape as
-  the constraint / variable migration in this PR but lands as a
-  separate PR.
+  store via the Standalone / Attached two-mode design. Plugs into
+  the existing `instance.constraints[id]` getter; no Series detour.
+
+### Dropped from the plan
+
+- `instance.constraints`, `decision_variables`, `*_constraints` were
+  going to change type from `dict` / `list` to `pandas.Series`. With
+  `*_df` covering bulk analysis directly off the SoA store and
+  `dict[id]` covering single-id wrapper access, a Series of snapshot
+  wrappers in between would not pull its weight (and would have
+  broken `.values()` callers loudly with no upside). See the
+  "Series-based collection accessors **(dropped)**" section for the
+  full rationale.
 
 A new section in `PYTHON_SDK_MIGRATION_GUIDE.md` will cover the Python
 side in detail once the deferred wave lands.
@@ -1269,10 +1296,11 @@ traceability with earlier review comments.
    no code-level mitigation in this proposal.** The wrapper holds a
    refcounted handle to the Instance; there's no cycle (wrapper →
    Instance, Instance → store, no back-pointer from store to
-   wrapper), but heavy use of Series can keep an Instance alive
-   longer than expected. Users who care drop the Series. Whether the
-   pattern needs revisiting (e.g. weak-handle variant of the wrapper)
-   is a question to take up at implementation time, not before.
+   wrapper), but holding a long-lived collection of Attached wrappers
+   can keep an Instance alive longer than expected. Users who care
+   drop their references to those wrappers. Whether the pattern
+   needs revisiting (e.g. weak-handle variant of the wrapper) is a
+   question to take up at implementation time, not before.
 
 ## Follow-ups (post-#843, post-#846)
 
@@ -1284,15 +1312,14 @@ traceability with earlier review comments.
   `*_metadata_mut`). These three methods should be narrowed to
   `pub(crate)` (or smaller) in a follow-up so the only way to break
   the collection's invariants is from inside the crate.
-- **`NamedFunction` SoA migration.** Track the
-  `NamedFunctionMetadataStore` work described under
-  "NamedFunction (deferred — separate PR)" above.
-- **Python Series + Attached two-mode wrappers.** Wave 2 of the
-  Python surface — `instance.constraints` returns a
-  `pandas.Series[ID -> Object]`, wrappers gain a `Py<Instance>`
-  back-reference and write-through metadata setters. Blocked on
-  the snapshot-vs-attached decision; the `Py<Instance>` lifetime
-  question is documented in resolved decision #8.
+- **Attached two-mode wrappers.** Wrappers gain a `Py<Instance>`
+  back-reference and write-through metadata setters via the
+  Standalone / Attached two-mode design. Plugs into the existing
+  `instance.constraints[id]` getter (the Series-based collection
+  accessor proposal that originally bundled this work has been
+  dropped — see "Series-based collection accessors **(dropped)**"
+  for rationale). The `Py<Instance>` lifetime question is
+  documented in resolved decision #8.
 
 ## Open questions
 
