@@ -1,5 +1,4 @@
-use anyhow::Result;
-use pyo3::{prelude::*, types::PyBytes, Bound};
+use pyo3::{prelude::*, Bound};
 use std::collections::{HashMap, HashSet};
 
 /// EvaluatedNamedFunction wrapper for Python
@@ -11,17 +10,6 @@ pub struct EvaluatedNamedFunction(pub ommx::EvaluatedNamedFunction);
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl EvaluatedNamedFunction {
-    #[staticmethod]
-    pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
-        Ok(Self(ommx::EvaluatedNamedFunction::from_bytes(
-            bytes.as_bytes(),
-        )?))
-    }
-
-    pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
-        PyBytes::new(py, &self.0.to_bytes())
-    }
-
     #[getter]
     pub fn id(&self) -> u64 {
         self.0.id.into_inner()

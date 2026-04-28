@@ -1,7 +1,7 @@
 use crate::{Constraint, Function, Linear, Parameter, Polynomial, Quadratic, VariableBound};
 use anyhow::Result;
 use ommx::{v1, ATol, LinearMonomial, VariableID};
-use pyo3::{prelude::*, types::PyBytes, Bound, PyAny};
+use pyo3::{prelude::*, Bound, PyAny};
 use std::collections::HashMap;
 
 /// Decision variable in an optimization problem.
@@ -275,15 +275,6 @@ impl DecisionVariable {
             parameters,
             description,
         )
-    }
-
-    #[staticmethod]
-    pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
-        Ok(Self(ommx::DecisionVariable::from_bytes(bytes.as_bytes())?))
-    }
-
-    pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
-        PyBytes::new(py, &self.0.to_bytes())
     }
 
     pub fn __repr__(&self) -> String {

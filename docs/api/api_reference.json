@@ -3700,32 +3700,6 @@
               "deprecated": null
             },
             {
-              "name": "from_bytes",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "bytes",
-                      "type_": {
-                        "display": "bytes",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "DecisionVariable",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
               "name": "integer",
               "doc": "",
               "signatures": [
@@ -4098,22 +4072,6 @@
                   ],
                   "return_type": {
                     "display": "DecisionVariable",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "to_bytes",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "bytes",
                     "link_target": null,
                     "children": []
                   }
@@ -4838,50 +4796,7 @@
           "name": "EvaluatedDecisionVariable",
           "doc": "",
           "bases": [],
-          "methods": [
-            {
-              "name": "from_bytes",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "bytes",
-                      "type_": {
-                        "display": "bytes",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "EvaluatedDecisionVariable",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "to_bytes",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "bytes",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            }
-          ],
+          "methods": [],
           "attributes": [
             {
               "name": "description",
@@ -5070,48 +4985,6 @@
                   "parameters": [],
                   "return_type": {
                     "display": "str",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "from_bytes",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "bytes",
-                      "type_": {
-                        "display": "bytes",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "EvaluatedNamedFunction",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "to_bytes",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "bytes",
                     "link_target": null,
                     "children": []
                   }
@@ -6064,37 +5937,6 @@
               "deprecated": null
             },
             {
-              "name": "from_bytes",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "bytes",
-                      "type_": {
-                        "display": "bytes",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "Function",
-                    "link_target": {
-                      "fqn": "ommx.v1.Function",
-                      "doc_module": "ommx.v1",
-                      "kind": "Class",
-                      "attribute": null
-                    },
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
               "name": "from_linear",
               "doc": "",
               "signatures": [
@@ -6527,22 +6369,6 @@
                         "children": []
                       }
                     ]
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "to_bytes",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "bytes",
-                    "link_target": null,
-                    "children": []
                   }
                 }
               ],
@@ -10367,32 +10193,6 @@
               "deprecated": null
             },
             {
-              "name": "from_bytes",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "bytes",
-                      "type_": {
-                        "display": "bytes",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "Linear",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
               "name": "mul_scalar",
               "doc": "",
               "signatures": [
@@ -10560,22 +10360,6 @@
                   "parameters": [],
                   "return_type": {
                     "display": "dict",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "to_bytes",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "bytes",
                     "link_target": null,
                     "children": []
                   }
@@ -11183,32 +10967,6 @@
               "deprecated": null
             },
             {
-              "name": "from_bytes",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "bytes",
-                      "type_": {
-                        "display": "bytes",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "NamedFunction",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
               "name": "partial_evaluate",
               "doc": "Partially evaluate the named function with the given state.\n\nThis modifies self in-place and returns self for method chaining.\n\n**Args:**\n\n- `state`: A State object, dict[int, float], or iterable of (int, float) tuples\n- `atol`: Optional absolute tolerance for evaluation\n\n**Returns:** Self (modified in-place) for method chaining",
               "signatures": [
@@ -11249,22 +11007,6 @@
                   ],
                   "return_type": {
                     "display": "NamedFunction",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "to_bytes",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "bytes",
                     "link_target": null,
                     "children": []
                   }
@@ -12341,48 +12083,6 @@
                   ],
                   "return_type": {
                     "display": "Polynomial",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "from_bytes",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "bytes",
-                      "type_": {
-                        "display": "bytes",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "Parameter",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "to_bytes",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "bytes",
                     "link_target": null,
                     "children": []
                   }
@@ -14219,32 +13919,6 @@
               "deprecated": null
             },
             {
-              "name": "from_bytes",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "bytes",
-                      "type_": {
-                        "display": "bytes",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "Polynomial",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
               "name": "mul_linear",
               "doc": "",
               "signatures": [
@@ -14441,22 +14115,6 @@
                   "parameters": [],
                   "return_type": {
                     "display": "dict",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "to_bytes",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "bytes",
                     "link_target": null,
                     "children": []
                   }
@@ -15492,32 +15150,6 @@
               "deprecated": null
             },
             {
-              "name": "from_bytes",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "bytes",
-                      "type_": {
-                        "display": "bytes",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "Quadratic",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
               "name": "mul_linear",
               "doc": "",
               "signatures": [
@@ -15676,22 +15308,6 @@
                   "parameters": [],
                   "return_type": {
                     "display": "dict",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "to_bytes",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "bytes",
                     "link_target": null,
                     "children": []
                   }
@@ -17748,50 +17364,7 @@
           "name": "SampledDecisionVariable",
           "doc": "",
           "bases": [],
-          "methods": [
-            {
-              "name": "from_bytes",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "bytes",
-                      "type_": {
-                        "display": "bytes",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "SampledDecisionVariable",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "to_bytes",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "bytes",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            }
-          ],
+          "methods": [],
           "attributes": [
             {
               "name": "bound",
@@ -17980,48 +17553,6 @@
                   "parameters": [],
                   "return_type": {
                     "display": "str",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "from_bytes",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "bytes",
-                      "type_": {
-                        "display": "bytes",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "SampledNamedFunction",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "to_bytes",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "bytes",
                     "link_target": null,
                     "children": []
                   }

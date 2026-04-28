@@ -4,11 +4,7 @@ use anyhow::{anyhow, Result};
 use approx::AbsDiffEq;
 use ommx::LinearMonomial;
 use ommx::{ATol, Coefficient, CoefficientError, Evaluate};
-use pyo3::{
-    prelude::*,
-    types::{PyBytes, PyDict},
-    Bound, PyAny,
-};
+use pyo3::{prelude::*, types::PyDict, Bound, PyAny};
 use std::collections::BTreeMap;
 
 /// Linear function of decision variables.
@@ -160,15 +156,6 @@ impl Linear {
             ommx::LinearParameters::new(num_terms, max_id.into())?,
         );
         Ok(Self(inner))
-    }
-
-    #[staticmethod]
-    pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
-        Ok(Self(ommx::Linear::from_bytes(bytes.as_bytes())?))
-    }
-
-    pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
-        PyBytes::new(py, &self.0.to_bytes())
     }
 
     #[getter]
