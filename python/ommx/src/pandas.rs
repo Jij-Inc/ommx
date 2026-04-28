@@ -654,6 +654,9 @@ pub fn entries_to_dataframe<'py, T: ToPandasEntry>(
 /// Build a `pandas.DataFrame` from pre-built entry dicts, indexed by `index_col`.
 ///
 /// Use this when entries need custom logic (e.g. SampleSet dynamic columns).
+/// Empty inputs still return a DataFrame whose index name is `index_col`,
+/// so downstream code can rely on the kind-qualified name (`df.index.name`)
+/// regardless of whether the underlying collection happened to be empty.
 pub fn raw_entries_to_dataframe<'py>(
     py: Python<'py>,
     entries: Vec<Bound<'py, PyAny>>,
@@ -662,7 +665,14 @@ pub fn raw_entries_to_dataframe<'py>(
     let pandas = py.import("pandas")?;
     let df = pandas.call_method1("DataFrame", (entries,))?;
     if df.getattr("empty")?.extract::<bool>()? {
-        return df.cast_into().map_err(Into::into);
+        // `set_index(index_col)` would fail because the column does not
+        // exist; `rename_axis` only sets the index name. Equivalent to
+        // `df.index.name = index_col` but returns a new DataFrame so the
+        // type / cast flow stays consistent with the non-empty branch.
+        return df
+            .call_method1("rename_axis", (index_col,))?
+            .cast_into()
+            .map_err(Into::into);
     }
     df.call_method1("set_index", (index_col,))?
         .cast_into()
@@ -671,7 +681,8 @@ pub fn raw_entries_to_dataframe<'py>(
 
 /// Build a sorted `pandas.DataFrame` from pre-built entry dicts.
 ///
-/// Sorts by `sort_by` columns before setting the index.
+/// Sorts by `sort_by` columns before setting the index. Empty inputs
+/// still get the index name set to `index_col`.
 pub fn sorted_entries_to_dataframe<'py>(
     py: Python<'py>,
     entries: Vec<Bound<'py, PyAny>>,
@@ -682,7 +693,10 @@ pub fn sorted_entries_to_dataframe<'py>(
     let pandas = py.import("pandas")?;
     let df = pandas.call_method1("DataFrame", (entries,))?;
     if df.getattr("empty")?.extract::<bool>()? {
-        return df.cast_into().map_err(Into::into);
+        return df
+            .call_method1("rename_axis", (index_col,))?
+            .cast_into()
+            .map_err(Into::into);
     }
     let sort_args = PyDict::new(py);
     sort_args.set_item("by", sort_by.to_vec())?;

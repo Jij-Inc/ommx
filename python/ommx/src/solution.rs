@@ -536,12 +536,16 @@ impl Solution {
                     let m = meta.collect_for(*id);
                     let dict =
                         crate::pandas::WithMetadata::new((*id, c), &m).to_pandas_entry(py)?;
-                    if let Some(reason) = removed_reasons.get(id) {
-                        crate::pandas::set_removed_reason_columns(&dict, reason)?;
-                    } else if flags.removed_reason {
-                        // Ensure removed_reason column appears even
-                        // when no row in this view carries a reason.
-                        crate::pandas::set_removed_reason_na(&dict)?;
+                    if flags.removed_reason {
+                        // Always emit the `removed_reason` column when
+                        // requested so its existence in the resulting
+                        // DataFrame is a function of the flag, not of
+                        // whether any row happens to carry a reason.
+                        if let Some(reason) = removed_reasons.get(id) {
+                            crate::pandas::set_removed_reason_columns(&dict, reason)?;
+                        } else {
+                            crate::pandas::set_removed_reason_na(&dict)?;
+                        }
                     }
                     crate::pandas::apply_include_filter(&dict, flags)?;
                     crate::pandas::rename_id_column(&dict, id_col)?;

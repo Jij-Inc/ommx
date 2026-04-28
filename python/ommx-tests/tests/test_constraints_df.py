@@ -233,17 +233,29 @@ def test_parametric_instance_constraints_df_default(snapshot):
     assert _df_snap(_parametric_instance().constraints_df()) == snapshot
 
 
-@pytest.mark.parametrize("kind", ["indicator", "one_hot", "sos1"])
-def test_parametric_instance_constraints_df_special_kinds_empty(snapshot, kind):
+@pytest.mark.parametrize(
+    "kind, expected_name",
+    [
+        ("indicator", "indicator_constraint_id"),
+        ("one_hot", "one_hot_constraint_id"),
+        ("sos1", "sos1_constraint_id"),
+    ],
+)
+def test_parametric_instance_constraints_df_special_kinds_empty(
+    snapshot, kind, expected_name
+):
     """Python `ParametricInstance.from_components` only accepts regular
-    constraints, so the special-kind collections are always empty —
-    but the dispatch path must still return a DataFrame with the
-    correct kind-qualified index name.
+    constraints, so the special-kind collections are always empty.
 
-    Regression guard for the Wave 2 macro dispatch on the three
-    special-kind ParametricInstance accessors that the public Python
-    surface cannot populate."""
-    assert _df_snap(_parametric_instance().constraints_df(kind=kind)) == snapshot
+    Empty DataFrames must still carry the kind-qualified index name —
+    `df.to_string()` happens to render `Index: []` without the name,
+    so the assertion on `df.index.name` is the load-bearing check.
+    Regression guard for the Wave 2 macro dispatch and for empty-df
+    handling in `raw_entries_to_dataframe`."""
+    df = _parametric_instance().constraints_df(kind=kind)
+    assert df.empty
+    assert df.index.name == expected_name
+    assert _df_snap(df) == snapshot
 
 
 # ---------------------------------------------------------------------------

@@ -672,10 +672,12 @@ impl SampleSet {
                         &m,
                     )
                     .to_pandas_entry(py)?;
-                    if let Some(reason) = removed_reasons.get(id) {
-                        crate::pandas::set_removed_reason_columns(&dict, reason)?;
-                    } else if flags.removed_reason {
-                        crate::pandas::set_removed_reason_na(&dict)?;
+                    if flags.removed_reason {
+                        if let Some(reason) = removed_reasons.get(id) {
+                            crate::pandas::set_removed_reason_columns(&dict, reason)?;
+                        } else {
+                            crate::pandas::set_removed_reason_na(&dict)?;
+                        }
                     }
                     crate::pandas::apply_include_filter(&dict, flags)?;
                     crate::pandas::rename_id_column(&dict, id_col)?;

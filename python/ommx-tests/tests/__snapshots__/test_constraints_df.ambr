@@ -92,21 +92,21 @@
   10                          =0  Quadratic  {0, 1, 2, 99}  <NA>         []        <NA>
   '''
 # ---
-# name: test_parametric_instance_constraints_df_special_kinds_empty[indicator]
+# name: test_parametric_instance_constraints_df_special_kinds_empty[indicator-indicator_constraint_id]
   '''
   Empty DataFrame
   Columns: []
   Index: []
   '''
 # ---
-# name: test_parametric_instance_constraints_df_special_kinds_empty[one_hot]
+# name: test_parametric_instance_constraints_df_special_kinds_empty[one_hot-one_hot_constraint_id]
   '''
   Empty DataFrame
   Columns: []
   Index: []
   '''
 # ---
-# name: test_parametric_instance_constraints_df_special_kinds_empty[sos1]
+# name: test_parametric_instance_constraints_df_special_kinds_empty[sos1-sos1_constraint_id]
   '''
   Empty DataFrame
   Columns: []
