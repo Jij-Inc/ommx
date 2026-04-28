@@ -6,6 +6,17 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
+### ⚠ `to_bytes` / `from_bytes` removed from non-top-level types ([#845](https://github.com/Jij-Inc/ommx/pull/845))
+
+Bytes serialization is removed from the following component-level types:
+
+- {class}`~ommx.v1.Function`, {class}`~ommx.v1.Linear`, {class}`~ommx.v1.Quadratic`, {class}`~ommx.v1.Polynomial`
+- {class}`~ommx.v1.Parameter`
+- {class}`~ommx.v1.NamedFunction`, {class}`~ommx.v1.EvaluatedNamedFunction`, {class}`~ommx.v1.SampledNamedFunction`
+- {class}`~ommx.v1.DecisionVariable`, {class}`~ommx.v1.EvaluatedDecisionVariable`, {class}`~ommx.v1.SampledDecisionVariable`
+
+These methods originally existed to ferry values across the Python ↔ Rust boundary back when the Python SDK had its own protobuf-based wrapper layer and had to serialize on every hop. With the v3 transition to direct PyO3 re-exports the boundary disappears, so element-level bytes round-trips no longer serve a purpose, and keeping them aligned with the upcoming metadata-storage redesign would only add maintenance cost. `to_bytes` / `from_bytes` remain available on the container types ({class}`~ommx.v1.Instance`, {class}`~ommx.v1.ParametricInstance`, {class}`~ommx.v1.Solution`, {class}`~ommx.v1.SampleSet`) and on the cross-evaluate DTOs ({class}`~ommx.v1.State`, {class}`~ommx.v1.Samples`, {class}`~ommx.v1.Parameters`) — use those when you need to persist or exchange data on disk or over the wire.
+
 ### 🆕 OpenTelemetry-based tracing and profiling ([#816](https://github.com/Jij-Inc/ommx/pull/816), [#823](https://github.com/Jij-Inc/ommx/pull/823), [#826](https://github.com/Jij-Inc/ommx/pull/826), [#828](https://github.com/Jij-Inc/ommx/pull/828), [#829](https://github.com/Jij-Inc/ommx/pull/829))
 
 The legacy `log` + `pyo3-log` → Python `logging` bridge is replaced by a `tracing` + `pyo3-tracing-opentelemetry` pipeline, so the Rust core's spans can now be consumed through the Python OTel SDK.
