@@ -77,20 +77,26 @@ impl pyo3_stub_gen::PyStubType for PyDataFrame {
 /// Which optional column families to fold into a wide `*_df` DataFrame.
 ///
 /// `metadata` toggles the `name` / `subscripts` / `description` columns.
-/// `parameters` toggles the `parameters.{key}` columns. The default
-/// (`Self::default_wide()`) preserves the v2-equivalent wide shape.
+/// `parameters` toggles the `parameters.{key}` columns. `removed_reason`
+/// is a unit flag that gates both the `removed_reason` (reason name)
+/// column and the `removed_reason.{key}` (reason parameters) columns
+/// together — the name without its parameters is rarely useful. The
+/// default (`Self::default_wide()`) preserves the v2-equivalent wide
+/// shape: metadata + parameters on, removed_reason off.
 #[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
 pub struct IncludeFlags {
     pub metadata: bool,
     pub parameters: bool,
+    pub removed_reason: bool,
 }
 
 impl IncludeFlags {
-    /// Default for wide `*_df` — both metadata and parameters columns on.
+    /// Default for wide `*_df` — metadata and parameters on, removed_reason off.
     pub fn default_wide() -> Self {
         Self {
             metadata: true,
             parameters: true,
+            removed_reason: false,
         }
     }
 
@@ -104,9 +110,10 @@ impl IncludeFlags {
                     match v.as_str() {
                         "metadata" => flags.metadata = true,
                         "parameters" => flags.parameters = true,
+                        "removed_reason" => flags.removed_reason = true,
                         other => {
                             return Err(PyValueError::new_err(format!(
-                                "unknown include flag: {other:?} (expected one of \"metadata\", \"parameters\")"
+                                "unknown include flag: {other:?} (expected one of \"metadata\", \"parameters\", \"removed_reason\")"
                             )));
                         }
                     }
@@ -118,6 +125,8 @@ impl IncludeFlags {
 }
 
 const METADATA_KEYS: &[&str] = &["name", "subscripts", "description"];
+const REMOVED_REASON_KEY: &str = "removed_reason";
+const REMOVED_REASON_PREFIX: &str = "removed_reason.";
 
 // ---------------------------------------------------------------------------
 // kind= dispatch — shared by the 4 constraint sidecar accessors
@@ -476,10 +485,11 @@ fn long_format_dataframe<'py>(
 
 /// Drop columns from a per-row dict according to the include flags.
 ///
-/// `metadata` columns are dropped by name; `parameters.*` columns are
-/// dropped by prefix. Missing keys are silently skipped (some impls don't
-/// emit every key).
-fn apply_include_filter(dict: &Bound<PyDict>, include: IncludeFlags) -> PyResult<()> {
+/// `metadata` columns are dropped by name; `parameters.*` and
+/// `removed_reason` (name + `removed_reason.*` parameters) columns are
+/// dropped by prefix. Missing keys are silently skipped (some impls
+/// don't emit every key).
+pub(crate) fn apply_include_filter(dict: &Bound<PyDict>, include: IncludeFlags) -> PyResult<()> {
     if !include.metadata {
         for key in METADATA_KEYS {
             if dict.contains(key)? {
@@ -497,6 +507,61 @@ fn apply_include_filter(dict: &Bound<PyDict>, include: IncludeFlags) -> PyResult
         for key in to_drop {
             dict.del_item(key)?;
         }
+    }
+    if !include.removed_reason {
+        if dict.contains(REMOVED_REASON_KEY)? {
+            dict.del_item(REMOVED_REASON_KEY)?;
+        }
+        let to_drop: Vec<String> = dict
+            .keys()
+            .iter()
+            .filter_map(|k| k.extract::<String>().ok())
+            .filter(|k| k.starts_with(REMOVED_REASON_PREFIX))
+            .collect();
+        for key in to_drop {
+            dict.del_item(key)?;
+        }
+    }
+    Ok(())
+}
+
+/// Rename the per-row dict's `"id"` key to `id_col`.
+///
+/// All `ToPandasEntry` impls emit the constraint / variable id under
+/// the literal key `"id"`. Wave 2 surfaces the kind-qualified column
+/// name (`regular_constraint_id`, `indicator_constraint_id`, …) so
+/// cross-kind joins surface their mismatch on inspection — this helper
+/// rewrites the key in place at the call site. No-op when `id_col` is
+/// already `"id"`.
+pub(crate) fn rename_id_column(dict: &Bound<PyDict>, id_col: &str) -> PyResult<()> {
+    if id_col == "id" {
+        return Ok(());
+    }
+    let value = dict
+        .get_item("id")?
+        .ok_or_else(|| PyValueError::new_err("entry dict missing required \"id\" column"))?;
+    dict.del_item("id")?;
+    dict.set_item(id_col, value)?;
+    Ok(())
+}
+
+/// Set `removed_reason` and `removed_reason.{key}` columns on `dict`.
+///
+/// `removed_reason` carries the reason name; `removed_reason.{key}`
+/// columns carry the reason parameters. Keys are emitted in lexicographic
+/// order so column ordering is deterministic across runs (the underlying
+/// `HashMap` iteration order is not). Used by call sites that fold
+/// removed-reason columns into a wide constraints DataFrame.
+pub(crate) fn set_removed_reason_columns(
+    dict: &Bound<PyDict>,
+    reason: &RemovedReason,
+) -> PyResult<()> {
+    dict.set_item(REMOVED_REASON_KEY, &reason.reason)?;
+    let mut keys: Vec<&str> = reason.parameters.keys().map(String::as_str).collect();
+    keys.sort_unstable();
+    for key in keys {
+        let value = &reason.parameters[key];
+        dict.set_item(format!("{REMOVED_REASON_PREFIX}{key}"), value)?;
     }
     Ok(())
 }
@@ -872,10 +937,7 @@ impl<'m> ToPandasEntry
         let (id, inner) = self.item;
         let (ic, reason) = inner;
         let dict = WithMetadata::new((id, ic), self.metadata).to_pandas_entry(py)?;
-        dict.set_item("removed_reason", &reason.reason)?;
-        for (key, value) in &reason.parameters {
-            dict.set_item(format!("removed_reason.{key}"), value)?;
-        }
+        set_removed_reason_columns(&dict, reason)?;
         Ok(dict)
     }
 }
@@ -1040,10 +1102,7 @@ impl<'m> ToPandasEntry
         let (id, inner) = self.item;
         let (one_hot, reason) = inner;
         let dict = WithMetadata::new((id, one_hot), self.metadata).to_pandas_entry(py)?;
-        dict.set_item("removed_reason", &reason.reason)?;
-        for (key, value) in &reason.parameters {
-            dict.set_item(format!("removed_reason.{key}"), value)?;
-        }
+        set_removed_reason_columns(&dict, reason)?;
         Ok(dict)
     }
 }
@@ -1084,10 +1143,7 @@ impl<'m> ToPandasEntry
         let (id, inner) = self.item;
         let (sos1, reason) = inner;
         let dict = WithMetadata::new((id, sos1), self.metadata).to_pandas_entry(py)?;
-        dict.set_item("removed_reason", &reason.reason)?;
-        for (key, value) in &reason.parameters {
-            dict.set_item(format!("removed_reason.{key}"), value)?;
-        }
+        set_removed_reason_columns(&dict, reason)?;
         Ok(dict)
     }
 }
@@ -1102,22 +1158,8 @@ impl<'m> ToPandasEntry
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let (id, inner) = self.item;
         let (constraint, reason) = inner;
-        let m = self.metadata;
-        let dict = PyDict::new(py);
-        dict.set_item("id", id.into_inner())?;
-        set_equality(&dict, constraint.equality)?;
-        set_function_type(&dict, &constraint.stage.function)?;
-        set_used_ids(&dict, &constraint.stage.function.required_ids())?;
-        set_metadata(
-            &dict,
-            m.name.as_deref(),
-            &m.subscripts,
-            m.description.as_deref(),
-        )?;
-        dict.set_item("removed_reason", &reason.reason)?;
-        for (key, value) in &reason.parameters {
-            dict.set_item(format!("removed_reason.{key}"), value)?;
-        }
+        let dict = WithMetadata::new((id, constraint), self.metadata).to_pandas_entry(py)?;
+        set_removed_reason_columns(&dict, reason)?;
         Ok(dict)
     }
 }
@@ -1206,24 +1248,6 @@ impl<'m> ToPandasEntry
         match c.stage.dual_variable {
             Some(v) => dict.set_item("dual_variable", v)?,
             None => dict.set_item("dual_variable", &na)?,
-        }
-        Ok(dict)
-    }
-}
-
-/// Entry for removed_reasons_df: constraint_id → removed_reason, removed_reason.{key}
-pub struct RemovedReasonEntry<'a> {
-    pub id: u64,
-    pub reason: &'a ommx::RemovedReason,
-}
-
-impl ToPandasEntry for RemovedReasonEntry<'_> {
-    fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let dict = PyDict::new(py);
-        dict.set_item("id", self.id)?;
-        dict.set_item("removed_reason", &self.reason.reason)?;
-        for (key, value) in &self.reason.parameters {
-            dict.set_item(format!("removed_reason.{key}"), value)?;
         }
         Ok(dict)
     }

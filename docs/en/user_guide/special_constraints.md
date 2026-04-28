@@ -176,26 +176,36 @@ When a special constraint is converted to a regular constraint (see [Capability 
 
 ## Accessing evaluation results
 
-The {class}`~ommx.v1.Solution` or {class}`~ommx.v1.SampleSet` obtained after solving provides a DataFrame accessor for each special constraint type alongside the one for regular constraints.
+The {class}`~ommx.v1.Solution` or {class}`~ommx.v1.SampleSet` obtained after solving exposes a single {meth}`~ommx.v1.Solution.constraints_df` method that dispatches on `kind=`:
 
-| Constraint type | Accessor (on `Solution`) |
+| Constraint type | `kind=` value |
 |---|---|
-| Regular | {meth}`~ommx.v1.Solution.constraints_df` |
-| Indicator | {meth}`~ommx.v1.Solution.indicator_constraints_df` |
-| OneHot | {meth}`~ommx.v1.Solution.one_hot_constraints_df` |
-| SOS1 | {meth}`~ommx.v1.Solution.sos1_constraints_df` |
+| Regular | `"regular"` (default) |
+| Indicator | `"indicator"` |
+| OneHot | `"one_hot"` |
+| SOS1 | `"sos1"` |
+
+```python
+solution.constraints_df()                  # regular (default)
+solution.constraints_df(kind="indicator")  # indicator
+sample_set.constraints_df(kind="one_hot")  # one-hot
+```
+
+The DataFrame is indexed by the kind-qualified id column (`regular_constraint_id`, `indicator_constraint_id`, `one_hot_constraint_id`, `sos1_constraint_id`) — accidental cross-id-space `df.join()` mistakes surface in `df.head()` and friends.
 
 The Indicator DataFrame includes an `indicator_active` column that disambiguates "the indicator was OFF (constraint trivially satisfied)" from "the indicator was ON and the constraint was actually satisfied". Indicator constraints do not carry a dual variable — a dual value is not well-defined for a conditional constraint — so `dual_variable` is omitted.
 
-### removed_reasons_df separation
+### Removed reason columns via `include=`
 
-For regular constraints, `removed_reason` is no longer a column of {meth}`~ommx.v1.Solution.constraints_df`. It lives in {meth}`~ommx.v1.Solution.removed_reasons_df` as a separate table, which you can join as needed:
+`removed_reason` is no longer a default column of {meth}`~ommx.v1.Solution.constraints_df`. Pass `"removed_reason"` in `include=` to fold the reason name and the `removed_reason.{key}` parameter columns back in (rows whose constraint was not removed before evaluation get NA in those columns):
 
 ```python
-df = solution.constraints_df().join(solution.removed_reasons_df())
+df = solution.constraints_df(
+    include=("metadata", "parameters", "removed_reason"),
+)
 ```
 
-The same split applies to Indicator, OneHot, and SOS1: each has its own `indicator_removed_reasons_df` / `one_hot_removed_reasons_df` / `sos1_removed_reasons_df` on both {class}`~ommx.v1.Solution` and {class}`~ommx.v1.SampleSet`.
+The same applies to Indicator, OneHot, and SOS1: pass the corresponding `kind=` together with `"removed_reason"` in `include=`. The long-format {meth}`~ommx.v1.Solution.constraint_removed_reasons_df` sidecar (also `kind=`-dispatched) remains the right surface when you want one row per (constraint id, parameter key) pair for joins or aggregation.
 
 ## Relax / Restore
 

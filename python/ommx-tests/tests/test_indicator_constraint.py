@@ -1,5 +1,6 @@
 """Tests for IndicatorConstraint Big-M conversion to regular constraints."""
 
+import pandas as pd
 import pytest
 from ommx.v1 import (
     Instance,
@@ -7,6 +8,11 @@ from ommx.v1 import (
     IndicatorConstraint,
     Equality,
 )
+
+
+def _df_snap(df: pd.DataFrame) -> str:
+    """Deterministic, snapshot-friendly rendering of a DataFrame."""
+    return df.to_string(na_rep="<NA>")
 
 
 def _instance(ic: IndicatorConstraint, x_lower: float = 0.0, x_upper: float = 5.0):
@@ -142,9 +148,9 @@ def test_convert_all_is_atomic_on_error():
     assert instance.removed_indicator_constraints == {}
 
 
-def test_removed_indicator_constraints_df_surfaces_reason_and_ids():
-    """`removed_indicator_constraints_df` exposes the reason and comma-joined
-    new-constraint IDs."""
+def test_removed_indicator_constraints_df_surfaces_reason_and_ids(snapshot):
+    """`constraints_df(kind="indicator", removed=True)` surfaces the
+    reason and comma-joined new-constraint IDs on removed rows."""
     y = DecisionVariable.binary(1)
     ic = IndicatorConstraint(
         indicator_variable=y,
@@ -152,14 +158,5 @@ def test_removed_indicator_constraints_df_surfaces_reason_and_ids():
         equality=Equality.EqualToZero,
     )
     instance = _instance(ic)
-
-    new_ids = instance.convert_indicator_to_constraint(7)
-
-    df = instance.removed_indicator_constraints_df()
-    assert list(df.index) == [7]
-    assert (
-        df.loc[7, "removed_reason"] == "ommx.Instance.convert_indicator_to_constraint"
-    )
-    assert df.loc[7, "removed_reason.constraint_ids"] == ",".join(
-        str(i) for i in new_ids
-    )
+    instance.convert_indicator_to_constraint(7)
+    assert _df_snap(instance.constraints_df(kind="indicator", removed=True)) == snapshot

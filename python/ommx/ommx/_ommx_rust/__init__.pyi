@@ -2516,52 +2516,29 @@ class Instance:
         DataFrame of decision variables
         """
     def constraints_df(
-        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
+        self,
+        kind: builtins.str = "regular",
+        include: typing.Optional[typing.Sequence[builtins.str]] = None,
+        removed: builtins.bool = False,
     ) -> pandas.DataFrame:
         r"""
-        DataFrame of constraints
-        """
-    def indicator_constraints_df(
-        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
-    ) -> pandas.DataFrame:
-        r"""
-        DataFrame of indicator constraints
-        """
-    def removed_indicator_constraints_df(
-        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
-    ) -> pandas.DataFrame:
-        r"""
-        DataFrame of removed indicator constraints
-        """
-    def one_hot_constraints_df(
-        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
-    ) -> pandas.DataFrame:
-        r"""
-        DataFrame of one-hot constraints
-        """
-    def removed_one_hot_constraints_df(
-        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
-    ) -> pandas.DataFrame:
-        r"""
-        DataFrame of removed one-hot constraints
-        """
-    def sos1_constraints_df(
-        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
-    ) -> pandas.DataFrame:
-        r"""
-        DataFrame of SOS1 constraints
-        """
-    def removed_sos1_constraints_df(
-        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
-    ) -> pandas.DataFrame:
-        r"""
-        DataFrame of removed SOS1 constraints
-        """
-    def removed_constraints_df(
-        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
-    ) -> pandas.DataFrame:
-        r"""
-        DataFrame of removed constraints
+        DataFrame of constraints, dispatched on `kind=`.
+
+        `kind` selects the constraint family — `"regular"`, `"indicator"`,
+        `"one_hot"`, or `"sos1"`. The DataFrame is indexed by the kind-
+        qualified id column (`{kind}_constraint_id`).
+
+        `include` selects which optional column families to fold in. It
+        accepts a sequence of `"metadata"` / `"parameters"` /
+        `"removed_reason"`; passing `None` (the default) yields the
+        v2-equivalent shape (`metadata` + `parameters`). `"removed_reason"`
+        is a unit flag that gates both the `removed_reason` column and the
+        `removed_reason.{key}` parameter columns together.
+
+        `removed=False` (default) returns active constraints only.
+        `removed=True` returns active + removed rows in the same DataFrame
+        and auto-sets `"removed_reason"` so removed rows are
+        distinguishable (active rows have NA in the reason columns).
         """
     def named_functions_df(
         self, include: typing.Optional[typing.Sequence[builtins.str]] = None
@@ -3377,16 +3354,15 @@ class ParametricInstance:
         DataFrame of decision variables
         """
     def constraints_df(
-        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
+        self,
+        kind: builtins.str = "regular",
+        include: typing.Optional[typing.Sequence[builtins.str]] = None,
+        removed: builtins.bool = False,
     ) -> pandas.DataFrame:
         r"""
-        DataFrame of constraints
-        """
-    def removed_constraints_df(
-        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
-    ) -> pandas.DataFrame:
-        r"""
-        DataFrame of removed constraints
+        DataFrame of constraints, dispatched on `kind=`. See
+        {meth}`ommx.v1.Instance.constraints_df` for column / `kind=` /
+        `include=` / `removed=` semantics.
         """
     def named_functions_df(
         self, include: typing.Optional[typing.Sequence[builtins.str]] = None
@@ -4160,68 +4136,20 @@ class SampleSet:
         Dynamic columns: one per sample_id (int) with the variable's value.
         """
     def constraints_df(
-        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
+        self,
+        kind: builtins.str = "regular",
+        include: typing.Optional[typing.Sequence[builtins.str]] = None,
     ) -> pandas.DataFrame:
         r"""
-        DataFrame of constraints with per-sample value and feasibility columns.
-        Static columns: id, equality, used_ids, name, subscripts, description.
-        Dynamic columns: value.{sample_id} and feasible.{sample_id} for each sample.
-        """
-    def removed_reasons_df(self) -> pandas.DataFrame:
-        r"""
-        DataFrame of removed constraint reasons.
+        DataFrame of sampled constraints, dispatched on `kind=`. See
+        {meth}`ommx.v1.Instance.constraints_df` for column / `kind=` /
+        `include=` semantics. Adds dynamic per-sample columns
+        (`value.{sample_id}`, `feasible.{sample_id}`, etc.) on top of
+        the kind-specific core columns.
 
-        Columns: id (index), removed_reason, removed_reason.{key}
-
-        Can be joined with {meth}`constraints_df` using the `id` index.
-        """
-    def indicator_constraints_df(
-        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
-    ) -> pandas.DataFrame:
-        r"""
-        DataFrame of indicator constraints with per-sample value, feasibility, and indicator_active columns.
-        Static columns: id, indicator_variable_id, equality, used_ids, name, subscripts, description.
-        Dynamic columns: value.{sample_id}, feasible.{sample_id}, indicator_active.{sample_id} for each sample.
-        """
-    def indicator_removed_reasons_df(self) -> pandas.DataFrame:
-        r"""
-        DataFrame of removed indicator constraint reasons.
-
-        Columns: id (index), removed_reason, removed_reason.{key}
-
-        Can be joined with {meth}`indicator_constraints_df` using the `id` index.
-        """
-    def one_hot_constraints_df(
-        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
-    ) -> pandas.DataFrame:
-        r"""
-        DataFrame of one-hot constraints with per-sample feasibility and active_variable columns.
-        Static columns: id, used_ids, name, subscripts, description.
-        Dynamic columns: feasible.{sample_id}, active_variable.{sample_id} for each sample.
-        """
-    def one_hot_removed_reasons_df(self) -> pandas.DataFrame:
-        r"""
-        DataFrame of removed one-hot constraint reasons.
-
-        Columns: id (index), removed_reason, removed_reason.{key}
-
-        Can be joined with {meth}`one_hot_constraints_df` using the `id` index.
-        """
-    def sos1_constraints_df(
-        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
-    ) -> pandas.DataFrame:
-        r"""
-        DataFrame of SOS1 constraints with per-sample feasibility and active_variable columns.
-        Static columns: id, used_ids, name, subscripts, description.
-        Dynamic columns: feasible.{sample_id}, active_variable.{sample_id} for each sample.
-        """
-    def sos1_removed_reasons_df(self) -> pandas.DataFrame:
-        r"""
-        DataFrame of removed SOS1 constraint reasons.
-
-        Columns: id (index), removed_reason, removed_reason.{key}
-
-        Can be joined with {meth}`sos1_constraints_df` using the `id` index.
+        `SampleSet` has no `removed=` parameter (no active/removed
+        distinction at the sampled stage); reason data is gated by
+        `"removed_reason"` in `include=`.
         """
     def named_functions_df(
         self, include: typing.Optional[typing.Sequence[builtins.str]] = None
@@ -4742,106 +4670,20 @@ class Solution:
         Columns: id (index), kind, lower, upper, name, subscripts, description, substituted_value, value
         """
     def constraints_df(
-        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
+        self,
+        kind: builtins.str = "regular",
+        include: typing.Optional[typing.Sequence[builtins.str]] = None,
     ) -> pandas.DataFrame:
         r"""
-        DataFrame of evaluated constraints
+        DataFrame of evaluated constraints, dispatched on `kind=`. See
+        {meth}`ommx.v1.Instance.constraints_df` for column / `kind=` /
+        `include=` semantics.
 
-        Columns: id (index), equality, value, used_ids, name, subscripts, description, dual_variable
-        """
-    def removed_reasons_df(self) -> pandas.DataFrame:
-        r"""
-        DataFrame of removed constraint reasons.
-
-        Columns: id (index), removed_reason, removed_reason.{key}
-
-        Can be joined with {meth}`constraints_df` on the `id` index.
-
-        # Examples
-
-        ```python
-        >>> from ommx.v1 import Instance, DecisionVariable
-        >>> x = [DecisionVariable.binary(i) for i in range(3)]
-        >>> instance = Instance.from_components(
-        ...     decision_variables=x,
-        ...     objective=sum(x),
-        ...     constraints=[
-        ...         (x[0] + x[1] == 1).set_id(10),
-        ...         (x[1] + x[2] == 1).set_id(20),
-        ...     ],
-        ...     sense=Instance.MAXIMIZE,
-        ... )
-        >>> instance.relax_constraint(10, "test_reason")
-        >>> solution = instance.evaluate({0: 1, 1: 0, 2: 1})
-        ```
-
-        `removed_reasons_df` contains only removed constraints:
-
-        ```python
-        >>> solution.removed_reasons_df()
-            removed_reason
-        id
-        10    test_reason
-        ```
-
-        Join with `constraints_df` to get full information:
-
-        ```python
-        >>> df = solution.constraints_df().join(solution.removed_reasons_df())
-        >>> df[["value", "removed_reason"]]
-            value removed_reason
-        id
-        10    0.0   test_reason
-        20    0.0           NaN
-        ```
-        """
-    def indicator_constraints_df(
-        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
-    ) -> pandas.DataFrame:
-        r"""
-        DataFrame of evaluated indicator constraints
-
-        Columns: id (index), indicator_variable_id, equality, value, indicator_active, used_ids, name, subscripts, description
-        """
-    def indicator_removed_reasons_df(self) -> pandas.DataFrame:
-        r"""
-        DataFrame of removed indicator constraint reasons.
-
-        Columns: id (index), removed_reason, removed_reason.{key}
-
-        Can be joined with {meth}`indicator_constraints_df` using the `id` index.
-        """
-    def one_hot_constraints_df(
-        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
-    ) -> pandas.DataFrame:
-        r"""
-        DataFrame of evaluated one-hot constraints
-
-        Columns: id (index), feasible, active_variable, used_ids, name, subscripts, description
-        """
-    def one_hot_removed_reasons_df(self) -> pandas.DataFrame:
-        r"""
-        DataFrame of removed one-hot constraint reasons.
-
-        Columns: id (index), removed_reason, removed_reason.{key}
-
-        Can be joined with {meth}`one_hot_constraints_df` using the `id` index.
-        """
-    def sos1_constraints_df(
-        self, include: typing.Optional[typing.Sequence[builtins.str]] = None
-    ) -> pandas.DataFrame:
-        r"""
-        DataFrame of evaluated SOS1 constraints
-
-        Columns: id (index), feasible, active_variable, used_ids, name, subscripts, description
-        """
-    def sos1_removed_reasons_df(self) -> pandas.DataFrame:
-        r"""
-        DataFrame of removed SOS1 constraint reasons.
-
-        Columns: id (index), removed_reason, removed_reason.{key}
-
-        Can be joined with {meth}`sos1_constraints_df` using the `id` index.
+        `Solution` has no `removed=` parameter (no active/removed
+        distinction at the evaluated stage); reason data is gated by
+        `"removed_reason"` in `include=`. When the flag is on, rows for
+        constraints removed before evaluation get `removed_reason` /
+        `removed_reason.{key}` columns populated; other rows have NA.
         """
     def named_functions_df(
         self, include: typing.Optional[typing.Sequence[builtins.str]] = None

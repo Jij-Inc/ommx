@@ -1,0 +1,71 @@
+# serializer version: 1
+# name: test_sample_set_one_hot_constraints_df_dynamic_columns
+  '''
+                          used_ids  name subscripts description  feasible.0  active_variable.0  feasible.1 active_variable.1
+  one_hot_constraint_id                                                                                                     
+  10                     {1, 2, 3}  <NA>         []        <NA>        True                  1       False              <NA>
+  '''
+# ---
+# name: test_sample_set_one_hot_removed_reasons_df_after_conversion
+  '''
+                          used_ids  name subscripts description  feasible.0  active_variable.0                               removed_reason removed_reason.constraint_id
+  one_hot_constraint_id                                                                                                                                                 
+  7                      {0, 1, 2}  <NA>         []        <NA>        True                  0  ommx.Instance.convert_one_hot_to_constraint                            0
+  '''
+# ---
+# name: test_sample_set_sos1_constraints_df_dynamic_columns
+  '''
+                       used_ids  name subscripts description  feasible.0  active_variable.0  feasible.1 active_variable.1  feasible.2 active_variable.2
+  sos1_constraint_id                                                                                                                                   
+  20                  {1, 2, 3}  <NA>         []        <NA>        True                  2        True              <NA>       False              <NA>
+  '''
+# ---
+# name: test_solution_one_hot_constraints_df_feasible
+  '''
+                         feasible  active_variable   used_ids  name subscripts description
+  one_hot_constraint_id                                                                   
+  10                         True                2  {1, 2, 3}  <NA>         []        <NA>
+  '''
+# ---
+# name: test_solution_one_hot_constraints_df_infeasible
+  '''
+                         feasible active_variable   used_ids  name subscripts description
+  one_hot_constraint_id                                                                  
+  10                        False            <NA>  {1, 2, 3}  <NA>         []        <NA>
+  '''
+# ---
+# name: test_solution_one_hot_removed_reasons_df_after_conversion
+  '''
+                         feasible  active_variable   used_ids  name subscripts description                               removed_reason removed_reason.constraint_id
+  one_hot_constraint_id                                                                                                                                             
+  7                          True                0  {0, 1, 2}  <NA>         []        <NA>  ommx.Instance.convert_one_hot_to_constraint                            0
+  '''
+# ---
+# name: test_solution_sos1_constraints_df_all_zero
+  '''
+                      feasible active_variable   used_ids  name subscripts description
+  sos1_constraint_id                                                                  
+  20                      True            <NA>  {1, 2, 3}  <NA>         []        <NA>
+  '''
+# ---
+# name: test_solution_sos1_constraints_df_one_active
+  '''
+                      feasible  active_variable   used_ids  name subscripts description
+  sos1_constraint_id                                                                   
+  20                      True                2  {1, 2, 3}  <NA>         []        <NA>
+  '''
+# ---
+# name: test_solution_sos1_removed_reasons_df_after_conversion
+  '''
+                      feasible  active_variable   used_ids  name subscripts description                             removed_reason removed_reason.constraint_ids
+  sos1_constraint_id                                                                                                                                            
+  7                       True                0  {0, 1, 2}  <NA>         []        <NA>  ommx.Instance.convert_sos1_to_constraints                             0
+  '''
+# ---
+# name: test_sos1_constraints_df_roundtrips_removed_metadata
+  '''
+                      variables  num_variables   used_ids  name subscripts description                             removed_reason removed_reason.constraint_ids
+  sos1_constraint_id                                                                                                                                           
+  7                   {0, 1, 2}              3  {0, 1, 2}  <NA>         []        <NA>  ommx.Instance.convert_sos1_to_constraints                             0
+  '''
+# ---

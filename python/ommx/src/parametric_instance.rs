@@ -1,7 +1,7 @@
 use crate::{
     pandas::{
         constraint_id_col, constraint_kind_collection, entries_to_dataframe, parse_constraint_kind,
-        PyDataFrame,
+        PyDataFrame, ToPandasEntry,
     },
     Constraint, DecisionVariable, Function, Instance, NamedFunction, Parameter, RemovedConstraint,
     Sense,
@@ -333,59 +333,55 @@ impl ParametricInstance {
         )
     }
 
-    /// DataFrame of constraints
-    #[pyo3(signature = (include = None))]
+    /// DataFrame of constraints, dispatched on `kind=`. See
+    /// {meth}`ommx.v1.Instance.constraints_df` for column / `kind=` /
+    /// `include=` / `removed=` semantics.
+    #[pyo3(signature = (kind = String::from("regular"), include = None, removed = false))]
     pub fn constraints_df<'py>(
         &self,
         py: Python<'py>,
+        kind: String,
         include: Option<Vec<String>>,
+        removed: bool,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
-        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
-        let meta_store = self.inner.constraint_collection().metadata().clone();
-        let view: Vec<(
-            ommx::ConstraintMetadata,
-            ommx::ConstraintID,
-            &ommx::Constraint,
-        )> = self
-            .inner
-            .constraints()
-            .iter()
-            .map(|(id, c)| (meta_store.collect_for(*id), *id, c))
-            .collect();
-        entries_to_dataframe(
-            py,
-            view.iter()
-                .map(|(m, id, c)| crate::pandas::WithMetadata::new((*id, *c), m)),
-            "id",
-            flags,
-        )
-    }
-
-    /// DataFrame of removed constraints
-    #[pyo3(signature = (include = None))]
-    pub fn removed_constraints_df<'py>(
-        &self,
-        py: Python<'py>,
-        include: Option<Vec<String>>,
-    ) -> PyResult<Bound<'py, PyDataFrame>> {
-        let flags = crate::pandas::IncludeFlags::from_optional(include)?;
-        let meta_store = self.inner.constraint_collection().metadata().clone();
-        let view: Vec<(
-            ommx::ConstraintMetadata,
-            ommx::ConstraintID,
-            &(ommx::Constraint, ommx::RemovedReason),
-        )> = self
-            .inner
-            .removed_constraints()
-            .iter()
-            .map(|(id, pair)| (meta_store.collect_for(*id), *id, pair))
-            .collect();
-        entries_to_dataframe(
-            py,
-            view.iter()
-                .map(|(m, id, pair)| crate::pandas::WithMetadata::new((*id, *pair), m)),
-            "id",
-            flags,
+        let kind_enum = parse_constraint_kind(&kind)?;
+        let id_col = constraint_id_col(kind_enum);
+        let mut flags = crate::pandas::IncludeFlags::from_optional(include)?;
+        if removed {
+            flags.removed_reason = true;
+        }
+        constraint_kind_collection!(
+            self.inner,
+            kind_enum,
+            [
+                constraint_collection,
+                indicator_constraint_collection,
+                one_hot_constraint_collection,
+                sos1_constraint_collection
+            ],
+            |coll| {
+                let meta = coll.metadata().clone();
+                let mut entries: Vec<Bound<'py, pyo3::types::PyAny>> = Vec::new();
+                for (id, c) in coll.active().iter() {
+                    let m = meta.collect_for(*id);
+                    let dict =
+                        crate::pandas::WithMetadata::new((*id, c), &m).to_pandas_entry(py)?;
+                    crate::pandas::apply_include_filter(&dict, flags)?;
+                    crate::pandas::rename_id_column(&dict, id_col)?;
+                    entries.push(dict.into_any());
+                }
+                if removed {
+                    for (id, pair) in coll.removed().iter() {
+                        let m = meta.collect_for(*id);
+                        let dict = crate::pandas::WithMetadata::new((*id, pair), &m)
+                            .to_pandas_entry(py)?;
+                        crate::pandas::apply_include_filter(&dict, flags)?;
+                        crate::pandas::rename_id_column(&dict, id_col)?;
+                        entries.push(dict.into_any());
+                    }
+                }
+                crate::pandas::raw_entries_to_dataframe(py, entries, id_col)
+            }
         )
     }
 

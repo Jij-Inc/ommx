@@ -1,16 +1,16 @@
 # serializer version: 1
 # name: test_constraints_df_default
   '''
-     equality    type   used_ids     name subscripts description
-  id                                                            
-  10       =0  Linear  {0, 1, 2}  balance         []        <NA>
+                        equality    type   used_ids     name subscripts description
+  regular_constraint_id                                                            
+  10                          =0  Linear  {0, 1, 2}  balance         []        <NA>
   '''
 # ---
 # name: test_constraints_df_include_empty
   '''
-     equality    type   used_ids
-  id                            
-  10       =0  Linear  {0, 1, 2}
+                        equality    type   used_ids
+  regular_constraint_id                            
+  10                          =0  Linear  {0, 1, 2}
   '''
 # ---
 # name: test_decision_variables_df_default
