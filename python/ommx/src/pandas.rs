@@ -2,7 +2,10 @@
 //! plus shared helpers for building DataFrames from domain objects.
 
 use fnv::FnvHashMap;
-use ommx::{ConstraintMetadata, DecisionVariableMetadata, Evaluate, VariableIDSet};
+use ommx::{
+    ConstraintMetadata, ConstraintMetadataStore, DecisionVariableMetadata, Evaluate, IDType,
+    Provenance, RemovedReason, VariableID, VariableIDSet, VariableMetadataStore,
+};
 use pyo3::{
     exceptions::PyValueError,
     prelude::*,
@@ -113,6 +116,247 @@ impl IncludeFlags {
 }
 
 const METADATA_KEYS: &[&str] = &["name", "subscripts", "description"];
+
+// ---------------------------------------------------------------------------
+// kind= dispatch — shared by the 4 constraint sidecar accessors
+// ---------------------------------------------------------------------------
+
+/// Constraint family selector for `kind=` arguments on sidecar DataFrames.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum ConstraintKind {
+    Regular,
+    Indicator,
+    OneHot,
+    Sos1,
+}
+
+/// Parse the `kind=` string argument. Returns `ValueError` on unknown values.
+pub fn parse_constraint_kind(kind: &str) -> PyResult<ConstraintKind> {
+    match kind {
+        "regular" => Ok(ConstraintKind::Regular),
+        "indicator" => Ok(ConstraintKind::Indicator),
+        "one_hot" => Ok(ConstraintKind::OneHot),
+        "sos1" => Ok(ConstraintKind::Sos1),
+        other => Err(PyValueError::new_err(format!(
+            "unknown constraint kind: {other:?} (expected one of \"regular\", \"indicator\", \"one_hot\", \"sos1\")"
+        ))),
+    }
+}
+
+/// Index column name for the chosen constraint kind. Each kind has a
+/// distinct ID space, so the qualified name keeps cross-kind joins
+/// visible (`regular_constraint_id` ≠ `indicator_constraint_id` etc.).
+pub fn constraint_id_col(kind: ConstraintKind) -> &'static str {
+    match kind {
+        ConstraintKind::Regular => "regular_constraint_id",
+        ConstraintKind::Indicator => "indicator_constraint_id",
+        ConstraintKind::OneHot => "one_hot_constraint_id",
+        ConstraintKind::Sos1 => "sos1_constraint_id",
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Sidecar DataFrame builders
+//
+// Long-format / id-indexed views over the SoA metadata stores. Each builder
+// reads the store directly and produces a DataFrame with a documented column
+// schema. Used by the `*_metadata_df`, `*_parameters_df`, `*_provenance_df`,
+// and `*_removed_reasons_df` accessors on Instance / ParametricInstance /
+// Solution / SampleSet.
+// ---------------------------------------------------------------------------
+
+/// Wide id-indexed metadata DataFrame for constraints.
+///
+/// One row per id from `ids`, in iteration order. Columns: `name`,
+/// `subscripts`, `description`. Index column = `id_col`.
+pub fn constraint_metadata_dataframe<'py, ID>(
+    py: Python<'py>,
+    store: &ConstraintMetadataStore<ID>,
+    ids: impl Iterator<Item = ID>,
+    id_col: &str,
+) -> PyResult<Bound<'py, PyDataFrame>>
+where
+    ID: IDType + Into<u64>,
+{
+    let entries: Vec<Bound<'py, PyAny>> = ids
+        .map(|id| -> PyResult<_> {
+            let dict = PyDict::new(py);
+            dict.set_item(id_col, Into::<u64>::into(id))?;
+            set_metadata(
+                &dict,
+                store.name(id),
+                store.subscripts(id),
+                store.description(id),
+            )?;
+            Ok(dict.into_any())
+        })
+        .collect::<PyResult<_>>()?;
+    raw_entries_to_dataframe(py, entries, id_col)
+}
+
+/// Long-format parameters DataFrame for constraints.
+///
+/// One row per (id, key) pair where `store.parameters(id)` is non-empty.
+/// Columns: `id_col`, `key`, `value`. Default RangeIndex (no `set_index`).
+pub fn constraint_parameters_dataframe<'py, ID>(
+    py: Python<'py>,
+    store: &ConstraintMetadataStore<ID>,
+    ids: impl Iterator<Item = ID>,
+    id_col: &str,
+) -> PyResult<Bound<'py, PyDataFrame>>
+where
+    ID: IDType + Into<u64>,
+{
+    let mut entries: Vec<Bound<'py, PyAny>> = Vec::new();
+    for id in ids {
+        let params = store.parameters(id);
+        for (key, value) in params {
+            let dict = PyDict::new(py);
+            dict.set_item(id_col, Into::<u64>::into(id))?;
+            dict.set_item("key", key)?;
+            dict.set_item("value", value)?;
+            entries.push(dict.into_any());
+        }
+    }
+    long_format_dataframe(py, entries)
+}
+
+/// Long-format provenance DataFrame for constraints.
+///
+/// One row per (id, step) pair where `store.provenance(id)` is non-empty.
+/// Columns: `id_col`, `step` (0-based), `source_kind`
+/// (`"IndicatorConstraint"` / `"OneHotConstraint"` / `"Sos1Constraint"`),
+/// `source_id`. Default RangeIndex.
+pub fn constraint_provenance_dataframe<'py, ID>(
+    py: Python<'py>,
+    store: &ConstraintMetadataStore<ID>,
+    ids: impl Iterator<Item = ID>,
+    id_col: &str,
+) -> PyResult<Bound<'py, PyDataFrame>>
+where
+    ID: IDType + Into<u64>,
+{
+    let mut entries: Vec<Bound<'py, PyAny>> = Vec::new();
+    for id in ids {
+        for (step, p) in store.provenance(id).iter().enumerate() {
+            let (source_kind, source_id) = provenance_parts(p);
+            let dict = PyDict::new(py);
+            dict.set_item(id_col, Into::<u64>::into(id))?;
+            dict.set_item("step", step as u64)?;
+            dict.set_item("source_kind", source_kind)?;
+            dict.set_item("source_id", source_id)?;
+            entries.push(dict.into_any());
+        }
+    }
+    long_format_dataframe(py, entries)
+}
+
+/// Long-format removed-reasons DataFrame for constraints.
+///
+/// One row per (id, parameter_key) pair when the removed reason has
+/// parameters; ids without parameters get one row with `key`/`value` set to
+/// `pandas.NA`. Columns: `id_col`, `reason`, `key`, `value`. Default
+/// RangeIndex.
+pub fn constraint_removed_reasons_dataframe<'py, 'a, ID>(
+    py: Python<'py>,
+    removed: impl Iterator<Item = (ID, &'a RemovedReason)>,
+    id_col: &str,
+) -> PyResult<Bound<'py, PyDataFrame>>
+where
+    ID: IDType + Into<u64>,
+{
+    let na = get_na(py)?;
+    let mut entries: Vec<Bound<'py, PyAny>> = Vec::new();
+    for (id, reason) in removed {
+        if reason.parameters.is_empty() {
+            let dict = PyDict::new(py);
+            dict.set_item(id_col, Into::<u64>::into(id))?;
+            dict.set_item("reason", &reason.reason)?;
+            dict.set_item("key", &na)?;
+            dict.set_item("value", &na)?;
+            entries.push(dict.into_any());
+        } else {
+            for (key, value) in &reason.parameters {
+                let dict = PyDict::new(py);
+                dict.set_item(id_col, Into::<u64>::into(id))?;
+                dict.set_item("reason", &reason.reason)?;
+                dict.set_item("key", key)?;
+                dict.set_item("value", value)?;
+                entries.push(dict.into_any());
+            }
+        }
+    }
+    long_format_dataframe(py, entries)
+}
+
+/// Wide id-indexed metadata DataFrame for decision variables.
+///
+/// Identical column shape to [`constraint_metadata_dataframe`], reading from
+/// a [`VariableMetadataStore`] instead.
+pub fn variable_metadata_dataframe<'py>(
+    py: Python<'py>,
+    store: &VariableMetadataStore,
+    ids: impl Iterator<Item = VariableID>,
+    id_col: &str,
+) -> PyResult<Bound<'py, PyDataFrame>> {
+    let entries: Vec<Bound<'py, PyAny>> = ids
+        .map(|id| -> PyResult<_> {
+            let dict = PyDict::new(py);
+            dict.set_item(id_col, Into::<u64>::into(id))?;
+            set_metadata(
+                &dict,
+                store.name(id),
+                store.subscripts(id),
+                store.description(id),
+            )?;
+            Ok(dict.into_any())
+        })
+        .collect::<PyResult<_>>()?;
+    raw_entries_to_dataframe(py, entries, id_col)
+}
+
+/// Long-format parameters DataFrame for decision variables.
+pub fn variable_parameters_dataframe<'py>(
+    py: Python<'py>,
+    store: &VariableMetadataStore,
+    ids: impl Iterator<Item = VariableID>,
+    id_col: &str,
+) -> PyResult<Bound<'py, PyDataFrame>> {
+    let mut entries: Vec<Bound<'py, PyAny>> = Vec::new();
+    for id in ids {
+        let params = store.parameters(id);
+        for (key, value) in params {
+            let dict = PyDict::new(py);
+            dict.set_item(id_col, Into::<u64>::into(id))?;
+            dict.set_item("key", key)?;
+            dict.set_item("value", value)?;
+            entries.push(dict.into_any());
+        }
+    }
+    long_format_dataframe(py, entries)
+}
+
+fn provenance_parts(p: &Provenance) -> (&'static str, u64) {
+    match *p {
+        Provenance::IndicatorConstraint(id) => ("IndicatorConstraint", id.into()),
+        Provenance::OneHotConstraint(id) => ("OneHotConstraint", id.into()),
+        Provenance::Sos1Constraint(id) => ("Sos1Constraint", id.into()),
+    }
+}
+
+/// Build a long-format DataFrame from pre-built entry dicts.
+///
+/// No `set_index` call, so the DataFrame keeps its default RangeIndex.
+/// Used by the `*_parameters_df` / `*_provenance_df` /
+/// `*_removed_reasons_df` builders.
+fn long_format_dataframe<'py>(
+    py: Python<'py>,
+    entries: Vec<Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyDataFrame>> {
+    let pandas = py.import("pandas")?;
+    let df = pandas.call_method1("DataFrame", (entries,))?;
+    df.cast_into().map_err(Into::into)
+}
 
 /// Drop columns from a per-row dict according to the include flags.
 ///

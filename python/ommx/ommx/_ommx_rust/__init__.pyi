@@ -2569,6 +2569,59 @@ class Instance:
         r"""
         DataFrame of named functions
         """
+    def constraint_metadata_df(
+        self, kind: builtins.str = "regular"
+    ) -> pandas.DataFrame:
+        r"""
+        Constraint metadata DataFrame (id-indexed wide format).
+
+        One row per constraint id (active + removed) with columns
+        `name`, `subscripts`, `description`. Index column is
+        `{kind}_constraint_id`. `kind` selects which constraint family
+        to read: `"regular"`, `"indicator"`, `"one_hot"`, or `"sos1"`.
+        """
+    def constraint_parameters_df(
+        self, kind: builtins.str = "regular"
+    ) -> pandas.DataFrame:
+        r"""
+        Constraint parameters DataFrame (long format).
+
+        One row per (constraint_id, parameter_key) pair. Columns:
+        `{kind}_constraint_id`, `key`, `value`. Default RangeIndex.
+        """
+    def constraint_provenance_df(
+        self, kind: builtins.str = "regular"
+    ) -> pandas.DataFrame:
+        r"""
+        Constraint provenance DataFrame (long format).
+
+        One row per (constraint_id, step) pair. Columns:
+        `{kind}_constraint_id`, `step`, `source_kind`, `source_id`.
+        """
+    def constraint_removed_reasons_df(
+        self, kind: builtins.str = "regular"
+    ) -> pandas.DataFrame:
+        r"""
+        Removed-constraint reasons DataFrame (long format).
+
+        One row per (constraint_id, parameter_key) pair, plus one row with
+        `key`/`value` set to NA when the reason has no parameters. Columns:
+        `{kind}_constraint_id`, `reason`, `key`, `value`.
+        """
+    def variable_metadata_df(self) -> pandas.DataFrame:
+        r"""
+        Decision-variable metadata DataFrame (id-indexed wide format).
+
+        Columns: `name`, `subscripts`, `description`. Index column =
+        `variable_id`.
+        """
+    def variable_parameters_df(self) -> pandas.DataFrame:
+        r"""
+        Decision-variable parameters DataFrame (long format).
+
+        One row per (variable_id, parameter_key) pair. Columns:
+        `variable_id`, `key`, `value`.
+        """
     def __copy__(self) -> Instance: ...
     def __deepcopy__(self, _memo: typing.Any) -> Instance: ...
     def as_minimization_problem(self) -> builtins.bool:
@@ -3346,6 +3399,40 @@ class ParametricInstance:
     ) -> pandas.DataFrame:
         r"""
         DataFrame of parameters
+        """
+    def constraint_metadata_df(
+        self, kind: builtins.str = "regular"
+    ) -> pandas.DataFrame:
+        r"""
+        Constraint metadata DataFrame (id-indexed). See
+        {meth}`ommx.v1.Instance.constraint_metadata_df` for column / `kind=`
+        semantics.
+        """
+    def constraint_parameters_df(
+        self, kind: builtins.str = "regular"
+    ) -> pandas.DataFrame:
+        r"""
+        Constraint parameters DataFrame (long format).
+        """
+    def constraint_provenance_df(
+        self, kind: builtins.str = "regular"
+    ) -> pandas.DataFrame:
+        r"""
+        Constraint provenance DataFrame (long format).
+        """
+    def constraint_removed_reasons_df(
+        self, kind: builtins.str = "regular"
+    ) -> pandas.DataFrame:
+        r"""
+        Removed-constraint reasons DataFrame (long format).
+        """
+    def variable_metadata_df(self) -> pandas.DataFrame:
+        r"""
+        Decision-variable metadata DataFrame (id-indexed).
+        """
+    def variable_parameters_df(self) -> pandas.DataFrame:
+        r"""
+        Decision-variable parameters DataFrame (long format).
         """
     def __copy__(self) -> ParametricInstance: ...
     def __deepcopy__(self, _memo: typing.Any) -> ParametricInstance: ...
@@ -4144,6 +4231,40 @@ class SampleSet:
         Static columns: id, used_ids, name, subscripts, description, parameters.
         Dynamic columns: one per sample_id (int) with the function's evaluated value.
         """
+    def constraint_metadata_df(
+        self, kind: builtins.str = "regular"
+    ) -> pandas.DataFrame:
+        r"""
+        Constraint metadata DataFrame (id-indexed). See
+        {meth}`ommx.v1.Instance.constraint_metadata_df` for column / `kind=`
+        semantics. Reads from the sampled collection's metadata store.
+        """
+    def constraint_parameters_df(
+        self, kind: builtins.str = "regular"
+    ) -> pandas.DataFrame:
+        r"""
+        Constraint parameters DataFrame (long format).
+        """
+    def constraint_provenance_df(
+        self, kind: builtins.str = "regular"
+    ) -> pandas.DataFrame:
+        r"""
+        Constraint provenance DataFrame (long format).
+        """
+    def constraint_removed_reasons_df(
+        self, kind: builtins.str = "regular"
+    ) -> pandas.DataFrame:
+        r"""
+        Removed-constraint reasons DataFrame (long format).
+        """
+    def variable_metadata_df(self) -> pandas.DataFrame:
+        r"""
+        Decision-variable metadata DataFrame (id-indexed).
+        """
+    def variable_parameters_df(self) -> pandas.DataFrame:
+        r"""
+        Decision-variable parameters DataFrame (long format).
+        """
 
 @typing.final
 class SampledConstraint:
@@ -4729,6 +4850,40 @@ class Solution:
         DataFrame of evaluated named functions
 
         Columns: id (index), value, used_ids, name, subscripts, description, parameters.{key}
+        """
+    def constraint_metadata_df(
+        self, kind: builtins.str = "regular"
+    ) -> pandas.DataFrame:
+        r"""
+        Constraint metadata DataFrame (id-indexed). See
+        {meth}`ommx.v1.Instance.constraint_metadata_df` for column / `kind=`
+        semantics. Reads from the evaluated collection's metadata store.
+        """
+    def constraint_parameters_df(
+        self, kind: builtins.str = "regular"
+    ) -> pandas.DataFrame:
+        r"""
+        Constraint parameters DataFrame (long format).
+        """
+    def constraint_provenance_df(
+        self, kind: builtins.str = "regular"
+    ) -> pandas.DataFrame:
+        r"""
+        Constraint provenance DataFrame (long format).
+        """
+    def constraint_removed_reasons_df(
+        self, kind: builtins.str = "regular"
+    ) -> pandas.DataFrame:
+        r"""
+        Removed-constraint reasons DataFrame (long format).
+        """
+    def variable_metadata_df(self) -> pandas.DataFrame:
+        r"""
+        Decision-variable metadata DataFrame (id-indexed).
+        """
+    def variable_parameters_df(self) -> pandas.DataFrame:
+        r"""
+        Decision-variable parameters DataFrame (long format).
         """
     def __copy__(self) -> Solution: ...
     def __deepcopy__(self, _memo: typing.Any) -> Solution: ...

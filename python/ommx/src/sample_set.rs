@@ -1,5 +1,8 @@
 use crate::{
-    pandas::{entries_to_dataframe, sorted_entries_to_dataframe, PyDataFrame, WithSampleIds},
+    pandas::{
+        constraint_id_col, entries_to_dataframe, parse_constraint_kind,
+        sorted_entries_to_dataframe, ConstraintKind, PyDataFrame, WithSampleIds,
+    },
     Solution,
 };
 use anyhow::Result;
@@ -897,6 +900,263 @@ impl SampleSet {
                 }),
             "id",
             flags,
+        )
+    }
+
+    /// Constraint metadata DataFrame (id-indexed). See
+    /// {meth}`ommx.v1.Instance.constraint_metadata_df` for column / `kind=`
+    /// semantics. Reads from the sampled collection's metadata store.
+    #[pyo3(signature = (kind = String::from("regular")))]
+    pub fn constraint_metadata_df<'py>(
+        &self,
+        py: Python<'py>,
+        kind: String,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let kind = parse_constraint_kind(&kind)?;
+        let id_col = constraint_id_col(kind);
+        match kind {
+            ConstraintKind::Regular => {
+                let coll = self.inner.constraints();
+                crate::pandas::constraint_metadata_dataframe(
+                    py,
+                    coll.metadata(),
+                    coll.inner()
+                        .keys()
+                        .chain(coll.removed_reasons().keys())
+                        .copied(),
+                    id_col,
+                )
+            }
+            ConstraintKind::Indicator => {
+                let coll = self.inner.indicator_constraints();
+                crate::pandas::constraint_metadata_dataframe(
+                    py,
+                    coll.metadata(),
+                    coll.inner()
+                        .keys()
+                        .chain(coll.removed_reasons().keys())
+                        .copied(),
+                    id_col,
+                )
+            }
+            ConstraintKind::OneHot => {
+                let coll = self.inner.one_hot_constraints();
+                crate::pandas::constraint_metadata_dataframe(
+                    py,
+                    coll.metadata(),
+                    coll.inner()
+                        .keys()
+                        .chain(coll.removed_reasons().keys())
+                        .copied(),
+                    id_col,
+                )
+            }
+            ConstraintKind::Sos1 => {
+                let coll = self.inner.sos1_constraints();
+                crate::pandas::constraint_metadata_dataframe(
+                    py,
+                    coll.metadata(),
+                    coll.inner()
+                        .keys()
+                        .chain(coll.removed_reasons().keys())
+                        .copied(),
+                    id_col,
+                )
+            }
+        }
+    }
+
+    /// Constraint parameters DataFrame (long format).
+    #[pyo3(signature = (kind = String::from("regular")))]
+    pub fn constraint_parameters_df<'py>(
+        &self,
+        py: Python<'py>,
+        kind: String,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let kind = parse_constraint_kind(&kind)?;
+        let id_col = constraint_id_col(kind);
+        match kind {
+            ConstraintKind::Regular => {
+                let coll = self.inner.constraints();
+                crate::pandas::constraint_parameters_dataframe(
+                    py,
+                    coll.metadata(),
+                    coll.inner()
+                        .keys()
+                        .chain(coll.removed_reasons().keys())
+                        .copied(),
+                    id_col,
+                )
+            }
+            ConstraintKind::Indicator => {
+                let coll = self.inner.indicator_constraints();
+                crate::pandas::constraint_parameters_dataframe(
+                    py,
+                    coll.metadata(),
+                    coll.inner()
+                        .keys()
+                        .chain(coll.removed_reasons().keys())
+                        .copied(),
+                    id_col,
+                )
+            }
+            ConstraintKind::OneHot => {
+                let coll = self.inner.one_hot_constraints();
+                crate::pandas::constraint_parameters_dataframe(
+                    py,
+                    coll.metadata(),
+                    coll.inner()
+                        .keys()
+                        .chain(coll.removed_reasons().keys())
+                        .copied(),
+                    id_col,
+                )
+            }
+            ConstraintKind::Sos1 => {
+                let coll = self.inner.sos1_constraints();
+                crate::pandas::constraint_parameters_dataframe(
+                    py,
+                    coll.metadata(),
+                    coll.inner()
+                        .keys()
+                        .chain(coll.removed_reasons().keys())
+                        .copied(),
+                    id_col,
+                )
+            }
+        }
+    }
+
+    /// Constraint provenance DataFrame (long format).
+    #[pyo3(signature = (kind = String::from("regular")))]
+    pub fn constraint_provenance_df<'py>(
+        &self,
+        py: Python<'py>,
+        kind: String,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let kind = parse_constraint_kind(&kind)?;
+        let id_col = constraint_id_col(kind);
+        match kind {
+            ConstraintKind::Regular => {
+                let coll = self.inner.constraints();
+                crate::pandas::constraint_provenance_dataframe(
+                    py,
+                    coll.metadata(),
+                    coll.inner()
+                        .keys()
+                        .chain(coll.removed_reasons().keys())
+                        .copied(),
+                    id_col,
+                )
+            }
+            ConstraintKind::Indicator => {
+                let coll = self.inner.indicator_constraints();
+                crate::pandas::constraint_provenance_dataframe(
+                    py,
+                    coll.metadata(),
+                    coll.inner()
+                        .keys()
+                        .chain(coll.removed_reasons().keys())
+                        .copied(),
+                    id_col,
+                )
+            }
+            ConstraintKind::OneHot => {
+                let coll = self.inner.one_hot_constraints();
+                crate::pandas::constraint_provenance_dataframe(
+                    py,
+                    coll.metadata(),
+                    coll.inner()
+                        .keys()
+                        .chain(coll.removed_reasons().keys())
+                        .copied(),
+                    id_col,
+                )
+            }
+            ConstraintKind::Sos1 => {
+                let coll = self.inner.sos1_constraints();
+                crate::pandas::constraint_provenance_dataframe(
+                    py,
+                    coll.metadata(),
+                    coll.inner()
+                        .keys()
+                        .chain(coll.removed_reasons().keys())
+                        .copied(),
+                    id_col,
+                )
+            }
+        }
+    }
+
+    /// Removed-constraint reasons DataFrame (long format).
+    #[pyo3(signature = (kind = String::from("regular")))]
+    pub fn constraint_removed_reasons_df<'py>(
+        &self,
+        py: Python<'py>,
+        kind: String,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        let kind = parse_constraint_kind(&kind)?;
+        let id_col = constraint_id_col(kind);
+        match kind {
+            ConstraintKind::Regular => crate::pandas::constraint_removed_reasons_dataframe(
+                py,
+                self.inner
+                    .constraints()
+                    .removed_reasons()
+                    .iter()
+                    .map(|(id, r)| (*id, r)),
+                id_col,
+            ),
+            ConstraintKind::Indicator => crate::pandas::constraint_removed_reasons_dataframe(
+                py,
+                self.inner
+                    .indicator_constraints()
+                    .removed_reasons()
+                    .iter()
+                    .map(|(id, r)| (*id, r)),
+                id_col,
+            ),
+            ConstraintKind::OneHot => crate::pandas::constraint_removed_reasons_dataframe(
+                py,
+                self.inner
+                    .one_hot_constraints()
+                    .removed_reasons()
+                    .iter()
+                    .map(|(id, r)| (*id, r)),
+                id_col,
+            ),
+            ConstraintKind::Sos1 => crate::pandas::constraint_removed_reasons_dataframe(
+                py,
+                self.inner
+                    .sos1_constraints()
+                    .removed_reasons()
+                    .iter()
+                    .map(|(id, r)| (*id, r)),
+                id_col,
+            ),
+        }
+    }
+
+    /// Decision-variable metadata DataFrame (id-indexed).
+    pub fn variable_metadata_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
+        crate::pandas::variable_metadata_dataframe(
+            py,
+            self.inner.variable_metadata(),
+            self.inner.decision_variables().keys().copied(),
+            "variable_id",
+        )
+    }
+
+    /// Decision-variable parameters DataFrame (long format).
+    pub fn variable_parameters_df<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
+        crate::pandas::variable_parameters_dataframe(
+            py,
+            self.inner.variable_metadata(),
+            self.inner.decision_variables().keys().copied(),
+            "variable_id",
         )
     }
 }
