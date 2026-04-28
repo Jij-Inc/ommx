@@ -40,13 +40,18 @@ use std::collections::BTreeMap;
 
 /// Marker trait for ID types used throughout the crate.
 ///
-/// Every numeric ID newtype in `ommx` (`ConstraintID`,
-/// `IndicatorConstraintID`, `OneHotConstraintID`, `Sos1ConstraintID`,
-/// `VariableID`, `NamedFunctionID`, `SampleID`) satisfies the same
-/// shape: copyable, totally ordered, hashable, debuggable, round-trips
-/// through `u64`, and participates in logical memory profiling. Bundling
-/// those bounds into one trait removes the need to repeat them at every
-/// generic site.
+/// Every constraint and decision-variable ID newtype in `ommx`
+/// (`ConstraintID`, `IndicatorConstraintID`, `OneHotConstraintID`,
+/// `Sos1ConstraintID`, `VariableID`, `NamedFunctionID`) satisfies the
+/// same shape: copyable, totally ordered, hashable, debuggable,
+/// round-trips through `u64`, and participates in logical memory
+/// profiling. Bundling those bounds into one trait removes the need
+/// to repeat them at every generic site (e.g.
+/// `ConstraintMetadataStore<ID>` and `ConstraintType::ID`).
+///
+/// `SampleID` is intentionally excluded: it is a sample-set index, not
+/// a metadata-bearing entity, and does not currently impl
+/// `LogicalMemoryProfile`.
 ///
 /// A blanket impl makes any concrete type satisfying the bounds an
 /// `IDType` automatically — there is nothing for callers to implement

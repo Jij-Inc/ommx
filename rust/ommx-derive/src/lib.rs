@@ -4,10 +4,15 @@
 //! is published to crates.io because `ommx` depends on it, but it has no
 //! stable API of its own and **no public surface for external use**.
 //!
-//! The `ommx` crate scopes the `LogicalMemoryProfile` trait and the
-//! re-exported derive to `pub(crate)`, so downstream users cannot
-//! meaningfully derive it on their own types. External consumers should
-//! use [`ommx::Instance::logical_memory_profile`] and
+//! The `ommx` crate gates the `LogicalMemoryProfile` trait and the
+//! re-exported derive behind a `pub(crate)` module, so downstream users
+//! cannot reach them through the public API and cannot meaningfully
+//! derive on their own types. The trait and the re-export are declared
+//! `pub` *inside* that module to satisfy the `private_bounds` lint when
+//! the trait appears in the bound of a `pub` type within the crate
+//! (e.g. `ConstraintMetadataStore<ID: ... + LogicalMemoryProfile>`).
+//! External consumers should use
+//! [`ommx::Instance::logical_memory_profile`] and
 //! [`ommx::MemoryProfile`] instead.
 //!
 //! [`ommx`]: https://docs.rs/ommx

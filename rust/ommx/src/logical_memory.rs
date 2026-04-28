@@ -77,16 +77,17 @@ use std::fmt;
 /// `visitor.visit_leaf()` for each leaf node, while intermediate nodes should
 /// delegate to their children.
 ///
-/// This trait is `pub` so it can appear in the bound of public types
-/// (e.g. `ConstraintMetadataStore<ID>` where `ID: LogicalMemoryProfile`)
-/// without triggering the `private_bounds` lint, and so the derive
-/// macro can be used at every struct that participates in profiling
-/// without having to fall back to a hand-written impl. The intended
-/// user-facing entry points are still
-/// [`crate::Instance::logical_memory_profile`] and
-/// [`crate::MemoryProfile`]; the trait itself has no stability
-/// guarantees beyond "exists, has the same shape across patch
-/// versions".
+/// The trait is declared `pub` so it can appear in the bound of `pub`
+/// types within this crate (e.g. `ConstraintMetadataStore<ID>` requires
+/// `ID: LogicalMemoryProfile`) without triggering the `private_bounds`
+/// lint, and so `#[derive(LogicalMemoryProfile)]` can be used at every
+/// struct that participates in profiling — the derive prevents
+/// "added a new field, forgot to update the impl" drift that hand-
+/// written impls invite. The enclosing module
+/// (`crate::logical_memory`) is `pub(crate)`, so downstream crates
+/// cannot reach the trait directly. The user-facing memory-profile
+/// entry points are [`crate::Instance::logical_memory_profile`] and
+/// [`crate::MemoryProfile`].
 pub trait LogicalMemoryProfile {
     /// Enumerate the "logical memory leaves" of this value.
     ///
@@ -297,13 +298,14 @@ macro_rules! impl_logical_memory_profile {
 }
 pub(crate) use impl_logical_memory_profile;
 
-// Re-export the derive macro alongside the trait so downstream
-// modules (and external crates, since both the trait and this
-// re-export are `pub`) can write `use ommx::LogicalMemoryProfile;`
-// and then `#[derive(LogicalMemoryProfile)]`. Promoting from
-// `pub(crate)` to `pub` lets the derive replace every mechanical
-// hand-written `impl` — the intended fix for "added a new field
-// and forgot to update the impl".
+// Re-export the derive macro alongside the trait so internal modules
+// can write `use crate::logical_memory::LogicalMemoryProfile;` and
+// then `#[derive(LogicalMemoryProfile)]`. The re-export and the
+// trait are `pub` (gated by the `pub(crate)` module wrapping them)
+// so the derive can be used at every struct that participates in
+// profiling — the fix for "added a new field and forgot to update
+// the impl" drift the hand-written form invites. External crates
+// cannot reach this re-export through the public API.
 pub use ommx_derive::LogicalMemoryProfile;
 
 // Generic implementations for primitive types
