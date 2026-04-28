@@ -1117,6 +1117,7 @@ impl<'m> ToPandasEntry
         // EvaluatedDecisionVariable has no substituted_value field
         dict.set_item("substituted_value", &na)?;
         dict.set_item("value", *dv.value())?;
+        set_parameter_columns(&dict, &m.parameters)?;
         Ok(dict)
     }
 }
@@ -1214,6 +1215,7 @@ impl<'a, 'm> ToPandasEntry
             &m.subscripts,
             m.description.as_deref(),
         )?;
+        set_parameter_columns(&dict, &m.parameters)?;
         for &sample_id in self.item.sample_ids {
             let value = dv.samples().get(sample_id).copied();
             dict.set_item(sample_id.into_inner(), value)?;
@@ -1264,12 +1266,7 @@ impl<'a> ToPandasEntry for WithSampleIds<'a, &'a ommx::SampledNamedFunction> {
             &nf.subscripts,
             nf.description.as_deref(),
         )?;
-        let params: Vec<String> = nf
-            .parameters
-            .iter()
-            .map(|(k, v)| format!("{k}={v}"))
-            .collect();
-        dict.set_item("parameters", params)?;
+        set_parameter_columns(&dict, &nf.parameters)?;
         for &sample_id in self.sample_ids {
             let value = nf.evaluated_values().get(sample_id).copied();
             dict.set_item(sample_id.into_inner(), value)?;

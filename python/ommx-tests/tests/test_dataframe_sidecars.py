@@ -209,3 +209,75 @@ def test_sample_set_variable_metadata_df_matches_instance():
     pd.testing.assert_frame_equal(
         instance.variable_metadata_df(), ss.variable_metadata_df()
     )
+
+
+# ---------------------------------------------------------------------------
+# Regression: Solution/SampleSet sidecars must NOT duplicate rows for
+# removed constraints. EvaluatedCollection.inner() / SampledCollection.inner()
+# already include removed ids, so chaining `.removed_reasons().keys()` would
+# double-count them.
+# ---------------------------------------------------------------------------
+
+
+def _instance_with_relaxed_constraint() -> Instance:
+    """Two regular constraints, one of which is relaxed (moved to removed)."""
+    x = [DecisionVariable.binary(i) for i in range(3)]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=sum(x),
+        constraints={
+            10: (x[0] + x[1] == 1).set_name("balance").set_parameters({"k": "v"}),
+            11: (x[1] + x[2] <= 1).set_name("cap"),
+        },
+        sense=Instance.MAXIMIZE,
+    )
+    instance.relax_constraint(10, "test_reason")
+    return instance
+
+
+def test_solution_sidecar_no_duplicate_rows_for_removed():
+    """The relaxed id 10 lives in both inner() and removed_reasons() — the
+    sidecar must emit one row per id, not two."""
+    instance = _instance_with_relaxed_constraint()
+    sol = instance.evaluate({0: 1, 1: 0, 2: 0})
+
+    meta = sol.constraint_metadata_df()
+    assert sorted(meta.index.tolist()) == [10, 11]
+
+    params = sol.constraint_parameters_df()
+    rows = list(zip(params["regular_constraint_id"], params["key"]))
+    assert rows == [(10, "k")]  # exactly one row, not duplicated
+
+
+def test_sample_set_sidecar_no_duplicate_rows_for_removed():
+    instance = _instance_with_relaxed_constraint()
+    ss = instance.evaluate_samples({0: {0: 1, 1: 0, 2: 0}})
+
+    meta = ss.constraint_metadata_df()
+    assert sorted(meta.index.tolist()) == [10, 11]
+
+    params = ss.constraint_parameters_df()
+    rows = list(zip(params["regular_constraint_id"], params["key"]))
+    assert rows == [(10, "k")]
+
+
+# ---------------------------------------------------------------------------
+# Regression: include=["parameters"] on Solution/SampleSet decision variables
+# now emits parameters.{key} columns (used to silently drop them).
+# ---------------------------------------------------------------------------
+
+
+def test_solution_decision_variables_df_emits_parameter_columns():
+    instance = _instance_with_metadata()
+    sol = instance.evaluate({0: 1, 1: 0, 2: 0})
+    df = sol.decision_variables_df(include=["parameters"])
+    assert "parameters.role" in df.columns
+    assert "parameters.shard" in df.columns
+
+
+def test_sample_set_decision_variables_df_emits_parameter_columns():
+    instance = _instance_with_metadata()
+    ss = instance.evaluate_samples({0: {0: 1, 1: 0, 2: 0}})
+    df = ss.decision_variables_df(include=["parameters"])
+    assert "parameters.role" in df.columns
+    assert "parameters.shard" in df.columns

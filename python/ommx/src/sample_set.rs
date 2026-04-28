@@ -920,10 +920,7 @@ impl SampleSet {
                 crate::pandas::constraint_metadata_dataframe(
                     py,
                     coll.metadata(),
-                    coll.inner()
-                        .keys()
-                        .chain(coll.removed_reasons().keys())
-                        .copied(),
+                    coll.inner().keys().copied(),
                     id_col,
                 )
             }
@@ -932,10 +929,7 @@ impl SampleSet {
                 crate::pandas::constraint_metadata_dataframe(
                     py,
                     coll.metadata(),
-                    coll.inner()
-                        .keys()
-                        .chain(coll.removed_reasons().keys())
-                        .copied(),
+                    coll.inner().keys().copied(),
                     id_col,
                 )
             }
@@ -944,10 +938,7 @@ impl SampleSet {
                 crate::pandas::constraint_metadata_dataframe(
                     py,
                     coll.metadata(),
-                    coll.inner()
-                        .keys()
-                        .chain(coll.removed_reasons().keys())
-                        .copied(),
+                    coll.inner().keys().copied(),
                     id_col,
                 )
             }
@@ -956,10 +947,7 @@ impl SampleSet {
                 crate::pandas::constraint_metadata_dataframe(
                     py,
                     coll.metadata(),
-                    coll.inner()
-                        .keys()
-                        .chain(coll.removed_reasons().keys())
-                        .copied(),
+                    coll.inner().keys().copied(),
                     id_col,
                 )
             }
@@ -981,10 +969,7 @@ impl SampleSet {
                 crate::pandas::constraint_parameters_dataframe(
                     py,
                     coll.metadata(),
-                    coll.inner()
-                        .keys()
-                        .chain(coll.removed_reasons().keys())
-                        .copied(),
+                    coll.inner().keys().copied(),
                     id_col,
                 )
             }
@@ -993,10 +978,7 @@ impl SampleSet {
                 crate::pandas::constraint_parameters_dataframe(
                     py,
                     coll.metadata(),
-                    coll.inner()
-                        .keys()
-                        .chain(coll.removed_reasons().keys())
-                        .copied(),
+                    coll.inner().keys().copied(),
                     id_col,
                 )
             }
@@ -1005,10 +987,7 @@ impl SampleSet {
                 crate::pandas::constraint_parameters_dataframe(
                     py,
                     coll.metadata(),
-                    coll.inner()
-                        .keys()
-                        .chain(coll.removed_reasons().keys())
-                        .copied(),
+                    coll.inner().keys().copied(),
                     id_col,
                 )
             }
@@ -1017,10 +996,7 @@ impl SampleSet {
                 crate::pandas::constraint_parameters_dataframe(
                     py,
                     coll.metadata(),
-                    coll.inner()
-                        .keys()
-                        .chain(coll.removed_reasons().keys())
-                        .copied(),
+                    coll.inner().keys().copied(),
                     id_col,
                 )
             }
@@ -1042,10 +1018,7 @@ impl SampleSet {
                 crate::pandas::constraint_provenance_dataframe(
                     py,
                     coll.metadata(),
-                    coll.inner()
-                        .keys()
-                        .chain(coll.removed_reasons().keys())
-                        .copied(),
+                    coll.inner().keys().copied(),
                     id_col,
                 )
             }
@@ -1054,10 +1027,7 @@ impl SampleSet {
                 crate::pandas::constraint_provenance_dataframe(
                     py,
                     coll.metadata(),
-                    coll.inner()
-                        .keys()
-                        .chain(coll.removed_reasons().keys())
-                        .copied(),
+                    coll.inner().keys().copied(),
                     id_col,
                 )
             }
@@ -1066,10 +1036,7 @@ impl SampleSet {
                 crate::pandas::constraint_provenance_dataframe(
                     py,
                     coll.metadata(),
-                    coll.inner()
-                        .keys()
-                        .chain(coll.removed_reasons().keys())
-                        .copied(),
+                    coll.inner().keys().copied(),
                     id_col,
                 )
             }
@@ -1078,10 +1045,7 @@ impl SampleSet {
                 crate::pandas::constraint_provenance_dataframe(
                     py,
                     coll.metadata(),
-                    coll.inner()
-                        .keys()
-                        .chain(coll.removed_reasons().keys())
-                        .copied(),
+                    coll.inner().keys().copied(),
                     id_col,
                 )
             }
