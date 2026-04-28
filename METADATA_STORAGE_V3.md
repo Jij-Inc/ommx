@@ -2,9 +2,9 @@
 
 Status: **Rust SDK landed; Python wrappers landed (snapshot model);
 `include=` + long-format sidecar dfs landed (Wave 1.5); per-kind
-`*_df` consolidation landed (Wave 2, PR #847); Series accessors,
-two-mode Attached wrappers, and `Literal[...]` typing deferred to
-follow-up PRs**
+`*_df` consolidation + `kind: Literal[...]` typing landed (Wave 2,
+PR #847); Series accessors and two-mode Attached wrappers deferred
+to follow-up PRs**
 
 This proposal is a **prerequisite** for `SPECIAL_CONSTRAINTS_V3.md` (PR #841).
 The proto-schema redesign in #841 cannot be finalized without first deciding
@@ -54,13 +54,15 @@ here. The implementation shipped in three waves:
   Wide `*_df` index column renamed from unqualified `id` to
   `{kind}_constraint_id`, matching the Wave 1.5 sidecars; empty
   collections still produce a DataFrame whose `df.index.name` is
-  the kind-qualified label. `kind` stays `str` at runtime;
-  `Literal[...]` typing + `@overload` stubs are kept as a follow-up.
+  the kind-qualified label. `kind` is typed
+  `Literal["regular","indicator","one_hot","sos1"]` in the stubs so
+  type checkers catch typos at edit time; runtime continues to
+  validate against the same set and raise `ValueError` on unknown
+  values for callers without a type checker.
 - **Future (deferred):** `Series[ID -> Object]` collection
   accessors, the two-mode Standalone / Attached wrappers with
   `Py<Instance>` back-references and write-through metadata setters,
-  `Literal[...]` typing on `kind=`, and the `NamedFunction` SoA
-  migration.
+  and the `NamedFunction` SoA migration.
 
 Sections below mark each item with **(landed)** or **(deferred)** so it
 is clear which parts are live in v3 alpha and which are still proposal.
@@ -594,7 +596,7 @@ Series accessor and the `kind=Literal` consolidation of per-kind
    handles)      back-referenced       constraint_provenance_df(kind=...) /
                  to the store)         constraint_removed_reasons_df(kind=...)
                                        (bulk-built from the SoA via column-wise
-                                       builders; kind via Literal + @overload)
+                                       builders; kind typed Literal[...])
 ```
 
 Wrapper objects, Series, and DataFrames are three views over the same
@@ -1112,8 +1114,15 @@ shape is:
   `{kind}_constraint_id` (matching the Wave 1.5 sidecars). Empty
   collections still produce a DataFrame whose `df.index.name` is
   the kind-qualified label.
-- `kind` typing stays `str` at runtime; `Literal[...]` typing +
-  `@overload` stubs are deferred to a follow-up.
+- `kind` is typed
+  `Literal["regular","indicator","one_hot","sos1"]` in the
+  `pyo3-stub-gen`-emitted stubs (`__init__.pyi`) so type checkers
+  catch typos at edit time. Runtime continues to validate against
+  the same set and raise `ValueError` on unknown values for callers
+  without a type checker. Per-kind `@overload` stubs that vary the
+  *return type* by kind are intentionally not emitted: every
+  `*_df` accessor returns a uniform `pandas.DataFrame`, so
+  overload-style typing has no return-type variation to express.
 
 ### Deferred to follow-up wave
 
@@ -1123,11 +1132,6 @@ shape is:
   - `s.values()` (method call) → `s.tolist()` or `list(s)`.
   - List-positional reliance on the old `decision_variables: list[…]`
     ordering breaks; index by `VariableID` instead.
-- `Literal[...]` typing on `kind=` (both the wide
-  `constraints_df(kind=...)` and the sidecars) plus the
-  `@overload` stubs that surface per-kind column schemas. The
-  runtime semantics land in Wave 2; this follow-up tightens the
-  static typing.
 - Wrapper-object metadata setters become write-through to the SoA
   store via the Standalone / Attached two-mode design.
 - `NamedFunction` / `EvaluatedNamedFunction` /
@@ -1147,15 +1151,17 @@ Numbering preserved from the original Open Questions list for
 traceability with earlier review comments.
 
 1. **Kind dispatch in Python — single method with `kind=...`
-   parameter.** Both the wide `constraints_df(kind=...)` (Wave 2)
-   and the long-format sidecar accessors (Wave 1.5) take a
-   `kind: str` argument validated at runtime against
-   `{"regular", "indicator", "one_hot", "sos1"}` (default
-   `"regular"`). `Literal[...]` typing + `pyo3-stub-gen`
-   `@overload` stubs are deferred to a separate follow-up so the
-   runtime semantics could be settled first; once landed, the
-   `Literal` typing covers both the wide and the sidecar accessors
-   uniformly.
+   parameter, typed `Literal[...]`.** Both the wide
+   `constraints_df(kind=...)` (Wave 2) and the long-format sidecar
+   accessors (Wave 1.5) take `kind:
+   Literal["regular","indicator","one_hot","sos1"]` (default
+   `"regular"`) in the generated stubs, with the same set
+   validated at runtime so callers without a type checker still
+   get a clean `ValueError` on a typo. `pyo3-stub-gen` `@overload`
+   stubs are intentionally *not* used: every `*_df` accessor
+   returns a uniform `pandas.DataFrame`, so overloads would have
+   no return-type variation to express; the input `Literal`
+   annotation is the entire static-typing benefit on offer.
 2. **`removed_reason` — surfaced both via wide df and via long-
    format sidecar.** `RemovedReason` is collection-level metadata
    in Rust, not part of the constraint. Wave 1.5 shipped the
@@ -1273,19 +1279,6 @@ traceability with earlier review comments.
   `*_metadata_mut`). These three methods should be narrowed to
   `pub(crate)` (or smaller) in a follow-up so the only way to break
   the collection's invariants is from inside the crate.
-- **`kind=Literal[...]` + `@overload` typing.** Wave 2 lands the
-  runtime semantics — single `constraints_df(kind=...)` per host,
-  `kind` validated at runtime against the four kind strings, and a
-  `{kind}_constraint_id` qualified index name on the wide df. The
-  static typing — `Literal["regular","indicator","one_hot","sos1"]`
-  on `kind` plus optional `pyo3-stub-gen`-emitted `@overload`
-  stubs that surface per-kind column schemas — is held off until
-  the runtime API has soaked. The hook to emit these is already in
-  pyo3-stub-gen (the `python_overload` parameter on
-  `gen_stub_pyfunction` / the `submit!` + `gen_methods_from_python!`
-  pattern); whether the per-kind column-schema overloads are worth
-  the maintenance, or only the `Literal[...]` input typing is, is a
-  question for the follow-up.
 - **`NamedFunction` SoA migration.** Track the
   `NamedFunctionMetadataStore` work described under
   "NamedFunction (deferred — separate PR)" above.

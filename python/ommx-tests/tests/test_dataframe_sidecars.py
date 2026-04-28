@@ -93,7 +93,7 @@ def test_constraint_parameters_df(snapshot):
 def test_unknown_kind_raises_value_error():
     instance = _instance_with_metadata()
     with pytest.raises(ValueError):
-        instance.constraint_metadata_df(kind="bogus")
+        instance.constraint_metadata_df(kind="bogus")  # type: ignore[arg-type]
 
 
 def test_indicator_kind_metadata_df(snapshot):

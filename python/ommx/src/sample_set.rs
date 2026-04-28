@@ -638,14 +638,18 @@ impl SampleSet {
     /// `SampleSet` has no `removed=` parameter (no active/removed
     /// distinction at the sampled stage); reason data is gated by
     /// `"removed_reason"` in `include=`.
-    #[pyo3(signature = (kind = String::from("regular"), include = None))]
+    #[pyo3(signature = (kind = "regular", include = None))]
     pub fn constraints_df<'py>(
         &self,
         py: Python<'py>,
-        kind: String,
+        #[gen_stub(override_type(
+            type_repr = "typing.Literal[\"regular\", \"indicator\", \"one_hot\", \"sos1\"]",
+            imports = ("typing")
+        ))]
+        kind: &str,
         include: Option<Vec<String>>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
-        let kind_enum = parse_constraint_kind(&kind)?;
+        let kind_enum = parse_constraint_kind(kind)?;
         let id_col = constraint_id_col(kind_enum);
         let flags = crate::pandas::IncludeFlags::from_optional(include)?;
         let sample_ids = sorted_sample_ids(&self.inner);
@@ -716,13 +720,17 @@ impl SampleSet {
     /// Constraint metadata DataFrame (id-indexed). See
     /// {meth}`ommx.v1.Instance.constraint_metadata_df` for column / `kind=`
     /// semantics. Reads from the sampled collection's metadata store.
-    #[pyo3(signature = (kind = String::from("regular")))]
+    #[pyo3(signature = (kind = "regular"))]
     pub fn constraint_metadata_df<'py>(
         &self,
         py: Python<'py>,
-        kind: String,
+        #[gen_stub(override_type(
+            type_repr = "typing.Literal[\"regular\", \"indicator\", \"one_hot\", \"sos1\"]",
+            imports = ("typing")
+        ))]
+        kind: &str,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
-        let kind = parse_constraint_kind(&kind)?;
+        let kind = parse_constraint_kind(kind)?;
         let id_col = constraint_id_col(kind);
         constraint_kind_collection!(
             self.inner,
@@ -745,13 +753,17 @@ impl SampleSet {
     }
 
     /// Constraint parameters DataFrame (long format).
-    #[pyo3(signature = (kind = String::from("regular")))]
+    #[pyo3(signature = (kind = "regular"))]
     pub fn constraint_parameters_df<'py>(
         &self,
         py: Python<'py>,
-        kind: String,
+        #[gen_stub(override_type(
+            type_repr = "typing.Literal[\"regular\", \"indicator\", \"one_hot\", \"sos1\"]",
+            imports = ("typing")
+        ))]
+        kind: &str,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
-        let kind = parse_constraint_kind(&kind)?;
+        let kind = parse_constraint_kind(kind)?;
         let id_col = constraint_id_col(kind);
         constraint_kind_collection!(
             self.inner,
@@ -774,13 +786,17 @@ impl SampleSet {
     }
 
     /// Constraint provenance DataFrame (long format).
-    #[pyo3(signature = (kind = String::from("regular")))]
+    #[pyo3(signature = (kind = "regular"))]
     pub fn constraint_provenance_df<'py>(
         &self,
         py: Python<'py>,
-        kind: String,
+        #[gen_stub(override_type(
+            type_repr = "typing.Literal[\"regular\", \"indicator\", \"one_hot\", \"sos1\"]",
+            imports = ("typing")
+        ))]
+        kind: &str,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
-        let kind = parse_constraint_kind(&kind)?;
+        let kind = parse_constraint_kind(kind)?;
         let id_col = constraint_id_col(kind);
         constraint_kind_collection!(
             self.inner,
@@ -803,13 +819,17 @@ impl SampleSet {
     }
 
     /// Removed-constraint reasons DataFrame (long format).
-    #[pyo3(signature = (kind = String::from("regular")))]
+    #[pyo3(signature = (kind = "regular"))]
     pub fn constraint_removed_reasons_df<'py>(
         &self,
         py: Python<'py>,
-        kind: String,
+        #[gen_stub(override_type(
+            type_repr = "typing.Literal[\"regular\", \"indicator\", \"one_hot\", \"sos1\"]",
+            imports = ("typing")
+        ))]
+        kind: &str,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
-        let kind = parse_constraint_kind(&kind)?;
+        let kind = parse_constraint_kind(kind)?;
         let id_col = constraint_id_col(kind);
         constraint_kind_collection!(
             self.inner,

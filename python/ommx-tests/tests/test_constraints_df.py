@@ -124,9 +124,11 @@ def test_instance_constraints_df_kind(snapshot, kind):
 
 
 def test_instance_constraints_df_unknown_kind():
-    """Unknown `kind=` raises ValueError."""
+    """Unknown `kind=` raises ValueError. The `Literal` annotation
+    catches the typo statically; the runtime check is a defense-in-
+    depth fallback for callers without a type checker."""
     with pytest.raises(ValueError, match="unknown constraint kind"):
-        _instance_all_kinds().constraints_df(kind="bogus")
+        _instance_all_kinds().constraints_df(kind="bogus")  # type: ignore[arg-type]
 
 
 def test_instance_constraints_df_unknown_include_flag():

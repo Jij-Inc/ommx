@@ -7096,13 +7096,34 @@
                     {
                       "name": "kind",
                       "type_": {
-                        "display": "str",
+                        "display": "Literal[\"regular\", \"indicator\", \"one_hot\", \"sos1\"]",
                         "link_target": null,
-                        "children": []
+                        "children": [
+                          {
+                            "display": "\"regular\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"indicator\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"one_hot\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"sos1\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
                       },
                       "default": {
                         "kind": "Simple",
-                        "value": "'regular'"
+                        "value": "\"regular\""
                       }
                     }
                   ],
@@ -7125,13 +7146,34 @@
                     {
                       "name": "kind",
                       "type_": {
-                        "display": "str",
+                        "display": "Literal[\"regular\", \"indicator\", \"one_hot\", \"sos1\"]",
                         "link_target": null,
-                        "children": []
+                        "children": [
+                          {
+                            "display": "\"regular\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"indicator\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"one_hot\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"sos1\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
                       },
                       "default": {
                         "kind": "Simple",
-                        "value": "'regular'"
+                        "value": "\"regular\""
                       }
                     }
                   ],
@@ -7154,13 +7196,34 @@
                     {
                       "name": "kind",
                       "type_": {
-                        "display": "str",
+                        "display": "Literal[\"regular\", \"indicator\", \"one_hot\", \"sos1\"]",
                         "link_target": null,
-                        "children": []
+                        "children": [
+                          {
+                            "display": "\"regular\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"indicator\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"one_hot\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"sos1\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
                       },
                       "default": {
                         "kind": "Simple",
-                        "value": "'regular'"
+                        "value": "\"regular\""
                       }
                     }
                   ],
@@ -7183,13 +7246,34 @@
                     {
                       "name": "kind",
                       "type_": {
-                        "display": "str",
+                        "display": "Literal[\"regular\", \"indicator\", \"one_hot\", \"sos1\"]",
                         "link_target": null,
-                        "children": []
+                        "children": [
+                          {
+                            "display": "\"regular\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"indicator\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"one_hot\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"sos1\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
                       },
                       "default": {
                         "kind": "Simple",
-                        "value": "'regular'"
+                        "value": "\"regular\""
                       }
                     }
                   ],
@@ -7212,13 +7296,34 @@
                     {
                       "name": "kind",
                       "type_": {
-                        "display": "str",
+                        "display": "Literal[\"regular\", \"indicator\", \"one_hot\", \"sos1\"]",
                         "link_target": null,
-                        "children": []
+                        "children": [
+                          {
+                            "display": "\"regular\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"indicator\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"one_hot\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"sos1\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
                       },
                       "default": {
                         "kind": "Simple",
-                        "value": "'regular'"
+                        "value": "\"regular\""
                       }
                     },
                     {
@@ -12506,13 +12611,34 @@
                     {
                       "name": "kind",
                       "type_": {
-                        "display": "str",
+                        "display": "Literal[\"regular\", \"indicator\", \"one_hot\", \"sos1\"]",
                         "link_target": null,
-                        "children": []
+                        "children": [
+                          {
+                            "display": "\"regular\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"indicator\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"one_hot\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"sos1\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
                       },
                       "default": {
                         "kind": "Simple",
-                        "value": "'regular'"
+                        "value": "\"regular\""
                       }
                     }
                   ],
@@ -12535,13 +12661,34 @@
                     {
                       "name": "kind",
                       "type_": {
-                        "display": "str",
+                        "display": "Literal[\"regular\", \"indicator\", \"one_hot\", \"sos1\"]",
                         "link_target": null,
-                        "children": []
+                        "children": [
+                          {
+                            "display": "\"regular\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"indicator\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"one_hot\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"sos1\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
                       },
                       "default": {
                         "kind": "Simple",
-                        "value": "'regular'"
+                        "value": "\"regular\""
                       }
                     }
                   ],
@@ -12564,13 +12711,34 @@
                     {
                       "name": "kind",
                       "type_": {
-                        "display": "str",
+                        "display": "Literal[\"regular\", \"indicator\", \"one_hot\", \"sos1\"]",
                         "link_target": null,
-                        "children": []
+                        "children": [
+                          {
+                            "display": "\"regular\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"indicator\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"one_hot\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"sos1\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
                       },
                       "default": {
                         "kind": "Simple",
-                        "value": "'regular'"
+                        "value": "\"regular\""
                       }
                     }
                   ],
@@ -12593,13 +12761,34 @@
                     {
                       "name": "kind",
                       "type_": {
-                        "display": "str",
+                        "display": "Literal[\"regular\", \"indicator\", \"one_hot\", \"sos1\"]",
                         "link_target": null,
-                        "children": []
+                        "children": [
+                          {
+                            "display": "\"regular\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"indicator\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"one_hot\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"sos1\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
                       },
                       "default": {
                         "kind": "Simple",
-                        "value": "'regular'"
+                        "value": "\"regular\""
                       }
                     }
                   ],
@@ -12622,13 +12811,34 @@
                     {
                       "name": "kind",
                       "type_": {
-                        "display": "str",
+                        "display": "Literal[\"regular\", \"indicator\", \"one_hot\", \"sos1\"]",
                         "link_target": null,
-                        "children": []
+                        "children": [
+                          {
+                            "display": "\"regular\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"indicator\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"one_hot\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"sos1\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
                       },
                       "default": {
                         "kind": "Simple",
-                        "value": "'regular'"
+                        "value": "\"regular\""
                       }
                     },
                     {
@@ -16631,13 +16841,34 @@
                     {
                       "name": "kind",
                       "type_": {
-                        "display": "str",
+                        "display": "Literal[\"regular\", \"indicator\", \"one_hot\", \"sos1\"]",
                         "link_target": null,
-                        "children": []
+                        "children": [
+                          {
+                            "display": "\"regular\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"indicator\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"one_hot\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"sos1\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
                       },
                       "default": {
                         "kind": "Simple",
-                        "value": "'regular'"
+                        "value": "\"regular\""
                       }
                     }
                   ],
@@ -16660,13 +16891,34 @@
                     {
                       "name": "kind",
                       "type_": {
-                        "display": "str",
+                        "display": "Literal[\"regular\", \"indicator\", \"one_hot\", \"sos1\"]",
                         "link_target": null,
-                        "children": []
+                        "children": [
+                          {
+                            "display": "\"regular\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"indicator\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"one_hot\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"sos1\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
                       },
                       "default": {
                         "kind": "Simple",
-                        "value": "'regular'"
+                        "value": "\"regular\""
                       }
                     }
                   ],
@@ -16689,13 +16941,34 @@
                     {
                       "name": "kind",
                       "type_": {
-                        "display": "str",
+                        "display": "Literal[\"regular\", \"indicator\", \"one_hot\", \"sos1\"]",
                         "link_target": null,
-                        "children": []
+                        "children": [
+                          {
+                            "display": "\"regular\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"indicator\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"one_hot\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"sos1\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
                       },
                       "default": {
                         "kind": "Simple",
-                        "value": "'regular'"
+                        "value": "\"regular\""
                       }
                     }
                   ],
@@ -16718,13 +16991,34 @@
                     {
                       "name": "kind",
                       "type_": {
-                        "display": "str",
+                        "display": "Literal[\"regular\", \"indicator\", \"one_hot\", \"sos1\"]",
                         "link_target": null,
-                        "children": []
+                        "children": [
+                          {
+                            "display": "\"regular\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"indicator\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"one_hot\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"sos1\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
                       },
                       "default": {
                         "kind": "Simple",
-                        "value": "'regular'"
+                        "value": "\"regular\""
                       }
                     }
                   ],
@@ -16747,13 +17041,34 @@
                     {
                       "name": "kind",
                       "type_": {
-                        "display": "str",
+                        "display": "Literal[\"regular\", \"indicator\", \"one_hot\", \"sos1\"]",
                         "link_target": null,
-                        "children": []
+                        "children": [
+                          {
+                            "display": "\"regular\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"indicator\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"one_hot\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"sos1\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
                       },
                       "default": {
                         "kind": "Simple",
-                        "value": "'regular'"
+                        "value": "\"regular\""
                       }
                     },
                     {
@@ -18709,13 +19024,34 @@
                     {
                       "name": "kind",
                       "type_": {
-                        "display": "str",
+                        "display": "Literal[\"regular\", \"indicator\", \"one_hot\", \"sos1\"]",
                         "link_target": null,
-                        "children": []
+                        "children": [
+                          {
+                            "display": "\"regular\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"indicator\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"one_hot\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"sos1\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
                       },
                       "default": {
                         "kind": "Simple",
-                        "value": "'regular'"
+                        "value": "\"regular\""
                       }
                     }
                   ],
@@ -18738,13 +19074,34 @@
                     {
                       "name": "kind",
                       "type_": {
-                        "display": "str",
+                        "display": "Literal[\"regular\", \"indicator\", \"one_hot\", \"sos1\"]",
                         "link_target": null,
-                        "children": []
+                        "children": [
+                          {
+                            "display": "\"regular\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"indicator\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"one_hot\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"sos1\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
                       },
                       "default": {
                         "kind": "Simple",
-                        "value": "'regular'"
+                        "value": "\"regular\""
                       }
                     }
                   ],
@@ -18767,13 +19124,34 @@
                     {
                       "name": "kind",
                       "type_": {
-                        "display": "str",
+                        "display": "Literal[\"regular\", \"indicator\", \"one_hot\", \"sos1\"]",
                         "link_target": null,
-                        "children": []
+                        "children": [
+                          {
+                            "display": "\"regular\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"indicator\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"one_hot\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"sos1\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
                       },
                       "default": {
                         "kind": "Simple",
-                        "value": "'regular'"
+                        "value": "\"regular\""
                       }
                     }
                   ],
@@ -18796,13 +19174,34 @@
                     {
                       "name": "kind",
                       "type_": {
-                        "display": "str",
+                        "display": "Literal[\"regular\", \"indicator\", \"one_hot\", \"sos1\"]",
                         "link_target": null,
-                        "children": []
+                        "children": [
+                          {
+                            "display": "\"regular\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"indicator\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"one_hot\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"sos1\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
                       },
                       "default": {
                         "kind": "Simple",
-                        "value": "'regular'"
+                        "value": "\"regular\""
                       }
                     }
                   ],
@@ -18825,13 +19224,34 @@
                     {
                       "name": "kind",
                       "type_": {
-                        "display": "str",
+                        "display": "Literal[\"regular\", \"indicator\", \"one_hot\", \"sos1\"]",
                         "link_target": null,
-                        "children": []
+                        "children": [
+                          {
+                            "display": "\"regular\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"indicator\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"one_hot\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"sos1\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
                       },
                       "default": {
                         "kind": "Simple",
-                        "value": "'regular'"
+                        "value": "\"regular\""
                       }
                     },
                     {
