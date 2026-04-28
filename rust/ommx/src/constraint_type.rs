@@ -38,6 +38,43 @@ use crate::{
 };
 use std::collections::BTreeMap;
 
+/// Marker trait for ID types used throughout the crate.
+///
+/// Every numeric ID newtype in `ommx` (`ConstraintID`,
+/// `IndicatorConstraintID`, `OneHotConstraintID`, `Sos1ConstraintID`,
+/// `VariableID`, `NamedFunctionID`, `SampleID`) satisfies the same
+/// shape: copyable, totally ordered, hashable, debuggable, round-trips
+/// through `u64`, and participates in logical memory profiling. Bundling
+/// those bounds into one trait removes the need to repeat them at every
+/// generic site.
+///
+/// A blanket impl makes any concrete type satisfying the bounds an
+/// `IDType` automatically — there is nothing for callers to implement
+/// manually.
+pub trait IDType:
+    Clone
+    + Copy
+    + Ord
+    + std::hash::Hash
+    + std::fmt::Debug
+    + From<u64>
+    + Into<u64>
+    + crate::logical_memory::LogicalMemoryProfile
+{
+}
+
+impl<T> IDType for T where
+    T: Clone
+        + Copy
+        + Ord
+        + std::hash::Hash
+        + std::fmt::Debug
+        + From<u64>
+        + Into<u64>
+        + crate::logical_memory::LogicalMemoryProfile
+{
+}
+
 /// A type family for constraints, mapping each lifecycle stage to a concrete type.
 ///
 /// This trait acts as `T: Stage → Type` — a type-level function from lifecycle stages
@@ -49,7 +86,7 @@ use std::collections::BTreeMap;
 /// to define all stage types for regular constraints.
 pub trait ConstraintType {
     /// The ID type for this constraint family.
-    type ID: Clone + Copy + Ord + std::hash::Hash + std::fmt::Debug + From<u64> + Into<u64>;
+    type ID: IDType;
     /// The constraint as defined in the problem.
     type Created: Evaluate<Output = Self::Evaluated, SampledOutput = Self::Sampled>
         + Clone

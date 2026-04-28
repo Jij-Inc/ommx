@@ -1,7 +1,7 @@
 use crate::constraint::{ConstraintMetadata, Provenance};
-use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
+use crate::constraint_type::IDType;
+use crate::logical_memory::LogicalMemoryProfile;
 use fnv::FnvHashMap;
-use std::hash::Hash;
 use std::sync::OnceLock;
 
 fn empty_parameters() -> &'static FnvHashMap<String, String> {
@@ -24,8 +24,8 @@ fn empty_parameters() -> &'static FnvHashMap<String, String> {
 /// borrowing getters that hide the sparse representation behind a uniform
 /// "missing = neutral" view (`Option<&str>` for textual fields, an empty slice
 /// or shared empty map for collection-shaped fields).
-#[derive(Debug, Clone, PartialEq)]
-pub struct ConstraintMetadataStore<ID: Eq + Hash> {
+#[derive(Debug, Clone, PartialEq, LogicalMemoryProfile)]
+pub struct ConstraintMetadataStore<ID: IDType> {
     name: FnvHashMap<ID, String>,
     subscripts: FnvHashMap<ID, Vec<i64>>,
     parameters: FnvHashMap<ID, FnvHashMap<String, String>>,
@@ -33,7 +33,7 @@ pub struct ConstraintMetadataStore<ID: Eq + Hash> {
     provenance: FnvHashMap<ID, Vec<Provenance>>,
 }
 
-impl<ID: Eq + Hash> Default for ConstraintMetadataStore<ID> {
+impl<ID: IDType> Default for ConstraintMetadataStore<ID> {
     fn default() -> Self {
         Self {
             name: FnvHashMap::default(),
@@ -45,7 +45,7 @@ impl<ID: Eq + Hash> Default for ConstraintMetadataStore<ID> {
     }
 }
 
-impl<ID: Eq + Hash + Copy> ConstraintMetadataStore<ID> {
+impl<ID: IDType> ConstraintMetadataStore<ID> {
     pub fn new() -> Self {
         Self::default()
     }
@@ -211,32 +211,6 @@ impl<ID: Eq + Hash + Copy> ConstraintMetadataStore<ID> {
             || self.parameters.contains_key(&id)
             || self.description.contains_key(&id)
             || self.provenance.contains_key(&id)
-    }
-}
-
-impl<ID> LogicalMemoryProfile for ConstraintMetadataStore<ID>
-where
-    ID: LogicalMemoryProfile + Eq + Hash,
-{
-    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
-        self.name
-            .visit_logical_memory(path.with("ConstraintMetadataStore.name").as_mut(), visitor);
-        self.subscripts.visit_logical_memory(
-            path.with("ConstraintMetadataStore.subscripts").as_mut(),
-            visitor,
-        );
-        self.parameters.visit_logical_memory(
-            path.with("ConstraintMetadataStore.parameters").as_mut(),
-            visitor,
-        );
-        self.description.visit_logical_memory(
-            path.with("ConstraintMetadataStore.description").as_mut(),
-            visitor,
-        );
-        self.provenance.visit_logical_memory(
-            path.with("ConstraintMetadataStore.provenance").as_mut(),
-            visitor,
-        );
     }
 }
 

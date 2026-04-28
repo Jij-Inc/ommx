@@ -76,7 +76,18 @@ use std::fmt;
 /// Implementations should enumerate their "logical memory leaves" by calling
 /// `visitor.visit_leaf()` for each leaf node, while intermediate nodes should
 /// delegate to their children.
-pub(crate) trait LogicalMemoryProfile {
+///
+/// This trait is `pub` so it can appear in the bound of public types
+/// (e.g. `ConstraintMetadataStore<ID>` where `ID: LogicalMemoryProfile`)
+/// without triggering the `private_bounds` lint, and so the derive
+/// macro can be used at every struct that participates in profiling
+/// without having to fall back to a hand-written impl. The intended
+/// user-facing entry points are still
+/// [`crate::Instance::logical_memory_profile`] and
+/// [`crate::MemoryProfile`]; the trait itself has no stability
+/// guarantees beyond "exists, has the same shape across patch
+/// versions".
+pub trait LogicalMemoryProfile {
     /// Enumerate the "logical memory leaves" of this value.
     ///
     /// # Arguments
@@ -91,7 +102,7 @@ pub(crate) trait LogicalMemoryProfile {
 }
 
 /// Visitor for logical memory leaf nodes.
-pub(crate) trait LogicalMemoryVisitor {
+pub trait LogicalMemoryVisitor {
     /// Callback for a single "leaf node" (logical memory chunk).
     fn visit_leaf(&mut self, path: &Path, bytes: usize);
 }
@@ -286,10 +297,14 @@ macro_rules! impl_logical_memory_profile {
 }
 pub(crate) use impl_logical_memory_profile;
 
-// Re-export the derive macro so downstream modules can write
-// `use crate::logical_memory::LogicalMemoryProfile;` and then
-// `#[derive(LogicalMemoryProfile)]`.
-pub(crate) use ommx_derive::LogicalMemoryProfile;
+// Re-export the derive macro alongside the trait so downstream
+// modules (and external crates, since both the trait and this
+// re-export are `pub`) can write `use ommx::LogicalMemoryProfile;`
+// and then `#[derive(LogicalMemoryProfile)]`. Promoting from
+// `pub(crate)` to `pub` lets the derive replace every mechanical
+// hand-written `impl` — the intended fix for "added a new field
+// and forgot to update the impl".
+pub use ommx_derive::LogicalMemoryProfile;
 
 // Generic implementations for primitive types
 

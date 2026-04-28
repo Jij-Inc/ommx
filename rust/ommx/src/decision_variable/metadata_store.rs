@@ -1,5 +1,5 @@
 use crate::decision_variable::DecisionVariableMetadata;
-use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
+use crate::logical_memory::LogicalMemoryProfile;
 use crate::VariableID;
 use fnv::FnvHashMap;
 use std::sync::OnceLock;
@@ -19,7 +19,7 @@ fn empty_parameters() -> &'static FnvHashMap<String, String> {
 ///
 /// Variables have no `provenance` field — that is constraint-specific, so the
 /// store omits it.
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, LogicalMemoryProfile)]
 pub struct VariableMetadataStore {
     name: FnvHashMap<VariableID, String>,
     subscripts: FnvHashMap<VariableID, Vec<i64>>,
@@ -166,25 +166,6 @@ impl VariableMetadataStore {
             || self.subscripts.contains_key(&id)
             || self.parameters.contains_key(&id)
             || self.description.contains_key(&id)
-    }
-}
-
-impl LogicalMemoryProfile for VariableMetadataStore {
-    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
-        self.name
-            .visit_logical_memory(path.with("VariableMetadataStore.name").as_mut(), visitor);
-        self.subscripts.visit_logical_memory(
-            path.with("VariableMetadataStore.subscripts").as_mut(),
-            visitor,
-        );
-        self.parameters.visit_logical_memory(
-            path.with("VariableMetadataStore.parameters").as_mut(),
-            visitor,
-        );
-        self.description.visit_logical_memory(
-            path.with("VariableMetadataStore.description").as_mut(),
-            visitor,
-        );
     }
 }
 
