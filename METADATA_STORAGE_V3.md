@@ -209,6 +209,72 @@ Why these levels:
   and `ParametricInstance` already own `BTreeMap<VariableID,
   DecisionVariable>` directly. We just add a sibling field.
 
+#### NamedFunction **(deferred — separate PR)**
+
+`NamedFunction` currently inlines its metadata as plain fields on the
+struct rather than via a `metadata: ConstraintMetadata`-style substruct,
+so the v1 → v3 alpha cutover did not include it. The shape today:
+
+```rust
+pub struct NamedFunction {
+    pub id:          NamedFunctionID,
+    pub function:    Function,
+    pub name:        Option<String>,
+    pub subscripts:  Vec<i64>,
+    pub parameters:  FnvHashMap<String, String>,
+    pub description: Option<String>,
+}
+// EvaluatedNamedFunction / SampledNamedFunction follow the same shape.
+```
+
+For consistency with the rest of the SoA migration, the metadata fields
+should move off the per-element struct onto a sibling store on the
+enclosing collection — same pattern as `VariableMetadataStore`:
+
+```rust
+pub struct NamedFunctionMetadataStore {
+    name:        FnvHashMap<NamedFunctionID, String>,
+    subscripts:  FnvHashMap<NamedFunctionID, Vec<i64>>,
+    parameters:  FnvHashMap<NamedFunctionID, FnvHashMap<String, String>>,
+    description: FnvHashMap<NamedFunctionID, String>,
+    // no provenance — named functions, like variables, have no chain.
+}
+
+pub struct NamedFunction {
+    pub id:       NamedFunctionID,
+    pub function: Function,
+    // metadata fields removed
+}
+
+pub struct Instance {
+    named_functions:          BTreeMap<NamedFunctionID, NamedFunction>,
+    named_function_metadata:  NamedFunctionMetadataStore,   // new
+    // …
+}
+// ParametricInstance, Solution, SampleSet get the same sibling field
+// next to their named_functions map.
+```
+
+The store, the per-field getters, and the parse / serialize drain
+pattern are mechanical — they mirror `VariableMetadataStore`
+verbatim, with `VariableID` swapped for `NamedFunctionID` and the
+provenance field omitted. Pythonside snapshot wrappers
+(`NamedFunction`, `EvaluatedNamedFunction`, `SampledNamedFunction`)
+gain a second tuple slot for the snapshot, exactly like the
+constraint and decision-variable wrappers in PR #843. Pandas
+rendering reuses the existing `WithMetadata<'a, T,
+NamedFunctionMetadata>` plumbing.
+
+Scope-wise this is a separate PR from the constraint / variable
+migration in #843. The shape of `NamedFunction` is structurally
+distinct (no per-element `metadata` substruct to peel off, no
+generic `*Collection<T>` to put a store inside, named functions
+have no `Created → Evaluated → Sampled` lifecycle), and bundling
+both migrations into one diff would have made the constraint /
+variable refactor harder to review. The store and per-field
+helpers, however, are already in scope of this proposal so the
+follow-up has a concrete spec to land against.
+
 ### Per-object struct changes
 
 ```rust
@@ -820,6 +886,13 @@ shape is:
   `constraints_df(kind=...)` overload set.
 - Wrapper-object metadata setters become write-through to the SoA
   store via the Standalone / Attached two-mode design.
+- `NamedFunction` / `EvaluatedNamedFunction` /
+  `SampledNamedFunction` lose their inline `name` / `subscripts` /
+  `parameters` / `description` fields; metadata moves to a
+  `NamedFunctionMetadataStore` sibling field on `Instance` /
+  `ParametricInstance` / `Solution` / `SampleSet`. Same shape as
+  the constraint / variable migration in this PR but lands as a
+  separate PR.
 
 A new section in `PYTHON_SDK_MIGRATION_GUIDE.md` will cover the Python
 side in detail once the deferred wave lands.
