@@ -136,3 +136,22 @@ def test_attached_constraint_id_and_instance_handle():
 
     assert isinstance(attached.constraint_id, int)
     assert attached.instance is instance
+
+
+def test_attached_keeps_instance_alive_after_del():
+    """`del instance` only drops one Python binding; the AttachedConstraint
+    still holds a Py<Instance> refcount, so the underlying instance — and the
+    SoA store backing read/write-through — remain valid."""
+    instance = _empty_instance()
+    attached = instance.add_constraint(_make_constraint(name="balance"))
+
+    del instance
+
+    # Read-through still works.
+    assert attached.name == "balance"
+    # Write-through still works.
+    attached.set_name("demand")
+    assert attached.name == "demand"
+    # detach() still finds the constraint and its metadata in the store.
+    snapshot = attached.detach()
+    assert snapshot.name == "demand"
