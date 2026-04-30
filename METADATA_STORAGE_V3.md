@@ -108,7 +108,7 @@ here. The implementation shipped in three waves:
   `list[AttachedDecisionVariable]` — write-through and arithmetic
   both work, removing the asymmetry vs. the constraint accessors.
   Current operand-class-driven return-type semantics is preserved
-  (see follow-ups for the dynamic-degree-downcast variant).
+  (`Quadratic + Quadratic -> Quadratic` even when terms cancel).
 - **Dropped:** the `Series[ID -> Object]` collection accessors.
   Their original draw was hosting back-referenced wrappers with
   bulk pandas indexing on top; with `*_df` (wide via `include=`,
@@ -1563,21 +1563,6 @@ traceability with earlier review comments.
   when `instance.constraints[id]` etc. now return `AttachedX`, the
   `add_*` / `attached_decision_variable(id)` insertion paths, and
   the `detach()` escape hatch when callers need a snapshot.
-- **Dynamic operand-class downcast for arithmetic results.**
-  Today the polymorphic operators dispatch on the *operand class*:
-  `Quadratic + Quadratic -> Quadratic` even when all quadratic terms
-  cancel. A more honest semantics would have the result type match
-  the *actual* runtime degree, e.g. `(x*x + 1) + (-x*x) -> Linear`.
-  The `FunctionInput` enum landed in #852 makes this a localized
-  change: introduce a `PolymorphicResult(ommx::Function)` wrapper
-  whose `IntoPyObject` matches on the inner `Function` variant and
-  yields `Linear` / `Quadratic` / `Polynomial` accordingly, then
-  rewrite each operator to compute through `ommx::Function`
-  arithmetic and return the wrapper. Callsites that depend on the
-  current "Quadratic with no quadratic terms still types as
-  Quadratic" shape will need to narrow with `isinstance` after this
-  change, so the @overload stubs become `Linear | Quadratic` /
-  `Linear | Quadratic | Polynomial` unions instead of a single type.
 
 ## Open questions
 
