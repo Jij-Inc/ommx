@@ -4,10 +4,14 @@ Status: **Rust SDK landed; Python wrappers landed (snapshot model);
 `include=` + long-format sidecar dfs landed (Wave 1.5); per-kind
 `*_df` consolidation + `kind: Literal[...]` typing landed (Wave 2,
 PR #847); `NamedFunction` SoA migration landed (PR #848 — same
-snapshot-model shape as `DecisionVariable` / `Constraint`).
+snapshot-model shape as `DecisionVariable` / `Constraint`);
+`AttachedConstraint` write-through wrapper for the regular
+`Constraint` collection on `Instance` landed (PR #849).
 `Series[ID -> Object]` collection accessors are dropped from the
-plan (rationale below). The `AttachedConstraint` write-through
-wrapper remains deferred to a follow-up PR.**
+plan (rationale below). Extending the same write-through pattern
+to `IndicatorConstraint` / `OneHotConstraint` / `Sos1Constraint`,
+to `DecisionVariable`, and to `ParametricInstance` remains deferred
+to follow-up PRs.**
 
 This proposal is a **prerequisite** for `SPECIAL_CONSTRAINTS_V3.md` (PR #841).
 The proto-schema redesign in #841 cannot be finalized without first deciding
@@ -62,11 +66,15 @@ here. The implementation shipped in three waves:
   type checkers catch typos at edit time; runtime continues to
   validate against the same set and raise `ValueError` on unknown
   values for callers without a type checker.
-- **Future (deferred):** an `AttachedConstraint` pyclass with a
+- **Wave 3 (PR #849, landed):** `AttachedConstraint` pyclass with a
   `Py<Instance>` back-reference and write-through metadata setters,
   returned by `Instance.add_constraint(c)` and by
   `instance.constraints[id]`. `Constraint` keeps its current
-  snapshot shape for modeling input.
+  snapshot shape for modeling input. Scope: regular `Constraint`
+  collection on `Instance` only; the same pattern for
+  `IndicatorConstraint` / `OneHotConstraint` / `Sos1Constraint`,
+  `DecisionVariable`, and `ParametricInstance` is deferred to
+  follow-up PRs.
 - **Dropped:** the `Series[ID -> Object]` collection accessors.
   Their original draw was hosting back-referenced wrappers with
   bulk pandas indexing on top; with `*_df` (wide via `include=`,
@@ -74,9 +82,9 @@ here. The implementation shipped in three waves:
   directly and `instance.constraints[id]` covering single-id
   access, a Series layer of snapshot wrappers in between would
   duplicate the dict accessor without adding a real capability.
-  The `AttachedConstraint` work, if it lands, exposes write-through
-  via the existing `instance.constraints[id]` getter — Series is
-  not a prerequisite.
+  The `AttachedConstraint` work plugs write-through into the
+  existing `instance.constraints[id]` getter — Series is not a
+  prerequisite.
 
 Sections below mark each item with **(landed)** or **(deferred)** so it
 is clear which parts are live in v3 alpha and which are still proposal.
@@ -153,11 +161,15 @@ SoA store; the behavior they implement is unchanged.
     constraint / variable to apply changes. This matches the prior
     `clone()`-based semantics; the wrapper is a snapshot, not a live
     handle.
-  - The `AttachedConstraint` design with a `Py<Instance>` back-reference
-    and write-through getters / setters described under
-    "`AttachedConstraint`: a separate write-through wrapper" below is
-    the long-term complement to the snapshot model but is **not yet
-    implemented** — the snapshot model is what ships in v3 alpha.
+  - **Write-through complement: `AttachedConstraint` (landed in PR #849).**
+    A separate pyclass with a `Py<Instance>` back-reference, returned by
+    `Instance.add_constraint(c)` and by `instance.constraints[id]`. Reads
+    pull live from the parent's SoA store; metadata setters write
+    through. `Constraint` itself stays in its snapshot shape — it is the
+    modeling-input type. See "`AttachedConstraint`: a separate write-
+    through wrapper" below for the full design. The same pattern for
+    other constraint kinds, decision variables, and `ParametricInstance`
+    is deferred to follow-up PRs.
 - `instance.constraints`, `decision_variables`, `*_constraints` stay
   `dict` / `list` of wrapper objects. The earlier proposal to migrate
   them to `pandas.Series[ID -> Object]` is **dropped** — bulk analysis
@@ -509,9 +521,11 @@ The boundaries currently work per-element and need to move to per-collection:
 The shipping v3 alpha exposes the snapshot wrapper surface
 described under **Snapshot wrappers (landed)** below, plus the
 `*_df` family with `include=` / `kind=` / `removed=` covering bulk
-analysis. The remaining section on `AttachedConstraint` describes
-the long-term target shape for write-through metadata mutation and
-is explicitly **deferred** to follow-up PRs.
+analysis. PR #849 added `AttachedConstraint` (the write-through
+form for the regular `Constraint` collection on `Instance`); the
+parallel `AttachedX` types for the special-constraint kinds, for
+`DecisionVariable`, and for `ParametricInstance` remain deferred
+to follow-up PRs.
 
 ### Snapshot wrappers (landed)
 
@@ -535,9 +549,15 @@ pub struct DecisionVariable(
 - **Standalone construction.** `(x[0] + x[1] == 1).set_name("balance")`
   produces a wrapper with default metadata in the second tuple slot;
   `set_name` / `set_subscripts` / etc. mutate it in place.
-- **Reading from an instance.** `instance.constraints[5]` calls
-  `Constraint::from_parts(inner.clone(), store.collect_for(id))`. The
-  wrapper now owns a snapshot of the SoA metadata for that id.
+- **Reading from an instance.** For the wrappers still in snapshot
+  mode (everything other than the regular `Constraint` collection on
+  `Instance` after PR #849), the host getter calls
+  `Wrapper::from_parts(inner.clone(), store.collect_for(id))`, so the
+  wrapper owns a snapshot of the SoA metadata for that id.
+  `instance.constraints[id]` switched to returning
+  `AttachedConstraint` (write-through) in PR #849; an explicit
+  snapshot of the same data is available via
+  `attached.detach() -> Constraint`.
 - **Writing back.** `Instance.from_components(...)` (and the parametric
   / sample-set equivalents) drain each wrapper's `.1` field into the
   instance's SoA stores via `store.insert(id, metadata)`.
@@ -560,21 +580,23 @@ pub struct DecisionVariable(
   serialize paths inside this crate.
 
 The semantic consequence is that mutations on a snapshot wrapper do not
-propagate back to the originating instance: `c = instance.constraints[5];
-c.set_name("x")` updates the local copy, not the instance. This matches
-the v2 behavior (the wrappers were already produced by `clone()` on the
-Rust side). To commit a change, callers re-insert via `from_components`
-or use the Rust SoA setters.
+propagate back. For wrappers that have *not* yet been promoted to the
+write-through form (special-constraint kinds, `DecisionVariable`,
+`Solution` / `SampleSet` evaluated / sampled types), this means
+`c = instance.<wrapper_dict>[id]; c.set_name("x")` updates the local
+copy, not the instance. This matches the v2 behavior (the wrappers
+were already produced by `clone()` on the Rust side). To commit a
+change, callers re-insert via `from_components` or use the Rust SoA
+setters.
 
-The `AttachedConstraint` type described next is the long-term
-complement to the snapshot model — it lets `attached.set_name("x")`
-write through to the instance's SoA store. It is a *separate* PyO3
-type built around a `Py<Instance>` back-reference; it does not replace
-`Constraint`, which stays in its current snapshot shape for modeling
-(operator overloading, expression building, `from_components` input).
-The split is independent of the dropped Series accessor plan;
-write-through plugs into the existing `instance.constraints[id]`
-getter, which switches to returning `AttachedConstraint`.
+For the regular `Constraint` collection on `Instance`, the snapshot
+behavior of `instance.constraints[id]` was replaced by
+`AttachedConstraint` write-through in PR #849 — see the next section.
+`Constraint` itself remains a snapshot when constructed standalone or
+returned from `attached.detach()`; only the live handle returned from
+`add_constraint(c)` and `instance.constraints[id]` writes through. The
+split is independent of the dropped Series accessor plan; write-
+through plugs into the existing `instance.constraints[id]` getter.
 
 ### Layered views over the Rust SoA store **(landed)**
 
@@ -598,11 +620,11 @@ landed in PR #847 (Wave 2).
               ┌─────┴──────────────────────┐
               ▼                            ▼
   instance.constraints[id]       constraints_df(kind=..., include=...) /
-  (today: snapshot Constraint    constraint_metadata_df(kind=...) /
-   with .name / .subscripts /    constraint_parameters_df(kind=...) /
-   …; future: AttachedConstraint constraint_provenance_df(kind=...) /
-   that writes through to the    constraint_removed_reasons_df(kind=...)
-   SoA store)                    (bulk-built from the SoA via column-wise
+  (AttachedConstraint:           constraint_metadata_df(kind=...) /
+   .name / .subscripts / …       constraint_parameters_df(kind=...) /
+   read live from the SoA        constraint_provenance_df(kind=...) /
+   store; metadata setters       constraint_removed_reasons_df(kind=...)
+   write through)                (bulk-built from the SoA via column-wise
                                  builders; kind typed Literal[...])
 ```
 
@@ -611,7 +633,7 @@ The wrapper getters and the DataFrame columns produce the same
 values for the same ID; the difference is per-id wrapper ergonomics
 vs. bulk DataFrame ergonomics.
 
-### `AttachedConstraint`: a separate write-through wrapper **(deferred)**
+### `AttachedConstraint`: a separate write-through wrapper **(landed in PR #849)**
 
 `Constraint` stays in its current snapshot shape (`pub struct
 Constraint(pub ommx::Constraint, pub ommx::ConstraintMetadata)`); it
@@ -710,13 +732,39 @@ themselves.
 #### Where the split type lives
 
 `AttachedConstraint` is the only new pyclass needed for the regular
-`Constraint` collection. The same shape extends to special-constraint
-kinds and to decision variables when their write-through stories
-land — each gets its own `AttachedX` type. The split is opt-in per
-collection; the original snapshot wrapper remains the input shape on
-`from_components`.
+`Constraint` collection on `Instance`, and that scope is what shipped
+in PR #849. The same shape extends to special-constraint kinds
+(`IndicatorConstraint` / `OneHotConstraint` / `Sos1Constraint`),
+to `DecisionVariable`, and to `ParametricInstance` — each would gain
+its own `AttachedX` type when its write-through story lands. The
+split is opt-in per collection; the original snapshot wrapper remains
+the input shape on `from_components`.
 
-### Staleness / lifetime **(deferred — applies to `AttachedConstraint`)**
+#### What landed in PR #849
+
+- `Instance::add_constraint(constraint, metadata) -> ConstraintID` on
+  the Rust side: picks an unused id and drains the metadata into the
+  per-constraint SoA store.
+- `AttachedConstraint { instance: Py<Instance>, id: ConstraintID }`
+  on the Python side, with the full getter / setter / `evaluate` /
+  `detach` surface listed above.
+- `Instance.add_constraint(c) -> AttachedConstraint` on the PyO3
+  binding, taking `slf: Bound<'_, Self>` so the resulting handle can
+  hold `Py<Instance>`.
+- `instance.constraints` getter switches its return type from
+  `dict[int, Constraint]` to `dict[int, AttachedConstraint]`.
+  `from_components` continues to accept `dict[int, Constraint]` for
+  the modeling input path.
+- The receiver-detection fix in `pyo3-stub-gen` 0.22.2 to recognize
+  `Bound<'_, Self>` and `Py<Self>` as the first-position receiver
+  for non-getter `#[pymethods]`.
+
+Out of scope for this PR (deferred): the special-constraint kinds,
+`DecisionVariable`, `ParametricInstance`, and the
+`Solution` / `SampleSet` evaluated / sampled wrappers (which have
+no edit lifecycle in v3 alpha and so do not need write-through).
+
+### Staleness / lifetime **(landed — applies to `AttachedConstraint`)**
 
 `AttachedConstraint` holds `Py<Instance>` (a refcounted handle). The
 `Instance` stays alive as long as any `AttachedConstraint` points at
@@ -1201,14 +1249,32 @@ shape is:
   `SampleSet::extract_all_named_functions`) now read from the
   per-host `named_function_metadata` store. Behavior is unchanged.
 
-### Deferred to follow-up wave
+### Landed in AttachedConstraint write-through (PR #849)
 
-- Write-through metadata setters via a separate `AttachedConstraint`
-  pyclass. `Constraint` keeps its current snapshot shape for
-  modeling; `AttachedConstraint` is returned by
-  `Instance.add_constraint(c)` and by `instance.constraints[id]`,
-  with getters/setters that read/write the SoA store directly. No
-  Series detour.
+- `Instance::add_constraint(constraint, metadata) -> ConstraintID`
+  on the Rust side. Picks an unused id and drains the
+  `ConstraintMetadata` into the per-constraint SoA store.
+- `AttachedConstraint` PyO3 pyclass holding `Py<Instance>` plus the
+  `ConstraintID`. Getters read core data from
+  `instance.constraints[id]` and metadata from
+  `constraint_metadata().<field>(id)`; metadata setters write
+  through to `constraint_metadata_mut()`.
+- `Instance.add_constraint(c) -> AttachedConstraint` on the PyO3
+  binding (signature uses `slf: Bound<'_, Self>` so the resulting
+  handle can hold `Py<Instance>`).
+- `Instance.constraints` getter return type switches from
+  `dict[int, Constraint]` to `dict[int, AttachedConstraint]`.
+  `from_components` continues to accept `dict[int, Constraint]` for
+  the modeling input path; `Constraint` is unchanged in shape.
+
+### Deferred to follow-up waves
+
+- Write-through wrappers for the special-constraint kinds
+  (`IndicatorConstraint`, `OneHotConstraint`, `Sos1Constraint`),
+  for `DecisionVariable`, and for `ParametricInstance`. Each gets
+  its own `AttachedX` pyclass following the same shape used in
+  PR #849. The Solution / SampleSet evaluated / sampled wrappers
+  do not need write-through (no edit lifecycle in v3 alpha).
 
 ### Dropped from the plan
 
@@ -1221,8 +1287,8 @@ shape is:
   "Series-based collection accessors **(dropped)**" section for the
   full rationale.
 
-A new section in `PYTHON_SDK_MIGRATION_GUIDE.md` will cover the Python
-side in detail once the deferred wave lands.
+A new section in `PYTHON_SDK_MIGRATION_GUIDE.md` will cover the
+Python side in detail once the remaining write-through wrappers land.
 
 ## Resolved decisions
 
@@ -1351,7 +1417,7 @@ traceability with earlier review comments.
    variant of the wrapper) is a question to take up at
    implementation time, not before.
 
-## Follow-ups (post-#843, post-#846)
+## Follow-ups (post-#843, post-#846, post-#849)
 
 - **Tighten `ConstraintCollection<T>` mutation surface.**
   `active_mut()` / `removed_mut()` / `insert_with()` are still `pub`
@@ -1361,15 +1427,20 @@ traceability with earlier review comments.
   `*_metadata_mut`). These three methods should be narrowed to
   `pub(crate)` (or smaller) in a follow-up so the only way to break
   the collection's invariants is from inside the crate.
-- **`AttachedConstraint` write-through wrapper.** A separate pyclass
-  with a `Py<Instance>` back-reference and write-through metadata
-  setters. `Constraint` keeps its current snapshot shape for
-  modeling; `AttachedConstraint` is returned by
-  `Instance.add_constraint(c)` and by `instance.constraints[id]`.
-  The Series-based collection accessor proposal that originally
-  bundled this work has been dropped — see "Series-based collection
-  accessors **(dropped)**" for rationale. The `Py<Instance>`
-  lifetime question is documented in resolved decision #8.
+- **Extend the `AttachedX` write-through pattern.** PR #849 covers
+  the regular `Constraint` collection on `Instance` only. The same
+  shape — separate `AttachedX` pyclass holding `Py<Host>` + ID,
+  write-through metadata setters, snapshot input on insert paths —
+  applies to:
+  - `IndicatorConstraint` / `OneHotConstraint` / `Sos1Constraint`
+    on `Instance` (each its own `AttachedIndicatorConstraint` etc.);
+  - `DecisionVariable` on `Instance`;
+  - the same constraint and decision-variable surface on
+    `ParametricInstance`.
+  `Solution` and `SampleSet` evaluated / sampled wrappers stay in
+  the snapshot model (no edit lifecycle in v3 alpha). The
+  `Py<Host>` lifetime question is documented in resolved decision
+  #8.
 
 ## Open questions
 
