@@ -456,16 +456,18 @@ class ArtifactBuilder:
 @typing.final
 class AttachedConstraint:
     r"""
-    Attached constraint — a write-through handle bound to an [`Instance`].
+    Attached constraint — a write-through handle bound to a host
+    ([`Instance`] or [`crate::ParametricInstance`]).
 
-    `AttachedConstraint` is returned by [`Instance.add_constraint`] and by
-    `instance.constraints[id]`. Unlike [`Constraint`], which is a snapshot,
-    reads pull live data from the parent instance and metadata setters write
-    through to its SoA metadata store. Two `AttachedConstraint` instances
-    pointing at the same id observe the same state.
+    `AttachedConstraint` is returned by `Instance.add_constraint` /
+    `ParametricInstance.add_constraint` and by their `constraints[id]`
+    getters. Unlike [`Constraint`], which is a snapshot, reads pull live data
+    from the parent host and metadata setters write through to its SoA
+    metadata store. Two `AttachedConstraint` instances pointing at the same id
+    on the same host observe the same state.
 
-    The handle keeps the parent `Instance` alive through a refcount; drop
-    the wrapper to release the back-reference.
+    The handle keeps the parent host alive through a refcount; drop the
+    wrapper to release the back-reference.
     """
     @property
     def constraint_id(self) -> builtins.int:
@@ -473,9 +475,10 @@ class AttachedConstraint:
         The id this handle points at.
         """
     @property
-    def instance(self) -> Instance:
+    def instance(self) -> typing.Any:
         r"""
-        The parent {class}`~ommx.v1.Instance` this constraint lives in.
+        The parent host this constraint lives in
+        ({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).
         """
     @property
     def function(self) -> Function: ...
@@ -496,9 +499,21 @@ class AttachedConstraint:
         Return a {class}`~ommx.v1.Constraint` snapshot of the current
         state. Mutations on the returned object do not propagate back.
         """
+    def evaluate(
+        self, state: ToState, *, atol: typing.Optional[builtins.float] = None
+    ) -> EvaluatedConstraint:
+        r"""
+        Evaluate the constraint with the given state. Only valid on
+        {class}`~ommx.v1.Instance`-hosted handles, since
+        {class}`~ommx.v1.ParametricInstance` constraints may still reference
+        unsubstituted parameters.
+        """
+    def __repr__(self) -> builtins.str: ...
+    def __copy__(self) -> AttachedConstraint: ...
+    def __deepcopy__(self, _memo: typing.Any) -> AttachedConstraint: ...
     def set_name(self, name: builtins.str) -> None:
         r"""
-        Set the name. Writes through to the parent instance's SoA store.
+        Set the name. Writes through to the parent host's SoA metadata store.
         """
     def add_name(self, name: builtins.str) -> None:
         r"""
@@ -506,15 +521,15 @@ class AttachedConstraint:
         """
     def set_subscripts(self, subscripts: typing.Sequence[builtins.int]) -> None:
         r"""
-        Set the subscripts. Writes through to the parent instance's SoA store.
+        Set the subscripts. Writes through to the parent host's SoA metadata store.
         """
     def add_subscripts(self, subscripts: typing.Sequence[builtins.int]) -> None:
         r"""
-        Append subscripts. Writes through to the parent instance's SoA store.
+        Append subscripts. Writes through to the parent host's SoA metadata store.
         """
     def set_description(self, description: builtins.str) -> None:
         r"""
-        Set the description. Writes through to the parent instance's SoA store.
+        Set the description. Writes through to the parent host's SoA metadata store.
         """
     def add_description(self, description: builtins.str) -> None:
         r"""
@@ -524,7 +539,7 @@ class AttachedConstraint:
         self, parameters: typing.Mapping[builtins.str, builtins.str]
     ) -> None:
         r"""
-        Replace all parameters. Writes through to the parent instance's SoA store.
+        Replace all parameters. Writes through to the parent host's SoA metadata store.
         """
     def add_parameters(
         self, parameters: typing.Mapping[builtins.str, builtins.str]
@@ -534,17 +549,8 @@ class AttachedConstraint:
         """
     def add_parameter(self, key: builtins.str, value: builtins.str) -> None:
         r"""
-        Add a single parameter entry. Writes through to the parent instance's SoA store.
+        Add a single parameter entry. Writes through to the parent host's SoA metadata store.
         """
-    def evaluate(
-        self, state: ToState, *, atol: typing.Optional[builtins.float] = None
-    ) -> EvaluatedConstraint:
-        r"""
-        Evaluate the constraint with the given state.
-        """
-    def __repr__(self) -> builtins.str: ...
-    def __copy__(self) -> AttachedConstraint: ...
-    def __deepcopy__(self, _memo: typing.Any) -> AttachedConstraint: ...
 
 @typing.final
 class Bound:
@@ -3390,7 +3396,16 @@ class ParametricInstance:
     @property
     def decision_variables(self) -> builtins.list[DecisionVariable]: ...
     @property
-    def constraints(self) -> builtins.dict[builtins.int, Constraint]: ...
+    def constraints(self) -> builtins.dict[builtins.int, AttachedConstraint]:
+        r"""
+        Dict of all active constraints in the instance keyed by their IDs.
+
+        Each value is an {class}`~ommx.v1.AttachedConstraint`: a write-through
+        handle whose getters read from this parametric instance's SoA store
+        and whose metadata setters write back through to it. Use
+        {meth}`~ommx.v1.AttachedConstraint.detach` to materialize a
+        {class}`~ommx.v1.Constraint` snapshot if you need an independent copy.
+        """
     @property
     def removed_constraints(self) -> builtins.dict[builtins.int, RemovedConstraint]: ...
     @property
@@ -3451,6 +3466,21 @@ class ParametricInstance:
         Substitute parameters to yield an instance.
 
         Parameters can be provided as a dict mapping parameter IDs to their values.
+        """
+    def add_constraint(self, constraint: Constraint) -> AttachedConstraint:
+        r"""
+        Add a regular constraint to this parametric instance.
+
+        Picks an unused {class}`~ommx.v1.ConstraintID`, drains the wrapper's
+        metadata snapshot into this parametric instance's SoA store, and
+        returns an {class}`~ommx.v1.AttachedConstraint` bound to the new id.
+        The input {class}`~ommx.v1.Constraint` is not mutated; subsequent
+        writes that should land on this parametric instance must go through
+        the returned handle.
+
+        Raises {class}`ValueError` if the constraint references an id that is
+        neither a defined decision variable nor a defined parameter, or if it
+        references an id currently used as a substitution-dependency key.
         """
     def get_decision_variable_by_id(
         self, variable_id: builtins.int

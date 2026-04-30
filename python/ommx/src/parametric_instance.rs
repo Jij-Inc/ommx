@@ -177,19 +177,49 @@ impl ParametricInstance {
             .collect()
     }
 
+    /// Dict of all active constraints in the instance keyed by their IDs.
+    ///
+    /// Each value is an {class}`~ommx.v1.AttachedConstraint`: a write-through
+    /// handle whose getters read from this parametric instance's SoA store
+    /// and whose metadata setters write back through to it. Use
+    /// {meth}`~ommx.v1.AttachedConstraint.detach` to materialize a
+    /// {class}`~ommx.v1.Constraint` snapshot if you need an independent copy.
     #[getter]
-    pub fn constraints(&self) -> BTreeMap<u64, Constraint> {
-        let metadata = self.inner.constraint_collection().metadata();
-        self.inner
-            .constraints()
-            .iter()
-            .map(|(id, constraint)| {
+    pub fn constraints(slf: Bound<'_, Self>) -> BTreeMap<u64, crate::AttachedConstraint> {
+        let py = slf.py();
+        let ids: Vec<ConstraintID> = slf.borrow().inner.constraints().keys().copied().collect();
+        let py_parametric: Py<Self> = slf.unbind();
+        ids.into_iter()
+            .map(|id| {
                 (
                     id.into_inner(),
-                    Constraint::from_parts(constraint.clone(), metadata.collect_for(*id)),
+                    crate::AttachedConstraint::from_parametric(py_parametric.clone_ref(py), id),
                 )
             })
             .collect()
+    }
+
+    /// Add a regular constraint to this parametric instance.
+    ///
+    /// Picks an unused {class}`~ommx.v1.ConstraintID`, drains the wrapper's
+    /// metadata snapshot into this parametric instance's SoA store, and
+    /// returns an {class}`~ommx.v1.AttachedConstraint` bound to the new id.
+    /// The input {class}`~ommx.v1.Constraint` is not mutated; subsequent
+    /// writes that should land on this parametric instance must go through
+    /// the returned handle.
+    ///
+    /// Raises {class}`ValueError` if the constraint references an id that is
+    /// neither a defined decision variable nor a defined parameter, or if it
+    /// references an id currently used as a substitution-dependency key.
+    pub fn add_constraint(
+        slf: Bound<'_, Self>,
+        constraint: Constraint,
+    ) -> Result<crate::AttachedConstraint> {
+        let id = {
+            let mut inst = slf.borrow_mut();
+            inst.inner.add_constraint(constraint.0, constraint.1)?
+        };
+        Ok(crate::AttachedConstraint::from_parametric(slf.unbind(), id))
     }
 
     #[getter]

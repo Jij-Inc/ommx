@@ -316,7 +316,7 @@ impl Instance {
             .map(|id| {
                 (
                     id.into_inner(),
-                    crate::AttachedConstraint::new(py_instance.clone_ref(py), id),
+                    crate::AttachedConstraint::from_instance(py_instance.clone_ref(py), id),
                 )
             })
             .collect()
@@ -342,7 +342,7 @@ impl Instance {
             let mut inst = slf.borrow_mut();
             inst.inner.add_constraint(constraint.0, constraint.1)?
         };
-        Ok(crate::AttachedConstraint::new(slf.unbind(), id))
+        Ok(crate::AttachedConstraint::from_instance(slf.unbind(), id))
     }
 
     /// Dict of all indicator constraints in the instance keyed by their IDs.

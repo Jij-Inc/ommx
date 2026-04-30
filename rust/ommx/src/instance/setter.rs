@@ -179,6 +179,60 @@ impl Instance {
     }
 }
 
+impl ParametricInstance {
+    /// Validate that all required IDs are defined either as decision variables
+    /// or as parameters, and are not currently used as substitution-dependency
+    /// keys.
+    ///
+    /// `ParametricInstance` validation differs from
+    /// [`Instance::validate_required_ids`](Instance) by also accepting
+    /// parameter IDs — constraints in a parametric instance may reference
+    /// parameters that will be substituted later via
+    /// [`ParametricInstance::with_parameters`].
+    fn validate_required_ids(&self, required_ids: VariableIDSet) -> crate::Result<()> {
+        let variable_ids: VariableIDSet = self.decision_variables().keys().cloned().collect();
+        let parameter_ids: VariableIDSet = self.parameters().keys().cloned().collect();
+        let known_ids: VariableIDSet = variable_ids.union(&parameter_ids).cloned().collect();
+        let dependency_keys: VariableIDSet = self.decision_variable_dependency().keys().collect();
+
+        if !required_ids.is_subset(&known_ids) {
+            let id = *required_ids.difference(&known_ids).next().unwrap();
+            crate::bail!({ ?id }, "Undefined variable ID is used: {id:?}");
+        }
+        let mut intersection = required_ids.intersection(&dependency_keys);
+        if let Some(&id) = intersection.next() {
+            crate::bail!(
+                { ?id },
+                "Dependent variable cannot be used in objectives or constraints: {id:?}",
+            );
+        }
+        Ok(())
+    }
+
+    /// Insert a new constraint with its metadata, picking an unused id.
+    ///
+    /// Mirrors [`Instance::add_constraint`] for parametric instances.
+    /// Returns the newly assigned [`ConstraintID`]. The metadata is drained
+    /// into the per-constraint [`ConstraintMetadataStore`]; pass
+    /// [`ConstraintMetadata::default`](crate::ConstraintMetadata) for an
+    /// unannotated constraint.
+    ///
+    /// All IDs referenced by the constraint must already be present in either
+    /// `decision_variables` or `parameters`, and must not be substitution-
+    /// dependency keys.
+    pub fn add_constraint(
+        &mut self,
+        constraint: Constraint,
+        metadata: crate::ConstraintMetadata,
+    ) -> crate::Result<ConstraintID> {
+        self.validate_required_ids(constraint.required_ids())?;
+        let id = self.constraint_collection.unused_id();
+        self.constraint_collection
+            .insert_with(id, constraint, metadata);
+        Ok(id)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

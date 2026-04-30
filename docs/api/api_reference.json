@@ -1547,7 +1547,7 @@
         {
           "kind": "Class",
           "name": "AttachedConstraint",
-          "doc": "Attached constraint — a write-through handle bound to an [`Instance`].\n\n`AttachedConstraint` is returned by [`Instance.add_constraint`] and by\n`instance.constraints[id]`. Unlike [`Constraint`], which is a snapshot,\nreads pull live data from the parent instance and metadata setters write\nthrough to its SoA metadata store. Two `AttachedConstraint` instances\npointing at the same id observe the same state.\n\nThe handle keeps the parent `Instance` alive through a refcount; drop\nthe wrapper to release the back-reference.",
+          "doc": "Attached constraint — a write-through handle bound to a host\n([`Instance`] or [`crate::ParametricInstance`]).\n\n`AttachedConstraint` is returned by `Instance.add_constraint` /\n`ParametricInstance.add_constraint` and by their `constraints[id]`\ngetters. Unlike [`Constraint`], which is a snapshot, reads pull live data\nfrom the parent host and metadata setters write through to its SoA\nmetadata store. Two `AttachedConstraint` instances pointing at the same id\non the same host observe the same state.\n\nThe handle keeps the parent host alive through a refcount; drop the\nwrapper to release the back-reference.",
           "bases": [],
           "methods": [
             {
@@ -1662,7 +1662,7 @@
             },
             {
               "name": "add_parameter",
-              "doc": "Add a single parameter entry. Writes through to the parent instance's SoA store.",
+              "doc": "Add a single parameter entry. Writes through to the parent host's SoA metadata store.",
               "signatures": [
                 {
                   "parameters": [
@@ -1734,7 +1734,7 @@
             },
             {
               "name": "add_subscripts",
-              "doc": "Append subscripts. Writes through to the parent instance's SoA store.",
+              "doc": "Append subscripts. Writes through to the parent host's SoA metadata store.",
               "signatures": [
                 {
                   "parameters": [
@@ -1782,7 +1782,7 @@
             },
             {
               "name": "evaluate",
-              "doc": "Evaluate the constraint with the given state.",
+              "doc": "Evaluate the constraint with the given state. Only valid on\n{class}`~ommx.v1.Instance`-hosted handles, since\n{class}`~ommx.v1.ParametricInstance` constraints may still reference\nunsubstituted parameters.",
               "signatures": [
                 {
                   "parameters": [
@@ -1831,7 +1831,7 @@
             },
             {
               "name": "set_description",
-              "doc": "Set the description. Writes through to the parent instance's SoA store.",
+              "doc": "Set the description. Writes through to the parent host's SoA metadata store.",
               "signatures": [
                 {
                   "parameters": [
@@ -1857,7 +1857,7 @@
             },
             {
               "name": "set_name",
-              "doc": "Set the name. Writes through to the parent instance's SoA store.",
+              "doc": "Set the name. Writes through to the parent host's SoA metadata store.",
               "signatures": [
                 {
                   "parameters": [
@@ -1883,7 +1883,7 @@
             },
             {
               "name": "set_parameters",
-              "doc": "Replace all parameters. Writes through to the parent instance's SoA store.",
+              "doc": "Replace all parameters. Writes through to the parent host's SoA metadata store.",
               "signatures": [
                 {
                   "parameters": [
@@ -1920,7 +1920,7 @@
             },
             {
               "name": "set_subscripts",
-              "doc": "Set the subscripts. Writes through to the parent instance's SoA store.",
+              "doc": "Set the subscripts. Writes through to the parent host's SoA metadata store.",
               "signatures": [
                 {
                   "parameters": [
@@ -2009,9 +2009,9 @@
             },
             {
               "name": "instance",
-              "doc": "The parent {class}`~ommx.v1.Instance` this constraint lives in.",
+              "doc": "The parent host this constraint lives in\n({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).",
               "type_": {
-                "display": "Instance",
+                "display": "Any",
                 "link_target": null,
                 "children": []
               },
@@ -13083,6 +13083,32 @@
               "deprecated": null
             },
             {
+              "name": "add_constraint",
+              "doc": "Add a regular constraint to this parametric instance.\n\nPicks an unused {class}`~ommx.v1.ConstraintID`, drains the wrapper's\nmetadata snapshot into this parametric instance's SoA store, and\nreturns an {class}`~ommx.v1.AttachedConstraint` bound to the new id.\nThe input {class}`~ommx.v1.Constraint` is not mutated; subsequent\nwrites that should land on this parametric instance must go through\nthe returned handle.\n\nRaises {class}`ValueError` if the constraint references an id that is\nneither a defined decision variable nor a defined parameter, or if it\nreferences an id currently used as a substitution-dependency key.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "constraint",
+                      "type_": {
+                        "display": "Constraint",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "AttachedConstraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "add_user_annotation",
               "doc": "",
               "signatures": [
@@ -14095,9 +14121,9 @@
             },
             {
               "name": "constraints",
-              "doc": "",
+              "doc": "Dict of all active constraints in the instance keyed by their IDs.\n\nEach value is an {class}`~ommx.v1.AttachedConstraint`: a write-through\nhandle whose getters read from this parametric instance's SoA store\nand whose metadata setters write back through to it. Use\n{meth}`~ommx.v1.AttachedConstraint.detach` to materialize a\n{class}`~ommx.v1.Constraint` snapshot if you need an independent copy.",
               "type_": {
-                "display": "dict[int, Constraint]",
+                "display": "dict[int, AttachedConstraint]",
                 "link_target": null,
                 "children": [
                   {
@@ -14106,7 +14132,7 @@
                     "children": []
                   },
                   {
-                    "display": "Constraint",
+                    "display": "AttachedConstraint",
                     "link_target": null,
                     "children": []
                   }

@@ -1,4 +1,4 @@
-use crate::{Equality, EvaluatedConstraint, Function, Instance, State};
+use crate::{ConstraintHost, Equality, EvaluatedConstraint, Function, Instance, State};
 use fnv::FnvHashMap;
 use ommx::Evaluate;
 use pyo3::{exceptions::PyKeyError, prelude::*, Bound, PyAny};
@@ -417,26 +417,41 @@ impl RemovedConstraint {
     }
 }
 
-/// Attached constraint — a write-through handle bound to an [`Instance`].
+/// Attached constraint — a write-through handle bound to a host
+/// ([`Instance`] or [`crate::ParametricInstance`]).
 ///
-/// `AttachedConstraint` is returned by [`Instance.add_constraint`] and by
-/// `instance.constraints[id]`. Unlike [`Constraint`], which is a snapshot,
-/// reads pull live data from the parent instance and metadata setters write
-/// through to its SoA metadata store. Two `AttachedConstraint` instances
-/// pointing at the same id observe the same state.
+/// `AttachedConstraint` is returned by `Instance.add_constraint` /
+/// `ParametricInstance.add_constraint` and by their `constraints[id]`
+/// getters. Unlike [`Constraint`], which is a snapshot, reads pull live data
+/// from the parent host and metadata setters write through to its SoA
+/// metadata store. Two `AttachedConstraint` instances pointing at the same id
+/// on the same host observe the same state.
 ///
-/// The handle keeps the parent `Instance` alive through a refcount; drop
-/// the wrapper to release the back-reference.
+/// The handle keeps the parent host alive through a refcount; drop the
+/// wrapper to release the back-reference.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 pub struct AttachedConstraint {
-    instance: Py<Instance>,
-    id: ommx::ConstraintID,
+    pub(crate) host: ConstraintHost,
+    pub(crate) id: ommx::ConstraintID,
 }
 
 impl AttachedConstraint {
-    pub fn new(instance: Py<Instance>, id: ommx::ConstraintID) -> Self {
-        Self { instance, id }
+    pub fn new(host: ConstraintHost, id: ommx::ConstraintID) -> Self {
+        Self { host, id }
+    }
+
+    /// Convenience constructor for an Instance-hosted handle.
+    pub fn from_instance(instance: Py<Instance>, id: ommx::ConstraintID) -> Self {
+        Self::new(ConstraintHost::Instance(instance), id)
+    }
+
+    /// Convenience constructor for a ParametricInstance-hosted handle.
+    pub fn from_parametric(
+        parametric: Py<crate::ParametricInstance>,
+        id: ommx::ConstraintID,
+    ) -> Self {
+        Self::new(ConstraintHost::Parametric(parametric), id)
     }
 }
 
@@ -455,6 +470,21 @@ fn lookup_constraint<'a>(
         })
 }
 
+fn lookup_constraint_parametric<'a>(
+    inst: &'a ommx::ParametricInstance,
+    id: ommx::ConstraintID,
+) -> PyResult<&'a ommx::Constraint> {
+    inst.constraints()
+        .get(&id)
+        .or_else(|| inst.removed_constraints().get(&id).map(|(c, _)| c))
+        .ok_or_else(|| {
+            PyKeyError::new_err(format!(
+                "constraint id {} not found in parametric instance",
+                id.into_inner()
+            ))
+        })
+}
+
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl AttachedConstraint {
@@ -464,158 +494,79 @@ impl AttachedConstraint {
         self.id.into_inner()
     }
 
-    /// The parent {class}`~ommx.v1.Instance` this constraint lives in.
+    /// The parent host this constraint lives in
+    /// ({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).
     #[getter]
-    pub fn instance(&self, py: Python<'_>) -> Py<Instance> {
-        self.instance.clone_ref(py)
+    pub fn instance(&self, py: Python<'_>) -> Py<PyAny> {
+        match &self.host {
+            ConstraintHost::Instance(p) => p.clone_ref(py).into_any(),
+            ConstraintHost::Parametric(p) => p.clone_ref(py).into_any(),
+        }
     }
 
     /// Return a {class}`~ommx.v1.Constraint` snapshot of the current
     /// state. Mutations on the returned object do not propagate back.
     pub fn detach(&self, py: Python<'_>) -> PyResult<Constraint> {
-        let inst = self.instance.borrow(py);
-        let c = lookup_constraint(&inst.inner, self.id)?.clone();
-        let metadata = inst.inner.constraint_metadata().collect_for(self.id);
-        Ok(Constraint(c, metadata))
+        match &self.host {
+            ConstraintHost::Instance(p) => {
+                let inst = p.borrow(py);
+                let c = lookup_constraint(&inst.inner, self.id)?.clone();
+                let metadata = inst.inner.constraint_metadata().collect_for(self.id);
+                Ok(Constraint(c, metadata))
+            }
+            ConstraintHost::Parametric(p) => {
+                let inst = p.borrow(py);
+                let c = lookup_constraint_parametric(&inst.inner, self.id)?.clone();
+                let metadata = inst.inner.constraint_metadata().collect_for(self.id);
+                Ok(Constraint(c, metadata))
+            }
+        }
     }
 
     #[getter]
     pub fn function(&self, py: Python<'_>) -> PyResult<Function> {
-        let inst = self.instance.borrow(py);
-        Ok(Function(
-            lookup_constraint(&inst.inner, self.id)?
-                .stage
-                .function
-                .clone(),
-        ))
+        match &self.host {
+            ConstraintHost::Instance(p) => {
+                let inst = p.borrow(py);
+                Ok(Function(
+                    lookup_constraint(&inst.inner, self.id)?
+                        .stage
+                        .function
+                        .clone(),
+                ))
+            }
+            ConstraintHost::Parametric(p) => {
+                let inst = p.borrow(py);
+                Ok(Function(
+                    lookup_constraint_parametric(&inst.inner, self.id)?
+                        .stage
+                        .function
+                        .clone(),
+                ))
+            }
+        }
     }
 
     #[getter]
     pub fn equality(&self, py: Python<'_>) -> PyResult<Equality> {
-        let inst = self.instance.borrow(py);
-        Ok(lookup_constraint(&inst.inner, self.id)?.equality.into())
+        match &self.host {
+            ConstraintHost::Instance(p) => {
+                let inst = p.borrow(py);
+                Ok(lookup_constraint(&inst.inner, self.id)?.equality.into())
+            }
+            ConstraintHost::Parametric(p) => {
+                let inst = p.borrow(py);
+                Ok(lookup_constraint_parametric(&inst.inner, self.id)?
+                    .equality
+                    .into())
+            }
+        }
     }
 
-    #[getter]
-    pub fn name(&self, py: Python<'_>) -> Option<String> {
-        let inst = self.instance.borrow(py);
-        inst.inner
-            .constraint_metadata()
-            .name(self.id)
-            .map(str::to_owned)
-    }
-
-    #[getter]
-    pub fn subscripts(&self, py: Python<'_>) -> Vec<i64> {
-        let inst = self.instance.borrow(py);
-        inst.inner
-            .constraint_metadata()
-            .subscripts(self.id)
-            .to_vec()
-    }
-
-    #[getter]
-    pub fn description(&self, py: Python<'_>) -> Option<String> {
-        let inst = self.instance.borrow(py);
-        inst.inner
-            .constraint_metadata()
-            .description(self.id)
-            .map(str::to_owned)
-    }
-
-    #[getter]
-    pub fn parameters(&self, py: Python<'_>) -> HashMap<String, String> {
-        let inst = self.instance.borrow(py);
-        inst.inner
-            .constraint_metadata()
-            .parameters(self.id)
-            .iter()
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect()
-    }
-
-    #[getter]
-    pub fn provenance(&self, py: Python<'_>) -> Vec<crate::Provenance> {
-        let inst = self.instance.borrow(py);
-        inst.inner
-            .constraint_metadata()
-            .provenance(self.id)
-            .iter()
-            .map(crate::Provenance::from)
-            .collect()
-    }
-
-    /// Set the name. Writes through to the parent instance's SoA store.
-    pub fn set_name(&self, py: Python<'_>, name: String) {
-        self.instance
-            .borrow_mut(py)
-            .inner
-            .constraint_metadata_mut()
-            .set_name(self.id, name);
-    }
-
-    /// Alias for {meth}`set_name` (backward compatibility).
-    pub fn add_name(&self, py: Python<'_>, name: String) {
-        self.set_name(py, name);
-    }
-
-    /// Set the subscripts. Writes through to the parent instance's SoA store.
-    pub fn set_subscripts(&self, py: Python<'_>, subscripts: Vec<i64>) {
-        self.instance
-            .borrow_mut(py)
-            .inner
-            .constraint_metadata_mut()
-            .set_subscripts(self.id, subscripts);
-    }
-
-    /// Append subscripts. Writes through to the parent instance's SoA store.
-    pub fn add_subscripts(&self, py: Python<'_>, subscripts: Vec<i64>) {
-        self.instance
-            .borrow_mut(py)
-            .inner
-            .constraint_metadata_mut()
-            .extend_subscripts(self.id, subscripts);
-    }
-
-    /// Set the description. Writes through to the parent instance's SoA store.
-    pub fn set_description(&self, py: Python<'_>, description: String) {
-        self.instance
-            .borrow_mut(py)
-            .inner
-            .constraint_metadata_mut()
-            .set_description(self.id, description);
-    }
-
-    /// Alias for {meth}`set_description` (backward compatibility).
-    pub fn add_description(&self, py: Python<'_>, description: String) {
-        self.set_description(py, description);
-    }
-
-    /// Replace all parameters. Writes through to the parent instance's SoA store.
-    pub fn set_parameters(&self, py: Python<'_>, parameters: HashMap<String, String>) {
-        let params: FnvHashMap<String, String> = parameters.into_iter().collect();
-        self.instance
-            .borrow_mut(py)
-            .inner
-            .constraint_metadata_mut()
-            .set_parameters(self.id, params);
-    }
-
-    /// Alias for {meth}`set_parameters` (backward compatibility).
-    pub fn add_parameters(&self, py: Python<'_>, parameters: HashMap<String, String>) {
-        self.set_parameters(py, parameters);
-    }
-
-    /// Add a single parameter entry. Writes through to the parent instance's SoA store.
-    pub fn add_parameter(&self, py: Python<'_>, key: String, value: String) {
-        self.instance
-            .borrow_mut(py)
-            .inner
-            .constraint_metadata_mut()
-            .set_parameter(self.id, key, value);
-    }
-
-    /// Evaluate the constraint with the given state.
+    /// Evaluate the constraint with the given state. Only valid on
+    /// {class}`~ommx.v1.Instance`-hosted handles, since
+    /// {class}`~ommx.v1.ParametricInstance` constraints may still reference
+    /// unsubstituted parameters.
     #[pyo3(signature = (state, *, atol=None))]
     pub fn evaluate(
         &self,
@@ -628,32 +579,62 @@ impl AttachedConstraint {
                 .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?,
             None => ommx::ATol::default(),
         };
-        let inst = self.instance.borrow(py);
-        let evaluated = lookup_constraint(&inst.inner, self.id)?
-            .evaluate(&state.0, atol)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-        let metadata = inst.inner.constraint_metadata().collect_for(self.id);
-        Ok(EvaluatedConstraint::from_parts(evaluated, metadata))
+        match &self.host {
+            ConstraintHost::Instance(p) => {
+                let inst = p.borrow(py);
+                let evaluated = lookup_constraint(&inst.inner, self.id)?
+                    .evaluate(&state.0, atol)
+                    .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+                let metadata = inst.inner.constraint_metadata().collect_for(self.id);
+                Ok(EvaluatedConstraint::from_parts(evaluated, metadata))
+            }
+            ConstraintHost::Parametric(_) => Err(pyo3::exceptions::PyValueError::new_err(
+                "AttachedConstraint.evaluate is not supported on a ParametricInstance host; \
+                 substitute parameters via ParametricInstance.with_parameters first",
+            )),
+        }
     }
 
     pub fn __repr__(&self, py: Python<'_>) -> String {
-        let inst = self.instance.borrow(py);
-        match lookup_constraint(&inst.inner, self.id) {
-            Ok(c) => c.to_string(),
-            Err(_) => format!("AttachedConstraint(id={}, dropped)", self.id.into_inner()),
+        match &self.host {
+            ConstraintHost::Instance(p) => {
+                let inst = p.borrow(py);
+                match lookup_constraint(&inst.inner, self.id) {
+                    Ok(c) => c.to_string(),
+                    Err(_) => {
+                        format!("AttachedConstraint(id={}, dropped)", self.id.into_inner())
+                    }
+                }
+            }
+            ConstraintHost::Parametric(p) => {
+                let inst = p.borrow(py);
+                match lookup_constraint_parametric(&inst.inner, self.id) {
+                    Ok(c) => c.to_string(),
+                    Err(_) => {
+                        format!("AttachedConstraint(id={}, dropped)", self.id.into_inner())
+                    }
+                }
+            }
         }
     }
 
     fn __copy__(&self, py: Python<'_>) -> Self {
         Self {
-            instance: self.instance.clone_ref(py),
+            host: self.host.clone_ref(py),
             id: self.id,
         }
     }
 
     fn __deepcopy__(&self, py: Python<'_>, _memo: Bound<'_, PyAny>) -> Self {
         // The wrapper is a refcounted handle, not a value type — deepcopy
-        // shares the same parent Instance.
+        // shares the same parent host.
         self.__copy__(py)
     }
 }
+
+crate::attached_metadata_methods!(
+    AttachedConstraint,
+    ommx::ConstraintID,
+    constraint_metadata,
+    constraint_metadata_mut
+);

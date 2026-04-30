@@ -2,6 +2,7 @@
 
 mod annotations;
 mod artifact;
+mod attached;
 mod bound;
 mod constraint;
 #[cfg(feature = "remote-artifact")]
@@ -36,6 +37,7 @@ mod sos1_constraint;
 mod state;
 
 pub use artifact::*;
+pub use attached::*;
 pub use bound::*;
 pub use constraint::*;
 #[cfg(feature = "remote-artifact")]
