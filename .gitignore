@@ -51,3 +51,7 @@ node_modules/
 !.claude/rules/
 !.claude/skills/
 !.claude/CLAUDE.md
+
+# Codex
+.agents/
+AGENTS.md
