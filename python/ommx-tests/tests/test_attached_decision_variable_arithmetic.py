@@ -18,8 +18,11 @@ from ommx.v1 import (
     Function,
     Instance,
     Linear,
+    Parameter,
+    ParametricInstance,
     Polynomial,
     Quadratic,
+    Sense,
 )
 
 
@@ -225,3 +228,64 @@ def test_function_plus_attached_returns_function(instance: Instance):
     base = Function(2 * y + 1)  # Function
     result = base + x
     assert isinstance(result, Function)
+
+
+# --- Edge cases ---
+
+
+def test_attached_plus_nan_raises_type_error(instance: Instance):
+    """NaN / inf scalars surface as `TypeError`. The `FunctionInput`
+    extraction path returns `Err`, which PyO3 converts to `NotImplemented`
+    on a binop, after which Python raises its generic
+    "unsupported operand types" `TypeError`. This is a v3 behavior change
+    vs. the pre-refactor `ValueError`."""
+    x, _ = _vars(instance)
+    with pytest.raises(TypeError):
+        _ = x + float("nan")
+    with pytest.raises(TypeError):
+        _ = x * float("inf")
+
+
+def test_attached_plus_unsupported_type_raises_type_error(instance: Instance):
+    """Unsupported rhs types also raise `TypeError` (same path as NaN).
+    The cast to `object` defeats pyright's overload check so we can verify
+    the runtime behavior."""
+    x, _ = _vars(instance)
+    rhs: object = "not a number"
+    with pytest.raises(TypeError):
+        _ = x + rhs  # type: ignore[operator]
+
+
+# --- Parametric host: arithmetic should behave the same ---
+
+
+def _parametric_instance() -> ParametricInstance:
+    return ParametricInstance.from_components(
+        sense=Sense.Minimize,
+        objective=Function.from_linear(Linear.constant(0.0)),
+        decision_variables=[
+            DecisionVariable.integer(0, lower=0, upper=10, name="x"),
+            DecisionVariable.integer(1, lower=0, upper=10, name="y"),
+        ],
+        constraints={},
+        parameters=[Parameter(id=100, name="alpha")],
+    )
+
+
+def test_parametric_attached_arithmetic_works():
+    """The arithmetic path uses only the id and does not depend on the host
+    kind, so a `ParametricInstance`-bound handle should compose the same
+    way."""
+    parametric = _parametric_instance()
+    variables = parametric.decision_variables
+    assert all(isinstance(v, AttachedDecisionVariable) for v in variables)
+    x, y = variables[0], variables[1]
+
+    linear = x + y + 3
+    assert isinstance(linear, Linear)
+    assert _terms(linear) == {0: 1.0, 1: 1.0}
+    assert _constant(linear) == 3.0
+
+    quad = x * y
+    assert isinstance(quad, Quadratic)
+    assert dict(quad.quadratic_terms) == {(0, 1): 1.0}

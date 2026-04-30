@@ -158,9 +158,14 @@ impl<'py> FromPyObject<'_, 'py> for FunctionInput {
             return match TryInto::<Coefficient>::try_into(scalar) {
                 Ok(c) => Ok(Self::Scalar(Some(c))),
                 Err(CoefficientError::Zero) => Ok(Self::Scalar(None)),
-                // NaN / Inf: surface as ValueError to match the previous
-                // polymorphic-op behavior (`linear + NaN` raised ValueError).
-                Err(e) => Err(pyo3::exceptions::PyValueError::new_err(e.to_string())),
+                // NaN / Inf. The error class is not user-observable: PyO3 catches
+                // any parameter-extraction failure on a binop and converts it to
+                // `NotImplemented`, after which Python raises its generic
+                // `TypeError("unsupported operand types")`. This is a minor
+                // behavior change vs. pre-refactor (which raised `ValueError`
+                // from the operator body) — accepted as part of the typed-
+                // `FunctionInput` parameter design in v3.
+                Err(e) => Err(PyTypeError::new_err(e.to_string())),
             };
         }
         Err(PyTypeError::new_err(format!(
