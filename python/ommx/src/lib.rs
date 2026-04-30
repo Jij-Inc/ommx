@@ -139,6 +139,7 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<Parameter>()?;
     m.add_class::<AdditionalCapability>()?;
     m.add_class::<Constraint>()?;
+    m.add_class::<AttachedConstraint>()?;
     m.add_class::<IndicatorConstraint>()?;
     m.add_class::<RemovedIndicatorConstraint>()?;
     m.add_class::<OneHotConstraint>()?;
@@ -212,6 +213,7 @@ pyo3_stub_gen::reexport_module_members!("ommx.v1" from "ommx._ommx_rust";
     "AdditionalCapability",
     // Constraint and named function
     "Constraint",
+    "AttachedConstraint",
     "IndicatorConstraint",
     "RemovedIndicatorConstraint",
     "OneHotConstraint",
