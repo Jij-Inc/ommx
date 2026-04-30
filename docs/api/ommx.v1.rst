@@ -19,6 +19,7 @@ ommx.v1
    _items/ommx.v1.Polynomial
    _items/ommx.v1.Function
    _items/ommx.v1.DecisionVariable
+   _items/ommx.v1.AttachedDecisionVariable
    _items/ommx.v1.Parameter
    _items/ommx.v1.AdditionalCapability
    _items/ommx.v1.Constraint

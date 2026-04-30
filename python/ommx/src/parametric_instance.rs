@@ -167,6 +167,8 @@ impl ParametricInstance {
         Function(self.inner.objective().clone())
     }
 
+    /// List of all decision variables in the parametric instance sorted by
+    /// their IDs (snapshots, suitable for arithmetic).
     #[getter]
     pub fn decision_variables(&self) -> Vec<DecisionVariable> {
         let metadata = self.inner.variable_metadata();
@@ -175,6 +177,41 @@ impl ParametricInstance {
             .iter()
             .map(|(id, var)| DecisionVariable::from_parts(var.clone(), metadata.collect_for(*id)))
             .collect()
+    }
+
+    /// Add a decision variable to this parametric instance. Returns an
+    /// {class}`~ommx.v1.AttachedDecisionVariable` bound to the variable's
+    /// id — a write-through handle for further metadata mutation.
+    pub fn add_decision_variable(
+        slf: Bound<'_, Self>,
+        variable: DecisionVariable,
+    ) -> Result<crate::AttachedDecisionVariable> {
+        let id = {
+            let mut inst = slf.borrow_mut();
+            inst.inner.add_decision_variable(variable.0, variable.1)?
+        };
+        Ok(crate::AttachedDecisionVariable::from_parametric(
+            slf.unbind(),
+            id,
+        ))
+    }
+
+    /// Look up the {class}`~ommx.v1.AttachedDecisionVariable` for the given
+    /// id — a write-through handle.
+    pub fn attached_decision_variable(
+        slf: Bound<'_, Self>,
+        variable_id: u64,
+    ) -> PyResult<crate::AttachedDecisionVariable> {
+        let id = VariableID::from(variable_id);
+        if !slf.borrow().inner.decision_variables().contains_key(&id) {
+            return Err(PyKeyError::new_err(format!(
+                "Decision variable with ID {variable_id} not found"
+            )));
+        }
+        Ok(crate::AttachedDecisionVariable::from_parametric(
+            slf.unbind(),
+            id,
+        ))
     }
 
     /// Dict of all active constraints in the instance keyed by their IDs.

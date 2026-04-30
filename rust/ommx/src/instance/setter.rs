@@ -115,6 +115,31 @@ impl Instance {
         Ok(id)
     }
 
+    /// Insert a decision variable with its metadata.
+    ///
+    /// The decision variable's `id()` must not collide with any existing
+    /// variable, and must not be a substitution-dependency key. Returns the
+    /// inserted variable's id for symmetry with `add_constraint`.
+    pub fn add_decision_variable(
+        &mut self,
+        variable: crate::DecisionVariable,
+        metadata: crate::DecisionVariableMetadata,
+    ) -> crate::Result<crate::VariableID> {
+        let id = variable.id();
+        if self.decision_variables.contains_key(&id) {
+            crate::bail!({ ?id }, "Duplicate decision variable ID: {id:?}");
+        }
+        if self.decision_variable_dependency.keys().any(|k| k == id) {
+            crate::bail!(
+                { ?id },
+                "Variable id {id:?} is currently used as a substitution-dependency key",
+            );
+        }
+        self.decision_variables.insert(id, variable);
+        self.variable_metadata.insert(id, metadata);
+        Ok(id)
+    }
+
     /// Insert a constraint into the instance under the given [`ConstraintID`].
     ///
     /// - If the constraint already exists, it will be replaced.
@@ -324,6 +349,36 @@ impl ParametricInstance {
         let id = self.sos1_constraint_collection.unused_id();
         self.sos1_constraint_collection
             .insert_with(id, constraint, metadata);
+        Ok(id)
+    }
+
+    /// Insert a decision variable with its metadata.
+    ///
+    /// The variable's id must not collide with any existing decision
+    /// variable, parameter, or substitution-dependency key.
+    pub fn add_decision_variable(
+        &mut self,
+        variable: crate::DecisionVariable,
+        metadata: crate::DecisionVariableMetadata,
+    ) -> crate::Result<crate::VariableID> {
+        let id = variable.id();
+        if self.decision_variables().contains_key(&id) {
+            crate::bail!({ ?id }, "Duplicate decision variable ID: {id:?}");
+        }
+        if self.parameters().contains_key(&id) {
+            crate::bail!(
+                { ?id },
+                "Variable id {id:?} collides with an existing parameter id",
+            );
+        }
+        if self.decision_variable_dependency().keys().any(|k| k == id) {
+            crate::bail!(
+                { ?id },
+                "Variable id {id:?} is currently used as a substitution-dependency key",
+            );
+        }
+        self.decision_variables.insert(id, variable);
+        self.variable_metadata.insert(id, metadata);
         Ok(id)
     }
 }

@@ -17,6 +17,7 @@ __all__ = [
     "Artifact",
     "ArtifactBuilder",
     "AttachedConstraint",
+    "AttachedDecisionVariable",
     "AttachedIndicatorConstraint",
     "AttachedOneHotConstraint",
     "AttachedSos1Constraint",
@@ -554,6 +555,69 @@ class AttachedConstraint:
         r"""
         Add a single parameter entry. Writes through to the parent host's SoA metadata store.
         """
+
+@typing.final
+class AttachedDecisionVariable:
+    r"""
+    Attached decision variable — a write-through handle bound to a host
+    ([`crate::Instance`] or [`crate::ParametricInstance`]).
+
+    `AttachedDecisionVariable` is returned by `Instance.add_decision_variable`
+    / `ParametricInstance.add_decision_variable` and by their
+    `decision_variables[id]` getters. Reads pull live data from the parent
+    host's SoA store and metadata setters write back through to it.
+
+    `DecisionVariableMetadata` has no `provenance` field, so the
+    write-through surface omits the corresponding getter.
+    """
+    @property
+    def id(self) -> builtins.int:
+        r"""
+        The id this handle points at.
+        """
+    @property
+    def instance(self) -> typing.Any:
+        r"""
+        The parent host this variable lives in.
+        """
+    @property
+    def kind(self) -> builtins.int: ...
+    @property
+    def bound(self) -> Bound: ...
+    @property
+    def substituted_value(self) -> typing.Optional[builtins.float]: ...
+    @property
+    def name(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]: ...
+    @property
+    def description(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
+    def detach(self) -> DecisionVariable:
+        r"""
+        Return a {class}`~ommx.v1.DecisionVariable` snapshot of the current
+        state. Mutations on the returned object do not propagate back.
+        """
+    def __repr__(self) -> builtins.str: ...
+    def __copy__(self) -> AttachedDecisionVariable: ...
+    def __deepcopy__(self, _memo: typing.Any) -> AttachedDecisionVariable: ...
+    def set_name(self, name: builtins.str) -> None:
+        r"""
+        Set the name. Writes through to the parent host's SoA metadata store.
+        """
+    def add_name(self, name: builtins.str) -> None: ...
+    def set_subscripts(self, subscripts: typing.Sequence[builtins.int]) -> None: ...
+    def add_subscripts(self, subscripts: typing.Sequence[builtins.int]) -> None: ...
+    def set_description(self, description: builtins.str) -> None: ...
+    def add_description(self, description: builtins.str) -> None: ...
+    def set_parameters(
+        self, parameters: typing.Mapping[builtins.str, builtins.str]
+    ) -> None: ...
+    def add_parameters(
+        self, parameters: typing.Mapping[builtins.str, builtins.str]
+    ) -> None: ...
+    def add_parameter(self, key: builtins.str, value: builtins.str) -> None: ...
 
 @typing.final
 class AttachedIndicatorConstraint:
@@ -1729,6 +1793,12 @@ class Instance:
     def decision_variables(self) -> builtins.list[DecisionVariable]:
         r"""
         List of all decision variables in the instance sorted by their IDs.
+
+        Returns {class}`~ommx.v1.DecisionVariable` snapshots — independent
+        values that participate in arithmetic to build expressions
+        (`x + y`, `2 * x` etc.). For write-through metadata mutation, use
+        {meth}`add_decision_variable` (when adding) or
+        {meth}`attached_decision_variable` (when looking up by id).
         """
     @property
     def constraints(self) -> builtins.dict[builtins.int, AttachedConstraint]:
@@ -1891,6 +1961,35 @@ class Instance:
         >>> instance.sense == Instance.MINIMIZE
         True
         ```
+        """
+    def add_decision_variable(
+        self, variable: DecisionVariable
+    ) -> AttachedDecisionVariable:
+        r"""
+        Add a decision variable to this instance.
+
+        Drains the wrapper's metadata snapshot into this instance's SoA
+        store and returns an {class}`~ommx.v1.AttachedDecisionVariable`
+        bound to the variable's id — a write-through handle for further
+        metadata mutation. The original wrapper is not modified.
+
+        Raises {class}`ValueError` if the variable's id collides with an
+        existing variable, parameter, or substitution-dependency key.
+        """
+    def attached_decision_variable(
+        self, variable_id: builtins.int
+    ) -> AttachedDecisionVariable:
+        r"""
+        Return an {class}`~ommx.v1.AttachedDecisionVariable` bound to the
+        given id — a write-through handle whose metadata setters update
+        this instance's SoA store.
+
+        Unlike `decision_variables[i]` (which returns a snapshot suitable
+        for arithmetic), the returned handle does not support arithmetic.
+        Call {meth}`~ommx.v1.AttachedDecisionVariable.detach` to obtain a
+        snapshot.
+
+        Raises {class}`KeyError` if no variable with `variable_id` exists.
         """
     def add_constraint(self, constraint: Constraint) -> AttachedConstraint:
         r"""
@@ -3721,7 +3820,11 @@ class ParametricInstance:
     @property
     def objective(self) -> Function: ...
     @property
-    def decision_variables(self) -> builtins.list[DecisionVariable]: ...
+    def decision_variables(self) -> builtins.list[DecisionVariable]:
+        r"""
+        List of all decision variables in the parametric instance sorted by
+        their IDs (snapshots, suitable for arithmetic).
+        """
     @property
     def constraints(self) -> builtins.dict[builtins.int, AttachedConstraint]:
         r"""
@@ -3821,6 +3924,21 @@ class ParametricInstance:
         Substitute parameters to yield an instance.
 
         Parameters can be provided as a dict mapping parameter IDs to their values.
+        """
+    def add_decision_variable(
+        self, variable: DecisionVariable
+    ) -> AttachedDecisionVariable:
+        r"""
+        Add a decision variable to this parametric instance. Returns an
+        {class}`~ommx.v1.AttachedDecisionVariable` bound to the variable's
+        id — a write-through handle for further metadata mutation.
+        """
+    def attached_decision_variable(
+        self, variable_id: builtins.int
+    ) -> AttachedDecisionVariable:
+        r"""
+        Look up the {class}`~ommx.v1.AttachedDecisionVariable` for the given
+        id — a write-through handle.
         """
     def add_constraint(self, constraint: Constraint) -> AttachedConstraint:
         r"""

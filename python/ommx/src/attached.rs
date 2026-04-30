@@ -258,3 +258,188 @@ macro_rules! attached_metadata_methods {
         }
     };
 }
+
+/// Like [`attached_metadata_methods!`] but for hosts with a
+/// [`VariableMetadataStore`](ommx::VariableMetadataStore), which lacks a
+/// `provenance` field. The store API is otherwise identical
+/// (`name` / `subscripts` / `description` / `parameters` / `set_*` /
+/// `extend_subscripts` / `set_parameter`).
+#[macro_export]
+macro_rules! attached_variable_metadata_methods {
+    ($Self:ident, $get:ident, $get_mut:ident) => {
+        #[pyo3_stub_gen::derive::gen_stub_pymethods]
+        #[pymethods]
+        impl $Self {
+            #[getter]
+            pub fn name(&self, py: pyo3::Python<'_>) -> Option<String> {
+                match &self.host {
+                    $crate::ConstraintHost::Instance(p) => {
+                        p.borrow(py).inner.$get().name(self.id).map(str::to_owned)
+                    }
+                    $crate::ConstraintHost::Parametric(p) => {
+                        p.borrow(py).inner.$get().name(self.id).map(str::to_owned)
+                    }
+                }
+            }
+
+            #[getter]
+            pub fn subscripts(&self, py: pyo3::Python<'_>) -> Vec<i64> {
+                match &self.host {
+                    $crate::ConstraintHost::Instance(p) => {
+                        p.borrow(py).inner.$get().subscripts(self.id).to_vec()
+                    }
+                    $crate::ConstraintHost::Parametric(p) => {
+                        p.borrow(py).inner.$get().subscripts(self.id).to_vec()
+                    }
+                }
+            }
+
+            #[getter]
+            pub fn description(&self, py: pyo3::Python<'_>) -> Option<String> {
+                match &self.host {
+                    $crate::ConstraintHost::Instance(p) => p
+                        .borrow(py)
+                        .inner
+                        .$get()
+                        .description(self.id)
+                        .map(str::to_owned),
+                    $crate::ConstraintHost::Parametric(p) => p
+                        .borrow(py)
+                        .inner
+                        .$get()
+                        .description(self.id)
+                        .map(str::to_owned),
+                }
+            }
+
+            #[getter]
+            pub fn parameters(
+                &self,
+                py: pyo3::Python<'_>,
+            ) -> std::collections::HashMap<String, String> {
+                let collect = |params: &fnv::FnvHashMap<String, String>| {
+                    params
+                        .iter()
+                        .map(|(k, v)| (k.clone(), v.clone()))
+                        .collect::<std::collections::HashMap<_, _>>()
+                };
+                match &self.host {
+                    $crate::ConstraintHost::Instance(p) => {
+                        collect(p.borrow(py).inner.$get().parameters(self.id))
+                    }
+                    $crate::ConstraintHost::Parametric(p) => {
+                        collect(p.borrow(py).inner.$get().parameters(self.id))
+                    }
+                }
+            }
+
+            /// Set the name. Writes through to the parent host's SoA metadata store.
+            pub fn set_name(&self, py: pyo3::Python<'_>, name: String) {
+                match &self.host {
+                    $crate::ConstraintHost::Instance(p) => {
+                        p.borrow_mut(py).inner.$get_mut().set_name(self.id, name)
+                    }
+                    $crate::ConstraintHost::Parametric(p) => {
+                        p.borrow_mut(py).inner.$get_mut().set_name(self.id, name)
+                    }
+                }
+            }
+
+            pub fn add_name(&self, py: pyo3::Python<'_>, name: String) {
+                self.set_name(py, name);
+            }
+
+            pub fn set_subscripts(&self, py: pyo3::Python<'_>, subscripts: Vec<i64>) {
+                match &self.host {
+                    $crate::ConstraintHost::Instance(p) => p
+                        .borrow_mut(py)
+                        .inner
+                        .$get_mut()
+                        .set_subscripts(self.id, subscripts),
+                    $crate::ConstraintHost::Parametric(p) => p
+                        .borrow_mut(py)
+                        .inner
+                        .$get_mut()
+                        .set_subscripts(self.id, subscripts),
+                }
+            }
+
+            pub fn add_subscripts(&self, py: pyo3::Python<'_>, subscripts: Vec<i64>) {
+                match &self.host {
+                    $crate::ConstraintHost::Instance(p) => p
+                        .borrow_mut(py)
+                        .inner
+                        .$get_mut()
+                        .extend_subscripts(self.id, subscripts),
+                    $crate::ConstraintHost::Parametric(p) => p
+                        .borrow_mut(py)
+                        .inner
+                        .$get_mut()
+                        .extend_subscripts(self.id, subscripts),
+                }
+            }
+
+            pub fn set_description(&self, py: pyo3::Python<'_>, description: String) {
+                match &self.host {
+                    $crate::ConstraintHost::Instance(p) => p
+                        .borrow_mut(py)
+                        .inner
+                        .$get_mut()
+                        .set_description(self.id, description),
+                    $crate::ConstraintHost::Parametric(p) => p
+                        .borrow_mut(py)
+                        .inner
+                        .$get_mut()
+                        .set_description(self.id, description),
+                }
+            }
+
+            pub fn add_description(&self, py: pyo3::Python<'_>, description: String) {
+                self.set_description(py, description);
+            }
+
+            pub fn set_parameters(
+                &self,
+                py: pyo3::Python<'_>,
+                parameters: std::collections::HashMap<String, String>,
+            ) {
+                let params: fnv::FnvHashMap<String, String> = parameters.into_iter().collect();
+                match &self.host {
+                    $crate::ConstraintHost::Instance(p) => p
+                        .borrow_mut(py)
+                        .inner
+                        .$get_mut()
+                        .set_parameters(self.id, params),
+                    $crate::ConstraintHost::Parametric(p) => p
+                        .borrow_mut(py)
+                        .inner
+                        .$get_mut()
+                        .set_parameters(self.id, params),
+                }
+            }
+
+            pub fn add_parameters(
+                &self,
+                py: pyo3::Python<'_>,
+                parameters: std::collections::HashMap<String, String>,
+            ) {
+                self.set_parameters(py, parameters);
+            }
+
+            pub fn add_parameter(&self, py: pyo3::Python<'_>, key: String, value: String) {
+                match &self.host {
+                    $crate::ConstraintHost::Instance(p) => p
+                        .borrow_mut(py)
+                        .inner
+                        .$get_mut()
+                        .set_parameter(self.id, key, value),
+                    $crate::ConstraintHost::Parametric(p) => p
+                        .borrow_mut(py)
+                        .inner
+                        .$get_mut()
+                        .set_parameter(self.id, key, value),
+                }
+            }
+        }
+    };
+}

@@ -138,6 +138,7 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<InstanceDescription>()?;
     m.add_class::<DecisionVariableAnalysis>()?;
     m.add_class::<DecisionVariable>()?;
+    m.add_class::<AttachedDecisionVariable>()?;
     m.add_class::<Parameter>()?;
     m.add_class::<AdditionalCapability>()?;
     m.add_class::<Constraint>()?;
@@ -213,6 +214,7 @@ pyo3_stub_gen::reexport_module_members!("ommx.v1" from "ommx._ommx_rust";
     "Function",
     // Decision variable and parameter
     "DecisionVariable",
+    "AttachedDecisionVariable",
     "Parameter",
     // Constraint capability
     "AdditionalCapability",

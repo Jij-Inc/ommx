@@ -2096,6 +2096,502 @@
         },
         {
           "kind": "Class",
+          "name": "AttachedDecisionVariable",
+          "doc": "Attached decision variable — a write-through handle bound to a host\n([`crate::Instance`] or [`crate::ParametricInstance`]).\n\n`AttachedDecisionVariable` is returned by `Instance.add_decision_variable`\n/ `ParametricInstance.add_decision_variable` and by their\n`decision_variables[id]` getters. Reads pull live data from the parent\nhost's SoA store and metadata setters write back through to it.\n\n`DecisionVariableMetadata` has no `provenance` field, so the\nwrite-through surface omits the corresponding getter.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__copy__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "AttachedDecisionVariable",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__deepcopy__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "_memo",
+                      "type_": {
+                        "display": "Any",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "AttachedDecisionVariable",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "add_description",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "description",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "add_name",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "add_parameter",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "value",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "add_parameters",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "parameters",
+                      "type_": {
+                        "display": "Mapping[str, str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "add_subscripts",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "subscripts",
+                      "type_": {
+                        "display": "Sequence[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "detach",
+              "doc": "Return a {class}`~ommx.v1.DecisionVariable` snapshot of the current\nstate. Mutations on the returned object do not propagate back.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "DecisionVariable",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "set_description",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "description",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "set_name",
+              "doc": "Set the name. Writes through to the parent host's SoA metadata store.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "set_parameters",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "parameters",
+                      "type_": {
+                        "display": "Mapping[str, str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "set_subscripts",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "subscripts",
+                      "type_": {
+                        "display": "Sequence[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "bound",
+              "doc": "",
+              "type_": {
+                "display": "Bound",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "description",
+              "doc": "",
+              "type_": {
+                "display": "Optional[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "id",
+              "doc": "The id this handle points at.",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "instance",
+              "doc": "The parent host this variable lives in.",
+              "type_": {
+                "display": "Any",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "kind",
+              "doc": "",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "name",
+              "doc": "",
+              "type_": {
+                "display": "Optional[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "parameters",
+              "doc": "",
+              "type_": {
+                "display": "dict[str, str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "subscripts",
+              "doc": "",
+              "type_": {
+                "display": "list[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "substituted_value",
+              "doc": "",
+              "type_": {
+                "display": "Optional[float]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "float",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
           "name": "AttachedIndicatorConstraint",
           "doc": "Attached indicator constraint — a write-through handle bound to a host\n([`crate::Instance`] or [`crate::ParametricInstance`]).\n\n`AttachedIndicatorConstraint` is returned by\n`Instance.add_indicator_constraint` /\n`ParametricInstance.add_indicator_constraint` and by their\n`indicator_constraints[id]` getters. Reads pull live data from the parent\nhost and metadata setters write through to its SoA metadata store.",
           "bases": [],
@@ -8919,6 +9415,32 @@
               "deprecated": null
             },
             {
+              "name": "add_decision_variable",
+              "doc": "Add a decision variable to this instance.\n\nDrains the wrapper's metadata snapshot into this instance's SoA\nstore and returns an {class}`~ommx.v1.AttachedDecisionVariable`\nbound to the variable's id — a write-through handle for further\nmetadata mutation. The original wrapper is not modified.\n\nRaises {class}`ValueError` if the variable's id collides with an\nexisting variable, parameter, or substitution-dependency key.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "variable",
+                      "type_": {
+                        "display": "DecisionVariable",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "AttachedDecisionVariable",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "add_indicator_constraint",
               "doc": "Add an indicator constraint to this instance.\n\nPicks an unused {class}`~ommx.v1.IndicatorConstraintID`, drains the\nwrapper's metadata snapshot into this instance's SoA store, and\nreturns an {class}`~ommx.v1.AttachedIndicatorConstraint` bound to the\nnew id.\n\nRaises {class}`ValueError` if the constraint references an undefined\ndecision variable or one currently used as a substitution-dependency\nkey.",
               "signatures": [
@@ -9229,6 +9751,32 @@
                         "children": []
                       }
                     ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "attached_decision_variable",
+              "doc": "Return an {class}`~ommx.v1.AttachedDecisionVariable` bound to the\ngiven id — a write-through handle whose metadata setters update\nthis instance's SoA store.\n\nUnlike `decision_variables[i]` (which returns a snapshot suitable\nfor arithmetic), the returned handle does not support arithmetic.\nCall {meth}`~ommx.v1.AttachedDecisionVariable.detach` to obtain a\nsnapshot.\n\nRaises {class}`KeyError` if no variable with `variable_id` exists.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "variable_id",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "AttachedDecisionVariable",
+                    "link_target": null,
+                    "children": []
                   }
                 }
               ],
@@ -11283,7 +11831,7 @@
             },
             {
               "name": "decision_variables",
-              "doc": "List of all decision variables in the instance sorted by their IDs.",
+              "doc": "List of all decision variables in the instance sorted by their IDs.\n\nReturns {class}`~ommx.v1.DecisionVariable` snapshots — independent\nvalues that participate in arithmetic to build expressions\n(`x + y`, `2 * x` etc.). For write-through metadata mutation, use\n{meth}`add_decision_variable` (when adding) or\n{meth}`attached_decision_variable` (when looking up by id).",
               "type_": {
                 "display": "list[DecisionVariable]",
                 "link_target": null,
@@ -14952,6 +15500,32 @@
               "deprecated": null
             },
             {
+              "name": "add_decision_variable",
+              "doc": "Add a decision variable to this parametric instance. Returns an\n{class}`~ommx.v1.AttachedDecisionVariable` bound to the variable's\nid — a write-through handle for further metadata mutation.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "variable",
+                      "type_": {
+                        "display": "DecisionVariable",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "AttachedDecisionVariable",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "add_indicator_constraint",
               "doc": "Add an indicator constraint to this parametric instance.\n\nPicks an unused {class}`~ommx.v1.IndicatorConstraintID`, drains the\nwrapper's metadata snapshot into this parametric instance's SoA\nstore, and returns an\n{class}`~ommx.v1.AttachedIndicatorConstraint` bound to the new id.\n\nRaises {class}`ValueError` if the constraint references an id that\nis neither a defined decision variable nor a defined parameter, or\nif it references an id currently used as a substitution-dependency\nkey.",
               "signatures": [
@@ -15117,6 +15691,32 @@
                   ],
                   "return_type": {
                     "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "attached_decision_variable",
+              "doc": "Look up the {class}`~ommx.v1.AttachedDecisionVariable` for the given\nid — a write-through handle.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "variable_id",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "AttachedDecisionVariable",
                     "link_target": null,
                     "children": []
                   }
@@ -16113,7 +16713,7 @@
             },
             {
               "name": "decision_variables",
-              "doc": "",
+              "doc": "List of all decision variables in the parametric instance sorted by\ntheir IDs (snapshots, suitable for arithmetic).",
               "type_": {
                 "display": "list[DecisionVariable]",
                 "link_target": null,
@@ -23895,6 +24495,7 @@
     "ommx.artifact.set_local_registry_root": "ommx.artifact",
     "ommx.v1.AdditionalCapability": "ommx.v1",
     "ommx.v1.AttachedConstraint": "ommx.v1",
+    "ommx.v1.AttachedDecisionVariable": "ommx.v1",
     "ommx.v1.AttachedIndicatorConstraint": "ommx.v1",
     "ommx.v1.AttachedOneHotConstraint": "ommx.v1",
     "ommx.v1.AttachedSos1Constraint": "ommx.v1",

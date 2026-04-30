@@ -310,6 +310,12 @@ impl Instance {
     }
 
     /// List of all decision variables in the instance sorted by their IDs.
+    ///
+    /// Returns {class}`~ommx.v1.DecisionVariable` snapshots — independent
+    /// values that participate in arithmetic to build expressions
+    /// (`x + y`, `2 * x` etc.). For write-through metadata mutation, use
+    /// {meth}`add_decision_variable` (when adding) or
+    /// {meth}`attached_decision_variable` (when looking up by id).
     #[getter]
     pub fn decision_variables(&self) -> Vec<DecisionVariable> {
         let metadata = self.inner.variable_metadata();
@@ -318,6 +324,55 @@ impl Instance {
             .iter()
             .map(|(id, var)| DecisionVariable::from_parts(var.clone(), metadata.collect_for(*id)))
             .collect()
+    }
+
+    /// Add a decision variable to this instance.
+    ///
+    /// Drains the wrapper's metadata snapshot into this instance's SoA
+    /// store and returns an {class}`~ommx.v1.AttachedDecisionVariable`
+    /// bound to the variable's id — a write-through handle for further
+    /// metadata mutation. The original wrapper is not modified.
+    ///
+    /// Raises {class}`ValueError` if the variable's id collides with an
+    /// existing variable, parameter, or substitution-dependency key.
+    pub fn add_decision_variable(
+        slf: Bound<'_, Self>,
+        variable: DecisionVariable,
+    ) -> Result<crate::AttachedDecisionVariable> {
+        let id = {
+            let mut inst = slf.borrow_mut();
+            inst.inner.add_decision_variable(variable.0, variable.1)?
+        };
+        Ok(crate::AttachedDecisionVariable::from_instance(
+            slf.unbind(),
+            id,
+        ))
+    }
+
+    /// Return an {class}`~ommx.v1.AttachedDecisionVariable` bound to the
+    /// given id — a write-through handle whose metadata setters update
+    /// this instance's SoA store.
+    ///
+    /// Unlike `decision_variables[i]` (which returns a snapshot suitable
+    /// for arithmetic), the returned handle does not support arithmetic.
+    /// Call {meth}`~ommx.v1.AttachedDecisionVariable.detach` to obtain a
+    /// snapshot.
+    ///
+    /// Raises {class}`KeyError` if no variable with `variable_id` exists.
+    pub fn attached_decision_variable(
+        slf: Bound<'_, Self>,
+        variable_id: u64,
+    ) -> PyResult<crate::AttachedDecisionVariable> {
+        let id = VariableID::from(variable_id);
+        if !slf.borrow().inner.decision_variables().contains_key(&id) {
+            return Err(PyKeyError::new_err(format!(
+                "Decision variable with ID {variable_id} not found"
+            )));
+        }
+        Ok(crate::AttachedDecisionVariable::from_instance(
+            slf.unbind(),
+            id,
+        ))
     }
 
     /// Dict of all active constraints in the instance keyed by their IDs.
