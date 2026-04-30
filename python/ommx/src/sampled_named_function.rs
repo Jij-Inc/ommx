@@ -1,10 +1,17 @@
 use pyo3::{prelude::*, Bound};
 use std::collections::{BTreeMap, HashSet};
 
+/// SampledNamedFunction wrapper for Python.
+///
+/// Holds the Rust `SampledNamedFunction` plus an owned snapshot of its
+/// metadata. See `NamedFunction` for the snapshot-model rationale.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
-pub struct SampledNamedFunction(pub ommx::SampledNamedFunction);
+pub struct SampledNamedFunction(
+    pub ommx::SampledNamedFunction,
+    pub ommx::NamedFunctionMetadata,
+);
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
@@ -18,25 +25,25 @@ impl SampledNamedFunction {
     /// Get the named function name
     #[getter]
     pub fn name(&self) -> Option<String> {
-        self.0.name.clone()
+        self.1.name.clone()
     }
 
     /// Get the subscripts
     #[getter]
     pub fn subscripts(&self) -> Vec<i64> {
-        self.0.subscripts.clone()
+        self.1.subscripts.clone()
     }
 
     /// Get the description
     #[getter]
     pub fn description(&self) -> Option<String> {
-        self.0.description.clone()
+        self.1.description.clone()
     }
 
     /// Get the parameters
     #[getter]
     pub fn parameters(&self) -> std::collections::HashMap<String, String> {
-        self.0
+        self.1
             .parameters
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))

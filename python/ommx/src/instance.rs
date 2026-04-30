@@ -172,10 +172,15 @@ impl Instance {
             builder = builder.sos1_constraints(rust_sos1_constraints);
         }
 
+        let mut named_function_metadata_pairs: Vec<(
+            ommx::NamedFunctionID,
+            ommx::NamedFunctionMetadata,
+        )> = Vec::new();
         if let Some(nfs) = named_functions {
             let mut rust_named_functions = BTreeMap::new();
             for nf in nfs {
                 let id = nf.0.id;
+                named_function_metadata_pairs.push((id, nf.1));
                 if rust_named_functions.insert(id, nf.0).is_some() {
                     anyhow::bail!("Duplicate named function ID: {}", id.into_inner());
                 }
@@ -200,6 +205,10 @@ impl Instance {
         let indicator_meta = inner.indicator_constraint_metadata_mut();
         for (id, m) in indicator_metadata_pairs {
             indicator_meta.insert(id, m);
+        }
+        let nf_meta = inner.named_function_metadata_mut();
+        for (id, m) in named_function_metadata_pairs {
+            nf_meta.insert(id, m);
         }
 
         Ok(Self {
@@ -458,10 +467,13 @@ impl Instance {
     /// List of all named functions in the instance sorted by their IDs.
     #[getter]
     pub fn named_functions(&self) -> Vec<NamedFunction> {
+        let metadata = self.inner.named_function_metadata();
         self.inner
             .named_functions()
-            .values()
-            .map(|named_function| NamedFunction(named_function.clone()))
+            .iter()
+            .map(|(id, named_function)| {
+                NamedFunction(named_function.clone(), metadata.collect_for(*id))
+            })
             .collect()
     }
 
@@ -1825,7 +1837,21 @@ impl Instance {
         include: Option<Vec<String>>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let flags = crate::pandas::IncludeFlags::from_optional(include)?;
-        entries_to_dataframe(py, self.inner.named_functions().values(), "id", flags)
+        let nf_meta_store = self.inner.named_function_metadata().clone();
+        let nf_meta_view: Vec<(ommx::NamedFunctionMetadata, &ommx::NamedFunction)> = self
+            .inner
+            .named_functions()
+            .iter()
+            .map(|(id, nf)| (nf_meta_store.collect_for(*id), nf))
+            .collect();
+        entries_to_dataframe(
+            py,
+            nf_meta_view
+                .iter()
+                .map(|(m, nf)| crate::pandas::WithMetadata::new(*nf, m)),
+            "id",
+            flags,
+        )
     }
 
     /// Constraint metadata DataFrame (id-indexed wide format).
@@ -2127,10 +2153,16 @@ impl Instance {
 
     /// Get a specific named function by ID
     pub fn get_named_function_by_id(&self, named_function_id: u64) -> PyResult<NamedFunction> {
+        let id = NamedFunctionID::from(named_function_id);
         self.inner
             .named_functions()
-            .get(&NamedFunctionID::from(named_function_id))
-            .map(|named_function| NamedFunction(named_function.clone()))
+            .get(&id)
+            .map(|named_function| {
+                NamedFunction(
+                    named_function.clone(),
+                    self.inner.named_function_metadata().collect_for(id),
+                )
+            })
             .ok_or_else(|| {
                 PyKeyError::new_err(format!(
                     "Named function with ID {named_function_id} not found"

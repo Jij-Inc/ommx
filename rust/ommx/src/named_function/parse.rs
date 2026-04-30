@@ -7,148 +7,153 @@ use crate::{
 };
 use anyhow::Result;
 
+/// Parsed v1 `NamedFunction` together with its drained metadata.
+///
+/// Per-element parse no longer attaches metadata to the [`NamedFunction`]
+/// itself — the metadata is returned alongside so the collection-level
+/// parse can drain it into the [`NamedFunctionMetadataStore`].
+#[derive(Debug)]
+pub struct ParsedNamedFunction {
+    pub named_function: NamedFunction,
+    pub metadata: NamedFunctionMetadata,
+}
+
 impl Parse for v1::NamedFunction {
-    type Output = NamedFunction;
+    type Output = ParsedNamedFunction;
     type Context = ();
 
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v1.NamedFunction";
-        Ok(NamedFunction {
+        let function = self
+            .function
+            .ok_or(RawParseError::MissingField {
+                message,
+                field: "function",
+            })?
+            .parse_as(&(), message, "function")?;
+        let named_function = NamedFunction {
             id: NamedFunctionID(self.id),
-            function: self
-                .function
-                .ok_or(RawParseError::MissingField {
-                    message,
-                    field: "function",
-                })?
-                .parse_as(&(), message, "function")?,
+            function,
+        };
+        let metadata = NamedFunctionMetadata {
             name: self.name,
             subscripts: self.subscripts,
             parameters: self.parameters.into_iter().collect(),
             description: self.description,
+        };
+        Ok(ParsedNamedFunction {
+            named_function,
+            metadata,
         })
     }
 }
 
 impl Parse for Vec<v1::NamedFunction> {
-    type Output = BTreeMap<NamedFunctionID, NamedFunction>;
+    type Output = (
+        BTreeMap<NamedFunctionID, NamedFunction>,
+        NamedFunctionMetadataStore,
+    );
     type Context = ();
 
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let mut named_functions = BTreeMap::new();
-        for named_function in self {
-            let named_function = named_function.parse(&())?;
-            let id = named_function.id;
-            if named_functions.insert(id, named_function).is_some() {
+        let mut metadata_store = NamedFunctionMetadataStore::default();
+        for v in self {
+            let parsed: ParsedNamedFunction = v.parse(&())?;
+            let id = parsed.named_function.id;
+            if named_functions.insert(id, parsed.named_function).is_some() {
                 return Err(RawParseError::InvalidInstance(format!(
                     "Duplicated named function ID is found in definition: {id:?}"
                 ))
                 .into());
             }
+            metadata_store.insert(id, parsed.metadata);
         }
-        Ok(named_functions)
+        Ok((named_functions, metadata_store))
     }
 }
 
-impl From<NamedFunction> for v1::NamedFunction {
-    fn from(
-        NamedFunction {
-            id,
-            function,
-            name,
-            subscripts,
-            parameters,
-            description,
-        }: NamedFunction,
-    ) -> Self {
-        Self {
-            id: id.into_inner(),
-            function: Some(function.into()),
-            name,
-            subscripts,
-            parameters: parameters.into_iter().collect(),
-            description,
-        }
+/// Build a v1 `NamedFunction` from its intrinsic data plus drained metadata.
+pub(crate) fn named_function_to_v1(
+    NamedFunction { id, function }: NamedFunction,
+    metadata: NamedFunctionMetadata,
+) -> v1::NamedFunction {
+    v1::NamedFunction {
+        id: id.into_inner(),
+        function: Some(function.into()),
+        name: metadata.name,
+        subscripts: metadata.subscripts,
+        parameters: metadata.parameters.into_iter().collect(),
+        description: metadata.description,
     }
 }
 
-impl From<EvaluatedNamedFunction> for v1::EvaluatedNamedFunction {
-    fn from(
-        EvaluatedNamedFunction {
-            id,
-            evaluated_value,
-            name,
-            subscripts,
-            parameters,
-            description,
-            used_decision_variable_ids,
-        }: EvaluatedNamedFunction,
-    ) -> Self {
-        Self {
-            id: id.into_inner(),
-            evaluated_value,
-            name,
-            subscripts,
-            parameters: parameters.into_iter().collect(),
-            description,
-            used_decision_variable_ids: used_decision_variable_ids
-                .into_iter()
-                .map(|id| id.into_inner())
-                .collect(),
-        }
-    }
+/// Parsed v1 `EvaluatedNamedFunction` together with its drained metadata.
+#[derive(Debug)]
+pub struct ParsedEvaluatedNamedFunction {
+    pub evaluated_named_function: EvaluatedNamedFunction,
+    pub metadata: NamedFunctionMetadata,
 }
 
 impl Parse for v1::EvaluatedNamedFunction {
-    type Output = EvaluatedNamedFunction;
+    type Output = ParsedEvaluatedNamedFunction;
     type Context = ();
 
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
-        Ok(EvaluatedNamedFunction {
+        let evaluated_named_function = EvaluatedNamedFunction {
             id: NamedFunctionID(self.id),
             evaluated_value: self.evaluated_value,
-            name: self.name,
-            subscripts: self.subscripts,
-            parameters: self.parameters.into_iter().collect(),
-            description: self.description,
             used_decision_variable_ids: self
                 .used_decision_variable_ids
                 .into_iter()
                 .map(VariableID::from)
                 .collect(),
+        };
+        let metadata = NamedFunctionMetadata {
+            name: self.name,
+            subscripts: self.subscripts,
+            parameters: self.parameters.into_iter().collect(),
+            description: self.description,
+        };
+        Ok(ParsedEvaluatedNamedFunction {
+            evaluated_named_function,
+            metadata,
         })
     }
 }
 
-impl From<SampledNamedFunction> for v1::SampledNamedFunction {
-    fn from(
-        SampledNamedFunction {
-            id,
-            evaluated_values,
-            name,
-            subscripts,
-            parameters,
-            description,
-            used_decision_variable_ids,
-        }: SampledNamedFunction,
-    ) -> Self {
-        Self {
-            id: id.into_inner(),
-            evaluated_values: Some(evaluated_values.into()),
-            name,
-            subscripts,
-            parameters: parameters.into_iter().collect(),
-            description,
-            used_decision_variable_ids: used_decision_variable_ids
-                .into_iter()
-                .map(|id| id.into_inner())
-                .collect(),
-        }
+/// Build a v1 `EvaluatedNamedFunction` from its intrinsic data plus drained metadata.
+pub(crate) fn evaluated_named_function_to_v1(
+    EvaluatedNamedFunction {
+        id,
+        evaluated_value,
+        used_decision_variable_ids,
+    }: EvaluatedNamedFunction,
+    metadata: NamedFunctionMetadata,
+) -> v1::EvaluatedNamedFunction {
+    v1::EvaluatedNamedFunction {
+        id: id.into_inner(),
+        evaluated_value,
+        name: metadata.name,
+        subscripts: metadata.subscripts,
+        parameters: metadata.parameters.into_iter().collect(),
+        description: metadata.description,
+        used_decision_variable_ids: used_decision_variable_ids
+            .into_iter()
+            .map(|id| id.into_inner())
+            .collect(),
     }
 }
 
+/// Parsed v1 `SampledNamedFunction` together with its drained metadata.
+#[derive(Debug)]
+pub struct ParsedSampledNamedFunction {
+    pub sampled_named_function: SampledNamedFunction,
+    pub metadata: NamedFunctionMetadata,
+}
+
 impl Parse for v1::SampledNamedFunction {
-    type Output = SampledNamedFunction;
+    type Output = ParsedSampledNamedFunction;
     type Context = ();
 
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
@@ -160,19 +165,49 @@ impl Parse for v1::SampledNamedFunction {
                 field: "evaluated_values",
             })?
             .parse_as(&(), message, "evaluated_values")?;
-        Ok(SampledNamedFunction {
+        let sampled_named_function = SampledNamedFunction {
             id: NamedFunctionID(self.id),
             evaluated_values,
-            name: self.name,
-            subscripts: self.subscripts,
-            parameters: self.parameters.into_iter().collect(),
-            description: self.description,
             used_decision_variable_ids: self
                 .used_decision_variable_ids
                 .into_iter()
                 .map(VariableID::from)
                 .collect(),
+        };
+        let metadata = NamedFunctionMetadata {
+            name: self.name,
+            subscripts: self.subscripts,
+            parameters: self.parameters.into_iter().collect(),
+            description: self.description,
+        };
+        Ok(ParsedSampledNamedFunction {
+            sampled_named_function,
+            metadata,
         })
+    }
+}
+
+/// Build a v1 `SampledNamedFunction` from its intrinsic data plus drained metadata.
+pub(crate) fn sampled_named_function_to_v1(
+    sampled: SampledNamedFunction,
+    metadata: NamedFunctionMetadata,
+) -> v1::SampledNamedFunction {
+    let SampledNamedFunction {
+        id,
+        evaluated_values,
+        used_decision_variable_ids,
+    } = sampled;
+    v1::SampledNamedFunction {
+        id: id.into_inner(),
+        evaluated_values: Some(evaluated_values.into()),
+        name: metadata.name,
+        subscripts: metadata.subscripts,
+        parameters: metadata.parameters.into_iter().collect(),
+        description: metadata.description,
+        used_decision_variable_ids: used_decision_variable_ids
+            .into_iter()
+            .map(|id| id.into_inner())
+            .collect(),
     }
 }
 
@@ -193,7 +228,7 @@ mod tests {
             parameters: Default::default(),
             description: None,
         };
-        let result: Result<NamedFunction, _> = nf.parse(&());
+        let result: Result<ParsedNamedFunction, _> = nf.parse(&());
         insta::assert_snapshot!(result.unwrap_err(), @r###"
         Traceback for OMMX Message parse error:
         └─ommx.v1.NamedFunction[function]
@@ -222,7 +257,7 @@ mod tests {
                 ..Default::default()
             },
         ];
-        let result: Result<BTreeMap<NamedFunctionID, NamedFunction>, _> = nfs.parse(&());
+        let result: Result<(BTreeMap<NamedFunctionID, NamedFunction>, _), _> = nfs.parse(&());
         insta::assert_snapshot!(result.unwrap_err(), @r###"
         Traceback for OMMX Message parse error:
         Duplicated named function ID is found in definition: NamedFunctionID(1)
@@ -245,22 +280,24 @@ mod tests {
             description: Some("A test named function".to_string()),
         };
 
-        let parsed: EvaluatedNamedFunction = v1_enf.parse(&()).unwrap();
+        let parsed: ParsedEvaluatedNamedFunction = v1_enf.parse(&()).unwrap();
+        let enf = parsed.evaluated_named_function;
+        let metadata = parsed.metadata;
 
-        assert_eq!(parsed.id(), NamedFunctionID::from(42));
-        assert_eq!(parsed.evaluated_value(), 3.14);
+        assert_eq!(enf.id(), NamedFunctionID::from(42));
+        assert_eq!(enf.evaluated_value(), 3.14);
         assert_eq!(
-            *parsed.used_decision_variable_ids(),
+            *enf.used_decision_variable_ids(),
             btreeset! { VariableID::from(1), VariableID::from(2), VariableID::from(3) }
         );
-        assert_eq!(*parsed.name(), Some("objective_penalty".to_string()));
-        assert_eq!(*parsed.subscripts(), vec![10, 20]);
+        assert_eq!(metadata.name, Some("objective_penalty".to_string()));
+        assert_eq!(metadata.subscripts, vec![10, 20]);
         assert_eq!(
-            *parsed.description(),
+            metadata.description,
             Some("A test named function".to_string())
         );
-        assert!(parsed.parameters().contains_key("key1"));
-        assert_eq!(parsed.parameters()["key1"], "value1");
+        assert!(metadata.parameters.contains_key("key1"));
+        assert_eq!(metadata.parameters["key1"], "value1");
     }
 
     #[test]
@@ -290,20 +327,22 @@ mod tests {
             used_decision_variable_ids: vec![10, 20],
         };
 
-        let parsed: SampledNamedFunction = v1_snf.parse(&()).unwrap();
+        let parsed: ParsedSampledNamedFunction = v1_snf.parse(&()).unwrap();
+        let snf = parsed.sampled_named_function;
+        let metadata = parsed.metadata;
 
-        assert_eq!(*parsed.id(), NamedFunctionID::from(7));
-        assert_eq!(parsed.name, Some("cost".to_string()));
-        assert_eq!(parsed.subscripts, vec![1, 2]);
-        assert_eq!(parsed.description, Some("A sampled function".to_string()));
-        assert!(parsed.parameters.contains_key("p"));
+        assert_eq!(*snf.id(), NamedFunctionID::from(7));
+        assert_eq!(metadata.name, Some("cost".to_string()));
+        assert_eq!(metadata.subscripts, vec![1, 2]);
+        assert_eq!(metadata.description, Some("A sampled function".to_string()));
+        assert!(metadata.parameters.contains_key("p"));
         assert_eq!(
-            *parsed.used_decision_variable_ids(),
+            *snf.used_decision_variable_ids(),
             btreeset! { VariableID::from(10), VariableID::from(20) }
         );
 
-        // Round-trip: SampledNamedFunction -> v1::SampledNamedFunction
-        let v1_converted: v1::SampledNamedFunction = parsed.into();
+        // Round-trip: SampledNamedFunction + metadata -> v1::SampledNamedFunction
+        let v1_converted = sampled_named_function_to_v1(snf, metadata);
         assert_eq!(v1_converted.id, 7);
         assert_eq!(v1_converted.name, Some("cost".to_string()));
         assert!(v1_converted.evaluated_values.is_some());
@@ -318,7 +357,7 @@ mod tests {
             name: Some("f".to_string()),
             ..Default::default()
         };
-        let result: Result<SampledNamedFunction, _> = v1_snf.parse(&());
+        let result: Result<ParsedSampledNamedFunction, _> = v1_snf.parse(&());
         insta::assert_snapshot!(result.unwrap_err(), @r###"
         Traceback for OMMX Message parse error:
         Field evaluated_values in ommx.v1.SampledNamedFunction is missing.

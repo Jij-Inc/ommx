@@ -3,11 +3,20 @@ use ommx::{Evaluate, NamedFunctionID};
 use pyo3::{prelude::*, Bound, PyAny};
 use std::collections::HashMap;
 
-/// NamedFunction wrapper for Python
+/// NamedFunction wrapper for Python.
+///
+/// Holds the Rust `NamedFunction` plus an owned snapshot of its metadata
+/// (`name` / `subscripts` / `parameters` / `description`). The metadata
+/// store lives at the host (`Instance` / `Solution` / `SampleSet`) level;
+/// when a wrapper is created via a host accessor, the host snapshots its
+/// store into the second tuple slot. Mutations on a wrapper do NOT
+/// propagate back to the host — re-insert via `Instance.from_components`
+/// (or equivalent) to apply changes. Same shape as `Constraint` /
+/// `DecisionVariable` after PR #843.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
-pub struct NamedFunction(pub ommx::NamedFunction);
+pub struct NamedFunction(pub ommx::NamedFunction, pub ommx::NamedFunctionMetadata);
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
@@ -38,13 +47,15 @@ impl NamedFunction {
         let named_function = ommx::NamedFunction {
             id: named_function_id,
             function: rust_function,
+        };
+        let metadata = ommx::NamedFunctionMetadata {
             name,
             subscripts,
             parameters: parameters.into_iter().collect(),
             description,
         };
 
-        Ok(Self(named_function))
+        Ok(Self(named_function, metadata))
     }
 
     #[getter]
@@ -59,22 +70,22 @@ impl NamedFunction {
 
     #[getter]
     pub fn name(&self) -> Option<String> {
-        self.0.name.clone()
+        self.1.name.clone()
     }
 
     #[getter]
     pub fn subscripts(&self) -> Vec<i64> {
-        self.0.subscripts.clone()
+        self.1.subscripts.clone()
     }
 
     #[getter]
     pub fn parameters(&self) -> HashMap<String, String> {
-        self.0.parameters.clone().into_iter().collect()
+        self.1.parameters.clone().into_iter().collect()
     }
 
     #[getter]
     pub fn description(&self) -> Option<String> {
-        self.0.description.clone()
+        self.1.description.clone()
     }
 
     /// Evaluate the named function with the given state.
@@ -96,7 +107,9 @@ impl NamedFunction {
             .0
             .evaluate(&state.0, atol)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-        Ok(EvaluatedNamedFunction(evaluated))
+        // Per-element evaluate doesn't see the host's metadata store, so the
+        // metadata snapshot from the source `NamedFunction` carries over.
+        Ok(EvaluatedNamedFunction(evaluated, self.1.clone()))
     }
 
     /// Partially evaluate the named function with the given state.

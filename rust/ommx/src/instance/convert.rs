@@ -50,6 +50,7 @@ impl From<Instance> for ParametricInstance {
             decision_variable_dependency,
             description,
             named_functions,
+            named_function_metadata,
             ..
         }: Instance,
     ) -> Self {
@@ -66,6 +67,7 @@ impl From<Instance> for ParametricInstance {
             decision_variable_dependency,
             description,
             named_functions,
+            named_function_metadata,
         }
     }
 }
@@ -130,6 +132,7 @@ impl ParametricInstance {
             one_hot_constraint_collection: self.one_hot_constraint_collection,
             sos1_constraint_collection: self.sos1_constraint_collection,
             named_functions,
+            named_function_metadata: self.named_function_metadata,
             decision_variable_dependency: self.decision_variable_dependency,
             parameters: Some(parameters),
             description: self.description,

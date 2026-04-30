@@ -173,6 +173,10 @@ mod tests {
         Instance.indicator_constraint_collection;metadata;ConstraintMetadataStore.provenance;FnvHashMap[stack] 32
         Instance.indicator_constraint_collection;metadata;ConstraintMetadataStore.subscripts;FnvHashMap[stack] 32
         Instance.indicator_constraint_collection;removed_indicator_constraints;BTreeMap[stack] 24
+        Instance.named_function_metadata;NamedFunctionMetadataStore.description;FnvHashMap[stack] 32
+        Instance.named_function_metadata;NamedFunctionMetadataStore.name;FnvHashMap[stack] 32
+        Instance.named_function_metadata;NamedFunctionMetadataStore.parameters;FnvHashMap[stack] 32
+        Instance.named_function_metadata;NamedFunctionMetadataStore.subscripts;FnvHashMap[stack] 32
         Instance.named_functions;BTreeMap[stack] 24
         Instance.objective;Zero 40
         Instance.one_hot_constraint_collection;metadata;ConstraintMetadataStore.description;FnvHashMap[stack] 32
@@ -242,6 +246,10 @@ mod tests {
         Instance.indicator_constraint_collection;metadata;ConstraintMetadataStore.provenance;FnvHashMap[stack] 32
         Instance.indicator_constraint_collection;metadata;ConstraintMetadataStore.subscripts;FnvHashMap[stack] 32
         Instance.indicator_constraint_collection;removed_indicator_constraints;BTreeMap[stack] 24
+        Instance.named_function_metadata;NamedFunctionMetadataStore.description;FnvHashMap[stack] 32
+        Instance.named_function_metadata;NamedFunctionMetadataStore.name;FnvHashMap[stack] 32
+        Instance.named_function_metadata;NamedFunctionMetadataStore.parameters;FnvHashMap[stack] 32
+        Instance.named_function_metadata;NamedFunctionMetadataStore.subscripts;FnvHashMap[stack] 32
         Instance.named_functions;BTreeMap[stack] 24
         Instance.objective;Linear;PolynomialBase.terms 80
         Instance.one_hot_constraint_collection;metadata;ConstraintMetadataStore.description;FnvHashMap[stack] 32
@@ -324,6 +332,10 @@ mod tests {
         Instance.indicator_constraint_collection;metadata;ConstraintMetadataStore.provenance;FnvHashMap[stack] 32
         Instance.indicator_constraint_collection;metadata;ConstraintMetadataStore.subscripts;FnvHashMap[stack] 32
         Instance.indicator_constraint_collection;removed_indicator_constraints;BTreeMap[stack] 24
+        Instance.named_function_metadata;NamedFunctionMetadataStore.description;FnvHashMap[stack] 32
+        Instance.named_function_metadata;NamedFunctionMetadataStore.name;FnvHashMap[stack] 32
+        Instance.named_function_metadata;NamedFunctionMetadataStore.parameters;FnvHashMap[stack] 32
+        Instance.named_function_metadata;NamedFunctionMetadataStore.subscripts;FnvHashMap[stack] 32
         Instance.named_functions;BTreeMap[stack] 24
         Instance.objective;Linear;PolynomialBase.terms 80
         Instance.one_hot_constraint_collection;metadata;ConstraintMetadataStore.description;FnvHashMap[stack] 32
@@ -400,6 +412,10 @@ mod tests {
         Instance.indicator_constraint_collection;metadata;ConstraintMetadataStore.provenance;FnvHashMap[stack] 32
         Instance.indicator_constraint_collection;metadata;ConstraintMetadataStore.subscripts;FnvHashMap[stack] 32
         Instance.indicator_constraint_collection;removed_indicator_constraints;BTreeMap[stack] 24
+        Instance.named_function_metadata;NamedFunctionMetadataStore.description;FnvHashMap[stack] 32
+        Instance.named_function_metadata;NamedFunctionMetadataStore.name;FnvHashMap[stack] 32
+        Instance.named_function_metadata;NamedFunctionMetadataStore.parameters;FnvHashMap[stack] 32
+        Instance.named_function_metadata;NamedFunctionMetadataStore.subscripts;FnvHashMap[stack] 32
         Instance.named_functions;BTreeMap[stack] 24
         Instance.objective;Zero 40
         Instance.one_hot_constraint_collection;metadata;ConstraintMetadataStore.description;FnvHashMap[stack] 32
@@ -487,6 +503,10 @@ mod tests {
         Instance.indicator_constraint_collection;metadata;ConstraintMetadataStore.provenance;FnvHashMap[stack] 32
         Instance.indicator_constraint_collection;metadata;ConstraintMetadataStore.subscripts;FnvHashMap[stack] 32
         Instance.indicator_constraint_collection;removed_indicator_constraints;BTreeMap[stack] 24
+        Instance.named_function_metadata;NamedFunctionMetadataStore.description;FnvHashMap[stack] 32
+        Instance.named_function_metadata;NamedFunctionMetadataStore.name;FnvHashMap[stack] 32
+        Instance.named_function_metadata;NamedFunctionMetadataStore.parameters;FnvHashMap[stack] 32
+        Instance.named_function_metadata;NamedFunctionMetadataStore.subscripts;FnvHashMap[stack] 32
         Instance.named_functions;BTreeMap[stack] 24
         Instance.objective;Zero 40
         Instance.one_hot_constraint_collection;metadata;ConstraintMetadataStore.description;FnvHashMap[stack] 32

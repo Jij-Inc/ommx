@@ -1262,20 +1262,22 @@ impl<'m> ToPandasEntry
     }
 }
 
-impl ToPandasEntry for ommx::NamedFunction {
+impl<'m> ToPandasEntry for WithMetadata<'m, &ommx::NamedFunction, ommx::NamedFunctionMetadata> {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let nf = self.item;
+        let m = self.metadata;
         let dict = PyDict::new(py);
-        dict.set_item("id", self.id.into_inner())?;
-        set_function_type(&dict, &self.function)?;
-        dict.set_item("function", crate::Function(self.function.clone()))?;
-        set_used_ids(&dict, &self.function.required_ids())?;
+        dict.set_item("id", nf.id.into_inner())?;
+        set_function_type(&dict, &nf.function)?;
+        dict.set_item("function", crate::Function(nf.function.clone()))?;
+        set_used_ids(&dict, &nf.function.required_ids())?;
         set_metadata(
             &dict,
-            self.name.as_deref(),
-            &self.subscripts,
-            self.description.as_deref(),
+            m.name.as_deref(),
+            &m.subscripts,
+            m.description.as_deref(),
         )?;
-        set_parameter_columns(&dict, &self.parameters)?;
+        set_parameter_columns(&dict, &m.parameters)?;
         Ok(dict)
     }
 }
@@ -1353,19 +1355,23 @@ impl<'m> ToPandasEntry
     }
 }
 
-impl ToPandasEntry for ommx::EvaluatedNamedFunction {
+impl<'m> ToPandasEntry
+    for WithMetadata<'m, &ommx::EvaluatedNamedFunction, ommx::NamedFunctionMetadata>
+{
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let enf = self.item;
+        let m = self.metadata;
         let dict = PyDict::new(py);
-        dict.set_item("id", self.id.into_inner())?;
-        dict.set_item("value", self.evaluated_value())?;
-        set_used_ids(&dict, self.used_decision_variable_ids())?;
+        dict.set_item("id", enf.id.into_inner())?;
+        dict.set_item("value", enf.evaluated_value())?;
+        set_used_ids(&dict, enf.used_decision_variable_ids())?;
         set_metadata(
             &dict,
-            self.name.as_deref(),
-            &self.subscripts,
-            self.description.as_deref(),
+            m.name.as_deref(),
+            &m.subscripts,
+            m.description.as_deref(),
         )?;
-        set_parameter_columns(&dict, &self.parameters)?;
+        set_parameter_columns(&dict, &m.parameters)?;
         Ok(dict)
     }
 }
@@ -1442,20 +1448,27 @@ impl<'a, 'm> ToPandasEntry
     }
 }
 
-impl<'a> ToPandasEntry for WithSampleIds<'a, &'a ommx::SampledNamedFunction> {
+impl<'a, 'm> ToPandasEntry
+    for WithMetadata<
+        'm,
+        WithSampleIds<'a, &'a ommx::SampledNamedFunction>,
+        ommx::NamedFunctionMetadata,
+    >
+{
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let nf = self.item;
+        let nf = self.item.item;
+        let m = self.metadata;
         let dict = PyDict::new(py);
         dict.set_item("id", nf.id().into_inner())?;
         set_used_ids(&dict, nf.used_decision_variable_ids())?;
         set_metadata(
             &dict,
-            nf.name.as_deref(),
-            &nf.subscripts,
-            nf.description.as_deref(),
+            m.name.as_deref(),
+            &m.subscripts,
+            m.description.as_deref(),
         )?;
-        set_parameter_columns(&dict, &nf.parameters)?;
-        for &sample_id in self.sample_ids {
+        set_parameter_columns(&dict, &m.parameters)?;
+        for &sample_id in self.item.sample_ids {
             let value = nf.evaluated_values().get(sample_id).copied();
             dict.set_item(sample_id.into_inner(), value)?;
         }

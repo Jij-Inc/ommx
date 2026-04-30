@@ -53,9 +53,14 @@ impl Parse for crate::v1::Solution {
             evaluated_constraints.insert(id, parsed_constraint);
         }
         let mut evaluated_named_functions = std::collections::BTreeMap::default();
+        let mut named_function_metadata =
+            crate::named_function::NamedFunctionMetadataStore::default();
         for enf in self.evaluated_named_functions {
-            let parsed_named_function = enf.parse_as(&(), message, "evaluated_named_functions")?;
-            evaluated_named_functions.insert(parsed_named_function.id(), parsed_named_function);
+            let parsed: crate::named_function::parse::ParsedEvaluatedNamedFunction =
+                enf.parse_as(&(), message, "evaluated_named_functions")?;
+            let id = parsed.evaluated_named_function.id();
+            evaluated_named_functions.insert(id, parsed.evaluated_named_function);
+            named_function_metadata.insert(id, parsed.metadata);
         }
 
         let mut decision_variables = std::collections::BTreeMap::default();
@@ -121,6 +126,7 @@ impl Parse for crate::v1::Solution {
             evaluated_named_functions,
             decision_variables,
             variable_metadata,
+            named_function_metadata,
             optimality,
             relaxation,
             sense,
@@ -188,10 +194,14 @@ impl From<Solution> for crate::v1::Solution {
                 v1_ec
             })
             .collect();
-        let evaluated_named_functions = solution
+        let named_function_metadata_store = solution.named_function_metadata().clone();
+        let evaluated_named_functions: Vec<crate::v1::EvaluatedNamedFunction> = solution
             .evaluated_named_functions()
-            .values()
-            .map(|enf| enf.clone().into())
+            .iter()
+            .map(|(id, enf)| {
+                let metadata = named_function_metadata_store.collect_for(*id);
+                crate::named_function::parse::evaluated_named_function_to_v1(enf.clone(), metadata)
+            })
             .collect();
         let variable_metadata_store = solution.variable_metadata().clone();
         let decision_variables: Vec<crate::v1::DecisionVariable> = solution
@@ -489,13 +499,14 @@ mod tests {
     fn test_solution_roundtrip_preserves_metadata() {
         use crate::{
             constraint::EvaluatedData, constraint_type::EvaluatedCollection, ATol, ConstraintID,
-            DecisionVariable, Equality, EvaluatedConstraint, EvaluatedDecisionVariable, Sense,
-            VariableID,
+            DecisionVariable, Equality, EvaluatedConstraint, EvaluatedDecisionVariable,
+            NamedFunctionID, Sense, VariableID,
         };
         use std::collections::BTreeMap;
 
         let var_id = VariableID::from(1);
         let cid = ConstraintID::from(10);
+        let nf_id = NamedFunctionID::from(0);
 
         let dv = DecisionVariable::binary(var_id);
         let evaluated_dv = EvaluatedDecisionVariable::new(dv, 1.0, ATol::default()).unwrap();
@@ -523,16 +534,42 @@ mod tests {
         let evaluated_constraints =
             EvaluatedCollection::with_metadata(evaluated_map, BTreeMap::new(), constraint_metadata);
 
+        // Add an evaluated named function with non-empty metadata so the
+        // round-trip exercises the named_function_metadata SoA store too.
+        // Construct via the v1 parse helper because
+        // `used_decision_variable_ids` is module-private on
+        // `EvaluatedNamedFunction`.
+        let evaluated_nf = {
+            use crate::parse::Parse as _;
+            let v1_enf = crate::v1::EvaluatedNamedFunction {
+                id: nf_id.into_inner(),
+                evaluated_value: 1.0,
+                used_decision_variable_ids: vec![var_id.into_inner()],
+                ..Default::default()
+            };
+            let parsed: crate::named_function::parse::ParsedEvaluatedNamedFunction =
+                v1_enf.parse(&()).unwrap();
+            parsed.evaluated_named_function
+        };
+        let mut evaluated_named_functions = BTreeMap::new();
+        evaluated_named_functions.insert(nf_id, evaluated_nf);
+        let mut named_function_metadata =
+            crate::named_function::NamedFunctionMetadataStore::default();
+        named_function_metadata.set_name(nf_id, "offset_x");
+        named_function_metadata.set_subscripts(nf_id, vec![0]);
+        named_function_metadata.set_description(nf_id, "x plus a constant");
+
         // SAFETY: the inputs above satisfy Solution invariants (one DV,
-        // one evaluated constraint over that DV, value 1.0 satisfies the
-        // equality, no removed reasons).
+        // one evaluated constraint over that DV, one named function over
+        // that DV, value 1.0 satisfies the equality, no removed reasons).
         let solution = unsafe {
             Solution::builder()
                 .objective(1.0)
                 .evaluated_constraints_collection(evaluated_constraints)
-                .evaluated_named_functions(BTreeMap::new())
+                .evaluated_named_functions(evaluated_named_functions)
                 .decision_variables(decision_variables)
                 .variable_metadata(variable_metadata)
+                .named_function_metadata(named_function_metadata)
                 .sense(Sense::Minimize)
                 .build_unchecked()
                 .unwrap()
@@ -546,5 +583,9 @@ mod tests {
         let constraint_meta = recovered.evaluated_constraints().metadata();
         assert_eq!(constraint_meta.name(cid), Some("balance"));
         assert_eq!(constraint_meta.description(cid), Some("demand-balance row"));
+        let nf_meta = recovered.named_function_metadata();
+        assert_eq!(nf_meta.name(nf_id), Some("offset_x"));
+        assert_eq!(nf_meta.subscripts(nf_id), &[0]);
+        assert_eq!(nf_meta.description(nf_id), Some("x plus a constant"));
     }
 }

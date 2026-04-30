@@ -193,7 +193,10 @@ impl Parse for v1::Instance {
             removed_constraints.insert(id, (c, reason));
         }
 
-        let named_functions = self
+        let (named_functions, named_function_metadata): (
+            BTreeMap<NamedFunctionID, NamedFunction>,
+            crate::named_function::NamedFunctionMetadataStore,
+        ) = self
             .named_functions
             .parse_as(&(), message, "named_functions")?;
 
@@ -255,6 +258,7 @@ impl Parse for v1::Instance {
             parameters: self.parameters,
             description: self.description,
             named_functions,
+            named_function_metadata,
         })
     }
 }
@@ -283,10 +287,14 @@ impl From<Instance> for v1::Instance {
             .into_iter()
             .map(|(id, c)| constraint_to_v1(id, c, constraint_metadata.remove(id)))
             .collect();
+        let mut named_function_metadata = value.named_function_metadata;
         let named_functions = value
             .named_functions
-            .into_values()
-            .map(|nf| nf.into())
+            .into_iter()
+            .map(|(id, nf)| {
+                let metadata = named_function_metadata.remove(id);
+                crate::named_function::parse::named_function_to_v1(nf, metadata)
+            })
             .collect();
         let removed_constraints = removed
             .into_iter()
@@ -419,7 +427,10 @@ impl Parse for v1::ParametricInstance {
             removed_constraints.insert(id, (c, reason));
         }
 
-        let named_functions = self
+        let (named_functions, named_function_metadata): (
+            BTreeMap<NamedFunctionID, NamedFunction>,
+            crate::named_function::NamedFunctionMetadataStore,
+        ) = self
             .named_functions
             .parse_as(&(), message, "named_functions")?;
 
@@ -479,6 +490,7 @@ impl Parse for v1::ParametricInstance {
             ),
             sos1_constraint_collection: ConstraintCollection::new(sos1_active, BTreeMap::new()),
             named_functions,
+            named_function_metadata,
             decision_variable_dependency,
             description: self.description,
         })
@@ -500,6 +512,7 @@ impl From<ParametricInstance> for v1::ParametricInstance {
             decision_variable_dependency,
             description,
             named_functions,
+            named_function_metadata,
         }: ParametricInstance,
     ) -> Self {
         // Special constraint types do not have a v1 proto representation yet.
@@ -537,6 +550,14 @@ impl From<ParametricInstance> for v1::ParametricInstance {
             .into_iter()
             .map(|(id, (c, r))| removed_constraint_to_v1(id, c, constraint_metadata.remove(id), r))
             .collect();
+        let mut named_function_metadata = named_function_metadata;
+        let v1_named_functions = named_functions
+            .into_iter()
+            .map(|(id, nf)| {
+                let metadata = named_function_metadata.remove(id);
+                crate::named_function::parse::named_function_to_v1(nf, metadata)
+            })
+            .collect();
         Self {
             description,
             sense: v1::instance::Sense::from(sense) as i32,
@@ -544,7 +565,7 @@ impl From<ParametricInstance> for v1::ParametricInstance {
             decision_variables: v1_decision_variables,
             parameters: parameters.into_values().collect(),
             constraints: v1_constraints,
-            named_functions: named_functions.into_values().map(|nf| nf.into()).collect(),
+            named_functions: v1_named_functions,
             removed_constraints: v1_removed_constraints,
             decision_variable_dependency: decision_variable_dependency
                 .into_iter()
@@ -1148,6 +1169,53 @@ mod tests {
                 .metadata()
                 .description(cid),
             Some("demand-balance row"),
+        );
+    }
+
+    /// Regression: `From<Instance> for v1::Instance` and the matching
+    /// `Parse for v1::Instance` must drain / re-attach the
+    /// `named_function_metadata` SoA store across a bytes round-trip,
+    /// the same way constraint and variable metadata do.
+    #[test]
+    fn test_instance_roundtrip_preserves_named_function_metadata() {
+        use crate::{
+            coeff, linear, DecisionVariable, Function, NamedFunctionID, Sense, VariableID,
+        };
+
+        let var_id = VariableID::from(1);
+        let nf_id = NamedFunctionID::from(0);
+
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(linear!(1)))
+            .decision_variables(maplit::btreemap! {
+                var_id => DecisionVariable::binary(var_id),
+            })
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap();
+
+        instance
+            .new_named_function(
+                Function::from(linear!(1) + coeff!(1.0)),
+                Some("offset_x".to_string()),
+                vec![0],
+                fnv::FnvHashMap::default(),
+                Some("x plus a constant".to_string()),
+            )
+            .unwrap();
+
+        let bytes = instance.to_bytes();
+        let recovered = Instance::from_bytes(&bytes).unwrap();
+
+        assert_eq!(
+            recovered.named_function_metadata().name(nf_id),
+            Some("offset_x"),
+        );
+        assert_eq!(recovered.named_function_metadata().subscripts(nf_id), &[0]);
+        assert_eq!(
+            recovered.named_function_metadata().description(nf_id),
+            Some("x plus a constant"),
         );
     }
 }

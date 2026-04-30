@@ -4932,7 +4932,7 @@
         {
           "kind": "Class",
           "name": "EvaluatedNamedFunction",
-          "doc": "EvaluatedNamedFunction wrapper for Python",
+          "doc": "EvaluatedNamedFunction wrapper for Python.\n\nHolds the Rust `EvaluatedNamedFunction` plus an owned snapshot of its\nmetadata. See `NamedFunction` for the snapshot-model rationale.",
           "bases": [],
           "methods": [
             {
@@ -10699,7 +10699,7 @@
         {
           "kind": "Class",
           "name": "NamedFunction",
-          "doc": "NamedFunction wrapper for Python",
+          "doc": "NamedFunction wrapper for Python.\n\nHolds the Rust `NamedFunction` plus an owned snapshot of its metadata\n(`name` / `subscripts` / `parameters` / `description`). The metadata\nstore lives at the host (`Instance` / `Solution` / `SampleSet`) level;\nwhen a wrapper is created via a host accessor, the host snapshots its\nstore into the second tuple slot. Mutations on a wrapper do NOT\npropagate back to the host — re-insert via `Instance.from_components`\n(or equivalent) to apply changes. Same shape as `Constraint` /\n`DecisionVariable` after PR #843.",
           "bases": [],
           "methods": [
             {
@@ -18454,7 +18454,7 @@
         {
           "kind": "Class",
           "name": "SampledNamedFunction",
-          "doc": "",
+          "doc": "SampledNamedFunction wrapper for Python.\n\nHolds the Rust `SampledNamedFunction` plus an owned snapshot of its\nmetadata. See `NamedFunction` for the snapshot-model rationale.",
           "bases": [],
           "methods": [
             {

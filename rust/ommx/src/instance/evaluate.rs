@@ -77,6 +77,7 @@ impl Evaluate for Instance {
                 .evaluated_named_functions(evaluated_named_functions)
                 .decision_variables(decision_variables)
                 .variable_metadata(self.variable_metadata.clone())
+                .named_function_metadata(self.named_function_metadata.clone())
                 .sense(sense)
                 .build_unchecked()?
         };
@@ -146,6 +147,7 @@ impl Evaluate for Instance {
             .one_hot_constraints_collection(sampled_one_hot_constraints)
             .sos1_constraints_collection(sampled_sos1_constraints)
             .named_functions(named_functions)
+            .named_function_metadata(self.named_function_metadata.clone())
             .sense(self.sense)
             .build()?)
     }
@@ -393,10 +395,6 @@ mod tests {
         let named_function = NamedFunction {
             id: NamedFunctionID::from(1),
             function: Function::from(linear!(2) + linear!(3) + linear!(4) + linear!(5)),
-            name: Some("f".to_string()),
-            subscripts: vec![],
-            parameters: Default::default(),
-            description: None,
         };
 
         let named_functions = btreemap! {

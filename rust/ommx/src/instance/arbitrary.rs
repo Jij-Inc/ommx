@@ -234,6 +234,7 @@ impl Arbitrary for Instance {
                                         Default::default(),
                                     ),
                                     named_functions,
+                                    named_function_metadata: Default::default(),
                                     sense,
                                     decision_variables,
                                     variable_metadata: Default::default(),

@@ -13,10 +13,6 @@ impl Arbitrary for NamedFunction {
             .prop_map(|function| NamedFunction {
                 id: NamedFunctionID(0), // Should be replaced with a unique ID, but cannot be generated here
                 function,
-                name: None,
-                subscripts: Vec::new(),
-                parameters: Default::default(),
-                description: None,
             })
             .boxed()
     }

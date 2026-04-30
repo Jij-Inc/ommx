@@ -118,6 +118,9 @@ pub struct SampleSet {
     sos1_constraints: SampledCollection<crate::Sos1Constraint>,
     #[getset(get = "pub")]
     named_functions: BTreeMap<NamedFunctionID, SampledNamedFunction>,
+    /// Per-named-function auxiliary metadata (sibling of [`Self::named_functions`]).
+    #[getset(get = "pub")]
+    named_function_metadata: crate::named_function::NamedFunctionMetadataStore,
     #[getset(get = "pub")]
     sense: Sense,
     #[getset(get = "pub")]
@@ -274,6 +277,7 @@ impl SampleSet {
                 .evaluated_named_functions(evaluated_named_functions)
                 .decision_variables(decision_variables)
                 .variable_metadata(self.variable_metadata.clone())
+                .named_function_metadata(self.named_function_metadata.clone())
                 .sense(sense)
                 .build_unchecked()
                 .expect("SampleSet invariants guarantee Solution invariants")
@@ -358,6 +362,7 @@ pub struct SampleSetBuilder {
     one_hot_constraints: SampledCollection<crate::OneHotConstraint>,
     sos1_constraints: SampledCollection<crate::Sos1Constraint>,
     named_functions: BTreeMap<NamedFunctionID, SampledNamedFunction>,
+    named_function_metadata: crate::named_function::NamedFunctionMetadataStore,
     sense: Option<Sense>,
 }
 
@@ -472,6 +477,15 @@ impl SampleSetBuilder {
         named_functions: BTreeMap<NamedFunctionID, SampledNamedFunction>,
     ) -> Self {
         self.named_functions = named_functions;
+        self
+    }
+
+    /// Sets the per-named-function metadata store.
+    pub fn named_function_metadata(
+        mut self,
+        named_function_metadata: crate::named_function::NamedFunctionMetadataStore,
+    ) -> Self {
+        self.named_function_metadata = named_function_metadata;
         self
     }
 
@@ -595,6 +609,7 @@ impl SampleSetBuilder {
             one_hot_constraints: self.one_hot_constraints,
             sos1_constraints: self.sos1_constraints,
             named_functions: self.named_functions,
+            named_function_metadata: self.named_function_metadata.clone(),
             sense,
             feasible,
             feasible_relaxed,
@@ -655,6 +670,7 @@ impl SampleSetBuilder {
             one_hot_constraints: self.one_hot_constraints,
             sos1_constraints: self.sos1_constraints,
             named_functions: self.named_functions,
+            named_function_metadata: self.named_function_metadata.clone(),
             sense,
             feasible,
             feasible_relaxed,

@@ -170,10 +170,11 @@ impl Solution {
     /// Get evaluated named functions as a list sorted by ID
     #[getter]
     pub fn named_functions(&self) -> Vec<crate::EvaluatedNamedFunction> {
+        let metadata = self.inner.named_function_metadata();
         self.inner
             .evaluated_named_functions()
-            .values()
-            .map(|nf| crate::EvaluatedNamedFunction(nf.clone()))
+            .iter()
+            .map(|(id, nf)| crate::EvaluatedNamedFunction(nf.clone(), metadata.collect_for(*id)))
             .collect()
     }
 
@@ -462,7 +463,14 @@ impl Solution {
         self.inner
             .evaluated_named_functions()
             .get(&named_function_id)
-            .map(|nf| crate::EvaluatedNamedFunction(nf.clone()))
+            .map(|nf| {
+                crate::EvaluatedNamedFunction(
+                    nf.clone(),
+                    self.inner
+                        .named_function_metadata()
+                        .collect_for(named_function_id),
+                )
+            })
             .ok_or_else(|| {
                 PyKeyError::new_err(format!(
                     "Unknown named function ID: {}",
@@ -565,9 +573,18 @@ impl Solution {
         include: Option<Vec<String>>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let flags = crate::pandas::IncludeFlags::from_optional(include)?;
+        let nf_meta_store = self.inner.named_function_metadata().clone();
+        let nf_meta_view: Vec<(ommx::NamedFunctionMetadata, &ommx::EvaluatedNamedFunction)> = self
+            .inner
+            .evaluated_named_functions()
+            .iter()
+            .map(|(id, nf)| (nf_meta_store.collect_for(*id), nf))
+            .collect();
         entries_to_dataframe(
             py,
-            self.inner.evaluated_named_functions().values(),
+            nf_meta_view
+                .iter()
+                .map(|(m, nf)| crate::pandas::WithMetadata::new(*nf, m)),
             "id",
             flags,
         )

@@ -284,6 +284,7 @@ impl ParametricInstanceBuilder {
             one_hot_constraint_collection: Default::default(),
             sos1_constraint_collection: Default::default(),
             named_functions: self.named_functions,
+            named_function_metadata: Default::default(),
             decision_variable_dependency: self.decision_variable_dependency,
             description: self.description,
         })
@@ -370,10 +371,6 @@ mod tests {
         let named_function = NamedFunction {
             id: NamedFunctionID::from(1),
             function: Function::Zero,
-            name: Some("f".to_string()),
-            subscripts: vec![],
-            parameters: Default::default(),
-            description: None,
         };
 
         let err = ParametricInstance::builder()
@@ -406,10 +403,6 @@ mod tests {
         let named_function = NamedFunction {
             id: NamedFunctionID::from(1),
             function: Function::from(linear!(999) + coeff!(1.0)),
-            name: Some("f".to_string()),
-            subscripts: vec![],
-            parameters: Default::default(),
-            description: None,
         };
 
         let err = ParametricInstance::builder()
@@ -443,10 +436,6 @@ mod tests {
         let named_function = NamedFunction {
             id: NamedFunctionID::from(1),
             function: Function::from(linear!(1) + linear!(2)), // uses both decision var and param
-            name: Some("f".to_string()),
-            subscripts: vec![],
-            parameters: Default::default(),
-            description: None,
         };
 
         let instance = ParametricInstance::builder()
