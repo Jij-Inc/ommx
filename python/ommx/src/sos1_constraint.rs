@@ -217,7 +217,7 @@ impl RemovedSos1Constraint {
 }
 
 /// Attached SOS1 constraint — a write-through handle bound to a host
-/// ([`crate::Instance`] or [`crate::ParametricInstance`]).
+/// ({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).
 ///
 /// Returned by `Instance.add_sos1_constraint` /
 /// `ParametricInstance.add_sos1_constraint` and by their

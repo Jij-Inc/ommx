@@ -217,7 +217,7 @@ impl RemovedOneHotConstraint {
 }
 
 /// Attached one-hot constraint — a write-through handle bound to a host
-/// ([`crate::Instance`] or [`crate::ParametricInstance`]).
+/// ({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).
 ///
 /// Returned by `Instance.add_one_hot_constraint` /
 /// `ParametricInstance.add_one_hot_constraint` and by their

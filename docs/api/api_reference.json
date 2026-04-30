@@ -1547,7 +1547,7 @@
         {
           "kind": "Class",
           "name": "AttachedConstraint",
-          "doc": "Attached constraint — a write-through handle bound to a host\n([`Instance`] or [`crate::ParametricInstance`]).\n\n`AttachedConstraint` is returned by `Instance.add_constraint` /\n`ParametricInstance.add_constraint` and by their `constraints[id]`\ngetters. Unlike [`Constraint`], which is a snapshot, reads pull live data\nfrom the parent host and metadata setters write through to its SoA\nmetadata store. Two `AttachedConstraint` instances pointing at the same id\non the same host observe the same state.\n\nThe handle keeps the parent host alive through a refcount; drop the\nwrapper to release the back-reference.",
+          "doc": "Attached constraint — a write-through handle bound to a host\n({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).\n\n`AttachedConstraint` is returned by `Instance.add_constraint` /\n`ParametricInstance.add_constraint` and by their `constraints[id]`\ngetters. Unlike {class}`~ommx.v1.Constraint`, which is a snapshot, reads\npull live data from the parent host and metadata setters write through\nto its SoA metadata store. Two `AttachedConstraint` instances pointing\nat the same id on the same host observe the same state.\n\nThe handle keeps the parent host alive through a refcount; drop the\nwrapper to release the back-reference.",
           "bases": [],
           "methods": [
             {
@@ -2097,7 +2097,7 @@
         {
           "kind": "Class",
           "name": "AttachedDecisionVariable",
-          "doc": "Attached decision variable — a write-through handle bound to a host\n([`crate::Instance`] or [`crate::ParametricInstance`]).\n\n`AttachedDecisionVariable` is returned by `add_decision_variable(v)`\n(insertion) and `attached_decision_variable(id)` (lookup) on both\nhosts. Unlike the constraint accessors, `decision_variables` keeps\nreturning a list of snapshot {class}`~ommx.v1.DecisionVariable`s so\nthat variables can still participate in arithmetic to build expressions\n(`x + y`, `2 * x`); a follow-up will extend `ToFunction` to accept\n`AttachedDecisionVariable` and let `decision_variables` switch to the\nattached form. Reads pull live data from the parent host's SoA store\nand metadata setters write back through to it.\n\n`DecisionVariableMetadata` has no `provenance` field, so the\nwrite-through surface omits the corresponding getter.",
+          "doc": "Attached decision variable — a write-through handle bound to a host\n({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).\n\n`AttachedDecisionVariable` is returned by `add_decision_variable(v)`\n(insertion) and `attached_decision_variable(id)` (lookup) on both\nhosts. Unlike the constraint accessors, `decision_variables` keeps\nreturning a list of snapshot {class}`~ommx.v1.DecisionVariable`s so\nthat variables can still participate in arithmetic to build expressions\n(`x + y`, `2 * x`); a follow-up will extend `ToFunction` to accept\n`AttachedDecisionVariable` and let `decision_variables` switch to the\nattached form. Reads pull live data from the parent host's SoA store\nand metadata setters write back through to it.\n\n`DecisionVariableMetadata` has no `provenance` field, so the\nwrite-through surface omits the corresponding getter.",
           "bases": [],
           "methods": [
             {
@@ -2581,7 +2581,7 @@
         {
           "kind": "Class",
           "name": "AttachedIndicatorConstraint",
-          "doc": "Attached indicator constraint — a write-through handle bound to a host\n([`crate::Instance`] or [`crate::ParametricInstance`]).\n\n`AttachedIndicatorConstraint` is returned by\n`Instance.add_indicator_constraint` /\n`ParametricInstance.add_indicator_constraint` and by their\n`indicator_constraints[id]` getters. Reads pull live data from the parent\nhost and metadata setters write through to its SoA metadata store.",
+          "doc": "Attached indicator constraint — a write-through handle bound to a host\n({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).\n\n`AttachedIndicatorConstraint` is returned by\n`Instance.add_indicator_constraint` /\n`ParametricInstance.add_indicator_constraint` and by their\n`indicator_constraints[id]` getters. Reads pull live data from the parent\nhost and metadata setters write through to its SoA metadata store.",
           "bases": [],
           "methods": [
             {
@@ -3093,7 +3093,7 @@
         {
           "kind": "Class",
           "name": "AttachedOneHotConstraint",
-          "doc": "Attached one-hot constraint — a write-through handle bound to a host\n([`crate::Instance`] or [`crate::ParametricInstance`]).\n\nReturned by `Instance.add_one_hot_constraint` /\n`ParametricInstance.add_one_hot_constraint` and by their\n`one_hot_constraints[id]` getters. Reads pull live data from the parent\nhost and metadata setters write through to its SoA metadata store.",
+          "doc": "Attached one-hot constraint — a write-through handle bound to a host\n({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).\n\nReturned by `Instance.add_one_hot_constraint` /\n`ParametricInstance.add_one_hot_constraint` and by their\n`one_hot_constraints[id]` getters. Reads pull live data from the parent\nhost and metadata setters write through to its SoA metadata store.",
           "bases": [],
           "methods": [
             {
@@ -3584,7 +3584,7 @@
         {
           "kind": "Class",
           "name": "AttachedSos1Constraint",
-          "doc": "Attached SOS1 constraint — a write-through handle bound to a host\n([`crate::Instance`] or [`crate::ParametricInstance`]).\n\nReturned by `Instance.add_sos1_constraint` /\n`ParametricInstance.add_sos1_constraint` and by their\n`sos1_constraints[id]` getters.",
+          "doc": "Attached SOS1 constraint — a write-through handle bound to a host\n({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).\n\nReturned by `Instance.add_sos1_constraint` /\n`ParametricInstance.add_sos1_constraint` and by their\n`sos1_constraints[id]` getters.",
           "bases": [],
           "methods": [
             {

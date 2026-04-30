@@ -461,14 +461,14 @@ class ArtifactBuilder:
 class AttachedConstraint:
     r"""
     Attached constraint — a write-through handle bound to a host
-    ([`Instance`] or [`crate::ParametricInstance`]).
+    ({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).
 
     `AttachedConstraint` is returned by `Instance.add_constraint` /
     `ParametricInstance.add_constraint` and by their `constraints[id]`
-    getters. Unlike [`Constraint`], which is a snapshot, reads pull live data
-    from the parent host and metadata setters write through to its SoA
-    metadata store. Two `AttachedConstraint` instances pointing at the same id
-    on the same host observe the same state.
+    getters. Unlike {class}`~ommx.v1.Constraint`, which is a snapshot, reads
+    pull live data from the parent host and metadata setters write through
+    to its SoA metadata store. Two `AttachedConstraint` instances pointing
+    at the same id on the same host observe the same state.
 
     The handle keeps the parent host alive through a refcount; drop the
     wrapper to release the back-reference.
@@ -560,7 +560,7 @@ class AttachedConstraint:
 class AttachedDecisionVariable:
     r"""
     Attached decision variable — a write-through handle bound to a host
-    ([`crate::Instance`] or [`crate::ParametricInstance`]).
+    ({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).
 
     `AttachedDecisionVariable` is returned by `add_decision_variable(v)`
     (insertion) and `attached_decision_variable(id)` (lookup) on both
@@ -628,7 +628,7 @@ class AttachedDecisionVariable:
 class AttachedIndicatorConstraint:
     r"""
     Attached indicator constraint — a write-through handle bound to a host
-    ([`crate::Instance`] or [`crate::ParametricInstance`]).
+    ({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).
 
     `AttachedIndicatorConstraint` is returned by
     `Instance.add_indicator_constraint` /
@@ -715,7 +715,7 @@ class AttachedIndicatorConstraint:
 class AttachedOneHotConstraint:
     r"""
     Attached one-hot constraint — a write-through handle bound to a host
-    ([`crate::Instance`] or [`crate::ParametricInstance`]).
+    ({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).
 
     Returned by `Instance.add_one_hot_constraint` /
     `ParametricInstance.add_one_hot_constraint` and by their
@@ -797,7 +797,7 @@ class AttachedOneHotConstraint:
 class AttachedSos1Constraint:
     r"""
     Attached SOS1 constraint — a write-through handle bound to a host
-    ([`crate::Instance`] or [`crate::ParametricInstance`]).
+    ({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).
 
     Returned by `Instance.add_sos1_constraint` /
     `ParametricInstance.add_sos1_constraint` and by their

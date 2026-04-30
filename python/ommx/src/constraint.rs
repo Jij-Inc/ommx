@@ -418,14 +418,14 @@ impl RemovedConstraint {
 }
 
 /// Attached constraint — a write-through handle bound to a host
-/// ([`Instance`] or [`crate::ParametricInstance`]).
+/// ({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).
 ///
 /// `AttachedConstraint` is returned by `Instance.add_constraint` /
 /// `ParametricInstance.add_constraint` and by their `constraints[id]`
-/// getters. Unlike [`Constraint`], which is a snapshot, reads pull live data
-/// from the parent host and metadata setters write through to its SoA
-/// metadata store. Two `AttachedConstraint` instances pointing at the same id
-/// on the same host observe the same state.
+/// getters. Unlike {class}`~ommx.v1.Constraint`, which is a snapshot, reads
+/// pull live data from the parent host and metadata setters write through
+/// to its SoA metadata store. Two `AttachedConstraint` instances pointing
+/// at the same id on the same host observe the same state.
 ///
 /// The handle keeps the parent host alive through a refcount; drop the
 /// wrapper to release the back-reference.

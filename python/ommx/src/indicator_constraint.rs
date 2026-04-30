@@ -212,7 +212,7 @@ impl RemovedIndicatorConstraint {
 }
 
 /// Attached indicator constraint — a write-through handle bound to a host
-/// ([`crate::Instance`] or [`crate::ParametricInstance`]).
+/// ({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).
 ///
 /// `AttachedIndicatorConstraint` is returned by
 /// `Instance.add_indicator_constraint` /

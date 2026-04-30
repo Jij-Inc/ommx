@@ -661,7 +661,7 @@ impl DecisionVariable {
 }
 
 /// Attached decision variable — a write-through handle bound to a host
-/// ([`crate::Instance`] or [`crate::ParametricInstance`]).
+/// ({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).
 ///
 /// `AttachedDecisionVariable` is returned by `add_decision_variable(v)`
 /// (insertion) and `attached_decision_variable(id)` (lookup) on both

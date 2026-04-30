@@ -37,7 +37,10 @@ mod sos1_constraint;
 mod state;
 
 pub use artifact::*;
-pub use attached::*;
+// `attached.rs` is implementation detail — re-export only the host enum that
+// the kind-specific binding files reference. The metadata-method macros are
+// already exported via `#[macro_export]`.
+pub use attached::ConstraintHost;
 pub use bound::*;
 pub use constraint::*;
 #[cfg(feature = "remote-artifact")]
