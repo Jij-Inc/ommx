@@ -113,6 +113,18 @@ impl ParametricInstance {
             constraint.stage.function.partial_evaluate(&state, atol)?;
         }
 
+        // Indicator constraint function bodies may reference parameter IDs
+        // (the structural indicator variable does not, by construction). The
+        // function body needs the same partial evaluation that regular
+        // constraint bodies receive — otherwise the resulting `Instance`
+        // would carry dangling parameter IDs in indicator bodies and break
+        // its own invariants.
+        let (mut indicator_active, indicator_removed, indicator_metadata) =
+            self.indicator_constraint_collection.into_parts();
+        for (_, ic) in indicator_active.iter_mut() {
+            ic.stage.function.partial_evaluate(&state, atol)?;
+        }
+
         let mut named_functions = self.named_functions;
         for (_, named_function) in named_functions.iter_mut() {
             named_function.partial_evaluate(&state, atol)?;
@@ -128,7 +140,16 @@ impl ParametricInstance {
                 removed_constraints,
                 constraint_metadata,
             ),
-            indicator_constraint_collection: self.indicator_constraint_collection,
+            indicator_constraint_collection: ConstraintCollection::with_metadata(
+                indicator_active,
+                indicator_removed,
+                indicator_metadata,
+            ),
+            // OneHot / SOS1 constraints are purely structural — their
+            // variable sets are always real decision variables (the
+            // parametric builder rejects parameter IDs there), so there is
+            // nothing to substitute and the collections pass through
+            // unchanged.
             one_hot_constraint_collection: self.one_hot_constraint_collection,
             sos1_constraint_collection: self.sos1_constraint_collection,
             named_functions,
@@ -137,5 +158,68 @@ impl ParametricInstance {
             parameters: Some(parameters),
             description: self.description,
         })
+    }
+}
+
+#[cfg(test)]
+mod with_parameters_tests {
+    use super::*;
+    use crate::{coeff, linear, Equality, Function};
+    use maplit::btreemap;
+
+    /// `ParametricInstance::with_parameters` must substitute parameter IDs
+    /// inside *indicator* function bodies, not just the objective and
+    /// regular constraint bodies. Otherwise the resulting `Instance`
+    /// carries dangling parameter IDs in its active indicator collection
+    /// and breaks its own invariants.
+    #[test]
+    fn indicator_function_body_is_substituted() {
+        // Indicator: y = 1 ⇒ (x + p - 1) == 0, where p is a parameter.
+        // After substituting p = 1, the body should read x + 0 = x.
+        let y = VariableID::from(1);
+        let x = VariableID::from(2);
+        let p = VariableID::from(100);
+        let indicator = crate::IndicatorConstraint::new(
+            y,
+            Equality::EqualToZero,
+            Function::from(linear!(2) + linear!(100) + coeff!(-1.0)),
+        );
+
+        let parametric = ParametricInstance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(btreemap! {
+                y => DecisionVariable::binary(y),
+                x => DecisionVariable::binary(x),
+            })
+            .parameters(btreemap! {
+                p => crate::v1::Parameter { id: 100, ..Default::default() },
+            })
+            .constraints(BTreeMap::new())
+            .indicator_constraints(btreemap! {
+                crate::IndicatorConstraintID::from(0) => indicator,
+            })
+            .build()
+            .unwrap();
+
+        let mut params = crate::v1::Parameters::default();
+        params.entries = std::collections::HashMap::from([(100, 1.0)]);
+        let instance = parametric.with_parameters(params).unwrap();
+
+        // After substitution, the indicator body must no longer reference
+        // the parameter id 100.
+        let materialized = instance
+            .indicator_constraints()
+            .get(&crate::IndicatorConstraintID::from(0))
+            .unwrap();
+        let body_required: VariableIDSet = materialized.stage.function.required_ids();
+        assert!(
+            !body_required.contains(&p),
+            "parameter id {p:?} survived in indicator body after with_parameters: {body_required:?}",
+        );
+        assert!(
+            body_required.contains(&x),
+            "decision variable id {x:?} should remain in indicator body: {body_required:?}",
+        );
     }
 }

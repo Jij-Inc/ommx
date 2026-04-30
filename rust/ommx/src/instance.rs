@@ -135,10 +135,13 @@ pub enum Sense {
 ///   non-empty and every member is registered in [`Self::decision_variables`].
 ///   SOS1 does not require [`Kind::Binary`](crate::decision_variable::Kind).
 ///
-/// The [`Instance::builder`] enforces these at construction time, and the
-/// post-construction setters [`Self::add_indicator_constraint`] /
-/// [`Self::add_one_hot_constraint`] / [`Self::add_sos1_constraint`] enforce
-/// the same invariants when adding a new constraint to an existing instance.
+/// These invariants are enforced at every construction or mutation entry
+/// point: [`Instance::builder`] (which accepts active maps for all three
+/// kinds plus a removed map for indicator constraints), the post-
+/// construction setters [`Self::add_indicator_constraint`] /
+/// [`Self::add_one_hot_constraint`] / [`Self::add_sos1_constraint`], and the
+/// internal `relax_indicator_constraint` / `convert_all_one_hots_to_constraints` /
+/// `convert_all_sos1_to_constraints` paths that populate the removed maps.
 ///
 #[derive(
     Debug,
@@ -473,11 +476,18 @@ impl Instance {
 /// - The constraint id-disjointness invariants (active vs. removed, per kind)
 ///   match [`Instance`].
 ///
-/// [`ParametricInstance::builder`] enforces these at construction time
-/// (mirroring [`Instance::builder`]), and the post-construction setters
+/// These invariants are enforced at every construction or mutation entry
+/// point: [`ParametricInstance::builder`] (which mirrors [`Instance::builder`]
+/// and accepts active maps for all three kinds plus a removed map for
+/// indicator constraints), and the post-construction setters
 /// [`Self::add_indicator_constraint`] / [`Self::add_one_hot_constraint`] /
-/// [`Self::add_sos1_constraint`] enforce the same invariants when adding
-/// a constraint to an existing parametric instance.
+/// [`Self::add_sos1_constraint`].
+///
+/// [`Self::with_parameters`] partially evaluates active indicator function
+/// bodies along with regular constraints and the objective when materializing
+/// a parametric instance into an [`Instance`], so the resulting [`Instance`]
+/// satisfies its own (stricter) invariants — no parameter IDs survive in
+/// indicator function bodies after substitution.
 ///
 #[derive(Debug, Clone, PartialEq, getset::Getters, Default)]
 pub struct ParametricInstance {
