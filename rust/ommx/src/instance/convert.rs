@@ -107,21 +107,28 @@ impl ParametricInstance {
         let mut objective = self.objective;
         objective.partial_evaluate(&state, atol)?;
 
-        let (mut constraints, removed_constraints, constraint_metadata) =
+        // Both active and removed regular constraint bodies need the parameter
+        // substitution applied — otherwise the resulting `Instance` would
+        // carry dangling parameter IDs in `removed_constraints`, violating
+        // its own invariants.
+        let (mut constraints, mut removed_constraints, constraint_metadata) =
             self.constraint_collection.into_parts();
         for (_, constraint) in constraints.iter_mut() {
             constraint.stage.function.partial_evaluate(&state, atol)?;
         }
+        for (_, (constraint, _reason)) in removed_constraints.iter_mut() {
+            constraint.stage.function.partial_evaluate(&state, atol)?;
+        }
 
-        // Indicator constraint function bodies may reference parameter IDs
-        // (the structural indicator variable does not, by construction). The
-        // function body needs the same partial evaluation that regular
-        // constraint bodies receive — otherwise the resulting `Instance`
-        // would carry dangling parameter IDs in indicator bodies and break
-        // its own invariants.
-        let (mut indicator_active, indicator_removed, indicator_metadata) =
+        // Indicator constraint function bodies may also reference parameter
+        // IDs (the structural indicator variable does not, by construction).
+        // Apply the same substitution to active and removed maps.
+        let (mut indicator_active, mut indicator_removed, indicator_metadata) =
             self.indicator_constraint_collection.into_parts();
         for (_, ic) in indicator_active.iter_mut() {
+            ic.stage.function.partial_evaluate(&state, atol)?;
+        }
+        for (_, (ic, _reason)) in indicator_removed.iter_mut() {
             ic.stage.function.partial_evaluate(&state, atol)?;
         }
 
@@ -166,6 +173,57 @@ mod with_parameters_tests {
     use super::*;
     use crate::{coeff, linear, Equality, Function};
     use maplit::btreemap;
+
+    /// Parameter substitution must apply to *removed* regular constraints
+    /// as well. `ParametricInstance` permits removed-constraint bodies to
+    /// reference parameters (function bodies are unrestricted), but the
+    /// resulting `Instance` has no parameters at all — so any parameter id
+    /// left in a removed body would dangle.
+    #[test]
+    fn removed_regular_constraint_body_is_substituted() {
+        let x = VariableID::from(1);
+        let p = VariableID::from(100);
+        let c_active = Constraint::equal_to_zero(Function::from(linear!(1)));
+        let c_removed = Constraint::equal_to_zero(Function::from(linear!(1) + linear!(100)));
+
+        let parametric = ParametricInstance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(btreemap! {
+                x => DecisionVariable::binary(x),
+            })
+            .parameters(btreemap! {
+                p => crate::v1::Parameter { id: 100, ..Default::default() },
+            })
+            .constraints(btreemap! {
+                ConstraintID::from(0) => c_active,
+            })
+            .removed_constraints(btreemap! {
+                ConstraintID::from(1) => (
+                    c_removed,
+                    crate::constraint::RemovedReason {
+                        reason: "test".to_string(),
+                        parameters: Default::default(),
+                    },
+                ),
+            })
+            .build()
+            .unwrap();
+
+        let mut params = crate::v1::Parameters::default();
+        params.entries = std::collections::HashMap::from([(100, 1.0)]);
+        let instance = parametric.with_parameters(params).unwrap();
+
+        let (rc, _r) = instance
+            .removed_constraints()
+            .get(&ConstraintID::from(1))
+            .unwrap();
+        let body_required: VariableIDSet = rc.stage.function.required_ids();
+        assert!(
+            !body_required.contains(&p),
+            "parameter id {p:?} survived in removed-constraint body: {body_required:?}",
+        );
+    }
 
     /// `ParametricInstance::with_parameters` must substitute parameter IDs
     /// inside *indicator* function bodies, not just the objective and
