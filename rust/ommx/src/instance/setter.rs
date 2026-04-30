@@ -491,8 +491,9 @@ impl ParametricInstance {
         if constraint.variables.is_empty() {
             crate::bail!("SOS1 constraint must contain at least one variable");
         }
-        self.require_decision_variables(constraint.required_ids())?;
-        self.validate_required_ids(constraint.required_ids())?;
+        let required_ids = constraint.required_ids();
+        self.require_decision_variables(required_ids.clone())?;
+        self.validate_required_ids(required_ids)?;
         let id = self.sos1_constraint_collection.unused_id();
         self.sos1_constraint_collection
             .insert_with(id, constraint, metadata);

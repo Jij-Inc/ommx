@@ -663,10 +663,15 @@ impl DecisionVariable {
 /// Attached decision variable — a write-through handle bound to a host
 /// ([`crate::Instance`] or [`crate::ParametricInstance`]).
 ///
-/// `AttachedDecisionVariable` is returned by `Instance.add_decision_variable`
-/// / `ParametricInstance.add_decision_variable` and by their
-/// `decision_variables[id]` getters. Reads pull live data from the parent
-/// host's SoA store and metadata setters write back through to it.
+/// `AttachedDecisionVariable` is returned by `add_decision_variable(v)`
+/// (insertion) and `attached_decision_variable(id)` (lookup) on both
+/// hosts. Unlike the constraint accessors, `decision_variables` keeps
+/// returning a list of snapshot {class}`~ommx.v1.DecisionVariable`s so
+/// that variables can still participate in arithmetic to build expressions
+/// (`x + y`, `2 * x`); a follow-up will extend `ToFunction` to accept
+/// `AttachedDecisionVariable` and let `decision_variables` switch to the
+/// attached form. Reads pull live data from the parent host's SoA store
+/// and metadata setters write back through to it.
 ///
 /// `DecisionVariableMetadata` has no `provenance` field, so the
 /// write-through surface omits the corresponding getter.
