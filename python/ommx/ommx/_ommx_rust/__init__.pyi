@@ -1675,7 +1675,23 @@ class IndicatorConstraint:
         """
     def set_name(self, name: builtins.str) -> IndicatorConstraint:
         r"""
-        Set the constraint name. Returns a new IndicatorConstraint.
+        Set the name. Returns self for method chaining (snapshot mutation).
+        """
+    def set_subscripts(
+        self, subscripts: typing.Sequence[builtins.int]
+    ) -> IndicatorConstraint:
+        r"""
+        Set the subscripts. Returns self for method chaining (snapshot mutation).
+        """
+    def set_description(self, description: builtins.str) -> IndicatorConstraint:
+        r"""
+        Set the description. Returns self for method chaining (snapshot mutation).
+        """
+    def set_parameters(
+        self, parameters: typing.Mapping[builtins.str, builtins.str]
+    ) -> IndicatorConstraint:
+        r"""
+        Replace all parameters. Returns self for method chaining (snapshot mutation).
         """
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> IndicatorConstraint: ...

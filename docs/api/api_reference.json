@@ -9187,8 +9187,34 @@
               "deprecated": null
             },
             {
+              "name": "set_description",
+              "doc": "Set the description. Returns self for method chaining (snapshot mutation).",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "description",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "IndicatorConstraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "set_name",
-              "doc": "Set the constraint name. Returns a new IndicatorConstraint.",
+              "doc": "Set the name. Returns self for method chaining (snapshot mutation).",
               "signatures": [
                 {
                   "parameters": [
@@ -9198,6 +9224,75 @@
                         "display": "str",
                         "link_target": null,
                         "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "IndicatorConstraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "set_parameters",
+              "doc": "Replace all parameters. Returns self for method chaining (snapshot mutation).",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "parameters",
+                      "type_": {
+                        "display": "Mapping[str, str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "IndicatorConstraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "set_subscripts",
+              "doc": "Set the subscripts. Returns self for method chaining (snapshot mutation).",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "subscripts",
+                      "type_": {
+                        "display": "Sequence[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
                       },
                       "default": null
                     }

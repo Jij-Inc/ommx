@@ -2,10 +2,17 @@ use super::*;
 
 impl Instance {
     /// Internal helper to validate required IDs against precomputed sets.
+    ///
+    /// Mirrors the `used / fixed / dependent` disjointness invariant the
+    /// builder enforces (`builder.rs`): a constraint or objective cannot
+    /// reference a variable whose value has been pinned via
+    /// [`DecisionVariable::substituted_value`] (`fixed`), nor a variable
+    /// used as a substitution-dependency key (`dependent`).
     fn validate_required_ids_with_sets(
         required_ids: &VariableIDSet,
         variable_ids: &VariableIDSet,
         dependency_keys: &VariableIDSet,
+        fixed_ids: &VariableIDSet,
     ) -> crate::Result<()> {
         // Check if all required IDs are defined
         if !required_ids.is_subset(variable_ids) {
@@ -14,11 +21,18 @@ impl Instance {
         }
 
         // Check if any required ID is a dependent variable (used as a key in decision_variable_dependency)
-        let mut intersection = required_ids.intersection(dependency_keys);
-        if let Some(&id) = intersection.next() {
+        if let Some(&id) = required_ids.intersection(dependency_keys).next() {
             crate::bail!(
                 { ?id },
                 "Dependent variable cannot be used in objectives or constraints: {id:?}",
+            );
+        }
+
+        // Check if any required ID is a fixed (substituted) variable.
+        if let Some(&id) = required_ids.intersection(fixed_ids).next() {
+            crate::bail!(
+                { ?id },
+                "Fixed variable {id:?} (substituted_value set) cannot be used in objectives or constraints",
             );
         }
 
@@ -26,11 +40,24 @@ impl Instance {
     }
 
     /// Validate that all required variable IDs are defined in the instance
-    /// and are not dependent variables (i.e., not used as keys in decision_variable_dependency)
+    /// and are not dependent variables (i.e., not used as keys in
+    /// decision_variable_dependency) and are not fixed variables
+    /// (substituted_value set).
     fn validate_required_ids(&self, required_ids: VariableIDSet) -> crate::Result<()> {
         let variable_ids: VariableIDSet = self.decision_variables.keys().cloned().collect();
         let dependency_keys: VariableIDSet = self.decision_variable_dependency.keys().collect();
-        Self::validate_required_ids_with_sets(&required_ids, &variable_ids, &dependency_keys)
+        let fixed_ids: VariableIDSet = self
+            .decision_variables
+            .values()
+            .filter(|dv| dv.substituted_value().is_some())
+            .map(|dv| dv.id())
+            .collect();
+        Self::validate_required_ids_with_sets(
+            &required_ids,
+            &variable_ids,
+            &dependency_keys,
+            &fixed_ids,
+        )
     }
 
     /// Set the objective function
@@ -220,11 +247,22 @@ impl Instance {
         // Build validation sets once
         let variable_ids: VariableIDSet = self.decision_variables.keys().cloned().collect();
         let dependency_keys: VariableIDSet = self.decision_variable_dependency.keys().collect();
+        let fixed_ids: VariableIDSet = self
+            .decision_variables
+            .values()
+            .filter(|dv| dv.substituted_value().is_some())
+            .map(|dv| dv.id())
+            .collect();
 
         // Validate all constraints first (atomic: fail before any insertion)
         for (_, constraint) in &constraints {
             let required_ids = constraint.required_ids();
-            Self::validate_required_ids_with_sets(&required_ids, &variable_ids, &dependency_keys)?;
+            Self::validate_required_ids_with_sets(
+                &required_ids,
+                &variable_ids,
+                &dependency_keys,
+                &fixed_ids,
+            )?;
         }
 
         // Insert all constraints (validation already done)
@@ -296,16 +334,27 @@ impl ParametricInstance {
         let parameter_ids: VariableIDSet = self.parameters().keys().cloned().collect();
         let known_ids: VariableIDSet = variable_ids.union(&parameter_ids).cloned().collect();
         let dependency_keys: VariableIDSet = self.decision_variable_dependency().keys().collect();
+        let fixed_ids: VariableIDSet = self
+            .decision_variables()
+            .values()
+            .filter(|dv| dv.substituted_value().is_some())
+            .map(|dv| dv.id())
+            .collect();
 
         if !required_ids.is_subset(&known_ids) {
             let id = *required_ids.difference(&known_ids).next().unwrap();
             crate::bail!({ ?id }, "Undefined variable ID is used: {id:?}");
         }
-        let mut intersection = required_ids.intersection(&dependency_keys);
-        if let Some(&id) = intersection.next() {
+        if let Some(&id) = required_ids.intersection(&dependency_keys).next() {
             crate::bail!(
                 { ?id },
                 "Dependent variable cannot be used in objectives or constraints: {id:?}",
+            );
+        }
+        if let Some(&id) = required_ids.intersection(&fixed_ids).next() {
+            crate::bail!(
+                { ?id },
+                "Fixed variable {id:?} (substituted_value set) cannot be used in objectives or constraints",
             );
         }
         Ok(())
@@ -701,6 +750,41 @@ mod tests {
         );
         // Ensure no constraint was added
         assert_eq!(instance.constraints().len(), 0);
+    }
+
+    #[test]
+    fn test_add_constraint_rejects_fixed_variable() {
+        // Pin variable 2's value via substituted_value, then try to add a
+        // constraint that references it. The setter must reject — same rule
+        // the builder enforces (used ∩ fixed = ∅).
+        let mut decision_variables = btreemap! {
+            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
+            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
+        };
+        decision_variables
+            .get_mut(&VariableID::from(2))
+            .unwrap()
+            .substitute(0.0, crate::ATol::default())
+            .unwrap();
+
+        let objective = linear!(1) + coeff!(1.0);
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            objective.into(),
+            decision_variables,
+            BTreeMap::new(),
+        )
+        .unwrap();
+
+        let bad = crate::Constraint::equal_to_zero((linear!(2) + coeff!(1.0)).into());
+        let err = instance
+            .add_constraint(bad, crate::ConstraintMetadata::default())
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("Fixed variable") && err.to_string().contains("VariableID(2)"),
+            "unexpected error: {err}"
+        );
+        assert!(instance.constraints().is_empty());
     }
 
     #[test]

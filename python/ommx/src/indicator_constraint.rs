@@ -96,11 +96,28 @@ impl IndicatorConstraint {
         self.1.parameters.clone().into_iter().collect()
     }
 
-    /// Set the constraint name. Returns a new IndicatorConstraint.
-    pub fn set_name(&self, name: String) -> Self {
-        let mut ic = self.clone();
-        ic.1.name = Some(name);
-        ic
+    /// Set the name. Returns self for method chaining (snapshot mutation).
+    pub fn set_name(&mut self, name: String) -> Self {
+        self.1.name = Some(name);
+        self.clone()
+    }
+
+    /// Set the subscripts. Returns self for method chaining (snapshot mutation).
+    pub fn set_subscripts(&mut self, subscripts: Vec<i64>) -> Self {
+        self.1.subscripts = subscripts;
+        self.clone()
+    }
+
+    /// Set the description. Returns self for method chaining (snapshot mutation).
+    pub fn set_description(&mut self, description: String) -> Self {
+        self.1.description = Some(description);
+        self.clone()
+    }
+
+    /// Replace all parameters. Returns self for method chaining (snapshot mutation).
+    pub fn set_parameters(&mut self, parameters: HashMap<String, String>) -> Self {
+        self.1.parameters = parameters.into_iter().collect();
+        self.clone()
     }
 
     fn __repr__(&self) -> String {
