@@ -3,7 +3,7 @@
 Status: **Rust SDK landed; Python wrappers landed (snapshot model);
 `include=` + long-format sidecar dfs landed (Wave 1.5); per-kind
 `*_df` consolidation + `kind: Literal[...]` typing landed (Wave 2,
-PR #847); `NamedFunction` SoA migration landed (this PR — same
+PR #847); `NamedFunction` SoA migration landed (PR #848 — same
 snapshot-model shape as `DecisionVariable` / `Constraint`).
 `Series[ID -> Object]` collection accessors are dropped from the
 plan (rationale below). Two-mode Attached wrappers remain deferred
@@ -277,7 +277,7 @@ Why these levels:
   and `ParametricInstance` already own `BTreeMap<VariableID,
   DecisionVariable>` directly. We just add a sibling field.
 
-#### NamedFunction **(landed — this PR)**
+#### NamedFunction **(landed — PR #848)**
 
 `NamedFunction` followed the same SoA migration path as
 `DecisionVariable` / `Constraint`, just shipped as a separate PR
@@ -285,7 +285,7 @@ because the structural shape was distinct enough that bundling both
 diffs would have made the constraint / variable refactor harder to
 review.
 
-Shape after this PR:
+Shape after PR #848:
 
 ```rust
 pub struct NamedFunctionMetadataStore {
@@ -1124,7 +1124,7 @@ shape is:
   `*_df` accessor returns a uniform `pandas.DataFrame`, so
   overload-style typing has no return-type variation to express.
 
-### Landed in NamedFunction SoA migration (this PR)
+### Landed in NamedFunction SoA migration (PR #848)
 
 - `NamedFunction`, `EvaluatedNamedFunction`, and
   `SampledNamedFunction` lose their inline `name` / `subscripts` /
