@@ -24,6 +24,7 @@ ommx.v1
    _items/ommx.v1.Constraint
    _items/ommx.v1.AttachedConstraint
    _items/ommx.v1.IndicatorConstraint
+   _items/ommx.v1.AttachedIndicatorConstraint
    _items/ommx.v1.RemovedIndicatorConstraint
    _items/ommx.v1.OneHotConstraint
    _items/ommx.v1.RemovedOneHotConstraint

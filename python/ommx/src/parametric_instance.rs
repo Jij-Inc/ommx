@@ -237,6 +237,65 @@ impl ParametricInstance {
             .collect()
     }
 
+    /// Dict of all active indicator constraints in the parametric instance
+    /// keyed by their IDs.
+    ///
+    /// Each value is an {class}`~ommx.v1.AttachedIndicatorConstraint`: a
+    /// write-through handle whose getters read from this parametric
+    /// instance's SoA store and whose metadata setters write back through
+    /// to it.
+    #[getter]
+    pub fn indicator_constraints(
+        slf: Bound<'_, Self>,
+    ) -> BTreeMap<u64, crate::AttachedIndicatorConstraint> {
+        let py = slf.py();
+        let ids: Vec<ommx::IndicatorConstraintID> = slf
+            .borrow()
+            .inner
+            .indicator_constraints()
+            .keys()
+            .copied()
+            .collect();
+        let py_parametric: Py<Self> = slf.unbind();
+        ids.into_iter()
+            .map(|id| {
+                (
+                    id.into_inner(),
+                    crate::AttachedIndicatorConstraint::from_parametric(
+                        py_parametric.clone_ref(py),
+                        id,
+                    ),
+                )
+            })
+            .collect()
+    }
+
+    /// Add an indicator constraint to this parametric instance.
+    ///
+    /// Picks an unused {class}`~ommx.v1.IndicatorConstraintID`, drains the
+    /// wrapper's metadata snapshot into this parametric instance's SoA
+    /// store, and returns an
+    /// {class}`~ommx.v1.AttachedIndicatorConstraint` bound to the new id.
+    ///
+    /// Raises {class}`ValueError` if the constraint references an id that
+    /// is neither a defined decision variable nor a defined parameter, or
+    /// if it references an id currently used as a substitution-dependency
+    /// key.
+    pub fn add_indicator_constraint(
+        slf: Bound<'_, Self>,
+        constraint: crate::IndicatorConstraint,
+    ) -> Result<crate::AttachedIndicatorConstraint> {
+        let id = {
+            let mut inst = slf.borrow_mut();
+            inst.inner
+                .add_indicator_constraint(constraint.0, constraint.1)?
+        };
+        Ok(crate::AttachedIndicatorConstraint::from_parametric(
+            slf.unbind(),
+            id,
+        ))
+    }
+
     #[getter]
     pub fn named_functions(&self) -> Vec<NamedFunction> {
         let metadata = self.inner.named_function_metadata();

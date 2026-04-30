@@ -4,6 +4,7 @@
 from ommx._ommx_rust import (
     AdditionalCapability,
     AttachedConstraint,
+    AttachedIndicatorConstraint,
     Bound,
     Constraint,
     DecisionVariable,
@@ -48,6 +49,7 @@ from ommx._ommx_rust import (
 __all__ = [
     "AdditionalCapability",
     "AttachedConstraint",
+    "AttachedIndicatorConstraint",
     "Bound",
     "Constraint",
     "DecisionVariable",

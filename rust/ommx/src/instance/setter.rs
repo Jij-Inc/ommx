@@ -63,6 +63,24 @@ impl Instance {
         Ok(id)
     }
 
+    /// Insert a new indicator constraint with its metadata, picking an unused id.
+    ///
+    /// Returns the newly assigned [`crate::IndicatorConstraintID`].
+    /// All variable IDs referenced by the constraint (the function plus the
+    /// indicator variable) must already be present in `decision_variables`
+    /// and must not be substitution-dependency keys.
+    pub fn add_indicator_constraint(
+        &mut self,
+        constraint: crate::IndicatorConstraint,
+        metadata: crate::ConstraintMetadata,
+    ) -> crate::Result<crate::IndicatorConstraintID> {
+        self.validate_required_ids(constraint.required_ids())?;
+        let id = self.indicator_constraint_collection.unused_id();
+        self.indicator_constraint_collection
+            .insert_with(id, constraint, metadata);
+        Ok(id)
+    }
+
     /// Insert a constraint into the instance under the given [`ConstraintID`].
     ///
     /// - If the constraint already exists, it will be replaced.
@@ -228,6 +246,23 @@ impl ParametricInstance {
         self.validate_required_ids(constraint.required_ids())?;
         let id = self.constraint_collection.unused_id();
         self.constraint_collection
+            .insert_with(id, constraint, metadata);
+        Ok(id)
+    }
+
+    /// Insert a new indicator constraint with its metadata, picking an unused id.
+    ///
+    /// Mirrors [`Instance::add_indicator_constraint`] for parametric
+    /// instances; required IDs may be either decision variables or
+    /// parameters.
+    pub fn add_indicator_constraint(
+        &mut self,
+        constraint: crate::IndicatorConstraint,
+        metadata: crate::ConstraintMetadata,
+    ) -> crate::Result<crate::IndicatorConstraintID> {
+        self.validate_required_ids(constraint.required_ids())?;
+        let id = self.indicator_constraint_collection.unused_id();
+        self.indicator_constraint_collection
             .insert_with(id, constraint, metadata);
         Ok(id)
     }

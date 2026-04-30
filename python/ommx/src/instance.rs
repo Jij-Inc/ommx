@@ -345,20 +345,61 @@ impl Instance {
         Ok(crate::AttachedConstraint::from_instance(slf.unbind(), id))
     }
 
-    /// Dict of all indicator constraints in the instance keyed by their IDs.
+    /// Dict of all active indicator constraints in the instance keyed by
+    /// their IDs.
+    ///
+    /// Each value is an {class}`~ommx.v1.AttachedIndicatorConstraint`: a
+    /// write-through handle whose getters read from this instance's SoA
+    /// store and whose metadata setters write back through to it.
     #[getter]
-    pub fn indicator_constraints(&self) -> BTreeMap<u64, crate::IndicatorConstraint> {
-        let metadata = self.inner.indicator_constraint_collection().metadata();
-        self.inner
+    pub fn indicator_constraints(
+        slf: Bound<'_, Self>,
+    ) -> BTreeMap<u64, crate::AttachedIndicatorConstraint> {
+        let py = slf.py();
+        let ids: Vec<ommx::IndicatorConstraintID> = slf
+            .borrow()
+            .inner
             .indicator_constraints()
-            .iter()
-            .map(|(id, ic)| {
+            .keys()
+            .copied()
+            .collect();
+        let py_instance: Py<Self> = slf.unbind();
+        ids.into_iter()
+            .map(|id| {
                 (
                     id.into_inner(),
-                    crate::IndicatorConstraint::from_parts(ic.clone(), metadata.collect_for(*id)),
+                    crate::AttachedIndicatorConstraint::from_instance(
+                        py_instance.clone_ref(py),
+                        id,
+                    ),
                 )
             })
             .collect()
+    }
+
+    /// Add an indicator constraint to this instance.
+    ///
+    /// Picks an unused {class}`~ommx.v1.IndicatorConstraintID`, drains the
+    /// wrapper's metadata snapshot into this instance's SoA store, and
+    /// returns an {class}`~ommx.v1.AttachedIndicatorConstraint` bound to the
+    /// new id.
+    ///
+    /// Raises {class}`ValueError` if the constraint references an undefined
+    /// decision variable or one currently used as a substitution-dependency
+    /// key.
+    pub fn add_indicator_constraint(
+        slf: Bound<'_, Self>,
+        constraint: crate::IndicatorConstraint,
+    ) -> Result<crate::AttachedIndicatorConstraint> {
+        let id = {
+            let mut inst = slf.borrow_mut();
+            inst.inner
+                .add_indicator_constraint(constraint.0, constraint.1)?
+        };
+        Ok(crate::AttachedIndicatorConstraint::from_instance(
+            slf.unbind(),
+            id,
+        ))
     }
 
     /// Dict of all removed indicator constraints in the instance keyed by their IDs.

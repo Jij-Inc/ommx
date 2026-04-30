@@ -1,8 +1,8 @@
-use pyo3::prelude::*;
+use pyo3::{exceptions::PyKeyError, prelude::*};
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 use std::collections::HashMap;
 
-use crate::{DecisionVariable, Equality, Function};
+use crate::{ConstraintHost, DecisionVariable, Equality, Function};
 
 #[gen_stub_pyclass]
 #[pyclass]
@@ -193,3 +193,214 @@ impl RemovedIndicatorConstraint {
         format!("RemovedIndicatorConstraint({head})")
     }
 }
+
+/// Attached indicator constraint — a write-through handle bound to a host
+/// ([`crate::Instance`] or [`crate::ParametricInstance`]).
+///
+/// `AttachedIndicatorConstraint` is returned by
+/// `Instance.add_indicator_constraint` /
+/// `ParametricInstance.add_indicator_constraint` and by their
+/// `indicator_constraints[id]` getters. Reads pull live data from the parent
+/// host and metadata setters write through to its SoA metadata store.
+#[gen_stub_pyclass]
+#[pyclass]
+pub struct AttachedIndicatorConstraint {
+    pub(crate) host: ConstraintHost,
+    pub(crate) id: ommx::IndicatorConstraintID,
+}
+
+impl AttachedIndicatorConstraint {
+    pub fn new(host: ConstraintHost, id: ommx::IndicatorConstraintID) -> Self {
+        Self { host, id }
+    }
+
+    pub fn from_instance(instance: Py<crate::Instance>, id: ommx::IndicatorConstraintID) -> Self {
+        Self::new(ConstraintHost::Instance(instance), id)
+    }
+
+    pub fn from_parametric(
+        parametric: Py<crate::ParametricInstance>,
+        id: ommx::IndicatorConstraintID,
+    ) -> Self {
+        Self::new(ConstraintHost::Parametric(parametric), id)
+    }
+}
+
+fn lookup_indicator<'a>(
+    inst: &'a ommx::Instance,
+    id: ommx::IndicatorConstraintID,
+) -> PyResult<&'a ommx::IndicatorConstraint> {
+    inst.indicator_constraints()
+        .get(&id)
+        .or_else(|| {
+            inst.removed_indicator_constraints()
+                .get(&id)
+                .map(|(c, _)| c)
+        })
+        .ok_or_else(|| {
+            PyKeyError::new_err(format!(
+                "indicator constraint id {} not found in instance",
+                id.into_inner()
+            ))
+        })
+}
+
+fn lookup_indicator_parametric<'a>(
+    inst: &'a ommx::ParametricInstance,
+    id: ommx::IndicatorConstraintID,
+) -> PyResult<&'a ommx::IndicatorConstraint> {
+    inst.indicator_constraints()
+        .get(&id)
+        .or_else(|| {
+            inst.removed_indicator_constraints()
+                .get(&id)
+                .map(|(c, _)| c)
+        })
+        .ok_or_else(|| {
+            PyKeyError::new_err(format!(
+                "indicator constraint id {} not found in parametric instance",
+                id.into_inner()
+            ))
+        })
+}
+
+#[gen_stub_pymethods]
+#[pymethods]
+impl AttachedIndicatorConstraint {
+    /// The id this handle points at.
+    #[getter]
+    pub fn constraint_id(&self) -> u64 {
+        self.id.into_inner()
+    }
+
+    /// The parent host this constraint lives in.
+    #[getter]
+    pub fn instance(&self, py: Python<'_>) -> Py<pyo3::PyAny> {
+        match &self.host {
+            ConstraintHost::Instance(p) => p.clone_ref(py).into_any(),
+            ConstraintHost::Parametric(p) => p.clone_ref(py).into_any(),
+        }
+    }
+
+    /// Return an {class}`~ommx.v1.IndicatorConstraint` snapshot of the
+    /// current state. Mutations on the returned object do not propagate back.
+    pub fn detach(&self, py: Python<'_>) -> PyResult<IndicatorConstraint> {
+        match &self.host {
+            ConstraintHost::Instance(p) => {
+                let inst = p.borrow(py);
+                let c = lookup_indicator(&inst.inner, self.id)?.clone();
+                let metadata = inst
+                    .inner
+                    .indicator_constraint_metadata()
+                    .collect_for(self.id);
+                Ok(IndicatorConstraint::from_parts(c, metadata))
+            }
+            ConstraintHost::Parametric(p) => {
+                let inst = p.borrow(py);
+                let c = lookup_indicator_parametric(&inst.inner, self.id)?.clone();
+                let metadata = inst
+                    .inner
+                    .indicator_constraint_metadata()
+                    .collect_for(self.id);
+                Ok(IndicatorConstraint::from_parts(c, metadata))
+            }
+        }
+    }
+
+    #[getter]
+    pub fn indicator_variable_id(&self, py: Python<'_>) -> PyResult<u64> {
+        match &self.host {
+            ConstraintHost::Instance(p) => {
+                let inst = p.borrow(py);
+                Ok(lookup_indicator(&inst.inner, self.id)?
+                    .indicator_variable
+                    .into_inner())
+            }
+            ConstraintHost::Parametric(p) => {
+                let inst = p.borrow(py);
+                Ok(lookup_indicator_parametric(&inst.inner, self.id)?
+                    .indicator_variable
+                    .into_inner())
+            }
+        }
+    }
+
+    #[getter]
+    pub fn function(&self, py: Python<'_>) -> PyResult<Function> {
+        match &self.host {
+            ConstraintHost::Instance(p) => {
+                let inst = p.borrow(py);
+                Ok(Function(
+                    lookup_indicator(&inst.inner, self.id)?.function().clone(),
+                ))
+            }
+            ConstraintHost::Parametric(p) => {
+                let inst = p.borrow(py);
+                Ok(Function(
+                    lookup_indicator_parametric(&inst.inner, self.id)?
+                        .function()
+                        .clone(),
+                ))
+            }
+        }
+    }
+
+    #[getter]
+    pub fn equality(&self, py: Python<'_>) -> PyResult<Equality> {
+        match &self.host {
+            ConstraintHost::Instance(p) => {
+                let inst = p.borrow(py);
+                Ok(lookup_indicator(&inst.inner, self.id)?.equality.into())
+            }
+            ConstraintHost::Parametric(p) => {
+                let inst = p.borrow(py);
+                Ok(lookup_indicator_parametric(&inst.inner, self.id)?
+                    .equality
+                    .into())
+            }
+        }
+    }
+
+    pub fn __repr__(&self, py: Python<'_>) -> String {
+        match &self.host {
+            ConstraintHost::Instance(p) => {
+                let inst = p.borrow(py);
+                match lookup_indicator(&inst.inner, self.id) {
+                    Ok(c) => c.to_string(),
+                    Err(_) => format!(
+                        "AttachedIndicatorConstraint(id={}, dropped)",
+                        self.id.into_inner()
+                    ),
+                }
+            }
+            ConstraintHost::Parametric(p) => {
+                let inst = p.borrow(py);
+                match lookup_indicator_parametric(&inst.inner, self.id) {
+                    Ok(c) => c.to_string(),
+                    Err(_) => format!(
+                        "AttachedIndicatorConstraint(id={}, dropped)",
+                        self.id.into_inner()
+                    ),
+                }
+            }
+        }
+    }
+
+    fn __copy__(&self, py: Python<'_>) -> Self {
+        Self {
+            host: self.host.clone_ref(py),
+            id: self.id,
+        }
+    }
+
+    fn __deepcopy__(&self, py: Python<'_>, _memo: pyo3::Bound<'_, pyo3::PyAny>) -> Self {
+        self.__copy__(py)
+    }
+}
+
+crate::attached_metadata_methods!(
+    AttachedIndicatorConstraint,
+    ommx::IndicatorConstraintID,
+    indicator_constraint_metadata,
+    indicator_constraint_metadata_mut
+);
