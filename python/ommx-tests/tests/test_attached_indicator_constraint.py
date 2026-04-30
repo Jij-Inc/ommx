@@ -241,6 +241,41 @@ def test_add_indicator_rejects_parameter_in_indicator_variable_position():
     assert parametric.indicator_constraints == {}
 
 
+def test_parametric_from_components_preserves_indicator_id():
+    """`ParametricInstance.from_components(indicator_constraints={5: ic, 10: ic2})`
+    must round-trip the user-supplied dict keys, matching `Instance.from_components`.
+    Earlier draft of the drain loop used `add_indicator_constraint` (which picks
+    its own id) and silently renumbered to 0, 1; this test pins the contract."""
+    parametric = ParametricInstance.from_components(
+        sense=Sense.Minimize,
+        objective=Function.from_linear(Linear.constant(0.0)),
+        decision_variables=[
+            DecisionVariable.binary(0),
+            DecisionVariable.binary(1),
+        ],
+        constraints={},
+        parameters=[Parameter(id=100, name="alpha")],
+        indicator_constraints={
+            5: IndicatorConstraint(
+                indicator_variable=DecisionVariable.binary(1),
+                function=Function.from_linear(Linear({0: 1.0}, 0.0)),
+                equality=Equality.EqualToZero,
+                name="ic_at_5",
+            ),
+            10: IndicatorConstraint(
+                indicator_variable=DecisionVariable.binary(1),
+                function=Function.from_linear(Linear({0: 1.0}, -0.5)),
+                equality=Equality.EqualToZero,
+                name="ic_at_10",
+            ),
+        },
+    )
+
+    assert set(parametric.indicator_constraints.keys()) == {5, 10}
+    assert parametric.indicator_constraints[5].name == "ic_at_5"
+    assert parametric.indicator_constraints[10].name == "ic_at_10"
+
+
 def test_add_indicator_rejects_non_binary_indicator_variable():
     """The indicator variable must have Kind::Binary — same invariant the
     Instance builder enforces for from_components. Without this check, a

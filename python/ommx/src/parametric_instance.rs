@@ -128,22 +128,27 @@ impl ParametricInstance {
         }
 
         // Drain the optional special-constraint collections via the
-        // structural-validation `add_*` setters, so parameter ids are
-        // rejected from structural positions at construction time. This
-        // mirrors how `Instance.from_components` accepts the same kwargs.
+        // id-preserving `insert_*_constraint` setters (same validation as
+        // `add_*_constraint`, but the caller-supplied id is round-tripped
+        // through). This mirrors how `Instance.from_components` accepts
+        // the same kwargs and preserves the dict keys.
         if let Some(ics) = indicator_constraints {
-            for (_id, ic) in ics {
-                inner.add_indicator_constraint(ic.0, ic.1)?;
+            for (id, ic) in ics {
+                inner.insert_indicator_constraint(
+                    ommx::IndicatorConstraintID::from(id),
+                    ic.0,
+                    ic.1,
+                )?;
             }
         }
         if let Some(ohs) = one_hot_constraints {
-            for (_id, oh) in ohs {
-                inner.add_one_hot_constraint(oh.0, oh.1)?;
+            for (id, oh) in ohs {
+                inner.insert_one_hot_constraint(ommx::OneHotConstraintID::from(id), oh.0, oh.1)?;
             }
         }
         if let Some(s1s) = sos1_constraints {
-            for (_id, s1) in s1s {
-                inner.add_sos1_constraint(s1.0, s1.1)?;
+            for (id, s1) in s1s {
+                inner.insert_sos1_constraint(ommx::Sos1ConstraintID::from(id), s1.0, s1.1)?;
             }
         }
 

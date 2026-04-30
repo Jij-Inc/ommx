@@ -131,7 +131,7 @@ impl Instance {
         metadata: crate::ConstraintMetadata,
     ) -> crate::Result<crate::Sos1ConstraintID> {
         if constraint.variables.is_empty() {
-            crate::bail!("SOS1 constraint must contain at least one variable",);
+            crate::bail!("SOS1 constraint must contain at least one variable");
         }
         self.validate_required_ids(constraint.required_ids())?;
         let id = self.sos1_constraint_collection.unused_id();
@@ -396,10 +396,12 @@ impl ParametricInstance {
         // Structural position: the indicator variable must be a binary
         // decision variable, not a parameter or a non-binary variable.
         self.require_binary_variable(constraint.indicator_variable)?;
-        // Function body may reference variables and / or parameters.
-        let mut body_ids = constraint.required_ids();
-        body_ids.remove(&constraint.indicator_variable);
-        self.validate_required_ids(body_ids)?;
+        // `validate_required_ids` (variables ∪ parameters minus dependency
+        // keys) is allowed to see the indicator variable here too: the
+        // variable-vs-parameter axis is already enforced above, so this
+        // call's only added contribution for the indicator variable is the
+        // dependency-key check.
+        self.validate_required_ids(constraint.required_ids())?;
         let id = self.indicator_constraint_collection.unused_id();
         self.indicator_constraint_collection
             .insert_with(id, constraint, metadata);
@@ -410,6 +412,7 @@ impl ParametricInstance {
     ///
     /// All variables in the one-hot set are structural and must be binary
     /// decision variables (parameter ids and non-binary kinds are rejected).
+    /// Dependency keys are also rejected.
     pub fn add_one_hot_constraint(
         &mut self,
         constraint: crate::OneHotConstraint,
@@ -418,6 +421,7 @@ impl ParametricInstance {
         for var_id in &constraint.variables {
             self.require_binary_variable(*var_id)?;
         }
+        self.validate_required_ids(constraint.required_ids())?;
         let id = self.one_hot_constraint_collection.unused_id();
         self.one_hot_constraint_collection
             .insert_with(id, constraint, metadata);
@@ -428,20 +432,103 @@ impl ParametricInstance {
     ///
     /// All variables in the SOS1 set are structural and must be decision
     /// variables (parameter ids are rejected). The set must be non-empty.
-    /// Unlike one-hot, SOS1 does not require `Kind::Binary`.
+    /// Dependency keys are also rejected. Unlike one-hot, SOS1 does not
+    /// require `Kind::Binary`.
     pub fn add_sos1_constraint(
         &mut self,
         constraint: crate::Sos1Constraint,
         metadata: crate::ConstraintMetadata,
     ) -> crate::Result<crate::Sos1ConstraintID> {
         if constraint.variables.is_empty() {
-            crate::bail!("SOS1 constraint must contain at least one variable",);
+            crate::bail!("SOS1 constraint must contain at least one variable");
         }
         self.require_decision_variables(constraint.required_ids())?;
+        self.validate_required_ids(constraint.required_ids())?;
         let id = self.sos1_constraint_collection.unused_id();
         self.sos1_constraint_collection
             .insert_with(id, constraint, metadata);
         Ok(id)
+    }
+
+    /// Insert an indicator constraint at a caller-supplied id.
+    ///
+    /// Mirrors [`Self::add_indicator_constraint`] but lets the caller pin
+    /// the id (used by `from_components` paths that must round-trip
+    /// user-supplied ids). Errors if the id is already in use in the
+    /// active or removed map.
+    pub fn insert_indicator_constraint(
+        &mut self,
+        id: crate::IndicatorConstraintID,
+        constraint: crate::IndicatorConstraint,
+        metadata: crate::ConstraintMetadata,
+    ) -> crate::Result<()> {
+        self.require_binary_variable(constraint.indicator_variable)?;
+        self.validate_required_ids(constraint.required_ids())?;
+        if self
+            .indicator_constraint_collection
+            .active()
+            .contains_key(&id)
+            || self
+                .indicator_constraint_collection
+                .removed()
+                .contains_key(&id)
+        {
+            crate::bail!({ ?id }, "Indicator constraint id {id:?} already exists");
+        }
+        self.indicator_constraint_collection
+            .insert_with(id, constraint, metadata);
+        Ok(())
+    }
+
+    /// Insert a one-hot constraint at a caller-supplied id. See
+    /// [`Self::insert_indicator_constraint`] for the rationale.
+    pub fn insert_one_hot_constraint(
+        &mut self,
+        id: crate::OneHotConstraintID,
+        constraint: crate::OneHotConstraint,
+        metadata: crate::ConstraintMetadata,
+    ) -> crate::Result<()> {
+        for var_id in &constraint.variables {
+            self.require_binary_variable(*var_id)?;
+        }
+        self.validate_required_ids(constraint.required_ids())?;
+        if self
+            .one_hot_constraint_collection
+            .active()
+            .contains_key(&id)
+            || self
+                .one_hot_constraint_collection
+                .removed()
+                .contains_key(&id)
+        {
+            crate::bail!({ ?id }, "One-hot constraint id {id:?} already exists");
+        }
+        self.one_hot_constraint_collection
+            .insert_with(id, constraint, metadata);
+        Ok(())
+    }
+
+    /// Insert a SOS1 constraint at a caller-supplied id. See
+    /// [`Self::insert_indicator_constraint`] for the rationale.
+    pub fn insert_sos1_constraint(
+        &mut self,
+        id: crate::Sos1ConstraintID,
+        constraint: crate::Sos1Constraint,
+        metadata: crate::ConstraintMetadata,
+    ) -> crate::Result<()> {
+        if constraint.variables.is_empty() {
+            crate::bail!("SOS1 constraint must contain at least one variable");
+        }
+        self.require_decision_variables(constraint.required_ids())?;
+        self.validate_required_ids(constraint.required_ids())?;
+        if self.sos1_constraint_collection.active().contains_key(&id)
+            || self.sos1_constraint_collection.removed().contains_key(&id)
+        {
+            crate::bail!({ ?id }, "SOS1 constraint id {id:?} already exists");
+        }
+        self.sos1_constraint_collection
+            .insert_with(id, constraint, metadata);
+        Ok(())
     }
 
     /// Insert a decision variable with its metadata.
