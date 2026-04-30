@@ -1631,6 +1631,11 @@ class Instance:
         {class}`~ommx.v1.AttachedConstraint` bound to the new id. The input
         {class}`~ommx.v1.Constraint` is not mutated; subsequent writes that
         should land in the instance must go through the returned handle.
+
+        Raises {class}`ValueError` if the constraint references an undefined
+        decision variable or one currently used as a substitution-dependency
+        key, matching the validation performed by other constraint-insertion
+        paths.
         """
     def reduce_capabilities(
         self, supported: builtins.set[AdditionalCapability]

@@ -623,8 +623,17 @@ impl AttachedConstraint {
         state: State,
         atol: Option<f64>,
     ) -> PyResult<EvaluatedConstraint> {
-        let snapshot = self.detach(py)?;
-        snapshot.evaluate(state, atol)
+        let atol = match atol {
+            Some(value) => ommx::ATol::new(value)
+                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?,
+            None => ommx::ATol::default(),
+        };
+        let inst = self.instance.borrow(py);
+        let evaluated = lookup_constraint(&inst.inner, self.id)?
+            .evaluate(&state.0, atol)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        let metadata = inst.inner.constraint_metadata().collect_for(self.id);
+        Ok(EvaluatedConstraint::from_parts(evaluated, metadata))
     }
 
     pub fn __repr__(&self, py: Python<'_>) -> String {

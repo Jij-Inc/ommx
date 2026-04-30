@@ -309,12 +309,14 @@ impl Instance {
     /// {class}`~ommx.v1.Constraint` snapshot if you need an independent copy.
     #[getter]
     pub fn constraints(slf: Bound<'_, Self>) -> BTreeMap<u64, crate::AttachedConstraint> {
+        let py = slf.py();
         let ids: Vec<ConstraintID> = slf.borrow().inner.constraints().keys().copied().collect();
+        let py_instance: Py<Self> = slf.unbind();
         ids.into_iter()
             .map(|id| {
                 (
                     id.into_inner(),
-                    crate::AttachedConstraint::new(slf.clone().unbind(), id),
+                    crate::AttachedConstraint::new(py_instance.clone_ref(py), id),
                 )
             })
             .collect()
@@ -327,15 +329,20 @@ impl Instance {
     /// {class}`~ommx.v1.AttachedConstraint` bound to the new id. The input
     /// {class}`~ommx.v1.Constraint` is not mutated; subsequent writes that
     /// should land in the instance must go through the returned handle.
+    ///
+    /// Raises {class}`ValueError` if the constraint references an undefined
+    /// decision variable or one currently used as a substitution-dependency
+    /// key, matching the validation performed by other constraint-insertion
+    /// paths.
     pub fn add_constraint(
         slf: Bound<'_, Self>,
         constraint: Constraint,
-    ) -> crate::AttachedConstraint {
+    ) -> Result<crate::AttachedConstraint> {
         let id = {
             let mut inst = slf.borrow_mut();
-            inst.inner.add_constraint(constraint.0, constraint.1)
+            inst.inner.add_constraint(constraint.0, constraint.1)?
         };
-        crate::AttachedConstraint::new(slf.unbind(), id)
+        Ok(crate::AttachedConstraint::new(slf.unbind(), id))
     }
 
     /// Dict of all indicator constraints in the instance keyed by their IDs.

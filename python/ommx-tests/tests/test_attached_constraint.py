@@ -217,6 +217,25 @@ def test_attached_after_relax_constraint_still_reads_through():
     assert snapshot.name == "balance"
 
 
+def test_add_constraint_rejects_undefined_variable():
+    """add_constraint validates that all referenced variables already exist
+    in the instance — same guarantee as insert_constraint. Referencing a
+    variable that was never declared raises rather than leaving the
+    instance in an invalid state."""
+    instance = _empty_instance()  # decision_variables = [0, 1]
+    rogue = Linear({99: 1.0}, 0.0)  # variable 99 is undefined
+    bad_constraint = Constraint(
+        function=Function.from_linear(rogue),
+        equality=Equality.EqualToZero,
+    )
+
+    with pytest.raises(Exception, match="99"):
+        instance.add_constraint(bad_constraint)
+
+    # Instance is unchanged.
+    assert instance.constraints == {}
+
+
 def test_copy_and_deepcopy_share_the_same_parent_instance():
     """`copy.copy` / `copy.deepcopy` on AttachedConstraint produce another
     handle that points at the same id on the same parent Instance — the

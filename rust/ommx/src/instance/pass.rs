@@ -3,22 +3,6 @@ use crate::ATol;
 use anyhow::Result;
 
 impl Instance {
-    /// Insert a new constraint with its metadata, picking an unused id.
-    ///
-    /// Returns the newly assigned [`ConstraintID`]. The metadata is
-    /// drained into the per-constraint [`ConstraintMetadataStore`]; pass
-    /// `ConstraintMetadata::default()` for an unannotated constraint.
-    pub fn add_constraint(
-        &mut self,
-        constraint: Constraint,
-        metadata: crate::ConstraintMetadata,
-    ) -> ConstraintID {
-        let id = self.constraint_collection.unused_id();
-        self.constraint_collection
-            .insert_with(id, constraint, metadata);
-        id
-    }
-
     pub fn relax_constraint(
         &mut self,
         id: ConstraintID,

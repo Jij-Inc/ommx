@@ -41,6 +41,28 @@ impl Instance {
         Ok(())
     }
 
+    /// Insert a new constraint with its metadata, picking an unused id.
+    ///
+    /// Returns the newly assigned [`ConstraintID`]. The metadata is
+    /// drained into the per-constraint [`ConstraintMetadataStore`]; pass
+    /// `ConstraintMetadata::default()` for an unannotated constraint.
+    ///
+    /// All variable IDs referenced by the constraint must already be
+    /// present in `decision_variables` and must not be substitution-
+    /// dependency keys, matching the validation enforced by
+    /// [`Self::insert_constraint`].
+    pub fn add_constraint(
+        &mut self,
+        constraint: Constraint,
+        metadata: crate::ConstraintMetadata,
+    ) -> crate::Result<ConstraintID> {
+        self.validate_required_ids(constraint.required_ids())?;
+        let id = self.constraint_collection.unused_id();
+        self.constraint_collection
+            .insert_with(id, constraint, metadata);
+        Ok(id)
+    }
+
     /// Insert a constraint into the instance under the given [`ConstraintID`].
     ///
     /// - If the constraint already exists, it will be replaced.

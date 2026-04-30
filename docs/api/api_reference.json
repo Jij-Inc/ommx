@@ -7400,7 +7400,7 @@
             },
             {
               "name": "add_constraint",
-              "doc": "Add a regular constraint to this instance.\n\nPicks an unused {class}`~ommx.v1.ConstraintID`, drains the wrapper's\nmetadata snapshot into this instance's SoA store, and returns an\n{class}`~ommx.v1.AttachedConstraint` bound to the new id. The input\n{class}`~ommx.v1.Constraint` is not mutated; subsequent writes that\nshould land in the instance must go through the returned handle.",
+              "doc": "Add a regular constraint to this instance.\n\nPicks an unused {class}`~ommx.v1.ConstraintID`, drains the wrapper's\nmetadata snapshot into this instance's SoA store, and returns an\n{class}`~ommx.v1.AttachedConstraint` bound to the new id. The input\n{class}`~ommx.v1.Constraint` is not mutated; subsequent writes that\nshould land in the instance must go through the returned handle.\n\nRaises {class}`ValueError` if the constraint references an undefined\ndecision variable or one currently used as a substitution-dependency\nkey, matching the validation performed by other constraint-insertion\npaths.",
               "signatures": [
                 {
                   "parameters": [
