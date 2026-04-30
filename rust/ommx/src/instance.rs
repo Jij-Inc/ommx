@@ -473,12 +473,11 @@ impl Instance {
 /// - The constraint id-disjointness invariants (active vs. removed, per kind)
 ///   match [`Instance`].
 ///
-/// The post-construction setters
+/// [`ParametricInstance::builder`] enforces these at construction time
+/// (mirroring [`Instance::builder`]), and the post-construction setters
 /// [`Self::add_indicator_constraint`] / [`Self::add_one_hot_constraint`] /
-/// [`Self::add_sos1_constraint`] enforce these at insertion time;
-/// [`ParametricInstance::builder`] currently doesn't accept the special-
-/// constraint collections, so snapshot-style construction goes through the
-/// setters too.
+/// [`Self::add_sos1_constraint`] enforce the same invariants when adding
+/// a constraint to an existing parametric instance.
 ///
 #[derive(Debug, Clone, PartialEq, getset::Getters, Default)]
 pub struct ParametricInstance {

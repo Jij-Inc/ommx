@@ -93,6 +93,56 @@ impl ParametricInstance {
             .constraints(rust_constraints)
             .parameters(rust_parameters);
 
+        let mut indicator_metadata_pairs: Vec<(
+            ommx::IndicatorConstraintID,
+            ommx::ConstraintMetadata,
+        )> = Vec::new();
+        if let Some(ics) = indicator_constraints {
+            let rust_indicator_constraints: BTreeMap<
+                ommx::IndicatorConstraintID,
+                ommx::IndicatorConstraint,
+            > = ics
+                .into_iter()
+                .map(|(id, ic)| {
+                    let iid = ommx::IndicatorConstraintID::from(id);
+                    indicator_metadata_pairs.push((iid, ic.1));
+                    (iid, ic.0)
+                })
+                .collect();
+            builder = builder.indicator_constraints(rust_indicator_constraints);
+        }
+
+        let mut one_hot_metadata_pairs: Vec<(ommx::OneHotConstraintID, ommx::ConstraintMetadata)> =
+            Vec::new();
+        if let Some(ohs) = one_hot_constraints {
+            let rust_one_hot_constraints: BTreeMap<
+                ommx::OneHotConstraintID,
+                ommx::OneHotConstraint,
+            > = ohs
+                .into_iter()
+                .map(|(id, oh)| {
+                    let oid = ommx::OneHotConstraintID::from(id);
+                    one_hot_metadata_pairs.push((oid, oh.1));
+                    (oid, oh.0)
+                })
+                .collect();
+            builder = builder.one_hot_constraints(rust_one_hot_constraints);
+        }
+
+        let mut sos1_metadata_pairs: Vec<(ommx::Sos1ConstraintID, ommx::ConstraintMetadata)> =
+            Vec::new();
+        if let Some(s1s) = sos1_constraints {
+            let rust_sos1_constraints: BTreeMap<ommx::Sos1ConstraintID, ommx::Sos1Constraint> = s1s
+                .into_iter()
+                .map(|(id, s1)| {
+                    let sid = ommx::Sos1ConstraintID::from(id);
+                    sos1_metadata_pairs.push((sid, s1.1));
+                    (sid, s1.0)
+                })
+                .collect();
+            builder = builder.sos1_constraints(rust_sos1_constraints);
+        }
+
         let mut named_function_metadata_pairs: Vec<(
             ommx::NamedFunctionID,
             ommx::NamedFunctionMetadata,
@@ -114,6 +164,8 @@ impl ParametricInstance {
         }
 
         let mut inner = builder.build()?;
+        // Drain wrapper-side metadata snapshots into the parametric
+        // instance's SoA stores, mirroring `Instance.from_components`.
         let var_meta = inner.variable_metadata_mut();
         for (id, m) in variable_metadata_pairs {
             var_meta.insert(id, m);
@@ -122,34 +174,21 @@ impl ParametricInstance {
         for (id, m) in constraint_metadata_pairs {
             constraint_meta.insert(id, m);
         }
+        let indicator_meta = inner.indicator_constraint_metadata_mut();
+        for (id, m) in indicator_metadata_pairs {
+            indicator_meta.insert(id, m);
+        }
+        let one_hot_meta = inner.one_hot_constraint_metadata_mut();
+        for (id, m) in one_hot_metadata_pairs {
+            one_hot_meta.insert(id, m);
+        }
+        let sos1_meta = inner.sos1_constraint_metadata_mut();
+        for (id, m) in sos1_metadata_pairs {
+            sos1_meta.insert(id, m);
+        }
         let nf_meta = inner.named_function_metadata_mut();
         for (id, m) in named_function_metadata_pairs {
             nf_meta.insert(id, m);
-        }
-
-        // Drain the optional special-constraint collections via the
-        // id-preserving `insert_*_constraint` setters (same validation as
-        // `add_*_constraint`, but the caller-supplied id is round-tripped
-        // through). This mirrors how `Instance.from_components` accepts
-        // the same kwargs and preserves the dict keys.
-        if let Some(ics) = indicator_constraints {
-            for (id, ic) in ics {
-                inner.insert_indicator_constraint(
-                    ommx::IndicatorConstraintID::from(id),
-                    ic.0,
-                    ic.1,
-                )?;
-            }
-        }
-        if let Some(ohs) = one_hot_constraints {
-            for (id, oh) in ohs {
-                inner.insert_one_hot_constraint(ommx::OneHotConstraintID::from(id), oh.0, oh.1)?;
-            }
-        }
-        if let Some(s1s) = sos1_constraints {
-            for (id, s1) in s1s {
-                inner.insert_sos1_constraint(ommx::Sos1ConstraintID::from(id), s1.0, s1.1)?;
-            }
         }
 
         Ok(Self {
