@@ -137,6 +137,15 @@ impl ParametricInstance {
             named_function.partial_evaluate(&state, atol)?;
         }
 
+        // Decision-variable dependency RHS expressions can also reference
+        // parameter IDs. Without substitution, dependent-variable
+        // expressions in the resulting `Instance` would carry dangling
+        // parameter references (the parametric builder doesn't restrict
+        // `decision_variable_dependency` RHS bodies to decision-variable
+        // IDs only).
+        let mut decision_variable_dependency = self.decision_variable_dependency;
+        decision_variable_dependency.partial_evaluate(&state, atol)?;
+
         Ok(Instance {
             sense: self.sense,
             objective,
@@ -161,7 +170,7 @@ impl ParametricInstance {
             sos1_constraint_collection: self.sos1_constraint_collection,
             named_functions,
             named_function_metadata: self.named_function_metadata,
-            decision_variable_dependency: self.decision_variable_dependency,
+            decision_variable_dependency,
             parameters: Some(parameters),
             description: self.description,
         })
@@ -173,6 +182,56 @@ mod with_parameters_tests {
     use super::*;
     use crate::{coeff, linear, Equality, Function};
     use maplit::btreemap;
+
+    /// Parameter substitution must apply to the right-hand-side of
+    /// `decision_variable_dependency` entries. The RHS is a `Function`
+    /// over arbitrary IDs; the parametric builder doesn't restrict it to
+    /// decision-variable IDs only, so a parameter reference there would
+    /// dangle in the resulting `Instance` without explicit substitution.
+    #[test]
+    fn decision_variable_dependency_rhs_is_substituted() {
+        use crate::AcyclicAssignments;
+        let x = VariableID::from(1);
+        let dep = VariableID::from(2);
+        let p = VariableID::from(100);
+        // Dependency: dep_var = x + p (RHS references a parameter).
+        let assignments =
+            AcyclicAssignments::new(vec![(dep, Function::from(linear!(1) + linear!(100)))])
+                .unwrap();
+
+        let parametric = ParametricInstance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(btreemap! {
+                x => DecisionVariable::binary(x),
+                dep => DecisionVariable::binary(dep),
+            })
+            .parameters(btreemap! {
+                p => crate::v1::Parameter { id: 100, ..Default::default() },
+            })
+            .constraints(BTreeMap::new())
+            .decision_variable_dependency(assignments)
+            .build()
+            .unwrap();
+
+        let mut params = crate::v1::Parameters::default();
+        params.entries = std::collections::HashMap::from([(100, 1.0)]);
+        let instance = parametric.with_parameters(params).unwrap();
+
+        let dep_rhs = instance
+            .decision_variable_dependency()
+            .get(&dep)
+            .expect("dependency entry survives materialization");
+        let rhs_required: VariableIDSet = dep_rhs.required_ids();
+        assert!(
+            !rhs_required.contains(&p),
+            "parameter id {p:?} survived in dependency RHS: {rhs_required:?}",
+        );
+        assert!(
+            rhs_required.contains(&x),
+            "decision variable id {x:?} should remain in dependency RHS: {rhs_required:?}",
+        );
+    }
 
     /// Parameter substitution must apply to *removed* regular constraints
     /// as well. `ParametricInstance` permits removed-constraint bodies to
@@ -222,6 +281,60 @@ mod with_parameters_tests {
         assert!(
             !body_required.contains(&p),
             "parameter id {p:?} survived in removed-constraint body: {body_required:?}",
+        );
+    }
+
+    /// Parameter substitution must apply to *removed* indicator constraints
+    /// too — the parametric builder accepts a removed-indicator map and the
+    /// `convert_*` paths can populate it. Without substitution, a
+    /// parameter id in a removed indicator body would dangle in the
+    /// materialized `Instance`.
+    #[test]
+    fn removed_indicator_function_body_is_substituted() {
+        let y = VariableID::from(1);
+        let x = VariableID::from(2);
+        let p = VariableID::from(100);
+        let indicator = crate::IndicatorConstraint::new(
+            y,
+            Equality::EqualToZero,
+            Function::from(linear!(2) + linear!(100)),
+        );
+
+        let parametric = ParametricInstance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(btreemap! {
+                y => DecisionVariable::binary(y),
+                x => DecisionVariable::binary(x),
+            })
+            .parameters(btreemap! {
+                p => crate::v1::Parameter { id: 100, ..Default::default() },
+            })
+            .constraints(BTreeMap::new())
+            .removed_indicator_constraints(btreemap! {
+                crate::IndicatorConstraintID::from(0) => (
+                    indicator,
+                    crate::constraint::RemovedReason {
+                        reason: "test".to_string(),
+                        parameters: Default::default(),
+                    },
+                ),
+            })
+            .build()
+            .unwrap();
+
+        let mut params = crate::v1::Parameters::default();
+        params.entries = std::collections::HashMap::from([(100, 1.0)]);
+        let instance = parametric.with_parameters(params).unwrap();
+
+        let (ic, _r) = instance
+            .removed_indicator_constraints()
+            .get(&crate::IndicatorConstraintID::from(0))
+            .expect("removed indicator survives materialization");
+        let body_required: VariableIDSet = ic.stage.function.required_ids();
+        assert!(
+            !body_required.contains(&p),
+            "parameter id {p:?} survived in removed-indicator body: {body_required:?}",
         );
     }
 

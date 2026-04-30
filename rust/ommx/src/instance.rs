@@ -137,11 +137,13 @@ pub enum Sense {
 ///
 /// These invariants are enforced at every construction or mutation entry
 /// point: [`Instance::builder`] (which accepts active maps for all three
-/// kinds plus a removed map for indicator constraints), the post-
-/// construction setters [`Self::add_indicator_constraint`] /
+/// kinds, a removed map for regular and indicator constraints, and validates
+/// each), the post-construction setters [`Self::insert_constraint`] /
+/// [`Self::add_constraint`] / [`Self::add_indicator_constraint`] /
 /// [`Self::add_one_hot_constraint`] / [`Self::add_sos1_constraint`], and the
-/// internal `relax_indicator_constraint` / `convert_all_one_hots_to_constraints` /
-/// `convert_all_sos1_to_constraints` paths that populate the removed maps.
+/// internal `relax_constraint` / `relax_indicator_constraint` /
+/// `convert_all_one_hots_to_constraints` / `convert_all_sos1_to_constraints`
+/// paths that populate the removed maps.
 ///
 #[derive(
     Debug,
@@ -477,17 +479,22 @@ impl Instance {
 ///   match [`Instance`].
 ///
 /// These invariants are enforced at every construction or mutation entry
-/// point: [`ParametricInstance::builder`] (which mirrors [`Instance::builder`]
-/// and accepts active maps for all three kinds plus a removed map for
-/// indicator constraints), and the post-construction setters
+/// point: [`ParametricInstance::builder`] (which mirrors
+/// [`Instance::builder`] and accepts active maps for all three kinds, plus
+/// removed maps for regular and indicator constraints, validating each),
+/// and the post-construction setters [`Self::add_constraint`] /
 /// [`Self::add_indicator_constraint`] / [`Self::add_one_hot_constraint`] /
 /// [`Self::add_sos1_constraint`].
 ///
-/// [`Self::with_parameters`] partially evaluates active indicator function
-/// bodies along with regular constraints and the objective when materializing
-/// a parametric instance into an [`Instance`], so the resulting [`Instance`]
-/// satisfies its own (stricter) invariants — no parameter IDs survive in
-/// indicator function bodies after substitution.
+/// [`Self::with_parameters`] partially evaluates parameter IDs out of every
+/// expression that could contain one when materializing a parametric
+/// instance into an [`Instance`]: the objective, active and removed regular
+/// constraint bodies, active and removed indicator constraint function
+/// bodies, named functions, and `decision_variable_dependency` RHS
+/// expressions. OneHot/SOS1 collections (active and removed) pass through
+/// unchanged because their variable sets are required to be real decision
+/// variables at construction time. The resulting [`Instance`] satisfies its
+/// own (stricter) invariants — no parameter IDs survive anywhere.
 ///
 #[derive(Debug, Clone, PartialEq, getset::Getters, Default)]
 pub struct ParametricInstance {

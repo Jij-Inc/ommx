@@ -17002,6 +17002,72 @@
               "is_readonly": true
             },
             {
+              "name": "removed_indicator_constraints",
+              "doc": "Dict of all removed indicator constraints in the parametric\ninstance keyed by their IDs.",
+              "type_": {
+                "display": "dict[int, RemovedIndicatorConstraint]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "RemovedIndicatorConstraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "removed_one_hot_constraints",
+              "doc": "Dict of all removed one-hot constraints in the parametric instance\nkeyed by their IDs. The removed map can become non-empty when an\n`Instance` whose one-hot constraints have been converted (via\n`convert_all_one_hots_to_constraints`) is round-tripped back to a\n`ParametricInstance` via `From<Instance>`.",
+              "type_": {
+                "display": "dict[int, RemovedOneHotConstraint]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "RemovedOneHotConstraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "removed_sos1_constraints",
+              "doc": "Dict of all removed SOS1 constraints in the parametric instance\nkeyed by their IDs. See {meth}`removed_one_hot_constraints` for the\nround-trip rationale.",
+              "type_": {
+                "display": "dict[int, RemovedSos1Constraint]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "RemovedSos1Constraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "sense",
               "doc": "",
               "type_": {

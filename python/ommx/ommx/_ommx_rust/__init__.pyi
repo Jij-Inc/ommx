@@ -3852,6 +3852,14 @@ class ParametricInstance:
         to it.
         """
     @property
+    def removed_indicator_constraints(
+        self,
+    ) -> builtins.dict[builtins.int, RemovedIndicatorConstraint]:
+        r"""
+        Dict of all removed indicator constraints in the parametric
+        instance keyed by their IDs.
+        """
+    @property
     def one_hot_constraints(
         self,
     ) -> builtins.dict[builtins.int, AttachedOneHotConstraint]:
@@ -3861,10 +3869,30 @@ class ParametricInstance:
         {class}`~ommx.v1.AttachedOneHotConstraint`.
         """
     @property
+    def removed_one_hot_constraints(
+        self,
+    ) -> builtins.dict[builtins.int, RemovedOneHotConstraint]:
+        r"""
+        Dict of all removed one-hot constraints in the parametric instance
+        keyed by their IDs. The removed map can become non-empty when an
+        `Instance` whose one-hot constraints have been converted (via
+        `convert_all_one_hots_to_constraints`) is round-tripped back to a
+        `ParametricInstance` via `From<Instance>`.
+        """
+    @property
     def sos1_constraints(self) -> builtins.dict[builtins.int, AttachedSos1Constraint]:
         r"""
         Dict of all active SOS1 constraints in the parametric instance keyed
         by their IDs. Each value is an {class}`~ommx.v1.AttachedSos1Constraint`.
+        """
+    @property
+    def removed_sos1_constraints(
+        self,
+    ) -> builtins.dict[builtins.int, RemovedSos1Constraint]:
+        r"""
+        Dict of all removed SOS1 constraints in the parametric instance
+        keyed by their IDs. See {meth}`removed_one_hot_constraints` for the
+        round-trip rationale.
         """
     @property
     def named_functions(self) -> builtins.list[NamedFunction]: ...
