@@ -1,5 +1,7 @@
 """Tests for AttachedConstraint write-through wrapper."""
 
+import copy
+
 import pytest
 
 from ommx.v1 import (
@@ -155,3 +157,84 @@ def test_attached_keeps_instance_alive_after_del():
     # detach() still finds the constraint and its metadata in the store.
     snapshot = attached.detach()
     assert snapshot.name == "demand"
+
+
+def test_add_subscripts_extends_instead_of_replacing():
+    """add_subscripts appends to the existing list (extend_subscripts on the
+    SoA store), in contrast with set_subscripts which replaces."""
+    instance = _empty_instance()
+    attached = instance.add_constraint(_make_constraint(name="balance"))
+    # _make_constraint stages [7] initially.
+    assert attached.subscripts == [7]
+
+    attached.add_subscripts([1, 2])
+
+    assert attached.subscripts == [7, 1, 2]
+
+
+def test_add_parameter_adds_single_key_without_clearing_others():
+    """add_parameter writes a single (key, value) entry while leaving other
+    parameters intact. add_parameters / set_parameters wholesale-replace."""
+    instance = _empty_instance()
+    attached = instance.add_constraint(_make_constraint(name="balance"))
+    # _make_constraint stages {"k": "v"} initially.
+    assert attached.parameters == {"k": "v"}
+
+    attached.add_parameter("k2", "v2")
+
+    assert attached.parameters == {"k": "v", "k2": "v2"}
+
+
+def test_add_parameters_replaces_existing_parameter_dict():
+    """add_parameters is an alias for set_parameters; it replaces the whole
+    parameter map rather than merging entries."""
+    instance = _empty_instance()
+    attached = instance.add_constraint(_make_constraint(name="balance"))
+    assert attached.parameters == {"k": "v"}
+
+    attached.add_parameters({"a": "1", "b": "2"})
+
+    assert attached.parameters == {"a": "1", "b": "2"}
+
+
+def test_attached_after_relax_constraint_still_reads_through():
+    """relax_constraint moves a constraint from active to removed; the
+    AttachedConstraint handle stays valid because lookup_constraint checks
+    both maps and the SoA metadata store is keyed by id regardless."""
+    instance = _empty_instance()
+    attached = instance.add_constraint(_make_constraint(name="balance"))
+    cid = attached.constraint_id
+    assert cid in instance.constraints
+
+    instance.relax_constraint(cid, "manual")
+    assert cid not in instance.constraints
+
+    # The handle still resolves: getters fall through to the removed map for
+    # core data and to the SoA store for metadata.
+    assert attached.name == "balance"
+    assert attached.subscripts == [7]
+    snapshot = attached.detach()
+    assert snapshot.name == "balance"
+
+
+def test_copy_and_deepcopy_share_the_same_parent_instance():
+    """`copy.copy` / `copy.deepcopy` on AttachedConstraint produce another
+    handle that points at the same id on the same parent Instance — the
+    wrapper is a refcounted handle, not a value type. A write-through on
+    one handle is observable on the copy."""
+    instance = _empty_instance()
+    attached = instance.add_constraint(_make_constraint(name="balance"))
+
+    shallow = copy.copy(attached)
+    deep = copy.deepcopy(attached)
+
+    # Same id, same parent.
+    assert shallow.constraint_id == attached.constraint_id
+    assert deep.constraint_id == attached.constraint_id
+    assert shallow.instance is instance
+    assert deep.instance is instance
+
+    # Mutating through the original is visible through both copies.
+    attached.set_name("demand")
+    assert shallow.name == "demand"
+    assert deep.name == "demand"
