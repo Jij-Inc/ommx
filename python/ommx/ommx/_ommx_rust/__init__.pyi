@@ -17,6 +17,10 @@ __all__ = [
     "Artifact",
     "ArtifactBuilder",
     "AttachedConstraint",
+    "AttachedDecisionVariable",
+    "AttachedIndicatorConstraint",
+    "AttachedOneHotConstraint",
+    "AttachedSos1Constraint",
     "Bound",
     "Constraint",
     "DecisionVariable",
@@ -456,16 +460,18 @@ class ArtifactBuilder:
 @typing.final
 class AttachedConstraint:
     r"""
-    Attached constraint — a write-through handle bound to an [`Instance`].
+    Attached constraint — a write-through handle bound to a host
+    ({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).
 
-    `AttachedConstraint` is returned by [`Instance.add_constraint`] and by
-    `instance.constraints[id]`. Unlike [`Constraint`], which is a snapshot,
-    reads pull live data from the parent instance and metadata setters write
-    through to its SoA metadata store. Two `AttachedConstraint` instances
-    pointing at the same id observe the same state.
+    `AttachedConstraint` is returned by `Instance.add_constraint` /
+    `ParametricInstance.add_constraint` and by their `constraints[id]`
+    getters. Unlike {class}`~ommx.v1.Constraint`, which is a snapshot, reads
+    pull live data from the parent host and metadata setters write through
+    to its SoA metadata store. Two `AttachedConstraint` instances pointing
+    at the same id on the same host observe the same state.
 
-    The handle keeps the parent `Instance` alive through a refcount; drop
-    the wrapper to release the back-reference.
+    The handle keeps the parent host alive through a refcount; drop the
+    wrapper to release the back-reference.
     """
     @property
     def constraint_id(self) -> builtins.int:
@@ -473,9 +479,10 @@ class AttachedConstraint:
         The id this handle points at.
         """
     @property
-    def instance(self) -> Instance:
+    def instance(self) -> typing.Any:
         r"""
-        The parent {class}`~ommx.v1.Instance` this constraint lives in.
+        The parent host this constraint lives in
+        ({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).
         """
     @property
     def function(self) -> Function: ...
@@ -496,9 +503,21 @@ class AttachedConstraint:
         Return a {class}`~ommx.v1.Constraint` snapshot of the current
         state. Mutations on the returned object do not propagate back.
         """
+    def evaluate(
+        self, state: ToState, *, atol: typing.Optional[builtins.float] = None
+    ) -> EvaluatedConstraint:
+        r"""
+        Evaluate the constraint with the given state. Only valid on
+        {class}`~ommx.v1.Instance`-hosted handles, since
+        {class}`~ommx.v1.ParametricInstance` constraints may still reference
+        unsubstituted parameters.
+        """
+    def __repr__(self) -> builtins.str: ...
+    def __copy__(self) -> AttachedConstraint: ...
+    def __deepcopy__(self, _memo: typing.Any) -> AttachedConstraint: ...
     def set_name(self, name: builtins.str) -> None:
         r"""
-        Set the name. Writes through to the parent instance's SoA store.
+        Set the name. Writes through to the parent host's SoA metadata store.
         """
     def add_name(self, name: builtins.str) -> None:
         r"""
@@ -506,15 +525,15 @@ class AttachedConstraint:
         """
     def set_subscripts(self, subscripts: typing.Sequence[builtins.int]) -> None:
         r"""
-        Set the subscripts. Writes through to the parent instance's SoA store.
+        Set the subscripts. Writes through to the parent host's SoA metadata store.
         """
     def add_subscripts(self, subscripts: typing.Sequence[builtins.int]) -> None:
         r"""
-        Append subscripts. Writes through to the parent instance's SoA store.
+        Append subscripts. Writes through to the parent host's SoA metadata store.
         """
     def set_description(self, description: builtins.str) -> None:
         r"""
-        Set the description. Writes through to the parent instance's SoA store.
+        Set the description. Writes through to the parent host's SoA metadata store.
         """
     def add_description(self, description: builtins.str) -> None:
         r"""
@@ -524,7 +543,7 @@ class AttachedConstraint:
         self, parameters: typing.Mapping[builtins.str, builtins.str]
     ) -> None:
         r"""
-        Replace all parameters. Writes through to the parent instance's SoA store.
+        Replace all parameters. Writes through to the parent host's SoA metadata store.
         """
     def add_parameters(
         self, parameters: typing.Mapping[builtins.str, builtins.str]
@@ -534,17 +553,320 @@ class AttachedConstraint:
         """
     def add_parameter(self, key: builtins.str, value: builtins.str) -> None:
         r"""
-        Add a single parameter entry. Writes through to the parent instance's SoA store.
+        Add a single parameter entry. Writes through to the parent host's SoA metadata store.
         """
-    def evaluate(
-        self, state: ToState, *, atol: typing.Optional[builtins.float] = None
-    ) -> EvaluatedConstraint:
+
+@typing.final
+class AttachedDecisionVariable:
+    r"""
+    Attached decision variable — a write-through handle bound to a host
+    ({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).
+
+    `AttachedDecisionVariable` is returned by `add_decision_variable(v)`
+    (insertion) and `attached_decision_variable(id)` (lookup) on both
+    hosts. Unlike the constraint accessors, `decision_variables` keeps
+    returning a list of snapshot {class}`~ommx.v1.DecisionVariable`s so
+    that variables can still participate in arithmetic to build expressions
+    (`x + y`, `2 * x`); a follow-up will extend `ToFunction` to accept
+    `AttachedDecisionVariable` and let `decision_variables` switch to the
+    attached form. Reads pull live data from the parent host's SoA store
+    and metadata setters write back through to it.
+
+    `DecisionVariableMetadata` has no `provenance` field, so the
+    write-through surface omits the corresponding getter.
+    """
+    @property
+    def id(self) -> builtins.int:
         r"""
-        Evaluate the constraint with the given state.
+        The id this handle points at.
+        """
+    @property
+    def instance(self) -> typing.Any:
+        r"""
+        The parent host this variable lives in.
+        """
+    @property
+    def kind(self) -> builtins.int: ...
+    @property
+    def bound(self) -> Bound: ...
+    @property
+    def substituted_value(self) -> typing.Optional[builtins.float]: ...
+    @property
+    def name(self) -> builtins.str: ...
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]: ...
+    @property
+    def description(self) -> builtins.str: ...
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
+    def detach(self) -> DecisionVariable:
+        r"""
+        Return a {class}`~ommx.v1.DecisionVariable` snapshot of the current
+        state. Mutations on the returned object do not propagate back.
         """
     def __repr__(self) -> builtins.str: ...
-    def __copy__(self) -> AttachedConstraint: ...
-    def __deepcopy__(self, _memo: typing.Any) -> AttachedConstraint: ...
+    def __copy__(self) -> AttachedDecisionVariable: ...
+    def __deepcopy__(self, _memo: typing.Any) -> AttachedDecisionVariable: ...
+    def set_name(self, name: builtins.str) -> None:
+        r"""
+        Set the name. Writes through to the parent host's SoA metadata store.
+        """
+    def add_name(self, name: builtins.str) -> None: ...
+    def set_subscripts(self, subscripts: typing.Sequence[builtins.int]) -> None: ...
+    def add_subscripts(self, subscripts: typing.Sequence[builtins.int]) -> None: ...
+    def set_description(self, description: builtins.str) -> None: ...
+    def add_description(self, description: builtins.str) -> None: ...
+    def set_parameters(
+        self, parameters: typing.Mapping[builtins.str, builtins.str]
+    ) -> None: ...
+    def add_parameters(
+        self, parameters: typing.Mapping[builtins.str, builtins.str]
+    ) -> None: ...
+    def add_parameter(self, key: builtins.str, value: builtins.str) -> None: ...
+
+@typing.final
+class AttachedIndicatorConstraint:
+    r"""
+    Attached indicator constraint — a write-through handle bound to a host
+    ({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).
+
+    `AttachedIndicatorConstraint` is returned by
+    `Instance.add_indicator_constraint` /
+    `ParametricInstance.add_indicator_constraint` and by their
+    `indicator_constraints[id]` getters. Reads pull live data from the parent
+    host and metadata setters write through to its SoA metadata store.
+    """
+    @property
+    def constraint_id(self) -> builtins.int:
+        r"""
+        The id this handle points at.
+        """
+    @property
+    def instance(self) -> typing.Any:
+        r"""
+        The parent host this constraint lives in.
+        """
+    @property
+    def indicator_variable_id(self) -> builtins.int: ...
+    @property
+    def function(self) -> Function: ...
+    @property
+    def equality(self) -> Equality: ...
+    @property
+    def name(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]: ...
+    @property
+    def description(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
+    @property
+    def provenance(self) -> builtins.list[Provenance]: ...
+    def detach(self) -> IndicatorConstraint:
+        r"""
+        Return an {class}`~ommx.v1.IndicatorConstraint` snapshot of the
+        current state. Mutations on the returned object do not propagate back.
+        """
+    def __repr__(self) -> builtins.str: ...
+    def __copy__(self) -> AttachedIndicatorConstraint: ...
+    def __deepcopy__(self, _memo: typing.Any) -> AttachedIndicatorConstraint: ...
+    def set_name(self, name: builtins.str) -> None:
+        r"""
+        Set the name. Writes through to the parent host's SoA metadata store.
+        """
+    def add_name(self, name: builtins.str) -> None:
+        r"""
+        Alias for {meth}`set_name` (backward compatibility).
+        """
+    def set_subscripts(self, subscripts: typing.Sequence[builtins.int]) -> None:
+        r"""
+        Set the subscripts. Writes through to the parent host's SoA metadata store.
+        """
+    def add_subscripts(self, subscripts: typing.Sequence[builtins.int]) -> None:
+        r"""
+        Append subscripts. Writes through to the parent host's SoA metadata store.
+        """
+    def set_description(self, description: builtins.str) -> None:
+        r"""
+        Set the description. Writes through to the parent host's SoA metadata store.
+        """
+    def add_description(self, description: builtins.str) -> None:
+        r"""
+        Alias for {meth}`set_description` (backward compatibility).
+        """
+    def set_parameters(
+        self, parameters: typing.Mapping[builtins.str, builtins.str]
+    ) -> None:
+        r"""
+        Replace all parameters. Writes through to the parent host's SoA metadata store.
+        """
+    def add_parameters(
+        self, parameters: typing.Mapping[builtins.str, builtins.str]
+    ) -> None:
+        r"""
+        Alias for {meth}`set_parameters` (backward compatibility).
+        """
+    def add_parameter(self, key: builtins.str, value: builtins.str) -> None:
+        r"""
+        Add a single parameter entry. Writes through to the parent host's SoA metadata store.
+        """
+
+@typing.final
+class AttachedOneHotConstraint:
+    r"""
+    Attached one-hot constraint — a write-through handle bound to a host
+    ({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).
+
+    Returned by `Instance.add_one_hot_constraint` /
+    `ParametricInstance.add_one_hot_constraint` and by their
+    `one_hot_constraints[id]` getters. Reads pull live data from the parent
+    host and metadata setters write through to its SoA metadata store.
+    """
+    @property
+    def constraint_id(self) -> builtins.int:
+        r"""
+        The id this handle points at.
+        """
+    @property
+    def instance(self) -> typing.Any:
+        r"""
+        The parent host this constraint lives in.
+        """
+    @property
+    def variables(self) -> builtins.list[builtins.int]: ...
+    @property
+    def name(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]: ...
+    @property
+    def description(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
+    @property
+    def provenance(self) -> builtins.list[Provenance]: ...
+    def detach(self) -> OneHotConstraint:
+        r"""
+        Return a {class}`~ommx.v1.OneHotConstraint` snapshot of the current
+        state. Mutations on the returned object do not propagate back.
+        """
+    def __repr__(self) -> builtins.str: ...
+    def __copy__(self) -> AttachedOneHotConstraint: ...
+    def __deepcopy__(self, _memo: typing.Any) -> AttachedOneHotConstraint: ...
+    def set_name(self, name: builtins.str) -> None:
+        r"""
+        Set the name. Writes through to the parent host's SoA metadata store.
+        """
+    def add_name(self, name: builtins.str) -> None:
+        r"""
+        Alias for {meth}`set_name` (backward compatibility).
+        """
+    def set_subscripts(self, subscripts: typing.Sequence[builtins.int]) -> None:
+        r"""
+        Set the subscripts. Writes through to the parent host's SoA metadata store.
+        """
+    def add_subscripts(self, subscripts: typing.Sequence[builtins.int]) -> None:
+        r"""
+        Append subscripts. Writes through to the parent host's SoA metadata store.
+        """
+    def set_description(self, description: builtins.str) -> None:
+        r"""
+        Set the description. Writes through to the parent host's SoA metadata store.
+        """
+    def add_description(self, description: builtins.str) -> None:
+        r"""
+        Alias for {meth}`set_description` (backward compatibility).
+        """
+    def set_parameters(
+        self, parameters: typing.Mapping[builtins.str, builtins.str]
+    ) -> None:
+        r"""
+        Replace all parameters. Writes through to the parent host's SoA metadata store.
+        """
+    def add_parameters(
+        self, parameters: typing.Mapping[builtins.str, builtins.str]
+    ) -> None:
+        r"""
+        Alias for {meth}`set_parameters` (backward compatibility).
+        """
+    def add_parameter(self, key: builtins.str, value: builtins.str) -> None:
+        r"""
+        Add a single parameter entry. Writes through to the parent host's SoA metadata store.
+        """
+
+@typing.final
+class AttachedSos1Constraint:
+    r"""
+    Attached SOS1 constraint — a write-through handle bound to a host
+    ({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).
+
+    Returned by `Instance.add_sos1_constraint` /
+    `ParametricInstance.add_sos1_constraint` and by their
+    `sos1_constraints[id]` getters.
+    """
+    @property
+    def constraint_id(self) -> builtins.int: ...
+    @property
+    def instance(self) -> typing.Any: ...
+    @property
+    def variables(self) -> builtins.list[builtins.int]: ...
+    @property
+    def name(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]: ...
+    @property
+    def description(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
+    @property
+    def provenance(self) -> builtins.list[Provenance]: ...
+    def detach(self) -> Sos1Constraint:
+        r"""
+        Return a {class}`~ommx.v1.Sos1Constraint` snapshot of the current
+        state. Mutations on the returned object do not propagate back.
+        """
+    def __repr__(self) -> builtins.str: ...
+    def __copy__(self) -> AttachedSos1Constraint: ...
+    def __deepcopy__(self, _memo: typing.Any) -> AttachedSos1Constraint: ...
+    def set_name(self, name: builtins.str) -> None:
+        r"""
+        Set the name. Writes through to the parent host's SoA metadata store.
+        """
+    def add_name(self, name: builtins.str) -> None:
+        r"""
+        Alias for {meth}`set_name` (backward compatibility).
+        """
+    def set_subscripts(self, subscripts: typing.Sequence[builtins.int]) -> None:
+        r"""
+        Set the subscripts. Writes through to the parent host's SoA metadata store.
+        """
+    def add_subscripts(self, subscripts: typing.Sequence[builtins.int]) -> None:
+        r"""
+        Append subscripts. Writes through to the parent host's SoA metadata store.
+        """
+    def set_description(self, description: builtins.str) -> None:
+        r"""
+        Set the description. Writes through to the parent host's SoA metadata store.
+        """
+    def add_description(self, description: builtins.str) -> None:
+        r"""
+        Alias for {meth}`set_description` (backward compatibility).
+        """
+    def set_parameters(
+        self, parameters: typing.Mapping[builtins.str, builtins.str]
+    ) -> None:
+        r"""
+        Replace all parameters. Writes through to the parent host's SoA metadata store.
+        """
+    def add_parameters(
+        self, parameters: typing.Mapping[builtins.str, builtins.str]
+    ) -> None:
+        r"""
+        Alias for {meth}`set_parameters` (backward compatibility).
+        """
+    def add_parameter(self, key: builtins.str, value: builtins.str) -> None:
+        r"""
+        Add a single parameter entry. Writes through to the parent host's SoA metadata store.
+        """
 
 @typing.final
 class Bound:
@@ -1358,7 +1680,23 @@ class IndicatorConstraint:
         """
     def set_name(self, name: builtins.str) -> IndicatorConstraint:
         r"""
-        Set the constraint name. Returns a new IndicatorConstraint.
+        Set the name. Returns self for method chaining (snapshot mutation).
+        """
+    def set_subscripts(
+        self, subscripts: typing.Sequence[builtins.int]
+    ) -> IndicatorConstraint:
+        r"""
+        Set the subscripts. Returns self for method chaining (snapshot mutation).
+        """
+    def set_description(self, description: builtins.str) -> IndicatorConstraint:
+        r"""
+        Set the description. Returns self for method chaining (snapshot mutation).
+        """
+    def set_parameters(
+        self, parameters: typing.Mapping[builtins.str, builtins.str]
+    ) -> IndicatorConstraint:
+        r"""
+        Replace all parameters. Returns self for method chaining (snapshot mutation).
         """
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> IndicatorConstraint: ...
@@ -1476,6 +1814,12 @@ class Instance:
     def decision_variables(self) -> builtins.list[DecisionVariable]:
         r"""
         List of all decision variables in the instance sorted by their IDs.
+
+        Returns {class}`~ommx.v1.DecisionVariable` snapshots — independent
+        values that participate in arithmetic to build expressions
+        (`x + y`, `2 * x` etc.). For write-through metadata mutation, use
+        {meth}`add_decision_variable` (when adding) or
+        {meth}`attached_decision_variable` (when looking up by id).
         """
     @property
     def constraints(self) -> builtins.dict[builtins.int, AttachedConstraint]:
@@ -1489,9 +1833,16 @@ class Instance:
         {class}`~ommx.v1.Constraint` snapshot if you need an independent copy.
         """
     @property
-    def indicator_constraints(self) -> builtins.dict[builtins.int, IndicatorConstraint]:
+    def indicator_constraints(
+        self,
+    ) -> builtins.dict[builtins.int, AttachedIndicatorConstraint]:
         r"""
-        Dict of all indicator constraints in the instance keyed by their IDs.
+        Dict of all active indicator constraints in the instance keyed by
+        their IDs.
+
+        Each value is an {class}`~ommx.v1.AttachedIndicatorConstraint`: a
+        write-through handle whose getters read from this instance's SoA
+        store and whose metadata setters write back through to it.
         """
     @property
     def removed_indicator_constraints(
@@ -1501,9 +1852,15 @@ class Instance:
         Dict of all removed indicator constraints in the instance keyed by their IDs.
         """
     @property
-    def one_hot_constraints(self) -> builtins.dict[builtins.int, OneHotConstraint]:
+    def one_hot_constraints(
+        self,
+    ) -> builtins.dict[builtins.int, AttachedOneHotConstraint]:
         r"""
-        Dict of all one-hot constraints in the instance keyed by their IDs.
+        Dict of all active one-hot constraints in the instance keyed by their IDs.
+
+        Each value is an {class}`~ommx.v1.AttachedOneHotConstraint`: a
+        write-through handle whose getters read from this instance's SoA
+        store and whose metadata setters write back through to it.
         """
     @property
     def removed_one_hot_constraints(
@@ -1513,9 +1870,13 @@ class Instance:
         Dict of all removed one-hot constraints in the instance keyed by their IDs.
         """
     @property
-    def sos1_constraints(self) -> builtins.dict[builtins.int, Sos1Constraint]:
+    def sos1_constraints(self) -> builtins.dict[builtins.int, AttachedSos1Constraint]:
         r"""
-        Dict of all SOS1 constraints in the instance keyed by their IDs.
+        Dict of all active SOS1 constraints in the instance keyed by their IDs.
+
+        Each value is an {class}`~ommx.v1.AttachedSos1Constraint`: a
+        write-through handle whose getters read from this instance's SoA
+        store and whose metadata setters write back through to it.
         """
     @property
     def removed_sos1_constraints(
@@ -1622,6 +1983,35 @@ class Instance:
         True
         ```
         """
+    def add_decision_variable(
+        self, variable: DecisionVariable
+    ) -> AttachedDecisionVariable:
+        r"""
+        Add a decision variable to this instance.
+
+        Drains the wrapper's metadata snapshot into this instance's SoA
+        store and returns an {class}`~ommx.v1.AttachedDecisionVariable`
+        bound to the variable's id — a write-through handle for further
+        metadata mutation. The original wrapper is not modified.
+
+        Raises {class}`ValueError` if the variable's id collides with an
+        existing variable, parameter, or substitution-dependency key.
+        """
+    def attached_decision_variable(
+        self, variable_id: builtins.int
+    ) -> AttachedDecisionVariable:
+        r"""
+        Return an {class}`~ommx.v1.AttachedDecisionVariable` bound to the
+        given id — a write-through handle whose metadata setters update
+        this instance's SoA store.
+
+        Unlike `decision_variables[i]` (which returns a snapshot suitable
+        for arithmetic), the returned handle does not support arithmetic.
+        Call {meth}`~ommx.v1.AttachedDecisionVariable.detach` to obtain a
+        snapshot.
+
+        Raises {class}`KeyError` if no variable with `variable_id` exists.
+        """
     def add_constraint(self, constraint: Constraint) -> AttachedConstraint:
         r"""
         Add a regular constraint to this instance.
@@ -1636,6 +2026,31 @@ class Instance:
         decision variable or one currently used as a substitution-dependency
         key, matching the validation performed by other constraint-insertion
         paths.
+        """
+    def add_indicator_constraint(
+        self, constraint: IndicatorConstraint
+    ) -> AttachedIndicatorConstraint:
+        r"""
+        Add an indicator constraint to this instance.
+
+        Picks an unused {class}`~ommx.v1.IndicatorConstraintID`, drains the
+        wrapper's metadata snapshot into this instance's SoA store, and
+        returns an {class}`~ommx.v1.AttachedIndicatorConstraint` bound to the
+        new id.
+
+        Raises {class}`ValueError` if the constraint references an undefined
+        decision variable or one currently used as a substitution-dependency
+        key.
+        """
+    def add_one_hot_constraint(
+        self, constraint: OneHotConstraint
+    ) -> AttachedOneHotConstraint:
+        r"""
+        Add a one-hot constraint to this instance.
+        """
+    def add_sos1_constraint(self, constraint: Sos1Constraint) -> AttachedSos1Constraint:
+        r"""
+        Add a SOS1 constraint to this instance.
         """
     def reduce_capabilities(
         self, supported: builtins.set[AdditionalCapability]
@@ -3210,13 +3625,51 @@ class OneHotConstraint:
     """
     @property
     def variables(self) -> builtins.list[builtins.int]: ...
-    def __new__(cls, *, variables: typing.Sequence[builtins.int]) -> OneHotConstraint:
+    @property
+    def name(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]: ...
+    @property
+    def description(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
+    def __new__(
+        cls,
+        *,
+        variables: typing.Sequence[builtins.int],
+        name: typing.Optional[builtins.str] = None,
+        subscripts: typing.Sequence[builtins.int] = [],
+        description: typing.Optional[builtins.str] = None,
+        parameters: typing.Mapping[builtins.str, builtins.str] = {},
+    ) -> OneHotConstraint:
         r"""
         Create a new one-hot constraint.
 
         **Args:**
 
         - `variables`: List of binary decision variable IDs (exactly one must be 1)
+        - `name` / `subscripts` / `description` / `parameters`: Optional
+          metadata. Drained into the host's SoA store on insertion.
+        """
+    def set_name(self, name: builtins.str) -> OneHotConstraint:
+        r"""
+        Set the name. Returns self for method chaining (snapshot mutation).
+        """
+    def set_subscripts(
+        self, subscripts: typing.Sequence[builtins.int]
+    ) -> OneHotConstraint:
+        r"""
+        Set the subscripts. Returns self for method chaining (snapshot mutation).
+        """
+    def set_description(self, description: builtins.str) -> OneHotConstraint:
+        r"""
+        Set the description. Returns self for method chaining (snapshot mutation).
+        """
+    def set_parameters(
+        self, parameters: typing.Mapping[builtins.str, builtins.str]
+    ) -> OneHotConstraint:
+        r"""
+        Replace all parameters. Returns self for method chaining (snapshot mutation).
         """
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> OneHotConstraint: ...
@@ -3388,11 +3841,80 @@ class ParametricInstance:
     @property
     def objective(self) -> Function: ...
     @property
-    def decision_variables(self) -> builtins.list[DecisionVariable]: ...
+    def decision_variables(self) -> builtins.list[DecisionVariable]:
+        r"""
+        List of all decision variables in the parametric instance sorted by
+        their IDs (snapshots, suitable for arithmetic).
+        """
     @property
-    def constraints(self) -> builtins.dict[builtins.int, Constraint]: ...
+    def constraints(self) -> builtins.dict[builtins.int, AttachedConstraint]:
+        r"""
+        Dict of all active constraints in the instance keyed by their IDs.
+
+        Each value is an {class}`~ommx.v1.AttachedConstraint`: a write-through
+        handle whose getters read from this parametric instance's SoA store
+        and whose metadata setters write back through to it. Use
+        {meth}`~ommx.v1.AttachedConstraint.detach` to materialize a
+        {class}`~ommx.v1.Constraint` snapshot if you need an independent copy.
+        """
     @property
     def removed_constraints(self) -> builtins.dict[builtins.int, RemovedConstraint]: ...
+    @property
+    def indicator_constraints(
+        self,
+    ) -> builtins.dict[builtins.int, AttachedIndicatorConstraint]:
+        r"""
+        Dict of all active indicator constraints in the parametric instance
+        keyed by their IDs.
+
+        Each value is an {class}`~ommx.v1.AttachedIndicatorConstraint`: a
+        write-through handle whose getters read from this parametric
+        instance's SoA store and whose metadata setters write back through
+        to it.
+        """
+    @property
+    def removed_indicator_constraints(
+        self,
+    ) -> builtins.dict[builtins.int, RemovedIndicatorConstraint]:
+        r"""
+        Dict of all removed indicator constraints in the parametric
+        instance keyed by their IDs.
+        """
+    @property
+    def one_hot_constraints(
+        self,
+    ) -> builtins.dict[builtins.int, AttachedOneHotConstraint]:
+        r"""
+        Dict of all active one-hot constraints in the parametric instance
+        keyed by their IDs. Each value is an
+        {class}`~ommx.v1.AttachedOneHotConstraint`.
+        """
+    @property
+    def removed_one_hot_constraints(
+        self,
+    ) -> builtins.dict[builtins.int, RemovedOneHotConstraint]:
+        r"""
+        Dict of all removed one-hot constraints in the parametric instance
+        keyed by their IDs. The removed map can become non-empty when an
+        `Instance` whose one-hot constraints have been converted (via
+        `convert_all_one_hots_to_constraints`) is round-tripped back to a
+        `ParametricInstance` via `From<Instance>`.
+        """
+    @property
+    def sos1_constraints(self) -> builtins.dict[builtins.int, AttachedSos1Constraint]:
+        r"""
+        Dict of all active SOS1 constraints in the parametric instance keyed
+        by their IDs. Each value is an {class}`~ommx.v1.AttachedSos1Constraint`.
+        """
+    @property
+    def removed_sos1_constraints(
+        self,
+    ) -> builtins.dict[builtins.int, RemovedSos1Constraint]:
+        r"""
+        Dict of all removed SOS1 constraints in the parametric instance
+        keyed by their IDs. See {meth}`removed_one_hot_constraints` for the
+        round-trip rationale.
+        """
     @property
     def named_functions(self) -> builtins.list[NamedFunction]: ...
     @property
@@ -3436,6 +3958,15 @@ class ParametricInstance:
         decision_variables: typing.Sequence[DecisionVariable],
         constraints: typing.Mapping[builtins.int, Constraint],
         parameters: typing.Sequence[Parameter],
+        indicator_constraints: typing.Optional[
+            typing.Mapping[builtins.int, IndicatorConstraint]
+        ] = None,
+        one_hot_constraints: typing.Optional[
+            typing.Mapping[builtins.int, OneHotConstraint]
+        ] = None,
+        sos1_constraints: typing.Optional[
+            typing.Mapping[builtins.int, Sos1Constraint]
+        ] = None,
         named_functions: typing.Optional[typing.Sequence[NamedFunction]] = None,
         description: typing.Optional[InstanceDescription] = None,
     ) -> ParametricInstance: ...
@@ -3451,6 +3982,62 @@ class ParametricInstance:
         Substitute parameters to yield an instance.
 
         Parameters can be provided as a dict mapping parameter IDs to their values.
+        """
+    def add_decision_variable(
+        self, variable: DecisionVariable
+    ) -> AttachedDecisionVariable:
+        r"""
+        Add a decision variable to this parametric instance. Returns an
+        {class}`~ommx.v1.AttachedDecisionVariable` bound to the variable's
+        id — a write-through handle for further metadata mutation.
+        """
+    def attached_decision_variable(
+        self, variable_id: builtins.int
+    ) -> AttachedDecisionVariable:
+        r"""
+        Look up the {class}`~ommx.v1.AttachedDecisionVariable` for the given
+        id — a write-through handle.
+        """
+    def add_constraint(self, constraint: Constraint) -> AttachedConstraint:
+        r"""
+        Add a regular constraint to this parametric instance.
+
+        Picks an unused {class}`~ommx.v1.ConstraintID`, drains the wrapper's
+        metadata snapshot into this parametric instance's SoA store, and
+        returns an {class}`~ommx.v1.AttachedConstraint` bound to the new id.
+        The input {class}`~ommx.v1.Constraint` is not mutated; subsequent
+        writes that should land on this parametric instance must go through
+        the returned handle.
+
+        Raises {class}`ValueError` if the constraint references an id that is
+        neither a defined decision variable nor a defined parameter, or if it
+        references an id currently used as a substitution-dependency key.
+        """
+    def add_indicator_constraint(
+        self, constraint: IndicatorConstraint
+    ) -> AttachedIndicatorConstraint:
+        r"""
+        Add an indicator constraint to this parametric instance.
+
+        Picks an unused {class}`~ommx.v1.IndicatorConstraintID`, drains the
+        wrapper's metadata snapshot into this parametric instance's SoA
+        store, and returns an
+        {class}`~ommx.v1.AttachedIndicatorConstraint` bound to the new id.
+
+        Raises {class}`ValueError` if the constraint references an id that
+        is neither a defined decision variable nor a defined parameter, or
+        if it references an id currently used as a substitution-dependency
+        key.
+        """
+    def add_one_hot_constraint(
+        self, constraint: OneHotConstraint
+    ) -> AttachedOneHotConstraint:
+        r"""
+        Add a one-hot constraint to this parametric instance.
+        """
+    def add_sos1_constraint(self, constraint: Sos1Constraint) -> AttachedSos1Constraint:
+        r"""
+        Add a SOS1 constraint to this parametric instance.
         """
     def get_decision_variable_by_id(
         self, variable_id: builtins.int
@@ -3915,6 +4502,14 @@ class RemovedOneHotConstraint:
     @property
     def variables(self) -> builtins.list[builtins.int]: ...
     @property
+    def name(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]: ...
+    @property
+    def description(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
+    @property
     def removed_reason(self) -> builtins.str: ...
     @property
     def removed_reason_parameters(
@@ -3931,6 +4526,14 @@ class RemovedSos1Constraint:
     def constraint(self) -> Sos1Constraint: ...
     @property
     def variables(self) -> builtins.list[builtins.int]: ...
+    @property
+    def name(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]: ...
+    @property
+    def description(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
     @property
     def removed_reason(self) -> builtins.str: ...
     @property
@@ -4905,13 +5508,51 @@ class Sos1Constraint:
     """
     @property
     def variables(self) -> builtins.list[builtins.int]: ...
-    def __new__(cls, *, variables: typing.Sequence[builtins.int]) -> Sos1Constraint:
+    @property
+    def name(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]: ...
+    @property
+    def description(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
+    def __new__(
+        cls,
+        *,
+        variables: typing.Sequence[builtins.int],
+        name: typing.Optional[builtins.str] = None,
+        subscripts: typing.Sequence[builtins.int] = [],
+        description: typing.Optional[builtins.str] = None,
+        parameters: typing.Mapping[builtins.str, builtins.str] = {},
+    ) -> Sos1Constraint:
         r"""
         Create a new SOS1 constraint.
 
         **Args:**
 
         - `variables`: List of decision variable IDs (at most one can be non-zero)
+        - `name` / `subscripts` / `description` / `parameters`: Optional
+          metadata. Drained into the host's SoA store on insertion.
+        """
+    def set_name(self, name: builtins.str) -> Sos1Constraint:
+        r"""
+        Set the name. Returns self for method chaining (snapshot mutation).
+        """
+    def set_subscripts(
+        self, subscripts: typing.Sequence[builtins.int]
+    ) -> Sos1Constraint:
+        r"""
+        Set the subscripts. Returns self for method chaining (snapshot mutation).
+        """
+    def set_description(self, description: builtins.str) -> Sos1Constraint:
+        r"""
+        Set the description. Returns self for method chaining (snapshot mutation).
+        """
+    def set_parameters(
+        self, parameters: typing.Mapping[builtins.str, builtins.str]
+    ) -> Sos1Constraint:
+        r"""
+        Replace all parameters. Returns self for method chaining (snapshot mutation).
         """
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> Sos1Constraint: ...

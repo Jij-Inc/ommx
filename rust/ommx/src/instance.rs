@@ -116,6 +116,35 @@ pub enum Sense {
 ///   Variable IDs in `named_functions` must be registered in [`Self::decision_variables`],
 ///   but are NOT included in the "used" set calculation.
 ///
+/// ## Special-constraint invariants
+///
+/// Active and removed indicator / one-hot / SOS1 constraints are subject to the
+/// same id-resolution rules as regular constraints, and additionally:
+///
+/// - [`Self::indicator_constraints`] and [`Self::removed_indicator_constraints`]
+///   are disjoint sets; same for the one-hot and SOS1 collections (within each
+///   kind — id spaces across kinds are independent).
+/// - For every active or removed [`crate::IndicatorConstraint`], the
+///   `indicator_variable` is registered in [`Self::decision_variables`] and
+///   has [`Kind::Binary`](crate::decision_variable::Kind). The function body
+///   may reference any defined variable.
+/// - For every active or removed [`crate::OneHotConstraint`], every member of
+///   `variables` is registered in [`Self::decision_variables`] and has
+///   [`Kind::Binary`](crate::decision_variable::Kind).
+/// - For every active or removed [`crate::Sos1Constraint`], `variables` is
+///   non-empty and every member is registered in [`Self::decision_variables`].
+///   SOS1 does not require [`Kind::Binary`](crate::decision_variable::Kind).
+///
+/// These invariants are enforced at every construction or mutation entry
+/// point: [`Instance::builder`] (which accepts active maps for all three
+/// kinds, a removed map for regular and indicator constraints, and validates
+/// each), the post-construction setters [`Self::insert_constraint`] /
+/// [`Self::add_constraint`] / [`Self::add_indicator_constraint`] /
+/// [`Self::add_one_hot_constraint`] / [`Self::add_sos1_constraint`], and the
+/// internal `relax_constraint` / `relax_indicator_constraint` /
+/// `convert_all_one_hots_to_constraints` / `convert_all_sos1_to_constraints`
+/// paths that populate the removed maps.
+///
 #[derive(
     Debug,
     Clone,
@@ -427,6 +456,45 @@ impl Instance {
 /// - [`Self::named_functions`] may contain fixed or dependent variable IDs (like `removed_constraints`).
 ///   Variable IDs in `named_functions` must be registered in [`Self::decision_variables`],
 ///   but are NOT included in the "used" set calculation.
+///
+/// ## Special-constraint invariants
+///
+/// The same special-constraint invariants apply as on [`Instance`], with one
+/// key difference: function bodies in indicator and regular constraints may
+/// reference parameter IDs (which are substituted via
+/// [`Self::with_parameters`]), but **structural** variable positions cannot
+/// — they must be real decision variables. Specifically:
+///
+/// - For every active or removed [`crate::IndicatorConstraint`], the
+///   `indicator_variable` is registered in [`Self::decision_variables`]
+///   (not [`Self::parameters`]) and has
+///   [`Kind::Binary`](crate::decision_variable::Kind). The function body
+///   may reference any defined variable or parameter.
+/// - For every active or removed [`crate::OneHotConstraint`], every member of
+///   `variables` is registered in [`Self::decision_variables`] and has
+///   [`Kind::Binary`](crate::decision_variable::Kind).
+/// - For every active or removed [`crate::Sos1Constraint`], `variables` is
+///   non-empty and every member is registered in [`Self::decision_variables`].
+/// - The constraint id-disjointness invariants (active vs. removed, per kind)
+///   match [`Instance`].
+///
+/// These invariants are enforced at every construction or mutation entry
+/// point: [`ParametricInstance::builder`] (which mirrors
+/// [`Instance::builder`] and accepts active maps for all three kinds, plus
+/// removed maps for regular and indicator constraints, validating each),
+/// and the post-construction setters [`Self::add_constraint`] /
+/// [`Self::add_indicator_constraint`] / [`Self::add_one_hot_constraint`] /
+/// [`Self::add_sos1_constraint`].
+///
+/// [`Self::with_parameters`] partially evaluates parameter IDs out of every
+/// expression that could contain one when materializing a parametric
+/// instance into an [`Instance`]: the objective, active and removed regular
+/// constraint bodies, active and removed indicator constraint function
+/// bodies, named functions, and `decision_variable_dependency` RHS
+/// expressions. OneHot/SOS1 collections (active and removed) pass through
+/// unchanged because their variable sets are required to be real decision
+/// variables at construction time. The resulting [`Instance`] satisfies its
+/// own (stricter) invariants — no parameter IDs survive anywhere.
 ///
 #[derive(Debug, Clone, PartialEq, getset::Getters, Default)]
 pub struct ParametricInstance {

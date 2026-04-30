@@ -2,6 +2,7 @@
 
 mod annotations;
 mod artifact;
+mod attached;
 mod bound;
 mod constraint;
 #[cfg(feature = "remote-artifact")]
@@ -36,6 +37,10 @@ mod sos1_constraint;
 mod state;
 
 pub use artifact::*;
+// `attached.rs` is implementation detail — re-export only the host enum that
+// the kind-specific binding files reference. The metadata-method macros are
+// already exported via `#[macro_export]`.
+pub use attached::ConstraintHost;
 pub use bound::*;
 pub use constraint::*;
 #[cfg(feature = "remote-artifact")]
@@ -136,15 +141,19 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<InstanceDescription>()?;
     m.add_class::<DecisionVariableAnalysis>()?;
     m.add_class::<DecisionVariable>()?;
+    m.add_class::<AttachedDecisionVariable>()?;
     m.add_class::<Parameter>()?;
     m.add_class::<AdditionalCapability>()?;
     m.add_class::<Constraint>()?;
     m.add_class::<AttachedConstraint>()?;
     m.add_class::<IndicatorConstraint>()?;
+    m.add_class::<AttachedIndicatorConstraint>()?;
     m.add_class::<RemovedIndicatorConstraint>()?;
     m.add_class::<OneHotConstraint>()?;
+    m.add_class::<AttachedOneHotConstraint>()?;
     m.add_class::<RemovedOneHotConstraint>()?;
     m.add_class::<Sos1Constraint>()?;
+    m.add_class::<AttachedSos1Constraint>()?;
     m.add_class::<RemovedSos1Constraint>()?;
     m.add_class::<NamedFunction>()?;
     m.add_class::<RemovedConstraint>()?;
@@ -208,6 +217,7 @@ pyo3_stub_gen::reexport_module_members!("ommx.v1" from "ommx._ommx_rust";
     "Function",
     // Decision variable and parameter
     "DecisionVariable",
+    "AttachedDecisionVariable",
     "Parameter",
     // Constraint capability
     "AdditionalCapability",
@@ -215,10 +225,13 @@ pyo3_stub_gen::reexport_module_members!("ommx.v1" from "ommx._ommx_rust";
     "Constraint",
     "AttachedConstraint",
     "IndicatorConstraint",
+    "AttachedIndicatorConstraint",
     "RemovedIndicatorConstraint",
     "OneHotConstraint",
+    "AttachedOneHotConstraint",
     "RemovedOneHotConstraint",
     "Sos1Constraint",
+    "AttachedSos1Constraint",
     "RemovedSos1Constraint",
     "RemovedConstraint",
     "Provenance",

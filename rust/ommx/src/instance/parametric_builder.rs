@@ -26,6 +26,13 @@ pub struct ParametricInstanceBuilder {
     constraints: Option<BTreeMap<ConstraintID, Constraint>>,
     named_functions: BTreeMap<NamedFunctionID, NamedFunction>,
     removed_constraints: BTreeMap<ConstraintID, (Constraint, crate::constraint::RemovedReason)>,
+    indicator_constraints: BTreeMap<crate::IndicatorConstraintID, crate::IndicatorConstraint>,
+    removed_indicator_constraints: BTreeMap<
+        crate::IndicatorConstraintID,
+        (crate::IndicatorConstraint, crate::constraint::RemovedReason),
+    >,
+    one_hot_constraints: BTreeMap<crate::OneHotConstraintID, crate::OneHotConstraint>,
+    sos1_constraints: BTreeMap<crate::Sos1ConstraintID, crate::Sos1Constraint>,
     decision_variable_dependency: AcyclicAssignments,
     description: Option<v1::instance::Description>,
 }
@@ -84,6 +91,45 @@ impl ParametricInstanceBuilder {
         removed_constraints: BTreeMap<ConstraintID, (Constraint, crate::constraint::RemovedReason)>,
     ) -> Self {
         self.removed_constraints = removed_constraints;
+        self
+    }
+
+    /// Sets the indicator constraints.
+    pub fn indicator_constraints(
+        mut self,
+        indicator_constraints: BTreeMap<crate::IndicatorConstraintID, crate::IndicatorConstraint>,
+    ) -> Self {
+        self.indicator_constraints = indicator_constraints;
+        self
+    }
+
+    /// Sets the removed indicator constraints.
+    pub fn removed_indicator_constraints(
+        mut self,
+        removed_indicator_constraints: BTreeMap<
+            crate::IndicatorConstraintID,
+            (crate::IndicatorConstraint, crate::constraint::RemovedReason),
+        >,
+    ) -> Self {
+        self.removed_indicator_constraints = removed_indicator_constraints;
+        self
+    }
+
+    /// Sets the one-hot constraints.
+    pub fn one_hot_constraints(
+        mut self,
+        one_hot_constraints: BTreeMap<crate::OneHotConstraintID, crate::OneHotConstraint>,
+    ) -> Self {
+        self.one_hot_constraints = one_hot_constraints;
+        self
+    }
+
+    /// Sets the SOS1 constraints.
+    pub fn sos1_constraints(
+        mut self,
+        sos1_constraints: BTreeMap<crate::Sos1ConstraintID, crate::Sos1Constraint>,
+    ) -> Self {
+        self.sos1_constraints = sos1_constraints;
         self
     }
 
@@ -212,6 +258,102 @@ impl ParametricInstanceBuilder {
             }
         }
 
+        // Validate indicator constraints. Function bodies may reference
+        // parameters; the indicator variable is a *structural* position and
+        // must be a binary decision variable (not a parameter).
+        let validate_indicator = |ic: &crate::IndicatorConstraint| -> crate::Result<()> {
+            let indicator_id = ic.indicator_variable;
+            let Some(dv) = decision_variables.get(&indicator_id) else {
+                if parameter_ids.contains(&indicator_id) {
+                    crate::bail!(
+                        { ?indicator_id },
+                        "Parameter id {indicator_id:?} cannot occupy the structural indicator-variable position; it must be a binary decision variable",
+                    );
+                }
+                crate::bail!(
+                    { ?indicator_id },
+                    "Indicator variable {indicator_id:?} is not defined in decision_variables",
+                );
+            };
+            if dv.kind() != crate::decision_variable::Kind::Binary {
+                crate::bail!(
+                    { ?indicator_id },
+                    "Indicator variable {indicator_id:?} must be binary",
+                );
+            }
+            // Function body (and the indicator var) may reference any
+            // defined id (variables ∪ parameters).
+            for id in ic.required_ids() {
+                if !all_variable_ids.contains(&id) {
+                    crate::bail!({ ?id }, "Undefined variable ID is used: {id:?}");
+                }
+            }
+            Ok(())
+        };
+        for value in self.indicator_constraints.values() {
+            validate_indicator(value)?;
+        }
+        for (ic, _reason) in self.removed_indicator_constraints.values() {
+            validate_indicator(ic)?;
+        }
+        // Validate disjointness of indicator active/removed.
+        for id in self.removed_indicator_constraints.keys() {
+            if self.indicator_constraints.contains_key(id) {
+                crate::bail!(
+                    { ?id },
+                    "Indicator constraint ID {id:?} is in both indicator_constraints and removed_indicator_constraints, but they must be disjoint",
+                );
+            }
+        }
+
+        // Validate one-hot constraints. Every variable is structural; must
+        // be a binary decision variable (parameter ids rejected).
+        for value in self.one_hot_constraints.values() {
+            for var_id in &value.variables {
+                let Some(dv) = decision_variables.get(var_id) else {
+                    if parameter_ids.contains(var_id) {
+                        crate::bail!(
+                            { ?var_id },
+                            "Parameter id {var_id:?} cannot occupy a structural one-hot variable position; it must be a binary decision variable",
+                        );
+                    }
+                    crate::bail!(
+                        { ?var_id },
+                        "One-hot variable {var_id:?} is not defined in decision_variables",
+                    );
+                };
+                if dv.kind() != crate::decision_variable::Kind::Binary {
+                    crate::bail!({ ?var_id }, "One-hot variable {var_id:?} must be binary");
+                }
+            }
+        }
+
+        // Validate SOS1 constraints. Variables are structural decision
+        // variables (parameter ids rejected); the variable set must be
+        // non-empty. SOS1 does not require Kind::Binary.
+        for (id, value) in &self.sos1_constraints {
+            if value.variables.is_empty() {
+                crate::bail!(
+                    { ?id },
+                    "SOS1 constraint {id:?} has no variables; SOS1 constraints must contain at least one variable",
+                );
+            }
+            for var_id in &value.variables {
+                if !decision_variable_ids.contains(var_id) {
+                    if parameter_ids.contains(var_id) {
+                        crate::bail!(
+                            { ?var_id },
+                            "Parameter id {var_id:?} cannot occupy a structural SOS1 variable position; it must be a decision variable",
+                        );
+                    }
+                    crate::bail!(
+                        { ?var_id },
+                        "SOS1 variable {var_id:?} is not defined in decision_variables",
+                    );
+                }
+            }
+        }
+
         // Validate that constraints and removed_constraints keys are disjoint
         for id in self.removed_constraints.keys() {
             if constraints.contains_key(id) {
@@ -241,6 +383,15 @@ impl ParametricInstanceBuilder {
         let mut used: VariableIDSet = objective.required_ids().into_iter().collect();
         for constraint in constraints.values() {
             used.extend(constraint.required_ids());
+        }
+        for ic in self.indicator_constraints.values() {
+            used.extend(ic.required_ids());
+        }
+        for oh in self.one_hot_constraints.values() {
+            used.extend(oh.required_ids());
+        }
+        for sos1 in self.sos1_constraints.values() {
+            used.extend(sos1.required_ids());
         }
         let fixed: VariableIDSet = decision_variables
             .values()
@@ -280,9 +431,18 @@ impl ParametricInstanceBuilder {
             parameters,
             variable_metadata: Default::default(),
             constraint_collection: ConstraintCollection::new(constraints, self.removed_constraints),
-            indicator_constraint_collection: Default::default(),
-            one_hot_constraint_collection: Default::default(),
-            sos1_constraint_collection: Default::default(),
+            indicator_constraint_collection: ConstraintCollection::new(
+                self.indicator_constraints,
+                self.removed_indicator_constraints,
+            ),
+            one_hot_constraint_collection: ConstraintCollection::new(
+                self.one_hot_constraints,
+                BTreeMap::new(),
+            ),
+            sos1_constraint_collection: ConstraintCollection::new(
+                self.sos1_constraints,
+                BTreeMap::new(),
+            ),
             named_functions: self.named_functions,
             named_function_metadata: Default::default(),
             decision_variable_dependency: self.decision_variable_dependency,
@@ -420,6 +580,168 @@ mod tests {
         let msg = err.to_string();
         assert!(
             msg.contains("Undefined variable ID") && msg.contains("999"),
+            "unexpected error: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_parametric_builder_with_indicator_constraint() {
+        use crate::{coeff, linear, Equality};
+        use maplit::btreemap;
+
+        // Indicator with body that references a parameter — allowed.
+        let indicator = crate::IndicatorConstraint::new(
+            VariableID::from(1),
+            Equality::EqualToZero,
+            Function::from(linear!(2) + linear!(100) + coeff!(1.0)),
+        );
+
+        let instance = ParametricInstance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(btreemap! {
+                VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
+                VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
+            })
+            .parameters(btreemap! {
+                VariableID::from(100) => v1::Parameter { id: 100, ..Default::default() },
+            })
+            .constraints(BTreeMap::new())
+            .indicator_constraints(btreemap! {
+                crate::IndicatorConstraintID::from(7) => indicator,
+            })
+            .build()
+            .unwrap();
+
+        assert_eq!(instance.indicator_constraints().len(), 1);
+        assert!(instance
+            .indicator_constraints()
+            .contains_key(&crate::IndicatorConstraintID::from(7)));
+    }
+
+    #[test]
+    fn test_parametric_builder_rejects_parameter_as_indicator_variable() {
+        use crate::{coeff, linear, Equality};
+        use maplit::btreemap;
+
+        // Parameter id 100 used as the indicator variable — must be rejected
+        // because substitution can't fill a structural variable position.
+        let indicator = crate::IndicatorConstraint::new(
+            VariableID::from(100), // parameter id, not a decision variable
+            Equality::EqualToZero,
+            Function::from(linear!(1) + coeff!(1.0)),
+        );
+
+        let err = ParametricInstance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(btreemap! {
+                VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
+            })
+            .parameters(btreemap! {
+                VariableID::from(100) => v1::Parameter { id: 100, ..Default::default() },
+            })
+            .constraints(BTreeMap::new())
+            .indicator_constraints(btreemap! {
+                crate::IndicatorConstraintID::from(0) => indicator,
+            })
+            .build()
+            .unwrap_err();
+
+        let msg = err.to_string();
+        assert!(
+            msg.contains("Parameter id") && msg.contains("structural"),
+            "unexpected error: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_parametric_builder_rejects_non_binary_indicator_variable() {
+        use crate::{coeff, linear, Equality};
+        use maplit::btreemap;
+
+        // Integer (not binary) variable as the indicator — must be rejected.
+        let indicator = crate::IndicatorConstraint::new(
+            VariableID::from(1),
+            Equality::EqualToZero,
+            Function::from(linear!(2) + coeff!(1.0)),
+        );
+
+        let err = ParametricInstance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(btreemap! {
+                VariableID::from(1) => DecisionVariable::integer(VariableID::from(1)),
+                VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
+            })
+            .parameters(BTreeMap::new())
+            .constraints(BTreeMap::new())
+            .indicator_constraints(btreemap! {
+                crate::IndicatorConstraintID::from(0) => indicator,
+            })
+            .build()
+            .unwrap_err();
+
+        let msg = err.to_string();
+        assert!(msg.contains("must be binary"), "unexpected error: {msg}");
+    }
+
+    #[test]
+    fn test_parametric_builder_rejects_parameter_in_one_hot_variables() {
+        use maplit::btreemap;
+
+        let one_hot = crate::OneHotConstraint::new(
+            [VariableID::from(1), VariableID::from(100)] // 100 is a parameter
+                .into_iter()
+                .collect(),
+        );
+
+        let err = ParametricInstance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(btreemap! {
+                VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
+            })
+            .parameters(btreemap! {
+                VariableID::from(100) => v1::Parameter { id: 100, ..Default::default() },
+            })
+            .constraints(BTreeMap::new())
+            .one_hot_constraints(btreemap! {
+                crate::OneHotConstraintID::from(0) => one_hot,
+            })
+            .build()
+            .unwrap_err();
+
+        let msg = err.to_string();
+        assert!(
+            msg.contains("Parameter id") && msg.contains("structural"),
+            "unexpected error: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_parametric_builder_rejects_empty_sos1() {
+        use maplit::btreemap;
+
+        let sos1 = crate::Sos1Constraint::new(std::collections::BTreeSet::new());
+
+        let err = ParametricInstance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(btreemap! {
+                VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
+            })
+            .parameters(BTreeMap::new())
+            .constraints(BTreeMap::new())
+            .sos1_constraints(btreemap! {
+                crate::Sos1ConstraintID::from(0) => sos1,
+            })
+            .build()
+            .unwrap_err();
+
+        let msg = err.to_string();
+        assert!(
+            msg.contains("at least one variable"),
             "unexpected error: {msg}"
         );
     }

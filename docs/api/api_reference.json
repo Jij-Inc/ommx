@@ -1547,7 +1547,7 @@
         {
           "kind": "Class",
           "name": "AttachedConstraint",
-          "doc": "Attached constraint — a write-through handle bound to an [`Instance`].\n\n`AttachedConstraint` is returned by [`Instance.add_constraint`] and by\n`instance.constraints[id]`. Unlike [`Constraint`], which is a snapshot,\nreads pull live data from the parent instance and metadata setters write\nthrough to its SoA metadata store. Two `AttachedConstraint` instances\npointing at the same id observe the same state.\n\nThe handle keeps the parent `Instance` alive through a refcount; drop\nthe wrapper to release the back-reference.",
+          "doc": "Attached constraint — a write-through handle bound to a host\n({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).\n\n`AttachedConstraint` is returned by `Instance.add_constraint` /\n`ParametricInstance.add_constraint` and by their `constraints[id]`\ngetters. Unlike {class}`~ommx.v1.Constraint`, which is a snapshot, reads\npull live data from the parent host and metadata setters write through\nto its SoA metadata store. Two `AttachedConstraint` instances pointing\nat the same id on the same host observe the same state.\n\nThe handle keeps the parent host alive through a refcount; drop the\nwrapper to release the back-reference.",
           "bases": [],
           "methods": [
             {
@@ -1662,7 +1662,7 @@
             },
             {
               "name": "add_parameter",
-              "doc": "Add a single parameter entry. Writes through to the parent instance's SoA store.",
+              "doc": "Add a single parameter entry. Writes through to the parent host's SoA metadata store.",
               "signatures": [
                 {
                   "parameters": [
@@ -1734,7 +1734,7 @@
             },
             {
               "name": "add_subscripts",
-              "doc": "Append subscripts. Writes through to the parent instance's SoA store.",
+              "doc": "Append subscripts. Writes through to the parent host's SoA metadata store.",
               "signatures": [
                 {
                   "parameters": [
@@ -1782,7 +1782,7 @@
             },
             {
               "name": "evaluate",
-              "doc": "Evaluate the constraint with the given state.",
+              "doc": "Evaluate the constraint with the given state. Only valid on\n{class}`~ommx.v1.Instance`-hosted handles, since\n{class}`~ommx.v1.ParametricInstance` constraints may still reference\nunsubstituted parameters.",
               "signatures": [
                 {
                   "parameters": [
@@ -1831,7 +1831,7 @@
             },
             {
               "name": "set_description",
-              "doc": "Set the description. Writes through to the parent instance's SoA store.",
+              "doc": "Set the description. Writes through to the parent host's SoA metadata store.",
               "signatures": [
                 {
                   "parameters": [
@@ -1857,7 +1857,7 @@
             },
             {
               "name": "set_name",
-              "doc": "Set the name. Writes through to the parent instance's SoA store.",
+              "doc": "Set the name. Writes through to the parent host's SoA metadata store.",
               "signatures": [
                 {
                   "parameters": [
@@ -1883,7 +1883,7 @@
             },
             {
               "name": "set_parameters",
-              "doc": "Replace all parameters. Writes through to the parent instance's SoA store.",
+              "doc": "Replace all parameters. Writes through to the parent host's SoA metadata store.",
               "signatures": [
                 {
                   "parameters": [
@@ -1920,7 +1920,7 @@
             },
             {
               "name": "set_subscripts",
-              "doc": "Set the subscripts. Writes through to the parent instance's SoA store.",
+              "doc": "Set the subscripts. Writes through to the parent host's SoA metadata store.",
               "signatures": [
                 {
                   "parameters": [
@@ -2009,9 +2009,9 @@
             },
             {
               "name": "instance",
-              "doc": "The parent {class}`~ommx.v1.Instance` this constraint lives in.",
+              "doc": "The parent host this constraint lives in\n({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).",
               "type_": {
-                "display": "Instance",
+                "display": "Any",
                 "link_target": null,
                 "children": []
               },
@@ -2076,6 +2076,1984 @@
             },
             {
               "name": "subscripts",
+              "doc": "",
+              "type_": {
+                "display": "list[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "AttachedDecisionVariable",
+          "doc": "Attached decision variable — a write-through handle bound to a host\n({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).\n\n`AttachedDecisionVariable` is returned by `add_decision_variable(v)`\n(insertion) and `attached_decision_variable(id)` (lookup) on both\nhosts. Unlike the constraint accessors, `decision_variables` keeps\nreturning a list of snapshot {class}`~ommx.v1.DecisionVariable`s so\nthat variables can still participate in arithmetic to build expressions\n(`x + y`, `2 * x`); a follow-up will extend `ToFunction` to accept\n`AttachedDecisionVariable` and let `decision_variables` switch to the\nattached form. Reads pull live data from the parent host's SoA store\nand metadata setters write back through to it.\n\n`DecisionVariableMetadata` has no `provenance` field, so the\nwrite-through surface omits the corresponding getter.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__copy__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "AttachedDecisionVariable",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__deepcopy__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "_memo",
+                      "type_": {
+                        "display": "Any",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "AttachedDecisionVariable",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "add_description",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "description",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "add_name",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "add_parameter",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "value",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "add_parameters",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "parameters",
+                      "type_": {
+                        "display": "Mapping[str, str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "add_subscripts",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "subscripts",
+                      "type_": {
+                        "display": "Sequence[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "detach",
+              "doc": "Return a {class}`~ommx.v1.DecisionVariable` snapshot of the current\nstate. Mutations on the returned object do not propagate back.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "DecisionVariable",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "set_description",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "description",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "set_name",
+              "doc": "Set the name. Writes through to the parent host's SoA metadata store.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "set_parameters",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "parameters",
+                      "type_": {
+                        "display": "Mapping[str, str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "set_subscripts",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "subscripts",
+                      "type_": {
+                        "display": "Sequence[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "bound",
+              "doc": "",
+              "type_": {
+                "display": "Bound",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "description",
+              "doc": "",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "id",
+              "doc": "The id this handle points at.",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "instance",
+              "doc": "The parent host this variable lives in.",
+              "type_": {
+                "display": "Any",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "kind",
+              "doc": "",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "name",
+              "doc": "",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "parameters",
+              "doc": "",
+              "type_": {
+                "display": "dict[str, str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "subscripts",
+              "doc": "",
+              "type_": {
+                "display": "list[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "substituted_value",
+              "doc": "",
+              "type_": {
+                "display": "Optional[float]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "float",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "AttachedIndicatorConstraint",
+          "doc": "Attached indicator constraint — a write-through handle bound to a host\n({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).\n\n`AttachedIndicatorConstraint` is returned by\n`Instance.add_indicator_constraint` /\n`ParametricInstance.add_indicator_constraint` and by their\n`indicator_constraints[id]` getters. Reads pull live data from the parent\nhost and metadata setters write through to its SoA metadata store.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__copy__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "AttachedIndicatorConstraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__deepcopy__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "_memo",
+                      "type_": {
+                        "display": "Any",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "AttachedIndicatorConstraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "add_description",
+              "doc": "Alias for {meth}`set_description` (backward compatibility).",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "description",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "add_name",
+              "doc": "Alias for {meth}`set_name` (backward compatibility).",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "add_parameter",
+              "doc": "Add a single parameter entry. Writes through to the parent host's SoA metadata store.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "value",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "add_parameters",
+              "doc": "Alias for {meth}`set_parameters` (backward compatibility).",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "parameters",
+                      "type_": {
+                        "display": "Mapping[str, str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "add_subscripts",
+              "doc": "Append subscripts. Writes through to the parent host's SoA metadata store.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "subscripts",
+                      "type_": {
+                        "display": "Sequence[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "detach",
+              "doc": "Return an {class}`~ommx.v1.IndicatorConstraint` snapshot of the\ncurrent state. Mutations on the returned object do not propagate back.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "IndicatorConstraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "set_description",
+              "doc": "Set the description. Writes through to the parent host's SoA metadata store.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "description",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "set_name",
+              "doc": "Set the name. Writes through to the parent host's SoA metadata store.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "set_parameters",
+              "doc": "Replace all parameters. Writes through to the parent host's SoA metadata store.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "parameters",
+                      "type_": {
+                        "display": "Mapping[str, str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "set_subscripts",
+              "doc": "Set the subscripts. Writes through to the parent host's SoA metadata store.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "subscripts",
+                      "type_": {
+                        "display": "Sequence[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "constraint_id",
+              "doc": "The id this handle points at.",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "description",
+              "doc": "",
+              "type_": {
+                "display": "Optional[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "equality",
+              "doc": "",
+              "type_": {
+                "display": "Equality",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "function",
+              "doc": "",
+              "type_": {
+                "display": "Function",
+                "link_target": {
+                  "fqn": "ommx.v1.Function",
+                  "doc_module": "ommx.v1",
+                  "kind": "Class",
+                  "attribute": null
+                },
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "indicator_variable_id",
+              "doc": "",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "instance",
+              "doc": "The parent host this constraint lives in.",
+              "type_": {
+                "display": "Any",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "name",
+              "doc": "",
+              "type_": {
+                "display": "Optional[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "parameters",
+              "doc": "",
+              "type_": {
+                "display": "dict[str, str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "provenance",
+              "doc": "",
+              "type_": {
+                "display": "list[Provenance]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "Provenance",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "subscripts",
+              "doc": "",
+              "type_": {
+                "display": "list[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "AttachedOneHotConstraint",
+          "doc": "Attached one-hot constraint — a write-through handle bound to a host\n({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).\n\nReturned by `Instance.add_one_hot_constraint` /\n`ParametricInstance.add_one_hot_constraint` and by their\n`one_hot_constraints[id]` getters. Reads pull live data from the parent\nhost and metadata setters write through to its SoA metadata store.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__copy__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "AttachedOneHotConstraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__deepcopy__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "_memo",
+                      "type_": {
+                        "display": "Any",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "AttachedOneHotConstraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "add_description",
+              "doc": "Alias for {meth}`set_description` (backward compatibility).",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "description",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "add_name",
+              "doc": "Alias for {meth}`set_name` (backward compatibility).",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "add_parameter",
+              "doc": "Add a single parameter entry. Writes through to the parent host's SoA metadata store.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "value",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "add_parameters",
+              "doc": "Alias for {meth}`set_parameters` (backward compatibility).",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "parameters",
+                      "type_": {
+                        "display": "Mapping[str, str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "add_subscripts",
+              "doc": "Append subscripts. Writes through to the parent host's SoA metadata store.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "subscripts",
+                      "type_": {
+                        "display": "Sequence[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "detach",
+              "doc": "Return a {class}`~ommx.v1.OneHotConstraint` snapshot of the current\nstate. Mutations on the returned object do not propagate back.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "OneHotConstraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "set_description",
+              "doc": "Set the description. Writes through to the parent host's SoA metadata store.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "description",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "set_name",
+              "doc": "Set the name. Writes through to the parent host's SoA metadata store.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "set_parameters",
+              "doc": "Replace all parameters. Writes through to the parent host's SoA metadata store.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "parameters",
+                      "type_": {
+                        "display": "Mapping[str, str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "set_subscripts",
+              "doc": "Set the subscripts. Writes through to the parent host's SoA metadata store.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "subscripts",
+                      "type_": {
+                        "display": "Sequence[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "constraint_id",
+              "doc": "The id this handle points at.",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "description",
+              "doc": "",
+              "type_": {
+                "display": "Optional[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "instance",
+              "doc": "The parent host this constraint lives in.",
+              "type_": {
+                "display": "Any",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "name",
+              "doc": "",
+              "type_": {
+                "display": "Optional[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "parameters",
+              "doc": "",
+              "type_": {
+                "display": "dict[str, str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "provenance",
+              "doc": "",
+              "type_": {
+                "display": "list[Provenance]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "Provenance",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "subscripts",
+              "doc": "",
+              "type_": {
+                "display": "list[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "variables",
+              "doc": "",
+              "type_": {
+                "display": "list[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "AttachedSos1Constraint",
+          "doc": "Attached SOS1 constraint — a write-through handle bound to a host\n({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).\n\nReturned by `Instance.add_sos1_constraint` /\n`ParametricInstance.add_sos1_constraint` and by their\n`sos1_constraints[id]` getters.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__copy__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "AttachedSos1Constraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__deepcopy__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "_memo",
+                      "type_": {
+                        "display": "Any",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "AttachedSos1Constraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "add_description",
+              "doc": "Alias for {meth}`set_description` (backward compatibility).",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "description",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "add_name",
+              "doc": "Alias for {meth}`set_name` (backward compatibility).",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "add_parameter",
+              "doc": "Add a single parameter entry. Writes through to the parent host's SoA metadata store.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "value",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "add_parameters",
+              "doc": "Alias for {meth}`set_parameters` (backward compatibility).",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "parameters",
+                      "type_": {
+                        "display": "Mapping[str, str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "add_subscripts",
+              "doc": "Append subscripts. Writes through to the parent host's SoA metadata store.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "subscripts",
+                      "type_": {
+                        "display": "Sequence[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "detach",
+              "doc": "Return a {class}`~ommx.v1.Sos1Constraint` snapshot of the current\nstate. Mutations on the returned object do not propagate back.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "Sos1Constraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "set_description",
+              "doc": "Set the description. Writes through to the parent host's SoA metadata store.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "description",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "set_name",
+              "doc": "Set the name. Writes through to the parent host's SoA metadata store.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "set_parameters",
+              "doc": "Replace all parameters. Writes through to the parent host's SoA metadata store.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "parameters",
+                      "type_": {
+                        "display": "Mapping[str, str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "set_subscripts",
+              "doc": "Set the subscripts. Writes through to the parent host's SoA metadata store.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "subscripts",
+                      "type_": {
+                        "display": "Sequence[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "constraint_id",
+              "doc": "",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "description",
+              "doc": "",
+              "type_": {
+                "display": "Optional[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "instance",
+              "doc": "",
+              "type_": {
+                "display": "Any",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "name",
+              "doc": "",
+              "type_": {
+                "display": "Optional[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "parameters",
+              "doc": "",
+              "type_": {
+                "display": "dict[str, str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "provenance",
+              "doc": "",
+              "type_": {
+                "display": "list[Provenance]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "Provenance",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "subscripts",
+              "doc": "",
+              "type_": {
+                "display": "list[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "variables",
               "doc": "",
               "type_": {
                 "display": "list[int]",
@@ -7209,8 +9187,34 @@
               "deprecated": null
             },
             {
+              "name": "set_description",
+              "doc": "Set the description. Returns self for method chaining (snapshot mutation).",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "description",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "IndicatorConstraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "set_name",
-              "doc": "Set the constraint name. Returns a new IndicatorConstraint.",
+              "doc": "Set the name. Returns self for method chaining (snapshot mutation).",
               "signatures": [
                 {
                   "parameters": [
@@ -7220,6 +9224,75 @@
                         "display": "str",
                         "link_target": null,
                         "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "IndicatorConstraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "set_parameters",
+              "doc": "Replace all parameters. Returns self for method chaining (snapshot mutation).",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "parameters",
+                      "type_": {
+                        "display": "Mapping[str, str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "IndicatorConstraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "set_subscripts",
+              "doc": "Set the subscripts. Returns self for method chaining (snapshot mutation).",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "subscripts",
+                      "type_": {
+                        "display": "Sequence[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
                       },
                       "default": null
                     }
@@ -7425,6 +9498,58 @@
               "deprecated": null
             },
             {
+              "name": "add_decision_variable",
+              "doc": "Add a decision variable to this instance.\n\nDrains the wrapper's metadata snapshot into this instance's SoA\nstore and returns an {class}`~ommx.v1.AttachedDecisionVariable`\nbound to the variable's id — a write-through handle for further\nmetadata mutation. The original wrapper is not modified.\n\nRaises {class}`ValueError` if the variable's id collides with an\nexisting variable, parameter, or substitution-dependency key.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "variable",
+                      "type_": {
+                        "display": "DecisionVariable",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "AttachedDecisionVariable",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "add_indicator_constraint",
+              "doc": "Add an indicator constraint to this instance.\n\nPicks an unused {class}`~ommx.v1.IndicatorConstraintID`, drains the\nwrapper's metadata snapshot into this instance's SoA store, and\nreturns an {class}`~ommx.v1.AttachedIndicatorConstraint` bound to the\nnew id.\n\nRaises {class}`ValueError` if the constraint references an undefined\ndecision variable or one currently used as a substitution-dependency\nkey.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "constraint",
+                      "type_": {
+                        "display": "IndicatorConstraint",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "AttachedIndicatorConstraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "add_integer_slack_to_inequality",
               "doc": "Convert inequality $f(x) \\leq 0$ to **inequality** $f(x) + b s \\leq 0$ with an integer slack variable $s$.\n\n- This should be used when {meth}`~ommx.v1.Instance.convert_inequality_to_equality_with_integer_slack` is not applicable.\n\n- The bound of $s$ will be $[0, \\text{slack\\_upper\\_bound}]$, and the coefficient $b$ is determined from the lower bound of $f(x)$.\n\n- Since the slack variable is integer, the yielded inequality has residual error $\\min_s f(x) + b s$ at most $b$.\n  And thus $b$ is returned to use scaling the penalty weight or other things.\n\n  - Larger slack_upper_bound (i.e. finer-grained slack) yields smaller $b$, and thus smaller the residual error,\n    but it needs more bits for the slack variable, and thus the problem size becomes larger.\n\n**Returns:**\nThe coefficient $b$ of the slack variable. If the constraint is trivially satisfied, this returns ``None``.\n\n# Examples\n\nLet's consider a simple inequality constraint x0 + 2*x1 <= 4.\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable\n>>> x = [\n...     DecisionVariable.integer(i, lower=0, upper=3, name=\"x\", subscripts=[i])\n...     for i in range(3)\n... ]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[\n...         (x[0] + 2*x[1] <= 4).set_id(0)\n...     ],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.constraints[0]\nConstraint(x0 + 2*x1 - 4 <= 0)\n```\n\nIntroduce an integer slack variable s in [0, 2]\n\n```python\n>>> b = instance.add_integer_slack_to_inequality(\n...     constraint_id=0,\n...     slack_upper_bound=2\n... )\n>>> b, instance.constraints[0]\n(2.0, Constraint(x0 + 2*x1 + 2*x3 - 4 <= 0))\n```",
               "signatures": [
@@ -7459,6 +9584,58 @@
                         "children": []
                       }
                     ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "add_one_hot_constraint",
+              "doc": "Add a one-hot constraint to this instance.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "constraint",
+                      "type_": {
+                        "display": "OneHotConstraint",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "AttachedOneHotConstraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "add_sos1_constraint",
+              "doc": "Add a SOS1 constraint to this instance.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "constraint",
+                      "type_": {
+                        "display": "Sos1Constraint",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "AttachedSos1Constraint",
+                    "link_target": null,
+                    "children": []
                   }
                 }
               ],
@@ -7657,6 +9834,32 @@
                         "children": []
                       }
                     ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "attached_decision_variable",
+              "doc": "Return an {class}`~ommx.v1.AttachedDecisionVariable` bound to the\ngiven id — a write-through handle whose metadata setters update\nthis instance's SoA store.\n\nUnlike `decision_variables[i]` (which returns a snapshot suitable\nfor arithmetic), the returned handle does not support arithmetic.\nCall {meth}`~ommx.v1.AttachedDecisionVariable.detach` to obtain a\nsnapshot.\n\nRaises {class}`KeyError` if no variable with `variable_id` exists.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "variable_id",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "AttachedDecisionVariable",
+                    "link_target": null,
+                    "children": []
                   }
                 }
               ],
@@ -9711,7 +11914,7 @@
             },
             {
               "name": "decision_variables",
-              "doc": "List of all decision variables in the instance sorted by their IDs.",
+              "doc": "List of all decision variables in the instance sorted by their IDs.\n\nReturns {class}`~ommx.v1.DecisionVariable` snapshots — independent\nvalues that participate in arithmetic to build expressions\n(`x + y`, `2 * x` etc.). For write-through metadata mutation, use\n{meth}`add_decision_variable` (when adding) or\n{meth}`attached_decision_variable` (when looking up by id).",
               "type_": {
                 "display": "list[DecisionVariable]",
                 "link_target": null,
@@ -9745,9 +11948,9 @@
             },
             {
               "name": "indicator_constraints",
-              "doc": "Dict of all indicator constraints in the instance keyed by their IDs.",
+              "doc": "Dict of all active indicator constraints in the instance keyed by\ntheir IDs.\n\nEach value is an {class}`~ommx.v1.AttachedIndicatorConstraint`: a\nwrite-through handle whose getters read from this instance's SoA\nstore and whose metadata setters write back through to it.",
               "type_": {
-                "display": "dict[int, IndicatorConstraint]",
+                "display": "dict[int, AttachedIndicatorConstraint]",
                 "link_target": null,
                 "children": [
                   {
@@ -9756,7 +11959,7 @@
                     "children": []
                   },
                   {
-                    "display": "IndicatorConstraint",
+                    "display": "AttachedIndicatorConstraint",
                     "link_target": null,
                     "children": []
                   }
@@ -9864,9 +12067,9 @@
             },
             {
               "name": "one_hot_constraints",
-              "doc": "Dict of all one-hot constraints in the instance keyed by their IDs.",
+              "doc": "Dict of all active one-hot constraints in the instance keyed by their IDs.\n\nEach value is an {class}`~ommx.v1.AttachedOneHotConstraint`: a\nwrite-through handle whose getters read from this instance's SoA\nstore and whose metadata setters write back through to it.",
               "type_": {
-                "display": "dict[int, OneHotConstraint]",
+                "display": "dict[int, AttachedOneHotConstraint]",
                 "link_target": null,
                 "children": [
                   {
@@ -9875,7 +12078,7 @@
                     "children": []
                   },
                   {
-                    "display": "OneHotConstraint",
+                    "display": "AttachedOneHotConstraint",
                     "link_target": null,
                     "children": []
                   }
@@ -10002,9 +12205,9 @@
             },
             {
               "name": "sos1_constraints",
-              "doc": "Dict of all SOS1 constraints in the instance keyed by their IDs.",
+              "doc": "Dict of all active SOS1 constraints in the instance keyed by their IDs.\n\nEach value is an {class}`~ommx.v1.AttachedSos1Constraint`: a\nwrite-through handle whose getters read from this instance's SoA\nstore and whose metadata setters write back through to it.",
               "type_": {
-                "display": "dict[int, Sos1Constraint]",
+                "display": "dict[int, AttachedSos1Constraint]",
                 "link_target": null,
                 "children": [
                   {
@@ -10013,7 +12216,7 @@
                     "children": []
                   },
                   {
-                    "display": "Sos1Constraint",
+                    "display": "AttachedSos1Constraint",
                     "link_target": null,
                     "children": []
                   }
@@ -12036,7 +14239,7 @@
             },
             {
               "name": "__new__",
-              "doc": "Create a new one-hot constraint.\n\n**Args:**\n\n- `variables`: List of binary decision variable IDs (exactly one must be 1)",
+              "doc": "Create a new one-hot constraint.\n\n**Args:**\n\n- `variables`: List of binary decision variable IDs (exactly one must be 1)\n- `name` / `subscripts` / `description` / `parameters`: Optional\n  metadata. Drained into the host's SoA store on insertion.",
               "signatures": [
                 {
                   "parameters": [
@@ -12054,6 +14257,83 @@
                         ]
                       },
                       "default": null
+                    },
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "subscripts",
+                      "type_": {
+                        "display": "Sequence[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "[]"
+                      }
+                    },
+                    {
+                      "name": "description",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "parameters",
+                      "type_": {
+                        "display": "Mapping[str, str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "{}"
+                      }
                     }
                   ],
                   "return_type": {
@@ -12081,9 +14361,203 @@
               ],
               "is_async": false,
               "deprecated": null
+            },
+            {
+              "name": "set_description",
+              "doc": "Set the description. Returns self for method chaining (snapshot mutation).",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "description",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "OneHotConstraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "set_name",
+              "doc": "Set the name. Returns self for method chaining (snapshot mutation).",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "OneHotConstraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "set_parameters",
+              "doc": "Replace all parameters. Returns self for method chaining (snapshot mutation).",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "parameters",
+                      "type_": {
+                        "display": "Mapping[str, str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "OneHotConstraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "set_subscripts",
+              "doc": "Set the subscripts. Returns self for method chaining (snapshot mutation).",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "subscripts",
+                      "type_": {
+                        "display": "Sequence[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "OneHotConstraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
             }
           ],
           "attributes": [
+            {
+              "name": "description",
+              "doc": "",
+              "type_": {
+                "display": "Optional[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "name",
+              "doc": "",
+              "type_": {
+                "display": "Optional[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "parameters",
+              "doc": "",
+              "type_": {
+                "display": "dict[str, str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "subscripts",
+              "doc": "",
+              "type_": {
+                "display": "list[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
             {
               "name": "variables",
               "doc": "",
@@ -13083,6 +15557,136 @@
               "deprecated": null
             },
             {
+              "name": "add_constraint",
+              "doc": "Add a regular constraint to this parametric instance.\n\nPicks an unused {class}`~ommx.v1.ConstraintID`, drains the wrapper's\nmetadata snapshot into this parametric instance's SoA store, and\nreturns an {class}`~ommx.v1.AttachedConstraint` bound to the new id.\nThe input {class}`~ommx.v1.Constraint` is not mutated; subsequent\nwrites that should land on this parametric instance must go through\nthe returned handle.\n\nRaises {class}`ValueError` if the constraint references an id that is\nneither a defined decision variable nor a defined parameter, or if it\nreferences an id currently used as a substitution-dependency key.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "constraint",
+                      "type_": {
+                        "display": "Constraint",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "AttachedConstraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "add_decision_variable",
+              "doc": "Add a decision variable to this parametric instance. Returns an\n{class}`~ommx.v1.AttachedDecisionVariable` bound to the variable's\nid — a write-through handle for further metadata mutation.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "variable",
+                      "type_": {
+                        "display": "DecisionVariable",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "AttachedDecisionVariable",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "add_indicator_constraint",
+              "doc": "Add an indicator constraint to this parametric instance.\n\nPicks an unused {class}`~ommx.v1.IndicatorConstraintID`, drains the\nwrapper's metadata snapshot into this parametric instance's SoA\nstore, and returns an\n{class}`~ommx.v1.AttachedIndicatorConstraint` bound to the new id.\n\nRaises {class}`ValueError` if the constraint references an id that\nis neither a defined decision variable nor a defined parameter, or\nif it references an id currently used as a substitution-dependency\nkey.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "constraint",
+                      "type_": {
+                        "display": "IndicatorConstraint",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "AttachedIndicatorConstraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "add_one_hot_constraint",
+              "doc": "Add a one-hot constraint to this parametric instance.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "constraint",
+                      "type_": {
+                        "display": "OneHotConstraint",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "AttachedOneHotConstraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "add_sos1_constraint",
+              "doc": "Add a SOS1 constraint to this parametric instance.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "constraint",
+                      "type_": {
+                        "display": "Sos1Constraint",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "AttachedSos1Constraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "add_user_annotation",
               "doc": "",
               "signatures": [
@@ -13170,6 +15774,32 @@
                   ],
                   "return_type": {
                     "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "attached_decision_variable",
+              "doc": "Look up the {class}`~ommx.v1.AttachedDecisionVariable` for the given\nid — a write-through handle.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "variable_id",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "AttachedDecisionVariable",
                     "link_target": null,
                     "children": []
                   }
@@ -13625,6 +16255,93 @@
                         ]
                       },
                       "default": null
+                    },
+                    {
+                      "name": "indicator_constraints",
+                      "type_": {
+                        "display": "Optional[Mapping[int, IndicatorConstraint]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Mapping[int, IndicatorConstraint]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "int",
+                                "link_target": null,
+                                "children": []
+                              },
+                              {
+                                "display": "IndicatorConstraint",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "one_hot_constraints",
+                      "type_": {
+                        "display": "Optional[Mapping[int, OneHotConstraint]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Mapping[int, OneHotConstraint]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "int",
+                                "link_target": null,
+                                "children": []
+                              },
+                              {
+                                "display": "OneHotConstraint",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "sos1_constraints",
+                      "type_": {
+                        "display": "Optional[Mapping[int, Sos1Constraint]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Mapping[int, Sos1Constraint]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "int",
+                                "link_target": null,
+                                "children": []
+                              },
+                              {
+                                "display": "Sos1Constraint",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
                     },
                     {
                       "name": "named_functions",
@@ -14095,9 +16812,9 @@
             },
             {
               "name": "constraints",
-              "doc": "",
+              "doc": "Dict of all active constraints in the instance keyed by their IDs.\n\nEach value is an {class}`~ommx.v1.AttachedConstraint`: a write-through\nhandle whose getters read from this parametric instance's SoA store\nand whose metadata setters write back through to it. Use\n{meth}`~ommx.v1.AttachedConstraint.detach` to materialize a\n{class}`~ommx.v1.Constraint` snapshot if you need an independent copy.",
               "type_": {
-                "display": "dict[int, Constraint]",
+                "display": "dict[int, AttachedConstraint]",
                 "link_target": null,
                 "children": [
                   {
@@ -14106,7 +16823,7 @@
                     "children": []
                   },
                   {
-                    "display": "Constraint",
+                    "display": "AttachedConstraint",
                     "link_target": null,
                     "children": []
                   }
@@ -14166,7 +16883,7 @@
             },
             {
               "name": "decision_variables",
-              "doc": "",
+              "doc": "List of all decision variables in the parametric instance sorted by\ntheir IDs (snapshots, suitable for arithmetic).",
               "type_": {
                 "display": "list[DecisionVariable]",
                 "link_target": null,
@@ -14190,6 +16907,28 @@
                 "children": [
                   {
                     "display": "InstanceDescription",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "indicator_constraints",
+              "doc": "Dict of all active indicator constraints in the parametric instance\nkeyed by their IDs.\n\nEach value is an {class}`~ommx.v1.AttachedIndicatorConstraint`: a\nwrite-through handle whose getters read from this parametric\ninstance's SoA store and whose metadata setters write back through\nto it.",
+              "type_": {
+                "display": "dict[int, AttachedIndicatorConstraint]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "AttachedIndicatorConstraint",
                     "link_target": null,
                     "children": []
                   }
@@ -14280,6 +17019,28 @@
               "is_readonly": true
             },
             {
+              "name": "one_hot_constraints",
+              "doc": "Dict of all active one-hot constraints in the parametric instance\nkeyed by their IDs. Each value is an\n{class}`~ommx.v1.AttachedOneHotConstraint`.",
+              "type_": {
+                "display": "dict[int, AttachedOneHotConstraint]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "AttachedOneHotConstraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "parameter_ids",
               "doc": "",
               "type_": {
@@ -14336,12 +17097,100 @@
               "is_readonly": true
             },
             {
+              "name": "removed_indicator_constraints",
+              "doc": "Dict of all removed indicator constraints in the parametric\ninstance keyed by their IDs.",
+              "type_": {
+                "display": "dict[int, RemovedIndicatorConstraint]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "RemovedIndicatorConstraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "removed_one_hot_constraints",
+              "doc": "Dict of all removed one-hot constraints in the parametric instance\nkeyed by their IDs. The removed map can become non-empty when an\n`Instance` whose one-hot constraints have been converted (via\n`convert_all_one_hots_to_constraints`) is round-tripped back to a\n`ParametricInstance` via `From<Instance>`.",
+              "type_": {
+                "display": "dict[int, RemovedOneHotConstraint]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "RemovedOneHotConstraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "removed_sos1_constraints",
+              "doc": "Dict of all removed SOS1 constraints in the parametric instance\nkeyed by their IDs. See {meth}`removed_one_hot_constraints` for the\nround-trip rationale.",
+              "type_": {
+                "display": "dict[int, RemovedSos1Constraint]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "RemovedSos1Constraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "sense",
               "doc": "",
               "type_": {
                 "display": "Sense",
                 "link_target": null,
                 "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "sos1_constraints",
+              "doc": "Dict of all active SOS1 constraints in the parametric instance keyed\nby their IDs. Each value is an {class}`~ommx.v1.AttachedSos1Constraint`.",
+              "type_": {
+                "display": "dict[int, AttachedSos1Constraint]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "AttachedSos1Constraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
               },
               "is_property": true,
               "is_readonly": true
@@ -17098,6 +19947,62 @@
               "is_readonly": true
             },
             {
+              "name": "description",
+              "doc": "",
+              "type_": {
+                "display": "Optional[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "name",
+              "doc": "",
+              "type_": {
+                "display": "Optional[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "parameters",
+              "doc": "",
+              "type_": {
+                "display": "dict[str, str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "removed_reason",
               "doc": "",
               "type_": {
@@ -17122,6 +20027,23 @@
                   },
                   {
                     "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "subscripts",
+              "doc": "",
+              "type_": {
+                "display": "list[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
                     "link_target": null,
                     "children": []
                   }
@@ -17186,6 +20108,62 @@
               "is_readonly": true
             },
             {
+              "name": "description",
+              "doc": "",
+              "type_": {
+                "display": "Optional[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "name",
+              "doc": "",
+              "type_": {
+                "display": "Optional[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "parameters",
+              "doc": "",
+              "type_": {
+                "display": "dict[str, str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "removed_reason",
               "doc": "",
               "type_": {
@@ -17210,6 +20188,23 @@
                   },
                   {
                     "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "subscripts",
+              "doc": "",
+              "type_": {
+                "display": "list[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
                     "link_target": null,
                     "children": []
                   }
@@ -20881,7 +23876,7 @@
             },
             {
               "name": "__new__",
-              "doc": "Create a new SOS1 constraint.\n\n**Args:**\n\n- `variables`: List of decision variable IDs (at most one can be non-zero)",
+              "doc": "Create a new SOS1 constraint.\n\n**Args:**\n\n- `variables`: List of decision variable IDs (at most one can be non-zero)\n- `name` / `subscripts` / `description` / `parameters`: Optional\n  metadata. Drained into the host's SoA store on insertion.",
               "signatures": [
                 {
                   "parameters": [
@@ -20899,6 +23894,83 @@
                         ]
                       },
                       "default": null
+                    },
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "subscripts",
+                      "type_": {
+                        "display": "Sequence[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "[]"
+                      }
+                    },
+                    {
+                      "name": "description",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "parameters",
+                      "type_": {
+                        "display": "Mapping[str, str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "{}"
+                      }
                     }
                   ],
                   "return_type": {
@@ -20926,9 +23998,203 @@
               ],
               "is_async": false,
               "deprecated": null
+            },
+            {
+              "name": "set_description",
+              "doc": "Set the description. Returns self for method chaining (snapshot mutation).",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "description",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Sos1Constraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "set_name",
+              "doc": "Set the name. Returns self for method chaining (snapshot mutation).",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Sos1Constraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "set_parameters",
+              "doc": "Replace all parameters. Returns self for method chaining (snapshot mutation).",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "parameters",
+                      "type_": {
+                        "display": "Mapping[str, str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Sos1Constraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "set_subscripts",
+              "doc": "Set the subscripts. Returns self for method chaining (snapshot mutation).",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "subscripts",
+                      "type_": {
+                        "display": "Sequence[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Sos1Constraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
             }
           ],
           "attributes": [
+            {
+              "name": "description",
+              "doc": "",
+              "type_": {
+                "display": "Optional[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "name",
+              "doc": "",
+              "type_": {
+                "display": "Optional[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "parameters",
+              "doc": "",
+              "type_": {
+                "display": "dict[str, str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "subscripts",
+              "doc": "",
+              "type_": {
+                "display": "list[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
             {
               "name": "variables",
               "doc": "",
@@ -21465,6 +24731,10 @@
     "ommx.artifact.set_local_registry_root": "ommx.artifact",
     "ommx.v1.AdditionalCapability": "ommx.v1",
     "ommx.v1.AttachedConstraint": "ommx.v1",
+    "ommx.v1.AttachedDecisionVariable": "ommx.v1",
+    "ommx.v1.AttachedIndicatorConstraint": "ommx.v1",
+    "ommx.v1.AttachedOneHotConstraint": "ommx.v1",
+    "ommx.v1.AttachedSos1Constraint": "ommx.v1",
     "ommx.v1.Bound": "ommx.v1",
     "ommx.v1.Constraint": "ommx.v1",
     "ommx.v1.DecisionVariable": "ommx.v1",

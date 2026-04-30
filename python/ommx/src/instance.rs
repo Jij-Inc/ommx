@@ -153,21 +153,33 @@ impl Instance {
             builder = builder.indicator_constraints(rust_indicator_constraints);
         }
 
+        let mut one_hot_metadata_pairs: Vec<(ommx::OneHotConstraintID, ommx::ConstraintMetadata)> =
+            Vec::new();
         if let Some(ohs) = one_hot_constraints {
             let rust_one_hot_constraints: BTreeMap<
                 ommx::OneHotConstraintID,
                 ommx::OneHotConstraint,
             > = ohs
                 .into_iter()
-                .map(|(id, oh)| (ommx::OneHotConstraintID::from(id), oh.0))
+                .map(|(id, oh)| {
+                    let oid = ommx::OneHotConstraintID::from(id);
+                    one_hot_metadata_pairs.push((oid, oh.1));
+                    (oid, oh.0)
+                })
                 .collect();
             builder = builder.one_hot_constraints(rust_one_hot_constraints);
         }
 
+        let mut sos1_metadata_pairs: Vec<(ommx::Sos1ConstraintID, ommx::ConstraintMetadata)> =
+            Vec::new();
         if let Some(s1s) = sos1_constraints {
             let rust_sos1_constraints: BTreeMap<ommx::Sos1ConstraintID, ommx::Sos1Constraint> = s1s
                 .into_iter()
-                .map(|(id, s1)| (ommx::Sos1ConstraintID::from(id), s1.0))
+                .map(|(id, s1)| {
+                    let sid = ommx::Sos1ConstraintID::from(id);
+                    sos1_metadata_pairs.push((sid, s1.1));
+                    (sid, s1.0)
+                })
                 .collect();
             builder = builder.sos1_constraints(rust_sos1_constraints);
         }
@@ -205,6 +217,14 @@ impl Instance {
         let indicator_meta = inner.indicator_constraint_metadata_mut();
         for (id, m) in indicator_metadata_pairs {
             indicator_meta.insert(id, m);
+        }
+        let one_hot_meta = inner.one_hot_constraint_metadata_mut();
+        for (id, m) in one_hot_metadata_pairs {
+            one_hot_meta.insert(id, m);
+        }
+        let sos1_meta = inner.sos1_constraint_metadata_mut();
+        for (id, m) in sos1_metadata_pairs {
+            sos1_meta.insert(id, m);
         }
         let nf_meta = inner.named_function_metadata_mut();
         for (id, m) in named_function_metadata_pairs {
@@ -290,6 +310,12 @@ impl Instance {
     }
 
     /// List of all decision variables in the instance sorted by their IDs.
+    ///
+    /// Returns {class}`~ommx.v1.DecisionVariable` snapshots — independent
+    /// values that participate in arithmetic to build expressions
+    /// (`x + y`, `2 * x` etc.). For write-through metadata mutation, use
+    /// {meth}`add_decision_variable` (when adding) or
+    /// {meth}`attached_decision_variable` (when looking up by id).
     #[getter]
     pub fn decision_variables(&self) -> Vec<DecisionVariable> {
         let metadata = self.inner.variable_metadata();
@@ -298,6 +324,55 @@ impl Instance {
             .iter()
             .map(|(id, var)| DecisionVariable::from_parts(var.clone(), metadata.collect_for(*id)))
             .collect()
+    }
+
+    /// Add a decision variable to this instance.
+    ///
+    /// Drains the wrapper's metadata snapshot into this instance's SoA
+    /// store and returns an {class}`~ommx.v1.AttachedDecisionVariable`
+    /// bound to the variable's id — a write-through handle for further
+    /// metadata mutation. The original wrapper is not modified.
+    ///
+    /// Raises {class}`ValueError` if the variable's id collides with an
+    /// existing variable, parameter, or substitution-dependency key.
+    pub fn add_decision_variable(
+        slf: Bound<'_, Self>,
+        variable: DecisionVariable,
+    ) -> Result<crate::AttachedDecisionVariable> {
+        let id = {
+            let mut inst = slf.borrow_mut();
+            inst.inner.add_decision_variable(variable.0, variable.1)?
+        };
+        Ok(crate::AttachedDecisionVariable::from_instance(
+            slf.unbind(),
+            id,
+        ))
+    }
+
+    /// Return an {class}`~ommx.v1.AttachedDecisionVariable` bound to the
+    /// given id — a write-through handle whose metadata setters update
+    /// this instance's SoA store.
+    ///
+    /// Unlike `decision_variables[i]` (which returns a snapshot suitable
+    /// for arithmetic), the returned handle does not support arithmetic.
+    /// Call {meth}`~ommx.v1.AttachedDecisionVariable.detach` to obtain a
+    /// snapshot.
+    ///
+    /// Raises {class}`KeyError` if no variable with `variable_id` exists.
+    pub fn attached_decision_variable(
+        slf: Bound<'_, Self>,
+        variable_id: u64,
+    ) -> PyResult<crate::AttachedDecisionVariable> {
+        let id = VariableID::from(variable_id);
+        if !slf.borrow().inner.decision_variables().contains_key(&id) {
+            return Err(PyKeyError::new_err(format!(
+                "Decision variable with ID {variable_id} not found"
+            )));
+        }
+        Ok(crate::AttachedDecisionVariable::from_instance(
+            slf.unbind(),
+            id,
+        ))
     }
 
     /// Dict of all active constraints in the instance keyed by their IDs.
@@ -316,7 +391,7 @@ impl Instance {
             .map(|id| {
                 (
                     id.into_inner(),
-                    crate::AttachedConstraint::new(py_instance.clone_ref(py), id),
+                    crate::AttachedConstraint::from_instance(py_instance.clone_ref(py), id),
                 )
             })
             .collect()
@@ -342,23 +417,64 @@ impl Instance {
             let mut inst = slf.borrow_mut();
             inst.inner.add_constraint(constraint.0, constraint.1)?
         };
-        Ok(crate::AttachedConstraint::new(slf.unbind(), id))
+        Ok(crate::AttachedConstraint::from_instance(slf.unbind(), id))
     }
 
-    /// Dict of all indicator constraints in the instance keyed by their IDs.
+    /// Dict of all active indicator constraints in the instance keyed by
+    /// their IDs.
+    ///
+    /// Each value is an {class}`~ommx.v1.AttachedIndicatorConstraint`: a
+    /// write-through handle whose getters read from this instance's SoA
+    /// store and whose metadata setters write back through to it.
     #[getter]
-    pub fn indicator_constraints(&self) -> BTreeMap<u64, crate::IndicatorConstraint> {
-        let metadata = self.inner.indicator_constraint_collection().metadata();
-        self.inner
+    pub fn indicator_constraints(
+        slf: Bound<'_, Self>,
+    ) -> BTreeMap<u64, crate::AttachedIndicatorConstraint> {
+        let py = slf.py();
+        let ids: Vec<ommx::IndicatorConstraintID> = slf
+            .borrow()
+            .inner
             .indicator_constraints()
-            .iter()
-            .map(|(id, ic)| {
+            .keys()
+            .copied()
+            .collect();
+        let py_instance: Py<Self> = slf.unbind();
+        ids.into_iter()
+            .map(|id| {
                 (
                     id.into_inner(),
-                    crate::IndicatorConstraint::from_parts(ic.clone(), metadata.collect_for(*id)),
+                    crate::AttachedIndicatorConstraint::from_instance(
+                        py_instance.clone_ref(py),
+                        id,
+                    ),
                 )
             })
             .collect()
+    }
+
+    /// Add an indicator constraint to this instance.
+    ///
+    /// Picks an unused {class}`~ommx.v1.IndicatorConstraintID`, drains the
+    /// wrapper's metadata snapshot into this instance's SoA store, and
+    /// returns an {class}`~ommx.v1.AttachedIndicatorConstraint` bound to the
+    /// new id.
+    ///
+    /// Raises {class}`ValueError` if the constraint references an undefined
+    /// decision variable or one currently used as a substitution-dependency
+    /// key.
+    pub fn add_indicator_constraint(
+        slf: Bound<'_, Self>,
+        constraint: crate::IndicatorConstraint,
+    ) -> Result<crate::AttachedIndicatorConstraint> {
+        let id = {
+            let mut inst = slf.borrow_mut();
+            inst.inner
+                .add_indicator_constraint(constraint.0, constraint.1)?
+        };
+        Ok(crate::AttachedIndicatorConstraint::from_instance(
+            slf.unbind(),
+            id,
+        ))
     }
 
     /// Dict of all removed indicator constraints in the instance keyed by their IDs.
@@ -383,51 +499,126 @@ impl Instance {
             .collect()
     }
 
-    /// Dict of all one-hot constraints in the instance keyed by their IDs.
+    /// Dict of all active one-hot constraints in the instance keyed by their IDs.
+    ///
+    /// Each value is an {class}`~ommx.v1.AttachedOneHotConstraint`: a
+    /// write-through handle whose getters read from this instance's SoA
+    /// store and whose metadata setters write back through to it.
     #[getter]
-    pub fn one_hot_constraints(&self) -> BTreeMap<u64, crate::OneHotConstraint> {
-        self.inner
+    pub fn one_hot_constraints(
+        slf: Bound<'_, Self>,
+    ) -> BTreeMap<u64, crate::AttachedOneHotConstraint> {
+        let py = slf.py();
+        let ids: Vec<ommx::OneHotConstraintID> = slf
+            .borrow()
+            .inner
             .one_hot_constraints()
-            .iter()
-            .map(|(id, c)| (id.into_inner(), crate::OneHotConstraint(c.clone())))
+            .keys()
+            .copied()
+            .collect();
+        let py_instance: Py<Self> = slf.unbind();
+        ids.into_iter()
+            .map(|id| {
+                (
+                    id.into_inner(),
+                    crate::AttachedOneHotConstraint::from_instance(py_instance.clone_ref(py), id),
+                )
+            })
             .collect()
+    }
+
+    /// Add a one-hot constraint to this instance.
+    pub fn add_one_hot_constraint(
+        slf: Bound<'_, Self>,
+        constraint: crate::OneHotConstraint,
+    ) -> Result<crate::AttachedOneHotConstraint> {
+        let id = {
+            let mut inst = slf.borrow_mut();
+            inst.inner
+                .add_one_hot_constraint(constraint.0, constraint.1)?
+        };
+        Ok(crate::AttachedOneHotConstraint::from_instance(
+            slf.unbind(),
+            id,
+        ))
     }
 
     /// Dict of all removed one-hot constraints in the instance keyed by their IDs.
     #[getter]
     pub fn removed_one_hot_constraints(&self) -> BTreeMap<u64, crate::RemovedOneHotConstraint> {
+        let metadata = self.inner.one_hot_constraint_metadata();
         self.inner
             .removed_one_hot_constraints()
             .iter()
             .map(|(id, (c, r))| {
                 (
                     id.into_inner(),
-                    crate::RemovedOneHotConstraint::from_pair(c.clone(), r.clone()),
+                    crate::RemovedOneHotConstraint::from_parts(
+                        c.clone(),
+                        metadata.collect_for(*id),
+                        r.clone(),
+                    ),
                 )
             })
             .collect()
     }
 
-    /// Dict of all SOS1 constraints in the instance keyed by their IDs.
+    /// Dict of all active SOS1 constraints in the instance keyed by their IDs.
+    ///
+    /// Each value is an {class}`~ommx.v1.AttachedSos1Constraint`: a
+    /// write-through handle whose getters read from this instance's SoA
+    /// store and whose metadata setters write back through to it.
     #[getter]
-    pub fn sos1_constraints(&self) -> BTreeMap<u64, crate::Sos1Constraint> {
-        self.inner
+    pub fn sos1_constraints(slf: Bound<'_, Self>) -> BTreeMap<u64, crate::AttachedSos1Constraint> {
+        let py = slf.py();
+        let ids: Vec<ommx::Sos1ConstraintID> = slf
+            .borrow()
+            .inner
             .sos1_constraints()
-            .iter()
-            .map(|(id, c)| (id.into_inner(), crate::Sos1Constraint(c.clone())))
+            .keys()
+            .copied()
+            .collect();
+        let py_instance: Py<Self> = slf.unbind();
+        ids.into_iter()
+            .map(|id| {
+                (
+                    id.into_inner(),
+                    crate::AttachedSos1Constraint::from_instance(py_instance.clone_ref(py), id),
+                )
+            })
             .collect()
+    }
+
+    /// Add a SOS1 constraint to this instance.
+    pub fn add_sos1_constraint(
+        slf: Bound<'_, Self>,
+        constraint: crate::Sos1Constraint,
+    ) -> Result<crate::AttachedSos1Constraint> {
+        let id = {
+            let mut inst = slf.borrow_mut();
+            inst.inner.add_sos1_constraint(constraint.0, constraint.1)?
+        };
+        Ok(crate::AttachedSos1Constraint::from_instance(
+            slf.unbind(),
+            id,
+        ))
     }
 
     /// Dict of all removed SOS1 constraints in the instance keyed by their IDs.
     #[getter]
     pub fn removed_sos1_constraints(&self) -> BTreeMap<u64, crate::RemovedSos1Constraint> {
+        let metadata = self.inner.sos1_constraint_metadata();
         self.inner
             .removed_sos1_constraints()
             .iter()
             .map(|(id, (c, r))| {
                 (
                     id.into_inner(),
-                    crate::RemovedSos1Constraint::from_pair(c.clone(), r.clone()),
+                    crate::RemovedSos1Constraint::from_parts(
+                        c.clone(),
+                        metadata.collect_for(*id),
+                        r.clone(),
+                    ),
                 )
             })
             .collect()

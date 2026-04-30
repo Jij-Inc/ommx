@@ -19,15 +19,19 @@ ommx.v1
    _items/ommx.v1.Polynomial
    _items/ommx.v1.Function
    _items/ommx.v1.DecisionVariable
+   _items/ommx.v1.AttachedDecisionVariable
    _items/ommx.v1.Parameter
    _items/ommx.v1.AdditionalCapability
    _items/ommx.v1.Constraint
    _items/ommx.v1.AttachedConstraint
    _items/ommx.v1.IndicatorConstraint
+   _items/ommx.v1.AttachedIndicatorConstraint
    _items/ommx.v1.RemovedIndicatorConstraint
    _items/ommx.v1.OneHotConstraint
+   _items/ommx.v1.AttachedOneHotConstraint
    _items/ommx.v1.RemovedOneHotConstraint
    _items/ommx.v1.Sos1Constraint
+   _items/ommx.v1.AttachedSos1Constraint
    _items/ommx.v1.RemovedSos1Constraint
    _items/ommx.v1.RemovedConstraint
    _items/ommx.v1.Provenance

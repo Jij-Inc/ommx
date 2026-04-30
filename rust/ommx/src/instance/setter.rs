@@ -2,10 +2,17 @@ use super::*;
 
 impl Instance {
     /// Internal helper to validate required IDs against precomputed sets.
+    ///
+    /// Mirrors the `used / fixed / dependent` disjointness invariant the
+    /// builder enforces (`builder.rs`): a constraint or objective cannot
+    /// reference a variable whose value has been pinned via
+    /// [`DecisionVariable::substituted_value`] (`fixed`), nor a variable
+    /// used as a substitution-dependency key (`dependent`).
     fn validate_required_ids_with_sets(
         required_ids: &VariableIDSet,
         variable_ids: &VariableIDSet,
         dependency_keys: &VariableIDSet,
+        fixed_ids: &VariableIDSet,
     ) -> crate::Result<()> {
         // Check if all required IDs are defined
         if !required_ids.is_subset(variable_ids) {
@@ -14,11 +21,18 @@ impl Instance {
         }
 
         // Check if any required ID is a dependent variable (used as a key in decision_variable_dependency)
-        let mut intersection = required_ids.intersection(dependency_keys);
-        if let Some(&id) = intersection.next() {
+        if let Some(&id) = required_ids.intersection(dependency_keys).next() {
             crate::bail!(
                 { ?id },
                 "Dependent variable cannot be used in objectives or constraints: {id:?}",
+            );
+        }
+
+        // Check if any required ID is a fixed (substituted) variable.
+        if let Some(&id) = required_ids.intersection(fixed_ids).next() {
+            crate::bail!(
+                { ?id },
+                "Fixed variable {id:?} (substituted_value set) cannot be used in objectives or constraints",
             );
         }
 
@@ -26,11 +40,24 @@ impl Instance {
     }
 
     /// Validate that all required variable IDs are defined in the instance
-    /// and are not dependent variables (i.e., not used as keys in decision_variable_dependency)
+    /// and are not dependent variables (i.e., not used as keys in
+    /// decision_variable_dependency) and are not fixed variables
+    /// (substituted_value set).
     fn validate_required_ids(&self, required_ids: VariableIDSet) -> crate::Result<()> {
         let variable_ids: VariableIDSet = self.decision_variables.keys().cloned().collect();
         let dependency_keys: VariableIDSet = self.decision_variable_dependency.keys().collect();
-        Self::validate_required_ids_with_sets(&required_ids, &variable_ids, &dependency_keys)
+        let fixed_ids: VariableIDSet = self
+            .decision_variables
+            .values()
+            .filter(|dv| dv.substituted_value().is_some())
+            .map(|dv| dv.id())
+            .collect();
+        Self::validate_required_ids_with_sets(
+            &required_ids,
+            &variable_ids,
+            &dependency_keys,
+            &fixed_ids,
+        )
     }
 
     /// Set the objective function
@@ -60,6 +87,108 @@ impl Instance {
         let id = self.constraint_collection.unused_id();
         self.constraint_collection
             .insert_with(id, constraint, metadata);
+        Ok(id)
+    }
+
+    /// Verify that the given id is a binary decision variable.
+    ///
+    /// Used at the structural positions of indicator and one-hot constraints,
+    /// where the [`Instance`] builder enforces `Kind::Binary` and the same
+    /// invariant must hold for the post-construction `add_*` setters.
+    fn require_binary_variable(&self, id: VariableID) -> crate::Result<()> {
+        let dv = self
+            .decision_variables
+            .get(&id)
+            .ok_or_else(|| crate::error!("Variable {id:?} is not defined in decision_variables"))?;
+        if dv.kind() != crate::decision_variable::Kind::Binary {
+            crate::bail!({ ?id }, "Variable {id:?} must be binary");
+        }
+        Ok(())
+    }
+
+    /// Insert a new indicator constraint with its metadata, picking an unused id.
+    ///
+    /// Returns the newly assigned [`crate::IndicatorConstraintID`].
+    /// Enforces the same invariants as the [`Instance`] builder:
+    /// - All variable IDs referenced by the constraint (function plus the
+    ///   indicator variable) must be present in `decision_variables` and must
+    ///   not be substitution-dependency keys.
+    /// - The indicator variable must have [`Kind::Binary`](crate::decision_variable::Kind).
+    pub fn add_indicator_constraint(
+        &mut self,
+        constraint: crate::IndicatorConstraint,
+        metadata: crate::ConstraintMetadata,
+    ) -> crate::Result<crate::IndicatorConstraintID> {
+        self.validate_required_ids(constraint.required_ids())?;
+        self.require_binary_variable(constraint.indicator_variable)?;
+        let id = self.indicator_constraint_collection.unused_id();
+        self.indicator_constraint_collection
+            .insert_with(id, constraint, metadata);
+        Ok(id)
+    }
+
+    /// Insert a new one-hot constraint with its metadata, picking an unused id.
+    ///
+    /// Returns the newly assigned [`crate::OneHotConstraintID`]. Enforces
+    /// the [`Instance`] builder's invariants: every variable in the one-hot
+    /// set must be defined and have [`Kind::Binary`](crate::decision_variable::Kind).
+    pub fn add_one_hot_constraint(
+        &mut self,
+        constraint: crate::OneHotConstraint,
+        metadata: crate::ConstraintMetadata,
+    ) -> crate::Result<crate::OneHotConstraintID> {
+        self.validate_required_ids(constraint.required_ids())?;
+        for var_id in &constraint.variables {
+            self.require_binary_variable(*var_id)?;
+        }
+        let id = self.one_hot_constraint_collection.unused_id();
+        self.one_hot_constraint_collection
+            .insert_with(id, constraint, metadata);
+        Ok(id)
+    }
+
+    /// Insert a new SOS1 constraint with its metadata, picking an unused id.
+    ///
+    /// Returns the newly assigned [`crate::Sos1ConstraintID`]. Enforces the
+    /// [`Instance`] builder's invariants: the variable set must be non-empty
+    /// and every variable must be defined in `decision_variables`.
+    pub fn add_sos1_constraint(
+        &mut self,
+        constraint: crate::Sos1Constraint,
+        metadata: crate::ConstraintMetadata,
+    ) -> crate::Result<crate::Sos1ConstraintID> {
+        if constraint.variables.is_empty() {
+            crate::bail!("SOS1 constraint must contain at least one variable");
+        }
+        self.validate_required_ids(constraint.required_ids())?;
+        let id = self.sos1_constraint_collection.unused_id();
+        self.sos1_constraint_collection
+            .insert_with(id, constraint, metadata);
+        Ok(id)
+    }
+
+    /// Insert a decision variable with its metadata.
+    ///
+    /// The decision variable's `id()` must not collide with any existing
+    /// variable, and must not be a substitution-dependency key. Returns the
+    /// inserted variable's id for symmetry with `add_constraint`.
+    pub fn add_decision_variable(
+        &mut self,
+        variable: crate::DecisionVariable,
+        metadata: crate::DecisionVariableMetadata,
+    ) -> crate::Result<crate::VariableID> {
+        let id = variable.id();
+        if self.decision_variables.contains_key(&id) {
+            crate::bail!({ ?id }, "Duplicate decision variable ID: {id:?}");
+        }
+        if self.decision_variable_dependency.keys().any(|k| k == id) {
+            crate::bail!(
+                { ?id },
+                "Variable id {id:?} is currently used as a substitution-dependency key",
+            );
+        }
+        self.decision_variables.insert(id, variable);
+        self.variable_metadata.insert(id, metadata);
         Ok(id)
     }
 
@@ -118,11 +247,22 @@ impl Instance {
         // Build validation sets once
         let variable_ids: VariableIDSet = self.decision_variables.keys().cloned().collect();
         let dependency_keys: VariableIDSet = self.decision_variable_dependency.keys().collect();
+        let fixed_ids: VariableIDSet = self
+            .decision_variables
+            .values()
+            .filter(|dv| dv.substituted_value().is_some())
+            .map(|dv| dv.id())
+            .collect();
 
         // Validate all constraints first (atomic: fail before any insertion)
         for (_, constraint) in &constraints {
             let required_ids = constraint.required_ids();
-            Self::validate_required_ids_with_sets(&required_ids, &variable_ids, &dependency_keys)?;
+            Self::validate_required_ids_with_sets(
+                &required_ids,
+                &variable_ids,
+                &dependency_keys,
+                &fixed_ids,
+            )?;
         }
 
         // Insert all constraints (validation already done)
@@ -176,6 +316,218 @@ impl Instance {
             .max(max_in_removed)
             .map(|max| ConstraintID::from(max + 1))
             .unwrap_or(ConstraintID::from(0))
+    }
+}
+
+impl ParametricInstance {
+    /// Validate that all required IDs are defined either as decision variables
+    /// or as parameters, and are not currently used as substitution-dependency
+    /// keys.
+    ///
+    /// `ParametricInstance` validation differs from
+    /// [`Instance::validate_required_ids`](Instance) by also accepting
+    /// parameter IDs — constraints in a parametric instance may reference
+    /// parameters that will be substituted later via
+    /// [`ParametricInstance::with_parameters`].
+    fn validate_required_ids(&self, required_ids: VariableIDSet) -> crate::Result<()> {
+        let variable_ids: VariableIDSet = self.decision_variables().keys().cloned().collect();
+        let parameter_ids: VariableIDSet = self.parameters().keys().cloned().collect();
+        let known_ids: VariableIDSet = variable_ids.union(&parameter_ids).cloned().collect();
+        let dependency_keys: VariableIDSet = self.decision_variable_dependency().keys().collect();
+        let fixed_ids: VariableIDSet = self
+            .decision_variables()
+            .values()
+            .filter(|dv| dv.substituted_value().is_some())
+            .map(|dv| dv.id())
+            .collect();
+
+        if !required_ids.is_subset(&known_ids) {
+            let id = *required_ids.difference(&known_ids).next().unwrap();
+            crate::bail!({ ?id }, "Undefined variable ID is used: {id:?}");
+        }
+        if let Some(&id) = required_ids.intersection(&dependency_keys).next() {
+            crate::bail!(
+                { ?id },
+                "Dependent variable cannot be used in objectives or constraints: {id:?}",
+            );
+        }
+        if let Some(&id) = required_ids.intersection(&fixed_ids).next() {
+            crate::bail!(
+                { ?id },
+                "Fixed variable {id:?} (substituted_value set) cannot be used in objectives or constraints",
+            );
+        }
+        Ok(())
+    }
+
+    /// Insert a new constraint with its metadata, picking an unused id.
+    ///
+    /// Mirrors [`Instance::add_constraint`] for parametric instances.
+    /// Returns the newly assigned [`ConstraintID`]. The metadata is drained
+    /// into the per-constraint [`ConstraintMetadataStore`]; pass
+    /// [`ConstraintMetadata::default`](crate::ConstraintMetadata) for an
+    /// unannotated constraint.
+    ///
+    /// All IDs referenced by the constraint must already be present in either
+    /// `decision_variables` or `parameters`, and must not be substitution-
+    /// dependency keys.
+    pub fn add_constraint(
+        &mut self,
+        constraint: Constraint,
+        metadata: crate::ConstraintMetadata,
+    ) -> crate::Result<ConstraintID> {
+        self.validate_required_ids(constraint.required_ids())?;
+        let id = self.constraint_collection.unused_id();
+        self.constraint_collection
+            .insert_with(id, constraint, metadata);
+        Ok(id)
+    }
+
+    /// Validate that the given ids are real decision variables (not parameters).
+    ///
+    /// Used for *structural* positions in special constraints — the indicator
+    /// variable and the variable sets of one-hot / SOS1 — where parameter ids
+    /// would not be substitutable in a way that preserves the constraint's
+    /// semantics. Function-body ids continue to be validated through
+    /// [`Self::validate_required_ids`], which permits parameters.
+    fn require_decision_variables(&self, ids: VariableIDSet) -> crate::Result<()> {
+        let variable_ids: VariableIDSet = self.decision_variables().keys().cloned().collect();
+        if !ids.is_subset(&variable_ids) {
+            let id = *ids.difference(&variable_ids).next().unwrap();
+            if self.parameters().contains_key(&id) {
+                crate::bail!(
+                    { ?id },
+                    "Parameter id {id:?} cannot occupy a structural variable position; \
+                     structural variables in indicator / one-hot / SOS1 constraints \
+                     must be decision variables",
+                );
+            }
+            crate::bail!({ ?id }, "Undefined variable ID is used: {id:?}");
+        }
+        Ok(())
+    }
+
+    /// Verify that the given id is a binary decision variable. Mirrors
+    /// [`Instance::require_binary_variable`](Instance) for the parametric
+    /// host. Parameter ids are rejected because they are not decision
+    /// variables in the first place — the matching error message points
+    /// at the structural-position rule from
+    /// [`Self::require_decision_variables`].
+    fn require_binary_variable(&self, id: VariableID) -> crate::Result<()> {
+        let dv = self.decision_variables().get(&id).ok_or_else(|| {
+            if self.parameters().contains_key(&id) {
+                crate::error!(
+                    "Parameter id {id:?} cannot occupy a structural variable position; \
+                     it must be a binary decision variable",
+                )
+            } else {
+                crate::error!("Variable {id:?} is not defined in decision_variables")
+            }
+        })?;
+        if dv.kind() != crate::decision_variable::Kind::Binary {
+            crate::bail!({ ?id }, "Variable {id:?} must be binary");
+        }
+        Ok(())
+    }
+
+    /// Insert a new indicator constraint with its metadata, picking an unused id.
+    ///
+    /// Mirrors [`Instance::add_indicator_constraint`] for parametric
+    /// instances. The function body may reference either decision variables
+    /// or parameters, but the indicator variable itself must be a binary
+    /// decision variable — substitution cannot replace a structural variable
+    /// position, and the indicator semantics require `Kind::Binary`.
+    pub fn add_indicator_constraint(
+        &mut self,
+        constraint: crate::IndicatorConstraint,
+        metadata: crate::ConstraintMetadata,
+    ) -> crate::Result<crate::IndicatorConstraintID> {
+        // Structural position: the indicator variable must be a binary
+        // decision variable, not a parameter or a non-binary variable.
+        self.require_binary_variable(constraint.indicator_variable)?;
+        // `validate_required_ids` (variables ∪ parameters minus dependency
+        // keys) is allowed to see the indicator variable here too: the
+        // variable-vs-parameter axis is already enforced above, so this
+        // call's only added contribution for the indicator variable is the
+        // dependency-key check.
+        self.validate_required_ids(constraint.required_ids())?;
+        let id = self.indicator_constraint_collection.unused_id();
+        self.indicator_constraint_collection
+            .insert_with(id, constraint, metadata);
+        Ok(id)
+    }
+
+    /// Insert a new one-hot constraint with its metadata, picking an unused id.
+    ///
+    /// All variables in the one-hot set are structural and must be binary
+    /// decision variables (parameter ids and non-binary kinds are rejected).
+    /// Dependency keys are also rejected.
+    pub fn add_one_hot_constraint(
+        &mut self,
+        constraint: crate::OneHotConstraint,
+        metadata: crate::ConstraintMetadata,
+    ) -> crate::Result<crate::OneHotConstraintID> {
+        for var_id in &constraint.variables {
+            self.require_binary_variable(*var_id)?;
+        }
+        self.validate_required_ids(constraint.required_ids())?;
+        let id = self.one_hot_constraint_collection.unused_id();
+        self.one_hot_constraint_collection
+            .insert_with(id, constraint, metadata);
+        Ok(id)
+    }
+
+    /// Insert a new SOS1 constraint with its metadata, picking an unused id.
+    ///
+    /// All variables in the SOS1 set are structural and must be decision
+    /// variables (parameter ids are rejected). The set must be non-empty.
+    /// Dependency keys are also rejected. Unlike one-hot, SOS1 does not
+    /// require `Kind::Binary`.
+    pub fn add_sos1_constraint(
+        &mut self,
+        constraint: crate::Sos1Constraint,
+        metadata: crate::ConstraintMetadata,
+    ) -> crate::Result<crate::Sos1ConstraintID> {
+        if constraint.variables.is_empty() {
+            crate::bail!("SOS1 constraint must contain at least one variable");
+        }
+        let required_ids = constraint.required_ids();
+        self.require_decision_variables(required_ids.clone())?;
+        self.validate_required_ids(required_ids)?;
+        let id = self.sos1_constraint_collection.unused_id();
+        self.sos1_constraint_collection
+            .insert_with(id, constraint, metadata);
+        Ok(id)
+    }
+
+    /// Insert a decision variable with its metadata.
+    ///
+    /// The variable's id must not collide with any existing decision
+    /// variable, parameter, or substitution-dependency key.
+    pub fn add_decision_variable(
+        &mut self,
+        variable: crate::DecisionVariable,
+        metadata: crate::DecisionVariableMetadata,
+    ) -> crate::Result<crate::VariableID> {
+        let id = variable.id();
+        if self.decision_variables().contains_key(&id) {
+            crate::bail!({ ?id }, "Duplicate decision variable ID: {id:?}");
+        }
+        if self.parameters().contains_key(&id) {
+            crate::bail!(
+                { ?id },
+                "Variable id {id:?} collides with an existing parameter id",
+            );
+        }
+        if self.decision_variable_dependency().keys().any(|k| k == id) {
+            crate::bail!(
+                { ?id },
+                "Variable id {id:?} is currently used as a substitution-dependency key",
+            );
+        }
+        self.decision_variables.insert(id, variable);
+        self.variable_metadata.insert(id, metadata);
+        Ok(id)
     }
 }
 
@@ -399,6 +751,41 @@ mod tests {
         );
         // Ensure no constraint was added
         assert_eq!(instance.constraints().len(), 0);
+    }
+
+    #[test]
+    fn test_add_constraint_rejects_fixed_variable() {
+        // Pin variable 2's value via substituted_value, then try to add a
+        // constraint that references it. The setter must reject — same rule
+        // the builder enforces (used ∩ fixed = ∅).
+        let mut decision_variables = btreemap! {
+            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
+            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
+        };
+        decision_variables
+            .get_mut(&VariableID::from(2))
+            .unwrap()
+            .substitute(0.0, crate::ATol::default())
+            .unwrap();
+
+        let objective = linear!(1) + coeff!(1.0);
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            objective.into(),
+            decision_variables,
+            BTreeMap::new(),
+        )
+        .unwrap();
+
+        let bad = crate::Constraint::equal_to_zero((linear!(2) + coeff!(1.0)).into());
+        let err = instance
+            .add_constraint(bad, crate::ConstraintMetadata::default())
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("Fixed variable") && err.to_string().contains("VariableID(2)"),
+            "unexpected error: {err}"
+        );
+        assert!(instance.constraints().is_empty());
     }
 
     #[test]

@@ -659,3 +659,207 @@ impl DecisionVariable {
         )
     }
 }
+
+/// Attached decision variable — a write-through handle bound to a host
+/// ({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).
+///
+/// `AttachedDecisionVariable` is returned by `add_decision_variable(v)`
+/// (insertion) and `attached_decision_variable(id)` (lookup) on both
+/// hosts. Unlike the constraint accessors, `decision_variables` keeps
+/// returning a list of snapshot {class}`~ommx.v1.DecisionVariable`s so
+/// that variables can still participate in arithmetic to build expressions
+/// (`x + y`, `2 * x`); a follow-up will extend `ToFunction` to accept
+/// `AttachedDecisionVariable` and let `decision_variables` switch to the
+/// attached form. Reads pull live data from the parent host's SoA store
+/// and metadata setters write back through to it.
+///
+/// `DecisionVariableMetadata` has no `provenance` field, so the
+/// write-through surface omits the corresponding getter.
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
+#[pyclass]
+pub struct AttachedDecisionVariable {
+    pub(crate) host: crate::ConstraintHost,
+    pub(crate) id: ommx::VariableID,
+}
+
+impl AttachedDecisionVariable {
+    pub fn new(host: crate::ConstraintHost, id: ommx::VariableID) -> Self {
+        Self { host, id }
+    }
+
+    pub fn from_instance(instance: Py<crate::Instance>, id: ommx::VariableID) -> Self {
+        Self::new(crate::ConstraintHost::Instance(instance), id)
+    }
+
+    pub fn from_parametric(
+        parametric: Py<crate::ParametricInstance>,
+        id: ommx::VariableID,
+    ) -> Self {
+        Self::new(crate::ConstraintHost::Parametric(parametric), id)
+    }
+}
+
+fn lookup_variable<'a>(
+    inst: &'a ommx::Instance,
+    id: ommx::VariableID,
+) -> pyo3::PyResult<&'a ommx::DecisionVariable> {
+    inst.decision_variables().get(&id).ok_or_else(|| {
+        pyo3::exceptions::PyKeyError::new_err(format!(
+            "decision variable id {} not found in instance",
+            id.into_inner()
+        ))
+    })
+}
+
+fn lookup_variable_parametric<'a>(
+    inst: &'a ommx::ParametricInstance,
+    id: ommx::VariableID,
+) -> pyo3::PyResult<&'a ommx::DecisionVariable> {
+    inst.decision_variables().get(&id).ok_or_else(|| {
+        pyo3::exceptions::PyKeyError::new_err(format!(
+            "decision variable id {} not found in parametric instance",
+            id.into_inner()
+        ))
+    })
+}
+
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
+#[pymethods]
+impl AttachedDecisionVariable {
+    /// The id this handle points at.
+    #[getter]
+    pub fn id(&self) -> u64 {
+        self.id.into_inner()
+    }
+
+    /// The parent host this variable lives in.
+    #[getter]
+    pub fn instance(&self, py: Python<'_>) -> Py<PyAny> {
+        match &self.host {
+            crate::ConstraintHost::Instance(p) => p.clone_ref(py).into_any(),
+            crate::ConstraintHost::Parametric(p) => p.clone_ref(py).into_any(),
+        }
+    }
+
+    /// Return a {class}`~ommx.v1.DecisionVariable` snapshot of the current
+    /// state. Mutations on the returned object do not propagate back.
+    pub fn detach(&self, py: Python<'_>) -> PyResult<DecisionVariable> {
+        match &self.host {
+            crate::ConstraintHost::Instance(p) => {
+                let inst = p.borrow(py);
+                let v = lookup_variable(&inst.inner, self.id)?.clone();
+                let metadata = inst.inner.variable_metadata().collect_for(self.id);
+                Ok(DecisionVariable::from_parts(v, metadata))
+            }
+            crate::ConstraintHost::Parametric(p) => {
+                let inst = p.borrow(py);
+                let v = lookup_variable_parametric(&inst.inner, self.id)?.clone();
+                let metadata = inst.inner.variable_metadata().collect_for(self.id);
+                Ok(DecisionVariable::from_parts(v, metadata))
+            }
+        }
+    }
+
+    #[getter]
+    pub fn kind(&self, py: Python<'_>) -> PyResult<i32> {
+        let with = |v: &ommx::DecisionVariable| -> i32 {
+            let kind: ommx::v1::decision_variable::Kind = v.kind().into();
+            kind as i32
+        };
+        match &self.host {
+            crate::ConstraintHost::Instance(p) => {
+                let inst = p.borrow(py);
+                Ok(with(lookup_variable(&inst.inner, self.id)?))
+            }
+            crate::ConstraintHost::Parametric(p) => {
+                let inst = p.borrow(py);
+                Ok(with(lookup_variable_parametric(&inst.inner, self.id)?))
+            }
+        }
+    }
+
+    #[getter]
+    pub fn bound(&self, py: Python<'_>) -> PyResult<VariableBound> {
+        match &self.host {
+            crate::ConstraintHost::Instance(p) => {
+                let inst = p.borrow(py);
+                Ok(VariableBound(
+                    lookup_variable(&inst.inner, self.id)?.bound(),
+                ))
+            }
+            crate::ConstraintHost::Parametric(p) => {
+                let inst = p.borrow(py);
+                Ok(VariableBound(
+                    lookup_variable_parametric(&inst.inner, self.id)?.bound(),
+                ))
+            }
+        }
+    }
+
+    #[getter]
+    pub fn substituted_value(&self, py: Python<'_>) -> PyResult<Option<f64>> {
+        match &self.host {
+            crate::ConstraintHost::Instance(p) => {
+                let inst = p.borrow(py);
+                Ok(lookup_variable(&inst.inner, self.id)?.substituted_value())
+            }
+            crate::ConstraintHost::Parametric(p) => {
+                let inst = p.borrow(py);
+                Ok(lookup_variable_parametric(&inst.inner, self.id)?.substituted_value())
+            }
+        }
+    }
+
+    pub fn __repr__(&self, py: Python<'_>) -> String {
+        let render = |v: &ommx::DecisionVariable, name: Option<&str>| -> String {
+            let kind: ommx::v1::decision_variable::Kind = v.kind().into();
+            format!(
+                "AttachedDecisionVariable(id={}, kind={}, name=\"{}\", bound=[{}, {}])",
+                v.id().into_inner(),
+                kind as i32,
+                name.unwrap_or(""),
+                v.bound().lower(),
+                v.bound().upper()
+            )
+        };
+        match &self.host {
+            crate::ConstraintHost::Instance(p) => {
+                let inst = p.borrow(py);
+                match lookup_variable(&inst.inner, self.id) {
+                    Ok(v) => render(v, inst.inner.variable_metadata().name(self.id)),
+                    Err(_) => format!(
+                        "AttachedDecisionVariable(id={}, dropped)",
+                        self.id.into_inner()
+                    ),
+                }
+            }
+            crate::ConstraintHost::Parametric(p) => {
+                let inst = p.borrow(py);
+                match lookup_variable_parametric(&inst.inner, self.id) {
+                    Ok(v) => render(v, inst.inner.variable_metadata().name(self.id)),
+                    Err(_) => format!(
+                        "AttachedDecisionVariable(id={}, dropped)",
+                        self.id.into_inner()
+                    ),
+                }
+            }
+        }
+    }
+
+    fn __copy__(&self, py: Python<'_>) -> Self {
+        Self {
+            host: self.host.clone_ref(py),
+            id: self.id,
+        }
+    }
+
+    fn __deepcopy__(&self, py: Python<'_>, _memo: Bound<'_, PyAny>) -> Self {
+        self.__copy__(py)
+    }
+}
+
+crate::attached_variable_metadata_methods!(
+    AttachedDecisionVariable,
+    variable_metadata,
+    variable_metadata_mut
+);
