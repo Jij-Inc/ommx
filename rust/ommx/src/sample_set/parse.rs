@@ -384,13 +384,14 @@ mod tests {
     fn test_sample_set_roundtrip_preserves_metadata() {
         use crate::constraint::SampledData;
         use crate::{
-            ATol, ConstraintID, DecisionVariable, Equality, SampleID, SampledDecisionVariable,
-            Sense, VariableID,
+            ATol, ConstraintID, DecisionVariable, Equality, NamedFunctionID, SampleID,
+            SampledDecisionVariable, Sense, VariableID,
         };
         use std::collections::BTreeMap;
 
         let var_id = VariableID::from(1);
         let cid = ConstraintID::from(10);
+        let nf_id = NamedFunctionID::from(0);
         let sample_id = SampleID::from(0);
 
         let dv = DecisionVariable::binary(var_id);
@@ -430,6 +431,35 @@ mod tests {
             constraint_metadata,
         );
 
+        // Add a sampled named function with non-empty metadata so the
+        // round-trip exercises the named_function_metadata SoA store too.
+        // `SampledNamedFunction` has module-private fields; construct via
+        // the v1 parse helper (same path Instance::evaluate_samples uses).
+        let sampled_nf = {
+            use crate::parse::Parse as _;
+            let v1_snf = crate::v1::SampledNamedFunction {
+                id: nf_id.into_inner(),
+                evaluated_values: Some(crate::v1::SampledValues {
+                    entries: vec![crate::v1::sampled_values::SampledValuesEntry {
+                        ids: vec![sample_id.into_inner()],
+                        value: 1.0,
+                    }],
+                }),
+                used_decision_variable_ids: vec![var_id.into_inner()],
+                ..Default::default()
+            };
+            let parsed: crate::named_function::parse::ParsedSampledNamedFunction =
+                v1_snf.parse(&()).unwrap();
+            parsed.sampled_named_function
+        };
+        let mut named_functions = BTreeMap::new();
+        named_functions.insert(nf_id, sampled_nf);
+        let mut named_function_metadata =
+            crate::named_function::NamedFunctionMetadataStore::default();
+        named_function_metadata.set_name(nf_id, "offset_x");
+        named_function_metadata.set_subscripts(nf_id, vec![0]);
+        named_function_metadata.set_description(nf_id, "x plus a constant");
+
         let mut objectives = crate::Sampled::default();
         objectives.append([sample_id], 1.0).unwrap();
 
@@ -438,6 +468,8 @@ mod tests {
             .variable_metadata(variable_metadata)
             .objectives(objectives)
             .constraints_collection(constraints)
+            .named_functions(named_functions)
+            .named_function_metadata(named_function_metadata)
             .sense(Sense::Minimize)
             .build()
             .unwrap();
@@ -450,5 +482,9 @@ mod tests {
         let constraint_meta = recovered.constraints().metadata();
         assert_eq!(constraint_meta.name(cid), Some("balance"));
         assert_eq!(constraint_meta.description(cid), Some("demand-balance row"));
+        let nf_meta = recovered.named_function_metadata();
+        assert_eq!(nf_meta.name(nf_id), Some("offset_x"));
+        assert_eq!(nf_meta.subscripts(nf_id), &[0]);
+        assert_eq!(nf_meta.description(nf_id), Some("x plus a constant"));
     }
 }
