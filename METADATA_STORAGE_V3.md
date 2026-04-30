@@ -109,6 +109,15 @@ here. The implementation shipped in three waves:
   both work, removing the asymmetry vs. the constraint accessors.
   Current operand-class-driven return-type semantics is preserved
   (`Quadratic + Quadratic -> Quadratic` even when terms cancel).
+  **Behavior change:** passing `NaN` or `±inf` as the rhs of an
+  arithmetic operator (e.g. `linear + float("nan")`) now raises
+  `TypeError("unsupported operand type(s) for +")` instead of the
+  previous `ValueError("Coefficient cannot be NaN")`. PyO3's binop
+  protocol catches every parameter-extraction failure and converts
+  it to `NotImplemented` before propagating, so neither the
+  in-`FromPyObject` error class nor any operator-body validation
+  can preserve the old `ValueError`. To detect invalid scalars
+  programmatically, validate before constructing the expression.
 - **Dropped:** the `Series[ID -> Object]` collection accessors.
   Their original draw was hosting back-referenced wrappers with
   bulk pandas indexing on top; with `*_df` (wide via `include=`,
@@ -837,11 +846,9 @@ explicitly opt into write-through.
     `add_sos1_constraint` and their getters.
   - `Instance.add_decision_variable(v) -> AttachedDecisionVariable`
     and `Instance.attached_decision_variable(id) -> AttachedDecisionVariable`.
-    `instance.decision_variables` keeps returning a snapshot list
-    (variables participate in arithmetic). A follow-up will extend
-    `ToFunction` to accept `AttachedDecisionVariable` so the snapshot-
-    list shape can switch to `list[AttachedDecisionVariable]` without
-    breaking expression building.
+    `instance.decision_variables` returns
+    `list[AttachedDecisionVariable]` (Wave 3.6 / PR #852); the
+    handles participate in arithmetic via `ToFunction`.
   - Same set on `ParametricInstance`. `ParametricInstance` previously
     surfaced only regular constraints in Python; this PR adds the
     indicator / one-hot / sos1 collection getters and `add_*` methods
