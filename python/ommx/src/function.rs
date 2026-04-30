@@ -1,6 +1,6 @@
 use crate::{
-    Constraint, DecisionVariable, Linear, Parameter, Polynomial, Quadratic, Rng, State,
-    VariableBound,
+    AttachedDecisionVariable, Constraint, DecisionVariable, Linear, Parameter, Polynomial,
+    Quadratic, Rng, State, VariableBound,
 };
 
 use anyhow::{anyhow, Result};
@@ -71,51 +71,118 @@ impl pyo3_stub_gen::PyStubType for Function {
     }
 }
 
-/// Convert various Python types to Function.
+/// Internal enum used by polymorphic arithmetic operators on
+/// `DecisionVariable` / `AttachedDecisionVariable` / `Parameter` / `Linear` / `Quadratic` /
+/// `Polynomial` to dispatch on the rhs's *operand class* without duplicating the type-extraction
+/// logic across files.
 ///
-/// Accepts: int, float, DecisionVariable, Parameter, Linear, Quadratic, Polynomial, Function.
+/// Variants are kept distinct so each operator can pick its return type from the rhs class
+/// alone (e.g. `Linear * Scalar -> Linear` but `Linear * Linear -> Quadratic`). The `Scalar`
+/// and `Linear` variants are deliberately separate even though both have degree ≤ 1, because
+/// multiplication behaves differently for them.
 ///
-/// Note: Parameter is accepted here because ParametricInstance uses Function for its objective
-/// and constraints, which may contain parameters. Whether a Parameter is valid in a given context
-/// is enforced by the Rust SDK's validation (e.g., Instance builder rejects undefined variable IDs).
-impl<'py> FromPyObject<'_, 'py> for Function {
+/// `Function` is the opaque catch-all: when the rhs is an explicit `Function` instance, the
+/// result is also `Function` (matching today's `__radd__`-fallback behavior).
+///
+/// Adding a new Function-extractable type only requires:
+///   1. one new branch in `FromPyObject for FunctionInput` (or fitting it under an existing
+///      variant via `Linear::single_term`), and
+///   2. a match arm — usually just reusing the existing `Linear` arm — in each polymorphic op.
+pub enum FunctionInput {
+    /// `int` / `float` / `numpy.integer` / `numpy.floating`. `None` represents zero
+    /// (which `ommx::Coefficient` cannot hold).
+    Scalar(Option<Coefficient>),
+    /// Anything of degree ≤ 1: `DecisionVariable`, `AttachedDecisionVariable`, `Parameter`, `Linear`.
+    Linear(ommx::Linear),
+    Quadratic(ommx::Quadratic),
+    Polynomial(ommx::Polynomial),
+    /// Opaque `Function`. Polymorphic operators preserve the `Function` shape on output.
+    Function(ommx::Function),
+}
+
+impl FunctionInput {
+    pub(crate) fn into_function(self) -> ommx::Function {
+        match self {
+            Self::Scalar(None) => ommx::Function::default(),
+            Self::Scalar(Some(c)) => ommx::Function::from(c),
+            Self::Linear(l) => ommx::Function::from(l),
+            Self::Quadratic(q) => ommx::Function::from(q),
+            Self::Polynomial(p) => ommx::Function::from(p),
+            Self::Function(f) => f,
+        }
+    }
+}
+
+/// Extract a Python value as one of the `ToFunction`-supported types.
+///
+/// The `Function` branch is checked first via `cast` (not `extract`) so an actual `Function`
+/// instance short-circuits the dispatch — using `extract` would invoke
+/// `Function::FromPyObject` (which itself calls back into this impl) and recurse. After
+/// that, more specific arithmetic types (`Polynomial` → `Quadratic` → `Linear`) are tried
+/// before degree-≤-1 wrappers (`DecisionVariable`, `AttachedDecisionVariable`, `Parameter`)
+/// and finally `f64` for scalars.
+impl<'py> FromPyObject<'_, 'py> for FunctionInput {
     type Error = PyErr;
     fn extract(ob: Borrowed<'_, 'py, PyAny>) -> PyResult<Self> {
         if let Ok(f) = ob.cast::<Function>() {
-            return Ok(f.borrow().clone());
+            return Ok(Self::Function(f.borrow().0.clone()));
         }
-        if let Ok(p) = ob.extract::<Polynomial>() {
-            return Ok(Self(ommx::Function::from(p.0)));
+        if let Ok(p) = ob.extract::<PyRef<Polynomial>>() {
+            return Ok(Self::Polynomial(p.0.clone()));
         }
-        if let Ok(q) = ob.extract::<Quadratic>() {
-            return Ok(Self(ommx::Function::from(q.0)));
+        if let Ok(q) = ob.extract::<PyRef<Quadratic>>() {
+            return Ok(Self::Quadratic(q.0.clone()));
         }
-        if let Ok(l) = ob.extract::<Linear>() {
-            return Ok(Self(ommx::Function::from(l.0)));
+        if let Ok(l) = ob.extract::<PyRef<Linear>>() {
+            return Ok(Self::Linear(l.0.clone()));
         }
-        if let Ok(dv) = ob.extract::<DecisionVariable>() {
-            let linear =
-                ommx::Linear::single_term(LinearMonomial::Variable(dv.0.id()), ommx::coeff!(1.0));
-            return Ok(Self(ommx::Function::from(linear)));
+        if let Ok(dv) = ob.extract::<PyRef<DecisionVariable>>() {
+            return Ok(Self::Linear(ommx::Linear::single_term(
+                LinearMonomial::Variable(dv.0.id()),
+                ommx::coeff!(1.0),
+            )));
         }
-        if let Ok(param) = ob.extract::<Parameter>() {
-            let linear = ommx::Linear::single_term(
+        if let Ok(att) = ob.extract::<PyRef<AttachedDecisionVariable>>() {
+            return Ok(Self::Linear(ommx::Linear::single_term(
+                LinearMonomial::Variable(att.id),
+                ommx::coeff!(1.0),
+            )));
+        }
+        if let Ok(param) = ob.extract::<PyRef<Parameter>>() {
+            return Ok(Self::Linear(ommx::Linear::single_term(
                 LinearMonomial::Variable(ommx::VariableID::from(param.0.id)),
                 ommx::coeff!(1.0),
-            );
-            return Ok(Self(ommx::Function::from(linear)));
+            )));
         }
         if let Ok(scalar) = ob.extract::<f64>() {
             return match TryInto::<Coefficient>::try_into(scalar) {
-                Ok(coeff) => Ok(Self(ommx::Function::from(coeff))),
-                Err(CoefficientError::Zero) => Ok(Self(ommx::Function::default())),
+                Ok(c) => Ok(Self::Scalar(Some(c))),
+                Err(CoefficientError::Zero) => Ok(Self::Scalar(None)),
+                // NaN / Inf. The error class is not user-observable: PyO3 catches
+                // any parameter-extraction failure on a binop and converts it to
+                // `NotImplemented`, after which Python raises its generic
+                // `TypeError("unsupported operand types")`. This is a minor
+                // behavior change vs. pre-refactor (which raised `ValueError`
+                // from the operator body) — accepted as part of the typed-
+                // `FunctionInput` parameter design in v3.
                 Err(e) => Err(PyTypeError::new_err(e.to_string())),
             };
         }
         Err(PyTypeError::new_err(format!(
-            "Cannot convert {} to Function. Accepted: int, float, DecisionVariable, Parameter, Linear, Quadratic, Polynomial, Function",
+            "Cannot convert {} to ToFunction. Accepted: int, float, numpy.integer, numpy.floating, DecisionVariable, AttachedDecisionVariable, Parameter, Linear, Quadratic, Polynomial, Function",
             ob.get_type().name()?
         )))
+    }
+}
+
+/// `Function::FromPyObject` is the user-facing `ToFunction` extraction. It collapses the
+/// per-class detail of `FunctionInput` into a single `ommx::Function`, which is what
+/// `Function`-typed parameters (e.g. `Function::__add__(rhs: Function)`) want.
+impl<'py> FromPyObject<'_, 'py> for Function {
+    type Error = PyErr;
+    fn extract(ob: Borrowed<'_, 'py, PyAny>) -> PyResult<Self> {
+        let input = FunctionInput::extract(ob)?;
+        Ok(Self(input.into_function()))
     }
 }
 
@@ -146,7 +213,24 @@ macro_rules! numpy_stub_marker {
 numpy_stub_marker!(NumpyInteger, "integer", "integer");
 numpy_stub_marker!(NumpyFloating, "floating", "floating");
 
-// Type alias: ToFunction = int | float | numpy.integer | numpy.floating | DecisionVariable | ...
+// Type alias: ScalarLike = int | float | numpy.integer | numpy.floating
+pyo3_stub_gen::type_alias!(
+    "ommx._ommx_rust",
+    ScalarLike = i64 | f64 | NumpyInteger | NumpyFloating
+);
+
+// Type alias: LinearLike = Linear | DecisionVariable | AttachedDecisionVariable
+//
+// Note: `Parameter` is intentionally NOT a member of `LinearLike`. Parameters are bound only
+// in `ParametricInstance` and represent values fixed before optimization, not optimization
+// variables — so they appear separately in `ToFunction` and in arithmetic overloads where a
+// caller might pass them.
+pyo3_stub_gen::type_alias!(
+    "ommx._ommx_rust",
+    LinearLike = Linear | DecisionVariable | AttachedDecisionVariable
+);
+
+// Type alias: ToFunction = ScalarLike | LinearLike | Parameter | Quadratic | Polynomial | Function
 pyo3_stub_gen::type_alias!(
     "ommx._ommx_rust",
     ToFunction = i64
@@ -154,6 +238,7 @@ pyo3_stub_gen::type_alias!(
         | NumpyInteger
         | NumpyFloating
         | DecisionVariable
+        | AttachedDecisionVariable
         | Parameter
         | Linear
         | Quadratic
@@ -179,6 +264,8 @@ impl Function {
     /// Accepts:
     /// - int or float: creates a constant function
     /// - DecisionVariable: creates a linear function with single term
+    /// - AttachedDecisionVariable: creates a linear function with single term
+    ///   (only the id is used; no host borrow is taken)
     /// - Parameter: creates a linear function with single term
     /// - Linear: creates a linear function
     /// - Quadratic: creates a quadratic function

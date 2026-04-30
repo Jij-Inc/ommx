@@ -36,6 +36,7 @@ __all__ = [
     "InstanceDescription",
     "Kind",
     "Linear",
+    "LinearLike",
     "NamedFunction",
     "OneHotConstraint",
     "Optimality",
@@ -57,6 +58,7 @@ __all__ = [
     "SampledDecisionVariable",
     "SampledNamedFunction",
     "Samples",
+    "ScalarLike",
     "Sense",
     "Solution",
     "Sos1Constraint",
@@ -74,12 +76,15 @@ __all__ = [
     "set_local_registry_root",
 ]
 
+LinearLike: TypeAlias = Linear | DecisionVariable | AttachedDecisionVariable
+ScalarLike: TypeAlias = builtins.int | builtins.float | numpy.integer | numpy.floating
 ToFunction: TypeAlias = (
     builtins.int
     | builtins.float
     | numpy.integer
     | numpy.floating
     | DecisionVariable
+    | AttachedDecisionVariable
     | Parameter
     | Linear
     | Quadratic
@@ -563,14 +568,14 @@ class AttachedDecisionVariable:
     ({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).
 
     `AttachedDecisionVariable` is returned by `add_decision_variable(v)`
-    (insertion) and `attached_decision_variable(id)` (lookup) on both
-    hosts. Unlike the constraint accessors, `decision_variables` keeps
-    returning a list of snapshot {class}`~ommx.v1.DecisionVariable`s so
-    that variables can still participate in arithmetic to build expressions
-    (`x + y`, `2 * x`); a follow-up will extend `ToFunction` to accept
-    `AttachedDecisionVariable` and let `decision_variables` switch to the
-    attached form. Reads pull live data from the parent host's SoA store
-    and metadata setters write back through to it.
+    (insertion), `attached_decision_variable(id)` (lookup), and the
+    `decision_variables` getter on both hosts. Reads pull live data from
+    the parent host's SoA store and metadata setters write back through to
+    it. Handles also participate in arithmetic (`x + y`, `2 * x` etc.) via
+    `ToFunction` — only the id is consumed for that, no host borrow is
+    taken, so arithmetic works even while the host is mutably borrowed
+    elsewhere. Call {meth}`detach` for an independent
+    {class}`~ommx.v1.DecisionVariable` snapshot.
 
     `DecisionVariableMetadata` has no `provenance` field, so the
     write-through surface omits the corresponding getter.
@@ -599,6 +604,54 @@ class AttachedDecisionVariable:
     def description(self) -> builtins.str: ...
     @property
     def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
+    @typing.overload
+    def __add__(self, rhs: ScalarLike | LinearLike | Parameter) -> Linear: ...
+    @typing.overload
+    def __add__(self, rhs: Quadratic) -> Quadratic: ...
+    @typing.overload
+    def __add__(self, rhs: Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __add__(self, rhs: Function) -> Function: ...
+    @typing.overload
+    def __radd__(self, lhs: ScalarLike | LinearLike | Parameter) -> Linear: ...
+    @typing.overload
+    def __radd__(self, lhs: Quadratic) -> Quadratic: ...
+    @typing.overload
+    def __radd__(self, lhs: Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __radd__(self, lhs: Function) -> Function: ...
+    @typing.overload
+    def __sub__(self, rhs: ScalarLike | LinearLike | Parameter) -> Linear: ...
+    @typing.overload
+    def __sub__(self, rhs: Quadratic) -> Quadratic: ...
+    @typing.overload
+    def __sub__(self, rhs: Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __sub__(self, rhs: Function) -> Function: ...
+    @typing.overload
+    def __rsub__(self, lhs: ScalarLike | LinearLike | Parameter) -> Linear: ...
+    @typing.overload
+    def __rsub__(self, lhs: Quadratic) -> Quadratic: ...
+    @typing.overload
+    def __rsub__(self, lhs: Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __rsub__(self, lhs: Function) -> Function: ...
+    @typing.overload
+    def __mul__(self, rhs: ScalarLike) -> Linear: ...
+    @typing.overload
+    def __mul__(self, rhs: LinearLike | Parameter) -> Quadratic: ...
+    @typing.overload
+    def __mul__(self, rhs: Quadratic | Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __mul__(self, rhs: Function) -> Function: ...
+    @typing.overload
+    def __rmul__(self, lhs: ScalarLike) -> Linear: ...
+    @typing.overload
+    def __rmul__(self, lhs: LinearLike | Parameter) -> Quadratic: ...
+    @typing.overload
+    def __rmul__(self, lhs: Quadratic | Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __rmul__(self, lhs: Function) -> Function: ...
     def detach(self) -> DecisionVariable:
         r"""
         Return a {class}`~ommx.v1.DecisionVariable` snapshot of the current
@@ -607,6 +660,22 @@ class AttachedDecisionVariable:
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> AttachedDecisionVariable: ...
     def __deepcopy__(self, _memo: typing.Any) -> AttachedDecisionVariable: ...
+    def __neg__(self) -> Linear:
+        r"""
+        Negation operator: `-x` → `Linear(-1 * x)`.
+        """
+    def __eq__(self, other: ToFunction) -> Constraint:  # type: ignore[override]
+        r"""
+        Create an equality constraint: `self == other` → `Constraint` with `EqualToZero`.
+        """
+    def __le__(self, other: ToFunction) -> Constraint:
+        r"""
+        Create a less-than-or-equal constraint.
+        """
+    def __ge__(self, other: ToFunction) -> Constraint:
+        r"""
+        Create a greater-than-or-equal constraint.
+        """
     def set_name(self, name: builtins.str) -> None:
         r"""
         Set the name. Writes through to the parent host's SoA metadata store.
@@ -1107,49 +1176,53 @@ class DecisionVariable:
     @property
     def substituted_value(self) -> typing.Optional[builtins.float]: ...
     @typing.overload
-    def __add__(
-        self, rhs: int | float | DecisionVariable | Parameter | Linear
-    ) -> Linear: ...
+    def __add__(self, rhs: ScalarLike | LinearLike | Parameter) -> Linear: ...
     @typing.overload
     def __add__(self, rhs: Quadratic) -> Quadratic: ...
     @typing.overload
     def __add__(self, rhs: Polynomial) -> Polynomial: ...
     @typing.overload
-    def __radd__(
-        self, lhs: int | float | DecisionVariable | Parameter | Linear
-    ) -> Linear: ...
+    def __add__(self, rhs: Function) -> Function: ...
+    @typing.overload
+    def __radd__(self, lhs: ScalarLike | LinearLike | Parameter) -> Linear: ...
     @typing.overload
     def __radd__(self, lhs: Quadratic) -> Quadratic: ...
     @typing.overload
     def __radd__(self, lhs: Polynomial) -> Polynomial: ...
     @typing.overload
-    def __sub__(
-        self, rhs: int | float | DecisionVariable | Parameter | Linear
-    ) -> Linear: ...
+    def __radd__(self, lhs: Function) -> Function: ...
+    @typing.overload
+    def __sub__(self, rhs: ScalarLike | LinearLike | Parameter) -> Linear: ...
     @typing.overload
     def __sub__(self, rhs: Quadratic) -> Quadratic: ...
     @typing.overload
     def __sub__(self, rhs: Polynomial) -> Polynomial: ...
     @typing.overload
-    def __rsub__(
-        self, lhs: int | float | DecisionVariable | Parameter | Linear
-    ) -> Linear: ...
+    def __sub__(self, rhs: Function) -> Function: ...
+    @typing.overload
+    def __rsub__(self, lhs: ScalarLike | LinearLike | Parameter) -> Linear: ...
     @typing.overload
     def __rsub__(self, lhs: Quadratic) -> Quadratic: ...
     @typing.overload
     def __rsub__(self, lhs: Polynomial) -> Polynomial: ...
     @typing.overload
-    def __mul__(self, rhs: int | float) -> Linear: ...
+    def __rsub__(self, lhs: Function) -> Function: ...
     @typing.overload
-    def __mul__(self, rhs: DecisionVariable | Parameter | Linear) -> Quadratic: ...
+    def __mul__(self, rhs: ScalarLike) -> Linear: ...
+    @typing.overload
+    def __mul__(self, rhs: LinearLike | Parameter) -> Quadratic: ...
     @typing.overload
     def __mul__(self, rhs: Quadratic | Polynomial) -> Polynomial: ...
     @typing.overload
-    def __rmul__(self, lhs: int | float) -> Linear: ...
+    def __mul__(self, rhs: Function) -> Function: ...
     @typing.overload
-    def __rmul__(self, lhs: DecisionVariable | Parameter | Linear) -> Quadratic: ...
+    def __rmul__(self, lhs: ScalarLike) -> Linear: ...
+    @typing.overload
+    def __rmul__(self, lhs: LinearLike | Parameter) -> Quadratic: ...
     @typing.overload
     def __rmul__(self, lhs: Quadratic | Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __rmul__(self, lhs: Function) -> Function: ...
     def __new__(
         cls,
         id: builtins.int,
@@ -1470,6 +1543,8 @@ class Function:
         Accepts:
         - int or float: creates a constant function
         - DecisionVariable: creates a linear function with single term
+        - AttachedDecisionVariable: creates a linear function with single term
+          (only the id is used; no host borrow is taken)
         - Parameter: creates a linear function with single term
         - Linear: creates a linear function
         - Quadratic: creates a quadratic function
@@ -1811,15 +1886,18 @@ class Instance:
         Get all unique named function names in this instance
         """
     @property
-    def decision_variables(self) -> builtins.list[DecisionVariable]:
+    def decision_variables(self) -> builtins.list[AttachedDecisionVariable]:
         r"""
         List of all decision variables in the instance sorted by their IDs.
 
-        Returns {class}`~ommx.v1.DecisionVariable` snapshots — independent
-        values that participate in arithmetic to build expressions
-        (`x + y`, `2 * x` etc.). For write-through metadata mutation, use
-        {meth}`add_decision_variable` (when adding) or
-        {meth}`attached_decision_variable` (when looking up by id).
+        Returns a list of {class}`~ommx.v1.AttachedDecisionVariable` write-through
+        handles. Each handle reads its kind / bound / metadata live from this
+        instance's SoA store and writes metadata mutations back through to it.
+        Handles also participate in arithmetic to build expressions
+        (`x + y`, `2 * x` etc.) — only their id is consumed for that, no host
+        borrow is taken. Call
+        {meth}`~ommx.v1.AttachedDecisionVariable.detach` if you need an
+        independent {class}`~ommx.v1.DecisionVariable` snapshot.
         """
     @property
     def constraints(self) -> builtins.dict[builtins.int, AttachedConstraint]:
@@ -2003,12 +2081,10 @@ class Instance:
         r"""
         Return an {class}`~ommx.v1.AttachedDecisionVariable` bound to the
         given id — a write-through handle whose metadata setters update
-        this instance's SoA store.
-
-        Unlike `decision_variables[i]` (which returns a snapshot suitable
-        for arithmetic), the returned handle does not support arithmetic.
-        Call {meth}`~ommx.v1.AttachedDecisionVariable.detach` to obtain a
-        snapshot.
+        this instance's SoA store. The handle also participates in
+        arithmetic via `ToFunction` (only its id is consumed). Call
+        {meth}`~ommx.v1.AttachedDecisionVariable.detach` to obtain an
+        independent {class}`~ommx.v1.DecisionVariable` snapshot.
 
         Raises {class}`KeyError` if no variable with `variable_id` exists.
         """
@@ -3398,49 +3474,53 @@ class Linear:
     @property
     def constant_term(self) -> builtins.float: ...
     @typing.overload
-    def __add__(
-        self, rhs: int | float | DecisionVariable | Parameter | Linear
-    ) -> Linear: ...
+    def __add__(self, rhs: ScalarLike | LinearLike | Parameter) -> Linear: ...
     @typing.overload
     def __add__(self, rhs: Quadratic) -> Quadratic: ...
     @typing.overload
     def __add__(self, rhs: Polynomial) -> Polynomial: ...
     @typing.overload
-    def __radd__(
-        self, lhs: int | float | DecisionVariable | Parameter | Linear
-    ) -> Linear: ...
+    def __add__(self, rhs: Function) -> Function: ...
+    @typing.overload
+    def __radd__(self, lhs: ScalarLike | LinearLike | Parameter) -> Linear: ...
     @typing.overload
     def __radd__(self, lhs: Quadratic) -> Quadratic: ...
     @typing.overload
     def __radd__(self, lhs: Polynomial) -> Polynomial: ...
     @typing.overload
-    def __sub__(
-        self, rhs: int | float | DecisionVariable | Parameter | Linear
-    ) -> Linear: ...
+    def __radd__(self, lhs: Function) -> Function: ...
+    @typing.overload
+    def __sub__(self, rhs: ScalarLike | LinearLike | Parameter) -> Linear: ...
     @typing.overload
     def __sub__(self, rhs: Quadratic) -> Quadratic: ...
     @typing.overload
     def __sub__(self, rhs: Polynomial) -> Polynomial: ...
     @typing.overload
-    def __rsub__(
-        self, lhs: int | float | DecisionVariable | Parameter | Linear
-    ) -> Linear: ...
+    def __sub__(self, rhs: Function) -> Function: ...
+    @typing.overload
+    def __rsub__(self, lhs: ScalarLike | LinearLike | Parameter) -> Linear: ...
     @typing.overload
     def __rsub__(self, lhs: Quadratic) -> Quadratic: ...
     @typing.overload
     def __rsub__(self, lhs: Polynomial) -> Polynomial: ...
     @typing.overload
-    def __mul__(self, rhs: int | float) -> Linear: ...
+    def __rsub__(self, lhs: Function) -> Function: ...
     @typing.overload
-    def __mul__(self, rhs: DecisionVariable | Parameter | Linear) -> Quadratic: ...
+    def __mul__(self, rhs: ScalarLike) -> Linear: ...
+    @typing.overload
+    def __mul__(self, rhs: LinearLike | Parameter) -> Quadratic: ...
     @typing.overload
     def __mul__(self, rhs: Quadratic | Polynomial) -> Polynomial: ...
     @typing.overload
-    def __rmul__(self, lhs: int | float) -> Linear: ...
+    def __mul__(self, rhs: Function) -> Function: ...
     @typing.overload
-    def __rmul__(self, lhs: DecisionVariable | Parameter | Linear) -> Quadratic: ...
+    def __rmul__(self, lhs: ScalarLike) -> Linear: ...
+    @typing.overload
+    def __rmul__(self, lhs: LinearLike | Parameter) -> Quadratic: ...
     @typing.overload
     def __rmul__(self, lhs: Quadratic | Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __rmul__(self, lhs: Function) -> Function: ...
     def __iadd__(self, rhs: Linear) -> Linear: ...
     def __new__(
         cls,
@@ -3705,49 +3785,53 @@ class Parameter:
     @property
     def description(self) -> builtins.str: ...
     @typing.overload
-    def __add__(
-        self, rhs: int | float | DecisionVariable | Parameter | Linear
-    ) -> Linear: ...
+    def __add__(self, rhs: ScalarLike | LinearLike | Parameter) -> Linear: ...
     @typing.overload
     def __add__(self, rhs: Quadratic) -> Quadratic: ...
     @typing.overload
     def __add__(self, rhs: Polynomial) -> Polynomial: ...
     @typing.overload
-    def __radd__(
-        self, lhs: int | float | DecisionVariable | Parameter | Linear
-    ) -> Linear: ...
+    def __add__(self, rhs: Function) -> Function: ...
+    @typing.overload
+    def __radd__(self, lhs: ScalarLike | LinearLike | Parameter) -> Linear: ...
     @typing.overload
     def __radd__(self, lhs: Quadratic) -> Quadratic: ...
     @typing.overload
     def __radd__(self, lhs: Polynomial) -> Polynomial: ...
     @typing.overload
-    def __sub__(
-        self, rhs: int | float | DecisionVariable | Parameter | Linear
-    ) -> Linear: ...
+    def __radd__(self, lhs: Function) -> Function: ...
+    @typing.overload
+    def __sub__(self, rhs: ScalarLike | LinearLike | Parameter) -> Linear: ...
     @typing.overload
     def __sub__(self, rhs: Quadratic) -> Quadratic: ...
     @typing.overload
     def __sub__(self, rhs: Polynomial) -> Polynomial: ...
     @typing.overload
-    def __rsub__(
-        self, lhs: int | float | DecisionVariable | Parameter | Linear
-    ) -> Linear: ...
+    def __sub__(self, rhs: Function) -> Function: ...
+    @typing.overload
+    def __rsub__(self, lhs: ScalarLike | LinearLike | Parameter) -> Linear: ...
     @typing.overload
     def __rsub__(self, lhs: Quadratic) -> Quadratic: ...
     @typing.overload
     def __rsub__(self, lhs: Polynomial) -> Polynomial: ...
     @typing.overload
-    def __mul__(self, rhs: int | float) -> Linear: ...
+    def __rsub__(self, lhs: Function) -> Function: ...
     @typing.overload
-    def __mul__(self, rhs: DecisionVariable | Parameter | Linear) -> Quadratic: ...
+    def __mul__(self, rhs: ScalarLike) -> Linear: ...
+    @typing.overload
+    def __mul__(self, rhs: LinearLike | Parameter) -> Quadratic: ...
     @typing.overload
     def __mul__(self, rhs: Quadratic | Polynomial) -> Polynomial: ...
     @typing.overload
-    def __rmul__(self, lhs: int | float) -> Linear: ...
+    def __mul__(self, rhs: Function) -> Function: ...
     @typing.overload
-    def __rmul__(self, lhs: DecisionVariable | Parameter | Linear) -> Quadratic: ...
+    def __rmul__(self, lhs: ScalarLike) -> Linear: ...
+    @typing.overload
+    def __rmul__(self, lhs: LinearLike | Parameter) -> Quadratic: ...
     @typing.overload
     def __rmul__(self, lhs: Quadratic | Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __rmul__(self, lhs: Function) -> Function: ...
     def __new__(
         cls,
         id: builtins.int,
@@ -3841,10 +3925,14 @@ class ParametricInstance:
     @property
     def objective(self) -> Function: ...
     @property
-    def decision_variables(self) -> builtins.list[DecisionVariable]:
+    def decision_variables(self) -> builtins.list[AttachedDecisionVariable]:
         r"""
         List of all decision variables in the parametric instance sorted by
-        their IDs (snapshots, suitable for arithmetic).
+        their IDs.
+
+        Returns a list of {class}`~ommx.v1.AttachedDecisionVariable` write-through
+        handles. See {attr}`~ommx.v1.Instance.decision_variables` for the same
+        shape on `Instance`.
         """
     @property
     def constraints(self) -> builtins.dict[builtins.int, AttachedConstraint]:
@@ -4159,66 +4247,42 @@ class Polynomial:
     >>> constraint = p == 0  # Returns Constraint
     ```
     """
+    @typing.overload
     def __add__(
-        self,
-        rhs: int
-        | float
-        | DecisionVariable
-        | Parameter
-        | Linear
-        | Quadratic
-        | Polynomial,
+        self, rhs: ScalarLike | LinearLike | Parameter | Quadratic | Polynomial
     ) -> Polynomial: ...
+    @typing.overload
+    def __add__(self, rhs: Function) -> Function: ...
+    @typing.overload
     def __radd__(
-        self,
-        lhs: int
-        | float
-        | DecisionVariable
-        | Parameter
-        | Linear
-        | Quadratic
-        | Polynomial,
+        self, lhs: ScalarLike | LinearLike | Parameter | Quadratic | Polynomial
     ) -> Polynomial: ...
+    @typing.overload
+    def __radd__(self, lhs: Function) -> Function: ...
+    @typing.overload
     def __sub__(
-        self,
-        rhs: int
-        | float
-        | DecisionVariable
-        | Parameter
-        | Linear
-        | Quadratic
-        | Polynomial,
+        self, rhs: ScalarLike | LinearLike | Parameter | Quadratic | Polynomial
     ) -> Polynomial: ...
+    @typing.overload
+    def __sub__(self, rhs: Function) -> Function: ...
+    @typing.overload
     def __rsub__(
-        self,
-        lhs: int
-        | float
-        | DecisionVariable
-        | Parameter
-        | Linear
-        | Quadratic
-        | Polynomial,
+        self, lhs: ScalarLike | LinearLike | Parameter | Quadratic | Polynomial
     ) -> Polynomial: ...
+    @typing.overload
+    def __rsub__(self, lhs: Function) -> Function: ...
+    @typing.overload
     def __mul__(
-        self,
-        rhs: int
-        | float
-        | DecisionVariable
-        | Parameter
-        | Linear
-        | Quadratic
-        | Polynomial,
+        self, rhs: ScalarLike | LinearLike | Parameter | Quadratic | Polynomial
     ) -> Polynomial: ...
+    @typing.overload
+    def __mul__(self, rhs: Function) -> Function: ...
+    @typing.overload
     def __rmul__(
-        self,
-        lhs: int
-        | float
-        | DecisionVariable
-        | Parameter
-        | Linear
-        | Quadratic
-        | Polynomial,
+        self, lhs: ScalarLike | LinearLike | Parameter | Quadratic | Polynomial
     ) -> Polynomial: ...
+    @typing.overload
+    def __rmul__(self, lhs: Function) -> Function: ...
     def __iadd__(self, rhs: Polynomial) -> Polynomial: ...
     def __new__(
         cls, terms: typing.Mapping[typing.Sequence[builtins.int], builtins.float]
@@ -4327,40 +4391,52 @@ class Quadratic:
     ) -> builtins.dict[tuple[builtins.int, builtins.int], builtins.float]: ...
     @typing.overload
     def __add__(
-        self, rhs: int | float | DecisionVariable | Parameter | Linear | Quadratic
+        self, rhs: ScalarLike | LinearLike | Parameter | Quadratic
     ) -> Quadratic: ...
     @typing.overload
     def __add__(self, rhs: Polynomial) -> Polynomial: ...
     @typing.overload
+    def __add__(self, rhs: Function) -> Function: ...
+    @typing.overload
     def __radd__(
-        self, lhs: int | float | DecisionVariable | Parameter | Linear | Quadratic
+        self, lhs: ScalarLike | LinearLike | Parameter | Quadratic
     ) -> Quadratic: ...
     @typing.overload
     def __radd__(self, lhs: Polynomial) -> Polynomial: ...
     @typing.overload
+    def __radd__(self, lhs: Function) -> Function: ...
+    @typing.overload
     def __sub__(
-        self, rhs: int | float | DecisionVariable | Parameter | Linear | Quadratic
+        self, rhs: ScalarLike | LinearLike | Parameter | Quadratic
     ) -> Quadratic: ...
     @typing.overload
     def __sub__(self, rhs: Polynomial) -> Polynomial: ...
     @typing.overload
+    def __sub__(self, rhs: Function) -> Function: ...
+    @typing.overload
     def __rsub__(
-        self, lhs: int | float | DecisionVariable | Parameter | Linear | Quadratic
+        self, lhs: ScalarLike | LinearLike | Parameter | Quadratic
     ) -> Quadratic: ...
     @typing.overload
     def __rsub__(self, lhs: Polynomial) -> Polynomial: ...
     @typing.overload
-    def __mul__(self, rhs: int | float) -> Quadratic: ...
+    def __rsub__(self, lhs: Function) -> Function: ...
+    @typing.overload
+    def __mul__(self, rhs: ScalarLike) -> Quadratic: ...
     @typing.overload
     def __mul__(
-        self, rhs: DecisionVariable | Parameter | Linear | Quadratic | Polynomial
+        self, rhs: LinearLike | Parameter | Quadratic | Polynomial
     ) -> Polynomial: ...
     @typing.overload
-    def __rmul__(self, lhs: int | float) -> Quadratic: ...
+    def __mul__(self, rhs: Function) -> Function: ...
+    @typing.overload
+    def __rmul__(self, lhs: ScalarLike) -> Quadratic: ...
     @typing.overload
     def __rmul__(
-        self, lhs: DecisionVariable | Parameter | Linear | Quadratic | Polynomial
+        self, lhs: LinearLike | Parameter | Quadratic | Polynomial
     ) -> Polynomial: ...
+    @typing.overload
+    def __rmul__(self, lhs: Function) -> Function: ...
     def __iadd__(self, rhs: Quadratic) -> Quadratic: ...
     def __new__(
         cls,

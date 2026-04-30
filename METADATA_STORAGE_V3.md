@@ -90,17 +90,34 @@ here. The implementation shipped in three waves:
   `name` / `subscripts` / `description` / `parameters` surface as the
   other kinds, and `ParametricInstance` gained the special-constraint
   collection getters and `add_*` methods it had been missing on the
-  Python side. `instance.decision_variables` keeps returning
-  snapshots (so arithmetic like `x + y` still works); per-id
-  write-through goes through `add_decision_variable(v)` /
-  `attached_decision_variable(id)`. The snapshot-list shape is a
-  temporary measure — arithmetic only needs the variable id, so a
-  follow-up will extend `ToFunction` (and `Linear` / `Quadratic` /
-  `Polynomial` arithmetic operators) to accept
-  `AttachedDecisionVariable` directly. Once that lands,
-  `instance.decision_variables` can return
-  `list[AttachedDecisionVariable]` without breaking expression
-  building, removing the asymmetry vs. the constraint accessors.
+  Python side.
+- **Wave 3.6 (this PR, landed):** Closed the remaining
+  `decision_variables` asymmetry. `ToFunction` now accepts
+  `AttachedDecisionVariable` (only its id is consumed, no host borrow
+  is taken); the polymorphic arithmetic operators on
+  `DecisionVariable` / `AttachedDecisionVariable` / `Parameter` /
+  `Linear` / `Quadratic` / `Polynomial` were rewritten to take a
+  shared `FunctionInput` enum so adding a new operand type only
+  touches `Function::FromPyObject` and the enum. `ScalarLike` and
+  `LinearLike` Python type aliases were introduced for the
+  `@overload` stubs (`ScalarLike = int | float | numpy.integer |
+  numpy.floating`, `LinearLike = Linear | DecisionVariable |
+  AttachedDecisionVariable`; `Parameter` is intentionally separate).
+  `instance.decision_variables` and
+  `parametric.decision_variables` now return
+  `list[AttachedDecisionVariable]` — write-through and arithmetic
+  both work, removing the asymmetry vs. the constraint accessors.
+  Current operand-class-driven return-type semantics is preserved
+  (`Quadratic + Quadratic -> Quadratic` even when terms cancel).
+  **Behavior change:** passing `NaN` or `±inf` as the rhs of an
+  arithmetic operator (e.g. `linear + float("nan")`) now raises
+  `TypeError("unsupported operand type(s) for +")` instead of the
+  previous `ValueError("Coefficient cannot be NaN")`. PyO3's binop
+  protocol catches every parameter-extraction failure and converts
+  it to `NotImplemented` before propagating, so neither the
+  in-`FromPyObject` error class nor any operator-body validation
+  can preserve the old `ValueError`. To detect invalid scalars
+  programmatically, validate before constructing the expression.
 - **Dropped:** the `Series[ID -> Object]` collection accessors.
   Their original draw was hosting back-referenced wrappers with
   bulk pandas indexing on top; with `*_df` (wide via `include=`,
@@ -829,11 +846,9 @@ explicitly opt into write-through.
     `add_sos1_constraint` and their getters.
   - `Instance.add_decision_variable(v) -> AttachedDecisionVariable`
     and `Instance.attached_decision_variable(id) -> AttachedDecisionVariable`.
-    `instance.decision_variables` keeps returning a snapshot list
-    (variables participate in arithmetic). A follow-up will extend
-    `ToFunction` to accept `AttachedDecisionVariable` so the snapshot-
-    list shape can switch to `list[AttachedDecisionVariable]` without
-    breaking expression building.
+    `instance.decision_variables` returns
+    `list[AttachedDecisionVariable]` (Wave 3.6 / PR #852); the
+    handles participate in arithmetic via `ToFunction`.
   - Same set on `ParametricInstance`. `ParametricInstance` previously
     surfaced only regular constraints in Python; this PR adds the
     indicator / one-hot / sos1 collection getters and `add_*` methods
@@ -1539,7 +1554,7 @@ traceability with earlier review comments.
    the pattern needs revisiting (e.g. weak-handle variant) is a
    question to take up at implementation time, not before.
 
-## Follow-ups (post-#843, post-#846, post-#849, post-#850)
+## Follow-ups (post-#843, post-#846, post-#849, post-#850, post-#852)
 
 - **Tighten `ConstraintCollection<T>` mutation surface.**
   `active_mut()` / `removed_mut()` / `insert_with()` are still `pub`
@@ -1555,19 +1570,6 @@ traceability with earlier review comments.
   when `instance.constraints[id]` etc. now return `AttachedX`, the
   `add_*` / `attached_decision_variable(id)` insertion paths, and
   the `detach()` escape hatch when callers need a snapshot.
-- **Extend `ToFunction` to accept `AttachedDecisionVariable`.**
-  `instance.decision_variables` and `parametric.decision_variables`
-  currently return `list[DecisionVariable]` snapshots so arithmetic
-  (`x + y`, `2 * x`) keeps working — `AttachedDecisionVariable` is
-  not in `ToFunction`'s union, so it cannot stand in for a
-  `DecisionVariable` operand today. Once `ToFunction` (and the
-  arithmetic operators on `Linear` / `Quadratic` / `Polynomial`)
-  also extract `AttachedDecisionVariable` (using its id to build a
-  `Linear::single_term`, the same way `DecisionVariable` and
-  `Parameter` do), the `decision_variables` getter can switch to
-  returning `list[AttachedDecisionVariable]` without breaking
-  expression building, removing the asymmetry vs. the constraint
-  accessors.
 
 ## Open questions
 
