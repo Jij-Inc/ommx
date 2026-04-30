@@ -98,9 +98,9 @@ here. The implementation shipped in three waves:
   `DecisionVariable` / `AttachedDecisionVariable` / `Parameter` /
   `Linear` / `Quadratic` / `Polynomial` were rewritten to take a
   shared `FunctionInput` enum so adding a new operand type only
-  touches `Function::FromPyObject` and the enum. `Scalar` and
+  touches `Function::FromPyObject` and the enum. `ScalarLike` and
   `LinearLike` Python type aliases were introduced for the
-  `@overload` stubs (`Scalar = int | float | numpy.integer |
+  `@overload` stubs (`ScalarLike = int | float | numpy.integer |
   numpy.floating`, `LinearLike = Linear | DecisionVariable |
   AttachedDecisionVariable`; `Parameter` is intentionally separate).
   `instance.decision_variables` and

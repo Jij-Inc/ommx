@@ -2109,11 +2109,11 @@
                     {
                       "name": "rhs",
                       "type_": {
-                        "display": "Scalar | LinearLike | Parameter",
+                        "display": "ScalarLike | LinearLike | Parameter",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Scalar",
+                            "display": "ScalarLike",
                             "link_target": null,
                             "children": []
                           },
@@ -2340,7 +2340,7 @@
                     {
                       "name": "rhs",
                       "type_": {
-                        "display": "Scalar",
+                        "display": "ScalarLike",
                         "link_target": null,
                         "children": []
                       },
@@ -2458,11 +2458,11 @@
                     {
                       "name": "lhs",
                       "type_": {
-                        "display": "Scalar | LinearLike | Parameter",
+                        "display": "ScalarLike | LinearLike | Parameter",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Scalar",
+                            "display": "ScalarLike",
                             "link_target": null,
                             "children": []
                           },
@@ -2570,7 +2570,7 @@
                     {
                       "name": "lhs",
                       "type_": {
-                        "display": "Scalar",
+                        "display": "ScalarLike",
                         "link_target": null,
                         "children": []
                       },
@@ -2672,11 +2672,11 @@
                     {
                       "name": "lhs",
                       "type_": {
-                        "display": "Scalar | LinearLike | Parameter",
+                        "display": "ScalarLike | LinearLike | Parameter",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Scalar",
+                            "display": "ScalarLike",
                             "link_target": null,
                             "children": []
                           },
@@ -2768,11 +2768,11 @@
                     {
                       "name": "rhs",
                       "type_": {
-                        "display": "Scalar | LinearLike | Parameter",
+                        "display": "ScalarLike | LinearLike | Parameter",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Scalar",
+                            "display": "ScalarLike",
                             "link_target": null,
                             "children": []
                           },
@@ -5837,11 +5837,11 @@
                     {
                       "name": "rhs",
                       "type_": {
-                        "display": "Scalar | LinearLike | Parameter",
+                        "display": "ScalarLike | LinearLike | Parameter",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Scalar",
+                            "display": "ScalarLike",
                             "link_target": null,
                             "children": []
                           },
@@ -6068,7 +6068,7 @@
                     {
                       "name": "rhs",
                       "type_": {
-                        "display": "Scalar",
+                        "display": "ScalarLike",
                         "link_target": null,
                         "children": []
                       },
@@ -6307,11 +6307,11 @@
                     {
                       "name": "lhs",
                       "type_": {
-                        "display": "Scalar | LinearLike | Parameter",
+                        "display": "ScalarLike | LinearLike | Parameter",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Scalar",
+                            "display": "ScalarLike",
                             "link_target": null,
                             "children": []
                           },
@@ -6419,7 +6419,7 @@
                     {
                       "name": "lhs",
                       "type_": {
-                        "display": "Scalar",
+                        "display": "ScalarLike",
                         "link_target": null,
                         "children": []
                       },
@@ -6521,11 +6521,11 @@
                     {
                       "name": "lhs",
                       "type_": {
-                        "display": "Scalar | LinearLike | Parameter",
+                        "display": "ScalarLike | LinearLike | Parameter",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Scalar",
+                            "display": "ScalarLike",
                             "link_target": null,
                             "children": []
                           },
@@ -6617,11 +6617,11 @@
                     {
                       "name": "rhs",
                       "type_": {
-                        "display": "Scalar | LinearLike | Parameter",
+                        "display": "ScalarLike | LinearLike | Parameter",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Scalar",
+                            "display": "ScalarLike",
                             "link_target": null,
                             "children": []
                           },
@@ -13044,11 +13044,11 @@
                     {
                       "name": "rhs",
                       "type_": {
-                        "display": "Scalar | LinearLike | Parameter",
+                        "display": "ScalarLike | LinearLike | Parameter",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Scalar",
+                            "display": "ScalarLike",
                             "link_target": null,
                             "children": []
                           },
@@ -13301,7 +13301,7 @@
                     {
                       "name": "rhs",
                       "type_": {
-                        "display": "Scalar",
+                        "display": "ScalarLike",
                         "link_target": null,
                         "children": []
                       },
@@ -13468,11 +13468,11 @@
                     {
                       "name": "lhs",
                       "type_": {
-                        "display": "Scalar | LinearLike | Parameter",
+                        "display": "ScalarLike | LinearLike | Parameter",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Scalar",
+                            "display": "ScalarLike",
                             "link_target": null,
                             "children": []
                           },
@@ -13580,7 +13580,7 @@
                     {
                       "name": "lhs",
                       "type_": {
-                        "display": "Scalar",
+                        "display": "ScalarLike",
                         "link_target": null,
                         "children": []
                       },
@@ -13682,11 +13682,11 @@
                     {
                       "name": "lhs",
                       "type_": {
-                        "display": "Scalar | LinearLike | Parameter",
+                        "display": "ScalarLike | LinearLike | Parameter",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Scalar",
+                            "display": "ScalarLike",
                             "link_target": null,
                             "children": []
                           },
@@ -13778,11 +13778,11 @@
                     {
                       "name": "rhs",
                       "type_": {
-                        "display": "Scalar | LinearLike | Parameter",
+                        "display": "ScalarLike | LinearLike | Parameter",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Scalar",
+                            "display": "ScalarLike",
                             "link_target": null,
                             "children": []
                           },
@@ -15387,11 +15387,11 @@
                     {
                       "name": "rhs",
                       "type_": {
-                        "display": "Scalar | LinearLike | Parameter",
+                        "display": "ScalarLike | LinearLike | Parameter",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Scalar",
+                            "display": "ScalarLike",
                             "link_target": null,
                             "children": []
                           },
@@ -15618,7 +15618,7 @@
                     {
                       "name": "rhs",
                       "type_": {
-                        "display": "Scalar",
+                        "display": "ScalarLike",
                         "link_target": null,
                         "children": []
                       },
@@ -15839,11 +15839,11 @@
                     {
                       "name": "lhs",
                       "type_": {
-                        "display": "Scalar | LinearLike | Parameter",
+                        "display": "ScalarLike | LinearLike | Parameter",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Scalar",
+                            "display": "ScalarLike",
                             "link_target": null,
                             "children": []
                           },
@@ -15951,7 +15951,7 @@
                     {
                       "name": "lhs",
                       "type_": {
-                        "display": "Scalar",
+                        "display": "ScalarLike",
                         "link_target": null,
                         "children": []
                       },
@@ -16053,11 +16053,11 @@
                     {
                       "name": "lhs",
                       "type_": {
-                        "display": "Scalar | LinearLike | Parameter",
+                        "display": "ScalarLike | LinearLike | Parameter",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Scalar",
+                            "display": "ScalarLike",
                             "link_target": null,
                             "children": []
                           },
@@ -16149,11 +16149,11 @@
                     {
                       "name": "rhs",
                       "type_": {
-                        "display": "Scalar | LinearLike | Parameter",
+                        "display": "ScalarLike | LinearLike | Parameter",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Scalar",
+                            "display": "ScalarLike",
                             "link_target": null,
                             "children": []
                           },
@@ -18034,11 +18034,11 @@
                     {
                       "name": "rhs",
                       "type_": {
-                        "display": "Scalar | LinearLike | Parameter | Quadratic | Polynomial",
+                        "display": "ScalarLike | LinearLike | Parameter | Quadratic | Polynomial",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Scalar",
+                            "display": "ScalarLike",
                             "link_target": null,
                             "children": []
                           },
@@ -18265,11 +18265,11 @@
                     {
                       "name": "rhs",
                       "type_": {
-                        "display": "Scalar | LinearLike | Parameter | Quadratic | Polynomial",
+                        "display": "ScalarLike | LinearLike | Parameter | Quadratic | Polynomial",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Scalar",
+                            "display": "ScalarLike",
                             "link_target": null,
                             "children": []
                           },
@@ -18394,11 +18394,11 @@
                     {
                       "name": "lhs",
                       "type_": {
-                        "display": "Scalar | LinearLike | Parameter | Quadratic | Polynomial",
+                        "display": "ScalarLike | LinearLike | Parameter | Quadratic | Polynomial",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Scalar",
+                            "display": "ScalarLike",
                             "link_target": null,
                             "children": []
                           },
@@ -18480,11 +18480,11 @@
                     {
                       "name": "lhs",
                       "type_": {
-                        "display": "Scalar | LinearLike | Parameter | Quadratic | Polynomial",
+                        "display": "ScalarLike | LinearLike | Parameter | Quadratic | Polynomial",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Scalar",
+                            "display": "ScalarLike",
                             "link_target": null,
                             "children": []
                           },
@@ -18550,11 +18550,11 @@
                     {
                       "name": "lhs",
                       "type_": {
-                        "display": "Scalar | LinearLike | Parameter | Quadratic | Polynomial",
+                        "display": "ScalarLike | LinearLike | Parameter | Quadratic | Polynomial",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Scalar",
+                            "display": "ScalarLike",
                             "link_target": null,
                             "children": []
                           },
@@ -18620,11 +18620,11 @@
                     {
                       "name": "rhs",
                       "type_": {
-                        "display": "Scalar | LinearLike | Parameter | Quadratic | Polynomial",
+                        "display": "ScalarLike | LinearLike | Parameter | Quadratic | Polynomial",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Scalar",
+                            "display": "ScalarLike",
                             "link_target": null,
                             "children": []
                           },
@@ -19212,11 +19212,11 @@
                     {
                       "name": "rhs",
                       "type_": {
-                        "display": "Scalar | LinearLike | Parameter | Quadratic",
+                        "display": "ScalarLike | LinearLike | Parameter | Quadratic",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Scalar",
+                            "display": "ScalarLike",
                             "link_target": null,
                             "children": []
                           },
@@ -19456,7 +19456,7 @@
                     {
                       "name": "rhs",
                       "type_": {
-                        "display": "Scalar",
+                        "display": "ScalarLike",
                         "link_target": null,
                         "children": []
                       },
@@ -19635,11 +19635,11 @@
                     {
                       "name": "lhs",
                       "type_": {
-                        "display": "Scalar | LinearLike | Parameter | Quadratic",
+                        "display": "ScalarLike | LinearLike | Parameter | Quadratic",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Scalar",
+                            "display": "ScalarLike",
                             "link_target": null,
                             "children": []
                           },
@@ -19734,7 +19734,7 @@
                     {
                       "name": "lhs",
                       "type_": {
-                        "display": "Scalar",
+                        "display": "ScalarLike",
                         "link_target": null,
                         "children": []
                       },
@@ -19817,11 +19817,11 @@
                     {
                       "name": "lhs",
                       "type_": {
-                        "display": "Scalar | LinearLike | Parameter | Quadratic",
+                        "display": "ScalarLike | LinearLike | Parameter | Quadratic",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Scalar",
+                            "display": "ScalarLike",
                             "link_target": null,
                             "children": []
                           },
@@ -19900,11 +19900,11 @@
                     {
                       "name": "rhs",
                       "type_": {
-                        "display": "Scalar | LinearLike | Parameter | Quadratic",
+                        "display": "ScalarLike | LinearLike | Parameter | Quadratic",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Scalar",
+                            "display": "ScalarLike",
                             "link_target": null,
                             "children": []
                           },

@@ -77,9 +77,9 @@ impl pyo3_stub_gen::PyStubType for Function {
 /// logic across files.
 ///
 /// Variants are kept distinct so each operator can pick its return type from the rhs class
-/// alone (e.g. `Linear * Scalar -> Linear` but `Linear * Linear -> Quadratic`). `Scalar` and
-/// `Linear` are deliberately separate even though both have degree ≤ 1, because multiplication
-/// behaves differently for them.
+/// alone (e.g. `Linear * Scalar -> Linear` but `Linear * Linear -> Quadratic`). The `Scalar`
+/// and `Linear` variants are deliberately separate even though both have degree ≤ 1, because
+/// multiplication behaves differently for them.
 ///
 /// `Function` is the opaque catch-all: when the rhs is an explicit `Function` instance, the
 /// result is also `Function` (matching today's `__radd__`-fallback behavior).
@@ -213,10 +213,10 @@ macro_rules! numpy_stub_marker {
 numpy_stub_marker!(NumpyInteger, "integer", "integer");
 numpy_stub_marker!(NumpyFloating, "floating", "floating");
 
-// Type alias: Scalar = int | float | numpy.integer | numpy.floating
+// Type alias: ScalarLike = int | float | numpy.integer | numpy.floating
 pyo3_stub_gen::type_alias!(
     "ommx._ommx_rust",
-    Scalar = i64 | f64 | NumpyInteger | NumpyFloating
+    ScalarLike = i64 | f64 | NumpyInteger | NumpyFloating
 );
 
 // Type alias: LinearLike = Linear | DecisionVariable | AttachedDecisionVariable
@@ -230,7 +230,7 @@ pyo3_stub_gen::type_alias!(
     LinearLike = Linear | DecisionVariable | AttachedDecisionVariable
 );
 
-// Type alias: ToFunction = Scalar | LinearLike | Parameter | Quadratic | Polynomial | Function
+// Type alias: ToFunction = ScalarLike | LinearLike | Parameter | Quadratic | Polynomial | Function
 pyo3_stub_gen::type_alias!(
     "ommx._ommx_rust",
     ToFunction = i64
