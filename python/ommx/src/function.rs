@@ -169,7 +169,7 @@ impl<'py> FromPyObject<'_, 'py> for FunctionInput {
             };
         }
         Err(PyTypeError::new_err(format!(
-            "Cannot convert {} to ToFunction. Accepted: int, float, DecisionVariable, AttachedDecisionVariable, Parameter, Linear, Quadratic, Polynomial, Function",
+            "Cannot convert {} to ToFunction. Accepted: int, float, numpy.integer, numpy.floating, DecisionVariable, AttachedDecisionVariable, Parameter, Linear, Quadratic, Polynomial, Function",
             ob.get_type().name()?
         )))
     }
