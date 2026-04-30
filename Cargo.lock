@@ -2185,6 +2185,8 @@ dependencies = [
 [[package]]
 name = "pyo3-stub-gen"
 version = "0.22.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b695173a33bec37b6acd288efe74f902f123f5891e5ff5ad53ff429e18833c14"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2209,6 +2211,8 @@ dependencies = [
 [[package]]
 name = "pyo3-stub-gen-derive"
 version = "0.22.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c2f901834d55c74f36be3353994062e3c3b3d47fda25572f5535e99434612ac8"
 dependencies = [
  "heck",
  "indexmap",
