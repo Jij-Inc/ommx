@@ -360,12 +360,10 @@ impl Instance {
 
     /// Return an {class}`~ommx.v1.AttachedDecisionVariable` bound to the
     /// given id — a write-through handle whose metadata setters update
-    /// this instance's SoA store.
-    ///
-    /// Unlike `decision_variables[i]` (which returns a snapshot suitable
-    /// for arithmetic), the returned handle does not support arithmetic.
-    /// Call {meth}`~ommx.v1.AttachedDecisionVariable.detach` to obtain a
-    /// snapshot.
+    /// this instance's SoA store. The handle also participates in
+    /// arithmetic via `ToFunction` (only its id is consumed). Call
+    /// {meth}`~ommx.v1.AttachedDecisionVariable.detach` to obtain an
+    /// independent {class}`~ommx.v1.DecisionVariable` snapshot.
     ///
     /// Raises {class}`KeyError` if no variable with `variable_id` exists.
     pub fn attached_decision_variable(

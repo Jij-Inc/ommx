@@ -540,14 +540,14 @@ impl DecisionVariable {
 /// ({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).
 ///
 /// `AttachedDecisionVariable` is returned by `add_decision_variable(v)`
-/// (insertion) and `attached_decision_variable(id)` (lookup) on both
-/// hosts. Unlike the constraint accessors, `decision_variables` keeps
-/// returning a list of snapshot {class}`~ommx.v1.DecisionVariable`s so
-/// that variables can still participate in arithmetic to build expressions
-/// (`x + y`, `2 * x`); a follow-up will extend `ToFunction` to accept
-/// `AttachedDecisionVariable` and let `decision_variables` switch to the
-/// attached form. Reads pull live data from the parent host's SoA store
-/// and metadata setters write back through to it.
+/// (insertion), `attached_decision_variable(id)` (lookup), and the
+/// `decision_variables` getter on both hosts. Reads pull live data from
+/// the parent host's SoA store and metadata setters write back through to
+/// it. Handles also participate in arithmetic (`x + y`, `2 * x` etc.) via
+/// `ToFunction` — only the id is consumed for that, no host borrow is
+/// taken, so arithmetic works even while the host is mutably borrowed
+/// elsewhere. Call {meth}`detach` for an independent
+/// {class}`~ommx.v1.DecisionVariable` snapshot.
 ///
 /// `DecisionVariableMetadata` has no `provenance` field, so the
 /// write-through surface omits the corresponding getter.

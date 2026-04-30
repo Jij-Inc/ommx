@@ -568,14 +568,14 @@ class AttachedDecisionVariable:
     ({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).
 
     `AttachedDecisionVariable` is returned by `add_decision_variable(v)`
-    (insertion) and `attached_decision_variable(id)` (lookup) on both
-    hosts. Unlike the constraint accessors, `decision_variables` keeps
-    returning a list of snapshot {class}`~ommx.v1.DecisionVariable`s so
-    that variables can still participate in arithmetic to build expressions
-    (`x + y`, `2 * x`); a follow-up will extend `ToFunction` to accept
-    `AttachedDecisionVariable` and let `decision_variables` switch to the
-    attached form. Reads pull live data from the parent host's SoA store
-    and metadata setters write back through to it.
+    (insertion), `attached_decision_variable(id)` (lookup), and the
+    `decision_variables` getter on both hosts. Reads pull live data from
+    the parent host's SoA store and metadata setters write back through to
+    it. Handles also participate in arithmetic (`x + y`, `2 * x` etc.) via
+    `ToFunction` — only the id is consumed for that, no host borrow is
+    taken, so arithmetic works even while the host is mutably borrowed
+    elsewhere. Call {meth}`detach` for an independent
+    {class}`~ommx.v1.DecisionVariable` snapshot.
 
     `DecisionVariableMetadata` has no `provenance` field, so the
     write-through surface omits the corresponding getter.
@@ -1543,6 +1543,8 @@ class Function:
         Accepts:
         - int or float: creates a constant function
         - DecisionVariable: creates a linear function with single term
+        - AttachedDecisionVariable: creates a linear function with single term
+          (only the id is used; no host borrow is taken)
         - Parameter: creates a linear function with single term
         - Linear: creates a linear function
         - Quadratic: creates a quadratic function
@@ -2079,12 +2081,10 @@ class Instance:
         r"""
         Return an {class}`~ommx.v1.AttachedDecisionVariable` bound to the
         given id — a write-through handle whose metadata setters update
-        this instance's SoA store.
-
-        Unlike `decision_variables[i]` (which returns a snapshot suitable
-        for arithmetic), the returned handle does not support arithmetic.
-        Call {meth}`~ommx.v1.AttachedDecisionVariable.detach` to obtain a
-        snapshot.
+        this instance's SoA store. The handle also participates in
+        arithmetic via `ToFunction` (only its id is consumed). Call
+        {meth}`~ommx.v1.AttachedDecisionVariable.detach` to obtain an
+        independent {class}`~ommx.v1.DecisionVariable` snapshot.
 
         Raises {class}`KeyError` if no variable with `variable_id` exists.
         """

@@ -216,3 +216,12 @@ def test_attached_plus_function_returns_function(instance: Instance):
     base = Function(2 * y + 1)  # Function
     result = x + base
     assert isinstance(result, Function)
+
+
+def test_function_plus_attached_returns_function(instance: Instance):
+    """Reflected dispatch: `Function.__add__(att_dv)` should also work via
+    `ToFunction` and return `Function`."""
+    x, y = _vars(instance)
+    base = Function(2 * y + 1)  # Function
+    result = base + x
+    assert isinstance(result, Function)

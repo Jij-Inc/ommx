@@ -115,9 +115,12 @@ impl FunctionInput {
 
 /// Extract a Python value as one of the `ToFunction`-supported types.
 ///
-/// Order is significant: more specific types are tried first so that, e.g., a `Polynomial` is
-/// not accidentally extracted as a `Function` via `Function::FromPyObject` recursion. The
-/// `Function` branch uses `cast` (not `extract`) for the same reason.
+/// The `Function` branch is checked first via `cast` (not `extract`) so an actual `Function`
+/// instance short-circuits the dispatch — using `extract` would invoke
+/// `Function::FromPyObject` (which itself calls back into this impl) and recurse. After
+/// that, more specific arithmetic types (`Polynomial` → `Quadratic` → `Linear`) are tried
+/// before degree-≤-1 wrappers (`DecisionVariable`, `AttachedDecisionVariable`, `Parameter`)
+/// and finally `f64` for scalars.
 impl<'py> FromPyObject<'_, 'py> for FunctionInput {
     type Error = PyErr;
     fn extract(ob: Borrowed<'_, 'py, PyAny>) -> PyResult<Self> {
@@ -155,7 +158,9 @@ impl<'py> FromPyObject<'_, 'py> for FunctionInput {
             return match TryInto::<Coefficient>::try_into(scalar) {
                 Ok(c) => Ok(Self::Scalar(Some(c))),
                 Err(CoefficientError::Zero) => Ok(Self::Scalar(None)),
-                Err(e) => Err(PyTypeError::new_err(e.to_string())),
+                // NaN / Inf: surface as ValueError to match the previous
+                // polymorphic-op behavior (`linear + NaN` raised ValueError).
+                Err(e) => Err(pyo3::exceptions::PyValueError::new_err(e.to_string())),
             };
         }
         Err(PyTypeError::new_err(format!(
@@ -254,6 +259,8 @@ impl Function {
     /// Accepts:
     /// - int or float: creates a constant function
     /// - DecisionVariable: creates a linear function with single term
+    /// - AttachedDecisionVariable: creates a linear function with single term
+    ///   (only the id is used; no host borrow is taken)
     /// - Parameter: creates a linear function with single term
     /// - Linear: creates a linear function
     /// - Quadratic: creates a quadratic function
