@@ -296,6 +296,89 @@ impl ParametricInstance {
         ))
     }
 
+    /// Dict of all active one-hot constraints in the parametric instance
+    /// keyed by their IDs. Each value is an
+    /// {class}`~ommx.v1.AttachedOneHotConstraint`.
+    #[getter]
+    pub fn one_hot_constraints(
+        slf: Bound<'_, Self>,
+    ) -> BTreeMap<u64, crate::AttachedOneHotConstraint> {
+        let py = slf.py();
+        let ids: Vec<ommx::OneHotConstraintID> = slf
+            .borrow()
+            .inner
+            .one_hot_constraints()
+            .keys()
+            .copied()
+            .collect();
+        let py_parametric: Py<Self> = slf.unbind();
+        ids.into_iter()
+            .map(|id| {
+                (
+                    id.into_inner(),
+                    crate::AttachedOneHotConstraint::from_parametric(
+                        py_parametric.clone_ref(py),
+                        id,
+                    ),
+                )
+            })
+            .collect()
+    }
+
+    /// Add a one-hot constraint to this parametric instance.
+    pub fn add_one_hot_constraint(
+        slf: Bound<'_, Self>,
+        constraint: crate::OneHotConstraint,
+    ) -> Result<crate::AttachedOneHotConstraint> {
+        let id = {
+            let mut inst = slf.borrow_mut();
+            inst.inner
+                .add_one_hot_constraint(constraint.0, constraint.1)?
+        };
+        Ok(crate::AttachedOneHotConstraint::from_parametric(
+            slf.unbind(),
+            id,
+        ))
+    }
+
+    /// Dict of all active SOS1 constraints in the parametric instance keyed
+    /// by their IDs. Each value is an {class}`~ommx.v1.AttachedSos1Constraint`.
+    #[getter]
+    pub fn sos1_constraints(slf: Bound<'_, Self>) -> BTreeMap<u64, crate::AttachedSos1Constraint> {
+        let py = slf.py();
+        let ids: Vec<ommx::Sos1ConstraintID> = slf
+            .borrow()
+            .inner
+            .sos1_constraints()
+            .keys()
+            .copied()
+            .collect();
+        let py_parametric: Py<Self> = slf.unbind();
+        ids.into_iter()
+            .map(|id| {
+                (
+                    id.into_inner(),
+                    crate::AttachedSos1Constraint::from_parametric(py_parametric.clone_ref(py), id),
+                )
+            })
+            .collect()
+    }
+
+    /// Add a SOS1 constraint to this parametric instance.
+    pub fn add_sos1_constraint(
+        slf: Bound<'_, Self>,
+        constraint: crate::Sos1Constraint,
+    ) -> Result<crate::AttachedSos1Constraint> {
+        let id = {
+            let mut inst = slf.borrow_mut();
+            inst.inner.add_sos1_constraint(constraint.0, constraint.1)?
+        };
+        Ok(crate::AttachedSos1Constraint::from_parametric(
+            slf.unbind(),
+            id,
+        ))
+    }
+
     #[getter]
     pub fn named_functions(&self) -> Vec<NamedFunction> {
         let metadata = self.inner.named_function_metadata();

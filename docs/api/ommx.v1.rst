@@ -27,8 +27,10 @@ ommx.v1
    _items/ommx.v1.AttachedIndicatorConstraint
    _items/ommx.v1.RemovedIndicatorConstraint
    _items/ommx.v1.OneHotConstraint
+   _items/ommx.v1.AttachedOneHotConstraint
    _items/ommx.v1.RemovedOneHotConstraint
    _items/ommx.v1.Sos1Constraint
+   _items/ommx.v1.AttachedSos1Constraint
    _items/ommx.v1.RemovedSos1Constraint
    _items/ommx.v1.RemovedConstraint
    _items/ommx.v1.Provenance

@@ -81,6 +81,40 @@ impl Instance {
         Ok(id)
     }
 
+    /// Insert a new one-hot constraint with its metadata, picking an unused id.
+    ///
+    /// Returns the newly assigned [`crate::OneHotConstraintID`].
+    /// All variable IDs referenced by the constraint must already be present
+    /// in `decision_variables` and must not be substitution-dependency keys.
+    pub fn add_one_hot_constraint(
+        &mut self,
+        constraint: crate::OneHotConstraint,
+        metadata: crate::ConstraintMetadata,
+    ) -> crate::Result<crate::OneHotConstraintID> {
+        self.validate_required_ids(constraint.required_ids())?;
+        let id = self.one_hot_constraint_collection.unused_id();
+        self.one_hot_constraint_collection
+            .insert_with(id, constraint, metadata);
+        Ok(id)
+    }
+
+    /// Insert a new SOS1 constraint with its metadata, picking an unused id.
+    ///
+    /// Returns the newly assigned [`crate::Sos1ConstraintID`].
+    /// All variable IDs referenced by the constraint must already be present
+    /// in `decision_variables` and must not be substitution-dependency keys.
+    pub fn add_sos1_constraint(
+        &mut self,
+        constraint: crate::Sos1Constraint,
+        metadata: crate::ConstraintMetadata,
+    ) -> crate::Result<crate::Sos1ConstraintID> {
+        self.validate_required_ids(constraint.required_ids())?;
+        let id = self.sos1_constraint_collection.unused_id();
+        self.sos1_constraint_collection
+            .insert_with(id, constraint, metadata);
+        Ok(id)
+    }
+
     /// Insert a constraint into the instance under the given [`ConstraintID`].
     ///
     /// - If the constraint already exists, it will be replaced.
@@ -263,6 +297,32 @@ impl ParametricInstance {
         self.validate_required_ids(constraint.required_ids())?;
         let id = self.indicator_constraint_collection.unused_id();
         self.indicator_constraint_collection
+            .insert_with(id, constraint, metadata);
+        Ok(id)
+    }
+
+    /// Insert a new one-hot constraint with its metadata, picking an unused id.
+    pub fn add_one_hot_constraint(
+        &mut self,
+        constraint: crate::OneHotConstraint,
+        metadata: crate::ConstraintMetadata,
+    ) -> crate::Result<crate::OneHotConstraintID> {
+        self.validate_required_ids(constraint.required_ids())?;
+        let id = self.one_hot_constraint_collection.unused_id();
+        self.one_hot_constraint_collection
+            .insert_with(id, constraint, metadata);
+        Ok(id)
+    }
+
+    /// Insert a new SOS1 constraint with its metadata, picking an unused id.
+    pub fn add_sos1_constraint(
+        &mut self,
+        constraint: crate::Sos1Constraint,
+        metadata: crate::ConstraintMetadata,
+    ) -> crate::Result<crate::Sos1ConstraintID> {
+        self.validate_required_ids(constraint.required_ids())?;
+        let id = self.sos1_constraint_collection.unused_id();
+        self.sos1_constraint_collection
             .insert_with(id, constraint, metadata);
         Ok(id)
     }
