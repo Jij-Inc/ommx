@@ -16,6 +16,7 @@ __all__ = [
     "AdditionalCapability",
     "Artifact",
     "ArtifactBuilder",
+    "AttachedConstraint",
     "Bound",
     "Constraint",
     "DecisionVariable",
@@ -451,6 +452,99 @@ class ArtifactBuilder:
         r"""
         Build the artifact.
         """
+
+@typing.final
+class AttachedConstraint:
+    r"""
+    Attached constraint — a write-through handle bound to an [`Instance`].
+
+    `AttachedConstraint` is returned by [`Instance.add_constraint`] and by
+    `instance.constraints[id]`. Unlike [`Constraint`], which is a snapshot,
+    reads pull live data from the parent instance and metadata setters write
+    through to its SoA metadata store. Two `AttachedConstraint` instances
+    pointing at the same id observe the same state.
+
+    The handle keeps the parent `Instance` alive through a refcount; drop
+    the wrapper to release the back-reference.
+    """
+    @property
+    def constraint_id(self) -> builtins.int:
+        r"""
+        The id this handle points at.
+        """
+    @property
+    def instance(self) -> Instance:
+        r"""
+        The parent {class}`~ommx.v1.Instance` this constraint lives in.
+        """
+    @property
+    def function(self) -> Function: ...
+    @property
+    def equality(self) -> Equality: ...
+    @property
+    def name(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]: ...
+    @property
+    def description(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
+    @property
+    def provenance(self) -> builtins.list[Provenance]: ...
+    def detach(self) -> Constraint:
+        r"""
+        Return a {class}`~ommx.v1.Constraint` snapshot of the current
+        state. Mutations on the returned object do not propagate back.
+        """
+    def set_name(self, name: builtins.str) -> None:
+        r"""
+        Set the name. Writes through to the parent instance's SoA store.
+        """
+    def add_name(self, name: builtins.str) -> None:
+        r"""
+        Alias for {meth}`set_name` (backward compatibility).
+        """
+    def set_subscripts(self, subscripts: typing.Sequence[builtins.int]) -> None:
+        r"""
+        Set the subscripts. Writes through to the parent instance's SoA store.
+        """
+    def add_subscripts(self, subscripts: typing.Sequence[builtins.int]) -> None:
+        r"""
+        Append subscripts. Writes through to the parent instance's SoA store.
+        """
+    def set_description(self, description: builtins.str) -> None:
+        r"""
+        Set the description. Writes through to the parent instance's SoA store.
+        """
+    def add_description(self, description: builtins.str) -> None:
+        r"""
+        Alias for {meth}`set_description` (backward compatibility).
+        """
+    def set_parameters(
+        self, parameters: typing.Mapping[builtins.str, builtins.str]
+    ) -> None:
+        r"""
+        Replace all parameters. Writes through to the parent instance's SoA store.
+        """
+    def add_parameters(
+        self, parameters: typing.Mapping[builtins.str, builtins.str]
+    ) -> None:
+        r"""
+        Alias for {meth}`set_parameters` (backward compatibility).
+        """
+    def add_parameter(self, key: builtins.str, value: builtins.str) -> None:
+        r"""
+        Add a single parameter entry. Writes through to the parent instance's SoA store.
+        """
+    def evaluate(
+        self, state: ToState, *, atol: typing.Optional[builtins.float] = None
+    ) -> EvaluatedConstraint:
+        r"""
+        Evaluate the constraint with the given state.
+        """
+    def __repr__(self) -> builtins.str: ...
+    def __copy__(self) -> AttachedConstraint: ...
+    def __deepcopy__(self, _memo: typing.Any) -> AttachedConstraint: ...
 
 @typing.final
 class Bound:
@@ -1384,9 +1478,15 @@ class Instance:
         List of all decision variables in the instance sorted by their IDs.
         """
     @property
-    def constraints(self) -> builtins.dict[builtins.int, Constraint]:
+    def constraints(self) -> builtins.dict[builtins.int, AttachedConstraint]:
         r"""
-        Dict of all constraints in the instance keyed by their IDs.
+        Dict of all active constraints in the instance keyed by their IDs.
+
+        Each value is an {class}`~ommx.v1.AttachedConstraint`: a write-through
+        handle whose getters read from this instance's SoA store and whose
+        metadata setters write back through to it. Use
+        {meth}`~ommx.v1.AttachedConstraint.detach` to materialize a
+        {class}`~ommx.v1.Constraint` snapshot if you need an independent copy.
         """
     @property
     def indicator_constraints(self) -> builtins.dict[builtins.int, IndicatorConstraint]:
@@ -1521,6 +1621,16 @@ class Instance:
         >>> instance.sense == Instance.MINIMIZE
         True
         ```
+        """
+    def add_constraint(self, constraint: Constraint) -> AttachedConstraint:
+        r"""
+        Add a regular constraint to this instance.
+
+        Picks an unused {class}`~ommx.v1.ConstraintID`, drains the wrapper's
+        metadata snapshot into this instance's SoA store, and returns an
+        {class}`~ommx.v1.AttachedConstraint` bound to the new id. The input
+        {class}`~ommx.v1.Constraint` is not mutated; subsequent writes that
+        should land in the instance must go through the returned handle.
         """
     def reduce_capabilities(
         self, supported: builtins.set[AdditionalCapability]

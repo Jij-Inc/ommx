@@ -1,0 +1,138 @@
+"""Tests for AttachedConstraint write-through wrapper."""
+
+import pytest
+
+from ommx.v1 import (
+    AttachedConstraint,
+    Constraint,
+    DecisionVariable,
+    Equality,
+    Function,
+    Instance,
+    Linear,
+)
+
+
+def _empty_instance() -> Instance:
+    return Instance.from_components(
+        sense=Instance.MINIMIZE,
+        objective=Function.from_linear(Linear.constant(0.0)),
+        decision_variables=[DecisionVariable.binary(0), DecisionVariable.binary(1)],
+        constraints={},
+    )
+
+
+def _make_constraint(name: str | None = "balance") -> Constraint:
+    linear = Linear({0: 1.0, 1: 1.0}, -1.0)
+    return Constraint(
+        function=Function.from_linear(linear),
+        equality=Equality.EqualToZero,
+        name=name,
+        subscripts=[7],
+        description="initial",
+        parameters={"k": "v"},
+    )
+
+
+def test_add_constraint_returns_attached_with_drained_metadata():
+    """add_constraint returns AttachedConstraint reading the staged metadata."""
+    instance = _empty_instance()
+    snapshot = _make_constraint(name="balance")
+
+    attached = instance.add_constraint(snapshot)
+
+    assert isinstance(attached, AttachedConstraint)
+    assert attached.name == "balance"
+    assert attached.subscripts == [7]
+    assert attached.description == "initial"
+    assert attached.parameters == {"k": "v"}
+
+
+def test_add_constraint_does_not_mutate_input_snapshot():
+    """The input Constraint stays a snapshot — write-through goes through the
+    returned AttachedConstraint, not the original."""
+    instance = _empty_instance()
+    snapshot = _make_constraint(name="balance")
+
+    attached = instance.add_constraint(snapshot)
+    attached.set_name("demand")
+
+    # Original snapshot is untouched.
+    assert snapshot.name == "balance"
+    # SoA store updated.
+    assert attached.name == "demand"
+
+
+def test_attached_setter_writes_through_to_instance():
+    """Mutations on AttachedConstraint land in the parent instance and surface
+    via instance.constraints[id]."""
+    instance = _empty_instance()
+    attached = instance.add_constraint(_make_constraint(name="balance"))
+    cid = attached.constraint_id
+
+    attached.set_name("demand")
+    attached.set_subscripts([1, 2, 3])
+    attached.set_description("updated")
+    attached.set_parameters({"a": "1", "b": "2"})
+
+    fresh = instance.constraints[cid]
+    assert fresh.name == "demand"
+    assert fresh.subscripts == [1, 2, 3]
+    assert fresh.description == "updated"
+    assert fresh.parameters == {"a": "1", "b": "2"}
+
+
+def test_two_attached_handles_share_state():
+    """Two AttachedConstraint handles for the same id observe the same data."""
+    instance = _empty_instance()
+    a = instance.add_constraint(_make_constraint(name="balance"))
+    b = instance.constraints[a.constraint_id]
+
+    a.set_name("demand")
+
+    assert b.name == "demand"
+
+
+def test_constraints_getter_returns_attached_constraints():
+    """instance.constraints values are AttachedConstraint, not Constraint."""
+    instance = _empty_instance()
+    a = instance.add_constraint(_make_constraint(name="c1"))
+    b = instance.add_constraint(_make_constraint(name="c2"))
+
+    constraints = instance.constraints
+    assert set(constraints.keys()) == {a.constraint_id, b.constraint_id}
+    assert all(isinstance(c, AttachedConstraint) for c in constraints.values())
+
+
+def test_detach_returns_independent_constraint_snapshot():
+    """detach() returns a Constraint whose mutations do not propagate back."""
+    instance = _empty_instance()
+    attached = instance.add_constraint(_make_constraint(name="balance"))
+
+    snapshot = attached.detach()
+    assert isinstance(snapshot, Constraint)
+    assert snapshot.name == "balance"
+
+    snapshot.set_name("ignored")
+    assert attached.name == "balance"
+
+
+def test_attached_evaluate_uses_live_data():
+    """evaluate() works on AttachedConstraint and yields the same value as on
+    a detached snapshot."""
+    instance = _empty_instance()
+    attached = instance.add_constraint(_make_constraint(name="balance"))
+    state = {0: 1.0, 1: 0.0}  # 1 + 0 - 1 = 0 → satisfies the equality
+
+    evaluated = attached.evaluate(state)
+    assert evaluated.evaluated_value == pytest.approx(0.0)
+    assert evaluated.feasible is True
+
+
+def test_attached_constraint_id_and_instance_handle():
+    """constraint_id surfaces the assigned id and instance returns the parent."""
+    instance = _empty_instance()
+    attached = instance.add_constraint(_make_constraint(name="balance"))
+
+    assert isinstance(attached.constraint_id, int)
+    assert attached.instance is instance

@@ -300,20 +300,42 @@ impl Instance {
             .collect()
     }
 
-    /// Dict of all constraints in the instance keyed by their IDs.
+    /// Dict of all active constraints in the instance keyed by their IDs.
+    ///
+    /// Each value is an {class}`~ommx.v1.AttachedConstraint`: a write-through
+    /// handle whose getters read from this instance's SoA store and whose
+    /// metadata setters write back through to it. Use
+    /// {meth}`~ommx.v1.AttachedConstraint.detach` to materialize a
+    /// {class}`~ommx.v1.Constraint` snapshot if you need an independent copy.
     #[getter]
-    pub fn constraints(&self) -> BTreeMap<u64, Constraint> {
-        let metadata = self.inner.constraint_collection().metadata();
-        self.inner
-            .constraints()
-            .iter()
-            .map(|(id, constraint)| {
+    pub fn constraints(slf: Bound<'_, Self>) -> BTreeMap<u64, crate::AttachedConstraint> {
+        let ids: Vec<ConstraintID> = slf.borrow().inner.constraints().keys().copied().collect();
+        ids.into_iter()
+            .map(|id| {
                 (
                     id.into_inner(),
-                    Constraint::from_parts(constraint.clone(), metadata.collect_for(*id)),
+                    crate::AttachedConstraint::new(slf.clone().unbind(), id),
                 )
             })
             .collect()
+    }
+
+    /// Add a regular constraint to this instance.
+    ///
+    /// Picks an unused {class}`~ommx.v1.ConstraintID`, drains the wrapper's
+    /// metadata snapshot into this instance's SoA store, and returns an
+    /// {class}`~ommx.v1.AttachedConstraint` bound to the new id. The input
+    /// {class}`~ommx.v1.Constraint` is not mutated; subsequent writes that
+    /// should land in the instance must go through the returned handle.
+    pub fn add_constraint(
+        slf: Bound<'_, Self>,
+        constraint: Constraint,
+    ) -> crate::AttachedConstraint {
+        let id = {
+            let mut inst = slf.borrow_mut();
+            inst.inner.add_constraint(constraint.0, constraint.1)
+        };
+        crate::AttachedConstraint::new(slf.unbind(), id)
     }
 
     /// Dict of all indicator constraints in the instance keyed by their IDs.
