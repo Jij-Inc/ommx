@@ -90,17 +90,25 @@ here. The implementation shipped in three waves:
   `name` / `subscripts` / `description` / `parameters` surface as the
   other kinds, and `ParametricInstance` gained the special-constraint
   collection getters and `add_*` methods it had been missing on the
-  Python side. `instance.decision_variables` keeps returning
-  snapshots (so arithmetic like `x + y` still works); per-id
-  write-through goes through `add_decision_variable(v)` /
-  `attached_decision_variable(id)`. The snapshot-list shape is a
-  temporary measure — arithmetic only needs the variable id, so a
-  follow-up will extend `ToFunction` (and `Linear` / `Quadratic` /
-  `Polynomial` arithmetic operators) to accept
-  `AttachedDecisionVariable` directly. Once that lands,
-  `instance.decision_variables` can return
-  `list[AttachedDecisionVariable]` without breaking expression
-  building, removing the asymmetry vs. the constraint accessors.
+  Python side.
+- **Wave 3.6 (this PR, landed):** Closed the remaining
+  `decision_variables` asymmetry. `ToFunction` now accepts
+  `AttachedDecisionVariable` (only its id is consumed, no host borrow
+  is taken); the polymorphic arithmetic operators on
+  `DecisionVariable` / `AttachedDecisionVariable` / `Parameter` /
+  `Linear` / `Quadratic` / `Polynomial` were rewritten to take a
+  shared `FunctionInput` enum so adding a new operand type only
+  touches `Function::FromPyObject` and the enum. `Scalar` and
+  `LinearLike` Python type aliases were introduced for the
+  `@overload` stubs (`Scalar = int | float | numpy.integer |
+  numpy.floating`, `LinearLike = Linear | DecisionVariable |
+  AttachedDecisionVariable`; `Parameter` is intentionally separate).
+  `instance.decision_variables` and
+  `parametric.decision_variables` now return
+  `list[AttachedDecisionVariable]` — write-through and arithmetic
+  both work, removing the asymmetry vs. the constraint accessors.
+  Current operand-class-driven return-type semantics is preserved
+  (see follow-ups for the dynamic-degree-downcast variant).
 - **Dropped:** the `Series[ID -> Object]` collection accessors.
   Their original draw was hosting back-referenced wrappers with
   bulk pandas indexing on top; with `*_df` (wide via `include=`,
@@ -1539,7 +1547,7 @@ traceability with earlier review comments.
    the pattern needs revisiting (e.g. weak-handle variant) is a
    question to take up at implementation time, not before.
 
-## Follow-ups (post-#843, post-#846, post-#849, post-#850)
+## Follow-ups (post-#843, post-#846, post-#849, post-#850, post-#852)
 
 - **Tighten `ConstraintCollection<T>` mutation surface.**
   `active_mut()` / `removed_mut()` / `insert_with()` are still `pub`
@@ -1555,19 +1563,21 @@ traceability with earlier review comments.
   when `instance.constraints[id]` etc. now return `AttachedX`, the
   `add_*` / `attached_decision_variable(id)` insertion paths, and
   the `detach()` escape hatch when callers need a snapshot.
-- **Extend `ToFunction` to accept `AttachedDecisionVariable`.**
-  `instance.decision_variables` and `parametric.decision_variables`
-  currently return `list[DecisionVariable]` snapshots so arithmetic
-  (`x + y`, `2 * x`) keeps working — `AttachedDecisionVariable` is
-  not in `ToFunction`'s union, so it cannot stand in for a
-  `DecisionVariable` operand today. Once `ToFunction` (and the
-  arithmetic operators on `Linear` / `Quadratic` / `Polynomial`)
-  also extract `AttachedDecisionVariable` (using its id to build a
-  `Linear::single_term`, the same way `DecisionVariable` and
-  `Parameter` do), the `decision_variables` getter can switch to
-  returning `list[AttachedDecisionVariable]` without breaking
-  expression building, removing the asymmetry vs. the constraint
-  accessors.
+- **Dynamic operand-class downcast for arithmetic results.**
+  Today the polymorphic operators dispatch on the *operand class*:
+  `Quadratic + Quadratic -> Quadratic` even when all quadratic terms
+  cancel. A more honest semantics would have the result type match
+  the *actual* runtime degree, e.g. `(x*x + 1) + (-x*x) -> Linear`.
+  The `FunctionInput` enum landed in #852 makes this a localized
+  change: introduce a `PolymorphicResult(ommx::Function)` wrapper
+  whose `IntoPyObject` matches on the inner `Function` variant and
+  yields `Linear` / `Quadratic` / `Polynomial` accordingly, then
+  rewrite each operator to compute through `ommx::Function`
+  arithmetic and return the wrapper. Callsites that depend on the
+  current "Quadratic with no quadratic terms still types as
+  Quadratic" shape will need to narrow with `isinstance` after this
+  change, so the @overload stubs become `Linear | Quadratic` /
+  `Linear | Quadratic | Polynomial` unions instead of a single type.
 
 ## Open questions
 

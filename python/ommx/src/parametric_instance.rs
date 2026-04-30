@@ -238,14 +238,26 @@ impl ParametricInstance {
     }
 
     /// List of all decision variables in the parametric instance sorted by
-    /// their IDs (snapshots, suitable for arithmetic).
+    /// their IDs.
+    ///
+    /// Returns a list of {class}`~ommx.v1.AttachedDecisionVariable` write-through
+    /// handles. See {attr}`~ommx.v1.Instance.decision_variables` for the same
+    /// shape on `Instance`.
     #[getter]
-    pub fn decision_variables(&self) -> Vec<DecisionVariable> {
-        let metadata = self.inner.variable_metadata();
-        self.inner
+    pub fn decision_variables(slf: Bound<'_, Self>) -> Vec<crate::AttachedDecisionVariable> {
+        let py = slf.py();
+        let ids: Vec<VariableID> = slf
+            .borrow()
+            .inner
             .decision_variables()
-            .iter()
-            .map(|(id, var)| DecisionVariable::from_parts(var.clone(), metadata.collect_for(*id)))
+            .keys()
+            .copied()
+            .collect();
+        let py_instance: Py<Self> = slf.unbind();
+        ids.into_iter()
+            .map(|id| {
+                crate::AttachedDecisionVariable::from_parametric(py_instance.clone_ref(py), id)
+            })
             .collect()
     }
 

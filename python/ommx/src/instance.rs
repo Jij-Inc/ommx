@@ -311,18 +311,27 @@ impl Instance {
 
     /// List of all decision variables in the instance sorted by their IDs.
     ///
-    /// Returns {class}`~ommx.v1.DecisionVariable` snapshots — independent
-    /// values that participate in arithmetic to build expressions
-    /// (`x + y`, `2 * x` etc.). For write-through metadata mutation, use
-    /// {meth}`add_decision_variable` (when adding) or
-    /// {meth}`attached_decision_variable` (when looking up by id).
+    /// Returns a list of {class}`~ommx.v1.AttachedDecisionVariable` write-through
+    /// handles. Each handle reads its kind / bound / metadata live from this
+    /// instance's SoA store and writes metadata mutations back through to it.
+    /// Handles also participate in arithmetic to build expressions
+    /// (`x + y`, `2 * x` etc.) — only their id is consumed for that, no host
+    /// borrow is taken. Call
+    /// {meth}`~ommx.v1.AttachedDecisionVariable.detach` if you need an
+    /// independent {class}`~ommx.v1.DecisionVariable` snapshot.
     #[getter]
-    pub fn decision_variables(&self) -> Vec<DecisionVariable> {
-        let metadata = self.inner.variable_metadata();
-        self.inner
+    pub fn decision_variables(slf: Bound<'_, Self>) -> Vec<crate::AttachedDecisionVariable> {
+        let py = slf.py();
+        let ids: Vec<VariableID> = slf
+            .borrow()
+            .inner
             .decision_variables()
-            .iter()
-            .map(|(id, var)| DecisionVariable::from_parts(var.clone(), metadata.collect_for(*id)))
+            .keys()
+            .copied()
+            .collect();
+        let py_instance: Py<Self> = slf.unbind();
+        ids.into_iter()
+            .map(|id| crate::AttachedDecisionVariable::from_instance(py_instance.clone_ref(py), id))
             .collect()
     }
 

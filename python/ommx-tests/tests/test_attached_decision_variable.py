@@ -96,18 +96,22 @@ def test_attached_decision_variable_lookup_returns_handle():
         instance.attached_decision_variable(999)
 
 
-def test_decision_variables_getter_still_returns_snapshots():
-    """The plain decision_variables getter preserves snapshot semantics so
-    arithmetic (`x + y` style expression building) keeps working."""
+def test_decision_variables_getter_returns_attached_handles():
+    """`decision_variables` returns write-through `AttachedDecisionVariable`
+    handles. Arithmetic still works because `AttachedDecisionVariable` is
+    accepted by `ToFunction`."""
     instance = _empty_instance()
     instance.add_decision_variable(_make_variable())
 
     variables = instance.decision_variables
-    assert all(isinstance(v, DecisionVariable) for v in variables)
+    assert all(isinstance(v, AttachedDecisionVariable) for v in variables)
     # Sanity: arithmetic compiles and produces a Linear.
     x, y = variables[0], variables[1]
     expr = x + y
-    assert hasattr(expr, "almost_equal")
+    assert isinstance(expr, Linear)
+    # Mutating an attached handle reflects on a fresh handle resolved by id.
+    x.set_name("renamed")
+    assert instance.attached_decision_variable(x.id).name == "renamed"
 
 
 def test_two_handles_share_state():

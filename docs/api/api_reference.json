@@ -2101,6 +2101,102 @@
           "bases": [],
           "methods": [
             {
+              "name": "__add__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "rhs",
+                      "type_": {
+                        "display": "Scalar | LinearLike | Parameter",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Scalar",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "LinearLike",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Parameter",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Linear",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "rhs",
+                      "type_": {
+                        "display": "Quadratic",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Quadratic",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "rhs",
+                      "type_": {
+                        "display": "Polynomial",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Polynomial",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "rhs",
+                      "type_": {
+                        "display": "Function",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "__copy__",
               "doc": "",
               "signatures": [
@@ -2143,6 +2239,313 @@
               "deprecated": null
             },
             {
+              "name": "__eq__",
+              "doc": "Create an equality constraint: `self == other` → `Constraint` with `EqualToZero`.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "ToFunction",
+                        "link_target": {
+                          "fqn": "ommx._ommx_rust.ToFunction",
+                          "doc_module": "ommx._ommx_rust",
+                          "kind": "Class",
+                          "attribute": null
+                        },
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Constraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__ge__",
+              "doc": "Create a greater-than-or-equal constraint.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "ToFunction",
+                        "link_target": {
+                          "fqn": "ommx._ommx_rust.ToFunction",
+                          "doc_module": "ommx._ommx_rust",
+                          "kind": "Class",
+                          "attribute": null
+                        },
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Constraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__le__",
+              "doc": "Create a less-than-or-equal constraint.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "ToFunction",
+                        "link_target": {
+                          "fqn": "ommx._ommx_rust.ToFunction",
+                          "doc_module": "ommx._ommx_rust",
+                          "kind": "Class",
+                          "attribute": null
+                        },
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Constraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__mul__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "rhs",
+                      "type_": {
+                        "display": "Scalar",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Linear",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "rhs",
+                      "type_": {
+                        "display": "LinearLike | Parameter",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "LinearLike",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Parameter",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Quadratic",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "rhs",
+                      "type_": {
+                        "display": "Quadratic | Polynomial",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Quadratic",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Polynomial",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Polynomial",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "rhs",
+                      "type_": {
+                        "display": "Function",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__neg__",
+              "doc": "Negation operator: `-x` → `Linear(-1 * x)`.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "Linear",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__radd__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "lhs",
+                      "type_": {
+                        "display": "Scalar | LinearLike | Parameter",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Scalar",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "LinearLike",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Parameter",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Linear",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "lhs",
+                      "type_": {
+                        "display": "Quadratic",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Quadratic",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "lhs",
+                      "type_": {
+                        "display": "Polynomial",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Polynomial",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "lhs",
+                      "type_": {
+                        "display": "Function",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "__repr__",
               "doc": "",
               "signatures": [
@@ -2150,6 +2553,300 @@
                   "parameters": [],
                   "return_type": {
                     "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__rmul__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "lhs",
+                      "type_": {
+                        "display": "Scalar",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Linear",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "lhs",
+                      "type_": {
+                        "display": "LinearLike | Parameter",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "LinearLike",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Parameter",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Quadratic",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "lhs",
+                      "type_": {
+                        "display": "Quadratic | Polynomial",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Quadratic",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Polynomial",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Polynomial",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "lhs",
+                      "type_": {
+                        "display": "Function",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__rsub__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "lhs",
+                      "type_": {
+                        "display": "Scalar | LinearLike | Parameter",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Scalar",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "LinearLike",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Parameter",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Linear",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "lhs",
+                      "type_": {
+                        "display": "Quadratic",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Quadratic",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "lhs",
+                      "type_": {
+                        "display": "Polynomial",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Polynomial",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "lhs",
+                      "type_": {
+                        "display": "Function",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__sub__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "rhs",
+                      "type_": {
+                        "display": "Scalar | LinearLike | Parameter",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Scalar",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "LinearLike",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Parameter",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Linear",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "rhs",
+                      "type_": {
+                        "display": "Quadratic",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Quadratic",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "rhs",
+                      "type_": {
+                        "display": "Polynomial",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Polynomial",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "rhs",
+                      "type_": {
+                        "display": "Function",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
                     "link_target": null,
                     "children": []
                   }
@@ -5140,31 +5837,21 @@
                     {
                       "name": "rhs",
                       "type_": {
-                        "display": "int | float | DecisionVariable | Parameter | Linear",
+                        "display": "Scalar | LinearLike | Parameter",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "int",
+                            "display": "Scalar",
                             "link_target": null,
                             "children": []
                           },
                           {
-                            "display": "float",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "DecisionVariable",
+                            "display": "LinearLike",
                             "link_target": null,
                             "children": []
                           },
                           {
                             "display": "Parameter",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Linear",
                             "link_target": null,
                             "children": []
                           }
@@ -5211,6 +5898,24 @@
                   ],
                   "return_type": {
                     "display": "Polynomial",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "rhs",
+                      "type_": {
+                        "display": "Function",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
                     "link_target": null,
                     "children": []
                   }
@@ -5363,20 +6068,9 @@
                     {
                       "name": "rhs",
                       "type_": {
-                        "display": "int | float",
+                        "display": "Scalar",
                         "link_target": null,
-                        "children": [
-                          {
-                            "display": "int",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "float",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
+                        "children": []
                       },
                       "default": null
                     }
@@ -5392,21 +6086,16 @@
                     {
                       "name": "rhs",
                       "type_": {
-                        "display": "DecisionVariable | Parameter | Linear",
+                        "display": "LinearLike | Parameter",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "DecisionVariable",
+                            "display": "LinearLike",
                             "link_target": null,
                             "children": []
                           },
                           {
                             "display": "Parameter",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Linear",
                             "link_target": null,
                             "children": []
                           }
@@ -5446,6 +6135,24 @@
                   ],
                   "return_type": {
                     "display": "Polynomial",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "rhs",
+                      "type_": {
+                        "display": "Function",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
                     "link_target": null,
                     "children": []
                   }
@@ -5600,31 +6307,21 @@
                     {
                       "name": "lhs",
                       "type_": {
-                        "display": "int | float | DecisionVariable | Parameter | Linear",
+                        "display": "Scalar | LinearLike | Parameter",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "int",
+                            "display": "Scalar",
                             "link_target": null,
                             "children": []
                           },
                           {
-                            "display": "float",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "DecisionVariable",
+                            "display": "LinearLike",
                             "link_target": null,
                             "children": []
                           },
                           {
                             "display": "Parameter",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Linear",
                             "link_target": null,
                             "children": []
                           }
@@ -5674,6 +6371,24 @@
                     "link_target": null,
                     "children": []
                   }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "lhs",
+                      "type_": {
+                        "display": "Function",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
+                    "link_target": null,
+                    "children": []
+                  }
                 }
               ],
               "is_async": false,
@@ -5704,20 +6419,9 @@
                     {
                       "name": "lhs",
                       "type_": {
-                        "display": "int | float",
+                        "display": "Scalar",
                         "link_target": null,
-                        "children": [
-                          {
-                            "display": "int",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "float",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
+                        "children": []
                       },
                       "default": null
                     }
@@ -5733,21 +6437,16 @@
                     {
                       "name": "lhs",
                       "type_": {
-                        "display": "DecisionVariable | Parameter | Linear",
+                        "display": "LinearLike | Parameter",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "DecisionVariable",
+                            "display": "LinearLike",
                             "link_target": null,
                             "children": []
                           },
                           {
                             "display": "Parameter",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Linear",
                             "link_target": null,
                             "children": []
                           }
@@ -5790,6 +6489,24 @@
                     "link_target": null,
                     "children": []
                   }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "lhs",
+                      "type_": {
+                        "display": "Function",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
+                    "link_target": null,
+                    "children": []
+                  }
                 }
               ],
               "is_async": false,
@@ -5804,31 +6521,21 @@
                     {
                       "name": "lhs",
                       "type_": {
-                        "display": "int | float | DecisionVariable | Parameter | Linear",
+                        "display": "Scalar | LinearLike | Parameter",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "int",
+                            "display": "Scalar",
                             "link_target": null,
                             "children": []
                           },
                           {
-                            "display": "float",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "DecisionVariable",
+                            "display": "LinearLike",
                             "link_target": null,
                             "children": []
                           },
                           {
                             "display": "Parameter",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Linear",
                             "link_target": null,
                             "children": []
                           }
@@ -5875,6 +6582,24 @@
                   ],
                   "return_type": {
                     "display": "Polynomial",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "lhs",
+                      "type_": {
+                        "display": "Function",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
                     "link_target": null,
                     "children": []
                   }
@@ -5892,31 +6617,21 @@
                     {
                       "name": "rhs",
                       "type_": {
-                        "display": "int | float | DecisionVariable | Parameter | Linear",
+                        "display": "Scalar | LinearLike | Parameter",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "int",
+                            "display": "Scalar",
                             "link_target": null,
                             "children": []
                           },
                           {
-                            "display": "float",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "DecisionVariable",
+                            "display": "LinearLike",
                             "link_target": null,
                             "children": []
                           },
                           {
                             "display": "Parameter",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Linear",
                             "link_target": null,
                             "children": []
                           }
@@ -5963,6 +6678,24 @@
                   ],
                   "return_type": {
                     "display": "Polynomial",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "rhs",
+                      "type_": {
+                        "display": "Function",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
                     "link_target": null,
                     "children": []
                   }
@@ -11914,13 +12647,13 @@
             },
             {
               "name": "decision_variables",
-              "doc": "List of all decision variables in the instance sorted by their IDs.\n\nReturns {class}`~ommx.v1.DecisionVariable` snapshots — independent\nvalues that participate in arithmetic to build expressions\n(`x + y`, `2 * x` etc.). For write-through metadata mutation, use\n{meth}`add_decision_variable` (when adding) or\n{meth}`attached_decision_variable` (when looking up by id).",
+              "doc": "List of all decision variables in the instance sorted by their IDs.\n\nReturns a list of {class}`~ommx.v1.AttachedDecisionVariable` write-through\nhandles. Each handle reads its kind / bound / metadata live from this\ninstance's SoA store and writes metadata mutations back through to it.\nHandles also participate in arithmetic to build expressions\n(`x + y`, `2 * x` etc.) — only their id is consumed for that, no host\nborrow is taken. Call\n{meth}`~ommx.v1.AttachedDecisionVariable.detach` if you need an\nindependent {class}`~ommx.v1.DecisionVariable` snapshot.",
               "type_": {
-                "display": "list[DecisionVariable]",
+                "display": "list[AttachedDecisionVariable]",
                 "link_target": null,
                 "children": [
                   {
-                    "display": "DecisionVariable",
+                    "display": "AttachedDecisionVariable",
                     "link_target": null,
                     "children": []
                   }
@@ -12311,31 +13044,21 @@
                     {
                       "name": "rhs",
                       "type_": {
-                        "display": "int | float | DecisionVariable | Parameter | Linear",
+                        "display": "Scalar | LinearLike | Parameter",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "int",
+                            "display": "Scalar",
                             "link_target": null,
                             "children": []
                           },
                           {
-                            "display": "float",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "DecisionVariable",
+                            "display": "LinearLike",
                             "link_target": null,
                             "children": []
                           },
                           {
                             "display": "Parameter",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Linear",
                             "link_target": null,
                             "children": []
                           }
@@ -12382,6 +13105,24 @@
                   ],
                   "return_type": {
                     "display": "Polynomial",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "rhs",
+                      "type_": {
+                        "display": "Function",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
                     "link_target": null,
                     "children": []
                   }
@@ -12560,20 +13301,9 @@
                     {
                       "name": "rhs",
                       "type_": {
-                        "display": "int | float",
+                        "display": "Scalar",
                         "link_target": null,
-                        "children": [
-                          {
-                            "display": "int",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "float",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
+                        "children": []
                       },
                       "default": null
                     }
@@ -12589,21 +13319,16 @@
                     {
                       "name": "rhs",
                       "type_": {
-                        "display": "DecisionVariable | Parameter | Linear",
+                        "display": "LinearLike | Parameter",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "DecisionVariable",
+                            "display": "LinearLike",
                             "link_target": null,
                             "children": []
                           },
                           {
                             "display": "Parameter",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Linear",
                             "link_target": null,
                             "children": []
                           }
@@ -12643,6 +13368,24 @@
                   ],
                   "return_type": {
                     "display": "Polynomial",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "rhs",
+                      "type_": {
+                        "display": "Function",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
                     "link_target": null,
                     "children": []
                   }
@@ -12725,31 +13468,21 @@
                     {
                       "name": "lhs",
                       "type_": {
-                        "display": "int | float | DecisionVariable | Parameter | Linear",
+                        "display": "Scalar | LinearLike | Parameter",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "int",
+                            "display": "Scalar",
                             "link_target": null,
                             "children": []
                           },
                           {
-                            "display": "float",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "DecisionVariable",
+                            "display": "LinearLike",
                             "link_target": null,
                             "children": []
                           },
                           {
                             "display": "Parameter",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Linear",
                             "link_target": null,
                             "children": []
                           }
@@ -12799,6 +13532,24 @@
                     "link_target": null,
                     "children": []
                   }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "lhs",
+                      "type_": {
+                        "display": "Function",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
+                    "link_target": null,
+                    "children": []
+                  }
                 }
               ],
               "is_async": false,
@@ -12829,20 +13580,9 @@
                     {
                       "name": "lhs",
                       "type_": {
-                        "display": "int | float",
+                        "display": "Scalar",
                         "link_target": null,
-                        "children": [
-                          {
-                            "display": "int",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "float",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
+                        "children": []
                       },
                       "default": null
                     }
@@ -12858,21 +13598,16 @@
                     {
                       "name": "lhs",
                       "type_": {
-                        "display": "DecisionVariable | Parameter | Linear",
+                        "display": "LinearLike | Parameter",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "DecisionVariable",
+                            "display": "LinearLike",
                             "link_target": null,
                             "children": []
                           },
                           {
                             "display": "Parameter",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Linear",
                             "link_target": null,
                             "children": []
                           }
@@ -12915,6 +13650,24 @@
                     "link_target": null,
                     "children": []
                   }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "lhs",
+                      "type_": {
+                        "display": "Function",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
+                    "link_target": null,
+                    "children": []
+                  }
                 }
               ],
               "is_async": false,
@@ -12929,31 +13682,21 @@
                     {
                       "name": "lhs",
                       "type_": {
-                        "display": "int | float | DecisionVariable | Parameter | Linear",
+                        "display": "Scalar | LinearLike | Parameter",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "int",
+                            "display": "Scalar",
                             "link_target": null,
                             "children": []
                           },
                           {
-                            "display": "float",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "DecisionVariable",
+                            "display": "LinearLike",
                             "link_target": null,
                             "children": []
                           },
                           {
                             "display": "Parameter",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Linear",
                             "link_target": null,
                             "children": []
                           }
@@ -13000,6 +13743,24 @@
                   ],
                   "return_type": {
                     "display": "Polynomial",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "lhs",
+                      "type_": {
+                        "display": "Function",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
                     "link_target": null,
                     "children": []
                   }
@@ -13017,31 +13778,21 @@
                     {
                       "name": "rhs",
                       "type_": {
-                        "display": "int | float | DecisionVariable | Parameter | Linear",
+                        "display": "Scalar | LinearLike | Parameter",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "int",
+                            "display": "Scalar",
                             "link_target": null,
                             "children": []
                           },
                           {
-                            "display": "float",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "DecisionVariable",
+                            "display": "LinearLike",
                             "link_target": null,
                             "children": []
                           },
                           {
                             "display": "Parameter",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Linear",
                             "link_target": null,
                             "children": []
                           }
@@ -13088,6 +13839,24 @@
                   ],
                   "return_type": {
                     "display": "Polynomial",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "rhs",
+                      "type_": {
+                        "display": "Function",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
                     "link_target": null,
                     "children": []
                   }
@@ -14618,31 +15387,21 @@
                     {
                       "name": "rhs",
                       "type_": {
-                        "display": "int | float | DecisionVariable | Parameter | Linear",
+                        "display": "Scalar | LinearLike | Parameter",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "int",
+                            "display": "Scalar",
                             "link_target": null,
                             "children": []
                           },
                           {
-                            "display": "float",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "DecisionVariable",
+                            "display": "LinearLike",
                             "link_target": null,
                             "children": []
                           },
                           {
                             "display": "Parameter",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Linear",
                             "link_target": null,
                             "children": []
                           }
@@ -14689,6 +15448,24 @@
                   ],
                   "return_type": {
                     "display": "Polynomial",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "rhs",
+                      "type_": {
+                        "display": "Function",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
                     "link_target": null,
                     "children": []
                   }
@@ -14841,20 +15618,9 @@
                     {
                       "name": "rhs",
                       "type_": {
-                        "display": "int | float",
+                        "display": "Scalar",
                         "link_target": null,
-                        "children": [
-                          {
-                            "display": "int",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "float",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
+                        "children": []
                       },
                       "default": null
                     }
@@ -14870,21 +15636,16 @@
                     {
                       "name": "rhs",
                       "type_": {
-                        "display": "DecisionVariable | Parameter | Linear",
+                        "display": "LinearLike | Parameter",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "DecisionVariable",
+                            "display": "LinearLike",
                             "link_target": null,
                             "children": []
                           },
                           {
                             "display": "Parameter",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Linear",
                             "link_target": null,
                             "children": []
                           }
@@ -14924,6 +15685,24 @@
                   ],
                   "return_type": {
                     "display": "Polynomial",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "rhs",
+                      "type_": {
+                        "display": "Function",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
                     "link_target": null,
                     "children": []
                   }
@@ -15060,31 +15839,21 @@
                     {
                       "name": "lhs",
                       "type_": {
-                        "display": "int | float | DecisionVariable | Parameter | Linear",
+                        "display": "Scalar | LinearLike | Parameter",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "int",
+                            "display": "Scalar",
                             "link_target": null,
                             "children": []
                           },
                           {
-                            "display": "float",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "DecisionVariable",
+                            "display": "LinearLike",
                             "link_target": null,
                             "children": []
                           },
                           {
                             "display": "Parameter",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Linear",
                             "link_target": null,
                             "children": []
                           }
@@ -15134,6 +15903,24 @@
                     "link_target": null,
                     "children": []
                   }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "lhs",
+                      "type_": {
+                        "display": "Function",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
+                    "link_target": null,
+                    "children": []
+                  }
                 }
               ],
               "is_async": false,
@@ -15164,20 +15951,9 @@
                     {
                       "name": "lhs",
                       "type_": {
-                        "display": "int | float",
+                        "display": "Scalar",
                         "link_target": null,
-                        "children": [
-                          {
-                            "display": "int",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "float",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
+                        "children": []
                       },
                       "default": null
                     }
@@ -15193,21 +15969,16 @@
                     {
                       "name": "lhs",
                       "type_": {
-                        "display": "DecisionVariable | Parameter | Linear",
+                        "display": "LinearLike | Parameter",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "DecisionVariable",
+                            "display": "LinearLike",
                             "link_target": null,
                             "children": []
                           },
                           {
                             "display": "Parameter",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Linear",
                             "link_target": null,
                             "children": []
                           }
@@ -15250,6 +16021,24 @@
                     "link_target": null,
                     "children": []
                   }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "lhs",
+                      "type_": {
+                        "display": "Function",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
+                    "link_target": null,
+                    "children": []
+                  }
                 }
               ],
               "is_async": false,
@@ -15264,31 +16053,21 @@
                     {
                       "name": "lhs",
                       "type_": {
-                        "display": "int | float | DecisionVariable | Parameter | Linear",
+                        "display": "Scalar | LinearLike | Parameter",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "int",
+                            "display": "Scalar",
                             "link_target": null,
                             "children": []
                           },
                           {
-                            "display": "float",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "DecisionVariable",
+                            "display": "LinearLike",
                             "link_target": null,
                             "children": []
                           },
                           {
                             "display": "Parameter",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Linear",
                             "link_target": null,
                             "children": []
                           }
@@ -15335,6 +16114,24 @@
                   ],
                   "return_type": {
                     "display": "Polynomial",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "lhs",
+                      "type_": {
+                        "display": "Function",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
                     "link_target": null,
                     "children": []
                   }
@@ -15352,31 +16149,21 @@
                     {
                       "name": "rhs",
                       "type_": {
-                        "display": "int | float | DecisionVariable | Parameter | Linear",
+                        "display": "Scalar | LinearLike | Parameter",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "int",
+                            "display": "Scalar",
                             "link_target": null,
                             "children": []
                           },
                           {
-                            "display": "float",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "DecisionVariable",
+                            "display": "LinearLike",
                             "link_target": null,
                             "children": []
                           },
                           {
                             "display": "Parameter",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Linear",
                             "link_target": null,
                             "children": []
                           }
@@ -15423,6 +16210,24 @@
                   ],
                   "return_type": {
                     "display": "Polynomial",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "rhs",
+                      "type_": {
+                        "display": "Function",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
                     "link_target": null,
                     "children": []
                   }
@@ -16883,13 +17688,13 @@
             },
             {
               "name": "decision_variables",
-              "doc": "List of all decision variables in the parametric instance sorted by\ntheir IDs (snapshots, suitable for arithmetic).",
+              "doc": "List of all decision variables in the parametric instance sorted by\ntheir IDs.\n\nReturns a list of {class}`~ommx.v1.AttachedDecisionVariable` write-through\nhandles. See {attr}`~ommx.v1.Instance.decision_variables` for the same\nshape on `Instance`.",
               "type_": {
-                "display": "list[DecisionVariable]",
+                "display": "list[AttachedDecisionVariable]",
                 "link_target": null,
                 "children": [
                   {
-                    "display": "DecisionVariable",
+                    "display": "AttachedDecisionVariable",
                     "link_target": null,
                     "children": []
                   }
@@ -17229,31 +18034,21 @@
                     {
                       "name": "rhs",
                       "type_": {
-                        "display": "int | float | DecisionVariable | Parameter | Linear | Quadratic | Polynomial",
+                        "display": "Scalar | LinearLike | Parameter | Quadratic | Polynomial",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "int",
+                            "display": "Scalar",
                             "link_target": null,
                             "children": []
                           },
                           {
-                            "display": "float",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "DecisionVariable",
+                            "display": "LinearLike",
                             "link_target": null,
                             "children": []
                           },
                           {
                             "display": "Parameter",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Linear",
                             "link_target": null,
                             "children": []
                           },
@@ -17274,6 +18069,24 @@
                   ],
                   "return_type": {
                     "display": "Polynomial",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "rhs",
+                      "type_": {
+                        "display": "Function",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
                     "link_target": null,
                     "children": []
                   }
@@ -17452,31 +18265,21 @@
                     {
                       "name": "rhs",
                       "type_": {
-                        "display": "int | float | DecisionVariable | Parameter | Linear | Quadratic | Polynomial",
+                        "display": "Scalar | LinearLike | Parameter | Quadratic | Polynomial",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "int",
+                            "display": "Scalar",
                             "link_target": null,
                             "children": []
                           },
                           {
-                            "display": "float",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "DecisionVariable",
+                            "display": "LinearLike",
                             "link_target": null,
                             "children": []
                           },
                           {
                             "display": "Parameter",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Linear",
                             "link_target": null,
                             "children": []
                           },
@@ -17497,6 +18300,24 @@
                   ],
                   "return_type": {
                     "display": "Polynomial",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "rhs",
+                      "type_": {
+                        "display": "Function",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
                     "link_target": null,
                     "children": []
                   }
@@ -17573,31 +18394,21 @@
                     {
                       "name": "lhs",
                       "type_": {
-                        "display": "int | float | DecisionVariable | Parameter | Linear | Quadratic | Polynomial",
+                        "display": "Scalar | LinearLike | Parameter | Quadratic | Polynomial",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "int",
+                            "display": "Scalar",
                             "link_target": null,
                             "children": []
                           },
                           {
-                            "display": "float",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "DecisionVariable",
+                            "display": "LinearLike",
                             "link_target": null,
                             "children": []
                           },
                           {
                             "display": "Parameter",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Linear",
                             "link_target": null,
                             "children": []
                           },
@@ -17618,6 +18429,24 @@
                   ],
                   "return_type": {
                     "display": "Polynomial",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "lhs",
+                      "type_": {
+                        "display": "Function",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
                     "link_target": null,
                     "children": []
                   }
@@ -17651,31 +18480,21 @@
                     {
                       "name": "lhs",
                       "type_": {
-                        "display": "int | float | DecisionVariable | Parameter | Linear | Quadratic | Polynomial",
+                        "display": "Scalar | LinearLike | Parameter | Quadratic | Polynomial",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "int",
+                            "display": "Scalar",
                             "link_target": null,
                             "children": []
                           },
                           {
-                            "display": "float",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "DecisionVariable",
+                            "display": "LinearLike",
                             "link_target": null,
                             "children": []
                           },
                           {
                             "display": "Parameter",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Linear",
                             "link_target": null,
                             "children": []
                           },
@@ -17696,6 +18515,24 @@
                   ],
                   "return_type": {
                     "display": "Polynomial",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "lhs",
+                      "type_": {
+                        "display": "Function",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
                     "link_target": null,
                     "children": []
                   }
@@ -17713,31 +18550,21 @@
                     {
                       "name": "lhs",
                       "type_": {
-                        "display": "int | float | DecisionVariable | Parameter | Linear | Quadratic | Polynomial",
+                        "display": "Scalar | LinearLike | Parameter | Quadratic | Polynomial",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "int",
+                            "display": "Scalar",
                             "link_target": null,
                             "children": []
                           },
                           {
-                            "display": "float",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "DecisionVariable",
+                            "display": "LinearLike",
                             "link_target": null,
                             "children": []
                           },
                           {
                             "display": "Parameter",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Linear",
                             "link_target": null,
                             "children": []
                           },
@@ -17761,6 +18588,24 @@
                     "link_target": null,
                     "children": []
                   }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "lhs",
+                      "type_": {
+                        "display": "Function",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
+                    "link_target": null,
+                    "children": []
+                  }
                 }
               ],
               "is_async": false,
@@ -17775,31 +18620,21 @@
                     {
                       "name": "rhs",
                       "type_": {
-                        "display": "int | float | DecisionVariable | Parameter | Linear | Quadratic | Polynomial",
+                        "display": "Scalar | LinearLike | Parameter | Quadratic | Polynomial",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "int",
+                            "display": "Scalar",
                             "link_target": null,
                             "children": []
                           },
                           {
-                            "display": "float",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "DecisionVariable",
+                            "display": "LinearLike",
                             "link_target": null,
                             "children": []
                           },
                           {
                             "display": "Parameter",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Linear",
                             "link_target": null,
                             "children": []
                           },
@@ -17820,6 +18655,24 @@
                   ],
                   "return_type": {
                     "display": "Polynomial",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "rhs",
+                      "type_": {
+                        "display": "Function",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
                     "link_target": null,
                     "children": []
                   }
@@ -18359,31 +19212,21 @@
                     {
                       "name": "rhs",
                       "type_": {
-                        "display": "int | float | DecisionVariable | Parameter | Linear | Quadratic",
+                        "display": "Scalar | LinearLike | Parameter | Quadratic",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "int",
+                            "display": "Scalar",
                             "link_target": null,
                             "children": []
                           },
                           {
-                            "display": "float",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "DecisionVariable",
+                            "display": "LinearLike",
                             "link_target": null,
                             "children": []
                           },
                           {
                             "display": "Parameter",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Linear",
                             "link_target": null,
                             "children": []
                           },
@@ -18417,6 +19260,24 @@
                   ],
                   "return_type": {
                     "display": "Polynomial",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "rhs",
+                      "type_": {
+                        "display": "Function",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
                     "link_target": null,
                     "children": []
                   }
@@ -18595,20 +19456,9 @@
                     {
                       "name": "rhs",
                       "type_": {
-                        "display": "int | float",
+                        "display": "Scalar",
                         "link_target": null,
-                        "children": [
-                          {
-                            "display": "int",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "float",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
+                        "children": []
                       },
                       "default": null
                     }
@@ -18624,21 +19474,16 @@
                     {
                       "name": "rhs",
                       "type_": {
-                        "display": "DecisionVariable | Parameter | Linear | Quadratic | Polynomial",
+                        "display": "LinearLike | Parameter | Quadratic | Polynomial",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "DecisionVariable",
+                            "display": "LinearLike",
                             "link_target": null,
                             "children": []
                           },
                           {
                             "display": "Parameter",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Linear",
                             "link_target": null,
                             "children": []
                           },
@@ -18659,6 +19504,24 @@
                   ],
                   "return_type": {
                     "display": "Polynomial",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "rhs",
+                      "type_": {
+                        "display": "Function",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
                     "link_target": null,
                     "children": []
                   }
@@ -18772,31 +19635,21 @@
                     {
                       "name": "lhs",
                       "type_": {
-                        "display": "int | float | DecisionVariable | Parameter | Linear | Quadratic",
+                        "display": "Scalar | LinearLike | Parameter | Quadratic",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "int",
+                            "display": "Scalar",
                             "link_target": null,
                             "children": []
                           },
                           {
-                            "display": "float",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "DecisionVariable",
+                            "display": "LinearLike",
                             "link_target": null,
                             "children": []
                           },
                           {
                             "display": "Parameter",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Linear",
                             "link_target": null,
                             "children": []
                           },
@@ -18830,6 +19683,24 @@
                   ],
                   "return_type": {
                     "display": "Polynomial",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "lhs",
+                      "type_": {
+                        "display": "Function",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
                     "link_target": null,
                     "children": []
                   }
@@ -18863,20 +19734,9 @@
                     {
                       "name": "lhs",
                       "type_": {
-                        "display": "int | float",
+                        "display": "Scalar",
                         "link_target": null,
-                        "children": [
-                          {
-                            "display": "int",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "float",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
+                        "children": []
                       },
                       "default": null
                     }
@@ -18892,21 +19752,16 @@
                     {
                       "name": "lhs",
                       "type_": {
-                        "display": "DecisionVariable | Parameter | Linear | Quadratic | Polynomial",
+                        "display": "LinearLike | Parameter | Quadratic | Polynomial",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "DecisionVariable",
+                            "display": "LinearLike",
                             "link_target": null,
                             "children": []
                           },
                           {
                             "display": "Parameter",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Linear",
                             "link_target": null,
                             "children": []
                           },
@@ -18930,6 +19785,24 @@
                     "link_target": null,
                     "children": []
                   }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "lhs",
+                      "type_": {
+                        "display": "Function",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
+                    "link_target": null,
+                    "children": []
+                  }
                 }
               ],
               "is_async": false,
@@ -18944,31 +19817,21 @@
                     {
                       "name": "lhs",
                       "type_": {
-                        "display": "int | float | DecisionVariable | Parameter | Linear | Quadratic",
+                        "display": "Scalar | LinearLike | Parameter | Quadratic",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "int",
+                            "display": "Scalar",
                             "link_target": null,
                             "children": []
                           },
                           {
-                            "display": "float",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "DecisionVariable",
+                            "display": "LinearLike",
                             "link_target": null,
                             "children": []
                           },
                           {
                             "display": "Parameter",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Linear",
                             "link_target": null,
                             "children": []
                           },
@@ -19002,6 +19865,24 @@
                   ],
                   "return_type": {
                     "display": "Polynomial",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "lhs",
+                      "type_": {
+                        "display": "Function",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
                     "link_target": null,
                     "children": []
                   }
@@ -19019,31 +19900,21 @@
                     {
                       "name": "rhs",
                       "type_": {
-                        "display": "int | float | DecisionVariable | Parameter | Linear | Quadratic",
+                        "display": "Scalar | LinearLike | Parameter | Quadratic",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "int",
+                            "display": "Scalar",
                             "link_target": null,
                             "children": []
                           },
                           {
-                            "display": "float",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "DecisionVariable",
+                            "display": "LinearLike",
                             "link_target": null,
                             "children": []
                           },
                           {
                             "display": "Parameter",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Linear",
                             "link_target": null,
                             "children": []
                           },
@@ -19077,6 +19948,24 @@
                   ],
                   "return_type": {
                     "display": "Polynomial",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "rhs",
+                      "type_": {
+                        "display": "Function",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
                     "link_target": null,
                     "children": []
                   }
