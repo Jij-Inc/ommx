@@ -2468,15 +2468,9 @@
               "name": "description",
               "doc": "",
               "type_": {
-                "display": "Optional[str]",
+                "display": "str",
                 "link_target": null,
-                "children": [
-                  {
-                    "display": "str",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
+                "children": []
               },
               "is_property": true,
               "is_readonly": true
@@ -2518,15 +2512,9 @@
               "name": "name",
               "doc": "",
               "type_": {
-                "display": "Optional[str]",
+                "display": "str",
                 "link_target": null,
-                "children": [
-                  {
-                    "display": "str",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
+                "children": []
               },
               "is_property": true,
               "is_readonly": true
@@ -16172,6 +16160,93 @@
                         ]
                       },
                       "default": null
+                    },
+                    {
+                      "name": "indicator_constraints",
+                      "type_": {
+                        "display": "Optional[Mapping[int, IndicatorConstraint]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Mapping[int, IndicatorConstraint]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "int",
+                                "link_target": null,
+                                "children": []
+                              },
+                              {
+                                "display": "IndicatorConstraint",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "one_hot_constraints",
+                      "type_": {
+                        "display": "Optional[Mapping[int, OneHotConstraint]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Mapping[int, OneHotConstraint]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "int",
+                                "link_target": null,
+                                "children": []
+                              },
+                              {
+                                "display": "OneHotConstraint",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "sos1_constraints",
+                      "type_": {
+                        "display": "Optional[Mapping[int, Sos1Constraint]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Mapping[int, Sos1Constraint]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "int",
+                                "link_target": null,
+                                "children": []
+                              },
+                              {
+                                "display": "Sos1Constraint",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
                     },
                     {
                       "name": "named_functions",

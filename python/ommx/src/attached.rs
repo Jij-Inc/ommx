@@ -264,6 +264,13 @@ macro_rules! attached_metadata_methods {
 /// `provenance` field. The store API is otherwise identical
 /// (`name` / `subscripts` / `description` / `parameters` / `set_*` /
 /// `extend_subscripts` / `set_parameter`).
+///
+/// `name` and `description` getters mirror [`DecisionVariable`](crate::DecisionVariable)
+/// — they return `String` with the empty string for missing entries, *not*
+/// `Option<String>`. This keeps the snapshot wrapper and the attached handle
+/// in sync (`instance.decision_variables[i].name` and
+/// `instance.attached_decision_variable(id).name` produce the same value
+/// for the same id).
 #[macro_export]
 macro_rules! attached_variable_metadata_methods {
     ($Self:ident, $get:ident, $get_mut:ident) => {
@@ -271,14 +278,22 @@ macro_rules! attached_variable_metadata_methods {
         #[pymethods]
         impl $Self {
             #[getter]
-            pub fn name(&self, py: pyo3::Python<'_>) -> Option<String> {
+            pub fn name(&self, py: pyo3::Python<'_>) -> String {
                 match &self.host {
-                    $crate::ConstraintHost::Instance(p) => {
-                        p.borrow(py).inner.$get().name(self.id).map(str::to_owned)
-                    }
-                    $crate::ConstraintHost::Parametric(p) => {
-                        p.borrow(py).inner.$get().name(self.id).map(str::to_owned)
-                    }
+                    $crate::ConstraintHost::Instance(p) => p
+                        .borrow(py)
+                        .inner
+                        .$get()
+                        .name(self.id)
+                        .map(str::to_owned)
+                        .unwrap_or_default(),
+                    $crate::ConstraintHost::Parametric(p) => p
+                        .borrow(py)
+                        .inner
+                        .$get()
+                        .name(self.id)
+                        .map(str::to_owned)
+                        .unwrap_or_default(),
                 }
             }
 
@@ -295,20 +310,22 @@ macro_rules! attached_variable_metadata_methods {
             }
 
             #[getter]
-            pub fn description(&self, py: pyo3::Python<'_>) -> Option<String> {
+            pub fn description(&self, py: pyo3::Python<'_>) -> String {
                 match &self.host {
                     $crate::ConstraintHost::Instance(p) => p
                         .borrow(py)
                         .inner
                         .$get()
                         .description(self.id)
-                        .map(str::to_owned),
+                        .map(str::to_owned)
+                        .unwrap_or_default(),
                     $crate::ConstraintHost::Parametric(p) => p
                         .borrow(py)
                         .inner
                         .$get()
                         .description(self.id)
-                        .map(str::to_owned),
+                        .map(str::to_owned)
+                        .unwrap_or_default(),
                 }
             }
 

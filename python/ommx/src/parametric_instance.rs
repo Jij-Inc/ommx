@@ -43,13 +43,16 @@ impl ParametricInstance {
     }
 
     #[staticmethod]
-    #[pyo3(signature = (*, sense, objective, decision_variables, constraints, parameters, named_functions=None, description=None))]
+    #[pyo3(signature = (*, sense, objective, decision_variables, constraints, parameters, indicator_constraints=None, one_hot_constraints=None, sos1_constraints=None, named_functions=None, description=None))]
     pub fn from_components(
         sense: Sense,
         objective: Function,
         decision_variables: Vec<DecisionVariable>,
         constraints: BTreeMap<u64, Constraint>,
         parameters: Vec<Parameter>,
+        indicator_constraints: Option<BTreeMap<u64, crate::IndicatorConstraint>>,
+        one_hot_constraints: Option<BTreeMap<u64, crate::OneHotConstraint>>,
+        sos1_constraints: Option<BTreeMap<u64, crate::Sos1Constraint>>,
         named_functions: Option<Vec<NamedFunction>>,
         description: Option<crate::InstanceDescription>,
     ) -> Result<Self> {
@@ -124,6 +127,26 @@ impl ParametricInstance {
             nf_meta.insert(id, m);
         }
 
+        // Drain the optional special-constraint collections via the
+        // structural-validation `add_*` setters, so parameter ids are
+        // rejected from structural positions at construction time. This
+        // mirrors how `Instance.from_components` accepts the same kwargs.
+        if let Some(ics) = indicator_constraints {
+            for (_id, ic) in ics {
+                inner.add_indicator_constraint(ic.0, ic.1)?;
+            }
+        }
+        if let Some(ohs) = one_hot_constraints {
+            for (_id, oh) in ohs {
+                inner.add_one_hot_constraint(oh.0, oh.1)?;
+            }
+        }
+        if let Some(s1s) = sos1_constraints {
+            for (_id, s1) in s1s {
+                inner.add_sos1_constraint(s1.0, s1.1)?;
+            }
+        }
+
         Ok(Self {
             inner,
             annotations: HashMap::new(),
@@ -139,6 +162,9 @@ impl ParametricInstance {
             Vec::new(),
             BTreeMap::new(),
             Vec::new(),
+            None,
+            None,
+            None,
             None,
             None,
         )

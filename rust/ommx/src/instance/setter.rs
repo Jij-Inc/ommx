@@ -309,17 +309,50 @@ impl ParametricInstance {
         Ok(id)
     }
 
+    /// Validate that the given ids are real decision variables (not parameters).
+    ///
+    /// Used for *structural* positions in special constraints — the indicator
+    /// variable and the variable sets of one-hot / SOS1 — where parameter ids
+    /// would not be substitutable in a way that preserves the constraint's
+    /// semantics. Function-body ids continue to be validated through
+    /// [`Self::validate_required_ids`], which permits parameters.
+    fn require_decision_variables(&self, ids: VariableIDSet) -> crate::Result<()> {
+        let variable_ids: VariableIDSet = self.decision_variables().keys().cloned().collect();
+        if !ids.is_subset(&variable_ids) {
+            let id = *ids.difference(&variable_ids).next().unwrap();
+            if self.parameters().contains_key(&id) {
+                crate::bail!(
+                    { ?id },
+                    "Parameter id {id:?} cannot occupy a structural variable position; \
+                     structural variables in indicator / one-hot / SOS1 constraints \
+                     must be decision variables",
+                );
+            }
+            crate::bail!({ ?id }, "Undefined variable ID is used: {id:?}");
+        }
+        Ok(())
+    }
+
     /// Insert a new indicator constraint with its metadata, picking an unused id.
     ///
     /// Mirrors [`Instance::add_indicator_constraint`] for parametric
-    /// instances; required IDs may be either decision variables or
-    /// parameters.
+    /// instances. The function body may reference either decision variables
+    /// or parameters, but the indicator variable itself must be a decision
+    /// variable — substitution cannot replace a structural variable position.
     pub fn add_indicator_constraint(
         &mut self,
         constraint: crate::IndicatorConstraint,
         metadata: crate::ConstraintMetadata,
     ) -> crate::Result<crate::IndicatorConstraintID> {
-        self.validate_required_ids(constraint.required_ids())?;
+        // Structural position: the indicator variable must be a real decision
+        // variable, not a parameter.
+        let indicator_only: VariableIDSet =
+            std::iter::once(constraint.indicator_variable).collect();
+        self.require_decision_variables(indicator_only)?;
+        // Function body may reference variables and / or parameters.
+        let mut body_ids = constraint.required_ids();
+        body_ids.remove(&constraint.indicator_variable);
+        self.validate_required_ids(body_ids)?;
         let id = self.indicator_constraint_collection.unused_id();
         self.indicator_constraint_collection
             .insert_with(id, constraint, metadata);
@@ -327,12 +360,16 @@ impl ParametricInstance {
     }
 
     /// Insert a new one-hot constraint with its metadata, picking an unused id.
+    ///
+    /// All variables in the one-hot set are structural and must be decision
+    /// variables (parameter ids are rejected — substitution cannot replace a
+    /// structural variable position).
     pub fn add_one_hot_constraint(
         &mut self,
         constraint: crate::OneHotConstraint,
         metadata: crate::ConstraintMetadata,
     ) -> crate::Result<crate::OneHotConstraintID> {
-        self.validate_required_ids(constraint.required_ids())?;
+        self.require_decision_variables(constraint.required_ids())?;
         let id = self.one_hot_constraint_collection.unused_id();
         self.one_hot_constraint_collection
             .insert_with(id, constraint, metadata);
@@ -340,12 +377,16 @@ impl ParametricInstance {
     }
 
     /// Insert a new SOS1 constraint with its metadata, picking an unused id.
+    ///
+    /// All variables in the SOS1 set are structural and must be decision
+    /// variables (parameter ids are rejected for the same reason as
+    /// [`Self::add_one_hot_constraint`]).
     pub fn add_sos1_constraint(
         &mut self,
         constraint: crate::Sos1Constraint,
         metadata: crate::ConstraintMetadata,
     ) -> crate::Result<crate::Sos1ConstraintID> {
-        self.validate_required_ids(constraint.required_ids())?;
+        self.require_decision_variables(constraint.required_ids())?;
         let id = self.sos1_constraint_collection.unused_id();
         self.sos1_constraint_collection
             .insert_with(id, constraint, metadata);

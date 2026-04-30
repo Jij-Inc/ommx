@@ -587,11 +587,11 @@ class AttachedDecisionVariable:
     @property
     def substituted_value(self) -> typing.Optional[builtins.float]: ...
     @property
-    def name(self) -> typing.Optional[builtins.str]: ...
+    def name(self) -> builtins.str: ...
     @property
     def subscripts(self) -> builtins.list[builtins.int]: ...
     @property
-    def description(self) -> typing.Optional[builtins.str]: ...
+    def description(self) -> builtins.str: ...
     @property
     def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
     def detach(self) -> DecisionVariable:
@@ -3909,6 +3909,15 @@ class ParametricInstance:
         decision_variables: typing.Sequence[DecisionVariable],
         constraints: typing.Mapping[builtins.int, Constraint],
         parameters: typing.Sequence[Parameter],
+        indicator_constraints: typing.Optional[
+            typing.Mapping[builtins.int, IndicatorConstraint]
+        ] = None,
+        one_hot_constraints: typing.Optional[
+            typing.Mapping[builtins.int, OneHotConstraint]
+        ] = None,
+        sos1_constraints: typing.Optional[
+            typing.Mapping[builtins.int, Sos1Constraint]
+        ] = None,
         named_functions: typing.Optional[typing.Sequence[NamedFunction]] = None,
         description: typing.Optional[InstanceDescription] = None,
     ) -> ParametricInstance: ...

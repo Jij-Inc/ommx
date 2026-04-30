@@ -220,3 +220,22 @@ def test_add_indicator_accepts_parameter_in_function_on_parametric():
 
     attached = parametric.add_indicator_constraint(constraint)
     assert attached.name == "param_link"
+
+
+def test_add_indicator_rejects_parameter_in_indicator_variable_position():
+    """The indicator variable is a structural position — substitution can't
+    fill it later, so a parameter id in that slot must be rejected on a
+    parametric host."""
+    parametric = _empty_parametric_instance()  # parameters = [100]
+    # parameter id 100 used as the indicator variable; this is invalid.
+    rogue_indicator = DecisionVariable.binary(100)
+    bad = IndicatorConstraint(
+        indicator_variable=rogue_indicator,
+        function=Function.from_linear(Linear({0: 1.0}, 0.0)),
+        equality=Equality.EqualToZero,
+    )
+
+    with pytest.raises(Exception, match="(structural|parameter)"):
+        parametric.add_indicator_constraint(bad)
+
+    assert parametric.indicator_constraints == {}

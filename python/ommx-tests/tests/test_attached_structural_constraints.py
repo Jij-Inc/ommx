@@ -255,3 +255,31 @@ def test_sos1_on_parametric_host():
     attached.set_subscripts([3])
     fresh = parametric.sos1_constraints[attached.constraint_id]
     assert fresh.subscripts == [3]
+
+
+# --------------------------------------------------------------------------- #
+# Structural-position validation on ParametricInstance                        #
+# --------------------------------------------------------------------------- #
+
+
+def test_one_hot_on_parametric_rejects_parameter_id_in_variables():
+    """OneHot's `variables` set is a structural position — substitution can't
+    fill it later. A parameter id there must be rejected."""
+    parametric = _empty_parametric_instance()  # parameters = [100]
+    bad = OneHotConstraint(variables=[0, 100])
+
+    with pytest.raises(Exception, match="(structural|parameter)"):
+        parametric.add_one_hot_constraint(bad)
+
+    assert parametric.one_hot_constraints == {}
+
+
+def test_sos1_on_parametric_rejects_parameter_id_in_variables():
+    """Same structural-position rule for SOS1."""
+    parametric = _empty_parametric_instance()  # parameters = [100]
+    bad = Sos1Constraint(variables=[0, 100])
+
+    with pytest.raises(Exception, match="(structural|parameter)"):
+        parametric.add_sos1_constraint(bad)
+
+    assert parametric.sos1_constraints == {}
