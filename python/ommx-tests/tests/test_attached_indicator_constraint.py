@@ -239,3 +239,32 @@ def test_add_indicator_rejects_parameter_in_indicator_variable_position():
         parametric.add_indicator_constraint(bad)
 
     assert parametric.indicator_constraints == {}
+
+
+def test_add_indicator_rejects_non_binary_indicator_variable():
+    """The indicator variable must have Kind::Binary — same invariant the
+    Instance builder enforces for from_components. Without this check, a
+    post-construction add_indicator_constraint(c) with an integer indicator
+    would leave the instance in an invalid state."""
+    instance = Instance.from_components(
+        sense=Instance.MINIMIZE,
+        objective=Function.from_linear(Linear.constant(0.0)),
+        decision_variables=[
+            DecisionVariable.binary(0),
+            # Variable id=1 is integer here — must NOT be usable as an
+            # indicator.
+            DecisionVariable.integer(1, lower=0, upper=5),
+            DecisionVariable.binary(2),
+        ],
+        constraints={},
+    )
+    bad = IndicatorConstraint(
+        indicator_variable=DecisionVariable.integer(1, lower=0, upper=5),
+        function=Function.from_linear(Linear({0: 1.0}, 0.0)),
+        equality=Equality.EqualToZero,
+    )
+
+    with pytest.raises(Exception, match="binary"):
+        instance.add_indicator_constraint(bad)
+
+    assert instance.indicator_constraints == {}

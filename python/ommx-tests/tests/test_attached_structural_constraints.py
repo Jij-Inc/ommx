@@ -283,3 +283,74 @@ def test_sos1_on_parametric_rejects_parameter_id_in_variables():
         parametric.add_sos1_constraint(bad)
 
     assert parametric.sos1_constraints == {}
+
+
+# --------------------------------------------------------------------------- #
+# Kind invariant (Binary) on Instance — same as the builder enforces         #
+# --------------------------------------------------------------------------- #
+
+
+def _instance_with_mixed_kinds() -> Instance:
+    return Instance.from_components(
+        sense=Instance.MINIMIZE,
+        objective=Function.from_linear(Linear.constant(0.0)),
+        decision_variables=[
+            DecisionVariable.binary(0),
+            DecisionVariable.integer(1, lower=0, upper=5),  # NOT binary
+            DecisionVariable.binary(2),
+        ],
+        constraints={},
+    )
+
+
+def test_one_hot_rejects_non_binary_variable():
+    """One-hot semantics require every variable to be binary. The setter
+    must enforce this even though the builder already does for
+    from_components."""
+    instance = _instance_with_mixed_kinds()
+    bad = OneHotConstraint(variables=[0, 1])  # var 1 is integer
+
+    with pytest.raises(Exception, match="binary"):
+        instance.add_one_hot_constraint(bad)
+
+    assert instance.one_hot_constraints == {}
+
+
+def test_sos1_accepts_non_binary_variable():
+    """SOS1 does NOT require binary — the constraint allows integer /
+    continuous variables. Asserting the looser rule keeps us honest about
+    the difference vs. one-hot."""
+    instance = _instance_with_mixed_kinds()
+    ok = Sos1Constraint(variables=[1, 2], name="mixed_kinds")
+
+    attached = instance.add_sos1_constraint(ok)
+    assert attached.name == "mixed_kinds"
+
+
+def test_sos1_rejects_empty_variable_set():
+    """SOS1 must contain at least one variable — same builder invariant."""
+    instance = _instance_with_mixed_kinds()
+    bad = Sos1Constraint(variables=[])
+
+    with pytest.raises(Exception, match="(at least one|empty)"):
+        instance.add_sos1_constraint(bad)
+
+    assert instance.sos1_constraints == {}
+
+
+def test_one_hot_rejects_non_binary_on_parametric_host():
+    """Same Binary-kind invariant on the parametric host."""
+    parametric = ParametricInstance.from_components(
+        sense=Sense.Minimize,
+        objective=Function.from_linear(Linear.constant(0.0)),
+        decision_variables=[
+            DecisionVariable.binary(0),
+            DecisionVariable.integer(1, lower=0, upper=5),
+        ],
+        constraints={},
+        parameters=[Parameter(id=100, name="alpha")],
+    )
+    bad = OneHotConstraint(variables=[0, 1])  # var 1 is integer
+
+    with pytest.raises(Exception, match="binary"):
+        parametric.add_one_hot_constraint(bad)
