@@ -235,11 +235,12 @@ The split tightens the invariants: variable-id validity is an
 `Instance`-level property (every `id` referenced by a constraint must
 live in `decision_variables`), while active/removed disjointness is a
 `ConstraintCollection`-level property. `Instance` never hands out a
-`&mut ConstraintCollection<T>` — the raw map / metadata mutators on
-`ConstraintCollection<T>` (`active_mut`, `removed_mut`, `insert_with`)
-are `pub(crate)`, and external callers go through the validating
-`Instance::add_*` / `relax_*` / `restore_*` family or the per-host
-metadata `_mut()` accessor instead.
+`&mut ConstraintCollection<T>` — the raw active/removed map mutators
+(`active_mut`, `removed_mut`, `insert_with`) are `pub(crate)`, so
+external callers can only mutate constraint membership through the
+validating `Instance::add_*` / `relax_*` / `restore_*` family.
+Per-host metadata mutation goes through the `_mut()` accessor on the
+SoA store, which can't break either invariant.
 
 On the Python side this drives a parallel set of changes:
 - `instance.constraints[id]` etc. return write-through

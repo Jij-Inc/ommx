@@ -209,7 +209,7 @@ for oh in hints.one_hot_constraints:
 
 **After (v3)**:
 ```python
-for cid, c in instance.constraints.items():              # dict[int, Constraint]
+for cid, c in instance.constraints.items():              # dict[int, AttachedConstraint]
     print(cid, c.function)
 
 for cid, rc in instance.removed_constraints.items():     # dict[int, RemovedConstraint]
@@ -223,6 +223,8 @@ for hid, oh in instance.one_hot_constraints.items(): ...
 for hid, sc in instance.sos1_constraints.items():    ...
 for hid, ic in instance.indicator_constraints.items(): ...
 ```
+
+The dict shape itself landed in 3.0.0a2 with snapshot `Constraint` values. In 3.0.0a3 the constraint dicts on `Instance` / `ParametricInstance` switched to write-through `AttachedX` handles — see §11 for the read / write semantics. `Solution.constraints` keeps a snapshot value type (`EvaluatedConstraint`) since it has no edit lifecycle. `Instance.removed_constraints` still surfaces `RemovedConstraint` snapshots; relax/restore go through `Instance.relax_constraint` / `Instance.restore_constraint` rather than mutating values inside this dict.
 
 `SampleSet.constraints` / `.decision_variables` / `.named_functions` remain `list`.
 
@@ -477,7 +479,7 @@ df = instance.decision_variables_df(include=[])
 
 `"removed_reason"` is a unit flag — it gates both the `removed_reason` column and the `removed_reason.{key}` parameter columns together. The `removed_reason` column is **schema-stable**: when the flag is on it always appears in the resulting DataFrame, NA-filled if no row carries a reason, so downstream code that branches on schema doesn't need to special-case empty data.
 
-The wide `*_df` index column was renamed from unqualified `id` to `{kind}_constraint_id` (`regular_constraint_id`, `indicator_constraint_id`, `one_hot_constraint_id`, `sos1_constraint_id`) and `variable_id` for `decision_variables_df()`. This makes cross-ID-space joins (which would silently produce wrong-but-shaped output when `int64` indexes line up) visible in `df.head()` / `df.info()` and IDE inspection.
+The wide `constraints_df()` index column was renamed from unqualified `id` to `{kind}_constraint_id` (`regular_constraint_id`, `indicator_constraint_id`, `one_hot_constraint_id`, `sos1_constraint_id`). `decision_variables_df()` keeps `id` as its index name (only one variable ID space, so disambiguation isn't load-bearing); the long-format variable sidecars in §10 do use `variable_id`. The kind-qualified constraint names make cross-ID-space joins (which would silently produce wrong-but-shaped output when `int64` indexes line up) visible in `df.head()` / `df.info()` and IDE inspection.
 
 ## 10. Long-format sidecar DataFrames (`3.0.0a3`, [#846](https://github.com/Jij-Inc/ommx/pull/846))
 
@@ -511,15 +513,16 @@ Use these for tidy-data joins / aggregation; reach for the wide `constraints_df(
 The dict / list accessors that previously returned snapshot wrapper objects now return `AttachedX` write-through handles bound to the parent host (`Instance` or `ParametricInstance`). Reads pull live from the host's SoA store; metadata setters write back through to it.
 
 ```python
-# v2.5.1 — snapshot wrappers; mutation didn't propagate
-c = instance.constraints[5]              # Constraint (snapshot)
-c.add_name("balance")                    # mutated the local copy
-print(instance.constraints[5].name)      # still None — no write-through
+# v2.5.1 — id-keyed lookup via get_constraint_by_id; snapshot wrapper,
+# mutation didn't propagate to the instance
+c = instance.get_constraint_by_id(5)
+c.add_name("balance")                              # mutated the local snapshot
+print(instance.get_constraint_by_id(5).name)       # still None — fresh snapshot
 
-# v3 — write-through handles
-c = instance.constraints[5]              # AttachedConstraint (live)
-c.set_name("balance")                    # writes through to instance.constraint_metadata
-print(instance.constraints[5].name)      # "balance"
+# v3 — dict accessor returns a write-through handle
+c = instance.constraints[5]                        # AttachedConstraint (live)
+c.set_name("balance")                              # writes through to the SoA store
+print(instance.constraints[5].name)                # "balance"
 ```
 
 Affected return types:
@@ -614,7 +617,7 @@ expr = 2 * p + 3  # Linear
 - [ ] Remove any `Linear.from_object(...)` / `Linear.equals_to(...)` calls.
 - [ ] Add parentheses to every `*_df` access — `instance.constraints_df` → `instance.constraints_df()` etc. (every `*_df` accessor is a method now).
 - [ ] Replace per-kind `instance.indicator_constraints_df` / `one_hot_constraints_df` / `sos1_constraints_df` and `removed_*_constraints_df` / `*_removed_reasons_df` calls with `constraints_df(kind=..., removed=...)` on the same host.
-- [ ] If you depended on the unqualified `id` index column on a wide `*_df`, switch to the kind-qualified name (`{kind}_constraint_id` for constraints, `variable_id` for decision variables).
+- [ ] If you depended on the unqualified `id` index column on a wide constraint `*_df`, switch to the kind-qualified `{kind}_constraint_id` name. `decision_variables_df()` keeps `id` (only one variable ID space); long-format variable sidecars use `variable_id`.
 - [ ] Drop the in-place `c.add_name(...)` mutation pattern on snapshot wrappers retrieved from an instance — those calls return a new object and don't write through to the host. Use the live handle returned by `instance.constraints[id]` (an `AttachedConstraint`) and call its `set_*` / `add_*` methods, or re-add via `from_components`.
 - [ ] Update return-type annotations / static analysis for `instance.constraints` etc. to expect `AttachedX` (`dict[int, AttachedConstraint]`, `list[AttachedDecisionVariable]`, …). Call `.detach()` if you need an independent snapshot.
 
