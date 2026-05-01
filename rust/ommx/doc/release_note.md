@@ -30,9 +30,11 @@ The 3.0.0 line is a major revision of the Rust SDK:
   `instance.named_function_metadata()`, …). One canonical store per
   collection, two views on top: per-id wrapper getters for one-off
   reads and `*_df` for bulk analysis.
-- A **capability model** lets adapters declare what they natively support
-  and auto-converts unsupported kinds at the boundary, so any OMMX
-  instance can be fed to any adapter.
+- A **capability model** lets adapters declare what they natively
+  support and auto-converts unsupported kinds at the boundary, so a
+  valid OMMX instance can be fed to any adapter (the conversion path
+  is fallible and surfaces as `Err(ommx::Error)`, e.g. on non-finite
+  bounds in the Big-M encoding).
 - The default **error surface** is a single
   [`ommx::Result<T>`](crate::Result) (re-export of `anyhow::Result`)
   with diagnostic context emitted through `tracing` from the new
@@ -166,18 +168,21 @@ exists in `decision_variables`) and active/removed disjointness as
 crate-internal invariants. Metadata mutation rides on its own `_mut()`
 accessor and can't break either.
 
-The Python side wraps the same SoA store: `instance.constraints[id]`
-and the parallel constraint / variable accessors return live
-`AttachedX` write-through handles, and `*_df()` methods (with
-`kind=` / `include=` / `removed=` parameters) plus six long-format
-sidecar DataFrames serve bulk analysis. See
-[`PYTHON_SDK_MIGRATION_GUIDE.md`](https://github.com/Jij-Inc/ommx/blob/main/PYTHON_SDK_MIGRATION_GUIDE.md)
-§9–11 for the user-facing version
-([#846](https://github.com/Jij-Inc/ommx/pull/846),
-[#847](https://github.com/Jij-Inc/ommx/pull/847),
-[#849](https://github.com/Jij-Inc/ommx/pull/849),
-[#850](https://github.com/Jij-Inc/ommx/pull/850),
-[#852](https://github.com/Jij-Inc/ommx/pull/852)).
+The Python side wraps the same SoA store with two parallel
+user-facing changes:
+
+- `instance.constraints[id]` and the parallel constraint / variable
+  accessors return live `AttachedX` write-through handles
+  ([#849](https://github.com/Jij-Inc/ommx/pull/849),
+  [#850](https://github.com/Jij-Inc/ommx/pull/850),
+  [#852](https://github.com/Jij-Inc/ommx/pull/852)).
+- `*_df()` methods (with `kind=` / `include=` / `removed=` parameters)
+  plus six long-format sidecar DataFrames serve bulk analysis directly
+  off the SoA store ([#846](https://github.com/Jij-Inc/ommx/pull/846),
+  [#847](https://github.com/Jij-Inc/ommx/pull/847)).
+
+See [`PYTHON_SDK_MIGRATION_GUIDE.md`](https://github.com/Jij-Inc/ommx/blob/main/PYTHON_SDK_MIGRATION_GUIDE.md)
+§9–11 for the user-facing version.
 
 The migration guide's [Metadata stores](crate::doc::migration_guide#metadata-stores)
 section has the per-host accessor list and the store API reference.
@@ -205,10 +210,12 @@ is a sorted set of them. Two `Instance` methods anchor the model:
 
 Adapters declare what they natively support and call
 `reduce_capabilities` before handing the instance to the underlying
-solver, so an adapter can accept any OMMX `Instance` without asking
-users to manually encode special constraints themselves. Each conversion
-is also emitted as an INFO-level `tracing` event in the
-`reduce_capabilities` span for observability.
+solver, so an adapter can accept any valid OMMX `Instance` without
+asking users to manually encode special constraints themselves. The
+conversion is fallible — e.g. the Big-M encoding requires finite
+bounds — and returns `Err(ommx::Error)` when the instance can't be
+reduced; otherwise each conversion is emitted as an INFO-level
+`tracing` event in the `reduce_capabilities` span for observability.
 
 ## Unified error surface ([#832](https://github.com/Jij-Inc/ommx/pull/832))
 
@@ -240,8 +247,8 @@ practice. A handful of typed surfaces are deliberately kept:
   [`qplib::QplibParseError`](crate::qplib::QplibParseError)),
   converted to `ommx::Error` at the domain boundary.
 
-The full signal-type list and downcast / propagation patterns live in
-the [error handling tutorial](crate::doc::tutorial::error_handling).
+The curated signal-type list and downcast / propagation patterns live
+in the [error handling tutorial](crate::doc::tutorial::error_handling).
 
 ## Tracing-first observability ([#816](https://github.com/Jij-Inc/ommx/pull/816), [#826](https://github.com/Jij-Inc/ommx/pull/826))
 
