@@ -13,14 +13,15 @@ landed in `3.0.0-alpha.1`.
 
 ## Overview
 
-`Constraint` is now generic over a lifecycle stage, and its
-`ConstraintID` lives on the enclosing collection key rather than on the
-struct itself:
+`Constraint` is now generic over a lifecycle stage, its `ConstraintID`
+lives on the enclosing collection key rather than on the struct itself,
+and metadata (`name`, `subscripts`, `parameters`, `description`,
+`provenance`) lives in a Struct-of-Arrays store on the enclosing
+collection — not on the per-constraint struct:
 
 ```rust,ignore
 pub struct Constraint<S: Stage<Self> = Created> {
     pub equality: Equality,
-    pub metadata: ConstraintMetadata,
     pub stage: S::Data,
 }
 ```
@@ -36,6 +37,12 @@ Three lifecycle stages are defined:
 Removed constraints are managed at the collection level —
 `ConstraintCollection` stores them as `(Constraint<Created>, RemovedReason)`
 pairs. "Removed" is not itself a stage.
+
+`DecisionVariable`, `IndicatorConstraint<S>`, `OneHotConstraint<S>`,
+`Sos1Constraint<S>`, and `NamedFunction` got the same SoA treatment —
+each lost its inline metadata fields, and the per-host metadata store
+is queried through narrow per-collection accessors on `Instance` /
+`ParametricInstance` (see [Metadata stores](#metadata-stores)).
 
 ## Breaking Changes
 
@@ -59,20 +66,35 @@ for (id, constraint) in instance.constraints() {
 constraint.equality  // Equality
 ```
 
-**Metadata fields** (moved to `metadata`):
+**Metadata fields** (moved off the constraint struct entirely; query the
+host's per-collection metadata store):
 ```rust,ignore
-// ❌ Before
+// ❌ Before (v2 — per-constraint inline)
 constraint.name
 constraint.subscripts
 constraint.parameters
 constraint.description
 
-// ✅ After
+// ❌ Earlier v3 alpha (briefly: a `metadata` field on the struct) — also gone
 constraint.metadata.name
-constraint.metadata.subscripts
-constraint.metadata.parameters
-constraint.metadata.description
+
+// ✅ After — metadata lives in the SoA store on the enclosing collection
+let store = instance.constraint_metadata();   // &ConstraintMetadataStore<ConstraintID>
+store.name(id)         // Option<&str>
+store.subscripts(id)   // &[i64]
+store.parameters(id)   // &FnvHashMap<String, String>
+store.description(id)  // Option<&str>
+store.provenance(id)   // &[Provenance]
+
+// One-shot owned reconstruction matching the pre-SoA struct
+let metadata: ConstraintMetadata = store.collect_for(id);
 ```
+
+The same shape applies to indicator / one-hot / sos1 constraints
+(`indicator_constraint_metadata()`, …) and to decision variables
+(`variable_metadata()` exposes a `VariableMetadataStore` without
+`provenance`). For named functions the parallel accessor is
+`named_function_metadata()` returning a `NamedFunctionMetadataStore`.
 
 **Created stage** — function access:
 ```rust,ignore
@@ -133,10 +155,9 @@ Constraint {
     description: None,
 }
 
-// ✅ After — no `id` field
+// ✅ After — no `id` and no inline metadata
 Constraint {
     equality: Equality::EqualToZero,
-    metadata: ConstraintMetadata::default(),
     stage: CreatedData { function },
 }
 
@@ -144,9 +165,19 @@ Constraint {
 Constraint::equal_to_zero(function)
 Constraint::less_than_or_equal_to_zero(function)
 
-// ✅ The ID attaches when you insert into a BTreeMap
-let mut constraints = BTreeMap::new();
-constraints.insert(ConstraintID::from(1), Constraint::equal_to_zero(function));
+// ✅ Insertion via the host's invariant-safe entry point — picks an
+// unused id, drains the (optional) metadata into the SoA store,
+// validates required_ids, returns the assigned id. `add_constraint`,
+// `relax_constraint`, and `restore_constraint` all take `&mut self`,
+// so `instance` must be a `mut` binding (or accessed via `&mut Instance`).
+let id = instance.add_constraint(
+    Constraint::equal_to_zero(function),
+    ConstraintMetadata { name: Some("demand_balance".into()), ..Default::default() },
+)?;
+
+// `relax_constraint` / `restore_constraint` move id between active and
+// removed; metadata stays in place. There is no `constraint_collection_mut()`
+// — the raw map mutators on `ConstraintCollection<T>` are `pub(crate)`.
 ```
 
 **Removed constraints** are no longer constructed as `Constraint<Removed>`. They are stored as `(Constraint<Created>, RemovedReason)` tuples in `ConstraintCollection`:
@@ -184,9 +215,11 @@ EvaluatedConstraint {
     removed_reason_parameters: FnvHashMap::default(),
 }
 
-// ✅ After — no `id` field; insert with the key when storing
+// ✅ After — no `id`, no inline metadata; insert with the key when
+// storing. Metadata for the id rides on the parent
+// `EvaluatedCollection<T>::metadata` SoA store.
 Constraint {
-    equality, metadata,
+    equality,
     stage: EvaluatedData {
         evaluated_value,
         feasible,
@@ -258,13 +291,13 @@ outside the crate.
 
 ### 6. getset Removal
 
-`EvaluatedConstraint` and `SampledConstraint` no longer use the `getset` crate. All fields are accessed directly via `self.id`, `self.equality`, `self.metadata`, and `self.stage.*`.
+`EvaluatedConstraint` and `SampledConstraint` no longer use the `getset` crate. All fields are accessed directly via `self.equality` and `self.stage.*`. (`self.id` and `self.metadata` no longer exist on the struct — see [Metadata stores](#metadata-stores) and the constraint-field-access section above.)
 
 Methods like `.id()`, `.equality()`, `.evaluated_value()`, `.feasible()` are **removed**. Use field access instead.
 
 ### 7. Error Surface Call-Site Rewrites
 
-See the [release note](crate::doc::release_note::v3_0_0_alpha_1) for the
+See the [release note](crate::doc::release_note) for the
 rationale and the [error handling tutorial](crate::doc::tutorial::error_handling)
 for the `ommx::Result` / signal-type / fail-site-macro story. This
 section only lists the mechanical call-site rewrites you need to apply
@@ -377,12 +410,14 @@ use `EvaluatedCollection::is_removed(&id)` or
 
 ### ConstraintCollection
 
-Generic collection of active + removed constraints. Also implements `Evaluate`:
+Generic collection of active + removed constraints, plus the SoA
+metadata store for the kind. Also implements `Evaluate`:
 
 ```rust,ignore
 pub struct ConstraintCollection<T: ConstraintType> {
     active: BTreeMap<T::ID, T::Created>,
     removed: BTreeMap<T::ID, (T::Created, RemovedReason)>,
+    metadata: ConstraintMetadataStore<T::ID>,
 }
 
 // Methods (public)
@@ -406,31 +441,118 @@ Removed constraints are just `Created` constraints paired with a `RemovedReason`
 
 ### EvaluatedCollection / SampledCollection
 
-Generic wrappers for evaluation results, used in `Solution` and `SampleSet`:
+Generic wrappers for evaluation results, used in `Solution` and `SampleSet`. Each carries the same `ConstraintMetadataStore<T::ID>` as the source `ConstraintCollection<T>` so per-id metadata is available at every stage:
 
 ```rust,ignore
 pub struct EvaluatedCollection<T: ConstraintType> {
     constraints: BTreeMap<T::ID, T::Evaluated>,
     removed_reasons: BTreeMap<T::ID, RemovedReason>,
+    metadata: ConstraintMetadataStore<T::ID>,
 }
 
 pub struct SampledCollection<T: ConstraintType> {
     constraints: BTreeMap<T::ID, T::Sampled>,
     removed_reasons: BTreeMap<T::ID, RemovedReason>,
+    metadata: ConstraintMetadataStore<T::ID>,
 }
 
 // Both Deref to BTreeMap<T::ID, T::Evaluated/Sampled> for backward-compatible access
-// and provide feasibility and removal methods:
+// and provide feasibility / removal / metadata accessors:
 collection.is_feasible()               // all constraints feasible
 collection.is_feasible_relaxed()       // all non-removed constraints feasible
 collection.is_removed(&id)             // check if a constraint was removed
 collection.removed_reasons()           // &BTreeMap<T::ID, RemovedReason>
-collection.into_parts()                // (constraints, removed_reasons)
+collection.metadata()                  // &ConstraintMetadataStore<T::ID>
 ```
+
+### Metadata stores
+
+Per-collection Struct-of-Arrays metadata stores replace the inline
+metadata fields that used to live on every `Constraint` /
+`DecisionVariable` / `NamedFunction`. Three families:
+
+```rust,ignore
+pub struct ConstraintMetadataStore<ID> { /* name / subscripts / parameters / description / provenance */ }
+pub struct VariableMetadataStore       { /* same, no provenance */ }
+pub struct NamedFunctionMetadataStore  { /* same, no provenance */ }
+```
+
+Per-host accessors on `Instance` and `ParametricInstance` give direct
+read / write access to every store:
+
+```rust,ignore
+instance.constraint_metadata()              // &ConstraintMetadataStore<ConstraintID>
+instance.constraint_metadata_mut()          // &mut …
+instance.indicator_constraint_metadata()    // &ConstraintMetadataStore<IndicatorConstraintID>
+instance.indicator_constraint_metadata_mut()
+instance.one_hot_constraint_metadata() / _mut()
+instance.sos1_constraint_metadata()    / _mut()
+instance.variable_metadata()           / _mut()        // &VariableMetadataStore
+instance.named_function_metadata()     / _mut()        // &NamedFunctionMetadataStore
+```
+
+`Solution` and `SampleSet` expose the variable / named-function stores
+the same way (`solution.variable_metadata()`,
+`solution.named_function_metadata()`, same on `SampleSet`), but
+constraint metadata is reached through the evaluated / sampled
+collection getter then `.metadata()` on the collection — there are no
+flattened `solution.constraint_metadata()` shortcuts at the host level:
+
+```rust,ignore
+solution.evaluated_constraints().metadata()              // &ConstraintMetadataStore<ConstraintID>
+solution.evaluated_indicator_constraints().metadata()    // … <IndicatorConstraintID>
+solution.evaluated_one_hot_constraints().metadata()
+solution.evaluated_sos1_constraints().metadata()
+
+sample_set.constraints().metadata()                      // &ConstraintMetadataStore<ConstraintID>
+sample_set.indicator_constraints().metadata()
+// etc.
+```
+
+Store API:
+
+```rust,ignore
+impl<ID> ConstraintMetadataStore<ID> {
+    // Per-field borrowing reads. EMPTY_* sentinels cover the absent case
+    // so the underlying Option<…> storage doesn't leak through.
+    pub fn name(&self, id: ID)        -> Option<&str>;
+    pub fn subscripts(&self, id: ID)  -> &[i64];
+    pub fn parameters(&self, id: ID)  -> &FnvHashMap<String, String>;
+    pub fn description(&self, id: ID) -> Option<&str>;
+    pub fn provenance(&self, id: ID)  -> &[Provenance];
+
+    // One-shot owned reconstruction matching the I/O struct.
+    pub fn collect_for(&self, id: ID) -> ConstraintMetadata;
+
+    // Setters (write-through to the SoA store).
+    pub fn set_name(&mut self, id: ID, name: impl Into<String>);
+    pub fn set_subscripts(&mut self, id: ID, s: impl Into<Vec<i64>>);
+    pub fn push_subscript(&mut self, id: ID, value: i64);
+    pub fn set_parameter(&mut self, id: ID, key: impl Into<String>, value: impl Into<String>);
+    pub fn set_parameters(&mut self, id: ID, params: FnvHashMap<String, String>);
+    pub fn set_description(&mut self, id: ID, desc: impl Into<String>);
+    pub fn push_provenance(&mut self, id: ID, p: Provenance);
+    pub fn set_provenance(&mut self, id: ID, p: Vec<Provenance>);
+
+    // Bulk owned exchange with the I/O struct.
+    pub fn insert(&mut self, id: ID, metadata: ConstraintMetadata);
+    pub fn remove(&mut self, id: ID) -> ConstraintMetadata;
+}
+```
+
+`VariableMetadataStore` and `NamedFunctionMetadataStore` mirror the
+shape above with the provenance fields omitted (`provenance(id)`,
+`push_provenance`, `set_provenance`). `VariableMetadataStore` keeps the
+subscript append helpers (`push_subscript`, `extend_subscripts`);
+`NamedFunctionMetadataStore` does not — extend a named function's
+subscripts via `set_subscripts(id, new_vec)` instead.
 
 ### ConstraintMetadata
 
-Common metadata extracted from the constraint:
+Owned struct used as the I/O type for metadata (insertion via
+`add_constraint(c, metadata)`, owned reads via `store.collect_for(id)`,
+modeling-chain staging on the Python `Constraint` snapshot wrapper).
+Same shape as the pre-SoA struct:
 
 ```rust,ignore
 pub struct ConstraintMetadata {
@@ -450,7 +572,7 @@ pub struct ConstraintMetadata {
 - [ ] Remove `constraint.id` reads — look up the ID via the enclosing `BTreeMap<ConstraintID, _>` key instead
 - [ ] Update `Constraint::equal_to_zero(id, function)` / `Constraint::less_than_or_equal_to_zero(id, function)` → drop the ID argument (`Constraint::equal_to_zero(function)`), insert with the key
 - [ ] Update `constraint.function` → `constraint.function()` or `constraint.stage.function`
-- [ ] Update `constraint.name` → `constraint.metadata.name` (and `subscripts`, `parameters`, `description`)
+- [ ] Update `constraint.name` reads — metadata is no longer on the constraint struct. Query the host's SoA store: `instance.constraint_metadata().name(id)` (and `subscripts`, `parameters`, `description`, `provenance`); use `collect_for(id) -> ConstraintMetadata` for an owned snapshot.
 - [ ] Update `evaluated.evaluated_value()` → `evaluated.stage.evaluated_value` (and other getset methods)
 - [ ] Update `RemovedConstraint` construction → `(Constraint, RemovedReason)` tuple
 - [ ] Update `removed.constraint.xxx` → `removed.0.xxx` (tuple access)
