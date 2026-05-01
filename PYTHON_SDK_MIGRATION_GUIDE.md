@@ -525,17 +525,17 @@ c.set_name("balance")                              # writes through to the SoA s
 print(instance.constraints[5].name)                # "balance"
 ```
 
-Affected return types:
+Affected return types (the column for `3.0.0a2` reflects the post-§4.2 state with snapshot value types; this section's change is the wrap into `AttachedX`):
 
-| Accessor | v2.5.1 | v3 |
-|---|---|---|
-| `instance.constraints` | `dict[int, Constraint]` | `dict[int, AttachedConstraint]` |
-| `instance.indicator_constraints` | `dict[int, IndicatorConstraint]` | `dict[int, AttachedIndicatorConstraint]` |
-| `instance.one_hot_constraints` | `dict[int, OneHotConstraint]` | `dict[int, AttachedOneHotConstraint]` |
-| `instance.sos1_constraints` | `dict[int, Sos1Constraint]` | `dict[int, AttachedSos1Constraint]` |
-| `instance.decision_variables` | `list[DecisionVariable]` | `list[AttachedDecisionVariable]` |
+| Accessor | v2.5.1 | 3.0.0a2 | v3 final (3.0.0a3) |
+|---|---|---|---|
+| `instance.constraints` | `list[Constraint]` | `dict[int, Constraint]` | `dict[int, AttachedConstraint]` |
+| `instance.indicator_constraints` | — (no indicator type) | `dict[int, IndicatorConstraint]` | `dict[int, AttachedIndicatorConstraint]` |
+| `instance.one_hot_constraints` | via `constraint_hints` (legacy `OneHot`) | `dict[int, OneHotConstraint]` | `dict[int, AttachedOneHotConstraint]` |
+| `instance.sos1_constraints` | via `constraint_hints` (legacy `Sos1`) | `dict[int, Sos1Constraint]` | `dict[int, AttachedSos1Constraint]` |
+| `instance.decision_variables` | `list[DecisionVariable]` | `list[DecisionVariable]` | `list[AttachedDecisionVariable]` |
 
-The same change applies on `ParametricInstance`. Solution / SampleSet evaluated / sampled wrappers stay as snapshots — those collections have no edit lifecycle.
+The list → dict shape change happened in 3.0.0a2 ([§4.2](#42-constraint-accessors-on-instance--parametricinstance--solution-return-dicts)); the 3.0.0a3 wave wraps each value in an `AttachedX` write-through handle. The same change applies on `ParametricInstance`. Solution / SampleSet evaluated / sampled wrappers stay as snapshots — those collections have no edit lifecycle.
 
 The snapshot wrapper types (`Constraint`, `IndicatorConstraint`, `OneHotConstraint`, `Sos1Constraint`, `DecisionVariable`) are unchanged in shape and remain the modeling-input type — operator overloading (`x + y == 1`), expression building, and `Instance.from_components(constraints={...})` all keep accepting / returning them. New `add_*` entry points consume snapshots and return the matching attached handle:
 
