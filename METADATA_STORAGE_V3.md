@@ -1470,7 +1470,9 @@ traceability with earlier review comments.
    ```rust
    impl<T: ConstraintType> ConstraintCollection<T> {
        pub fn unused_id(&self) -> T::ID;
-       pub fn insert_with(
+       // pub(crate) — external callers go through Instance::add_*
+       // (which validates required_ids and then delegates to insert_with).
+       pub(crate) fn insert_with(
            &mut self,
            id: T::ID,
            c: T::Created,
@@ -1478,6 +1480,8 @@ traceability with earlier review comments.
        );
    }
 
+   // Crate-internal usage (e.g. inside instance/setter.rs after
+   // validate_required_ids):
    let id = collection.unused_id();
    collection.insert_with(
        id,
@@ -1499,10 +1503,14 @@ traceability with earlier review comments.
      owned read, modeling-chain staging). Same shape as the pre-v3
      struct.
 
-   Pure Rust callers (algorithms, adapters, tests) constructing
-   constraints in loops use `insert_with` to avoid the silent-
-   metadata-loss footgun of the two-step form. Independent of the
-   Python staging bag, which serves the modeling chain.
+   Inside the `ommx` crate, algorithms / setters use `insert_with`
+   in tight loops to avoid the silent-metadata-loss footgun of the
+   two-step form (`active_mut().insert(id, c)` plus a separate
+   `metadata_mut().insert(id, m)`). External callers don't see this
+   primitive directly — they go through `Instance::add_*`, which
+   validates `required_ids()` first and then delegates to
+   `insert_with`. Independent of the Python staging bag, which
+   serves the modeling chain.
 4. **`parameters` Rust storage — nested
    `FnvHashMap<ID, FnvHashMap<String, String>>`.** Matches the
    existing per-object metadata shape, makes "all parameters of one
@@ -1556,14 +1564,16 @@ traceability with earlier review comments.
 
 ## Follow-ups (post-#843, post-#846, post-#849, post-#850, post-#852)
 
-- **Tighten `ConstraintCollection<T>` mutation surface.**
-  `active_mut()` / `removed_mut()` / `insert_with()` are still `pub`
-  on `ConstraintCollection<T>` itself, even though no public caller
-  outside the crate needs them — `Instance` and `ParametricInstance`
-  now expose only invariant-safe operations (`add_*`, `relax`,
-  `restore`, `*_metadata_mut`). These three methods should be
-  narrowed to `pub(crate)` (or smaller) in a follow-up so the only
-  way to break the collection's invariants is from inside the crate.
+- **Tighten `ConstraintCollection<T>` mutation surface (landed).**
+  `active_mut()` / `removed_mut()` / `insert_with()` were still `pub`
+  on `ConstraintCollection<T>` even though no caller outside the crate
+  needed them — `Instance` and `ParametricInstance` already exposed
+  only invariant-safe operations (`add_*`, `relax_*`, `restore_*`,
+  `insert_constraint`, `*_metadata_mut`), and never handed out
+  `&mut ConstraintCollection<T>`. These three primitives are now
+  `pub(crate)`, so external callers can only mutate constraint
+  collections through the validating `Instance` API. The
+  `migration_guide` reference card was updated accordingly.
 - **Document the `AttachedX` family in
   `PYTHON_SDK_MIGRATION_GUIDE.md`.** The migration guide currently
   predates the write-through extension; a new section should cover

@@ -250,12 +250,21 @@ impl<T: ConstraintType> ConstraintCollection<T> {
     }
 
     /// Mutable access to active constraints.
-    pub fn active_mut(&mut self) -> &mut BTreeMap<T::ID, T::Created> {
+    ///
+    /// Crate-internal: callers outside `ommx` go through invariant-safe
+    /// `Instance` / `ParametricInstance` methods (`add_*`, `relax_*`,
+    /// `restore_*`, `insert_constraint`, …). A raw `&mut` on the active
+    /// map can be used to insert a constraint whose `required_ids()` are
+    /// not in `decision_variables`, or to break the active/removed
+    /// disjointness — both of which the high-level API prevents.
+    pub(crate) fn active_mut(&mut self) -> &mut BTreeMap<T::ID, T::Created> {
         &mut self.active
     }
 
     /// Mutable access to removed constraints.
-    pub fn removed_mut(&mut self) -> &mut BTreeMap<T::ID, (T::Created, RemovedReason)> {
+    ///
+    /// Crate-internal: see [`Self::active_mut`].
+    pub(crate) fn removed_mut(&mut self) -> &mut BTreeMap<T::ID, (T::Created, RemovedReason)> {
         &mut self.removed
     }
 
@@ -264,7 +273,18 @@ impl<T: ConstraintType> ConstraintCollection<T> {
     /// `id` must not already be present in either the active or removed map.
     /// The metadata is written to the store; empty metadata fields are stored
     /// sparsely (i.e. omitted) by [`ConstraintMetadataStore::insert`].
-    pub fn insert_with(&mut self, id: T::ID, constraint: T::Created, metadata: ConstraintMetadata) {
+    ///
+    /// Crate-internal: external callers use the validating `Instance::add_*`
+    /// entry points. This primitive bypasses `validate_required_ids`, so the
+    /// caller is responsible for ensuring every `id` in
+    /// `constraint.required_ids()` exists in the parent instance's variable
+    /// store.
+    pub(crate) fn insert_with(
+        &mut self,
+        id: T::ID,
+        constraint: T::Created,
+        metadata: ConstraintMetadata,
+    ) {
         self.active.insert(id, constraint);
         self.metadata.insert(id, metadata);
     }

@@ -247,16 +247,14 @@ instance.removed_constraints()   // &BTreeMap<ConstraintID, (Constraint, Removed
 instance.constraint_collection() // &ConstraintCollection<Constraint>
 ```
 
-For internal/mutable access:
-```rust,ignore
-// ❌ Before
-self.constraints.values_mut()
-self.removed_constraints.entry(id)
-
-// ✅ After
-self.constraint_collection.active_mut().values_mut()
-self.constraint_collection.removed_mut().entry(id)
-```
+For mutable access, downstream code goes through invariant-safe
+`Instance` / `ParametricInstance` methods (`add_constraint`,
+`insert_constraint`, `relax_constraint`, `restore_constraint`, …) —
+these validate that every `id` referenced by the constraint exists in
+`decision_variables` and keep the active / removed maps disjoint. The
+raw `active_mut()` / `removed_mut()` mutators on
+`ConstraintCollection<T>` are `pub(crate)` and not callable from
+outside the crate.
 
 ### 6. getset Removal
 
@@ -387,12 +385,15 @@ pub struct ConstraintCollection<T: ConstraintType> {
     removed: BTreeMap<T::ID, (T::Created, RemovedReason)>,
 }
 
-// Methods
+// Methods (public)
 collection.active()                    // &BTreeMap<T::ID, T::Created>
 collection.removed()                   // &BTreeMap<T::ID, (T::Created, RemovedReason)>
-collection.active_mut()                // &mut BTreeMap
-collection.removed_mut()               // &mut BTreeMap
-collection.into_parts()                // (active, removed)
+collection.metadata()                  // &ConstraintMetadataStore<T::ID>
+collection.into_parts()                // (active, removed, metadata)
+// Mutation goes through Instance / ParametricInstance methods so
+// invariants (active/removed disjointness, variable-id validity)
+// are enforced; the raw `active_mut` / `removed_mut` / `insert_with`
+// primitives on this type are `pub(crate)`.
 
 // Evaluate trait impl
 collection.evaluate(state, atol)           // EvaluatedCollection<T>
