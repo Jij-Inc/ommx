@@ -73,205 +73,114 @@ cross-type lookups, and lives in its own collection slot on
 
 ## Stage parameter and the `ConstraintType` trait ([#789](https://github.com/Jij-Inc/ommx/pull/789), [#795](https://github.com/Jij-Inc/ommx/pull/795), [#796](https://github.com/Jij-Inc/ommx/pull/796), [#806](https://github.com/Jij-Inc/ommx/pull/806))
 
-Promoting indicator / one-hot / SOS1 to first-class types alongside regular
-`Constraint` multiplies the number of concrete constraint structs by the
-number of lifecycle states each kind can be in — created, evaluated,
-sampled, and (before v3) removed. Hand-writing four-kind × four-state = 16
-concrete struct definitions was never going to scale; the core refactor of
-3.0.0 is the abstraction that collapses that matrix.
+Promoting indicator / one-hot / SOS1 to first-class types alongside
+regular `Constraint` would have multiplied the number of concrete
+constraint structs by the number of lifecycle states each kind can be
+in (created / evaluated / sampled, with removal handled separately).
+Hand-writing the resulting 4 × 3 = 12 concrete struct definitions
+wasn't going to scale.
 
-Every constraint kind is now a single generic struct parameterized by a
-[`Stage`](crate::Stage) marker. For the regular constraint:
-
-```rust,ignore
-pub struct Constraint<S: Stage<Self> = Created> {
-    pub equality: Equality,
-    pub stage: S::Data,
-}
-```
-
-with three inhabited stages — `Created`, `Evaluated`, and `Sampled`. Each
-stage swaps in different `stage` data (the function for `Created`, the
-evaluated value and feasibility for `Evaluated`, per-sample vectors for
-`Sampled`). The type aliases `EvaluatedConstraint = Constraint<Evaluated>`
-and `SampledConstraint = Constraint<stage::Sampled>` keep the common
-names as entry points. `IndicatorConstraint`, `OneHotConstraint`, and
-`Sos1Constraint` share the same `Stage` / `ConstraintType` pattern,
-though their `Created`-stage data differs (an `indicator_variable` on
-`IndicatorConstraint`, a `variables` set on `OneHotConstraint` /
-`Sos1Constraint`).
-
-The unifying abstraction is the
-[`ConstraintType`](crate::ConstraintType) trait, a defunctionalization of
-`Stage → Type` that names each kind's concrete stage types:
-
-```rust,ignore
-pub trait ConstraintType {
-    type ID;
-    type Created;     // e.g. Constraint, IndicatorConstraint, …
-    type Evaluated;   // e.g. EvaluatedConstraint, EvaluatedIndicatorConstraint, …
-    type Sampled;     // e.g. SampledConstraint, SampledIndicatorConstraint, …
-}
-```
-
-`ConstraintCollection<T>` / `EvaluatedCollection<T>` / `SampledCollection<T>`
-(used by `Instance`, `Solution`, and `SampleSet` respectively) are
-parameterized by `T: ConstraintType`, so generic code — iteration,
-feasibility checks, DataFrame rendering, adapter conversion — is written
-once and applied uniformly across every constraint kind. The
-[`EvaluatedConstraintBehavior`](crate::EvaluatedConstraintBehavior) and
+The core refactor of 3.0 collapses the matrix: every constraint kind
+is one generic struct parameterized by a [`Stage`](crate::Stage)
+marker, and the [`ConstraintType`](crate::ConstraintType) trait names
+the concrete `Created` / `Evaluated` / `Sampled` types per kind so
+generic code (iteration, feasibility checks, DataFrame rendering,
+adapter conversion) is written once and applied uniformly. The
+[`EvaluatedConstraintBehavior`](crate::EvaluatedConstraintBehavior) /
 [`SampledConstraintBehavior`](crate::SampledConstraintBehavior) traits
 expose the per-kind feasibility surface in the same style.
 
-Two knock-on simplifications fall out:
+Two knock-on simplifications:
 
-- **No `Removed` stage.** Removal is collection-level state, not a
-  stage (see "Collections and serialization" below).
-- **No `id` field on the struct.** The constraint's ID lives on the
-  enclosing `BTreeMap<T::ID, T::Created>` key, which was already the
-  single source of truth, so standalone constraints are identity-less
-  until inserted into a collection.
+- **No `Removed` stage.** Removal is collection-level state — see the
+  next section.
+- **No `id` field on the struct.** A constraint's ID lives on the
+  enclosing `BTreeMap` key, which was already the single source of
+  truth.
+
+The migration guide's [Constraint Field Access](crate::doc::migration_guide#1-constraint-field-access)
+and [New Types](crate::doc::migration_guide#new-types) sections cover
+the struct shapes and the trait family in full.
 
 ## Collections and serialization ([#789](https://github.com/Jij-Inc/ommx/pull/789), [#795](https://github.com/Jij-Inc/ommx/pull/795), [#806](https://github.com/Jij-Inc/ommx/pull/806))
 
-The trait above is only half the story. The other half is a trio of
-generic collection wrappers that hold constraints uniformly across every
-kind and every stage:
+A trio of generic collection wrappers holds constraints uniformly
+across every kind and every stage:
+[`ConstraintCollection<T>`](crate::ConstraintCollection) on
+`Instance` / `ParametricInstance` (active + removed paired with a
+[`RemovedReason`](crate::RemovedReason)),
+[`EvaluatedCollection<T>`](crate::EvaluatedCollection) on
+[`Solution`](crate::Solution) (evaluated + removed-reason map), and
+[`SampledCollection<T>`](crate::SampledCollection) on
+[`SampleSet`](crate::SampleSet) (per-sample variants). Iteration,
+feasibility checks, and `RemovedReason` handling work the same way
+across every constraint kind at every stage, so adapter / Solution /
+SampleSet code doesn't need to special-case the four kinds.
 
-- [`ConstraintCollection<T>`](crate::ConstraintCollection) — active
-  constraints plus removed ones paired with a
-  [`RemovedReason`](crate::RemovedReason). Used by
-  [`Instance`](crate::Instance); replaces the old flat
-  `Instance.constraints` + `Instance.removed_constraints` fields with
-  one typed slot per constraint kind
-  (`constraint_collection()`, `indicator_constraint_collection()`,
-  `one_hot_constraint_collection()`, `sos1_constraint_collection()`).
-  Exposes `active()` / `removed()`, `relax(id, reason)` /
-  `restore(id)`, and `required_ids()`.
-- [`EvaluatedCollection<T>`](crate::EvaluatedCollection) — evaluated
-  constraints plus a map of `RemovedReason`s for any that were relaxed
-  before evaluation. Used by [`Solution`](crate::Solution). Exposes
-  `is_feasible()` / `is_feasible_relaxed()` / `removed_reasons()` /
-  `is_removed(&id)`.
-- [`SampledCollection<T>`](crate::SampledCollection) — sampled
-  constraints plus the corresponding `RemovedReason`s. Used by
-  [`SampleSet`](crate::SampleSet). Exposes `is_feasible_for(sample_id)`
-  / `is_feasible_relaxed_for(sample_id)` / `removed_reasons()` /
-  `is_removed(&id)` — the per-sample variants of the `Evaluated`
-  versions, since feasibility is decided per draw.
+**Serialization moves to the host level.** With the `id` field gone
+from individual constraints and metadata living in a per-collection
+SoA store (next section), a single element can no longer round-trip
+on its own. Per-element `to_bytes` / `from_bytes` are not provided on
+any constraint kind or its evaluated / sampled counterpart; use
+`Instance::to_bytes` / `from_bytes`,
+`ParametricInstance::to_bytes` / `from_bytes`,
+`Solution::to_bytes` / `from_bytes`, or
+`SampleSet::to_bytes` / `from_bytes` as the entry points — each
+encodes every constraint kind together with IDs and metadata in one
+`v1::*` protobuf message.
 
-Iterating and RemovedReason handling work the same way across every
-kind at each stage, so code on the adapter / Solution / SampleSet side
-doesn't need to special-case `Constraint` vs `IndicatorConstraint` vs
-`OneHotConstraint` vs `Sos1Constraint`.
-
-**Serialization moves to the host level.** Because constraints no
-longer carry their own `id` field — and the parent collection is the
-sole owner of `ConstraintID → Constraint` mappings as well as the
-per-collection metadata SoA store — the natural unit of serialization
-is the host. Per-element `to_bytes` / `from_bytes` are no longer
-provided on `Constraint`, `EvaluatedConstraint`, `SampledConstraint`,
-the new special-constraint types (`IndicatorConstraint`,
-`OneHotConstraint`, `Sos1Constraint`), or their evaluated / sampled
-counterparts: a single element can no longer round-trip on its own
-because metadata and the id come from the host. Use
-[`Instance::to_bytes`](crate::Instance::to_bytes) /
-[`from_bytes`](crate::Instance::from_bytes),
-[`ParametricInstance::to_bytes`](crate::ParametricInstance::to_bytes) /
-`from_bytes`, `Solution::to_bytes` / `from_bytes`, and
-`SampleSet::to_bytes` / `from_bytes` as the recommended entry points;
-each encodes every constraint kind together with its IDs and metadata
-in one `v1::*` protobuf message.
-
-[`ParametricInstance`](crate::ParametricInstance) follows the same
-shape: the same typed collection slots per constraint kind, plus a
-sibling `VariableMetadataStore` and `NamedFunctionMetadataStore`, and
-its own `to_bytes` / `from_bytes` at the instance level.
+The migration guide's [ConstraintCollection](crate::doc::migration_guide#constraintcollection)
+and [EvaluatedCollection / SampledCollection](crate::doc::migration_guide#evaluatedcollection--sampledcollection)
+reference cards list the public methods on each.
 
 ## Metadata storage: SoA store on the enclosing collection ([#843](https://github.com/Jij-Inc/ommx/pull/843), [#848](https://github.com/Jij-Inc/ommx/pull/848), [#850](https://github.com/Jij-Inc/ommx/pull/850), [#853](https://github.com/Jij-Inc/ommx/pull/853))
 
 Constraints, decision variables, and named functions used to carry
-their metadata inline. In v3 the same fact lives in **one canonical
-place per collection** — a Struct-of-Arrays metadata store keyed by
-ID — and per-element structs shrink to their intrinsic data:
+their metadata (`name`, `subscripts`, `parameters`, `description`, and
+— for constraints only — `provenance`) inline on each element. In v3
+the same fact lives in **one canonical place per collection**: a
+Struct-of-Arrays metadata store keyed by ID, riding alongside the
+constraint / variable / named-function map. Per-element structs shrink
+to their intrinsic data and the SoA store is the canonical source for
+both per-id reads and bulk DataFrame analysis.
 
-```rust,ignore
-pub struct Constraint<S: Stage<Self> = Created> {
-    pub equality: Equality,
-    pub stage: S::Data,
-    // metadata field removed
-}
+Three store families share one shape:
+[`ConstraintMetadataStore<ID>`](crate::ConstraintMetadataStore) on
+every constraint-kind collection (the same store rides through
+[`EvaluatedCollection<T>`](crate::EvaluatedCollection) and
+[`SampledCollection<T>`](crate::SampledCollection) so metadata is
+available at every stage),
+[`VariableMetadataStore`](crate::VariableMetadataStore) as a sibling
+field on `Instance` / `ParametricInstance` / `Solution` / `SampleSet`
+(no separate `DecisionVariableCollection` was introduced), and
+[`NamedFunctionMetadataStore`](crate::NamedFunctionMetadataStore) the
+same way for named functions.
 
-pub struct ConstraintCollection<T: ConstraintType> {
-    active:   BTreeMap<T::ID, T::Created>,
-    removed:  BTreeMap<T::ID, (T::Created, RemovedReason)>,
-    metadata: ConstraintMetadataStore<T::ID>,   // new
-}
-```
+The split lets the type system enforce invariants more tightly. The
+raw active/removed map mutators on `ConstraintCollection<T>` are
+`pub(crate)` and `Instance` never hands out
+`&mut ConstraintCollection<T>`, so external callers must go through
+the validating `Instance::add_*` / `relax_*` / `restore_*` family —
+which keep variable-id validity (every `id` referenced by a constraint
+exists in `decision_variables`) and active/removed disjointness as
+crate-internal invariants. Metadata mutation rides on its own `_mut()`
+accessor and can't break either.
 
-Three store families share one shape (`name` / `subscripts` /
-`parameters` / `description`, plus `provenance` on constraints):
+The Python side wraps the same SoA store: `instance.constraints[id]`
+and the parallel constraint / variable accessors return live
+`AttachedX` write-through handles, and `*_df()` methods (with
+`kind=` / `include=` / `removed=` parameters) plus six long-format
+sidecar DataFrames serve bulk analysis. See
+[`PYTHON_SDK_MIGRATION_GUIDE.md`](https://github.com/Jij-Inc/ommx/blob/main/PYTHON_SDK_MIGRATION_GUIDE.md)
+§9–11 for the user-facing version
+([#846](https://github.com/Jij-Inc/ommx/pull/846),
+[#847](https://github.com/Jij-Inc/ommx/pull/847),
+[#849](https://github.com/Jij-Inc/ommx/pull/849),
+[#850](https://github.com/Jij-Inc/ommx/pull/850),
+[#852](https://github.com/Jij-Inc/ommx/pull/852)).
 
-- [`ConstraintMetadataStore<ID>`](crate::ConstraintMetadataStore) on
-  every [`ConstraintCollection<T>`](crate::ConstraintCollection),
-  [`EvaluatedCollection<T>`](crate::EvaluatedCollection), and
-  [`SampledCollection<T>`](crate::SampledCollection) — so the same
-  metadata source rides through evaluation and sampling.
-- [`VariableMetadataStore`](crate::VariableMetadataStore) as a sibling
-  field on `Instance` / `ParametricInstance` / `Solution` / `SampleSet`
-  (no separate `DecisionVariableCollection` was introduced).
-- [`NamedFunctionMetadataStore`](crate::NamedFunctionMetadataStore) the
-  same way for named functions.
-
-Per-host accessors expose them safely: `instance.constraint_metadata()`,
-`indicator_constraint_metadata()`, `one_hot_constraint_metadata()`,
-`sos1_constraint_metadata()`, `variable_metadata()`,
-`named_function_metadata()` (each with a `_mut()` companion). The store
-itself offers per-field borrowing reads (`name(id) -> Option<&str>`,
-`subscripts(id) -> &[i64]`, …), a one-shot owned reconstruction
-(`collect_for(id) -> ConstraintMetadata`), and write-through setters
-(`set_name`, `push_subscript`, `set_parameter`, `push_provenance`, …).
-Bulk owned exchange via `insert(id, ConstraintMetadata)` /
-`remove(id) -> ConstraintMetadata` keeps the existing
-[`ConstraintMetadata`](crate::ConstraintMetadata) struct viable as the
-I/O / modeling-input shape.
-
-The split tightens the invariants: variable-id validity is an
-`Instance`-level property (every `id` referenced by a constraint must
-live in `decision_variables`), while active/removed disjointness is a
-`ConstraintCollection`-level property. `Instance` never hands out a
-`&mut ConstraintCollection<T>` — the raw active/removed map mutators
-(`active_mut`, `removed_mut`, `insert_with`) are `pub(crate)`, so
-external callers can only mutate constraint membership through the
-validating `Instance::add_*` / `relax_*` / `restore_*` family.
-Per-host metadata mutation goes through the `_mut()` accessor on the
-SoA store, which can't break either invariant.
-
-On the Python side this drives a parallel set of changes (see
-`PYTHON_SDK_MIGRATION_GUIDE.md` for the user-facing version):
-
-- `instance.constraints[id]` etc. return write-through `AttachedX`
-  handles whose reads pull live from the SoA store and whose metadata
-  setters write back through to it. The snapshot wrapper types
-  (`Constraint`, `IndicatorConstraint`, …) remain as the modeling-input
-  shape, and `attached.detach()` materializes a snapshot when needed.
-  ([#849](https://github.com/Jij-Inc/ommx/pull/849),
-  [#850](https://github.com/Jij-Inc/ommx/pull/850),
-  [#852](https://github.com/Jij-Inc/ommx/pull/852))
-- `*_df` accessors are methods, with `kind=` / `include=` / `removed=`
-  parameters consolidating the old per-kind families. `include=`
-  defaults to `None` (which expands to `("metadata", "parameters")` —
-  the v2-equivalent wide shape); `"removed_reason"` is opt-in via
-  `include=`, and is auto-enabled on `Instance` / `ParametricInstance`
-  when `removed=True` so removed rows are distinguishable. Six
-  long-format sidecar DataFrames (`constraint_metadata_df`,
-  `constraint_parameters_df`, `constraint_provenance_df`,
-  `constraint_removed_reasons_df`, `variable_metadata_df`,
-  `variable_parameters_df`) read directly from the stores for tidy-data
-  joins. ([#846](https://github.com/Jij-Inc/ommx/pull/846),
-  [#847](https://github.com/Jij-Inc/ommx/pull/847))
-
-See the [migration guide](crate::doc::migration_guide#metadata-stores) for the per-host accessor reference and call-site rewrites.
+The migration guide's [Metadata stores](crate::doc::migration_guide#metadata-stores)
+section has the per-host accessor list and the store API reference.
 
 ## Capability model ([#790](https://github.com/Jij-Inc/ommx/pull/790), [#805](https://github.com/Jij-Inc/ommx/pull/805), [#810](https://github.com/Jij-Inc/ommx/pull/810), [#811](https://github.com/Jij-Inc/ommx/pull/811), [#814](https://github.com/Jij-Inc/ommx/pull/814))
 
@@ -303,7 +212,7 @@ is also emitted as an INFO-level `tracing` event in the
 
 ## Unified error surface ([#832](https://github.com/Jij-Inc/ommx/pull/832))
 
-The default error type is now [`ommx::Result<T>`](crate::Result) /
+The default error type is [`ommx::Result<T>`](crate::Result) /
 [`ommx::Error`](crate::Error), re-exports of `anyhow::Result<T>` and
 `anyhow::Error` so downstream crates can propagate with `?` without
 taking an `anyhow` dependency themselves. New crate-level fail-site
@@ -313,34 +222,26 @@ producing the `anyhow::Error`, so diagnostic context lands in the
 configured tracing subscriber rather than being stacked via
 `anyhow::Error::context(...)` at the fail site.
 
-The previous discriminant-style error enums (`InstanceError`, `MpsParseError`,
-`StateValidationError`, `LogEncodingError`, `UnknownSampleIDError`, the
-variants of `QplibParseError`, …) have been removed — downstream code never
-matched on their variants in practice, so the enums were pure ceremony.
+The previous discriminant-style error enums (`InstanceError`,
+`MpsParseError`, `StateValidationError`, `LogEncodingError`,
+`UnknownSampleIDError`, the variants of `QplibParseError`, …) have
+been removed — downstream code never matched on their variants in
+practice. A handful of typed surfaces are deliberately kept:
 
-Two narrow-domain parsers keep structured error types because they
-carry *positional* breadcrumbs that editors and diagnostic UIs can
-consume: [`ParseError`](crate::ParseError) (proto-tree
-`Vec<ParseContext>`) and
-[`qplib::QplibParseError`](crate::qplib::QplibParseError) (1-based line
-number and rendered message). Both convert to `ommx::Error` at the
-domain boundary.
+- A curated set of **signal types** ([`InfeasibleDetected`](crate::InfeasibleDetected),
+  [`BoundError`](crate::BoundError),
+  [`DecisionVariableError`](crate::DecisionVariableError),
+  [`DuplicatedSampleIDError`](crate::DuplicatedSampleIDError),
+  [`SubstitutionError`](crate::SubstitutionError), …) returned typed
+  by their entry-point APIs (`Bound::new`, `Sampled::append`,
+  `Substitute::*`, …) for callers that recover by discriminant.
+- Two narrow-domain parser errors that carry *positional* breadcrumbs
+  ([`ParseError`](crate::ParseError),
+  [`qplib::QplibParseError`](crate::qplib::QplibParseError)),
+  converted to `ommx::Error` at the domain boundary.
 
-Several **signal types** stay `pub` and are returned typed (not as
-`ommx::Error`) by APIs whose callers commonly recover them via
-discriminant or downcast: [`BoundError`](crate::BoundError) on
-[`Bound::new`](crate::Bound::new); [`DecisionVariableError`](crate::DecisionVariableError)
-on `DecisionVariable::new` / `set_bound` / `substitute`;
-[`DuplicatedSampleIDError`](crate::DuplicatedSampleIDError) on
-`Sampled::append`; [`SubstitutionError`](crate::SubstitutionError) on
-the [`Substitute`](crate::Substitute) trait family;
-[`InfeasibleDetected`](crate::InfeasibleDetected),
-[`CoefficientError`](crate::CoefficientError),
-[`AtolError`](crate::AtolError),
-[`SolutionError`](crate::SolutionError), and
-[`SampleSetError`](crate::SampleSetError). Other call sites that
-internally raise these signals propagate them through `ommx::Error`,
-where downstream code recovers via `err.downcast_ref::<T>()`.
+The full signal-type list and downcast / propagation patterns live in
+the [error handling tutorial](crate::doc::tutorial::error_handling).
 
 ## Tracing-first observability ([#816](https://github.com/Jij-Inc/ommx/pull/816), [#826](https://github.com/Jij-Inc/ommx/pull/826))
 
