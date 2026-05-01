@@ -21,6 +21,8 @@ Themes you will encounter:
 2. `Constraint` no longer has an `id` — constraint IDs live only as the keys of the `dict[int, Constraint]` you pass to `Instance.from_components`. All `.id` getters, `set_id()` / `id=` kwargs, and global ID-counter helpers are gone.
 3. Container types flipped: every constraint-valued argument and getter on `Instance` / `ParametricInstance` / `Solution` is now `dict[int, T]`, not `list[T]`. `decision_variables` stays a `list`.
 4. A handful of renames and small signature changes (`write_mps` → `save_mps`, `Parameters(entries=...)` → plain `dict`, …).
+5. Every `*_df` accessor is a method now, with `kind=` / `include=` / `removed=` parameters consolidating the per-kind / active-vs-removed family. Long-format sidecar DataFrames (`constraint_metadata_df`, `constraint_provenance_df`, `variable_parameters_df`, …) are new.
+6. `instance.constraints[id]` and `instance.decision_variables` return write-through `AttachedX` handles instead of snapshot wrappers; metadata mutations through them propagate back to the host.
 
 ## 1. Import changes
 
@@ -373,9 +375,9 @@ except ValueError as e:
     ...
 ```
 
-### 6.6 `ParametricInstance.parameters` returns `list[Parameter]`, use `parameters_df` for the DataFrame
+### 6.6 `ParametricInstance.parameters` returns `list[Parameter]`, use `parameters_df()` for the DataFrame
 
-The DataFrame view moved to a separate `_df` property, mirroring `decision_variables` / `decision_variables_df` and `constraints` / `constraints_df`. The bare `parameters` attribute is now an ordered `list[Parameter]`.
+The DataFrame view moved to a separate `_df` accessor, mirroring `decision_variables` / `decision_variables_df()` and `constraints` / `constraints_df()`. The bare `parameters` attribute is now an ordered `list[Parameter]`. Every `*_df` accessor on `Instance` / `ParametricInstance` / `Solution` / `SampleSet` is a **method** call (see §9 below).
 
 ```python
 # v2.5.1 (DataFrame view)
@@ -383,7 +385,7 @@ parametric_instance.parameters            # -> pandas.DataFrame
 
 # v3
 parametric_instance.parameters            # -> list[Parameter]
-parametric_instance.parameters_df         # -> pandas.DataFrame
+parametric_instance.parameters_df()       # -> pandas.DataFrame  (method, not property)
 ```
 
 ## 7. Removed helpers
@@ -425,9 +427,130 @@ constraint = constraint.add_name("test")
 constraint = (x == 1).add_name("test").add_description("A test constraint")
 ```
 
-## 9. Convenience additions (not breaking)
+## 9. DataFrame accessors are methods, with `kind=` / `include=` / `removed=`
 
-### 9.1 `DecisionVariable.binary` / `integer` / `continuous` accept `lower` / `upper` kwargs
+Every `*_df` accessor on `Instance` / `ParametricInstance` / `Solution` / `SampleSet` is a method call now, and the per-kind family on each host (`constraints_df`, `indicator_constraints_df`, `one_hot_constraints_df`, `sos1_constraints_df`, plus the parallel `removed_*_constraints_df` and `*_removed_reasons_df` families) collapsed into one `constraints_df(kind=...)` per host. Optional column families are gated by an `include=` parameter.
+
+```python
+# v2.5.1
+df = instance.constraints_df             # property, regular constraints only
+df = instance.indicator_constraints_df   # separate accessor per kind
+df = instance.removed_constraints_df     # separate active vs. removed
+df = solution.constraints_df
+
+# v3
+df = instance.constraints_df()           # method; default kind="regular"
+df = instance.constraints_df(kind="indicator")
+df = instance.constraints_df(kind="regular", removed=True)
+                                         # active + removed merged in id order
+df = solution.constraints_df()           # no removed= (no active/removed
+                                         # distinction at the evaluated stage)
+```
+
+`kind` accepts `Literal["regular", "indicator", "one_hot", "sos1"]` (default `"regular"`); unknown values raise `ValueError`. Solution / SampleSet have no `removed=` parameter — at the evaluated / sampled stage every row is materialized regardless of how it was lifecycled, and reason data is gated by `"removed_reason"` in `include=` instead.
+
+`include` accepts a `Sequence[str]` of `"metadata"` / `"parameters"` / `"removed_reason"` (singular). The default (`None`) preserves the v2 wide shape (`("metadata", "parameters")`); `include=[]` drops every optional column family.
+
+```python
+# Default — v2-equivalent shape (metadata + parameters columns)
+df = instance.constraints_df()
+
+# Core only — drop metadata and parameters
+df = instance.constraints_df(include=[])
+
+# Active + removed in one DataFrame; reason columns auto-added
+df = instance.constraints_df(removed=True)
+# columns include: equality, function_type, used_ids,
+#                  name, subscripts, description, parameters.{key},
+#                  removed_reason, removed_reason.{key}
+
+# decision_variables_df takes include= but no kind= or removed=
+df = instance.decision_variables_df()
+df = instance.decision_variables_df(include=[])
+```
+
+`"removed_reason"` is a unit flag — it gates both the `removed_reason` column and the `removed_reason.{key}` parameter columns together. The `removed_reason` column is **schema-stable**: when the flag is on it always appears in the resulting DataFrame, NA-filled if no row carries a reason, so downstream code that branches on schema doesn't need to special-case empty data.
+
+The wide `*_df` index column was renamed from unqualified `id` to `{kind}_constraint_id` (`regular_constraint_id`, `indicator_constraint_id`, `one_hot_constraint_id`, `sos1_constraint_id`) and `variable_id` for `decision_variables_df()`. This makes cross-ID-space joins (which would silently produce wrong-but-shaped output when `int64` indexes line up) visible in `df.head()` / `df.info()` and IDE inspection.
+
+## 10. Long-format sidecar DataFrames
+
+`Instance` / `ParametricInstance` / `Solution` / `SampleSet` gained six long-format / id-indexed sidecar DataFrame methods that read directly from the SoA metadata stores:
+
+```python
+# Constraint-side — kind= dispatches across the four constraint families
+instance.constraint_metadata_df(kind="regular")
+                                          # name, subscripts, description
+                                          # index: regular_constraint_id
+instance.constraint_parameters_df(kind="regular")
+                                          # columns: regular_constraint_id, key, value
+instance.constraint_provenance_df(kind="regular")
+                                          # columns: regular_constraint_id, step,
+                                          #          source_kind, source_id
+instance.constraint_removed_reasons_df(kind="regular")
+                                          # columns: regular_constraint_id, reason,
+                                          #          key, value
+
+# Variable-side — single ID space, no kind=
+instance.variable_metadata_df()
+instance.variable_parameters_df()
+```
+
+Use these for tidy-data joins / aggregation; reach for the wide `constraints_df()` (with `include=`) when you want one row per id with columns alongside.
+
+`provenance` is intentionally not folded into `constraints_df()` via `include=`: chains have variable length, and a wide pivot would either explode the column space or produce an object-dtype list column. Pivot the long-format `constraint_provenance_df()` yourself if you need a wide view.
+
+## 11. Constraint and variable accessors return `AttachedX` write-through handles
+
+The dict / list accessors that previously returned snapshot wrapper objects now return `AttachedX` write-through handles bound to the parent host (`Instance` or `ParametricInstance`). Reads pull live from the host's SoA store; metadata setters write back through to it.
+
+```python
+# v2.5.1 — snapshot wrappers; mutation didn't propagate
+c = instance.constraints[5]              # Constraint (snapshot)
+c.add_name("balance")                    # mutated the local copy
+print(instance.constraints[5].name)      # still None — no write-through
+
+# v3 — write-through handles
+c = instance.constraints[5]              # AttachedConstraint (live)
+c.set_name("balance")                    # writes through to instance.constraint_metadata
+print(instance.constraints[5].name)      # "balance"
+```
+
+Affected return types:
+
+| Accessor | v2.5.1 | v3 |
+|---|---|---|
+| `instance.constraints` | `dict[int, Constraint]` | `dict[int, AttachedConstraint]` |
+| `instance.indicator_constraints` | `dict[int, IndicatorConstraint]` | `dict[int, AttachedIndicatorConstraint]` |
+| `instance.one_hot_constraints` | `dict[int, OneHotConstraint]` | `dict[int, AttachedOneHotConstraint]` |
+| `instance.sos1_constraints` | `dict[int, Sos1Constraint]` | `dict[int, AttachedSos1Constraint]` |
+| `instance.decision_variables` | `list[DecisionVariable]` | `list[AttachedDecisionVariable]` |
+
+The same change applies on `ParametricInstance`. Solution / SampleSet evaluated / sampled wrappers stay as snapshots — those collections have no edit lifecycle.
+
+The snapshot wrapper types (`Constraint`, `IndicatorConstraint`, `OneHotConstraint`, `Sos1Constraint`, `DecisionVariable`) are unchanged in shape and remain the modeling-input type — operator overloading (`x + y == 1`), expression building, and `Instance.from_components(constraints={...})` all keep accepting / returning them. New `add_*` entry points consume snapshots and return the matching attached handle:
+
+```python
+c = (x[0] + x[1] == 1).set_name("balance")     # Constraint snapshot
+
+attached = instance.add_constraint(c)          # -> AttachedConstraint
+attached.set_subscripts([0])                   # writes through
+
+# Single-id lookup also returns an attached handle
+print(instance.constraints[attached.constraint_id].name)   # "balance"
+
+# attached_decision_variable(id) is the dedicated lookup for variables
+av = instance.attached_decision_variable(0)
+av.set_name("x_0")
+```
+
+`AttachedX` exposes `.detach()` to materialize an independent snapshot when you need one (e.g. to send through `from_components`, ship via `to_bytes`, or hand off to code that expects the modeling type). `AttachedDecisionVariable` participates in arithmetic via `ToFunction` (only its id is consumed, no host borrow is taken), so existing expression-building code keeps working without `.detach()`.
+
+Two `AttachedX` instances pointing at the same id observe the same state — a write through one is visible through any other and through the next `*_df` call. The host stays alive as long as any `AttachedX` references it (the handle holds a refcounted `Py<Instance>` / `Py<ParametricInstance>`); drop the handles to release the host.
+
+## 12. Convenience additions (not breaking)
+
+### 12.1 `DecisionVariable.binary` / `integer` / `continuous` accept `lower` / `upper` kwargs
 
 ```python
 # v3
@@ -436,7 +559,7 @@ y = DecisionVariable.continuous(2, lower=-1.0, upper=1.0)
 z = DecisionVariable.integer(3)                  # unbounded
 ```
 
-### 9.2 `DecisionVariable.equals_to(other)` for object equality
+### 12.2 `DecisionVariable.equals_to(other)` for object equality
 
 Because `==` creates a `Constraint`, v3 adds an explicit `equals_to` method (and the same for `Parameter` / `Linear` / …) for `bool` equality.
 
@@ -449,7 +572,7 @@ x.equals_to(y)      # True
 x.id == y.id        # True
 ```
 
-### 9.3 `Parameter` supports the same operators as `DecisionVariable`
+### 12.3 `Parameter` supports the same operators as `DecisionVariable`
 
 ```python
 from ommx.v1 import Parameter, DecisionVariable
@@ -479,10 +602,15 @@ expr = 2 * p + 3  # Linear
 - [ ] Update code that used `Linear.terms` / `Quadratic.terms` / `Polynomial.terms` as a property — they are methods now.
 - [ ] `SampleSet.sample_ids` is a method returning `set[int]`; use `sample_set.sample_ids_list` if you need a `list`.
 - [ ] Change `except RuntimeError` around `.evaluate(...)` / `.partial_evaluate(...)` calls to `except ValueError`.
-- [ ] Switch `parametric_instance.parameters` DataFrame reads to `parametric_instance.parameters_df` (`.parameters` now returns `list[Parameter]`).
+- [ ] Switch `parametric_instance.parameters` DataFrame reads to `parametric_instance.parameters_df()` (now a method; `.parameters` returns `list[Parameter]`).
 - [ ] Treat `Constraint.add_name(...)` / `add_description(...)` / `add_subscripts(...)` as returning a new object — assign the result.
 - [ ] Replace `ArtifactArchive` / `ArtifactDir` usage with `Artifact.load_archive(...)` or `Artifact.load(...)`.
 - [ ] Remove any `Linear.from_object(...)` / `Linear.equals_to(...)` calls.
+- [ ] Add parentheses to every `*_df` access — `instance.constraints_df` → `instance.constraints_df()` etc. (every `*_df` accessor is a method now).
+- [ ] Replace per-kind `instance.indicator_constraints_df` / `one_hot_constraints_df` / `sos1_constraints_df` and `removed_*_constraints_df` / `*_removed_reasons_df` calls with `constraints_df(kind=..., removed=...)` on the same host.
+- [ ] If you depended on the unqualified `id` index column on a wide `*_df`, switch to the kind-qualified name (`{kind}_constraint_id` for constraints, `variable_id` for decision variables).
+- [ ] Drop the in-place `c.add_name(...)` mutation pattern on snapshot wrappers retrieved from an instance — those calls return a new object and don't write through to the host. Use the live handle returned by `instance.constraints[id]` (an `AttachedConstraint`) and call its `set_*` / `add_*` methods, or re-add via `from_components`.
+- [ ] Update return-type annotations / static analysis for `instance.constraints` etc. to expect `AttachedX` (`dict[int, AttachedConstraint]`, `list[AttachedDecisionVariable]`, …). Call `.detach()` if you need an independent snapshot.
 
 ---
 
