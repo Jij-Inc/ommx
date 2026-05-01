@@ -253,9 +253,12 @@ On the Python side this drives a parallel set of changes (see
   ([#849](https://github.com/Jij-Inc/ommx/pull/849),
   [#850](https://github.com/Jij-Inc/ommx/pull/850),
   [#852](https://github.com/Jij-Inc/ommx/pull/852))
-- `*_df` accessors are methods, with `kind=` /
-  `include=("metadata","parameters","removed_reason")` /
-  `removed=` parameters consolidating the old per-kind families. Six
+- `*_df` accessors are methods, with `kind=` / `include=` / `removed=`
+  parameters consolidating the old per-kind families. `include=`
+  defaults to `None` (which expands to `("metadata", "parameters")` —
+  the v2-equivalent wide shape); `"removed_reason"` is opt-in via
+  `include=`, and is auto-enabled on `Instance` / `ParametricInstance`
+  when `removed=True` so removed rows are distinguishable. Six
   long-format sidecar DataFrames (`constraint_metadata_df`,
   `constraint_parameters_df`, `constraint_provenance_df`,
   `constraint_removed_reasons_df`, `variable_metadata_df`,
