@@ -377,7 +377,7 @@ except ValueError as e:
 
 ### 6.6 `ParametricInstance.parameters` returns `list[Parameter]`, use `parameters_df()` for the DataFrame
 
-The DataFrame view moved to a separate `_df` accessor, mirroring `decision_variables` / `decision_variables_df()` and `constraints` / `constraints_df()`. The bare `parameters` attribute is now an ordered `list[Parameter]`. Every `*_df` accessor on `Instance` / `ParametricInstance` / `Solution` / `SampleSet` is a **method** call (see §9 below).
+The DataFrame view moved to a separate `_df` accessor, mirroring `decision_variables` / `decision_variables_df()` and `constraints` / `constraints_df()`. The bare `parameters` attribute is now an ordered `list[Parameter]`. Every `*_df` accessor on `Instance` / `ParametricInstance` / `Solution` / `SampleSet` is a **method** call (`3.0.0a3`, [#846](https://github.com/Jij-Inc/ommx/pull/846); see §9 below).
 
 ```python
 # v2.5.1 (DataFrame view)
@@ -427,7 +427,7 @@ constraint = constraint.add_name("test")
 constraint = (x == 1).add_name("test").add_description("A test constraint")
 ```
 
-## 9. DataFrame accessors are methods, with `kind=` / `include=` / `removed=`
+## 9. DataFrame accessors are methods, with `kind=` / `include=` / `removed=` (`3.0.0a3`, [#846](https://github.com/Jij-Inc/ommx/pull/846), [#847](https://github.com/Jij-Inc/ommx/pull/847))
 
 Every `*_df` accessor on `Instance` / `ParametricInstance` / `Solution` / `SampleSet` is a method call now, and the per-kind family on each host (`constraints_df`, `indicator_constraints_df`, `one_hot_constraints_df`, `sos1_constraints_df`, plus the parallel `removed_*_constraints_df` and `*_removed_reasons_df` families) collapsed into one `constraints_df(kind=...)` per host. Optional column families are gated by an `include=` parameter.
 
@@ -473,7 +473,7 @@ df = instance.decision_variables_df(include=[])
 
 The wide `*_df` index column was renamed from unqualified `id` to `{kind}_constraint_id` (`regular_constraint_id`, `indicator_constraint_id`, `one_hot_constraint_id`, `sos1_constraint_id`) and `variable_id` for `decision_variables_df()`. This makes cross-ID-space joins (which would silently produce wrong-but-shaped output when `int64` indexes line up) visible in `df.head()` / `df.info()` and IDE inspection.
 
-## 10. Long-format sidecar DataFrames
+## 10. Long-format sidecar DataFrames (`3.0.0a3`, [#846](https://github.com/Jij-Inc/ommx/pull/846))
 
 `Instance` / `ParametricInstance` / `Solution` / `SampleSet` gained six long-format / id-indexed sidecar DataFrame methods that read directly from the SoA metadata stores:
 
@@ -500,7 +500,7 @@ Use these for tidy-data joins / aggregation; reach for the wide `constraints_df(
 
 `provenance` is intentionally not folded into `constraints_df()` via `include=`: chains have variable length, and a wide pivot would either explode the column space or produce an object-dtype list column. Pivot the long-format `constraint_provenance_df()` yourself if you need a wide view.
 
-## 11. Constraint and variable accessors return `AttachedX` write-through handles
+## 11. Constraint and variable accessors return `AttachedX` write-through handles (`3.0.0a3`, [#849](https://github.com/Jij-Inc/ommx/pull/849), [#850](https://github.com/Jij-Inc/ommx/pull/850), [#852](https://github.com/Jij-Inc/ommx/pull/852))
 
 The dict / list accessors that previously returned snapshot wrapper objects now return `AttachedX` write-through handles bound to the parent host (`Instance` or `ParametricInstance`). Reads pull live from the host's SoA store; metadata setters write back through to it.
 

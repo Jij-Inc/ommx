@@ -19,6 +19,13 @@ The 3.0.0 line is a major revision of the Rust SDK:
   gone from individual constraints, the **collection is the natural
   unit of serialization** (`Instance::to_bytes`, `Solution::to_bytes`,
   `SampleSet::to_bytes`).
+- Metadata (`name`, `subscripts`, `parameters`, `description`,
+  `provenance`) moves off each constraint and into per-collection
+  **Struct-of-Arrays metadata stores**, queried through narrow
+  per-host accessors (`instance.constraint_metadata()`,
+  `instance.variable_metadata()`, …). One canonical store per
+  collection, two views on top: per-id wrapper getters for one-off
+  reads and `*_df` for bulk analysis.
 - A **capability model** lets adapters declare what they natively support
   and auto-converts unsupported kinds at the boundary, so any OMMX
   instance can be fed to any adapter.
@@ -71,10 +78,11 @@ Every constraint kind is now a single generic struct parameterized by a
 ```rust,ignore
 pub struct Constraint<S: Stage<Self> = Created> {
     pub equality: Equality,
-    pub metadata: ConstraintMetadata,
     pub stage: S::Data,
 }
 ```
+
+Metadata (`name`, `subscripts`, `parameters`, `description`, `provenance`) used to live inline on each constraint; in v3 it moves to a per-collection Struct-of-Arrays store — see [Metadata storage](#metadata-storage-soa-store-on-the-enclosing-collection) below.
 
 with three inhabited stages — `Created`, `Evaluated`, and `Sampled`. Each
 stage swaps in different `stage` data (the function for `Created`, the
@@ -174,6 +182,82 @@ mapping). Concretely:
 [`ParametricInstance`](crate::ParametricInstance) follows the same
 shape: the same typed collection slots per constraint kind, and its
 own `to_bytes` / `from_bytes` at the instance level.
+
+## Metadata storage: SoA store on the enclosing collection ([#843](https://github.com/Jij-Inc/ommx/pull/843), [#846](https://github.com/Jij-Inc/ommx/pull/846), [#847](https://github.com/Jij-Inc/ommx/pull/847), [#848](https://github.com/Jij-Inc/ommx/pull/848), [#849](https://github.com/Jij-Inc/ommx/pull/849), [#850](https://github.com/Jij-Inc/ommx/pull/850), [#852](https://github.com/Jij-Inc/ommx/pull/852), [#853](https://github.com/Jij-Inc/ommx/pull/853))
+
+Constraints, decision variables, and named functions used to carry
+their metadata inline. In v3 the same fact lives in **one canonical
+place per collection** — a Struct-of-Arrays metadata store keyed by
+ID — and per-element structs shrink to their intrinsic data:
+
+```rust,ignore
+pub struct Constraint<S: Stage<Self> = Created> {
+    pub equality: Equality,
+    pub stage: S::Data,
+    // metadata field removed
+}
+
+pub struct ConstraintCollection<T: ConstraintType> {
+    active:   BTreeMap<T::ID, T::Created>,
+    removed:  BTreeMap<T::ID, (T::Created, RemovedReason)>,
+    metadata: ConstraintMetadataStore<T::ID>,   // new
+}
+```
+
+Three store families share one shape (`name` / `subscripts` /
+`parameters` / `description`, plus `provenance` on constraints):
+
+- [`ConstraintMetadataStore<ID>`](crate::ConstraintMetadataStore) on
+  every [`ConstraintCollection<T>`](crate::ConstraintCollection),
+  [`EvaluatedCollection<T>`](crate::EvaluatedCollection), and
+  [`SampledCollection<T>`](crate::SampledCollection) — so the same
+  metadata source rides through evaluation and sampling.
+- [`VariableMetadataStore`](crate::VariableMetadataStore) as a sibling
+  field on `Instance` / `ParametricInstance` / `Solution` / `SampleSet`
+  (no separate `DecisionVariableCollection` was introduced).
+- [`NamedFunctionMetadataStore`](crate::NamedFunctionMetadataStore) the
+  same way for named functions.
+
+Per-host accessors expose them safely: `instance.constraint_metadata()`,
+`indicator_constraint_metadata()`, `one_hot_constraint_metadata()`,
+`sos1_constraint_metadata()`, `variable_metadata()`,
+`named_function_metadata()` (each with a `_mut()` companion). The store
+itself offers per-field borrowing reads (`name(id) -> Option<&str>`,
+`subscripts(id) -> &[i64]`, …), a one-shot owned reconstruction
+(`collect_for(id) -> ConstraintMetadata`), and write-through setters
+(`set_name`, `push_subscript`, `set_parameter`, `push_provenance`, …).
+Bulk owned exchange via `insert(id, ConstraintMetadata)` /
+`remove(id) -> ConstraintMetadata` keeps the existing
+[`ConstraintMetadata`](crate::ConstraintMetadata) struct viable as the
+I/O / modeling-input shape.
+
+The split tightens the invariants: variable-id validity is an
+`Instance`-level property (every `id` referenced by a constraint must
+live in `decision_variables`), while active/removed disjointness is a
+`ConstraintCollection`-level property. `Instance` never hands out a
+`&mut ConstraintCollection<T>` — the raw map / metadata mutators on
+`ConstraintCollection<T>` (`active_mut`, `removed_mut`, `insert_with`)
+are `pub(crate)`, and external callers go through the validating
+`Instance::add_*` / `relax_*` / `restore_*` family or the per-host
+metadata `_mut()` accessor instead.
+
+On the Python side this drives a parallel set of changes:
+- `instance.constraints[id]` etc. return write-through
+  [`AttachedX`](https://github.com/Jij-Inc/ommx/pull/849) handles whose
+  reads pull live from the SoA store and whose metadata setters write
+  back through to it. The snapshot wrapper types
+  (`Constraint`, `IndicatorConstraint`, …) remain as the modeling-input
+  shape, and `attached.detach()` materializes a snapshot when needed.
+- `*_df` accessors are methods, with `kind=` /
+  `include=("metadata","parameters","removed_reason")` /
+  `removed=` parameters consolidating the old per-kind families. Six
+  long-format sidecar DataFrames (`constraint_metadata_df`,
+  `constraint_parameters_df`, `constraint_provenance_df`,
+  `constraint_removed_reasons_df`, `variable_metadata_df`,
+  `variable_parameters_df`) read directly from the stores for tidy-data
+  joins.
+
+See the [migration guide](crate::doc::migration_guide#metadata-stores) for the per-host accessor reference and call-site rewrites.
 
 ## Capability model ([#790](https://github.com/Jij-Inc/ommx/pull/790), [#805](https://github.com/Jij-Inc/ommx/pull/805), [#810](https://github.com/Jij-Inc/ommx/pull/810), [#811](https://github.com/Jij-Inc/ommx/pull/811), [#814](https://github.com/Jij-Inc/ommx/pull/814))
 
