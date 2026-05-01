@@ -475,8 +475,8 @@ pub struct VariableMetadataStore       { /* same, no provenance */ }
 pub struct NamedFunctionMetadataStore  { /* same, no provenance */ }
 ```
 
-Per-host accessors on `Instance` and `ParametricInstance` (mirrored on
-`Solution` / `SampleSet` for evaluated / sampled stages):
+Per-host accessors on `Instance` and `ParametricInstance` give direct
+read / write access to every store:
 
 ```rust,ignore
 instance.constraint_metadata()              // &ConstraintMetadataStore<ConstraintID>
@@ -487,6 +487,24 @@ instance.one_hot_constraint_metadata() / _mut()
 instance.sos1_constraint_metadata()    / _mut()
 instance.variable_metadata()           / _mut()        // &VariableMetadataStore
 instance.named_function_metadata()     / _mut()        // &NamedFunctionMetadataStore
+```
+
+`Solution` and `SampleSet` expose the variable / named-function stores
+the same way (`solution.variable_metadata()`,
+`solution.named_function_metadata()`, same on `SampleSet`), but
+constraint metadata is reached through the evaluated / sampled
+collection getter then `.metadata()` on the collection — there are no
+flattened `solution.constraint_metadata()` shortcuts at the host level:
+
+```rust,ignore
+solution.evaluated_constraints().metadata()              // &ConstraintMetadataStore<ConstraintID>
+solution.evaluated_indicator_constraints().metadata()    // … <IndicatorConstraintID>
+solution.evaluated_one_hot_constraints().metadata()
+solution.evaluated_sos1_constraints().metadata()
+
+sample_set.constraints().metadata()                      // &ConstraintMetadataStore<ConstraintID>
+sample_set.indicator_constraints().metadata()
+// etc.
 ```
 
 Store API:
@@ -520,8 +538,12 @@ impl<ID> ConstraintMetadataStore<ID> {
 }
 ```
 
-`VariableMetadataStore` and `NamedFunctionMetadataStore` mirror the same
-shape with `provenance` omitted.
+`VariableMetadataStore` and `NamedFunctionMetadataStore` mirror the
+shape above with the provenance fields omitted (`provenance(id)`,
+`push_provenance`, `set_provenance`). `VariableMetadataStore` keeps the
+subscript append helpers (`push_subscript`, `extend_subscripts`);
+`NamedFunctionMetadataStore` does not — extend a named function's
+subscripts via `set_subscripts(id, new_vec)` instead.
 
 ### ConstraintMetadata
 
