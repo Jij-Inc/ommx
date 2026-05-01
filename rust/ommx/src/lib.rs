@@ -130,8 +130,5 @@ pub mod doc {
     pub mod migration_guide {}
 
     #[doc = include_str!("../doc/release_note.md")]
-    pub mod release_note {
-        #[doc = include_str!("../doc/release_note/v3_0_0_alpha_1.md")]
-        pub mod v3_0_0_alpha_1 {}
-    }
+    pub mod release_note {}
 }

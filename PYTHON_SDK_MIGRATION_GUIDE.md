@@ -26,7 +26,7 @@ Themes you will encounter:
 
 ## 1. Import changes
 
-### 1.1 Protobuf submodules are gone
+### 1.1 Protobuf submodules are gone (`3.0.0a1`, [#776](https://github.com/Jij-Inc/ommx/pull/776))
 
 Every `ommx.v1.*_pb2` module and `ommx.v1.annotation` is removed. Import classes from `ommx.v1` directly.
 
@@ -45,7 +45,7 @@ from ommx.v1 import Constraint, Equality, Function, Linear, State
 
 The `.from_protobuf()` / `.to_protobuf()` bridge methods on `Constraint`, `RemovedConstraint`, `DecisionVariable`, etc. are removed along with the protobuf objects they produced. Use `from_bytes` / `to_bytes` for serialisation instead.
 
-### 1.2 Constraint-hint helper types removed
+### 1.2 Constraint-hint helper types removed (`3.0.0a1`, [#776](https://github.com/Jij-Inc/ommx/pull/776); `3.0.0a2`, [#790](https://github.com/Jij-Inc/ommx/pull/790), [#798](https://github.com/Jij-Inc/ommx/pull/798))
 
 `ConstraintHints`, `OneHot`, `Sos1`, and the `Parameters` wrapper are no longer exported from `ommx.v1`. They are superseded by the first-class constraint types (`OneHotConstraint`, `Sos1Constraint`, `IndicatorConstraint`) and plain `dict[int, float]` for parameter substitution.
 
@@ -60,7 +60,7 @@ from ommx.v1 import OneHotConstraint, Sos1Constraint, IndicatorConstraint
 # Parameters is gone — pass a plain dict[int, float] to ParametricInstance.with_parameters
 ```
 
-## 2. Removal of `.raw` and `from_raw` / `from_protobuf` / `to_protobuf`
+## 2. Removal of `.raw` and `from_raw` / `from_protobuf` / `to_protobuf` (`3.0.0a1`, [#770](https://github.com/Jij-Inc/ommx/pull/770), [#771](https://github.com/Jij-Inc/ommx/pull/771), [#774](https://github.com/Jij-Inc/ommx/pull/774), [#775](https://github.com/Jij-Inc/ommx/pull/775))
 
 v2 deprecated `.raw`, v3 removes it. All migrated classes are direct Rust types; there is no separate underlying object.
 
@@ -93,7 +93,7 @@ The dataclass-style constructors (`Instance(raw=..., annotations=...)`) are also
 
 ## 3. Constraint IDs moved out of the `Constraint` object
 
-### 3.1 No more `id` / `set_id()` / `id=` kwarg
+### 3.1 No more `id` / `set_id()` / `id=` kwarg (`3.0.0a2`, [#806](https://github.com/Jij-Inc/ommx/pull/806))
 
 `Constraint` (and `IndicatorConstraint`, `OneHotConstraint`, `Sos1Constraint`, `RemovedConstraint`, `EvaluatedConstraint`, `SampledConstraint`) no longer carry an ID. The constraint object is **detached** — it gets an ID only when it is placed in the `dict[int, Constraint]` you pass to `Instance.from_components` (see §4).
 
@@ -129,7 +129,7 @@ instance = Instance.from_components(
 )
 ```
 
-### 3.2 Comparison operators return a detached `Constraint`
+### 3.2 Comparison operators return a detached `Constraint` (`3.0.0a2`, [#806](https://github.com/Jij-Inc/ommx/pull/806))
 
 `==`, `<=`, `>=` on `DecisionVariable` / `Parameter` / `Linear` / `Quadratic` / `Polynomial` / `Function` / `NamedFunction` still return a `Constraint`, but with no ID. Assign the ID through the `constraints=` dict.
 
@@ -145,7 +145,7 @@ c = x + y <= 5
 Instance.from_components(..., constraints={0: c}, ...)
 ```
 
-### 3.3 Global ID-counter helpers removed
+### 3.3 Global ID-counter helpers removed (`3.0.0a2`, [#806](https://github.com/Jij-Inc/ommx/pull/806))
 
 These module-level names are gone from `ommx._ommx_rust`:
 
@@ -159,7 +159,7 @@ Constraint IDs no longer exist outside the `BTreeMap` keys inside an `Instance`.
 
 ## 4. Container-type changes (`list` → `dict[int, T]`)
 
-### 4.1 `Instance.from_components(constraints=...)` expects a `dict[int, Constraint]`
+### 4.1 `Instance.from_components(constraints=...)` expects a `dict[int, Constraint]` (`3.0.0a2`, [#806](https://github.com/Jij-Inc/ommx/pull/806))
 
 All constraint-valued arguments are keyed by ID. `decision_variables` stays a `Sequence[DecisionVariable]`.
 
@@ -189,7 +189,7 @@ Instance.from_components(
 
 All arguments are keyword-only. `ParametricInstance.from_components` takes the same `constraints: Mapping[int, Constraint]` shape.
 
-### 4.2 Constraint accessors on `Instance` / `ParametricInstance` / `Solution` return dicts
+### 4.2 Constraint accessors on `Instance` / `ParametricInstance` / `Solution` return dicts (`3.0.0a2`, [#806](https://github.com/Jij-Inc/ommx/pull/806))
 
 **Before (v2.5.1)**:
 ```python
@@ -228,7 +228,7 @@ for hid, ic in instance.indicator_constraints.items(): ...
 
 ## 5. Renames and signature changes
 
-### 5.1 `write_mps` → `save_mps`
+### 5.1 `write_mps` → `save_mps` (`3.0.0a1`, [#780](https://github.com/Jij-Inc/ommx/pull/780))
 
 ```python
 # v2.5.1
@@ -239,7 +239,7 @@ instance.save_mps("out.mps.gz")                 # compress=True by default
 instance.save_mps("out.mps", compress=False)
 ```
 
-### 5.2 `Instance.used_decision_variable_ids()` → `Instance.required_ids()`
+### 5.2 `Instance.used_decision_variable_ids()` → `Instance.required_ids()` (`3.0.0a2`, [#806](https://github.com/Jij-Inc/ommx/pull/806))
 
 ```python
 # v2.5.1
@@ -253,7 +253,7 @@ func.required_ids()
 
 (`used_decision_variable_ids()` is still the name on `EvaluatedConstraint`, `SampledConstraint`, `EvaluatedDecisionVariable`, `EvaluatedNamedFunction`, `SampledNamedFunction`.)
 
-### 5.3 `Parameter.new(id=...)` → `Parameter(id, ...)`
+### 5.3 `Parameter.new(id=...)` → `Parameter(id, ...)` (`3.0.0a1`, [#770](https://github.com/Jij-Inc/ommx/pull/770))
 
 The `.new` factory is removed; the `id` argument is positional.
 
@@ -265,7 +265,7 @@ p = Parameter.new(id=3, name="w", subscripts=[0])
 p = Parameter(3, name="w", subscripts=[0])
 ```
 
-### 5.4 `ParametricInstance.with_parameters` takes a plain dict
+### 5.4 `ParametricInstance.with_parameters` takes a plain dict (`3.0.0a1`, [#776](https://github.com/Jij-Inc/ommx/pull/776))
 
 The `Parameters(entries=...)` wrapper is gone.
 
@@ -278,7 +278,7 @@ pi.with_parameters(Parameters(entries={p.id: 1.0}))
 pi.with_parameters({p.id: 1.0})
 ```
 
-### 5.5 `Linear(terms=..., constant=...)` always takes `dict[int, float]`
+### 5.5 `Linear(terms=..., constant=...)` always takes `dict[int, float]` (`3.0.0a1`, [#770](https://github.com/Jij-Inc/ommx/pull/770), [#776](https://github.com/Jij-Inc/ommx/pull/776))
 
 v2.5.1 had a protobuf form (`Linear(terms=[Linear.Term(id=j, coefficient=c) for ...], constant=-b)`) via `linear_pb2`. In v3 `terms` is always `dict[int, float]` and `Linear.Term` does not exist.
 
@@ -297,7 +297,7 @@ Linear(terms={int(j): float(c) for j, c in enumerate(row)}, constant=float(-b))
 
 ## 6. Return-type changes
 
-### 6.1 `Constraint.name` / `Constraint.description` are `Optional[str]`
+### 6.1 `Constraint.name` / `Constraint.description` are `Optional[str]` (`3.0.0a1`, [#770](https://github.com/Jij-Inc/ommx/pull/770), [#771](https://github.com/Jij-Inc/ommx/pull/771))
 
 v2.5.1 declared them `str` (empty string when unset). v3 declares `Optional[str]` and returns `None`. This also applies to `RemovedConstraint`, `IndicatorConstraint`, `EvaluatedConstraint`, `SampledConstraint`, `NamedFunction`, `EvaluatedNamedFunction`, `SampledNamedFunction`.
 
@@ -311,7 +311,7 @@ if constraint.name:                              # still works for both
     print(constraint.name)
 ```
 
-### 6.2 `Linear.terms` / `Quadratic.terms` / `Polynomial.terms` are methods, not properties
+### 6.2 `Linear.terms` / `Quadratic.terms` / `Polynomial.terms` are methods, not properties (`3.0.0a2`, [#806](https://github.com/Jij-Inc/ommx/pull/806))
 
 Only `Function.terms` remains a property. The three building-block types switched to methods.
 
@@ -329,7 +329,7 @@ polynomial.terms()
 
 `Linear.linear_terms`, `Quadratic.linear_terms` / `quadratic_terms`, and `Polynomial.constant_term` stay properties.
 
-### 6.3 `DecisionVariable.BINARY`/`INTEGER`/… are `int` sentinels
+### 6.3 `DecisionVariable.BINARY`/`INTEGER`/… are `int` sentinels (`3.0.0a1`, [#770](https://github.com/Jij-Inc/ommx/pull/770))
 
 In v2.5.1 these class constants were `Kind` enum members. In v3 they are the underlying `int` values, and `DecisionVariable.kind` returns `int` (the protobuf wire value).
 
@@ -346,7 +346,7 @@ if var.kind == DecisionVariable.INTEGER:  # int == int
 # If you want the enum, construct it: Kind(var.kind)
 ```
 
-### 6.4 `SampleSet.sample_ids` changed from list-property to set-method
+### 6.4 `SampleSet.sample_ids` changed from list-property to set-method (`3.0.0a1`, [#775](https://github.com/Jij-Inc/ommx/pull/775))
 
 ```python
 # v2.5.1
@@ -357,7 +357,7 @@ ids: set[int]  = sample_set.sample_ids()         # method
 ids: list[int] = sample_set.sample_ids_list      # separate property when you need a list
 ```
 
-### 6.5 `evaluate` / `partial_evaluate` raise `ValueError`, not `RuntimeError`
+### 6.5 `evaluate` / `partial_evaluate` raise `ValueError`, not `RuntimeError` (`3.0.0a1`, [#770](https://github.com/Jij-Inc/ommx/pull/770))
 
 Every `.evaluate(state)` / `.partial_evaluate(state)` method on `Linear`, `Quadratic`, `Polynomial`, `Function`, `Constraint`, `NamedFunction`, and `Instance` now raises `ValueError` (e.g. `ValueError: Missing entry for id: 2`) when the state is missing a required decision-variable ID or the atol is invalid. In v2.5.1 the same error surfaced as `RuntimeError` via anyhow. Update `except` clauses accordingly.
 
@@ -375,9 +375,9 @@ except ValueError as e:
     ...
 ```
 
-### 6.6 `ParametricInstance.parameters` returns `list[Parameter]`, use `parameters_df()` for the DataFrame
+### 6.6 `ParametricInstance.parameters` returns `list[Parameter]`, use `parameters_df()` for the DataFrame (`3.0.0a3`, [#846](https://github.com/Jij-Inc/ommx/pull/846))
 
-The DataFrame view moved to a separate `_df` accessor, mirroring `decision_variables` / `decision_variables_df()` and `constraints` / `constraints_df()`. The bare `parameters` attribute is now an ordered `list[Parameter]`. Every `*_df` accessor on `Instance` / `ParametricInstance` / `Solution` / `SampleSet` is a **method** call (`3.0.0a3`, [#846](https://github.com/Jij-Inc/ommx/pull/846); see §9 below).
+The DataFrame view moved to a separate `_df` accessor, mirroring `decision_variables` / `decision_variables_df()` and `constraints` / `constraints_df()`. The bare `parameters` attribute is now an ordered `list[Parameter]`. Every `*_df` accessor on `Instance` / `ParametricInstance` / `Solution` / `SampleSet` is a **method** call (see §9 below).
 
 ```python
 # v2.5.1 (DataFrame view)
@@ -388,7 +388,7 @@ parametric_instance.parameters            # -> list[Parameter]
 parametric_instance.parameters_df()       # -> pandas.DataFrame  (method, not property)
 ```
 
-## 7. Removed helpers
+## 7. Removed helpers (`3.0.0a1`, [#770](https://github.com/Jij-Inc/ommx/pull/770), [#776](https://github.com/Jij-Inc/ommx/pull/776), [#782](https://github.com/Jij-Inc/ommx/pull/782); `3.0.0a2`, [#798](https://github.com/Jij-Inc/ommx/pull/798))
 
 - `Linear.from_object(x)` — construct via `Linear.single_term(...)`, `Linear.constant(...)`, or the arithmetic operators.
 - `Linear.equals_to(other)` — use `linear.almost_equal(other, atol=...)`. (Available on every expression type.)
@@ -408,7 +408,7 @@ artifact = Artifact.load_archive("path/to/file.ommx")   # file or directory
 artifact = Artifact.load("ghcr.io/jij-inc/ommx/...")    # remote registry
 ```
 
-## 8. Constraint metadata methods return new objects
+## 8. Constraint metadata methods return new objects (`3.0.0a1`, [#770](https://github.com/Jij-Inc/ommx/pull/770), [#771](https://github.com/Jij-Inc/ommx/pull/771))
 
 v2 mutated the Python wrapper in place; v3 methods are thin wrappers around a Rust call that returns a fresh `Constraint`.
 

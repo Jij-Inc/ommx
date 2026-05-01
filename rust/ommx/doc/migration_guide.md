@@ -295,7 +295,7 @@ Methods like `.id()`, `.equality()`, `.evaluated_value()`, `.feasible()` are **r
 
 ### 7. Error Surface Call-Site Rewrites
 
-See the [release note](crate::doc::release_note::v3_0_0_alpha_1) for the
+See the [release note](crate::doc::release_note) for the
 rationale and the [error handling tutorial](crate::doc::tutorial::error_handling)
 for the `ommx::Result` / signal-type / fail-site-macro story. This
 section only lists the mechanical call-site rewrites you need to apply
