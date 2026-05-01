@@ -228,7 +228,7 @@ for hid, ic in instance.indicator_constraints.items(): ...
 
 ## 5. Renames and signature changes
 
-### 5.1 `write_mps` → `save_mps` (`3.0.0a1`, [#780](https://github.com/Jij-Inc/ommx/pull/780))
+### 5.1 `write_mps` → `save_mps` (`3.0.0a1`, [#775](https://github.com/Jij-Inc/ommx/pull/775))
 
 ```python
 # v2.5.1
@@ -265,7 +265,7 @@ p = Parameter.new(id=3, name="w", subscripts=[0])
 p = Parameter(3, name="w", subscripts=[0])
 ```
 
-### 5.4 `ParametricInstance.with_parameters` takes a plain dict (`3.0.0a1`, [#776](https://github.com/Jij-Inc/ommx/pull/776))
+### 5.4 `ParametricInstance.with_parameters` takes a plain dict (`3.0.0a1`, [#774](https://github.com/Jij-Inc/ommx/pull/774))
 
 The `Parameters(entries=...)` wrapper is gone.
 
@@ -408,24 +408,30 @@ artifact = Artifact.load_archive("path/to/file.ommx")   # file or directory
 artifact = Artifact.load("ghcr.io/jij-inc/ommx/...")    # remote registry
 ```
 
-## 8. Constraint metadata methods return new objects (`3.0.0a1`, [#770](https://github.com/Jij-Inc/ommx/pull/770), [#771](https://github.com/Jij-Inc/ommx/pull/771))
+## 8. Snapshot `Constraint` setters return a clone, not `self` (`3.0.0a1`, [#770](https://github.com/Jij-Inc/ommx/pull/770), [#771](https://github.com/Jij-Inc/ommx/pull/771))
 
-v2 mutated the Python wrapper in place; v3 methods are thin wrappers around a Rust call that returns a fresh `Constraint`.
+v2's `Constraint.add_name(...)` / `add_subscripts(...)` / `add_description(...)` mutated the Python wrapper in place and returned `self` (the same object), so chained calls on a held reference accumulated correctly. v3's setters still mutate in place but return `self.clone()` — a fresh wrapper. Single calls behave the same; **chained calls without reassignment lose every mutation past the first** because the chain operates on clones from that point on.
 
-**Before (v2.5.1)**:
 ```python
+# Single call — identical behavior in v2 and v3
 constraint = x == 1
-constraint.add_name("test")           # mutated in place
-print(constraint.name)                # "test"
-```
+constraint.add_name("test")
+print(constraint.name)                # "test" in both versions
 
-**After (v3)**:
-```python
+# Chained calls without reassignment — diverges
 constraint = x == 1
-constraint = constraint.add_name("test")
-# or chain directly:
+constraint.add_name("a").add_subscripts([0])
+
+# v2: constraint.name == "a" AND constraint.subscripts == [0]
+#     (chain mutated `constraint` itself end-to-end)
+# v3: constraint.name == "a" but constraint.subscripts == []
+#     (only add_name landed in `constraint`; add_subscripts mutated the clone)
+
+# Robust pattern that works in both: assign or chain into a fresh binding
 constraint = (x == 1).add_name("test").add_description("A test constraint")
 ```
+
+For constraints retrieved from an instance (`instance.constraints[id]`), use the [`AttachedConstraint`](https://github.com/Jij-Inc/ommx/pull/849) write-through API in §11 — its `set_*` / `add_*` methods write back to the instance's SoA store regardless of how you call them.
 
 ## 9. DataFrame accessors are methods, with `kind=` / `include=` / `removed=` (`3.0.0a3`, [#846](https://github.com/Jij-Inc/ommx/pull/846), [#847](https://github.com/Jij-Inc/ommx/pull/847))
 
@@ -603,7 +609,7 @@ expr = 2 * p + 3  # Linear
 - [ ] `SampleSet.sample_ids` is a method returning `set[int]`; use `sample_set.sample_ids_list` if you need a `list`.
 - [ ] Change `except RuntimeError` around `.evaluate(...)` / `.partial_evaluate(...)` calls to `except ValueError`.
 - [ ] Switch `parametric_instance.parameters` DataFrame reads to `parametric_instance.parameters_df()` (now a method; `.parameters` returns `list[Parameter]`).
-- [ ] Treat `Constraint.add_name(...)` / `add_description(...)` / `add_subscripts(...)` as returning a new object — assign the result.
+- [ ] Audit chained `Constraint.add_name(...).add_subscripts(...)` calls — the chain operates on a clone after the first method, so only the first mutation lands in the original wrapper. Assign the chain to a fresh binding (`c = (...).add_name(...).add_subscripts(...)`), or use the live `AttachedConstraint` from `instance.constraints[id]` for write-through mutation.
 - [ ] Replace `ArtifactArchive` / `ArtifactDir` usage with `Artifact.load_archive(...)` or `Artifact.load(...)`.
 - [ ] Remove any `Linear.from_object(...)` / `Linear.equals_to(...)` calls.
 - [ ] Add parentheses to every `*_df` access — `instance.constraints_df` → `instance.constraints_df()` etc. (every `*_df` accessor is a method now).
