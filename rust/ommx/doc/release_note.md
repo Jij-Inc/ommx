@@ -160,31 +160,30 @@ kind at each stage, so code on the adapter / Solution / SampleSet side
 doesn't need to special-case `Constraint` vs `IndicatorConstraint` vs
 `OneHotConstraint` vs `Sos1Constraint`.
 
-**Serialization moves to the collection level.** Because constraints no
-longer carry their own `id` field, the natural unit of serialization is
-the enclosing collection (which owns the `ConstraintID → Constraint`
-mapping). Concretely:
-
-- [`Instance::to_bytes`](crate::Instance::to_bytes) /
-  [`from_bytes`](crate::Instance::from_bytes), `Solution::to_bytes` /
-  `from_bytes`, and `SampleSet::to_bytes` / `from_bytes` are the
-  recommended entry points. Each encodes every constraint kind together
-  with its IDs in one `v1::*` protobuf message.
-- Per-constraint `to_bytes` / `from_bytes` on the regular
-  `Constraint`, `EvaluatedConstraint`, and `SampledConstraint` still
-  exist but now require an explicit `ConstraintID` argument and return
-  `(ConstraintID, T)` on decode — the type can no longer round-trip on
-  its own.
-- The new special-constraint types (`IndicatorConstraint`,
-  `OneHotConstraint`, `Sos1Constraint`) intentionally have no
-  per-constraint `to_bytes` / `from_bytes`; they are only serialized as
-  part of an `Instance`, `Solution`, or `SampleSet`.
+**Serialization moves to the host level.** Because constraints no
+longer carry their own `id` field — and the parent collection is the
+sole owner of `ConstraintID → Constraint` mappings as well as the
+per-collection metadata SoA store — the natural unit of serialization
+is the host. Per-element `to_bytes` / `from_bytes` are no longer
+provided on `Constraint`, `EvaluatedConstraint`, `SampledConstraint`,
+the new special-constraint types (`IndicatorConstraint`,
+`OneHotConstraint`, `Sos1Constraint`), or their evaluated / sampled
+counterparts: a single element can no longer round-trip on its own
+because metadata and the id come from the host. Use
+[`Instance::to_bytes`](crate::Instance::to_bytes) /
+[`from_bytes`](crate::Instance::from_bytes),
+[`ParametricInstance::to_bytes`](crate::ParametricInstance::to_bytes) /
+`from_bytes`, `Solution::to_bytes` / `from_bytes`, and
+`SampleSet::to_bytes` / `from_bytes` as the recommended entry points;
+each encodes every constraint kind together with its IDs and metadata
+in one `v1::*` protobuf message.
 
 [`ParametricInstance`](crate::ParametricInstance) follows the same
-shape: the same typed collection slots per constraint kind, and its
-own `to_bytes` / `from_bytes` at the instance level.
+shape: the same typed collection slots per constraint kind, plus a
+sibling `VariableMetadataStore` and `NamedFunctionMetadataStore`, and
+its own `to_bytes` / `from_bytes` at the instance level.
 
-## Metadata storage: SoA store on the enclosing collection ([#843](https://github.com/Jij-Inc/ommx/pull/843), [#846](https://github.com/Jij-Inc/ommx/pull/846), [#847](https://github.com/Jij-Inc/ommx/pull/847), [#848](https://github.com/Jij-Inc/ommx/pull/848), [#849](https://github.com/Jij-Inc/ommx/pull/849), [#850](https://github.com/Jij-Inc/ommx/pull/850), [#852](https://github.com/Jij-Inc/ommx/pull/852), [#853](https://github.com/Jij-Inc/ommx/pull/853))
+## Metadata storage: SoA store on the enclosing collection ([#843](https://github.com/Jij-Inc/ommx/pull/843), [#848](https://github.com/Jij-Inc/ommx/pull/848), [#850](https://github.com/Jij-Inc/ommx/pull/850), [#853](https://github.com/Jij-Inc/ommx/pull/853))
 
 Constraints, decision variables, and named functions used to carry
 their metadata inline. In v3 the same fact lives in **one canonical
@@ -243,13 +242,17 @@ validating `Instance::add_*` / `relax_*` / `restore_*` family.
 Per-host metadata mutation goes through the `_mut()` accessor on the
 SoA store, which can't break either invariant.
 
-On the Python side this drives a parallel set of changes:
-- `instance.constraints[id]` etc. return write-through
-  [`AttachedX`](https://github.com/Jij-Inc/ommx/pull/849) handles whose
-  reads pull live from the SoA store and whose metadata setters write
-  back through to it. The snapshot wrapper types
+On the Python side this drives a parallel set of changes (see
+`PYTHON_SDK_MIGRATION_GUIDE.md` for the user-facing version):
+
+- `instance.constraints[id]` etc. return write-through `AttachedX`
+  handles whose reads pull live from the SoA store and whose metadata
+  setters write back through to it. The snapshot wrapper types
   (`Constraint`, `IndicatorConstraint`, …) remain as the modeling-input
   shape, and `attached.detach()` materializes a snapshot when needed.
+  ([#849](https://github.com/Jij-Inc/ommx/pull/849),
+  [#850](https://github.com/Jij-Inc/ommx/pull/850),
+  [#852](https://github.com/Jij-Inc/ommx/pull/852))
 - `*_df` accessors are methods, with `kind=` /
   `include=("metadata","parameters","removed_reason")` /
   `removed=` parameters consolidating the old per-kind families. Six
@@ -257,7 +260,8 @@ On the Python side this drives a parallel set of changes:
   `constraint_parameters_df`, `constraint_provenance_df`,
   `constraint_removed_reasons_df`, `variable_metadata_df`,
   `variable_parameters_df`) read directly from the stores for tidy-data
-  joins.
+  joins. ([#846](https://github.com/Jij-Inc/ommx/pull/846),
+  [#847](https://github.com/Jij-Inc/ommx/pull/847))
 
 See the [migration guide](crate::doc::migration_guide#metadata-stores) for the per-host accessor reference and call-site rewrites.
 
@@ -291,44 +295,57 @@ is also emitted as an INFO-level `tracing` event in the
 
 ## Unified error surface ([#832](https://github.com/Jij-Inc/ommx/pull/832))
 
-The public API of the crate now returns a single error type.
-[`ommx::Result<T>`](crate::Result) and [`ommx::Error`](crate::Error) are
-re-exports of `anyhow::Result<T>` and `anyhow::Error`, so downstream crates can
-propagate with `?` without taking an `anyhow` dependency themselves.
+The default error type is now [`ommx::Result<T>`](crate::Result) /
+[`ommx::Error`](crate::Error), re-exports of `anyhow::Result<T>` and
+`anyhow::Error` so downstream crates can propagate with `?` without
+taking an `anyhow` dependency themselves. New crate-level fail-site
+macros — [`bail!`](crate::bail) / [`error!`](crate::error!) /
+[`ensure!`](crate::ensure) — emit a `tracing::error!` event alongside
+producing the `anyhow::Error`, so diagnostic context lands in the
+configured tracing subscriber rather than being stacked via
+`anyhow::Error::context(...)` at the fail site.
 
 The previous discriminant-style error enums (`InstanceError`, `MpsParseError`,
 `StateValidationError`, `LogEncodingError`, `UnknownSampleIDError`, the
 variants of `QplibParseError`, …) have been removed — downstream code never
 matched on their variants in practice, so the enums were pure ceremony.
-A small set of **signal types** remains `pub` because callers do recover them
-by downcast: [`InfeasibleDetected`](crate::InfeasibleDetected),
+
+Two narrow-domain parsers keep structured error types because they
+carry *positional* breadcrumbs that editors and diagnostic UIs can
+consume: [`ParseError`](crate::ParseError) (proto-tree
+`Vec<ParseContext>`) and
+[`qplib::QplibParseError`](crate::qplib::QplibParseError) (1-based line
+number and rendered message). Both convert to `ommx::Error` at the
+domain boundary.
+
+Several **signal types** stay `pub` and are returned typed (not as
+`ommx::Error`) by APIs whose callers commonly recover them via
+discriminant or downcast: [`BoundError`](crate::BoundError) on
+[`Bound::new`](crate::Bound::new); [`DecisionVariableError`](crate::DecisionVariableError)
+on `DecisionVariable::new` / `set_bound` / `substitute`;
+[`DuplicatedSampleIDError`](crate::DuplicatedSampleIDError) on
+`Sampled::append`; [`SubstitutionError`](crate::SubstitutionError) on
+the [`Substitute`](crate::Substitute) trait family;
+[`InfeasibleDetected`](crate::InfeasibleDetected),
 [`CoefficientError`](crate::CoefficientError),
-[`BoundError`](crate::BoundError), [`AtolError`](crate::AtolError),
-[`DecisionVariableError`](crate::DecisionVariableError),
-[`SubstitutionError`](crate::SubstitutionError),
-[`SolutionError`](crate::SolutionError),
-[`SampleSetError`](crate::SampleSetError), and
-[`DuplicatedSampleIDError`](crate::DuplicatedSampleIDError).
-
-Two narrow-domain parsers keep their structured error types because they carry
-*positional* breadcrumbs that editors and diagnostic UIs can consume:
-[`ParseError`](crate::ParseError) (proto-tree `Vec<ParseContext>`) and
-[`qplib::QplibParseError`](crate::qplib::QplibParseError) (1-based line number
-and rendered message).
-
-Diagnostic context flows through `tracing`, not through
-`anyhow::Error::context(...)`. The fail-site macros
-[`bail!`](crate::bail) / [`error!`](crate::error!) / [`ensure!`](crate::ensure)
-emit a `tracing::error!` event alongside producing an `anyhow::Error` from the
-same format string.
+[`AtolError`](crate::AtolError),
+[`SolutionError`](crate::SolutionError), and
+[`SampleSetError`](crate::SampleSetError). Other call sites that
+internally raise these signals propagate them through `ommx::Error`,
+where downstream code recovers via `err.downcast_ref::<T>()`.
 
 ## Tracing-first observability ([#816](https://github.com/Jij-Inc/ommx/pull/816), [#826](https://github.com/Jij-Inc/ommx/pull/826))
 
 Internal logging has moved off `log` to `tracing`, and span coverage has been
 broadened across parsing, evaluation, substitution, and solver adapter
 entry points. Subscribers (including `tracing-opentelemetry`) pick up
-structured fields and span context directly from the crate — no ad-hoc context
-stacking via `anyhow::Error::context(...)` is needed.
+structured fields and span context directly from the crate. New
+internal fail sites use the crate-level `bail!` / `error!` / `ensure!`
+macros instead of stacking context via `anyhow::Error::context(...)`,
+so diagnostic information lands as a `tracing::error!` event at the
+moment it's produced rather than being attached to the error chain
+(legacy `.context(...)` call sites in narrow-domain parsers and the
+artifact layer remain).
 
 ## Domain types replace `v1_ext` ([#799](https://github.com/Jij-Inc/ommx/pull/799), [#801](https://github.com/Jij-Inc/ommx/pull/801), [#803](https://github.com/Jij-Inc/ommx/pull/803), [#804](https://github.com/Jij-Inc/ommx/pull/804))
 
@@ -342,8 +359,13 @@ crate root. The `v1_ext` helper module has been removed.
 Two new domain traits accompany this shift:
 
 - [`Propagate`](crate::Propagate) performs unit-propagation-style constraint
-  reasoning and returns a [`PropagateOutcome`](crate::PropagateOutcome) that
-  records a `Provenance` chain for every substitution it applied.
+  reasoning and returns a [`PropagateOutcome`](crate::PropagateOutcome) —
+  `Active(T)` (constraint shrunk in place), `Consumed(T)` (fully determined
+  by the state, move to removed), or `Transformed { original, new }` (kind
+  change, e.g. an indicator constraint promoted to a regular constraint).
+  Callers that need provenance bookkeeping append a `Provenance` entry to
+  the host's [`ConstraintMetadataStore`](crate::ConstraintMetadataStore)
+  when they apply the outcome.
 - [`Substitute`](crate::Substitute) performs symbolic variable substitution,
   with an acyclic fast path and full cycle detection.
 
