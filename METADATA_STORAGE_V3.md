@@ -1470,7 +1470,9 @@ traceability with earlier review comments.
    ```rust
    impl<T: ConstraintType> ConstraintCollection<T> {
        pub fn unused_id(&self) -> T::ID;
-       pub fn insert_with(
+       // pub(crate) — external callers go through Instance::add_*
+       // (which validates required_ids and then delegates to insert_with).
+       pub(crate) fn insert_with(
            &mut self,
            id: T::ID,
            c: T::Created,
@@ -1478,6 +1480,8 @@ traceability with earlier review comments.
        );
    }
 
+   // Crate-internal usage (e.g. inside instance/setter.rs after
+   // validate_required_ids):
    let id = collection.unused_id();
    collection.insert_with(
        id,
@@ -1499,10 +1503,14 @@ traceability with earlier review comments.
      owned read, modeling-chain staging). Same shape as the pre-v3
      struct.
 
-   Pure Rust callers (algorithms, adapters, tests) constructing
-   constraints in loops use `insert_with` to avoid the silent-
-   metadata-loss footgun of the two-step form. Independent of the
-   Python staging bag, which serves the modeling chain.
+   Inside the `ommx` crate, algorithms / setters use `insert_with`
+   in tight loops to avoid the silent-metadata-loss footgun of the
+   two-step form (`active_mut().insert(id, c)` plus a separate
+   `metadata_mut().insert(id, m)`). External callers don't see this
+   primitive directly — they go through `Instance::add_*`, which
+   validates `required_ids()` first and then delegates to
+   `insert_with`. Independent of the Python staging bag, which
+   serves the modeling chain.
 4. **`parameters` Rust storage — nested
    `FnvHashMap<ID, FnvHashMap<String, String>>`.** Matches the
    existing per-object metadata shape, makes "all parameters of one

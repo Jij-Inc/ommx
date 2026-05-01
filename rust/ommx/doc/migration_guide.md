@@ -388,7 +388,8 @@ pub struct ConstraintCollection<T: ConstraintType> {
 // Methods (public)
 collection.active()                    // &BTreeMap<T::ID, T::Created>
 collection.removed()                   // &BTreeMap<T::ID, (T::Created, RemovedReason)>
-collection.into_parts()                // (active, removed)
+collection.metadata()                  // &ConstraintMetadataStore<T::ID>
+collection.into_parts()                // (active, removed, metadata)
 // Mutation goes through Instance / ParametricInstance methods so
 // invariants (active/removed disjointness, variable-id validity)
 // are enforced; the raw `active_mut` / `removed_mut` / `insert_with`
