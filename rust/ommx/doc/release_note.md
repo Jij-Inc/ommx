@@ -21,11 +21,12 @@ The 3.0.0 line is a major revision of the Rust SDK:
   gone from individual constraints, the **collection is the natural
   unit of serialization** (`Instance::to_bytes`, `Solution::to_bytes`,
   `SampleSet::to_bytes`).
-- Metadata (`name`, `subscripts`, `parameters`, `description`,
-  `provenance`) moves off each constraint and into per-collection
-  **Struct-of-Arrays metadata stores**, queried through narrow
-  per-host accessors (`instance.constraint_metadata()`,
-  `instance.variable_metadata()`, …). One canonical store per
+- Metadata (`name`, `subscripts`, `parameters`, `description`, plus
+  `provenance` on constraints) moves off each constraint, decision
+  variable, and named function into per-collection **Struct-of-Arrays
+  metadata stores**, queried through narrow per-host accessors
+  (`instance.constraint_metadata()`, `instance.variable_metadata()`,
+  `instance.named_function_metadata()`, …). One canonical store per
   collection, two views on top: per-id wrapper getters for one-off
   reads and `*_df` for bulk analysis.
 - A **capability model** lets adapters declare what they natively support
