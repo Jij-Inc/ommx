@@ -167,7 +167,9 @@ Constraint::less_than_or_equal_to_zero(function)
 
 // ✅ Insertion via the host's invariant-safe entry point — picks an
 // unused id, drains the (optional) metadata into the SoA store,
-// validates required_ids, returns the assigned id.
+// validates required_ids, returns the assigned id. `add_constraint`,
+// `relax_constraint`, and `restore_constraint` all take `&mut self`,
+// so `instance` must be a `mut` binding (or accessed via `&mut Instance`).
 let id = instance.add_constraint(
     Constraint::equal_to_zero(function),
     ConstraintMetadata { name: Some("demand_balance".into()), ..Default::default() },
