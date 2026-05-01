@@ -17,10 +17,11 @@ The 3.0.0 line is a major revision of the Rust SDK:
   [`ConstraintCollection<T>`](crate::ConstraintCollection) /
   [`EvaluatedCollection<T>`](crate::EvaluatedCollection) /
   [`SampledCollection<T>`](crate::SampledCollection) wrappers on
-  `Instance`, `Solution`, and `SampleSet`; because the `id` field is
-  gone from individual constraints, the **collection is the natural
-  unit of serialization** (`Instance::to_bytes`, `Solution::to_bytes`,
-  `SampleSet::to_bytes`).
+  `Instance`, `ParametricInstance`, `Solution`, and `SampleSet`;
+  because the `id` field is gone from individual constraints, the
+  **host is the natural unit of serialization**
+  (`Instance::to_bytes`, `ParametricInstance::to_bytes`,
+  `Solution::to_bytes`, `SampleSet::to_bytes`).
 - Metadata (`name`, `subscripts`, `parameters`, `description`, plus
   `provenance` on constraints) moves off each constraint, decision
   variable, and named function into per-collection **Struct-of-Arrays
@@ -32,9 +33,13 @@ The 3.0.0 line is a major revision of the Rust SDK:
 - A **capability model** lets adapters declare what they natively support
   and auto-converts unsupported kinds at the boundary, so any OMMX
   instance can be fed to any adapter.
-- The public **error surface** collapses to a single type, with diagnostic
-  context emitted through `tracing` rather than stacked via
-  `anyhow::Context`.
+- The default **error surface** is a single
+  [`ommx::Result<T>`](crate::Result) (re-export of `anyhow::Result`)
+  with diagnostic context emitted through `tracing` from the new
+  fail-site macros. A handful of typed signal types
+  (`BoundError`, `DecisionVariableError`, `DuplicatedSampleIDError`,
+  `SubstitutionError`, …) stay typed at their public-API entry points
+  for callers that recover by discriminant.
 - The long-running migration away from the proto-generated `v1_ext`
   helpers finishes: domain types (`Instance`, `Constraint`,
   `DecisionVariable`, …) are the primary API, and `v1::*` is reserved for
