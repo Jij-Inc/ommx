@@ -1556,14 +1556,16 @@ traceability with earlier review comments.
 
 ## Follow-ups (post-#843, post-#846, post-#849, post-#850, post-#852)
 
-- **Tighten `ConstraintCollection<T>` mutation surface.**
-  `active_mut()` / `removed_mut()` / `insert_with()` are still `pub`
-  on `ConstraintCollection<T>` itself, even though no public caller
-  outside the crate needs them — `Instance` and `ParametricInstance`
-  now expose only invariant-safe operations (`add_*`, `relax`,
-  `restore`, `*_metadata_mut`). These three methods should be
-  narrowed to `pub(crate)` (or smaller) in a follow-up so the only
-  way to break the collection's invariants is from inside the crate.
+- **Tighten `ConstraintCollection<T>` mutation surface (landed).**
+  `active_mut()` / `removed_mut()` / `insert_with()` were still `pub`
+  on `ConstraintCollection<T>` even though no caller outside the crate
+  needed them — `Instance` and `ParametricInstance` already exposed
+  only invariant-safe operations (`add_*`, `relax_*`, `restore_*`,
+  `insert_constraint`, `*_metadata_mut`), and never handed out
+  `&mut ConstraintCollection<T>`. These three primitives are now
+  `pub(crate)`, so external callers can only mutate constraint
+  collections through the validating `Instance` API. The
+  `migration_guide` reference card was updated accordingly.
 - **Document the `AttachedX` family in
   `PYTHON_SDK_MIGRATION_GUIDE.md`.** The migration guide currently
   predates the write-through extension; a new section should cover
