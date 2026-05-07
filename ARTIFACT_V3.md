@@ -343,7 +343,7 @@ Phase 2 は span / event schema を変更せず、同じ OTel signal を読む r
 ```jsonc
 {
   "schemaVersion": 2,
-  "artifactType": "application/org.ommx.experiment.v1",
+  "artifactType": "application/org.ommx.v1.experiment",
   "config": { ... },
   "layers": [ ... full DataStore snapshot ... ],
   "subject": {
@@ -410,40 +410,3 @@ GC は data model を変えない。full snapshot、digest primary、single-pare
 - **TracerProvider 所有権**: 現行 `ommx.tracing` の lazy setup が provider を install する挙動は v3 方針と衝突するため見直す必要がある。
 - **Logger output の期待差分**: Phase 1 は post-hoc 表示なので、従来の live console output を期待する環境では明示的な説明が必要。
 - **Registry の OCI v1.1 対応差**: `subject` 非対応 registry に当たる可能性がある。初期方針は explicit error とし、fallback は実ケースが出てから設計する。
-
-## 11. 参考
-
-### OMMX Rust
-
-- `rust/ommx/src/artifact.rs`
-- `rust/ommx/src/artifact/{builder,annotations,media_types,config}.rs`
-- `rust/ommx/Cargo.toml`
-- `rust/ommx/examples/{create,pull}_artifact.rs`
-
-### OMMX Python
-
-- `python/ommx/src/artifact.rs`
-- `python/ommx/Cargo.toml`
-- `python/ommx-tests/tests/test_descriptor.py`
-
-### OMMX Tracing / OTel
-
-- `python/ommx/ommx/tracing/{__init__,_capture,_collector,_render,_setup,_magic}.py`
-- `python/ommx/Cargo.toml` の `tracing-bridge` feature と `pyo3-tracing-opentelemetry` dependency
-- `python/ommx-tests/tests/{test_tracing,test_tracing_capture,test_tracing_magic}.py`
-- 各 adapter の `tests/test_tracing.py`
-
-### ocipkg
-
-- `/Users/termoshtt/github.com/termoshtt/ocipkg/ocipkg/src/lib.rs`
-- 主要 module: `image`, `media_types`, `local`, `distribution`
-
-### minto
-
-- `/Users/termoshtt/github.com/Jij-Inc/minto/minto/datastore.py`
-- `/Users/termoshtt/github.com/Jij-Inc/minto/minto/experiment.py`
-- `/Users/termoshtt/github.com/Jij-Inc/minto/minto/run.py`
-- `/Users/termoshtt/github.com/Jij-Inc/minto/minto/exp_dataspace.py`
-- `/Users/termoshtt/github.com/Jij-Inc/minto/minto/environment.py`
-- `/Users/termoshtt/github.com/Jij-Inc/minto/minto/logger.py`
-- `/Users/termoshtt/github.com/Jij-Inc/minto/minto/table.py`
