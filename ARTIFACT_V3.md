@@ -299,12 +299,21 @@ v3 の Local Registry API は path ではなく reference / descriptor / blob re
 OCI Image Layout との互換は import / export boundary で保つ。
 
 - import: `.ommx` archive または OCI dir を読み、manifest / descriptors / blobs を検証して IndexStore + BlobStore に登録する。
-- default export: 指定された manifest descriptor 1 つを root にして必要 blobs を集め、standard OCI Image Layout (`oci-layout`, `index.json`, `blobs/`) を materialize する。`subject` は descriptor として残るが、parent manifest / parent blobs は同梱しない。
-- history bundle export: 明示 opt-in。指定された manifest から `subject` chain を辿り、到達した parent manifests と必要 blobs も同じ archive / directory に materialize する。offline で `history()` を使いたい場合の形式であり、default `.ommx` export とは分ける。
+- default export: 指定された manifest descriptor 1 つを root にして、その manifest の material closure を集め、standard OCI Image Layout (`oci-layout`, `index.json`, `blobs/`) を materialize する。Git で言えば `depth=1` の export である。
+- history bundle export: 明示 opt-in。指定された manifest から `subject` chain を辿り、lineage closure も同じ archive / directory に materialize する。Git で言えば `--depth=N` または full history bundle に相当する。offline で `history()` を使いたい場合の形式であり、default `.ommx` export とは分ける。
 - remote push: IndexStore + BlobStore から manifest / blobs を読み、OCI Distribution API に送る。
 - remote pull: remote manifest / blobs を BlobStore に入れ、IndexStore transaction で ref を登録する。
 
 この方針により、Local Registry は queryable / transactional な内部 store として実装しつつ、`.ommx` file と remote OCI registry との互換性を維持する。
+
+Export closure の定義:
+
+| closure | 含むもの | 用途 |
+|---|---|---|
+| material closure | root manifest、config、`layers[]`、trace layer など、その manifest を読んで snapshot を復元するために必要な content-addressed objects | default export |
+| lineage closure | `subject` chain で到達する parent manifests と、それぞれの material closure | history bundle export |
+
+`subject` は default export において descriptor として manifest 内に残るが、material closure には含めない。したがって parent digest は分かるが、parent manifest / parent blobs は archive 内に存在しない場合がある。
 
 ## 7. DataStore / Experiment model
 
@@ -482,7 +491,7 @@ Phase 2 は span / event schema を変更せず、同じ OTel signal を読む r
 
 `subject` は lineage / provenance のためのリンクであり、子 Artifact を読むための必須 dependency ではない。
 
-したがって単一 Artifact の archive export は、その Artifact の full snapshot だけを self-contained にする。history に含まれる parent Artifact は default export の dependency ではなく、同梱したい場合は history bundle export を明示する。
+したがって単一 Artifact の archive export は、その Artifact の material closure だけを self-contained にする。これは Git の `depth=1` に近い。history に含まれる parent Artifact は default export の dependency ではなく、同梱したい場合は history bundle export を明示する。
 
 ```jsonc
 {
