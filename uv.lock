@@ -32,7 +32,7 @@ dev = [
     { name = "pluggy" },
     { name = "pyright", specifier = ">=1.1.394" },
     { name = "pytest", specifier = ">=8.3.4" },
-    { name = "pytest-codspeed", specifier = ">=3.2.0" },
+    { name = "pytest-codspeed", specifier = ">=4.5.0" },
     { name = "pytest-github-actions-annotate-failures" },
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "ruamel-yaml", specifier = ">=0.18.10" },
