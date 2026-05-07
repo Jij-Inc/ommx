@@ -188,16 +188,19 @@ v3 初期では fallback 仕様を先に固定しない。archive / dir backend 
 
 ### 5.4 OCI Image Layout の位置づけ
 
-OCI Image Layout (`oci-layout`, `index.json`, `blobs/`) は v3 でも互換形式として維持する。ただし Local Registry の mutable index として `index.json` を直接更新し続ける設計にはしない。
+OCI Image Layout (`oci-layout`, `index.json`, `blobs/`) は Local Registry の内部形式としては使わない。`index.json` を持たない directory は OCI Image Layout ではないため、v3 Local Registry の BlobStore root には `oci-layout` を置かない。
 
-v3 における OCI Image Layout の用途:
+v3 における OCI Image Layout は import / export 用の interchange format である。
 
 - `.ommx` archive の import / export。
-- directory layout backend との互換読み書き。
+- 明示的に export された OCI directory layout。
+- legacy directory layout backend からの migration。
 - remote OCI registry への push / pull 境界。
 - 標準 tool で検査できる interchange format。
 
-Local Registry 内部では IndexStore が refs / manifests / entries の source of truth になり、BlobStore が content-addressed bytes の source of truth になる。OCI Image Layout は必要な時に IndexStore + BlobStore から materialize する。
+Local Registry 内部では IndexStore が refs / manifests / entries の source of truth になり、BlobStore が content-addressed bytes の source of truth になる。filesystem / GCS BlobStore が `blobs/<algorithm>/<encoded>` という key convention を使っても、それは OCI Image Layout ではなく単なる CAS object namespace である。
+
+標準 OCI Image Layout が必要な場合は、IndexStore + BlobStore から export 先 directory または archive に `oci-layout`, `index.json`, `blobs/` を materialize する。
 
 ## 6. Local Registry model
 
@@ -238,6 +241,8 @@ IndexStore が持つ最小情報:
 ### 6.3 BlobStore
 
 BlobStore は content-addressed bytes を保存する。filesystem backend では `blobs/<algorithm>/<encoded>`、GCS backend では同じ logical key を object name として使う。
+
+この `blobs/` は OCI Image Layout の `blobs/` と同じ digest-addressed naming を借りるだけで、BlobStore root 自体は OCI dir ではない。BlobStore root には `oci-layout` も `index.json` も置かない。
 
 BlobStore の規則:
 
