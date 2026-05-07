@@ -1,11 +1,16 @@
 # Since most of PR does not affect benchmark, we do not run benchmarks on PR by default.
-# Run manually if needed via `task codspeed:trigger`
+# Run manually if needed via `task codspeed:trigger`.
+# Release tags (rust-*, python-*) also trigger benchmarks so each release has a
+# comparison baseline against the previous release.
 
 name: Benchmark
 
 on:
   push:
     branches: [main]
+    tags:
+      - rust-*
+      - python-*
   workflow_dispatch:
 
 permissions:
@@ -28,7 +33,7 @@ jobs:
         with:
           run: cargo codspeed run
           token: ${{ secrets.CODSPEED_TOKEN }}
-          mode: instrumentation
+          mode: simulation
 
   python:
     name: Benchmarks for Python SDK
@@ -54,4 +59,4 @@ jobs:
         with:
           run: pytest python/ommx-tests/ --codspeed
           token: ${{ secrets.CODSPEED_TOKEN }}
-          mode: instrumentation
+          mode: simulation
