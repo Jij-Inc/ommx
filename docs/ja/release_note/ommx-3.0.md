@@ -55,6 +55,20 @@ Sidecar の index 名はファミリーごとに qualified (`regular_constraint_
 
 これらのメソッドは元々、Python SDK が独自の protobuf ベースのラッパー層を持っていた時代に Python ↔ Rust 境界を跨ぐたびにシリアライズが必要だったために用意されていたものでした。v3 で全型を PyO3 から直接再エクスポートする方針に切り替わったことでこの境界自体が消え、要素単位のバイト列ラウンドトリップは役目を終えています。今後予定しているメタデータ管理方式の見直しに合わせて維持し続けるコストも見合わなくなったため、ここで廃止します。永続化やプロセス間でのデータ交換が必要な場合は、これまで通りコンテナ型（{class}`~ommx.v1.Instance` / {class}`~ommx.v1.ParametricInstance` / {class}`~ommx.v1.Solution` / {class}`~ommx.v1.SampleSet`）と evaluate 用の DTO（{class}`~ommx.v1.State` / {class}`~ommx.v1.Samples` / {class}`~ommx.v1.Parameters`）の `to_bytes` / `from_bytes` をご利用ください。
 
+### 🆕 メタデータ書き込みスルーラッパー: `AttachedConstraint` / `AttachedDecisionVariable` ([#849](https://github.com/Jij-Inc/ommx/pull/849), [#850](https://github.com/Jij-Inc/ommx/pull/850), [#852](https://github.com/Jij-Inc/ommx/pull/852))
+
+`Instance.add_constraint` / `instance.constraints[id]` と `ParametricInstance` 側の対応するアクセサが、snapshot のコピーではなく親ホストに紐付いた書き込みスルーハンドルを返すようになりました。読み出しはホストから live に取得し、メタデータの setter はホスト側 SoA メタデータストアに直接書き込まれるため、同じ id を指す 2 つのハンドルは常に同じ状態を観測します。
+
+```python
+c = instance.add_constraint(x + y == 0)         # AttachedConstraint が返る
+c.set_name("budget")                             # instance に書き込まれる
+assert instance.constraints[c.constraint_id].name == "budget"
+```
+
+書き込みスルー型は 5 種類: {class}`~ommx.v1.AttachedConstraint`, {class}`~ommx.v1.AttachedIndicatorConstraint`, {class}`~ommx.v1.AttachedOneHotConstraint`, {class}`~ommx.v1.AttachedSos1Constraint`, {class}`~ommx.v1.AttachedDecisionVariable`。{class}`~ommx.v1.Constraint` / {class}`~ommx.v1.DecisionVariable` の構造はこれまでと変わらず、モデリング入力（演算子オーバーロードや `Instance.from_components`）に使う snapshot ラッパーとして引き続き利用します。各 `AttachedX` には、ホストへの back-reference を切り離して等価な snapshot を取り出すための `.detach()` が用意されています。
+
+同じ変更の一環として、`instance.decision_variables` の戻り値が `list[DecisionVariable]` (snapshot) から `list[AttachedDecisionVariable]` に変更され、`instance.constraints` や特殊制約アクセサと整合的になりました。
+
 ### 🆕 OpenTelemetryベースのトレーシング/プロファイリング ([#816](https://github.com/Jij-Inc/ommx/pull/816), [#823](https://github.com/Jij-Inc/ommx/pull/823), [#826](https://github.com/Jij-Inc/ommx/pull/826), [#828](https://github.com/Jij-Inc/ommx/pull/828), [#829](https://github.com/Jij-Inc/ommx/pull/829))
 
 従来の `log` + `pyo3-log` 経由のPython `logging` ブリッジを廃止し、Rustコアを `tracing` + `pyo3-tracing-opentelemetry` ベースに切り替えて、Python OTel SDKを通じて可視化できるようになりました。
