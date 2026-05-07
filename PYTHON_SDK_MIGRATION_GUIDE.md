@@ -89,7 +89,7 @@ instance.to_bytes()             # (de)serialise whole Instance / Solution / Samp
 
 The dataclass-style constructors (`Instance(raw=..., annotations=...)`) are also gone — `Instance`, `Solution`, `SampleSet` are no longer Python `@dataclass`es. Construct through `Instance.from_components(...)` etc. and set `instance.annotations = {...}` or `instance.add_user_annotation(...)` afterwards.
 
-`Constraint`, `EvaluatedConstraint`, `SampledConstraint`, and `RemovedConstraint` no longer have `to_bytes` / `from_bytes` — a single constraint cannot meaningfully carry its ID on its own now that IDs live in the enclosing dict, so the per-constraint serialisation API was removed. Serialise the containing `Instance` / `Solution` / `SampleSet` instead.
+`Constraint`, `EvaluatedConstraint`, `SampledConstraint`, and `RemovedConstraint` no longer have `to_bytes` / `from_bytes` — a single constraint cannot meaningfully carry its ID on its own now that IDs live in the enclosing dict, so the per-constraint serialisation API was removed. Serialise the containing `Instance` / `Solution` / `SampleSet` instead. (3.0.0a3 extends the same removal to the rest of the non-top-level types — `Function` / `Linear` / `Quadratic` / `Polynomial`, `Parameter`, `NamedFunction` family, `DecisionVariable` family — see §12.)
 
 ## 3. Constraint IDs moved out of the `Constraint` object
 
@@ -557,9 +557,46 @@ av.set_name("x_0")
 
 Two `AttachedX` instances pointing at the same id observe the same state — a write through one is visible through any other and through the next `*_df` call. The host stays alive as long as any `AttachedX` references it (the handle holds a refcounted `Py<Instance>` / `Py<ParametricInstance>`); drop the handles to release the host.
 
-## 12. Convenience additions (not breaking)
+## 12. `to_bytes` / `from_bytes` removed from non-top-level types (`3.0.0a3`, [#845](https://github.com/Jij-Inc/ommx/pull/845))
 
-### 12.1 `DecisionVariable.binary` / `integer` / `continuous` accept `lower` / `upper` kwargs
+Element-level bytes serialisation is removed from these types:
+
+- `Function`, `Linear`, `Quadratic`, `Polynomial`
+- `Parameter`
+- `NamedFunction`, `EvaluatedNamedFunction`, `SampledNamedFunction`
+- `DecisionVariable`, `EvaluatedDecisionVariable`, `SampledDecisionVariable`
+
+(The `Constraint` family — `Constraint`, `EvaluatedConstraint`, `SampledConstraint`, `RemovedConstraint` — already lost `to_bytes` / `from_bytes` in 3.0.0a2 along with the `Constraint.id` field; see §2.)
+
+These methods originally existed to ferry values across the Python ↔ Rust boundary back when the Python SDK had its own protobuf-based wrapper layer. With the v3 transition to direct PyO3 re-exports the boundary is gone, so element-level bytes round-trips no longer serve a purpose. Persist or exchange data through the **container types** instead:
+
+- `Instance.to_bytes()` / `Instance.from_bytes(...)` (and the same on `ParametricInstance`, `Solution`, `SampleSet`)
+- `State.to_bytes()` / `Samples.to_bytes()` / `Parameters.to_bytes()` for the cross-`evaluate` DTOs
+
+```python
+# Before (2.5.1 / 3.0.0a2)
+blob = my_function.to_bytes()
+f    = Function.from_bytes(blob)
+
+dv_blob = decision_variable.to_bytes()
+dv      = DecisionVariable.from_bytes(dv_blob)
+
+# After (3.0.0a3) — wrap in the enclosing container and round-trip that
+instance      = Instance.from_components(
+    sense=Instance.MINIMIZE,
+    objective=my_function,
+    decision_variables=[decision_variable],
+    constraints={},
+)
+instance_blob = instance.to_bytes()
+restored      = Instance.from_bytes(instance_blob)
+my_function   = restored.objective
+decision_variable = restored.decision_variables[0].detach()
+```
+
+## 13. Convenience additions (not breaking)
+
+### 13.1 `DecisionVariable.binary` / `integer` / `continuous` accept `lower` / `upper` kwargs
 
 ```python
 # v3
@@ -568,7 +605,7 @@ y = DecisionVariable.continuous(2, lower=-1.0, upper=1.0)
 z = DecisionVariable.integer(3)                  # unbounded
 ```
 
-### 12.2 `DecisionVariable.equals_to(other)` for object equality
+### 13.2 `DecisionVariable.equals_to(other)` for object equality
 
 Because `==` creates a `Constraint`, v3 adds an explicit `equals_to` method (and the same for `Parameter` / `Linear` / …) for `bool` equality.
 
@@ -581,7 +618,7 @@ x.equals_to(y)      # True
 x.id == y.id        # True
 ```
 
-### 12.3 `Parameter` supports the same operators as `DecisionVariable`
+### 13.3 `Parameter` supports the same operators as `DecisionVariable`
 
 ```python
 from ommx.v1 import Parameter, DecisionVariable
@@ -620,6 +657,7 @@ expr = 2 * p + 3  # Linear
 - [ ] If you depended on the unqualified `id` index column on a wide constraint `*_df`, switch to the kind-qualified `{kind}_constraint_id` name. `decision_variables_df()` keeps `id` (only one variable ID space); long-format variable sidecars use `variable_id`.
 - [ ] Drop the in-place `c.add_name(...)` mutation pattern on snapshot wrappers retrieved from an instance — those calls return a new object and don't write through to the host. Use the live handle returned by `instance.constraints[id]` (an `AttachedConstraint`) and call its `set_*` / `add_*` methods, or re-add via `from_components`.
 - [ ] Update return-type annotations / static analysis for `instance.constraints` etc. to expect `AttachedX` (`dict[int, AttachedConstraint]`, `list[AttachedDecisionVariable]`, …). Call `.detach()` if you need an independent snapshot.
+- [ ] Replace element-level `to_bytes()` / `from_bytes()` calls on `Function` / `Linear` / `Quadratic` / `Polynomial` / `Parameter` / the `NamedFunction` family / the `DecisionVariable` family with whole-`Instance` / `Solution` / `SampleSet` round-trips (or the `State` / `Samples` / `Parameters` DTOs for evaluate plumbing). See §12.
 
 ---
 
