@@ -6,6 +6,12 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
+## 3.0.0 Alpha 3
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0a3-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0a3)
+
+See the GitHub Release above for full details. The following summarizes the main changes. This is a pre-release version. APIs may change before the final release.
+
 ### ⚠ `*_df` accessors are methods + `include=` filter + sidecar DataFrames ([#846](https://github.com/Jij-Inc/ommx/pull/846))
 
 Every `*_df` accessor on `Instance` / `ParametricInstance` / `Solution` / `SampleSet` is now a regular method instead of a `#[getter]` property. Existing call sites need parentheses:
@@ -139,13 +145,13 @@ Accordingly, the legacy `ConstraintHints` / `OneHot` / `Sos1` classes, the `Inst
 
 ### ⚠ `removed_reason` column gated by `include=` ([#796](https://github.com/Jij-Inc/ommx/pull/796), [#847](https://github.com/Jij-Inc/ommx/pull/847))
 
-In v2.5.1 {meth}`Solution.constraints_df <ommx.v1.Solution.constraints_df>` carried a `removed_reason` column unconditionally. In v3.0.0a4 that column is gated by `"removed_reason"` in `include=` (a unit flag that controls both the reason name and `removed_reason.{key}` parameter columns). Rows whose constraint was not removed before evaluation get NA in those columns.
+In v2.5.1 {meth}`Solution.constraints_df <ommx.v1.Solution.constraints_df>` carried a `removed_reason` column unconditionally. In v3.0.0a3 that column is gated by `"removed_reason"` in `include=` (a unit flag that controls both the reason name and `removed_reason.{key}` parameter columns). Rows whose constraint was not removed before evaluation get NA in those columns.
 
 ```python
 # Before (2.5.1)
 df = solution.constraints_df  # contains a 'removed_reason' column
 
-# After (3.0.0a4 — `*_df` are now methods)
+# After (3.0.0a3 — `*_df` are now methods)
 df = solution.constraints_df()  # no removed_reason column
 df = solution.constraints_df(include=("metadata", "parameters", "removed_reason"))
 # ↳ adds removed_reason / removed_reason.{key} (NA for active rows)
