@@ -39,6 +39,8 @@ Open Mathematical prograMming eXchange (OMMX) is an open ecosystem that empowers
 
 # API Reference
 
+[![CodSpeed Badge](https://img.shields.io/endpoint?url=https://codspeed.io/badge.json)](https://codspeed.io/Jij-Inc/ommx?utm_source=badge)
+
 See [DEVELOPMENT.md](./DEVELOPMENT.md) about developing this project.
 
 ## Rust SDK
