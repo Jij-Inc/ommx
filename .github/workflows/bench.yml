@@ -19,7 +19,6 @@ permissions:
 jobs:
   rust:
     name: Benchmarks for Rust SDK
-    if: ${{ !startsWith(github.ref, 'refs/tags/python-') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -38,7 +37,6 @@ jobs:
 
   python:
     name: Benchmarks for Python SDK
-    if: ${{ !startsWith(github.ref, 'refs/tags/rust-') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
