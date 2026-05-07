@@ -4,6 +4,7 @@
 mod annotations;
 mod builder;
 mod config;
+pub mod local_registry;
 pub mod media_types;
 pub use annotations::*;
 pub use builder::*;

@@ -112,7 +112,7 @@ v3 では Rust / Python ともに破壊的変更を許容する。既存 API を
 - writer が最終 directory に直接書くため、reader が partially written artifact を観測し得る。
 - shared filesystem や mounted object storage 上で atomic update と multi-writer coordination を扱いにくい。
 
-v3 ではこの現行 layout を legacy layout backend として扱い、Local Registry の内部表現は IndexStore + BlobStore に置き換える。
+v3 ではこの現行 layout を legacy local registry layout として扱い、新規書き込み先ではなく read / import 互換の対象にする。Local Registry の内部表現は IndexStore + BlobStore に置き換えるが、既存 root に保存済みの path/tag OCI dir artifacts は v3 でも読み込めなければならない。
 
 ### 3.5 テスト状況
 
@@ -132,7 +132,7 @@ v3 実装では Rust integration test と Python round-trip test を最初に整
 - remote OCI registry transport は既存 crate (`oci-distribution` / `oci-client` 等) の利用を評価し、使える部分だけ採用する。
 - Artifact manifest semantics、archive materialization、explicit OCI directory import/export、legacy layout migration は OMMX-owned implementation として設計する。
 - Local Registry を IndexStore + BlobStore として再設計する。
-- Local Registry の query / resolve / atomic publish API を用意し、`get_image_dir()` 依存を legacy path backend に閉じる。
+- Local Registry の query / resolve / atomic publish API を用意し、`get_image_dir()` 依存を legacy local registry layout の read / import path に閉じる。
 - OMMX core に `Experiment`, `Run`, `DataStore`, `EnvironmentInfo`, table/export を設計し直して取り込む。
 - Artifact と OTel の双方向接続を実装する。
 - build trace の self-contained trace layer を Artifact に埋め込む。
@@ -294,11 +294,13 @@ v3 の Local Registry API は path ではなく reference / descriptor / blob re
 
 `get_image_dir(image_name)` は v3 の中心 API ではない。OCI dir backend 互換や migration tool のための legacy API とし、Local Registry の existence check / listing / read path には使わない。
 
+ただし既存 Local Registry の read 互換は維持する。`Artifact.load(ref)` は IndexStore で ref を解決できない場合、legacy local registry layout (`get_image_dir(ref)` が指す path/tag OCI dir) を fallback として読める。fallback で読んだ artifact はそのまま read-only view にしてよいし、必要なら明示 import API で IndexStore + BlobStore に登録できる。
+
 ### 6.6 Import / export
 
 OCI Image Layout との互換は import / export boundary で保つ。
 
-- import: `.ommx` archive または OCI dir を読み、manifest / descriptors / blobs を検証して IndexStore + BlobStore に登録する。
+- import: `.ommx` archive、明示 OCI directory layout、または legacy local registry layout を読み、manifest / descriptors / blobs を検証して IndexStore + BlobStore に登録する。
 - default export: 指定された manifest descriptor 1 つを root にして、その manifest の material closure を集め、standard OCI Image Layout (`oci-layout`, `index.json`, `blobs/`) を materialize する。Git で言えば `depth=1` の export である。
 - history bundle export: 明示 opt-in。指定された manifest から `subject` chain を辿り、lineage closure も同じ archive / directory に materialize する。Git で言えば `--depth=N` または full history bundle に相当する。offline で `history()` を使いたい場合の形式であり、default `.ommx` export とは分ける。
 - remote push: IndexStore + BlobStore から manifest / blobs を読み、OCI Distribution API に送る。
