@@ -6,6 +6,8 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
+Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
+
 ## 3.0.0 Alpha 3
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0a3-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0a3)
