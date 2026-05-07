@@ -46,6 +46,22 @@ solution.decision_variables_df(include=["parameters"]) # core + parameters
 
 Sidecar の index 名はファミリーごとに qualified (`regular_constraint_id` / `indicator_constraint_id` / `one_hot_constraint_id` / `sos1_constraint_id` / `variable_id`) になっており、別 ID 空間どうしを誤って `df.join()` した場合に `df.head()` 等で気づきやすくなっています。`*_parameters_df` / `*_removed_reasons_df` の行は `(id, key)` 順にソート済み、空の long-format DataFrame もスキーマ列だけ持つ形で返ります。
 
+### ⚠ `removed_reason` カラムを `include=` でゲート ([#796](https://github.com/Jij-Inc/ommx/pull/796), [#847](https://github.com/Jij-Inc/ommx/pull/847))
+
+v2.5.1 までは {meth}`Solution.constraints_df <ommx.v1.Solution.constraints_df>` に `removed_reason` カラムが常に含まれていました。`include=` による初期のゲート化は 3.0.0a2 (#796) で導入され、3.0.0a3 では上記の `kind=` / `include=` / `removed=` dispatch 形に整理されています (#847)。`include=` の `"removed_reason"` フラグでカラムを有効化する形で、これは reason 名と `removed_reason.{key}` パラメータカラムをまとめて制御するユニットフラグです。評価前に削除されていなかった行はそれらのカラムが NA になります。
+
+```python
+# Before (2.5.1)
+df = solution.constraints_df  # 'removed_reason' カラムを含む
+
+# After (3.0.0a3 — `*_df` はメソッドになりました)
+df = solution.constraints_df()  # removed_reason カラムなし
+df = solution.constraints_df(include=("metadata", "parameters", "removed_reason"))
+# ↳ removed_reason / removed_reason.{key} が追加（active 行は NA）
+```
+
+`kind=` / `include=` の形は {class}`~ommx.v1.SampleSet` でも同じです。{class}`~ommx.v1.Instance` / {class}`~ommx.v1.ParametricInstance` では、`removed=True` を渡すと active と removed の両方が同じ DataFrame に並び、`"removed_reason"` が自動的に有効化されるので、active 行と removed 行を見分けることができます。
+
 ### ⚠ 部品型から `to_bytes` / `from_bytes` を削除 ([#845](https://github.com/Jij-Inc/ommx/pull/845))
 
 以下の部品型からバイト列シリアライズを削除しました:
@@ -158,22 +174,6 @@ Instance.from_components(..., constraints={5: c}, ...)
 具体的な使い方、評価結果の参照、Indicator 制約の relax / restore ワークフローについては [特殊制約型](../user_guide/special_constraints.md) を参照してください。
 
 これに伴い旧 API である `ConstraintHints` / `OneHot` / `Sos1` クラス、`Instance.constraint_hints` プロパティ、PySCIPOpt Adapter の `use_sos1` フラグは削除されています。
-
-### ⚠ `removed_reason` カラムを `include=` でゲート ([#796](https://github.com/Jij-Inc/ommx/pull/796), [#847](https://github.com/Jij-Inc/ommx/pull/847))
-
-v2.5.1 までは {meth}`Solution.constraints_df <ommx.v1.Solution.constraints_df>` に `removed_reason` カラムが常に含まれていましたが、v3.0.0a3 では `include=` の `"removed_reason"` フラグでゲートします（reason 名と `removed_reason.{key}` パラメータカラムをまとめて制御するユニットフラグ）。評価前に削除されていなかった行はそれらのカラムが NA になります。
-
-```python
-# Before (2.5.1)
-df = solution.constraints_df  # 'removed_reason' カラムを含む
-
-# After (3.0.0a3 — `*_df` はメソッドになりました)
-df = solution.constraints_df()  # removed_reason カラムなし
-df = solution.constraints_df(include=("metadata", "parameters", "removed_reason"))
-# ↳ removed_reason / removed_reason.{key} が追加（active 行は NA）
-```
-
-`kind=` / `include=` の形は {class}`~ommx.v1.SampleSet` でも同じです。{class}`~ommx.v1.Instance` / {class}`~ommx.v1.ParametricInstance` では、`removed=True` を渡すと active と removed の両方が同じ DataFrame に並び、`"removed_reason"` が自動的に有効化されるので、active 行と removed 行を見分けることができます。
 
 ### 🆕 Adapter Capability モデル ([#790](https://github.com/Jij-Inc/ommx/pull/790), [#805](https://github.com/Jij-Inc/ommx/pull/805), [#810](https://github.com/Jij-Inc/ommx/pull/810), [#811](https://github.com/Jij-Inc/ommx/pull/811), [#814](https://github.com/Jij-Inc/ommx/pull/814))
 

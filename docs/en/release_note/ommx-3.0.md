@@ -46,6 +46,22 @@ Six new long-format / id-indexed sidecar accessors read directly from the SoA me
 
 Sidecar index names are kind-qualified (`regular_constraint_id` / `indicator_constraint_id` / `one_hot_constraint_id` / `sos1_constraint_id` / `variable_id`) so accidental cross-id-space `df.join()` mistakes surface in `df.head()` and friends. Long-format `*_parameters_df` / `*_removed_reasons_df` rows are sorted by `(id, key)`, and empty long-format DataFrames keep their column schema instead of returning a column-less frame.
 
+### ⚠ `removed_reason` column gated by `include=` ([#796](https://github.com/Jij-Inc/ommx/pull/796), [#847](https://github.com/Jij-Inc/ommx/pull/847))
+
+In v2.5.1 {meth}`Solution.constraints_df <ommx.v1.Solution.constraints_df>` carried a `removed_reason` column unconditionally. The initial `include=` gate of that column landed in 3.0.0a2 (#796), and 3.0.0a3 finalizes it into the `kind=` / `include=` / `removed=` dispatch shape documented above (#847): the column is opted in by `"removed_reason"` in `include=` (a unit flag that controls both the reason name and `removed_reason.{key}` parameter columns). Rows whose constraint was not removed before evaluation get NA in those columns.
+
+```python
+# Before (2.5.1)
+df = solution.constraints_df  # contains a 'removed_reason' column
+
+# After (3.0.0a3 — `*_df` are now methods)
+df = solution.constraints_df()  # no removed_reason column
+df = solution.constraints_df(include=("metadata", "parameters", "removed_reason"))
+# ↳ adds removed_reason / removed_reason.{key} (NA for active rows)
+```
+
+The same `kind=` / `include=` shape applies on {class}`~ommx.v1.SampleSet`. On {class}`~ommx.v1.Instance` and {class}`~ommx.v1.ParametricInstance`, `removed=True` returns active + removed rows in one DataFrame and auto-sets `"removed_reason"` so removed rows are distinguishable.
+
 ### ⚠ `to_bytes` / `from_bytes` removed from non-top-level types ([#845](https://github.com/Jij-Inc/ommx/pull/845))
 
 Bytes serialization is removed from the following component-level types:
@@ -158,22 +174,6 @@ In addition to regular constraints, the following three special constraint types
 For concrete usage, evaluation-result access, and the Indicator relax / restore workflow, see [Special Constraints](../user_guide/special_constraints.md).
 
 Accordingly, the legacy `ConstraintHints` / `OneHot` / `Sos1` classes, the `Instance.constraint_hints` property, and the PySCIPOpt Adapter's `use_sos1` flag are removed.
-
-### ⚠ `removed_reason` column gated by `include=` ([#796](https://github.com/Jij-Inc/ommx/pull/796), [#847](https://github.com/Jij-Inc/ommx/pull/847))
-
-In v2.5.1 {meth}`Solution.constraints_df <ommx.v1.Solution.constraints_df>` carried a `removed_reason` column unconditionally. In v3.0.0a3 that column is gated by `"removed_reason"` in `include=` (a unit flag that controls both the reason name and `removed_reason.{key}` parameter columns). Rows whose constraint was not removed before evaluation get NA in those columns.
-
-```python
-# Before (2.5.1)
-df = solution.constraints_df  # contains a 'removed_reason' column
-
-# After (3.0.0a3 — `*_df` are now methods)
-df = solution.constraints_df()  # no removed_reason column
-df = solution.constraints_df(include=("metadata", "parameters", "removed_reason"))
-# ↳ adds removed_reason / removed_reason.{key} (NA for active rows)
-```
-
-The same `kind=` / `include=` shape applies on {class}`~ommx.v1.SampleSet`. On {class}`~ommx.v1.Instance` and {class}`~ommx.v1.ParametricInstance`, `removed=True` returns active + removed rows in one DataFrame and auto-sets `"removed_reason"` so removed rows are distinguishable.
 
 ### 🆕 Adapter Capability Model ([#790](https://github.com/Jij-Inc/ommx/pull/790), [#805](https://github.com/Jij-Inc/ommx/pull/805), [#810](https://github.com/Jij-Inc/ommx/pull/810), [#811](https://github.com/Jij-Inc/ommx/pull/811), [#814](https://github.com/Jij-Inc/ommx/pull/814))
 
