@@ -171,21 +171,27 @@ impl PyArtifact {
     pub fn load(py: Python<'_>, image_name: &str) -> Result<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let image_name_parsed = ocipkg::ImageName::parse(image_name)?;
+
+        // Fast path: already published in the v3 SQLite Local Registry.
         if let Some(artifact) = ommx::artifact::LocalArtifact::try_open(image_name_parsed.clone())?
         {
             return Ok(Self(ArtifactInner::Local(artifact)));
         }
+
+        // SQLite miss. Make sure the legacy OCI dir cache is populated for
+        // this image (pull from remote if needed), then import that legacy
+        // entry into the v3 SQLite registry. After this the artifact is
+        // reachable like any v3 native build, and the next call hits the
+        // fast path above instead of pulling again.
         let local_path = ommx::artifact::get_image_dir(&image_name_parsed);
-        if local_path.exists() {
-            bail!(
-                "Artifact {image_name} was found only in the legacy OCI directory local registry at {}. \
-                 Run `ommx artifact import` once, then retry.",
-                local_path.display()
-            );
+        if !local_path.exists() {
+            let mut remote = Artifact::from_remote(image_name_parsed.clone())?;
+            let _ = remote.pull()?;
         }
-        let mut remote = Artifact::from_remote(image_name_parsed)?;
-        let local = remote.pull()?;
-        Ok(Self(ArtifactInner::Dir(local)))
+        let registry = ommx::artifact::local_registry::LocalRegistry::open_default()?;
+        registry.import_legacy_ref(&image_name_parsed)?;
+        let artifact = ommx::artifact::LocalArtifact::open(image_name_parsed)?;
+        Ok(Self(ArtifactInner::Local(artifact)))
     }
 
     /// Push the artifact to remote registry.

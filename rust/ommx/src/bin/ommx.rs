@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
 use clap::{Parser, Subcommand};
 use colored::Colorize;
-use ocipkg::{oci_spec::image::ImageManifest, ImageName};
+use ocipkg::{image::Image, oci_spec::image::ImageManifest, ImageName};
 use ommx::artifact::{
     get_image_dir,
     local_registry::{LocalRegistry, RefConflictPolicy},
@@ -223,6 +223,16 @@ fn main() -> Result<()> {
         Command::Load { path } => {
             let mut artifact = Artifact::from_oci_archive(path)?;
             artifact.load()?;
+            // Mirror the legacy-OciDir load into the v3 SQLite Local Registry
+            // so that `ommx list` (and any other v3 reader that goes through
+            // the IndexStore) can see the freshly loaded image. The legacy
+            // write above remains because `ommx push` / `save` and the Python
+            // archive read path still consume the OciDir form; the follow-up
+            // PR that ports those over to the v3 registry will drop this
+            // double-write.
+            let image_name = artifact.get_name()?;
+            let registry = LocalRegistry::open_default()?;
+            registry.import_legacy_ref(&image_name)?;
         }
 
         Command::ImageDirectory { image_name } => {
