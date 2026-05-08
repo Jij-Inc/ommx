@@ -294,7 +294,7 @@ v3 の Local Registry API は path ではなく reference / descriptor / blob re
 
 `get_image_dir(image_name)` は v3 の中心 API ではない。OCI dir backend 互換や migration tool のための legacy API とし、Local Registry の existence check / listing / read path には使わない。
 
-ただし既存 Local Registry の read 互換は維持する。v3 Local Registry を初めて open するとき、legacy local registry layout (`get_image_dir(ref)` が指す path/tag OCI dir 群) を一度だけ scan し、manifest / descriptors / blobs を検証して IndexStore + BlobStore に migration する。migration 完了後の `Artifact.exists` / `Artifact.resolve` / `Artifact.load` / `Artifact.list` は IndexStore を source of truth とし、ref miss のたびに legacy path を再探索しない。
+ただし既存 Local Registry の read 互換は維持する。legacy local registry layout (`get_image_dir(ref)` が指す path/tag OCI dir 群) は、ユーザーが明示的に `ommx artifact migrate` を実行するか、Rust / Python SDK の migration API を呼び出したときだけ scan し、manifest / descriptors / blobs を検証して IndexStore + BlobStore に migration する。通常の `Artifact.exists` / `Artifact.resolve` / `Artifact.load` / `Artifact.list` は IndexStore を source of truth とし、ref miss のたびに legacy path を再探索しない。
 
 ### 6.6 Import / export
 

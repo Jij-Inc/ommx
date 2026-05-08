@@ -1,8 +1,8 @@
 use anyhow::{bail, Result};
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use colored::Colorize;
 use ocipkg::{oci_spec::image::ImageManifest, ImageName};
-use ommx::artifact::{get_image_dir, Artifact};
+use ommx::artifact::{get_image_dir, local_registry::LocalRegistry, Artifact};
 use std::path::{Path, PathBuf};
 
 mod built_info {
@@ -66,6 +66,22 @@ enum Command {
     ImageDirectory {
         /// Container image name
         image_name: String,
+    },
+
+    /// Manage Artifact v3 local registry
+    Artifact {
+        #[command(subcommand)]
+        command: ArtifactCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum ArtifactCommand {
+    /// Migrate legacy path/tag OCI directories into the v3 local registry
+    Migrate {
+        /// Local registry root. Defaults to OMMX_LOCAL_REGISTRY_ROOT or the OS default data dir.
+        #[clap(long)]
+        root: Option<PathBuf>,
     },
 }
 
@@ -209,6 +225,23 @@ fn main() -> Result<()> {
                 println!("{image_name}");
             }
         }
+
+        Command::Artifact { command } => match command {
+            ArtifactCommand::Migrate { root } => {
+                let registry = if let Some(root) = root {
+                    LocalRegistry::open(root)?
+                } else {
+                    LocalRegistry::open_default()?
+                };
+                let report = registry.migrate_legacy_layout()?;
+                println!(
+                    "Migrated {} legacy OCI dir(s) from {}",
+                    report.imported_dirs,
+                    registry.root().display()
+                );
+                println!("Scanned {} legacy OCI dir(s)", report.scanned_dirs);
+            }
+        },
     }
     Ok(())
 }
