@@ -14,8 +14,12 @@ use rusqlite::{params, Connection, OptionalExtension};
 use sha2::{Digest as _, Sha256};
 use std::{
     fs,
+    fs::OpenOptions,
+    io::{ErrorKind, Write},
     path::{Path, PathBuf},
+    time::Duration,
 };
+use uuid::Uuid;
 
 pub const SQLITE_INDEX_FILE_NAME: &str = "index.sqlite3";
 pub const FILE_BLOB_STORE_DIR_NAME: &str = "blobs";
@@ -27,6 +31,7 @@ pub const BLOB_KIND_LAYER: &str = "layer";
 pub const BLOB_KIND_MANIFEST: &str = "manifest";
 
 const SCHEMA_VERSION: i64 = 1;
+const SQLITE_BUSY_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BlobRecord {
@@ -99,6 +104,8 @@ impl SqliteIndexStore {
         }
         let conn = Connection::open(path)
             .with_context(|| format!("Failed to open SQLite index {}", path.display()))?;
+        conn.busy_timeout(SQLITE_BUSY_TIMEOUT)
+            .context("Failed to configure SQLite busy timeout")?;
         let store = Self { conn };
         store.init_schema()?;
         Ok(store)
@@ -308,24 +315,48 @@ impl SqliteIndexStore {
         policy: RefConflictPolicy,
     ) -> Result<RefUpdate> {
         validate_digest(manifest_digest)?;
-        if let Some(existing_manifest_digest) = self.resolve_ref(name, reference)? {
-            if existing_manifest_digest == manifest_digest {
-                return Ok(RefUpdate::Unchanged);
-            }
-            if policy == RefConflictPolicy::KeepExisting {
-                return Ok(RefUpdate::Conflicted {
-                    existing_manifest_digest,
-                    incoming_manifest_digest: manifest_digest.to_string(),
-                });
-            }
-            self.put_ref(name, reference, manifest_digest)?;
-            return Ok(RefUpdate::Replaced {
-                previous_manifest_digest: existing_manifest_digest,
-            });
+        if policy == RefConflictPolicy::Replace {
+            return self.replace_ref(name, reference, manifest_digest);
+        }
+
+        let inserted = self.conn.execute(
+            r#"
+            INSERT INTO refs (name, reference, manifest_digest, updated_at)
+            VALUES (?1, ?2, ?3, ?4)
+            ON CONFLICT(name, reference) DO NOTHING
+            "#,
+            params![name, reference, manifest_digest, now_rfc3339()],
+        )?;
+        if inserted == 1 {
+            return Ok(RefUpdate::Inserted);
+        }
+
+        let existing_manifest_digest = self.resolve_ref(name, reference)?.with_context(|| {
+            format!("Ref disappeared while resolving conflict: {name}:{reference}")
+        })?;
+        if existing_manifest_digest == manifest_digest {
+            Ok(RefUpdate::Unchanged)
+        } else {
+            Ok(RefUpdate::Conflicted {
+                existing_manifest_digest,
+                incoming_manifest_digest: manifest_digest.to_string(),
+            })
+        }
+    }
+
+    fn replace_ref(&self, name: &str, reference: &str, manifest_digest: &str) -> Result<RefUpdate> {
+        let previous_manifest_digest = self.resolve_ref(name, reference)?;
+        if previous_manifest_digest.as_deref() == Some(manifest_digest) {
+            return Ok(RefUpdate::Unchanged);
         }
 
         self.put_ref(name, reference, manifest_digest)?;
-        Ok(RefUpdate::Inserted)
+        Ok(match previous_manifest_digest {
+            Some(previous_manifest_digest) => RefUpdate::Replaced {
+                previous_manifest_digest,
+            },
+            None => RefUpdate::Inserted,
+        })
     }
 
     pub fn resolve_ref(&self, name: &str, reference: &str) -> Result<Option<String>> {
@@ -467,15 +498,9 @@ impl FileBlobStore {
                 .with_context(|| format!("Failed to create {}", parent.display()))?;
         }
         if path.exists() {
-            let existing = fs::read(&path)
-                .with_context(|| format!("Failed to read existing blob {}", path.display()))?;
-            ensure!(
-                existing == bytes,
-                "Existing blob has different bytes for digest {digest}"
-            );
+            verify_existing_blob(&path, bytes, &digest)?;
         } else {
-            fs::write(&path, bytes)
-                .with_context(|| format!("Failed to write blob {}", path.display()))?;
+            self.write_blob_atomically(bytes, &digest, &path)?;
         }
         Ok(BlobRecord {
             digest,
@@ -505,6 +530,53 @@ impl FileBlobStore {
     pub fn path_for_digest(&self, digest: &str) -> Result<PathBuf> {
         let (algorithm, encoded) = split_digest(digest)?;
         Ok(self.root.join(algorithm).join(encoded))
+    }
+
+    fn write_blob_atomically(&self, bytes: &[u8], digest: &str, path: &Path) -> Result<()> {
+        let temp_path = self.temp_path_for_digest(digest)?;
+        let mut temp_file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temp_path)
+            .with_context(|| format!("Failed to create temporary blob {}", temp_path.display()))?;
+        temp_file
+            .write_all(bytes)
+            .with_context(|| format!("Failed to write temporary blob {}", temp_path.display()))?;
+        temp_file
+            .sync_all()
+            .with_context(|| format!("Failed to sync temporary blob {}", temp_path.display()))?;
+        drop(temp_file);
+
+        match fs::hard_link(&temp_path, path) {
+            Ok(()) => {
+                let _ = fs::remove_file(&temp_path);
+                Ok(())
+            }
+            Err(error) if error.kind() == ErrorKind::AlreadyExists => {
+                let _ = fs::remove_file(&temp_path);
+                verify_existing_blob(path, bytes, digest)
+            }
+            Err(error) => {
+                let _ = fs::remove_file(&temp_path);
+                Err(error).with_context(|| {
+                    format!(
+                        "Failed to publish blob {} from {} to {}",
+                        digest,
+                        temp_path.display(),
+                        path.display()
+                    )
+                })
+            }
+        }
+    }
+
+    fn temp_path_for_digest(&self, digest: &str) -> Result<PathBuf> {
+        let path = self.path_for_digest(digest)?;
+        let encoded = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .context("Blob digest path has no file name")?;
+        Ok(path.with_file_name(format!(".{encoded}.{}.tmp", Uuid::new_v4())))
     }
 }
 
@@ -580,6 +652,12 @@ pub struct LegacyMigrationReport {
     pub replaced_refs: usize,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RefConflictHandling {
+    Error,
+    Return,
+}
+
 /// Import an existing OCI Image Layout directory into the v3 local registry.
 ///
 /// This is the compatibility path for the current OMMX local registry layout:
@@ -606,6 +684,23 @@ pub fn import_legacy_oci_dir_with_policy(
     oci_dir_root: impl AsRef<Path>,
     policy: RefConflictPolicy,
 ) -> Result<LegacyOciDirImport> {
+    let (import, _) = import_legacy_oci_dir_with_policy_inner(
+        index_store,
+        blob_store,
+        oci_dir_root,
+        policy,
+        RefConflictHandling::Error,
+    )?;
+    Ok(import)
+}
+
+fn import_legacy_oci_dir_with_policy_inner(
+    index_store: &SqliteIndexStore,
+    blob_store: &FileBlobStore,
+    oci_dir_root: impl AsRef<Path>,
+    policy: RefConflictPolicy,
+    conflict_handling: RefConflictHandling,
+) -> Result<(LegacyOciDirImport, Option<RefUpdate>)> {
     let oci_dir_root = oci_dir_root.as_ref();
     ensure_legacy_oci_layout(oci_dir_root)?;
 
@@ -618,6 +713,12 @@ pub fn import_legacy_oci_dir_with_policy(
     );
     let manifest_desc = image_index.manifests().first().unwrap();
     let image_name = image_name_from_index_descriptor(manifest_desc)?;
+    let manifest_digest = digest_to_string(manifest_desc.digest());
+    if conflict_handling == RefConflictHandling::Error {
+        if let Some(image_name) = &image_name {
+            ensure_image_ref_update_allowed(index_store, image_name, &manifest_digest, policy)?;
+        }
+    }
 
     put_descriptor_blob(
         index_store,
@@ -626,11 +727,6 @@ pub fn import_legacy_oci_dir_with_policy(
         manifest_desc,
         BLOB_KIND_MANIFEST,
     )?;
-
-    let manifest_digest = digest_to_string(manifest_desc.digest());
-    if let Some(image_name) = &image_name {
-        ensure_image_ref_update_allowed(index_store, image_name, &manifest_digest, policy)?;
-    }
 
     let manifest_bytes = blob_store.read_bytes(&manifest_digest)?;
     let manifest: ImageManifest = serde_json::from_slice(&manifest_bytes)
@@ -678,14 +774,26 @@ pub fn import_legacy_oci_dir_with_policy(
         &layers,
     )?;
 
-    if let Some(image_name) = &image_name {
-        put_image_ref_checked(index_store, image_name, &manifest_digest, policy)?;
-    }
+    let ref_update = image_name
+        .as_ref()
+        .map(|image_name| {
+            put_image_ref_with_conflict_handling(
+                index_store,
+                image_name,
+                &manifest_digest,
+                policy,
+                conflict_handling,
+            )
+        })
+        .transpose()?;
 
-    Ok(LegacyOciDirImport {
-        manifest_digest,
-        image_name,
-    })
+    Ok((
+        LegacyOciDirImport {
+            manifest_digest,
+            image_name,
+        },
+        ref_update,
+    ))
 }
 
 pub fn import_legacy_local_registry_ref(
@@ -726,6 +834,25 @@ pub fn import_legacy_oci_dir_as_ref_with_policy(
     image_name: &ImageName,
     policy: RefConflictPolicy,
 ) -> Result<LegacyOciDirImport> {
+    let (import, _) = import_legacy_oci_dir_as_ref_with_policy_inner(
+        index_store,
+        blob_store,
+        oci_dir_root,
+        image_name,
+        policy,
+        RefConflictHandling::Error,
+    )?;
+    Ok(import)
+}
+
+fn import_legacy_oci_dir_as_ref_with_policy_inner(
+    index_store: &SqliteIndexStore,
+    blob_store: &FileBlobStore,
+    oci_dir_root: impl AsRef<Path>,
+    image_name: &ImageName,
+    policy: RefConflictPolicy,
+    conflict_handling: RefConflictHandling,
+) -> Result<(LegacyOciDirImport, RefUpdate)> {
     let legacy_path = oci_dir_root.as_ref();
     let legacy_ref = legacy_oci_dir_ref(legacy_path)?;
     if let Some(imported_name) = &legacy_ref.image_name {
@@ -737,12 +864,32 @@ pub fn import_legacy_oci_dir_as_ref_with_policy(
         );
     }
 
-    ensure_image_ref_update_allowed(index_store, image_name, &legacy_ref.manifest_digest, policy)?;
-    let import = import_legacy_oci_dir_with_policy(index_store, blob_store, legacy_path, policy)?;
-    if import.image_name.is_none() {
-        put_image_ref_checked(index_store, image_name, &import.manifest_digest, policy)?;
+    if conflict_handling == RefConflictHandling::Error {
+        ensure_image_ref_update_allowed(
+            index_store,
+            image_name,
+            &legacy_ref.manifest_digest,
+            policy,
+        )?;
     }
-    Ok(import)
+    let (import, annotation_update) = import_legacy_oci_dir_with_policy_inner(
+        index_store,
+        blob_store,
+        legacy_path,
+        policy,
+        conflict_handling,
+    )?;
+    let ref_update = match annotation_update {
+        Some(update) => update,
+        None => put_image_ref_with_conflict_handling(
+            index_store,
+            image_name,
+            &import.manifest_digest,
+            policy,
+            conflict_handling,
+        )?,
+    };
+    Ok((import, ref_update))
 }
 
 pub fn migrate_legacy_local_registry(
@@ -781,12 +928,13 @@ pub fn migrate_legacy_local_registry_with_policy(
 
         match existing_manifest_digest {
             None => {
-                import_legacy_oci_dir_as_ref_with_policy(
+                let (_, ref_update) = import_legacy_oci_dir_as_ref_with_policy_inner(
                     index_store,
                     blob_store,
                     legacy_dir,
                     &image_name,
                     RefConflictPolicy::KeepExisting,
+                    RefConflictHandling::Return,
                 )
                 .with_context(|| {
                     format!(
@@ -794,15 +942,16 @@ pub fn migrate_legacy_local_registry_with_policy(
                         legacy_dir.display()
                     )
                 })?;
-                report.imported_dirs += 1;
+                record_migration_ref_update(&mut report, ref_update);
             }
             Some(existing) if existing == legacy_ref.manifest_digest => {
-                import_legacy_oci_dir_as_ref_with_policy(
+                let (_, ref_update) = import_legacy_oci_dir_as_ref_with_policy_inner(
                     index_store,
                     blob_store,
                     legacy_dir,
                     &image_name,
                     RefConflictPolicy::KeepExisting,
+                    RefConflictHandling::Return,
                 )
                 .with_context(|| {
                     format!(
@@ -810,18 +959,19 @@ pub fn migrate_legacy_local_registry_with_policy(
                         legacy_dir.display()
                     )
                 })?;
-                report.verified_dirs += 1;
+                record_migration_ref_update(&mut report, ref_update);
             }
             Some(_) if policy == RefConflictPolicy::KeepExisting => {
                 report.conflicted_dirs += 1;
             }
             Some(_) => {
-                import_legacy_oci_dir_as_ref_with_policy(
+                let (_, ref_update) = import_legacy_oci_dir_as_ref_with_policy_inner(
                     index_store,
                     blob_store,
                     legacy_dir,
                     &image_name,
                     RefConflictPolicy::Replace,
+                    RefConflictHandling::Return,
                 )
                 .with_context(|| {
                     format!(
@@ -829,7 +979,7 @@ pub fn migrate_legacy_local_registry_with_policy(
                         legacy_dir.display()
                     )
                 })?;
-                report.replaced_refs += 1;
+                record_migration_ref_update(&mut report, ref_update);
             }
         }
     }
@@ -984,17 +1134,18 @@ fn ensure_image_ref_update_allowed(
     Ok(())
 }
 
-fn put_image_ref_checked(
+fn put_image_ref_with_conflict_handling(
     index_store: &SqliteIndexStore,
     image_name: &ImageName,
     manifest_digest: &str,
     policy: RefConflictPolicy,
+    conflict_handling: RefConflictHandling,
 ) -> Result<RefUpdate> {
     match index_store.put_image_ref_with_policy(image_name, manifest_digest, policy)? {
         RefUpdate::Conflicted {
             existing_manifest_digest,
             incoming_manifest_digest,
-        } => {
+        } if conflict_handling == RefConflictHandling::Error => {
             anyhow::bail!(
                 "Local registry ref conflict for {}: existing manifest {}, incoming manifest {}",
                 image_name,
@@ -1002,8 +1153,34 @@ fn put_image_ref_checked(
                 incoming_manifest_digest
             )
         }
+        RefUpdate::Conflicted {
+            existing_manifest_digest,
+            incoming_manifest_digest,
+        } => Ok(RefUpdate::Conflicted {
+            existing_manifest_digest,
+            incoming_manifest_digest,
+        }),
         update => Ok(update),
     }
+}
+
+fn record_migration_ref_update(report: &mut LegacyMigrationReport, update: RefUpdate) {
+    match update {
+        RefUpdate::Inserted => report.imported_dirs += 1,
+        RefUpdate::Unchanged => report.verified_dirs += 1,
+        RefUpdate::Replaced { .. } => report.replaced_refs += 1,
+        RefUpdate::Conflicted { .. } => report.conflicted_dirs += 1,
+    }
+}
+
+fn verify_existing_blob(path: &Path, bytes: &[u8], digest: &str) -> Result<()> {
+    let existing = fs::read(path)
+        .with_context(|| format!("Failed to read existing blob {}", path.display()))?;
+    ensure!(
+        existing == bytes,
+        "Existing blob has different bytes for digest {digest}"
+    );
+    Ok(())
 }
 
 pub fn sha256_digest(bytes: &[u8]) -> String {
@@ -1237,6 +1414,59 @@ mod tests {
     }
 
     #[test]
+    fn concurrent_keep_existing_ref_publish_keeps_one_digest() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let root = dir.path().join("registry-v3");
+        let index_store = SqliteIndexStore::open_in_registry_root(&root)?;
+        let blob_store = FileBlobStore::open_in_registry_root(&root)?;
+        let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:race")?;
+        let first_digest = put_test_manifest(&index_store, &blob_store, b"first-manifest")?;
+        let second_digest = put_test_manifest(&index_store, &blob_store, b"second-manifest")?;
+        assert_ne!(first_digest, second_digest);
+
+        let handles: Vec<_> = [first_digest.clone(), second_digest.clone()]
+            .into_iter()
+            .map(|manifest_digest| {
+                let root = root.clone();
+                let image_name = image_name.clone();
+                std::thread::spawn(move || -> Result<RefUpdate> {
+                    let index_store = SqliteIndexStore::open_in_registry_root(root)?;
+                    index_store.put_image_ref_with_policy(
+                        &image_name,
+                        &manifest_digest,
+                        RefConflictPolicy::KeepExisting,
+                    )
+                })
+            })
+            .collect();
+
+        let updates: Vec<_> = handles
+            .into_iter()
+            .map(|handle| handle.join().expect("ref publisher thread panicked"))
+            .collect::<Result<_>>()?;
+
+        assert_eq!(
+            updates
+                .iter()
+                .filter(|update| matches!(update, RefUpdate::Inserted))
+                .count(),
+            1
+        );
+        assert_eq!(
+            updates
+                .iter()
+                .filter(|update| matches!(update, RefUpdate::Conflicted { .. }))
+                .count(),
+            1
+        );
+        let final_digest = index_store
+            .resolve_image_name(&image_name)?
+            .context("Ref was not published")?;
+        assert!(final_digest == first_digest || final_digest == second_digest);
+        Ok(())
+    }
+
+    #[test]
     fn imports_legacy_oci_dir_into_sqlite_registry() -> Result<()> {
         let dir = tempfile::tempdir()?;
         let legacy_dir = dir.path().join("legacy");
@@ -1419,10 +1649,109 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn concurrent_legacy_migrations_are_idempotent() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let root = dir.path().to_path_buf();
+        let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:parallel")?;
+        let legacy_dir = legacy_local_registry_path(&root, &image_name);
+        build_test_legacy_oci_dir(legacy_dir, image_name.clone())?;
+
+        let handles: Vec<_> = (0..2)
+            .map(|_| {
+                let root = root.clone();
+                std::thread::spawn(move || -> Result<LegacyMigrationReport> {
+                    let registry = LocalRegistry::open(root)?;
+                    registry.migrate_legacy_layout()
+                })
+            })
+            .collect();
+
+        let reports: Vec<_> = handles
+            .into_iter()
+            .map(|handle| handle.join().expect("migration thread panicked"))
+            .collect::<Result<_>>()?;
+
+        assert_eq!(
+            reports
+                .iter()
+                .map(|report| report.scanned_dirs)
+                .sum::<usize>(),
+            2
+        );
+        assert_eq!(
+            reports
+                .iter()
+                .map(|report| report.imported_dirs)
+                .sum::<usize>(),
+            1
+        );
+        assert_eq!(
+            reports
+                .iter()
+                .map(|report| report.verified_dirs)
+                .sum::<usize>(),
+            1
+        );
+        assert_eq!(
+            reports
+                .iter()
+                .map(|report| report.conflicted_dirs)
+                .sum::<usize>(),
+            0
+        );
+
+        let registry = LocalRegistry::open(&root)?;
+        let imported_digest = registry
+            .resolve_image_name(&image_name)?
+            .context("Legacy local registry ref was not migrated")?;
+        assert!(registry.blobs().exists(&imported_digest)?);
+        Ok(())
+    }
+
+    #[test]
+    fn concurrent_blob_writes_publish_one_complete_blob() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let root = dir.path().join("blobs");
+        let bytes = b"parallel blob".to_vec();
+
+        let handles: Vec<_> = (0..4)
+            .map(|_| {
+                let root = root.clone();
+                let bytes = bytes.clone();
+                std::thread::spawn(move || -> Result<BlobRecord> {
+                    let store = FileBlobStore::open(root)?;
+                    store.put_bytes(&bytes)
+                })
+            })
+            .collect();
+
+        let records: Vec<_> = handles
+            .into_iter()
+            .map(|handle| handle.join().expect("blob writer thread panicked"))
+            .collect::<Result<_>>()?;
+
+        let digest = sha256_digest(&bytes);
+        assert!(records.iter().all(|record| record.digest == digest));
+        let store = FileBlobStore::open(&root)?;
+        assert_eq!(store.read_bytes(&digest)?, bytes);
+        Ok(())
+    }
+
     fn put_test_manifest_ref(
         index_store: &SqliteIndexStore,
         blob_store: &FileBlobStore,
         image_name: &ImageName,
+        bytes: &[u8],
+    ) -> Result<String> {
+        let digest = put_test_manifest(index_store, blob_store, bytes)?;
+        index_store.put_image_ref(image_name, &digest)?;
+        Ok(digest)
+    }
+
+    fn put_test_manifest(
+        index_store: &SqliteIndexStore,
+        blob_store: &FileBlobStore,
         bytes: &[u8],
     ) -> Result<String> {
         let mut blob = blob_store.put_bytes(bytes)?;
@@ -1440,7 +1769,6 @@ mod tests {
             },
             &[],
         )?;
-        index_store.put_image_ref(image_name, &blob.digest)?;
         Ok(blob.digest)
     }
 
