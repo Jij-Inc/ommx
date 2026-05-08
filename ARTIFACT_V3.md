@@ -112,7 +112,7 @@ v3 では Rust / Python ともに破壊的変更を許容する。既存 API を
 - writer が最終 directory に直接書くため、reader が partially written artifact を観測し得る。
 - shared filesystem や mounted object storage 上で atomic update と multi-writer coordination を扱いにくい。
 
-v3 ではこの現行 layout を legacy layout backend として扱い、Local Registry の内部表現は IndexStore + BlobStore に置き換える。
+v3 ではこの現行 layout を legacy local registry layout として扱い、新規書き込み先ではなく read / import 互換の対象にする。Local Registry の内部表現は IndexStore + BlobStore に置き換えるが、既存 root に保存済みの path/tag OCI dir artifacts は v3 でも読み込めなければならない。
 
 ### 3.5 テスト状況
 
@@ -132,7 +132,7 @@ v3 実装では Rust integration test と Python round-trip test を最初に整
 - remote OCI registry transport は既存 crate (`oci-distribution` / `oci-client` 等) の利用を評価し、使える部分だけ採用する。
 - Artifact manifest semantics、archive materialization、explicit OCI directory import/export、legacy layout migration は OMMX-owned implementation として設計する。
 - Local Registry を IndexStore + BlobStore として再設計する。
-- Local Registry の query / resolve / atomic publish API を用意し、`get_image_dir()` 依存を legacy path backend に閉じる。
+- Local Registry の query / resolve / atomic publish API を用意し、`get_image_dir()` 依存を legacy local registry layout の read / import path に閉じる。
 - OMMX core に `Experiment`, `Run`, `DataStore`, `EnvironmentInfo`, table/export を設計し直して取り込む。
 - Artifact と OTel の双方向接続を実装する。
 - build trace の self-contained trace layer を Artifact に埋め込む。
@@ -236,10 +236,10 @@ IndexStore は Local Registry の mutable state を持つ。実装は storage pr
 
 | 実装 | 用途 |
 |---|---|
-| SQLite | single-user local cache、test、CLI workflow |
-| PostgreSQL | shared registry、multi-process writer、cloud deployment |
+| SQLite | single-node local cache、test、CLI workflow |
+| PostgreSQL | shared registry、multi-node writer、cloud deployment |
 
-SQLite file を mounted object storage 上の multi-writer registry として使わない。shared registry では PostgreSQL 等の transaction を持つ外部 database を使う。
+SQLite は同一 node 上の複数 process / runner が同じ local cache に短時間 write する用途を許容する。この場合、write は SQLite の transaction によって serialize される前提とし、高頻度 writer や長時間 transaction を持つ shared registry にはしない。SQLite file を mounted object storage 上の multi-writer registry として使わない。shared filesystem、multi-node writer、cloud deployment では PostgreSQL 等の transaction を持つ外部 database を使う。
 
 IndexStore が持つ最小情報:
 
@@ -280,6 +280,15 @@ DB と BlobStore は分散 transaction にならないため、publish 順序を
 
 tag update は IndexStore transaction 内の ref update として扱う。`ArtifactBuilder.build()` が最終 path に直接書く方式は v3 Local Registry では使わない。
 
+並行 publish では、unique ref / digest への書き込みは互いに独立して成功できる。同じ mutable ref へ異なる manifest digest を publish する場合、Local Registry は少なくとも次の primitive を提供する。
+
+| primitive | 方針 |
+|---|---|
+| keep-existing publish | 既存 ref を保持し、異なる digest がすでに publish されていれば conflict とする |
+| replace publish | 呼び出し側が明示した場合だけ ref を新しい digest に更新する |
+
+`latest`, `active`, `current run` のような alias に last-writer-wins、compare-and-swap、promote-only のどれを採用するかは Experiment / Run 層の semantic として決める。Local Registry 層はこれらを実現するための atomic publish primitive を提供するに留める。
+
 ### 6.5 Read / query API
 
 v3 の Local Registry API は path ではなく reference / descriptor / blob reader を中心にする。
@@ -294,11 +303,17 @@ v3 の Local Registry API は path ではなく reference / descriptor / blob re
 
 `get_image_dir(image_name)` は v3 の中心 API ではない。OCI dir backend 互換や migration tool のための legacy API とし、Local Registry の existence check / listing / read path には使わない。
 
+ただし既存 Local Registry の read 互換は維持する。legacy local registry layout (`get_image_dir(ref)` が指す path/tag OCI dir 群) は、ユーザーが明示的に `ommx artifact migrate` を実行するか、Rust / Python SDK の migration API を呼び出したときだけ scan し、manifest / descriptors / blobs を検証して IndexStore + BlobStore に migration する。通常の `Artifact.exists` / `Artifact.resolve` / `Artifact.load` / `Artifact.list` は IndexStore を source of truth とし、ref miss のたびに legacy path を再探索しない。
+
+migration 時に新 Local Registry 側へ同名 ref がすでに存在し、legacy 側と manifest digest が異なる場合、default は既存 ref を保持して当該 entry を skip する。置換は `ommx artifact migrate --replace`、または SDK の migration API で `Replace` policy を明示した場合だけ行う。同名 ref が同じ digest を指している場合は conflict ではなく、manifest / blobs の存在確認と再登録を行う idempotent verify として扱う。
+
+並行 migration では、default policy は ref publish を atomic insert として扱う。同じ legacy ref / digest を複数 process が同時に migration した場合、最初の publish が import、後続は verify になる。異なる digest が同じ ref に並行 publish される場合、default は first writer wins で後続を conflict skip とする。`--replace` は明示的な destructive operation なので、並行実行時は last writer wins とする。BlobStore は CAS path へ直接 partial write せず、同一 directory 内の temporary file に書いてから atomic publish する。
+
 ### 6.6 Import / export
 
 OCI Image Layout との互換は import / export boundary で保つ。
 
-- import: `.ommx` archive または OCI dir を読み、manifest / descriptors / blobs を検証して IndexStore + BlobStore に登録する。
+- import: `.ommx` archive、明示 OCI directory layout、または legacy local registry layout を読み、manifest / descriptors / blobs を検証して IndexStore + BlobStore に登録する。
 - default export: 指定された manifest descriptor 1 つを root にして、その manifest の material closure を集め、standard OCI Image Layout (`oci-layout`, `index.json`, `blobs/`) を materialize する。Git で言えば `depth=1` の export である。
 - history bundle export: 明示 opt-in。指定された manifest から `subject` chain を辿り、lineage closure も同じ archive / directory に materialize する。Git で言えば `--depth=N` または full history bundle に相当する。offline で `history()` を使いたい場合の形式であり、default `.ommx` export とは分ける。
 - remote push: IndexStore + BlobStore から manifest / blobs を読み、OCI Distribution API に送る。
