@@ -27,6 +27,8 @@ pub const BLOB_KIND_LAYER: &str = "layer";
 pub const BLOB_KIND_MANIFEST: &str = "manifest";
 
 const SCHEMA_VERSION: i64 = 1;
+const LEGACY_LOCAL_REGISTRY_MIGRATION_KEY: &str = "legacy-local-registry-v1";
+const MIGRATION_COMPLETE_VALUE: &str = "complete";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BlobRecord {
@@ -324,6 +326,31 @@ impl SqliteIndexStore {
         Ok(out)
     }
 
+    pub fn get_metadata(&self, key: &str) -> Result<Option<String>> {
+        self.conn
+            .query_row(
+                "SELECT value FROM metadata WHERE key = ?1",
+                params![key],
+                |row| row.get(0),
+            )
+            .optional()
+            .context("Failed to query local registry metadata")
+    }
+
+    pub fn put_metadata(&self, key: &str, value: &str) -> Result<()> {
+        self.conn.execute(
+            r#"
+            INSERT INTO metadata (key, value, updated_at)
+            VALUES (?1, ?2, ?3)
+            ON CONFLICT(key) DO UPDATE SET
+                value = excluded.value,
+                updated_at = excluded.updated_at
+            "#,
+            params![key, value, now_rfc3339()],
+        )?;
+        Ok(())
+    }
+
     fn init_schema(&self) -> Result<()> {
         self.conn.execute_batch(
             r#"
@@ -380,6 +407,12 @@ impl SqliteIndexStore {
 
             CREATE INDEX IF NOT EXISTS idx_refs_name ON refs(name);
             CREATE INDEX IF NOT EXISTS idx_manifest_layers_digest ON manifest_layers(digest);
+
+            CREATE TABLE IF NOT EXISTS metadata (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
             "#,
         )?;
         let version = self.schema_version()?;
@@ -473,7 +506,9 @@ impl LocalRegistry {
         let root = root.into();
         let index = SqliteIndexStore::open_in_registry_root(&root)?;
         let blobs = FileBlobStore::open_in_registry_root(&root)?;
-        Ok(Self { root, index, blobs })
+        let registry = Self { root, index, blobs };
+        registry.migrate_legacy_layout_once()?;
+        Ok(registry)
     }
 
     pub fn open_default() -> Result<Self> {
@@ -496,17 +531,12 @@ impl LocalRegistry {
         import_legacy_local_registry_ref(&self.index, &self.blobs, &self.root, image_name)
     }
 
-    pub fn resolve_image_name(&self, image_name: &ImageName) -> Result<Option<String>> {
-        self.index.resolve_image_name(image_name)
+    pub fn migrate_legacy_layout_once(&self) -> Result<LegacyMigrationReport> {
+        migrate_legacy_local_registry_once(&self.index, &self.blobs, &self.root)
     }
 
-    pub fn resolve_or_import_legacy_ref(&self, image_name: &ImageName) -> Result<Option<String>> {
-        resolve_or_import_legacy_local_registry_ref(
-            &self.index,
-            &self.blobs,
-            &self.root,
-            image_name,
-        )
+    pub fn resolve_image_name(&self, image_name: &ImageName) -> Result<Option<String>> {
+        self.index.resolve_image_name(image_name)
     }
 }
 
@@ -514,6 +544,13 @@ impl LocalRegistry {
 pub struct LegacyOciDirImport {
     pub manifest_digest: String,
     pub image_name: Option<ImageName>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LegacyMigrationReport {
+    pub skipped: bool,
+    pub scanned_dirs: usize,
+    pub imported_dirs: usize,
 }
 
 /// Import an existing OCI Image Layout directory into the v3 local registry.
@@ -613,7 +650,17 @@ pub fn import_legacy_local_registry_ref(
     image_name: &ImageName,
 ) -> Result<LegacyOciDirImport> {
     let legacy_path = legacy_local_registry_path(legacy_registry_root, image_name);
-    if let Some(imported_name) = legacy_oci_dir_image_name(&legacy_path)? {
+    import_legacy_oci_dir_as_ref(index_store, blob_store, legacy_path, image_name)
+}
+
+pub fn import_legacy_oci_dir_as_ref(
+    index_store: &SqliteIndexStore,
+    blob_store: &FileBlobStore,
+    oci_dir_root: impl AsRef<Path>,
+    image_name: &ImageName,
+) -> Result<LegacyOciDirImport> {
+    let legacy_path = oci_dir_root.as_ref();
+    if let Some(imported_name) = legacy_oci_dir_image_name(legacy_path)? {
         ensure!(
             &imported_name == image_name,
             "Legacy local registry ref mismatch: requested={}, imported={}",
@@ -622,11 +669,52 @@ pub fn import_legacy_local_registry_ref(
         );
     }
 
-    let import = import_legacy_oci_dir(index_store, blob_store, &legacy_path)?;
+    let import = import_legacy_oci_dir(index_store, blob_store, legacy_path)?;
     if import.image_name.is_none() {
         index_store.put_image_ref(image_name, &import.manifest_digest)?;
     }
     Ok(import)
+}
+
+pub fn migrate_legacy_local_registry_once(
+    index_store: &SqliteIndexStore,
+    blob_store: &FileBlobStore,
+    legacy_registry_root: impl AsRef<Path>,
+) -> Result<LegacyMigrationReport> {
+    let legacy_registry_root = legacy_registry_root.as_ref();
+    if index_store
+        .get_metadata(LEGACY_LOCAL_REGISTRY_MIGRATION_KEY)?
+        .as_deref()
+        == Some(MIGRATION_COMPLETE_VALUE)
+    {
+        return Ok(LegacyMigrationReport {
+            skipped: true,
+            scanned_dirs: 0,
+            imported_dirs: 0,
+        });
+    }
+
+    let legacy_dirs = gather_legacy_oci_dirs(legacy_registry_root)?;
+    for legacy_dir in &legacy_dirs {
+        let image_name = legacy_migration_image_name(legacy_registry_root, legacy_dir)?;
+        import_legacy_oci_dir_as_ref(index_store, blob_store, legacy_dir, &image_name)
+            .with_context(|| {
+                format!(
+                    "Failed to migrate legacy local registry entry {}",
+                    legacy_dir.display()
+                )
+            })?;
+    }
+
+    index_store.put_metadata(
+        LEGACY_LOCAL_REGISTRY_MIGRATION_KEY,
+        MIGRATION_COMPLETE_VALUE,
+    )?;
+    Ok(LegacyMigrationReport {
+        skipped: false,
+        scanned_dirs: legacy_dirs.len(),
+        imported_dirs: legacy_dirs.len(),
+    })
 }
 
 pub fn legacy_oci_dir_image_name(oci_dir_root: impl AsRef<Path>) -> Result<Option<ImageName>> {
@@ -642,33 +730,6 @@ pub fn legacy_oci_dir_image_name(oci_dir_root: impl AsRef<Path>) -> Result<Optio
     );
     let manifest_desc = image_index.manifests().first().unwrap();
     image_name_from_index_descriptor(manifest_desc)
-}
-
-pub fn resolve_or_import_legacy_local_registry_ref(
-    index_store: &SqliteIndexStore,
-    blob_store: &FileBlobStore,
-    legacy_registry_root: impl AsRef<Path>,
-    image_name: &ImageName,
-) -> Result<Option<String>> {
-    let legacy_registry_root = legacy_registry_root.as_ref();
-    if let Some(manifest_digest) = index_store.resolve_image_name(image_name)? {
-        return Ok(Some(manifest_digest));
-    }
-
-    let legacy_path = legacy_local_registry_path(legacy_registry_root, image_name);
-    if !legacy_path.join("oci-layout").exists() {
-        return Ok(None);
-    }
-
-    let import =
-        import_legacy_local_registry_ref(index_store, blob_store, legacy_registry_root, image_name)
-            .with_context(|| {
-                format!(
-                    "Failed to import legacy local registry entry {}",
-                    legacy_path.display()
-                )
-            })?;
-    Ok(Some(import.manifest_digest))
 }
 
 pub fn legacy_local_registry_path(
@@ -700,6 +761,63 @@ pub fn image_name_repository(image_name: &ImageName) -> String {
         format!("{}:{}/{}", image_name.hostname, port, image_name.name)
     } else {
         format!("{}/{}", image_name.hostname, image_name.name)
+    }
+}
+
+fn gather_legacy_oci_dirs(root: &Path) -> Result<Vec<PathBuf>> {
+    if !root.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut dirs = Vec::new();
+    gather_legacy_oci_dirs_inner(root, &mut dirs)?;
+    Ok(dirs)
+}
+
+fn gather_legacy_oci_dirs_inner(dir: &Path, dirs: &mut Vec<PathBuf>) -> Result<()> {
+    for entry in fs::read_dir(dir).with_context(|| format!("Failed to read {}", dir.display()))? {
+        let entry = entry?;
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        if path.join("oci-layout").exists() {
+            dirs.push(path);
+        } else {
+            gather_legacy_oci_dirs_inner(&path, dirs)?;
+        }
+    }
+    Ok(())
+}
+
+fn legacy_migration_image_name(
+    legacy_registry_root: &Path,
+    legacy_dir: &Path,
+) -> Result<ImageName> {
+    let annotated = legacy_oci_dir_image_name(legacy_dir)?;
+    let path_name = legacy_dir
+        .strip_prefix(legacy_registry_root)
+        .ok()
+        .and_then(|relative| ImageName::from_path(relative).ok());
+
+    match (annotated, path_name) {
+        (Some(annotated), Some(path_name)) => {
+            ensure!(
+                annotated == path_name,
+                "Legacy local registry ref mismatch: path={}, annotation={}",
+                path_name,
+                annotated
+            );
+            Ok(annotated)
+        }
+        (Some(annotated), None) => Ok(annotated),
+        (None, Some(path_name)) => Ok(path_name),
+        (None, None) => {
+            anyhow::bail!(
+                "Cannot infer image name for legacy local registry entry {}",
+                legacy_dir.display()
+            )
+        }
     }
 }
 
@@ -930,6 +1048,12 @@ mod tests {
         let refs = store.list_refs(Some("example.com/ommx"))?;
         assert_eq!(refs.len(), 1);
         assert_eq!(refs[0].reference, "latest");
+        assert!(store.get_metadata("migration")?.is_none());
+        store.put_metadata("migration", "complete")?;
+        assert_eq!(
+            store.get_metadata("migration")?,
+            Some("complete".to_string())
+        );
         Ok(())
     }
 
@@ -972,7 +1096,7 @@ mod tests {
     }
 
     #[test]
-    fn resolves_by_importing_legacy_local_registry_ref() -> Result<()> {
+    fn migrates_legacy_local_registry_once() -> Result<()> {
         let dir = tempfile::tempdir()?;
         let legacy_registry_root = dir.path().join("legacy-registry");
         let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:v2")?;
@@ -984,48 +1108,52 @@ mod tests {
         let blob_store = FileBlobStore::open_in_registry_root(&registry_root)?;
 
         assert!(index_store.resolve_image_name(&image_name)?.is_none());
-        let imported_digest = resolve_or_import_legacy_local_registry_ref(
-            &index_store,
-            &blob_store,
-            &legacy_registry_root,
-            &image_name,
-        )?
-        .context("Legacy local registry ref was not resolved")?;
+        let report =
+            migrate_legacy_local_registry_once(&index_store, &blob_store, &legacy_registry_root)?;
         assert_eq!(
-            index_store.resolve_image_name(&image_name)?,
-            Some(imported_digest.clone())
+            report,
+            LegacyMigrationReport {
+                skipped: false,
+                scanned_dirs: 1,
+                imported_dirs: 1
+            }
         );
+        let imported_digest = index_store
+            .resolve_image_name(&image_name)?
+            .context("Legacy local registry ref was not migrated")?;
         assert_eq!(
-            resolve_or_import_legacy_local_registry_ref(
-                &index_store,
-                &blob_store,
-                &legacy_registry_root,
-                &image_name,
-            )?,
-            Some(imported_digest)
+            migrate_legacy_local_registry_once(&index_store, &blob_store, &legacy_registry_root)?,
+            LegacyMigrationReport {
+                skipped: true,
+                scanned_dirs: 0,
+                imported_dirs: 0
+            }
         );
+        assert!(blob_store.exists(&imported_digest)?);
         Ok(())
     }
 
     #[test]
-    fn local_registry_resolves_legacy_ref_from_same_root() -> Result<()> {
+    fn local_registry_migrates_legacy_refs_on_open() -> Result<()> {
         let dir = tempfile::tempdir()?;
         let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:v3")?;
         let legacy_dir = legacy_local_registry_path(dir.path(), &image_name);
         build_test_legacy_oci_dir(legacy_dir, image_name.clone())?;
 
         let registry = LocalRegistry::open(dir.path())?;
-        assert!(registry.resolve_image_name(&image_name)?.is_none());
         let imported_digest = registry
-            .resolve_or_import_legacy_ref(&image_name)?
-            .context("Legacy local registry ref was not resolved")?;
-
-        assert_eq!(
-            registry.resolve_image_name(&image_name)?,
-            Some(imported_digest.clone())
-        );
+            .resolve_image_name(&image_name)?
+            .context("Legacy local registry ref was not migrated")?;
         assert!(registry.blobs().exists(&imported_digest)?);
         assert!(registry.index().get_manifest(&imported_digest)?.is_some());
+        assert_eq!(
+            registry.migrate_legacy_layout_once()?,
+            LegacyMigrationReport {
+                skipped: true,
+                scanned_dirs: 0,
+                imported_dirs: 0
+            }
+        );
         Ok(())
     }
 
