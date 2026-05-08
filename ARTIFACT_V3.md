@@ -339,19 +339,20 @@ v3 の Local Registry API は path ではなく reference / descriptor / blob re
 
 import 時に新 Local Registry 側へ同名 ref がすでに存在し、legacy 側と manifest digest が異なる場合、default は既存 ref を保持して当該 entry を skip する。置換は `ommx artifact import --replace`、または SDK の import API で `Replace` policy を明示した場合だけ行う。同名 ref が同じ digest を指している場合は conflict ではなく、manifest / blobs の存在確認と再登録を行う idempotent verify として扱う。
 
-import 時に新 Local Registry 側へ同名 ref がすでに存在し、legacy 側と manifest digest が異なる場合、default は既存 ref を保持して当該 entry を skip する。置換は `ommx artifact import --replace`、または SDK の import API で `Replace` policy を明示した場合だけ行う。同名 ref が同じ digest を指している場合は conflict ではなく、manifest / blobs の存在確認と再登録を行う idempotent verify として扱う。
-
 並行 import では、default policy は ref publish を atomic insert として扱う。同じ legacy ref / digest を複数 process が同時に import した場合、最初の publish が成功、後続は verify になる。異なる digest が同じ ref に並行 publish される場合、default は first writer wins で後続を conflict skip とする。`--replace` は明示的な destructive operation なので、並行実行時は last writer wins とする。BlobStore は CAS path へ直接 partial write せず、同一 directory 内の temporary file に書いてから atomic publish する。
 
 ### 6.6 Import / export
 
 OCI Image Layout との互換は import / export boundary で保つ。
 
-- import: `.ommx` archive、明示 OCI directory layout、または legacy local registry layout を読み、**manifest bytes / 各 blob を bytes そのまま** 検証して IndexStore + BlobStore に登録する。manifest format は変換しない (Image Manifest であれ Artifact Manifest であれ、bytes と digest を保持する)。
+- import: 外部の OCI 形式 content を **manifest bytes / 各 blob を bytes そのまま** 検証して IndexStore + BlobStore に登録する。対応する source は次の 4 つで、すべて同じ identity-preserving rule に従う (manifest format は変換しない、Image Manifest であれ Artifact Manifest であれ bytes と digest を保持する):
+  - 単一の OCI Image Layout directory (`oci-layout` + `index.json` + `blobs/`)。`oras` / `crane` / `skopeo` 出力でも v2 OMMX local registry の path/tag entry でも同様。
+  - v2 OMMX local registry layout (path/tag tree)。再帰 scan で root 下の OCI dir を列挙し、上記の per-dir import を batch で適用する。
+  - `.ommx` OCI archive (tar.gz)。
+  - remote OCI registry からの pull。manifest / blobs を BlobStore に入れ、IndexStore transaction で ref を登録する。
 - default export: 指定された manifest descriptor 1 つを root にして、その manifest の material closure を集め、standard OCI Image Layout (`oci-layout`, `index.json`, `blobs/`) を materialize する。Git で言えば `depth=1` の export である。
 - history bundle export: 明示 opt-in。指定された manifest から `subject` chain を辿り、lineage closure も同じ archive / directory に materialize する。Git で言えば `--depth=N` または full history bundle に相当する。offline で `history()` を使いたい場合の形式であり、default `.ommx` export とは分ける。
 - remote push: IndexStore + BlobStore から manifest / blobs を読み、OCI Distribution API に送る。
-- remote pull: remote manifest / blobs を BlobStore に入れ、IndexStore transaction で ref を登録する。
 
 この方針により、Local Registry は queryable / transactional な内部 store として実装しつつ、`.ommx` file と remote OCI registry との互換性を維持する。
 
