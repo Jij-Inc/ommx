@@ -61,7 +61,6 @@ impl LocalRegistry {
         self.index.resolve_image_name(image_name)
     }
 
-    #[allow(dead_code)]
     pub(crate) fn publish_artifact_manifest(
         &self,
         image_name: &ImageName,
@@ -154,12 +153,10 @@ impl LocalRegistry {
             .put_image_ref_with_policy(image_name, &manifest_digest, policy)
     }
 
-    #[allow(dead_code)]
     fn put_artifact_blob(&self, blob: &PendingArtifactBlob, kind: &str) -> Result<()> {
         self.put_descriptor_bytes(blob.descriptor(), blob.bytes(), kind)
     }
 
-    #[allow(dead_code)]
     fn put_descriptor_bytes(
         &self,
         descriptor: &Descriptor,
@@ -186,7 +183,6 @@ impl LocalRegistry {
     }
 }
 
-#[allow(dead_code)]
 fn annotations_json(annotations: Option<&HashMap<String, String>>) -> Result<String> {
     match annotations {
         Some(annotations) => String::from_utf8(stable_json_bytes(annotations)?)

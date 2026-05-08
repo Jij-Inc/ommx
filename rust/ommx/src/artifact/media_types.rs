@@ -1,4 +1,4 @@
-use ocipkg::oci_spec::image::MediaType;
+use oci_spec::image::MediaType;
 
 pub const V1_ARTIFACT_MEDIA_TYPE: &str = "application/org.ommx.v1.artifact";
 pub const V1_CONFIG_MEDIA_TYPE: &str = "application/org.ommx.v1.config+json";

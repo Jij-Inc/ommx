@@ -12,7 +12,10 @@ pub use annotations::*;
 pub use builder::*;
 pub use config::*;
 pub use digest::sha256_digest;
-pub(crate) use manifest::*;
+pub(crate) use manifest::{
+    descriptor_from_bytes, stable_json_bytes, PendingArtifactBlob, OCI_ARTIFACT_MANIFEST_MEDIA_TYPE,
+};
+pub use manifest::{LocalArtifact, LocalArtifactBuilder};
 
 use crate::v1;
 use anyhow::{bail, ensure, Context, Result};
@@ -115,23 +118,6 @@ pub fn ghcr(org: &str, repo: &str, name: &str, tag: &str) -> Result<ImageName> {
     ))
 }
 
-fn gather_oci_dirs(dir: &Path) -> Result<Vec<PathBuf>> {
-    let mut images = Vec::new();
-    for entry in std::fs::read_dir(dir)? {
-        let entry = entry?;
-        let path = entry.path();
-        if path.is_dir() {
-            if path.join("oci-layout").exists() {
-                images.push(path);
-            } else {
-                let mut sub_images = gather_oci_dirs(&path)?;
-                images.append(&mut sub_images)
-            }
-        }
-    }
-    Ok(images)
-}
-
 #[cfg(feature = "remote-artifact")]
 fn auth_from_env() -> Result<(String, String, String)> {
     if let (Ok(domain), Ok(username), Ok(password)) = (
@@ -150,14 +136,12 @@ fn auth_from_env() -> Result<(String, String, String)> {
 /// Get all images stored in the local registry
 pub fn get_images() -> Result<Vec<ImageName>> {
     let root = get_local_registry_root();
-    let dirs = gather_oci_dirs(root)?;
-    dirs.into_iter()
-        .map(|dir| {
-            let relative = dir
-                .strip_prefix(root)
-                .context("Failed to get relative path")?;
-            ImageName::from_path(relative)
-        })
+    let registry = local_registry::LocalRegistry::open(root)?;
+    registry
+        .index()
+        .list_refs(None)?
+        .into_iter()
+        .map(|reference| ImageName::parse(&format!("{}:{}", reference.name, reference.reference)))
         .collect()
 }
 

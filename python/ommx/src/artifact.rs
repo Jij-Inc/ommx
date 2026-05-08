@@ -13,6 +13,7 @@ use crate::PyDescriptor;
 enum ArtifactInner {
     Archive(Mutex<Artifact<OciArchive>>),
     Dir(Artifact<OciDir>),
+    Local(Box<Mutex<ommx::artifact::LocalArtifact>>),
 }
 
 impl ArtifactInner {
@@ -22,6 +23,7 @@ impl ArtifactInner {
                 a.get_mut().unwrap().get_name().map(|n| n.to_string()).ok()
             }
             ArtifactInner::Dir(d) => d.get_name().map(|n| n.to_string()).ok(),
+            ArtifactInner::Local(local) => Some(local.get_mut().unwrap().image_name().to_string()),
         }
     }
 
@@ -35,6 +37,7 @@ impl ArtifactInner {
                 let manifest = d.get_manifest()?;
                 Ok(manifest.annotations().as_ref().cloned().unwrap_or_default())
             }
+            ArtifactInner::Local(local) => local.get_mut().unwrap().annotations(),
         }
     }
 
@@ -58,20 +61,29 @@ impl ArtifactInner {
                     .map(PyDescriptor::from)
                     .collect())
             }
+            ArtifactInner::Local(local) => Ok(local
+                .get_mut()
+                .unwrap()
+                .layers()?
+                .into_iter()
+                .map(PyDescriptor::from)
+                .collect()),
         }
     }
 
     fn get_blob(&mut self, digest: &str) -> Result<Vec<u8>> {
-        let digest = digest.parse()?;
         match self {
             ArtifactInner::Archive(a) => {
+                let digest = digest.parse()?;
                 let blob = a.get_mut().unwrap().get_blob(&digest)?;
                 Ok(blob.to_vec())
             }
             ArtifactInner::Dir(d) => {
+                let digest = digest.parse()?;
                 let blob = d.get_blob(&digest)?;
                 Ok(blob.to_vec())
             }
+            ArtifactInner::Local(local) => local.get_mut().unwrap().get_blob(digest),
         }
     }
 
@@ -85,6 +97,9 @@ impl ArtifactInner {
             ArtifactInner::Dir(d) => {
                 let _remote = d.push()?;
                 Ok(())
+            }
+            ArtifactInner::Local(_) => {
+                bail!("Pushing SQLite-backed local registry artifacts is not implemented yet")
             }
         }
     }
@@ -150,10 +165,17 @@ impl PyArtifact {
     pub fn load(py: Python<'_>, image_name: &str) -> Result<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let image_name_parsed = ocipkg::ImageName::parse(image_name)?;
+        if let Some(artifact) = ommx::artifact::LocalArtifact::try_open(image_name_parsed.clone())?
+        {
+            return Ok(Self(ArtifactInner::Local(Box::new(Mutex::new(artifact)))));
+        }
         let local_path = ommx::artifact::get_image_dir(&image_name_parsed);
         if local_path.exists() {
-            let artifact = Artifact::from_oci_dir(&local_path)?;
-            return Ok(Self(ArtifactInner::Dir(artifact)));
+            bail!(
+                "Artifact {image_name} was found only in the legacy OCI directory local registry at {}. \
+                 Run `ommx artifact migrate` once, then retry.",
+                local_path.display()
+            );
         }
         let mut remote = Artifact::from_remote(image_name_parsed)?;
         let local = remote.pull()?;
@@ -552,8 +574,8 @@ fn assert_media_type(descriptor: &PyDescriptor, expected: &str) -> Result<()> {
 // ---------------------------------------------------------------------------
 
 enum BuilderInner {
-    Archive(Option<ommx::artifact::Builder<ocipkg::image::OciArchiveBuilder>>),
-    Dir(Option<ommx::artifact::Builder<ocipkg::image::OciDirBuilder>>),
+    Archive(Option<Box<ommx::artifact::Builder<ocipkg::image::OciArchiveBuilder>>>),
+    Dir(Option<Box<ommx::artifact::LocalArtifactBuilder>>),
 }
 
 impl BuilderInner {
@@ -575,7 +597,8 @@ impl BuilderInner {
                 let builder = b
                     .as_mut()
                     .ok_or_else(|| anyhow::anyhow!("Already built artifact"))?;
-                let desc = builder.add_layer(media_type.into(), blob, annotations)?;
+                let desc =
+                    builder.add_layer_bytes(media_type.into(), blob.to_vec(), annotations)?;
                 Ok(PyDescriptor::from(desc))
             }
         }
@@ -593,7 +616,7 @@ impl BuilderInner {
                 let builder = b
                     .as_mut()
                     .ok_or_else(|| anyhow::anyhow!("Already built artifact"))?;
-                builder.add_annotation(key.into(), value.into());
+                builder.add_annotation(key, value);
             }
         }
         Ok(())
@@ -605,15 +628,15 @@ impl BuilderInner {
                 let builder = b
                     .take()
                     .ok_or_else(|| anyhow::anyhow!("Already built artifact"))?;
-                let artifact = builder.build()?;
+                let artifact = (*builder).build()?;
                 Ok(ArtifactInner::Archive(Mutex::new(artifact)))
             }
             BuilderInner::Dir(ref mut b) => {
                 let builder = b
                     .take()
                     .ok_or_else(|| anyhow::anyhow!("Already built artifact"))?;
-                let artifact = builder.build()?;
-                Ok(ArtifactInner::Dir(artifact))
+                let artifact = (*builder).build()?;
+                Ok(ArtifactInner::Local(Box::new(Mutex::new(artifact))))
             }
         }
     }
@@ -660,7 +683,7 @@ impl PyArtifactBuilder {
     #[staticmethod]
     pub fn new_archive_unnamed(path: PathBuf) -> Result<Self> {
         let builder = ommx::artifact::Builder::new_archive_unnamed(path)?;
-        Ok(Self(BuilderInner::Archive(Some(builder))))
+        Ok(Self(BuilderInner::Archive(Some(Box::new(builder)))))
     }
 
     /// Create a new artifact archive with a named image name.
@@ -668,7 +691,7 @@ impl PyArtifactBuilder {
     pub fn new_archive(path: PathBuf, image_name: &str) -> Result<Self> {
         let image_name = ocipkg::ImageName::parse(image_name)?;
         let builder = ommx::artifact::Builder::new_archive(path, image_name)?;
-        Ok(Self(BuilderInner::Archive(Some(builder))))
+        Ok(Self(BuilderInner::Archive(Some(Box::new(builder)))))
     }
 
     /// Create a new artifact in local registry with a named image name.
@@ -689,8 +712,8 @@ impl PyArtifactBuilder {
     #[staticmethod]
     pub fn new(image_name: &str) -> Result<Self> {
         let image_name = ocipkg::ImageName::parse(image_name)?;
-        let builder = ommx::artifact::Builder::new(image_name)?;
-        Ok(Self(BuilderInner::Dir(Some(builder))))
+        let builder = ommx::artifact::LocalArtifactBuilder::new_ommx(image_name);
+        Ok(Self(BuilderInner::Dir(Some(Box::new(builder)))))
     }
 
     /// Create a new artifact as a temporary file.
@@ -707,7 +730,7 @@ impl PyArtifactBuilder {
     #[staticmethod]
     pub fn temp() -> Result<Self> {
         let builder = ommx::artifact::Builder::temp_archive()?;
-        Ok(Self(BuilderInner::Archive(Some(builder))))
+        Ok(Self(BuilderInner::Archive(Some(Box::new(builder)))))
     }
 
     /// An alias for {meth}`new` to create a new artifact in local registry
@@ -717,8 +740,8 @@ impl PyArtifactBuilder {
     /// to the GitHub repository URL.
     #[staticmethod]
     pub fn for_github(org: &str, repo: &str, name: &str, tag: &str) -> Result<Self> {
-        let builder = ommx::artifact::Builder::for_github(org, repo, name, tag)?;
-        Ok(Self(BuilderInner::Dir(Some(builder))))
+        let builder = ommx::artifact::LocalArtifactBuilder::for_github(org, repo, name, tag)?;
+        Ok(Self(BuilderInner::Dir(Some(Box::new(builder)))))
     }
 
     /// Add an {class}`~ommx.v1.Instance` to the artifact with annotations.

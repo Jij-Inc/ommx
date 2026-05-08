@@ -1,17 +1,20 @@
-#![allow(dead_code)]
-
 use super::{
     digest::sha256_digest,
+    ghcr,
     local_registry::{LocalRegistry, RefConflictPolicy, RefUpdate},
-    media_types,
+    media_types, InstanceAnnotations, ParametricInstanceAnnotations, SampleSetAnnotations,
+    SolutionAnnotations,
 };
-use anyhow::{Context, Result};
+use crate::v1;
+use anyhow::{bail, Context, Result};
 use oci_spec::image::{
     ArtifactManifest, ArtifactManifestBuilder as OciArtifactManifestBuilder, Descriptor,
     DescriptorBuilder, Digest, MediaType,
 };
+use prost::Message;
 use serde::Serialize;
 use std::{collections::HashMap, str::FromStr};
+use url::Url;
 
 pub const OCI_ARTIFACT_MANIFEST_MEDIA_TYPE: &str = "application/vnd.oci.artifact.manifest.v1+json";
 
@@ -40,24 +43,102 @@ impl PendingArtifactBlob {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct LocalArtifactBuild {
-    manifest_descriptor: Descriptor,
-    ref_update: RefUpdate,
+/// OMMX Artifact stored in the SQLite-backed Local Registry.
+#[derive(Debug)]
+pub struct LocalArtifact {
+    registry: LocalRegistry,
+    image_name: ocipkg::ImageName,
+    manifest_digest: String,
 }
 
-impl LocalArtifactBuild {
-    pub(crate) fn manifest_descriptor(&self) -> &Descriptor {
-        &self.manifest_descriptor
+impl LocalArtifact {
+    pub(crate) fn from_parts(
+        registry: LocalRegistry,
+        image_name: ocipkg::ImageName,
+        manifest_digest: String,
+    ) -> Self {
+        Self {
+            registry,
+            image_name,
+            manifest_digest,
+        }
     }
 
-    pub(crate) fn ref_update(&self) -> &RefUpdate {
-        &self.ref_update
+    pub fn open(image_name: ocipkg::ImageName) -> Result<Self> {
+        let registry = LocalRegistry::open_default()?;
+        Self::open_in_registry(registry, image_name)
+    }
+
+    pub fn open_in_registry(
+        registry: LocalRegistry,
+        image_name: ocipkg::ImageName,
+    ) -> Result<Self> {
+        Self::try_open_in_registry(registry, image_name.clone())?.with_context(|| {
+            format!(
+                "Artifact not found in the SQLite-backed local registry: {image_name}. \
+                 If this artifact exists in the legacy OCI directory local registry, \
+                 run `ommx artifact migrate` once, then retry."
+            )
+        })
+    }
+
+    pub fn try_open(image_name: ocipkg::ImageName) -> Result<Option<Self>> {
+        let registry = LocalRegistry::open_default()?;
+        Self::try_open_in_registry(registry, image_name)
+    }
+
+    pub fn try_open_in_registry(
+        registry: LocalRegistry,
+        image_name: ocipkg::ImageName,
+    ) -> Result<Option<Self>> {
+        let Some(manifest_digest) = registry.resolve_image_name(&image_name)? else {
+            return Ok(None);
+        };
+        Ok(Some(Self::from_parts(
+            registry,
+            image_name,
+            manifest_digest,
+        )))
+    }
+
+    pub fn image_name(&self) -> &ocipkg::ImageName {
+        &self.image_name
+    }
+
+    pub fn manifest_digest(&self) -> &str {
+        &self.manifest_digest
+    }
+
+    pub fn get_manifest(&self) -> Result<ArtifactManifest> {
+        let bytes = self.registry.blobs().read_bytes(&self.manifest_digest)?;
+        let manifest: ArtifactManifest =
+            serde_json::from_slice(&bytes).context("Failed to parse OCI artifact manifest")?;
+        ensure_ommx_artifact_manifest(&manifest)?;
+        Ok(manifest)
+    }
+
+    pub fn annotations(&self) -> Result<HashMap<String, String>> {
+        Ok(self
+            .get_manifest()?
+            .annotations()
+            .as_ref()
+            .cloned()
+            .unwrap_or_default())
+    }
+
+    pub fn layers(&self) -> Result<Vec<Descriptor>> {
+        Ok(self.get_manifest()?.blobs().to_vec())
+    }
+
+    pub fn get_blob(&self, digest: &str) -> Result<Vec<u8>> {
+        self.registry.blobs().read_bytes(digest)
     }
 }
 
+/// Builder for OMMX Artifacts stored in the SQLite-backed Local Registry.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct LocalArtifactBuilder {
+pub struct LocalArtifactBuilder {
+    image_name: ocipkg::ImageName,
     artifact_type: MediaType,
     blobs: Vec<PendingArtifactBlob>,
     subject: Option<Descriptor>,
@@ -65,8 +146,9 @@ pub(crate) struct LocalArtifactBuilder {
 }
 
 impl LocalArtifactBuilder {
-    pub(crate) fn new(artifact_type: MediaType) -> Self {
+    pub fn new(image_name: ocipkg::ImageName, artifact_type: MediaType) -> Self {
         Self {
+            image_name,
             artifact_type,
             blobs: Vec::new(),
             subject: None,
@@ -74,13 +156,24 @@ impl LocalArtifactBuilder {
         }
     }
 
-    pub(crate) fn new_ommx() -> Self {
-        Self::new(MediaType::Other(
-            media_types::V1_ARTIFACT_MEDIA_TYPE.to_string(),
-        ))
+    pub fn new_ommx(image_name: ocipkg::ImageName) -> Self {
+        Self::new(
+            image_name,
+            MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
+        )
     }
 
-    pub(crate) fn add_blob_bytes(
+    /// Create a new artifact builder for a GitHub container registry image name.
+    pub fn for_github(org: &str, repo: &str, name: &str, tag: &str) -> Result<Self> {
+        let image_name = ghcr(org, repo, name, tag)?;
+        let source = Url::parse(&format!("https://github.com/{org}/{repo}"))?;
+
+        let mut builder = Self::new_ommx(image_name);
+        builder.add_source(&source);
+        Ok(builder)
+    }
+
+    pub fn add_layer_bytes(
         &mut self,
         media_type: MediaType,
         bytes: Vec<u8>,
@@ -92,34 +185,92 @@ impl LocalArtifactBuilder {
         Ok(descriptor)
     }
 
-    pub(crate) fn set_subject(&mut self, subject: Descriptor) -> &mut Self {
+    pub fn add_instance(
+        &mut self,
+        instance: v1::Instance,
+        annotations: InstanceAnnotations,
+    ) -> Result<Descriptor> {
+        self.add_layer_bytes(
+            media_types::v1_instance(),
+            instance.encode_to_vec(),
+            annotations.into(),
+        )
+    }
+
+    pub fn add_solution(
+        &mut self,
+        solution: v1::State,
+        annotations: SolutionAnnotations,
+    ) -> Result<Descriptor> {
+        self.add_layer_bytes(
+            media_types::v1_solution(),
+            solution.encode_to_vec(),
+            annotations.into(),
+        )
+    }
+
+    pub fn add_parametric_instance(
+        &mut self,
+        instance: v1::ParametricInstance,
+        annotations: ParametricInstanceAnnotations,
+    ) -> Result<Descriptor> {
+        self.add_layer_bytes(
+            media_types::v1_parametric_instance(),
+            instance.encode_to_vec(),
+            annotations.into(),
+        )
+    }
+
+    pub fn add_sample_set(
+        &mut self,
+        sample_set: v1::SampleSet,
+        annotations: SampleSetAnnotations,
+    ) -> Result<Descriptor> {
+        self.add_layer_bytes(
+            media_types::v1_sample_set(),
+            sample_set.encode_to_vec(),
+            annotations.into(),
+        )
+    }
+
+    pub fn set_subject(&mut self, subject: Descriptor) -> &mut Self {
         self.subject = Some(subject);
         self
     }
 
-    pub(crate) fn insert_annotation(&mut self, key: impl Into<String>, value: impl Into<String>) {
+    pub fn add_annotation(&mut self, key: impl Into<String>, value: impl Into<String>) {
         self.annotations.insert(key.into(), value.into());
     }
 
-    pub(crate) fn build_local(
+    pub fn add_source(&mut self, url: &Url) {
+        self.add_annotation("org.opencontainers.image.source", url.to_string());
+    }
+
+    pub fn build(self) -> Result<LocalArtifact> {
+        let registry = LocalRegistry::open_default()?;
+        self.build_in_registry(&registry, RefConflictPolicy::KeepExisting)
+    }
+
+    pub fn build_in_registry(
         self,
         registry: &LocalRegistry,
-        image_name: &ocipkg::ImageName,
         policy: RefConflictPolicy,
-    ) -> Result<LocalArtifactBuild> {
+    ) -> Result<LocalArtifact> {
         let prepared = self.prepare()?;
         let ref_update = registry.publish_artifact_manifest(
-            image_name,
+            &prepared.image_name,
             &prepared.manifest,
             &prepared.manifest_descriptor,
             &prepared.manifest_bytes,
             &prepared.blobs,
             policy,
         )?;
-        Ok(LocalArtifactBuild {
-            manifest_descriptor: prepared.manifest_descriptor,
-            ref_update,
-        })
+        reject_conflicting_ref(&prepared.image_name, ref_update)?;
+        Ok(LocalArtifact::from_parts(
+            LocalRegistry::open(registry.root())?,
+            prepared.image_name,
+            prepared.manifest_descriptor.digest().to_string(),
+        ))
     }
 
     fn prepare(self) -> Result<PreparedArtifactManifest> {
@@ -144,6 +295,7 @@ impl LocalArtifactBuilder {
         let manifest_descriptor =
             descriptor_from_bytes(MediaType::ArtifactManifest, &manifest_bytes, HashMap::new())?;
         Ok(PreparedArtifactManifest {
+            image_name: self.image_name,
             manifest,
             manifest_bytes,
             manifest_descriptor,
@@ -154,6 +306,7 @@ impl LocalArtifactBuilder {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct PreparedArtifactManifest {
+    image_name: ocipkg::ImageName,
     manifest: ArtifactManifest,
     manifest_bytes: Vec<u8>,
     manifest_descriptor: Descriptor,
@@ -182,19 +335,51 @@ pub(crate) fn stable_json_bytes(value: &impl Serialize) -> Result<Vec<u8>> {
     serde_json::to_vec(&value).context("Failed to encode stable JSON bytes")
 }
 
+fn reject_conflicting_ref(image_name: &ocipkg::ImageName, ref_update: RefUpdate) -> Result<()> {
+    if let RefUpdate::Conflicted {
+        existing_manifest_digest,
+        incoming_manifest_digest,
+    } = ref_update
+    {
+        bail!(
+            "Local registry ref {image_name} already points to {existing_manifest_digest}; \
+             incoming manifest {incoming_manifest_digest} was not published"
+        );
+    }
+    Ok(())
+}
+
+fn ensure_ommx_artifact_manifest(manifest: &ArtifactManifest) -> Result<()> {
+    anyhow::ensure!(
+        manifest.media_type().as_ref() == OCI_ARTIFACT_MANIFEST_MEDIA_TYPE,
+        "Manifest is not an OCI artifact manifest: {}",
+        manifest.media_type()
+    );
+    anyhow::ensure!(
+        manifest.artifact_type() == &media_types::v1_artifact(),
+        "Not an OMMX Artifact: {}",
+        manifest.artifact_type()
+    );
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    fn test_image_name(tag: &str) -> Result<ocipkg::ImageName> {
+        ocipkg::ImageName::parse(&format!("ghcr.io/jij-inc/ommx/demo:{tag}"))
+    }
+
     #[test]
     fn builds_native_oci_artifact_manifest() -> Result<()> {
-        let mut builder = LocalArtifactBuilder::new_ommx();
-        let blob = builder.add_blob_bytes(
+        let mut builder = LocalArtifactBuilder::new_ommx(test_image_name("v1")?);
+        let blob = builder.add_layer_bytes(
             MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
             b"instance".to_vec(),
             HashMap::from([("org.ommx.v1.instance.title".to_string(), "demo".to_string())]),
         )?;
-        builder.insert_annotation("org.opencontainers.image.ref.name", "example.com/demo:v1");
+        builder.add_annotation("org.opencontainers.image.ref.name", "example.com/demo:v1");
 
         let prepared = builder.prepare()?;
         assert_eq!(prepared.manifest.media_type(), &MediaType::ArtifactManifest);
@@ -219,8 +404,8 @@ mod tests {
 
     #[test]
     fn stable_manifest_json_is_independent_of_annotation_insertion_order() -> Result<()> {
-        let first = prepared_with_annotations([("b", "2"), ("a", "1")])?;
-        let second = prepared_with_annotations([("a", "1"), ("b", "2")])?;
+        let first = prepared_with_annotations("order-a", [("b", "2"), ("a", "1")])?;
+        let second = prepared_with_annotations("order-b", [("a", "1"), ("b", "2")])?;
 
         assert_eq!(first.manifest_bytes, second.manifest_bytes);
         assert_eq!(
@@ -237,8 +422,8 @@ mod tests {
             b"parent manifest",
             HashMap::new(),
         )?;
-        let mut builder = LocalArtifactBuilder::new_ommx();
-        builder.add_blob_bytes(
+        let mut builder = LocalArtifactBuilder::new_ommx(test_image_name("subject")?);
+        builder.add_layer_bytes(
             MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
             b"instance".to_vec(),
             HashMap::new(),
@@ -256,16 +441,17 @@ mod tests {
     }
 
     fn prepared_with_annotations(
+        tag: &str,
         annotations: impl IntoIterator<Item = (&'static str, &'static str)>,
     ) -> Result<PreparedArtifactManifest> {
-        let mut builder = LocalArtifactBuilder::new_ommx();
-        builder.add_blob_bytes(
+        let mut builder = LocalArtifactBuilder::new_ommx(test_image_name(tag)?);
+        builder.add_layer_bytes(
             MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
             b"instance".to_vec(),
             HashMap::new(),
         )?;
         for (key, value) in annotations {
-            builder.insert_annotation(key, value);
+            builder.add_annotation(key, value);
         }
         builder.prepare()
     }

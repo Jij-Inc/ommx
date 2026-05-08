@@ -1,6 +1,6 @@
 use super::*;
 use crate::artifact::{
-    media_types, LocalArtifactBuild, LocalArtifactBuilder, OCI_ARTIFACT_MANIFEST_MEDIA_TYPE,
+    media_types, LocalArtifact, LocalArtifactBuilder, OCI_ARTIFACT_MANIFEST_MEDIA_TYPE,
 };
 use anyhow::{Context, Result};
 use oci_spec::image::{ArtifactManifest, MediaType};
@@ -174,6 +174,7 @@ fn imports_legacy_oci_dir_into_sqlite_registry() -> Result<()> {
     let manifest = index_store
         .get_manifest(&imported.manifest_digest)?
         .context("Imported manifest is missing")?;
+    assert_eq!(manifest.media_type, OCI_ARTIFACT_MANIFEST_MEDIA_TYPE);
     let manifest_blob = index_store
         .get_blob(&manifest.digest)?
         .context("Imported manifest blob is missing")?;
@@ -184,7 +185,12 @@ fn imports_legacy_oci_dir_into_sqlite_registry() -> Result<()> {
     let layer_blob = index_store
         .get_blob(&layers[0].digest)?
         .context("Imported layer blob is missing")?;
-    assert_eq!(layer_blob.kind, BLOB_KIND_LAYER);
+    assert_eq!(layer_blob.kind, BLOB_KIND_BLOB);
+
+    let artifact =
+        LocalArtifact::open_in_registry(LocalRegistry::open(&registry_root)?, image_name)?;
+    assert_eq!(artifact.layers()?, vec![layer.clone()]);
+    assert_eq!(artifact.get_blob(&layer.digest().to_string())?, b"instance");
     Ok(())
 }
 
@@ -337,16 +343,12 @@ fn local_registry_builds_native_artifact_manifest() -> Result<()> {
     let registry = LocalRegistry::open(dir.path())?;
     let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:built")?;
 
-    let built = build_test_local_artifact(&registry, &image_name, b"instance")?;
+    let artifact = build_test_local_artifact(&registry, &image_name, b"instance")?;
 
-    assert_eq!(built.ref_update(), &RefUpdate::Inserted);
     let manifest_digest = registry
         .resolve_image_name(&image_name)?
         .context("Published ref is missing")?;
-    assert_eq!(
-        manifest_digest,
-        built.manifest_descriptor().digest().to_string()
-    );
+    assert_eq!(manifest_digest, artifact.manifest_digest());
     let manifest_bytes = registry.blobs().read_bytes(&manifest_digest)?;
     let manifest: ArtifactManifest = serde_json::from_slice(&manifest_bytes)?;
     let blob = manifest
@@ -359,21 +361,19 @@ fn local_registry_builds_native_artifact_manifest() -> Result<()> {
         .get_manifest(&manifest_digest)?
         .context("Published manifest is missing")?;
     assert_eq!(manifest_record.media_type, OCI_ARTIFACT_MANIFEST_MEDIA_TYPE);
-    assert_eq!(manifest_record.size, built.manifest_descriptor().size());
+    assert_eq!(manifest_record.size, manifest_bytes.len() as u64);
     assert_eq!(manifest.media_type(), &MediaType::ArtifactManifest);
     assert_eq!(
         manifest.artifact_type(),
         &MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string())
     );
+    assert_eq!(artifact.layers()?, manifest.blobs().to_vec());
 
     let layers = registry.index().get_layers(&manifest_digest)?;
     assert_eq!(layers.len(), 1);
     assert_eq!(layers[0].digest, blob.digest().to_string());
     assert_eq!(layers[0].media_type, media_types::V1_INSTANCE_MEDIA_TYPE);
-    assert_eq!(
-        registry.blobs().read_bytes(&blob.digest().to_string())?,
-        b"instance"
-    );
+    assert_eq!(artifact.get_blob(&blob.digest().to_string())?, b"instance");
     Ok(())
 }
 
@@ -383,27 +383,17 @@ fn local_registry_build_keep_existing_skips_conflicting_manifest() -> Result<()>
     let registry = LocalRegistry::open(dir.path())?;
     let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:keep")?;
     let first = build_test_local_artifact(&registry, &image_name, b"first")?;
-    let second = build_test_local_artifact(&registry, &image_name, b"second")?;
+    let (second, second_blob) = new_test_local_artifact_builder(image_name.clone(), b"second")?;
 
-    assert_eq!(first.ref_update(), &RefUpdate::Inserted);
-    assert_eq!(
-        second.ref_update(),
-        &RefUpdate::Conflicted {
-            existing_manifest_digest: first.manifest_descriptor().digest().to_string(),
-            incoming_manifest_digest: second.manifest_descriptor().digest().to_string()
-        }
-    );
+    let error = second
+        .build_in_registry(&registry, RefConflictPolicy::KeepExisting)
+        .expect_err("conflicting local registry ref should fail");
+    assert!(error.to_string().contains("already points to"));
     assert_eq!(
         registry.resolve_image_name(&image_name)?,
-        Some(first.manifest_descriptor().digest().to_string())
+        Some(first.manifest_digest().to_string())
     );
-    assert!(registry
-        .index()
-        .get_manifest(&second.manifest_descriptor().digest().to_string())?
-        .is_none());
-    assert!(!registry
-        .blobs()
-        .exists(&second.manifest_descriptor().digest().to_string())?);
+    assert!(!registry.blobs().exists(&second_blob.digest().to_string())?);
     Ok(())
 }
 
@@ -500,14 +490,22 @@ fn build_test_local_artifact(
     registry: &LocalRegistry,
     image_name: &ImageName,
     layer_bytes: &[u8],
-) -> Result<LocalArtifactBuild> {
-    let mut builder = LocalArtifactBuilder::new_ommx();
-    builder.add_blob_bytes(
+) -> Result<LocalArtifact> {
+    let (builder, _) = new_test_local_artifact_builder(image_name.clone(), layer_bytes)?;
+    builder.build_in_registry(registry, RefConflictPolicy::KeepExisting)
+}
+
+fn new_test_local_artifact_builder(
+    image_name: ImageName,
+    layer_bytes: &[u8],
+) -> Result<(LocalArtifactBuilder, Descriptor)> {
+    let mut builder = LocalArtifactBuilder::new_ommx(image_name);
+    let descriptor = builder.add_layer_bytes(
         MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
         layer_bytes.to_vec(),
         HashMap::from([("org.ommx.v1.instance.title".to_string(), "demo".to_string())]),
     )?;
-    builder.build_local(registry, image_name, RefConflictPolicy::KeepExisting)
+    Ok((builder, descriptor))
 }
 
 fn put_test_manifest_ref(
