@@ -13,7 +13,11 @@ use oci_spec::image::{
 };
 use prost::Message;
 use serde::Serialize;
-use std::{collections::HashMap, str::FromStr, sync::Arc};
+use std::{
+    collections::HashMap,
+    str::FromStr,
+    sync::{Arc, OnceLock},
+};
 use url::Url;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -49,11 +53,19 @@ impl PendingArtifactBlob {
 /// [`super::local_registry::SqliteIndexStore`], this makes
 /// `LocalArtifact` `Sync` and `Clone`-friendly without any per-artifact
 /// connection duplication.
+///
+/// The parsed manifest is memoised in an `Arc<OnceLock<LocalManifest>>`
+/// so repeated calls to [`Self::layers`] / [`Self::annotations`] /
+/// [`Self::subject`] do not re-read the manifest blob from the
+/// `BlobStore`, requery the `IndexStore`, and re-parse the JSON each
+/// time. Clones of the artifact share the same cell, so any clone that
+/// reads the manifest first warms it for the rest.
 #[derive(Debug, Clone)]
 pub struct LocalArtifact {
     registry: Arc<LocalRegistry>,
     image_name: ocipkg::ImageName,
     manifest_digest: String,
+    manifest_cache: Arc<OnceLock<LocalManifest>>,
 }
 
 impl LocalArtifact {
@@ -66,6 +78,7 @@ impl LocalArtifact {
             registry,
             image_name,
             manifest_digest,
+            manifest_cache: Arc::new(OnceLock::new()),
         }
     }
 
@@ -120,7 +133,21 @@ impl LocalArtifact {
         &self.manifest_digest
     }
 
-    pub fn get_manifest(&self) -> Result<LocalManifest> {
+    /// Read and cache the manifest associated with this artifact.
+    ///
+    /// The first successful call populates a shared `OnceLock`; later
+    /// calls (and clones of `self`) reuse the cached value without
+    /// touching the `BlobStore` / `IndexStore`. Failed reads are not
+    /// cached, so transient errors retry on the next call.
+    pub fn get_manifest(&self) -> Result<&LocalManifest> {
+        if let Some(cached) = self.manifest_cache.get() {
+            return Ok(cached);
+        }
+        let manifest = self.read_manifest_uncached()?;
+        Ok(self.manifest_cache.get_or_init(|| manifest))
+    }
+
+    fn read_manifest_uncached(&self) -> Result<LocalManifest> {
         let bytes = self.registry.blobs().read_bytes(&self.manifest_digest)?;
         let record = self
             .registry
@@ -194,10 +221,16 @@ impl LocalManifest {
         }
     }
 
-    pub fn artifact_type(&self) -> Option<&MediaType> {
+    /// Always returns the OMMX `artifactType` discriminator. `parse`
+    /// rejects manifests without one (see `ensure_ommx_image_manifest`
+    /// / `ensure_ommx_artifact_manifest`), so this method does not
+    /// surface an `Option`.
+    pub fn artifact_type(&self) -> &MediaType {
         match self {
-            LocalManifest::Image(m) => m.artifact_type().as_ref(),
-            LocalManifest::Artifact(m) => Some(m.artifact_type()),
+            LocalManifest::Image(m) => m.artifact_type().as_ref().expect(
+                "ensure_ommx_image_manifest guarantees Image Manifest carries an artifactType",
+            ),
+            LocalManifest::Artifact(m) => m.artifact_type(),
         }
     }
 

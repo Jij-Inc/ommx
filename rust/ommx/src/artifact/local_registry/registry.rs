@@ -1,14 +1,13 @@
 use super::{
-    import_legacy_local_registry, import_legacy_local_registry_ref,
-    import_legacy_local_registry_with_policy, now_rfc3339, FileBlobStore, LayerRecord,
-    LegacyImportReport, LegacyOciDirImport, ManifestRecord, RefConflictPolicy, RefUpdate,
-    SqliteIndexStore, BLOB_KIND_BLOB, BLOB_KIND_MANIFEST,
+    annotations_json, import_legacy_local_registry, import_legacy_local_registry_ref,
+    import_legacy_local_registry_ref_with_policy, import_legacy_local_registry_with_policy,
+    now_rfc3339, FileBlobStore, LayerRecord, LegacyImportReport, LegacyOciDirRef, ManifestRecord,
+    RefConflictPolicy, RefUpdate, SqliteIndexStore, BLOB_KIND_BLOB, BLOB_KIND_MANIFEST,
 };
-use crate::artifact::{stable_json_bytes, PendingArtifactBlob, OCI_ARTIFACT_MANIFEST_MEDIA_TYPE};
+use crate::artifact::{PendingArtifactBlob, OCI_ARTIFACT_MANIFEST_MEDIA_TYPE};
 use anyhow::{ensure, Context, Result};
 use oci_spec::image::{ArtifactManifest, Descriptor, MediaType};
 use ocipkg::ImageName;
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
@@ -42,8 +41,22 @@ impl LocalRegistry {
         &self.blobs
     }
 
-    pub fn import_legacy_ref(&self, image_name: &ImageName) -> Result<LegacyOciDirImport> {
+    pub fn import_legacy_ref(&self, image_name: &ImageName) -> Result<LegacyOciDirRef> {
         import_legacy_local_registry_ref(&self.index, &self.blobs, &self.root, image_name)
+    }
+
+    pub fn import_legacy_ref_with_policy(
+        &self,
+        image_name: &ImageName,
+        policy: RefConflictPolicy,
+    ) -> Result<LegacyOciDirRef> {
+        import_legacy_local_registry_ref_with_policy(
+            &self.index,
+            &self.blobs,
+            &self.root,
+            image_name,
+            policy,
+        )
     }
 
     pub fn import_legacy_layout(&self) -> Result<LegacyImportReport> {
@@ -180,13 +193,5 @@ impl LocalRegistry {
         record.media_type = Some(descriptor.media_type().to_string());
         record.kind = kind.to_string();
         self.index.put_blob(&record)
-    }
-}
-
-fn annotations_json(annotations: Option<&HashMap<String, String>>) -> Result<String> {
-    match annotations {
-        Some(annotations) => String::from_utf8(stable_json_bytes(annotations)?)
-            .context("Stable JSON bytes are not UTF-8"),
-        None => Ok("{}".to_string()),
     }
 }

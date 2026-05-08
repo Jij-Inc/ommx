@@ -166,6 +166,18 @@ fn imports_legacy_oci_dir_into_sqlite_registry_preserving_image_manifest() -> Re
     let index_store = SqliteIndexStore::open_in_registry_root(&registry_root)?;
     let blob_store = FileBlobStore::open_in_registry_root(&registry_root)?;
 
+    // Snapshot the original legacy manifest bytes so we can assert
+    // byte-for-byte equality with what ends up in the v3 BlobStore.
+    let (legacy_algorithm, legacy_encoded) = expected_digest
+        .split_once(':')
+        .expect("manifest digest is `algorithm:encoded`");
+    let legacy_manifest_bytes = std::fs::read(
+        legacy_dir
+            .join("blobs")
+            .join(legacy_algorithm)
+            .join(legacy_encoded),
+    )?;
+
     let imported = import_legacy_oci_dir(&index_store, &blob_store, &legacy_dir)?;
 
     assert_eq!(imported.image_name, Some(image_name.clone()));
@@ -176,6 +188,16 @@ fn imports_legacy_oci_dir_into_sqlite_registry_preserving_image_manifest() -> Re
     );
     assert!(blob_store.exists(&imported.manifest_digest)?);
     assert!(blob_store.exists(&layer.digest().to_string())?);
+
+    // Strict identity: the manifest bytes the v3 BlobStore returns must
+    // be exactly the bytes that lived in the legacy OCI dir. Digest
+    // equality already implies this for SHA-256, but a direct check
+    // catches any future regression where import accidentally rebuilds
+    // / re-serialises the manifest.
+    assert_eq!(
+        blob_store.read_bytes(&imported.manifest_digest)?,
+        legacy_manifest_bytes
+    );
 
     let manifest = index_store
         .get_manifest(&imported.manifest_digest)?
@@ -380,6 +402,18 @@ fn local_registry_builds_native_artifact_manifest() -> Result<()> {
         &MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string())
     );
     assert_eq!(artifact.layers()?, manifest.blobs().to_vec());
+    // LocalArtifact must dispatch on the stored manifest media type and
+    // surface the v3 native Artifact Manifest's blob descriptors through
+    // the common LocalManifest view (symmetric to the legacy import
+    // test that exercises LocalManifest::Image).
+    assert!(matches!(
+        artifact.get_manifest()?,
+        LocalManifest::Artifact(_)
+    ));
+    assert_eq!(
+        artifact.get_manifest()?.artifact_type(),
+        &MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string())
+    );
 
     let layers = registry.index().get_layers(&manifest_digest)?;
     assert_eq!(layers.len(), 1);

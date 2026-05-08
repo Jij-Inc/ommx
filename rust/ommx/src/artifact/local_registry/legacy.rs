@@ -1,7 +1,7 @@
 use super::{
-    now_rfc3339, sha256_digest, FileBlobStore, LayerRecord, ManifestRecord, RefConflictPolicy,
-    RefUpdate, SqliteIndexStore, ValidatedDigest, BLOB_KIND_BLOB, BLOB_KIND_CONFIG,
-    BLOB_KIND_MANIFEST, OCI_IMAGE_REF_NAME_ANNOTATION,
+    annotations_json, now_rfc3339, sha256_digest, FileBlobStore, LayerRecord, ManifestRecord,
+    RefConflictPolicy, RefUpdate, SqliteIndexStore, ValidatedDigest, BLOB_KIND_BLOB,
+    BLOB_KIND_CONFIG, BLOB_KIND_MANIFEST, OCI_IMAGE_REF_NAME_ANNOTATION,
 };
 use crate::artifact::{media_types, OCI_IMAGE_MANIFEST_MEDIA_TYPE};
 use anyhow::{ensure, Context, Result};
@@ -15,12 +15,12 @@ use std::{
     str::FromStr,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LegacyOciDirImport {
-    pub manifest_digest: String,
-    pub image_name: Option<ImageName>,
-}
-
+/// Identity of a legacy OCI dir entry: the manifest digest preserved
+/// from the legacy `index.json`, plus the OCI image ref name annotation
+/// when present. Returned both by lookups (`legacy_oci_dir_ref`) and
+/// by import operations (`import_legacy_oci_dir*`), since v3 import is
+/// identity-preserving and reports the same digest the legacy directory
+/// already contained.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LegacyOciDirRef {
     pub manifest_digest: String,
@@ -68,7 +68,7 @@ pub fn import_legacy_oci_dir(
     index_store: &SqliteIndexStore,
     blob_store: &FileBlobStore,
     oci_dir_root: impl AsRef<Path>,
-) -> Result<LegacyOciDirImport> {
+) -> Result<LegacyOciDirRef> {
     import_legacy_oci_dir_with_policy(
         index_store,
         blob_store,
@@ -82,7 +82,7 @@ pub fn import_legacy_oci_dir_with_policy(
     blob_store: &FileBlobStore,
     oci_dir_root: impl AsRef<Path>,
     policy: RefConflictPolicy,
-) -> Result<LegacyOciDirImport> {
+) -> Result<LegacyOciDirRef> {
     let (import, _) = import_legacy_oci_dir_with_policy_inner(
         index_store,
         blob_store,
@@ -99,7 +99,7 @@ fn import_legacy_oci_dir_with_policy_inner(
     oci_dir_root: impl AsRef<Path>,
     policy: RefConflictPolicy,
     conflict_handling: RefConflictHandling,
-) -> Result<(LegacyOciDirImport, Option<RefUpdate>)> {
+) -> Result<(LegacyOciDirRef, Option<RefUpdate>)> {
     let oci_dir_root = oci_dir_root.as_ref();
     let prepared = prepare_legacy_oci_dir(oci_dir_root)?;
     let manifest_digest = prepared.manifest_digest.clone();
@@ -119,7 +119,7 @@ fn import_legacy_oci_dir_with_policy_inner(
             digest: digest_to_string(layer.digest()),
             media_type: layer.media_type().to_string(),
             size: layer.size(),
-            annotations_json: annotations_json(layer.annotations())?,
+            annotations_json: annotations_json(layer.annotations().as_ref())?,
         });
     }
     // Image Manifest references a config blob; persist it as a CAS object so
@@ -151,7 +151,7 @@ fn import_legacy_oci_dir_with_policy_inner(
                 .subject()
                 .as_ref()
                 .map(|d| digest_to_string(d.digest())),
-            annotations_json: annotations_json(prepared.image_manifest.annotations())?,
+            annotations_json: annotations_json(prepared.image_manifest.annotations().as_ref())?,
             created_at: now_rfc3339(),
         },
         &layers,
@@ -171,7 +171,7 @@ fn import_legacy_oci_dir_with_policy_inner(
         .transpose()?;
 
     Ok((
-        LegacyOciDirImport {
+        LegacyOciDirRef {
             manifest_digest,
             image_name,
         },
@@ -184,14 +184,30 @@ pub fn import_legacy_local_registry_ref(
     blob_store: &FileBlobStore,
     legacy_registry_root: impl AsRef<Path>,
     image_name: &ImageName,
-) -> Result<LegacyOciDirImport> {
+) -> Result<LegacyOciDirRef> {
+    import_legacy_local_registry_ref_with_policy(
+        index_store,
+        blob_store,
+        legacy_registry_root,
+        image_name,
+        RefConflictPolicy::KeepExisting,
+    )
+}
+
+pub fn import_legacy_local_registry_ref_with_policy(
+    index_store: &SqliteIndexStore,
+    blob_store: &FileBlobStore,
+    legacy_registry_root: impl AsRef<Path>,
+    image_name: &ImageName,
+    policy: RefConflictPolicy,
+) -> Result<LegacyOciDirRef> {
     let legacy_path = legacy_local_registry_path(legacy_registry_root, image_name);
     import_legacy_oci_dir_as_ref_with_policy(
         index_store,
         blob_store,
         legacy_path,
         image_name,
-        RefConflictPolicy::KeepExisting,
+        policy,
     )
 }
 
@@ -200,7 +216,7 @@ pub fn import_legacy_oci_dir_as_ref(
     blob_store: &FileBlobStore,
     oci_dir_root: impl AsRef<Path>,
     image_name: &ImageName,
-) -> Result<LegacyOciDirImport> {
+) -> Result<LegacyOciDirRef> {
     import_legacy_oci_dir_as_ref_with_policy(
         index_store,
         blob_store,
@@ -216,7 +232,7 @@ pub fn import_legacy_oci_dir_as_ref_with_policy(
     oci_dir_root: impl AsRef<Path>,
     image_name: &ImageName,
     policy: RefConflictPolicy,
-) -> Result<LegacyOciDirImport> {
+) -> Result<LegacyOciDirRef> {
     let (import, _) = import_legacy_oci_dir_as_ref_with_policy_inner(
         index_store,
         blob_store,
@@ -235,7 +251,7 @@ fn import_legacy_oci_dir_as_ref_with_policy_inner(
     image_name: &ImageName,
     policy: RefConflictPolicy,
     conflict_handling: RefConflictHandling,
-) -> Result<(LegacyOciDirImport, RefUpdate)> {
+) -> Result<(LegacyOciDirRef, RefUpdate)> {
     let legacy_path = oci_dir_root.as_ref();
     let legacy_ref = legacy_oci_dir_ref(legacy_path)?;
     if let Some(imported_name) = &legacy_ref.image_name {
@@ -673,15 +689,4 @@ fn image_name_from_index_descriptor(desc: &Descriptor) -> Result<Option<ImageNam
 
 fn digest_to_string<D: std::fmt::Display + ?Sized>(digest: &D) -> String {
     digest.to_string()
-}
-
-fn annotations_json(
-    annotations: &Option<std::collections::HashMap<String, String>>,
-) -> Result<String> {
-    match annotations {
-        Some(annotations) => {
-            serde_json::to_string(annotations).context("Failed to encode annotations")
-        }
-        None => Ok("{}".to_string()),
-    }
 }
