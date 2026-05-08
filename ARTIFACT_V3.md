@@ -327,7 +327,17 @@ v3 の Local Registry API は path ではなく reference / descriptor / blob re
 
 `get_image_dir(image_name)` は v3 の中心 API ではない。OCI dir backend 互換や migration tool のための legacy API とし、Local Registry の existence check / listing / read path には使わない。
 
-ただし既存 Local Registry の read 互換は維持する。legacy local registry layout (`get_image_dir(ref)` が指す path/tag OCI dir 群) は、ユーザーが明示的に `ommx artifact import` を実行するか、Rust / Python SDK の import API を呼び出したときだけ scan し、manifest / descriptors / blobs を検証して **manifest bytes と digest を保持したまま** IndexStore + BlobStore に取り込む (5.5)。通常の `Artifact.exists` / `Artifact.resolve` / `Artifact.load` / `Artifact.list` は IndexStore を source of truth とし、ref miss のたびに legacy path を再探索しない。
+ただし既存 Local Registry の read 互換は維持する。legacy local registry layout (`get_image_dir(ref)` が指す path/tag OCI dir 群) は、ユーザーが明示的に `ommx artifact import` を実行するか、Rust / Python SDK の import API を呼び出したときに、manifest / descriptors / blobs を検証して **manifest bytes と digest を保持したまま** IndexStore + BlobStore に取り込む (5.5)。
+
+「ref miss のたびに legacy 全体を再探索しない」原則は、**root の再帰 scan のような重い処理を回避する** という意味で読む。`Artifact.list` が IndexStore のみを query するのはこの原則による。一方で、`Artifact.load(image)` のような単一 image を要求する高レベル API は、SQLite miss 時に **その image の legacy path 一つに対する `Path::exists()`** で probe し、見つかれば 1 回だけ自動 import して以後の呼び出しは IndexStore fast path に乗せる「lazy auto-migration」を許容する。これは v2 ユーザの ergonomics を壊さないための例外で、
+
+- probe は対象 image 一つの dir 存在判定だけ (root scan ではない)
+- 一度 import すれば 2 回目以降は SQLite hit、再 probe は走らない
+- legacy data からの **読み出しではなく、SQLite への取り込み**(identity-preserving import)
+
+という条件を満たす範囲に限る。read を fallthrough する fallback (毎回 legacy を読む) は依然として禁止。`Artifact.list` のような listing API も依然 SQLite のみ。
+
+import 時に新 Local Registry 側へ同名 ref がすでに存在し、legacy 側と manifest digest が異なる場合、default は既存 ref を保持して当該 entry を skip する。置換は `ommx artifact import --replace`、または SDK の import API で `Replace` policy を明示した場合だけ行う。同名 ref が同じ digest を指している場合は conflict ではなく、manifest / blobs の存在確認と再登録を行う idempotent verify として扱う。
 
 import 時に新 Local Registry 側へ同名 ref がすでに存在し、legacy 側と manifest digest が異なる場合、default は既存 ref を保持して当該 entry を skip する。置換は `ommx artifact import --replace`、または SDK の import API で `Replace` policy を明示した場合だけ行う。同名 ref が同じ digest を指している場合は conflict ではなく、manifest / blobs の存在確認と再登録を行う idempotent verify として扱う。
 

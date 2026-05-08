@@ -172,17 +172,26 @@ impl PyArtifact {
         let _guard = crate::TRACING.attach_parent_context(py);
         let image_name_parsed = ocipkg::ImageName::parse(image_name)?;
 
-        // Fast path: already published in the v3 SQLite Local Registry.
+        // Fast path: the image is already published in the v3 SQLite Local
+        // Registry. Subsequent calls for the same image always land here.
         if let Some(artifact) = ommx::artifact::LocalArtifact::try_open(image_name_parsed.clone())?
         {
             return Ok(Self(ArtifactInner::Local(artifact)));
         }
 
-        // SQLite miss. Make sure the legacy OCI dir cache is populated for
-        // this image (pull from remote if needed), then import that legacy
-        // entry into the v3 SQLite registry. After this the artifact is
-        // reachable like any v3 native build, and the next call hits the
-        // fast path above instead of pulling again.
+        // SQLite miss — apply the lazy auto-migration described in
+        // ARTIFACT_V3.md §6.5: probe this single image's legacy OCI dir path
+        // (one `Path::exists()`, *not* a recursive scan of the legacy root),
+        // pull from remote into the legacy cache if absent, then import that
+        // legacy entry into the v3 SQLite registry. Identity is preserved
+        // because import_legacy_ref delegates to the standard OCI dir import
+        // path which keeps manifest bytes and digest verbatim. The next call
+        // hits the SQLite fast path above instead of probing legacy again.
+        //
+        // This is *not* a fallback (we never serve reads from legacy on the
+        // hot path); it's a one-shot adapter that drains v2 / remote-pulled
+        // content into the v3 store on first access so the v2 ergonomics of
+        // `Artifact.load(image)` keep working.
         let local_path = ommx::artifact::get_image_dir(&image_name_parsed);
         if !local_path.exists() {
             let mut remote = Artifact::from_remote(image_name_parsed.clone())?;
