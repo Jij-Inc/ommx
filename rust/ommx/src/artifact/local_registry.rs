@@ -66,6 +66,25 @@ pub struct LayerRecord {
     pub annotations_json: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RefConflictPolicy {
+    KeepExisting,
+    Replace,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RefUpdate {
+    Inserted,
+    Unchanged,
+    Replaced {
+        previous_manifest_digest: String,
+    },
+    Conflicted {
+        existing_manifest_digest: String,
+        incoming_manifest_digest: String,
+    },
+}
+
 #[derive(Debug)]
 pub struct SqliteIndexStore {
     conn: Connection,
@@ -279,6 +298,34 @@ impl SqliteIndexStore {
             params![name, reference, manifest_digest, now_rfc3339()],
         )?;
         Ok(())
+    }
+
+    pub fn put_ref_with_policy(
+        &self,
+        name: &str,
+        reference: &str,
+        manifest_digest: &str,
+        policy: RefConflictPolicy,
+    ) -> Result<RefUpdate> {
+        validate_digest(manifest_digest)?;
+        if let Some(existing_manifest_digest) = self.resolve_ref(name, reference)? {
+            if existing_manifest_digest == manifest_digest {
+                return Ok(RefUpdate::Unchanged);
+            }
+            if policy == RefConflictPolicy::KeepExisting {
+                return Ok(RefUpdate::Conflicted {
+                    existing_manifest_digest,
+                    incoming_manifest_digest: manifest_digest.to_string(),
+                });
+            }
+            self.put_ref(name, reference, manifest_digest)?;
+            return Ok(RefUpdate::Replaced {
+                previous_manifest_digest: existing_manifest_digest,
+            });
+        }
+
+        self.put_ref(name, reference, manifest_digest)?;
+        Ok(RefUpdate::Inserted)
     }
 
     pub fn resolve_ref(&self, name: &str, reference: &str) -> Result<Option<String>> {
@@ -500,6 +547,13 @@ impl LocalRegistry {
         migrate_legacy_local_registry(&self.index, &self.blobs, &self.root)
     }
 
+    pub fn migrate_legacy_layout_with_policy(
+        &self,
+        policy: RefConflictPolicy,
+    ) -> Result<LegacyMigrationReport> {
+        migrate_legacy_local_registry_with_policy(&self.index, &self.blobs, &self.root, policy)
+    }
+
     pub fn resolve_image_name(&self, image_name: &ImageName) -> Result<Option<String>> {
         self.index.resolve_image_name(image_name)
     }
@@ -512,9 +566,18 @@ pub struct LegacyOciDirImport {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LegacyOciDirRef {
+    pub manifest_digest: String,
+    pub image_name: Option<ImageName>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LegacyMigrationReport {
     pub scanned_dirs: usize,
     pub imported_dirs: usize,
+    pub verified_dirs: usize,
+    pub conflicted_dirs: usize,
+    pub replaced_refs: usize,
 }
 
 /// Import an existing OCI Image Layout directory into the v3 local registry.
@@ -528,6 +591,20 @@ pub fn import_legacy_oci_dir(
     index_store: &SqliteIndexStore,
     blob_store: &FileBlobStore,
     oci_dir_root: impl AsRef<Path>,
+) -> Result<LegacyOciDirImport> {
+    import_legacy_oci_dir_with_policy(
+        index_store,
+        blob_store,
+        oci_dir_root,
+        RefConflictPolicy::KeepExisting,
+    )
+}
+
+pub fn import_legacy_oci_dir_with_policy(
+    index_store: &SqliteIndexStore,
+    blob_store: &FileBlobStore,
+    oci_dir_root: impl AsRef<Path>,
+    policy: RefConflictPolicy,
 ) -> Result<LegacyOciDirImport> {
     let oci_dir_root = oci_dir_root.as_ref();
     ensure_legacy_oci_layout(oci_dir_root)?;
@@ -551,6 +628,10 @@ pub fn import_legacy_oci_dir(
     )?;
 
     let manifest_digest = digest_to_string(manifest_desc.digest());
+    if let Some(image_name) = &image_name {
+        ensure_image_ref_update_allowed(index_store, image_name, &manifest_digest, policy)?;
+    }
+
     let manifest_bytes = blob_store.read_bytes(&manifest_digest)?;
     let manifest: ImageManifest = serde_json::from_slice(&manifest_bytes)
         .with_context(|| format!("Failed to parse legacy manifest {manifest_digest}"))?;
@@ -598,7 +679,7 @@ pub fn import_legacy_oci_dir(
     )?;
 
     if let Some(image_name) = &image_name {
-        index_store.put_image_ref(image_name, &manifest_digest)?;
+        put_image_ref_checked(index_store, image_name, &manifest_digest, policy)?;
     }
 
     Ok(LegacyOciDirImport {
@@ -614,7 +695,13 @@ pub fn import_legacy_local_registry_ref(
     image_name: &ImageName,
 ) -> Result<LegacyOciDirImport> {
     let legacy_path = legacy_local_registry_path(legacy_registry_root, image_name);
-    import_legacy_oci_dir_as_ref(index_store, blob_store, legacy_path, image_name)
+    import_legacy_oci_dir_as_ref_with_policy(
+        index_store,
+        blob_store,
+        legacy_path,
+        image_name,
+        RefConflictPolicy::KeepExisting,
+    )
 }
 
 pub fn import_legacy_oci_dir_as_ref(
@@ -623,19 +710,37 @@ pub fn import_legacy_oci_dir_as_ref(
     oci_dir_root: impl AsRef<Path>,
     image_name: &ImageName,
 ) -> Result<LegacyOciDirImport> {
+    import_legacy_oci_dir_as_ref_with_policy(
+        index_store,
+        blob_store,
+        oci_dir_root,
+        image_name,
+        RefConflictPolicy::KeepExisting,
+    )
+}
+
+pub fn import_legacy_oci_dir_as_ref_with_policy(
+    index_store: &SqliteIndexStore,
+    blob_store: &FileBlobStore,
+    oci_dir_root: impl AsRef<Path>,
+    image_name: &ImageName,
+    policy: RefConflictPolicy,
+) -> Result<LegacyOciDirImport> {
     let legacy_path = oci_dir_root.as_ref();
-    if let Some(imported_name) = legacy_oci_dir_image_name(legacy_path)? {
+    let legacy_ref = legacy_oci_dir_ref(legacy_path)?;
+    if let Some(imported_name) = &legacy_ref.image_name {
         ensure!(
-            &imported_name == image_name,
+            imported_name == image_name,
             "Legacy local registry ref mismatch: requested={}, imported={}",
             image_name,
             imported_name
         );
     }
 
-    let import = import_legacy_oci_dir(index_store, blob_store, legacy_path)?;
+    ensure_image_ref_update_allowed(index_store, image_name, &legacy_ref.manifest_digest, policy)?;
+    let import = import_legacy_oci_dir_with_policy(index_store, blob_store, legacy_path, policy)?;
     if import.image_name.is_none() {
-        index_store.put_image_ref(image_name, &import.manifest_digest)?;
+        put_image_ref_checked(index_store, image_name, &import.manifest_digest, policy)?;
     }
     Ok(import)
 }
@@ -645,26 +750,98 @@ pub fn migrate_legacy_local_registry(
     blob_store: &FileBlobStore,
     legacy_registry_root: impl AsRef<Path>,
 ) -> Result<LegacyMigrationReport> {
+    migrate_legacy_local_registry_with_policy(
+        index_store,
+        blob_store,
+        legacy_registry_root,
+        RefConflictPolicy::KeepExisting,
+    )
+}
+
+pub fn migrate_legacy_local_registry_with_policy(
+    index_store: &SqliteIndexStore,
+    blob_store: &FileBlobStore,
+    legacy_registry_root: impl AsRef<Path>,
+    policy: RefConflictPolicy,
+) -> Result<LegacyMigrationReport> {
     let legacy_registry_root = legacy_registry_root.as_ref();
     let legacy_dirs = gather_legacy_oci_dirs(legacy_registry_root)?;
+    let mut report = LegacyMigrationReport {
+        scanned_dirs: legacy_dirs.len(),
+        imported_dirs: 0,
+        verified_dirs: 0,
+        conflicted_dirs: 0,
+        replaced_refs: 0,
+    };
+
     for legacy_dir in &legacy_dirs {
         let image_name = legacy_migration_image_name(legacy_registry_root, legacy_dir)?;
-        import_legacy_oci_dir_as_ref(index_store, blob_store, legacy_dir, &image_name)
-            .with_context(|| {
-                format!(
-                    "Failed to migrate legacy local registry entry {}",
-                    legacy_dir.display()
+        let legacy_ref = legacy_oci_dir_ref(legacy_dir)?;
+        let existing_manifest_digest = index_store.resolve_image_name(&image_name)?;
+
+        match existing_manifest_digest {
+            None => {
+                import_legacy_oci_dir_as_ref_with_policy(
+                    index_store,
+                    blob_store,
+                    legacy_dir,
+                    &image_name,
+                    RefConflictPolicy::KeepExisting,
                 )
-            })?;
+                .with_context(|| {
+                    format!(
+                        "Failed to migrate legacy local registry entry {}",
+                        legacy_dir.display()
+                    )
+                })?;
+                report.imported_dirs += 1;
+            }
+            Some(existing) if existing == legacy_ref.manifest_digest => {
+                import_legacy_oci_dir_as_ref_with_policy(
+                    index_store,
+                    blob_store,
+                    legacy_dir,
+                    &image_name,
+                    RefConflictPolicy::KeepExisting,
+                )
+                .with_context(|| {
+                    format!(
+                        "Failed to verify migrated legacy local registry entry {}",
+                        legacy_dir.display()
+                    )
+                })?;
+                report.verified_dirs += 1;
+            }
+            Some(_) if policy == RefConflictPolicy::KeepExisting => {
+                report.conflicted_dirs += 1;
+            }
+            Some(_) => {
+                import_legacy_oci_dir_as_ref_with_policy(
+                    index_store,
+                    blob_store,
+                    legacy_dir,
+                    &image_name,
+                    RefConflictPolicy::Replace,
+                )
+                .with_context(|| {
+                    format!(
+                        "Failed to replace legacy local registry entry {}",
+                        legacy_dir.display()
+                    )
+                })?;
+                report.replaced_refs += 1;
+            }
+        }
     }
 
-    Ok(LegacyMigrationReport {
-        scanned_dirs: legacy_dirs.len(),
-        imported_dirs: legacy_dirs.len(),
-    })
+    Ok(report)
 }
 
 pub fn legacy_oci_dir_image_name(oci_dir_root: impl AsRef<Path>) -> Result<Option<ImageName>> {
+    Ok(legacy_oci_dir_ref(oci_dir_root)?.image_name)
+}
+
+pub fn legacy_oci_dir_ref(oci_dir_root: impl AsRef<Path>) -> Result<LegacyOciDirRef> {
     let oci_dir_root = oci_dir_root.as_ref();
     ensure_legacy_oci_layout(oci_dir_root)?;
 
@@ -676,7 +853,10 @@ pub fn legacy_oci_dir_image_name(oci_dir_root: impl AsRef<Path>) -> Result<Optio
         index_path.display()
     );
     let manifest_desc = image_index.manifests().first().unwrap();
-    image_name_from_index_descriptor(manifest_desc)
+    Ok(LegacyOciDirRef {
+        manifest_digest: digest_to_string(manifest_desc.digest()),
+        image_name: image_name_from_index_descriptor(manifest_desc)?,
+    })
 }
 
 pub fn legacy_local_registry_path(
@@ -692,6 +872,20 @@ impl SqliteIndexStore {
             &image_name_repository(image_name),
             image_name.reference.as_str(),
             manifest_digest,
+        )
+    }
+
+    pub fn put_image_ref_with_policy(
+        &self,
+        image_name: &ImageName,
+        manifest_digest: &str,
+        policy: RefConflictPolicy,
+    ) -> Result<RefUpdate> {
+        self.put_ref_with_policy(
+            &image_name_repository(image_name),
+            image_name.reference.as_str(),
+            manifest_digest,
+            policy,
         )
     }
 
@@ -765,6 +959,50 @@ fn legacy_migration_image_name(
                 legacy_dir.display()
             )
         }
+    }
+}
+
+fn ensure_image_ref_update_allowed(
+    index_store: &SqliteIndexStore,
+    image_name: &ImageName,
+    manifest_digest: &str,
+    policy: RefConflictPolicy,
+) -> Result<()> {
+    if policy == RefConflictPolicy::Replace {
+        return Ok(());
+    }
+
+    if let Some(existing_manifest_digest) = index_store.resolve_image_name(image_name)? {
+        ensure!(
+            existing_manifest_digest == manifest_digest,
+            "Local registry ref conflict for {}: existing manifest {}, incoming manifest {}",
+            image_name,
+            existing_manifest_digest,
+            manifest_digest
+        );
+    }
+    Ok(())
+}
+
+fn put_image_ref_checked(
+    index_store: &SqliteIndexStore,
+    image_name: &ImageName,
+    manifest_digest: &str,
+    policy: RefConflictPolicy,
+) -> Result<RefUpdate> {
+    match index_store.put_image_ref_with_policy(image_name, manifest_digest, policy)? {
+        RefUpdate::Conflicted {
+            existing_manifest_digest,
+            incoming_manifest_digest,
+        } => {
+            anyhow::bail!(
+                "Local registry ref conflict for {}: existing manifest {}, incoming manifest {}",
+                image_name,
+                existing_manifest_digest,
+                incoming_manifest_digest
+            )
+        }
+        update => Ok(update),
     }
 }
 
@@ -1055,7 +1293,10 @@ mod tests {
             report,
             LegacyMigrationReport {
                 scanned_dirs: 1,
-                imported_dirs: 1
+                imported_dirs: 1,
+                verified_dirs: 0,
+                conflicted_dirs: 0,
+                replaced_refs: 0
             }
         );
         let imported_digest = index_store
@@ -1065,10 +1306,89 @@ mod tests {
             migrate_legacy_local_registry(&index_store, &blob_store, &legacy_registry_root)?,
             LegacyMigrationReport {
                 scanned_dirs: 1,
-                imported_dirs: 1
+                imported_dirs: 0,
+                verified_dirs: 1,
+                conflicted_dirs: 0,
+                replaced_refs: 0
             }
         );
         assert!(blob_store.exists(&imported_digest)?);
+        Ok(())
+    }
+
+    #[test]
+    fn migrate_legacy_local_registry_keeps_existing_ref_on_conflict() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let legacy_registry_root = dir.path().join("legacy-registry");
+        let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:conflict")?;
+        let legacy_dir = legacy_local_registry_path(&legacy_registry_root, &image_name);
+        build_test_legacy_oci_dir(legacy_dir.clone(), image_name.clone())?;
+        let legacy_manifest_digest = legacy_oci_dir_ref(&legacy_dir)?.manifest_digest;
+
+        let registry_root = dir.path().join("registry-v3");
+        let index_store = SqliteIndexStore::open_in_registry_root(&registry_root)?;
+        let blob_store = FileBlobStore::open_in_registry_root(&registry_root)?;
+        let existing_digest =
+            put_test_manifest_ref(&index_store, &blob_store, &image_name, b"existing-manifest")?;
+        assert_ne!(existing_digest, legacy_manifest_digest);
+
+        let report =
+            migrate_legacy_local_registry(&index_store, &blob_store, &legacy_registry_root)?;
+        assert_eq!(
+            report,
+            LegacyMigrationReport {
+                scanned_dirs: 1,
+                imported_dirs: 0,
+                verified_dirs: 0,
+                conflicted_dirs: 1,
+                replaced_refs: 0
+            }
+        );
+        assert_eq!(
+            index_store.resolve_image_name(&image_name)?,
+            Some(existing_digest)
+        );
+        assert!(!blob_store.exists(&legacy_manifest_digest)?);
+        Ok(())
+    }
+
+    #[test]
+    fn migrate_legacy_local_registry_replaces_existing_ref_when_requested() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let legacy_registry_root = dir.path().join("legacy-registry");
+        let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:replace")?;
+        let legacy_dir = legacy_local_registry_path(&legacy_registry_root, &image_name);
+        build_test_legacy_oci_dir(legacy_dir.clone(), image_name.clone())?;
+        let legacy_manifest_digest = legacy_oci_dir_ref(&legacy_dir)?.manifest_digest;
+
+        let registry_root = dir.path().join("registry-v3");
+        let index_store = SqliteIndexStore::open_in_registry_root(&registry_root)?;
+        let blob_store = FileBlobStore::open_in_registry_root(&registry_root)?;
+        let existing_digest =
+            put_test_manifest_ref(&index_store, &blob_store, &image_name, b"existing-manifest")?;
+        assert_ne!(existing_digest, legacy_manifest_digest);
+
+        let report = migrate_legacy_local_registry_with_policy(
+            &index_store,
+            &blob_store,
+            &legacy_registry_root,
+            RefConflictPolicy::Replace,
+        )?;
+        assert_eq!(
+            report,
+            LegacyMigrationReport {
+                scanned_dirs: 1,
+                imported_dirs: 0,
+                verified_dirs: 0,
+                conflicted_dirs: 0,
+                replaced_refs: 1
+            }
+        );
+        assert_eq!(
+            index_store.resolve_image_name(&image_name)?,
+            Some(legacy_manifest_digest.clone())
+        );
+        assert!(blob_store.exists(&legacy_manifest_digest)?);
         Ok(())
     }
 
@@ -1085,7 +1405,10 @@ mod tests {
             registry.migrate_legacy_layout()?,
             LegacyMigrationReport {
                 scanned_dirs: 1,
-                imported_dirs: 1
+                imported_dirs: 1,
+                verified_dirs: 0,
+                conflicted_dirs: 0,
+                replaced_refs: 0
             }
         );
         let imported_digest = registry
@@ -1094,6 +1417,31 @@ mod tests {
         assert!(registry.blobs().exists(&imported_digest)?);
         assert!(registry.index().get_manifest(&imported_digest)?.is_some());
         Ok(())
+    }
+
+    fn put_test_manifest_ref(
+        index_store: &SqliteIndexStore,
+        blob_store: &FileBlobStore,
+        image_name: &ImageName,
+        bytes: &[u8],
+    ) -> Result<String> {
+        let mut blob = blob_store.put_bytes(bytes)?;
+        blob.media_type = Some("application/vnd.oci.image.manifest.v1+json".to_string());
+        blob.kind = BLOB_KIND_MANIFEST.to_string();
+        index_store.put_blob(&blob)?;
+        index_store.put_manifest(
+            &ManifestRecord {
+                digest: blob.digest.clone(),
+                media_type: "application/vnd.oci.image.manifest.v1+json".to_string(),
+                size: bytes.len() as u64,
+                subject_digest: None,
+                annotations_json: "{}".to_string(),
+                created_at: now_rfc3339(),
+            },
+            &[],
+        )?;
+        index_store.put_image_ref(image_name, &blob.digest)?;
+        Ok(blob.digest)
     }
 
     fn build_test_legacy_oci_dir(legacy_dir: PathBuf, image_name: ImageName) -> Result<Descriptor> {

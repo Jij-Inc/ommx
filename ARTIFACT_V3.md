@@ -296,6 +296,8 @@ v3 の Local Registry API は path ではなく reference / descriptor / blob re
 
 ただし既存 Local Registry の read 互換は維持する。legacy local registry layout (`get_image_dir(ref)` が指す path/tag OCI dir 群) は、ユーザーが明示的に `ommx artifact migrate` を実行するか、Rust / Python SDK の migration API を呼び出したときだけ scan し、manifest / descriptors / blobs を検証して IndexStore + BlobStore に migration する。通常の `Artifact.exists` / `Artifact.resolve` / `Artifact.load` / `Artifact.list` は IndexStore を source of truth とし、ref miss のたびに legacy path を再探索しない。
 
+migration 時に新 Local Registry 側へ同名 ref がすでに存在し、legacy 側と manifest digest が異なる場合、default は既存 ref を保持して当該 entry を skip する。置換は `ommx artifact migrate --replace`、または SDK の migration API で `Replace` policy を明示した場合だけ行う。同名 ref が同じ digest を指している場合は conflict ではなく、manifest / blobs の存在確認と再登録を行う idempotent verify として扱う。
+
 ### 6.6 Import / export
 
 OCI Image Layout との互換は import / export boundary で保つ。

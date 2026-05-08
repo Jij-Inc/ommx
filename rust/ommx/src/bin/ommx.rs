@@ -2,7 +2,11 @@ use anyhow::{bail, Result};
 use clap::{Parser, Subcommand};
 use colored::Colorize;
 use ocipkg::{oci_spec::image::ImageManifest, ImageName};
-use ommx::artifact::{get_image_dir, local_registry::LocalRegistry, Artifact};
+use ommx::artifact::{
+    get_image_dir,
+    local_registry::{LocalRegistry, RefConflictPolicy},
+    Artifact,
+};
 use std::path::{Path, PathBuf};
 
 mod built_info {
@@ -82,6 +86,10 @@ enum ArtifactCommand {
         /// Local registry root. Defaults to OMMX_LOCAL_REGISTRY_ROOT or the OS default data dir.
         #[clap(long)]
         root: Option<PathBuf>,
+
+        /// Replace existing v3 refs when a legacy entry has the same name but a different manifest.
+        #[clap(long)]
+        replace: bool,
     },
 }
 
@@ -227,19 +235,32 @@ fn main() -> Result<()> {
         }
 
         Command::Artifact { command } => match command {
-            ArtifactCommand::Migrate { root } => {
+            ArtifactCommand::Migrate { root, replace } => {
                 let registry = if let Some(root) = root {
                     LocalRegistry::open(root)?
                 } else {
                     LocalRegistry::open_default()?
                 };
-                let report = registry.migrate_legacy_layout()?;
+                let policy = if *replace {
+                    RefConflictPolicy::Replace
+                } else {
+                    RefConflictPolicy::KeepExisting
+                };
+                let report = registry.migrate_legacy_layout_with_policy(policy)?;
                 println!(
                     "Migrated {} legacy OCI dir(s) from {}",
                     report.imported_dirs,
                     registry.root().display()
                 );
                 println!("Scanned {} legacy OCI dir(s)", report.scanned_dirs);
+                println!("Verified {} existing ref(s)", report.verified_dirs);
+                println!("Replaced {} existing ref(s)", report.replaced_refs);
+                if report.conflicted_dirs > 0 {
+                    println!(
+                        "Skipped {} conflicting ref(s); rerun with --replace to overwrite them",
+                        report.conflicted_dirs
+                    );
+                }
             }
         },
     }
