@@ -5,7 +5,6 @@
 //! local-registry state is represented by an index store plus a CAS blob store.
 
 mod blob;
-mod digest;
 mod index;
 mod legacy;
 mod registry;
@@ -16,9 +15,9 @@ mod tests;
 
 use chrono::Utc;
 
+pub use crate::artifact::digest::sha256_digest;
+pub(crate) use crate::artifact::digest::{validate_digest, ValidatedDigest};
 pub use blob::FileBlobStore;
-pub use digest::sha256_digest;
-pub(crate) use digest::{validate_digest, ValidatedDigest};
 pub use index::{image_name_repository, SqliteIndexStore};
 pub use legacy::{
     import_legacy_local_registry_ref, import_legacy_oci_dir, import_legacy_oci_dir_as_ref,

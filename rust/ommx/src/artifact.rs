@@ -4,11 +4,15 @@
 mod annotations;
 mod builder;
 mod config;
+pub mod digest;
 pub mod local_registry;
+mod manifest;
 pub mod media_types;
 pub use annotations::*;
 pub use builder::*;
 pub use config::*;
+pub use digest::sha256_digest;
+pub use manifest::*;
 
 use crate::v1;
 use anyhow::{bail, ensure, Context, Result};
