@@ -12,6 +12,7 @@ use ocipkg::{
 };
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 #[test]
 fn file_blob_store_round_trip() -> Result<()> {
@@ -192,8 +193,10 @@ fn imports_legacy_oci_dir_into_sqlite_registry_preserving_image_manifest() -> Re
         .context("Imported layer blob is missing")?;
     assert_eq!(layer_blob.kind, BLOB_KIND_BLOB);
 
-    let artifact =
-        LocalArtifact::open_in_registry(LocalRegistry::open(&registry_root)?, image_name)?;
+    let artifact = LocalArtifact::open_in_registry(
+        Arc::new(LocalRegistry::open(&registry_root)?),
+        image_name,
+    )?;
     // LocalArtifact must dispatch on the stored manifest media type and
     // surface the legacy Image Manifest's layer descriptors through the
     // common LocalManifest view.
@@ -349,7 +352,7 @@ fn local_registry_imports_legacy_refs_when_requested() -> Result<()> {
 #[test]
 fn local_registry_builds_native_artifact_manifest() -> Result<()> {
     let dir = tempfile::tempdir()?;
-    let registry = LocalRegistry::open(dir.path())?;
+    let registry = Arc::new(LocalRegistry::open(dir.path())?);
     let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:built")?;
 
     let artifact = build_test_local_artifact(&registry, &image_name, b"instance")?;
@@ -389,13 +392,13 @@ fn local_registry_builds_native_artifact_manifest() -> Result<()> {
 #[test]
 fn local_registry_build_keep_existing_skips_conflicting_manifest() -> Result<()> {
     let dir = tempfile::tempdir()?;
-    let registry = LocalRegistry::open(dir.path())?;
+    let registry = Arc::new(LocalRegistry::open(dir.path())?);
     let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:keep")?;
     let first = build_test_local_artifact(&registry, &image_name, b"first")?;
     let (second, second_blob) = new_test_local_artifact_builder(image_name.clone(), b"second")?;
 
     let error = second
-        .build_in_registry(&registry, RefConflictPolicy::KeepExisting)
+        .build_in_registry(registry.clone(), RefConflictPolicy::KeepExisting)
         .expect_err("conflicting local registry ref should fail");
     assert!(error.to_string().contains("already points to"));
     assert_eq!(
@@ -496,12 +499,12 @@ fn concurrent_blob_writes_publish_one_complete_blob() -> Result<()> {
 }
 
 fn build_test_local_artifact(
-    registry: &LocalRegistry,
+    registry: &Arc<LocalRegistry>,
     image_name: &ImageName,
     layer_bytes: &[u8],
 ) -> Result<LocalArtifact> {
     let (builder, _) = new_test_local_artifact_builder(image_name.clone(), layer_bytes)?;
-    builder.build_in_registry(registry, RefConflictPolicy::KeepExisting)
+    builder.build_in_registry(registry.clone(), RefConflictPolicy::KeepExisting)
 }
 
 fn new_test_local_artifact_builder(

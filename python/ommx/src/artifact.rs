@@ -11,9 +11,17 @@ use crate::PyDescriptor;
 // ---------------------------------------------------------------------------
 
 enum ArtifactInner {
+    // The legacy ocipkg readers carry mutable per-handle state (file
+    // cursor for the tar/zstd archive reader), which makes them !Sync.
+    // Wrap them in Mutex so the enclosing #[pyclass] can satisfy the
+    // gil_used = false Sync requirement. The Mutex is uncontended in
+    // practice because PyArtifact methods take &mut self.
     Archive(Mutex<Artifact<OciArchive>>),
     Dir(Artifact<OciDir>),
-    Local(Box<Mutex<ommx::artifact::LocalArtifact>>),
+    // LocalArtifact already holds an Arc<LocalRegistry> whose internal
+    // SqliteIndexStore wraps the Connection in a Mutex, so it is Sync
+    // by itself. No outer Mutex / Box needed here.
+    Local(ommx::artifact::LocalArtifact),
 }
 
 impl ArtifactInner {
@@ -23,7 +31,7 @@ impl ArtifactInner {
                 a.get_mut().unwrap().get_name().map(|n| n.to_string()).ok()
             }
             ArtifactInner::Dir(d) => d.get_name().map(|n| n.to_string()).ok(),
-            ArtifactInner::Local(local) => Some(local.get_mut().unwrap().image_name().to_string()),
+            ArtifactInner::Local(local) => Some(local.image_name().to_string()),
         }
     }
 
@@ -37,7 +45,7 @@ impl ArtifactInner {
                 let manifest = d.get_manifest()?;
                 Ok(manifest.annotations().as_ref().cloned().unwrap_or_default())
             }
-            ArtifactInner::Local(local) => local.get_mut().unwrap().annotations(),
+            ArtifactInner::Local(local) => local.annotations(),
         }
     }
 
@@ -62,8 +70,6 @@ impl ArtifactInner {
                     .collect())
             }
             ArtifactInner::Local(local) => Ok(local
-                .get_mut()
-                .unwrap()
                 .layers()?
                 .into_iter()
                 .map(PyDescriptor::from)
@@ -83,7 +89,7 @@ impl ArtifactInner {
                 let blob = d.get_blob(&digest)?;
                 Ok(blob.to_vec())
             }
-            ArtifactInner::Local(local) => local.get_mut().unwrap().get_blob(digest),
+            ArtifactInner::Local(local) => local.get_blob(digest),
         }
     }
 
@@ -167,7 +173,7 @@ impl PyArtifact {
         let image_name_parsed = ocipkg::ImageName::parse(image_name)?;
         if let Some(artifact) = ommx::artifact::LocalArtifact::try_open(image_name_parsed.clone())?
         {
-            return Ok(Self(ArtifactInner::Local(Box::new(Mutex::new(artifact)))));
+            return Ok(Self(ArtifactInner::Local(artifact)));
         }
         let local_path = ommx::artifact::get_image_dir(&image_name_parsed);
         if local_path.exists() {
@@ -636,7 +642,7 @@ impl BuilderInner {
                     .take()
                     .ok_or_else(|| anyhow::anyhow!("Already built artifact"))?;
                 let artifact = (*builder).build()?;
-                Ok(ArtifactInner::Local(Box::new(Mutex::new(artifact))))
+                Ok(ArtifactInner::Local(artifact))
             }
         }
     }

@@ -13,7 +13,7 @@ use oci_spec::image::{
 };
 use prost::Message;
 use serde::Serialize;
-use std::{collections::HashMap, str::FromStr};
+use std::{collections::HashMap, str::FromStr, sync::Arc};
 use url::Url;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -42,16 +42,23 @@ impl PendingArtifactBlob {
 }
 
 /// OMMX Artifact stored in the SQLite-backed Local Registry.
-#[derive(Debug)]
+///
+/// Holds an [`Arc`]ed [`LocalRegistry`] so that several artifacts opened
+/// from the same registry share a single SQLite connection and blob
+/// store handle. Combined with the `Mutex<Connection>` inside
+/// [`super::local_registry::SqliteIndexStore`], this makes
+/// `LocalArtifact` `Sync` and `Clone`-friendly without any per-artifact
+/// connection duplication.
+#[derive(Debug, Clone)]
 pub struct LocalArtifact {
-    registry: LocalRegistry,
+    registry: Arc<LocalRegistry>,
     image_name: ocipkg::ImageName,
     manifest_digest: String,
 }
 
 impl LocalArtifact {
     pub(crate) fn from_parts(
-        registry: LocalRegistry,
+        registry: Arc<LocalRegistry>,
         image_name: ocipkg::ImageName,
         manifest_digest: String,
     ) -> Self {
@@ -63,30 +70,30 @@ impl LocalArtifact {
     }
 
     pub fn open(image_name: ocipkg::ImageName) -> Result<Self> {
-        let registry = LocalRegistry::open_default()?;
+        let registry = Arc::new(LocalRegistry::open_default()?);
         Self::open_in_registry(registry, image_name)
     }
 
     pub fn open_in_registry(
-        registry: LocalRegistry,
+        registry: Arc<LocalRegistry>,
         image_name: ocipkg::ImageName,
     ) -> Result<Self> {
         Self::try_open_in_registry(registry, image_name.clone())?.with_context(|| {
             format!(
                 "Artifact not found in the SQLite-backed local registry: {image_name}. \
                  If this artifact exists in the legacy OCI directory local registry, \
-                 run `ommx artifact migrate` once, then retry."
+                 run `ommx artifact import` once, then retry."
             )
         })
     }
 
     pub fn try_open(image_name: ocipkg::ImageName) -> Result<Option<Self>> {
-        let registry = LocalRegistry::open_default()?;
+        let registry = Arc::new(LocalRegistry::open_default()?);
         Self::try_open_in_registry(registry, image_name)
     }
 
     pub fn try_open_in_registry(
-        registry: LocalRegistry,
+        registry: Arc<LocalRegistry>,
         image_name: ocipkg::ImageName,
     ) -> Result<Option<Self>> {
         let Some(manifest_digest) = registry.resolve_image_name(&image_name)? else {
@@ -97,6 +104,12 @@ impl LocalArtifact {
             image_name,
             manifest_digest,
         )))
+    }
+
+    /// Borrow the underlying registry, which may be shared with other
+    /// `LocalArtifact` instances.
+    pub fn registry(&self) -> &Arc<LocalRegistry> {
+        &self.registry
     }
 
     pub fn image_name(&self) -> &ocipkg::ImageName {
@@ -142,10 +155,17 @@ impl LocalArtifact {
 /// A manifest read from the SQLite Local Registry, dispatched on its OCI media
 /// type. v3 stores both Image Manifest (legacy import path) and Artifact
 /// Manifest (native build path) and identifies each by its bytes digest.
+///
+/// Both variants are boxed because `oci_spec`'s `ImageManifest` (~800 bytes)
+/// and `ArtifactManifest` (~460 bytes) are large structs — keeping them
+/// inline would either trip `clippy::large_enum_variant` or pad the smaller
+/// variant up to the larger one. The boxed indirection costs one allocation
+/// per `get_manifest()` call but keeps both the enum and the surrounding
+/// `Result<LocalManifest>` cheap to move around.
 #[derive(Debug, Clone)]
 pub enum LocalManifest {
-    Image(ImageManifest),
-    Artifact(ArtifactManifest),
+    Image(Box<ImageManifest>),
+    Artifact(Box<ArtifactManifest>),
 }
 
 impl LocalManifest {
@@ -155,13 +175,13 @@ impl LocalManifest {
                 let manifest: ArtifactManifest = serde_json::from_slice(bytes)
                     .context("Failed to parse OCI artifact manifest")?;
                 ensure_ommx_artifact_manifest(&manifest)?;
-                Ok(LocalManifest::Artifact(manifest))
+                Ok(LocalManifest::Artifact(Box::new(manifest)))
             }
             OCI_IMAGE_MANIFEST_MEDIA_TYPE => {
                 let manifest: ImageManifest =
                     serde_json::from_slice(bytes).context("Failed to parse OCI image manifest")?;
                 ensure_ommx_image_manifest(&manifest)?;
-                Ok(LocalManifest::Image(manifest))
+                Ok(LocalManifest::Image(Box::new(manifest)))
             }
             other => bail!("Unsupported manifest media type for OMMX artifact: {other}"),
         }
@@ -316,13 +336,13 @@ impl LocalArtifactBuilder {
     }
 
     pub fn build(self) -> Result<LocalArtifact> {
-        let registry = LocalRegistry::open_default()?;
-        self.build_in_registry(&registry, RefConflictPolicy::KeepExisting)
+        let registry = Arc::new(LocalRegistry::open_default()?);
+        self.build_in_registry(registry, RefConflictPolicy::KeepExisting)
     }
 
     pub fn build_in_registry(
         self,
-        registry: &LocalRegistry,
+        registry: Arc<LocalRegistry>,
         policy: RefConflictPolicy,
     ) -> Result<LocalArtifact> {
         let prepared = self.prepare()?;
@@ -336,7 +356,7 @@ impl LocalArtifactBuilder {
         )?;
         reject_conflicting_ref(&prepared.image_name, ref_update)?;
         Ok(LocalArtifact::from_parts(
-            LocalRegistry::open(registry.root())?,
+            registry,
             prepared.image_name,
             prepared.manifest_descriptor.digest().to_string(),
         ))

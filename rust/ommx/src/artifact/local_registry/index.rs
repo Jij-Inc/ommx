@@ -5,14 +5,26 @@ use super::{
 use anyhow::{ensure, Context, Result};
 use ocipkg::ImageName;
 use rusqlite::{params, Connection, OptionalExtension};
-use std::{fs, path::Path, time::Duration};
+use std::{
+    fs,
+    path::Path,
+    sync::{Mutex, MutexGuard},
+    time::Duration,
+};
 
 const SCHEMA_VERSION: i64 = 1;
 const SQLITE_BUSY_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// SQLite-backed index store for the v3 Local Registry.
+///
+/// `rusqlite::Connection` is `Send` but `!Sync`, so it lives behind a
+/// [`Mutex`] here. That makes [`SqliteIndexStore`] (and the enclosing
+/// [`super::LocalRegistry`]) `Sync`, which lets a single registry be
+/// shared via [`std::sync::Arc`] across PyO3 wrappers without
+/// per-artifact connection duplication.
 #[derive(Debug)]
 pub struct SqliteIndexStore {
-    conn: Connection,
+    conn: Mutex<Connection>,
 }
 
 impl SqliteIndexStore {
@@ -26,7 +38,9 @@ impl SqliteIndexStore {
             .with_context(|| format!("Failed to open SQLite index {}", path.display()))?;
         conn.busy_timeout(SQLITE_BUSY_TIMEOUT)
             .context("Failed to configure SQLite busy timeout")?;
-        let store = Self { conn };
+        let store = Self {
+            conn: Mutex::new(conn),
+        };
         store.init_schema()?;
         Ok(store)
     }
@@ -35,8 +49,14 @@ impl SqliteIndexStore {
         Self::open(root.as_ref().join(SQLITE_INDEX_FILE_NAME))
     }
 
-    pub fn schema_version(&self) -> Result<i64> {
+    fn lock(&self) -> MutexGuard<'_, Connection> {
         self.conn
+            .lock()
+            .expect("SqliteIndexStore connection mutex poisoned")
+    }
+
+    pub fn schema_version(&self) -> Result<i64> {
+        self.lock()
             .query_row(
                 "SELECT version FROM ommx_local_registry_schema LIMIT 1",
                 [],
@@ -57,7 +77,7 @@ impl SqliteIndexStore {
             );
         }
         let now = now_rfc3339();
-        self.conn.execute(
+        self.lock().execute(
             r#"
             INSERT INTO blobs (digest, size, media_type, storage_uri, kind, created_at, last_verified_at)
             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
@@ -83,7 +103,7 @@ impl SqliteIndexStore {
 
     pub fn get_blob(&self, digest: &str) -> Result<Option<BlobRecord>> {
         validate_digest(digest)?;
-        self.conn
+        self.lock()
             .query_row(
                 r#"
                 SELECT digest, size, media_type, storage_uri, kind, last_verified_at
@@ -108,7 +128,8 @@ impl SqliteIndexStore {
 
     pub fn put_manifest(&self, record: &ManifestRecord, layers: &[LayerRecord]) -> Result<()> {
         validate_digest(&record.digest)?;
-        let tx = self.conn.unchecked_transaction()?;
+        let conn = self.lock();
+        let tx = conn.unchecked_transaction()?;
         tx.execute(
             r#"
             INSERT INTO manifests (digest, media_type, size, subject_digest, annotations_json, created_at)
@@ -162,7 +183,7 @@ impl SqliteIndexStore {
 
     pub fn get_manifest(&self, digest: &str) -> Result<Option<ManifestRecord>> {
         validate_digest(digest)?;
-        self.conn
+        self.lock()
             .query_row(
                 r#"
                 SELECT digest, media_type, size, subject_digest, annotations_json, created_at
@@ -187,7 +208,8 @@ impl SqliteIndexStore {
 
     pub fn get_layers(&self, manifest_digest: &str) -> Result<Vec<LayerRecord>> {
         validate_digest(manifest_digest)?;
-        let mut stmt = self.conn.prepare(
+        let conn = self.lock();
+        let mut stmt = conn.prepare(
             r#"
             SELECT manifest_digest, position, digest, media_type, size, annotations_json
             FROM manifest_layers
@@ -214,7 +236,7 @@ impl SqliteIndexStore {
 
     pub fn put_ref(&self, name: &str, reference: &str, manifest_digest: &str) -> Result<()> {
         validate_digest(manifest_digest)?;
-        self.conn.execute(
+        self.lock().execute(
             r#"
             INSERT INTO refs (name, reference, manifest_digest, updated_at)
             VALUES (?1, ?2, ?3, ?4)
@@ -239,7 +261,7 @@ impl SqliteIndexStore {
             return self.replace_ref(name, reference, manifest_digest);
         }
 
-        let inserted = self.conn.execute(
+        let inserted = self.lock().execute(
             r#"
             INSERT INTO refs (name, reference, manifest_digest, updated_at)
             VALUES (?1, ?2, ?3, ?4)
@@ -280,7 +302,7 @@ impl SqliteIndexStore {
     }
 
     pub fn resolve_ref(&self, name: &str, reference: &str) -> Result<Option<String>> {
-        self.conn
+        self.lock()
             .query_row(
                 "SELECT manifest_digest FROM refs WHERE name = ?1 AND reference = ?2",
                 params![name, reference],
@@ -291,11 +313,12 @@ impl SqliteIndexStore {
     }
 
     pub fn list_refs(&self, name_prefix: Option<&str>) -> Result<Vec<RefRecord>> {
+        let conn = self.lock();
         let mut out = Vec::new();
         if let Some(prefix) = name_prefix {
             let prefix_len = i64::try_from(prefix.chars().count())
                 .context("Ref prefix length does not fit in i64")?;
-            let mut stmt = self.conn.prepare(
+            let mut stmt = conn.prepare(
                 r#"
                 SELECT name, reference, manifest_digest, updated_at
                 FROM refs
@@ -308,7 +331,7 @@ impl SqliteIndexStore {
                 out.push(row?);
             }
         } else {
-            let mut stmt = self.conn.prepare(
+            let mut stmt = conn.prepare(
                 r#"
                 SELECT name, reference, manifest_digest, updated_at
                 FROM refs
@@ -324,7 +347,7 @@ impl SqliteIndexStore {
     }
 
     fn init_schema(&self) -> Result<()> {
-        self.conn.execute_batch(
+        self.lock().execute_batch(
             r#"
             PRAGMA foreign_keys = ON;
 
