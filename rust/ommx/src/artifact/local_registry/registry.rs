@@ -4,7 +4,7 @@ use super::{
     now_rfc3339, FileBlobStore, LayerRecord, LegacyImportReport, LegacyOciDirRef, ManifestRecord,
     RefConflictPolicy, RefUpdate, SqliteIndexStore, BLOB_KIND_BLOB, BLOB_KIND_MANIFEST,
 };
-use crate::artifact::{PendingArtifactBlob, OCI_ARTIFACT_MANIFEST_MEDIA_TYPE};
+use crate::artifact::{StagedArtifactBlob, OCI_ARTIFACT_MANIFEST_MEDIA_TYPE};
 use anyhow::{ensure, Context, Result};
 use oci_spec::image::{ArtifactManifest, Descriptor, MediaType};
 use ocipkg::ImageName;
@@ -80,7 +80,7 @@ impl LocalRegistry {
         manifest: &ArtifactManifest,
         manifest_descriptor: &Descriptor,
         manifest_bytes: &[u8],
-        blobs: &[PendingArtifactBlob],
+        blobs: &[StagedArtifactBlob],
         policy: RefConflictPolicy,
     ) -> Result<RefUpdate> {
         ensure!(
@@ -166,7 +166,7 @@ impl LocalRegistry {
             .put_image_ref_with_policy(image_name, &manifest_digest, policy)
     }
 
-    fn put_artifact_blob(&self, blob: &PendingArtifactBlob, kind: &str) -> Result<()> {
+    fn put_artifact_blob(&self, blob: &StagedArtifactBlob, kind: &str) -> Result<()> {
         self.put_descriptor_bytes(blob.descriptor(), blob.bytes(), kind)
     }
 

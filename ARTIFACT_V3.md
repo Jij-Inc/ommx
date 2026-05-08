@@ -286,6 +286,12 @@ BlobStore の規則:
 
 ### 6.4 Atomic publish
 
+ここで使う「publish」は OCI Distribution 由来の用語であり、**registry 側から見た動詞**として一貫して使う。具体的には、Local Registry が manifest を **receive** して、対応する content-addressed blobs と一緒に IndexStore に登録し、`image_name` で指定された ref を新しい manifest digest に立てて、その artifact を **discoverable な状態にする** 一連の atomic operation を指す。
+
+Git で例えるなら `git commit` の内部実装に相当する: `.git/objects/` に object を書き、`refs/heads/<branch>` を新しい commit digest に進める。SDK の Build / Seal / View 三相 (7.4 章) における Seal フェーズの I/O 部分は、ここで定義する registry publish primitive を呼ぶ。
+
+`ArtifactBuilder.build()` が「commit する」、`LocalRegistry::publish_artifact_manifest` が「registry 側で receive して ref を立てる」、という二つの異なるレイヤーの動詞であり、ユーザ視点での `commit / build` と registry 視点での `publish` を意図的に分けている。
+
 DB と BlobStore は分散 transaction にならないため、publish 順序を固定する。
 
 1. layer / config / manifest bytes を build phase で作る。
@@ -406,6 +412,8 @@ Artifact の mutation semantics は 3 相に分ける。
 | View | immutable read-only | `Artifact` |
 
 Build 相では同名 key の upsert を許容してよい。Seal 相で最終 DataStore view を snapshot として manifest に固定する。View 相には `add` / `update` を生やさない。
+
+Seal の I/O 段階 — manifest と layer blobs を実際に Local Registry に書き、ref を立てて discoverable にする atomic 動作 — は registry-internal primitive である `publish_artifact_manifest` (6.4 参照) を呼ぶ。「publish」は OCI Distribution 由来の registry 側の動詞、「commit / build」は SDK ユーザが触る動詞。Git で言えば `git commit` (ユーザ視点) と "object を `.git/objects/` に書いて `refs/heads/<branch>` を進める" (内部実装) の関係に対応する。
 
 永続層に update primitive は存在しない。永続化済み Artifact を変える唯一の方法は、新しい full-snapshot Artifact を作ることである。
 

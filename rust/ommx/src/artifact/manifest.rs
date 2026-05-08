@@ -20,13 +20,20 @@ use std::{
 };
 use url::Url;
 
+/// A blob whose `Descriptor` has already been computed and that is
+/// staged in memory for the next `publish_artifact_manifest` call.
+///
+/// Bridges the in-memory `LocalArtifactBuilder` (Build phase) and the
+/// I/O-side registry publish (Seal phase) — the analogue of a Git
+/// blob entry sitting in the index after `git add`, before `git
+/// commit` writes it to `.git/objects/`.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct PendingArtifactBlob {
+pub(crate) struct StagedArtifactBlob {
     descriptor: Descriptor,
     bytes: Vec<u8>,
 }
 
-impl PendingArtifactBlob {
+impl StagedArtifactBlob {
     pub(crate) fn new(
         media_type: MediaType,
         bytes: Vec<u8>,
@@ -262,7 +269,7 @@ impl LocalManifest {
 pub struct LocalArtifactBuilder {
     image_name: ocipkg::ImageName,
     artifact_type: MediaType,
-    blobs: Vec<PendingArtifactBlob>,
+    blobs: Vec<StagedArtifactBlob>,
     subject: Option<Descriptor>,
     annotations: HashMap<String, String>,
 }
@@ -301,7 +308,7 @@ impl LocalArtifactBuilder {
         bytes: Vec<u8>,
         annotations: HashMap<String, String>,
     ) -> Result<Descriptor> {
-        let blob = PendingArtifactBlob::new(media_type, bytes, annotations)?;
+        let blob = StagedArtifactBlob::new(media_type, bytes, annotations)?;
         let descriptor = blob.descriptor.clone();
         self.blobs.push(blob);
         Ok(descriptor)
@@ -378,24 +385,28 @@ impl LocalArtifactBuilder {
         registry: Arc<LocalRegistry>,
         policy: RefConflictPolicy,
     ) -> Result<LocalArtifact> {
-        let prepared = self.prepare()?;
+        let staged = self.stage()?;
         let ref_update = registry.publish_artifact_manifest(
-            &prepared.image_name,
-            &prepared.manifest,
-            &prepared.manifest_descriptor,
-            &prepared.manifest_bytes,
-            &prepared.blobs,
+            &staged.image_name,
+            &staged.manifest,
+            &staged.manifest_descriptor,
+            &staged.manifest_bytes,
+            &staged.blobs,
             policy,
         )?;
-        reject_conflicting_ref(&prepared.image_name, ref_update)?;
+        reject_conflicting_ref(&staged.image_name, ref_update)?;
         Ok(LocalArtifact::from_parts(
             registry,
-            prepared.image_name,
-            prepared.manifest_descriptor.digest().to_string(),
+            staged.image_name,
+            staged.manifest_descriptor.digest().to_string(),
         ))
     }
 
-    fn prepare(self) -> Result<PreparedArtifactManifest> {
+    /// Compute the manifest, its stable JSON bytes, and the matching
+    /// descriptor from the in-memory builder state, returning a
+    /// [`StagedArtifactManifest`] that the registry can later publish.
+    /// Pure: no I/O, no registry interaction.
+    fn stage(self) -> Result<StagedArtifactManifest> {
         let mut builder = OciArtifactManifestBuilder::default()
             .artifact_type(self.artifact_type)
             .blobs(
@@ -416,7 +427,7 @@ impl LocalArtifactBuilder {
         let manifest_bytes = stable_json_bytes(&manifest)?;
         let manifest_descriptor =
             descriptor_from_bytes(MediaType::ArtifactManifest, &manifest_bytes, HashMap::new())?;
-        Ok(PreparedArtifactManifest {
+        Ok(StagedArtifactManifest {
             image_name: self.image_name,
             manifest,
             manifest_bytes,
@@ -426,13 +437,30 @@ impl LocalArtifactBuilder {
     }
 }
 
+/// The whole-artifact analogue of [`StagedArtifactBlob`]: bundles the
+/// `OCI ArtifactManifest` together with its stable JSON bytes, the
+/// matching `Descriptor` (digest / size / media type), every layer
+/// blob staged for upload, and the target `ImageName`.
+///
+/// Produced purely by in-memory computation (`LocalArtifactBuilder::stage`)
+/// and consumed by the registry publish path
+/// (`LocalRegistry::publish_artifact_manifest`). Splitting the Build
+/// phase ("compute everything we need") from the Seal phase ("write
+/// blobs / insert manifest record / update ref atomically") keeps
+/// publish a pure I/O step that only validates the staged bundle.
+///
+/// The Git analogy is the constructed-but-not-yet-written tree +
+/// commit object — a `git commit` materialises objects in
+/// `.git/objects/` and updates `refs/heads/<branch>`; here, publish
+/// materialises CAS bytes and updates the IndexStore ref to the new
+/// manifest digest.
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct PreparedArtifactManifest {
+struct StagedArtifactManifest {
     image_name: ocipkg::ImageName,
     manifest: ArtifactManifest,
     manifest_bytes: Vec<u8>,
     manifest_descriptor: Descriptor,
-    blobs: Vec<PendingArtifactBlob>,
+    blobs: Vec<StagedArtifactBlob>,
 }
 
 pub(crate) fn descriptor_from_bytes(
@@ -515,31 +543,31 @@ mod tests {
         )?;
         builder.add_annotation("org.opencontainers.image.ref.name", "example.com/demo:v1");
 
-        let prepared = builder.prepare()?;
-        assert_eq!(prepared.manifest.media_type(), &MediaType::ArtifactManifest);
+        let staged = builder.stage()?;
+        assert_eq!(staged.manifest.media_type(), &MediaType::ArtifactManifest);
         assert_eq!(
-            prepared.manifest.artifact_type(),
+            staged.manifest.artifact_type(),
             &MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string())
         );
-        assert_eq!(prepared.manifest.blobs(), &[blob]);
+        assert_eq!(staged.manifest.blobs(), &[blob]);
         assert_eq!(
-            prepared.manifest_descriptor.media_type(),
+            staged.manifest_descriptor.media_type(),
             &MediaType::ArtifactManifest
         );
         assert_eq!(
-            prepared.manifest_descriptor.digest().to_string(),
-            sha256_digest(&prepared.manifest_bytes)
+            staged.manifest_descriptor.digest().to_string(),
+            sha256_digest(&staged.manifest_bytes)
         );
 
-        let parsed: ArtifactManifest = serde_json::from_slice(&prepared.manifest_bytes)?;
-        assert_eq!(parsed, prepared.manifest);
+        let parsed: ArtifactManifest = serde_json::from_slice(&staged.manifest_bytes)?;
+        assert_eq!(parsed, staged.manifest);
         Ok(())
     }
 
     #[test]
     fn stable_manifest_json_is_independent_of_annotation_insertion_order() -> Result<()> {
-        let first = prepared_with_annotations("order-a", [("b", "2"), ("a", "1")])?;
-        let second = prepared_with_annotations("order-b", [("a", "1"), ("b", "2")])?;
+        let first = staged_with_annotations("order-a", [("b", "2"), ("a", "1")])?;
+        let second = staged_with_annotations("order-b", [("a", "1"), ("b", "2")])?;
 
         assert_eq!(first.manifest_bytes, second.manifest_bytes);
         assert_eq!(
@@ -564,8 +592,8 @@ mod tests {
         )?;
         builder.set_subject(subject.clone());
 
-        let prepared = builder.prepare()?;
-        assert_eq!(prepared.manifest.subject(), &Some(subject));
+        let staged = builder.stage()?;
+        assert_eq!(staged.manifest.subject(), &Some(subject));
         Ok(())
     }
 
@@ -574,10 +602,10 @@ mod tests {
         assert!(Digest::from_str("sha256:../bad").is_err());
     }
 
-    fn prepared_with_annotations(
+    fn staged_with_annotations(
         tag: &str,
         annotations: impl IntoIterator<Item = (&'static str, &'static str)>,
-    ) -> Result<PreparedArtifactManifest> {
+    ) -> Result<StagedArtifactManifest> {
         let mut builder = LocalArtifactBuilder::new_ommx(test_image_name(tag)?);
         builder.add_layer_bytes(
             MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
@@ -587,6 +615,6 @@ mod tests {
         for (key, value) in annotations {
             builder.add_annotation(key, value);
         }
-        builder.prepare()
+        builder.stage()
     }
 }
