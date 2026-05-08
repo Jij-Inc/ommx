@@ -12,7 +12,7 @@ pub use annotations::*;
 pub use builder::*;
 pub use config::*;
 pub use digest::sha256_digest;
-pub use manifest::*;
+pub(crate) use manifest::*;
 
 use crate::v1;
 use anyhow::{bail, ensure, Context, Result};

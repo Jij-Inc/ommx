@@ -41,6 +41,7 @@ itertools.workspace = true
 katexit.workspace = true
 maplit.workspace = true
 num.workspace = true
+oci-spec.workspace = true
 ocipkg = { workspace = true }
 ommx-derive = { path = "../ommx-derive", version = "=3.0.0-alpha.2" }
 ordered-float.workspace = true

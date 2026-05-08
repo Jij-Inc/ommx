@@ -1,15 +1,15 @@
 use super::*;
 use crate::artifact::{
-    media_types, ArtifactManifestBuilder, BuiltArtifactManifest, Config,
-    OCI_IMAGE_MANIFEST_MEDIA_TYPE,
+    media_types, LocalArtifactBuild, LocalArtifactBuilder, OCI_ARTIFACT_MANIFEST_MEDIA_TYPE,
 };
 use anyhow::{Context, Result};
+use oci_spec::image::{ArtifactManifest, MediaType};
 use ocipkg::ImageName;
 use ocipkg::{
     image::{ImageBuilder, OciDirBuilder},
-    oci_spec::image::{Descriptor, DescriptorBuilder, ImageManifestBuilder, MediaType},
+    oci_spec::image::{Descriptor, DescriptorBuilder, ImageManifestBuilder},
 };
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 #[test]
@@ -332,57 +332,63 @@ fn local_registry_migrates_legacy_refs_when_requested() -> Result<()> {
 }
 
 #[test]
-fn local_registry_publishes_built_artifact_manifest() -> Result<()> {
+fn local_registry_builds_native_artifact_manifest() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let registry = LocalRegistry::open(dir.path())?;
     let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:built")?;
 
-    let built = build_test_built_manifest(b"instance")?;
-    let layer = built.layers()[0].descriptor();
+    let built = build_test_local_artifact(&registry, &image_name, b"instance")?;
 
-    assert_eq!(
-        registry.publish_built_manifest(&image_name, &built, RefConflictPolicy::KeepExisting)?,
-        RefUpdate::Inserted
-    );
+    assert_eq!(built.ref_update(), &RefUpdate::Inserted);
     let manifest_digest = registry
         .resolve_image_name(&image_name)?
         .context("Published ref is missing")?;
-    assert_eq!(manifest_digest, built.manifest_descriptor().digest());
     assert_eq!(
-        registry.blobs().read_bytes(&manifest_digest)?,
-        built.manifest_bytes()
+        manifest_digest,
+        built.manifest_descriptor().digest().to_string()
     );
+    let manifest_bytes = registry.blobs().read_bytes(&manifest_digest)?;
+    let manifest: ArtifactManifest = serde_json::from_slice(&manifest_bytes)?;
+    let blob = manifest
+        .blobs()
+        .first()
+        .context("Published blob is missing")?;
 
-    let manifest = registry
+    let manifest_record = registry
         .index()
         .get_manifest(&manifest_digest)?
         .context("Published manifest is missing")?;
-    assert_eq!(manifest.media_type, OCI_IMAGE_MANIFEST_MEDIA_TYPE);
-    assert_eq!(manifest.size, built.manifest_descriptor().size());
+    assert_eq!(manifest_record.media_type, OCI_ARTIFACT_MANIFEST_MEDIA_TYPE);
+    assert_eq!(manifest_record.size, built.manifest_descriptor().size());
+    assert_eq!(manifest.media_type(), &MediaType::ArtifactManifest);
+    assert_eq!(
+        manifest.artifact_type(),
+        &MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string())
+    );
 
     let layers = registry.index().get_layers(&manifest_digest)?;
     assert_eq!(layers.len(), 1);
-    assert_eq!(layers[0].digest, layer.digest());
+    assert_eq!(layers[0].digest, blob.digest().to_string());
     assert_eq!(layers[0].media_type, media_types::V1_INSTANCE_MEDIA_TYPE);
-    assert_eq!(registry.blobs().read_bytes(layer.digest())?, b"instance");
+    assert_eq!(
+        registry.blobs().read_bytes(&blob.digest().to_string())?,
+        b"instance"
+    );
     Ok(())
 }
 
 #[test]
-fn local_registry_publish_keep_existing_skips_conflicting_manifest() -> Result<()> {
+fn local_registry_build_keep_existing_skips_conflicting_manifest() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let registry = LocalRegistry::open(dir.path())?;
     let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:keep")?;
-    let first = build_test_built_manifest(b"first")?;
-    let second = build_test_built_manifest(b"second")?;
+    let first = build_test_local_artifact(&registry, &image_name, b"first")?;
+    let second = build_test_local_artifact(&registry, &image_name, b"second")?;
 
+    assert_eq!(first.ref_update(), &RefUpdate::Inserted);
     assert_eq!(
-        registry.publish_built_manifest(&image_name, &first, RefConflictPolicy::KeepExisting)?,
-        RefUpdate::Inserted
-    );
-    assert_eq!(
-        registry.publish_built_manifest(&image_name, &second, RefConflictPolicy::KeepExisting)?,
-        RefUpdate::Conflicted {
+        second.ref_update(),
+        &RefUpdate::Conflicted {
             existing_manifest_digest: first.manifest_descriptor().digest().to_string(),
             incoming_manifest_digest: second.manifest_descriptor().digest().to_string()
         }
@@ -393,11 +399,11 @@ fn local_registry_publish_keep_existing_skips_conflicting_manifest() -> Result<(
     );
     assert!(registry
         .index()
-        .get_manifest(second.manifest_descriptor().digest())?
+        .get_manifest(&second.manifest_descriptor().digest().to_string())?
         .is_none());
     assert!(!registry
         .blobs()
-        .exists(second.manifest_descriptor().digest())?);
+        .exists(&second.manifest_descriptor().digest().to_string())?);
     Ok(())
 }
 
@@ -490,19 +496,18 @@ fn concurrent_blob_writes_publish_one_complete_blob() -> Result<()> {
     Ok(())
 }
 
-fn build_test_built_manifest(layer_bytes: &[u8]) -> Result<BuiltArtifactManifest> {
-    let mut builder = ArtifactManifestBuilder::new_ommx();
-    builder.add_config_bytes(
-        media_types::V1_CONFIG_MEDIA_TYPE,
-        serde_json::to_vec(&Config {})?,
-        BTreeMap::new(),
-    );
-    builder.add_layer_bytes(
-        media_types::V1_INSTANCE_MEDIA_TYPE,
+fn build_test_local_artifact(
+    registry: &LocalRegistry,
+    image_name: &ImageName,
+    layer_bytes: &[u8],
+) -> Result<LocalArtifactBuild> {
+    let mut builder = LocalArtifactBuilder::new_ommx();
+    builder.add_blob_bytes(
+        MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
         layer_bytes.to_vec(),
-        BTreeMap::from([("org.ommx.v1.instance.title".to_string(), "demo".to_string())]),
-    );
-    builder.build()
+        HashMap::from([("org.ommx.v1.instance.title".to_string(), "demo".to_string())]),
+    )?;
+    builder.build_local(registry, image_name, RefConflictPolicy::KeepExisting)
 }
 
 fn put_test_manifest_ref(

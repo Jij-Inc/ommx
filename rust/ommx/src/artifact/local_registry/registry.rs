@@ -2,11 +2,13 @@ use super::{
     import_legacy_local_registry_ref, migrate_legacy_local_registry,
     migrate_legacy_local_registry_with_policy, now_rfc3339, FileBlobStore, LayerRecord,
     LegacyMigrationReport, LegacyOciDirImport, ManifestRecord, RefConflictPolicy, RefUpdate,
-    SqliteIndexStore, BLOB_KIND_CONFIG, BLOB_KIND_LAYER, BLOB_KIND_MANIFEST,
+    SqliteIndexStore, BLOB_KIND_BLOB, BLOB_KIND_MANIFEST,
 };
-use crate::artifact::{ArtifactBlob, ArtifactDescriptor, BuiltArtifactManifest};
+use crate::artifact::{stable_json_bytes, PendingArtifactBlob, OCI_ARTIFACT_MANIFEST_MEDIA_TYPE};
 use anyhow::{ensure, Context, Result};
+use oci_spec::image::{ArtifactManifest, Descriptor, MediaType};
 use ocipkg::ImageName;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
@@ -59,84 +61,114 @@ impl LocalRegistry {
         self.index.resolve_image_name(image_name)
     }
 
-    pub fn publish_built_manifest(
+    #[allow(dead_code)]
+    pub(crate) fn publish_artifact_manifest(
         &self,
         image_name: &ImageName,
-        artifact: &BuiltArtifactManifest,
+        manifest: &ArtifactManifest,
+        manifest_descriptor: &Descriptor,
+        manifest_bytes: &[u8],
+        blobs: &[PendingArtifactBlob],
         policy: RefConflictPolicy,
     ) -> Result<RefUpdate> {
-        let manifest_digest = artifact.manifest_descriptor().digest();
+        ensure!(
+            manifest.media_type().as_ref() == OCI_ARTIFACT_MANIFEST_MEDIA_TYPE,
+            "Manifest is not an OCI artifact manifest: {}",
+            manifest.media_type()
+        );
+        ensure!(
+            manifest_descriptor.media_type() == &MediaType::ArtifactManifest,
+            "Manifest descriptor is not an OCI artifact manifest descriptor: {}",
+            manifest_descriptor.media_type()
+        );
+        ensure!(
+            manifest_descriptor.digest().to_string()
+                == crate::artifact::sha256_digest(manifest_bytes),
+            "Manifest descriptor digest does not match manifest bytes"
+        );
+        ensure!(
+            manifest_descriptor.size() == manifest_bytes.len() as u64,
+            "Manifest descriptor size does not match manifest bytes"
+        );
+        ensure!(
+            manifest.blobs().len() == blobs.len(),
+            "Manifest blob descriptor count does not match pending blob count"
+        );
+        for (manifest_blob, pending_blob) in manifest.blobs().iter().zip(blobs) {
+            ensure!(
+                manifest_blob == pending_blob.descriptor(),
+                "Manifest blob descriptor does not match pending blob descriptor"
+            );
+        }
+
+        let manifest_digest = manifest_descriptor.digest().to_string();
         if policy == RefConflictPolicy::KeepExisting {
             if let Some(existing_manifest_digest) = self.resolve_image_name(image_name)? {
-                if existing_manifest_digest != manifest_digest {
+                if existing_manifest_digest != manifest_digest.as_str() {
                     return Ok(RefUpdate::Conflicted {
                         existing_manifest_digest,
-                        incoming_manifest_digest: manifest_digest.to_string(),
+                        incoming_manifest_digest: manifest_digest,
                     });
                 }
             }
         }
 
-        self.put_artifact_blob(artifact.config(), BLOB_KIND_CONFIG)?;
-        for layer in artifact.layers() {
-            self.put_artifact_blob(layer, BLOB_KIND_LAYER)?;
+        for blob in blobs {
+            self.put_artifact_blob(blob, BLOB_KIND_BLOB)?;
         }
-        self.put_descriptor_bytes(
-            artifact.manifest_descriptor(),
-            artifact.manifest_bytes(),
-            BLOB_KIND_MANIFEST,
-        )?;
+        self.put_descriptor_bytes(manifest_descriptor, manifest_bytes, BLOB_KIND_MANIFEST)?;
 
-        let layers = artifact
-            .manifest()
-            .layers()
+        let layers = manifest
+            .blobs()
             .iter()
             .enumerate()
             .map(|(position, layer)| -> Result<LayerRecord> {
                 Ok(LayerRecord {
-                    manifest_digest: manifest_digest.to_string(),
+                    manifest_digest: manifest_digest.clone(),
                     position: u32::try_from(position)
                         .context("Layer position does not fit in u32")?,
                     digest: layer.digest().to_string(),
                     media_type: layer.media_type().to_string(),
                     size: layer.size(),
-                    annotations_json: serde_json::to_string(layer.annotations())
+                    annotations_json: annotations_json(layer.annotations().as_ref())
                         .context("Failed to encode layer annotations")?,
                 })
             })
             .collect::<Result<Vec<_>>>()?;
         self.index.put_manifest(
             &ManifestRecord {
-                digest: manifest_digest.to_string(),
-                media_type: artifact.manifest_descriptor().media_type().to_string(),
-                size: artifact.manifest_descriptor().size(),
-                subject_digest: artifact
-                    .manifest()
+                digest: manifest_digest.clone(),
+                media_type: manifest_descriptor.media_type().to_string(),
+                size: manifest_descriptor.size(),
+                subject_digest: manifest
                     .subject()
+                    .as_ref()
                     .map(|subject| subject.digest().to_string()),
-                annotations_json: serde_json::to_string(artifact.manifest().annotations())
+                annotations_json: annotations_json(manifest.annotations().as_ref())
                     .context("Failed to encode manifest annotations")?,
                 created_at: now_rfc3339(),
             },
             &layers,
         )?;
         self.index
-            .put_image_ref_with_policy(image_name, manifest_digest, policy)
+            .put_image_ref_with_policy(image_name, &manifest_digest, policy)
     }
 
-    fn put_artifact_blob(&self, blob: &ArtifactBlob, kind: &str) -> Result<()> {
+    #[allow(dead_code)]
+    fn put_artifact_blob(&self, blob: &PendingArtifactBlob, kind: &str) -> Result<()> {
         self.put_descriptor_bytes(blob.descriptor(), blob.bytes(), kind)
     }
 
+    #[allow(dead_code)]
     fn put_descriptor_bytes(
         &self,
-        descriptor: &ArtifactDescriptor,
+        descriptor: &Descriptor,
         bytes: &[u8],
         kind: &str,
     ) -> Result<()> {
         let mut record = self.blobs.put_bytes(bytes)?;
         ensure!(
-            record.digest == descriptor.digest(),
+            record.digest == descriptor.digest().to_string(),
             "Descriptor digest mismatch: descriptor={}, actual={}",
             descriptor.digest(),
             record.digest
@@ -151,5 +183,14 @@ impl LocalRegistry {
         record.media_type = Some(descriptor.media_type().to_string());
         record.kind = kind.to_string();
         self.index.put_blob(&record)
+    }
+}
+
+#[allow(dead_code)]
+fn annotations_json(annotations: Option<&HashMap<String, String>>) -> Result<String> {
+    match annotations {
+        Some(annotations) => String::from_utf8(stable_json_bytes(annotations)?)
+            .context("Stable JSON bytes are not UTF-8"),
+        None => Ok("{}".to_string()),
     }
 }

@@ -1763,6 +1763,7 @@ dependencies = [
  "katexit",
  "maplit",
  "num",
+ "oci-spec",
  "ocipkg",
  "ommx-derive",
  "ordered-float",
