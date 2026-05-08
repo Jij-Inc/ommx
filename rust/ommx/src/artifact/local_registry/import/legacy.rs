@@ -26,8 +26,8 @@
 
 use super::super::{FileBlobStore, RefConflictPolicy, RefUpdate, SqliteIndexStore};
 use super::oci_dir::{
-    import_oci_dir_as_ref_with_policy, import_oci_dir_as_ref_with_policy_inner, oci_dir_image_name,
-    oci_dir_ref, OciDirImport, RefConflictHandling,
+    import_oci_dir_as_ref_with_policy, import_oci_dir_inner, oci_dir_image_name, oci_dir_ref,
+    OciDirImport, RefConflictHandling,
 };
 use anyhow::{ensure, Context, Result};
 use ocipkg::ImageName;
@@ -119,11 +119,11 @@ pub fn import_legacy_local_registry_with_policy(
 
         match existing_manifest_digest {
             None => {
-                let (_, ref_update) = import_oci_dir_as_ref_with_policy_inner(
+                let (_, ref_update) = import_oci_dir_inner(
                     index_store,
                     blob_store,
                     legacy_dir,
-                    &image_name,
+                    Some(&image_name),
                     policy,
                     RefConflictHandling::Return,
                 )
@@ -136,11 +136,11 @@ pub fn import_legacy_local_registry_with_policy(
                 record_import_ref_update(&mut report, ref_update);
             }
             Some(existing) if existing == dir_ref.manifest_digest => {
-                let (_, ref_update) = import_oci_dir_as_ref_with_policy_inner(
+                let (_, ref_update) = import_oci_dir_inner(
                     index_store,
                     blob_store,
                     legacy_dir,
-                    &image_name,
+                    Some(&image_name),
                     policy,
                     RefConflictHandling::Return,
                 )
@@ -156,11 +156,11 @@ pub fn import_legacy_local_registry_with_policy(
                 report.conflicted_dirs += 1;
             }
             Some(_) => {
-                let (_, ref_update) = import_oci_dir_as_ref_with_policy_inner(
+                let (_, ref_update) = import_oci_dir_inner(
                     index_store,
                     blob_store,
                     legacy_dir,
-                    &image_name,
+                    Some(&image_name),
                     RefConflictPolicy::Replace,
                     RefConflictHandling::Return,
                 )
@@ -239,7 +239,11 @@ fn legacy_import_image_name(legacy_registry_root: &Path, legacy_dir: &Path) -> R
     }
 }
 
-fn record_import_ref_update(report: &mut LegacyImportReport, update: RefUpdate) {
+fn record_import_ref_update(report: &mut LegacyImportReport, update: Option<RefUpdate>) {
+    // The legacy batch import always passes an explicit `image_name`
+    // to `import_oci_dir_inner`, so the inner function always writes
+    // a ref and the outcome is always `Some(_)`.
+    let Some(update) = update else { return };
     match update {
         RefUpdate::Inserted => report.imported_dirs += 1,
         RefUpdate::Unchanged => report.verified_dirs += 1,

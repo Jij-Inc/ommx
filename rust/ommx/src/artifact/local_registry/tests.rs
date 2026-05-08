@@ -11,7 +11,7 @@ use ocipkg::{
     oci_spec::image::{Descriptor, DescriptorBuilder, ImageManifestBuilder},
 };
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -629,6 +629,98 @@ fn local_artifact_subject_round_trips() -> Result<()> {
 }
 
 #[test]
+fn imports_oci_dir_with_artifact_manifest_layout() -> Result<()> {
+    // OCI dir whose manifest is an Artifact Manifest (no Image
+    // config, layers in `blobs[]`) must import as identity-preserving
+    // and surface as `LocalManifest::Artifact` on read.
+    let dir = tempfile::tempdir()?;
+    let oci_dir = dir.path().join("oci-art");
+    let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:art")?;
+    let (layer, expected_manifest_digest) =
+        build_test_oci_dir_with_artifact_manifest(&oci_dir, &image_name, b"art-instance")?;
+
+    let registry_root = dir.path().join("registry-v3");
+    let index_store = SqliteIndexStore::open_in_registry_root(&registry_root)?;
+    let blob_store = FileBlobStore::open_in_registry_root(&registry_root)?;
+    let imported = import_oci_dir(&index_store, &blob_store, &oci_dir)?;
+
+    assert_eq!(imported.manifest_digest, expected_manifest_digest);
+    assert_eq!(imported.image_name.as_ref(), Some(&image_name));
+    let manifest_record = index_store
+        .get_manifest(&imported.manifest_digest)?
+        .context("Imported manifest is missing")?;
+    assert_eq!(manifest_record.media_type, OCI_ARTIFACT_MANIFEST_MEDIA_TYPE);
+    assert!(blob_store.exists(&imported.manifest_digest)?);
+    assert!(blob_store.exists(&layer.digest().to_string())?);
+
+    let registry = LocalRegistry::open(&registry_root)?;
+    let artifact = LocalArtifact::open_in_registry(Arc::new(registry), image_name)?;
+    assert!(matches!(
+        artifact.get_manifest()?,
+        LocalManifest::Artifact(_)
+    ));
+    assert_eq!(artifact.layers()?, vec![layer]);
+    Ok(())
+}
+
+#[test]
+fn concurrent_publish_different_digests_keeps_one_winner() -> Result<()> {
+    // Two LocalArtifactBuilder writers race to publish *different*
+    // manifest digests under the same image_name. With KeepExisting
+    // policy the atomic publish must let exactly one writer win
+    // (`Inserted`) and the other must surface as a conflict-error,
+    // never leaving the registry in a state where a different
+    // manifest digest claims the ref.
+    let dir = tempfile::tempdir()?;
+    let registry_root = dir.path().to_path_buf();
+    let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:race-publish")?;
+
+    let handles: Vec<_> = (0..2)
+        .map(|i| {
+            let registry_root = registry_root.clone();
+            let image_name = image_name.clone();
+            std::thread::spawn(move || -> Result<bool> {
+                let registry = Arc::new(LocalRegistry::open(registry_root)?);
+                let bytes = format!("racer-{i}");
+                let (builder, _) =
+                    new_test_local_artifact_builder(image_name.clone(), bytes.as_bytes())?;
+                match builder.build_in_registry(registry, RefConflictPolicy::KeepExisting) {
+                    Ok(_) => Ok(true),
+                    Err(err) => {
+                        // Only the conflict outcome is acceptable here.
+                        assert!(
+                            err.to_string().contains("already points to"),
+                            "unexpected build_in_registry error: {err}"
+                        );
+                        Ok(false)
+                    }
+                }
+            })
+        })
+        .collect();
+
+    let outcomes: Vec<bool> = handles
+        .into_iter()
+        .map(|h| h.join().expect("publisher thread panicked"))
+        .collect::<Result<_>>()?;
+
+    let winners = outcomes.iter().filter(|w| **w).count();
+    let losers = outcomes.iter().filter(|w| !**w).count();
+    assert_eq!(winners, 1, "exactly one publisher must win the ref");
+    assert_eq!(losers, 1, "exactly one publisher must surface a conflict");
+
+    let final_registry = LocalRegistry::open(&registry_root)?;
+    let resolved = final_registry
+        .resolve_image_name(&image_name)?
+        .context("ref disappeared after concurrent publish")?;
+    assert!(
+        !resolved.is_empty(),
+        "ref must still resolve to the winning manifest digest"
+    );
+    Ok(())
+}
+
+#[test]
 fn concurrent_blob_writes_publish_one_complete_blob() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let root = dir.path().join("blobs");
@@ -733,4 +825,75 @@ fn build_test_oci_dir(legacy_dir: PathBuf, image_name: ImageName) -> Result<Desc
         .build()?;
     let _oci_dir = builder.build(manifest)?;
     Ok(layer)
+}
+
+/// Build a v3-shaped OCI Image Layout directory whose manifest is an
+/// OCI **Artifact** Manifest (no `config`, layers in `blobs[]`). Used
+/// to exercise the Artifact-Manifest dispatch in `import_oci_dir`.
+fn build_test_oci_dir_with_artifact_manifest(
+    oci_dir: &Path,
+    image_name: &ImageName,
+    layer_bytes: &[u8],
+) -> Result<(Descriptor, String)> {
+    use oci_spec::image::{
+        ArtifactManifestBuilder, ImageIndexBuilder, OciLayoutBuilder, SCHEMA_VERSION,
+    };
+    use std::fs;
+
+    let blobs_dir = oci_dir.join("blobs/sha256");
+    fs::create_dir_all(&blobs_dir)?;
+    fs::write(oci_dir.join("oci-layout"), {
+        let layout = OciLayoutBuilder::default()
+            .image_layout_version("1.0.0")
+            .build()?;
+        serde_json::to_vec(&layout)?
+    })?;
+
+    // Write a single layer blob to the CAS and build its descriptor.
+    let layer_digest_str = sha256_digest(layer_bytes);
+    let layer_digest_encoded = layer_digest_str
+        .strip_prefix("sha256:")
+        .expect("sha256 digest format");
+    fs::write(blobs_dir.join(layer_digest_encoded), layer_bytes)?;
+    let layer = DescriptorBuilder::default()
+        .media_type(MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.into()))
+        .digest(oci_spec::image::Digest::from_str(&layer_digest_str)?)
+        .size(layer_bytes.len() as u64)
+        .build()?;
+
+    // Build the Artifact Manifest pointing at the layer.
+    let manifest = ArtifactManifestBuilder::default()
+        .artifact_type(media_types::v1_artifact())
+        .blobs(vec![layer.clone()])
+        .build()?;
+    let manifest_bytes = serde_json::to_vec(&manifest)?;
+    let manifest_digest_str = sha256_digest(&manifest_bytes);
+    let manifest_digest_encoded = manifest_digest_str
+        .strip_prefix("sha256:")
+        .expect("sha256 digest format");
+    fs::write(blobs_dir.join(manifest_digest_encoded), &manifest_bytes)?;
+
+    // Manifest descriptor in `index.json` carries the
+    // ref-name annotation and the ArtifactManifest media type.
+    let mut annotations = HashMap::new();
+    annotations.insert(
+        OCI_IMAGE_REF_NAME_ANNOTATION.to_string(),
+        image_name.to_string(),
+    );
+    let index_descriptor = DescriptorBuilder::default()
+        .media_type(MediaType::ArtifactManifest)
+        .digest(oci_spec::image::Digest::from_str(&manifest_digest_str)?)
+        .size(manifest_bytes.len() as u64)
+        .annotations(annotations)
+        .build()?;
+    let image_index = ImageIndexBuilder::default()
+        .schema_version(SCHEMA_VERSION)
+        .manifests(vec![index_descriptor])
+        .build()?;
+    fs::write(
+        oci_dir.join("index.json"),
+        serde_json::to_vec(&image_index)?,
+    )?;
+
+    Ok((layer, manifest_digest_str))
 }

@@ -1,8 +1,9 @@
 use super::{
     annotations_json, import_legacy_local_registry, import_legacy_local_registry_ref,
     import_legacy_local_registry_ref_with_policy, import_legacy_local_registry_with_policy,
-    now_rfc3339, FileBlobStore, LayerRecord, LegacyImportReport, ManifestRecord, OciDirImport,
-    RefConflictPolicy, RefUpdate, SqliteIndexStore, BLOB_KIND_BLOB, BLOB_KIND_MANIFEST,
+    now_rfc3339, BlobRecord, FileBlobStore, LayerRecord, LegacyImportReport, ManifestRecord,
+    OciDirImport, RefConflictPolicy, RefUpdate, SqliteIndexStore, BLOB_KIND_BLOB,
+    BLOB_KIND_MANIFEST,
 };
 use crate::artifact::{StagedArtifactBlob, OCI_ARTIFACT_MANIFEST_MEDIA_TYPE};
 use anyhow::{ensure, Context, Result};
@@ -114,6 +115,12 @@ impl LocalRegistry {
         }
 
         let manifest_digest = manifest_descriptor.digest().to_string();
+
+        // Pre-check: under `KeepExisting`, return the conflict before
+        // we waste any CAS writes. The atomic publish in stage 2
+        // re-validates the same condition inside the SQLite
+        // transaction, so concurrent racers can't slip through; this
+        // is purely a fast path for the common single-writer case.
         if policy == RefConflictPolicy::KeepExisting {
             if let Some(existing_manifest_digest) = self.resolve_image_name(image_name)? {
                 if existing_manifest_digest != manifest_digest.as_str() {
@@ -125,12 +132,26 @@ impl LocalRegistry {
             }
         }
 
+        // Stage 1: write CAS bytes (idempotent, outside any SQLite tx).
+        // Stage 2: a single SQLite transaction covers all blob records
+        // + manifest + ref so a crash or conflict can never leave
+        // committed manifest / blob rows under a ref that wasn't
+        // actually published.
+        let mut blob_records = Vec::with_capacity(blobs.len() + 1);
         for blob in blobs {
-            self.put_artifact_blob(blob, BLOB_KIND_BLOB)?;
+            blob_records.push(self.stage_blob_record(
+                blob.descriptor(),
+                blob.bytes(),
+                BLOB_KIND_BLOB,
+            )?);
         }
-        self.put_descriptor_bytes(manifest_descriptor, manifest_bytes, BLOB_KIND_MANIFEST)?;
+        blob_records.push(self.stage_blob_record(
+            manifest_descriptor,
+            manifest_bytes,
+            BLOB_KIND_MANIFEST,
+        )?);
 
-        let layers = manifest
+        let layer_records = manifest
             .blobs()
             .iter()
             .enumerate()
@@ -147,35 +168,42 @@ impl LocalRegistry {
                 })
             })
             .collect::<Result<Vec<_>>>()?;
-        self.index.put_manifest(
-            &ManifestRecord {
-                digest: manifest_digest.clone(),
-                media_type: manifest_descriptor.media_type().to_string(),
-                size: manifest_descriptor.size(),
-                subject_digest: manifest
-                    .subject()
-                    .as_ref()
-                    .map(|subject| subject.digest().to_string()),
-                annotations_json: annotations_json(manifest.annotations().as_ref())
-                    .context("Failed to encode manifest annotations")?,
-                created_at: now_rfc3339(),
-            },
-            &layers,
+        let manifest_record = ManifestRecord {
+            digest: manifest_digest.clone(),
+            media_type: manifest_descriptor.media_type().to_string(),
+            size: manifest_descriptor.size(),
+            subject_digest: manifest
+                .subject()
+                .as_ref()
+                .map(|subject| subject.digest().to_string()),
+            annotations_json: annotations_json(manifest.annotations().as_ref())
+                .context("Failed to encode manifest annotations")?,
+            created_at: now_rfc3339(),
+        };
+
+        let outcome = self.index.publish_artifact_atomic(
+            &blob_records,
+            &manifest_record,
+            &layer_records,
+            Some(image_name),
+            policy,
         )?;
-        self.index
-            .put_image_ref_with_policy(image_name, &manifest_digest, policy)
+        outcome.ref_update.context(
+            "publish_artifact_atomic returned no RefUpdate for an explicit image_name; \
+             this is a bug",
+        )
     }
 
-    fn put_artifact_blob(&self, blob: &StagedArtifactBlob, kind: &str) -> Result<()> {
-        self.put_descriptor_bytes(blob.descriptor(), blob.bytes(), kind)
-    }
-
-    fn put_descriptor_bytes(
+    /// CAS-write a descriptor's bytes and produce a [`BlobRecord`] for
+    /// the IndexStore. The DB row is *not* inserted here; the caller
+    /// passes the records to [`SqliteIndexStore::publish_artifact_atomic`]
+    /// so the inserts happen inside the publish transaction.
+    fn stage_blob_record(
         &self,
         descriptor: &Descriptor,
         bytes: &[u8],
         kind: &str,
-    ) -> Result<()> {
+    ) -> Result<BlobRecord> {
         let mut record = self.blobs.put_bytes(bytes)?;
         ensure!(
             record.digest == descriptor.digest().to_string(),
@@ -192,6 +220,6 @@ impl LocalRegistry {
         );
         record.media_type = Some(descriptor.media_type().to_string());
         record.kind = kind.to_string();
-        self.index.put_blob(&record)
+        Ok(record)
     }
 }

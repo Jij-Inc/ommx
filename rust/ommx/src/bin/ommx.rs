@@ -4,7 +4,9 @@ use colored::Colorize;
 use ocipkg::{oci_spec::image::ImageManifest, ImageName};
 use ommx::artifact::{
     get_image_dir,
-    local_registry::{import_oci_archive, LocalRegistry, RefConflictPolicy},
+    local_registry::{
+        import_oci_archive, import_oci_dir, pull_image, LocalRegistry, RefConflictPolicy,
+    },
     Artifact,
 };
 use std::path::{Path, PathBuf};
@@ -208,9 +210,15 @@ fn main() -> Result<()> {
         },
 
         Command::Pull { image_name } => {
+            // Route remote pull through `local_registry::pull_image` so the
+            // freshly pulled artifact lands in the v3 SQLite registry. The
+            // legacy OCI dir is still produced as the ocipkg-based stage 1
+            // (see `import::remote::pull_image`); a follow-up PR replaces
+            // that stage with a native streaming pull and the call site
+            // here stays unchanged.
             let name = ImageName::parse(image_name)?;
-            let mut artifact = Artifact::from_remote(name)?;
-            artifact.pull()?;
+            let registry = std::sync::Arc::new(LocalRegistry::open_default()?);
+            pull_image(&registry, &name)?;
         }
 
         Command::Save { image_name, output } => {
@@ -221,12 +229,17 @@ fn main() -> Result<()> {
         }
 
         Command::Load { path } => {
-            // Two-stage archive ingest (ocipkg → legacy OCI dir → SQLite)
-            // is encapsulated in `local_registry::import::archive`. When
-            // that module switches to a native pull-into-SQLite path,
-            // this call site doesn't change.
+            // The CLI flag advertises "OCI archive or OCI directory", so
+            // dispatch on what the path actually is. Archives go through
+            // the ocipkg-based stage-1 pipeline in `import::archive`;
+            // directories use the native `import::oci_dir` path that
+            // dispatches on Image / Artifact Manifest.
             let registry = std::sync::Arc::new(LocalRegistry::open_default()?);
-            import_oci_archive(&registry, path)?;
+            if path.is_dir() {
+                import_oci_dir(registry.index(), registry.blobs(), path)?;
+            } else {
+                import_oci_archive(&registry, path)?;
+            }
         }
 
         Command::ImageDirectory { image_name } => {

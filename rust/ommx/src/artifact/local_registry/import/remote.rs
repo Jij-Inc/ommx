@@ -21,8 +21,6 @@
 //! is the SDK's contract, so that swap can land without touching
 //! `bin/ommx.rs` or the Python entry points.
 
-#![cfg(feature = "remote-artifact")]
-
 use super::super::LocalRegistry;
 use super::oci_dir::{import_oci_dir_as_ref, OciDirImport};
 use crate::artifact::{get_image_dir, Artifact};
