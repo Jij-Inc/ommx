@@ -1,32 +1,29 @@
-//! v3 OMMX Local Registry: SQLite-backed index + filesystem CAS blob
-//! store, plus the import paths that bring outside content in.
+//! v3 OMMX Local Registry.
 //!
-//! Layering, from the inside out:
+//! The Local Registry stores artifacts as content-addressed blobs in
+//! [`FileBlobStore`] plus index records in [`SqliteIndexStore`]. It
+//! does **not** keep anything in OCI Image Layout (`oci-layout` +
+//! `index.json` + `blobs/`) form internally; that format is purely an
+//! interchange boundary handled in the [`import`] submodule.
 //!
-//! - [`index`] / [`blob`] / [`types`] — the SQLite [`SqliteIndexStore`]
-//!   and the filesystem [`FileBlobStore`] that together back v3 local
-//!   state, plus their data shapes (`BlobRecord`, `ManifestRecord`,
-//!   `RefRecord`, `LayerRecord`, `RefConflictPolicy`, `RefUpdate`).
-//! - [`registry`] — [`LocalRegistry`] glues those two stores into a
-//!   single addressable unit, exposes the publish primitive used by
-//!   `LocalArtifactBuilder`, and forwards the import entry points
-//!   below.
-//! - [`oci_dir`] — generic OCI Image Layout (`oci-layout` +
-//!   `index.json` + `blobs/`) I/O. **Not** legacy: the same format is
-//!   produced by `oras` / `crane` / `skopeo` and used as the v3
-//!   import / export interchange. Identity-preserving: manifest bytes
-//!   and digest are stored verbatim; format conversion is a separate
-//!   explicit `convert` operation (ARTIFACT_V3.md §6.7).
-//! - [`legacy`] — v2 OMMX local registry compatibility. Owns
-//!   `<root>/<image_name>/<tag>/` path layout, recursive scan, and the
-//!   batch [`LegacyImportReport`]. Uses [`oci_dir`] internally for the
-//!   actual per-directory import. The directory format itself is not
-//!   legacy; only the v2-specific layout is.
+//! Two distinct layers live here:
+//!
+//! - **Storage** — [`index`] / [`blob`] / [`types`] / [`registry`].
+//!   The SQLite + filesystem CAS that owns v3 local state, plus the
+//!   shared row / policy types. [`LocalRegistry`] glues the two stores
+//!   into a single addressable unit and exposes the `publish` primitive
+//!   used by `LocalArtifactBuilder`.
+//! - **Import** — [`import`]. Boundary code that reads external content
+//!   in its native form and writes it through [`LocalRegistry`].
+//!   Currently `import::oci_dir` (a single OCI Image Layout directory)
+//!   and `import::legacy` (a v2 OMMX local registry path/tag tree of
+//!   such directories). All imports are identity-preserving; format
+//!   conversion is a separate explicit `convert` operation
+//!   (ARTIFACT_V3.md §6.7).
 
 mod blob;
+mod import;
 mod index;
-mod legacy;
-mod oci_dir;
 mod registry;
 mod types;
 
@@ -40,16 +37,16 @@ use std::collections::HashMap;
 pub use crate::artifact::digest::sha256_digest;
 pub(crate) use crate::artifact::digest::{validate_digest, ValidatedDigest};
 pub use blob::FileBlobStore;
-pub use index::{image_name_repository, SqliteIndexStore};
-pub use legacy::{
+pub use import::legacy::{
     import_legacy_local_registry, import_legacy_local_registry_ref,
     import_legacy_local_registry_ref_with_policy, import_legacy_local_registry_with_policy,
     legacy_local_registry_path, LegacyImportReport,
 };
-pub use oci_dir::{
+pub use import::oci_dir::{
     import_oci_dir, import_oci_dir_as_ref, import_oci_dir_as_ref_with_policy,
     import_oci_dir_with_policy, oci_dir_image_name, oci_dir_ref, OciDirRef,
 };
+pub use index::{image_name_repository, SqliteIndexStore};
 pub use registry::LocalRegistry;
 pub use types::{
     BlobRecord, LayerRecord, ManifestRecord, RefConflictPolicy, RefRecord, RefUpdate,

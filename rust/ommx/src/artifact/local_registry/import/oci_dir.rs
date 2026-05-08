@@ -21,7 +21,7 @@
 //! in the sibling [`super::legacy`] module and uses this module's
 //! primitives.
 
-use super::{
+use super::super::{
     annotations_json, now_rfc3339, sha256_digest, FileBlobStore, LayerRecord, ManifestRecord,
     RefConflictPolicy, RefUpdate, SqliteIndexStore, ValidatedDigest, BLOB_KIND_BLOB,
     BLOB_KIND_CONFIG, BLOB_KIND_MANIFEST, OCI_IMAGE_REF_NAME_ANNOTATION,

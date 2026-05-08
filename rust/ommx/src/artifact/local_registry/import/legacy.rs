@@ -24,11 +24,11 @@
 //! **not** v2-specific and lives in [`super::oci_dir`]; this module just
 //! drives that lower layer with v2-aware bookkeeping.
 
+use super::super::{FileBlobStore, RefConflictPolicy, RefUpdate, SqliteIndexStore};
 use super::oci_dir::{
     import_oci_dir_as_ref_with_policy, import_oci_dir_as_ref_with_policy_inner, oci_dir_image_name,
     oci_dir_ref, OciDirRef, RefConflictHandling,
 };
-use super::{FileBlobStore, RefConflictPolicy, RefUpdate, SqliteIndexStore};
 use anyhow::{ensure, Context, Result};
 use ocipkg::ImageName;
 use std::{
