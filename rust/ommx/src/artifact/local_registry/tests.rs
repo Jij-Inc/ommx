@@ -1,6 +1,7 @@
 use super::*;
 use crate::artifact::{
-    media_types, LocalArtifact, LocalArtifactBuilder, OCI_ARTIFACT_MANIFEST_MEDIA_TYPE,
+    media_types, LocalArtifact, LocalArtifactBuilder, LocalManifest,
+    OCI_ARTIFACT_MANIFEST_MEDIA_TYPE, OCI_IMAGE_MANIFEST_MEDIA_TYPE,
 };
 use anyhow::{Context, Result};
 use oci_spec::image::{ArtifactManifest, MediaType};
@@ -151,11 +152,14 @@ fn concurrent_keep_existing_ref_publish_keeps_one_digest() -> Result<()> {
 }
 
 #[test]
-fn imports_legacy_oci_dir_into_sqlite_registry() -> Result<()> {
+fn imports_legacy_oci_dir_into_sqlite_registry_preserving_image_manifest() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let legacy_dir = dir.path().join("legacy");
     let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:v1")?;
     let layer = build_test_legacy_oci_dir(legacy_dir.clone(), image_name.clone())?;
+    // The legacy import path must preserve the manifest digest and bytes,
+    // so capture the legacy digest up front and assert identity is intact.
+    let expected_digest = legacy_oci_dir_ref(&legacy_dir)?.manifest_digest;
 
     let registry_root = dir.path().join("registry-v3");
     let index_store = SqliteIndexStore::open_in_registry_root(&registry_root)?;
@@ -164,6 +168,7 @@ fn imports_legacy_oci_dir_into_sqlite_registry() -> Result<()> {
     let imported = import_legacy_oci_dir(&index_store, &blob_store, &legacy_dir)?;
 
     assert_eq!(imported.image_name, Some(image_name.clone()));
+    assert_eq!(imported.manifest_digest, expected_digest);
     assert_eq!(
         index_store.resolve_image_name(&image_name)?,
         Some(imported.manifest_digest.clone())
@@ -174,7 +179,7 @@ fn imports_legacy_oci_dir_into_sqlite_registry() -> Result<()> {
     let manifest = index_store
         .get_manifest(&imported.manifest_digest)?
         .context("Imported manifest is missing")?;
-    assert_eq!(manifest.media_type, OCI_ARTIFACT_MANIFEST_MEDIA_TYPE);
+    assert_eq!(manifest.media_type, OCI_IMAGE_MANIFEST_MEDIA_TYPE);
     let manifest_blob = index_store
         .get_blob(&manifest.digest)?
         .context("Imported manifest blob is missing")?;
@@ -189,13 +194,17 @@ fn imports_legacy_oci_dir_into_sqlite_registry() -> Result<()> {
 
     let artifact =
         LocalArtifact::open_in_registry(LocalRegistry::open(&registry_root)?, image_name)?;
+    // LocalArtifact must dispatch on the stored manifest media type and
+    // surface the legacy Image Manifest's layer descriptors through the
+    // common LocalManifest view.
+    assert!(matches!(artifact.get_manifest()?, LocalManifest::Image(_)));
     assert_eq!(artifact.layers()?, vec![layer.clone()]);
     assert_eq!(artifact.get_blob(&layer.digest().to_string())?, b"instance");
     Ok(())
 }
 
 #[test]
-fn migrates_legacy_local_registry_explicitly() -> Result<()> {
+fn imports_legacy_local_registry_explicitly() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let legacy_registry_root = dir.path().join("legacy-registry");
     let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:v2")?;
@@ -207,10 +216,10 @@ fn migrates_legacy_local_registry_explicitly() -> Result<()> {
     let blob_store = FileBlobStore::open_in_registry_root(&registry_root)?;
 
     assert!(index_store.resolve_image_name(&image_name)?.is_none());
-    let report = migrate_legacy_local_registry(&index_store, &blob_store, &legacy_registry_root)?;
+    let report = import_legacy_local_registry(&index_store, &blob_store, &legacy_registry_root)?;
     assert_eq!(
         report,
-        LegacyMigrationReport {
+        LegacyImportReport {
             scanned_dirs: 1,
             imported_dirs: 1,
             verified_dirs: 0,
@@ -220,10 +229,10 @@ fn migrates_legacy_local_registry_explicitly() -> Result<()> {
     );
     let imported_digest = index_store
         .resolve_image_name(&image_name)?
-        .context("Legacy local registry ref was not migrated")?;
+        .context("Legacy local registry ref was not imported")?;
     assert_eq!(
-        migrate_legacy_local_registry(&index_store, &blob_store, &legacy_registry_root)?,
-        LegacyMigrationReport {
+        import_legacy_local_registry(&index_store, &blob_store, &legacy_registry_root)?,
+        LegacyImportReport {
             scanned_dirs: 1,
             imported_dirs: 0,
             verified_dirs: 1,
@@ -236,7 +245,7 @@ fn migrates_legacy_local_registry_explicitly() -> Result<()> {
 }
 
 #[test]
-fn migrate_legacy_local_registry_keeps_existing_ref_on_conflict() -> Result<()> {
+fn import_legacy_local_registry_keeps_existing_ref_on_conflict() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let legacy_registry_root = dir.path().join("legacy-registry");
     let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:conflict")?;
@@ -251,10 +260,10 @@ fn migrate_legacy_local_registry_keeps_existing_ref_on_conflict() -> Result<()> 
         put_test_manifest_ref(&index_store, &blob_store, &image_name, b"existing-manifest")?;
     assert_ne!(existing_digest, legacy_manifest_digest);
 
-    let report = migrate_legacy_local_registry(&index_store, &blob_store, &legacy_registry_root)?;
+    let report = import_legacy_local_registry(&index_store, &blob_store, &legacy_registry_root)?;
     assert_eq!(
         report,
-        LegacyMigrationReport {
+        LegacyImportReport {
             scanned_dirs: 1,
             imported_dirs: 0,
             verified_dirs: 0,
@@ -271,7 +280,7 @@ fn migrate_legacy_local_registry_keeps_existing_ref_on_conflict() -> Result<()> 
 }
 
 #[test]
-fn migrate_legacy_local_registry_replaces_existing_ref_when_requested() -> Result<()> {
+fn import_legacy_local_registry_replaces_existing_ref_when_requested() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let legacy_registry_root = dir.path().join("legacy-registry");
     let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:replace")?;
@@ -286,7 +295,7 @@ fn migrate_legacy_local_registry_replaces_existing_ref_when_requested() -> Resul
         put_test_manifest_ref(&index_store, &blob_store, &image_name, b"existing-manifest")?;
     assert_ne!(existing_digest, legacy_manifest_digest);
 
-    let report = migrate_legacy_local_registry_with_policy(
+    let report = import_legacy_local_registry_with_policy(
         &index_store,
         &blob_store,
         &legacy_registry_root,
@@ -294,7 +303,7 @@ fn migrate_legacy_local_registry_replaces_existing_ref_when_requested() -> Resul
     )?;
     assert_eq!(
         report,
-        LegacyMigrationReport {
+        LegacyImportReport {
             scanned_dirs: 1,
             imported_dirs: 0,
             verified_dirs: 0,
@@ -311,7 +320,7 @@ fn migrate_legacy_local_registry_replaces_existing_ref_when_requested() -> Resul
 }
 
 #[test]
-fn local_registry_migrates_legacy_refs_when_requested() -> Result<()> {
+fn local_registry_imports_legacy_refs_when_requested() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:v3")?;
     let legacy_dir = legacy_local_registry_path(dir.path(), &image_name);
@@ -320,8 +329,8 @@ fn local_registry_migrates_legacy_refs_when_requested() -> Result<()> {
     let registry = LocalRegistry::open(dir.path())?;
     assert!(registry.resolve_image_name(&image_name)?.is_none());
     assert_eq!(
-        registry.migrate_legacy_layout()?,
-        LegacyMigrationReport {
+        registry.import_legacy_layout()?,
+        LegacyImportReport {
             scanned_dirs: 1,
             imported_dirs: 1,
             verified_dirs: 0,
@@ -331,7 +340,7 @@ fn local_registry_migrates_legacy_refs_when_requested() -> Result<()> {
     );
     let imported_digest = registry
         .resolve_image_name(&image_name)?
-        .context("Legacy local registry ref was not migrated")?;
+        .context("Legacy local registry ref was not imported")?;
     assert!(registry.blobs().exists(&imported_digest)?);
     assert!(registry.index().get_manifest(&imported_digest)?.is_some());
     Ok(())
@@ -398,7 +407,7 @@ fn local_registry_build_keep_existing_skips_conflicting_manifest() -> Result<()>
 }
 
 #[test]
-fn concurrent_legacy_migrations_are_idempotent() -> Result<()> {
+fn concurrent_legacy_imports_are_idempotent() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let root = dir.path().to_path_buf();
     let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:parallel")?;
@@ -408,16 +417,16 @@ fn concurrent_legacy_migrations_are_idempotent() -> Result<()> {
     let handles: Vec<_> = (0..2)
         .map(|_| {
             let root = root.clone();
-            std::thread::spawn(move || -> Result<LegacyMigrationReport> {
+            std::thread::spawn(move || -> Result<LegacyImportReport> {
                 let registry = LocalRegistry::open(root)?;
-                registry.migrate_legacy_layout()
+                registry.import_legacy_layout()
             })
         })
         .collect();
 
     let reports: Vec<_> = handles
         .into_iter()
-        .map(|handle| handle.join().expect("migration thread panicked"))
+        .map(|handle| handle.join().expect("import thread panicked"))
         .collect::<Result<_>>()?;
 
     assert_eq!(
@@ -452,7 +461,7 @@ fn concurrent_legacy_migrations_are_idempotent() -> Result<()> {
     let registry = LocalRegistry::open(&root)?;
     let imported_digest = registry
         .resolve_image_name(&image_name)?
-        .context("Legacy local registry ref was not migrated")?;
+        .context("Legacy local registry ref was not imported")?;
     assert!(registry.blobs().exists(&imported_digest)?);
     Ok(())
 }

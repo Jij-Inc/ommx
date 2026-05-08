@@ -2,21 +2,19 @@ use super::{
     digest::sha256_digest,
     ghcr,
     local_registry::{LocalRegistry, RefConflictPolicy, RefUpdate},
-    media_types, InstanceAnnotations, ParametricInstanceAnnotations, SampleSetAnnotations,
-    SolutionAnnotations,
+    media_types::{self, OCI_ARTIFACT_MANIFEST_MEDIA_TYPE, OCI_IMAGE_MANIFEST_MEDIA_TYPE},
+    InstanceAnnotations, ParametricInstanceAnnotations, SampleSetAnnotations, SolutionAnnotations,
 };
 use crate::v1;
 use anyhow::{bail, Context, Result};
 use oci_spec::image::{
     ArtifactManifest, ArtifactManifestBuilder as OciArtifactManifestBuilder, Descriptor,
-    DescriptorBuilder, Digest, MediaType,
+    DescriptorBuilder, Digest, ImageManifest, MediaType,
 };
 use prost::Message;
 use serde::Serialize;
 use std::{collections::HashMap, str::FromStr};
 use url::Url;
-
-pub const OCI_ARTIFACT_MANIFEST_MEDIA_TYPE: &str = "application/vnd.oci.artifact.manifest.v1+json";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PendingArtifactBlob {
@@ -109,29 +107,100 @@ impl LocalArtifact {
         &self.manifest_digest
     }
 
-    pub fn get_manifest(&self) -> Result<ArtifactManifest> {
+    pub fn get_manifest(&self) -> Result<LocalManifest> {
         let bytes = self.registry.blobs().read_bytes(&self.manifest_digest)?;
-        let manifest: ArtifactManifest =
-            serde_json::from_slice(&bytes).context("Failed to parse OCI artifact manifest")?;
-        ensure_ommx_artifact_manifest(&manifest)?;
-        Ok(manifest)
+        let record = self
+            .registry
+            .index()
+            .get_manifest(&self.manifest_digest)?
+            .with_context(|| {
+                format!(
+                    "Manifest record {} not found in IndexStore",
+                    self.manifest_digest
+                )
+            })?;
+        LocalManifest::parse(&record.media_type, &bytes)
     }
 
     pub fn annotations(&self) -> Result<HashMap<String, String>> {
-        Ok(self
-            .get_manifest()?
-            .annotations()
-            .as_ref()
-            .cloned()
-            .unwrap_or_default())
+        Ok(self.get_manifest()?.annotations())
     }
 
     pub fn layers(&self) -> Result<Vec<Descriptor>> {
-        Ok(self.get_manifest()?.blobs().to_vec())
+        Ok(self.get_manifest()?.layers())
+    }
+
+    pub fn subject(&self) -> Result<Option<Descriptor>> {
+        Ok(self.get_manifest()?.subject())
     }
 
     pub fn get_blob(&self, digest: &str) -> Result<Vec<u8>> {
         self.registry.blobs().read_bytes(digest)
+    }
+}
+
+/// A manifest read from the SQLite Local Registry, dispatched on its OCI media
+/// type. v3 stores both Image Manifest (legacy import path) and Artifact
+/// Manifest (native build path) and identifies each by its bytes digest.
+#[derive(Debug, Clone)]
+pub enum LocalManifest {
+    Image(ImageManifest),
+    Artifact(ArtifactManifest),
+}
+
+impl LocalManifest {
+    fn parse(media_type: &str, bytes: &[u8]) -> Result<Self> {
+        match media_type {
+            OCI_ARTIFACT_MANIFEST_MEDIA_TYPE => {
+                let manifest: ArtifactManifest = serde_json::from_slice(bytes)
+                    .context("Failed to parse OCI artifact manifest")?;
+                ensure_ommx_artifact_manifest(&manifest)?;
+                Ok(LocalManifest::Artifact(manifest))
+            }
+            OCI_IMAGE_MANIFEST_MEDIA_TYPE => {
+                let manifest: ImageManifest =
+                    serde_json::from_slice(bytes).context("Failed to parse OCI image manifest")?;
+                ensure_ommx_image_manifest(&manifest)?;
+                Ok(LocalManifest::Image(manifest))
+            }
+            other => bail!("Unsupported manifest media type for OMMX artifact: {other}"),
+        }
+    }
+
+    pub fn media_type(&self) -> &'static str {
+        match self {
+            LocalManifest::Image(_) => OCI_IMAGE_MANIFEST_MEDIA_TYPE,
+            LocalManifest::Artifact(_) => OCI_ARTIFACT_MANIFEST_MEDIA_TYPE,
+        }
+    }
+
+    pub fn artifact_type(&self) -> Option<&MediaType> {
+        match self {
+            LocalManifest::Image(m) => m.artifact_type().as_ref(),
+            LocalManifest::Artifact(m) => Some(m.artifact_type()),
+        }
+    }
+
+    pub fn layers(&self) -> Vec<Descriptor> {
+        match self {
+            LocalManifest::Image(m) => m.layers().to_vec(),
+            LocalManifest::Artifact(m) => m.blobs().to_vec(),
+        }
+    }
+
+    pub fn annotations(&self) -> HashMap<String, String> {
+        let raw = match self {
+            LocalManifest::Image(m) => m.annotations().clone(),
+            LocalManifest::Artifact(m) => m.annotations().clone(),
+        };
+        raw.unwrap_or_default()
+    }
+
+    pub fn subject(&self) -> Option<Descriptor> {
+        match self {
+            LocalManifest::Image(m) => m.subject().clone(),
+            LocalManifest::Artifact(m) => m.subject().clone(),
+        }
     }
 }
 
@@ -359,6 +428,18 @@ fn ensure_ommx_artifact_manifest(manifest: &ArtifactManifest) -> Result<()> {
         manifest.artifact_type() == &media_types::v1_artifact(),
         "Not an OMMX Artifact: {}",
         manifest.artifact_type()
+    );
+    Ok(())
+}
+
+fn ensure_ommx_image_manifest(manifest: &ImageManifest) -> Result<()> {
+    let artifact_type = manifest
+        .artifact_type()
+        .as_ref()
+        .context("OCI image manifest is not an OMMX artifact: artifactType is missing")?;
+    anyhow::ensure!(
+        artifact_type == &media_types::v1_artifact(),
+        "OCI image manifest is not an OMMX artifact: {artifact_type}",
     );
     Ok(())
 }

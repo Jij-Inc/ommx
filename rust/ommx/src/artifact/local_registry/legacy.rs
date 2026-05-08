@@ -1,20 +1,18 @@
 use super::{
     now_rfc3339, sha256_digest, FileBlobStore, LayerRecord, ManifestRecord, RefConflictPolicy,
-    RefUpdate, SqliteIndexStore, ValidatedDigest, BLOB_KIND_BLOB, BLOB_KIND_MANIFEST,
-    OCI_IMAGE_REF_NAME_ANNOTATION,
+    RefUpdate, SqliteIndexStore, ValidatedDigest, BLOB_KIND_BLOB, BLOB_KIND_CONFIG,
+    BLOB_KIND_MANIFEST, OCI_IMAGE_REF_NAME_ANNOTATION,
 };
-use crate::artifact::{
-    descriptor_from_bytes, media_types, stable_json_bytes, OCI_ARTIFACT_MANIFEST_MEDIA_TYPE,
-};
+use crate::artifact::{media_types, OCI_IMAGE_MANIFEST_MEDIA_TYPE};
 use anyhow::{ensure, Context, Result};
 use oci_spec::image::{
-    ArtifactManifest, ArtifactManifestBuilder, Descriptor, ImageIndex, ImageManifest, MediaType,
-    OciLayout,
+    Descriptor, DescriptorBuilder, Digest, ImageIndex, ImageManifest, MediaType, OciLayout,
 };
 use ocipkg::ImageName;
 use std::{
     fs,
     path::{Path, PathBuf},
+    str::FromStr,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,7 +28,7 @@ pub struct LegacyOciDirRef {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LegacyMigrationReport {
+pub struct LegacyImportReport {
     pub scanned_dirs: usize,
     pub imported_dirs: usize,
     pub verified_dirs: usize,
@@ -44,13 +42,19 @@ enum RefConflictHandling {
     Return,
 }
 
+/// Preparation result for a legacy OCI directory.
+///
+/// v3 import preserves the legacy [`ImageManifest`] bytes and digest as-is.
+/// Format conversion (Image Manifest -> Artifact Manifest) is intentionally
+/// out of scope here and lives in a separate explicit `convert` operation.
 struct PreparedLegacyOciDir {
     manifest_digest: String,
     image_name: Option<ImageName>,
-    manifest: ArtifactManifest,
     manifest_bytes: Vec<u8>,
     manifest_descriptor: Descriptor,
-    legacy_manifest: ImageManifest,
+    image_manifest: ImageManifest,
+    config_descriptor: Descriptor,
+    config_bytes: Vec<u8>,
 }
 
 /// Import an existing OCI Image Layout directory into the v3 local registry.
@@ -106,8 +110,8 @@ fn import_legacy_oci_dir_with_policy_inner(
         }
     }
 
-    let mut layers = Vec::with_capacity(prepared.manifest.blobs().len());
-    for (position, layer) in prepared.legacy_manifest.layers().iter().enumerate() {
+    let mut layers = Vec::with_capacity(prepared.image_manifest.layers().len());
+    for (position, layer) in prepared.image_manifest.layers().iter().enumerate() {
         put_legacy_descriptor_blob(index_store, blob_store, oci_dir_root, layer, BLOB_KIND_BLOB)?;
         layers.push(LayerRecord {
             manifest_digest: manifest_digest.clone(),
@@ -118,6 +122,17 @@ fn import_legacy_oci_dir_with_policy_inner(
             annotations_json: annotations_json(layer.annotations())?,
         });
     }
+    // Image Manifest references a config blob; persist it as a CAS object so
+    // that re-export can rebuild a self-contained OCI Image Layout. It is not
+    // a layer, so it does not appear in `manifest_layers`.
+    put_descriptor_bytes(
+        index_store,
+        blob_store,
+        &prepared.config_descriptor,
+        &prepared.config_bytes,
+        BLOB_KIND_CONFIG,
+    )?;
+    // Store the manifest blob bytes as-is; digest is preserved.
     put_descriptor_bytes(
         index_store,
         blob_store,
@@ -129,14 +144,14 @@ fn import_legacy_oci_dir_with_policy_inner(
     index_store.put_manifest(
         &ManifestRecord {
             digest: manifest_digest.clone(),
-            media_type: OCI_ARTIFACT_MANIFEST_MEDIA_TYPE.to_string(),
+            media_type: OCI_IMAGE_MANIFEST_MEDIA_TYPE.to_string(),
             size: prepared.manifest_descriptor.size(),
             subject_digest: prepared
-                .manifest
+                .image_manifest
                 .subject()
                 .as_ref()
                 .map(|d| digest_to_string(d.digest())),
-            annotations_json: annotations_json(prepared.manifest.annotations())?,
+            annotations_json: annotations_json(prepared.image_manifest.annotations())?,
             created_at: now_rfc3339(),
         },
         &layers,
@@ -260,12 +275,12 @@ fn import_legacy_oci_dir_as_ref_with_policy_inner(
     Ok((import, ref_update))
 }
 
-pub fn migrate_legacy_local_registry(
+pub fn import_legacy_local_registry(
     index_store: &SqliteIndexStore,
     blob_store: &FileBlobStore,
     legacy_registry_root: impl AsRef<Path>,
-) -> Result<LegacyMigrationReport> {
-    migrate_legacy_local_registry_with_policy(
+) -> Result<LegacyImportReport> {
+    import_legacy_local_registry_with_policy(
         index_store,
         blob_store,
         legacy_registry_root,
@@ -273,15 +288,15 @@ pub fn migrate_legacy_local_registry(
     )
 }
 
-pub fn migrate_legacy_local_registry_with_policy(
+pub fn import_legacy_local_registry_with_policy(
     index_store: &SqliteIndexStore,
     blob_store: &FileBlobStore,
     legacy_registry_root: impl AsRef<Path>,
     policy: RefConflictPolicy,
-) -> Result<LegacyMigrationReport> {
+) -> Result<LegacyImportReport> {
     let legacy_registry_root = legacy_registry_root.as_ref();
     let legacy_dirs = gather_legacy_oci_dirs(legacy_registry_root)?;
-    let mut report = LegacyMigrationReport {
+    let mut report = LegacyImportReport {
         scanned_dirs: legacy_dirs.len(),
         imported_dirs: 0,
         verified_dirs: 0,
@@ -290,7 +305,7 @@ pub fn migrate_legacy_local_registry_with_policy(
     };
 
     for legacy_dir in &legacy_dirs {
-        let image_name = legacy_migration_image_name(legacy_registry_root, legacy_dir)?;
+        let image_name = legacy_import_image_name(legacy_registry_root, legacy_dir)?;
         let legacy_ref = legacy_oci_dir_ref(legacy_dir)?;
         let existing_manifest_digest = index_store.resolve_image_name(&image_name)?;
 
@@ -306,11 +321,11 @@ pub fn migrate_legacy_local_registry_with_policy(
                 )
                 .with_context(|| {
                     format!(
-                        "Failed to migrate legacy local registry entry {}",
+                        "Failed to import legacy local registry entry {}",
                         legacy_dir.display()
                     )
                 })?;
-                record_migration_ref_update(&mut report, ref_update);
+                record_import_ref_update(&mut report, ref_update);
             }
             Some(existing) if existing == legacy_ref.manifest_digest => {
                 let (_, ref_update) = import_legacy_oci_dir_as_ref_with_policy_inner(
@@ -323,11 +338,11 @@ pub fn migrate_legacy_local_registry_with_policy(
                 )
                 .with_context(|| {
                     format!(
-                        "Failed to verify migrated legacy local registry entry {}",
+                        "Failed to verify imported legacy local registry entry {}",
                         legacy_dir.display()
                     )
                 })?;
-                record_migration_ref_update(&mut report, ref_update);
+                record_import_ref_update(&mut report, ref_update);
             }
             Some(_) if policy == RefConflictPolicy::KeepExisting => {
                 report.conflicted_dirs += 1;
@@ -347,7 +362,7 @@ pub fn migrate_legacy_local_registry_with_policy(
                         legacy_dir.display()
                     )
                 })?;
-                record_migration_ref_update(&mut report, ref_update);
+                record_import_ref_update(&mut report, ref_update);
             }
         }
     }
@@ -400,10 +415,7 @@ fn gather_legacy_oci_dirs_inner(dir: &Path, dirs: &mut Vec<PathBuf>) -> Result<(
     Ok(())
 }
 
-fn legacy_migration_image_name(
-    legacy_registry_root: &Path,
-    legacy_dir: &Path,
-) -> Result<ImageName> {
+fn legacy_import_image_name(legacy_registry_root: &Path, legacy_dir: &Path) -> Result<ImageName> {
     let annotated = legacy_oci_dir_image_name(legacy_dir)?;
     let path_name = legacy_dir
         .strip_prefix(legacy_registry_root)
@@ -483,7 +495,7 @@ fn put_image_ref_with_conflict_handling(
     }
 }
 
-fn record_migration_ref_update(report: &mut LegacyMigrationReport, update: RefUpdate) {
+fn record_import_ref_update(report: &mut LegacyImportReport, update: RefUpdate) {
     match update {
         RefUpdate::Inserted => report.imported_dirs += 1,
         RefUpdate::Unchanged => report.verified_dirs += 1,
@@ -515,20 +527,20 @@ fn prepare_legacy_oci_dir(oci_dir_root: impl AsRef<Path>) -> Result<PreparedLega
         "Legacy OMMX local registry entry must contain exactly one manifest: {}",
         index_path.display()
     );
-    let legacy_manifest_descriptor = image_index.manifests().first().unwrap();
-    let image_name = image_name_from_index_descriptor(legacy_manifest_descriptor)?;
-    let legacy_manifest_digest = digest_to_string(legacy_manifest_descriptor.digest());
+    let legacy_index_descriptor = image_index.manifests().first().unwrap();
+    let image_name = image_name_from_index_descriptor(legacy_index_descriptor)?;
+    let legacy_manifest_digest = digest_to_string(legacy_index_descriptor.digest());
     let legacy_manifest_bytes = read_legacy_blob(oci_dir_root, &legacy_manifest_digest)
         .with_context(|| format!("Failed to read legacy manifest blob {legacy_manifest_digest}"))?;
     ensure!(
-        legacy_manifest_bytes.len() as u64 == legacy_manifest_descriptor.size(),
+        legacy_manifest_bytes.len() as u64 == legacy_index_descriptor.size(),
         "Legacy manifest blob size mismatch for {legacy_manifest_digest}: descriptor={}, actual={}",
-        legacy_manifest_descriptor.size(),
+        legacy_index_descriptor.size(),
         legacy_manifest_bytes.len()
     );
-    let legacy_manifest: ImageManifest = serde_json::from_slice(&legacy_manifest_bytes)
+    let image_manifest: ImageManifest = serde_json::from_slice(&legacy_manifest_bytes)
         .with_context(|| format!("Failed to parse legacy manifest {legacy_manifest_digest}"))?;
-    let legacy_artifact_type = legacy_manifest
+    let legacy_artifact_type = image_manifest
         .artifact_type()
         .as_ref()
         .context("Legacy OCI dir is not an OMMX artifact: artifactType is missing")?;
@@ -538,31 +550,38 @@ fn prepare_legacy_oci_dir(oci_dir_root: impl AsRef<Path>) -> Result<PreparedLega
         legacy_artifact_type
     );
 
-    let mut builder = ArtifactManifestBuilder::default()
-        .artifact_type(media_types::v1_artifact())
-        .blobs(legacy_manifest.layers().to_vec());
-    if let Some(subject) = legacy_manifest.subject().clone() {
-        builder = builder.subject(subject);
-    }
-    if let Some(annotations) = legacy_manifest.annotations().clone() {
-        builder = builder.annotations(annotations);
-    }
-    let manifest = builder
+    // Build an OCI Image Manifest descriptor that preserves the legacy bytes
+    // and digest verbatim. v3 import does not rewrite the manifest.
+    let manifest_digest_parsed = Digest::from_str(&legacy_manifest_digest)
+        .with_context(|| format!("Invalid legacy manifest digest: {legacy_manifest_digest}"))?;
+    let manifest_descriptor = DescriptorBuilder::default()
+        .media_type(MediaType::ImageManifest)
+        .digest(manifest_digest_parsed)
+        .size(legacy_manifest_bytes.len() as u64)
         .build()
-        .context("Failed to build OCI artifact manifest from legacy OCI dir")?;
-    let manifest_bytes = stable_json_bytes(&manifest)?;
-    let manifest_descriptor = descriptor_from_bytes(
-        MediaType::ArtifactManifest,
-        &manifest_bytes,
-        Default::default(),
-    )?;
+        .context("Failed to build OCI image manifest descriptor for legacy OCI dir")?;
+
+    // Image Manifest references a config blob; read it so the registry can
+    // re-export a self-contained OCI Image Layout later.
+    let config_descriptor = image_manifest.config().clone();
+    let config_digest = digest_to_string(config_descriptor.digest());
+    let config_bytes = read_legacy_blob(oci_dir_root, &config_digest)
+        .with_context(|| format!("Failed to read legacy config blob {config_digest}"))?;
+    ensure!(
+        config_bytes.len() as u64 == config_descriptor.size(),
+        "Legacy config blob size mismatch for {config_digest}: descriptor={}, actual={}",
+        config_descriptor.size(),
+        config_bytes.len()
+    );
+
     Ok(PreparedLegacyOciDir {
-        manifest_digest: manifest_descriptor.digest().to_string(),
+        manifest_digest: legacy_manifest_digest,
         image_name,
-        manifest,
-        manifest_bytes,
+        manifest_bytes: legacy_manifest_bytes,
         manifest_descriptor,
-        legacy_manifest,
+        image_manifest,
+        config_descriptor,
+        config_bytes,
     })
 }
 

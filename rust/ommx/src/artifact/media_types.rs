@@ -1,5 +1,8 @@
 use oci_spec::image::MediaType;
 
+pub const OCI_IMAGE_MANIFEST_MEDIA_TYPE: &str = "application/vnd.oci.image.manifest.v1+json";
+pub const OCI_ARTIFACT_MANIFEST_MEDIA_TYPE: &str = "application/vnd.oci.artifact.manifest.v1+json";
+
 pub const V1_ARTIFACT_MEDIA_TYPE: &str = "application/org.ommx.v1.artifact";
 pub const V1_CONFIG_MEDIA_TYPE: &str = "application/org.ommx.v1.config+json";
 pub const V1_INSTANCE_MEDIA_TYPE: &str = "application/org.ommx.v1.instance";

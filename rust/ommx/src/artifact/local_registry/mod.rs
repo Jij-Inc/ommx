@@ -20,11 +20,11 @@ pub(crate) use crate::artifact::digest::{validate_digest, ValidatedDigest};
 pub use blob::FileBlobStore;
 pub use index::{image_name_repository, SqliteIndexStore};
 pub use legacy::{
-    import_legacy_local_registry_ref, import_legacy_oci_dir, import_legacy_oci_dir_as_ref,
+    import_legacy_local_registry, import_legacy_local_registry_ref,
+    import_legacy_local_registry_with_policy, import_legacy_oci_dir, import_legacy_oci_dir_as_ref,
     import_legacy_oci_dir_as_ref_with_policy, import_legacy_oci_dir_with_policy,
-    legacy_local_registry_path, legacy_oci_dir_image_name, legacy_oci_dir_ref,
-    migrate_legacy_local_registry, migrate_legacy_local_registry_with_policy,
-    LegacyMigrationReport, LegacyOciDirImport, LegacyOciDirRef,
+    legacy_local_registry_path, legacy_oci_dir_image_name, legacy_oci_dir_ref, LegacyImportReport,
+    LegacyOciDirImport, LegacyOciDirRef,
 };
 pub use registry::LocalRegistry;
 pub use types::{

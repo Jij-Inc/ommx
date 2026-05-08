@@ -12,10 +12,9 @@ pub use annotations::*;
 pub use builder::*;
 pub use config::*;
 pub use digest::sha256_digest;
-pub(crate) use manifest::{
-    descriptor_from_bytes, stable_json_bytes, PendingArtifactBlob, OCI_ARTIFACT_MANIFEST_MEDIA_TYPE,
-};
-pub use manifest::{LocalArtifact, LocalArtifactBuilder};
+pub(crate) use manifest::{stable_json_bytes, PendingArtifactBlob};
+pub use manifest::{LocalArtifact, LocalArtifactBuilder, LocalManifest};
+pub use media_types::{OCI_ARTIFACT_MANIFEST_MEDIA_TYPE, OCI_IMAGE_MANIFEST_MEDIA_TYPE};
 
 use crate::v1;
 use anyhow::{bail, ensure, Context, Result};

@@ -81,8 +81,11 @@ enum Command {
 
 #[derive(Subcommand)]
 enum ArtifactCommand {
-    /// Migrate legacy path/tag OCI directories into the v3 local registry
-    Migrate {
+    /// Import legacy path/tag OCI directories into the v3 local registry, preserving manifest digest.
+    ///
+    /// Reformatting an Image Manifest as an Artifact Manifest is a separate explicit operation
+    /// (`convert`, not yet exposed) that produces a new artifact under a new digest / new ref.
+    Import {
         /// Local registry root. Defaults to OMMX_LOCAL_REGISTRY_ROOT or the OS default data dir.
         #[clap(long)]
         root: Option<PathBuf>,
@@ -235,7 +238,7 @@ fn main() -> Result<()> {
         }
 
         Command::Artifact { command } => match command {
-            ArtifactCommand::Migrate { root, replace } => {
+            ArtifactCommand::Import { root, replace } => {
                 let registry = if let Some(root) = root {
                     LocalRegistry::open(root)?
                 } else {
@@ -246,9 +249,9 @@ fn main() -> Result<()> {
                 } else {
                     RefConflictPolicy::KeepExisting
                 };
-                let report = registry.migrate_legacy_layout_with_policy(policy)?;
+                let report = registry.import_legacy_layout_with_policy(policy)?;
                 println!(
-                    "Migrated {} legacy OCI dir(s) from {}",
+                    "Imported {} legacy OCI dir(s) into {}",
                     report.imported_dirs,
                     registry.root().display()
                 );

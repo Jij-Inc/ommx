@@ -1,7 +1,7 @@
 use super::{
-    import_legacy_local_registry_ref, migrate_legacy_local_registry,
-    migrate_legacy_local_registry_with_policy, now_rfc3339, FileBlobStore, LayerRecord,
-    LegacyMigrationReport, LegacyOciDirImport, ManifestRecord, RefConflictPolicy, RefUpdate,
+    import_legacy_local_registry, import_legacy_local_registry_ref,
+    import_legacy_local_registry_with_policy, now_rfc3339, FileBlobStore, LayerRecord,
+    LegacyImportReport, LegacyOciDirImport, ManifestRecord, RefConflictPolicy, RefUpdate,
     SqliteIndexStore, BLOB_KIND_BLOB, BLOB_KIND_MANIFEST,
 };
 use crate::artifact::{stable_json_bytes, PendingArtifactBlob, OCI_ARTIFACT_MANIFEST_MEDIA_TYPE};
@@ -46,15 +46,15 @@ impl LocalRegistry {
         import_legacy_local_registry_ref(&self.index, &self.blobs, &self.root, image_name)
     }
 
-    pub fn migrate_legacy_layout(&self) -> Result<LegacyMigrationReport> {
-        migrate_legacy_local_registry(&self.index, &self.blobs, &self.root)
+    pub fn import_legacy_layout(&self) -> Result<LegacyImportReport> {
+        import_legacy_local_registry(&self.index, &self.blobs, &self.root)
     }
 
-    pub fn migrate_legacy_layout_with_policy(
+    pub fn import_legacy_layout_with_policy(
         &self,
         policy: RefConflictPolicy,
-    ) -> Result<LegacyMigrationReport> {
-        migrate_legacy_local_registry_with_policy(&self.index, &self.blobs, &self.root, policy)
+    ) -> Result<LegacyImportReport> {
+        import_legacy_local_registry_with_policy(&self.index, &self.blobs, &self.root, policy)
     }
 
     pub fn resolve_image_name(&self, image_name: &ImageName) -> Result<Option<String>> {

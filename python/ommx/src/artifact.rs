@@ -173,7 +173,7 @@ impl PyArtifact {
         if local_path.exists() {
             bail!(
                 "Artifact {image_name} was found only in the legacy OCI directory local registry at {}. \
-                 Run `ommx artifact migrate` once, then retry.",
+                 Run `ommx artifact import` once, then retry.",
                 local_path.display()
             );
         }
