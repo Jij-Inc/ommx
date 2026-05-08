@@ -1,12 +1,32 @@
-//! SQLite-backed local registry index and filesystem content store.
+//! v3 OMMX Local Registry: SQLite-backed index + filesystem CAS blob
+//! store, plus the import paths that bring outside content in.
 //!
-//! This module is intentionally independent from the current `ocipkg::OciDir`
-//! local-registry layout. The legacy layout remains a read/import source; new
-//! local-registry state is represented by an index store plus a CAS blob store.
+//! Layering, from the inside out:
+//!
+//! - [`index`] / [`blob`] / [`types`] — the SQLite [`SqliteIndexStore`]
+//!   and the filesystem [`FileBlobStore`] that together back v3 local
+//!   state, plus their data shapes (`BlobRecord`, `ManifestRecord`,
+//!   `RefRecord`, `LayerRecord`, `RefConflictPolicy`, `RefUpdate`).
+//! - [`registry`] — [`LocalRegistry`] glues those two stores into a
+//!   single addressable unit, exposes the publish primitive used by
+//!   `LocalArtifactBuilder`, and forwards the import entry points
+//!   below.
+//! - [`oci_dir`] — generic OCI Image Layout (`oci-layout` +
+//!   `index.json` + `blobs/`) I/O. **Not** legacy: the same format is
+//!   produced by `oras` / `crane` / `skopeo` and used as the v3
+//!   import / export interchange. Identity-preserving: manifest bytes
+//!   and digest are stored verbatim; format conversion is a separate
+//!   explicit `convert` operation (ARTIFACT_V3.md §6.7).
+//! - [`legacy`] — v2 OMMX local registry compatibility. Owns
+//!   `<root>/<image_name>/<tag>/` path layout, recursive scan, and the
+//!   batch [`LegacyImportReport`]. Uses [`oci_dir`] internally for the
+//!   actual per-directory import. The directory format itself is not
+//!   legacy; only the v2-specific layout is.
 
 mod blob;
 mod index;
 mod legacy;
+mod oci_dir;
 mod registry;
 mod types;
 
@@ -24,9 +44,11 @@ pub use index::{image_name_repository, SqliteIndexStore};
 pub use legacy::{
     import_legacy_local_registry, import_legacy_local_registry_ref,
     import_legacy_local_registry_ref_with_policy, import_legacy_local_registry_with_policy,
-    import_legacy_oci_dir, import_legacy_oci_dir_as_ref, import_legacy_oci_dir_as_ref_with_policy,
-    import_legacy_oci_dir_with_policy, legacy_local_registry_path, legacy_oci_dir_image_name,
-    legacy_oci_dir_ref, LegacyImportReport, LegacyOciDirRef,
+    legacy_local_registry_path, LegacyImportReport,
+};
+pub use oci_dir::{
+    import_oci_dir, import_oci_dir_as_ref, import_oci_dir_as_ref_with_policy,
+    import_oci_dir_with_policy, oci_dir_image_name, oci_dir_ref, OciDirRef,
 };
 pub use registry::LocalRegistry;
 pub use types::{

@@ -1,7 +1,7 @@
 use super::{
     annotations_json, import_legacy_local_registry, import_legacy_local_registry_ref,
     import_legacy_local_registry_ref_with_policy, import_legacy_local_registry_with_policy,
-    now_rfc3339, FileBlobStore, LayerRecord, LegacyImportReport, LegacyOciDirRef, ManifestRecord,
+    now_rfc3339, FileBlobStore, LayerRecord, LegacyImportReport, ManifestRecord, OciDirRef,
     RefConflictPolicy, RefUpdate, SqliteIndexStore, BLOB_KIND_BLOB, BLOB_KIND_MANIFEST,
 };
 use crate::artifact::{StagedArtifactBlob, OCI_ARTIFACT_MANIFEST_MEDIA_TYPE};
@@ -41,7 +41,7 @@ impl LocalRegistry {
         &self.blobs
     }
 
-    pub fn import_legacy_ref(&self, image_name: &ImageName) -> Result<LegacyOciDirRef> {
+    pub fn import_legacy_ref(&self, image_name: &ImageName) -> Result<OciDirRef> {
         import_legacy_local_registry_ref(&self.index, &self.blobs, &self.root, image_name)
     }
 
@@ -49,7 +49,7 @@ impl LocalRegistry {
         &self,
         image_name: &ImageName,
         policy: RefConflictPolicy,
-    ) -> Result<LegacyOciDirRef> {
+    ) -> Result<OciDirRef> {
         import_legacy_local_registry_ref_with_policy(
             &self.index,
             &self.blobs,

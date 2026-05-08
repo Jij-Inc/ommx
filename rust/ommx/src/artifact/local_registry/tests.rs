@@ -153,14 +153,14 @@ fn concurrent_keep_existing_ref_publish_keeps_one_digest() -> Result<()> {
 }
 
 #[test]
-fn imports_legacy_oci_dir_into_sqlite_registry_preserving_image_manifest() -> Result<()> {
+fn imports_oci_dir_into_sqlite_registry_preserving_image_manifest() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let legacy_dir = dir.path().join("legacy");
     let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:v1")?;
-    let layer = build_test_legacy_oci_dir(legacy_dir.clone(), image_name.clone())?;
+    let layer = build_test_oci_dir(legacy_dir.clone(), image_name.clone())?;
     // The legacy import path must preserve the manifest digest and bytes,
     // so capture the legacy digest up front and assert identity is intact.
-    let expected_digest = legacy_oci_dir_ref(&legacy_dir)?.manifest_digest;
+    let expected_digest = oci_dir_ref(&legacy_dir)?.manifest_digest;
 
     let registry_root = dir.path().join("registry-v3");
     let index_store = SqliteIndexStore::open_in_registry_root(&registry_root)?;
@@ -178,7 +178,7 @@ fn imports_legacy_oci_dir_into_sqlite_registry_preserving_image_manifest() -> Re
             .join(legacy_encoded),
     )?;
 
-    let imported = import_legacy_oci_dir(&index_store, &blob_store, &legacy_dir)?;
+    let imported = import_oci_dir(&index_store, &blob_store, &legacy_dir)?;
 
     assert_eq!(imported.image_name, Some(image_name.clone()));
     assert_eq!(imported.manifest_digest, expected_digest);
@@ -234,7 +234,7 @@ fn imports_legacy_local_registry_explicitly() -> Result<()> {
     let legacy_registry_root = dir.path().join("legacy-registry");
     let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:v2")?;
     let legacy_dir = legacy_local_registry_path(&legacy_registry_root, &image_name);
-    build_test_legacy_oci_dir(legacy_dir, image_name.clone())?;
+    build_test_oci_dir(legacy_dir, image_name.clone())?;
 
     let registry_root = dir.path().join("registry-v3");
     let index_store = SqliteIndexStore::open_in_registry_root(&registry_root)?;
@@ -275,8 +275,8 @@ fn import_legacy_local_registry_keeps_existing_ref_on_conflict() -> Result<()> {
     let legacy_registry_root = dir.path().join("legacy-registry");
     let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:conflict")?;
     let legacy_dir = legacy_local_registry_path(&legacy_registry_root, &image_name);
-    build_test_legacy_oci_dir(legacy_dir.clone(), image_name.clone())?;
-    let legacy_manifest_digest = legacy_oci_dir_ref(&legacy_dir)?.manifest_digest;
+    build_test_oci_dir(legacy_dir.clone(), image_name.clone())?;
+    let legacy_manifest_digest = oci_dir_ref(&legacy_dir)?.manifest_digest;
 
     let registry_root = dir.path().join("registry-v3");
     let index_store = SqliteIndexStore::open_in_registry_root(&registry_root)?;
@@ -310,8 +310,8 @@ fn import_legacy_local_registry_replaces_existing_ref_when_requested() -> Result
     let legacy_registry_root = dir.path().join("legacy-registry");
     let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:replace")?;
     let legacy_dir = legacy_local_registry_path(&legacy_registry_root, &image_name);
-    build_test_legacy_oci_dir(legacy_dir.clone(), image_name.clone())?;
-    let legacy_manifest_digest = legacy_oci_dir_ref(&legacy_dir)?.manifest_digest;
+    build_test_oci_dir(legacy_dir.clone(), image_name.clone())?;
+    let legacy_manifest_digest = oci_dir_ref(&legacy_dir)?.manifest_digest;
 
     let registry_root = dir.path().join("registry-v3");
     let index_store = SqliteIndexStore::open_in_registry_root(&registry_root)?;
@@ -349,7 +349,7 @@ fn local_registry_imports_legacy_refs_when_requested() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:v3")?;
     let legacy_dir = legacy_local_registry_path(dir.path(), &image_name);
-    build_test_legacy_oci_dir(legacy_dir, image_name.clone())?;
+    build_test_oci_dir(legacy_dir, image_name.clone())?;
 
     let registry = LocalRegistry::open(dir.path())?;
     assert!(registry.resolve_image_name(&image_name)?.is_none());
@@ -449,7 +449,7 @@ fn concurrent_legacy_imports_are_idempotent() -> Result<()> {
     let root = dir.path().to_path_buf();
     let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:parallel")?;
     let legacy_dir = legacy_local_registry_path(&root, &image_name);
-    build_test_legacy_oci_dir(legacy_dir, image_name.clone())?;
+    build_test_oci_dir(legacy_dir, image_name.clone())?;
 
     let handles: Vec<_> = (0..2)
         .map(|_| {
@@ -588,7 +588,7 @@ fn put_test_manifest(
     Ok(blob.digest)
 }
 
-fn build_test_legacy_oci_dir(legacy_dir: PathBuf, image_name: ImageName) -> Result<Descriptor> {
+fn build_test_oci_dir(legacy_dir: PathBuf, image_name: ImageName) -> Result<Descriptor> {
     let mut builder = OciDirBuilder::new(legacy_dir, image_name)?;
 
     let config = builder.add_empty_json()?;
