@@ -236,10 +236,10 @@ IndexStore は Local Registry の mutable state を持つ。実装は storage pr
 
 | 実装 | 用途 |
 |---|---|
-| SQLite | single-user local cache、test、CLI workflow |
-| PostgreSQL | shared registry、multi-process writer、cloud deployment |
+| SQLite | single-node local cache、test、CLI workflow |
+| PostgreSQL | shared registry、multi-node writer、cloud deployment |
 
-SQLite file を mounted object storage 上の multi-writer registry として使わない。shared registry では PostgreSQL 等の transaction を持つ外部 database を使う。
+SQLite は同一 node 上の複数 process / runner が同じ local cache に短時間 write する用途を許容する。この場合、write は SQLite の transaction によって serialize される前提とし、高頻度 writer や長時間 transaction を持つ shared registry にはしない。SQLite file を mounted object storage 上の multi-writer registry として使わない。shared filesystem、multi-node writer、cloud deployment では PostgreSQL 等の transaction を持つ外部 database を使う。
 
 IndexStore が持つ最小情報:
 
@@ -279,6 +279,15 @@ DB と BlobStore は分散 transaction にならないため、publish 順序を
 途中で失敗した場合、IndexStore に commit されていない artifact は見えない。BlobStore に残った unindexed blob は GC で回収する。
 
 tag update は IndexStore transaction 内の ref update として扱う。`ArtifactBuilder.build()` が最終 path に直接書く方式は v3 Local Registry では使わない。
+
+並行 publish では、unique ref / digest への書き込みは互いに独立して成功できる。同じ mutable ref へ異なる manifest digest を publish する場合、Local Registry は少なくとも次の primitive を提供する。
+
+| primitive | 方針 |
+|---|---|
+| keep-existing publish | 既存 ref を保持し、異なる digest がすでに publish されていれば conflict とする |
+| replace publish | 呼び出し側が明示した場合だけ ref を新しい digest に更新する |
+
+`latest`, `active`, `current run` のような alias に last-writer-wins、compare-and-swap、promote-only のどれを採用するかは Experiment / Run 層の semantic として決める。Local Registry 層はこれらを実現するための atomic publish primitive を提供するに留める。
 
 ### 6.5 Read / query API
 
