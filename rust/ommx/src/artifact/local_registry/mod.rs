@@ -17,9 +17,11 @@
 //!   in its native form and writes it through [`LocalRegistry`].
 //!   Currently `import::oci_dir` (a single OCI Image Layout directory)
 //!   and `import::legacy` (a v2 OMMX local registry path/tag tree of
-//!   such directories). All imports are identity-preserving; format
-//!   conversion is a separate explicit `convert` operation
-//!   (ARTIFACT_V3.md §6.7).
+//!   such directories). All imports are identity-preserving: manifest
+//!   bytes and digest are stored verbatim. Reformatting an Image
+//!   Manifest into an Artifact Manifest is a separate explicit
+//!   `convert` operation that produces a new artifact under a new
+//!   digest / new ref, intentionally not a side effect of import.
 
 mod blob;
 mod import;

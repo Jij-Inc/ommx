@@ -223,12 +223,11 @@ fn main() -> Result<()> {
         Command::Load { path } => {
             // Extract the archive into the legacy OCI dir cache and then
             // immediately drain that single entry into the v3 SQLite Local
-            // Registry via the lazy auto-migration described in
-            // ARTIFACT_V3.md §6.5. The legacy write is kept because
-            // `ommx push` / `save` and the Python archive read path still
-            // consume the OciDir form; the follow-up PR that ports those
-            // readers to the SQLite registry will drop the legacy write so
-            // `ommx load` lands directly in v3.
+            // Registry. The legacy write is kept because `ommx push` /
+            // `save` and the Python archive read path still consume the
+            // OciDir form; the follow-up PR that ports those readers to
+            // the SQLite registry will drop the legacy write so `ommx
+            // load` lands directly in v3.
             let mut artifact = Artifact::from_oci_archive(path)?;
             artifact.load()?;
             let image_name = artifact.get_name()?;

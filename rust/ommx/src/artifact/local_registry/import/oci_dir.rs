@@ -13,8 +13,8 @@
 //! that come out of the directory are stored verbatim into
 //! [`SqliteIndexStore`] and [`FileBlobStore`]. Reformatting an OCI
 //! Image Manifest into an OCI Artifact Manifest is intentionally a
-//! separate explicit `convert` operation (see ARTIFACT_V3.md §6.7),
-//! not a side effect of import.
+//! separate explicit `convert` operation that produces a new artifact
+//! under a new digest / new ref, not a side effect of import.
 //!
 //! The v2-OMMX-local-registry-specific code (the recursive scan of
 //! a path/tag-shaped tree, the path-to-`ImageName` heuristics) lives
@@ -87,9 +87,11 @@ struct PreparedOciDir {
 /// `index.json` as mutable state; it only reads it to discover the single
 /// manifest, and then copies the exact content-addressed blobs into
 /// [`FileBlobStore`] while inserting the matching records into
-/// [`SqliteIndexStore`]. The manifest digest is preserved verbatim — see
-/// [`OciDirRef`] and v3 design rule 13 in `ARTIFACT_V3.md` for why "import"
-/// never rewrites the manifest.
+/// [`SqliteIndexStore`]. The manifest digest is preserved verbatim — import
+/// never rewrites the manifest. Reformatting an Image Manifest into an
+/// Artifact Manifest is a separate explicit `convert` operation that
+/// produces a new artifact under a new digest / new ref, intentionally not
+/// a side effect of import.
 pub fn import_oci_dir(
     index_store: &SqliteIndexStore,
     blob_store: &FileBlobStore,

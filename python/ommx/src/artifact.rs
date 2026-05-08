@@ -179,14 +179,14 @@ impl PyArtifact {
             return Ok(Self(ArtifactInner::Local(artifact)));
         }
 
-        // SQLite miss — apply the lazy auto-migration described in
-        // ARTIFACT_V3.md §6.5: probe this single image's legacy OCI dir path
-        // (one `Path::exists()`, *not* a recursive scan of the legacy root),
-        // pull from remote into the legacy cache if absent, then import that
-        // legacy entry into the v3 SQLite registry. Identity is preserved
-        // because import_legacy_ref delegates to the standard OCI dir import
-        // path which keeps manifest bytes and digest verbatim. The next call
-        // hits the SQLite fast path above instead of probing legacy again.
+        // SQLite miss — apply lazy auto-migration: probe this single image's
+        // legacy OCI dir path (one `Path::exists()`, *not* a recursive scan
+        // of the legacy root), pull from remote into the legacy cache if
+        // absent, then import that legacy entry into the v3 SQLite registry.
+        // Identity is preserved because `import_legacy_ref` delegates to the
+        // standard OCI dir import path which keeps manifest bytes and digest
+        // verbatim. The next call hits the SQLite fast path above instead of
+        // probing legacy again.
         //
         // This is *not* a fallback (we never serve reads from legacy on the
         // hot path); it's a one-shot adapter that drains v2 / remote-pulled
