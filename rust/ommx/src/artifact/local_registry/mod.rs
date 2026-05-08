@@ -51,7 +51,7 @@ pub use import::oci_dir::{
 };
 #[cfg(feature = "remote-artifact")]
 pub use import::remote::pull_image;
-pub use index::{image_name_repository, PublishOutcome, SqliteIndexStore};
+pub use index::{PublishOutcome, SqliteIndexStore};
 pub use registry::LocalRegistry;
 pub use types::{
     BlobRecord, LayerRecord, ManifestRecord, RefConflictPolicy, RefRecord, RefUpdate,

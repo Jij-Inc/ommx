@@ -583,7 +583,7 @@ impl SqliteIndexStore {
     }
 }
 
-pub fn image_name_repository(image_name: &ImageName) -> String {
+fn image_name_repository(image_name: &ImageName) -> String {
     if let Some(port) = image_name.port {
         format!("{}:{}/{}", image_name.hostname, port, image_name.name)
     } else {

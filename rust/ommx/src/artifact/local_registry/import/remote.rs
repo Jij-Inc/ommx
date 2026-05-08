@@ -1,7 +1,21 @@
 //! Remote OCI registry → v3 SQLite Local Registry import.
 //!
-//! Same shape as [`super::archive`]: a two-stage pipeline glued on top
-//! of ocipkg.
+//! ## Naming note: `pull_image` vs `import_*`
+//!
+//! The other import sources expose `import_<noun>` entry points
+//! (`import_oci_dir`, `import_oci_archive`, `import_legacy_local_registry`).
+//! This module deliberately names its entry point [`pull_image`]
+//! instead, mirroring the OCI Distribution Spec verb and the
+//! surrounding ecosystem (`docker pull`, `oras pull`, `crane pull`).
+//! Renaming it to `import_remote` would lose the OCI-domain signal
+//! that the operation is a network fetch with the standard pull
+//! semantics; the `import` namespace it lives in already conveys
+//! that the result lands in the v3 registry.
+//!
+//! ## Implementation shape
+//!
+//! Same two-stage pipeline as [`super::archive`], glued on top of
+//! ocipkg:
 //!
 //! 1. `Artifact::from_remote(image).pull()` performs the OCI
 //!    Distribution pull and writes the manifest / config / layer
