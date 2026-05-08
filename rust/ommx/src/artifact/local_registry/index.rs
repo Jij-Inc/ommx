@@ -293,16 +293,17 @@ impl SqliteIndexStore {
     pub fn list_refs(&self, name_prefix: Option<&str>) -> Result<Vec<RefRecord>> {
         let mut out = Vec::new();
         if let Some(prefix) = name_prefix {
-            let like = format!("{prefix}%");
+            let prefix_len = i64::try_from(prefix.chars().count())
+                .context("Ref prefix length does not fit in i64")?;
             let mut stmt = self.conn.prepare(
                 r#"
                 SELECT name, reference, manifest_digest, updated_at
                 FROM refs
-                WHERE name LIKE ?1
+                WHERE substr(name, 1, ?1) = ?2
                 ORDER BY name, reference
                 "#,
             )?;
-            let rows = stmt.query_map(params![like], ref_from_row)?;
+            let rows = stmt.query_map(params![prefix_len, prefix], ref_from_row)?;
             for row in rows {
                 out.push(row?);
             }

@@ -6,26 +6,42 @@ pub fn sha256_digest(bytes: &[u8]) -> String {
     format!("sha256:{}", encode_hex(&digest))
 }
 
-pub(crate) fn validate_digest(digest: &str) -> Result<()> {
-    let (algorithm, encoded) = split_digest(digest)?;
-    ensure!(
-        algorithm == "sha256",
-        "Unsupported digest algorithm: {algorithm}"
-    );
-    ensure!(
-        encoded.len() == 64 && encoded.bytes().all(|b| b.is_ascii_hexdigit()),
-        "Invalid sha256 digest: {digest}"
-    );
-    Ok(())
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ValidatedDigest<'a> {
+    algorithm: &'a str,
+    encoded: &'a str,
 }
 
-pub(crate) fn split_digest(digest: &str) -> Result<(&str, &str)> {
-    let (algorithm, encoded) = digest
-        .split_once(':')
-        .with_context(|| format!("Digest must be '<algorithm>:<encoded>': {digest}"))?;
-    ensure!(!algorithm.is_empty(), "Digest algorithm is empty");
-    ensure!(!encoded.is_empty(), "Digest value is empty");
-    Ok((algorithm, encoded))
+impl<'a> ValidatedDigest<'a> {
+    pub(crate) fn parse(digest: &'a str) -> Result<Self> {
+        let (algorithm, encoded) = digest
+            .split_once(':')
+            .with_context(|| format!("Digest must be '<algorithm>:<encoded>': {digest}"))?;
+        ensure!(!algorithm.is_empty(), "Digest algorithm is empty");
+        ensure!(!encoded.is_empty(), "Digest value is empty");
+        ensure!(
+            algorithm == "sha256",
+            "Unsupported digest algorithm: {algorithm}"
+        );
+        ensure!(
+            encoded.len() == 64 && encoded.bytes().all(|b| b.is_ascii_hexdigit()),
+            "Invalid sha256 digest: {digest}"
+        );
+        Ok(Self { algorithm, encoded })
+    }
+
+    pub(crate) fn algorithm(&self) -> &'a str {
+        self.algorithm
+    }
+
+    pub(crate) fn encoded(&self) -> &'a str {
+        self.encoded
+    }
+}
+
+pub(crate) fn validate_digest(digest: &str) -> Result<()> {
+    ValidatedDigest::parse(digest)?;
+    Ok(())
 }
 
 fn encode_hex(bytes: &[u8]) -> String {

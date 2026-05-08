@@ -1,6 +1,6 @@
 use super::{
-    now_rfc3339, sha256_digest, split_digest, FileBlobStore, LayerRecord, ManifestRecord,
-    RefConflictPolicy, RefUpdate, SqliteIndexStore, BLOB_KIND_CONFIG, BLOB_KIND_LAYER,
+    now_rfc3339, sha256_digest, FileBlobStore, LayerRecord, ManifestRecord, RefConflictPolicy,
+    RefUpdate, SqliteIndexStore, ValidatedDigest, BLOB_KIND_CONFIG, BLOB_KIND_LAYER,
     BLOB_KIND_MANIFEST, OCI_IMAGE_REF_NAME_ANNOTATION,
 };
 use anyhow::{ensure, Context, Result};
@@ -315,7 +315,7 @@ pub fn migrate_legacy_local_registry_with_policy(
                     blob_store,
                     legacy_dir,
                     &image_name,
-                    RefConflictPolicy::KeepExisting,
+                    policy,
                     RefConflictHandling::Return,
                 )
                 .with_context(|| {
@@ -332,7 +332,7 @@ pub fn migrate_legacy_local_registry_with_policy(
                     blob_store,
                     legacy_dir,
                     &image_name,
-                    RefConflictPolicy::KeepExisting,
+                    policy,
                     RefConflictHandling::Return,
                 )
                 .with_context(|| {
@@ -568,8 +568,11 @@ fn read_legacy_blob(oci_dir_root: &Path, digest: &str) -> Result<Vec<u8>> {
 }
 
 fn legacy_blob_path(oci_dir_root: &Path, digest: &str) -> Result<PathBuf> {
-    let (algorithm, encoded) = split_digest(digest)?;
-    Ok(oci_dir_root.join("blobs").join(algorithm).join(encoded))
+    let digest = ValidatedDigest::parse(digest)?;
+    Ok(oci_dir_root
+        .join("blobs")
+        .join(digest.algorithm())
+        .join(digest.encoded()))
 }
 
 fn read_json_file<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T> {

@@ -20,6 +20,8 @@ fn file_blob_store_round_trip() -> Result<()> {
     );
     assert!(store.exists(&record.digest)?);
     assert_eq!(store.read_bytes(&record.digest)?, b"hello");
+    assert!(store.path_for_digest("sha256:../../outside").is_err());
+    assert!(store.exists("sha256:../../outside").is_err());
     Ok(())
 }
 
@@ -77,11 +79,17 @@ fn sqlite_index_store_round_trip() -> Result<()> {
     assert_eq!(stored_layers, layers);
     assert_eq!(
         store.resolve_ref("example.com/ommx/experiment", "latest")?,
-        Some(manifest_digest)
+        Some(manifest_digest.clone())
     );
     let refs = store.list_refs(Some("example.com/ommx"))?;
     assert_eq!(refs.len(), 1);
     assert_eq!(refs[0].reference, "latest");
+
+    store.put_ref("example.com/foo_bar/experiment", "latest", &manifest_digest)?;
+    store.put_ref("example.com/fooXbar/experiment", "latest", &manifest_digest)?;
+    let refs = store.list_refs(Some("example.com/foo_bar"))?;
+    assert_eq!(refs.len(), 1);
+    assert_eq!(refs[0].name, "example.com/foo_bar/experiment");
     Ok(())
 }
 

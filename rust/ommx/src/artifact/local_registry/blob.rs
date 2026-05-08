@@ -1,5 +1,6 @@
 use super::{
-    now_rfc3339, sha256_digest, split_digest, BlobRecord, BLOB_KIND_BLOB, FILE_BLOB_STORE_DIR_NAME,
+    now_rfc3339, sha256_digest, BlobRecord, ValidatedDigest, BLOB_KIND_BLOB,
+    FILE_BLOB_STORE_DIR_NAME,
 };
 use anyhow::{ensure, Context, Result};
 use std::{
@@ -69,8 +70,8 @@ impl FileBlobStore {
     }
 
     pub fn path_for_digest(&self, digest: &str) -> Result<PathBuf> {
-        let (algorithm, encoded) = split_digest(digest)?;
-        Ok(self.root.join(algorithm).join(encoded))
+        let digest = ValidatedDigest::parse(digest)?;
+        Ok(self.root.join(digest.algorithm()).join(digest.encoded()))
     }
 
     fn write_blob_atomically(&self, bytes: &[u8], digest: &str, path: &Path) -> Result<()> {
