@@ -12,6 +12,7 @@ use ocipkg::{
 };
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::Arc;
 
 #[test]
@@ -500,6 +501,130 @@ fn concurrent_legacy_imports_are_idempotent() -> Result<()> {
         .resolve_image_name(&image_name)?
         .context("Legacy local registry ref was not imported")?;
     assert!(registry.blobs().exists(&imported_digest)?);
+    Ok(())
+}
+
+#[test]
+fn import_oci_dir_with_policy_surfaces_ref_update() -> Result<()> {
+    // First import returns Inserted; an idempotent re-import returns
+    // Unchanged. Both come back through the public OciDirImport.
+    let dir = tempfile::tempdir()?;
+    let legacy_dir = dir.path().join("legacy");
+    let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:ru1")?;
+    build_test_oci_dir(legacy_dir.clone(), image_name.clone())?;
+
+    let registry_root = dir.path().join("registry-v3");
+    let index_store = SqliteIndexStore::open_in_registry_root(&registry_root)?;
+    let blob_store = FileBlobStore::open_in_registry_root(&registry_root)?;
+
+    let first = import_oci_dir_with_policy(
+        &index_store,
+        &blob_store,
+        &legacy_dir,
+        RefConflictPolicy::KeepExisting,
+    )?;
+    assert_eq!(first.image_name.as_ref(), Some(&image_name));
+    assert!(matches!(first.ref_update, Some(RefUpdate::Inserted)));
+
+    let second = import_oci_dir_with_policy(
+        &index_store,
+        &blob_store,
+        &legacy_dir,
+        RefConflictPolicy::KeepExisting,
+    )?;
+    assert_eq!(second.manifest_digest, first.manifest_digest);
+    assert!(matches!(second.ref_update, Some(RefUpdate::Unchanged)));
+    Ok(())
+}
+
+#[test]
+fn local_registry_import_legacy_ref_with_policy_replaces_existing() -> Result<()> {
+    // Exercises the `_with_policy` variant on `LocalRegistry::import_legacy_ref*`
+    // (added so the per-image import has the same Replace / KeepExisting
+    // surface as the batch one). With Replace the ref ends up at the
+    // legacy digest and the outcome is Replaced { previous }.
+    let dir = tempfile::tempdir()?;
+    let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:rwp")?;
+    let legacy_dir = legacy_local_registry_path(dir.path(), &image_name);
+    build_test_oci_dir(legacy_dir.clone(), image_name.clone())?;
+    let legacy_manifest_digest = oci_dir_ref(&legacy_dir)?.manifest_digest;
+
+    let registry = LocalRegistry::open(dir.path())?;
+    let existing_digest = put_test_manifest_ref(
+        registry.index(),
+        registry.blobs(),
+        &image_name,
+        b"prior-manifest",
+    )?;
+    assert_ne!(existing_digest, legacy_manifest_digest);
+
+    let import = registry.import_legacy_ref_with_policy(&image_name, RefConflictPolicy::Replace)?;
+    assert_eq!(import.manifest_digest, legacy_manifest_digest);
+    assert!(matches!(
+        import.ref_update,
+        Some(RefUpdate::Replaced { ref previous_manifest_digest })
+            if previous_manifest_digest == &existing_digest
+    ));
+    assert_eq!(
+        registry.resolve_image_name(&image_name)?,
+        Some(legacy_manifest_digest)
+    );
+    Ok(())
+}
+
+#[test]
+fn local_artifact_caches_manifest_across_clones() -> Result<()> {
+    // get_manifest() memoises into an Arc<OnceLock<LocalManifest>>; the
+    // same artifact handed out via Clone shares the cell. A reference
+    // returned by one handle and another reference returned by its
+    // clone must point at the same cached value.
+    let dir = tempfile::tempdir()?;
+    let registry = Arc::new(LocalRegistry::open(dir.path())?);
+    let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:cache")?;
+
+    let artifact = build_test_local_artifact(&registry, &image_name, b"cache-test")?;
+    let m1 = artifact.get_manifest()? as *const LocalManifest;
+    let m2 = artifact.get_manifest()? as *const LocalManifest;
+    assert_eq!(m1, m2, "second get_manifest() must reuse the cached value");
+
+    let cloned = artifact.clone();
+    let m3 = cloned.get_manifest()? as *const LocalManifest;
+    assert_eq!(
+        m1, m3,
+        "clones must share the OnceLock cell, not produce a separate parse"
+    );
+    Ok(())
+}
+
+#[test]
+fn local_artifact_subject_round_trips() -> Result<()> {
+    // LocalArtifact::subject() goes through the cached LocalManifest
+    // and surfaces the Descriptor that LocalArtifactBuilder set via
+    // `set_subject`. None when no subject is set.
+    let dir = tempfile::tempdir()?;
+    let registry = Arc::new(LocalRegistry::open(dir.path())?);
+    let plain_image = ImageName::parse("ghcr.io/jij-inc/ommx/demo:plain")?;
+    let plain = build_test_local_artifact(&registry, &plain_image, b"no-subject")?;
+    assert_eq!(plain.subject()?, None);
+
+    let subject_descriptor = oci_spec::image::DescriptorBuilder::default()
+        .media_type(MediaType::ArtifactManifest)
+        .digest(oci_spec::image::Digest::from_str(&sha256_digest(
+            b"parent-manifest-bytes",
+        ))?)
+        .size(b"parent-manifest-bytes".len() as u64)
+        .build()?;
+
+    let child_image = ImageName::parse("ghcr.io/jij-inc/ommx/demo:child")?;
+    let mut builder = LocalArtifactBuilder::new_ommx(child_image.clone());
+    builder.add_layer_bytes(
+        MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
+        b"child-layer".to_vec(),
+        HashMap::new(),
+    )?;
+    builder.set_subject(subject_descriptor.clone());
+    let child = builder.build_in_registry(registry.clone(), RefConflictPolicy::KeepExisting)?;
+    assert_eq!(child.subject()?, Some(subject_descriptor));
     Ok(())
 }
 

@@ -27,7 +27,7 @@
 use super::super::{FileBlobStore, RefConflictPolicy, RefUpdate, SqliteIndexStore};
 use super::oci_dir::{
     import_oci_dir_as_ref_with_policy, import_oci_dir_as_ref_with_policy_inner, oci_dir_image_name,
-    oci_dir_ref, OciDirRef, RefConflictHandling,
+    oci_dir_ref, OciDirImport, RefConflictHandling,
 };
 use anyhow::{ensure, Context, Result};
 use ocipkg::ImageName;
@@ -37,6 +37,11 @@ use std::{
 };
 
 /// Aggregate outcome of an [`import_legacy_local_registry`] run.
+///
+/// `#[non_exhaustive]` so future counters (e.g. orphan-blob discovery
+/// during the v2 sweep, byte counts) can be added without breaking
+/// exhaustive struct literal construction at call sites.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LegacyImportReport {
     pub scanned_dirs: usize,
@@ -46,12 +51,24 @@ pub struct LegacyImportReport {
     pub replaced_refs: usize,
 }
 
+impl LegacyImportReport {
+    fn empty(scanned_dirs: usize) -> Self {
+        Self {
+            scanned_dirs,
+            imported_dirs: 0,
+            verified_dirs: 0,
+            conflicted_dirs: 0,
+            replaced_refs: 0,
+        }
+    }
+}
+
 pub fn import_legacy_local_registry_ref(
     index_store: &SqliteIndexStore,
     blob_store: &FileBlobStore,
     legacy_registry_root: impl AsRef<Path>,
     image_name: &ImageName,
-) -> Result<OciDirRef> {
+) -> Result<OciDirImport> {
     import_legacy_local_registry_ref_with_policy(
         index_store,
         blob_store,
@@ -67,7 +84,7 @@ pub fn import_legacy_local_registry_ref_with_policy(
     legacy_registry_root: impl AsRef<Path>,
     image_name: &ImageName,
     policy: RefConflictPolicy,
-) -> Result<OciDirRef> {
+) -> Result<OciDirImport> {
     let legacy_path = legacy_local_registry_path(legacy_registry_root, image_name);
     import_oci_dir_as_ref_with_policy(index_store, blob_store, legacy_path, image_name, policy)
 }
@@ -93,13 +110,7 @@ pub fn import_legacy_local_registry_with_policy(
 ) -> Result<LegacyImportReport> {
     let legacy_registry_root = legacy_registry_root.as_ref();
     let legacy_dirs = gather_legacy_oci_dirs(legacy_registry_root)?;
-    let mut report = LegacyImportReport {
-        scanned_dirs: legacy_dirs.len(),
-        imported_dirs: 0,
-        verified_dirs: 0,
-        conflicted_dirs: 0,
-        replaced_refs: 0,
-    };
+    let mut report = LegacyImportReport::empty(legacy_dirs.len());
 
     for legacy_dir in &legacy_dirs {
         let image_name = legacy_import_image_name(legacy_registry_root, legacy_dir)?;

@@ -228,9 +228,14 @@ fn main() -> Result<()> {
             // OciDir form; the follow-up PR that ports those readers to
             // the SQLite registry will drop the legacy write so `ommx
             // load` lands directly in v3.
+            //
+            // Read the image name *before* `artifact.load()` runs the
+            // archive through `ocipkg::image::copy`, so we don't depend
+            // on the archive reader staying in a state where `get_name`
+            // still works after extraction.
             let mut artifact = Artifact::from_oci_archive(path)?;
-            artifact.load()?;
             let image_name = artifact.get_name()?;
+            artifact.load()?;
             let registry = LocalRegistry::open_default()?;
             registry.import_legacy_ref(&image_name)?;
         }

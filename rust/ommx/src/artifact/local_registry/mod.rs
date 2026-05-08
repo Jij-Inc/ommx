@@ -46,7 +46,7 @@ pub use import::legacy::{
 };
 pub use import::oci_dir::{
     import_oci_dir, import_oci_dir_as_ref, import_oci_dir_as_ref_with_policy,
-    import_oci_dir_with_policy, oci_dir_image_name, oci_dir_ref, OciDirRef,
+    import_oci_dir_with_policy, oci_dir_image_name, oci_dir_ref, OciDirImport, OciDirRef,
 };
 pub use index::{image_name_repository, SqliteIndexStore};
 pub use registry::LocalRegistry;
