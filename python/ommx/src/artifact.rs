@@ -179,27 +179,22 @@ impl PyArtifact {
             return Ok(Self(ArtifactInner::Local(artifact)));
         }
 
-        // SQLite miss — apply lazy auto-migration: probe this single image's
-        // legacy OCI dir path (one `Path::exists()`, *not* a recursive scan
-        // of the legacy root), pull from remote into the legacy cache if
-        // absent, then import that legacy entry into the v3 SQLite registry.
-        // Identity is preserved because `import_legacy_ref` delegates to the
-        // standard OCI dir import path which keeps manifest bytes and digest
-        // verbatim. The next call hits the SQLite fast path above instead of
-        // probing legacy again.
+        // SQLite miss — apply lazy auto-migration: defer the two-stage
+        // remote-pull-into-legacy-then-import-into-SQLite pipeline to
+        // `local_registry::import::remote::pull_image`. That module is the
+        // single chokepoint where the ocipkg-based pull lives, so when it
+        // is replaced with a native v3 path that streams blobs straight
+        // into the SQLite registry this call site doesn't change.
         //
         // This is *not* a fallback (we never serve reads from legacy on the
-        // hot path); it's a one-shot adapter that drains v2 / remote-pulled
-        // content into the v3 store on first access so the v2 ergonomics of
-        // `Artifact.load(image)` keep working.
-        let local_path = ommx::artifact::get_image_dir(&image_name_parsed);
-        if !local_path.exists() {
-            let mut remote = Artifact::from_remote(image_name_parsed.clone())?;
-            let _ = remote.pull()?;
-        }
-        let registry = ommx::artifact::local_registry::LocalRegistry::open_default()?;
-        registry.import_legacy_ref(&image_name_parsed)?;
-        let artifact = ommx::artifact::LocalArtifact::open(image_name_parsed)?;
+        // hot path); the legacy OCI dir is just the on-disk staging area
+        // that ocipkg currently uses, and the next call hits the SQLite
+        // fast path above instead of probing legacy again.
+        let registry =
+            std::sync::Arc::new(ommx::artifact::local_registry::LocalRegistry::open_default()?);
+        ommx::artifact::local_registry::pull_image(&registry, &image_name_parsed)?;
+        let artifact =
+            ommx::artifact::LocalArtifact::open_in_registry(registry, image_name_parsed)?;
         Ok(Self(ArtifactInner::Local(artifact)))
     }
 

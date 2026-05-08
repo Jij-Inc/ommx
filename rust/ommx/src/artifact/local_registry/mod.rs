@@ -39,6 +39,7 @@ use std::collections::HashMap;
 pub use crate::artifact::digest::sha256_digest;
 pub(crate) use crate::artifact::digest::{validate_digest, ValidatedDigest};
 pub use blob::FileBlobStore;
+pub use import::archive::import_oci_archive;
 pub use import::legacy::{
     import_legacy_local_registry, import_legacy_local_registry_ref,
     import_legacy_local_registry_ref_with_policy, import_legacy_local_registry_with_policy,
@@ -48,6 +49,8 @@ pub use import::oci_dir::{
     import_oci_dir, import_oci_dir_as_ref, import_oci_dir_as_ref_with_policy,
     import_oci_dir_with_policy, oci_dir_image_name, oci_dir_ref, OciDirImport, OciDirRef,
 };
+#[cfg(feature = "remote-artifact")]
+pub use import::remote::pull_image;
 pub use index::{image_name_repository, SqliteIndexStore};
 pub use registry::LocalRegistry;
 pub use types::{

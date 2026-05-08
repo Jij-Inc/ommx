@@ -1,10 +1,10 @@
 use anyhow::{bail, Result};
 use clap::{Parser, Subcommand};
 use colored::Colorize;
-use ocipkg::{image::Image, oci_spec::image::ImageManifest, ImageName};
+use ocipkg::{oci_spec::image::ImageManifest, ImageName};
 use ommx::artifact::{
     get_image_dir,
-    local_registry::{LocalRegistry, RefConflictPolicy},
+    local_registry::{import_oci_archive, LocalRegistry, RefConflictPolicy},
     Artifact,
 };
 use std::path::{Path, PathBuf};
@@ -221,23 +221,12 @@ fn main() -> Result<()> {
         }
 
         Command::Load { path } => {
-            // Extract the archive into the legacy OCI dir cache and then
-            // immediately drain that single entry into the v3 SQLite Local
-            // Registry. The legacy write is kept because `ommx push` /
-            // `save` and the Python archive read path still consume the
-            // OciDir form; the follow-up PR that ports those readers to
-            // the SQLite registry will drop the legacy write so `ommx
-            // load` lands directly in v3.
-            //
-            // Read the image name *before* `artifact.load()` runs the
-            // archive through `ocipkg::image::copy`, so we don't depend
-            // on the archive reader staying in a state where `get_name`
-            // still works after extraction.
-            let mut artifact = Artifact::from_oci_archive(path)?;
-            let image_name = artifact.get_name()?;
-            artifact.load()?;
-            let registry = LocalRegistry::open_default()?;
-            registry.import_legacy_ref(&image_name)?;
+            // Two-stage archive ingest (ocipkg → legacy OCI dir → SQLite)
+            // is encapsulated in `local_registry::import::archive`. When
+            // that module switches to a native pull-into-SQLite path,
+            // this call site doesn't change.
+            let registry = std::sync::Arc::new(LocalRegistry::open_default()?);
+            import_oci_archive(&registry, path)?;
         }
 
         Command::ImageDirectory { image_name } => {
