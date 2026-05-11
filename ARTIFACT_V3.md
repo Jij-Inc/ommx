@@ -640,3 +640,37 @@ GC は data model を変えない。full snapshot、digest primary、single-pare
 - **TracerProvider 所有権**: 現行 `ommx.tracing` の lazy setup が provider を install する挙動は v3 方針と衝突するため見直す必要がある。
 - **Logger output の期待差分**: Phase 1 は post-hoc 表示なので、従来の live console output を期待する環境では明示的な説明が必要。
 - **Registry の OCI v1.1 対応差**: `subject` 非対応 registry に当たる可能性がある。初期方針は explicit error とし、fallback は実ケースが出てから設計する。
+
+## 12. 実装ステータス
+
+v3 design の実装は段階的に進める。本書は全項目が完了した時点で削除し、内容を Sphinx documentation / API reference に統合する。後続 PR の TODO は PR description ではなく本章に集約する (merged PR は後から検索しづらく、本書は branch を跨いで update できるため)。
+
+### 12.1 SQLite Local Registry foundation (landed)
+
+v3 PR #864 で landing する範囲。
+
+- SQLite-backed Local Registry (`SqliteIndexStore` + filesystem CAS `FileBlobStore`)。`Mutex<Connection>` で `Sync` を満たし、poisoned mutex は `into_inner()` で recovery (panic させない)。
+- `ArtifactBuilder.new(image).build()` と `Artifact.load(image)` を SQLite registry 経由に切り替え。
+- Image Manifest と Artifact Manifest の coexistence (`LocalManifest::{Image, Artifact}` で dispatch)。両 format で identity-preserving (5.5)。
+- legacy OCI dir からの identity-preserving import (`ommx artifact import` CLI + SDK の `import_legacy_local_registry*` / `import_oci_dir*`)。
+- `Artifact.load(image)` / `ommx load` の lazy auto-migration (6.5)。
+- ocipkg seam の局所化: 残った ocipkg 依存は `local_registry::import::archive` と `local_registry::import::remote` の 2 モジュールのみ。
+- 並行 publish primitive (`RefConflictPolicy::{KeepExisting, Replace}`、`RefUpdate::{Inserted, Unchanged, Replaced, Conflicted}` 4 状態)。
+- `import::archive` / `import::remote` は `registry.root().join(image_name.as_path())` に staging する (`get_image_dir` の global default に縛られない)。
+
+### 12.2 後続 PR に残す TODO
+
+| 項目 | 仕様参照章 | 現状の注記 |
+|---|---|---|
+| `import::archive` / `import::remote` の stage 1 を ocipkg ベースから native streamer に置換 | 5.1, 6.6 | 現状は `ocipkg → legacy OCI dir → import_oci_dir_as_ref → SQLite` の 2-stage。public 関数 signature は変えない |
+| `ommx::ocipkg` re-export と、Rust / Python の `Descriptor` / `Digest` / `MediaType` / `ImageReference` public surface の撤去 | 5.1, 5.2 | OMMX-owned public types への置き換え。migration note を別途用意 |
+| Archive build path (`ArtifactBuilder.new_archive*`, `temp()`, `Artifact.load_archive`) の v3 Artifact Manifest pipeline 化 | 5.5, 7.4 | 現状は ocipkg-based Image Manifest pipeline。SQLite registry を経由しない |
+| SQLite registry から remote への native `push` | 6.4, 6.6 | 現状の Python `Artifact.push()` は legacy OCI dir 経由の transitional path。v3-native build artifact (legacy 不在) は明示 error |
+| `Artifact.load(image)` / `ommx load` の legacy double-write 撤廃 | 6.5 | `push` / `save` / Python archive 読み出しが SQLite から直接読めるようになり、かつ native stage 1 が landing したら |
+| `convert` 操作 (Image Manifest → Artifact Manifest、別 digest / 別 ref) | 6.7 | API 形 (Rust / Python / CLI) は未確定。最初の dogfooding 候補 |
+| Lineage API (`parent()`, `history()`, `diff(other)`) | 9.4 | full snapshot + `subject` chain 前提。child 一覧 (Referrers API) は初期対象外 |
+| OTel trace layer 埋め込み | 8.4, 8.5 | Phase 1 は OTLP JSON のみ。global `TracerProvider` は設定しない (`trace="auto"`/`"required"` mode) |
+| Trace renderer | 8.6 | Phase 1 は post-hoc renderer、Phase 2 で scoped streaming |
+| `ommx artifact gc` と reachability analysis hook | 10 | Local Registry / 旧 archive / OCI directory layout を対象。remote registry は capability 検出できる場合のみ実削除 |
+| `rust/dataset/{miplib2017,qplib}` packaging path の v3 化 | 6.6 | 現状は legacy `OciDirBuilder` 使用。v3 Artifact Manifest pipeline に揃える |
+| DataStore / Experiment / Run / EnvironmentInfo の OMMX core 取り込み | 7 | minto-equivalent functionality を OMMX-owned で再設計。API compat は破棄 (4.3) |
