@@ -1,7 +1,17 @@
 use oci_spec::image::MediaType;
 
 pub const OCI_IMAGE_MANIFEST_MEDIA_TYPE: &str = "application/vnd.oci.image.manifest.v1+json";
-pub const OCI_ARTIFACT_MANIFEST_MEDIA_TYPE: &str = "application/vnd.oci.artifact.manifest.v1+json";
+
+/// Media type of the OCI 1.1 "empty descriptor" used as the `config`
+/// blob for OMMX Image Manifests. See
+/// <https://github.com/opencontainers/image-spec/blob/main/manifest.md#guidance-for-an-empty-descriptor>.
+pub const OCI_EMPTY_CONFIG_MEDIA_TYPE: &str = "application/vnd.oci.empty.v1+json";
+/// Body of the OCI empty descriptor: the two-byte JSON document `{}`.
+pub const OCI_EMPTY_CONFIG_BYTES: &[u8] = b"{}";
+/// SHA-256 digest of [`OCI_EMPTY_CONFIG_BYTES`]. Hard-coded so the
+/// constant can be used in `const` contexts without re-hashing.
+pub const OCI_EMPTY_CONFIG_DIGEST: &str =
+    "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a";
 
 pub const V1_ARTIFACT_MEDIA_TYPE: &str = "application/org.ommx.v1.artifact";
 pub const V1_CONFIG_MEDIA_TYPE: &str = "application/org.ommx.v1.config+json";

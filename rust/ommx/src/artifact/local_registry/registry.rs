@@ -2,12 +2,12 @@ use super::{
     annotations_json, import_legacy_local_registry, import_legacy_local_registry_ref,
     import_legacy_local_registry_ref_with_policy, import_legacy_local_registry_with_policy,
     now_rfc3339, BlobRecord, FileBlobStore, LayerRecord, LegacyImportReport, ManifestRecord,
-    OciDirImport, RefConflictPolicy, RefUpdate, SqliteIndexStore, BLOB_KIND_BLOB,
+    OciDirImport, RefConflictPolicy, RefUpdate, SqliteIndexStore, BLOB_KIND_BLOB, BLOB_KIND_CONFIG,
     BLOB_KIND_MANIFEST,
 };
-use crate::artifact::{StagedArtifactBlob, OCI_ARTIFACT_MANIFEST_MEDIA_TYPE};
+use crate::artifact::{media_types, StagedArtifactBlob};
 use anyhow::{ensure, Context, Result};
-use oci_spec::image::{ArtifactManifest, Descriptor, MediaType};
+use oci_spec::image::{Descriptor, ImageManifest, MediaType};
 use ocipkg::ImageName;
 use std::path::{Path, PathBuf};
 
@@ -75,24 +75,27 @@ impl LocalRegistry {
         self.index.resolve_image_name(image_name)
     }
 
+    /// Publish a staged OCI Image Manifest bundle to the SQLite Local
+    /// Registry. Callers must construct `manifest` and `manifest_descriptor`
+    /// via [`crate::artifact::LocalArtifactBuilder`] or the import paths
+    /// in `local_registry::import::*`, both of which produce an OCI
+    /// Image Manifest with the OMMX `artifactType` field set. The
+    /// publish path does not dispatch on manifest format — the SQLite
+    /// Local Registry stores OCI Image Manifest exclusively.
     pub(crate) fn publish_artifact_manifest(
         &self,
         image_name: &ImageName,
-        manifest: &ArtifactManifest,
+        manifest: &ImageManifest,
         manifest_descriptor: &Descriptor,
         manifest_bytes: &[u8],
         blobs: &[StagedArtifactBlob],
         policy: RefConflictPolicy,
     ) -> Result<RefUpdate> {
         ensure!(
-            manifest.media_type().as_ref() == OCI_ARTIFACT_MANIFEST_MEDIA_TYPE,
-            "Manifest is not an OCI artifact manifest: {}",
-            manifest.media_type()
-        );
-        ensure!(
-            manifest_descriptor.media_type() == &MediaType::ArtifactManifest,
-            "Manifest descriptor is not an OCI artifact manifest descriptor: {}",
-            manifest_descriptor.media_type()
+            manifest_descriptor.media_type() == &MediaType::ImageManifest,
+            "Manifest descriptor must be `{:?}`, got `{}`",
+            MediaType::ImageManifest,
+            manifest_descriptor.media_type(),
         );
         ensure!(
             manifest_descriptor.digest().to_string()
@@ -103,14 +106,37 @@ impl LocalRegistry {
             manifest_descriptor.size() == manifest_bytes.len() as u64,
             "Manifest descriptor size does not match manifest bytes"
         );
+        let artifact_type = manifest
+            .artifact_type()
+            .as_ref()
+            .context("Manifest does not carry the OMMX `artifactType` field")?;
         ensure!(
-            manifest.blobs().len() == blobs.len(),
-            "Manifest blob descriptor count does not match pending blob count"
+            artifact_type == &MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
+            "Manifest `artifactType` must be `{}`, got `{}`",
+            media_types::V1_ARTIFACT_MEDIA_TYPE,
+            artifact_type,
         );
-        for (manifest_blob, pending_blob) in manifest.blobs().iter().zip(blobs) {
+        // OCI Image Manifest `blobs` = manifest layers + the `config`
+        // descriptor (which is the OCI 1.1 empty config blob in OMMX's
+        // builder). Callers stage all of these in `blobs[]`.
+        let manifest_descriptor_count = manifest.layers().len() + 1;
+        ensure!(
+            manifest_descriptor_count == blobs.len(),
+            "Manifest descriptor count ({manifest_descriptor_count}) does not match pending blob count ({})",
+            blobs.len()
+        );
+        let staged_descriptors: Vec<&Descriptor> =
+            blobs.iter().map(|blob| blob.descriptor()).collect();
+        let descriptor_is_staged = |d: &Descriptor| staged_descriptors.contains(&d);
+        ensure!(
+            descriptor_is_staged(manifest.config()),
+            "Manifest config descriptor is not staged for upload"
+        );
+        for layer in manifest.layers() {
             ensure!(
-                manifest_blob == pending_blob.descriptor(),
-                "Manifest blob descriptor does not match pending blob descriptor"
+                descriptor_is_staged(layer),
+                "Manifest layer descriptor is not staged for upload: {}",
+                layer.digest()
             );
         }
 
@@ -137,13 +163,22 @@ impl LocalRegistry {
         // + manifest + ref so a crash or conflict can never leave
         // committed manifest / blob rows under a ref that wasn't
         // actually published.
+        //
+        // Tag the manifest's `config` descriptor with `BLOB_KIND_CONFIG`
+        // (matching the OCI-dir import path) and everything else with
+        // `BLOB_KIND_BLOB`. Without this dispatch the empty config blob
+        // built by `LocalArtifactBuilder::stage` would be persisted as a
+        // generic layer, diverging from imports of legacy v2 dirs and
+        // breaking GC / query logic that filters on `kind`.
+        let config_digest = manifest.config().digest();
         let mut blob_records = Vec::with_capacity(blobs.len() + 1);
         for blob in blobs {
-            blob_records.push(self.stage_blob_record(
-                blob.descriptor(),
-                blob.bytes(),
-                BLOB_KIND_BLOB,
-            )?);
+            let kind = if blob.descriptor().digest() == config_digest {
+                BLOB_KIND_CONFIG
+            } else {
+                BLOB_KIND_BLOB
+            };
+            blob_records.push(self.stage_blob_record(blob.descriptor(), blob.bytes(), kind)?);
         }
         blob_records.push(self.stage_blob_record(
             manifest_descriptor,
@@ -152,7 +187,7 @@ impl LocalRegistry {
         )?);
 
         let layer_records = manifest
-            .blobs()
+            .layers()
             .iter()
             .enumerate()
             .map(|(position, layer)| -> Result<LayerRecord> {
