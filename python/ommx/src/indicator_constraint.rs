@@ -243,10 +243,10 @@ impl AttachedIndicatorConstraint {
     }
 }
 
-fn lookup_indicator<'a>(
-    inst: &'a ommx::Instance,
+fn lookup_indicator(
+    inst: &ommx::Instance,
     id: ommx::IndicatorConstraintID,
-) -> PyResult<&'a ommx::IndicatorConstraint> {
+) -> PyResult<&ommx::IndicatorConstraint> {
     inst.indicator_constraints()
         .get(&id)
         .or_else(|| {
@@ -262,10 +262,10 @@ fn lookup_indicator<'a>(
         })
 }
 
-fn lookup_indicator_parametric<'a>(
-    inst: &'a ommx::ParametricInstance,
+fn lookup_indicator_parametric(
+    inst: &ommx::ParametricInstance,
     id: ommx::IndicatorConstraintID,
-) -> PyResult<&'a ommx::IndicatorConstraint> {
+) -> PyResult<&ommx::IndicatorConstraint> {
     inst.indicator_constraints()
         .get(&id)
         .or_else(|| {

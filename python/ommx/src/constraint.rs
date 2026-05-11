@@ -455,10 +455,7 @@ impl AttachedConstraint {
     }
 }
 
-fn lookup_constraint<'a>(
-    inst: &'a ommx::Instance,
-    id: ommx::ConstraintID,
-) -> PyResult<&'a ommx::Constraint> {
+fn lookup_constraint(inst: &ommx::Instance, id: ommx::ConstraintID) -> PyResult<&ommx::Constraint> {
     inst.constraints()
         .get(&id)
         .or_else(|| inst.removed_constraints().get(&id).map(|(c, _)| c))
@@ -470,10 +467,10 @@ fn lookup_constraint<'a>(
         })
 }
 
-fn lookup_constraint_parametric<'a>(
-    inst: &'a ommx::ParametricInstance,
+fn lookup_constraint_parametric(
+    inst: &ommx::ParametricInstance,
     id: ommx::ConstraintID,
-) -> PyResult<&'a ommx::Constraint> {
+) -> PyResult<&ommx::Constraint> {
     inst.constraints()
         .get(&id)
         .or_else(|| inst.removed_constraints().get(&id).map(|(c, _)| c))

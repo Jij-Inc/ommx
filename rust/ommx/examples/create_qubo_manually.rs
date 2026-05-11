@@ -68,7 +68,7 @@ fn main() -> Result<()> {
     // Display decision variable metadata
     println!("\nDecision variables:");
     let meta = instance.variable_metadata();
-    for (id, _var) in instance.decision_variables() {
+    for id in instance.decision_variables().keys() {
         println!(
             "  Variable {}: name={:?}, subscripts={:?}",
             id,
