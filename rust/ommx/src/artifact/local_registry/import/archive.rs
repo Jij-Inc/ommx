@@ -2,9 +2,14 @@
 //!
 //! Currently this is a **two-stage pipeline glued on top of ocipkg**:
 //!
-//! 1. `Artifact::from_oci_archive(path).load()` extracts the archive
-//!    into the legacy OCI dir at `get_image_dir(image_name)` using
-//!    `ocipkg::image::copy` and `OciDirBuilder`.
+//! 1. `Artifact::from_oci_archive(path).load_to(legacy_path)` extracts
+//!    the archive into a legacy OCI dir under
+//!    `registry.root().join(image_name.as_path())` using
+//!    `ocipkg::image::copy` and `OciDirBuilder`. Routing through
+//!    [`crate::artifact::Artifact::load_to`] (instead of [`Artifact::load`])
+//!    keeps the legacy staging dir under the same root as the SQLite
+//!    registry — important when the caller opens the registry on a
+//!    non-default root.
 //! 2. [`super::oci_dir::import_oci_dir_as_ref`] reads that legacy
 //!    directory back, validates manifest / blob digests, and writes
 //!    them into the SQLite [`super::super::SqliteIndexStore`] +
@@ -19,13 +24,13 @@
 //! The follow-up that drops ocipkg from this PR's scope will replace
 //! the inner two stages with a native v3 path that streams archive
 //! bytes straight into [`super::super::FileBlobStore`] and inserts
-//! the matching SQLite records, bypassing `get_image_dir` entirely.
+//! the matching SQLite records, bypassing the legacy dir entirely.
 //! The public function signature here is what the rest of the SDK
 //! depends on, so that swap can land without touching call sites.
 
 use super::super::LocalRegistry;
 use super::oci_dir::{import_oci_dir_as_ref, OciDirImport};
-use crate::artifact::{get_image_dir, Artifact};
+use crate::artifact::Artifact;
 use anyhow::Result;
 use ocipkg::image::Image;
 use std::{path::Path, sync::Arc};
@@ -33,7 +38,7 @@ use std::{path::Path, sync::Arc};
 /// Import a `.ommx` OCI archive on disk into the v3 SQLite Local Registry.
 ///
 /// Reads the archive's manifest / config / layer blobs through ocipkg,
-/// extracts them into the legacy OCI dir for `image_name`, and then
+/// extracts them into a legacy OCI dir under `registry.root()`, and then
 /// imports that directory into SQLite preserving manifest digest.
 /// Returns the [`OciDirImport`] outcome reported by the underlying
 /// directory import (`Inserted` on first call for this image,
@@ -41,7 +46,7 @@ use std::{path::Path, sync::Arc};
 pub fn import_oci_archive(registry: &Arc<LocalRegistry>, path: &Path) -> Result<OciDirImport> {
     let mut artifact = Artifact::from_oci_archive(path)?;
     let image_name = artifact.get_name()?;
-    artifact.load()?;
-    let legacy_path = get_image_dir(&image_name);
+    let legacy_path = registry.root().join(image_name.as_path());
+    artifact.load_to(&legacy_path)?;
     import_oci_dir_as_ref(registry.index(), registry.blobs(), legacy_path, &image_name)
 }

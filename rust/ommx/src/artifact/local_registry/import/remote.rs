@@ -17,9 +17,14 @@
 //! Same two-stage pipeline as [`super::archive`], glued on top of
 //! ocipkg:
 //!
-//! 1. `Artifact::from_remote(image).pull()` performs the OCI
-//!    Distribution pull and writes the manifest / config / layer
-//!    blobs into the legacy OCI dir at `get_image_dir(image_name)`.
+//! 1. `Artifact::from_remote(image).pull_to(legacy_path)` performs the
+//!    OCI Distribution pull and writes the manifest / config / layer
+//!    blobs into a legacy OCI dir under
+//!    `registry.root().join(image_name.as_path())`. Routing through
+//!    [`crate::artifact::Artifact::pull_to`] (instead of [`Artifact::pull`])
+//!    keeps the legacy staging dir under the same root as the SQLite
+//!    registry — important when the caller opens the registry on a
+//!    non-default root.
 //! 2. [`super::oci_dir::import_oci_dir_as_ref`] reads that legacy
 //!    directory back, validates manifest / blob digests, and writes
 //!    them into the SQLite [`super::super::SqliteIndexStore`] +
@@ -37,7 +42,7 @@
 
 use super::super::LocalRegistry;
 use super::oci_dir::{import_oci_dir_as_ref, OciDirImport};
-use crate::artifact::{get_image_dir, Artifact};
+use crate::artifact::Artifact;
 use anyhow::Result;
 use ocipkg::ImageName;
 use std::sync::Arc;
@@ -45,17 +50,18 @@ use std::sync::Arc;
 /// Pull `image_name` from its remote registry into the v3 SQLite
 /// Local Registry.
 ///
-/// If the legacy OCI dir cache already has the image, the network
-/// fetch is skipped (matches the existing `Artifact<Remote>::pull`
+/// If the legacy OCI dir cache already has the image at
+/// `registry.root().join(image_name.as_path())`, the network fetch is
+/// skipped (matches the existing `Artifact<Remote>::pull` skip-on-exist
 /// behaviour). The legacy entry — whether freshly pulled or already
 /// present — is then imported into SQLite preserving manifest digest.
 /// Returns the [`OciDirImport`] outcome from the underlying directory
 /// import.
 pub fn pull_image(registry: &Arc<LocalRegistry>, image_name: &ImageName) -> Result<OciDirImport> {
-    let legacy_path = get_image_dir(image_name);
+    let legacy_path = registry.root().join(image_name.as_path());
     if !legacy_path.exists() {
         let mut remote = Artifact::from_remote(image_name.clone())?;
-        let _ = remote.pull()?;
+        let _ = remote.pull_to(&legacy_path)?;
     }
     import_oci_dir_as_ref(registry.index(), registry.blobs(), legacy_path, image_name)
 }

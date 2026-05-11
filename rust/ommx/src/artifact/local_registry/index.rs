@@ -69,10 +69,25 @@ impl SqliteIndexStore {
         Self::open(root.as_ref().join(SQLITE_INDEX_FILE_NAME))
     }
 
+    /// Acquire the connection guard. If the mutex was poisoned by an
+    /// earlier panic, fall back to the wrapped `Connection` (rusqlite's
+    /// internal state isn't damaged by Rust-level poisoning — the lock
+    /// flag just records that some other thread paniced while holding
+    /// it) and log a warning. Better than letting one rogue panic
+    /// abort every subsequent registry call, which matters for the
+    /// Python bindings where the same process may run many independent
+    /// operations.
     fn lock(&self) -> MutexGuard<'_, Connection> {
-        self.conn
-            .lock()
-            .expect("SqliteIndexStore connection mutex poisoned")
+        match self.conn.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                tracing::warn!(
+                    "SqliteIndexStore connection mutex was poisoned by an earlier panic; \
+                     recovering the inner connection"
+                );
+                poisoned.into_inner()
+            }
+        }
     }
 
     pub fn schema_version(&self) -> Result<i64> {
