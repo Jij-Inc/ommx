@@ -385,7 +385,7 @@
             },
             {
               "name": "load_archive",
-              "doc": "Load an artifact stored as a single file or directory.\n\n```python\n>>> artifact = Artifact.load_archive(\"data/random_lp_instance.ommx\")\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/random_lp_instance:...\n\n```",
+              "doc": "Load an artifact stored as a `.ommx` OCI archive file, or import\nan OCI Image Layout directory into the v3 SQLite Local Registry\nand return a handle to the registry entry.\n\nFile path → opened in-place via `Artifact<OciArchive>`; no\nregistry side effect. Directory path → identity-preserving\nimport into the user's default SQLite Local Registry (see\n`local_registry::import_oci_dir`), then opened by ref. The\ndistinction matches the v3 design: archives stay readable\nwithout registry state, while loose OCI Image Layouts live\nin the registry.\n\n```python\n>>> artifact = Artifact.load_archive(\"data/random_lp_instance.ommx\")\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/random_lp_instance:...\n\n```",
               "signatures": [
                 {
                   "parameters": [

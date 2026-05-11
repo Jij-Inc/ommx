@@ -163,7 +163,17 @@ class Artifact:
     @staticmethod
     def load_archive(path: builtins.str | os.PathLike | pathlib.Path) -> Artifact:
         r"""
-        Load an artifact stored as a single file or directory.
+        Load an artifact stored as a `.ommx` OCI archive file, or import
+        an OCI Image Layout directory into the v3 SQLite Local Registry
+        and return a handle to the registry entry.
+
+        File path → opened in-place via `Artifact<OciArchive>`; no
+        registry side effect. Directory path → identity-preserving
+        import into the user's default SQLite Local Registry (see
+        `local_registry::import_oci_dir`), then opened by ref. The
+        distinction matches the v3 design: archives stay readable
+        without registry state, while loose OCI Image Layouts live
+        in the registry.
 
         ```python
         >>> artifact = Artifact.load_archive("data/random_lp_instance.ommx")
