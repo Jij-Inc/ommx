@@ -66,7 +66,7 @@ impl RemoteTransport {
             ..ClientConfig::default()
         };
         let client = Client::new(config);
-        let auth = resolve_auth(&image_name.hostname);
+        let auth = resolve_auth(&registry_key(image_name))?;
 
         Ok(Self {
             runtime,
@@ -153,6 +153,18 @@ fn protocol_for(hostname: &str) -> ClientProtocol {
     }
 }
 
+/// `host[:port]` registry key for credential lookup. `docker login
+/// localhost:5000` and `docker login ghcr.io` write entries under
+/// these forms in `~/.docker/config.json`, and `OMMX_BASIC_AUTH_DOMAIN`
+/// is documented to match the same shape. Using only `hostname` here
+/// would silently miss credentials on any non-443/80 registry.
+fn registry_key(image_name: &ocipkg::ImageName) -> String {
+    match image_name.port {
+        Some(port) => format!("{}:{}", image_name.hostname, port),
+        None => image_name.hostname.clone(),
+    }
+}
+
 /// Three-tier credential resolution for the target registry host:
 ///
 /// 1. `OMMX_BASIC_AUTH_*` env vars — explicit override, intended for CI
@@ -167,30 +179,83 @@ fn protocol_for(hostname: &str) -> ClientProtocol {
 /// The env-var override wins over docker config so that a `docker login`
 /// session on the workstation can be deliberately bypassed in CI without
 /// having to log out.
-fn resolve_auth(hostname: &str) -> RegistryAuth {
-    if let Some(auth) = auth_from_env(hostname) {
-        return auth;
+fn resolve_auth(registry_key: &str) -> crate::Result<RegistryAuth> {
+    if let Some(auth) = auth_from_env(registry_key)? {
+        return Ok(auth);
     }
-    if let Some(auth) = auth_from_docker_config(hostname) {
-        return auth;
+    if let Some(auth) = auth_from_docker_config(registry_key) {
+        return Ok(auth);
     }
-    tracing::debug!("No credentials resolved for {hostname}; using anonymous auth");
-    RegistryAuth::Anonymous
+    tracing::debug!("No credentials resolved for {registry_key}; using anonymous auth");
+    Ok(RegistryAuth::Anonymous)
 }
 
-fn auth_from_env(hostname: &str) -> Option<RegistryAuth> {
-    let domain = env::var("OMMX_BASIC_AUTH_DOMAIN").ok()?;
-    if domain != hostname {
+/// Snapshot of the three `OMMX_BASIC_AUTH_*` env vars. Extracted so the
+/// classification logic in [`classify_env_credentials`] is unit-testable
+/// without touching process env (which is parallel-unsafe under
+/// cargo's default test runner).
+struct EnvCredentials {
+    domain: Option<String>,
+    username: Option<String>,
+    password: Option<String>,
+}
+
+fn auth_from_env(registry_key: &str) -> crate::Result<Option<RegistryAuth>> {
+    classify_env_credentials(
+        registry_key,
+        EnvCredentials {
+            domain: env::var("OMMX_BASIC_AUTH_DOMAIN").ok(),
+            username: env::var("OMMX_BASIC_AUTH_USERNAME").ok(),
+            password: env::var("OMMX_BASIC_AUTH_PASSWORD").ok(),
+        },
+    )
+}
+
+/// `OMMX_BASIC_AUTH_DOMAIN` is the gating flag for the env-var override.
+/// If it is set and matches the target registry, both
+/// `OMMX_BASIC_AUTH_USERNAME` and `OMMX_BASIC_AUTH_PASSWORD` are
+/// mandatory: a CI misconfiguration that sets the domain but forgets a
+/// credential variable should error loudly rather than silently fall
+/// through to the workstation's `~/.docker/config.json` (which is
+/// usually absent in CI) and then to anonymous (which would surface as
+/// an unhelpful registry 401).
+///
+/// When the domain doesn't match the target, the override is
+/// intentionally inactive — return `Ok(None)` so docker config is
+/// consulted next.
+fn classify_env_credentials(
+    registry_key: &str,
+    creds: EnvCredentials,
+) -> crate::Result<Option<RegistryAuth>> {
+    let Some(domain) = creds.domain else {
+        return Ok(None);
+    };
+    if domain != registry_key {
         tracing::debug!(
-            "OMMX_BASIC_AUTH_DOMAIN={domain} does not match target host {hostname}; \
+            "OMMX_BASIC_AUTH_DOMAIN={domain} does not match target {registry_key}; \
              falling through to docker config"
         );
-        return None;
+        return Ok(None);
     }
-    let username = env::var("OMMX_BASIC_AUTH_USERNAME").ok()?;
-    let password = env::var("OMMX_BASIC_AUTH_PASSWORD").ok()?;
-    tracing::info!("Using OMMX_BASIC_AUTH credentials for {hostname} (user {username})");
-    Some(RegistryAuth::Basic(username, password))
+    match (creds.username, creds.password) {
+        (Some(username), Some(password)) => {
+            tracing::info!(
+                "Using OMMX_BASIC_AUTH credentials for {registry_key} (user {username})"
+            );
+            Ok(Some(RegistryAuth::Basic(username, password)))
+        }
+        (u, p) => {
+            let username_state = if u.is_some() { "set" } else { "unset" };
+            let password_state = if p.is_some() { "set" } else { "unset" };
+            crate::bail!(
+                "OMMX_BASIC_AUTH_DOMAIN={domain} is set (matches target {registry_key}), \
+                 but OMMX_BASIC_AUTH_USERNAME={username_state} and \
+                 OMMX_BASIC_AUTH_PASSWORD={password_state}. Both variables are required \
+                 for the env-var auth override; unset OMMX_BASIC_AUTH_DOMAIN to fall back \
+                 to ~/.docker/config.json instead."
+            )
+        }
+    }
 }
 
 /// Look the hostname up in `~/.docker/config.json` (or `$DOCKER_CONFIG`).
@@ -230,8 +295,34 @@ fn classify_docker_credential(
             | CredentialRetrievalError::NoCredentialConfigured,
         ) => None,
         Err(e) => {
+            // `CredentialRetrievalError::HelperFailure`'s Display
+            // includes the helper's stdout and stderr verbatim. A
+            // broken helper that succeeded the exec but returned
+            // malformed JSON could echo a partial token in stdout, so
+            // log only the structural shape of the failure, not the
+            // raw bytes. The matching arm names are descriptive
+            // enough for diagnosis (the user can re-run the helper
+            // directly to see the leaked stderr if they need it).
+            let summary = match &e {
+                CredentialRetrievalError::HelperCommunicationError => {
+                    "HelperCommunicationError".to_string()
+                }
+                CredentialRetrievalError::MalformedHelperResponse => {
+                    "MalformedHelperResponse".to_string()
+                }
+                CredentialRetrievalError::HelperFailure { helper, .. } => {
+                    format!("HelperFailure({helper})")
+                }
+                CredentialRetrievalError::CredentialDecodingError => {
+                    "CredentialDecodingError".to_string()
+                }
+                CredentialRetrievalError::ConfigReadError => "ConfigReadError".to_string(),
+                CredentialRetrievalError::ConfigNotFound
+                | CredentialRetrievalError::NoCredentialConfigured => unreachable!(),
+            };
             tracing::warn!(
-                "Failed to read docker credential for {hostname}: {e}; falling through to anonymous"
+                "Failed to read docker credential for {hostname}: {summary}; \
+                 falling through to anonymous"
             );
             None
         }
@@ -302,17 +393,95 @@ mod tests {
 
     /// Helper / decoding failures are also non-fatal: warn and fall
     /// through. The user sees the registry's own 401 rather than a
-    /// crash from a broken `docker-credential-*` binary.
+    /// crash from a broken `docker-credential-*` binary. The helper's
+    /// stdout / stderr is summarised by error variant only, never
+    /// logged verbatim — see the comment in `classify_docker_credential`
+    /// about token-leak risk from helpers that return malformed JSON.
     #[test]
     fn classify_helper_failure_falls_through() {
         let auth = classify_docker_credential(
             "ghcr.io",
             Err(CredentialRetrievalError::HelperFailure {
                 helper: "docker-credential-broken".to_string(),
-                stdout: String::new(),
-                stderr: "boom".to_string(),
+                stdout: "{\"Secret\": \"leaked-token\"}".to_string(),
+                stderr: "AWS_SECRET_ACCESS_KEY=should-not-appear-in-logs".to_string(),
             }),
         );
         assert!(auth.is_none());
+    }
+
+    /// `registry_key` is what we hand to the env-var override comparison
+    /// and to `docker_credential::get_credential`. Both surfaces key on
+    /// `host[:port]` (matching `docker login localhost:5000`), not
+    /// hostname alone — using hostname only would silently miss
+    /// credentials on non-443/80 registries.
+    #[test]
+    fn registry_key_includes_port_when_present() {
+        let with_port = ocipkg::ImageName::parse("localhost:5000/ommx/native-push:tag1").unwrap();
+        assert_eq!(registry_key(&with_port), "localhost:5000");
+
+        let no_port = ocipkg::ImageName::parse("ghcr.io/jij-inc/ommx:tag1").unwrap();
+        assert_eq!(registry_key(&no_port), "ghcr.io");
+    }
+
+    fn env(domain: Option<&str>, username: Option<&str>, password: Option<&str>) -> EnvCredentials {
+        EnvCredentials {
+            domain: domain.map(str::to_string),
+            username: username.map(str::to_string),
+            password: password.map(str::to_string),
+        }
+    }
+
+    /// Domain unset → override inactive, fall through to docker config.
+    #[test]
+    fn env_creds_no_domain_falls_through() {
+        let out = classify_env_credentials("ghcr.io", env(None, None, None)).unwrap();
+        assert!(out.is_none());
+
+        // Username/password set without domain is also fall-through:
+        // the user hasn't activated the override.
+        let out = classify_env_credentials("ghcr.io", env(None, Some("u"), Some("p"))).unwrap();
+        assert!(out.is_none());
+    }
+
+    /// Domain set but pointing somewhere else → docker config takes over.
+    /// Avoids surprising users who set the var globally on the
+    /// workstation but push to a different registry.
+    #[test]
+    fn env_creds_domain_mismatch_falls_through() {
+        let out = classify_env_credentials(
+            "ghcr.io",
+            env(Some("registry.example.com"), Some("u"), Some("p")),
+        )
+        .unwrap();
+        assert!(out.is_none());
+    }
+
+    /// Domain matches + both credentials → Basic auth.
+    #[test]
+    fn env_creds_full_override_produces_basic() {
+        let out = classify_env_credentials(
+            "ghcr.io",
+            env(Some("ghcr.io"), Some("alice"), Some("secret")),
+        )
+        .unwrap();
+        assert_basic(out, "alice", "secret");
+    }
+
+    /// Domain matches but one of the credential vars is missing → loud
+    /// error, *not* silent fall-through. This is the CI misconfig case
+    /// Codex flagged: setting only USERNAME and forgetting PASSWORD
+    /// must not surface as an opaque registry 401 after we fall
+    /// through to anonymous.
+    #[test]
+    fn env_creds_partial_override_errors() {
+        for (u, p) in [(Some("alice"), None), (None, Some("secret")), (None, None)] {
+            let err = classify_env_credentials("ghcr.io", env(Some("ghcr.io"), u, p))
+                .expect_err("partial OMMX_BASIC_AUTH_* should be an error");
+            let msg = err.to_string();
+            assert!(msg.contains("OMMX_BASIC_AUTH_DOMAIN=ghcr.io"));
+            assert!(msg.contains("USERNAME="));
+            assert!(msg.contains("PASSWORD="));
+        }
     }
 }

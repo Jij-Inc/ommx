@@ -70,8 +70,17 @@ jobs:
       - name: Setup Environment
         uses: ./.github/actions/setup-test-environment
 
-      - name: Probe local registry
-        run: curl -sf http://localhost:5000/v2/
+      - name: Wait for local registry to be ready
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:5000/v2/; then
+              echo "registry ready after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "registry not ready after 30s" >&2
+          exit 1
 
       - name: Run remote-artifact tests against local registry
         run: cargo test -p ommx --features remote-artifact -- --include-ignored push_local_artifact_to
