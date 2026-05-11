@@ -5,9 +5,9 @@ use super::{
     OciDirImport, RefConflictPolicy, RefUpdate, SqliteIndexStore, BLOB_KIND_BLOB,
     BLOB_KIND_MANIFEST,
 };
-use crate::artifact::{StagedArtifactBlob, OCI_IMAGE_MANIFEST_MEDIA_TYPE};
+use crate::artifact::StagedArtifactBlob;
 use anyhow::{ensure, Context, Result};
-use oci_spec::image::{Descriptor, ImageManifest, MediaType};
+use oci_spec::image::{Descriptor, ImageManifest};
 use ocipkg::ImageName;
 use std::path::{Path, PathBuf};
 
@@ -75,6 +75,13 @@ impl LocalRegistry {
         self.index.resolve_image_name(image_name)
     }
 
+    /// Publish a staged OCI Image Manifest bundle to the SQLite Local
+    /// Registry. Callers must construct `manifest` and `manifest_descriptor`
+    /// via [`crate::artifact::LocalArtifactBuilder`] or the import paths
+    /// in `local_registry::import::*`, both of which produce an OCI
+    /// Image Manifest with the OMMX `artifactType` field set. The
+    /// publish path does not dispatch on manifest format — the SQLite
+    /// Local Registry stores OCI Image Manifest exclusively.
     pub(crate) fn publish_artifact_manifest(
         &self,
         image_name: &ImageName,
@@ -84,20 +91,6 @@ impl LocalRegistry {
         blobs: &[StagedArtifactBlob],
         policy: RefConflictPolicy,
     ) -> Result<RefUpdate> {
-        let manifest_media_type = manifest
-            .media_type()
-            .as_ref()
-            .map(|m| m.to_string())
-            .unwrap_or_default();
-        ensure!(
-            manifest_media_type == OCI_IMAGE_MANIFEST_MEDIA_TYPE,
-            "Manifest is not an OCI image manifest: {manifest_media_type}",
-        );
-        ensure!(
-            manifest_descriptor.media_type() == &MediaType::ImageManifest,
-            "Manifest descriptor is not an OCI image manifest descriptor: {}",
-            manifest_descriptor.media_type()
-        );
         ensure!(
             manifest_descriptor.digest().to_string()
                 == crate::artifact::sha256_digest(manifest_bytes),

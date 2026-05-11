@@ -159,9 +159,13 @@ impl LocalArtifact {
     }
 
     fn read_manifest_uncached(&self) -> Result<LocalManifest> {
-        let bytes = self.registry.blobs().read_bytes(&self.manifest_digest)?;
-        let record = self
-            .registry
+        // Verify the IndexStore has a manifest record for this digest so a
+        // missing index entry surfaces as a clear "manifest not found"
+        // error instead of bubbling up as a parse failure or stale-cache
+        // hit. The record's `media_type` column is informational — the
+        // SQLite Local Registry only stores OCI Image Manifest, so no
+        // per-call dispatch is needed.
+        self.registry
             .index()
             .get_manifest(&self.manifest_digest)?
             .with_context(|| {
@@ -170,7 +174,8 @@ impl LocalArtifact {
                     self.manifest_digest
                 )
             })?;
-        LocalManifest::parse(&record.media_type, &bytes)
+        let bytes = self.registry.blobs().read_bytes(&self.manifest_digest)?;
+        LocalManifest::parse(&bytes)
     }
 
     pub fn annotations(&self) -> Result<HashMap<String, String>> {
@@ -191,12 +196,11 @@ impl LocalArtifact {
 }
 
 /// A manifest read from the SQLite Local Registry. v3 stores OCI Image
-/// Manifest as the only native format (ARTIFACT_V3.md §5.5); OMMX
-/// artifacts are identified by the `artifactType` field plus the
-/// `application/vnd.oci.empty.v1+json` empty config descriptor. The
-/// deprecated OCI Artifact Manifest media type
-/// (`application/vnd.oci.artifact.manifest.v1+json`) is rejected at
-/// parse time rather than supported via a second enum variant.
+/// Manifest as the only native format; OMMX artifacts are identified
+/// by the `artifactType` field plus the `application/vnd.oci.empty.v1+json`
+/// empty config descriptor. The deprecated OCI Artifact Manifest media
+/// type (`application/vnd.oci.artifact.manifest.v1+json`) is rejected
+/// at parse time rather than supported via a second enum variant.
 ///
 /// Boxed because `oci_spec`'s `ImageManifest` is large (~800 bytes) and
 /// callers move `LocalManifest` around inside `Arc<OnceLock<...>>`.
@@ -204,20 +208,11 @@ impl LocalArtifact {
 pub struct LocalManifest(Box<ImageManifest>);
 
 impl LocalManifest {
-    fn parse(media_type: &str, bytes: &[u8]) -> Result<Self> {
-        match media_type {
-            media_types::OCI_IMAGE_MANIFEST_MEDIA_TYPE => {
-                let manifest: ImageManifest =
-                    serde_json::from_slice(bytes).context("Failed to parse OCI image manifest")?;
-                ensure_ommx_image_manifest(&manifest)?;
-                Ok(Self(Box::new(manifest)))
-            }
-            other => bail!(
-                "Unsupported manifest media type for OMMX artifact: {other} \
-                 (only `{}` is accepted; OCI Artifact Manifest is deprecated and not supported)",
-                media_types::OCI_IMAGE_MANIFEST_MEDIA_TYPE,
-            ),
-        }
+    fn parse(bytes: &[u8]) -> Result<Self> {
+        let manifest: ImageManifest =
+            serde_json::from_slice(bytes).context("Failed to parse OCI image manifest")?;
+        ensure_ommx_image_manifest(&manifest)?;
+        Ok(Self(Box::new(manifest)))
     }
 
     pub fn media_type(&self) -> &'static str {
@@ -251,8 +246,8 @@ impl LocalManifest {
 ///
 /// Produces an OCI Image Manifest with `artifactType` set to the OMMX
 /// artifact media type and the OCI 1.1 empty config descriptor as
-/// `config` (per ARTIFACT_V3.md §1.12 / §5.5). The layer blobs land in
-/// the Image Manifest's `layers[]` field.
+/// `config`. The layer blobs land in the Image Manifest's `layers[]`
+/// field.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LocalArtifactBuilder {
     image_name: ocipkg::ImageName,

@@ -647,9 +647,8 @@ fn local_artifact_subject_round_trips() -> Result<()> {
 #[test]
 fn rejects_import_of_deprecated_artifact_manifest_layout() -> Result<()> {
     // v3 does not support OCI Artifact Manifest
-    // (`application/vnd.oci.artifact.manifest.v1+json`); see
-    // ARTIFACT_V3.md §5.5. import must reject such layouts with a
-    // clear error, not silently fall back.
+    // (`application/vnd.oci.artifact.manifest.v1+json`); import must
+    // reject such layouts with a clear error, not silently fall back.
     let dir = tempfile::tempdir()?;
     let oci_dir = dir.path().join("oci-art");
     let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:art")?;

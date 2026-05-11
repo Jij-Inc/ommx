@@ -143,12 +143,6 @@ struct StagedOciDir {
     image_config: (Descriptor, Vec<u8>),
 }
 
-impl StagedOciDir {
-    fn manifest_media_type(&self) -> &'static str {
-        OCI_IMAGE_MANIFEST_MEDIA_TYPE
-    }
-}
-
 /// Import a standard OCI Image Layout directory into the v3 local registry.
 ///
 /// Works for any OCI Image Layout (`oci-layout` + `index.json` + `blobs/`),
@@ -301,7 +295,7 @@ pub(super) fn import_oci_dir_inner(
 
     let manifest_record = ManifestRecord {
         digest: manifest_digest.clone(),
-        media_type: staged.manifest_media_type().to_string(),
+        media_type: OCI_IMAGE_MANIFEST_MEDIA_TYPE.to_string(),
         size: staged.manifest_descriptor.size(),
         subject_digest: staged
             .subject
@@ -428,8 +422,8 @@ fn stage_oci_dir(oci_dir_root: impl AsRef<Path>) -> Result<StagedOciDir> {
         manifest_bytes.len()
     );
 
-    // v3 supports only OCI Image Manifest (ARTIFACT_V3.md §5.5). The
-    // deprecated OCI Artifact Manifest is rejected at parse time.
+    // v3 supports only OCI Image Manifest. The deprecated OCI Artifact
+    // Manifest is rejected at parse time.
     let (layers, annotations, subject, image_config) = match index_descriptor.media_type() {
         MediaType::ImageManifest => stage_image_manifest(oci_dir_root, &manifest_bytes)?,
         MediaType::ArtifactManifest => anyhow::bail!(
