@@ -765,8 +765,10 @@ fn import_oci_archive_re_extracts_when_legacy_dir_is_stale() -> Result<()> {
 
     let archive_path_a = dir.path().join("a.ommx");
     {
-        let mut builder =
-            crate::artifact::Builder::new_archive(archive_path_a.clone(), image_name.clone())?;
+        let mut builder = crate::artifact::ArchiveArtifactBuilder::new_archive(
+            archive_path_a.clone(),
+            image_name.clone(),
+        )?;
         builder.add_layer(
             MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.into()),
             b"archive-A",
@@ -776,8 +778,10 @@ fn import_oci_archive_re_extracts_when_legacy_dir_is_stale() -> Result<()> {
     }
     let archive_path_b = dir.path().join("b.ommx");
     {
-        let mut builder =
-            crate::artifact::Builder::new_archive(archive_path_b.clone(), image_name.clone())?;
+        let mut builder = crate::artifact::ArchiveArtifactBuilder::new_archive(
+            archive_path_b.clone(),
+            image_name.clone(),
+        )?;
         builder.add_layer(
             MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.into()),
             b"archive-B",

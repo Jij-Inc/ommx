@@ -23,22 +23,22 @@ use super::{ParametricInstanceAnnotations, SampleSetAnnotations};
 /// [`super::LocalArtifactBuilder`] instead; this type is the
 /// archive-only legacy path retained for `PyArtifactBuilder.new_archive*`
 /// / `temp` and the test suite.
-pub struct Builder(OciArtifactBuilder<OciArchiveBuilder>);
+pub struct ArchiveArtifactBuilder(OciArtifactBuilder<OciArchiveBuilder>);
 
-impl Deref for Builder {
+impl Deref for ArchiveArtifactBuilder {
     type Target = OciArtifactBuilder<OciArchiveBuilder>;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl DerefMut for Builder {
+impl DerefMut for ArchiveArtifactBuilder {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
 
-impl Builder {
+impl ArchiveArtifactBuilder {
     pub fn new_archive_unnamed(path: PathBuf) -> Result<Self> {
         let archive = OciArchiveBuilder::new_unnamed(path)?;
         Ok(Self(OciArtifactBuilder::new(
