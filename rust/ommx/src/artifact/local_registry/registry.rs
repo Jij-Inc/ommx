@@ -5,9 +5,9 @@ use super::{
     OciDirImport, RefConflictPolicy, RefUpdate, SqliteIndexStore, BLOB_KIND_BLOB,
     BLOB_KIND_MANIFEST,
 };
-use crate::artifact::{StagedArtifactBlob, OCI_ARTIFACT_MANIFEST_MEDIA_TYPE};
+use crate::artifact::{StagedArtifactBlob, OCI_IMAGE_MANIFEST_MEDIA_TYPE};
 use anyhow::{ensure, Context, Result};
-use oci_spec::image::{ArtifactManifest, Descriptor, MediaType};
+use oci_spec::image::{Descriptor, ImageManifest, MediaType};
 use ocipkg::ImageName;
 use std::path::{Path, PathBuf};
 
@@ -78,20 +78,24 @@ impl LocalRegistry {
     pub(crate) fn publish_artifact_manifest(
         &self,
         image_name: &ImageName,
-        manifest: &ArtifactManifest,
+        manifest: &ImageManifest,
         manifest_descriptor: &Descriptor,
         manifest_bytes: &[u8],
         blobs: &[StagedArtifactBlob],
         policy: RefConflictPolicy,
     ) -> Result<RefUpdate> {
+        let manifest_media_type = manifest
+            .media_type()
+            .as_ref()
+            .map(|m| m.to_string())
+            .unwrap_or_default();
         ensure!(
-            manifest.media_type().as_ref() == OCI_ARTIFACT_MANIFEST_MEDIA_TYPE,
-            "Manifest is not an OCI artifact manifest: {}",
-            manifest.media_type()
+            manifest_media_type == OCI_IMAGE_MANIFEST_MEDIA_TYPE,
+            "Manifest is not an OCI image manifest: {manifest_media_type}",
         );
         ensure!(
-            manifest_descriptor.media_type() == &MediaType::ArtifactManifest,
-            "Manifest descriptor is not an OCI artifact manifest descriptor: {}",
+            manifest_descriptor.media_type() == &MediaType::ImageManifest,
+            "Manifest descriptor is not an OCI image manifest descriptor: {}",
             manifest_descriptor.media_type()
         );
         ensure!(
@@ -103,14 +107,27 @@ impl LocalRegistry {
             manifest_descriptor.size() == manifest_bytes.len() as u64,
             "Manifest descriptor size does not match manifest bytes"
         );
+        // OCI Image Manifest `blobs` = manifest layers + the `config`
+        // descriptor (which is the OCI 1.1 empty config blob in OMMX's
+        // builder). Callers stage all of these in `blobs[]`.
+        let manifest_descriptor_count = manifest.layers().len() + 1;
         ensure!(
-            manifest.blobs().len() == blobs.len(),
-            "Manifest blob descriptor count does not match pending blob count"
+            manifest_descriptor_count == blobs.len(),
+            "Manifest descriptor count ({manifest_descriptor_count}) does not match pending blob count ({})",
+            blobs.len()
         );
-        for (manifest_blob, pending_blob) in manifest.blobs().iter().zip(blobs) {
+        let staged_descriptors: Vec<&Descriptor> =
+            blobs.iter().map(|blob| blob.descriptor()).collect();
+        let descriptor_is_staged = |d: &Descriptor| staged_descriptors.contains(&d);
+        ensure!(
+            descriptor_is_staged(manifest.config()),
+            "Manifest config descriptor is not staged for upload"
+        );
+        for layer in manifest.layers() {
             ensure!(
-                manifest_blob == pending_blob.descriptor(),
-                "Manifest blob descriptor does not match pending blob descriptor"
+                descriptor_is_staged(layer),
+                "Manifest layer descriptor is not staged for upload: {}",
+                layer.digest()
             );
         }
 
@@ -152,7 +169,7 @@ impl LocalRegistry {
         )?);
 
         let layer_records = manifest
-            .blobs()
+            .layers()
             .iter()
             .enumerate()
             .map(|(position, layer)| -> Result<LayerRecord> {

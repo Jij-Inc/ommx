@@ -1,10 +1,9 @@
 use super::*;
 use crate::artifact::{
-    media_types, LocalArtifact, LocalArtifactBuilder, LocalManifest,
-    OCI_ARTIFACT_MANIFEST_MEDIA_TYPE, OCI_IMAGE_MANIFEST_MEDIA_TYPE,
+    media_types, LocalArtifact, LocalArtifactBuilder, LocalManifest, OCI_IMAGE_MANIFEST_MEDIA_TYPE,
 };
 use anyhow::{Context, Result};
-use oci_spec::image::{ArtifactManifest, MediaType};
+use oci_spec::image::MediaType;
 use ocipkg::ImageName;
 use ocipkg::{
     image::{ImageBuilder, OciDirBuilder},
@@ -223,7 +222,10 @@ fn imports_oci_dir_into_sqlite_registry_preserving_image_manifest() -> Result<()
     // LocalArtifact must dispatch on the stored manifest media type and
     // surface the legacy Image Manifest's layer descriptors through the
     // common LocalManifest view.
-    assert!(matches!(artifact.get_manifest()?, LocalManifest::Image(_)));
+    assert_eq!(
+        artifact.get_manifest()?.media_type(),
+        OCI_IMAGE_MANIFEST_MEDIA_TYPE
+    );
     assert_eq!(artifact.layers()?, vec![layer.clone()]);
     assert_eq!(artifact.get_blob(&layer.digest().to_string())?, b"instance");
     Ok(())
@@ -373,7 +375,7 @@ fn local_registry_imports_legacy_refs_when_requested() -> Result<()> {
 }
 
 #[test]
-fn local_registry_builds_native_artifact_manifest() -> Result<()> {
+fn local_registry_builds_native_image_manifest_with_artifact_type() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let registry = Arc::new(LocalRegistry::open(dir.path())?);
     let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:built")?;
@@ -385,32 +387,40 @@ fn local_registry_builds_native_artifact_manifest() -> Result<()> {
         .context("Published ref is missing")?;
     assert_eq!(manifest_digest, artifact.manifest_digest());
     let manifest_bytes = registry.blobs().read_bytes(&manifest_digest)?;
-    let manifest: ArtifactManifest = serde_json::from_slice(&manifest_bytes)?;
-    let blob = manifest
-        .blobs()
+    let manifest: oci_spec::image::ImageManifest = serde_json::from_slice(&manifest_bytes)?;
+    let layer = manifest
+        .layers()
         .first()
-        .context("Published blob is missing")?;
+        .context("Published layer is missing")?;
 
     let manifest_record = registry
         .index()
         .get_manifest(&manifest_digest)?
         .context("Published manifest is missing")?;
-    assert_eq!(manifest_record.media_type, OCI_ARTIFACT_MANIFEST_MEDIA_TYPE);
+    assert_eq!(manifest_record.media_type, OCI_IMAGE_MANIFEST_MEDIA_TYPE);
     assert_eq!(manifest_record.size, manifest_bytes.len() as u64);
-    assert_eq!(manifest.media_type(), &MediaType::ArtifactManifest);
     assert_eq!(
-        manifest.artifact_type(),
-        &MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string())
+        manifest.media_type().as_ref(),
+        Some(&MediaType::ImageManifest)
     );
-    assert_eq!(artifact.layers()?, manifest.blobs().to_vec());
-    // LocalArtifact must dispatch on the stored manifest media type and
-    // surface the v3 native Artifact Manifest's blob descriptors through
-    // the common LocalManifest view (symmetric to the legacy import
-    // test that exercises LocalManifest::Image).
-    assert!(matches!(
-        artifact.get_manifest()?,
-        LocalManifest::Artifact(_)
-    ));
+    assert_eq!(
+        manifest.artifact_type().as_ref(),
+        Some(&MediaType::Other(
+            media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()
+        ))
+    );
+    // OCI 1.1 empty config descriptor is required for `artifactType` to be
+    // honoured by registries.
+    assert_eq!(manifest.config().media_type(), &MediaType::EmptyJSON);
+    assert_eq!(
+        manifest.config().digest().to_string(),
+        media_types::OCI_EMPTY_CONFIG_DIGEST
+    );
+    assert_eq!(artifact.layers()?, manifest.layers().to_vec());
+    assert_eq!(
+        artifact.get_manifest()?.media_type(),
+        OCI_IMAGE_MANIFEST_MEDIA_TYPE
+    );
     assert_eq!(
         artifact.get_manifest()?.artifact_type(),
         &MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string())
@@ -418,9 +428,15 @@ fn local_registry_builds_native_artifact_manifest() -> Result<()> {
 
     let layers = registry.index().get_layers(&manifest_digest)?;
     assert_eq!(layers.len(), 1);
-    assert_eq!(layers[0].digest, blob.digest().to_string());
+    assert_eq!(layers[0].digest, layer.digest().to_string());
     assert_eq!(layers[0].media_type, media_types::V1_INSTANCE_MEDIA_TYPE);
-    assert_eq!(artifact.get_blob(&blob.digest().to_string())?, b"instance");
+    assert_eq!(artifact.get_blob(&layer.digest().to_string())?, b"instance");
+
+    // Empty config blob must also be readable from the registry.
+    assert_eq!(
+        artifact.get_blob(media_types::OCI_EMPTY_CONFIG_DIGEST)?,
+        media_types::OCI_EMPTY_CONFIG_BYTES
+    );
     Ok(())
 }
 
@@ -608,7 +624,7 @@ fn local_artifact_subject_round_trips() -> Result<()> {
     assert_eq!(plain.subject()?, None);
 
     let subject_descriptor = oci_spec::image::DescriptorBuilder::default()
-        .media_type(MediaType::ArtifactManifest)
+        .media_type(MediaType::ImageManifest)
         .digest(oci_spec::image::Digest::from_str(&sha256_digest(
             b"parent-manifest-bytes",
         ))?)
@@ -629,37 +645,26 @@ fn local_artifact_subject_round_trips() -> Result<()> {
 }
 
 #[test]
-fn imports_oci_dir_with_artifact_manifest_layout() -> Result<()> {
-    // OCI dir whose manifest is an Artifact Manifest (no Image
-    // config, layers in `blobs[]`) must import as identity-preserving
-    // and surface as `LocalManifest::Artifact` on read.
+fn rejects_import_of_deprecated_artifact_manifest_layout() -> Result<()> {
+    // v3 does not support OCI Artifact Manifest
+    // (`application/vnd.oci.artifact.manifest.v1+json`); see
+    // ARTIFACT_V3.md §5.5. import must reject such layouts with a
+    // clear error, not silently fall back.
     let dir = tempfile::tempdir()?;
     let oci_dir = dir.path().join("oci-art");
     let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:art")?;
-    let (layer, expected_manifest_digest) =
-        build_test_oci_dir_with_artifact_manifest(&oci_dir, &image_name, b"art-instance")?;
+    build_test_oci_dir_with_artifact_manifest(&oci_dir, &image_name, b"art-instance")?;
 
     let registry_root = dir.path().join("registry-v3");
     let index_store = SqliteIndexStore::open_in_registry_root(&registry_root)?;
     let blob_store = FileBlobStore::open_in_registry_root(&registry_root)?;
-    let imported = import_oci_dir(&index_store, &blob_store, &oci_dir)?;
-
-    assert_eq!(imported.manifest_digest, expected_manifest_digest);
-    assert_eq!(imported.image_name.as_ref(), Some(&image_name));
-    let manifest_record = index_store
-        .get_manifest(&imported.manifest_digest)?
-        .context("Imported manifest is missing")?;
-    assert_eq!(manifest_record.media_type, OCI_ARTIFACT_MANIFEST_MEDIA_TYPE);
-    assert!(blob_store.exists(&imported.manifest_digest)?);
-    assert!(blob_store.exists(&layer.digest().to_string())?);
-
-    let registry = LocalRegistry::open(&registry_root)?;
-    let artifact = LocalArtifact::open_in_registry(Arc::new(registry), image_name)?;
-    assert!(matches!(
-        artifact.get_manifest()?,
-        LocalManifest::Artifact(_)
-    ));
-    assert_eq!(artifact.layers()?, vec![layer]);
+    let err = import_oci_dir(&index_store, &blob_store, &oci_dir)
+        .expect_err("Artifact Manifest import must error");
+    let message = format!("{err:#}");
+    assert!(
+        message.contains("OCI Artifact Manifest"),
+        "Error must mention the rejected format; got: {message}"
+    );
     Ok(())
 }
 
