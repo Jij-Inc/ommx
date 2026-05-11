@@ -26,7 +26,14 @@ pub fn package(path: &Path) -> Result<()> {
             continue;
         };
 
-        let image_name = ImageName::parse(&format!("ghcr.io/jij-inc/ommx/v3/miplib2017:{name}"))?;
+        let image_name =
+            match ImageName::parse(&format!("ghcr.io/jij-inc/ommx/v3/miplib2017:{name}")) {
+                Ok(name) => name,
+                Err(err) => {
+                    tracing::warn!("Skip: invalid image name for '{name}': {err}");
+                    continue;
+                }
+            };
         if LocalArtifact::try_open(image_name.clone())?.is_some() {
             tracing::info!("Skip: {image_name} already in the v3 local registry");
             continue;
