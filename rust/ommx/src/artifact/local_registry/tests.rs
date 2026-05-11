@@ -813,15 +813,14 @@ fn concurrent_blob_writes_publish_one_complete_blob() -> Result<()> {
 }
 
 #[test]
-fn import_oci_archive_re_extracts_when_legacy_dir_is_stale() -> Result<()> {
-    // P1 regression: importing a second .ommx archive with the same
-    // image_name but different content used to leave the prior archive's
-    // bytes at `legacy_path` (because `load_to` skipped when the dir
-    // existed), so `import_oci_dir_as_ref` re-imported the *old* manifest
-    // digest and returned `Unchanged` instead of surfacing the digest
-    // mismatch. Fixed by always staging into a temp dir and atomically
-    // promoting it over `legacy_path`. This test would loop back into a
-    // false `Ok(Unchanged)` without that fix.
+fn import_oci_archive_surfaces_digest_conflict_for_same_ref() -> Result<()> {
+    // Importing a second .ommx archive that shares the first's image
+    // name but carries different bytes must surface a ref conflict
+    // under the default `KeepExisting` policy, not a stale `Unchanged`.
+    // Each call to `import_oci_archive` stages into a fresh tempdir
+    // that is dropped before the function returns, so SQLite's ref
+    // conflict check sees the new archive's freshly hashed manifest
+    // digest rather than the prior archive's bytes.
     let dir = tempfile::tempdir()?;
     let registry = Arc::new(LocalRegistry::open(dir.path())?);
     let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:reextract")?;

@@ -14,22 +14,27 @@
 //!
 //! ## Implementation shape
 //!
-//! Same two-stage pipeline as [`super::archive`], glued on top of
-//! ocipkg:
+//! Two-stage pipeline glued on top of ocipkg:
 //!
 //! 1. `Artifact::from_remote(image).pull_to(staging_path)` performs
-//!    the OCI Distribution pull into a sibling temp dir, which is
-//!    then atomically renamed to the legacy OCI dir at
-//!    `registry.root().join(image_name.as_path())`. Routing through
-//!    [`crate::artifact::Artifact::pull_to`] (instead of [`Artifact::pull`])
-//!    keeps the legacy staging dir under the same root as the SQLite
-//!    registry — important when the caller opens the registry on a
-//!    non-default root. Staging into a temp dir means a concurrent
-//!    first-miss can't observe a partially populated `legacy_path`.
-//! 2. [`super::oci_dir::import_oci_dir_as_ref`] reads that legacy
+//!    the OCI Distribution pull into a [`tempfile::TempDir`] under
+//!    the registry root. The temp dir is the only on-disk
+//!    materialisation of the pull in OCI Image Layout form; it is
+//!    dropped when this function returns. v3 has no legacy OCI dir
+//!    cache for fresh pulls — SQLite is the sole post-import home
+//!    of the bytes.
+//! 2. [`super::oci_dir::import_oci_dir_as_ref`] reads that temp
 //!    directory back, validates manifest / blob digests, and writes
 //!    them into the SQLite [`super::super::SqliteIndexStore`] +
 //!    [`super::super::FileBlobStore`].
+//!
+//! The pre-pull SQLite check short-circuits the network fetch when
+//! the registry already resolves `image_name` to a manifest digest:
+//! the function returns an [`OciDirImport`] with
+//! [`super::super::RefUpdate::Unchanged`] without touching the
+//! network. The same cache-hit semantics that the v2-era legacy dir
+//! cache offered, now expressed against the canonical SQLite ref
+//! store.
 //!
 //! Feature-gated behind `remote-artifact` because `Artifact::from_remote`
 //! is, and because this is the only place in `local_registry` that
@@ -41,59 +46,52 @@
 //! is the SDK's contract, so that swap can land without touching
 //! `bin/ommx.rs` or the Python entry points.
 
-use super::super::LocalRegistry;
+use super::super::{LocalRegistry, RefUpdate};
 use super::oci_dir::{import_oci_dir_as_ref, OciDirImport};
 use crate::artifact::Artifact;
 use anyhow::{Context, Result};
 use ocipkg::ImageName;
-use std::{fs, sync::Arc};
+use std::sync::Arc;
 
 /// Pull `image_name` from its remote registry into the v3 SQLite
 /// Local Registry.
 ///
-/// If the legacy OCI dir cache already has the image at
-/// `registry.root().join(image_name.as_path())`, the network fetch is
-/// skipped (matches the existing `Artifact<Remote>::pull` skip-on-exist
-/// behaviour). The legacy entry — whether freshly pulled or already
-/// present — is then imported into SQLite preserving manifest digest.
-/// Returns the [`OciDirImport`] outcome from the underlying directory
-/// import.
+/// If the registry already resolves `image_name` to a manifest digest,
+/// the network fetch is skipped and the function returns an
+/// [`OciDirImport`] with [`RefUpdate::Unchanged`]. Otherwise the image
+/// is pulled into a tempdir-backed OCI Image Layout under the
+/// registry root and then imported into SQLite preserving manifest
+/// digest. The tempdir is removed before the function returns; the
+/// post-import home of the bytes is the SQLite registry alone.
 ///
-/// First-miss pulls are staged into a sibling temp dir and atomically
-/// renamed to `legacy_path` so a concurrent reader can never observe a
-/// half-written OCI layout. If two threads race the first miss for the
-/// same image, both pull (content-addressed, so the bytes match), the
-/// rename winner publishes its dir, and the loser's tempdir is dropped.
+/// If two threads race the first miss for the same image, both pull
+/// (content-addressed, so the bytes match) into separate temp dirs;
+/// the import side de-duplicates through SQLite's
+/// `publish_artifact_atomic`, so the second writer sees `Unchanged`.
 pub fn pull_image(registry: &Arc<LocalRegistry>, image_name: &ImageName) -> Result<OciDirImport> {
-    let legacy_path = registry.root().join(image_name.as_path());
-    if !legacy_path.exists() {
-        let parent = legacy_path
-            .parent()
-            .context("legacy_path has no parent directory")?;
-        fs::create_dir_all(parent)
-            .with_context(|| format!("Failed to create parent dir {}", parent.display()))?;
-        let temp_holder = tempfile::tempdir_in(parent).with_context(|| {
-            format!("Failed to create temp staging dir in {}", parent.display())
-        })?;
-        let staging_path = temp_holder.path().join("staged");
-        let mut remote = Artifact::from_remote(image_name.clone())?;
-        let _ = remote.pull_to(&staging_path)?;
-        match fs::rename(&staging_path, &legacy_path) {
-            Ok(()) => {}
-            Err(_) if legacy_path.exists() => {
-                // Another concurrent pull won the rename race; their
-                // content-addressed dir already populates `legacy_path`.
-                // Our temp dir is cleaned up when `temp_holder` drops.
-            }
-            Err(e) => {
-                return Err(e).with_context(|| {
-                    format!(
-                        "Failed to publish staged pull contents to {}",
-                        legacy_path.display()
-                    )
-                });
-            }
-        }
+    if let Some(manifest_digest) = registry.index().resolve_image_name(image_name)? {
+        return Ok(OciDirImport {
+            manifest_digest,
+            image_name: Some(image_name.clone()),
+            ref_update: Some(RefUpdate::Unchanged),
+        });
     }
-    import_oci_dir_as_ref(registry.index(), registry.blobs(), legacy_path, image_name)
+
+    let staging_parent = registry.root();
+    std::fs::create_dir_all(staging_parent).with_context(|| {
+        format!(
+            "Failed to create registry root {}",
+            staging_parent.display()
+        )
+    })?;
+    let temp_holder = tempfile::tempdir_in(staging_parent).with_context(|| {
+        format!(
+            "Failed to create temp staging dir in {}",
+            staging_parent.display()
+        )
+    })?;
+    let staging_path = temp_holder.path().join("staged");
+    let mut remote = Artifact::from_remote(image_name.clone())?;
+    let _ = remote.pull_to(&staging_path)?;
+    import_oci_dir_as_ref(registry.index(), registry.blobs(), staging_path, image_name)
 }

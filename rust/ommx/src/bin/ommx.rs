@@ -103,19 +103,18 @@ impl ImageNameOrPath {
             return Ok(Self::OciArchive(path.to_path_buf()));
         }
         if let Ok(name) = ImageName::parse(input) {
-            // Prefer the SQLite Local Registry: anything imported via
-            // `ommx load` or `ommx pull` (post-v3) lands there and the
-            // legacy disk OCI dir is only kept around as the
-            // lazy-auto-migration cache. Falling back to the legacy
-            // dir keeps pre-v3 user state addressable until Step C
-            // removes that path entirely.
+            // SQLite Local Registry is the sole source for local
+            // artifacts in v3. The pre-v3 path-tree layout under
+            // `registry.root().join(image_name.as_path())` is no longer
+            // auto-detected as "local"; users migrate it explicitly
+            // via `ommx artifact import`. After that, the ref resolves
+            // through SQLite like any other v3 artifact.
             //
             // The SQLite probe is best-effort: an unopenable registry
             // (corrupt DB, read-only filesystem, permission denied) is
             // *not* fatal for a remote-targeted command like
-            // `ommx push <ghcr ref>` or `ommx inspect <remote>`. We
-            // log the failure and fall through to the legacy-dir
-            // check, then to the remote branch.
+            // `ommx push <ghcr ref>` or `ommx inspect <remote>`. We log
+            // the failure and fall through to the remote branch.
             match LocalArtifact::try_open(name.clone()) {
                 Ok(Some(_)) => return Ok(Self::Local(name)),
                 Ok(None) => {}
@@ -125,9 +124,6 @@ impl ImageNameOrPath {
                          treating ref as not-local-in-SQLite"
                     );
                 }
-            }
-            if get_image_dir(&name).exists() {
-                return Ok(Self::Local(name));
             }
             return Ok(Self::Remote(name));
         }
@@ -140,24 +136,32 @@ impl ImageNameOrPath {
             ImageNameOrPath::OciArchive(path) => {
                 Artifact::from_oci_archive(path)?.get_manifest()?
             }
-            // `parse` now routes SQLite-resident refs to `Local`, so
-            // any caller of `get_manifest` (currently `ommx inspect`)
-            // must serve from SQLite before falling back to the
-            // legacy disk OCI dir. Otherwise a v3-only artifact
-            // (loaded via `ommx load` of an archive — no legacy dir
-            // created) would surface as a path-not-found error.
-            ImageNameOrPath::Local(name) => {
-                if let Some(local_artifact) = LocalArtifact::try_open(name.clone())? {
-                    local_artifact.get_manifest()?.clone().into_inner()
-                } else {
-                    let image_dir = get_image_dir(name);
-                    Artifact::from_oci_dir(&image_dir)?.get_manifest()?
-                }
-            }
+            // `parse` only routes a ref to `Local` when SQLite resolves
+            // it, so `LocalArtifact::open` should always succeed here;
+            // if it doesn't, surface the SQLite-side migration message.
+            ImageNameOrPath::Local(name) => LocalArtifact::open(name.clone())?
+                .get_manifest()?
+                .clone()
+                .into_inner(),
             ImageNameOrPath::Remote(name) => Artifact::from_remote(name.clone())?.get_manifest()?,
         };
         Ok(manifest)
     }
+}
+
+/// Fail with a "not in local registry" message. When a legacy v2-shaped
+/// OCI directory exists at the user's local registry root for this
+/// image, point them at the explicit migration command rather than the
+/// generic not-found message.
+fn bail_not_found_locally(name: &ImageName) -> Result<()> {
+    if get_image_dir(name).exists() {
+        bail!(
+            "{name} exists only in the legacy local registry directory. \
+             Run `ommx artifact import` once to migrate it into the v3 \
+             SQLite-backed registry, then retry."
+        );
+    }
+    bail!("Image not found in local: {}", name)
 }
 
 fn main() -> Result<()> {
@@ -196,26 +200,14 @@ fn main() -> Result<()> {
                 let mut artifact = Artifact::from_oci_archive(&path)?;
                 artifact.push()?;
             }
-            // The CLI and the Python `Artifact.push()` share the same
-            // native code path: `LocalArtifact::push()`. `try_open`
-            // resolves via the SQLite Local Registry (post-v3 default);
-            // when only a legacy disk OCI dir is present `open` would
-            // bail with the "run `ommx artifact import`" message, but
-            // the `parse` dispatch above already routed that case to
-            // `Local(name)`, so fall back to the legacy push for now.
-            // Step C removes the legacy branch.
+            // CLI and Python `Artifact.push()` share the same native
+            // code path: `LocalArtifact::push()`. `parse` only routes
+            // SQLite-resident refs to `Local`, so `open` is the right
+            // call (it returns the migration message on miss).
             ImageNameOrPath::Local(name) => {
-                if let Some(artifact) = LocalArtifact::try_open(name.clone())? {
-                    artifact.push()?;
-                } else {
-                    let image_dir = get_image_dir(&name);
-                    let mut artifact = Artifact::from_oci_dir(&image_dir)?;
-                    artifact.push()?;
-                }
+                LocalArtifact::open(name)?.push()?;
             }
-            ImageNameOrPath::Remote(name) => {
-                bail!("Image not found in local: {}", name)
-            }
+            ImageNameOrPath::Remote(name) => bail_not_found_locally(&name)?,
         },
 
         Command::Pull { image_name } => {
@@ -232,9 +224,7 @@ fn main() -> Result<()> {
 
         Command::Save { image_name, output } => {
             let name = ImageName::parse(image_name)?;
-            let image_dir = get_image_dir(&name);
-            let mut artifact = Artifact::from_oci_dir(&image_dir)?;
-            artifact.save(output)?;
+            LocalArtifact::open(name)?.save(output)?;
         }
 
         Command::Load { path } => {

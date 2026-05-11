@@ -708,8 +708,10 @@ Transport crate は **`oci-client`** (ORAS project, [oras-project/rust-oci-clien
 
 **auth e2e テスト:** `rust/ommx/tests/auth_e2e.rs` が `testcontainers` 経由で ephemeral `registry:2` (anonymous / htpasswd) を立ち上げ、resolver の各 tier (anonymous / docker config / env override / 部分 env override bail) と CLI dispatch + 否定ケース (auth 強制の sanity / 誤 credential 拒否) を実 push で検証する (8 シナリオ)。`#[ignore = "requires docker"]` + `#[serial]` で env mutation を逐次化、CI は `--include-ignored --test-threads=1` で全 8 件を走らせる。
 
-**Step C — lazy auto-migration の legacy double-write 撤廃** (§12.2 行 6、行 4 Archive 半分)。
+**Step C — lazy auto-migration の legacy double-write 撤廃** (§12.2 行 6、行 4 Archive 半分)。**進行中。**
 
-`Artifact.load(image)` / `ommx load` の auto-migration を "remote/archive → legacy disk OCI dir → SQLite" の 2-stage から "remote/archive → SQLite" 直結に変更。Python `ArtifactInner::Dir` 分岐を削除し、`{Archive, Local}` 2-variant に。`Artifact<OciDir>` は `import::*` の temp scratch でしか使われない実装詳細に格下げ。`Artifact<OciArchive>::push` も Step B で導入した新 transport に統一する候補。
+`Artifact.load(image)` / `ommx load` の auto-migration を "remote/archive → legacy disk OCI dir → SQLite" の 2-stage から "remote/archive → SQLite" 直結に変更する。`import_oci_archive` / `pull_image` は staging を `tempfile::TempDir` (registry root 配下) に切り替え、`registry.root().join(image_name.as_path())` への promote を行わない。`pull_image` は事前に SQLite の ref を resolve して network fetch を short-circuit する (v2 era の "skip if legacy dir exists" を canonical ref store ベースに置換)。CLI の `ImageNameOrPath::parse` は legacy dir の存在を fall-through として読み取らなくなり、SQLite ref のみで `Local`/`Remote` を分岐する; `ommx push <local>` / `ommx inspect <local>` / `ommx save <image> <output>` は `LocalArtifact::open` 経由になり、新たに追加した `LocalArtifact::save` (SQLite + CAS → `OciArchiveBuilder` 直結) を使う。pre-v3 user の legacy dir のみが存在する path は `bail_not_found_locally` が `ommx artifact import` への migration hint を返す。
+
+Python 側は `ArtifactInner::Dir` variant を削除し `{Archive, Local}` 2-variant に集約。`Artifact.load_archive(dir_path)` は dir 入力に対し `local_registry::import_oci_dir` で SQLite に identity-preserving import して `LocalArtifact` を返す (file 入力は従来通り `Artifact<OciArchive>` を直接 open)。`BuilderInner::Dir` も内部的に `LocalArtifactBuilder` を保持しているだけだったので `BuilderInner::Local` にリネーム。`Artifact<OciArchive>::push` の新 transport 統一は本 step では扱わず、後続 milestone に持ち越す (`auth_from_env` ベースで稼働を維持)。
 
 A / B' / B / C 後に残る ocipkg seam は `Builder<OciArchiveBuilder>` (archive 出力) と `import::{archive, remote}` 内の temp staging のみ。§12.2 行 1 (native streamer 置換) と行 2 (ocipkg 公開 surface 撤去) はその次の milestone series。
