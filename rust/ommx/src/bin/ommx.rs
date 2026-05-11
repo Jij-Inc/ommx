@@ -3,7 +3,7 @@ use clap::{Parser, Subcommand};
 use colored::Colorize;
 use ocipkg::{oci_spec::image::ImageManifest, ImageName};
 use ommx::artifact::{
-    get_image_dir,
+    fetch_remote_manifest, get_image_dir,
     local_registry::{
         import_oci_archive, import_oci_dir, pull_image, LocalRegistry, RefConflictPolicy,
     },
@@ -148,9 +148,12 @@ impl ImageNameOrPath {
             // through to `Remote`). Bail with the migration hint before
             // initiating a network fetch so `ommx inspect` does not
             // silently look up a ref the user already has locally.
+            // Manifest-only fetch (no blob pull, no SQLite write) keeps
+            // inspect cheap; users who want the bytes locally run
+            // `ommx pull <name>`.
             ImageNameOrPath::Remote(name) => {
                 migration_hint_if_legacy_only(name)?;
-                Artifact::from_remote(name.clone())?.get_manifest()?
+                fetch_remote_manifest(name)?
             }
         };
         Ok(manifest)
@@ -210,10 +213,21 @@ fn main() -> Result<()> {
         }
 
         Command::Push { image_name_or_path } => match ImageNameOrPath::parse(image_name_or_path)? {
-            ImageNameOrPath::OciDir(path) => {
-                let mut artifact = Artifact::from_oci_dir(&path)?;
-                artifact.push()?;
-            }
+            // OCI Image Layout dirs feed into the SQLite registry via
+            // `ommx load <dir>` (identity-preserving import) and are
+            // pushed by ref from there. Direct `ommx push <dir>` would
+            // duplicate that path, so it is not supported in v3.
+            ImageNameOrPath::OciDir(path) => bail!(
+                "Cannot push OCI Image Layout directory `{}` directly. Run \
+                 `ommx load <dir>` to import it into the SQLite Local Registry, \
+                 then `ommx push <image_name>`.",
+                path.display(),
+            ),
+            // `Artifact<OciArchive>::push` reads the archive in place
+            // and uploads through the v3 native transport (the empty
+            // config blob + every layer, then the manifest). Bytes never
+            // touch the SQLite Local Registry, so an archive push has
+            // no local side effect.
             ImageNameOrPath::OciArchive(path) => {
                 let mut artifact = Artifact::from_oci_archive(&path)?;
                 artifact.push()?;

@@ -15,9 +15,13 @@
 //! `await` on the Python side; until then this `block_on` wrapper is the
 //! single point that needs to change.
 //!
-//! Pull / list / probe surface is intentionally not implemented yet —
-//! Step B is push-only. The corresponding read paths still go through
-//! `ocipkg` in `local_registry::import::remote`.
+//! Push (Step B) and pull (Step D) surfaces are both implemented here.
+//! `pull_manifest_raw` returns the manifest body verbatim so the digest
+//! the registry computes and the digest we store locally agree
+//! byte-for-byte; `pull_blob_to_vec` collects a blob into a `Vec<u8>`
+//! over `oci-client`'s streaming reader. Layer-blob streaming straight
+//! into [`super::local_registry::FileBlobStore`] is a later refinement
+//! once `FileBlobStore` grows an `AsyncWrite`-compatible put path.
 //!
 //! Credentials are resolved by [`resolve_auth`] in a three-tier chain:
 //! `OMMX_BASIC_AUTH_*` env override → `~/.docker/config.json`
@@ -31,6 +35,7 @@
 
 use anyhow::Context;
 use docker_credential::{CredentialRetrievalError, DockerCredential};
+use futures_util::TryStreamExt;
 use http::HeaderValue;
 use oci_client::{
     client::{ClientConfig, ClientProtocol},
@@ -77,18 +82,27 @@ impl RemoteTransport {
 
     /// Authenticate to the registry once before issuing other requests.
     /// `oci-client` defers auth challenges until the first request, but
-    /// for push flows we want bearer-token negotiation to happen up
-    /// front so that errors surface with the operation that triggered
-    /// them rather than buried inside a blob upload.
-    pub(crate) fn auth(&self, image_name: &ocipkg::ImageName) -> crate::Result<()> {
+    /// for push / pull flows we want bearer-token negotiation to happen
+    /// up front so that errors surface with the operation that triggered
+    /// them rather than buried inside a blob transfer. Pass the
+    /// [`RegistryOperation`] matching the next call (`Push` vs `Pull`);
+    /// registries scope bearer tokens by operation.
+    pub(crate) fn auth_for(
+        &self,
+        image_name: &ocipkg::ImageName,
+        operation: RegistryOperation,
+    ) -> crate::Result<()> {
         let reference = to_reference(image_name)?;
         self.runtime
-            .block_on(
-                self.client
-                    .auth(&reference, &self.auth, RegistryOperation::Push),
-            )
+            .block_on(self.client.auth(&reference, &self.auth, operation))
             .with_context(|| format!("Failed to authenticate against {reference}"))?;
         Ok(())
+    }
+
+    /// Convenience: authenticate for a `Push` request. Most existing
+    /// call sites push; the explicit form is [`Self::auth_for`].
+    pub(crate) fn auth(&self, image_name: &ocipkg::ImageName) -> crate::Result<()> {
+        self.auth_for(image_name, RegistryOperation::Push)
     }
 
     /// Push a single blob to the registry. The caller passes the
@@ -134,6 +148,59 @@ impl RemoteTransport {
             .with_context(|| format!("Failed to push manifest to {reference}"))?;
         Ok(())
     }
+
+    /// Pull the manifest for `image_name` verbatim. Returns the raw
+    /// bytes (so the digest the registry computes and the digest we
+    /// store locally agree byte-for-byte) alongside the digest string
+    /// reported by the registry. `accepted_media_types` is forwarded
+    /// to the `Accept` header — pass the OMMX image-manifest media
+    /// type for a manifest pull.
+    pub(crate) fn pull_manifest_raw(
+        &self,
+        image_name: &ocipkg::ImageName,
+        accepted_media_types: &[&str],
+    ) -> crate::Result<(Vec<u8>, String)> {
+        let reference = to_reference(image_name)?;
+        let (bytes, digest) = self
+            .runtime
+            .block_on(
+                self.client
+                    .pull_manifest_raw(&reference, &self.auth, accepted_media_types),
+            )
+            .with_context(|| format!("Failed to pull manifest from {reference}"))?;
+        Ok((bytes.to_vec(), digest))
+    }
+
+    /// Pull a single blob into memory. `oci_client::Client::pull_blob_stream`
+    /// preserves the `Content-Length` for buffer pre-allocation and
+    /// avoids the digest verification that `pull_blob` does on the
+    /// streaming reader — the caller writes the bytes into
+    /// [`super::local_registry::FileBlobStore`] which re-derives sha256
+    /// during `put_bytes` and then asserts the result matches the
+    /// expected digest, so the registry-side digest is enforced exactly
+    /// once at the storage boundary rather than twice in network and
+    /// store layers.
+    pub(crate) fn pull_blob_to_vec(
+        &self,
+        image_name: &ocipkg::ImageName,
+        digest: &str,
+    ) -> crate::Result<Vec<u8>> {
+        let reference = to_reference(image_name)?;
+        let bytes = self
+            .runtime
+            .block_on(async {
+                let resp = self.client.pull_blob_stream(&reference, digest).await?;
+                let mut buf =
+                    Vec::with_capacity(resp.content_length.unwrap_or(0).try_into().unwrap_or(0));
+                let mut stream = resp.stream;
+                while let Some(chunk) = stream.try_next().await? {
+                    buf.extend_from_slice(&chunk);
+                }
+                Ok::<_, anyhow::Error>(buf)
+            })
+            .with_context(|| format!("Failed to pull blob {digest} from {reference}"))?;
+        Ok(bytes)
+    }
 }
 
 /// Build a [`Reference`] from `ocipkg`'s `ImageName`. The two crates pull
@@ -143,7 +210,6 @@ fn to_reference(image_name: &ocipkg::ImageName) -> crate::Result<Reference> {
     let raw = image_name.to_string();
     raw.parse::<Reference>()
         .with_context(|| format!("Invalid OCI image reference: {raw}"))
-        .map_err(Into::into)
 }
 
 /// `oci-client` defaults to HTTPS; `localhost` registries (used in tests

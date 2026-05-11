@@ -2482,6 +2482,7 @@ dependencies = [
  "docker_credential",
  "flate2",
  "fnv",
+ "futures-util",
  "getset",
  "http",
  "indexmap 2.14.0",

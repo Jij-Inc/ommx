@@ -1,12 +1,21 @@
-//! End-to-end authentication tests for `LocalArtifact::push()`.
+//! End-to-end authentication tests for the v3 native OCI transport.
 //!
 //! These tests start ephemeral OCI registries (anonymous or
 //! htpasswd-protected) via `testcontainers`, materialise the
 //! credentials the SDK is supposed to discover (env vars or a fake
-//! `~/.docker/config.json`), and then exercise the full push pipeline
-//! against the registry. They cover every tier of the three-tier
-//! credential resolver in `artifact::remote_transport::resolve_auth`
-//! plus the auth negotiation that `oci_client::Client::auth` performs.
+//! `~/.docker/config.json`), and then exercise the full push / pull
+//! pipeline against the registry. They cover every tier of the
+//! three-tier credential resolver in
+//! `artifact::remote_transport::resolve_auth` plus the auth
+//! negotiation that `oci_client::Client::auth` performs.
+//!
+//! After Step D (§12.4) every push / pull path in the SDK shares the
+//! same `RemoteTransport` plumbing: `LocalArtifact::push` reads from
+//! SQLite, `Artifact<OciArchive>::push` reads from a `.ommx` archive
+//! on disk, and `pull_image` writes straight into SQLite. The suite
+//! mirrors that three-way split so any future divergence between
+//! "push from SQLite", "push from archive", and "pull into SQLite"
+//! surfaces here rather than only in production.
 //!
 //! All tests are `#[ignore]` so a plain `cargo test` does not require
 //! Docker. CI re-runs the suite with `--include-ignored auth_e2e`.
@@ -19,8 +28,8 @@
 use anyhow::Result;
 use ocipkg::ImageName;
 use ommx::artifact::{
-    local_registry::{LocalRegistry, RefConflictPolicy},
-    media_types, LocalArtifact, LocalArtifactBuilder,
+    local_registry::{pull_image, LocalRegistry, RefConflictPolicy},
+    media_types, Artifact, LocalArtifact, LocalArtifactBuilder,
 };
 use serial_test::serial;
 use std::collections::HashMap;
@@ -332,6 +341,86 @@ fn cli_push_routes_through_native_path() -> Result<()> {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr),
     );
+    Ok(())
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Archive push path
+// ──────────────────────────────────────────────────────────────────
+
+/// `Artifact<OciArchive>::push` shares the v3 `RemoteTransport` with
+/// `LocalArtifact::push` after Step D. This exercises the archive read
+/// + push half: build a tiny artifact in SQLite, save it as a `.ommx`
+/// archive on disk, then push that archive bypassing the SQLite
+/// registry entirely. A regression that re-introduced ocipkg's
+/// `RemoteBuilder` / `auth_from_env` on the archive path would fail
+/// here because the htpasswd registry rejects anonymous, and the env
+/// override is not set in the anonymous-registry case below.
+#[test]
+#[ignore = "requires docker"]
+#[serial]
+fn push_oci_archive_through_native_transport() -> Result<()> {
+    let _env = EnvGuard::new();
+    let registry = start_anonymous_registry();
+    let port = registry.get_host_port_ipv4(5000)?;
+    let image_name = ImageName::parse(&format!("localhost:{port}/ommx-test/archive-push:tag1"))?;
+
+    // Build the artifact in SQLite, then save it out as an OCI archive.
+    let (local, _local_dir) = build_test_artifact(image_name.clone())?;
+    let archive_dir = tempfile::tempdir()?;
+    let archive_path = archive_dir.path().join("artifact.ommx");
+    local.save(&archive_path)?;
+
+    let mut archive = Artifact::from_oci_archive(&archive_path)?;
+    archive.push()
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Pull path
+// ──────────────────────────────────────────────────────────────────
+
+/// `pull_image` against an anonymous registry: push an artifact, then
+/// pull it back into a *fresh* SQLite Local Registry tempdir and
+/// verify the same instance layer round-trips. This is the end-to-end
+/// integration test for the Step D native pull pipeline. The previous
+/// `pull_image_short_circuits_when_ref_is_present_with_blob` unit test
+/// in `local_registry/tests.rs` covers the SQLite-resident fast path;
+/// this one covers the network-fetch slow path that the unit test
+/// stubs out.
+#[test]
+#[ignore = "requires docker"]
+#[serial]
+fn pull_image_round_trips_through_anonymous_registry() -> Result<()> {
+    let _env = EnvGuard::new();
+    let registry = start_anonymous_registry();
+    let port = registry.get_host_port_ipv4(5000)?;
+    let image_name = ImageName::parse(&format!("localhost:{port}/ommx-test/pull-rt:tag1"))?;
+
+    // Push from a sender-side SQLite registry.
+    let (sender_local, _sender_dir) = build_test_artifact(image_name.clone())?;
+    let expected_layer_bytes = {
+        let layers = sender_local.layers()?;
+        assert_eq!(layers.len(), 1);
+        sender_local.get_blob(layers[0].digest().as_ref())?
+    };
+    sender_local.push()?;
+
+    // Pull into a fresh receiver-side SQLite registry tempdir.
+    let receiver_dir = tempfile::tempdir()?;
+    let receiver = Arc::new(LocalRegistry::open(receiver_dir.path())?);
+    let outcome = pull_image(&receiver, &image_name)?;
+    assert_eq!(outcome.image_name.as_ref(), Some(&image_name));
+
+    // The pulled artifact must be the same artifact: same manifest
+    // digest, same single layer, same layer bytes. Failure on any of
+    // these assertions means the native pull lost data on the way
+    // through `RemoteTransport` + `publish_artifact_atomic`.
+    let pulled = LocalArtifact::open_in_registry(receiver, image_name)?;
+    assert_eq!(pulled.manifest_digest(), outcome.manifest_digest);
+    let layers = pulled.layers()?;
+    assert_eq!(layers.len(), 1);
+    let pulled_bytes = pulled.get_blob(layers[0].digest().as_ref())?;
+    assert_eq!(pulled_bytes, expected_layer_bytes);
     Ok(())
 }
 

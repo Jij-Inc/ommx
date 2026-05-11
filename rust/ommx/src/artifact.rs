@@ -24,13 +24,15 @@ pub use media_types::OCI_IMAGE_MANIFEST_MEDIA_TYPE;
 use crate::v1;
 use anyhow::{bail, ensure, Context, Result};
 use ocipkg::{
-    image::{Image, OciArchive, OciArchiveBuilder, OciArtifact, OciDir, OciDirBuilder},
+    image::{Image, OciArchive, OciArtifact, OciDir, OciDirBuilder},
     oci_spec::image::{Descriptor, ImageManifest, MediaType},
     Digest, ImageName,
 };
 
 #[cfg(feature = "remote-artifact")]
-use ocipkg::image::{Remote, RemoteBuilder};
+use crate::artifact::remote_transport::RemoteTransport;
+#[cfg(feature = "remote-artifact")]
+use oci_client::RegistryOperation;
 use prost::Message;
 use std::{env, path::PathBuf, sync::OnceLock};
 use std::{
@@ -122,19 +124,23 @@ pub fn ghcr(org: &str, repo: &str, name: &str, tag: &str) -> Result<ImageName> {
     ))
 }
 
+/// Pull only the manifest for `image_name` from its remote registry,
+/// without populating the v3 SQLite Local Registry. Used by CLI
+/// `ommx inspect <remote-ref>` so the user can read what is on the
+/// other side of a ref without committing to a full pull. For the
+/// full pull-into-registry flow use [`local_registry::pull_image`].
+///
+/// Credentials are resolved by [`remote_transport::RemoteTransport`]'s
+/// three-tier chain (env override → `~/.docker/config.json` →
+/// anonymous), matching every other network call on the SDK.
 #[cfg(feature = "remote-artifact")]
-fn auth_from_env() -> Result<(String, String, String)> {
-    if let (Ok(domain), Ok(username), Ok(password)) = (
-        env::var("OMMX_BASIC_AUTH_DOMAIN"),
-        env::var("OMMX_BASIC_AUTH_USERNAME"),
-        env::var("OMMX_BASIC_AUTH_PASSWORD"),
-    ) {
-        tracing::info!(
-            "Detect OMMX_BASIC_AUTH_DOMAIN, OMMX_BASIC_AUTH_USERNAME, OMMX_BASIC_AUTH_PASSWORD for authentication."
-        );
-        return Ok((domain, username, password));
-    }
-    bail!("No authentication information found in environment variables");
+pub fn fetch_remote_manifest(image_name: &ImageName) -> Result<ImageManifest> {
+    let transport = RemoteTransport::new(image_name)?;
+    transport.auth_for(image_name, RegistryOperation::Pull)?;
+    let (manifest_bytes, _digest) =
+        transport.pull_manifest_raw(image_name, &[OCI_IMAGE_MANIFEST_MEDIA_TYPE])?;
+    serde_json::from_slice(&manifest_bytes)
+        .context("Failed to parse OCI image manifest from the remote registry")
 }
 
 /// Get all images stored in the local registry
@@ -171,24 +177,55 @@ impl Artifact<OciArchive> {
         Self::new(artifact)
     }
 
+    /// Push this archive to its OCI registry through the v3 native
+    /// transport. Reads manifest + config + every layer blob from
+    /// the archive once and uploads each via
+    /// [`remote_transport::RemoteTransport`]; the bytes never touch
+    /// the v3 SQLite Local Registry, so a push of an archive that
+    /// has not been imported is side-effect-free locally.
+    ///
+    /// Credentials are resolved by the three-tier chain (env →
+    /// `~/.docker/config.json` → anonymous). Blobs are pushed before
+    /// the manifest so a partial failure leaves the registry without
+    /// a tag pointing at incomplete data; OCI cross-blob-mount /
+    /// "blob already exists" optimisation is a follow-up refinement.
     #[cfg(feature = "remote-artifact")]
     #[tracing::instrument(skip_all, fields(artifact_storage = "oci_archive"))]
-    pub fn push(&mut self) -> Result<Artifact<Remote>> {
-        let name = self.get_name()?;
-        tracing::info!("Pushing: {name}");
-        let mut remote = RemoteBuilder::new(name)?;
-        if let Ok((domain, username, password)) = auth_from_env() {
-            remote.add_basic_auth(&domain, &username, &password);
-        }
-        let out = ocipkg::image::copy(self.0.deref_mut(), remote)?;
-        Ok(Artifact(OciArtifact::new(out)))
-    }
-
-    #[tracing::instrument(skip_all, fields(artifact_storage = "oci_archive"))]
-    pub fn load(&mut self) -> Result<()> {
+    pub fn push(&mut self) -> Result<()> {
         let image_name = self.get_name()?;
-        let path = get_image_dir(&image_name);
-        self.load_to(&path)
+        let manifest = self.get_manifest()?;
+        let manifest_digest = sha256_digest_of_manifest(&manifest)?;
+        let manifest_bytes = serde_json::to_vec(&manifest)
+            .context("Failed to re-serialise OCI image manifest from the archive")?;
+
+        tracing::info!("Pushing {image_name} from archive");
+        let transport = RemoteTransport::new(&image_name)?;
+        transport.auth_for(&image_name, RegistryOperation::Push)?;
+
+        let descriptors: Vec<Descriptor> = std::iter::once(manifest.config().clone())
+            .chain(manifest.layers().iter().cloned())
+            .collect();
+        for descriptor in &descriptors {
+            let digest = descriptor.digest().to_string();
+            let parsed_digest: Digest = digest.parse().with_context(|| {
+                format!("Invalid blob digest {digest} in manifest for {image_name}")
+            })?;
+            let bytes = self.0.get_blob(&parsed_digest)?;
+            tracing::debug!(size = bytes.len(), "Pushing blob {digest} of {image_name}");
+            transport.push_blob(&image_name, &digest, bytes)?;
+        }
+
+        let content_type = manifest
+            .media_type()
+            .as_ref()
+            .map(MediaType::to_string)
+            .unwrap_or_else(|| OCI_IMAGE_MANIFEST_MEDIA_TYPE.to_string());
+        tracing::info!(
+            "Publishing manifest {manifest_digest} ({content_type}, {} bytes) to {image_name}",
+            manifest_bytes.len(),
+        );
+        transport.push_manifest_bytes(&image_name, manifest_bytes, &content_type)?;
+        Ok(())
     }
 
     /// Load this archive into an OCI Image Layout at the explicit
@@ -213,76 +250,29 @@ impl Artifact<OciArchive> {
     }
 }
 
+/// SHA-256 digest of the manifest as we re-serialise it for push. We
+/// serialise once and hash that exact byte sequence so the digest
+/// reported in tracing matches what `RemoteTransport::push_manifest_bytes`
+/// uploads.
+#[cfg(feature = "remote-artifact")]
+fn sha256_digest_of_manifest(manifest: &ImageManifest) -> Result<String> {
+    let bytes = serde_json::to_vec(manifest)
+        .context("Failed to serialise OCI image manifest for digest computation")?;
+    Ok(sha256_digest(&bytes))
+}
+
 impl Artifact<OciDir> {
+    /// Open an existing OCI Image Layout directory for read. v3 has
+    /// no push / save / load_to surface on `OciDir`: archive / dir
+    /// inputs flow through [`local_registry::import_oci_dir`] /
+    /// [`local_registry::import_oci_archive`] into the SQLite Local
+    /// Registry and are pushed via [`LocalArtifact::push`]. Direct
+    /// `OciDir` reads remain available so callers that already hold
+    /// an OCI Image Layout (e.g. `oras` exports) can inspect it
+    /// without importing.
     pub fn from_oci_dir(path: &Path) -> Result<Self> {
         let artifact = OciArtifact::from_oci_dir(path)?;
         Self::new(artifact)
-    }
-
-    #[cfg(feature = "remote-artifact")]
-    #[tracing::instrument(skip_all, fields(artifact_storage = "oci_dir"))]
-    pub fn push(&mut self) -> Result<Artifact<Remote>> {
-        let name = self.get_name()?;
-        tracing::info!("Pushing: {name}");
-        let mut remote = RemoteBuilder::new(name)?;
-        if let Ok((domain, username, password)) = auth_from_env() {
-            remote.add_basic_auth(&domain, &username, &password);
-        }
-        let out = ocipkg::image::copy(self.0.deref_mut(), remote)?;
-        Ok(Artifact(OciArtifact::new(out)))
-    }
-
-    #[tracing::instrument(skip_all, fields(artifact_storage = "oci_dir"))]
-    pub fn save(&mut self, output: &Path) -> Result<()> {
-        if output.exists() {
-            bail!("Output file already exists: {}", output.display());
-        }
-        let builder = if let Ok(name) = self.get_name() {
-            OciArchiveBuilder::new(output.to_path_buf(), name)?
-        } else {
-            OciArchiveBuilder::new_unnamed(output.to_path_buf())?
-        };
-        ocipkg::image::copy(self.0.deref_mut(), builder)?;
-        Ok(())
-    }
-}
-
-#[cfg(feature = "remote-artifact")]
-impl Artifact<Remote> {
-    pub fn from_remote(image_name: ImageName) -> Result<Self> {
-        let artifact = OciArtifact::from_remote(image_name)?;
-        Self::new(artifact)
-    }
-
-    #[tracing::instrument(skip_all, fields(artifact_storage = "remote"))]
-    pub fn pull(&mut self) -> Result<Artifact<OciDir>> {
-        let image_name = self.get_name()?;
-        let path = get_image_dir(&image_name);
-        self.pull_to(&path)
-    }
-
-    /// Pull this remote artifact into an OCI Image Layout at the
-    /// explicit `target_path`. Used by the v3 Local Registry pull
-    /// path with a caller-owned tempdir under the registry root so
-    /// the staged layout lives on the same filesystem as the
-    /// `FileBlobStore`; the tempdir is dropped once the import has
-    /// copied the bytes into the SQLite + `FileBlobStore` registry.
-    #[tracing::instrument(skip_all, fields(artifact_storage = "remote", target_path = %target_path.display()))]
-    pub fn pull_to(&mut self, target_path: &Path) -> Result<Artifact<OciDir>> {
-        let image_name = self.get_name()?;
-        if target_path.exists() {
-            tracing::trace!("Already exists at: {}", target_path.display());
-            return Ok(Artifact(OciArtifact::from_oci_dir(target_path)?));
-        }
-        tracing::info!("Pulling {image_name} to {}", target_path.display());
-        if let Ok((domain, username, password)) = auth_from_env() {
-            self.0.add_basic_auth(&domain, &username, &password);
-        }
-        let out = ocipkg::image::copy(
-            self.0.deref_mut(),
-            OciDirBuilder::new(target_path.to_path_buf(), image_name)?,
-        )?;
-        Ok(Artifact(OciArtifact::new(out)))
     }
 }
 

@@ -22,6 +22,7 @@ default = ["remote-artifact"]
 remote-artifact = [
     "ocipkg/remote",
     "dep:docker_credential",
+    "dep:futures-util",
     "dep:http",
     "dep:oci-client",
     "dep:tokio",
@@ -43,6 +44,7 @@ directories.workspace = true
 docker_credential = { workspace = true, optional = true }
 flate2.workspace = true
 fnv.workspace = true
+futures-util = { workspace = true, optional = true }
 getset.workspace = true
 http = { workspace = true, optional = true }
 indexmap.workspace = true

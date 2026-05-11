@@ -1,6 +1,10 @@
 use anyhow::Result;
 use ocipkg::ImageName;
-use ommx::artifact::{media_types, Artifact};
+use ommx::artifact::{
+    local_registry::{pull_image, LocalRegistry},
+    media_types, LocalArtifact,
+};
+use std::sync::Arc;
 
 fn main() -> Result<()> {
     tracing_subscriber::fmt()
@@ -13,13 +17,17 @@ fn main() -> Result<()> {
 
     let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")?;
 
-    // Pull the artifact from remote registry
-    let mut remote = Artifact::from_remote(image_name)?;
-    let mut local = remote.pull()?;
+    // Pull the artifact from the remote registry into the v3 SQLite
+    // Local Registry, then open it for read by ref.
+    let registry = Arc::new(LocalRegistry::open_default()?);
+    pull_image(&registry, &image_name)?;
+    let local = LocalArtifact::open_in_registry(registry, image_name)?;
 
-    // Load the instance message from the artifact
-    for desc in local.get_layer_descriptors(&media_types::v1_instance())? {
-        println!("{}", desc.digest());
+    // Print the digest of each instance layer.
+    for desc in local.layers()? {
+        if desc.media_type() == &media_types::v1_instance() {
+            println!("{}", desc.digest());
+        }
     }
     Ok(())
 }
