@@ -214,8 +214,9 @@ mod with_parameters_tests {
             .build()
             .unwrap();
 
-        let mut params = crate::v1::Parameters::default();
-        params.entries = std::collections::HashMap::from([(100, 1.0)]);
+        let params = crate::v1::Parameters {
+            entries: std::collections::HashMap::from([(100, 1.0)]),
+        };
         let instance = parametric.with_parameters(params).unwrap();
 
         let dep_rhs = instance
@@ -269,8 +270,9 @@ mod with_parameters_tests {
             .build()
             .unwrap();
 
-        let mut params = crate::v1::Parameters::default();
-        params.entries = std::collections::HashMap::from([(100, 1.0)]);
+        let params = crate::v1::Parameters {
+            entries: std::collections::HashMap::from([(100, 1.0)]),
+        };
         let instance = parametric.with_parameters(params).unwrap();
 
         let (rc, _r) = instance
@@ -323,8 +325,9 @@ mod with_parameters_tests {
             .build()
             .unwrap();
 
-        let mut params = crate::v1::Parameters::default();
-        params.entries = std::collections::HashMap::from([(100, 1.0)]);
+        let params = crate::v1::Parameters {
+            entries: std::collections::HashMap::from([(100, 1.0)]),
+        };
         let instance = parametric.with_parameters(params).unwrap();
 
         let (ic, _r) = instance
@@ -373,8 +376,9 @@ mod with_parameters_tests {
             .build()
             .unwrap();
 
-        let mut params = crate::v1::Parameters::default();
-        params.entries = std::collections::HashMap::from([(100, 1.0)]);
+        let params = crate::v1::Parameters {
+            entries: std::collections::HashMap::from([(100, 1.0)]),
+        };
         let instance = parametric.with_parameters(params).unwrap();
 
         // After substitution, the indicator body must no longer reference

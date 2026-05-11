@@ -12,6 +12,17 @@ use crate::{
     VariableID,
 };
 
+type ConvertedDecisionVariables = (
+    BTreeMap<VariableID, DecisionVariable>,
+    Vec<(VariableID, String)>,
+    HashMap<ColumnName, VariableID>,
+);
+
+type ConvertedConstraints = (
+    BTreeMap<ConstraintID, Constraint>,
+    Vec<(ConstraintID, String)>,
+);
+
 pub fn convert(mps: Mps) -> crate::Result<Instance> {
     let (decision_variables, var_names, name_id_map) = convert_dvars(&mps);
     let objective = convert_objective(&mps, &name_id_map)?;
@@ -46,13 +57,7 @@ fn convert_description(mps: &Mps) -> Option<v1::instance::Description> {
     }
 }
 
-fn convert_dvars(
-    mps: &Mps,
-) -> (
-    BTreeMap<VariableID, DecisionVariable>,
-    Vec<(VariableID, String)>,
-    HashMap<ColumnName, VariableID>,
-) {
+fn convert_dvars(mps: &Mps) -> ConvertedDecisionVariables {
     let Mps {
         vars,
         u,
@@ -187,10 +192,7 @@ fn convert_objective(
 fn convert_constraints(
     mps: &Mps,
     name_id_map: &HashMap<ColumnName, VariableID>,
-) -> crate::Result<(
-    BTreeMap<ConstraintID, Constraint>,
-    Vec<(ConstraintID, String)>,
-)> {
+) -> crate::Result<ConvertedConstraints> {
     let Mps {
         a,
         b,

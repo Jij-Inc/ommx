@@ -187,7 +187,7 @@ fn imports_oci_dir_into_sqlite_registry_preserving_image_manifest() -> Result<()
         Some(imported.manifest_digest.clone())
     );
     assert!(blob_store.exists(&imported.manifest_digest)?);
-    assert!(blob_store.exists(&layer.digest().to_string())?);
+    assert!(blob_store.exists(layer.digest().as_ref())?);
 
     // Strict identity: the manifest bytes the v3 BlobStore returns must
     // be exactly the bytes that lived in the legacy OCI dir. Digest
@@ -227,7 +227,7 @@ fn imports_oci_dir_into_sqlite_registry_preserving_image_manifest() -> Result<()
         OCI_IMAGE_MANIFEST_MEDIA_TYPE
     );
     assert_eq!(artifact.layers()?, vec![layer.clone()]);
-    assert_eq!(artifact.get_blob(&layer.digest().to_string())?, b"instance");
+    assert_eq!(artifact.get_blob(layer.digest().as_ref())?, b"instance");
     Ok(())
 }
 
@@ -430,7 +430,7 @@ fn local_registry_builds_native_image_manifest_with_artifact_type() -> Result<()
     assert_eq!(layers.len(), 1);
     assert_eq!(layers[0].digest, layer.digest().to_string());
     assert_eq!(layers[0].media_type, media_types::V1_INSTANCE_MEDIA_TYPE);
-    assert_eq!(artifact.get_blob(&layer.digest().to_string())?, b"instance");
+    assert_eq!(artifact.get_blob(layer.digest().as_ref())?, b"instance");
 
     // Empty config blob must be readable from the registry and persisted
     // with `BLOB_KIND_CONFIG`, matching the OCI dir import path. A
@@ -465,7 +465,7 @@ fn local_registry_build_keep_existing_skips_conflicting_manifest() -> Result<()>
         registry.resolve_image_name(&image_name)?,
         Some(first.manifest_digest().to_string())
     );
-    assert!(!registry.blobs().exists(&second_blob.digest().to_string())?);
+    assert!(!registry.blobs().exists(second_blob.digest().as_ref())?);
     Ok(())
 }
 
@@ -676,7 +676,7 @@ fn imports_legacy_v2_oci_dir_with_ommx_config_blob() -> Result<()> {
 
     assert_eq!(imported.image_name, Some(image_name.clone()));
     assert!(blob_store.exists(&imported.manifest_digest)?);
-    assert!(blob_store.exists(&layer_descriptor.digest().to_string())?);
+    assert!(blob_store.exists(layer_descriptor.digest().as_ref())?);
 
     // OMMX-specific config blob is preserved with `BLOB_KIND_CONFIG`.
     let config_digest_str = config_descriptor.digest().to_string();

@@ -246,10 +246,10 @@ impl AttachedSos1Constraint {
     }
 }
 
-fn lookup_sos1<'a>(
-    inst: &'a ommx::Instance,
+fn lookup_sos1(
+    inst: &ommx::Instance,
     id: ommx::Sos1ConstraintID,
-) -> PyResult<&'a ommx::Sos1Constraint> {
+) -> PyResult<&ommx::Sos1Constraint> {
     inst.sos1_constraints()
         .get(&id)
         .or_else(|| inst.removed_sos1_constraints().get(&id).map(|(c, _)| c))
@@ -261,10 +261,10 @@ fn lookup_sos1<'a>(
         })
 }
 
-fn lookup_sos1_parametric<'a>(
-    inst: &'a ommx::ParametricInstance,
+fn lookup_sos1_parametric(
+    inst: &ommx::ParametricInstance,
     id: ommx::Sos1ConstraintID,
-) -> PyResult<&'a ommx::Sos1Constraint> {
+) -> PyResult<&ommx::Sos1Constraint> {
     inst.sos1_constraints()
         .get(&id)
         .or_else(|| inst.removed_sos1_constraints().get(&id).map(|(c, _)| c))

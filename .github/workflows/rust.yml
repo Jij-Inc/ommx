@@ -35,7 +35,7 @@ jobs:
         with:
           reporter: "github-pr-check"
           github_token: ${{ github.token }}
-          clippy_flags: -- -Dwarnings
+          clippy_flags: --all-targets -- -Dwarnings
 
   semver:
     runs-on: ubuntu-latest
