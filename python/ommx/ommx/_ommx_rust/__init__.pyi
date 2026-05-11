@@ -295,29 +295,6 @@ class ArtifactBuilder:
     ```
     """
     @staticmethod
-    def new_archive_unnamed(
-        path: builtins.str | os.PathLike | pathlib.Path,
-    ) -> ArtifactBuilder:
-        r"""
-        Create a new artifact archive with an unnamed image name.
-
-        This cannot be loaded into local registry nor pushed to remote registry.
-
-        ```python
-        >>> from ommx.testing import SingleFeasibleLPGenerator, DataType
-        >>> generator = SingleFeasibleLPGenerator(3, DataType.INT)
-        >>> instance = generator.get_v1_instance()
-        >>> import uuid
-        >>> filename = f"data/single_feasible_lp.ommx.{uuid.uuid4()}"
-        >>> builder = ArtifactBuilder.new_archive_unnamed(filename)
-        >>> _desc = builder.add_instance(instance)
-        >>> artifact = builder.build()
-        >>> print(artifact.image_name)
-        None
-
-        ```
-        """
-    @staticmethod
     def new_archive(
         path: builtins.str | os.PathLike | pathlib.Path, image_name: builtins.str
     ) -> ArtifactBuilder:

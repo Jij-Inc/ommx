@@ -1,8 +1,7 @@
 use anyhow::{bail, Result};
-use ocipkg::image::{Image, OciArchive};
-use ommx::artifact::Artifact;
+use ommx::artifact::OmmxArchive;
 use pyo3::{prelude::*, types::PyBytes};
-use std::{collections::HashMap, path::PathBuf, sync::Mutex};
+use std::{collections::HashMap, path::PathBuf};
 
 use crate::PyDescriptor;
 
@@ -11,48 +10,36 @@ use crate::PyDescriptor;
 // ---------------------------------------------------------------------------
 
 enum ArtifactInner {
-    // The ocipkg archive reader carries mutable per-handle state (file
-    // cursor for the tar/zstd reader), which makes it !Sync. Wrap in
-    // Mutex so the enclosing #[pyclass] can satisfy the gil_used = false
-    // Sync requirement. The Mutex is uncontended in practice because
-    // PyArtifact methods take &mut self.
-    Archive(Mutex<Artifact<OciArchive>>),
-    // LocalArtifact already holds an Arc<LocalRegistry> whose internal
+    // `OmmxArchive` wraps a `LocalArtifact` over a tempdir-backed
+    // `LocalRegistry`. Sync (the underlying SQLite handle is). The
+    // tempdir is dropped when the variant is dropped — at that point
+    // the temp SQLite registry's files disappear.
+    Archive(OmmxArchive),
+    // LocalArtifact holds an Arc<LocalRegistry> whose internal
     // SqliteIndexStore wraps the Connection in a Mutex, so it is Sync
     // by itself. No outer Mutex / Box needed here.
     Local(ommx::artifact::LocalArtifact),
 }
 
 impl ArtifactInner {
-    fn image_name(&mut self) -> Option<String> {
+    fn image_name(&self) -> Option<String> {
         match self {
-            ArtifactInner::Archive(a) => {
-                a.get_mut().unwrap().get_name().map(|n| n.to_string()).ok()
-            }
+            ArtifactInner::Archive(a) => Some(a.image_name().to_string()),
             ArtifactInner::Local(local) => Some(local.image_name().to_string()),
         }
     }
 
-    fn annotations(&mut self) -> Result<HashMap<String, String>> {
+    fn annotations(&self) -> Result<HashMap<String, String>> {
         match self {
-            ArtifactInner::Archive(a) => {
-                let manifest = a.get_mut().unwrap().get_manifest()?;
-                Ok(manifest.annotations().as_ref().cloned().unwrap_or_default())
-            }
+            ArtifactInner::Archive(a) => a.annotations(),
             ArtifactInner::Local(local) => local.annotations(),
         }
     }
 
-    fn layers(&mut self) -> Result<Vec<PyDescriptor>> {
+    fn layers(&self) -> Result<Vec<PyDescriptor>> {
         match self {
             ArtifactInner::Archive(a) => {
-                let manifest = a.get_mut().unwrap().get_manifest()?;
-                Ok(manifest
-                    .layers()
-                    .iter()
-                    .cloned()
-                    .map(PyDescriptor::from)
-                    .collect())
+                Ok(a.layers()?.into_iter().map(PyDescriptor::from).collect())
             }
             ArtifactInner::Local(local) => Ok(local
                 .layers()?
@@ -62,24 +49,17 @@ impl ArtifactInner {
         }
     }
 
-    fn get_blob(&mut self, digest: &str) -> Result<Vec<u8>> {
+    fn get_blob(&self, digest: &str) -> Result<Vec<u8>> {
         match self {
-            ArtifactInner::Archive(a) => {
-                let digest = digest.parse()?;
-                let blob = a.get_mut().unwrap().get_blob(&digest)?;
-                Ok(blob.to_vec())
-            }
+            ArtifactInner::Archive(a) => a.get_blob(digest),
             ArtifactInner::Local(local) => local.get_blob(digest),
         }
     }
 
     #[cfg(feature = "remote-artifact")]
-    fn push(&mut self) -> Result<()> {
+    fn push(&self) -> Result<()> {
         match self {
-            ArtifactInner::Archive(a) => {
-                let _remote = a.get_mut().unwrap().push()?;
-                Ok(())
-            }
+            ArtifactInner::Archive(a) => a.push(),
             ArtifactInner::Local(local) => local.push(),
         }
     }
@@ -141,8 +121,8 @@ impl PyArtifact {
     pub fn load_archive(py: Python<'_>, path: PathBuf) -> Result<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
         if path.is_file() {
-            let artifact = Artifact::from_oci_archive(&path)?;
-            Ok(Self(ArtifactInner::Archive(Mutex::new(artifact))))
+            let archive = OmmxArchive::open(&path)?;
+            Ok(Self(ArtifactInner::Archive(archive)))
         } else if path.is_dir() {
             // Validate the ref annotation BEFORE running `import_oci_dir`
             // so an unnamed OCI Image Layout (no
@@ -639,7 +619,7 @@ impl BuilderInner {
                 let builder = b
                     .as_mut()
                     .ok_or_else(|| anyhow::anyhow!("Already built artifact"))?;
-                builder.add_annotation(key.into(), value.into());
+                builder.add_annotation(key, value);
             }
             BuilderInner::Local(ref mut b) => {
                 let builder = b
@@ -657,8 +637,8 @@ impl BuilderInner {
                 let builder = b
                     .take()
                     .ok_or_else(|| anyhow::anyhow!("Already built artifact"))?;
-                let artifact = (*builder).build()?;
-                Ok(ArtifactInner::Archive(Mutex::new(artifact)))
+                let archive = (*builder).build()?;
+                Ok(ArtifactInner::Archive(archive))
             }
             BuilderInner::Local(ref mut b) => {
                 let builder = b
@@ -692,29 +672,6 @@ pub struct PyArtifactBuilder(BuilderInner);
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl PyArtifactBuilder {
-    /// Create a new artifact archive with an unnamed image name.
-    ///
-    /// This cannot be loaded into local registry nor pushed to remote registry.
-    ///
-    /// ```python
-    /// >>> from ommx.testing import SingleFeasibleLPGenerator, DataType
-    /// >>> generator = SingleFeasibleLPGenerator(3, DataType.INT)
-    /// >>> instance = generator.get_v1_instance()
-    /// >>> import uuid
-    /// >>> filename = f"data/single_feasible_lp.ommx.{uuid.uuid4()}"
-    /// >>> builder = ArtifactBuilder.new_archive_unnamed(filename)
-    /// >>> _desc = builder.add_instance(instance)
-    /// >>> artifact = builder.build()
-    /// >>> print(artifact.image_name)
-    /// None
-    ///
-    /// ```
-    #[staticmethod]
-    pub fn new_archive_unnamed(path: PathBuf) -> Result<Self> {
-        let builder = ommx::artifact::ArchiveArtifactBuilder::new_archive_unnamed(path)?;
-        Ok(Self(BuilderInner::Archive(Some(Box::new(builder)))))
-    }
-
     /// Create a new artifact archive with a named image name.
     #[staticmethod]
     pub fn new_archive(path: PathBuf, image_name: &str) -> Result<Self> {

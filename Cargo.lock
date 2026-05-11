@@ -2507,6 +2507,7 @@ dependencies = [
  "sha2",
  "similar 3.1.0",
  "smallvec",
+ "tar",
  "tempfile",
  "testcontainers",
  "testcontainers-modules",

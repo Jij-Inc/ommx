@@ -1107,53 +1107,6 @@
               "deprecated": null
             },
             {
-              "name": "new_archive_unnamed",
-              "doc": "Create a new artifact archive with an unnamed image name.\n\nThis cannot be loaded into local registry nor pushed to remote registry.\n\n```python\n>>> from ommx.testing import SingleFeasibleLPGenerator, DataType\n>>> generator = SingleFeasibleLPGenerator(3, DataType.INT)\n>>> instance = generator.get_v1_instance()\n>>> import uuid\n>>> filename = f\"data/single_feasible_lp.ommx.{uuid.uuid4()}\"\n>>> builder = ArtifactBuilder.new_archive_unnamed(filename)\n>>> _desc = builder.add_instance(instance)\n>>> artifact = builder.build()\n>>> print(artifact.image_name)\nNone\n\n```",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "path",
-                      "type_": {
-                        "display": "str | PathLike | Path",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "str",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "PathLike",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Path",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "ArtifactBuilder",
-                    "link_target": {
-                      "fqn": "ommx.artifact.ArtifactBuilder",
-                      "doc_module": "ommx.artifact",
-                      "kind": "Class",
-                      "attribute": null
-                    },
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
               "name": "temp",
               "doc": "Create a new artifact as a temporary file.\n\nNote that this is insecure and should only be used for testing.\n\n```python\n>>> builder = ArtifactBuilder.temp()\n>>> artifact = builder.build()\n>>> print(artifact.image_name)\nttl.sh/...-...-...-...-...:1h\n\n```",
               "signatures": [

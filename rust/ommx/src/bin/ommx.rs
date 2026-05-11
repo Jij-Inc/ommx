@@ -5,9 +5,10 @@ use ocipkg::{oci_spec::image::ImageManifest, ImageName};
 use ommx::artifact::{
     fetch_remote_manifest, get_image_dir,
     local_registry::{
-        import_oci_archive, import_oci_dir, pull_image, LocalRegistry, RefConflictPolicy,
+        import_oci_archive, import_oci_dir, oci_dir_ref, pull_image, LocalRegistry,
+        RefConflictPolicy,
     },
-    Artifact, LocalArtifact,
+    LocalArtifact, OmmxArchive,
 };
 use std::path::{Path, PathBuf};
 
@@ -132,9 +133,36 @@ impl ImageNameOrPath {
 
     fn get_manifest(&self) -> Result<ImageManifest> {
         let manifest = match self {
-            ImageNameOrPath::OciDir(path) => Artifact::from_oci_dir(path)?.get_manifest()?,
+            // OCI Image Layout directory inspect: read the manifest
+            // descriptor's digest out of `index.json` (via the existing
+            // `oci_dir_ref`) and load the manifest blob directly from
+            // disk. Avoids importing into SQLite for a read-only op.
+            ImageNameOrPath::OciDir(path) => {
+                let dir_ref = oci_dir_ref(path)?;
+                let manifest_blob_path = path
+                    .join("blobs")
+                    .join("sha256")
+                    .join(dir_ref.manifest_digest.trim_start_matches("sha256:"));
+                let bytes = std::fs::read(&manifest_blob_path).with_context(|| {
+                    format!(
+                        "Failed to read manifest blob at {}",
+                        manifest_blob_path.display()
+                    )
+                })?;
+                serde_json::from_slice(&bytes).with_context(|| {
+                    format!(
+                        "Failed to parse OCI image manifest at {}",
+                        manifest_blob_path.display()
+                    )
+                })?
+            }
+            // OCI archive inspect routes through `OmmxArchive::open`,
+            // which imports the archive into a private tempdir-backed
+            // registry. The tempdir is dropped when the `OmmxArchive`
+            // value is dropped (end of this match arm).
             ImageNameOrPath::OciArchive(path) => {
-                Artifact::from_oci_archive(path)?.get_manifest()?
+                let archive = OmmxArchive::open(path)?;
+                archive.get_manifest()?.clone().into_inner()
             }
             // `parse` only routes a ref to `Local` when SQLite resolves
             // it, so `LocalArtifact::open` should always succeed here;
@@ -223,14 +251,14 @@ fn main() -> Result<()> {
                  then `ommx push <image_name>`.",
                 path.display(),
             ),
-            // `Artifact<OciArchive>::push` reads the archive in place
-            // and uploads through the v3 native transport (the empty
-            // config blob + every layer, then the manifest). Bytes never
-            // touch the SQLite Local Registry, so an archive push has
-            // no local side effect.
+            // `OmmxArchive::push` reads the archive (which has been
+            // imported into a temp registry on open) and uploads
+            // through the v3 native transport. The temp registry is
+            // dropped at the end of this arm, so an archive push has
+            // no persistent local side effect.
             ImageNameOrPath::OciArchive(path) => {
-                let mut artifact = Artifact::from_oci_archive(&path)?;
-                artifact.push()?;
+                let archive = OmmxArchive::open(&path)?;
+                archive.push()?;
             }
             // CLI and Python `Artifact.push()` share the same native
             // code path: `LocalArtifact::push()`. `parse` only routes

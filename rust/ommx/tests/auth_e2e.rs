@@ -29,7 +29,7 @@ use anyhow::Result;
 use ocipkg::ImageName;
 use ommx::artifact::{
     local_registry::{pull_image, LocalRegistry, RefConflictPolicy},
-    media_types, Artifact, LocalArtifact, LocalArtifactBuilder,
+    media_types, LocalArtifact, LocalArtifactBuilder, OmmxArchive,
 };
 use serial_test::serial;
 use std::collections::HashMap;
@@ -371,7 +371,7 @@ fn push_oci_archive_through_native_transport() -> Result<()> {
     let archive_path = archive_dir.path().join("artifact.ommx");
     local.save(&archive_path)?;
 
-    let mut archive = Artifact::from_oci_archive(&archive_path)?;
+    let archive = OmmxArchive::open(&archive_path)?;
     archive.push()
 }
 
