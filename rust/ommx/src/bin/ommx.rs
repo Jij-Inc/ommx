@@ -1,10 +1,12 @@
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 use colored::Colorize;
 use ocipkg::{oci_spec::image::ImageManifest, ImageName};
 use ommx::artifact::{
     get_image_dir,
-    local_registry::{LocalRegistry, RefConflictPolicy},
+    local_registry::{
+        import_oci_archive, import_oci_dir, pull_image, LocalRegistry, RefConflictPolicy,
+    },
     Artifact,
 };
 use std::path::{Path, PathBuf};
@@ -81,8 +83,11 @@ enum Command {
 
 #[derive(Subcommand)]
 enum ArtifactCommand {
-    /// Migrate legacy path/tag OCI directories into the v3 local registry
-    Migrate {
+    /// Import legacy path/tag OCI directories into the v3 local registry, preserving manifest digest.
+    ///
+    /// Reformatting an Image Manifest as an Artifact Manifest is a separate explicit operation
+    /// (`convert`, not yet exposed) that produces a new artifact under a new digest / new ref.
+    Import {
         /// Local registry root. Defaults to OMMX_LOCAL_REGISTRY_ROOT or the OS default data dir.
         #[clap(long)]
         root: Option<PathBuf>,
@@ -205,9 +210,15 @@ fn main() -> Result<()> {
         },
 
         Command::Pull { image_name } => {
+            // Route remote pull through `local_registry::pull_image` so the
+            // freshly pulled artifact lands in the v3 SQLite registry. The
+            // legacy OCI dir is still produced as the ocipkg-based stage 1
+            // (see `import::remote::pull_image`); a follow-up PR replaces
+            // that stage with a native streaming pull and the call site
+            // here stays unchanged.
             let name = ImageName::parse(image_name)?;
-            let mut artifact = Artifact::from_remote(name)?;
-            artifact.pull()?;
+            let registry = std::sync::Arc::new(LocalRegistry::open_default()?);
+            pull_image(&registry, &name)?;
         }
 
         Command::Save { image_name, output } => {
@@ -218,8 +229,30 @@ fn main() -> Result<()> {
         }
 
         Command::Load { path } => {
-            let mut artifact = Artifact::from_oci_archive(path)?;
-            artifact.load()?;
+            // The CLI flag advertises "OCI archive or OCI directory", so
+            // dispatch on what the path actually is. Archives go through
+            // the ocipkg-based stage-1 pipeline in `import::archive`;
+            // directories use the native `import::oci_dir` path that
+            // dispatches on Image / Artifact Manifest. Using
+            // `fs::metadata` (rather than `Path::exists()` /
+            // `Path::is_dir()`) surfaces permission and IO errors with
+            // the path attached, and rejects special files (FIFO,
+            // socket, device) explicitly instead of sending them to the
+            // archive branch where they would fail with an opaque
+            // ocipkg / tar error.
+            let metadata = std::fs::metadata(path)
+                .with_context(|| format!("Failed to stat {}", path.display()))?;
+            let registry = std::sync::Arc::new(LocalRegistry::open_default()?);
+            if metadata.is_dir() {
+                import_oci_dir(registry.index(), registry.blobs(), path)?;
+            } else if metadata.is_file() {
+                import_oci_archive(&registry, path)?;
+            } else {
+                bail!(
+                    "Path is neither a directory nor a regular file: {}",
+                    path.display()
+                );
+            }
         }
 
         Command::ImageDirectory { image_name } => {
@@ -235,7 +268,7 @@ fn main() -> Result<()> {
         }
 
         Command::Artifact { command } => match command {
-            ArtifactCommand::Migrate { root, replace } => {
+            ArtifactCommand::Import { root, replace } => {
                 let registry = if let Some(root) = root {
                     LocalRegistry::open(root)?
                 } else {
@@ -246,9 +279,9 @@ fn main() -> Result<()> {
                 } else {
                     RefConflictPolicy::KeepExisting
                 };
-                let report = registry.migrate_legacy_layout_with_policy(policy)?;
+                let report = registry.import_legacy_layout_with_policy(policy)?;
                 println!(
-                    "Migrated {} legacy OCI dir(s) from {}",
+                    "Imported {} legacy OCI dir(s) into {}",
                     report.imported_dirs,
                     registry.root().display()
                 );

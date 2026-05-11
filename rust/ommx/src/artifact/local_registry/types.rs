@@ -7,6 +7,13 @@ pub const BLOB_KIND_CONFIG: &str = "config";
 pub const BLOB_KIND_LAYER: &str = "layer";
 pub const BLOB_KIND_MANIFEST: &str = "manifest";
 
+// Record structs reflect SQLite row shapes that are still evolving (we
+// expect to add columns such as a typed `oci_spec::image::Digest`,
+// per-row checksums, etc.). `#[non_exhaustive]` keeps in-crate struct
+// literal construction working while preventing downstream code from
+// breaking when we add a field.
+
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BlobRecord {
     pub digest: String,
@@ -17,6 +24,7 @@ pub struct BlobRecord {
     pub last_verified_at: Option<String>,
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ManifestRecord {
     pub digest: String,
@@ -27,6 +35,7 @@ pub struct ManifestRecord {
     pub created_at: String,
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RefRecord {
     pub name: String,
@@ -35,6 +44,7 @@ pub struct RefRecord {
     pub updated_at: String,
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LayerRecord {
     pub manifest_digest: String,

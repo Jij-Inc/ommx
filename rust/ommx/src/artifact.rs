@@ -4,11 +4,17 @@
 mod annotations;
 mod builder;
 mod config;
+pub mod digest;
 pub mod local_registry;
+mod manifest;
 pub mod media_types;
 pub use annotations::*;
 pub use builder::*;
 pub use config::*;
+pub use digest::sha256_digest;
+pub(crate) use manifest::{stable_json_bytes, StagedArtifactBlob};
+pub use manifest::{LocalArtifact, LocalArtifactBuilder, LocalManifest};
+pub use media_types::{OCI_ARTIFACT_MANIFEST_MEDIA_TYPE, OCI_IMAGE_MANIFEST_MEDIA_TYPE};
 
 use crate::v1;
 use anyhow::{bail, ensure, Context, Result};
@@ -111,23 +117,6 @@ pub fn ghcr(org: &str, repo: &str, name: &str, tag: &str) -> Result<ImageName> {
     ))
 }
 
-fn gather_oci_dirs(dir: &Path) -> Result<Vec<PathBuf>> {
-    let mut images = Vec::new();
-    for entry in std::fs::read_dir(dir)? {
-        let entry = entry?;
-        let path = entry.path();
-        if path.is_dir() {
-            if path.join("oci-layout").exists() {
-                images.push(path);
-            } else {
-                let mut sub_images = gather_oci_dirs(&path)?;
-                images.append(&mut sub_images)
-            }
-        }
-    }
-    Ok(images)
-}
-
 #[cfg(feature = "remote-artifact")]
 fn auth_from_env() -> Result<(String, String, String)> {
     if let (Ok(domain), Ok(username), Ok(password)) = (
@@ -146,14 +135,12 @@ fn auth_from_env() -> Result<(String, String, String)> {
 /// Get all images stored in the local registry
 pub fn get_images() -> Result<Vec<ImageName>> {
     let root = get_local_registry_root();
-    let dirs = gather_oci_dirs(root)?;
-    dirs.into_iter()
-        .map(|dir| {
-            let relative = dir
-                .strip_prefix(root)
-                .context("Failed to get relative path")?;
-            ImageName::from_path(relative)
-        })
+    let registry = local_registry::LocalRegistry::open(root)?;
+    registry
+        .index()
+        .list_refs(None)?
+        .into_iter()
+        .map(|reference| ImageName::parse(&format!("{}:{}", reference.name, reference.reference)))
         .collect()
 }
 
@@ -196,12 +183,26 @@ impl Artifact<OciArchive> {
     pub fn load(&mut self) -> Result<()> {
         let image_name = self.get_name()?;
         let path = get_image_dir(&image_name);
-        if path.exists() {
-            tracing::trace!("Already exists in local registry: {}", path.display());
+        self.load_to(&path)
+    }
+
+    /// Load this archive into a legacy OCI dir at the explicit
+    /// `target_path` instead of the global default from
+    /// [`get_image_dir`]. Used by the v3 Local Registry import path so
+    /// the legacy staging dir lands under the registry's actual root
+    /// when a non-default root is configured.
+    #[tracing::instrument(skip_all, fields(artifact_storage = "oci_archive", target_path = %target_path.display()))]
+    pub fn load_to(&mut self, target_path: &Path) -> Result<()> {
+        let image_name = self.get_name()?;
+        if target_path.exists() {
+            tracing::trace!("Already exists at: {}", target_path.display());
             return Ok(());
         }
-        tracing::info!("Loading to local registry: {image_name}");
-        ocipkg::image::copy(self.0.deref_mut(), OciDirBuilder::new(path, image_name)?)?;
+        tracing::info!("Loading {image_name} to {}", target_path.display());
+        ocipkg::image::copy(
+            self.0.deref_mut(),
+            OciDirBuilder::new(target_path.to_path_buf(), image_name)?,
+        )?;
         Ok(())
     }
 }
@@ -251,15 +252,29 @@ impl Artifact<Remote> {
     pub fn pull(&mut self) -> Result<Artifact<OciDir>> {
         let image_name = self.get_name()?;
         let path = get_image_dir(&image_name);
-        if path.exists() {
-            tracing::trace!("Already exists in local registry: {}", path.display());
-            return Ok(Artifact(OciArtifact::from_oci_dir(&path)?));
+        self.pull_to(&path)
+    }
+
+    /// Pull this remote artifact into a legacy OCI dir at the explicit
+    /// `target_path` instead of the global default from
+    /// [`get_image_dir`]. Used by the v3 Local Registry pull path so
+    /// the legacy staging dir lands under the registry's actual root
+    /// when a non-default root is configured.
+    #[tracing::instrument(skip_all, fields(artifact_storage = "remote", target_path = %target_path.display()))]
+    pub fn pull_to(&mut self, target_path: &Path) -> Result<Artifact<OciDir>> {
+        let image_name = self.get_name()?;
+        if target_path.exists() {
+            tracing::trace!("Already exists at: {}", target_path.display());
+            return Ok(Artifact(OciArtifact::from_oci_dir(target_path)?));
         }
-        tracing::info!("Pulling to local registry: {image_name}");
+        tracing::info!("Pulling {image_name} to {}", target_path.display());
         if let Ok((domain, username, password)) = auth_from_env() {
             self.0.add_basic_auth(&domain, &username, &password);
         }
-        let out = ocipkg::image::copy(self.0.deref_mut(), OciDirBuilder::new(path, image_name)?)?;
+        let out = ocipkg::image::copy(
+            self.0.deref_mut(),
+            OciDirBuilder::new(target_path.to_path_buf(), image_name)?,
+        )?;
         Ok(Artifact(OciArtifact::new(out)))
     }
 }

@@ -4,15 +4,38 @@ use super::{
 };
 use anyhow::{ensure, Context, Result};
 use ocipkg::ImageName;
-use rusqlite::{params, Connection, OptionalExtension};
-use std::{fs, path::Path, time::Duration};
+use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
+use std::{
+    fs,
+    path::Path,
+    sync::{Mutex, MutexGuard},
+    time::Duration,
+};
+
+/// Public outcome of [`SqliteIndexStore::publish_artifact_atomic`].
+///
+/// `ref_update` is `None` when the caller did not pass an `image_name`
+/// (digest-only publish, no SQLite ref written). Otherwise it carries
+/// the [`RefUpdate`] for that ref.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublishOutcome {
+    pub ref_update: Option<RefUpdate>,
+}
 
 const SCHEMA_VERSION: i64 = 1;
 const SQLITE_BUSY_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// SQLite-backed index store for the v3 Local Registry.
+///
+/// `rusqlite::Connection` is `Send` but `!Sync`, so it lives behind a
+/// [`Mutex`] here. That makes [`SqliteIndexStore`] (and the enclosing
+/// [`super::LocalRegistry`]) `Sync`, which lets a single registry be
+/// shared via [`std::sync::Arc`] across PyO3 wrappers without
+/// per-artifact connection duplication.
 #[derive(Debug)]
 pub struct SqliteIndexStore {
-    conn: Connection,
+    conn: Mutex<Connection>,
 }
 
 impl SqliteIndexStore {
@@ -26,7 +49,18 @@ impl SqliteIndexStore {
             .with_context(|| format!("Failed to open SQLite index {}", path.display()))?;
         conn.busy_timeout(SQLITE_BUSY_TIMEOUT)
             .context("Failed to configure SQLite busy timeout")?;
-        let store = Self { conn };
+        // Best-effort WAL: better concurrency for readers + writer,
+        // but the PRAGMA itself needs an exclusive lock at the moment
+        // of switching, which can fail with SQLITE_BUSY if another
+        // process is opening the same file at the same instant. Once
+        // *any* connection has set WAL on the file, every subsequent
+        // opener inherits it, so a lost race here is harmless.
+        // Correctness still comes from `BEGIN IMMEDIATE` +
+        // `busy_timeout`, not from the journal mode.
+        let _ = conn.pragma_update(None, "journal_mode", "WAL");
+        let store = Self {
+            conn: Mutex::new(conn),
+        };
         store.init_schema()?;
         Ok(store)
     }
@@ -35,8 +69,29 @@ impl SqliteIndexStore {
         Self::open(root.as_ref().join(SQLITE_INDEX_FILE_NAME))
     }
 
+    /// Acquire the connection guard. If the mutex was poisoned by an
+    /// earlier panic, fall back to the wrapped `Connection` (rusqlite's
+    /// internal state isn't damaged by Rust-level poisoning — the lock
+    /// flag just records that some other thread paniced while holding
+    /// it) and log a warning. Better than letting one rogue panic
+    /// abort every subsequent registry call, which matters for the
+    /// Python bindings where the same process may run many independent
+    /// operations.
+    fn lock(&self) -> MutexGuard<'_, Connection> {
+        match self.conn.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                tracing::warn!(
+                    "SqliteIndexStore connection mutex was poisoned by an earlier panic; \
+                     recovering the inner connection"
+                );
+                poisoned.into_inner()
+            }
+        }
+    }
+
     pub fn schema_version(&self) -> Result<i64> {
-        self.conn
+        self.lock()
             .query_row(
                 "SELECT version FROM ommx_local_registry_schema LIMIT 1",
                 [],
@@ -46,18 +101,36 @@ impl SqliteIndexStore {
     }
 
     pub fn put_blob(&self, record: &BlobRecord) -> Result<()> {
+        let conn = self.lock();
+        Self::put_blob_in(&conn, record)
+    }
+
+    /// Connection-scoped variant of [`Self::put_blob`]. Lets callers
+    /// compose blob inserts with manifest / ref inserts inside one
+    /// transaction (see [`Self::publish_artifact_atomic`]). The
+    /// existence-and-size guard is run inside the same `conn`/`tx`
+    /// so the check + insert are read-after-write consistent.
+    fn put_blob_in(conn: &Connection, record: &BlobRecord) -> Result<()> {
         validate_digest(&record.digest)?;
-        if let Some(existing) = self.get_blob(&record.digest)? {
+        if let Some(existing_size) = conn
+            .query_row(
+                "SELECT size FROM blobs WHERE digest = ?1",
+                params![record.digest],
+                |row| read_u64(row, 0),
+            )
+            .optional()
+            .context("Failed to query existing blob size")?
+        {
             ensure!(
-                existing.size == record.size,
+                existing_size == record.size,
                 "Blob size mismatch for digest {}: existing={}, new={}",
                 record.digest,
-                existing.size,
+                existing_size,
                 record.size
             );
         }
         let now = now_rfc3339();
-        self.conn.execute(
+        conn.execute(
             r#"
             INSERT INTO blobs (digest, size, media_type, storage_uri, kind, created_at, last_verified_at)
             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
@@ -83,7 +156,7 @@ impl SqliteIndexStore {
 
     pub fn get_blob(&self, digest: &str) -> Result<Option<BlobRecord>> {
         validate_digest(digest)?;
-        self.conn
+        self.lock()
             .query_row(
                 r#"
                 SELECT digest, size, media_type, storage_uri, kind, last_verified_at
@@ -107,9 +180,24 @@ impl SqliteIndexStore {
     }
 
     pub fn put_manifest(&self, record: &ManifestRecord, layers: &[LayerRecord]) -> Result<()> {
+        let mut conn = self.lock();
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        Self::put_manifest_in(&tx, record, layers)?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Connection-scoped variant of [`Self::put_manifest`]. Caller is
+    /// responsible for opening / committing the transaction so the
+    /// manifest insert can be composed with other writes (blob
+    /// records, ref publish) atomically.
+    fn put_manifest_in(
+        conn: &Connection,
+        record: &ManifestRecord,
+        layers: &[LayerRecord],
+    ) -> Result<()> {
         validate_digest(&record.digest)?;
-        let tx = self.conn.unchecked_transaction()?;
-        tx.execute(
+        conn.execute(
             r#"
             INSERT INTO manifests (digest, media_type, size, subject_digest, annotations_json, created_at)
             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
@@ -128,7 +216,7 @@ impl SqliteIndexStore {
                 record.created_at,
             ],
         )?;
-        tx.execute(
+        conn.execute(
             "DELETE FROM manifest_layers WHERE manifest_digest = ?1",
             params![record.digest],
         )?;
@@ -140,7 +228,7 @@ impl SqliteIndexStore {
                 record.digest
             );
             validate_digest(&layer.digest)?;
-            tx.execute(
+            conn.execute(
                 r#"
                 INSERT INTO manifest_layers
                     (manifest_digest, position, digest, media_type, size, annotations_json)
@@ -156,13 +244,12 @@ impl SqliteIndexStore {
                 ],
             )?;
         }
-        tx.commit()?;
         Ok(())
     }
 
     pub fn get_manifest(&self, digest: &str) -> Result<Option<ManifestRecord>> {
         validate_digest(digest)?;
-        self.conn
+        self.lock()
             .query_row(
                 r#"
                 SELECT digest, media_type, size, subject_digest, annotations_json, created_at
@@ -187,7 +274,8 @@ impl SqliteIndexStore {
 
     pub fn get_layers(&self, manifest_digest: &str) -> Result<Vec<LayerRecord>> {
         validate_digest(manifest_digest)?;
-        let mut stmt = self.conn.prepare(
+        let conn = self.lock();
+        let mut stmt = conn.prepare(
             r#"
             SELECT manifest_digest, position, digest, media_type, size, annotations_json
             FROM manifest_layers
@@ -213,8 +301,18 @@ impl SqliteIndexStore {
     }
 
     pub fn put_ref(&self, name: &str, reference: &str, manifest_digest: &str) -> Result<()> {
+        let conn = self.lock();
+        Self::put_ref_in(&conn, name, reference, manifest_digest)
+    }
+
+    fn put_ref_in(
+        conn: &Connection,
+        name: &str,
+        reference: &str,
+        manifest_digest: &str,
+    ) -> Result<()> {
         validate_digest(manifest_digest)?;
-        self.conn.execute(
+        conn.execute(
             r#"
             INSERT INTO refs (name, reference, manifest_digest, updated_at)
             VALUES (?1, ?2, ?3, ?4)
@@ -234,12 +332,26 @@ impl SqliteIndexStore {
         manifest_digest: &str,
         policy: RefConflictPolicy,
     ) -> Result<RefUpdate> {
+        let conn = self.lock();
+        Self::put_ref_with_policy_in(&conn, name, reference, manifest_digest, policy)
+    }
+
+    /// Connection-scoped variant of [`Self::put_ref_with_policy`].
+    /// Lets callers compose ref publish with blob / manifest inserts
+    /// inside one transaction (see [`Self::publish_artifact_atomic`]).
+    fn put_ref_with_policy_in(
+        conn: &Connection,
+        name: &str,
+        reference: &str,
+        manifest_digest: &str,
+        policy: RefConflictPolicy,
+    ) -> Result<RefUpdate> {
         validate_digest(manifest_digest)?;
         if policy == RefConflictPolicy::Replace {
-            return self.replace_ref(name, reference, manifest_digest);
+            return Self::replace_ref_in(conn, name, reference, manifest_digest);
         }
 
-        let inserted = self.conn.execute(
+        let inserted = conn.execute(
             r#"
             INSERT INTO refs (name, reference, manifest_digest, updated_at)
             VALUES (?1, ?2, ?3, ?4)
@@ -251,9 +363,10 @@ impl SqliteIndexStore {
             return Ok(RefUpdate::Inserted);
         }
 
-        let existing_manifest_digest = self.resolve_ref(name, reference)?.with_context(|| {
-            format!("Ref disappeared while resolving conflict: {name}:{reference}")
-        })?;
+        let existing_manifest_digest =
+            Self::resolve_ref_in(conn, name, reference)?.with_context(|| {
+                format!("Ref disappeared while resolving conflict: {name}:{reference}")
+            })?;
         if existing_manifest_digest == manifest_digest {
             Ok(RefUpdate::Unchanged)
         } else {
@@ -264,13 +377,18 @@ impl SqliteIndexStore {
         }
     }
 
-    fn replace_ref(&self, name: &str, reference: &str, manifest_digest: &str) -> Result<RefUpdate> {
-        let previous_manifest_digest = self.resolve_ref(name, reference)?;
+    fn replace_ref_in(
+        conn: &Connection,
+        name: &str,
+        reference: &str,
+        manifest_digest: &str,
+    ) -> Result<RefUpdate> {
+        let previous_manifest_digest = Self::resolve_ref_in(conn, name, reference)?;
         if previous_manifest_digest.as_deref() == Some(manifest_digest) {
             return Ok(RefUpdate::Unchanged);
         }
 
-        self.put_ref(name, reference, manifest_digest)?;
+        Self::put_ref_in(conn, name, reference, manifest_digest)?;
         Ok(match previous_manifest_digest {
             Some(previous_manifest_digest) => RefUpdate::Replaced {
                 previous_manifest_digest,
@@ -279,23 +397,82 @@ impl SqliteIndexStore {
         })
     }
 
+    fn resolve_ref_in(conn: &Connection, name: &str, reference: &str) -> Result<Option<String>> {
+        conn.query_row(
+            "SELECT manifest_digest FROM refs WHERE name = ?1 AND reference = ?2",
+            params![name, reference],
+            |row| row.get(0),
+        )
+        .optional()
+        .context("Failed to resolve local registry ref")
+    }
+
     pub fn resolve_ref(&self, name: &str, reference: &str) -> Result<Option<String>> {
-        self.conn
-            .query_row(
-                "SELECT manifest_digest FROM refs WHERE name = ?1 AND reference = ?2",
-                params![name, reference],
-                |row| row.get(0),
-            )
-            .optional()
-            .context("Failed to resolve local registry ref")
+        let conn = self.lock();
+        Self::resolve_ref_in(&conn, name, reference)
+    }
+
+    /// Atomic publish: in one SQLite transaction, insert all `blobs`
+    /// records, the `manifest` + `layers`, and (if `image_name` is
+    /// `Some`) the corresponding ref under `policy`. CAS bytes must
+    /// already have been written to [`super::FileBlobStore`] before
+    /// this call — only the IndexStore rows are batched here.
+    ///
+    /// On a `Replace` policy the function still returns
+    /// `RefUpdate::Replaced { previous_manifest_digest }` so callers
+    /// can record the prior state. A `Conflicted` outcome under
+    /// `KeepExisting` aborts the transaction (so the manifest /
+    /// layers / blob rows are not committed) and returns
+    /// `Ok(PublishOutcome { ref_update: Some(Conflicted { .. }) })`;
+    /// callers that prefer to bail can match on the variant.
+    pub fn publish_artifact_atomic(
+        &self,
+        blobs: &[BlobRecord],
+        manifest: &ManifestRecord,
+        layers: &[LayerRecord],
+        image_name: Option<&ImageName>,
+        policy: RefConflictPolicy,
+    ) -> Result<PublishOutcome> {
+        // BEGIN IMMEDIATE acquires the RESERVED lock at the start so
+        // `busy_timeout` waits cleanly when another writer is active,
+        // instead of upgrading mid-transaction and risking SQLITE_BUSY
+        // from two writers each holding a SHARED lock.
+        let mut conn = self.lock();
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        for blob in blobs {
+            Self::put_blob_in(&tx, blob)?;
+        }
+        Self::put_manifest_in(&tx, manifest, layers)?;
+        let ref_update = if let Some(image_name) = image_name {
+            let name = image_name_repository(image_name);
+            let reference = image_name.reference.as_str();
+            let update =
+                Self::put_ref_with_policy_in(&tx, &name, reference, &manifest.digest, policy)?;
+            // KeepExisting + different incoming digest → conflict.
+            // Roll back the manifest / blob inserts so we don't leave
+            // unreferenced rows committed under a ref that resolved
+            // to a different artifact.
+            if let RefUpdate::Conflicted { .. } = &update {
+                drop(tx);
+                return Ok(PublishOutcome {
+                    ref_update: Some(update),
+                });
+            }
+            Some(update)
+        } else {
+            None
+        };
+        tx.commit()?;
+        Ok(PublishOutcome { ref_update })
     }
 
     pub fn list_refs(&self, name_prefix: Option<&str>) -> Result<Vec<RefRecord>> {
+        let conn = self.lock();
         let mut out = Vec::new();
         if let Some(prefix) = name_prefix {
             let prefix_len = i64::try_from(prefix.chars().count())
                 .context("Ref prefix length does not fit in i64")?;
-            let mut stmt = self.conn.prepare(
+            let mut stmt = conn.prepare(
                 r#"
                 SELECT name, reference, manifest_digest, updated_at
                 FROM refs
@@ -308,7 +485,7 @@ impl SqliteIndexStore {
                 out.push(row?);
             }
         } else {
-            let mut stmt = self.conn.prepare(
+            let mut stmt = conn.prepare(
                 r#"
                 SELECT name, reference, manifest_digest, updated_at
                 FROM refs
@@ -324,7 +501,7 @@ impl SqliteIndexStore {
     }
 
     fn init_schema(&self) -> Result<()> {
-        self.conn.execute_batch(
+        self.lock().execute_batch(
             r#"
             PRAGMA foreign_keys = ON;
 
@@ -421,7 +598,7 @@ impl SqliteIndexStore {
     }
 }
 
-pub fn image_name_repository(image_name: &ImageName) -> String {
+fn image_name_repository(image_name: &ImageName) -> String {
     if let Some(port) = image_name.port {
         format!("{}:{}/{}", image_name.hostname, port, image_name.name)
     } else {
