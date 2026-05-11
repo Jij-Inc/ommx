@@ -877,6 +877,104 @@ fn import_oci_archive_surfaces_digest_conflict_for_same_ref() -> Result<()> {
     Ok(())
 }
 
+#[test]
+fn import_oci_archive_does_not_leave_legacy_dir_behind() -> Result<()> {
+    // Step C invariant: after a successful `import_oci_archive`, the
+    // v2-era path `registry.root().join(image_name.as_path())` must
+    // not exist. The archive's staging tempdir is created under the
+    // registry root and dropped before the function returns; SQLite +
+    // FileBlobStore are the sole post-import home.
+    let dir = tempfile::tempdir()?;
+    let registry = Arc::new(LocalRegistry::open(dir.path())?);
+    let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:no-legacy-dir")?;
+    let archive_path = dir.path().join("artifact.ommx");
+    {
+        let mut builder = crate::artifact::ArchiveArtifactBuilder::new_archive(
+            archive_path.clone(),
+            image_name.clone(),
+        )?;
+        builder.add_layer(
+            MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.into()),
+            b"step-c-payload",
+            HashMap::new(),
+        )?;
+        let _ = builder.build()?;
+    }
+
+    let outcome = import_oci_archive(&registry, &archive_path)?;
+    assert_eq!(outcome.image_name.as_ref(), Some(&image_name));
+
+    let v2_path = registry.root().join(image_name.as_path());
+    assert!(
+        !v2_path.exists(),
+        "legacy v2 OCI dir must not be promoted under registry root, but {} exists",
+        v2_path.display(),
+    );
+    Ok(())
+}
+
+#[cfg(feature = "remote-artifact")]
+#[test]
+fn pull_image_short_circuits_when_ref_is_present_with_blob() -> Result<()> {
+    // Step C fast path: `pull_image` against a ref already published
+    // in the SQLite Local Registry must return `Unchanged` without
+    // touching the network. Constructing the artifact via
+    // `LocalArtifactBuilder` (no network) and then calling
+    // `pull_image` against an unresolvable host exercises this — if
+    // the short-circuit ever regresses, the call would attempt a DNS
+    // lookup against a `.invalid` TLD and fail.
+    let dir = tempfile::tempdir()?;
+    let registry = Arc::new(LocalRegistry::open(dir.path())?);
+    let image_name = ImageName::parse("does-not-resolve.invalid/jij-inc/ommx/demo:short-circuit")?;
+    let local_artifact =
+        build_test_local_artifact(&registry, &image_name, b"step-c-pull-short-circuit")?;
+    let expected_digest = local_artifact.manifest_digest().to_string();
+
+    let outcome = super::import::remote::pull_image(&registry, &image_name)?;
+    assert_eq!(outcome.image_name.as_ref(), Some(&image_name));
+    assert_eq!(outcome.manifest_digest, expected_digest);
+    assert!(
+        matches!(outcome.ref_update, Some(RefUpdate::Unchanged)),
+        "expected RefUpdate::Unchanged on SQLite-hit short-circuit, got {:?}",
+        outcome.ref_update,
+    );
+    Ok(())
+}
+
+#[cfg(feature = "remote-artifact")]
+#[test]
+fn pull_image_does_not_short_circuit_when_manifest_blob_is_missing() -> Result<()> {
+    // P1 guard from Codex review: if the SQLite ref resolves but the
+    // manifest blob is missing from the FileBlobStore (registry
+    // corruption, manual deletion, interrupted import), `pull_image`
+    // must fall through to a fresh pull rather than return a stale
+    // `Unchanged`. We can't run the fall-through path without a real
+    // remote, so the assertion is: an unreachable remote produces an
+    // error (i.e., the function did attempt the pull) rather than the
+    // happy-path `Unchanged` it would return without the blob check.
+    let dir = tempfile::tempdir()?;
+    let registry = Arc::new(LocalRegistry::open(dir.path())?);
+    let image_name = ImageName::parse("does-not-resolve.invalid/jij-inc/ommx/demo:blob-missing")?;
+    let local_artifact =
+        build_test_local_artifact(&registry, &image_name, b"step-c-blob-corruption")?;
+
+    // Simulate corruption: remove the manifest blob file under the
+    // FileBlobStore while keeping the SQLite ref intact.
+    let manifest_digest = local_artifact.manifest_digest().to_string();
+    let blob_path = registry.blobs().path_for_digest(&manifest_digest)?;
+    std::fs::remove_file(&blob_path)
+        .with_context(|| format!("Failed to remove manifest blob at {}", blob_path.display()))?;
+
+    let result = super::import::remote::pull_image(&registry, &image_name);
+    assert!(
+        result.is_err(),
+        "pull_image must fall through to a remote pull when the manifest blob is \
+         missing; the unreachable host should surface as Err, but got {:?}",
+        result,
+    );
+    Ok(())
+}
+
 fn build_test_local_artifact(
     registry: &Arc<LocalRegistry>,
     image_name: &ImageName,

@@ -757,4 +757,6 @@ Step H は公開 signature の breaking change を含むので、**v3.0 stable r
 
 Step H 完了で `ocipkg` を `Cargo.toml` から削除でき、v3 における ocipkg 依存撤去が完了する。
 
-**順序の依存関係:** D (network) と F (local format) は独立で、どちらが先でも問題ない。H は D / F の両方が landed して `Artifact<Base: Image>` / `OciArchive` などの公開 type が消えてから着手する (callsite が新 type に対応している必要があるため)。順序は `D → F → H` または `F → D → H` のどちらでもよい。Step C と同程度の粒度感で、3 PR で完了見込み。
+**順序の依存関係:** D (network) と F (local format) は機能軸では独立だが、両者とも blob を `FileBlobStore` に直接書く経路を新設する。D が先行する場合は `FileBlobStore::put_bytes` を超える追加 API (例えば streaming upload / resumable write) を D PR で安易に拡張せず、まず Step B 時点の API surface で完結させること。F が同 store を再利用するため、D の internal API 拡張が F での再設計を強制すると interface churn が発生する。新規 API が必要になった場合は D の PR description で明示し、F でも同じ shape を採用できるよう review 段階で合意を取る。逆に F が先行する場合は同じ制約は無く、F が固めた writer 経路を D がそのまま再利用できる。
+
+H は D / F の両方が landed して `Artifact<Base: Image>` / `OciArchive` などの公開 type が消えてから着手する (callsite が新 type に対応している必要があるため)。順序は `D → F → H` または `F → D → H` のどちらでもよい。Step C と同程度の粒度感で、3 PR で完了見込み。

@@ -29,12 +29,17 @@
 //!    [`super::super::FileBlobStore`].
 //!
 //! The pre-pull SQLite check short-circuits the network fetch when
-//! the registry already resolves `image_name` to a manifest digest:
+//! the registry already resolves `image_name` to a manifest digest
+//! **and** the manifest blob is present in [`super::super::FileBlobStore`]:
 //! the function returns an [`OciDirImport`] with
 //! [`super::super::RefUpdate::Unchanged`] without touching the
-//! network. The same cache-hit semantics that the v2-era legacy dir
-//! cache offered, now expressed against the canonical SQLite ref
-//! store.
+//! network. The blob-presence probe distinguishes a healthy hit from
+//! a half-populated registry (e.g., manual blob-store deletion,
+//! interrupted import) — the latter falls through to a fresh pull
+//! with a `tracing::warn!` event rather than handing back a stale
+//! `Unchanged` that would surface as an opaque `get_blob` failure
+//! later. The same cache-hit semantics the v2-era legacy dir cache
+//! offered, now expressed against the canonical SQLite ref store.
 //!
 //! Feature-gated behind `remote-artifact` because `Artifact::from_remote`
 //! is, and because this is the only place in `local_registry` that
@@ -56,25 +61,48 @@ use std::sync::Arc;
 /// Pull `image_name` from its remote registry into the v3 SQLite
 /// Local Registry.
 ///
-/// If the registry already resolves `image_name` to a manifest digest,
-/// the network fetch is skipped and the function returns an
-/// [`OciDirImport`] with [`RefUpdate::Unchanged`]. Otherwise the image
-/// is pulled into a tempdir-backed OCI Image Layout under the
-/// registry root and then imported into SQLite preserving manifest
-/// digest. The tempdir is removed before the function returns; the
-/// post-import home of the bytes is the SQLite registry alone.
+/// If the registry already resolves `image_name` to a manifest digest
+/// whose blob is present in the `FileBlobStore`, the network fetch is
+/// skipped and the function returns an [`OciDirImport`] with
+/// [`RefUpdate::Unchanged`]. If the ref resolves but the manifest blob
+/// is missing (registry corruption, interrupted import, manual blob
+/// deletion), the function logs a `tracing::warn!` and falls through
+/// to a fresh pull rather than handing back a stale `Unchanged` — that
+/// would surface later as an opaque `get_blob` failure with no
+/// recovery hint. Layer-blob completeness is not probed: if the
+/// manifest is present, layers are assumed to follow from the same
+/// publish transaction (`publish_artifact_atomic`); a layer-only gap
+/// is a strict registry-corruption case and out of scope for this
+/// fast path.
 ///
-/// If two threads race the first miss for the same image, both pull
-/// (content-addressed, so the bytes match) into separate temp dirs;
-/// the import side de-duplicates through SQLite's
-/// `publish_artifact_atomic`, so the second writer sees `Unchanged`.
+/// Otherwise the image is pulled into a tempdir-backed OCI Image Layout
+/// under the registry root and then imported into SQLite preserving
+/// manifest digest. The tempdir is removed before the function returns;
+/// the post-import home of the bytes is the SQLite registry alone.
+///
+/// Concurrent first-miss pulls for the same image stage into separate
+/// temp dirs and converge at SQLite's `publish_artifact_atomic`.
+/// **Assuming the remote registry returns byte-identical manifests
+/// across both requests**, the second writer sees `Unchanged`. If the
+/// remote serves non-deterministic manifest bytes (e.g., field reorder,
+/// whitespace drift) the two digests differ and the loser surfaces a
+/// `Conflicted` outcome under `KeepExisting`; callers that need
+/// last-writer-wins semantics in that case should drive the import
+/// with `RefConflictPolicy::Replace`.
 pub fn pull_image(registry: &Arc<LocalRegistry>, image_name: &ImageName) -> Result<OciDirImport> {
     if let Some(manifest_digest) = registry.index().resolve_image_name(image_name)? {
-        return Ok(OciDirImport {
-            manifest_digest,
-            image_name: Some(image_name.clone()),
-            ref_update: Some(RefUpdate::Unchanged),
-        });
+        if registry.blobs().exists(&manifest_digest)? {
+            return Ok(OciDirImport {
+                manifest_digest,
+                image_name: Some(image_name.clone()),
+                ref_update: Some(RefUpdate::Unchanged),
+            });
+        }
+        tracing::warn!(
+            "SQLite ref resolves {image_name} → {manifest_digest}, but the manifest \
+             blob is missing from FileBlobStore; falling through to a fresh remote \
+             pull to repopulate the registry",
+        );
     }
 
     let staging_parent = registry.root();

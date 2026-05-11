@@ -143,17 +143,27 @@ impl ImageNameOrPath {
                 .get_manifest()?
                 .clone()
                 .into_inner(),
-            ImageNameOrPath::Remote(name) => Artifact::from_remote(name.clone())?.get_manifest()?,
+            // `Remote` here also covers pre-v3 users whose artifact is
+            // only in the legacy disk dir (SQLite misses → parse falls
+            // through to `Remote`). Bail with the migration hint before
+            // initiating a network fetch so `ommx inspect` does not
+            // silently look up a ref the user already has locally.
+            ImageNameOrPath::Remote(name) => {
+                migration_hint_if_legacy_only(name)?;
+                Artifact::from_remote(name.clone())?.get_manifest()?
+            }
         };
         Ok(manifest)
     }
 }
 
-/// Fail with a "not in local registry" message. When a legacy v2-shaped
+/// Bail with the pre-v3 → v3 migration hint when a legacy v2-shaped
 /// OCI directory exists at the user's local registry root for this
-/// image, point them at the explicit migration command rather than the
-/// generic not-found message.
-fn bail_not_found_locally(name: &ImageName) -> Result<()> {
+/// image. Used by handlers (`Inspect`, `Save`) where the next step
+/// would otherwise contact the network for what is in fact a local
+/// pre-v3 artifact. Returns `Ok(())` when no legacy dir is present,
+/// letting callers proceed with their normal remote / local fallback.
+fn migration_hint_if_legacy_only(name: &ImageName) -> Result<()> {
     if get_image_dir(name).exists() {
         bail!(
             "{name} exists only in the legacy local registry directory. \
@@ -161,6 +171,14 @@ fn bail_not_found_locally(name: &ImageName) -> Result<()> {
              SQLite-backed registry, then retry."
         );
     }
+    Ok(())
+}
+
+/// Fail with a "not in local registry" message, preferring the legacy
+/// migration hint when applicable. Used by handlers (`Push`) where the
+/// command has no remote fallback path and must terminate.
+fn bail_not_found_locally(name: &ImageName) -> Result<()> {
+    migration_hint_if_legacy_only(name)?;
     bail!("Image not found in local: {}", name)
 }
 
