@@ -117,8 +117,8 @@ pub(super) enum RefConflictHandling {
 /// All the read-only state that a single OCI Image Layout directory
 /// contributes to a v3 import: identity (digest + ref-name annotation),
 /// the manifest bytes / descriptor that get persisted verbatim, the
-/// format tag, the layer descriptors enumerated from the manifest,
-/// and (Image Manifest only) the config blob.
+/// layer descriptors enumerated from the manifest, and the config
+/// blob.
 ///
 /// "Staged" parallels the build-side vocabulary
 /// ([`crate::artifact::StagedArtifactBlob`],
@@ -145,16 +145,18 @@ struct StagedOciDir {
 
 /// Import a standard OCI Image Layout directory into the v3 local registry.
 ///
-/// Works for any OCI Image Layout (`oci-layout` + `index.json` + `blobs/`),
-/// regardless of how it was produced. The v3 registry does not keep
-/// `index.json` as mutable state; it only reads it to discover the single
-/// manifest, and then copies the exact content-addressed blobs into
-/// [`FileBlobStore`] while inserting the matching records into
-/// [`SqliteIndexStore`]. The manifest digest is preserved verbatim — import
-/// never rewrites the manifest. Reformatting an Image Manifest into an
-/// Artifact Manifest is a separate explicit `convert` operation that
-/// produces a new artifact under a new digest / new ref, intentionally not
-/// a side effect of import.
+/// Works for any OCI Image Layout (`oci-layout` + `index.json` + `blobs/`)
+/// that uses OCI Image Manifest (with the OMMX `artifactType` set), regardless
+/// of how it was produced. The v3 registry does not keep `index.json` as
+/// mutable state; it only reads it to discover the single manifest, and
+/// then copies the exact content-addressed blobs into [`FileBlobStore`]
+/// while inserting the matching records into [`SqliteIndexStore`]. The
+/// manifest digest is preserved verbatim — import never rewrites the
+/// manifest.
+///
+/// OCI Image Layouts that use the deprecated OCI Artifact Manifest
+/// (`application/vnd.oci.artifact.manifest.v1+json`) are rejected at
+/// import time; no format conversion is performed as a side effect.
 pub fn import_oci_dir(
     index_store: &SqliteIndexStore,
     blob_store: &FileBlobStore,

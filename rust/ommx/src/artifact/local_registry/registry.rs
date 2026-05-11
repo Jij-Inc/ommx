@@ -5,9 +5,9 @@ use super::{
     OciDirImport, RefConflictPolicy, RefUpdate, SqliteIndexStore, BLOB_KIND_BLOB, BLOB_KIND_CONFIG,
     BLOB_KIND_MANIFEST,
 };
-use crate::artifact::StagedArtifactBlob;
+use crate::artifact::{media_types, StagedArtifactBlob};
 use anyhow::{ensure, Context, Result};
-use oci_spec::image::{Descriptor, ImageManifest};
+use oci_spec::image::{Descriptor, ImageManifest, MediaType};
 use ocipkg::ImageName;
 use std::path::{Path, PathBuf};
 
@@ -92,6 +92,12 @@ impl LocalRegistry {
         policy: RefConflictPolicy,
     ) -> Result<RefUpdate> {
         ensure!(
+            manifest_descriptor.media_type() == &MediaType::ImageManifest,
+            "Manifest descriptor must be `{:?}`, got `{}`",
+            MediaType::ImageManifest,
+            manifest_descriptor.media_type(),
+        );
+        ensure!(
             manifest_descriptor.digest().to_string()
                 == crate::artifact::sha256_digest(manifest_bytes),
             "Manifest descriptor digest does not match manifest bytes"
@@ -99,6 +105,16 @@ impl LocalRegistry {
         ensure!(
             manifest_descriptor.size() == manifest_bytes.len() as u64,
             "Manifest descriptor size does not match manifest bytes"
+        );
+        let artifact_type = manifest
+            .artifact_type()
+            .as_ref()
+            .context("Manifest does not carry the OMMX `artifactType` field")?;
+        ensure!(
+            artifact_type == &MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
+            "Manifest `artifactType` must be `{}`, got `{}`",
+            media_types::V1_ARTIFACT_MEDIA_TYPE,
+            artifact_type,
         );
         // OCI Image Manifest `blobs` = manifest layers + the `config`
         // descriptor (which is the OCI 1.1 empty config blob in OMMX's

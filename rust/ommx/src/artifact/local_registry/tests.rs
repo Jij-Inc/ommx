@@ -654,6 +654,56 @@ fn local_artifact_subject_round_trips() -> Result<()> {
 }
 
 #[test]
+fn imports_legacy_v2_oci_dir_with_ommx_config_blob() -> Result<()> {
+    // v2 SDK can produce Image Manifests whose `config` blob is an
+    // OMMX-specific `application/org.ommx.v1.config+json` (instead of
+    // the v3 builder's OCI 1.1 empty descriptor). v3 import / read must
+    // preserve such manifests verbatim: parse-time check is artifactType
+    // only (no config-shape requirement), and the config blob lands as
+    // `BLOB_KIND_CONFIG` in the IndexStore so GC reachability and
+    // queries treat it consistently with the v3 empty-config path.
+    let dir = tempfile::tempdir()?;
+    let legacy_dir = dir.path().join("v2-legacy");
+    let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:v2-config")?;
+    let v2_config_bytes = br#"{"description":"v2 legacy config"}"#;
+    let (config_descriptor, layer_descriptor) =
+        build_test_oci_dir_with_v2_config(legacy_dir.clone(), image_name.clone(), v2_config_bytes)?;
+
+    let registry_root = dir.path().join("registry-v3");
+    let index_store = SqliteIndexStore::open_in_registry_root(&registry_root)?;
+    let blob_store = FileBlobStore::open_in_registry_root(&registry_root)?;
+    let imported = import_oci_dir(&index_store, &blob_store, &legacy_dir)?;
+
+    assert_eq!(imported.image_name, Some(image_name.clone()));
+    assert!(blob_store.exists(&imported.manifest_digest)?);
+    assert!(blob_store.exists(&layer_descriptor.digest().to_string())?);
+
+    // OMMX-specific config blob is preserved with `BLOB_KIND_CONFIG`.
+    let config_digest_str = config_descriptor.digest().to_string();
+    assert!(blob_store.exists(&config_digest_str)?);
+    let config_blob = index_store
+        .get_blob(&config_digest_str)?
+        .context("Imported config blob is missing")?;
+    assert_eq!(config_blob.kind, BLOB_KIND_CONFIG);
+    assert_eq!(
+        config_blob.media_type.as_deref(),
+        Some(media_types::V1_CONFIG_MEDIA_TYPE)
+    );
+    assert_eq!(blob_store.read_bytes(&config_digest_str)?, v2_config_bytes);
+
+    // LocalArtifact reads the legacy manifest (parse-time check is on
+    // artifactType only, so the OMMX-specific config is not rejected).
+    let registry = Arc::new(LocalRegistry::open(&registry_root)?);
+    let artifact = LocalArtifact::open_in_registry(registry, image_name)?;
+    assert_eq!(
+        artifact.get_manifest()?.media_type(),
+        OCI_IMAGE_MANIFEST_MEDIA_TYPE
+    );
+    assert_eq!(artifact.layers()?, vec![layer_descriptor]);
+    Ok(())
+}
+
+#[test]
 fn rejects_import_of_deprecated_artifact_manifest_layout() -> Result<()> {
     // v3 does not support OCI Artifact Manifest
     // (`application/vnd.oci.artifact.manifest.v1+json`); import must
@@ -904,6 +954,42 @@ fn build_test_oci_dir(legacy_dir: PathBuf, image_name: ImageName) -> Result<Desc
         .build()?;
     let _oci_dir = builder.build(manifest)?;
     Ok(layer)
+}
+
+/// Build an OCI Image Layout whose Image Manifest carries an
+/// OMMX-specific config blob (`application/org.ommx.v1.config+json`)
+/// rather than the OCI 1.1 empty descriptor. Mirrors the manifest shape
+/// that SDK v2 produced when the user explicitly called
+/// `ArchiveArtifactBuilder::add_config`, so the v3 import path can be
+/// exercised against the legacy variant the SDK still has to read.
+fn build_test_oci_dir_with_v2_config(
+    legacy_dir: PathBuf,
+    image_name: ImageName,
+    config_bytes: &[u8],
+) -> Result<(Descriptor, Descriptor)> {
+    let mut builder = OciDirBuilder::new(legacy_dir, image_name)?;
+    let (config_digest, config_size) = builder.add_blob(config_bytes)?;
+    let config = DescriptorBuilder::default()
+        .media_type(MediaType::Other(media_types::V1_CONFIG_MEDIA_TYPE.into()))
+        .digest(config_digest)
+        .size(config_size)
+        .build()?;
+    let (layer_digest, layer_size) = builder.add_blob(b"v2-instance")?;
+    let layer = DescriptorBuilder::default()
+        .media_type(MediaType::Other(
+            media_types::V1_INSTANCE_MEDIA_TYPE.to_string(),
+        ))
+        .digest(layer_digest)
+        .size(layer_size)
+        .build()?;
+    let manifest = ImageManifestBuilder::default()
+        .schema_version(2_u32)
+        .artifact_type(media_types::v1_artifact())
+        .config(config.clone())
+        .layers(vec![layer.clone()])
+        .build()?;
+    let _oci_dir = builder.build(manifest)?;
+    Ok((config, layer))
 }
 
 /// Build a v3-shaped OCI Image Layout directory whose manifest is an
