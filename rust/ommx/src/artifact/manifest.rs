@@ -134,16 +134,6 @@ impl LocalArtifact {
         &self.manifest_digest
     }
 
-    /// Root path of the SQLite Local Registry this artifact lives in.
-    ///
-    /// Public so that the Python binding can derive the matching legacy
-    /// OCI dir path (`registry_root.join(image_name.as_path())`) for
-    /// the transitional `push()` path that round-trips through ocipkg.
-    /// Goes away once native v3 push lands.
-    pub fn registry_root(&self) -> &std::path::Path {
-        self.registry.root()
-    }
-
     /// Read and cache the manifest associated with this artifact.
     ///
     /// The first successful call populates a shared `OnceLock`; later
@@ -245,8 +235,22 @@ impl LocalManifest {
             .expect("ensure_ommx_image_manifest guarantees Image Manifest carries an artifactType")
     }
 
+    pub fn config(&self) -> Descriptor {
+        self.0.config().clone()
+    }
+
     pub fn layers(&self) -> Vec<Descriptor> {
         self.0.layers().to_vec()
+    }
+
+    /// Consume this wrapper and return the inner OCI Image Manifest.
+    /// Used by callers that need to round-trip the manifest as JSON
+    /// (e.g. the CLI's `ommx inspect`), where the standard OCI
+    /// `serde` form is what's expected. The accessors above cover
+    /// programmatic use; `into_inner` is the escape hatch when the
+    /// whole thing needs to leave the wrapper.
+    pub fn into_inner(self) -> ImageManifest {
+        *self.0
     }
 
     pub fn annotations(&self) -> HashMap<String, String> {

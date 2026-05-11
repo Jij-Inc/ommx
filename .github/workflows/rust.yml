@@ -56,6 +56,28 @@ jobs:
       - name: Run tests
         run: cargo test
 
+  auth-e2e:
+    # End-to-end coverage of the remote-artifact push pipeline and
+    # the three-tier credential resolver in
+    # `artifact::remote_transport::resolve_auth`. The test suite
+    # (`rust/ommx/tests/auth_e2e.rs`) brings up its own ephemeral OCI
+    # registries via `testcontainers` — anonymous, htpasswd-protected,
+    # and one for the CLI dispatch test — so we do not need a GHA
+    # `services:` declaration here. `ubuntu-latest` runners ship with
+    # a running Docker daemon.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-test-environment
+
+      - name: Run auth e2e tests
+        run: |
+          cargo test -p ommx --features remote-artifact,built,cli --test auth_e2e \
+            -- --include-ignored --test-threads=1
+
   protogen:
     runs-on: ubuntu-latest
     steps:
