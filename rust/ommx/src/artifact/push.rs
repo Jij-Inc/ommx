@@ -58,6 +58,51 @@ impl LocalArtifact {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use crate::artifact::{
+        local_registry::{LocalRegistry, RefConflictPolicy},
+        media_types, LocalArtifactBuilder,
+    };
+    use anyhow::Result;
+    use oci_spec::image::MediaType;
+    use ocipkg::ImageName;
+    use std::collections::HashMap;
+    use std::sync::Arc;
+
+    /// Pushes an OCI Artifact Manifest produced by the v3 SQLite Local
+    /// Registry to a `registry:2`-style local registry on
+    /// `localhost:5000`. Ignored by default; the `with-registry` CI job
+    /// re-runs the test suite with `--include-ignored` after launching
+    /// the registry service container.
+    ///
+    /// The test only asserts that the entire push path (auth → blob
+    /// upload → manifest upload with `application/vnd.oci.artifact.manifest.v1+json`
+    /// Content-Type) completes against a real registry. Registry-state
+    /// verification (`curl /v2/<repo>/tags/list`) is done in the CI step
+    /// rather than in Rust so the test stays self-contained.
+    #[test]
+    #[ignore]
+    fn push_local_artifact_to_localhost_registry() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let registry = Arc::new(LocalRegistry::open(dir.path())?);
+        let image_name = ImageName::parse("localhost:5000/ommx-test/native-push:tag1")?;
+
+        let mut builder = LocalArtifactBuilder::new(image_name.clone());
+        builder.add_layer_bytes(
+            MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
+            b"native-push".to_vec(),
+            HashMap::from([(
+                "org.ommx.v1.instance.title".to_string(),
+                "native-push".to_string(),
+            )]),
+        )?;
+        let artifact = builder.build_in_registry(registry.clone(), RefConflictPolicy::Replace)?;
+
+        artifact.push()
+    }
+}
+
 /// Enumerate every blob a manifest references, in push order: dependent
 /// blobs (`config`, `layers` / `blobs`) before the manifest itself.
 fn collect_blob_descriptors(manifest: &LocalManifest) -> Vec<Descriptor> {

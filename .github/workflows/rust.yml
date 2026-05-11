@@ -56,6 +56,35 @@ jobs:
       - name: Run tests
         run: cargo test
 
+  test-with-registry:
+    runs-on: ubuntu-latest
+    services:
+      registry:
+        image: registry:2
+        ports:
+          - 5000:5000
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-test-environment
+
+      - name: Probe local registry
+        run: curl -sf http://localhost:5000/v2/
+
+      - name: Run remote-artifact tests against local registry
+        run: cargo test -p ommx --features remote-artifact -- --include-ignored push_local_artifact_to
+
+      - name: Verify pushed artifact lives in registry
+        run: |
+          set -eux
+          curl -sf http://localhost:5000/v2/ommx-test/native-push/tags/list \
+            | grep -F '"tag1"'
+          curl -sf -H "Accept: application/vnd.oci.artifact.manifest.v1+json" \
+            http://localhost:5000/v2/ommx-test/native-push/manifests/tag1 \
+            | grep -F '"artifactType"'
+
   protogen:
     runs-on: ubuntu-latest
     steps:
