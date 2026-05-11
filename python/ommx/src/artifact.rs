@@ -1,5 +1,5 @@
 use anyhow::{bail, Result};
-use ocipkg::image::{Image, OciArchive, OciDir};
+use ocipkg::image::{Image, OciArchive};
 use ommx::artifact::Artifact;
 use pyo3::{prelude::*, types::PyBytes};
 use std::{collections::HashMap, path::PathBuf, sync::Mutex};
@@ -7,17 +7,16 @@ use std::{collections::HashMap, path::PathBuf, sync::Mutex};
 use crate::PyDescriptor;
 
 // ---------------------------------------------------------------------------
-// ArtifactInner: unified wrapper for Archive / Dir
+// ArtifactInner: archive readers + SQLite Local Registry handles
 // ---------------------------------------------------------------------------
 
 enum ArtifactInner {
-    // The legacy ocipkg readers carry mutable per-handle state (file
-    // cursor for the tar/zstd archive reader), which makes them !Sync.
-    // Wrap them in Mutex so the enclosing #[pyclass] can satisfy the
-    // gil_used = false Sync requirement. The Mutex is uncontended in
-    // practice because PyArtifact methods take &mut self.
+    // The ocipkg archive reader carries mutable per-handle state (file
+    // cursor for the tar/zstd reader), which makes it !Sync. Wrap in
+    // Mutex so the enclosing #[pyclass] can satisfy the gil_used = false
+    // Sync requirement. The Mutex is uncontended in practice because
+    // PyArtifact methods take &mut self.
     Archive(Mutex<Artifact<OciArchive>>),
-    Dir(Artifact<OciDir>),
     // LocalArtifact already holds an Arc<LocalRegistry> whose internal
     // SqliteIndexStore wraps the Connection in a Mutex, so it is Sync
     // by itself. No outer Mutex / Box needed here.
@@ -30,7 +29,6 @@ impl ArtifactInner {
             ArtifactInner::Archive(a) => {
                 a.get_mut().unwrap().get_name().map(|n| n.to_string()).ok()
             }
-            ArtifactInner::Dir(d) => d.get_name().map(|n| n.to_string()).ok(),
             ArtifactInner::Local(local) => Some(local.image_name().to_string()),
         }
     }
@@ -41,10 +39,6 @@ impl ArtifactInner {
                 let manifest = a.get_mut().unwrap().get_manifest()?;
                 Ok(manifest.annotations().as_ref().cloned().unwrap_or_default())
             }
-            ArtifactInner::Dir(d) => {
-                let manifest = d.get_manifest()?;
-                Ok(manifest.annotations().as_ref().cloned().unwrap_or_default())
-            }
             ArtifactInner::Local(local) => local.annotations(),
         }
     }
@@ -53,15 +47,6 @@ impl ArtifactInner {
         match self {
             ArtifactInner::Archive(a) => {
                 let manifest = a.get_mut().unwrap().get_manifest()?;
-                Ok(manifest
-                    .layers()
-                    .iter()
-                    .cloned()
-                    .map(PyDescriptor::from)
-                    .collect())
-            }
-            ArtifactInner::Dir(d) => {
-                let manifest = d.get_manifest()?;
                 Ok(manifest
                     .layers()
                     .iter()
@@ -84,11 +69,6 @@ impl ArtifactInner {
                 let blob = a.get_mut().unwrap().get_blob(&digest)?;
                 Ok(blob.to_vec())
             }
-            ArtifactInner::Dir(d) => {
-                let digest = digest.parse()?;
-                let blob = d.get_blob(&digest)?;
-                Ok(blob.to_vec())
-            }
             ArtifactInner::Local(local) => local.get_blob(digest),
         }
     }
@@ -98,10 +78,6 @@ impl ArtifactInner {
         match self {
             ArtifactInner::Archive(a) => {
                 let _remote = a.get_mut().unwrap().push()?;
-                Ok(())
-            }
-            ArtifactInner::Dir(d) => {
-                let _remote = d.push()?;
                 Ok(())
             }
             ArtifactInner::Local(local) => local.push(),
@@ -132,7 +108,28 @@ pub struct PyArtifact(ArtifactInner);
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl PyArtifact {
-    /// Load an artifact stored as a single file or directory.
+    /// Load an artifact stored as a `.ommx` OCI archive file, or import
+    /// an OCI Image Layout directory into the v3 SQLite Local Registry
+    /// and return a handle to the registry entry.
+    ///
+    /// File path → opened in-place via `Artifact<OciArchive>`; no
+    /// registry side effect. Directory path → **identity-preserving
+    /// import into the user's default SQLite Local Registry** (see
+    /// `local_registry::import_oci_dir`), then opened by ref. The
+    /// distinction matches the v3 design: archives stay readable
+    /// without registry state, while loose OCI Image Layouts live in
+    /// the registry.
+    ///
+    /// > **Side effect for the directory branch**: the OCI Image
+    /// > Layout at `path` is permanently written into the SQLite
+    /// > Local Registry under the default root
+    /// > (`$XDG_DATA_HOME/ommx/` on Linux,
+    /// > `$HOME/Library/Application Support/org.ommx.ommx/` on macOS,
+    /// > or `$OMMX_LOCAL_REGISTRY_ROOT` when set). Subsequent
+    /// > `Artifact.load(image_name)` calls resolve from SQLite without
+    /// > another import. If a transient read with no registry write
+    /// > is wanted, pack the directory into a `.ommx` archive first
+    /// > and pass the file path instead.
     ///
     /// ```python
     /// >>> artifact = Artifact.load_archive("data/random_lp_instance.ommx")
@@ -147,8 +144,30 @@ impl PyArtifact {
             let artifact = Artifact::from_oci_archive(&path)?;
             Ok(Self(ArtifactInner::Archive(Mutex::new(artifact))))
         } else if path.is_dir() {
-            let artifact = Artifact::from_oci_dir(&path)?;
-            Ok(Self(ArtifactInner::Dir(artifact)))
+            // Validate the ref annotation BEFORE running `import_oci_dir`
+            // so an unnamed OCI Image Layout (no
+            // `org.opencontainers.image.ref.name`) bails without
+            // mutating the user's SQLite registry. Otherwise blobs +
+            // manifest are persisted under no ref and the same call
+            // re-orphans them on every retry.
+            let image_name = ommx::artifact::local_registry::oci_dir_image_name(&path)?
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "OCI dir at {} has no `org.opencontainers.image.ref.name` \
+                         annotation; unannotated OCI Image Layouts cannot be addressed \
+                         by name in the SQLite Local Registry",
+                        path.display(),
+                    )
+                })?;
+            let registry =
+                std::sync::Arc::new(ommx::artifact::local_registry::LocalRegistry::open_default()?);
+            ommx::artifact::local_registry::import_oci_dir(
+                registry.index(),
+                registry.blobs(),
+                &path,
+            )?;
+            let artifact = ommx::artifact::LocalArtifact::open_in_registry(registry, image_name)?;
+            Ok(Self(ArtifactInner::Local(artifact)))
         } else {
             bail!("Path must be a file or a directory")
         }
@@ -177,17 +196,13 @@ impl PyArtifact {
             return Ok(Self(ArtifactInner::Local(artifact)));
         }
 
-        // SQLite miss — apply lazy auto-migration: defer the two-stage
-        // remote-pull-into-legacy-then-import-into-SQLite pipeline to
-        // `local_registry::import::remote::pull_image`. That module is the
-        // single chokepoint where the ocipkg-based pull lives, so when it
-        // is replaced with a native v3 path that streams blobs straight
-        // into the SQLite registry this call site doesn't change.
-        //
-        // This is *not* a fallback (we never serve reads from legacy on the
-        // hot path); the legacy OCI dir is just the on-disk staging area
-        // that ocipkg currently uses, and the next call hits the SQLite
-        // fast path above instead of probing legacy again.
+        // SQLite miss — pull from the remote registry directly into
+        // SQLite. `pull_image` stages into a tempdir-backed OCI Image
+        // Layout, then imports identity-preserving into SQLite; the
+        // tempdir is dropped before the function returns, so no
+        // on-disk OCI dir cache is left behind. When the ocipkg-based
+        // stage is replaced with a native streamer, this call site
+        // does not change.
         let registry =
             std::sync::Arc::new(ommx::artifact::local_registry::LocalRegistry::open_default()?);
         ommx::artifact::local_registry::pull_image(&registry, &image_name_parsed)?;
@@ -589,7 +604,7 @@ fn assert_media_type(descriptor: &PyDescriptor, expected: &str) -> Result<()> {
 
 enum BuilderInner {
     Archive(Option<Box<ommx::artifact::ArchiveArtifactBuilder>>),
-    Dir(Option<Box<ommx::artifact::LocalArtifactBuilder>>),
+    Local(Option<Box<ommx::artifact::LocalArtifactBuilder>>),
 }
 
 impl BuilderInner {
@@ -607,7 +622,7 @@ impl BuilderInner {
                 let desc = builder.add_layer(media_type.into(), blob, annotations)?;
                 Ok(PyDescriptor::from(desc))
             }
-            BuilderInner::Dir(ref mut b) => {
+            BuilderInner::Local(ref mut b) => {
                 let builder = b
                     .as_mut()
                     .ok_or_else(|| anyhow::anyhow!("Already built artifact"))?;
@@ -626,7 +641,7 @@ impl BuilderInner {
                     .ok_or_else(|| anyhow::anyhow!("Already built artifact"))?;
                 builder.add_annotation(key.into(), value.into());
             }
-            BuilderInner::Dir(ref mut b) => {
+            BuilderInner::Local(ref mut b) => {
                 let builder = b
                     .as_mut()
                     .ok_or_else(|| anyhow::anyhow!("Already built artifact"))?;
@@ -645,7 +660,7 @@ impl BuilderInner {
                 let artifact = (*builder).build()?;
                 Ok(ArtifactInner::Archive(Mutex::new(artifact)))
             }
-            BuilderInner::Dir(ref mut b) => {
+            BuilderInner::Local(ref mut b) => {
                 let builder = b
                     .take()
                     .ok_or_else(|| anyhow::anyhow!("Already built artifact"))?;
@@ -727,7 +742,7 @@ impl PyArtifactBuilder {
     pub fn new(image_name: &str) -> Result<Self> {
         let image_name = ocipkg::ImageName::parse(image_name)?;
         let builder = ommx::artifact::LocalArtifactBuilder::new(image_name);
-        Ok(Self(BuilderInner::Dir(Some(Box::new(builder)))))
+        Ok(Self(BuilderInner::Local(Some(Box::new(builder)))))
     }
 
     /// Create a new artifact as a temporary file.
@@ -755,7 +770,7 @@ impl PyArtifactBuilder {
     #[staticmethod]
     pub fn for_github(org: &str, repo: &str, name: &str, tag: &str) -> Result<Self> {
         let builder = ommx::artifact::LocalArtifactBuilder::for_github(org, repo, name, tag)?;
-        Ok(Self(BuilderInner::Dir(Some(Box::new(builder)))))
+        Ok(Self(BuilderInner::Local(Some(Box::new(builder)))))
     }
 
     /// Add an {class}`~ommx.v1.Instance` to the artifact with annotations.

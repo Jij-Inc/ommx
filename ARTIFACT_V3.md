@@ -708,8 +708,55 @@ Transport crate は **`oci-client`** (ORAS project, [oras-project/rust-oci-clien
 
 **auth e2e テスト:** `rust/ommx/tests/auth_e2e.rs` が `testcontainers` 経由で ephemeral `registry:2` (anonymous / htpasswd) を立ち上げ、resolver の各 tier (anonymous / docker config / env override / 部分 env override bail) と CLI dispatch + 否定ケース (auth 強制の sanity / 誤 credential 拒否) を実 push で検証する (8 シナリオ)。`#[ignore = "requires docker"]` + `#[serial]` で env mutation を逐次化、CI は `--include-ignored --test-threads=1` で全 8 件を走らせる。
 
-**Step C — lazy auto-migration の legacy double-write 撤廃** (§12.2 行 6、行 4 Archive 半分)。
+**Step C — lazy auto-migration の legacy double-write 撤廃** (§12.2 行 6、行 4 Archive 半分)。**進行中。**
 
-`Artifact.load(image)` / `ommx load` の auto-migration を "remote/archive → legacy disk OCI dir → SQLite" の 2-stage から "remote/archive → SQLite" 直結に変更。Python `ArtifactInner::Dir` 分岐を削除し、`{Archive, Local}` 2-variant に。`Artifact<OciDir>` は `import::*` の temp scratch でしか使われない実装詳細に格下げ。`Artifact<OciArchive>::push` も Step B で導入した新 transport に統一する候補。
+`Artifact.load(image)` / `ommx load` の auto-migration を "remote/archive → legacy disk OCI dir → SQLite" の 2-stage から "remote/archive → SQLite" 直結に変更する。`import_oci_archive` / `pull_image` は staging を `tempfile::TempDir` (registry root 配下) に切り替え、`registry.root().join(image_name.as_path())` への promote を行わない。`pull_image` は事前に SQLite の ref を resolve して network fetch を short-circuit する (v2 era の "skip if legacy dir exists" を canonical ref store ベースに置換)。CLI の `ImageNameOrPath::parse` は legacy dir の存在を fall-through として読み取らなくなり、SQLite ref のみで `Local`/`Remote` を分岐する; `ommx push <local>` / `ommx inspect <local>` / `ommx save <image> <output>` は `LocalArtifact::open` 経由になり、新たに追加した `LocalArtifact::save` (SQLite + CAS → `OciArchiveBuilder` 直結) を使う。pre-v3 user の legacy dir のみが存在する path は `bail_not_found_locally` が `ommx artifact import` への migration hint を返す。
 
-A / B' / B / C 後に残る ocipkg seam は `Builder<OciArchiveBuilder>` (archive 出力) と `import::{archive, remote}` 内の temp staging のみ。§12.2 行 1 (native streamer 置換) と行 2 (ocipkg 公開 surface 撤去) はその次の milestone series。
+Python 側は `ArtifactInner::Dir` variant を削除し `{Archive, Local}` 2-variant に集約。`Artifact.load_archive(dir_path)` は dir 入力に対し `local_registry::import_oci_dir` で SQLite に identity-preserving import して `LocalArtifact` を返す (file 入力は従来通り `Artifact<OciArchive>` を直接 open)。`BuilderInner::Dir` も内部的に `LocalArtifactBuilder` を保持しているだけだったので `BuilderInner::Local` にリネーム。`Artifact<OciArchive>::push` の新 transport 統一は本 step では扱わず、後続 milestone に持ち越す (`auth_from_env` ベースで稼働を維持)。
+
+A / B' / B / C 後に残る ocipkg seam は `Builder<OciArchiveBuilder>` (archive 出力) と `import::{archive, remote}` 内の temp staging のみ。§12.2 行 1 (native streamer 置換) と行 2 (ocipkg 公開 surface 撤去) はその次の milestone series で、§12.4 で D → F → H として分解する。
+
+### 12.4 ocipkg 依存撤去の milestone series (D → F → H)
+
+Step C landing 後に残存している ocipkg surface は機能軸で 5 つに分かれる:
+
+| カテゴリ | 使用箇所 | 役割 |
+|---|---|---|
+| A. Archive 入出力フォーマット | `Artifact<OciArchive>`, `ArchiveArtifactBuilder::build`, `OciArchiveBuilder` (`save.rs`) | `.ommx` (tar = oci-archive) reader/writer |
+| B. OCI Image Layout dir 入出力 | `Artifact<OciDir>`, `OciDirBuilder` (import staging), `OciArtifact::from_oci_dir` | `import::{archive, remote}` の temp staging 用 |
+| C. Remote push/pull (Archive 側) | `Artifact<OciArchive>::push`, `Artifact<OciDir>::push`, `Artifact<Remote>::pull_to` | ocipkg の `Remote` / `RemoteBuilder` + `auth_from_env` |
+| D. `Image` / `ImageBuilder` trait | `Artifact<Base: Image>` の汎用化, `ocipkg::image::copy` 5 箇所 | ocipkg の format-agnostic abstraction |
+| E. `ocipkg::ImageName` | 公開 API ほぼ全て (`LocalArtifact::open`, builder, CLI, Python) | image ref parser |
+
+これを以下の 3 step で順に切る。各 step は独立 PR、step 間で SDK が壊れない状態を維持する。
+
+**Step D — native remote transport を Archive 側にも展開** (§12.2 行 1 remote 半分、行 4 Archive 残り半分)。
+
+`Artifact<OciArchive>::push` を Step B で導入した `oci-client` ベースの `remote_transport::RemoteTransport` に切り替え、`Artifact<Remote>::pull_to` を撤去して `pull_image` を remote → SQLite 直結にする。後者は manifest / config / layer blobs を `oci-client::Client::pull_blob` 経由で `FileBlobStore` に直接書き、SQLite の blob / manifest / ref レコードを 1 transaction で publish する。`Artifact<OciDir>::push` は CLI 経路を Step C で失った上 Python 側でも未使用なので Step D で削除する。
+
+Step D の境界: archive / dir に対する `LocalArtifact::push()` 経路 (Step B で導入) は触らない。auth e2e テスト (`rust/ommx/tests/auth_e2e.rs`) は `Artifact<OciArchive>::push` を新 transport で経由するシナリオが追加され、`auth_from_env` ベースの単独 push 経路は撤去される。残る ocipkg `Remote` / `RemoteBuilder` / `auth_from_env` も同時に撤去する。
+
+**Step F — native archive (tar) reader / writer** (§12.2 行 1 archive 半分、行 4 Archive 残り)。
+
+`.ommx` archive は **tar of OCI Image Layout** に過ぎないので、`tar` crate 直叩きの native 実装に置換する。Writer は `LocalArtifact::save` を SQLite から blob を読みながら tar entry を append、最後に `index.json` を追記する形式に書き直す。Reader (`Artifact<OciArchive>` の `get_blob` / `get_manifest`) は 2 つの選択肢があり、
+
+1. tar の random access reader を独自実装する
+2. archive を開いた瞬間に `import_oci_archive` 同等の経路で temp SQLite registry に展開し、以降は `LocalArtifact` として読む (`load_archive(file)` を `load_archive(dir)` と同じ "import 経路" に揃える)
+
+2 のほうが implementation cost が低く、本書の "SQLite が canonical store" の方針とも整合する。最終決定は Step F PR で。同じ PR で `import::archive::import_oci_archive` の OciDir staging を撤去し、tar から直接 `FileBlobStore` + SQLite に書く。
+
+Step F が landed すると ocipkg の `OciArchive` / `OciArchiveBuilder` / `OciDir` / `OciDirBuilder` / `OciArtifact` / `Image` / `ImageBuilder` の使用箇所が全て消える。`Artifact<Base: Image>` の generic 化も意味を失うので、`Artifact<OciArchive>` は `OmmxArchive` のような単型 struct に折る (Python `ArtifactInner::Archive` も同名で更新)。
+
+**Step H — `ImageName` 公開 surface 撤去** (§12.2 行 2)。
+
+最後に残る ocipkg surface。最大の blast radius (`LocalArtifact::open` / `LocalArtifactBuilder::new` / annotation builder / CLI parse / Python `Artifact.load(...)` 全てが `ocipkg::ImageName` を expose) を持つので、Step D / F の後に独立 PR として進める。
+
+候補は `oci_client::Reference` (= `oci_spec::distribution::Reference` の re-export、`oci-client` が既に dep にあるので zero-add) だが、`ocipkg::ImageName` の `as_path` / `hostname` / `port` / `name` / `reference` フィールドアクセスは SQLite ref store の repository key 構築 (`image_name_repository`) や CLI parse 経路で深く使われており、`oci_client::Reference` の API shape とは微妙にズレる。**独自 type `ommx::artifact::ImageRef` で wrap し、`oci_client::Reference` を内部に保持しつつ Display / FromStr / fields accessor を新 type 側で提供する** ほうが現実的な見込み。最終 type 設計は Step H PR で確定する。
+
+Step H は公開 signature の breaking change を含むので、**v3.0 stable release 前に必ず land させる**。Python 側の `Artifact.load(image_name: str)` は `&str` を受け取って Rust 側で parse する形なので Python user 影響は限定的、影響は主に Rust SDK consumer に集中する。
+
+Step H 完了で `ocipkg` を `Cargo.toml` から削除でき、v3 における ocipkg 依存撤去が完了する。
+
+**順序の依存関係:** D (network) と F (local format) は機能軸では独立だが、両者とも blob を `FileBlobStore` に直接書く経路を新設する。D が先行する場合は `FileBlobStore::put_bytes` を超える追加 API (例えば streaming upload / resumable write) を D PR で安易に拡張せず、まず Step B 時点の API surface で完結させること。F が同 store を再利用するため、D の internal API 拡張が F での再設計を強制すると interface churn が発生する。新規 API が必要になった場合は D の PR description で明示し、F でも同じ shape を採用できるよう review 段階で合意を取る。逆に F が先行する場合は同じ制約は無く、F が固めた writer 経路を D がそのまま再利用できる。
+
+H は D / F の両方が landed して `Artifact<Base: Image>` / `OciArchive` などの公開 type が消えてから着手する (callsite が新 type に対応している必要があるため)。順序は `D → F → H` または `F → D → H` のどちらでもよい。Step C と同程度の粒度感で、3 PR で完了見込み。

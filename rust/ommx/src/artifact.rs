@@ -12,6 +12,7 @@ pub mod media_types;
 mod push;
 #[cfg(feature = "remote-artifact")]
 mod remote_transport;
+mod save;
 pub use annotations::*;
 pub use builder::*;
 pub use config::*;
@@ -190,11 +191,12 @@ impl Artifact<OciArchive> {
         self.load_to(&path)
     }
 
-    /// Load this archive into a legacy OCI dir at the explicit
-    /// `target_path` instead of the global default from
-    /// [`get_image_dir`]. Used by the v3 Local Registry import path so
-    /// the legacy staging dir lands under the registry's actual root
-    /// when a non-default root is configured.
+    /// Load this archive into an OCI Image Layout at the explicit
+    /// `target_path`. Used by the v3 Local Registry import path with
+    /// a caller-owned tempdir under the registry root so the staged
+    /// layout lives on the same filesystem as the `FileBlobStore`;
+    /// the tempdir is dropped once the import has copied the bytes
+    /// into the SQLite + `FileBlobStore` registry.
     #[tracing::instrument(skip_all, fields(artifact_storage = "oci_archive", target_path = %target_path.display()))]
     pub fn load_to(&mut self, target_path: &Path) -> Result<()> {
         let image_name = self.get_name()?;
@@ -259,11 +261,12 @@ impl Artifact<Remote> {
         self.pull_to(&path)
     }
 
-    /// Pull this remote artifact into a legacy OCI dir at the explicit
-    /// `target_path` instead of the global default from
-    /// [`get_image_dir`]. Used by the v3 Local Registry pull path so
-    /// the legacy staging dir lands under the registry's actual root
-    /// when a non-default root is configured.
+    /// Pull this remote artifact into an OCI Image Layout at the
+    /// explicit `target_path`. Used by the v3 Local Registry pull
+    /// path with a caller-owned tempdir under the registry root so
+    /// the staged layout lives on the same filesystem as the
+    /// `FileBlobStore`; the tempdir is dropped once the import has
+    /// copied the bytes into the SQLite + `FileBlobStore` registry.
     #[tracing::instrument(skip_all, fields(artifact_storage = "remote", target_path = %target_path.display()))]
     pub fn pull_to(&mut self, target_path: &Path) -> Result<Artifact<OciDir>> {
         let image_name = self.get_name()?;
