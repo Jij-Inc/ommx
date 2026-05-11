@@ -193,10 +193,10 @@ impl Artifact<OciArchive> {
 
     /// Load this archive into an OCI Image Layout at the explicit
     /// `target_path`. Used by the v3 Local Registry import path with
-    /// a caller-owned tempdir so the staged layout lands under the
-    /// registry root for a same-filesystem rename and is dropped
-    /// once the import has copied the bytes into the SQLite +
-    /// `FileBlobStore` registry.
+    /// a caller-owned tempdir under the registry root so the staged
+    /// layout lives on the same filesystem as the `FileBlobStore`;
+    /// the tempdir is dropped once the import has copied the bytes
+    /// into the SQLite + `FileBlobStore` registry.
     #[tracing::instrument(skip_all, fields(artifact_storage = "oci_archive", target_path = %target_path.display()))]
     pub fn load_to(&mut self, target_path: &Path) -> Result<()> {
         let image_name = self.get_name()?;
@@ -263,10 +263,10 @@ impl Artifact<Remote> {
 
     /// Pull this remote artifact into an OCI Image Layout at the
     /// explicit `target_path`. Used by the v3 Local Registry pull
-    /// path with a caller-owned tempdir so the staged layout lands
-    /// under the registry root for a same-filesystem rename and is
-    /// dropped once the import has copied the bytes into the SQLite
-    /// + `FileBlobStore` registry.
+    /// path with a caller-owned tempdir under the registry root so
+    /// the staged layout lives on the same filesystem as the
+    /// `FileBlobStore`; the tempdir is dropped once the import has
+    /// copied the bytes into the SQLite + `FileBlobStore` registry.
     #[tracing::instrument(skip_all, fields(artifact_storage = "remote", target_path = %target_path.display()))]
     pub fn pull_to(&mut self, target_path: &Path) -> Result<Artifact<OciDir>> {
         let image_name = self.get_name()?;

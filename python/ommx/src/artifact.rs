@@ -144,21 +144,28 @@ impl PyArtifact {
             let artifact = Artifact::from_oci_archive(&path)?;
             Ok(Self(ArtifactInner::Archive(Mutex::new(artifact))))
         } else if path.is_dir() {
+            // Validate the ref annotation BEFORE running `import_oci_dir`
+            // so an unnamed OCI Image Layout (no
+            // `org.opencontainers.image.ref.name`) bails without
+            // mutating the user's SQLite registry. Otherwise blobs +
+            // manifest are persisted under no ref and the same call
+            // re-orphans them on every retry.
+            let image_name = ommx::artifact::local_registry::oci_dir_image_name(&path)?
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "OCI dir at {} has no `org.opencontainers.image.ref.name` \
+                         annotation; unannotated OCI Image Layouts cannot be addressed \
+                         by name in the SQLite Local Registry",
+                        path.display(),
+                    )
+                })?;
             let registry =
                 std::sync::Arc::new(ommx::artifact::local_registry::LocalRegistry::open_default()?);
-            let import = ommx::artifact::local_registry::import_oci_dir(
+            ommx::artifact::local_registry::import_oci_dir(
                 registry.index(),
                 registry.blobs(),
                 &path,
             )?;
-            let image_name = import.image_name.ok_or_else(|| {
-                anyhow::anyhow!(
-                    "OCI dir at {} has no `org.opencontainers.image.ref.name` annotation; \
-                     unannotated OCI Image Layouts cannot be addressed by name in the SQLite \
-                     Local Registry",
-                    path.display(),
-                )
-            })?;
             let artifact = ommx::artifact::LocalArtifact::open_in_registry(registry, image_name)?;
             Ok(Self(ArtifactInner::Local(artifact)))
         } else {

@@ -975,6 +975,62 @@ fn pull_image_does_not_short_circuit_when_manifest_blob_is_missing() -> Result<(
     Ok(())
 }
 
+#[test]
+fn local_artifact_save_round_trip_preserves_layers() -> Result<()> {
+    // `LocalArtifact::save` is the CLI `save` command's only path
+    // post-Step C. Verify the produced archive: (a) is a valid OCI
+    // archive that `Artifact::from_oci_archive` can open, (b)
+    // exposes the OMMX artifactType, (c) preserves layer descriptors
+    // and bytes byte-for-byte. The manifest digest is **not**
+    // asserted equal: `OciArchiveBuilder::build` re-serialises the
+    // parsed `ImageManifest`, which can produce a different byte
+    // representation (this is documented in `save.rs`'s module doc).
+    use ocipkg::image::{Image, OciArchive};
+    let dir = tempfile::tempdir()?;
+    let registry = Arc::new(LocalRegistry::open(dir.path())?);
+    let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:save-round-trip")?;
+    let layer_bytes = b"step-c-save-round-trip-payload";
+    let local_artifact = build_test_local_artifact(&registry, &image_name, layer_bytes)?;
+    let expected_layers = local_artifact.layers()?;
+    let archive_path = dir.path().join("round-trip.ommx");
+
+    local_artifact.save(&archive_path)?;
+    assert!(
+        archive_path.is_file(),
+        "save() must produce the archive file at {}",
+        archive_path.display(),
+    );
+
+    let mut archive = ocipkg::image::OciArtifact::<OciArchive>::from_oci_archive(&archive_path)?;
+    let manifest = archive.get_manifest()?;
+    assert_eq!(
+        manifest.artifact_type().as_ref(),
+        Some(&crate::artifact::media_types::v1_artifact()),
+        "saved archive must carry the OMMX artifactType",
+    );
+    assert_eq!(
+        manifest.layers().len(),
+        expected_layers.len(),
+        "saved archive layer count differs from source",
+    );
+    for (expected, actual) in expected_layers.iter().zip(manifest.layers()) {
+        assert_eq!(expected.digest(), actual.digest(), "layer digest drift");
+        assert_eq!(expected.size(), actual.size(), "layer size drift");
+        assert_eq!(
+            expected.media_type(),
+            actual.media_type(),
+            "layer media_type drift",
+        );
+        let blob: Vec<u8> = archive.get_blob(actual.digest())?.to_vec();
+        assert_eq!(
+            blob.as_slice(),
+            layer_bytes,
+            "saved archive layer bytes differ from source",
+        );
+    }
+    Ok(())
+}
+
 fn build_test_local_artifact(
     registry: &Arc<LocalRegistry>,
     image_name: &ImageName,

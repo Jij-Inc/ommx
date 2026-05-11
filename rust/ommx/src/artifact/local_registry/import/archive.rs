@@ -4,7 +4,8 @@
 //!
 //! 1. `Artifact::from_oci_archive(path).load_to(staging_path)` extracts
 //!    the archive into a fresh [`tempfile::TempDir`] under the
-//!    registry's parent directory. The temp dir is the only on-disk
+//!    registry root (so the staging filesystem matches the
+//!    `FileBlobStore`'s). The temp dir is the only on-disk
 //!    materialisation of the archive in OCI Image Layout form; it is
 //!    dropped when this function returns. v3 has no legacy OCI dir
 //!    cache for fresh imports — SQLite is the sole post-import home
@@ -42,10 +43,11 @@ use std::{path::Path, sync::Arc};
 /// conflict when the new archive's manifest digest differs from the
 /// SQLite-recorded one under `KeepExisting` policy).
 ///
-/// The staging tempdir is created under the registry root so the OS
-/// rename / copy stays on the same filesystem, and is removed before
-/// the function returns; the post-import home of the bytes is the
-/// SQLite registry alone.
+/// The staging tempdir is created under the registry root (so the
+/// staging filesystem matches the `FileBlobStore`'s, avoiding
+/// cross-device copies when blobs are read into SQLite) and is
+/// removed before the function returns; the post-import home of the
+/// bytes is the SQLite registry alone.
 pub fn import_oci_archive(registry: &Arc<LocalRegistry>, path: &Path) -> Result<OciDirImport> {
     let mut artifact = Artifact::from_oci_archive(path)?;
     let image_name = artifact.get_name()?;

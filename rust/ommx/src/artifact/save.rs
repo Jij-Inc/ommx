@@ -1,10 +1,14 @@
 //! Native `LocalArtifact::save` — SQLite + CAS → on-disk OCI archive.
 //!
-//! Streams the SQLite-resident artifact directly to an `OciArchiveBuilder`:
-//! every layer / config blob is read from the BlobStore by digest and
-//! appended via `ImageBuilder::add_blob`, then the manifest is finalised
-//! through `ImageBuilder::build`. No intermediate on-disk OCI directory
-//! is materialised.
+//! Copies the SQLite-resident artifact directly to an `OciArchiveBuilder`:
+//! every layer / config blob is read into a `Vec<u8>` from the
+//! BlobStore by digest, appended via `ImageBuilder::add_blob`, then
+//! the manifest is finalised through `ImageBuilder::build`. No
+//! intermediate on-disk OCI directory is materialised, but memory use
+//! is **per-blob**, not constant — `oci-client` 0.16 / `ocipkg` 0.4
+//! `add_blob` takes `&[u8]`, so each blob is in-RAM for the duration
+//! of its append. The follow-up that switches to a native tar writer
+//! (§12.4 Step F) is the right place to introduce streaming.
 //!
 //! `OciArchiveBuilder` re-hashes each blob with sha256 to produce the
 //! descriptor it embeds in the archive's index. We compare that fresh
