@@ -614,7 +614,7 @@ fn assert_media_type(descriptor: &PyDescriptor, expected: &str) -> Result<()> {
 // ---------------------------------------------------------------------------
 
 enum BuilderInner {
-    Archive(Option<Box<ommx::artifact::Builder<ocipkg::image::OciArchiveBuilder>>>),
+    Archive(Option<Box<ommx::artifact::Builder>>),
     Dir(Option<Box<ommx::artifact::LocalArtifactBuilder>>),
 }
 

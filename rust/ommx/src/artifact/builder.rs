@@ -4,7 +4,7 @@ use crate::{
 };
 use anyhow::Result;
 use ocipkg::{
-    image::{ImageBuilder, OciArchiveBuilder, OciArtifactBuilder},
+    image::{OciArchive, OciArchiveBuilder, OciArtifactBuilder},
     ImageName,
 };
 use prost::Message;
@@ -17,23 +17,28 @@ use uuid::Uuid;
 
 use super::{ParametricInstanceAnnotations, SampleSetAnnotations};
 
-/// Build [Artifact]
-pub struct Builder<Base: ImageBuilder>(OciArtifactBuilder<Base>);
+/// Build an [`Artifact<OciArchive>`] (`.ommx` OCI archive output).
+///
+/// v3-native build into the SQLite Local Registry uses
+/// [`super::LocalArtifactBuilder`] instead; this type is the
+/// archive-only legacy path retained for `PyArtifactBuilder.new_archive*`
+/// / `temp` and the test suite.
+pub struct Builder(OciArtifactBuilder<OciArchiveBuilder>);
 
-impl<Base: ImageBuilder> Deref for Builder<Base> {
-    type Target = OciArtifactBuilder<Base>;
+impl Deref for Builder {
+    type Target = OciArtifactBuilder<OciArchiveBuilder>;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl<Base: ImageBuilder> DerefMut for Builder<Base> {
+impl DerefMut for Builder {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
 
-impl Builder<OciArchiveBuilder> {
+impl Builder {
     pub fn new_archive_unnamed(path: PathBuf) -> Result<Self> {
         let archive = OciArchiveBuilder::new_unnamed(path)?;
         Ok(Self(OciArtifactBuilder::new(
@@ -58,9 +63,7 @@ impl Builder<OciArchiveBuilder> {
             ImageName::parse(&format!("ttl.sh/{id}:1h"))?,
         )
     }
-}
 
-impl<Base: ImageBuilder> Builder<Base> {
     pub fn add_instance(
         &mut self,
         instance: v1::Instance,
@@ -115,7 +118,7 @@ impl<Base: ImageBuilder> Builder<Base> {
         Ok(())
     }
 
-    pub fn build(self) -> Result<Artifact<Base::Image>> {
+    pub fn build(self) -> Result<Artifact<OciArchive>> {
         Artifact::new(self.0.build()?)
     }
 }
