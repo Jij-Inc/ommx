@@ -26,13 +26,10 @@ use super::super::{
     ManifestRecord, RefConflictPolicy, RefUpdate, SqliteIndexStore, ValidatedDigest,
     BLOB_KIND_BLOB, BLOB_KIND_CONFIG, BLOB_KIND_MANIFEST, OCI_IMAGE_REF_NAME_ANNOTATION,
 };
-use crate::artifact::{
-    media_types, OCI_ARTIFACT_MANIFEST_MEDIA_TYPE, OCI_IMAGE_MANIFEST_MEDIA_TYPE,
-};
+use crate::artifact::{media_types, OCI_IMAGE_MANIFEST_MEDIA_TYPE};
 use anyhow::{ensure, Context, Result};
 use oci_spec::image::{
-    ArtifactManifest, Descriptor, DescriptorBuilder, Digest, ImageIndex, ImageManifest, MediaType,
-    OciLayout,
+    Descriptor, DescriptorBuilder, Digest, ImageIndex, ImageManifest, MediaType, OciLayout,
 };
 use ocipkg::ImageName;
 use std::collections::HashMap;
@@ -120,8 +117,8 @@ pub(super) enum RefConflictHandling {
 /// All the read-only state that a single OCI Image Layout directory
 /// contributes to a v3 import: identity (digest + ref-name annotation),
 /// the manifest bytes / descriptor that get persisted verbatim, the
-/// format tag, the layer descriptors enumerated from the manifest,
-/// and (Image Manifest only) the config blob.
+/// layer descriptors enumerated from the manifest, and the config
+/// blob.
 ///
 /// "Staged" parallels the build-side vocabulary
 /// ([`crate::artifact::StagedArtifactBlob`],
@@ -131,60 +128,35 @@ pub(super) enum RefConflictHandling {
 ///
 /// Built once by [`stage_oci_dir`] and consumed by
 /// [`import_oci_dir_inner`]. v3 import is identity-preserving:
-/// `manifest_bytes` and `manifest_digest` are stored verbatim, and
-/// reformatting Image Manifest into Artifact Manifest is a separate
-/// explicit `convert` operation, never a side effect of import.
+/// `manifest_bytes` and `manifest_digest` are stored verbatim. The only
+/// supported manifest format is OCI Image Manifest (with `artifactType`
+/// set to the OMMX artifact media type); the deprecated OCI Artifact
+/// Manifest is rejected at parse time.
 struct StagedOciDir {
     manifest_digest: String,
     image_name: Option<ImageName>,
     manifest_bytes: Vec<u8>,
     manifest_descriptor: Descriptor,
-    format: OciManifestFormat,
     layers: Vec<Descriptor>,
     annotations: Option<HashMap<String, String>>,
     subject: Option<Descriptor>,
-    /// `Some` only when `format == Image`. Artifact Manifest has no
-    /// `config` field, so this is `None` and stage 1 of the import
-    /// skips the config CAS write.
-    image_config: Option<(Descriptor, Vec<u8>)>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum OciManifestFormat {
-    Image,
-    Artifact,
-}
-
-impl StagedOciDir {
-    fn manifest_media_type(&self) -> &'static str {
-        match self.format {
-            OciManifestFormat::Image => OCI_IMAGE_MANIFEST_MEDIA_TYPE,
-            OciManifestFormat::Artifact => OCI_ARTIFACT_MANIFEST_MEDIA_TYPE,
-        }
-    }
-}
-
-impl OciManifestFormat {
-    fn descriptor_media_type(self) -> MediaType {
-        match self {
-            Self::Image => MediaType::ImageManifest,
-            Self::Artifact => MediaType::ArtifactManifest,
-        }
-    }
+    image_config: (Descriptor, Vec<u8>),
 }
 
 /// Import a standard OCI Image Layout directory into the v3 local registry.
 ///
-/// Works for any OCI Image Layout (`oci-layout` + `index.json` + `blobs/`),
-/// regardless of how it was produced. The v3 registry does not keep
-/// `index.json` as mutable state; it only reads it to discover the single
-/// manifest, and then copies the exact content-addressed blobs into
-/// [`FileBlobStore`] while inserting the matching records into
-/// [`SqliteIndexStore`]. The manifest digest is preserved verbatim — import
-/// never rewrites the manifest. Reformatting an Image Manifest into an
-/// Artifact Manifest is a separate explicit `convert` operation that
-/// produces a new artifact under a new digest / new ref, intentionally not
-/// a side effect of import.
+/// Works for any OCI Image Layout (`oci-layout` + `index.json` + `blobs/`)
+/// that uses OCI Image Manifest (with the OMMX `artifactType` set), regardless
+/// of how it was produced. The v3 registry does not keep `index.json` as
+/// mutable state; it only reads it to discover the single manifest, and
+/// then copies the exact content-addressed blobs into [`FileBlobStore`]
+/// while inserting the matching records into [`SqliteIndexStore`]. The
+/// manifest digest is preserved verbatim — import never rewrites the
+/// manifest.
+///
+/// OCI Image Layouts that use the deprecated OCI Artifact Manifest
+/// (`application/vnd.oci.artifact.manifest.v1+json`) are rejected at
+/// import time; no format conversion is performed as a side effect.
 pub fn import_oci_dir(
     index_store: &SqliteIndexStore,
     blob_store: &FileBlobStore,
@@ -309,14 +281,13 @@ pub(super) fn import_oci_dir_inner(
             annotations_json: annotations_json(layer.annotations().as_ref())?,
         });
     }
-    if let Some((config_descriptor, config_bytes)) = staged.image_config.as_ref() {
-        blob_records.push(stage_descriptor_bytes(
-            blob_store,
-            config_descriptor,
-            config_bytes,
-            BLOB_KIND_CONFIG,
-        )?);
-    }
+    let (config_descriptor, config_bytes) = &staged.image_config;
+    blob_records.push(stage_descriptor_bytes(
+        blob_store,
+        config_descriptor,
+        config_bytes,
+        BLOB_KIND_CONFIG,
+    )?);
     blob_records.push(stage_descriptor_bytes(
         blob_store,
         &staged.manifest_descriptor,
@@ -326,7 +297,7 @@ pub(super) fn import_oci_dir_inner(
 
     let manifest_record = ManifestRecord {
         digest: manifest_digest.clone(),
-        media_type: staged.manifest_media_type().to_string(),
+        media_type: OCI_IMAGE_MANIFEST_MEDIA_TYPE.to_string(),
         size: staged.manifest_descriptor.size(),
         subject_digest: staged
             .subject
@@ -453,24 +424,25 @@ fn stage_oci_dir(oci_dir_root: impl AsRef<Path>) -> Result<StagedOciDir> {
         manifest_bytes.len()
     );
 
-    // Dispatch on the index descriptor's media type so an OCI Artifact
-    // Manifest layout (no Image config, layers in `blobs[]`) imports
-    // identity-preservingly alongside the more common Image Manifest
-    // layout. v3 import never rewrites the manifest.
-    let (format, layers, annotations, subject, image_config) = match index_descriptor.media_type() {
+    // v3 supports only OCI Image Manifest. The deprecated OCI Artifact
+    // Manifest is rejected at parse time.
+    let (layers, annotations, subject, image_config) = match index_descriptor.media_type() {
         MediaType::ImageManifest => stage_image_manifest(oci_dir_root, &manifest_bytes)?,
-        MediaType::ArtifactManifest => stage_artifact_manifest(&manifest_bytes)?,
+        MediaType::ArtifactManifest => anyhow::bail!(
+            "OCI dir uses the deprecated OCI Artifact Manifest \
+             (application/vnd.oci.artifact.manifest.v1+json), which is not supported. \
+             v3 OMMX accepts only OCI Image Manifest with artifactType."
+        ),
         other => anyhow::bail!(
-            "OCI dir manifest descriptor has unsupported media type: {}. \
-             Expected an OMMX Image Manifest or Artifact Manifest.",
-            other
+            "OCI dir manifest descriptor has unsupported media type: {other}. \
+             Expected an OMMX Image Manifest."
         ),
     };
 
     let manifest_digest_parsed = Digest::from_str(&manifest_digest)
         .with_context(|| format!("Invalid manifest digest: {manifest_digest}"))?;
     let manifest_descriptor = DescriptorBuilder::default()
-        .media_type(format.descriptor_media_type())
+        .media_type(MediaType::ImageManifest)
         .digest(manifest_digest_parsed)
         .size(manifest_bytes.len() as u64)
         .build()
@@ -481,7 +453,6 @@ fn stage_oci_dir(oci_dir_root: impl AsRef<Path>) -> Result<StagedOciDir> {
         image_name,
         manifest_bytes,
         manifest_descriptor,
-        format,
         layers,
         annotations,
         subject,
@@ -489,13 +460,12 @@ fn stage_oci_dir(oci_dir_root: impl AsRef<Path>) -> Result<StagedOciDir> {
     })
 }
 
-/// Format-specific fields filled into [`StagedOciDir`] by `stage_oci_dir`.
+/// Manifest-derived fields filled into [`StagedOciDir`] by `stage_oci_dir`.
 type StagedManifestFields = (
-    OciManifestFormat,
     Vec<Descriptor>,
     Option<HashMap<String, String>>,
     Option<Descriptor>,
-    Option<(Descriptor, Vec<u8>)>,
+    (Descriptor, Vec<u8>),
 );
 
 fn stage_image_manifest(
@@ -520,24 +490,10 @@ fn stage_image_manifest(
     );
 
     Ok((
-        OciManifestFormat::Image,
         manifest.layers().to_vec(),
         manifest.annotations().clone(),
         manifest.subject().clone(),
-        Some((config_descriptor, config_bytes)),
-    ))
-}
-
-fn stage_artifact_manifest(manifest_bytes: &[u8]) -> Result<StagedManifestFields> {
-    let manifest: ArtifactManifest =
-        serde_json::from_slice(manifest_bytes).context("Failed to parse OCI artifact manifest")?;
-    ensure_ommx_artifact_type(Some(manifest.artifact_type()))?;
-    Ok((
-        OciManifestFormat::Artifact,
-        manifest.blobs().to_vec(),
-        manifest.annotations().clone(),
-        manifest.subject().clone(),
-        None,
+        (config_descriptor, config_bytes),
     ))
 }
 

@@ -2,14 +2,14 @@ use super::{
     digest::sha256_digest,
     ghcr,
     local_registry::{LocalRegistry, RefConflictPolicy, RefUpdate},
-    media_types::{self, OCI_ARTIFACT_MANIFEST_MEDIA_TYPE, OCI_IMAGE_MANIFEST_MEDIA_TYPE},
+    media_types::{self, OCI_EMPTY_CONFIG_BYTES},
     InstanceAnnotations, ParametricInstanceAnnotations, SampleSetAnnotations, SolutionAnnotations,
 };
 use crate::v1;
 use anyhow::{bail, Context, Result};
 use oci_spec::image::{
-    ArtifactManifest, ArtifactManifestBuilder as OciArtifactManifestBuilder, Descriptor,
-    DescriptorBuilder, Digest, ImageManifest, MediaType,
+    Descriptor, DescriptorBuilder, Digest, ImageManifest,
+    ImageManifestBuilder as OciImageManifestBuilder, MediaType,
 };
 use prost::Message;
 use serde::Serialize;
@@ -149,7 +149,14 @@ impl LocalArtifact {
     }
 
     fn read_manifest_uncached(&self) -> Result<LocalManifest> {
-        let bytes = self.registry.blobs().read_bytes(&self.manifest_digest)?;
+        // Verify the IndexStore has a manifest record for this digest so a
+        // missing index entry surfaces as a clear "manifest not found"
+        // error instead of bubbling up as a parse failure or stale-cache
+        // hit. The record's `media_type` column is informational for the
+        // common Image Manifest case, but is also used here to detect
+        // entries written by earlier v3-alpha builds (`#864` / `#866`)
+        // as OCI Artifact Manifest and surface a targeted error instead
+        // of an opaque image-manifest parse failure.
         let record = self
             .registry
             .index()
@@ -160,7 +167,17 @@ impl LocalArtifact {
                     self.manifest_digest
                 )
             })?;
-        LocalManifest::parse(&record.media_type, &bytes)
+        if record.media_type != media_types::OCI_IMAGE_MANIFEST_MEDIA_TYPE {
+            bail!(
+                "Manifest {} was persisted as `{}`, which is not supported in this build. \
+                 Only OCI Image Manifest (`{}`) is read from the SQLite Local Registry.",
+                self.manifest_digest,
+                record.media_type,
+                media_types::OCI_IMAGE_MANIFEST_MEDIA_TYPE,
+            );
+        }
+        let bytes = self.registry.blobs().read_bytes(&self.manifest_digest)?;
+        LocalManifest::parse(&bytes)
     }
 
     pub fn annotations(&self) -> Result<HashMap<String, String>> {
@@ -180,90 +197,72 @@ impl LocalArtifact {
     }
 }
 
-/// A manifest read from the SQLite Local Registry, dispatched on its OCI media
-/// type. v3 stores both Image Manifest (legacy import path) and Artifact
-/// Manifest (native build path) and identifies each by its bytes digest.
+/// A manifest read from the SQLite Local Registry. v3 stores OCI Image
+/// Manifest as the only native format; OMMX artifacts are identified
+/// at parse time by the `artifactType` field (validated against
+/// `application/org.ommx.v1.artifact`). The native build path also
+/// writes an `application/vnd.oci.empty.v1+json` empty config descriptor
+/// — matching the SDK v2 archive build — but `parse` does not assert
+/// on the config blob, so legacy v2 imports that carry an OMMX-specific
+/// config remain readable. The deprecated OCI Artifact Manifest media
+/// type (`application/vnd.oci.artifact.manifest.v1+json`) is rejected
+/// at parse time rather than supported via a second enum variant.
 ///
-/// Both variants are boxed because `oci_spec`'s `ImageManifest` (~800 bytes)
-/// and `ArtifactManifest` (~460 bytes) are large structs — keeping them
-/// inline would either trip `clippy::large_enum_variant` or pad the smaller
-/// variant up to the larger one. The boxed indirection costs one allocation
-/// per `get_manifest()` call but keeps both the enum and the surrounding
-/// `Result<LocalManifest>` cheap to move around.
+/// Boxed because `oci_spec`'s `ImageManifest` is large (~800 bytes) and
+/// callers move `LocalManifest` around inside `Arc<OnceLock<...>>`.
 #[derive(Debug, Clone)]
-pub enum LocalManifest {
-    Image(Box<ImageManifest>),
-    Artifact(Box<ArtifactManifest>),
-}
+pub struct LocalManifest(Box<ImageManifest>);
 
 impl LocalManifest {
-    fn parse(media_type: &str, bytes: &[u8]) -> Result<Self> {
-        match media_type {
-            OCI_ARTIFACT_MANIFEST_MEDIA_TYPE => {
-                let manifest: ArtifactManifest = serde_json::from_slice(bytes)
-                    .context("Failed to parse OCI artifact manifest")?;
-                ensure_ommx_artifact_manifest(&manifest)?;
-                Ok(LocalManifest::Artifact(Box::new(manifest)))
-            }
-            OCI_IMAGE_MANIFEST_MEDIA_TYPE => {
-                let manifest: ImageManifest =
-                    serde_json::from_slice(bytes).context("Failed to parse OCI image manifest")?;
-                ensure_ommx_image_manifest(&manifest)?;
-                Ok(LocalManifest::Image(Box::new(manifest)))
-            }
-            other => bail!("Unsupported manifest media type for OMMX artifact: {other}"),
-        }
+    fn parse(bytes: &[u8]) -> Result<Self> {
+        let manifest: ImageManifest =
+            serde_json::from_slice(bytes).context("Failed to parse OCI image manifest")?;
+        ensure_ommx_image_manifest(&manifest)?;
+        Ok(Self(Box::new(manifest)))
     }
 
     pub fn media_type(&self) -> &'static str {
-        match self {
-            LocalManifest::Image(_) => OCI_IMAGE_MANIFEST_MEDIA_TYPE,
-            LocalManifest::Artifact(_) => OCI_ARTIFACT_MANIFEST_MEDIA_TYPE,
-        }
+        media_types::OCI_IMAGE_MANIFEST_MEDIA_TYPE
     }
 
     /// Always returns the OMMX `artifactType` discriminator. `parse`
-    /// rejects manifests without one (see `ensure_ommx_image_manifest`
-    /// / `ensure_ommx_artifact_manifest`), so this method does not
-    /// surface an `Option`.
+    /// rejects manifests without one (see `ensure_ommx_image_manifest`),
+    /// so this method does not surface an `Option`.
     pub fn artifact_type(&self) -> &MediaType {
-        match self {
-            LocalManifest::Image(m) => m.artifact_type().as_ref().expect(
-                "ensure_ommx_image_manifest guarantees Image Manifest carries an artifactType",
-            ),
-            LocalManifest::Artifact(m) => m.artifact_type(),
-        }
+        self.0
+            .artifact_type()
+            .as_ref()
+            .expect("ensure_ommx_image_manifest guarantees Image Manifest carries an artifactType")
+    }
+
+    pub fn config(&self) -> Descriptor {
+        self.0.config().clone()
     }
 
     pub fn layers(&self) -> Vec<Descriptor> {
-        match self {
-            LocalManifest::Image(m) => m.layers().to_vec(),
-            LocalManifest::Artifact(m) => m.blobs().to_vec(),
-        }
+        self.0.layers().to_vec()
     }
 
     pub fn annotations(&self) -> HashMap<String, String> {
-        let raw = match self {
-            LocalManifest::Image(m) => m.annotations().clone(),
-            LocalManifest::Artifact(m) => m.annotations().clone(),
-        };
-        raw.unwrap_or_default()
+        self.0.annotations().clone().unwrap_or_default()
     }
 
     pub fn subject(&self) -> Option<Descriptor> {
-        match self {
-            LocalManifest::Image(m) => m.subject().clone(),
-            LocalManifest::Artifact(m) => m.subject().clone(),
-        }
+        self.0.subject().clone()
     }
 }
 
 /// Builder for OMMX Artifacts stored in the SQLite-backed Local Registry.
+///
+/// Produces an OCI Image Manifest with `artifactType` set to the OMMX
+/// artifact media type and the OCI 1.1 empty config descriptor as
+/// `config`. The layer blobs land in the Image Manifest's `layers[]`
+/// field.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LocalArtifactBuilder {
     image_name: ocipkg::ImageName,
     artifact_type: MediaType,
-    blobs: Vec<StagedArtifactBlob>,
+    layers: Vec<StagedArtifactBlob>,
     subject: Option<Descriptor>,
     annotations: HashMap<String, String>,
 }
@@ -273,7 +272,7 @@ impl LocalArtifactBuilder {
         Self {
             image_name,
             artifact_type: MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
-            blobs: Vec::new(),
+            layers: Vec::new(),
             subject: None,
             annotations: HashMap::new(),
         }
@@ -297,7 +296,7 @@ impl LocalArtifactBuilder {
     ) -> Result<Descriptor> {
         let blob = StagedArtifactBlob::new(media_type, bytes, annotations)?;
         let descriptor = blob.descriptor.clone();
-        self.blobs.push(blob);
+        self.layers.push(blob);
         Ok(descriptor)
     }
 
@@ -393,15 +392,44 @@ impl LocalArtifactBuilder {
     /// descriptor from the in-memory builder state, returning a
     /// [`StagedArtifactManifest`] that the registry can later publish.
     /// Pure: no I/O, no registry interaction.
+    ///
+    /// Materialises the empty config blob as one of the staged blobs so
+    /// the publish path uploads it alongside the layers. Matches the
+    /// SDK v2 / `ArchiveArtifactBuilder` manifest shape (see
+    /// `ocipkg::image::OciArtifactBuilder::new`): `schemaVersion: 2` +
+    /// `artifactType` + empty config + layers, with the manifest's
+    /// own `mediaType` field intentionally absent so `LocalArtifactBuilder`
+    /// and the archive build path produce structurally identical
+    /// manifests.
     fn stage(self) -> Result<StagedArtifactManifest> {
-        let mut builder = OciArtifactManifestBuilder::default()
+        let mut blobs = self.layers;
+        // V2 SDK's `ocipkg::OciArtifactBuilder::add_empty_json` emits the
+        // empty config descriptor without an `annotations` field; build
+        // it directly here (bypassing `descriptor_from_bytes`, which
+        // always renders `annotations` even when empty for layer
+        // descriptors) so the resulting manifest matches v2 byte-for-byte.
+        let empty_config_bytes = OCI_EMPTY_CONFIG_BYTES.to_vec();
+        let config_descriptor = DescriptorBuilder::default()
+            .media_type(MediaType::EmptyJSON)
+            .digest(
+                Digest::from_str(&sha256_digest(&empty_config_bytes))
+                    .context("Failed to parse empty config digest")?,
+            )
+            .size(empty_config_bytes.len() as u64)
+            .build()
+            .context("Failed to build empty config descriptor")?;
+        let layer_descriptors: Vec<Descriptor> =
+            blobs.iter().map(|blob| blob.descriptor.clone()).collect();
+        blobs.push(StagedArtifactBlob {
+            descriptor: config_descriptor.clone(),
+            bytes: empty_config_bytes,
+        });
+
+        let mut builder = OciImageManifestBuilder::default()
+            .schema_version(2u32)
             .artifact_type(self.artifact_type)
-            .blobs(
-                self.blobs
-                    .iter()
-                    .map(|blob| blob.descriptor.clone())
-                    .collect::<Vec<_>>(),
-            );
+            .config(config_descriptor)
+            .layers(layer_descriptors);
         if let Some(subject) = self.subject {
             builder = builder.subject(subject);
         }
@@ -410,24 +438,25 @@ impl LocalArtifactBuilder {
         }
         let manifest = builder
             .build()
-            .context("Failed to build OCI artifact manifest")?;
+            .context("Failed to build OCI image manifest")?;
         let manifest_bytes = stable_json_bytes(&manifest)?;
         let manifest_descriptor =
-            descriptor_from_bytes(MediaType::ArtifactManifest, &manifest_bytes, HashMap::new())?;
+            descriptor_from_bytes(MediaType::ImageManifest, &manifest_bytes, HashMap::new())?;
         Ok(StagedArtifactManifest {
             image_name: self.image_name,
             manifest,
             manifest_bytes,
             manifest_descriptor,
-            blobs: self.blobs,
+            blobs,
         })
     }
 }
 
 /// The whole-artifact analogue of [`StagedArtifactBlob`]: bundles the
-/// `OCI ArtifactManifest` together with its stable JSON bytes, the
-/// matching `Descriptor` (digest / size / media type), every layer
-/// blob staged for upload, and the target `ImageName`.
+/// `OCI ImageManifest` together with its stable JSON bytes, the
+/// matching `Descriptor` (digest / size / media type), every blob
+/// staged for upload (layers + the OCI 1.1 empty config), and the
+/// target `ImageName`.
 ///
 /// Produced purely by in-memory computation (`LocalArtifactBuilder::stage`)
 /// and consumed by the registry publish path
@@ -444,7 +473,7 @@ impl LocalArtifactBuilder {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct StagedArtifactManifest {
     image_name: ocipkg::ImageName,
-    manifest: ArtifactManifest,
+    manifest: ImageManifest,
     manifest_bytes: Vec<u8>,
     manifest_descriptor: Descriptor,
     blobs: Vec<StagedArtifactBlob>,
@@ -456,14 +485,19 @@ pub(crate) fn descriptor_from_bytes(
     annotations: HashMap<String, String>,
 ) -> Result<Descriptor> {
     let digest = Digest::from_str(&sha256_digest(bytes)).context("Failed to parse blob digest")?;
-    let mut builder = DescriptorBuilder::default()
+    // `annotations` is always set, even when empty, matching SDK v2 /
+    // `ocipkg::OciArtifactBuilder::add_layer` which renders the field as
+    // `"annotations": {}` in the manifest JSON. Preserving this shape
+    // keeps layer descriptor bytes (and therefore the manifest digest)
+    // byte-for-byte compatible with v2 OMMX artifacts.
+    let descriptor = DescriptorBuilder::default()
         .media_type(media_type)
         .digest(digest)
-        .size(bytes.len() as u64);
-    if !annotations.is_empty() {
-        builder = builder.annotations(annotations);
-    }
-    builder.build().context("Failed to build OCI descriptor")
+        .size(bytes.len() as u64)
+        .annotations(annotations)
+        .build()
+        .context("Failed to build OCI descriptor")?;
+    Ok(descriptor)
 }
 
 pub(crate) fn stable_json_bytes(value: &impl Serialize) -> Result<Vec<u8>> {
@@ -483,20 +517,6 @@ fn reject_conflicting_ref(image_name: &ocipkg::ImageName, ref_update: RefUpdate)
              incoming manifest {incoming_manifest_digest} was not published"
         );
     }
-    Ok(())
-}
-
-fn ensure_ommx_artifact_manifest(manifest: &ArtifactManifest) -> Result<()> {
-    anyhow::ensure!(
-        manifest.media_type().as_ref() == OCI_ARTIFACT_MANIFEST_MEDIA_TYPE,
-        "Manifest is not an OCI artifact manifest: {}",
-        manifest.media_type()
-    );
-    anyhow::ensure!(
-        manifest.artifact_type() == &media_types::v1_artifact(),
-        "Not an OMMX Artifact: {}",
-        manifest.artifact_type()
-    );
     Ok(())
 }
 
@@ -521,9 +541,9 @@ mod tests {
     }
 
     #[test]
-    fn builds_native_oci_artifact_manifest() -> Result<()> {
+    fn builds_native_oci_image_manifest_with_artifact_type() -> Result<()> {
         let mut builder = LocalArtifactBuilder::new(test_image_name("v1")?);
-        let blob = builder.add_layer_bytes(
+        let layer = builder.add_layer_bytes(
             MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
             b"instance".to_vec(),
             HashMap::from([("org.ommx.v1.instance.title".to_string(), "demo".to_string())]),
@@ -531,22 +551,45 @@ mod tests {
         builder.add_annotation("org.opencontainers.image.ref.name", "example.com/demo:v1");
 
         let staged = builder.stage()?;
-        assert_eq!(staged.manifest.media_type(), &MediaType::ArtifactManifest);
+        // Manifest's own `mediaType` field is intentionally not set, matching
+        // the v2 / `ArchiveArtifactBuilder` shape; the OCI Distribution
+        // Content-Type header is supplied separately at push time.
+        assert_eq!(staged.manifest.media_type().as_ref(), None);
         assert_eq!(
-            staged.manifest.artifact_type(),
-            &MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string())
+            staged.manifest.artifact_type().as_ref(),
+            Some(&MediaType::Other(
+                media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()
+            ))
         );
-        assert_eq!(staged.manifest.blobs(), &[blob]);
+        assert_eq!(staged.manifest.layers(), &[layer]);
+
+        // OCI 1.1 empty config descriptor is set as the manifest's config and
+        // staged for upload alongside the layers.
+        let config = staged.manifest.config();
+        assert_eq!(config.media_type(), &MediaType::EmptyJSON);
+        assert_eq!(
+            config.size(),
+            media_types::OCI_EMPTY_CONFIG_BYTES.len() as u64
+        );
+        assert_eq!(
+            config.digest().to_string(),
+            media_types::OCI_EMPTY_CONFIG_DIGEST
+        );
+        assert!(staged
+            .blobs
+            .iter()
+            .any(|blob| blob.descriptor.digest() == config.digest()));
+
         assert_eq!(
             staged.manifest_descriptor.media_type(),
-            &MediaType::ArtifactManifest
+            &MediaType::ImageManifest
         );
         assert_eq!(
             staged.manifest_descriptor.digest().to_string(),
             sha256_digest(&staged.manifest_bytes)
         );
 
-        let parsed: ArtifactManifest = serde_json::from_slice(&staged.manifest_bytes)?;
+        let parsed: ImageManifest = serde_json::from_slice(&staged.manifest_bytes)?;
         assert_eq!(parsed, staged.manifest);
         Ok(())
     }
@@ -566,11 +609,8 @@ mod tests {
 
     #[test]
     fn builds_manifest_with_subject() -> Result<()> {
-        let subject = descriptor_from_bytes(
-            MediaType::ArtifactManifest,
-            b"parent manifest",
-            HashMap::new(),
-        )?;
+        let subject =
+            descriptor_from_bytes(MediaType::ImageManifest, b"parent manifest", HashMap::new())?;
         let mut builder = LocalArtifactBuilder::new(test_image_name("subject")?);
         builder.add_layer_bytes(
             MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),

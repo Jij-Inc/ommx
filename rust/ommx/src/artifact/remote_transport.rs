@@ -98,11 +98,9 @@ impl RemoteTransport {
     }
 
     /// Push the manifest bytes verbatim with the caller-supplied OCI
-    /// `Content-Type`. `oci_client::Client::push_manifest_raw` lets us
-    /// publish both OCI Image Manifest and OCI Artifact Manifest bytes
-    /// without round-tripping through the typed `OciManifest` enum, so
-    /// the digest stored locally and the digest the registry computes
-    /// agree byte-for-byte.
+    /// `Content-Type`. `oci_client::Client::push_manifest_raw` skips
+    /// the typed `OciManifest` round-trip, so the digest stored locally
+    /// and the digest the registry computes agree byte-for-byte.
     pub(crate) fn push_manifest_bytes(
         &self,
         image_name: &ocipkg::ImageName,

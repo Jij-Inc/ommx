@@ -81,7 +81,7 @@ jobs:
           set -eux
           curl -sf http://localhost:5000/v2/ommx-test/native-push/tags/list \
             | grep -F '"tag1"'
-          curl -sf -H "Accept: application/vnd.oci.artifact.manifest.v1+json" \
+          curl -sf -H "Accept: application/vnd.oci.image.manifest.v1+json" \
             http://localhost:5000/v2/ommx-test/native-push/manifests/tag1 \
             | grep -F '"artifactType"'
 

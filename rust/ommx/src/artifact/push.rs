@@ -1,17 +1,16 @@
 //! Native `LocalArtifact::push` — SQLite + CAS → remote OCI registry.
 //!
 //! The push streams the SQLite-resident artifact directly to the remote
-//! registry: every layer / blob is read from the BlobStore by digest and
-//! pushed through the [`super::remote_transport::RemoteTransport`]
-//! wrapper, then the verbatim manifest bytes (as digest-addressed in the
-//! BlobStore) are published with the manifest's recorded media type. No
-//! intermediate on-disk OCI directory is materialised.
+//! registry: the empty config blob and every layer blob are read from
+//! the BlobStore by digest and pushed through the
+//! [`super::remote_transport::RemoteTransport`] wrapper, then the
+//! verbatim manifest bytes (as digest-addressed in the BlobStore) are
+//! published with `application/vnd.oci.image.manifest.v1+json` as the
+//! Content-Type. No intermediate on-disk OCI directory is materialised.
 //!
-//! Image Manifest and Artifact Manifest are handled uniformly because
-//! the manifest is treated as opaque bytes: the only `LocalManifest`
-//! dispatch needed is "collect descriptors to push" — for an Image
-//! Manifest that is `config + layers`, for an Artifact Manifest it is
-//! `optional config + blobs`. See `super::manifest::LocalManifest`.
+//! `LocalManifest` is OCI Image Manifest only — Artifact Manifest is
+//! rejected at parse time — so blob enumeration is uniform: `config`
+//! followed by each entry in `layers[]`.
 
 use super::{remote_transport::RemoteTransport, LocalArtifact, LocalManifest};
 use oci_spec::image::Descriptor;
@@ -70,17 +69,19 @@ mod tests {
     use std::collections::HashMap;
     use std::sync::Arc;
 
-    /// Pushes an OCI Artifact Manifest produced by the v3 SQLite Local
-    /// Registry to a `registry:2`-style local registry on
-    /// `localhost:5000`. Ignored by default; the `with-registry` CI job
-    /// re-runs the test suite with `--include-ignored` after launching
-    /// the registry service container.
+    /// Pushes an OCI Image Manifest (with the OMMX `artifactType`)
+    /// produced by the v3 SQLite Local Registry to a `registry:2`-style
+    /// local registry on `localhost:5000`. Ignored by default; the
+    /// `with-registry` CI job re-runs the test suite with
+    /// `--include-ignored` after launching the registry service
+    /// container.
     ///
     /// The test only asserts that the entire push path (auth → blob
-    /// upload → manifest upload with `application/vnd.oci.artifact.manifest.v1+json`
-    /// Content-Type) completes against a real registry. Registry-state
-    /// verification (`curl /v2/<repo>/tags/list`) is done in the CI step
-    /// rather than in Rust so the test stays self-contained.
+    /// upload → manifest upload with
+    /// `application/vnd.oci.image.manifest.v1+json` Content-Type)
+    /// completes against a real registry. Registry-state verification
+    /// (`curl /v2/<repo>/tags/list`) is done in the CI step rather than
+    /// in Rust so the test stays self-contained.
     #[test]
     #[ignore]
     fn push_local_artifact_to_localhost_registry() -> Result<()> {
@@ -104,15 +105,11 @@ mod tests {
 }
 
 /// Enumerate every blob a manifest references, in push order: dependent
-/// blobs (`config`, `layers` / `blobs`) before the manifest itself.
+/// blobs (`config`, then `layers`) before the manifest itself.
 fn collect_blob_descriptors(manifest: &LocalManifest) -> Vec<Descriptor> {
-    match manifest {
-        LocalManifest::Image(m) => {
-            let mut out = Vec::with_capacity(1 + m.layers().len());
-            out.push(m.config().clone());
-            out.extend(m.layers().iter().cloned());
-            out
-        }
-        LocalManifest::Artifact(m) => m.blobs().to_vec(),
-    }
+    let layers = manifest.layers();
+    let mut out = Vec::with_capacity(1 + layers.len());
+    out.push(manifest.config());
+    out.extend(layers);
+    out
 }
