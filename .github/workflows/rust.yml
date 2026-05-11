@@ -56,13 +56,16 @@ jobs:
       - name: Run tests
         run: cargo test
 
-  test-with-registry:
+  auth-e2e:
+    # End-to-end coverage of the remote-artifact push pipeline and
+    # the three-tier credential resolver in
+    # `artifact::remote_transport::resolve_auth`. The test suite
+    # (`rust/ommx/tests/auth_e2e.rs`) brings up its own ephemeral OCI
+    # registries via `testcontainers` — anonymous, htpasswd-protected,
+    # and one for the CLI dispatch test — so we do not need a GHA
+    # `services:` declaration here. `ubuntu-latest` runners ship with
+    # a running Docker daemon.
     runs-on: ubuntu-latest
-    services:
-      registry:
-        image: registry:2
-        ports:
-          - 5000:5000
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -70,62 +73,10 @@ jobs:
       - name: Setup Environment
         uses: ./.github/actions/setup-test-environment
 
-      - name: Wait for local registry to be ready
+      - name: Run auth e2e tests
         run: |
-          for i in $(seq 1 30); do
-            if curl -sf http://localhost:5000/v2/; then
-              echo "registry ready after ${i}s"
-              exit 0
-            fi
-            sleep 1
-          done
-          echo "registry not ready after 30s" >&2
-          exit 1
-
-      - name: Run remote-artifact tests against local registry
-        run: cargo test -p ommx --features remote-artifact -- --include-ignored push_local_artifact_to
-
-      - name: Verify pushed artifact lives in registry
-        run: |
-          set -eux
-          curl -sf http://localhost:5000/v2/ommx-test/native-push/tags/list \
-            | grep -F '"tag1"'
-          curl -sf -H "Accept: application/vnd.oci.image.manifest.v1+json" \
-            http://localhost:5000/v2/ommx-test/native-push/manifests/tag1 \
-            | grep -F '"artifactType"'
-
-      # The Rust smoke test above exercises `LocalArtifact::push()`
-      # directly. This step covers the CLI entry point: `ommx push`
-      # must dispatch through `LocalArtifact::try_open` + native
-      # push for any image resident in the SQLite Local Registry,
-      # not the legacy `Artifact::from_oci_dir` + ocipkg path.
-      #
-      # `ommx pull`'s stage-1 auto-migration materialises a legacy
-      # disk OCI dir at `$OMMX_LOCAL_REGISTRY_ROOT/<host>/<repo>/<tag>`
-      # alongside populating SQLite, so a regression that took the
-      # legacy ocipkg push fallback would still find a usable disk
-      # dir and pass silently. To make the test airtight we delete
-      # everything under the registry root *except* `blobs/` and
-      # `index.sqlite3` after the pull — that strips the legacy dirs
-      # while leaving the SQLite registry intact, so the push can
-      # only succeed via the new `LocalArtifact::push()` path.
-      - name: Smoke-test ommx push CLI round-trip
-        env:
-          OMMX_LOCAL_REGISTRY_ROOT: /tmp/ommx-cli-registry
-        run: |
-          set -eux
-          mkdir -p "$OMMX_LOCAL_REGISTRY_ROOT"
-          cargo run --bin ommx --features remote-artifact,built,cli -- \
-            pull localhost:5000/ommx-test/native-push:tag1
-          # Strip the legacy OCI dirs so only the SQLite path is viable.
-          find "$OMMX_LOCAL_REGISTRY_ROOT" -maxdepth 1 -mindepth 1 \
-            -type d ! -name blobs -exec rm -rf {} +
-          ls -la "$OMMX_LOCAL_REGISTRY_ROOT"
-          cargo run --bin ommx --features remote-artifact,built,cli -- \
-            push localhost:5000/ommx-test/native-push:tag1
-          curl -sf http://localhost:5000/v2/ommx-test/native-push/manifests/tag1 \
-            -H "Accept: application/vnd.oci.image.manifest.v1+json" \
-            | grep -F '"artifactType"'
+          cargo test -p ommx --features remote-artifact,built,cli --test auth_e2e \
+            -- --include-ignored --test-threads=1
 
   protogen:
     runs-on: ubuntu-latest

@@ -77,6 +77,9 @@ colored.workspace = true
 criterion.workspace = true
 indoc.workspace = true
 insta.workspace = true
+serial_test.workspace = true
+testcontainers.workspace = true
+testcontainers-modules.workspace = true
 
 [build-dependencies]
 built = { workspace = true, optional = true }

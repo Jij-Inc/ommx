@@ -704,6 +704,8 @@ Transport crate は **`oci-client`** (ORAS project, [oras-project/rust-oci-clien
 
 **credential 解決:** OMMX は credential store を自前で持たない。新 transport は `OMMX_BASIC_AUTH_*` env var (CI 用 explicit override) → `~/.docker/config.json` (+ credential helper、`docker_credential` クレート経由) → anonymous の 3 段で解決する。これにより `docker login` / `gcloud auth configure-docker` / `aws ecr get-login-password` が既に container ecosystem に対して surface している credential をそのまま流用できる。`oci-client` 自体は credential lookup を持たないので、`RegistryAuth::{Anonymous, Basic, Bearer}` のいずれかを materialize する責任は SDK 側にある。
 
+**auth e2e テスト:** `rust/ommx/tests/auth_e2e.rs` が `testcontainers` 経由で ephemeral `registry:2` (anonymous / htpasswd) を立ち上げ、resolver の各 tier (anonymous / docker config / env override / 部分 env override bail) と CLI dispatch + 否定ケース (auth 強制の sanity / 誤 credential 拒否) を実 push で検証する (8 シナリオ)。`#[ignore = "requires docker"]` + `#[serial]` で env mutation を逐次化、CI は `--include-ignored --test-threads=1` で全 8 件を走らせる。
+
 **Step C — lazy auto-migration の legacy double-write 撤廃** (§12.2 行 6、行 4 Archive 半分)。
 
 `Artifact.load(image)` / `ommx load` の auto-migration を "remote/archive → legacy disk OCI dir → SQLite" の 2-stage から "remote/archive → SQLite" 直結に変更。Python `ArtifactInner::Dir` 分岐を削除し、`{Archive, Local}` 2-variant に。`Artifact<OciDir>` は `import::*` の temp scratch でしか使われない実装詳細に格下げ。`Artifact<OciArchive>::push` も Step B で導入した新 transport に統一する候補。
