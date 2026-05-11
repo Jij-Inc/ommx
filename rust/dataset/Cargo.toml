@@ -15,4 +15,5 @@ ommx = { path = "../ommx" }
 serde = { workspace = true, features = ["derive"] }
 tracing.workspace = true
 tracing-subscriber.workspace = true
+url.workspace = true
 zip.workspace = true

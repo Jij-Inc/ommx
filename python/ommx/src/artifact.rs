@@ -614,7 +614,7 @@ fn assert_media_type(descriptor: &PyDescriptor, expected: &str) -> Result<()> {
 // ---------------------------------------------------------------------------
 
 enum BuilderInner {
-    Archive(Option<Box<ommx::artifact::Builder<ocipkg::image::OciArchiveBuilder>>>),
+    Archive(Option<Box<ommx::artifact::ArchiveArtifactBuilder>>),
     Dir(Option<Box<ommx::artifact::LocalArtifactBuilder>>),
 }
 
@@ -722,7 +722,7 @@ impl PyArtifactBuilder {
     /// ```
     #[staticmethod]
     pub fn new_archive_unnamed(path: PathBuf) -> Result<Self> {
-        let builder = ommx::artifact::Builder::new_archive_unnamed(path)?;
+        let builder = ommx::artifact::ArchiveArtifactBuilder::new_archive_unnamed(path)?;
         Ok(Self(BuilderInner::Archive(Some(Box::new(builder)))))
     }
 
@@ -730,7 +730,7 @@ impl PyArtifactBuilder {
     #[staticmethod]
     pub fn new_archive(path: PathBuf, image_name: &str) -> Result<Self> {
         let image_name = ocipkg::ImageName::parse(image_name)?;
-        let builder = ommx::artifact::Builder::new_archive(path, image_name)?;
+        let builder = ommx::artifact::ArchiveArtifactBuilder::new_archive(path, image_name)?;
         Ok(Self(BuilderInner::Archive(Some(Box::new(builder)))))
     }
 
@@ -752,7 +752,7 @@ impl PyArtifactBuilder {
     #[staticmethod]
     pub fn new(image_name: &str) -> Result<Self> {
         let image_name = ocipkg::ImageName::parse(image_name)?;
-        let builder = ommx::artifact::LocalArtifactBuilder::new_ommx(image_name);
+        let builder = ommx::artifact::LocalArtifactBuilder::new(image_name);
         Ok(Self(BuilderInner::Dir(Some(Box::new(builder)))))
     }
 
@@ -769,7 +769,7 @@ impl PyArtifactBuilder {
     /// ```
     #[staticmethod]
     pub fn temp() -> Result<Self> {
-        let builder = ommx::artifact::Builder::temp_archive()?;
+        let builder = ommx::artifact::ArchiveArtifactBuilder::temp_archive()?;
         Ok(Self(BuilderInner::Archive(Some(Box::new(builder)))))
     }
 
