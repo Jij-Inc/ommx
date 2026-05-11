@@ -54,6 +54,7 @@ rusqlite.workspace = true
 sha2.workspace = true
 similar.workspace = true
 smallvec.workspace = true
+tempfile.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 tracing-subscriber = { workspace = true, optional = true }
@@ -65,7 +66,6 @@ colored.workspace = true
 criterion.workspace = true
 indoc.workspace = true
 insta.workspace = true
-tempfile.workspace = true
 
 [build-dependencies]
 built = { workspace = true, optional = true }

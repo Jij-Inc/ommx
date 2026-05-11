@@ -749,6 +749,68 @@ fn concurrent_blob_writes_publish_one_complete_blob() -> Result<()> {
     Ok(())
 }
 
+#[test]
+fn import_oci_archive_re_extracts_when_legacy_dir_is_stale() -> Result<()> {
+    // P1 regression: importing a second .ommx archive with the same
+    // image_name but different content used to leave the prior archive's
+    // bytes at `legacy_path` (because `load_to` skipped when the dir
+    // existed), so `import_oci_dir_as_ref` re-imported the *old* manifest
+    // digest and returned `Unchanged` instead of surfacing the digest
+    // mismatch. Fixed by always staging into a temp dir and atomically
+    // promoting it over `legacy_path`. This test would loop back into a
+    // false `Ok(Unchanged)` without that fix.
+    let dir = tempfile::tempdir()?;
+    let registry = Arc::new(LocalRegistry::open(dir.path())?);
+    let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:reextract")?;
+
+    let archive_path_a = dir.path().join("a.ommx");
+    {
+        let mut builder =
+            crate::artifact::Builder::new_archive(archive_path_a.clone(), image_name.clone())?;
+        builder.add_layer(
+            MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.into()),
+            b"archive-A",
+            HashMap::new(),
+        )?;
+        let _ = builder.build()?;
+    }
+    let archive_path_b = dir.path().join("b.ommx");
+    {
+        let mut builder =
+            crate::artifact::Builder::new_archive(archive_path_b.clone(), image_name.clone())?;
+        builder.add_layer(
+            MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.into()),
+            b"archive-B",
+            HashMap::new(),
+        )?;
+        let _ = builder.build()?;
+    }
+
+    let outcome_a = import_oci_archive(&registry, &archive_path_a)?;
+    let digest_a = outcome_a.manifest_digest.clone();
+
+    // Stale legacy dir would silently shadow archive B's bytes. The
+    // fix re-extracts B over the legacy path, so the second import sees
+    // B's digest and surfaces a ref conflict against A under the
+    // default `KeepExisting` policy.
+    let err = import_oci_archive(&registry, &archive_path_b)
+        .expect_err("second import with a different manifest digest must surface a conflict");
+    let msg = err.to_string();
+    assert!(
+        msg.contains(&digest_a),
+        "conflict message should mention archive A's existing digest, got: {msg}",
+    );
+    // The "incoming" side of the conflict must be a digest distinct
+    // from A — i.e. B's digest — proving that the implementation read
+    // B's freshly extracted bytes and not the stale A bytes.
+    assert!(
+        msg.contains("incoming manifest sha256:")
+            && !msg.contains(&format!("incoming manifest {digest_a}")),
+        "incoming digest must differ from archive A (i.e. come from B's re-extracted bytes): {msg}",
+    );
+    Ok(())
+}
+
 fn build_test_local_artifact(
     registry: &Arc<LocalRegistry>,
     image_name: &ImageName,

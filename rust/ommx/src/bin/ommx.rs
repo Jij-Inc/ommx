@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 use colored::Colorize;
 use ocipkg::{oci_spec::image::ImageManifest, ImageName};
@@ -233,17 +233,25 @@ fn main() -> Result<()> {
             // dispatch on what the path actually is. Archives go through
             // the ocipkg-based stage-1 pipeline in `import::archive`;
             // directories use the native `import::oci_dir` path that
-            // dispatches on Image / Artifact Manifest. A missing path
-            // is reported up front rather than as a downstream tar /
-            // OCI parsing error.
-            if !path.exists() {
-                bail!("Path does not exist: {}", path.display());
-            }
+            // dispatches on Image / Artifact Manifest. Using
+            // `fs::metadata` (rather than `Path::exists()` /
+            // `Path::is_dir()`) surfaces permission and IO errors with
+            // the path attached, and rejects special files (FIFO,
+            // socket, device) explicitly instead of sending them to the
+            // archive branch where they would fail with an opaque
+            // ocipkg / tar error.
+            let metadata = std::fs::metadata(path)
+                .with_context(|| format!("Failed to stat {}", path.display()))?;
             let registry = std::sync::Arc::new(LocalRegistry::open_default()?);
-            if path.is_dir() {
+            if metadata.is_dir() {
                 import_oci_dir(registry.index(), registry.blobs(), path)?;
-            } else {
+            } else if metadata.is_file() {
                 import_oci_archive(&registry, path)?;
+            } else {
+                bail!(
+                    "Path is neither a directory nor a regular file: {}",
+                    path.display()
+                );
             }
         }
 
