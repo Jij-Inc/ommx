@@ -65,7 +65,7 @@ tempfile = "3.27.0"
 testcontainers = { version = "0.27.3", features = ["blocking"] }
 testcontainers-modules = { version = "0.15.0", features = ["cncf_distribution"] }
 thiserror = "2.0.18"
-tokio = { version = "1.48.0", default-features = false, features = ["rt"] }
+tokio = { version = "1.48.0", default-features = false, features = ["rt", "time", "net", "io-util"] }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
 url = "2.5.8"

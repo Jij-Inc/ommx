@@ -16,9 +16,13 @@ use super::{remote_transport::RemoteTransport, LocalArtifact, LocalManifest};
 use oci_spec::image::Descriptor;
 
 impl LocalArtifact {
-    /// Push this artifact to its OCI registry. The credentials are read
-    /// from `OMMX_BASIC_AUTH_DOMAIN` / `OMMX_BASIC_AUTH_USERNAME` /
-    /// `OMMX_BASIC_AUTH_PASSWORD` env vars; absence means anonymous.
+    /// Push this artifact to its OCI registry. Credentials are
+    /// resolved by [`super::remote_transport`]'s three-tier chain:
+    /// `OMMX_BASIC_AUTH_*` env vars (explicit override) →
+    /// `~/.docker/config.json` plus credential helpers
+    /// (`docker-credential-gcloud`, …) → anonymous. A workstation
+    /// `docker login` is sufficient; OMMX does not maintain its own
+    /// credential store.
     ///
     /// Pushes blobs first, manifest last, so a partial failure leaves
     /// the registry without a tag pointing at incomplete data. Blobs
@@ -40,7 +44,11 @@ impl LocalArtifact {
                 "Pushing blob {digest} of {}",
                 self.image_name()
             );
-            transport.push_blob(self.image_name(), &digest, &bytes)?;
+            // `bytes` is moved into `push_blob`, which moves it into
+            // `oci_client::Client::push_blob`, which takes `Vec<u8>`
+            // by value. Avoid `to_vec()`-ing a buffer that is
+            // already owned (blobs can be tens of MB).
+            transport.push_blob(self.image_name(), &digest, bytes)?;
         }
 
         let manifest_bytes = self.get_blob(self.manifest_digest())?;
@@ -52,7 +60,7 @@ impl LocalArtifact {
             manifest_bytes.len(),
             self.image_name(),
         );
-        transport.push_manifest_bytes(self.image_name(), &manifest_bytes, content_type)?;
+        transport.push_manifest_bytes(self.image_name(), manifest_bytes, content_type)?;
         Ok(())
     }
 }

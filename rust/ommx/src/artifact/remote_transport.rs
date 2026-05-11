@@ -94,16 +94,18 @@ impl RemoteTransport {
     /// Push a single blob to the registry. The caller passes the
     /// pre-computed digest (which the SQLite Local Registry already
     /// stores as the BlobStore key), so the registry-side digest can be
-    /// validated without re-hashing.
+    /// validated without re-hashing. `bytes` is moved into
+    /// `oci_client::Client::push_blob` (which takes `Vec<u8>` by
+    /// value) so blobs the caller already owns don't get cloned.
     pub(crate) fn push_blob(
         &self,
         image_name: &ocipkg::ImageName,
         digest: &str,
-        bytes: &[u8],
+        bytes: Vec<u8>,
     ) -> crate::Result<()> {
         let reference = to_reference(image_name)?;
         self.runtime
-            .block_on(self.client.push_blob(&reference, bytes.to_vec(), digest))
+            .block_on(self.client.push_blob(&reference, bytes, digest))
             .with_context(|| format!("Failed to push blob {digest} to {reference}"))?;
         Ok(())
     }
@@ -112,10 +114,12 @@ impl RemoteTransport {
     /// `Content-Type`. `oci_client::Client::push_manifest_raw` skips
     /// the typed `OciManifest` round-trip, so the digest stored locally
     /// and the digest the registry computes agree byte-for-byte.
+    /// `manifest_bytes` is moved through into `push_manifest_raw` to
+    /// avoid cloning a manifest the caller already owns.
     pub(crate) fn push_manifest_bytes(
         &self,
         image_name: &ocipkg::ImageName,
-        manifest_bytes: &[u8],
+        manifest_bytes: Vec<u8>,
         content_type: &str,
     ) -> crate::Result<()> {
         let reference = to_reference(image_name)?;
@@ -125,7 +129,7 @@ impl RemoteTransport {
         self.runtime
             .block_on(
                 self.client
-                    .push_manifest_raw(&reference, manifest_bytes.to_vec(), header),
+                    .push_manifest_raw(&reference, manifest_bytes, header),
             )
             .with_context(|| format!("Failed to push manifest to {reference}"))?;
         Ok(())
