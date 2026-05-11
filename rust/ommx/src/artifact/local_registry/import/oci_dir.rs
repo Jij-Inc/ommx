@@ -266,17 +266,18 @@ pub(super) fn import_oci_dir_inner(
         if let Some(image_name) = effective_image_name.as_ref() {
             if let Some(existing_manifest_digest) = index_store.resolve_image_name(image_name)? {
                 if existing_manifest_digest != manifest_digest {
+                    if conflict_handling == RefConflictHandling::Error {
+                        anyhow::bail!(
+                            "Local registry ref conflict for {}: existing manifest {}, incoming manifest {}",
+                            image_name,
+                            existing_manifest_digest,
+                            manifest_digest,
+                        );
+                    }
                     let conflict = RefUpdate::Conflicted {
                         existing_manifest_digest,
                         incoming_manifest_digest: manifest_digest.clone(),
                     };
-                    if conflict_handling == RefConflictHandling::Error {
-                        anyhow::bail!(
-                            "Local registry ref conflict for {}: {:?}",
-                            image_name,
-                            conflict
-                        );
-                    }
                     return Ok((
                         OciDirRef {
                             manifest_digest,

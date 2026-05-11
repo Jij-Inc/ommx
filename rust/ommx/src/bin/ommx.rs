@@ -233,7 +233,12 @@ fn main() -> Result<()> {
             // dispatch on what the path actually is. Archives go through
             // the ocipkg-based stage-1 pipeline in `import::archive`;
             // directories use the native `import::oci_dir` path that
-            // dispatches on Image / Artifact Manifest.
+            // dispatches on Image / Artifact Manifest. A missing path
+            // is reported up front rather than as a downstream tar /
+            // OCI parsing error.
+            if !path.exists() {
+                bail!("Path does not exist: {}", path.display());
+            }
             let registry = std::sync::Arc::new(LocalRegistry::open_default()?);
             if path.is_dir() {
                 import_oci_dir(registry.index(), registry.blobs(), path)?;

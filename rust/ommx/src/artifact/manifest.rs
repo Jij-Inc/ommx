@@ -126,12 +126,6 @@ impl LocalArtifact {
         )))
     }
 
-    /// Borrow the underlying registry, which may be shared with other
-    /// `LocalArtifact` instances.
-    pub fn registry(&self) -> &Arc<LocalRegistry> {
-        &self.registry
-    }
-
     pub fn image_name(&self) -> &ocipkg::ImageName {
         &self.image_name
     }
