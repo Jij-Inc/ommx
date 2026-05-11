@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use colored::Colorize;
 use ocipkg::ImageName;
 use ommx::{
-    artifact::{Builder, InstanceAnnotations},
+    artifact::{ArchiveArtifactBuilder, InstanceAnnotations},
     random::random_deterministic,
     InstanceParameters,
 };
@@ -50,7 +50,7 @@ fn main() -> Result<()> {
     annotations.set_title("random_lp".to_string());
     annotations.set_created(chrono::Local::now());
 
-    let mut builder = Builder::new_archive(out.clone(), image_name)?;
+    let mut builder = ArchiveArtifactBuilder::new_archive(out.clone(), image_name)?;
     builder.add_instance(lp, annotations)?;
     builder.add_source(&Url::parse("https://github.com/Jij-Inc/ommx")?);
     builder.add_description("Test artifact created by examples/create_artifact.rs".to_string());
