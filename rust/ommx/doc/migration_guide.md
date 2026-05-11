@@ -3,6 +3,7 @@
 This document covers migration of the OMMX Rust SDK (`ommx` crate) across major versions.
 
 - [v3 (Stage Pattern)](#rust-sdk-v3-stage-pattern-migration-guide) — Constraint lifecycle stage parameterization
+- [v3 (Artifact API)](#rust-sdk-v3-artifact-api-migration-guide) — Local registry / archive builder split and renames
 
 ---
 
@@ -583,3 +584,97 @@ pub struct ConstraintMetadata {
 - [ ] Remove any `getset` usage for constraint types
 - [ ] Update any `InstanceError` / `MpsParseError` / `QplibParseError` / `StateValidationError` / `LogEncodingError` / `UnknownSampleIDError` matches → inspect `err.to_string()` or use `err.downcast_ref::<T>()` for signal types
 - [ ] Replace `Result<T, UnknownSampleIDError>` key-lookup methods with `Option<T>` on the call site
+
+---
+
+# Rust SDK v3 Artifact API Migration Guide
+
+This section covers the Artifact / Local Registry API changes landed
+across `3.0.0-alpha.2` and later. The v3 Local Registry foundation
+(SQLite-backed `IndexStore` + filesystem CAS `BlobStore`) was introduced
+in [#864](https://github.com/Jij-Inc/ommx/pull/864); subsequent PRs land
+the cleanup of the legacy ocipkg-based build / read paths.
+
+## Overview
+
+Artifact construction was a single generic `Builder<Base: ImageBuilder>`
+that switched between `.ommx` archive output and a legacy on-disk
+"OCI Image Layout" local registry depending on the `Base` type. The new
+shape splits those by destination:
+
+| Output destination | v2 type | v3 type |
+|---|---|---|
+| v3 SQLite Local Registry | `Builder<OciDirBuilder>` | `LocalArtifactBuilder` |
+| `.ommx` OCI archive | `Builder<OciArchiveBuilder>` | `ArchiveArtifactBuilder` |
+
+The local-registry path now writes an OCI Artifact Manifest (per OCI 1.1
+spec) into a SQLite-backed registry instead of an on-disk OCI Image
+Layout directory. Existing legacy `<root>/<image>/<tag>/` directories
+are identity-preserved on import via `ommx artifact import` or the
+`import_legacy_local_registry*` SDK functions — pulled bytes (manifest
+digest and JSON) round-trip verbatim.
+
+## Breaking Changes
+
+### 1. Local Registry builder
+
+```rust,ignore
+// ❌ Before
+use ommx::artifact::Builder;
+let mut builder = Builder::for_github("Jij-Inc", "demo", "experiment", "v1")?;
+builder.add_instance(instance, annotations)?;
+let artifact = builder.build()?;
+
+// ✅ After
+use ommx::artifact::LocalArtifactBuilder;
+let mut builder = LocalArtifactBuilder::for_github("Jij-Inc", "demo", "experiment", "v1")?;
+builder.add_instance(instance, annotations)?;
+let artifact = builder.build()?;
+```
+
+`Builder<OciDirBuilder>::{new, for_github}` are removed. Use
+`LocalArtifactBuilder::{new, for_github}` instead. Output lands in the
+v3 SQLite registry rather than the legacy `<root>/<image>/<tag>/`
+OCI Image Layout directory.
+
+### 2. Archive builder rename
+
+```rust,ignore
+// ❌ Before
+use ommx::artifact::Builder;
+let mut builder = Builder::new_archive(path, image_name)?;
+
+// ✅ After
+use ommx::artifact::ArchiveArtifactBuilder;
+let mut builder = ArchiveArtifactBuilder::new_archive(path, image_name)?;
+```
+
+After the local-registry constructors were split off, the remaining
+`Builder<Base: ImageBuilder>` was archive-only. It is now a non-generic
+`ArchiveArtifactBuilder` wrapping `OciArtifactBuilder<OciArchiveBuilder>`
+and producing `Artifact<OciArchive>`. The constructors (`new_archive`,
+`new_archive_unnamed`, `temp_archive`) and the `add_*` / `build`
+signatures are unchanged.
+
+### 3. `LocalArtifactBuilder::new` signature
+
+```rust,ignore
+// ❌ Before (3.0.0-alpha.2 only)
+let mut builder = LocalArtifactBuilder::new_ommx(image_name);
+
+// ✅ After
+let mut builder = LocalArtifactBuilder::new(image_name);
+```
+
+`new_ommx` was a thin wrapper that defaulted `artifact_type` to
+`media_types::v1_artifact()`. The 2-arg generic
+`new(image_name, artifact_type)` had no callers (the OMMX SDK only
+builds OMMX artifacts), so both were merged into a single
+`new(image_name)`.
+
+## Migration Checklist
+
+- [ ] Replace `ommx::artifact::Builder` with `LocalArtifactBuilder` (for local-registry output) or `ArchiveArtifactBuilder` (for `.ommx` archive output)
+- [ ] Replace `Builder::for_github` (local-registry path) with `LocalArtifactBuilder::for_github`
+- [ ] Replace `Builder::new_archive*` / `temp_archive` with `ArchiveArtifactBuilder::new_archive*` / `temp_archive`
+- [ ] Replace `LocalArtifactBuilder::new_ommx(name)` with `LocalArtifactBuilder::new(name)` (only relevant if you used `3.0.0-alpha.2`)
