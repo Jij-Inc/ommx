@@ -592,9 +592,7 @@ pub struct ConstraintMetadata {
 This section covers the Artifact / Local Registry API changes for users
 moving from `ommx` v2 to v3. The v3 Local Registry is SQLite-backed
 (IndexStore + filesystem CAS BlobStore) rather than an on-disk OCI
-Image Layout per `image:tag`; see the
-[Artifact v3 design](https://github.com/Jij-Inc/ommx/blob/main/ARTIFACT_V3.md)
-for the full model.
+Image Layout per `image:tag`.
 
 ## Overview
 
