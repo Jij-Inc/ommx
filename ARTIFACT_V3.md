@@ -221,7 +221,7 @@ Local Registry 内部では IndexStore が refs / manifests / entries の source
 
 ### 5.5 Manifest format
 
-SQLite Local Registry の native manifest format は OCI Image Manifest (`application/vnd.oci.image.manifest.v1+json`) のみとする。OMMX 固有 artifact の type 識別は manifest 内の `artifactType` field (例: `application/org.ommx.v1.artifact`) と `application/vnd.oci.empty.v1+json` empty config descriptor で行う。
+SQLite Local Registry の native manifest format は OCI Image Manifest (`application/vnd.oci.image.manifest.v1+json`) のみとする。OMMX 固有 artifact の識別は manifest top-level の `artifactType` field (`application/org.ommx.v1.artifact`) で行う。parse 時に検証するのはこの field のみで、`config` blob は実装上のデフォルトを定めるだけの非識別情報とする。
 
 OCI Image Spec v1.1 で deprecated / removed 化された OCI Artifact Manifest (`application/vnd.oci.artifact.manifest.v1+json`) はサポートしない。次の理由による。
 
@@ -231,7 +231,14 @@ OCI Image Spec v1.1 で deprecated / removed 化された OCI Artifact Manifest 
 
 build / import / pull のいずれの経路でも、Local Registry に保存される manifest は Image Manifest である。import 時に旧 v2 OMMX が生成済みの Image Manifest はそのまま identity-preserving に取り込む (manifest bytes / digest を保持)。万一外部由来の Artifact Manifest を import しようとした場合は、未サポート format として明示 error にする (sloppy fallback はしない)。
 
-format 変換のための「convert」操作は v3 では提供しない。v2 で生成された Image Manifest と v3 で生成される Image Manifest は同じ format であり、`artifactType` field の有無による semantic 差分があるだけで、format conversion API は不要である。
+native build path (v3 `LocalArtifactBuilder`) は SDK v2 の archive build path (`ocipkg::OciArtifactBuilder::new` 経由) と byte-level に整合する manifest shape を採用する。具体的には:
+
+- `schemaVersion: 2`、`artifactType: application/org.ommx.v1.artifact`、`config` は OCI 1.1 empty descriptor (`application/vnd.oci.empty.v1+json` の 2-byte JSON `{}`)、`layers[]` は各 entry に `annotations` field を持つ (空 object でも render する)。manifest top-level の `mediaType` field は意図的に出力しない (v2 SDK と同様、HTTP Content-Type は push 時に transport が個別に付与する)。
+- v3 SQLite registry が出力する manifest と v2 archive build が出力する manifest の唯一の差分は JSON field 順序で、v3 は reproducible digest のため `stable_json_bytes` で alphabetical sort する (v2 SDK は struct 宣言順)。
+
+import 経路で v2 SDK が生成した OMMX-specific config (`application/org.ommx.v1.config+json`) を持つ legacy Image Manifest は、parse-time check が `artifactType` だけなので識別 / read に支障なく取り込める。
+
+format 変換のための「convert」操作は v3 では提供しない。v2 で生成された Image Manifest と v3 で生成される Image Manifest は同じ format であり、`config` blob の中身が違うだけで format conversion API は不要である。
 
 ## 6. Local Registry model
 
@@ -548,7 +555,6 @@ Phase 2 は span / event schema を変更せず、同じ OTel signal を読む r
 ```jsonc
 {
   "schemaVersion": 2,
-  "mediaType": "application/vnd.oci.image.manifest.v1+json",
   "artifactType": "application/org.ommx.v1.experiment",
   "config": {
     "mediaType": "application/vnd.oci.empty.v1+json",
@@ -563,6 +569,8 @@ Phase 2 は span / event schema を変更せず、同じ OTel signal を読む r
   }
 }
 ```
+
+manifest top-level の `mediaType` field は v2 SDK と同様に出力しない (5.5)。Content-Type は push 時に transport が個別に付与する。`subject` descriptor の `mediaType` は OCI Image Manifest 固定 (9.1)。
 
 ### 9.2 Linear history
 
@@ -643,7 +651,7 @@ v3 PR #864 で landing する範囲。
 - 並行 publish primitive (`RefConflictPolicy::{KeepExisting, Replace}`、`RefUpdate::{Inserted, Unchanged, Replaced, Conflicted}` 4 状態)。
 - `import::archive` / `import::remote` は `registry.root().join(image_name.as_path())` に staging する (`get_image_dir` の global default に縛られない)。
 
-設計上 deprecated 化された OCI Artifact Manifest (5.5 参照) に関する実装は #864 / #866 時点でコードに残っているが (`LocalManifest::Artifact` variant、`OCI_ARTIFACT_MANIFEST_MEDIA_TYPE`、`LocalArtifactBuilder` の Artifact Manifest 生成 path、`ensure_ommx_artifact_manifest` validator 等)、これらは未使用の dead code 扱いとし、§12.2 / §12.3 Step B' で撤去する。
+PR #868 で本書の Image Manifest 一本化方針 (5.5) と Step A → B' → B → C milestone 構成 (12.3) も merged。design doc 上は Image Manifest only に統一されたが、#864 / #866 が landing した時点では `LocalArtifactBuilder` は依然として deprecated 化された OCI Artifact Manifest を生成しており (`LocalManifest::Artifact` variant、`OCI_ARTIFACT_MANIFEST_MEDIA_TYPE`、`ensure_ommx_artifact_manifest` validator 等が残存)、これらの撤去は §12.3 Step B' で扱う。
 
 ### 12.2 後続 PR に残す TODO
 
@@ -651,7 +659,7 @@ v3 PR #864 で landing する範囲。
 |---|---|---|
 | `import::archive` / `import::remote` の stage 1 を ocipkg ベースから native streamer に置換 | 5.1, 6.6 | 現状は `ocipkg → legacy OCI dir → import_oci_dir_as_ref → SQLite` の 2-stage。public 関数 signature は変えない |
 | `ommx::ocipkg` re-export と、Rust / Python の `Descriptor` / `Digest` / `MediaType` / `ImageReference` public surface の撤去 | 5.1, 5.2 | OMMX-owned public types への置き換え。migration note を別途用意 |
-| `LocalArtifactBuilder` を OCI Image Manifest with `artifactType` + empty config に refactor | 5.5 | 現状は deprecated 化された OCI Artifact Manifest (`application/vnd.oci.artifact.manifest.v1+json`) を生成しており、`distribution/distribution` v2 系で `MANIFEST_INVALID` reject される。`LocalManifest::Artifact` variant / `OCI_ARTIFACT_MANIFEST_MEDIA_TYPE` 関連 dead code もこの PR で撤去 (§12.3 Step B') |
+| `LocalArtifactBuilder` を OCI Image Manifest with `artifactType` + empty config に refactor | 5.5 | 現状は deprecated 化された OCI Artifact Manifest (`application/vnd.oci.artifact.manifest.v1+json`) を生成しており、`distribution/distribution` v2 系で `MANIFEST_INVALID` reject される。`LocalManifest::Artifact` variant / `OCI_ARTIFACT_MANIFEST_MEDIA_TYPE` 関連 dead code もこの PR で撤去 (§12.3 Step B')。**進行中: PR #869 (in review)** |
 | Archive build path (`ArtifactBuilder.new_archive*`, `temp()`, `Artifact.load_archive`) の v3 pipeline 化 | 5.5, 7.4 | 現状は ocipkg-based Image Manifest pipeline。SQLite registry を経由しない。v3 native build と同じ Image Manifest with `artifactType` を生成する |
 | SQLite registry から remote への native `push` | 6.4, 6.6 | 現状の Python `Artifact.push()` は legacy OCI dir 経由の transitional path。v3-native build artifact (legacy 不在) は明示 error。transport crate は `oci-client` (ORAS, [oras-project/rust-oci-client](https://github.com/oras-project/rust-oci-client)) を採用予定 |
 | `Artifact.load(image)` / `ommx load` の legacy double-write 撤廃 | 6.5 | `push` / `save` / Python archive 読み出しが SQLite から直接読めるようになり、かつ native stage 1 が landing したら |
@@ -670,9 +678,13 @@ v3 PR #864 で landing する範囲。
 
 `rust/dataset/{miplib2017,qplib}` を `LocalArtifactBuilder::new` + 明示的 `add_source` に切り替え、出力 image name を `ghcr.io/jij-inc/ommx/v3/{miplib2017,qplib}:<tag>` とする。唯一の caller が消えた `rust/ommx/src/artifact/builder.rs` の `Builder<OciDirBuilder>::{new, for_github}` を削除。既存 `ghcr.io/jij-inc/ommx/{miplib2017,qplib}:*` は触らない (freeze) — SQLite registry は両 namespace を identity-preserving に保持できるため user 影響なし。Step A landing 時点では builder が deprecated Artifact Manifest を生成していたため、v3 namespace への初回 publish は Step B' / B 後に持ち越し。
 
-**Step B' — `LocalArtifactBuilder` の OCI Image Manifest 化** (§12.2 行 3)。
+**Step B' — `LocalArtifactBuilder` の OCI Image Manifest 化** (§12.2 行 3)。**進行中: PR #869 (in review)。**
 
 `LocalArtifactBuilder` を `OciArtifactManifestBuilder` ベースから `OciImageManifestBuilder` ベースに切り替え、`artifactType` field と `application/vnd.oci.empty.v1+json` empty config descriptor で OMMX artifact を表現する (5.5)。同時に dead code 化する `LocalManifest::Artifact` variant、`OCI_ARTIFACT_MANIFEST_MEDIA_TYPE` 定数、`ensure_ommx_artifact_manifest` validator、`local_registry::import` 系の Artifact Manifest dispatch を撤去する。Local Registry の persisted manifest は Image Manifest 単形式になり、reader / writer / tests が単純化される。
+
+生成する manifest は SDK v2 archive build (`ocipkg::OciArtifactBuilder::new` 経由) と byte-level に整合する shape を採用する (5.5): top-level の `mediaType` field は出力せず、各 layer descriptor は空でも `annotations` field を render し、empty config descriptor は `annotations` を持たない。registry に publish する際の Content-Type は transport が個別に付与する。残差は JSON field 順序 (v3 は `stable_json_bytes` で alphabetical sort、v2 SDK は struct 宣言順) のみで、これは reproducible digest のための意図的な前進。
+
+`publish_artifact_manifest` の SQLite 側 blob 分類は manifest の `config().digest()` 一致を見て empty config blob のみ `BLOB_KIND_CONFIG`、他は `BLOB_KIND_BLOB` で記録する (OCI dir import path との整合)。
 
 なお、draft PR #867 (Step B 着手) は当時 deprecated 化された Artifact Manifest 前提で書かれており、本 Step B' の前提変更を受けて一旦保留。Step B' landing 後に再開する。
 
