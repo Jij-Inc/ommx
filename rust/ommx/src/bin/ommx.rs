@@ -138,9 +138,19 @@ impl ImageNameOrPath {
             ImageNameOrPath::OciArchive(path) => {
                 Artifact::from_oci_archive(path)?.get_manifest()?
             }
+            // `parse` now routes SQLite-resident refs to `Local`, so
+            // any caller of `get_manifest` (currently `ommx inspect`)
+            // must serve from SQLite before falling back to the
+            // legacy disk OCI dir. Otherwise a v3-only artifact
+            // (loaded via `ommx load` of an archive — no legacy dir
+            // created) would surface as a path-not-found error.
             ImageNameOrPath::Local(name) => {
-                let image_dir = get_image_dir(name);
-                Artifact::from_oci_dir(&image_dir)?.get_manifest()?
+                if let Some(local_artifact) = LocalArtifact::try_open(name.clone())? {
+                    local_artifact.get_manifest()?.clone().into_inner()
+                } else {
+                    let image_dir = get_image_dir(name);
+                    Artifact::from_oci_dir(&image_dir)?.get_manifest()?
+                }
             }
             ImageNameOrPath::Remote(name) => Artifact::from_remote(name.clone())?.get_manifest()?,
         };

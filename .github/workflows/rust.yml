@@ -100,18 +100,15 @@ jobs:
       # push for any image resident in the SQLite Local Registry,
       # not the legacy `Artifact::from_oci_dir` + ocipkg path.
       #
-      # We pull tag1 (just pushed by the Rust step above) into a
-      # CLI-side SQLite Local Registry under a separate root, then
-      # push the same content back. The push is idempotent on the
-      # registry side because the digest is unchanged, but it still
-      # exercises the full CLI → LocalArtifact → oci-client path
-      # end-to-end: a regression to the legacy ocipkg push would
-      # fail this step because the CLI's clean registry root has
-      # no legacy OCI dir to fall through to. Without an
-      # `ommx retag` command there is no way to make this push
-      # produce a *new* tag, so the value is the round-trip's exit
-      # status plus the `artifactType` re-check (the manifest digest
-      # the CLI publishes must still satisfy the v3 invariant).
+      # `ommx pull`'s stage-1 auto-migration materialises a legacy
+      # disk OCI dir at `$OMMX_LOCAL_REGISTRY_ROOT/<host>/<repo>/<tag>`
+      # alongside populating SQLite, so a regression that took the
+      # legacy ocipkg push fallback would still find a usable disk
+      # dir and pass silently. To make the test airtight we delete
+      # everything under the registry root *except* `blobs/` and
+      # `index.sqlite3` after the pull — that strips the legacy dirs
+      # while leaving the SQLite registry intact, so the push can
+      # only succeed via the new `LocalArtifact::push()` path.
       - name: Smoke-test ommx push CLI round-trip
         env:
           OMMX_LOCAL_REGISTRY_ROOT: /tmp/ommx-cli-registry
@@ -120,6 +117,10 @@ jobs:
           mkdir -p "$OMMX_LOCAL_REGISTRY_ROOT"
           cargo run --bin ommx --features remote-artifact,built,cli -- \
             pull localhost:5000/ommx-test/native-push:tag1
+          # Strip the legacy OCI dirs so only the SQLite path is viable.
+          find "$OMMX_LOCAL_REGISTRY_ROOT" -maxdepth 1 -mindepth 1 \
+            -type d ! -name blobs -exec rm -rf {} +
+          ls -la "$OMMX_LOCAL_REGISTRY_ROOT"
           cargo run --bin ommx --features remote-artifact,built,cli -- \
             push localhost:5000/ommx-test/native-push:tag1
           curl -sf http://localhost:5000/v2/ommx-test/native-push/manifests/tag1 \

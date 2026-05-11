@@ -243,6 +243,16 @@ impl LocalManifest {
         self.0.layers().to_vec()
     }
 
+    /// Consume this wrapper and return the inner OCI Image Manifest.
+    /// Used by callers that need to round-trip the manifest as JSON
+    /// (e.g. the CLI's `ommx inspect`), where the standard OCI
+    /// `serde` form is what's expected. The accessors above cover
+    /// programmatic use; `into_inner` is the escape hatch when the
+    /// whole thing needs to leave the wrapper.
+    pub fn into_inner(self) -> ImageManifest {
+        *self.0
+    }
+
     pub fn annotations(&self) -> HashMap<String, String> {
         self.0.annotations().clone().unwrap_or_default()
     }
