@@ -104,33 +104,7 @@ impl ArtifactInner {
                 let _remote = d.push()?;
                 Ok(())
             }
-            ArtifactInner::Local(local) => {
-                // Transitional push for the SQLite Local Registry: route
-                // through the legacy OCI dir at
-                // `registry_root / image_name`. That dir is populated by
-                // `Artifact.load(...)` (lazy auto-migration's stage 1) and
-                // by `LocalArtifactBuilder::build_in_registry` callers
-                // that materialise it; when it exists, push delegates to
-                // ocipkg's `Artifact<OciDir>::push`. When it doesn't
-                // (pure v3-native artifacts with no legacy materialisation
-                // yet), surface a clear error instead of pretending the
-                // operation succeeded — native v3 push from SQLite is the
-                // follow-up that drops the ocipkg dependency.
-                let image_name = local.image_name().clone();
-                let legacy_path = local.registry_root().join(image_name.as_path());
-                if !legacy_path.exists() {
-                    bail!(
-                        "Cannot push {image_name}: the v3 Local Registry has the artifact in SQLite \
-                         but no legacy OCI dir cache at {}. Direct push from SQLite-backed storage is \
-                         not implemented yet — for now build via ArtifactBuilder.new_archive*() and \
-                         push the resulting archive instead.",
-                        legacy_path.display()
-                    );
-                }
-                let mut artifact = ommx::artifact::Artifact::from_oci_dir(&legacy_path)?;
-                let _remote = artifact.push()?;
-                Ok(())
-            }
+            ArtifactInner::Local(local) => local.push(),
         }
     }
 }

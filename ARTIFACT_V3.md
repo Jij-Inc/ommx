@@ -659,7 +659,7 @@ PR #868 で本書の Image Manifest 一本化方針 (5.5) と Step A → B' → 
 |---|---|---|
 | `import::archive` / `import::remote` の stage 1 を ocipkg ベースから native streamer に置換 | 5.1, 6.6 | 現状は `ocipkg → legacy OCI dir → import_oci_dir_as_ref → SQLite` の 2-stage。public 関数 signature は変えない |
 | `ommx::ocipkg` re-export と、Rust / Python の `Descriptor` / `Digest` / `MediaType` / `ImageReference` public surface の撤去 | 5.1, 5.2 | OMMX-owned public types への置き換え。migration note を別途用意 |
-| `LocalArtifactBuilder` を OCI Image Manifest with `artifactType` + empty config に refactor | 5.5 | 現状は deprecated 化された OCI Artifact Manifest (`application/vnd.oci.artifact.manifest.v1+json`) を生成しており、`distribution/distribution` v2 系で `MANIFEST_INVALID` reject される。`LocalManifest::Artifact` variant / `OCI_ARTIFACT_MANIFEST_MEDIA_TYPE` 関連 dead code もこの PR で撤去 (§12.3 Step B')。**進行中: PR #869 (in review)** |
+| `LocalArtifactBuilder` を OCI Image Manifest with `artifactType` + empty config に refactor | 5.5 | 現状は deprecated 化された OCI Artifact Manifest (`application/vnd.oci.artifact.manifest.v1+json`) を生成しており、`distribution/distribution` v2 系で `MANIFEST_INVALID` reject される。`LocalManifest::Artifact` variant / `OCI_ARTIFACT_MANIFEST_MEDIA_TYPE` 関連 dead code もこの PR で撤去 (§12.3 Step B')。**Landed in PR #869.** |
 | Archive build path (`ArtifactBuilder.new_archive*`, `temp()`, `Artifact.load_archive`) の v3 pipeline 化 | 5.5, 7.4 | 現状は ocipkg-based Image Manifest pipeline。SQLite registry を経由しない。v3 native build と同じ Image Manifest with `artifactType` を生成する |
 | SQLite registry から remote への native `push` | 6.4, 6.6 | 現状の Python `Artifact.push()` は legacy OCI dir 経由の transitional path。v3-native build artifact (legacy 不在) は明示 error。transport crate は `oci-client` (ORAS, [oras-project/rust-oci-client](https://github.com/oras-project/rust-oci-client)) を採用予定 |
 | `Artifact.load(image)` / `ommx load` の legacy double-write 撤廃 | 6.5 | `push` / `save` / Python archive 読み出しが SQLite から直接読めるようになり、かつ native stage 1 が landing したら |
@@ -678,7 +678,7 @@ PR #868 で本書の Image Manifest 一本化方針 (5.5) と Step A → B' → 
 
 `rust/dataset/{miplib2017,qplib}` を `LocalArtifactBuilder::new` + 明示的 `add_source` に切り替え、出力 image name を `ghcr.io/jij-inc/ommx/v3/{miplib2017,qplib}:<tag>` とする。唯一の caller が消えた `rust/ommx/src/artifact/builder.rs` の `Builder<OciDirBuilder>::{new, for_github}` を削除。既存 `ghcr.io/jij-inc/ommx/{miplib2017,qplib}:*` は触らない (freeze) — SQLite registry は両 namespace を identity-preserving に保持できるため user 影響なし。Step A landing 時点では builder が deprecated Artifact Manifest を生成していたため、v3 namespace への初回 publish は Step B' / B 後に持ち越し。
 
-**Step B' — `LocalArtifactBuilder` の OCI Image Manifest 化** (§12.2 行 3)。**進行中: PR #869 (in review)。**
+**Step B' — `LocalArtifactBuilder` の OCI Image Manifest 化** (§12.2 行 3)。**Landed in PR #869.**
 
 `LocalArtifactBuilder` を `OciArtifactManifestBuilder` ベースから `OciImageManifestBuilder` ベースに切り替え、`artifactType` field と `application/vnd.oci.empty.v1+json` empty config descriptor で OMMX artifact を表現する (5.5)。同時に dead code 化する `LocalManifest::Artifact` variant、`OCI_ARTIFACT_MANIFEST_MEDIA_TYPE` 定数、`ensure_ommx_artifact_manifest` validator、`local_registry::import` 系の Artifact Manifest dispatch を撤去する。Local Registry の persisted manifest は Image Manifest 単形式になり、reader / writer / tests が単純化される。
 
@@ -686,9 +686,7 @@ PR #868 で本書の Image Manifest 一本化方針 (5.5) と Step A → B' → 
 
 `publish_artifact_manifest` の SQLite 側 blob 分類は manifest の `config().digest()` 一致を見て empty config blob のみ `BLOB_KIND_CONFIG`、他は `BLOB_KIND_BLOB` で記録する (OCI dir import path との整合)。
 
-なお、draft PR #867 (Step B 着手) は当時 deprecated 化された Artifact Manifest 前提で書かれており、本 Step B' の前提変更を受けて一旦保留。Step B' landing 後に再開する。
-
-**Step B — SQLite → remote の native push 実装** (§12.2 行 5、行 10 publish 部分)。
+**Step B — SQLite → remote の native push 実装** (§12.2 行 5、行 10 publish 部分)。**進行中: PR #867 (Step B' landing 後に再開)。**
 
 `LocalArtifact::push()` を SQLite + CAS から remote registry に直接 stream する。Python `ArtifactInner::Local::push` の "legacy disk dir 経由 fallback" を撤去。Step B 後に `ghcr.io/jij-inc/ommx/v3/{miplib2017,qplib}:*` を初回 publish (v3 dataset release event)。
 
@@ -702,7 +700,13 @@ Transport crate は **`oci-client`** (ORAS project, [oras-project/rust-oci-clien
 
 **async 戦略 (2):** 後続 milestone で async surface を段階的に外側に広げ、最終的に Python 側は [`pyo3-async-runtimes`](https://docs.rs/pyo3-async-runtimes/) 経由で `await` 可能にする。Step B 時点では SDK entry での runtime 構築は導入しない。
 
-**Step B scope の境界:** `Artifact<OciArchive>::push` / `Artifact<OciDir>::push` (archive output / legacy dir 経由 push) は `ocipkg` ベースのまま据え置き、Step C で扱う。Step B では `LocalArtifact::push()` のみが新 transport を経由する。
+**Step B scope の境界:** `Artifact<OciArchive>::push` / `Artifact<OciDir>::push` (archive output / legacy dir 経由 push) は `ocipkg` ベースのまま据え置き、Step C で扱う。Step B では `LocalArtifact::push()` のみが新 transport を経由する。CLI (`ommx push <image>`) と Python (`Artifact.push()`) は同じ `LocalArtifact::push()` を共有するように両方更新する: CLI の `ImageNameOrPath::parse` は SQLite registry を先に問い合わせ、`Command::Push` の `Local` 分岐は `LocalArtifact::try_open` → 新 native push に流す (pre-v3 user の legacy disk dir のみ存在する path は fall-through として残す — Step C で除去)。
+
+**credential 解決:** OMMX は credential store を自前で持たない。新 transport は `OMMX_BASIC_AUTH_*` env var (CI 用 explicit override) → `~/.docker/config.json` (+ credential helper、`docker_credential` クレート経由) → anonymous の 3 段で解決する。これにより `docker login` / `gcloud auth configure-docker` / `aws ecr get-login-password` が既に container ecosystem に対して surface している credential をそのまま流用できる。`oci-client` 自体は credential lookup を持たないので、`RegistryAuth::{Anonymous, Basic, Bearer}` のいずれかを materialize する責任は SDK 側にある。
+
+これに伴い、v2 までの `ommx login` サブコマンド (ocipkg の `~/.ocipkg/config.json` に書き込んでいた) を本 PR で削除する。OMMX が credential store を所有しない設計と矛盾するため、`~/.ocipkg/config.json` を resolver の追加 tier として読む案は採用しない。`ommx login` ユーザーは `docker login <registry>` に移行する。
+
+**auth e2e テスト:** `rust/ommx/tests/auth_e2e.rs` が `testcontainers` 経由で ephemeral `registry:2` (anonymous / htpasswd) を立ち上げ、resolver の各 tier (anonymous / docker config / env override / 部分 env override bail) と CLI dispatch + 否定ケース (auth 強制の sanity / 誤 credential 拒否) を実 push で検証する (8 シナリオ)。`#[ignore = "requires docker"]` + `#[serial]` で env mutation を逐次化、CI は `--include-ignored --test-threads=1` で全 8 件を走らせる。
 
 **Step C — lazy auto-migration の legacy double-write 撤廃** (§12.2 行 6、行 4 Archive 半分)。
 

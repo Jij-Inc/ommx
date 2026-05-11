@@ -7,7 +7,7 @@ use ommx::artifact::{
     local_registry::{
         import_oci_archive, import_oci_dir, pull_image, LocalRegistry, RefConflictPolicy,
     },
-    Artifact,
+    Artifact, LocalArtifact,
 };
 use std::path::{Path, PathBuf};
 
@@ -20,18 +20,6 @@ mod built_info {
 enum Command {
     /// Show the version
     Version,
-
-    /// Login to the remote registry
-    Login {
-        /// Registry URL, e.g. https://ghcr.io/v2/Jij-Inc/ommx
-        registry: String,
-        /// Username
-        #[clap(short, long)]
-        username: Option<String>,
-        /// Password
-        #[clap(short, long)]
-        password: Option<String>,
-    },
 
     /// Show the image manifest as JSON
     Inspect {
@@ -115,12 +103,33 @@ impl ImageNameOrPath {
             return Ok(Self::OciArchive(path.to_path_buf()));
         }
         if let Ok(name) = ImageName::parse(input) {
-            let path = get_image_dir(&name);
-            if path.exists() {
-                return Ok(Self::Local(name));
-            } else {
-                return Ok(Self::Remote(name));
+            // Prefer the SQLite Local Registry: anything imported via
+            // `ommx load` or `ommx pull` (post-v3) lands there and the
+            // legacy disk OCI dir is only kept around as the
+            // lazy-auto-migration cache. Falling back to the legacy
+            // dir keeps pre-v3 user state addressable until Step C
+            // removes that path entirely.
+            //
+            // The SQLite probe is best-effort: an unopenable registry
+            // (corrupt DB, read-only filesystem, permission denied) is
+            // *not* fatal for a remote-targeted command like
+            // `ommx push <ghcr ref>` or `ommx inspect <remote>`. We
+            // log the failure and fall through to the legacy-dir
+            // check, then to the remote branch.
+            match LocalArtifact::try_open(name.clone()) {
+                Ok(Some(_)) => return Ok(Self::Local(name)),
+                Ok(None) => {}
+                Err(e) => {
+                    tracing::debug!(
+                        "SQLite Local Registry probe for {name} failed ({e:#}); \
+                         treating ref as not-local-in-SQLite"
+                    );
+                }
             }
+            if get_image_dir(&name).exists() {
+                return Ok(Self::Local(name));
+            }
+            return Ok(Self::Remote(name));
         }
         bail!("Invalid input: {}", input)
     }
@@ -131,9 +140,19 @@ impl ImageNameOrPath {
             ImageNameOrPath::OciArchive(path) => {
                 Artifact::from_oci_archive(path)?.get_manifest()?
             }
+            // `parse` now routes SQLite-resident refs to `Local`, so
+            // any caller of `get_manifest` (currently `ommx inspect`)
+            // must serve from SQLite before falling back to the
+            // legacy disk OCI dir. Otherwise a v3-only artifact
+            // (loaded via `ommx load` of an archive — no legacy dir
+            // created) would surface as a path-not-found error.
             ImageNameOrPath::Local(name) => {
-                let image_dir = get_image_dir(name);
-                Artifact::from_oci_dir(&image_dir)?.get_manifest()?
+                if let Some(local_artifact) = LocalArtifact::try_open(name.clone())? {
+                    local_artifact.get_manifest()?.clone().into_inner()
+                } else {
+                    let image_dir = get_image_dir(name);
+                    Artifact::from_oci_dir(&image_dir)?.get_manifest()?
+                }
             }
             ImageNameOrPath::Remote(name) => Artifact::from_remote(name.clone())?.get_manifest()?,
         };
@@ -163,28 +182,6 @@ fn main() -> Result<()> {
                 println!("{:>12} {}", "Git Commit".blue().bold(), hash);
             }
         }
-        Command::Login {
-            registry,
-            username,
-            password,
-        } => {
-            let url = url::Url::parse(registry)?;
-            let mut auth = ocipkg::distribution::StoredAuth::load_all()?;
-            match (username, password) {
-                (Some(username), Some(password)) => {
-                    auth.add(url.domain().unwrap(), username, password);
-                }
-                (None, None) => {}
-                _ => {
-                    bail!("--username and --password must be provided at the same time");
-                }
-            }
-            let _token = auth.get_token(&url)?;
-            println!("Login succeed");
-
-            auth.save()?;
-        }
-
         Command::Inspect { image_name_or_path } => {
             let manifest = ImageNameOrPath::parse(image_name_or_path)?.get_manifest()?;
             println!("{}", serde_json::to_string_pretty(&manifest)?);
@@ -199,10 +196,22 @@ fn main() -> Result<()> {
                 let mut artifact = Artifact::from_oci_archive(&path)?;
                 artifact.push()?;
             }
+            // The CLI and the Python `Artifact.push()` share the same
+            // native code path: `LocalArtifact::push()`. `try_open`
+            // resolves via the SQLite Local Registry (post-v3 default);
+            // when only a legacy disk OCI dir is present `open` would
+            // bail with the "run `ommx artifact import`" message, but
+            // the `parse` dispatch above already routed that case to
+            // `Local(name)`, so fall back to the legacy push for now.
+            // Step C removes the legacy branch.
             ImageNameOrPath::Local(name) => {
-                let image_dir = get_image_dir(&name);
-                let mut artifact = Artifact::from_oci_dir(&image_dir)?;
-                artifact.push()?;
+                if let Some(artifact) = LocalArtifact::try_open(name.clone())? {
+                    artifact.push()?;
+                } else {
+                    let image_dir = get_image_dir(&name);
+                    let mut artifact = Artifact::from_oci_dir(&image_dir)?;
+                    artifact.push()?;
+                }
             }
             ImageNameOrPath::Remote(name) => {
                 bail!("Image not found in local: {}", name)

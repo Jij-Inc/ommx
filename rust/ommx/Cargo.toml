@@ -19,7 +19,14 @@ workspace = true
 
 [features]
 default = ["remote-artifact"]
-remote-artifact = ["ocipkg/remote", "built"]
+remote-artifact = [
+    "ocipkg/remote",
+    "dep:docker_credential",
+    "dep:http",
+    "dep:oci-client",
+    "dep:tokio",
+    "built",
+]
 built = ["dep:built"]
 cli = ["dep:tracing-subscriber"]
 
@@ -33,14 +40,17 @@ colored.workspace = true
 csv.workspace = true
 derive_more.workspace = true
 directories.workspace = true
+docker_credential = { workspace = true, optional = true }
 flate2.workspace = true
 fnv.workspace = true
 getset.workspace = true
+http = { workspace = true, optional = true }
 indexmap.workspace = true
 itertools.workspace = true
 katexit.workspace = true
 maplit.workspace = true
 num.workspace = true
+oci-client = { workspace = true, optional = true }
 oci-spec.workspace = true
 ocipkg = { workspace = true }
 ommx-derive = { path = "../ommx-derive", version = "=3.0.0-alpha.2" }
@@ -56,6 +66,7 @@ similar.workspace = true
 smallvec.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
+tokio = { workspace = true, optional = true }
 tracing.workspace = true
 tracing-subscriber = { workspace = true, optional = true }
 url.workspace = true
@@ -66,6 +77,9 @@ colored.workspace = true
 criterion.workspace = true
 indoc.workspace = true
 insta.workspace = true
+serial_test.workspace = true
+testcontainers.workspace = true
+testcontainers-modules.workspace = true
 
 [build-dependencies]
 built = { workspace = true, optional = true }
