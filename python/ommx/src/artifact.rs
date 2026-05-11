@@ -1,69 +1,18 @@
 use anyhow::{bail, Result};
-use ommx::artifact::OmmxArchive;
 use pyo3::{prelude::*, types::PyBytes};
 use std::{collections::HashMap, path::PathBuf};
 
 use crate::PyDescriptor;
 
 // ---------------------------------------------------------------------------
-// ArtifactInner: archive readers + SQLite Local Registry handles
+// PyArtifact backing handle
 // ---------------------------------------------------------------------------
-
-enum ArtifactInner {
-    // `OmmxArchive` wraps a `LocalArtifact` over a tempdir-backed
-    // `LocalRegistry`. Sync (the underlying SQLite handle is). The
-    // tempdir is dropped when the variant is dropped — at that point
-    // the temp SQLite registry's files disappear.
-    Archive(OmmxArchive),
-    // LocalArtifact holds an Arc<LocalRegistry> whose internal
-    // SqliteIndexStore wraps the Connection in a Mutex, so it is Sync
-    // by itself. No outer Mutex / Box needed here.
-    Local(ommx::artifact::LocalArtifact),
-}
-
-impl ArtifactInner {
-    fn image_name(&self) -> Option<String> {
-        match self {
-            ArtifactInner::Archive(a) => Some(a.image_name().to_string()),
-            ArtifactInner::Local(local) => Some(local.image_name().to_string()),
-        }
-    }
-
-    fn annotations(&self) -> Result<HashMap<String, String>> {
-        match self {
-            ArtifactInner::Archive(a) => a.annotations(),
-            ArtifactInner::Local(local) => local.annotations(),
-        }
-    }
-
-    fn layers(&self) -> Result<Vec<PyDescriptor>> {
-        match self {
-            ArtifactInner::Archive(a) => {
-                Ok(a.layers()?.into_iter().map(PyDescriptor::from).collect())
-            }
-            ArtifactInner::Local(local) => Ok(local
-                .layers()?
-                .into_iter()
-                .map(PyDescriptor::from)
-                .collect()),
-        }
-    }
-
-    fn get_blob(&self, digest: &str) -> Result<Vec<u8>> {
-        match self {
-            ArtifactInner::Archive(a) => a.get_blob(digest),
-            ArtifactInner::Local(local) => local.get_blob(digest),
-        }
-    }
-
-    #[cfg(feature = "remote-artifact")]
-    fn push(&self) -> Result<()> {
-        match self {
-            ArtifactInner::Archive(a) => a.push(),
-            ArtifactInner::Local(local) => local.push(),
-        }
-    }
-}
+//
+// v3 collapses the prior `Archive` / `Local` enum into a single
+// `LocalArtifact`: archives are an exchange format that must be
+// imported into the SQLite Local Registry before any read / push
+// happens, so every PyArtifact value points into the user's
+// persistent SQLite registry.
 
 // ---------------------------------------------------------------------------
 // PyArtifact
@@ -83,33 +32,27 @@ impl ArtifactInner {
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust", name = "Artifact")]
-pub struct PyArtifact(ArtifactInner);
+pub struct PyArtifact(ommx::artifact::LocalArtifact);
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl PyArtifact {
-    /// Load an artifact stored as a `.ommx` OCI archive file, or import
-    /// an OCI Image Layout directory into the v3 SQLite Local Registry
-    /// and return a handle to the registry entry.
+    /// Import an artifact from a `.ommx` OCI archive file (or an OCI
+    /// Image Layout directory) into the user's v3 SQLite Local Registry,
+    /// and return a handle to the imported registry entry.
     ///
-    /// File path → opened in-place via `Artifact<OciArchive>`; no
-    /// registry side effect. Directory path → **identity-preserving
-    /// import into the user's default SQLite Local Registry** (see
-    /// `local_registry::import_oci_dir`), then opened by ref. The
-    /// distinction matches the v3 design: archives stay readable
-    /// without registry state, while loose OCI Image Layouts live in
-    /// the registry.
+    /// **Side effect (intentional)**: archive / directory contents are
+    /// permanently written into the SQLite Local Registry under the
+    /// default root (`$XDG_DATA_HOME/ommx/` on Linux,
+    /// `$HOME/Library/Application Support/org.ommx.ommx/` on macOS, or
+    /// `$OMMX_LOCAL_REGISTRY_ROOT` when set). Subsequent
+    /// `Artifact.load(image_name)` calls resolve from SQLite without
+    /// re-importing. v3 treats `.ommx` files purely as an exchange
+    /// format; there is no in-place "open archive for read" path.
     ///
-    /// > **Side effect for the directory branch**: the OCI Image
-    /// > Layout at `path` is permanently written into the SQLite
-    /// > Local Registry under the default root
-    /// > (`$XDG_DATA_HOME/ommx/` on Linux,
-    /// > `$HOME/Library/Application Support/org.ommx.ommx/` on macOS,
-    /// > or `$OMMX_LOCAL_REGISTRY_ROOT` when set). Subsequent
-    /// > `Artifact.load(image_name)` calls resolve from SQLite without
-    /// > another import. If a transient read with no registry write
-    /// > is wanted, pack the directory into a `.ommx` archive first
-    /// > and pass the file path instead.
+    /// The input must carry an `org.opencontainers.image.ref.name`
+    /// annotation. Unnamed archives / directories cannot be addressed
+    /// in the SQLite Local Registry and are rejected.
     ///
     /// ```python
     /// >>> artifact = Artifact.load_archive("data/random_lp_instance.ommx")
@@ -120,9 +63,24 @@ impl PyArtifact {
     #[staticmethod]
     pub fn load_archive(py: Python<'_>, path: PathBuf) -> Result<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        if path.is_file() {
-            let archive = OmmxArchive::open(&path)?;
-            Ok(Self(ArtifactInner::Archive(archive)))
+        let registry =
+            std::sync::Arc::new(ommx::artifact::local_registry::LocalRegistry::open_default()?);
+
+        let image_name = if path.is_file() {
+            // Archive ingest goes through `import_oci_archive` which
+            // streams blobs into the user's FileBlobStore and publishes
+            // the manifest atomically. Conflicts on KeepExisting are
+            // surfaced as `Err` by the import path itself.
+            let outcome = ommx::artifact::local_registry::import_oci_archive(&registry, &path)?;
+            outcome.image_name.ok_or_else(|| {
+                anyhow::anyhow!(
+                    "OCI archive at {} has no `org.opencontainers.image.ref.name` \
+                     annotation; v3 SQLite Local Registry requires a ref name to \
+                     address an imported artifact. Rebuild the archive with an \
+                     image name via `ArtifactBuilder.new_archive(path, image_name)`.",
+                    path.display(),
+                )
+            })?
         } else if path.is_dir() {
             // Validate the ref annotation BEFORE running `import_oci_dir`
             // so an unnamed OCI Image Layout (no
@@ -139,18 +97,18 @@ impl PyArtifact {
                         path.display(),
                     )
                 })?;
-            let registry =
-                std::sync::Arc::new(ommx::artifact::local_registry::LocalRegistry::open_default()?);
             ommx::artifact::local_registry::import_oci_dir(
                 registry.index(),
                 registry.blobs(),
                 &path,
             )?;
-            let artifact = ommx::artifact::LocalArtifact::open_in_registry(registry, image_name)?;
-            Ok(Self(ArtifactInner::Local(artifact)))
+            image_name
         } else {
             bail!("Path must be a file or a directory")
-        }
+        };
+
+        let artifact = ommx::artifact::LocalArtifact::open_in_registry(registry, image_name)?;
+        Ok(Self(artifact))
     }
 
     /// Load an artifact stored as a container image in local or remote registry.
@@ -173,22 +131,18 @@ impl PyArtifact {
         // Registry. Subsequent calls for the same image always land here.
         if let Some(artifact) = ommx::artifact::LocalArtifact::try_open(image_name_parsed.clone())?
         {
-            return Ok(Self(ArtifactInner::Local(artifact)));
+            return Ok(Self(artifact));
         }
 
         // SQLite miss — pull from the remote registry directly into
-        // SQLite. `pull_image` stages into a tempdir-backed OCI Image
-        // Layout, then imports identity-preserving into SQLite; the
-        // tempdir is dropped before the function returns, so no
-        // on-disk OCI dir cache is left behind. When the ocipkg-based
-        // stage is replaced with a native streamer, this call site
-        // does not change.
+        // SQLite via the v3 native `pull_image` (no on-disk OCI dir
+        // intermediate; blobs land straight in FileBlobStore).
         let registry =
             std::sync::Arc::new(ommx::artifact::local_registry::LocalRegistry::open_default()?);
         ommx::artifact::local_registry::pull_image(&registry, &image_name_parsed)?;
         let artifact =
             ommx::artifact::LocalArtifact::open_in_registry(registry, image_name_parsed)?;
-        Ok(Self(ArtifactInner::Local(artifact)))
+        Ok(Self(artifact))
     }
 
     /// Push the artifact to remote registry.
@@ -200,7 +154,7 @@ impl PyArtifact {
 
     #[getter]
     pub fn image_name(&mut self) -> Option<String> {
-        self.0.image_name()
+        Some(self.0.image_name().to_string())
     }
 
     /// Annotations in the artifact manifest.
@@ -211,7 +165,12 @@ impl PyArtifact {
 
     #[getter]
     pub fn layers(&mut self) -> Result<Vec<PyDescriptor>> {
-        self.0.layers()
+        Ok(self
+            .0
+            .layers()?
+            .into_iter()
+            .map(PyDescriptor::from)
+            .collect())
     }
 
     /// Look up a layer descriptor by digest.
@@ -219,8 +178,8 @@ impl PyArtifact {
         let _guard = crate::TRACING.attach_parent_context(py);
         let layers = self.0.layers()?;
         for layer in layers {
-            if layer.digest() == digest {
-                return Ok(layer);
+            if layer.digest().as_ref() == digest {
+                return Ok(PyDescriptor::from(layer));
             }
         }
         bail!("Layer {} not found", digest)
@@ -346,10 +305,11 @@ impl PyArtifact {
                     .0
                     .layers()
                     .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-                for desc in &layers {
-                    if desc.media_type() == "application/org.ommx.v1.instance" {
+                for desc in layers {
+                    let py_desc = PyDescriptor::from(desc);
+                    if py_desc.media_type() == "application/org.ommx.v1.instance" {
                         return self
-                            .get_instance_inner(desc)
+                            .get_instance_inner(&py_desc)
                             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()));
                     }
                 }
@@ -382,10 +342,11 @@ impl PyArtifact {
                     .0
                     .layers()
                     .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-                for desc in &layers {
-                    if desc.media_type() == "application/org.ommx.v1.solution" {
+                for desc in layers {
+                    let py_desc = PyDescriptor::from(desc);
+                    if py_desc.media_type() == "application/org.ommx.v1.solution" {
                         return self
-                            .get_solution_inner(desc)
+                            .get_solution_inner(&py_desc)
                             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()));
                     }
                 }
@@ -418,10 +379,11 @@ impl PyArtifact {
                     .0
                     .layers()
                     .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-                for desc in &layers {
-                    if desc.media_type() == "application/org.ommx.v1.parametric-instance" {
+                for desc in layers {
+                    let py_desc = PyDescriptor::from(desc);
+                    if py_desc.media_type() == "application/org.ommx.v1.parametric-instance" {
                         return self
-                            .get_parametric_instance_inner(desc)
+                            .get_parametric_instance_inner(&py_desc)
                             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()));
                     }
                 }
@@ -454,10 +416,11 @@ impl PyArtifact {
                     .0
                     .layers()
                     .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-                for desc in &layers {
-                    if desc.media_type() == "application/org.ommx.v1.sample-set" {
+                for desc in layers {
+                    let py_desc = PyDescriptor::from(desc);
+                    if py_desc.media_type() == "application/org.ommx.v1.sample-set" {
                         return self
-                            .get_sample_set_inner(desc)
+                            .get_sample_set_inner(&py_desc)
                             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()));
                     }
                 }
@@ -631,21 +594,19 @@ impl BuilderInner {
         Ok(())
     }
 
-    fn build(&mut self) -> Result<ArtifactInner> {
+    fn build(&mut self) -> Result<ommx::artifact::LocalArtifact> {
         match self {
             BuilderInner::Archive(ref mut b) => {
                 let builder = b
                     .take()
                     .ok_or_else(|| anyhow::anyhow!("Already built artifact"))?;
-                let archive = (*builder).build()?;
-                Ok(ArtifactInner::Archive(archive))
+                (*builder).build()
             }
             BuilderInner::Local(ref mut b) => {
                 let builder = b
                     .take()
                     .ok_or_else(|| anyhow::anyhow!("Already built artifact"))?;
-                let artifact = (*builder).build()?;
-                Ok(ArtifactInner::Local(artifact))
+                (*builder).build()
             }
         }
     }

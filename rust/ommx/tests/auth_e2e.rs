@@ -28,8 +28,8 @@
 use anyhow::Result;
 use ocipkg::ImageName;
 use ommx::artifact::{
-    local_registry::{pull_image, LocalRegistry, RefConflictPolicy},
-    media_types, LocalArtifact, LocalArtifactBuilder, OmmxArchive,
+    local_registry::{import_oci_archive, pull_image, LocalRegistry, RefConflictPolicy},
+    media_types, LocalArtifact, LocalArtifactBuilder,
 };
 use serial_test::serial;
 use std::collections::HashMap;
@@ -348,31 +348,39 @@ fn cli_push_routes_through_native_path() -> Result<()> {
 // Archive push path
 // ──────────────────────────────────────────────────────────────────
 
-/// `Artifact<OciArchive>::push` shares the v3 `RemoteTransport` with
-/// `LocalArtifact::push` after Step D. This exercises the archive read
-/// + push half: build a tiny artifact in SQLite, save it as a `.ommx`
-/// archive on disk, then push that archive bypassing the SQLite
-/// registry entirely. A regression that re-introduced ocipkg's
-/// `RemoteBuilder` / `auth_from_env` on the archive path would fail
-/// here because the htpasswd registry rejects anonymous, and the env
-/// override is not set in the anonymous-registry case below.
+/// v3 treats `.ommx` archives as an exchange format: pushing an
+/// archive means "load it into the SQLite Local Registry, then push
+/// the resulting registry entry". This test exercises that two-step
+/// pipeline against an anonymous registry: build, save, drop the
+/// sender registry, then import into a fresh receiver registry and
+/// push from there. A regression that re-introduced ocipkg's
+/// `RemoteBuilder` / `auth_from_env` on the push side would fail
+/// because `LocalArtifact::push` routes through the v3
+/// `RemoteTransport`.
 #[test]
 #[ignore = "requires docker"]
 #[serial]
-fn push_oci_archive_through_native_transport() -> Result<()> {
+fn push_oci_archive_via_load_then_push() -> Result<()> {
     let _env = EnvGuard::new();
     let registry = start_anonymous_registry();
     let port = registry.get_host_port_ipv4(5000)?;
     let image_name = ImageName::parse(&format!("localhost:{port}/ommx-test/archive-push:tag1"))?;
 
-    // Build the artifact in SQLite, then save it out as an OCI archive.
-    let (local, _local_dir) = build_test_artifact(image_name.clone())?;
+    // Sender side: build in SQLite, save to archive on disk.
+    let (sender_local, _sender_dir) = build_test_artifact(image_name.clone())?;
     let archive_dir = tempfile::tempdir()?;
     let archive_path = archive_dir.path().join("artifact.ommx");
-    local.save(&archive_path)?;
+    sender_local.save(&archive_path)?;
+    drop(sender_local);
 
-    let archive = OmmxArchive::open(&archive_path)?;
-    archive.push()
+    // Receiver side: import the archive into a fresh SQLite registry,
+    // then push from that registry. Matches the v3 "archive is
+    // exchange format" model exactly.
+    let receiver_dir = tempfile::tempdir()?;
+    let receiver = Arc::new(LocalRegistry::open(receiver_dir.path())?);
+    import_oci_archive(&receiver, &archive_path)?;
+    let receiver_local = LocalArtifact::open_in_registry(receiver, image_name)?;
+    receiver_local.push()
 }
 
 // ──────────────────────────────────────────────────────────────────

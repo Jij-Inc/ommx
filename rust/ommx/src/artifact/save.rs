@@ -35,7 +35,7 @@ use oci_spec::image::{
 };
 use std::{
     collections::HashMap,
-    fs::File,
+    fs::OpenOptions,
     io::{BufWriter, Cursor, Write},
     path::Path,
     str::FromStr,
@@ -55,16 +55,25 @@ impl LocalArtifact {
     /// produced archive. Importing the archive back into a fresh
     /// registry round-trips to the same digest.
     pub fn save(&self, output: &Path) -> crate::Result<()> {
-        if output.exists() {
-            crate::bail!("Output file already exists: {}", output.display());
-        }
         let manifest_digest = self.manifest_digest().to_string();
         let manifest_bytes = self.get_blob(&manifest_digest)?;
         let manifest: ImageManifest = serde_json::from_slice(&manifest_bytes)
             .context("Failed to parse manifest from SQLite Local Registry")?;
 
-        let file = File::create(output)
-            .with_context(|| format!("Failed to create archive at {}", output.display()))?;
+        // `create_new(true)` closes the TOCTOU window between an `exists()`
+        // probe and the open: a concurrent process that races us cannot
+        // have its file silently truncated. The kernel's atomic
+        // O_CREAT|O_EXCL is the only safe surface here.
+        let file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(output)
+            .with_context(|| {
+                format!(
+                    "Failed to create archive at {} (file already exists or path is invalid)",
+                    output.display()
+                )
+            })?;
         let mut tar = tar::Builder::new(BufWriter::new(file));
         // Deterministic mode pins uid/gid/mtime to known values so a
         // bit-for-bit `save` against the same registry produces the

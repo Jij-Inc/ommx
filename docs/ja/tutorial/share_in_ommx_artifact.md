@@ -130,17 +130,16 @@ if os.path.exists(filename):
     os.remove(filename)
 
 # 1. OMMX Artifactファイルを作成するためのビルダーを作成する
-builder = ArtifactBuilder.new_archive_unnamed(filename)
+builder = ArtifactBuilder.new_archive(filename, "my-instance.ommx/local:v1")
 ```
 
-[`ArtifactBuilder`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder) にはいくつかコンストラクタがあり、コンテナとして名前で管理するか、アーカイブファイルとして管理するかを選択できます。コンテナのようにコンテナレジストリを使ってPushとPullを行う場合は名前が必須ですが、アーカイブファイルを使う場合は名前が不要です。ここではアーカイブファイルとして管理する `ArtifactBuilder.new_archive_unnamed` を使います。
+[`ArtifactBuilder`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder) にはいくつかコンストラクタがあります。v3 ではすべてのアーティファクトが SQLite Local Registry 上で名前により参照されるため、必ずイメージ名を指定してください。v2 時代の `new_archive_unnamed` は廃止されました。アーカイブファイルとして共有する場合でも `my-instance.ommx/local:v1` のようなプレースホルダ名を指定する形になります。
 
 | コンストラクタ | 説明 |
 | --- | --- |
-| [`ArtifactBuilder.new`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.new) | コンテナとして名前で管理する |
-| [`ArtifactBuilder.new_archive`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.new_archive) | アーカイブファイルとコンテナの両方として扱えるようにする |
-| [`ArtifactBuilder.new_archive_unnamed`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.new_archive_unnamed) | アーカイブファイルとして管理する |
-| [`ArtifactBuilder.for_github`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.for_github) | GitHub Container Registryに合わせてコンテナの名前を決める |
+| [`ArtifactBuilder.new`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.new) | SQLite Local Registry 上で名前で管理する |
+| [`ArtifactBuilder.new_archive`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.new_archive) | アーカイブファイルとレジストリエントリの両方として扱う |
+| [`ArtifactBuilder.for_github`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.for_github) | GitHub Container Registry に合わせてコンテナの名前を決める |
 
 どの方法で初期化しても同じように `ommx.v1.Instance` や他のデータを保存することが出来ます。上で用意したデータを追加してみましょう。
 

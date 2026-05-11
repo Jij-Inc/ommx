@@ -2,7 +2,6 @@
 //!
 
 mod annotations;
-mod archive;
 mod builder;
 mod config;
 pub mod digest;
@@ -15,7 +14,6 @@ mod push;
 mod remote_transport;
 mod save;
 pub use annotations::*;
-pub use archive::OmmxArchive;
 pub use builder::*;
 pub use config::*;
 pub use digest::sha256_digest;

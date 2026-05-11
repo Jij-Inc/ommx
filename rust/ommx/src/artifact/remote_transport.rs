@@ -171,10 +171,18 @@ impl RemoteTransport {
         Ok((bytes.to_vec(), digest))
     }
 
-    /// Pull a single blob into memory. `oci_client::Client::pull_blob_stream`
-    /// preserves the `Content-Length` for buffer pre-allocation and
-    /// avoids the digest verification that `pull_blob` does on the
-    /// streaming reader — the caller writes the bytes into
+    /// Pull a single blob into memory. The caller passes the manifest-
+    /// declared `expected_size`; the helper allocates the destination
+    /// `Vec` from this value (not from the registry-reported
+    /// `Content-Length`), validates `Content-Length` if present, and
+    /// aborts the chunk loop the moment accumulated bytes exceed
+    /// `expected_size`. Together these prevent a malicious or broken
+    /// registry from inducing an oversized allocation before any
+    /// digest check would catch the body.
+    ///
+    /// `oci_client::Client::pull_blob_stream` skips the digest
+    /// verification that `pull_blob` does on the streaming reader; the
+    /// caller writes the bytes into
     /// [`super::local_registry::FileBlobStore`] which re-derives sha256
     /// during `put_bytes` and then asserts the result matches the
     /// expected digest, so the registry-side digest is enforced exactly
@@ -184,16 +192,34 @@ impl RemoteTransport {
         &self,
         image_name: &ocipkg::ImageName,
         digest: &str,
+        expected_size: u64,
     ) -> crate::Result<Vec<u8>> {
         let reference = to_reference(image_name)?;
         let bytes = self
             .runtime
             .block_on(async {
                 let resp = self.client.pull_blob_stream(&reference, digest).await?;
-                let mut buf =
-                    Vec::with_capacity(resp.content_length.unwrap_or(0).try_into().unwrap_or(0));
+                if let Some(content_length) = resp.content_length {
+                    anyhow::ensure!(
+                        content_length == expected_size,
+                        "Registry reported Content-Length {content_length} for blob {digest}, \
+                         but the manifest descriptor declares size {expected_size}",
+                    );
+                }
+                let capacity =
+                    usize::try_from(expected_size).context("Blob size does not fit in usize")?;
+                let mut buf = Vec::with_capacity(capacity);
+                let mut accumulated: u64 = 0;
                 let mut stream = resp.stream;
                 while let Some(chunk) = stream.try_next().await? {
+                    accumulated = accumulated
+                        .checked_add(chunk.len() as u64)
+                        .context("Pulled blob size overflowed u64")?;
+                    anyhow::ensure!(
+                        accumulated <= expected_size,
+                        "Pulled blob bytes for {digest} exceed declared size {expected_size}; \
+                         the registry served more data than the manifest descriptor allows",
+                    );
                     buf.extend_from_slice(&chunk);
                 }
                 Ok::<_, anyhow::Error>(buf)

@@ -5,10 +5,10 @@ use ocipkg::{oci_spec::image::ImageManifest, ImageName};
 use ommx::artifact::{
     fetch_remote_manifest, get_image_dir,
     local_registry::{
-        import_oci_archive, import_oci_dir, oci_dir_ref, pull_image, LocalRegistry,
-        RefConflictPolicy,
+        import_oci_archive, import_oci_dir, oci_dir_ref, pull_image, read_archive_manifest,
+        LocalRegistry, RefConflictPolicy,
     },
-    LocalArtifact, OmmxArchive,
+    LocalArtifact,
 };
 use std::path::{Path, PathBuf};
 
@@ -149,21 +149,19 @@ impl ImageNameOrPath {
                         manifest_blob_path.display()
                     )
                 })?;
-                serde_json::from_slice(&bytes).with_context(|| {
+                serde_json::from_slice::<ImageManifest>(&bytes).with_context(|| {
                     format!(
                         "Failed to parse OCI image manifest at {}",
                         manifest_blob_path.display()
                     )
                 })?
             }
-            // OCI archive inspect routes through `OmmxArchive::open`,
-            // which imports the archive into a private tempdir-backed
-            // registry. The tempdir is dropped when the `OmmxArchive`
-            // value is dropped (end of this match arm).
-            ImageNameOrPath::OciArchive(path) => {
-                let archive = OmmxArchive::open(path)?;
-                archive.get_manifest()?.clone().into_inner()
-            }
+            // Read-only inspect: a native tar pre-scan extracts the
+            // manifest blob without touching the SQLite Local Registry.
+            // `Artifact.load_archive(file)` is the side-effecting
+            // import path; `ommx inspect <archive>` should not mutate
+            // the user's registry.
+            ImageNameOrPath::OciArchive(path) => read_archive_manifest(path)?,
             // `parse` only routes a ref to `Local` when SQLite resolves
             // it, so `LocalArtifact::open` should always succeed here;
             // if it doesn't, surface the SQLite-side migration message.
@@ -241,25 +239,23 @@ fn main() -> Result<()> {
         }
 
         Command::Push { image_name_or_path } => match ImageNameOrPath::parse(image_name_or_path)? {
-            // OCI Image Layout dirs feed into the SQLite registry via
-            // `ommx load <dir>` (identity-preserving import) and are
-            // pushed by ref from there. Direct `ommx push <dir>` would
-            // duplicate that path, so it is not supported in v3.
+            // v3 treats archive / OCI Image Layout dirs as exchange
+            // formats; push always goes from the SQLite Local Registry.
+            // Both paths bail with the same migration hint: load into
+            // the registry first, then push by image name.
             ImageNameOrPath::OciDir(path) => bail!(
                 "Cannot push OCI Image Layout directory `{}` directly. Run \
                  `ommx load <dir>` to import it into the SQLite Local Registry, \
                  then `ommx push <image_name>`.",
                 path.display(),
             ),
-            // `OmmxArchive::push` reads the archive (which has been
-            // imported into a temp registry on open) and uploads
-            // through the v3 native transport. The temp registry is
-            // dropped at the end of this arm, so an archive push has
-            // no persistent local side effect.
-            ImageNameOrPath::OciArchive(path) => {
-                let archive = OmmxArchive::open(&path)?;
-                archive.push()?;
-            }
+            ImageNameOrPath::OciArchive(path) => bail!(
+                "Cannot push OCI archive `{}` directly. Run `ommx load <file>` \
+                 to import it into the SQLite Local Registry, then \
+                 `ommx push <image_name>`. (Archive is an exchange format; v3 \
+                 pushes always source from the registry.)",
+                path.display(),
+            ),
             // CLI and Python `Artifact.push()` share the same native
             // code path: `LocalArtifact::push()`. `parse` only routes
             // SQLite-resident refs to `Local`, so `open` is the right

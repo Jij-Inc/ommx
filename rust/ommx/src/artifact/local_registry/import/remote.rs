@@ -184,6 +184,27 @@ pub fn pull_image(registry: &Arc<LocalRegistry>, image_name: &ImageName) -> Resu
         Some(image_name),
         RefConflictPolicy::KeepExisting,
     )?;
+    // Surface a ref conflict as `Err` rather than `Ok(Conflicted)`:
+    // callers (Python `Artifact.load`, CLI `ommx pull`, dataset
+    // loaders) treat a successful return as "the freshly pulled bytes
+    // are now resident under `image_name`". Under `KeepExisting`, a
+    // conflict means the SQLite ref still points at the *prior*
+    // manifest digest; opening `LocalArtifact` after that would
+    // silently surface the local cache, not the remote bytes. Forcing
+    // an explicit error lets callers decide between `--replace`
+    // semantics and aborting.
+    if let Some(RefUpdate::Conflicted {
+        existing_manifest_digest,
+        incoming_manifest_digest,
+    }) = &outcome.ref_update
+    {
+        anyhow::bail!(
+            "Local registry ref conflict for {image_name}: existing manifest \
+             {existing_manifest_digest}, incoming manifest {incoming_manifest_digest}. \
+             The remote serves a different manifest than the one cached locally; \
+             retry with a replace policy if you want to overwrite the local ref."
+        );
+    }
 
     Ok(OciDirImport {
         manifest_digest,
@@ -227,7 +248,11 @@ fn pull_descriptor_blob(
     kind: &str,
 ) -> Result<BlobRecord> {
     let digest = descriptor.digest().to_string();
-    let bytes = transport.pull_blob_to_vec(image_name, &digest)?;
+    // The manifest descriptor's `size` bounds the network read: the
+    // transport's pull helper allocates from this value (not from the
+    // registry-reported `Content-Length`) and aborts the chunk loop if
+    // the registry serves more bytes than declared.
+    let bytes = transport.pull_blob_to_vec(image_name, &digest, descriptor.size())?;
     anyhow::ensure!(
         bytes.len() as u64 == descriptor.size(),
         "{kind} blob size mismatch for {digest}: descriptor={}, actual={}",

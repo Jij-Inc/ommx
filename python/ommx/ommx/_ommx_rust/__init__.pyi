@@ -163,28 +163,22 @@ class Artifact:
     @staticmethod
     def load_archive(path: builtins.str | os.PathLike | pathlib.Path) -> Artifact:
         r"""
-        Load an artifact stored as a `.ommx` OCI archive file, or import
-        an OCI Image Layout directory into the v3 SQLite Local Registry
-        and return a handle to the registry entry.
+        Import an artifact from a `.ommx` OCI archive file (or an OCI
+        Image Layout directory) into the user's v3 SQLite Local Registry,
+        and return a handle to the imported registry entry.
 
-        File path → opened in-place via `Artifact<OciArchive>`; no
-        registry side effect. Directory path → **identity-preserving
-        import into the user's default SQLite Local Registry** (see
-        `local_registry::import_oci_dir`), then opened by ref. The
-        distinction matches the v3 design: archives stay readable
-        without registry state, while loose OCI Image Layouts live in
-        the registry.
+        **Side effect (intentional)**: archive / directory contents are
+        permanently written into the SQLite Local Registry under the
+        default root (`$XDG_DATA_HOME/ommx/` on Linux,
+        `$HOME/Library/Application Support/org.ommx.ommx/` on macOS, or
+        `$OMMX_LOCAL_REGISTRY_ROOT` when set). Subsequent
+        `Artifact.load(image_name)` calls resolve from SQLite without
+        re-importing. v3 treats `.ommx` files purely as an exchange
+        format; there is no in-place "open archive for read" path.
 
-        > **Side effect for the directory branch**: the OCI Image
-        > Layout at `path` is permanently written into the SQLite
-        > Local Registry under the default root
-        > (`$XDG_DATA_HOME/ommx/` on Linux,
-        > `$HOME/Library/Application Support/org.ommx.ommx/` on macOS,
-        > or `$OMMX_LOCAL_REGISTRY_ROOT` when set). Subsequent
-        > `Artifact.load(image_name)` calls resolve from SQLite without
-        > another import. If a transient read with no registry write
-        > is wanted, pack the directory into a `.ommx` archive first
-        > and pass the file path instead.
+        The input must carry an `org.opencontainers.image.ref.name`
+        annotation. Unnamed archives / directories cannot be addressed
+        in the SQLite Local Registry and are rejected.
 
         ```python
         >>> artifact = Artifact.load_archive("data/random_lp_instance.ommx")

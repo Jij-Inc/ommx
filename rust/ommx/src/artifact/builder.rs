@@ -1,18 +1,12 @@
-//! `.ommx` OCI archive builder backed by a temp SQLite registry.
+//! `.ommx` OCI archive builder backed by the user's SQLite Local Registry.
 //!
-//! Step F (§12.4) rewrote `ArchiveArtifactBuilder` as a thin wrapper
-//! around [`LocalArtifactBuilder`] + [`LocalRegistry`] in a private
-//! [`tempfile::TempDir`]:
-//!
-//! 1. `new_archive(path, image_name)` opens a temp registry under a
-//!    fresh tempdir and stages layers / annotations against a
-//!    [`LocalArtifactBuilder`] inside it.
-//! 2. `build()` publishes the staged blobs + manifest into the temp
-//!    registry, then calls [`LocalArtifact::save`] to materialise the
-//!    archive at the requested output path. The returned
-//!    [`OmmxArchive`] keeps the tempdir alive so further reads on the
-//!    handle (e.g. iterating layers, computing a manifest digest,
-//!    re-pushing) stay valid.
+//! Step F (§12.4) rewrote `ArchiveArtifactBuilder` as a thin
+//! convenience wrapper around [`LocalArtifactBuilder`] that publishes
+//! the artifact into the **user's persistent SQLite Local Registry**
+//! and then calls [`LocalArtifact::save`] to write the `.ommx` archive
+//! file. The archive is purely an exchange-format export of the
+//! registry-resident artifact; there is no transient or anonymous
+//! archive path in v3.
 //!
 //! All blob writes go through the v3 native code path
 //! ([`crate::artifact::save`]'s native tar writer) and the produced
@@ -22,7 +16,7 @@
 
 use crate::artifact::{
     local_registry::{LocalRegistry, RefConflictPolicy},
-    media_types, Config, InstanceAnnotations, LocalArtifactBuilder, OmmxArchive,
+    media_types, Config, InstanceAnnotations, LocalArtifact, LocalArtifactBuilder,
     ParametricInstanceAnnotations, SampleSetAnnotations, SolutionAnnotations,
 };
 use crate::v1;
@@ -41,7 +35,6 @@ use uuid::Uuid;
 pub struct ArchiveArtifactBuilder {
     inner: LocalArtifactBuilder,
     output_path: PathBuf,
-    tempdir: tempfile::TempDir,
     registry: Arc<LocalRegistry>,
 }
 
@@ -49,27 +42,22 @@ impl ArchiveArtifactBuilder {
     /// Build an archive at `path` under the given `image_name`. The
     /// image name is written into the archive's `index.json` as the
     /// `org.opencontainers.image.ref.name` annotation, matching what
-    /// [`LocalArtifact::save`] produces. v3 does not support
-    /// `org.opencontainers.image.ref.name`-absent archives — every
-    /// archive carries a ref so the v3 SQLite Local Registry can
-    /// address it on import.
+    /// [`LocalArtifact::save`] produces, **and** is published into the
+    /// user's persistent SQLite Local Registry as a side effect of
+    /// `build()`. v3 does not support `ref.name`-absent archives — every
+    /// archive carries a ref so the SQLite Local Registry can address
+    /// it on import / export.
     pub fn new_archive(path: PathBuf, image_name: ImageName) -> Result<Self> {
         if path.exists() {
             crate::bail!("Archive output file already exists: {}", path.display());
         }
-        let tempdir = tempfile::tempdir()
-            .context("Failed to create temp dir for ArchiveArtifactBuilder registry")?;
-        let registry = Arc::new(LocalRegistry::open(tempdir.path()).with_context(|| {
-            format!(
-                "Failed to open temp Local Registry at {}",
-                tempdir.path().display()
-            )
+        let registry = Arc::new(LocalRegistry::open_default().with_context(|| {
+            "Failed to open the default SQLite Local Registry for archive build"
         })?);
         let inner = LocalArtifactBuilder::new(image_name);
         Ok(Self {
             inner,
             output_path: path,
-            tempdir,
             registry,
         })
     }
@@ -181,11 +169,15 @@ impl ArchiveArtifactBuilder {
             .add_annotation("org.opencontainers.image.description", description);
     }
 
-    pub fn build(self) -> Result<OmmxArchive> {
+    pub fn build(self) -> Result<LocalArtifact> {
         let local = self
             .inner
             .build_in_registry(self.registry, RefConflictPolicy::Replace)?;
         local.save(&self.output_path)?;
-        Ok(OmmxArchive::from_local_in_tempdir(local, self.tempdir))
+        // `local` points into the user's persistent SQLite registry, so
+        // the artifact is reachable by ref name after `build()` without
+        // an additional `Artifact.load(...)` round-trip. The archive
+        // file at `output_path` is the exchange-format export.
+        Ok(local)
     }
 }
