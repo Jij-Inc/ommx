@@ -672,23 +672,38 @@ v3 PR #864 で landing する範囲。
 | OTel trace layer 埋め込み | 8.4, 8.5 | Phase 1 は OTLP JSON のみ。global `TracerProvider` は設定しない (`trace="auto"`/`"required"` mode) |
 | Trace renderer | 8.6 | Phase 1 は post-hoc renderer、Phase 2 で scoped streaming |
 | `ommx artifact gc` と reachability analysis hook | 10 | Local Registry / 旧 archive / OCI directory layout を対象。remote registry は capability 検出できる場合のみ実削除 |
-| `rust/dataset/{miplib2017,qplib}` packaging path の v3 化 | 6.6 | 新 namespace `ghcr.io/jij-inc/ommx/v3/{miplib2017,qplib}:*` を Artifact Manifest で publish する。既存 `ghcr.io/jij-inc/ommx/{miplib2017,qplib}:*` (Image Manifest) は freeze し、format flip しない (両 namespace は SQLite registry に identity-preserving に共存可能)。code 切替と publish の ordering は §12.3 step A / step B 後の re-publish に対応 |
+| `rust/dataset/{miplib2017,qplib}` packaging path の v3 化 | 6.6 | 新 namespace `ghcr.io/jij-inc/ommx/v3/{miplib2017,qplib}:*` を Artifact Manifest で publish する。既存 `ghcr.io/jij-inc/ommx/{miplib2017,qplib}:*` (Image Manifest) は freeze し、format flip しない (両 namespace は SQLite registry に identity-preserving に共存可能)。code 切替は #866 (Step A) で完了、初回 publish は Step B 後 |
 | DataStore / Experiment / Run / EnvironmentInfo の OMMX core 取り込み | 7 | minto-equivalent functionality を OMMX-owned で再設計。API compat は破棄 (4.3) |
 
 ### 12.3 次の実装 milestone (A → B → C)
 
 §12.2 のうち、新機能ではなく構造を片付ける項目を以下の順序で進める。各 step は独立 PR、step 間で SDK が壊れない状態を維持する。
 
-**Step A — legacy Image Manifest build path の撤去** (§12.2 行 3 Dir 半分、行 11 code 部分)。
+**Step A — legacy Image Manifest build path の撤去** (§12.2 行 3 Dir 半分、行 11 code 部分)。**Landed in PR #866.**
 
-`rust/dataset/{miplib2017,qplib}` を `LocalArtifactBuilder::new_ommx` + 明示的 `add_source` に切り替え、出力 image name を `ghcr.io/jij-inc/ommx/v3/{miplib2017,qplib}:<tag>` とする。唯一の caller が消えた `rust/ommx/src/artifact/builder.rs` の `Builder<OciDirBuilder>::{new, for_github}` を削除。既存 `ghcr.io/jij-inc/ommx/{miplib2017,qplib}:*` は触らない (freeze、format flip なし) — SQLite registry は両 namespace を identity-preserving に保持できるため user 影響なし。step B 前は v3 namespace への push 不可だが、これは release workflow のタイミング問題で user 影響はない。
+`rust/dataset/{miplib2017,qplib}` を `LocalArtifactBuilder::new` + 明示的 `add_source` に切り替え、出力 image name を `ghcr.io/jij-inc/ommx/v3/{miplib2017,qplib}:<tag>` とする。唯一の caller が消えた `rust/ommx/src/artifact/builder.rs` の `Builder<OciDirBuilder>::{new, for_github}` を削除。既存 `ghcr.io/jij-inc/ommx/{miplib2017,qplib}:*` は触らない (freeze、format flip なし) — SQLite registry は両 namespace を identity-preserving に保持できるため user 影響なし。step B 前は v3 namespace への push 不可だが、これは release workflow のタイミング問題で user 影響はない。
 
 **Step B — SQLite → remote の native push 実装** (§12.2 行 4、行 11 publish 部分)。
 
-`LocalArtifact::push()` を SQLite + CAS から `Remote` に直接 stream する。Python `ArtifactInner::Local::push` の "legacy disk dir 経由 fallback" を撤去。step B 後に `ghcr.io/jij-inc/ommx/v3/{miplib2017,qplib}:*` を初回 publish (v3 dataset release event)。
+`LocalArtifact::push()` を SQLite + CAS から remote registry に直接 stream する。Python `ArtifactInner::Local::push` の "legacy disk dir 経由 fallback" を撤去。step B 後に `ghcr.io/jij-inc/ommx/v3/{miplib2017,qplib}:*` を初回 publish (v3 dataset release event)。
+
+Transport crate は **`oci-client`** (ORAS project, [oras-project/rust-oci-client](https://github.com/oras-project/rust-oci-client)) を採用する。選定理由:
+
+- `Client::push_manifest_raw(image, body, content_type)` で **OCI Artifact Manifest** を任意 Content-Type で push 可能 (`ocipkg::Client::push_manifest` は `ImageManifest` 型でハードコードされ、Artifact Manifest を push できない)。
+- `oci-spec` 0.9 ベースで OMMX 既存 dep と互換。`oci_client::Reference` は `oci_spec::distribution::Reference` の re-export。
+- Apache-2.0、ORAS sub-project として継続メンテナンス (last release 2026-03)。
+- `ocipkg` が表面化させていた GCAR (Google Cloud Artifact Registry) auth challenge 互換性問題 (Jij-Inc/ommx#606、`AuthChallenge::try_from` の JSON parse 失敗) も新 transport で解消見込み。
+
+**async 戦略 (1):** `oci-client` は async-only (`tokio` + `reqwest`)。Step B では transport wrapper module が private `tokio::runtime::Runtime` を保持し、`block_on` で sync 境界を保つ。`LocalArtifact::push()` の public signature は sync のまま。
+
+**async 戦略 (2):** 後続 milestone で async surface を段階的に外側に広げ、最終的に Python 側は [`pyo3-async-runtimes`](https://docs.rs/pyo3-async-runtimes/) 経由で `await` 可能にする。Step B 時点では SDK entry での runtime 構築は導入しない。
+
+**Step B scope の境界:** `Artifact<OciArchive>::push` / `Artifact<OciDir>::push` (archive output / legacy dir 経由 push) は `ocipkg` ベースのまま据え置き、Step C で扱う。Step B では `LocalArtifact::push()` のみが新 transport を経由する。
 
 **Step C — lazy auto-migration の legacy double-write 撤廃** (§12.2 行 5、行 3 Archive 半分)。
 
-`Artifact.load(image)` / `ommx load` の auto-migration を "remote/archive → legacy disk OCI dir → SQLite" の 2-stage から "remote/archive → SQLite" 直結に変更。Python `ArtifactInner::Dir` 分岐を削除し、`{Archive, Local}` 2-variant に。`Artifact<OciDir>` は `import::*` の temp scratch でしか使われない実装詳細に格下げ。
+**Step C — lazy auto-migration の legacy double-write 撤廃** (§12.2 行 5、行 3 Archive 半分)。
+
+`Artifact.load(image)` / `ommx load` の auto-migration を "remote/archive → legacy disk OCI dir → SQLite" の 2-stage から "remote/archive → SQLite" 直結に変更。Python `ArtifactInner::Dir` 分岐を削除し、`{Archive, Local}` 2-variant に。`Artifact<OciDir>` は `import::*` の temp scratch でしか使われない実装詳細に格下げ。`Artifact<OciArchive>::push` も Step B で導入した新 transport に統一する候補。
 
 A / B / C 後に残る ocipkg seam は `Builder<OciArchiveBuilder>` (archive 出力) と `import::{archive, remote}` 内の temp staging のみ。§12.2 行 1 (native streamer 置換) と行 2 (ocipkg 公開 surface 撤去) はその次の milestone series。

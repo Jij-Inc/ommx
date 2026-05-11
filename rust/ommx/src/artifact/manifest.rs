@@ -134,16 +134,6 @@ impl LocalArtifact {
         &self.manifest_digest
     }
 
-    /// Root path of the SQLite Local Registry this artifact lives in.
-    ///
-    /// Public so that the Python binding can derive the matching legacy
-    /// OCI dir path (`registry_root.join(image_name.as_path())`) for
-    /// the transitional `push()` path that round-trips through ocipkg.
-    /// Goes away once native v3 push lands.
-    pub fn registry_root(&self) -> &std::path::Path {
-        self.registry.root()
-    }
-
     /// Read and cache the manifest associated with this artifact.
     ///
     /// The first successful call populates a shared `OnceLock`; later

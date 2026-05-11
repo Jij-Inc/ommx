@@ -8,6 +8,10 @@ pub mod digest;
 pub mod local_registry;
 mod manifest;
 pub mod media_types;
+#[cfg(feature = "remote-artifact")]
+mod push;
+#[cfg(feature = "remote-artifact")]
+mod remote_transport;
 pub use annotations::*;
 pub use builder::*;
 pub use config::*;
