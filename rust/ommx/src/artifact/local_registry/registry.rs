@@ -2,7 +2,7 @@ use super::{
     annotations_json, import_legacy_local_registry, import_legacy_local_registry_ref,
     import_legacy_local_registry_ref_with_policy, import_legacy_local_registry_with_policy,
     now_rfc3339, BlobRecord, FileBlobStore, LayerRecord, LegacyImportReport, ManifestRecord,
-    OciDirImport, RefConflictPolicy, RefUpdate, SqliteIndexStore, BLOB_KIND_BLOB,
+    OciDirImport, RefConflictPolicy, RefUpdate, SqliteIndexStore, BLOB_KIND_BLOB, BLOB_KIND_CONFIG,
     BLOB_KIND_MANIFEST,
 };
 use crate::artifact::StagedArtifactBlob;
@@ -147,13 +147,22 @@ impl LocalRegistry {
         // + manifest + ref so a crash or conflict can never leave
         // committed manifest / blob rows under a ref that wasn't
         // actually published.
+        //
+        // Tag the manifest's `config` descriptor with `BLOB_KIND_CONFIG`
+        // (matching the OCI-dir import path) and everything else with
+        // `BLOB_KIND_BLOB`. Without this dispatch the empty config blob
+        // built by `LocalArtifactBuilder::stage` would be persisted as a
+        // generic layer, diverging from imports of legacy v2 dirs and
+        // breaking GC / query logic that filters on `kind`.
+        let config_digest = manifest.config().digest();
         let mut blob_records = Vec::with_capacity(blobs.len() + 1);
         for blob in blobs {
-            blob_records.push(self.stage_blob_record(
-                blob.descriptor(),
-                blob.bytes(),
-                BLOB_KIND_BLOB,
-            )?);
+            let kind = if blob.descriptor().digest() == config_digest {
+                BLOB_KIND_CONFIG
+            } else {
+                BLOB_KIND_BLOB
+            };
+            blob_records.push(self.stage_blob_record(blob.descriptor(), blob.bytes(), kind)?);
         }
         blob_records.push(self.stage_blob_record(
             manifest_descriptor,

@@ -432,11 +432,20 @@ fn local_registry_builds_native_image_manifest_with_artifact_type() -> Result<()
     assert_eq!(layers[0].media_type, media_types::V1_INSTANCE_MEDIA_TYPE);
     assert_eq!(artifact.get_blob(&layer.digest().to_string())?, b"instance");
 
-    // Empty config blob must also be readable from the registry.
+    // Empty config blob must be readable from the registry and persisted
+    // with `BLOB_KIND_CONFIG`, matching the OCI dir import path. A
+    // mis-classified config blob (e.g. recorded as `BLOB_KIND_BLOB`)
+    // would break GC reachability analysis and queries that filter by
+    // blob kind.
     assert_eq!(
         artifact.get_blob(media_types::OCI_EMPTY_CONFIG_DIGEST)?,
         media_types::OCI_EMPTY_CONFIG_BYTES
     );
+    let config_record = registry
+        .index()
+        .get_blob(media_types::OCI_EMPTY_CONFIG_DIGEST)?
+        .context("Empty config blob record is missing")?;
+    assert_eq!(config_record.kind, BLOB_KIND_CONFIG);
     Ok(())
 }
 

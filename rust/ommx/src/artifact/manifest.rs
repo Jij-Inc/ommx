@@ -197,8 +197,12 @@ impl LocalArtifact {
 
 /// A manifest read from the SQLite Local Registry. v3 stores OCI Image
 /// Manifest as the only native format; OMMX artifacts are identified
-/// by the `artifactType` field plus the `application/vnd.oci.empty.v1+json`
-/// empty config descriptor. The deprecated OCI Artifact Manifest media
+/// at parse time by the `artifactType` field (validated against
+/// `application/org.ommx.v1.artifact`). The native build path also
+/// writes an `application/vnd.oci.empty.v1+json` empty config descriptor
+/// — matching the SDK v2 archive build — but `parse` does not assert
+/// on the config blob, so legacy v2 imports that carry an OMMX-specific
+/// config remain readable. The deprecated OCI Artifact Manifest media
 /// type (`application/vnd.oci.artifact.manifest.v1+json`) is rejected
 /// at parse time rather than supported via a second enum variant.
 ///
