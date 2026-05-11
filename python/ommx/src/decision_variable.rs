@@ -648,10 +648,10 @@ pyo3_stub_gen::inventory::submit! {
     }
 }
 
-fn lookup_variable<'a>(
-    inst: &'a ommx::Instance,
+fn lookup_variable(
+    inst: &ommx::Instance,
     id: ommx::VariableID,
-) -> pyo3::PyResult<&'a ommx::DecisionVariable> {
+) -> pyo3::PyResult<&ommx::DecisionVariable> {
     inst.decision_variables().get(&id).ok_or_else(|| {
         pyo3::exceptions::PyKeyError::new_err(format!(
             "decision variable id {} not found in instance",
@@ -660,10 +660,10 @@ fn lookup_variable<'a>(
     })
 }
 
-fn lookup_variable_parametric<'a>(
-    inst: &'a ommx::ParametricInstance,
+fn lookup_variable_parametric(
+    inst: &ommx::ParametricInstance,
     id: ommx::VariableID,
-) -> pyo3::PyResult<&'a ommx::DecisionVariable> {
+) -> pyo3::PyResult<&ommx::DecisionVariable> {
     inst.decision_variables().get(&id).ok_or_else(|| {
         pyo3::exceptions::PyKeyError::new_err(format!(
             "decision variable id {} not found in parametric instance",

@@ -247,10 +247,10 @@ impl AttachedOneHotConstraint {
     }
 }
 
-fn lookup_one_hot<'a>(
-    inst: &'a ommx::Instance,
+fn lookup_one_hot(
+    inst: &ommx::Instance,
     id: ommx::OneHotConstraintID,
-) -> PyResult<&'a ommx::OneHotConstraint> {
+) -> PyResult<&ommx::OneHotConstraint> {
     inst.one_hot_constraints()
         .get(&id)
         .or_else(|| inst.removed_one_hot_constraints().get(&id).map(|(c, _)| c))
@@ -262,10 +262,10 @@ fn lookup_one_hot<'a>(
         })
 }
 
-fn lookup_one_hot_parametric<'a>(
-    inst: &'a ommx::ParametricInstance,
+fn lookup_one_hot_parametric(
+    inst: &ommx::ParametricInstance,
     id: ommx::OneHotConstraintID,
-) -> PyResult<&'a ommx::OneHotConstraint> {
+) -> PyResult<&ommx::OneHotConstraint> {
     inst.one_hot_constraints()
         .get(&id)
         .or_else(|| inst.removed_one_hot_constraints().get(&id).map(|(c, _)| c))

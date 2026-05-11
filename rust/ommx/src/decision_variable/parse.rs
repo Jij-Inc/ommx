@@ -182,7 +182,7 @@ impl Parse for v1::SampledDecisionVariable {
             samples,
             crate::ATol::default(),
         )
-        .map_err(|e| RawParseError::InvalidDecisionVariable(e))?;
+        .map_err(RawParseError::InvalidDecisionVariable)?;
         Ok(ParsedSampledDecisionVariable {
             variable: sampled,
             metadata: parsed_dv.metadata,
