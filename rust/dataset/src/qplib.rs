@@ -1,6 +1,10 @@
 use anyhow::{anyhow, Context, Result};
-use ommx::artifact::Builder;
+use ommx::{
+    artifact::{LocalArtifact, LocalArtifactBuilder},
+    ocipkg::ImageName,
+};
 use std::{fs, path::Path};
+use url::Url;
 use zip::ZipArchive;
 
 pub fn package(path: &Path) -> Result<()> {
@@ -14,6 +18,8 @@ pub fn package(path: &Path) -> Result<()> {
         "Loaded {} QPLIB metadata entries from CSV",
         csv_annotations.len()
     );
+
+    let source_url = Url::parse("https://github.com/Jij-Inc/ommx")?;
 
     // Input archive is expected to contain `*.qplib` files.
     for i in 0..ar.len() {
@@ -35,10 +41,11 @@ pub fn package(path: &Path) -> Result<()> {
             .strip_prefix("QPLIB_")
             .ok_or_else(|| anyhow!("Expected QPLIB_ prefix in filename: {}", name))?;
 
-        let Ok(mut builder) = Builder::for_github("Jij-Inc", "ommx", "qplib", tag) else {
-            tracing::warn!("Skip: container already exists for '{name}'");
+        let image_name = ImageName::parse(&format!("ghcr.io/jij-inc/ommx/v3/qplib:{tag}"))?;
+        if LocalArtifact::try_open(image_name.clone())?.is_some() {
+            tracing::info!("Skip: {image_name} already in the v3 local registry");
             continue;
-        };
+        }
 
         tracing::info!("Loading: {name}");
 
@@ -74,6 +81,8 @@ pub fn package(path: &Path) -> Result<()> {
             ncons
         );
 
+        let mut builder = LocalArtifactBuilder::new_ommx(image_name);
+        builder.add_source(&source_url);
         builder.add_instance(instance.into(), annotations)?;
         let _artifact = builder.build()?;
         // Do not push here. Use `ommx push` command to upload the artifacts.

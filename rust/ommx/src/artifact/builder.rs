@@ -1,13 +1,10 @@
 use crate::{
-    artifact::{
-        get_local_registry_root, ghcr, media_types, Artifact, Config, InstanceAnnotations,
-        SolutionAnnotations,
-    },
+    artifact::{media_types, Artifact, Config, InstanceAnnotations, SolutionAnnotations},
     v1,
 };
 use anyhow::Result;
 use ocipkg::{
-    image::{ImageBuilder, OciArchiveBuilder, OciArtifactBuilder, OciDirBuilder},
+    image::{ImageBuilder, OciArchiveBuilder, OciArtifactBuilder},
     ImageName,
 };
 use prost::Message;
@@ -16,7 +13,6 @@ use std::{
     ops::{Deref, DerefMut},
     path::PathBuf,
 };
-use url::Url;
 use uuid::Uuid;
 
 use super::{ParametricInstanceAnnotations, SampleSetAnnotations};
@@ -61,28 +57,6 @@ impl Builder<OciArchiveBuilder> {
             std::env::temp_dir().join(format!("ommx-{id}")),
             ImageName::parse(&format!("ttl.sh/{id}:1h"))?,
         )
-    }
-}
-
-impl Builder<OciDirBuilder> {
-    pub fn new(image_name: ImageName) -> Result<Self> {
-        let dir = get_local_registry_root().join(image_name.as_path());
-        let layout = OciDirBuilder::new(dir, image_name)?;
-        Ok(Self(OciArtifactBuilder::new(
-            layout,
-            media_types::v1_artifact(),
-        )?))
-    }
-
-    /// Create a new artifact builder for a GitHub container registry image
-    pub fn for_github(org: &str, repo: &str, name: &str, tag: &str) -> Result<Self> {
-        let image_name = ghcr(org, repo, name, tag)?;
-        let source = Url::parse(&format!("https://github.com/{org}/{repo}"))?;
-
-        let mut builder = Self::new(image_name)?;
-        builder.add_source(&source);
-
-        Ok(builder)
     }
 }
 

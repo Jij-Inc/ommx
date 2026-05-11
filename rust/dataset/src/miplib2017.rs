@@ -1,6 +1,10 @@
 use anyhow::{Context, Result};
-use ommx::artifact::Builder;
+use ommx::{
+    artifact::{LocalArtifact, LocalArtifactBuilder},
+    ocipkg::ImageName,
+};
 use std::{fs, path::Path};
+use url::Url;
 use zip::ZipArchive;
 
 pub fn package(path: &Path) -> Result<()> {
@@ -8,6 +12,8 @@ pub fn package(path: &Path) -> Result<()> {
     tracing::info!("Input Archive: {}", path.display());
     let f = fs::File::open(path).with_context(|| format!("File not found: {path:?}"))?;
     let mut ar = ZipArchive::new(f).with_context(|| format!("Not a ZIP archive: {path:?}"))?;
+
+    let source_url = Url::parse("https://github.com/Jij-Inc/ommx")?;
 
     // Input archive is expected to contain `*.mps.gz` files on the root level.
     for i in 0..ar.len() {
@@ -20,10 +26,11 @@ pub fn package(path: &Path) -> Result<()> {
             continue;
         };
 
-        let Ok(mut builder) = Builder::for_github("Jij-Inc", "ommx", "miplib2017", &name) else {
-            tracing::warn!("Skip: container already exists for '{name}'");
+        let image_name = ImageName::parse(&format!("ghcr.io/jij-inc/ommx/v3/miplib2017:{name}"))?;
+        if LocalArtifact::try_open(image_name.clone())?.is_some() {
+            tracing::info!("Skip: {image_name} already in the v3 local registry");
             continue;
-        };
+        }
 
         tracing::info!("Loading: {name}");
         let instance = match ommx::mps::parse(file) {
@@ -44,6 +51,9 @@ pub fn package(path: &Path) -> Result<()> {
 
         let mut annotations = annotations.clone();
         annotations.set_created_now();
+
+        let mut builder = LocalArtifactBuilder::new_ommx(image_name);
+        builder.add_source(&source_url);
         builder.add_instance(instance.into(), annotations)?;
         let _artifact = builder.build()?;
         // Do not push here. Use `ommx push` command to upload the artifacts.
