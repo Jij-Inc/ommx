@@ -383,24 +383,40 @@ impl LocalArtifactBuilder {
     /// [`StagedArtifactManifest`] that the registry can later publish.
     /// Pure: no I/O, no registry interaction.
     ///
-    /// Materialises the OCI 1.1 empty config blob as one of the staged
-    /// blobs so the publish path uploads it alongside the layers. The
-    /// caller does not need to know about empty-config bookkeeping.
+    /// Materialises the empty config blob as one of the staged blobs so
+    /// the publish path uploads it alongside the layers. Matches the
+    /// SDK v2 / `ArchiveArtifactBuilder` manifest shape (see
+    /// `ocipkg::image::OciArtifactBuilder::new`): `schemaVersion: 2` +
+    /// `artifactType` + empty config + layers, with the manifest's
+    /// own `mediaType` field intentionally absent so `LocalArtifactBuilder`
+    /// and the archive build path produce structurally identical
+    /// manifests.
     fn stage(self) -> Result<StagedArtifactManifest> {
         let mut blobs = self.layers;
-        let config_blob = StagedArtifactBlob::new(
-            MediaType::EmptyJSON,
-            OCI_EMPTY_CONFIG_BYTES.to_vec(),
-            HashMap::new(),
-        )?;
-        let config_descriptor = config_blob.descriptor.clone();
+        // V2 SDK's `ocipkg::OciArtifactBuilder::add_empty_json` emits the
+        // empty config descriptor without an `annotations` field; build
+        // it directly here (bypassing `descriptor_from_bytes`, which
+        // always renders `annotations` even when empty for layer
+        // descriptors) so the resulting manifest matches v2 byte-for-byte.
+        let empty_config_bytes = OCI_EMPTY_CONFIG_BYTES.to_vec();
+        let config_descriptor = DescriptorBuilder::default()
+            .media_type(MediaType::EmptyJSON)
+            .digest(
+                Digest::from_str(&sha256_digest(&empty_config_bytes))
+                    .context("Failed to parse empty config digest")?,
+            )
+            .size(empty_config_bytes.len() as u64)
+            .build()
+            .context("Failed to build empty config descriptor")?;
         let layer_descriptors: Vec<Descriptor> =
             blobs.iter().map(|blob| blob.descriptor.clone()).collect();
-        blobs.push(config_blob);
+        blobs.push(StagedArtifactBlob {
+            descriptor: config_descriptor.clone(),
+            bytes: empty_config_bytes,
+        });
 
         let mut builder = OciImageManifestBuilder::default()
             .schema_version(2u32)
-            .media_type(MediaType::ImageManifest)
             .artifact_type(self.artifact_type)
             .config(config_descriptor)
             .layers(layer_descriptors);
@@ -459,14 +475,19 @@ pub(crate) fn descriptor_from_bytes(
     annotations: HashMap<String, String>,
 ) -> Result<Descriptor> {
     let digest = Digest::from_str(&sha256_digest(bytes)).context("Failed to parse blob digest")?;
-    let mut builder = DescriptorBuilder::default()
+    // `annotations` is always set, even when empty, matching SDK v2 /
+    // `ocipkg::OciArtifactBuilder::add_layer` which renders the field as
+    // `"annotations": {}` in the manifest JSON. Preserving this shape
+    // keeps layer descriptor bytes (and therefore the manifest digest)
+    // byte-for-byte compatible with v2 OMMX artifacts.
+    let descriptor = DescriptorBuilder::default()
         .media_type(media_type)
         .digest(digest)
-        .size(bytes.len() as u64);
-    if !annotations.is_empty() {
-        builder = builder.annotations(annotations);
-    }
-    builder.build().context("Failed to build OCI descriptor")
+        .size(bytes.len() as u64)
+        .annotations(annotations)
+        .build()
+        .context("Failed to build OCI descriptor")?;
+    Ok(descriptor)
 }
 
 pub(crate) fn stable_json_bytes(value: &impl Serialize) -> Result<Vec<u8>> {
@@ -520,10 +541,10 @@ mod tests {
         builder.add_annotation("org.opencontainers.image.ref.name", "example.com/demo:v1");
 
         let staged = builder.stage()?;
-        assert_eq!(
-            staged.manifest.media_type().as_ref(),
-            Some(&MediaType::ImageManifest)
-        );
+        // Manifest's own `mediaType` field is intentionally not set, matching
+        // the v2 / `ArchiveArtifactBuilder` shape; the OCI Distribution
+        // Content-Type header is supplied separately at push time.
+        assert_eq!(staged.manifest.media_type().as_ref(), None);
         assert_eq!(
             staged.manifest.artifact_type().as_ref(),
             Some(&MediaType::Other(

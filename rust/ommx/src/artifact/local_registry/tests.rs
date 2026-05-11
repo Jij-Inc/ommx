@@ -399,18 +399,18 @@ fn local_registry_builds_native_image_manifest_with_artifact_type() -> Result<()
         .context("Published manifest is missing")?;
     assert_eq!(manifest_record.media_type, OCI_IMAGE_MANIFEST_MEDIA_TYPE);
     assert_eq!(manifest_record.size, manifest_bytes.len() as u64);
-    assert_eq!(
-        manifest.media_type().as_ref(),
-        Some(&MediaType::ImageManifest)
-    );
+    // Manifest's own `mediaType` field is left unset to match the v2 /
+    // ArchiveArtifactBuilder shape; the IndexStore record's `media_type`
+    // column carries the format for query / dispatch purposes.
+    assert_eq!(manifest.media_type().as_ref(), None);
     assert_eq!(
         manifest.artifact_type().as_ref(),
         Some(&MediaType::Other(
             media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()
         ))
     );
-    // OCI 1.1 empty config descriptor is required for `artifactType` to be
-    // honoured by registries.
+    // Empty config descriptor matches what `ocipkg::OciArtifactBuilder::new`
+    // produces by default; OMMX v2 SDK output and v3 SQLite registry agree.
     assert_eq!(manifest.config().media_type(), &MediaType::EmptyJSON);
     assert_eq!(
         manifest.config().digest().to_string(),
