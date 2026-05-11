@@ -52,7 +52,7 @@ pub fn package(path: &Path) -> Result<()> {
         let mut annotations = annotations.clone();
         annotations.set_created_now();
 
-        let mut builder = LocalArtifactBuilder::new_ommx(image_name);
+        let mut builder = LocalArtifactBuilder::new(image_name);
         builder.add_source(&source_url);
         builder.add_instance(instance.into(), annotations)?;
         let _artifact = builder.build()?;

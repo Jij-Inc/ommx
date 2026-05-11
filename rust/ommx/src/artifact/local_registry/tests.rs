@@ -616,7 +616,7 @@ fn local_artifact_subject_round_trips() -> Result<()> {
         .build()?;
 
     let child_image = ImageName::parse("ghcr.io/jij-inc/ommx/demo:child")?;
-    let mut builder = LocalArtifactBuilder::new_ommx(child_image.clone());
+    let mut builder = LocalArtifactBuilder::new(child_image.clone());
     builder.add_layer_bytes(
         MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
         b"child-layer".to_vec(),
@@ -828,7 +828,7 @@ fn new_test_local_artifact_builder(
     image_name: ImageName,
     layer_bytes: &[u8],
 ) -> Result<(LocalArtifactBuilder, Descriptor)> {
-    let mut builder = LocalArtifactBuilder::new_ommx(image_name);
+    let mut builder = LocalArtifactBuilder::new(image_name);
     let descriptor = builder.add_layer_bytes(
         MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
         layer_bytes.to_vec(),

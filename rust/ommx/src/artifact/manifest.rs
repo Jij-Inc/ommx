@@ -279,21 +279,14 @@ pub struct LocalArtifactBuilder {
 }
 
 impl LocalArtifactBuilder {
-    pub fn new(image_name: ocipkg::ImageName, artifact_type: MediaType) -> Self {
+    pub fn new(image_name: ocipkg::ImageName) -> Self {
         Self {
             image_name,
-            artifact_type,
+            artifact_type: MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
             blobs: Vec::new(),
             subject: None,
             annotations: HashMap::new(),
         }
-    }
-
-    pub fn new_ommx(image_name: ocipkg::ImageName) -> Self {
-        Self::new(
-            image_name,
-            MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
-        )
     }
 
     /// Create a new artifact builder for a GitHub container registry image name.
@@ -301,7 +294,7 @@ impl LocalArtifactBuilder {
         let image_name = ghcr(org, repo, name, tag)?;
         let source = Url::parse(&format!("https://github.com/{org}/{repo}"))?;
 
-        let mut builder = Self::new_ommx(image_name);
+        let mut builder = Self::new(image_name);
         builder.add_source(&source);
         Ok(builder)
     }
@@ -539,7 +532,7 @@ mod tests {
 
     #[test]
     fn builds_native_oci_artifact_manifest() -> Result<()> {
-        let mut builder = LocalArtifactBuilder::new_ommx(test_image_name("v1")?);
+        let mut builder = LocalArtifactBuilder::new(test_image_name("v1")?);
         let blob = builder.add_layer_bytes(
             MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
             b"instance".to_vec(),
@@ -588,7 +581,7 @@ mod tests {
             b"parent manifest",
             HashMap::new(),
         )?;
-        let mut builder = LocalArtifactBuilder::new_ommx(test_image_name("subject")?);
+        let mut builder = LocalArtifactBuilder::new(test_image_name("subject")?);
         builder.add_layer_bytes(
             MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
             b"instance".to_vec(),
@@ -610,7 +603,7 @@ mod tests {
         tag: &str,
         annotations: impl IntoIterator<Item = (&'static str, &'static str)>,
     ) -> Result<StagedArtifactManifest> {
-        let mut builder = LocalArtifactBuilder::new_ommx(test_image_name(tag)?);
+        let mut builder = LocalArtifactBuilder::new(test_image_name(tag)?);
         builder.add_layer_bytes(
             MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
             b"instance".to_vec(),

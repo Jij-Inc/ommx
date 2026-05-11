@@ -752,7 +752,7 @@ impl PyArtifactBuilder {
     #[staticmethod]
     pub fn new(image_name: &str) -> Result<Self> {
         let image_name = ocipkg::ImageName::parse(image_name)?;
-        let builder = ommx::artifact::LocalArtifactBuilder::new_ommx(image_name);
+        let builder = ommx::artifact::LocalArtifactBuilder::new(image_name);
         Ok(Self(BuilderInner::Dir(Some(Box::new(builder)))))
     }
 
