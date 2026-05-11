@@ -700,7 +700,7 @@ Transport crate は **`oci-client`** (ORAS project, [oras-project/rust-oci-clien
 
 **async 戦略 (2):** 後続 milestone で async surface を段階的に外側に広げ、最終的に Python 側は [`pyo3-async-runtimes`](https://docs.rs/pyo3-async-runtimes/) 経由で `await` 可能にする。Step B 時点では SDK entry での runtime 構築は導入しない。
 
-**Step B scope の境界:** `Artifact<OciArchive>::push` / `Artifact<OciDir>::push` (archive output / legacy dir 経由 push) は `ocipkg` ベースのまま据え置き、Step C で扱う。Step B では `LocalArtifact::push()` のみが新 transport を経由する。
+**Step B scope の境界:** `Artifact<OciArchive>::push` / `Artifact<OciDir>::push` (archive output / legacy dir 経由 push) は `ocipkg` ベースのまま据え置き、Step C で扱う。Step B では `LocalArtifact::push()` のみが新 transport を経由する。CLI (`ommx push <image>`) と Python (`Artifact.push()`) は同じ `LocalArtifact::push()` を共有するように両方更新する: CLI の `ImageNameOrPath::parse` は SQLite registry を先に問い合わせ、`Command::Push` の `Local` 分岐は `LocalArtifact::try_open` → 新 native push に流す (pre-v3 user の legacy disk dir のみ存在する path は fall-through として残す — Step C で除去)。
 
 **credential 解決:** OMMX は credential store を自前で持たない。新 transport は `OMMX_BASIC_AUTH_*` env var (CI 用 explicit override) → `~/.docker/config.json` (+ credential helper、`docker_credential` クレート経由) → anonymous の 3 段で解決する。これにより `docker login` / `gcloud auth configure-docker` / `aws ecr get-login-password` が既に container ecosystem に対して surface している credential をそのまま流用できる。`oci-client` 自体は credential lookup を持たないので、`RegistryAuth::{Anonymous, Basic, Bearer}` のいずれかを materialize する責任は SDK 側にある。
 

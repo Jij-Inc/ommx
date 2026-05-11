@@ -7,7 +7,7 @@ use ommx::artifact::{
     local_registry::{
         import_oci_archive, import_oci_dir, pull_image, LocalRegistry, RefConflictPolicy,
     },
-    Artifact,
+    Artifact, LocalArtifact,
 };
 use std::path::{Path, PathBuf};
 
@@ -115,12 +115,19 @@ impl ImageNameOrPath {
             return Ok(Self::OciArchive(path.to_path_buf()));
         }
         if let Ok(name) = ImageName::parse(input) {
-            let path = get_image_dir(&name);
-            if path.exists() {
+            // Prefer the SQLite Local Registry: anything imported via
+            // `ommx load` or `ommx pull` (post-v3) lands there and the
+            // legacy disk OCI dir is only kept around as the
+            // lazy-auto-migration cache. Falling back to the legacy
+            // dir keeps pre-v3 user state addressable until Step C
+            // removes that path entirely.
+            if LocalArtifact::try_open(name.clone())?.is_some() {
                 return Ok(Self::Local(name));
-            } else {
-                return Ok(Self::Remote(name));
             }
+            if get_image_dir(&name).exists() {
+                return Ok(Self::Local(name));
+            }
+            return Ok(Self::Remote(name));
         }
         bail!("Invalid input: {}", input)
     }
@@ -199,10 +206,22 @@ fn main() -> Result<()> {
                 let mut artifact = Artifact::from_oci_archive(&path)?;
                 artifact.push()?;
             }
+            // The CLI and the Python `Artifact.push()` share the same
+            // native code path: `LocalArtifact::push()`. `try_open`
+            // resolves via the SQLite Local Registry (post-v3 default);
+            // when only a legacy disk OCI dir is present `open` would
+            // bail with the "run `ommx artifact import`" message, but
+            // the `parse` dispatch above already routed that case to
+            // `Local(name)`, so fall back to the legacy push for now.
+            // Step C removes the legacy branch.
             ImageNameOrPath::Local(name) => {
-                let image_dir = get_image_dir(&name);
-                let mut artifact = Artifact::from_oci_dir(&image_dir)?;
-                artifact.push()?;
+                if let Some(artifact) = LocalArtifact::try_open(name.clone())? {
+                    artifact.push()?;
+                } else {
+                    let image_dir = get_image_dir(&name);
+                    let mut artifact = Artifact::from_oci_dir(&image_dir)?;
+                    artifact.push()?;
+                }
             }
             ImageNameOrPath::Remote(name) => {
                 bail!("Image not found in local: {}", name)
