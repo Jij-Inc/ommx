@@ -28,6 +28,44 @@ const DEFAULT_TAG: &str = "latest";
 /// Backed by [`oci_spec::distribution::Reference`]. Display produces
 /// the canonical `host[:port]/name(:tag|@digest)` form and round-trips
 /// through [`ImageRef::parse`].
+///
+/// # Canonicalisation invariant
+///
+/// **Every `ImageRef` value is in canonical form**:
+/// 1. [`canonicalize_legacy_docker_hub_host`] has rewritten any
+///    `registry-1.docker.io/` prefix (ocipkg's v2 default) to
+///    `docker.io/`.
+/// 2. `oci_spec::distribution::Reference::split_domain` has
+///    normalised the host — `index.docker.io` aliases collapse to
+///    `docker.io`, and single-segment Docker Hub names gain the
+///    implicit `library/` repository prefix.
+///
+/// The SQLite Local Registry relies on this invariant: the
+/// `(name, reference)` columns are populated from
+/// [`Self::repository_key`] and [`Self::reference`], both of which
+/// read out of the inner canonical [`Reference`]. A non-canonical
+/// `ImageRef` reaching the index would silently route the same image
+/// to duplicate SQLite rows, breaking lookups across spellings
+/// (`alpine` vs `docker.io/library/alpine:latest` vs
+/// `registry-1.docker.io/alpine:latest`).
+///
+/// The invariant is upheld structurally rather than by run-time
+/// assertion: the inner [`Reference`] is private, and the only
+/// construction paths are
+/// - [`Self::parse`] / `<Self as FromStr>::from_str` — applies both
+///   canonicalisation layers.
+/// - `<Self as Deserialize>::deserialize` — routes through
+///   [`Self::parse`].
+/// - [`Self::from_repository_and_reference`] — also routes through
+///   [`Self::parse`].
+///
+/// **Adding any new constructor that bypasses [`Self::parse`] would
+/// break the invariant.** A `pub fn from_inner(Reference) -> Self`,
+/// a `From<Reference> for ImageRef` impl, or exposing the inner
+/// field would let unnormalised data leak into the SQLite key path.
+/// Future constructors must either route through [`Self::parse`] or
+/// apply both canonicalisation layers explicitly before constructing
+/// `Self(...)`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ImageRef(Reference);
 
@@ -470,5 +508,49 @@ mod tests {
         let parsed = ImageRef::parse("registry-1.docker.io").unwrap();
         assert_eq!(parsed.name(), "library/registry-1.docker.io");
         assert_eq!(parsed.hostname(), "docker.io");
+    }
+
+    /// Structural canonicalisation invariant (see the `ImageRef`
+    /// type-level rustdoc). Every spelling of the same Docker Hub
+    /// image must yield `==`-equal `ImageRef` values, because both
+    /// the v2 shim and `oci_spec::distribution::Reference::split_domain`
+    /// run inside `parse` and converge on the canonical form
+    /// `docker.io/library/alpine:latest`. A regression that lets an
+    /// uncanonicalised `Reference` through (e.g. a future
+    /// `From<Reference>` impl) would surface here as one of these
+    /// spellings parsing to a different `ImageRef` than the others.
+    #[test]
+    fn canonicalisation_invariant_collapses_every_docker_hub_spelling() {
+        let spellings = [
+            "alpine",
+            "alpine:latest",
+            "docker.io/alpine",
+            "docker.io/alpine:latest",
+            "docker.io/library/alpine:latest",
+            "index.docker.io/alpine:latest",
+            "index.docker.io/library/alpine:latest",
+            "registry-1.docker.io/alpine:latest",
+            "registry-1.docker.io/library/alpine:latest",
+        ];
+        let canonical = ImageRef::parse(spellings[0]).unwrap();
+        for spelling in &spellings[1..] {
+            let parsed = ImageRef::parse(spelling)
+                .unwrap_or_else(|e| panic!("parse({spelling}) failed: {e}"));
+            assert_eq!(
+                parsed,
+                canonical,
+                "spelling {spelling} broke the canonicalisation invariant: \
+                 produced {parsed} (repository_key={}) but canonical form is {canonical} \
+                 (repository_key={})",
+                parsed.repository_key(),
+                canonical.repository_key(),
+            );
+        }
+        // Spot-check the final canonical shape so a regression that
+        // breaks *both* sides of the assertion (e.g. removing the
+        // shim AND the oci-spec dep) still gets caught.
+        assert_eq!(canonical.repository_key(), "docker.io/library/alpine");
+        assert_eq!(canonical.reference(), "latest");
+        assert_eq!(canonical.to_string(), "docker.io/library/alpine:latest");
     }
 }
