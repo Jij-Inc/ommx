@@ -8,6 +8,18 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### ⚠ Artifact API: archive becomes an exchange format ([#872](https://github.com/Jij-Inc/ommx/pull/872))
+
+v3 redraws the artifact API around the SQLite Local Registry as the single canonical store; `.ommx` archives become a pure exchange format. Breaking changes on {class}`~ommx.artifact.ArtifactBuilder` and {class}`~ommx.artifact.Artifact` need migration:
+
+- {func}`ArtifactBuilder.new_archive <ommx.artifact.ArtifactBuilder.new_archive>` → {func}`ArtifactBuilder.new <ommx.artifact.ArtifactBuilder.new>` + {func}`Artifact.save <ommx.artifact.Artifact.save>` (new method).
+- {func}`ArtifactBuilder.new_archive_unnamed <ommx.artifact.ArtifactBuilder.new_archive_unnamed>` → {func}`ArtifactBuilder.new_anonymous <ommx.artifact.ArtifactBuilder.new_anonymous>` + `Artifact.save(path)`. Anonymous artifacts now carry a synthesized `<registry-id8>.ommx.local/anonymous:<timestamp>-<nonce>` image name instead of `None`.
+- {func}`Artifact.load_archive <ommx.artifact.Artifact.load_archive>` now **imports** the archive into the user's persistent SQLite Local Registry (was: in-place read with no registry side effect).
+- CLI `ommx push <archive>` and `ommx push <oci-dir>` removed — load into the registry first, then push by image name.
+- New CLI `ommx artifact prune-anonymous [--dry-run]` bulk-cleans accumulated anonymous-build entries.
+
+See the [Python SDK v2→v3 Migration Guide §13](https://github.com/Jij-Inc/ommx/blob/main/PYTHON_SDK_MIGRATION_GUIDE.md#13-artifact-api-archive-becomes-an-exchange-format) for the full before/after code and migration checklist.
+
 ## 3.0.0 Alpha 3
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0a3-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0a3)
