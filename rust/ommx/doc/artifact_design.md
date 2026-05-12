@@ -43,7 +43,7 @@ with off-the-shelf tools (`oras`, `crane`, `skopeo`).
 | Image reference | The name an Artifact is known by — `host[:port]/name(:tag\|@digest)` |
 | Manifest | Small JSON describing the Artifact: `artifactType`, `config`, an ordered list of layer descriptors, optional `subject` for lineage. An OCI Image Manifest, stored verbatim |
 | Descriptor | `{ mediaType, digest, size, annotations }` — a typed pointer to a content-addressed blob (OCI 1.1) |
-| Layer / blob | The actual payload bytes (a serialized [`Instance`](crate::Instance), a Parquet `DataFrame`, …). Identified by digest |
+| Layer / blob | The actual payload bytes (a serialized [`v1::Instance`](crate::v1::Instance), a Parquet `DataFrame`, …). Identified by digest. OMMX-typed layers carry protobuf wire bytes under `crate::v1::*`; the semantic Rust wrappers (`crate::Instance`, etc.) are SDK conveniences, not what is written to disk |
 | Tag | Mutable alias for a digest (e.g. `:v1`, `:latest`) |
 | Digest | Immutable identifier (`sha256:…`); the primary key for an Artifact version. Content hash of the manifest |
 
@@ -182,10 +182,14 @@ inside a `.ommx` archive or as a directory tree) contains:
 
 - An `oci-layout` marker file with version `1.0.0`.
 - An `index.json` listing the artifact manifests being exported.
-  Each entry carries an `org.opencontainers.image.ref.name`
-  annotation giving the OMMX image reference (`host[:port]/name:tag`
-  form), so an importer can reconstruct the original name without
-  side-channel information.
+  The canonical OMMX writer attaches an
+  `org.opencontainers.image.ref.name` annotation on each entry
+  giving the OMMX image reference (`host[:port]/name:tag` form), so
+  an importer can reconstruct the original name without
+  side-channel information. **Readers accept entries without this
+  annotation** — the OMMX importer falls back to synthesizing an
+  anonymous ref so legacy or third-party layouts that omit it still
+  round-trip into the Local Registry.
 - A `blobs/<algorithm>/<encoded>` tree containing the manifest JSON
   bytes, the config blob, and every referenced layer blob — each
   keyed by content digest.
