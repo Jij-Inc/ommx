@@ -653,18 +653,22 @@ impl PyArtifactBuilder {
     /// Create a new artifact builder without inventing an image name.
     ///
     /// UX shortcut: a synthetic image name of the form
-    /// `<registry-id8>.ommx.local/anonymous:<local-timestamp>` is
-    /// generated at build time and used as the SQLite Local Registry
-    /// key. v3 stores every artifact in the registry, so anonymous
-    /// artifacts still need a key — the registry-id prefix (a random
-    /// 8-hex truncation of a UUID generated once per `LocalRegistry`
-    /// and persisted in its SQLite metadata) identifies which
-    /// registry produced the artifact, useful when archives are
-    /// shared, and the local-time timestamp lets you identify entries
-    /// by when they were created. Use `Artifact.image_name` to read
-    /// the synthesized name back. The `.local` mDNS TLD prevents an
-    /// accidental push from leaking to a real remote registry. Use
-    /// `ommx artifact prune-anonymous` to clean accumulated entries.
+    /// `<registry-id8>.ommx.local/anonymous:<local-timestamp>-<nonce>`
+    /// is generated at build time and used as the SQLite Local
+    /// Registry key. v3 stores every artifact in the registry, so
+    /// anonymous artifacts still need a key — the registry-id prefix
+    /// (a random 8-hex truncation of a UUID generated once per
+    /// `LocalRegistry` and persisted in its SQLite metadata)
+    /// identifies which registry produced the artifact (useful when
+    /// archives are shared), the local-time timestamp lets you
+    /// identify entries by when they were created, and the 8-hex
+    /// random nonce keeps concurrent anonymous builds (MINTO-style
+    /// scripts emitting many artifacts per second) collision-free
+    /// regardless of clock resolution. Use `Artifact.image_name` to
+    /// read the synthesized name back. The `.local` mDNS TLD prevents
+    /// an accidental push from leaking to a real remote registry.
+    /// Use `ommx artifact prune-anonymous` to clean accumulated
+    /// entries.
     ///
     /// The timestamp is the **caller's local time** with no timezone
     /// marker. If an anonymous archive is shared with someone in a

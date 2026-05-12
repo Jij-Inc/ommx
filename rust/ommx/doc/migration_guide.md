@@ -663,13 +663,16 @@ exports a `.ommx` file. Constructors:
 - `LocalArtifactBuilder::new(image_name)` — caller-supplied ref name.
 - `LocalArtifactBuilder::new_anonymous()` — defers name synthesis to
   `build_in_registry`, which constructs
-  `<registry-id8>.ommx.local/anonymous:<local-timestamp>` against the
-  destination registry's `registry_id` (a random UUID generated once
-  per `LocalRegistry` and persisted in SQLite metadata). The local-time
-  `YYYYMMDDTHHMMSS` tag lets you read the creation time at a glance.
-  The `.local` mDNS TLD prevents an accidental push from leaking to
-  a real remote registry. `ommx artifact prune-anonymous`
-  bulk-cleans every registry-id prefix's anonymous refs.
+  `<registry-id8>.ommx.local/anonymous:<local-timestamp>-<nonce>`
+  against the destination registry's `registry_id` (a random UUID
+  generated once per `LocalRegistry` and persisted in SQLite
+  metadata). The local-time `YYYYMMDDTHHMMSS` tag lets you read the
+  creation time at a glance, and the 8-hex random nonce keeps
+  concurrent / scripted anonymous builds collision-free regardless of
+  the host's clock resolution. The `.local` mDNS TLD prevents an
+  accidental push from leaking to a real remote registry.
+  `ommx artifact prune-anonymous` bulk-cleans every registry-id
+  prefix's anonymous refs.
 - `LocalArtifactBuilder::temp()` — random `ttl.sh/<uuid>:1h` name;
   insecure, tests only.
 - `LocalArtifactBuilder::for_github(org, repo, name, tag)` — GHCR

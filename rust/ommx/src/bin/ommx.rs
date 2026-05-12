@@ -89,13 +89,12 @@ enum ArtifactCommand {
     /// Delete every SQLite ref produced by `ArtifactBuilder.new_anonymous`.
     ///
     /// `new_anonymous` writes artifacts under the synthetic ref
-    /// `<registry-id8>.ommx.local/anonymous:<local-timestamp>` so the
-    /// SQLite Local Registry has a key to address the artifact under.
-    /// This command deletes every ref whose name ends with
-    /// `.ommx.local/anonymous`, including entries imported from
-    /// registries with different `registry_id` prefixes. Manifest /
-    /// blob CAS records are left in place; a future GC sweep will
-    /// reclaim them.
+    /// `<registry-id8>.ommx.local/anonymous:<local-timestamp>-<nonce>`
+    /// so the SQLite Local Registry has a key to address the artifact
+    /// under. This command deletes every ref whose name + tag match
+    /// that structure, including entries imported from registries with
+    /// different `registry_id` prefixes. Manifest / blob CAS records
+    /// are left in place; a future GC sweep will reclaim them.
     PruneAnonymous {
         /// Local registry root. Defaults to OMMX_LOCAL_REGISTRY_ROOT or the OS default data dir.
         #[clap(long)]

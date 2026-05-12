@@ -140,7 +140,7 @@ builder = ArtifactBuilder.new_anonymous()
 | Constructor | Description |
 | --- | --- |
 | [`ArtifactBuilder.new`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.new) | Caller-supplied image name |
-| [`ArtifactBuilder.new_anonymous`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.new_anonymous) | Synthesized name `<registry-id8>.ommx.local/anonymous:<local-timestamp>` for share-and-discard archives |
+| [`ArtifactBuilder.new_anonymous`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.new_anonymous) | Synthesized name `<registry-id8>.ommx.local/anonymous:<local-timestamp>-<nonce>` for share-and-discard archives |
 | [`ArtifactBuilder.for_github`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.for_github) | Convenience for GitHub Container Registry naming |
 
 `new_anonymous` uses the `.local` mDNS link-local TLD so an accidental push won't leak to a real remote registry. The registry-id prefix is generated once per `LocalRegistry` (a random UUID stored in the registry's SQLite metadata) — anonymous artifacts from the same registry share a prefix, so when an archive is shared you can tell artifacts apart by their source registry. Clean accumulated anonymous entries with `ommx artifact prune-anonymous` (which removes entries from every registry-id prefix, not just the current host's).

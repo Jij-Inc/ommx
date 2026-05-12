@@ -642,12 +642,26 @@ pub const ANONYMOUS_ARTIFACT_REF_NAME_SUFFIX: &str = ".ommx.local/anonymous";
 /// realistic collisions across a single user's registries.
 const ANONYMOUS_REGISTRY_ID_HOST_LEN: usize = 8;
 
+/// Hex chars of the random nonce appended to the timestamp tag.
+/// 8 hex = 32 bits = ~4.3 × 10^9 possible nonces; at N=10 000
+/// concurrent anonymous builds the birthday-paradox collision
+/// probability is ~1.2 × 10^-5, which combined with the seconds-level
+/// timestamp prefix and the `RefConflictPolicy::Replace` fallback in
+/// `build_in_registry` gives a practical zero collision rate even on
+/// platforms whose `clock_gettime` resolution is only microseconds
+/// (notably macOS — chrono's `%.9f` pads with zeros there, so the
+/// timestamp alone would not differentiate builds within the same
+/// microsecond).
+const ANONYMOUS_TAG_NONCE_HEX_LEN: usize = 8;
+
 /// Generate a synthetic [`ocipkg::ImageName`] for an anonymous
 /// artifact. Build the image name from the registry's persisted
 /// `registry_id` (so the prefix matches the destination registry,
-/// not the default registry), plus a local-time timestamp tag.
+/// not the default registry), plus a local-time timestamp + random
+/// nonce tag.
 ///
-/// Format: `<registry-id8>.ommx.local/anonymous:<local-time>` where
+/// Format: `<registry-id8>.ommx.local/anonymous:<local-time>-<nonce>`
+/// where
 /// - `<registry-id8>` is the first
 ///   [`ANONYMOUS_REGISTRY_ID_HOST_LEN`] hex chars of the registry's
 ///   `registry_id` metadata (a random UUID generated once per
@@ -659,6 +673,13 @@ const ANONYMOUS_REGISTRY_ID_HOST_LEN: usize = 8;
 ///   glance" intent). A registry shared across machines in different
 ///   timezones loses the time component's absolute meaning, which is
 ///   an explicit non-goal for anonymous artifacts.
+/// - `<nonce>` is [`ANONYMOUS_TAG_NONCE_HEX_LEN`] hex chars of a fresh
+///   UUID v4. Required for MINTO-style concurrent build patterns
+///   (scripts emitting many anonymous artifacts per second): without
+///   it, two builds in the same second would synthesize the same tag
+///   and overwrite each other. `RefConflictPolicy::Replace` in
+///   `build_in_registry` is kept as a defense-in-depth fallback for
+///   the astronomically rare nonce collision.
 pub(crate) fn anonymous_artifact_image_name(registry_id: &str) -> Result<ocipkg::ImageName> {
     let prefix: String = registry_id
         .chars()
@@ -673,7 +694,13 @@ pub(crate) fn anonymous_artifact_image_name(registry_id: &str) -> Result<ocipkg:
         ANONYMOUS_REGISTRY_ID_HOST_LEN,
     );
     let stamp = chrono::Local::now().format("%Y%m%dT%H%M%S");
-    ocipkg::ImageName::parse(&format!("{prefix}.ommx.local/anonymous:{stamp}"))
+    let nonce: String = uuid::Uuid::new_v4()
+        .simple()
+        .to_string()
+        .chars()
+        .take(ANONYMOUS_TAG_NONCE_HEX_LEN)
+        .collect();
+    ocipkg::ImageName::parse(&format!("{prefix}.ommx.local/anonymous:{stamp}-{nonce}"))
         .with_context(|| format!("Failed to synthesise anonymous artifact image name: {prefix}"))
 }
 
@@ -694,17 +721,36 @@ pub fn is_anonymous_artifact_ref_name(name: &str) -> bool {
             .all(|c| c.is_ascii_digit() || ('a'..='f').contains(&c))
 }
 
-/// True iff `tag` matches the `YYYYMMDDTHHMMSS` shape that
-/// [`anonymous_artifact_image_name`] generates: 15 chars, digits with
-/// `T` at position 8. Combined with [`is_anonymous_artifact_ref_name`]
-/// this gives `prune-anonymous` a structural match instead of a
-/// substring match.
+/// True iff `tag` matches the `YYYYMMDDTHHMMSS-<nonce>` shape that
+/// [`anonymous_artifact_image_name`] generates: 15 timestamp chars
+/// (digits with `T` at position 8), `-` separator, and
+/// [`ANONYMOUS_TAG_NONCE_HEX_LEN`] lowercase hex chars. Combined with
+/// [`is_anonymous_artifact_ref_name`] this gives `prune-anonymous` a
+/// structural match instead of a substring match.
 pub fn is_anonymous_artifact_tag(tag: &str) -> bool {
-    tag.len() == 15
-        && tag
-            .chars()
-            .enumerate()
-            .all(|(i, c)| if i == 8 { c == 'T' } else { c.is_ascii_digit() })
+    let expected_len = 15 + 1 + ANONYMOUS_TAG_NONCE_HEX_LEN;
+    if tag.len() != expected_len {
+        return false;
+    }
+    let bytes = tag.as_bytes();
+    // Timestamp portion: 8 digits, 'T', 6 digits.
+    for (i, b) in bytes[..15].iter().enumerate() {
+        let ok = if i == 8 {
+            *b == b'T'
+        } else {
+            b.is_ascii_digit()
+        };
+        if !ok {
+            return false;
+        }
+    }
+    // Separator + nonce.
+    if bytes[15] != b'-' {
+        return false;
+    }
+    bytes[16..]
+        .iter()
+        .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(b))
 }
 
 #[cfg(test)]
@@ -715,17 +761,19 @@ mod tests {
         ocipkg::ImageName::parse(&format!("ghcr.io/jij-inc/ommx/demo:{tag}"))
     }
 
-    /// `<registry-id8>.ommx.local/anonymous:<YYYYMMDDTHHMMSS>` must
-    /// parse as a valid OCI image reference. A regression that
+    /// `<registry-id8>.ommx.local/anonymous:<YYYYMMDDTHHMMSS>-<nonce>`
+    /// must parse as a valid OCI image reference. A regression that
     /// included `:` / `+` in the timestamp, or non-alphanumeric chars
-    /// in the registry-id prefix, would break `ImageName::parse`.
+    /// in the registry-id prefix or the nonce, would break
+    /// `ImageName::parse`.
     #[test]
     fn anonymous_image_name_parses() {
         let fake_registry_id = "deadbeef0123456789abcdef01234567";
         let name = anonymous_artifact_image_name(fake_registry_id).expect("synthetic ref parses");
         let s = name.to_string();
         // Repository portion ends with `.ommx.local/anonymous`; the
-        // tag follows the colon. e.g. `deadbeef.ommx.local/anonymous:20260512T153045`.
+        // tag follows the colon.
+        // e.g. `deadbeef.ommx.local/anonymous:20260512T153045-a3f17b9c`.
         let (before_colon, tag) = s.rsplit_once(':').expect("ref must include `:tag`");
         assert!(
             before_colon.ends_with(ANONYMOUS_ARTIFACT_REF_NAME_SUFFIX),
@@ -735,13 +783,35 @@ mod tests {
             before_colon.starts_with("deadbeef."),
             "ref `{before_colon}` must start with the truncated registry-id prefix",
         );
-        // Tag is `YYYYMMDDTHHMMSS` (15 chars), no separators except
-        // the alphabetic `T` between date and time.
-        assert_eq!(tag.len(), 15, "tag `{tag}` must be 15 chars");
+        // Tag = 15 timestamp + `-` + nonce.
+        let expected_tag_len = 15 + 1 + ANONYMOUS_TAG_NONCE_HEX_LEN;
+        assert_eq!(
+            tag.len(),
+            expected_tag_len,
+            "tag `{tag}` must be {expected_tag_len} chars",
+        );
         assert!(
             tag.chars().nth(8) == Some('T'),
             "tag `{tag}` must have `T` at position 8",
         );
+        assert!(
+            tag.chars().nth(15) == Some('-'),
+            "tag `{tag}` must have `-` separator before the nonce",
+        );
+    }
+
+    /// Two anonymous image names generated back-to-back must differ in
+    /// the nonce portion even when the timestamp portion is the same.
+    /// MINTO-style concurrent build patterns rely on this for
+    /// collision-free unique naming; second-resolution timestamps
+    /// alone (especially on macOS where `clock_gettime` is microsecond
+    /// resolution) would not suffice.
+    #[test]
+    fn anonymous_image_name_nonce_differentiates_same_second_builds() {
+        let id = "0123456789abcdef0123456789abcdef";
+        let n1 = anonymous_artifact_image_name(id).unwrap().to_string();
+        let n2 = anonymous_artifact_image_name(id).unwrap().to_string();
+        assert_ne!(n1, n2, "back-to-back anonymous names must differ: {n1}");
     }
 
     /// `is_anonymous_artifact_ref_name` + `is_anonymous_artifact_tag`
@@ -769,11 +839,17 @@ mod tests {
             "ABCDEFGH.ommx.local/anonymous"
         ));
 
-        // Negative: tag is not the synthesized YYYYMMDDTHHMMSS shape.
+        // Negative: tag is not the synthesized YYYYMMDDTHHMMSS-<nonce>
+        // shape.
         assert!(!is_anonymous_artifact_tag("v1"));
-        assert!(!is_anonymous_artifact_tag("20260512-153045"));
-        assert!(!is_anonymous_artifact_tag("2026051215304500"));
-        assert!(!is_anonymous_artifact_tag("XXXXXXXXTXXXXXX"));
+        // Right total length but wrong internal shape (no `T`, no `-`).
+        assert!(!is_anonymous_artifact_tag("20260512-15304500a3f17b9c"));
+        // Missing nonce.
+        assert!(!is_anonymous_artifact_tag("20260512T153045"));
+        // Nonce contains non-hex.
+        assert!(!is_anonymous_artifact_tag("20260512T153045-XXXXXXXX"));
+        // Wrong separator between timestamp and nonce.
+        assert!(!is_anonymous_artifact_tag("20260512T153045_a3f17b9c"));
     }
 
     /// Hostname prefix is truncated to the configured length even when
