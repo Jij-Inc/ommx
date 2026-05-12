@@ -696,9 +696,15 @@ exports a `.ommx` file. Constructors:
 - [ ] Replace `Builder::for_github` with `LocalArtifactBuilder::for_github`.
 - [ ] Replace `temp_archive()` with `LocalArtifactBuilder::temp()?.build()?.save(&path)?`.
 - [ ] Replace `ocipkg::ImageName` with `ommx::artifact::ImageRef`. The
-      type exposes the same `host[:port]/name:reference` parsing and
-      `hostname()` / `port()` / `name()` / `reference()` / `as_path()`
-      accessors; field access (`image_name.hostname`, `image_name.port`,
-      …) becomes a method call. The `ommx::ocipkg` re-export is
-      removed in v3, so any direct `use ommx::ocipkg::ImageName` call
-      site needs to switch.
+      type accepts `host[:port]/name:tag`, `host[:port]/name@<digest>`,
+      and the legacy `host[:port]/name:algorithm:hex` digest spelling
+      on parse, and canonicalises to `name@<digest>` for digest
+      references on `Display` (tag references keep `:`). Field
+      access (`image_name.hostname`, `image_name.port`, …) becomes a
+      method call. Bare-namespace inputs without an explicit registry
+      (`library/ubuntu:20.04`) now default to `registry-1.docker.io`
+      via the standard Docker reference heuristic — the first segment
+      is only treated as a host when it contains `.` or `:` or equals
+      `localhost`. The `ommx::ocipkg` re-export is removed in v3, so
+      any direct `use ommx::ocipkg::ImageName` call site needs to
+      switch.

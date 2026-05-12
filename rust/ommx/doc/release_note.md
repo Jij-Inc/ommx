@@ -287,16 +287,24 @@ Two new domain traits accompany this shift:
 
 ## `ommx::artifact::ImageRef` replaces `ocipkg::ImageName`
 
-`ImageRef` is the OMMX-owned parsed form of an OCI image reference
-(`host[:port]/name:tag` or `host[:port]/name@sha256:...`). It supersedes
-the previously re-exported `ocipkg::ImageName` on every public surface:
+`ImageRef` is the OMMX-owned parsed form of an OCI image reference.
+It accepts `host[:port]/name:tag`, `host[:port]/name@<digest>`, and
+the legacy `host[:port]/name:algorithm:hex` digest spelling on parse,
+and canonicalises to `host[:port]/name@<digest>` for digest references
+on [`Display`](std::fmt::Display) (tag references keep the `:`
+separator). `ImageRef` supersedes the previously re-exported
+`ocipkg::ImageName` on every public surface:
 [`LocalArtifact::open`](crate::artifact::LocalArtifact::open),
 [`LocalArtifactBuilder::new`](crate::artifact::LocalArtifactBuilder::new),
 the SQLite Local Registry helpers, and the CLI parse path all now take
 [`ImageRef`](crate::artifact::ImageRef). The accessors mirror what
 `ImageName` offered (`hostname()`, `port()`, `name()`, `reference()`,
 plus the v2-cache-compatible `as_path()` / `from_path()`), but field
-access (`image_name.hostname`) becomes a method call. The
+access (`image_name.hostname`) becomes a method call. Bare-namespace
+inputs without an explicit registry (`library/ubuntu:20.04`,
+`jij-inc/ommx:tag`) default to `registry-1.docker.io` via the standard
+Docker reference heuristic — the first segment is only treated as a
+host when it contains `.` or `:` or equals `localhost`. The
 `ommx::ocipkg` re-export is removed.
 
 ## Other notable changes
