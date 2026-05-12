@@ -70,12 +70,17 @@ impl PyArtifact {
             std::sync::Arc::new(ommx::artifact::local_registry::LocalRegistry::open_default()?);
 
         let image_name = if path.is_file() {
-            // Archive ingest goes through `import_oci_archive` which
-            // streams blobs into the user's FileBlobStore and publishes
-            // the manifest atomically. Conflicts on KeepExisting are
-            // surfaced as `Err` by the import path itself.
-            let outcome = ommx::artifact::local_registry::import_oci_archive(&registry, &path)?;
-            outcome.image_name.ok_or_else(|| {
+            // Preflight: validate the archive's ref annotation BEFORE
+            // running `import_oci_archive`. The import path writes
+            // blobs into `FileBlobStore` during the tar scan and only
+            // checks the ref annotation afterward; without this
+            // preflight, an archive with no `org.opencontainers.image.ref.name`
+            // would leave orphan CAS blobs in the user's registry on
+            // the same retry it then refuses to import. `inspect_archive`
+            // reads only `index.json` + the manifest blob, no
+            // registry mutation.
+            let view = ommx::artifact::local_registry::inspect_archive(&path)?;
+            let image_name = view.image_name.ok_or_else(|| {
                 anyhow::anyhow!(
                     "OCI archive at {} has no `org.opencontainers.image.ref.name` \
                      annotation; v3 SQLite Local Registry requires a ref name to \
@@ -83,7 +88,14 @@ impl PyArtifact {
                      image name via `ArtifactBuilder.new(image_name)` + `Artifact.save(path)`.",
                     path.display(),
                 )
-            })?
+            })?;
+            // Now run the actual import. The publish path will
+            // reproduce the same ref annotation; a mismatch is
+            // structurally impossible since both reads source the
+            // same tar entry.
+            let outcome = ommx::artifact::local_registry::import_oci_archive(&registry, &path)?;
+            debug_assert_eq!(outcome.image_name.as_ref(), Some(&image_name));
+            image_name
         } else if path.is_dir() {
             // Validate the ref annotation BEFORE running `import_oci_dir`
             // so an unnamed OCI Image Layout (no
@@ -572,6 +584,8 @@ pub struct PyArchiveManifest {
     manifest_digest: String,
     layers: Vec<PyDescriptor>,
     annotations: HashMap<String, String>,
+    config: PyDescriptor,
+    subject: Option<PyDescriptor>,
 }
 
 impl From<ommx::artifact::local_registry::ArchiveInspectView> for PyArchiveManifest {
@@ -592,6 +606,8 @@ impl From<ommx::artifact::local_registry::ArchiveInspectView> for PyArchiveManif
                 .as_ref()
                 .cloned()
                 .unwrap_or_default(),
+            config: PyDescriptor::from(view.manifest.config().clone()),
+            subject: view.manifest.subject().clone().map(PyDescriptor::from),
         }
     }
 }
@@ -625,6 +641,29 @@ impl PyArchiveManifest {
     #[getter]
     pub fn annotations(&self) -> HashMap<String, String> {
         self.annotations.clone()
+    }
+
+    /// Descriptor of the `config` blob (the OCI 1.1 empty config in
+    /// v3-built archives; v2 archives may carry an OMMX-specific
+    /// config blob). The descriptor exposes media type, digest, size,
+    /// and annotations; the bytes themselves are not accessible from
+    /// `ArchiveManifest` — import the archive via
+    /// {meth}`Artifact.import_archive` if you need to read the config
+    /// payload.
+    #[getter]
+    pub fn config(&self) -> PyDescriptor {
+        self.config.clone()
+    }
+
+    /// Optional `subject` descriptor on the OCI image manifest, used
+    /// for the OCI referrers API (cosign / sigstore signatures,
+    /// SBOMs, …). `None` for ordinary OMMX artifacts; surfaced here
+    /// so MINTO-style consumers that walk OCI referrer graphs do not
+    /// have to import each archive to discover whether it carries a
+    /// subject.
+    #[getter]
+    pub fn subject(&self) -> Option<PyDescriptor> {
+        self.subject.clone()
     }
 }
 

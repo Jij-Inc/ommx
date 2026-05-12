@@ -305,8 +305,8 @@ impl LocalArtifactBuilder {
     /// Builder for an artifact whose name is auto-generated. UX
     /// shortcut for "I just want to share this artifact, I don't want
     /// to invent a real name". The synthesized image name has the form
-    /// `<registry-id8>.ommx.local/anonymous:<local-timestamp>`; the
-    /// registry-id prefix is generated once when each
+    /// `<registry-id8>.ommx.local/anonymous:<local-timestamp>-<nonce>`;
+    /// the registry-id prefix is generated once when each
     /// [`LocalRegistry`] is first created and persisted in its SQLite
     /// metadata, so anonymous artifacts from the same registry share
     /// a prefix and can be told apart from artifacts imported from
@@ -314,6 +314,18 @@ impl LocalArtifactBuilder {
     /// [`Self::build_in_registry`] so the prefix reflects the actual
     /// target registry (not the default registry). Use
     /// `ommx artifact prune-anonymous` to clean accumulated entries.
+    ///
+    /// **Note: [`RefConflictPolicy`] is forced to `Replace` for
+    /// anonymous builds** — [`Self::build_in_registry`] silently
+    /// overrides whatever policy the caller passes. Anonymous
+    /// artifacts are designed to be transient and unique by
+    /// timestamp + nonce; collision recovery is "silently overwrite
+    /// the older entry" rather than "fail with a ref conflict". The
+    /// 48-bit nonce in [`anonymous_artifact_image_name`] makes
+    /// collisions astronomically rare in practice, and the policy
+    /// override is kept as defense-in-depth. Callers who want
+    /// collision detection cannot opt out — pick an explicit name
+    /// via [`Self::new`] instead.
     pub fn new_anonymous() -> Self {
         Self {
             image_name: BuilderImageName::Anonymous,
@@ -633,7 +645,11 @@ fn ensure_ommx_image_manifest(manifest: &ImageManifest) -> Result<()> {
 /// this name resolves through mDNS rather than DNS — so an accidental
 /// `ommx push <anonymous>` cannot leak the artifact to a real remote
 /// registry; absent an mDNS responder, the push just fails locally.
-pub const ANONYMOUS_ARTIFACT_REF_NAME_SUFFIX: &str = ".ommx.local/anonymous";
+/// Internal-only suffix shared by every anonymous artifact ref name.
+/// Use [`is_anonymous_artifact_ref_name`] for the structural match
+/// predicate — that is the stable public API; this literal can change
+/// over time without breaking external users.
+pub(crate) const ANONYMOUS_ARTIFACT_REF_NAME_SUFFIX: &str = ".ommx.local/anonymous";
 
 /// Number of hex chars from the full registry-id used as the
 /// hostname prefix. The metadata column stores the full 32-hex UUID;
@@ -643,16 +659,18 @@ pub const ANONYMOUS_ARTIFACT_REF_NAME_SUFFIX: &str = ".ommx.local/anonymous";
 const ANONYMOUS_REGISTRY_ID_HOST_LEN: usize = 8;
 
 /// Hex chars of the random nonce appended to the timestamp tag.
-/// 8 hex = 32 bits = ~4.3 × 10^9 possible nonces; at N=10 000
+/// 12 hex = 48 bits = ~2.8 × 10^14 possible nonces; at N=10 000
 /// concurrent anonymous builds the birthday-paradox collision
-/// probability is ~1.2 × 10^-5, which combined with the seconds-level
+/// probability is ~1.8 × 10^-7, which combined with the seconds-level
 /// timestamp prefix and the `RefConflictPolicy::Replace` fallback in
 /// `build_in_registry` gives a practical zero collision rate even on
 /// platforms whose `clock_gettime` resolution is only microseconds
 /// (notably macOS — chrono's `%.9f` pads with zeros there, so the
 /// timestamp alone would not differentiate builds within the same
-/// microsecond).
-const ANONYMOUS_TAG_NONCE_HEX_LEN: usize = 8;
+/// microsecond). 32 bits (8 hex) would only give P ~ 1.2 × 10^-2 at
+/// the same scale, so the extra 4 hex chars are worth the tag-length
+/// cost.
+const ANONYMOUS_TAG_NONCE_HEX_LEN: usize = 12;
 
 /// Generate a synthetic [`ocipkg::ImageName`] for an anonymous
 /// artifact. Build the image name from the registry's persisted

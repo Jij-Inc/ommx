@@ -172,13 +172,15 @@ impl RemoteTransport {
     }
 
     /// Pull a single blob into memory. The caller passes the manifest-
-    /// declared `expected_size`; the helper allocates the destination
-    /// `Vec` from this value (not from the registry-reported
-    /// `Content-Length`), validates `Content-Length` if present, and
-    /// aborts the chunk loop the moment accumulated bytes exceed
-    /// `expected_size`. Together these prevent a malicious or broken
-    /// registry from inducing an oversized allocation before any
-    /// digest check would catch the body.
+    /// declared `expected_size`; the helper validates registry-reported
+    /// `Content-Length` if present, aborts the chunk loop the moment
+    /// accumulated bytes exceed `expected_size`, and caps the initial
+    /// `Vec::with_capacity` at [`BLOB_PREALLOC_CAP_BYTES`] so a manifest
+    /// that lies about a multi-gigabyte size cannot induce an
+    /// up-front OOM before any digest check has a chance to fire. The
+    /// buffer can still grow past the cap if the actual stream
+    /// genuinely produces that many bytes (legitimate large blobs
+    /// just pay an extra realloc).
     ///
     /// `oci_client::Client::pull_blob_stream` skips the digest
     /// verification that `pull_blob` does on the streaming reader; the
@@ -206,9 +208,14 @@ impl RemoteTransport {
                          but the manifest descriptor declares size {expected_size}",
                     );
                 }
-                let capacity =
-                    usize::try_from(expected_size).context("Blob size does not fit in usize")?;
-                let mut buf = Vec::with_capacity(capacity);
+                // Cap preallocation. A malicious manifest claiming
+                // `size = u64::MAX` would otherwise be reduced to
+                // `usize::MAX` and OOM on the spot; capping at a
+                // sane upper bound forces the registry to actually
+                // serve that many bytes (which the accumulated check
+                // below catches) before we allocate them.
+                let prealloc = expected_size.min(BLOB_PREALLOC_CAP_BYTES) as usize;
+                let mut buf = Vec::with_capacity(prealloc);
                 let mut accumulated: u64 = 0;
                 let mut stream = resp.stream;
                 while let Some(chunk) = stream.try_next().await? {
@@ -228,6 +235,15 @@ impl RemoteTransport {
         Ok(bytes)
     }
 }
+
+/// Upper bound on `Vec::with_capacity` for blob downloads. Typical
+/// OMMX layer blobs (problem instances, solutions) are well under
+/// this, so legitimate traffic never hits the cap; a hostile manifest
+/// that claims a multi-gigabyte size is contained to a single 256 MiB
+/// pre-allocation rather than allocating from the claim directly.
+/// The buffer can still grow past the cap if the actual stream
+/// produces more bytes, at the cost of one or two reallocations.
+const BLOB_PREALLOC_CAP_BYTES: u64 = 256 * 1024 * 1024;
 
 /// Build a [`Reference`] from `ocipkg`'s `ImageName`. The two crates pull
 /// in different versions of `oci-spec`, so the canonical interchange is

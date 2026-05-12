@@ -17,7 +17,7 @@ pub use config::*;
 pub use digest::sha256_digest;
 pub use manifest::{
     is_anonymous_artifact_ref_name, is_anonymous_artifact_tag, LocalArtifact, LocalArtifactBuilder,
-    LocalManifest, ANONYMOUS_ARTIFACT_REF_NAME_SUFFIX,
+    LocalManifest,
 };
 pub(crate) use manifest::{stable_json_bytes, StagedArtifactBlob};
 pub use media_types::OCI_IMAGE_MANIFEST_MEDIA_TYPE;

@@ -35,6 +35,22 @@
               "is_readonly": true
             },
             {
+              "name": "config",
+              "doc": "Descriptor of the `config` blob (the OCI 1.1 empty config in\nv3-built archives; v2 archives may carry an OMMX-specific\nconfig blob). The descriptor exposes media type, digest, size,\nand annotations; the bytes themselves are not accessible from\n`ArchiveManifest` — import the archive via\n{meth}`Artifact.import_archive` if you need to read the config\npayload.",
+              "type_": {
+                "display": "Descriptor",
+                "link_target": {
+                  "fqn": "ommx.artifact.Descriptor",
+                  "doc_module": "ommx.artifact",
+                  "kind": "Class",
+                  "attribute": null
+                },
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "image_name",
               "doc": "Image ref name read from the archive's `index.json`\n(`org.opencontainers.image.ref.name` annotation). `None` only\nfor archives that explicitly omit the annotation; archives\nbuilt by v3 always carry one.",
               "type_": {
@@ -80,6 +96,28 @@
                 "display": "str",
                 "link_target": null,
                 "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "subject",
+              "doc": "Optional `subject` descriptor on the OCI image manifest, used\nfor the OCI referrers API (cosign / sigstore signatures,\nSBOMs, …). `None` for ordinary OMMX artifacts; surfaced here\nso MINTO-style consumers that walk OCI referrer graphs do not\nhave to import each archive to discover whether it carries a\nsubject.",
+              "type_": {
+                "display": "Optional[_ommx_rust.Descriptor]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "Descriptor",
+                    "link_target": {
+                      "fqn": "ommx.artifact.Descriptor",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                ]
               },
               "is_property": true,
               "is_readonly": true

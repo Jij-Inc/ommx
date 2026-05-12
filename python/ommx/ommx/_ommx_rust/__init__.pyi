@@ -136,6 +136,27 @@ class ArchiveManifest:
         Manifest-level annotations (the `annotations` field of the
         `ImageManifest`, not per-layer annotations).
         """
+    @property
+    def config(self) -> Descriptor:
+        r"""
+        Descriptor of the `config` blob (the OCI 1.1 empty config in
+        v3-built archives; v2 archives may carry an OMMX-specific
+        config blob). The descriptor exposes media type, digest, size,
+        and annotations; the bytes themselves are not accessible from
+        `ArchiveManifest` — import the archive via
+        {meth}`Artifact.import_archive` if you need to read the config
+        payload.
+        """
+    @property
+    def subject(self) -> typing.Optional[Descriptor]:
+        r"""
+        Optional `subject` descriptor on the OCI image manifest, used
+        for the OCI referrers API (cosign / sigstore signatures,
+        SBOMs, …). `None` for ordinary OMMX artifacts; surfaced here
+        so MINTO-style consumers that walk OCI referrer graphs do not
+        have to import each archive to discover whether it carries a
+        subject.
+        """
 
 @typing.final
 class Artifact:
