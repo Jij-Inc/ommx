@@ -16,7 +16,7 @@
 use anyhow::{Context, Result};
 use oci_spec::distribution::Reference;
 use serde::{Deserialize, Serialize};
-use std::{fmt, str::FromStr};
+use std::{borrow::Cow, fmt, str::FromStr};
 
 /// Tag substituted in when an image reference omits one. Matches the
 /// behaviour of `docker pull <name>` and
@@ -79,10 +79,18 @@ impl ImageRef {
     /// Single string view of the tag-or-digest portion. Prefers the
     /// digest when both are present (digest pins the image immutably
     /// and is what the SQLite Local Registry stores), otherwise the
-    /// tag, otherwise the default `latest` (`oci_spec` only omits
-    /// both for the rare bare-name form that hasn't been defaulted
-    /// yet — `parse` always populates a tag, so in practice this
-    /// branch is unreachable from `parse`-d values).
+    /// tag, otherwise the default `latest`. The combined
+    /// `name:tag@<digest>` form silently drops the tag here — OMMX
+    /// has no code path that produces the combined form, so this is
+    /// theoretical for SDK-internal use, but external callers who
+    /// pass it should be aware that round-tripping through
+    /// `(repository_key, reference)` keeps only the digest.
+    /// `oci_spec::distribution::Reference::from_str` always sets at
+    /// least one of `tag` or `digest` (a parse with neither falls
+    /// back to `latest` inside oci-spec itself), so the
+    /// `DEFAULT_TAG` fallback here is defensive only — it would only
+    /// fire for an [`ImageRef`] constructed without going through
+    /// `parse`, which is currently impossible from public surface.
     pub fn reference(&self) -> &str {
         self.0
             .digest()
@@ -116,10 +124,46 @@ impl FromStr for ImageRef {
     type Err = anyhow::Error;
 
     fn from_str(input: &str) -> Result<Self> {
-        let reference = input
+        let canonical = canonicalize_legacy_docker_hub_host(input);
+        let reference = canonical
             .parse::<Reference>()
             .with_context(|| format!("Invalid image reference: {input}"))?;
         Ok(Self(reference))
+    }
+}
+
+/// Rewrite ocipkg's legacy Docker Hub default hostname
+/// (`registry-1.docker.io`) to the OCI distribution-spec canonical
+/// (`docker.io`) before delegating to
+/// [`oci_spec::distribution::Reference`].
+///
+/// **Why**: SDK v2 used ocipkg, which defaulted bare image names
+/// (`alpine`, `ubuntu:20.04`) to the hostname `registry-1.docker.io`
+/// — Docker's actual API endpoint, but not a canonical OCI
+/// distribution hostname. v2 caches on disk and v2 archive
+/// annotations carry that hostname verbatim. v3 uses
+/// `oci_spec::distribution::Reference`, whose `split_domain`
+/// normalises `docker.io` (and only `docker.io`, plus its legacy
+/// alias `index.docker.io`) by adding the `library/` prefix for
+/// single-segment names. Without this shim, the same image surfaces
+/// under two distinct SQLite keys depending on which side of the
+/// v2 → v3 boundary the string was produced:
+///
+/// - `Artifact.load("alpine")` → `docker.io/library/alpine`
+/// - `import_legacy_local_registry` reading a v2 annotation
+///   `registry-1.docker.io/alpine:latest` →
+///   `registry-1.docker.io/alpine`
+///
+/// Rewriting the prefix here collapses both paths onto the same
+/// canonical key. The rewrite is bounded to the exact prefix
+/// `"registry-1.docker.io/"` (with trailing slash) so adjacent
+/// hostnames like `registry-1.docker.io.example/foo` are left
+/// alone.
+fn canonicalize_legacy_docker_hub_host(input: &str) -> Cow<'_, str> {
+    if let Some(rest) = input.strip_prefix("registry-1.docker.io/") {
+        Cow::Owned(format!("docker.io/{rest}"))
+    } else {
+        Cow::Borrowed(input)
     }
 }
 
@@ -339,5 +383,92 @@ mod tests {
             format!("ghcr.io/jij-inc/ommx@{digest}"),
             "digest reference must use `@`, not `:`, to survive oci_spec parsing",
         );
+    }
+
+    /// **v2 compat invariant**: the ocipkg legacy default hostname
+    /// `registry-1.docker.io` (used for bare image names like `alpine`)
+    /// must parse to the same canonical [`ImageRef`] as the oci-spec
+    /// normalised forms `alpine` / `docker.io/alpine`. Without this,
+    /// a v2 cache imported from a manifest annotation under
+    /// `registry-1.docker.io/alpine:latest` would land under a
+    /// different SQLite key than `Artifact.load("alpine")` later
+    /// queries, and the cache would be silently invisible.
+    #[test]
+    fn parse_collapses_ocipkg_docker_hub_host_to_canonical() {
+        let legacy = ImageRef::parse("registry-1.docker.io/alpine:latest").unwrap();
+        let bare = ImageRef::parse("alpine").unwrap();
+        let canonical = ImageRef::parse("docker.io/alpine:latest").unwrap();
+        assert_eq!(
+            legacy, bare,
+            "registry-1.docker.io/alpine:latest must parse to the same ImageRef as the bare name",
+        );
+        assert_eq!(
+            legacy, canonical,
+            "registry-1.docker.io/alpine:latest must parse to the same ImageRef as docker.io/alpine:latest",
+        );
+        // The collapsed key is what the SQLite Local Registry stores
+        // under, so all three forms must produce the same repository
+        // key when looked up.
+        assert_eq!(legacy.repository_key(), "docker.io/library/alpine");
+        assert_eq!(legacy.to_string(), "docker.io/library/alpine:latest");
+    }
+
+    /// Multi-segment Docker Hub names (`registry-1.docker.io/<org>/<repo>`)
+    /// must collapse to the same key as the canonical `docker.io/<org>/<repo>`
+    /// form. oci-spec skips the `library/` prefix when the repository
+    /// already has a slash, so the result is `docker.io/<org>/<repo>`
+    /// from both sides.
+    #[test]
+    fn parse_collapses_multi_segment_docker_hub_host() {
+        let legacy = ImageRef::parse("registry-1.docker.io/jij-inc/ommx:v1").unwrap();
+        let canonical = ImageRef::parse("docker.io/jij-inc/ommx:v1").unwrap();
+        assert_eq!(legacy, canonical);
+        assert_eq!(legacy.repository_key(), "docker.io/jij-inc/ommx");
+        assert_eq!(legacy.to_string(), "docker.io/jij-inc/ommx:v1");
+    }
+
+    /// Digest-pinned legacy refs must collapse the host the same way,
+    /// so v2 archive annotations like
+    /// `registry-1.docker.io/alpine@sha256:...` round-trip to the
+    /// canonical SQLite key.
+    #[test]
+    fn parse_collapses_legacy_docker_hub_host_with_digest() {
+        let digest = "sha256:0011223344556677889900112233445566778899001122334455667788990011";
+        let legacy = ImageRef::parse(&format!("registry-1.docker.io/alpine@{digest}")).unwrap();
+        let canonical = ImageRef::parse(&format!("docker.io/alpine@{digest}")).unwrap();
+        assert_eq!(legacy, canonical);
+        assert_eq!(legacy.repository_key(), "docker.io/library/alpine");
+    }
+
+    /// The shim must only fire on the exact prefix
+    /// `"registry-1.docker.io/"` (with trailing slash). A registry
+    /// hostname that *contains* `registry-1.docker.io` as a substring
+    /// is a different domain and must be left alone, otherwise we
+    /// silently misroute pulls.
+    #[test]
+    fn parse_does_not_rewrite_lookalike_hosts() {
+        let lookalike = ImageRef::parse("registry-1.docker.io.example/foo:v1").unwrap();
+        assert_eq!(
+            lookalike.hostname(),
+            "registry-1.docker.io.example",
+            "substring-matching hostnames must not be rewritten to docker.io",
+        );
+        assert_eq!(lookalike.name(), "foo");
+    }
+
+    /// A bare `registry-1.docker.io` string (no `/`) does not match
+    /// the trailing-slash prefix and must not be rewritten — without
+    /// the slash there's no `<rest>` to splice on. oci-spec then
+    /// treats the whole string as a single-segment repository name
+    /// under the default Docker Hub registry (so the parsed
+    /// repository ends up as `library/registry-1.docker.io`). That's
+    /// a quirky-but-consistent oci-spec outcome; the assertion here
+    /// pins **the shim did not run** — if it had, the input would
+    /// have become `docker.io/<empty>`, which oci-spec rejects.
+    #[test]
+    fn parse_does_not_rewrite_bare_registry_host_string() {
+        let parsed = ImageRef::parse("registry-1.docker.io").unwrap();
+        assert_eq!(parsed.name(), "library/registry-1.docker.io");
+        assert_eq!(parsed.hostname(), "docker.io");
     }
 }

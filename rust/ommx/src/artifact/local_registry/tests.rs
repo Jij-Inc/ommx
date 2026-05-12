@@ -291,6 +291,77 @@ fn imports_legacy_local_registry_explicitly() -> Result<()> {
     Ok(())
 }
 
+/// End-to-end v2 → v3 invariant for Docker Hub shorthand. A v2 cache
+/// lives on disk at `<root>/registry-1.docker.io/alpine/__latest/`
+/// with the manifest descriptor carrying
+/// `org.opencontainers.image.ref.name = "registry-1.docker.io/alpine:latest"`
+/// (the form ocipkg's `Display` produced). After
+/// `import_legacy_local_registry`, the v3 `Artifact.load("alpine")`
+/// equivalent — `LocalRegistry::resolve_image_name(parse("alpine"))` —
+/// must hit, because the legacy host normalisation shim in
+/// [`ImageRef::parse`] collapses every spelling of the same image onto
+/// one canonical SQLite key. A regression that removed the shim would
+/// silently route `load("alpine")` to a SQLite miss → network pull of
+/// the real Docker Hub `alpine`, ignoring the user's pre-imported v2
+/// cache.
+#[test]
+fn imports_legacy_docker_hub_short_name_via_normalisation_shim() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let legacy_registry_root = dir.path().join("legacy-registry");
+    // Reproduce the v2 on-disk shape verbatim — ocipkg's `as_path`
+    // for `alpine` was `registry-1.docker.io/alpine/__latest`, not
+    // the v3 canonical `docker.io/library/alpine/__latest`.
+    let legacy_dir = legacy_registry_root
+        .join("registry-1.docker.io")
+        .join("alpine")
+        .join("__latest");
+    let raw_annotation = "registry-1.docker.io/alpine:latest".to_string();
+    let mut builder =
+        TestOciDirBuilder::with_raw_ref_annotation(legacy_dir.clone(), Some(raw_annotation))?;
+    let config = builder.add_empty_json()?;
+    let (layer_digest, layer_size) = builder.add_blob(b"alpine-rootfs")?;
+    let layer = DescriptorBuilder::default()
+        .media_type(MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.into()))
+        .digest(layer_digest)
+        .size(layer_size)
+        .build()?;
+    let manifest = ImageManifestBuilder::default()
+        .schema_version(2_u32)
+        .artifact_type(media_types::v1_artifact())
+        .config(config)
+        .layers(vec![layer])
+        .build()?;
+    builder.finish(manifest)?;
+
+    let registry_root = dir.path().join("registry-v3");
+    let index_store = SqliteIndexStore::open_in_registry_root(&registry_root)?;
+    let blob_store = FileBlobStore::open_in_registry_root(&registry_root)?;
+
+    let report = import_legacy_local_registry(&index_store, &blob_store, &legacy_registry_root)?;
+    assert_eq!(report.imported_dirs, 1, "v2 dir must import cleanly");
+
+    // The canonical SQLite key is `(docker.io/library/alpine, latest)`;
+    // every spelling of the same image must resolve to the same row.
+    for spelling in [
+        "alpine",
+        "alpine:latest",
+        "docker.io/alpine:latest",
+        "docker.io/library/alpine:latest",
+        "registry-1.docker.io/alpine:latest",
+    ] {
+        let parsed =
+            ImageRef::parse(spelling).with_context(|| format!("failed to parse {spelling}"))?;
+        let resolved = index_store
+            .resolve_image_name(&parsed)?
+            .with_context(|| format!("post-import resolve missed for spelling {spelling}"))?;
+        assert!(
+            resolved.starts_with("sha256:"),
+            "resolved digest must be sha256 for {spelling}, got {resolved}",
+        );
+    }
+    Ok(())
+}
+
 #[test]
 fn import_legacy_local_registry_keeps_existing_ref_on_conflict() -> Result<()> {
     let dir = tempfile::tempdir()?;
@@ -1319,18 +1390,35 @@ fn build_test_oci_dir_with_v2_config(
 
 /// In-tests reimplementation of the ocipkg `OciDirBuilder`. Writes
 /// `oci-layout`, an `index.json` with the manifest descriptor (with the
-/// `org.opencontainers.image.ref.name` annotation when an
-/// [`ImageRef`] is supplied), and one `blobs/sha256/<encoded>` file per
-/// CAS write. Used by the legacy-import tests to materialise v2-shaped
-/// OCI dirs without keeping a runtime ocipkg dependency.
+/// `org.opencontainers.image.ref.name` annotation when one is supplied),
+/// and one `blobs/sha256/<encoded>` file per CAS write. Used by the
+/// legacy-import tests to materialise v2-shaped OCI dirs without
+/// keeping a runtime ocipkg dependency.
 struct TestOciDirBuilder {
     oci_dir_root: PathBuf,
-    image_name: Option<ImageRef>,
+    ref_name_annotation: Option<String>,
     is_finished: bool,
 }
 
 impl TestOciDirBuilder {
     fn new(oci_dir_root: PathBuf, image_name: Option<ImageRef>) -> Result<Self> {
+        // Default code path: the ref name annotation is the canonical
+        // Display form of the ImageRef. Tests that need to simulate a
+        // v2-shaped annotation (e.g. `registry-1.docker.io/alpine:latest`,
+        // which v3 canonicalises to `docker.io/library/alpine:latest`)
+        // call [`Self::with_raw_ref_annotation`] instead.
+        Self::with_raw_ref_annotation(oci_dir_root, image_name.map(|n| n.to_string()))
+    }
+
+    /// Construct a builder that stamps an arbitrary string as the
+    /// `org.opencontainers.image.ref.name` annotation, bypassing
+    /// `ImageRef`'s canonicalisation. Used to reproduce v2-era
+    /// on-disk states where the annotation carries the ocipkg
+    /// default hostname `registry-1.docker.io/...`.
+    fn with_raw_ref_annotation(
+        oci_dir_root: PathBuf,
+        ref_name_annotation: Option<String>,
+    ) -> Result<Self> {
         anyhow::ensure!(
             !oci_dir_root.exists(),
             "test oci-dir {} already exists",
@@ -1339,7 +1427,7 @@ impl TestOciDirBuilder {
         std::fs::create_dir_all(&oci_dir_root)?;
         Ok(Self {
             oci_dir_root,
-            image_name,
+            ref_name_annotation,
             is_finished: false,
         })
     }
@@ -1375,11 +1463,11 @@ impl TestOciDirBuilder {
             .media_type(MediaType::ImageManifest)
             .size(size)
             .digest(digest);
-        if let Some(name) = &self.image_name {
+        if let Some(name) = &self.ref_name_annotation {
             let mut annotations = HashMap::new();
             annotations.insert(
                 "org.opencontainers.image.ref.name".to_string(),
-                name.to_string(),
+                name.clone(),
             );
             descriptor_builder = descriptor_builder.annotations(annotations);
         }

@@ -307,21 +307,58 @@ standard Docker reference heuristic — the first segment is only
 treated as a host when it contains `.` or `:` or equals `localhost`.
 The `ommx::ocipkg` re-export is removed.
 
+### v2 compat shim for Docker Hub shorthand
+
+SDK v2 used `ocipkg`, which defaulted bare image names (`alpine`,
+`ubuntu:20.04`) to the hostname `registry-1.docker.io`. v3 uses
+`oci_spec::distribution::Reference`, whose canonical Docker Hub
+hostname is `docker.io` (with `library/` automatically prefixed for
+single-segment names). Without intervention, the same image would
+land under two distinct SQLite Local Registry keys depending on
+which side of the v2 → v3 boundary produced the string:
+`load("alpine")` → `docker.io/library/alpine`, but a v2 cache
+annotated as `registry-1.docker.io/alpine:latest` →
+`registry-1.docker.io/alpine`. [`ImageRef::parse`](crate::artifact::ImageRef::parse)
+rewrites the `"registry-1.docker.io/"` prefix to `"docker.io/"` before
+delegating to `oci_spec`, collapsing every spelling of a Docker Hub
+image onto the same canonical key. The rewrite requires the trailing
+slash so adjacent hostnames like `registry-1.docker.io.example/...`
+are left alone. `ocipkg`'s legacy `name:algorithm:hex` digest
+spelling is *not* preserved — `oci_spec` rejects it — so digest-pinned
+v2 annotations must already use the OCI-standard `name@<digest>`
+form to round-trip (which is what `ocipkg`'s archive writer emitted
+for digest refs in practice).
+
+### `as_path` / `from_path` moved to the legacy module
+
 `ocipkg::ImageName` exposed `as_path()` / `from_path()` for the v2
 disk-cache local registry layout (`<root>/<image_name>/<tag>/`). The
 v3 SQLite Local Registry stores blobs content-addressed and refs in
 SQLite, so per-image directory paths are no longer a v3 concept.
-The path helpers have moved off `ImageRef` and into
+The path-shape helpers have moved off `ImageRef` and into
 [`local_registry::import::legacy`](crate::artifact::local_registry::import::legacy)
-as crate-private functions, used only while reading v2 caches during
-`ommx artifact import`. The
+as `pub(crate)` functions; only the higher-level
 [`legacy_local_registry_path`](crate::artifact::local_registry::legacy_local_registry_path)
-re-export is the only `pub` entry point that still computes a v2-shaped
-path. The previously public `get_image_dir` / `image_dir` functions
-and the `ommx image-dir` CLI subcommand are removed; their return
-value no longer corresponded to any v3 storage location, and the
-remaining v3-era use (`ommx push` legacy-only migration hint) goes
-through `legacy_local_registry_path` directly.
+remains `pub`, used by `ommx artifact import` and the CLI's
+v2-only migration hint. The previously public `get_image_dir` /
+`image_dir` functions and the `ommx image-dir` CLI subcommand are
+removed — their return value no longer corresponded to any v3
+storage location.
+
+### Accessor behaviour notes
+
+- `reference()` returns the digest when both a tag and a digest are
+  set (the OCI `name:tag@<digest>` combined form). OMMX has no code
+  path that produces the combined form, so the tag-drop is theoretical
+  for SDK-internal use; external callers who manually pass the combined
+  form should be aware that round-tripping `ImageRef` through
+  `(repository_key, reference)` keeps only the digest.
+- `port()` parses through `u16::from_str` and returns `None` if the
+  port substring overflows. `oci_spec`'s upstream regex enforces
+  `:<digits>`, so an overflow here means the user supplied a port like
+  `99999` that the registry would also reject; the silent `None`
+  defends the SQLite key lookup at the cost of not surfacing the
+  oversized port as a separate error.
 
 ## Other notable changes
 

@@ -709,6 +709,20 @@ exports a `.ommx` file. Constructors:
       or `:` or equals `localhost`. The `ommx::ocipkg` re-export is
       removed in v3, so any direct `use ommx::ocipkg::ImageName` call
       site needs to switch.
+- [ ] Be aware of the **Docker Hub hostname canonicalisation** when
+      sharing user-data caches across SDK versions. SDK v2's `ocipkg`
+      defaulted bare image names to the hostname
+      `registry-1.docker.io`; v3 normalises to the OCI canonical
+      `docker.io` with `library/` prefix added for single-segment
+      names. `ImageRef::parse` includes a one-line shim that rewrites
+      `registry-1.docker.io/` to `docker.io/` so v2 archive
+      annotations and disk-cache layouts collapse onto the same SQLite
+      key that `Artifact.load("alpine")` queries. `ocipkg`'s legacy
+      digest spelling `name:algorithm:hex` is **not** accepted by
+      `oci_spec` and is not back-translated — digest-pinned v2
+      annotations had to already use the OCI-standard `name@<digest>`
+      form (which is what ocipkg's archive writer emitted in
+      practice).
 - [ ] Drop calls to `ommx::artifact::get_image_dir` /
       `ommx::artifact::image_dir`. These returned a v2 disk-cache
       path (`<root>/<image_name>/<tag>/`) that no longer corresponds
