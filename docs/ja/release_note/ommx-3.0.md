@@ -17,6 +17,7 @@ v3 では SQLite Local Registry を唯一の正規ストアと位置づけ、`.o
 - {func}`Artifact.load_archive <ommx.artifact.Artifact.load_archive>` は移行エラーを投げるようになり、2 つの置換メソッドへ誘導します: {func}`Artifact.import_archive <ommx.artifact.Artifact.import_archive>` (アーカイブを永続 SQLite Local Registry に import する v3 の後継、書き込み副作用あり) と {func}`Artifact.inspect_archive <ommx.artifact.Artifact.inspect_archive>` (registry に書き込まずに manifest + layer descriptors を読む、{class}`ArchiveManifest <ommx.artifact.ArchiveManifest>` を返却)。v2 の `load_archive` は registry 副作用無しで in-place 読み込みする API でした。リネームによって、アップグレード時に静かに registry に書き込まれることを防ぎ、意味論変更を明示します。`ArtifactBuilder.new_archive_unnamed` が生成していた `org.opencontainers.image.ref.name` 注釈のない v2 アーカイブは、`import_archive` が import 時に匿名名を合成して受け入れます (`inspect_archive` は read-only のため synthesis 用の registry が無く、`ArchiveManifest.image_name = None` でそのまま返却します)。
 - CLI `ommx push <archive>` / `ommx push <oci-dir>` は廃止 — レジストリに load してから image name で push する 2 段階フローへ移行してください。
 - 新 CLI `ommx artifact prune-anonymous [--dry-run]` で蓄積した匿名 build エントリを一括削除可能。
+- `ommx.get_image_dir(...)` と CLI `ommx image-dir <name>` を廃止しました。戻り値は v2 disk-cache の `<root>/<image_name>/<tag>/` パスで、v3 SQLite Local Registry の実際の保存先 (blob は content-addressed、ref は SQLite) とは無関係になっており、ユーザーをミスリードしていたため。既存の v2 cache は引き続き `ommx artifact import` で移行できます。
 
 before / after コード例と移行チェックリストは [Python SDK v2→v3 Migration Guide §13](https://github.com/Jij-Inc/ommx/blob/main/PYTHON_SDK_MIGRATION_GUIDE.md#13-artifact-api-archive-becomes-an-exchange-format) を参照してください。
 

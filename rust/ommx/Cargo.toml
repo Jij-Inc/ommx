@@ -20,7 +20,6 @@ workspace = true
 [features]
 default = ["remote-artifact"]
 remote-artifact = [
-    "ocipkg/remote",
     "dep:docker_credential",
     "dep:futures-util",
     "dep:http",
@@ -54,7 +53,6 @@ maplit.workspace = true
 num.workspace = true
 oci-client = { workspace = true, optional = true }
 oci-spec.workspace = true
-ocipkg = { workspace = true }
 ommx-derive = { path = "../ommx-derive", version = "=3.0.0-alpha.2" }
 ordered-float.workspace = true
 petgraph.workspace = true

@@ -1,6 +1,6 @@
 use anyhow::Result;
 use derive_more::{Deref, From};
-use ocipkg::oci_spec::image::Descriptor;
+use oci_spec::image::Descriptor;
 use pyo3::{prelude::*, types::PyDict};
 use std::collections::HashMap;
 

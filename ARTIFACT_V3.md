@@ -49,7 +49,9 @@ Artifact v3 では、この構造を整理する。
 | `media_types.rs` | OMMX 固有 media type 定義 |
 | `config.rs` | config 構造体 |
 
-`rust/ommx/Cargo.toml` は `ocipkg` に依存している。
+> **本セクション (§3) は v3 着手前の出発点の記述**。`ocipkg` 依存・公開 surface は Step D / F / H (§12.3 / §12.4) で全て撤去済み。現状の依存と公開 surface は §12.4 を参照。
+
+`rust/ommx/Cargo.toml` は v3 着手時点で `ocipkg` に依存していた。
 
 ```toml
 ocipkg = { version = "0.4.0", default-features = false }
@@ -59,7 +61,9 @@ default = ["remote-artifact"]
 remote-artifact = ["ocipkg/remote", "built"]
 ```
 
-### 3.2 `ocipkg` 利用面
+(Step H landing 時点で `ocipkg` の workspace dep / `ommx::ocipkg` re-export ともに削除済み。`oci-client` / `oci-spec` への置換は §12.3 / §12.4 を参照。)
+
+### 3.2 `ocipkg` 利用面 (v3 着手前)
 
 | `ocipkg` API | 用途 |
 |---|---|
@@ -72,13 +76,13 @@ remote-artifact = ["ocipkg/remote", "built"]
 | `ImageManifest` / `Descriptor` / `Digest` / `MediaType` | OCI 標準型 |
 | `image::copy()` | backend 間の artifact copy |
 
-実装上の依存は artifact 周辺に寄っているが、public surface には漏れている。
+実装上の依存は artifact 周辺に寄っていたが、public surface には漏れていた。
 
-- Rust SDK は `ommx::ocipkg` を re-export している。
-- Rust artifact API は `Descriptor` / `Digest` / `MediaType` を public signature に含む。
-- Python `Descriptor` は `oci-spec` の JSON shape を public API として見せている。
+- Rust SDK は `ommx::ocipkg` を re-export していた。
+- Rust artifact API は `Descriptor` / `Digest` / `MediaType` を public signature に含んでいた。
+- Python `Descriptor` は `oci-spec` の JSON shape を public API として見せていた。
 
-したがって `ocipkg` 削除は内部差し替えだけでは終わらない。v3 では Descriptor / Digest / MediaType / ImageReference を OMMX-owned public types として用意し、migration note を用意する。`oci-spec` 由来型を使う場合も internal serde helper に閉じ、public API には出さない。
+したがって `ocipkg` 削除は内部差し替えだけでは終わらないと判断し、v3 では Descriptor / Digest / MediaType / ImageReference を OMMX-owned public types として用意し、migration note を整備した。`oci-spec` 由来型を使う場合も internal serde helper に閉じ、public API には出さない方針を取った (実装は Step H §12.4 で完了)。
 
 ### 3.3 Python Artifact 実装
 
@@ -753,15 +757,19 @@ Step F の landing で ocipkg の `OciArchive` / `OciArchiveBuilder` / `OciDir` 
 
 蓄積した anonymous エントリは `ommx artifact prune-anonymous [--dry-run]` で一括削除できる (manifest / blob の CAS レコードは残り、将来の GC で回収される)。
 
-**Step H — `ImageName` 公開 surface 撤去** (§12.2 行 2)。
+**Step H — `ImageName` 公開 surface 撤去** (§12.2 行 2)。**完了。**
 
-最後に残る ocipkg surface。最大の blast radius (`LocalArtifact::open` / `LocalArtifactBuilder::new` / annotation builder / CLI parse / Python `Artifact.load(...)` 全てが `ocipkg::ImageName` を expose) を持つので、Step D / F の後に独立 PR として進める。
+最後に残っていた ocipkg surface。`ocipkg::ImageName` を expose していた `LocalArtifact::open` / `LocalArtifactBuilder::new` / annotation builder / CLI parse / Python `Artifact.load(...)` を、OMMX-owned な `ommx::artifact::ImageRef` に切り替えた。
 
-候補は `oci_client::Reference` (= `oci_spec::distribution::Reference` の re-export、`oci-client` が既に dep にあるので zero-add) だが、`ocipkg::ImageName` の `as_path` / `hostname` / `port` / `name` / `reference` フィールドアクセスは SQLite ref store の repository key 構築 (`image_name_repository`) や CLI parse 経路で深く使われており、`oci_client::Reference` の API shape とは微妙にズレる。**独自 type `ommx::artifact::ImageRef` で wrap し、`oci_client::Reference` を内部に保持しつつ Display / FromStr / fields accessor を新 type 側で提供する** ほうが現実的な見込み。最終 type 設計は Step H PR で確定する。
+`ImageRef` は `oci_spec::distribution::Reference` を内側に持つ newtype で、parsing / validation / canonical Display を全て上流 crate に委譲する。`hostname()` / `port()` / `name()` / `reference()` の accessor は OMMX-owned API として残し、`reference()` は tag と digest の両方を 1 本の `&str` で返す (`digest()` があればそちらを優先 — SQLite Local Registry が digest pin を保持するため; `name:tag@<digest>` の combined form では tag が捨てられるが OMMX で combined form を生成する経路は無い)。受け付ける入力は `host[:port]/name:tag` / `host[:port]/name@<digest>` / 組み合わせ `name:tag@<digest>` / Docker-Hub 省略形 (`alpine` → `docker.io/library/alpine:latest`) の全てで、registry host の判定は Docker 標準ヒューリスティック (`localhost` / `.` 含む / `:` 含む) に従う。Display は OCI canonical form で digest ref を `name@<digest>`、tag ref を `name:<tag>` に正規化する。
 
-Step H は公開 signature の breaking change を含むので、**v3.0 stable release 前に必ず land させる**。Python 側の `Artifact.load(image_name: str)` は `&str` を受け取って Rust 側で parse する形なので Python user 影響は限定的、影響は主に Rust SDK consumer に集中する。
+**v2 互換 shim**: ocipkg は bare な Docker Hub 名 (`alpine` 等) を hostname `registry-1.docker.io` に default させていたが、oci-spec は `docker.io` を canonical として扱い `library/` prefix まで補完する。v2 cache の annotation や v2 archive の `org.opencontainers.image.ref.name` は ocipkg の Display を経由しているので `registry-1.docker.io/alpine:latest` のような形で残っており、そのままだと v3 が `Artifact.load("alpine")` を query した時の canonical key (`docker.io/library/alpine`) と一致せず SQLite miss する。これを防ぐため `ImageRef::parse` は `"registry-1.docker.io/"` prefix を `"docker.io/"` に書き換えてから oci-spec に渡し、両ルートを同じ canonical key に正規化する。書き換えは末尾 `/` 込みの完全一致のみなので `registry-1.docker.io.example/...` のような近似 hostname は触らない。`name:algorithm:hex` 形式 (ocipkg の legacy digest spelling) は oci-spec 側で reject されるので、digest を含む v2 annotation は OCI canonical `name@<digest>` 形で書かれている前提。
 
-Step H 完了で `ocipkg` を `Cargo.toml` から削除でき、v3 における ocipkg 依存撤去が完了する。
+v2 disk-cache の `<root>/<image_name>/<tag>/` 互換 path helper (`as_path` / `from_path`) は `ImageRef` から `local_registry::import::legacy::image_ref_as_path` / `image_ref_from_path` (crate-private) に降ろした。pub 入口は `local_registry::legacy_local_registry_path` のみで、CLI の `migration_hint_if_legacy_only` および `import_legacy_local_registry_ref` 経路で使われる。v3 storage は SQLite + CAS なので per-image directory path という概念自体が無くなったため、v2 → v3 migration 経路に閉じた。これに伴い stale だった `ommx::artifact::get_image_dir` / `image_dir` の Rust API、CLI `ommx image-dir <name>` subcommand、Python `ommx.get_image_dir` を全て撤去した。
+
+Python 側の `Artifact.load(image_name: str)` は `&str` を受け取って Rust 側で `ImageRef::parse` を呼ぶ形なので、Python user 影響は最小限。影響は主に Rust SDK consumer に集中するが、`ocipkg::ImageName` を直接 import していた user は `ommx::artifact::ImageRef` に置換するだけで済む。フィールド直アクセス (`image_name.hostname`) は accessor method 呼び出し (`image_name.hostname()`) に変わる。
+
+Step H landing で `ocipkg` を `Cargo.toml` から削除し、v3 における ocipkg 依存撤去を完了した。`ommx::ocipkg` re-export も同時に消滅。
 
 **順序の依存関係:** D (network) と F (local format) は機能軸では独立だが、両者とも blob を `FileBlobStore` に直接書く経路を新設する。D が先行する場合は `FileBlobStore::put_bytes` を超える追加 API (例えば streaming upload / resumable write) を D PR で安易に拡張せず、まず Step B 時点の API surface で完結させること。F が同 store を再利用するため、D の internal API 拡張が F での再設計を強制すると interface churn が発生する。新規 API が必要になった場合は D の PR description で明示し、F でも同じ shape を採用できるよう review 段階で合意を取る。逆に F が先行する場合は同じ制約は無く、F が固めた writer 経路を D がそのまま再利用できる。
 

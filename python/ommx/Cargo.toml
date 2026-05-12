@@ -38,7 +38,7 @@ anyhow.workspace = true
 approx.workspace = true
 derive_more.workspace = true
 fnv.workspace = true
-ocipkg.workspace = true
+oci-spec.workspace = true
 pyo3-stub-gen.workspace = true
 pyo3-tracing-opentelemetry = { workspace = true, optional = true }
 pyo3.workspace = true

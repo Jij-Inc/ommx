@@ -10,6 +10,8 @@
 //! This module owns only the **v2-shape-specific** helpers:
 //!
 //! - the path computation `<root>/<image_name>` ([`legacy_local_registry_path`]),
+//!   backed by the v2 disk-cache encoding [`image_ref_as_path`] /
+//!   [`image_ref_from_path`] (`__` substituted for `:`),
 //! - the recursive scan of a v2 root for `oci-layout`-bearing dirs
 //!   ([`gather_legacy_oci_dirs`]),
 //! - per-entry name resolution that reconciles the on-disk path with the
@@ -29,8 +31,8 @@ use super::oci_dir::{
     import_oci_dir_as_ref_with_policy, import_oci_dir_inner, oci_dir_image_name, oci_dir_ref,
     OciDirImport, RefConflictHandling,
 };
+use crate::artifact::ImageRef;
 use anyhow::{ensure, Context, Result};
-use ocipkg::ImageName;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -67,7 +69,7 @@ pub fn import_legacy_local_registry_ref(
     index_store: &SqliteIndexStore,
     blob_store: &FileBlobStore,
     legacy_registry_root: impl AsRef<Path>,
-    image_name: &ImageName,
+    image_name: &ImageRef,
 ) -> Result<OciDirImport> {
     import_legacy_local_registry_ref_with_policy(
         index_store,
@@ -82,7 +84,7 @@ pub fn import_legacy_local_registry_ref_with_policy(
     index_store: &SqliteIndexStore,
     blob_store: &FileBlobStore,
     legacy_registry_root: impl AsRef<Path>,
-    image_name: &ImageName,
+    image_name: &ImageRef,
     policy: RefConflictPolicy,
 ) -> Result<OciDirImport> {
     let legacy_path = legacy_local_registry_path(legacy_registry_root, image_name);
@@ -180,9 +182,71 @@ pub fn import_legacy_local_registry_with_policy(
 
 pub fn legacy_local_registry_path(
     legacy_registry_root: impl AsRef<Path>,
-    image_name: &ImageName,
+    image_name: &ImageRef,
 ) -> PathBuf {
-    legacy_registry_root.as_ref().join(image_name.as_path())
+    legacy_registry_root
+        .as_ref()
+        .join(image_ref_as_path(image_name))
+}
+
+/// Encode an [`ImageRef`] as the v2 disk-cache path
+/// `{hostname}/{name}/__{reference}` (or
+/// `{hostname}__{port}/{name}/__{reference}` when a port is set).
+/// This is the layout SDK v2 wrote to disk per `(image, tag)`; v3
+/// no longer produces this layout but still needs to read it during
+/// `ommx artifact import`.
+///
+/// The encoding maps `:` to `__`, inherited byte-for-byte from
+/// SDK v2. Tags that legitimately contain `__` (which the OCI
+/// distribution tag grammar otherwise allows) are ambiguous on
+/// round-trip — [`image_ref_from_path`] decodes `__` back to `:`,
+/// so a tag `my__tag` becomes the digest-shaped `my:tag` and fails
+/// `oci_spec::distribution::Reference`'s digest-length check.
+/// OMMX-generated refs never use `__` in tags, so the v2 → v3
+/// import path is unaffected. Switching to a percent-encoded layout
+/// would invalidate existing v2 caches on disk, so the legacy
+/// encoding is preserved.
+pub(crate) fn image_ref_as_path(image_name: &ImageRef) -> PathBuf {
+    let reference = image_name.reference().replace(':', "__");
+    // v2 disk layout encodes `host:port` as `host__port`. Split out
+    // the port from the canonical `host[:port]` form at the call
+    // site rather than via dedicated accessors — the split is a
+    // local detail of the legacy encoding, not a v3 concept on
+    // [`ImageRef`].
+    let host = match image_name.registry().rsplit_once(':') {
+        Some((host, port)) => format!("{host}__{port}"),
+        None => image_name.registry().to_string(),
+    };
+    PathBuf::from(format!("{host}/{}/__{reference}", image_name.name()))
+}
+
+/// Inverse of [`image_ref_as_path`]. Returns an error when the
+/// path shape doesn't match the encoding, so a stray directory
+/// inside the legacy local registry root surfaces a clear error
+/// during import rather than producing a corrupted ref.
+pub(crate) fn image_ref_from_path(path: &Path) -> Result<ImageRef> {
+    let components = path
+        .components()
+        .map(|c| {
+            c.as_os_str()
+                .to_str()
+                .context("Path includes a non UTF-8 component")
+        })
+        .collect::<Result<Vec<&str>>>()?;
+    if components.len() < 3 {
+        anyhow::bail!(
+            "Path for image ref must contain registry, name, and tag components: {}",
+            path.display()
+        );
+    }
+    let registry = components[0].replace("__", ":");
+    let n = components.len();
+    let name = components[1..n - 1].join("/");
+    let last = components[n - 1]
+        .strip_prefix("__")
+        .with_context(|| format!("Missing tag prefix in path: {}", path.display()))?
+        .replace("__", ":");
+    ImageRef::from_repository_and_reference(&format!("{registry}/{name}"), &last)
 }
 
 fn gather_legacy_oci_dirs(root: &Path) -> Result<Vec<PathBuf>> {
@@ -211,12 +275,12 @@ fn gather_legacy_oci_dirs_inner(dir: &Path, dirs: &mut Vec<PathBuf>) -> Result<(
     Ok(())
 }
 
-fn legacy_import_image_name(legacy_registry_root: &Path, legacy_dir: &Path) -> Result<ImageName> {
+fn legacy_import_image_name(legacy_registry_root: &Path, legacy_dir: &Path) -> Result<ImageRef> {
     let annotated = oci_dir_image_name(legacy_dir)?;
     let path_name = legacy_dir
         .strip_prefix(legacy_registry_root)
         .ok()
-        .and_then(|relative| ImageName::from_path(relative).ok());
+        .and_then(|relative| image_ref_from_path(relative).ok());
 
     match (annotated, path_name) {
         (Some(annotated), Some(path_name)) => {
@@ -249,5 +313,46 @@ fn record_import_ref_update(report: &mut LegacyImportReport, update: Option<RefU
         RefUpdate::Unchanged => report.verified_dirs += 1,
         RefUpdate::Replaced { .. } => report.replaced_refs += 1,
         RefUpdate::Conflicted { .. } => report.conflicted_dirs += 1,
+    }
+}
+
+#[cfg(test)]
+mod path_layout_tests {
+    use super::*;
+
+    /// Path round-trip holds for every ref whose tag does not contain
+    /// `__` — the v2-inherited encoding maps `:` to `__`, so a tag
+    /// already containing `__` is the documented break point.
+    #[test]
+    fn round_trip_path_layout_for_non_underscore_tags() {
+        for input in [
+            "localhost:5000/test_repo:latest",
+            "ubuntu:20.04",
+            "alpine",
+            "quay.io/jitesoft/alpine@sha256:6755355f801f8e3694bffb1a925786813462cea16f1ce2b0290b6a48acf2500c",
+        ] {
+            let r = ImageRef::parse(input).unwrap();
+            let path = image_ref_as_path(&r);
+            let parsed = image_ref_from_path(&path).unwrap();
+            assert_eq!(parsed, r, "round-trip failed for {input}");
+        }
+    }
+
+    /// Tags that legitimately contain `__` collide with the legacy
+    /// path encoding of `:`, so the round-trip is not lossless —
+    /// `image_ref_from_path` decodes every `__` back to `:`, then
+    /// reassembles the ref with `@` as the digest separator. The
+    /// result fails `oci_spec::distribution::Reference`'s digest
+    /// length check (a "tag" like `my__tag` won't satisfy any known
+    /// `algorithm:hex` shape), surfacing the lossy case as a clear
+    /// parse error rather than silent corruption.
+    #[test]
+    fn path_layout_round_trip_fails_for_double_underscore_tags() {
+        let r = ImageRef::parse("example.com/foo:my__tag").unwrap();
+        let path = image_ref_as_path(&r);
+        assert!(
+            image_ref_from_path(&path).is_err(),
+            "image_ref_from_path should reject the lossy round-trip rather than corrupt the ref",
+        );
     }
 }

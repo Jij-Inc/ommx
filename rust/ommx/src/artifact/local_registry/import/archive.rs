@@ -36,10 +36,9 @@ use super::super::{
     BLOB_KIND_CONFIG, BLOB_KIND_MANIFEST, OCI_IMAGE_REF_NAME_ANNOTATION,
 };
 use super::oci_dir::OciDirImport;
-use crate::artifact::{media_types, OCI_IMAGE_MANIFEST_MEDIA_TYPE};
+use crate::artifact::{media_types, ImageRef, OCI_IMAGE_MANIFEST_MEDIA_TYPE};
 use anyhow::{Context, Result};
 use oci_spec::image::{Descriptor, ImageIndex, ImageManifest, MediaType, OciLayout};
-use ocipkg::ImageName;
 use std::{
     fs::File,
     io::{BufReader, Read},
@@ -55,7 +54,7 @@ use tar::Archive;
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub struct ArchiveInspectView {
-    pub image_name: Option<ImageName>,
+    pub image_name: Option<ImageRef>,
     pub manifest: ImageManifest,
     pub manifest_digest: String,
 }
@@ -85,7 +84,7 @@ pub fn inspect_archive(path: &Path) -> Result<ArchiveInspectView> {
 
 /// First-pass helper for [`inspect_archive`]: stream the tar to find
 /// `index.json` and return `(manifest_digest, ref_name)`.
-fn read_archive_index(path: &Path) -> Result<(String, Option<ImageName>)> {
+fn read_archive_index(path: &Path) -> Result<(String, Option<ImageRef>)> {
     let file = File::open(path)
         .with_context(|| format!("Failed to open OCI archive {}", path.display()))?;
     let mut archive = Archive::new(BufReader::new(file));
@@ -540,10 +539,10 @@ fn record_for_manifest_blob(blobs: &FileBlobStore, digest: &str, size: u64) -> R
 
 /// Extract the `org.opencontainers.image.ref.name` annotation from the
 /// `index.json` manifest descriptor.
-fn image_name_from_index_descriptor(desc: &Descriptor) -> Result<Option<ImageName>> {
+fn image_name_from_index_descriptor(desc: &Descriptor) -> Result<Option<ImageRef>> {
     desc.annotations()
         .as_ref()
         .and_then(|annotations| annotations.get(OCI_IMAGE_REF_NAME_ANNOTATION))
-        .map(|name| ImageName::parse(name).with_context(|| format!("Invalid image ref: {name}")))
+        .map(|name| ImageRef::parse(name).with_context(|| format!("Invalid image ref: {name}")))
         .transpose()
 }

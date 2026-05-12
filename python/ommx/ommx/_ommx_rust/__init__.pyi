@@ -68,7 +68,6 @@ __all__ = [
     "ToSamples",
     "ToState",
     "get_default_atol",
-    "get_image_dir",
     "get_images",
     "get_local_registry_root",
     "miplib2017_instance_annotations",
@@ -6004,13 +6003,6 @@ class Sense(enum.Enum):
     def __str__(self) -> builtins.str: ...
 
 def get_default_atol() -> builtins.float: ...
-def get_image_dir(image_name: builtins.str) -> pathlib.Path:
-    r"""
-    Get the path where given image is stored in the local registry.
-
-    - The directory may not exist if the image is not in the local registry.
-    """
-
 def get_images() -> builtins.list[builtins.str]:
     r"""
     Get all image names stored in the local registry.

@@ -5,10 +5,9 @@ use super::{
     OciDirImport, RefConflictPolicy, RefUpdate, SqliteIndexStore, BLOB_KIND_BLOB, BLOB_KIND_CONFIG,
     BLOB_KIND_MANIFEST,
 };
-use crate::artifact::{media_types, StagedArtifactBlob};
+use crate::artifact::{media_types, ImageRef, StagedArtifactBlob};
 use anyhow::{ensure, Context, Result};
 use oci_spec::image::{Descriptor, ImageManifest, MediaType};
-use ocipkg::ImageName;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
@@ -42,13 +41,13 @@ impl LocalRegistry {
         &self.blobs
     }
 
-    pub fn import_legacy_ref(&self, image_name: &ImageName) -> Result<OciDirImport> {
+    pub fn import_legacy_ref(&self, image_name: &ImageRef) -> Result<OciDirImport> {
         import_legacy_local_registry_ref(&self.index, &self.blobs, &self.root, image_name)
     }
 
     pub fn import_legacy_ref_with_policy(
         &self,
-        image_name: &ImageName,
+        image_name: &ImageRef,
         policy: RefConflictPolicy,
     ) -> Result<OciDirImport> {
         import_legacy_local_registry_ref_with_policy(
@@ -71,7 +70,7 @@ impl LocalRegistry {
         import_legacy_local_registry_with_policy(&self.index, &self.blobs, &self.root, policy)
     }
 
-    pub fn resolve_image_name(&self, image_name: &ImageName) -> Result<Option<String>> {
+    pub fn resolve_image_name(&self, image_name: &ImageRef) -> Result<Option<String>> {
         self.index.resolve_image_name(image_name)
     }
 
@@ -84,7 +83,7 @@ impl LocalRegistry {
     /// and [`crate::artifact::is_anonymous_artifact_tag`] match every
     /// name produced this way, so
     /// `ommx artifact prune-anonymous` cleans them uniformly.
-    pub fn synthesize_anonymous_image_name(&self) -> Result<ImageName> {
+    pub fn synthesize_anonymous_image_name(&self) -> Result<ImageRef> {
         let registry_id = self.index.registry_id()?;
         crate::artifact::anonymous_artifact_image_name(&registry_id)
     }
@@ -140,7 +139,7 @@ impl LocalRegistry {
     /// Local Registry stores OCI Image Manifest exclusively.
     pub(crate) fn publish_artifact_manifest(
         &self,
-        image_name: &ImageName,
+        image_name: &ImageRef,
         manifest: &ImageManifest,
         manifest_descriptor: &Descriptor,
         manifest_bytes: &[u8],

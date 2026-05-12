@@ -26,10 +26,9 @@
 #![cfg(feature = "remote-artifact")]
 
 use anyhow::Result;
-use ocipkg::ImageName;
 use ommx::artifact::{
     local_registry::{import_oci_archive, pull_image, LocalRegistry, RefConflictPolicy},
-    media_types, LocalArtifact, LocalArtifactBuilder,
+    media_types, ImageRef, LocalArtifact, LocalArtifactBuilder,
 };
 use serial_test::serial;
 use std::collections::HashMap;
@@ -84,7 +83,7 @@ fn start_htpasswd_registry() -> Container<GenericImage> {
 /// Build a tiny LocalArtifact in a fresh tempdir-backed SQLite Local
 /// Registry. Returns the artifact (containing one INSTANCE layer) plus
 /// the registry's tempdir handle so it stays alive for the caller.
-fn build_test_artifact(image_name: ImageName) -> Result<(LocalArtifact, tempfile::TempDir)> {
+fn build_test_artifact(image_name: ImageRef) -> Result<(LocalArtifact, tempfile::TempDir)> {
     let dir = tempfile::tempdir()?;
     let registry = Arc::new(LocalRegistry::open(dir.path())?);
     let mut builder = LocalArtifactBuilder::new(image_name);
@@ -172,7 +171,7 @@ fn push_anonymous_against_open_registry() -> Result<()> {
     let _env = EnvGuard::new();
     let registry = start_anonymous_registry();
     let port = registry.get_host_port_ipv4(5000)?;
-    let image_name = ImageName::parse(&format!("localhost:{port}/ommx-test/anon:tag1"))?;
+    let image_name = ImageRef::parse(&format!("localhost:{port}/ommx-test/anon:tag1"))?;
     let (artifact, _dir) = build_test_artifact(image_name)?;
     artifact.push()
 }
@@ -194,7 +193,7 @@ fn push_with_docker_config_only() -> Result<()> {
     let host = format!("localhost:{port}");
     let _docker_dir = write_docker_config(&host, ALICE_USER, ALICE_PASSWORD)?;
 
-    let image_name = ImageName::parse(&format!("{host}/ommx-test/docker-only:tag1"))?;
+    let image_name = ImageRef::parse(&format!("{host}/ommx-test/docker-only:tag1"))?;
     let (artifact, _dir) = build_test_artifact(image_name)?;
     artifact.push()
 }
@@ -209,7 +208,7 @@ fn push_anonymous_against_htpasswd_registry_fails() -> Result<()> {
     let _env = EnvGuard::new();
     let registry = start_htpasswd_registry();
     let port = registry.get_host_port_ipv4(5000)?;
-    let image_name = ImageName::parse(&format!("localhost:{port}/ommx-test/anon-fail:tag1"))?;
+    let image_name = ImageRef::parse(&format!("localhost:{port}/ommx-test/anon-fail:tag1"))?;
     let (artifact, _dir) = build_test_artifact(image_name)?;
     let err = artifact
         .push()
@@ -242,7 +241,7 @@ fn push_with_env_basic_auth() -> Result<()> {
     set_env("OMMX_BASIC_AUTH_USERNAME", ALICE_USER);
     set_env("OMMX_BASIC_AUTH_PASSWORD", ALICE_PASSWORD);
 
-    let image_name = ImageName::parse(&format!("{host}/ommx-test/env-auth:tag1"))?;
+    let image_name = ImageRef::parse(&format!("{host}/ommx-test/env-auth:tag1"))?;
     let (artifact, _dir) = build_test_artifact(image_name)?;
     artifact.push()
 }
@@ -263,7 +262,7 @@ fn push_with_wrong_env_password_fails() -> Result<()> {
     set_env("OMMX_BASIC_AUTH_USERNAME", ALICE_USER);
     set_env("OMMX_BASIC_AUTH_PASSWORD", "wrong-password");
 
-    let image_name = ImageName::parse(&format!("{host}/ommx-test/wrong-pw:tag1"))?;
+    let image_name = ImageRef::parse(&format!("{host}/ommx-test/wrong-pw:tag1"))?;
     let (artifact, _dir) = build_test_artifact(image_name)?;
     assert!(artifact.push().is_err());
     Ok(())
@@ -287,7 +286,7 @@ fn env_override_beats_docker_config() -> Result<()> {
     set_env("OMMX_BASIC_AUTH_USERNAME", ALICE_USER);
     set_env("OMMX_BASIC_AUTH_PASSWORD", ALICE_PASSWORD);
 
-    let image_name = ImageName::parse(&format!("{host}/ommx-test/env-wins:tag1"))?;
+    let image_name = ImageRef::parse(&format!("{host}/ommx-test/env-wins:tag1"))?;
     let (artifact, _dir) = build_test_artifact(image_name)?;
     artifact.push()
 }
@@ -317,7 +316,7 @@ fn cli_push_routes_through_native_path() -> Result<()> {
     let dir = tempfile::tempdir()?;
     {
         let local = Arc::new(LocalRegistry::open(dir.path())?);
-        let mut builder = LocalArtifactBuilder::new(ImageName::parse(&image_name)?);
+        let mut builder = LocalArtifactBuilder::new(ImageRef::parse(&image_name)?);
         builder.add_layer_bytes(
             oci_spec::image::MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
             b"cli-dispatch".to_vec(),
@@ -364,7 +363,7 @@ fn push_oci_archive_via_load_then_push() -> Result<()> {
     let _env = EnvGuard::new();
     let registry = start_anonymous_registry();
     let port = registry.get_host_port_ipv4(5000)?;
-    let image_name = ImageName::parse(&format!("localhost:{port}/ommx-test/archive-push:tag1"))?;
+    let image_name = ImageRef::parse(&format!("localhost:{port}/ommx-test/archive-push:tag1"))?;
 
     // Sender side: build in SQLite, save to archive on disk.
     let (sender_local, _sender_dir) = build_test_artifact(image_name.clone())?;
@@ -402,7 +401,7 @@ fn pull_image_round_trips_through_anonymous_registry() -> Result<()> {
     let _env = EnvGuard::new();
     let registry = start_anonymous_registry();
     let port = registry.get_host_port_ipv4(5000)?;
-    let image_name = ImageName::parse(&format!("localhost:{port}/ommx-test/pull-rt:tag1"))?;
+    let image_name = ImageRef::parse(&format!("localhost:{port}/ommx-test/pull-rt:tag1"))?;
 
     // Push from a sender-side SQLite registry.
     let (sender_local, _sender_dir) = build_test_artifact(image_name.clone())?;
@@ -449,7 +448,7 @@ fn partial_env_override_bails_before_registry_call() -> Result<()> {
     set_env("OMMX_BASIC_AUTH_USERNAME", ALICE_USER);
     // PASSWORD deliberately unset.
 
-    let image_name = ImageName::parse(&format!("{host}/ommx-test/partial:tag1"))?;
+    let image_name = ImageRef::parse(&format!("{host}/ommx-test/partial:tag1"))?;
     let (artifact, _dir) = build_test_artifact(image_name)?;
     let err = artifact
         .push()

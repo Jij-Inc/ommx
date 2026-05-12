@@ -1,8 +1,5 @@
 use anyhow::{Context, Result};
-use ommx::{
-    artifact::{LocalArtifact, LocalArtifactBuilder},
-    ocipkg::ImageName,
-};
+use ommx::artifact::{ImageRef, LocalArtifact, LocalArtifactBuilder};
 use std::{fs, path::Path};
 use url::Url;
 use zip::ZipArchive;
@@ -27,7 +24,7 @@ pub fn package(path: &Path) -> Result<()> {
         };
 
         let image_name =
-            match ImageName::parse(&format!("ghcr.io/jij-inc/ommx/v3/miplib2017:{name}")) {
+            match ImageRef::parse(&format!("ghcr.io/jij-inc/ommx/v3/miplib2017:{name}")) {
                 Ok(name) => name,
                 Err(err) => {
                     tracing::warn!("Skip: invalid image name for '{name}': {err}");

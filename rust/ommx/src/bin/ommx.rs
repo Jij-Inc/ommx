@@ -1,14 +1,14 @@
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 use colored::Colorize;
-use ocipkg::{oci_spec::image::ImageManifest, ImageName};
+use oci_spec::image::ImageManifest;
 use ommx::artifact::{
-    fetch_remote_manifest, get_image_dir,
+    fetch_remote_manifest, get_local_registry_root,
     local_registry::{
-        import_oci_archive, import_oci_dir, inspect_archive, oci_dir_ref, pull_image,
-        LocalRegistry, RefConflictPolicy,
+        import_oci_archive, import_oci_dir, inspect_archive, legacy_local_registry_path,
+        oci_dir_ref, pull_image, LocalRegistry, RefConflictPolicy,
     },
-    LocalArtifact,
+    ImageRef, LocalArtifact,
 };
 use std::path::{Path, PathBuf};
 
@@ -57,12 +57,6 @@ enum Command {
     /// List the images in the local registry
     List,
 
-    /// Get the directory where the image is stored
-    ImageDirectory {
-        /// Container image name
-        image_name: String,
-    },
-
     /// Manage Artifact v3 local registry
     Artifact {
         #[command(subcommand)]
@@ -106,14 +100,14 @@ enum ArtifactCommand {
     },
 }
 
-enum ImageNameOrPath {
-    Local(ImageName),
-    Remote(ImageName),
+enum ImageRefOrPath {
+    Local(ImageRef),
+    Remote(ImageRef),
     OciArchive(PathBuf),
     OciDir(PathBuf),
 }
 
-impl ImageNameOrPath {
+impl ImageRefOrPath {
     fn parse(input: &str) -> Result<Self> {
         let path: &Path = input.as_ref();
         if path.is_dir() {
@@ -122,7 +116,7 @@ impl ImageNameOrPath {
         if path.is_file() {
             return Ok(Self::OciArchive(path.to_path_buf()));
         }
-        if let Ok(name) = ImageName::parse(input) {
+        if let Ok(name) = ImageRef::parse(input) {
             // SQLite Local Registry is the sole source for local
             // artifacts in v3. The pre-v3 path-tree layout under
             // `registry.root().join(image_name.as_path())` is no longer
@@ -156,7 +150,7 @@ impl ImageNameOrPath {
             // descriptor's digest out of `index.json` (via the existing
             // `oci_dir_ref`) and load the manifest blob directly from
             // disk. Avoids importing into SQLite for a read-only op.
-            ImageNameOrPath::OciDir(path) => {
+            ImageRefOrPath::OciDir(path) => {
                 let dir_ref = oci_dir_ref(path)?;
                 let manifest_blob_path = path
                     .join("blobs")
@@ -180,11 +174,11 @@ impl ImageNameOrPath {
             // `Artifact.import_archive(file)` is the side-effecting
             // import path; `ommx inspect <archive>` should not mutate
             // the user's registry.
-            ImageNameOrPath::OciArchive(path) => inspect_archive(path)?.manifest,
+            ImageRefOrPath::OciArchive(path) => inspect_archive(path)?.manifest,
             // `parse` only routes a ref to `Local` when SQLite resolves
             // it, so `LocalArtifact::open` should always succeed here;
             // if it doesn't, surface the SQLite-side migration message.
-            ImageNameOrPath::Local(name) => LocalArtifact::open(name.clone())?
+            ImageRefOrPath::Local(name) => LocalArtifact::open(name.clone())?
                 .get_manifest()?
                 .clone()
                 .into_inner(),
@@ -196,7 +190,7 @@ impl ImageNameOrPath {
             // Manifest-only fetch (no blob pull, no SQLite write) keeps
             // inspect cheap; users who want the bytes locally run
             // `ommx pull <name>`.
-            ImageNameOrPath::Remote(name) => {
+            ImageRefOrPath::Remote(name) => {
                 migration_hint_if_legacy_only(name)?;
                 fetch_remote_manifest(name)?
             }
@@ -211,8 +205,8 @@ impl ImageNameOrPath {
 /// would otherwise contact the network for what is in fact a local
 /// pre-v3 artifact. Returns `Ok(())` when no legacy dir is present,
 /// letting callers proceed with their normal remote / local fallback.
-fn migration_hint_if_legacy_only(name: &ImageName) -> Result<()> {
-    if get_image_dir(name).exists() {
+fn migration_hint_if_legacy_only(name: &ImageRef) -> Result<()> {
+    if legacy_local_registry_path(get_local_registry_root(), name).exists() {
         bail!(
             "{name} exists only in the legacy local registry directory. \
              Run `ommx artifact import` once to migrate it into the v3 \
@@ -225,7 +219,7 @@ fn migration_hint_if_legacy_only(name: &ImageName) -> Result<()> {
 /// Fail with a "not in local registry" message, preferring the legacy
 /// migration hint when applicable. Used by handlers (`Push`) where the
 /// command has no remote fallback path and must terminate.
-fn bail_not_found_locally(name: &ImageName) -> Result<()> {
+fn bail_not_found_locally(name: &ImageRef) -> Result<()> {
     migration_hint_if_legacy_only(name)?;
     bail!("Image not found in local: {}", name)
 }
@@ -253,22 +247,22 @@ fn main() -> Result<()> {
             }
         }
         Command::Inspect { image_name_or_path } => {
-            let manifest = ImageNameOrPath::parse(image_name_or_path)?.get_manifest()?;
+            let manifest = ImageRefOrPath::parse(image_name_or_path)?.get_manifest()?;
             println!("{}", serde_json::to_string_pretty(&manifest)?);
         }
 
-        Command::Push { image_name_or_path } => match ImageNameOrPath::parse(image_name_or_path)? {
+        Command::Push { image_name_or_path } => match ImageRefOrPath::parse(image_name_or_path)? {
             // v3 treats archive / OCI Image Layout dirs as exchange
             // formats; push always goes from the SQLite Local Registry.
             // Both paths bail with the same migration hint: load into
             // the registry first, then push by image name.
-            ImageNameOrPath::OciDir(path) => bail!(
+            ImageRefOrPath::OciDir(path) => bail!(
                 "Cannot push OCI Image Layout directory `{}` directly. Run \
                  `ommx load <dir>` to import it into the SQLite Local Registry, \
                  then `ommx push <image_name>`.",
                 path.display(),
             ),
-            ImageNameOrPath::OciArchive(path) => bail!(
+            ImageRefOrPath::OciArchive(path) => bail!(
                 "Cannot push OCI archive `{}` directly. Run `ommx load <file>` \
                  to import it into the SQLite Local Registry, then \
                  `ommx push <image_name>`. (Archive is an exchange format; v3 \
@@ -279,41 +273,36 @@ fn main() -> Result<()> {
             // code path: `LocalArtifact::push()`. `parse` only routes
             // SQLite-resident refs to `Local`, so `open` is the right
             // call (it returns the migration message on miss).
-            ImageNameOrPath::Local(name) => {
+            ImageRefOrPath::Local(name) => {
                 LocalArtifact::open(name)?.push()?;
             }
-            ImageNameOrPath::Remote(name) => bail_not_found_locally(&name)?,
+            ImageRefOrPath::Remote(name) => bail_not_found_locally(&name)?,
         },
 
         Command::Pull { image_name } => {
             // Route remote pull through `local_registry::pull_image` so the
-            // freshly pulled artifact lands in the v3 SQLite registry. The
-            // legacy OCI dir is still produced as the ocipkg-based stage 1
-            // (see `import::remote::pull_image`); a follow-up PR replaces
-            // that stage with a native streaming pull and the call site
-            // here stays unchanged.
-            let name = ImageName::parse(image_name)?;
+            // freshly pulled artifact lands in the v3 SQLite registry.
+            let name = ImageRef::parse(image_name)?;
             let registry = std::sync::Arc::new(LocalRegistry::open_default()?);
             pull_image(&registry, &name)?;
         }
 
         Command::Save { image_name, output } => {
-            let name = ImageName::parse(image_name)?;
+            let name = ImageRef::parse(image_name)?;
             LocalArtifact::open(name)?.save(output)?;
         }
 
         Command::Load { path } => {
             // The CLI flag advertises "OCI archive or OCI directory", so
             // dispatch on what the path actually is. Archives go through
-            // the ocipkg-based stage-1 pipeline in `import::archive`;
-            // directories use the native `import::oci_dir` path that
-            // dispatches on Image / Artifact Manifest. Using
-            // `fs::metadata` (rather than `Path::exists()` /
-            // `Path::is_dir()`) surfaces permission and IO errors with
-            // the path attached, and rejects special files (FIFO,
-            // socket, device) explicitly instead of sending them to the
-            // archive branch where they would fail with an opaque
-            // ocipkg / tar error.
+            // the native `import::archive` reader; directories use
+            // `import::oci_dir`, which dispatches on Image / Artifact
+            // Manifest. Using `fs::metadata` (rather than
+            // `Path::exists()` / `Path::is_dir()`) surfaces permission
+            // and IO errors with the path attached, and rejects special
+            // files (FIFO, socket, device) explicitly instead of sending
+            // them to the archive branch where they would fail with an
+            // opaque tar error.
             let metadata = std::fs::metadata(path)
                 .with_context(|| format!("Failed to stat {}", path.display()))?;
             let registry = std::sync::Arc::new(LocalRegistry::open_default()?);
@@ -327,12 +316,6 @@ fn main() -> Result<()> {
                     path.display()
                 );
             }
-        }
-
-        Command::ImageDirectory { image_name } => {
-            let name = ImageName::parse(image_name)?;
-            let path = get_image_dir(&name);
-            println!("{}", path.display());
         }
 
         Command::List => {

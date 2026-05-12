@@ -285,6 +285,79 @@ Two new domain traits accompany this shift:
 - [`Substitute`](crate::Substitute) performs symbolic variable substitution,
   with an acyclic fast path and full cycle detection.
 
+## `ommx::artifact::ImageRef` replaces `ocipkg::ImageName`
+
+`ImageRef` is the OMMX-owned parsed form of an OCI image reference,
+implemented as a thin newtype around
+[`oci_spec::distribution::Reference`]. It accepts
+`host[:port]/name:tag`, `host[:port]/name@<digest>`, and the combined
+`name:tag@<digest>` form on parse, and canonicalises digest references
+to `host[:port]/name@<digest>` on Display (tag references keep the
+`:` separator). `ImageRef` supersedes the previously re-exported
+`ocipkg::ImageName` on every public surface:
+[`LocalArtifact::open`](crate::artifact::LocalArtifact::open),
+[`LocalArtifactBuilder::new`](crate::artifact::LocalArtifactBuilder::new),
+the SQLite Local Registry helpers, and the CLI parse path all now take
+[`ImageRef`](crate::artifact::ImageRef). The accessor shape is
+`registry()` (the joined `host[:port]` form) plus `name()` /
+`reference()` — the v2 split accessors `hostname` / `port` have
+been removed since every internal consumer ended up rejoining them
+back to `host[:port]` at the call site (callers that genuinely need
+just the host portion, e.g. the localhost / 127.* heuristic in
+`remote_transport::protocol_for`, parse the joined form inline).
+Bare-namespace inputs without an explicit registry
+(`library/ubuntu:20.04`, `alpine`) default to `docker.io` via the
+standard Docker reference heuristic — the first segment is only
+treated as a host when it contains `.` or `:` or equals `localhost`.
+The `ommx::ocipkg` re-export is removed.
+
+### v2 compat shim for Docker Hub shorthand
+
+SDK v2 used `ocipkg`, which defaulted bare image names (`alpine`,
+`ubuntu:20.04`) to the hostname `registry-1.docker.io`. v3 uses
+`oci_spec::distribution::Reference`, whose canonical Docker Hub
+hostname is `docker.io` (with `library/` automatically prefixed for
+single-segment names). Without intervention, the same image would
+land under two distinct SQLite Local Registry keys depending on
+which side of the v2 → v3 boundary produced the string:
+`load("alpine")` → `docker.io/library/alpine`, but a v2 cache
+annotated as `registry-1.docker.io/alpine:latest` →
+`registry-1.docker.io/alpine`. [`ImageRef::parse`](crate::artifact::ImageRef::parse)
+rewrites the `"registry-1.docker.io/"` prefix to `"docker.io/"` before
+delegating to `oci_spec`, collapsing every spelling of a Docker Hub
+image onto the same canonical key. The rewrite requires the trailing
+slash so adjacent hostnames like `registry-1.docker.io.example/...`
+are left alone. `ocipkg`'s legacy `name:algorithm:hex` digest
+spelling is *not* preserved — `oci_spec` rejects it — so digest-pinned
+v2 annotations must already use the OCI-standard `name@<digest>`
+form to round-trip (which is what `ocipkg`'s archive writer emitted
+for digest refs in practice).
+
+### `as_path` / `from_path` moved to the legacy module
+
+`ocipkg::ImageName` exposed `as_path()` / `from_path()` for the v2
+disk-cache local registry layout (`<root>/<image_name>/<tag>/`). The
+v3 SQLite Local Registry stores blobs content-addressed and refs in
+SQLite, so per-image directory paths are no longer a v3 concept.
+The path-shape helpers have moved off `ImageRef` and into
+[`local_registry::import::legacy`](crate::artifact::local_registry::import::legacy)
+as `pub(crate)` functions; only the higher-level
+[`legacy_local_registry_path`](crate::artifact::local_registry::legacy_local_registry_path)
+remains `pub`, used by `ommx artifact import` and the CLI's
+v2-only migration hint. The previously public `get_image_dir` /
+`image_dir` functions and the `ommx image-dir` CLI subcommand are
+removed — their return value no longer corresponded to any v3
+storage location.
+
+### Accessor behaviour notes
+
+- `reference()` returns the digest when both a tag and a digest are
+  set (the OCI `name:tag@<digest>` combined form). OMMX has no code
+  path that produces the combined form, so the tag-drop is theoretical
+  for SDK-internal use; external callers who manually pass the combined
+  form should be aware that round-tripping `ImageRef` through
+  `(repository_key, reference)` keeps only the digest.
+
 ## Other notable changes
 
 - `ommx-derive` introduces `#[derive(LogicalMemoryProfile)]` for structural

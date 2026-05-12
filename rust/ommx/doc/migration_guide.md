@@ -695,3 +695,50 @@ exports a `.ommx` file. Constructors:
       the default registry's `registry_id`.)
 - [ ] Replace `Builder::for_github` with `LocalArtifactBuilder::for_github`.
 - [ ] Replace `temp_archive()` with `LocalArtifactBuilder::temp()?.build()?.save(&path)?`.
+- [ ] Replace `ocipkg::ImageName` with `ommx::artifact::ImageRef`. The
+      type is a newtype around `oci_spec::distribution::Reference`,
+      so the full distribution-reference grammar applies. It accepts
+      `host[:port]/name:tag`, `host[:port]/name@<digest>`, and the
+      combined `tag@<digest>` form on parse, and canonicalises digest
+      references to `name@<digest>` on `Display` (tag references keep
+      `:`). The accessor shape is `registry()` (the joined
+      `host[:port]` form, same as
+      `oci_spec::distribution::Reference::registry`) plus `name()` /
+      `reference()`. The v2 split accessors `hostname` /
+      `port` are **gone**: every internal consumer ended up
+      rejoining them at the call site, so the wrapper now exposes
+      the joined form directly. Callers that genuinely need just the
+      host portion (e.g. a localhost / 127.* heuristic) should parse
+      `registry()` inline. Bare-namespace inputs without an
+      explicit registry (`library/ubuntu:20.04`, `alpine`) default to
+      `docker.io` via the standard Docker reference heuristic — the
+      first segment is only treated as a host when it contains `.`
+      or `:` or equals `localhost`. The `ommx::ocipkg` re-export is
+      removed in v3, so any direct `use ommx::ocipkg::ImageName` call
+      site needs to switch.
+- [ ] Be aware of the **Docker Hub hostname canonicalisation** when
+      sharing user-data caches across SDK versions. SDK v2's `ocipkg`
+      defaulted bare image names to the hostname
+      `registry-1.docker.io`; v3 normalises to the OCI canonical
+      `docker.io` with `library/` prefix added for single-segment
+      names. `ImageRef::parse` includes a one-line shim that rewrites
+      `registry-1.docker.io/` to `docker.io/` so v2 archive
+      annotations and disk-cache layouts collapse onto the same SQLite
+      key that `Artifact.load("alpine")` queries. `ocipkg`'s legacy
+      digest spelling `name:algorithm:hex` is **not** accepted by
+      `oci_spec` and is not back-translated — digest-pinned v2
+      annotations had to already use the OCI-standard `name@<digest>`
+      form (which is what ocipkg's archive writer emitted in
+      practice).
+- [ ] Drop calls to `ommx::artifact::get_image_dir` /
+      `ommx::artifact::image_dir`. These returned a v2 disk-cache
+      path (`<root>/<image_name>/<tag>/`) that no longer corresponds
+      to anything in the v3 SQLite Local Registry. The v2 → v3
+      migration check that previously read this path moves to
+      `ommx::artifact::local_registry::legacy_local_registry_path`,
+      which is the only `pub` entry point that still computes the
+      v2-shaped path (used internally by `ommx artifact import`).
+      The `ommx image-dir <name>` CLI subcommand and the Python
+      `ommx.get_image_dir` function are removed for the same
+      reason — pointing users at a path that is unrelated to v3
+      storage was actively misleading.
