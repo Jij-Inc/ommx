@@ -445,6 +445,48 @@
               ],
               "is_async": false,
               "deprecated": null
+            },
+            {
+              "name": "save",
+              "doc": "Save the artifact as a `.ommx` OCI archive file at `path`.\n\nThe archive is an exchange-format export of the registry-resident\nartifact. Loading the archive back via\n{meth}`Artifact.load_archive` reimports it into the SQLite Local\nRegistry under the same image name.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "path",
+                      "type_": {
+                        "display": "str | PathLike | Path",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "PathLike",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Path",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
             }
           ],
           "attributes": [
@@ -1021,7 +1063,7 @@
             },
             {
               "name": "new",
-              "doc": "Create a new artifact in local registry with a named image name.\n\n```python\n>>> from ommx.testing import SingleFeasibleLPGenerator, DataType\n>>> generator = SingleFeasibleLPGenerator(3, DataType.INT)\n>>> instance = generator.get_v1_instance()\n>>> import uuid\n>>> image_name = f\"ghcr.io/jij-inc/ommx/single_feasible_lp:{uuid.uuid4()}\"\n>>> builder = ArtifactBuilder.new(image_name)\n>>> _desc = builder.add_instance(instance)\n>>> artifact = builder.build()\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/single_feasible_lp:...\n\n```",
+              "doc": "Create a new artifact builder with an explicit image name. The\nartifact is published into the user's persistent SQLite Local\nRegistry on `build()`; call {meth}`Artifact.save(path)` on the\nreturned handle if you also want a `.ommx` archive file for\nsharing.\n\n```python\n>>> from ommx.testing import SingleFeasibleLPGenerator, DataType\n>>> generator = SingleFeasibleLPGenerator(3, DataType.INT)\n>>> instance = generator.get_v1_instance()\n>>> import uuid\n>>> image_name = f\"ghcr.io/jij-inc/ommx/single_feasible_lp:{uuid.uuid4()}\"\n>>> builder = ArtifactBuilder.new(image_name)\n>>> _desc = builder.add_instance(instance)\n>>> artifact = builder.build()\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/single_feasible_lp:...\n\n```",
               "signatures": [
                 {
                   "parameters": [
@@ -1051,93 +1093,11 @@
               "deprecated": null
             },
             {
-              "name": "new_archive",
-              "doc": "Create a new artifact archive with a named image name.",
+              "name": "new_anonymous",
+              "doc": "Create a new artifact builder without inventing an image name.\n\nUX shortcut: a synthetic image name of the form\n`ommx.local/anonymous:<local-timestamp>` is generated and used\nas the SQLite Local Registry key. v3 stores every artifact in\nthe registry, so anonymous artifacts still need a key — the\ntimestamp lets you identify entries by when they were created\n(use `Artifact.image_name` to read it back). The hostname\n`ommx.local` uses the `.local` mDNS link-local TLD so any\nattempt to push the artifact will not leak to a real remote\nregistry. Use `ommx artifact prune-anonymous` to clean\naccumulated entries.\n\nCall {meth}`Artifact.save(path)` on the returned handle to also\nwrite a `.ommx` archive file for sharing.\n\n```python\n>>> from ommx.testing import SingleFeasibleLPGenerator, DataType\n>>> generator = SingleFeasibleLPGenerator(3, DataType.INT)\n>>> instance = generator.get_v1_instance()\n>>> builder = ArtifactBuilder.new_anonymous()\n>>> _desc = builder.add_instance(instance)\n>>> artifact = builder.build()\n>>> assert artifact.image_name.startswith(\"ommx.local/anonymous:\")\n\n```",
               "signatures": [
                 {
-                  "parameters": [
-                    {
-                      "name": "path",
-                      "type_": {
-                        "display": "str | PathLike | Path",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "str",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "PathLike",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Path",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      },
-                      "default": null
-                    },
-                    {
-                      "name": "image_name",
-                      "type_": {
-                        "display": "str",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "ArtifactBuilder",
-                    "link_target": {
-                      "fqn": "ommx.artifact.ArtifactBuilder",
-                      "doc_module": "ommx.artifact",
-                      "kind": "Class",
-                      "attribute": null
-                    },
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "new_archive_unnamed",
-              "doc": "Create a new artifact archive without inventing an image name.\n\nUX shortcut: a synthetic ref of the form\n`local.ommx/anonymous-<UTC-timestamp>:tmp` is generated and\nused for both the archive's `org.opencontainers.image.ref.name`\nannotation and the SQLite Local Registry key. v3 stores every\nartifact in the registry, so unnamed archives still need a key\n— the timestamp suffix lets you identify entries by when they\nwere created. Use `ommx artifact prune-anonymous` (or\n{meth}`~ommx.artifact.LocalRegistry.prune_anonymous_archive_refs`\non the Python side) to clean accumulated anonymous entries.\nPick a real name with {meth}`new_archive` if you want a stable,\nhuman-readable one.\n\n```python\n>>> from ommx.testing import SingleFeasibleLPGenerator, DataType\n>>> generator = SingleFeasibleLPGenerator(3, DataType.INT)\n>>> instance = generator.get_v1_instance()\n>>> import uuid\n>>> filename = f\"data/single_feasible_lp.ommx.{uuid.uuid4()}\"\n>>> builder = ArtifactBuilder.new_archive_unnamed(filename)\n>>> _desc = builder.add_instance(instance)\n>>> artifact = builder.build()\n>>> assert artifact.image_name.startswith(\"local.ommx/anonymous-\")\n\n```",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "path",
-                      "type_": {
-                        "display": "str | PathLike | Path",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "str",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "PathLike",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Path",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      },
-                      "default": null
-                    }
-                  ],
+                  "parameters": [],
                   "return_type": {
                     "display": "ArtifactBuilder",
                     "link_target": {
@@ -1155,7 +1115,7 @@
             },
             {
               "name": "temp",
-              "doc": "Create a new artifact as a temporary file.\n\nNote that this is insecure and should only be used for testing.\n\n```python\n>>> builder = ArtifactBuilder.temp()\n>>> artifact = builder.build()\n>>> print(artifact.image_name)\nttl.sh/...-...-...-...-...:1h\n\n```",
+              "doc": "Create a new artifact builder under a random `ttl.sh` image name.\nInsecure; for tests only. `ttl.sh` is a public registry that\nexpires images after one hour.\n\n```python\n>>> builder = ArtifactBuilder.temp()\n>>> artifact = builder.build()\n>>> print(artifact.image_name)\nttl.sh/...-...-...-...-...:1h\n\n```",
               "signatures": [
                 {
                   "parameters": [],

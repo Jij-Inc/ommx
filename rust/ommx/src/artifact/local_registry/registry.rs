@@ -75,18 +75,26 @@ impl LocalRegistry {
         self.index.resolve_image_name(image_name)
     }
 
-    /// List every SQLite ref whose name matches the anonymous-archive
-    /// synthetic prefix (`local.ommx/anonymous-`). Returned in
-    /// `(name, reference)` order to match [`SqliteIndexStore::list_refs`].
-    pub fn list_anonymous_archive_refs(
+    /// List every SQLite ref published under the shared anonymous
+    /// repository name `ommx.local/anonymous`. Each anonymous artifact
+    /// has the same `name` column and a per-build timestamp as
+    /// `reference`, so this filters by exact name match (`list_refs`'
+    /// prefix would over-match if any future ref shared the same
+    /// prefix). Returned in `(name, reference)` order.
+    pub fn list_anonymous_artifact_refs(
         &self,
     ) -> Result<Vec<crate::artifact::local_registry::RefRecord>> {
-        self.index
-            .list_refs(Some(crate::artifact::ANONYMOUS_ARCHIVE_REF_NAME_PREFIX))
+        let all = self
+            .index
+            .list_refs(Some(crate::artifact::ANONYMOUS_ARTIFACT_REF_NAME))?;
+        Ok(all
+            .into_iter()
+            .filter(|r| r.name == crate::artifact::ANONYMOUS_ARTIFACT_REF_NAME)
+            .collect())
     }
 
     /// Bulk-delete every SQLite ref produced by
-    /// [`crate::artifact::ArchiveArtifactBuilder::new_archive_unnamed`].
+    /// [`crate::artifact::LocalArtifactBuilder::new_anonymous`].
     /// Returns the deleted records so callers (e.g. CLI
     /// `ommx artifact prune-anonymous`) can report what changed. The
     /// manifest / config / layer / blob CAS records the deleted refs
@@ -94,10 +102,10 @@ impl LocalRegistry {
     /// reclaimable by a future GC sweep. This is intentional — the
     /// prune is cheap and the orphan reclamation is the slower /
     /// riskier operation.
-    pub fn prune_anonymous_archive_refs(
+    pub fn prune_anonymous_artifact_refs(
         &self,
     ) -> Result<Vec<crate::artifact::local_registry::RefRecord>> {
-        let refs = self.list_anonymous_archive_refs()?;
+        let refs = self.list_anonymous_artifact_refs()?;
         for r in &refs {
             self.index.delete_ref(&r.name, &r.reference)?;
         }

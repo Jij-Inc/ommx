@@ -288,6 +288,26 @@ impl LocalArtifactBuilder {
         }
     }
 
+    /// Builder for an artifact whose name is auto-generated. UX
+    /// shortcut for "I just want to share this artifact, I don't want
+    /// to invent a real name". The synthesized image name has the form
+    /// `ommx.local/anonymous:<local-timestamp>` (see
+    /// [`anonymous_artifact_image_name`] for the exact format); a user
+    /// inspecting the SQLite Local Registry later can tell at a glance
+    /// when each anonymous entry was created. Use
+    /// `ommx artifact prune-anonymous` to clean accumulated entries.
+    pub fn new_anonymous() -> Result<Self> {
+        Ok(Self::new(anonymous_artifact_image_name()?))
+    }
+
+    /// Builder under a random `ttl.sh/<uuid>:1h` image name. Insecure;
+    /// for tests only.
+    pub fn temp() -> Result<Self> {
+        let id = uuid::Uuid::new_v4();
+        let image_name = ocipkg::ImageName::parse(&format!("ttl.sh/{id}:1h"))?;
+        Ok(Self::new(image_name))
+    }
+
     /// Create a new artifact builder for a GitHub container registry image name.
     pub fn for_github(org: &str, repo: &str, name: &str, tag: &str) -> Result<Self> {
         let image_name = ghcr(org, repo, name, tag)?;
@@ -542,12 +562,55 @@ fn ensure_ommx_image_manifest(manifest: &ImageManifest) -> Result<()> {
     Ok(())
 }
 
+/// Fully-qualified repository name shared by every anonymous artifact:
+/// `ommx.local/anonymous`. v3 stores each anonymous build as a separate
+/// `(name, reference)` row under this name, where the reference is the
+/// build's local timestamp.
+///
+/// The hostname segment `ommx.local` deliberately uses the `.local`
+/// link-local TLD (RFC 6762, multicast DNS). A push attempt against
+/// this name resolves through mDNS rather than DNS — so an accidental
+/// `ommx push <anonymous>` cannot leak the artifact to a real remote
+/// registry; absent an mDNS responder, the push just fails locally.
+pub const ANONYMOUS_ARTIFACT_REF_NAME: &str = "ommx.local/anonymous";
+
+/// Generate a synthetic [`ocipkg::ImageName`] for an anonymous artifact.
+///
+/// Format: `ommx.local/anonymous:<local-time>` where the timestamp is
+/// `YYYY-MM-DD-HH-MM-SS-<nanoseconds>` in the caller's local time zone
+/// (not UTC) so a user inspecting the SQLite Local Registry later can
+/// read the creation time without time-zone arithmetic. Nanosecond
+/// precision keeps two anonymous builds in the same second from
+/// colliding; should they ever collide, the `ArchiveBuilder` /
+/// `Artifact.save` path uses `RefConflictPolicy::Replace` so the
+/// outcome is overwrite, not error.
+pub fn anonymous_artifact_image_name() -> Result<ocipkg::ImageName> {
+    let stamp = chrono::Local::now().format("%Y-%m-%d-%H-%M-%S-%9f");
+    ocipkg::ImageName::parse(&format!("{ANONYMOUS_ARTIFACT_REF_NAME}:{stamp}"))
+        .with_context(|| format!("Failed to synthesise anonymous artifact image name: {stamp}"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn test_image_name(tag: &str) -> Result<ocipkg::ImageName> {
         ocipkg::ImageName::parse(&format!("ghcr.io/jij-inc/ommx/demo:{tag}"))
+    }
+
+    /// `chrono::Local::now().format("%Y-%m-%d-%H-%M-%S-%9f")` produces
+    /// a string whose every component is alphanumeric with `-`
+    /// separators — the OCI distribution spec accepts this as a tag.
+    /// A regression that swapped the format to include `:` or `.`
+    /// would break `ImageName::parse` here.
+    #[test]
+    fn anonymous_image_name_parses() {
+        let name = anonymous_artifact_image_name().expect("synthetic ref must parse");
+        let s = name.to_string();
+        assert!(
+            s.starts_with(&format!("{ANONYMOUS_ARTIFACT_REF_NAME}:")),
+            "synthetic ref `{s}` must start with `{ANONYMOUS_ARTIFACT_REF_NAME}:`",
+        );
     }
 
     #[test]

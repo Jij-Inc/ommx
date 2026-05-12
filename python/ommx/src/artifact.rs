@@ -77,7 +77,7 @@ impl PyArtifact {
                     "OCI archive at {} has no `org.opencontainers.image.ref.name` \
                      annotation; v3 SQLite Local Registry requires a ref name to \
                      address an imported artifact. Rebuild the archive with an \
-                     image name via `ArtifactBuilder.new_archive(path, image_name)`.",
+                     image name via `ArtifactBuilder.new(image_name)` + `Artifact.save(path)`.",
                     path.display(),
                 )
             })?
@@ -150,6 +150,17 @@ impl PyArtifact {
     pub fn push(&mut self, py: Python<'_>) -> Result<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
         self.0.push()
+    }
+
+    /// Save the artifact as a `.ommx` OCI archive file at `path`.
+    ///
+    /// The archive is an exchange-format export of the registry-resident
+    /// artifact. Loading the archive back via
+    /// {meth}`Artifact.load_archive` reimports it into the SQLite Local
+    /// Registry under the same image name.
+    pub fn save(&mut self, py: Python<'_>, path: PathBuf) -> Result<()> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        self.0.save(&path)
     }
 
     #[getter]
@@ -542,73 +553,53 @@ fn assert_media_type(descriptor: &PyDescriptor, expected: &str) -> Result<()> {
 }
 
 // ---------------------------------------------------------------------------
-// BuilderInner: unified wrapper for Archive / Dir builders
+// BuilderInner: wrapper around LocalArtifactBuilder
 // ---------------------------------------------------------------------------
+//
+// v3 collapses the old `Archive` / `Local` split: archives are an
+// exchange format produced by `LocalArtifact::save(path)`, not a
+// distinct build target. Every builder lands in the user's SQLite
+// Local Registry; callers `save()` afterward if they also want a
+// `.ommx` file. The `Option` is consumed on `build()` so a second
+// call surfaces "Already built artifact".
 
-enum BuilderInner {
-    Archive(Option<Box<ommx::artifact::ArchiveArtifactBuilder>>),
-    Local(Option<Box<ommx::artifact::LocalArtifactBuilder>>),
-}
+struct BuilderInner(Option<Box<ommx::artifact::LocalArtifactBuilder>>);
 
 impl BuilderInner {
+    fn new(builder: ommx::artifact::LocalArtifactBuilder) -> Self {
+        Self(Some(Box::new(builder)))
+    }
+
+    fn as_mut(&mut self) -> Result<&mut ommx::artifact::LocalArtifactBuilder> {
+        self.0
+            .as_mut()
+            .map(|b| b.as_mut())
+            .ok_or_else(|| anyhow::anyhow!("Already built artifact"))
+    }
+
     fn add_layer(
         &mut self,
         media_type: &str,
         blob: &[u8],
         annotations: HashMap<String, String>,
     ) -> Result<PyDescriptor> {
-        match self {
-            BuilderInner::Archive(ref mut b) => {
-                let builder = b
-                    .as_mut()
-                    .ok_or_else(|| anyhow::anyhow!("Already built artifact"))?;
-                let desc = builder.add_layer(media_type.into(), blob, annotations)?;
-                Ok(PyDescriptor::from(desc))
-            }
-            BuilderInner::Local(ref mut b) => {
-                let builder = b
-                    .as_mut()
-                    .ok_or_else(|| anyhow::anyhow!("Already built artifact"))?;
-                let desc =
-                    builder.add_layer_bytes(media_type.into(), blob.to_vec(), annotations)?;
-                Ok(PyDescriptor::from(desc))
-            }
-        }
+        let desc = self
+            .as_mut()?
+            .add_layer_bytes(media_type.into(), blob.to_vec(), annotations)?;
+        Ok(PyDescriptor::from(desc))
     }
 
     fn add_annotation(&mut self, key: &str, value: &str) -> Result<()> {
-        match self {
-            BuilderInner::Archive(ref mut b) => {
-                let builder = b
-                    .as_mut()
-                    .ok_or_else(|| anyhow::anyhow!("Already built artifact"))?;
-                builder.add_annotation(key, value);
-            }
-            BuilderInner::Local(ref mut b) => {
-                let builder = b
-                    .as_mut()
-                    .ok_or_else(|| anyhow::anyhow!("Already built artifact"))?;
-                builder.add_annotation(key, value);
-            }
-        }
+        self.as_mut()?.add_annotation(key, value);
         Ok(())
     }
 
     fn build(&mut self) -> Result<ommx::artifact::LocalArtifact> {
-        match self {
-            BuilderInner::Archive(ref mut b) => {
-                let builder = b
-                    .take()
-                    .ok_or_else(|| anyhow::anyhow!("Already built artifact"))?;
-                (*builder).build()
-            }
-            BuilderInner::Local(ref mut b) => {
-                let builder = b
-                    .take()
-                    .ok_or_else(|| anyhow::anyhow!("Already built artifact"))?;
-                (*builder).build()
-            }
-        }
+        let builder = self
+            .0
+            .take()
+            .ok_or_else(|| anyhow::anyhow!("Already built artifact"))?;
+        (*builder).build()
     }
 }
 
@@ -633,47 +624,11 @@ pub struct PyArtifactBuilder(BuilderInner);
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl PyArtifactBuilder {
-    /// Create a new artifact archive with a named image name.
-    #[staticmethod]
-    pub fn new_archive(path: PathBuf, image_name: &str) -> Result<Self> {
-        let image_name = ocipkg::ImageName::parse(image_name)?;
-        let builder = ommx::artifact::ArchiveArtifactBuilder::new_archive(path, image_name)?;
-        Ok(Self(BuilderInner::Archive(Some(Box::new(builder)))))
-    }
-
-    /// Create a new artifact archive without inventing an image name.
-    ///
-    /// UX shortcut: a synthetic ref of the form
-    /// `local.ommx/anonymous-<UTC-timestamp>:tmp` is generated and
-    /// used for both the archive's `org.opencontainers.image.ref.name`
-    /// annotation and the SQLite Local Registry key. v3 stores every
-    /// artifact in the registry, so unnamed archives still need a key
-    /// — the timestamp suffix lets you identify entries by when they
-    /// were created. Use `ommx artifact prune-anonymous` (or
-    /// {meth}`~ommx.artifact.LocalRegistry.prune_anonymous_archive_refs`
-    /// on the Python side) to clean accumulated anonymous entries.
-    /// Pick a real name with {meth}`new_archive` if you want a stable,
-    /// human-readable one.
-    ///
-    /// ```python
-    /// >>> from ommx.testing import SingleFeasibleLPGenerator, DataType
-    /// >>> generator = SingleFeasibleLPGenerator(3, DataType.INT)
-    /// >>> instance = generator.get_v1_instance()
-    /// >>> import uuid
-    /// >>> filename = f"data/single_feasible_lp.ommx.{uuid.uuid4()}"
-    /// >>> builder = ArtifactBuilder.new_archive_unnamed(filename)
-    /// >>> _desc = builder.add_instance(instance)
-    /// >>> artifact = builder.build()
-    /// >>> assert artifact.image_name.startswith("local.ommx/anonymous-")
-    ///
-    /// ```
-    #[staticmethod]
-    pub fn new_archive_unnamed(path: PathBuf) -> Result<Self> {
-        let builder = ommx::artifact::ArchiveArtifactBuilder::new_archive_unnamed(path)?;
-        Ok(Self(BuilderInner::Archive(Some(Box::new(builder)))))
-    }
-
-    /// Create a new artifact in local registry with a named image name.
+    /// Create a new artifact builder with an explicit image name. The
+    /// artifact is published into the user's persistent SQLite Local
+    /// Registry on `build()`; call {meth}`Artifact.save(path)` on the
+    /// returned handle if you also want a `.ommx` archive file for
+    /// sharing.
     ///
     /// ```python
     /// >>> from ommx.testing import SingleFeasibleLPGenerator, DataType
@@ -692,12 +647,44 @@ impl PyArtifactBuilder {
     pub fn new(image_name: &str) -> Result<Self> {
         let image_name = ocipkg::ImageName::parse(image_name)?;
         let builder = ommx::artifact::LocalArtifactBuilder::new(image_name);
-        Ok(Self(BuilderInner::Local(Some(Box::new(builder)))))
+        Ok(Self(BuilderInner::new(builder)))
     }
 
-    /// Create a new artifact as a temporary file.
+    /// Create a new artifact builder without inventing an image name.
     ///
-    /// Note that this is insecure and should only be used for testing.
+    /// UX shortcut: a synthetic image name of the form
+    /// `ommx.local/anonymous:<local-timestamp>` is generated and used
+    /// as the SQLite Local Registry key. v3 stores every artifact in
+    /// the registry, so anonymous artifacts still need a key — the
+    /// timestamp lets you identify entries by when they were created
+    /// (use `Artifact.image_name` to read it back). The hostname
+    /// `ommx.local` uses the `.local` mDNS link-local TLD so any
+    /// attempt to push the artifact will not leak to a real remote
+    /// registry. Use `ommx artifact prune-anonymous` to clean
+    /// accumulated entries.
+    ///
+    /// Call {meth}`Artifact.save(path)` on the returned handle to also
+    /// write a `.ommx` archive file for sharing.
+    ///
+    /// ```python
+    /// >>> from ommx.testing import SingleFeasibleLPGenerator, DataType
+    /// >>> generator = SingleFeasibleLPGenerator(3, DataType.INT)
+    /// >>> instance = generator.get_v1_instance()
+    /// >>> builder = ArtifactBuilder.new_anonymous()
+    /// >>> _desc = builder.add_instance(instance)
+    /// >>> artifact = builder.build()
+    /// >>> assert artifact.image_name.startswith("ommx.local/anonymous:")
+    ///
+    /// ```
+    #[staticmethod]
+    pub fn new_anonymous() -> Result<Self> {
+        let builder = ommx::artifact::LocalArtifactBuilder::new_anonymous()?;
+        Ok(Self(BuilderInner::new(builder)))
+    }
+
+    /// Create a new artifact builder under a random `ttl.sh` image name.
+    /// Insecure; for tests only. `ttl.sh` is a public registry that
+    /// expires images after one hour.
     ///
     /// ```python
     /// >>> builder = ArtifactBuilder.temp()
@@ -708,8 +695,8 @@ impl PyArtifactBuilder {
     /// ```
     #[staticmethod]
     pub fn temp() -> Result<Self> {
-        let builder = ommx::artifact::ArchiveArtifactBuilder::temp_archive()?;
-        Ok(Self(BuilderInner::Archive(Some(Box::new(builder)))))
+        let builder = ommx::artifact::LocalArtifactBuilder::temp()?;
+        Ok(Self(BuilderInner::new(builder)))
     }
 
     /// An alias for {meth}`new` to create a new artifact in local registry
@@ -720,7 +707,7 @@ impl PyArtifactBuilder {
     #[staticmethod]
     pub fn for_github(org: &str, repo: &str, name: &str, tag: &str) -> Result<Self> {
         let builder = ommx::artifact::LocalArtifactBuilder::for_github(org, repo, name, tag)?;
-        Ok(Self(BuilderInner::Local(Some(Box::new(builder)))))
+        Ok(Self(BuilderInner::new(builder)))
     }
 
     /// Add an {class}`~ommx.v1.Instance` to the artifact with annotations.

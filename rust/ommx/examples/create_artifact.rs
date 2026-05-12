@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use colored::Colorize;
 use ocipkg::ImageName;
 use ommx::{
-    artifact::{ArchiveArtifactBuilder, InstanceAnnotations},
+    artifact::{InstanceAnnotations, LocalArtifactBuilder},
     random::random_deterministic,
     InstanceParameters,
 };
@@ -50,11 +50,15 @@ fn main() -> Result<()> {
     annotations.set_title("random_lp".to_string());
     annotations.set_created(chrono::Local::now());
 
-    let mut builder = ArchiveArtifactBuilder::new_archive(out.clone(), image_name)?;
+    let mut builder = LocalArtifactBuilder::new(image_name);
     builder.add_instance(lp, annotations)?;
     builder.add_source(&Url::parse("https://github.com/Jij-Inc/ommx")?);
-    builder.add_description("Test artifact created by examples/create_artifact.rs".to_string());
-    let _artifact = builder.build()?;
+    builder.add_annotation(
+        "org.opencontainers.image.description",
+        "Test artifact created by examples/create_artifact.rs",
+    );
+    let artifact = builder.build()?;
+    artifact.save(&out)?;
     println!("{:>12} {}", "Saved".green().bold(), out.display());
     Ok(())
 }

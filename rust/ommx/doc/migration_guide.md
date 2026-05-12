@@ -598,20 +598,23 @@ Image Layout per `image:tag`.
 
 Artifact construction was a single generic `Builder<Base: ImageBuilder>`
 that switched between `.ommx` archive output and a legacy on-disk
-"OCI Image Layout" local registry depending on the `Base` type. The new
-shape splits those by destination:
+"OCI Image Layout" local registry depending on the `Base` type. v3
+collapses that split: every build goes through `LocalArtifactBuilder`
+and lands in the SQLite Local Registry. A `.ommx` file is just an
+exchange-format export of a registry-resident artifact, produced by
+`LocalArtifact::save(path)`.
 
-| Output destination | v2 type | v3 type |
-|---|---|---|
-| v3 SQLite Local Registry | `Builder<OciDirBuilder>` | `LocalArtifactBuilder` |
-| `.ommx` OCI archive | `Builder<OciArchiveBuilder>` | `ArchiveArtifactBuilder` |
+| v2 | v3 |
+|---|---|
+| `Builder<OciDirBuilder>` (local registry) | `LocalArtifactBuilder` |
+| `Builder<OciArchiveBuilder>` (`.ommx` file) | `LocalArtifactBuilder::new(...).build()?.save(path)?` |
 
-The local-registry path now writes an OCI Artifact Manifest (per OCI 1.1
-spec) into a SQLite-backed registry instead of an on-disk OCI Image
-Layout directory. Existing legacy `<root>/<image>/<tag>/` directories
-are identity-preserved on import via `ommx artifact import` or the
-`import_legacy_local_registry*` SDK functions — pulled bytes (manifest
-digest and JSON) round-trip verbatim.
+The local-registry path now writes an OCI Image Manifest (per OCI 1.1
+spec, with `artifactType`) into a SQLite-backed registry instead of an
+on-disk OCI Image Layout directory. Existing legacy
+`<root>/<image>/<tag>/` directories are identity-preserved on import
+via `ommx artifact import` or the `import_legacy_local_registry*` SDK
+functions — pulled bytes (manifest digest and JSON) round-trip verbatim.
 
 ## Breaking Changes
 
@@ -636,35 +639,51 @@ let artifact = builder.build()?;
 v3 SQLite registry rather than the legacy `<root>/<image>/<tag>/`
 OCI Image Layout directory.
 
-### 2. Archive builder rename
+### 2. Archive output goes through LocalArtifactBuilder
 
 ```rust,ignore
 // ❌ Before
 use ommx::artifact::Builder;
 let mut builder = Builder::new_archive(path, image_name)?;
+builder.add_instance(instance, ann)?;
+let artifact = builder.build()?;
 
 // ✅ After
-use ommx::artifact::ArchiveArtifactBuilder;
-let mut builder = ArchiveArtifactBuilder::new_archive(path, image_name)?;
+use ommx::artifact::LocalArtifactBuilder;
+let mut builder = LocalArtifactBuilder::new(image_name);
+builder.add_instance(instance, ann)?;
+let artifact = builder.build()?;
+artifact.save(&path)?;
 ```
 
-`ArchiveArtifactBuilder` is a non-generic wrapper that builds into
-the user's SQLite Local Registry and saves the archive file out.
-Constructors:
+`ArchiveArtifactBuilder` is gone. The same `LocalArtifactBuilder`
+publishes into the SQLite Local Registry, and `LocalArtifact::save`
+exports a `.ommx` file. Constructors:
 
-- `new_archive(path, image_name)` — caller-supplied ref name.
-- `new_archive_unnamed(path)` — v3 synthesizes a placeholder ref of
-  the form `local.ommx/anonymous-<UTC-timestamp>:tmp` so the SQLite
-  Local Registry has a key; the timestamp lets you identify entries
-  by when they were created. Use `ommx artifact prune-anonymous` to
-  bulk-clean accumulated anonymous refs.
-- `temp_archive()` — random `ttl.sh` name; insecure, tests only.
+- `LocalArtifactBuilder::new(image_name)` — caller-supplied ref name.
+- `LocalArtifactBuilder::new_anonymous()` — synthesizes a placeholder
+  image name `ommx.local/anonymous:<local-timestamp>` (the SQLite
+  Local Registry requires a ref; the local-time timestamp lets you
+  identify entries by when they were created). The `.local` mDNS TLD
+  prevents an accidental push from leaking to a real remote registry.
+  `ommx artifact prune-anonymous` bulk-cleans accumulated anonymous
+  refs.
+- `LocalArtifactBuilder::temp()` — random `ttl.sh/<uuid>:1h` name;
+  insecure, tests only.
+- `LocalArtifactBuilder::for_github(org, repo, name, tag)` — GHCR
+  helper.
 
-`build()` returns `LocalArtifact` (was `Artifact<OciArchive>` in v2).
-The `add_*` signatures are unchanged.
+`build()` returns `LocalArtifact`. The `add_*` signatures are
+`add_layer_bytes` / `add_instance` / `add_solution` /
+`add_parametric_instance` / `add_sample_set`.
 
 ## Migration Checklist
 
-- [ ] Replace `ommx::artifact::Builder` with `LocalArtifactBuilder` (for local-registry output) or `ArchiveArtifactBuilder` (for `.ommx` archive output)
-- [ ] Replace `Builder::for_github` (local-registry path) with `LocalArtifactBuilder::for_github`
-- [ ] Replace `Builder::new_archive*` / `temp_archive` with `ArchiveArtifactBuilder::new_archive*` / `temp_archive`
+- [ ] Replace `ommx::artifact::Builder` (both `OciDirBuilder` and
+      `OciArchiveBuilder` variants) with `LocalArtifactBuilder`.
+- [ ] Replace `Builder::new_archive(path, name)` + `.build()` with
+      `LocalArtifactBuilder::new(name).build()?.save(&path)?`.
+- [ ] Replace `Builder::new_archive_unnamed(path)` with
+      `LocalArtifactBuilder::new_anonymous()?.build()?.save(&path)?`.
+- [ ] Replace `Builder::for_github` with `LocalArtifactBuilder::for_github`.
+- [ ] Replace `temp_archive()` with `LocalArtifactBuilder::temp()?.build()?.save(&path)?`.

@@ -2,7 +2,6 @@
 //!
 
 mod annotations;
-mod builder;
 mod config;
 pub mod digest;
 pub mod local_registry;
@@ -14,11 +13,13 @@ mod push;
 mod remote_transport;
 mod save;
 pub use annotations::*;
-pub use builder::*;
 pub use config::*;
 pub use digest::sha256_digest;
+pub use manifest::{
+    anonymous_artifact_image_name, LocalArtifact, LocalArtifactBuilder, LocalManifest,
+    ANONYMOUS_ARTIFACT_REF_NAME,
+};
 pub(crate) use manifest::{stable_json_bytes, StagedArtifactBlob};
-pub use manifest::{LocalArtifact, LocalArtifactBuilder, LocalManifest};
 pub use media_types::OCI_IMAGE_MANIFEST_MEDIA_TYPE;
 
 use anyhow::{Context, Result};

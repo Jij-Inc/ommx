@@ -86,10 +86,10 @@ enum ArtifactCommand {
         replace: bool,
     },
 
-    /// Delete every SQLite ref produced by `ArtifactBuilder.new_archive_unnamed`.
+    /// Delete every SQLite ref produced by `ArtifactBuilder.new_anonymous`.
     ///
-    /// `new_archive_unnamed` writes archives under a synthetic
-    /// `local.ommx/anonymous-<UTC-timestamp>:tmp` ref so the SQLite Local
+    /// `new_anonymous` writes artifacts under the shared
+    /// `ommx.local/anonymous:<local-timestamp>` ref so the SQLite Local
     /// Registry has a key to address the artifact under. Use this command
     /// to clean those entries out periodically. Manifest / blob CAS
     /// records are left in place; a future GC sweep will reclaim them.
@@ -373,18 +373,21 @@ fn main() -> Result<()> {
                 } else {
                     LocalRegistry::open_default()?
                 };
-                let to_remove = registry.list_anonymous_archive_refs()?;
+                let to_remove = registry.list_anonymous_artifact_refs()?;
                 if to_remove.is_empty() {
-                    println!("No anonymous archive refs found.");
+                    println!("No anonymous artifact refs found.");
                 } else if *dry_run {
-                    println!("Would remove {} anonymous archive ref(s):", to_remove.len());
+                    println!(
+                        "Would remove {} anonymous artifact ref(s):",
+                        to_remove.len()
+                    );
                     for r in &to_remove {
                         println!("  {}:{}  →  {}", r.name, r.reference, r.manifest_digest);
                     }
                     println!("(--dry-run: registry unchanged)");
                 } else {
-                    let removed = registry.prune_anonymous_archive_refs()?;
-                    println!("Removed {} anonymous archive ref(s):", removed.len());
+                    let removed = registry.prune_anonymous_artifact_refs()?;
+                    println!("Removed {} anonymous artifact ref(s):", removed.len());
                     for r in &removed {
                         println!("  {}:{}", r.name, r.reference);
                     }

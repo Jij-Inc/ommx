@@ -14,6 +14,28 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
 
+/// Build a tiny single-layer artifact in a fresh temp SQLite registry,
+/// save it to `archive_path` via the v3 native save writer, and drop
+/// the temp registry. Used by archive-import tests that need a `.ommx`
+/// file on disk without polluting the test's main registry.
+fn save_test_archive(
+    archive_path: &Path,
+    image_name: ImageName,
+    layer_bytes: Vec<u8>,
+) -> Result<()> {
+    let sender_dir = tempfile::tempdir()?;
+    let sender_registry = Arc::new(LocalRegistry::open(sender_dir.path())?);
+    let mut builder = LocalArtifactBuilder::new(image_name);
+    builder.add_layer_bytes(
+        MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.into()),
+        layer_bytes,
+        HashMap::new(),
+    )?;
+    let local = builder.build_in_registry(sender_registry, RefConflictPolicy::Replace)?;
+    local.save(archive_path)?;
+    Ok(())
+}
+
 #[test]
 fn file_blob_store_round_trip() -> Result<()> {
     let dir = tempfile::tempdir()?;
@@ -826,31 +848,9 @@ fn import_oci_archive_surfaces_digest_conflict_for_same_ref() -> Result<()> {
     let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:reextract")?;
 
     let archive_path_a = dir.path().join("a.ommx");
-    {
-        let mut builder = crate::artifact::ArchiveArtifactBuilder::new_archive(
-            archive_path_a.clone(),
-            image_name.clone(),
-        )?;
-        builder.add_layer(
-            MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.into()),
-            b"archive-A",
-            HashMap::new(),
-        )?;
-        let _ = builder.build()?;
-    }
+    save_test_archive(&archive_path_a, image_name.clone(), b"archive-A".to_vec())?;
     let archive_path_b = dir.path().join("b.ommx");
-    {
-        let mut builder = crate::artifact::ArchiveArtifactBuilder::new_archive(
-            archive_path_b.clone(),
-            image_name.clone(),
-        )?;
-        builder.add_layer(
-            MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.into()),
-            b"archive-B",
-            HashMap::new(),
-        )?;
-        let _ = builder.build()?;
-    }
+    save_test_archive(&archive_path_b, image_name.clone(), b"archive-B".to_vec())?;
 
     let outcome_a = import_oci_archive(&registry, &archive_path_a)?;
     let digest_a = outcome_a.manifest_digest.clone();
@@ -888,18 +888,11 @@ fn import_oci_archive_does_not_leave_legacy_dir_behind() -> Result<()> {
     let registry = Arc::new(LocalRegistry::open(dir.path())?);
     let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:no-legacy-dir")?;
     let archive_path = dir.path().join("artifact.ommx");
-    {
-        let mut builder = crate::artifact::ArchiveArtifactBuilder::new_archive(
-            archive_path.clone(),
-            image_name.clone(),
-        )?;
-        builder.add_layer(
-            MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.into()),
-            b"step-c-payload",
-            HashMap::new(),
-        )?;
-        let _ = builder.build()?;
-    }
+    save_test_archive(
+        &archive_path,
+        image_name.clone(),
+        b"step-c-payload".to_vec(),
+    )?;
 
     let outcome = import_oci_archive(&registry, &archive_path)?;
     assert_eq!(outcome.image_name.as_ref(), Some(&image_name));

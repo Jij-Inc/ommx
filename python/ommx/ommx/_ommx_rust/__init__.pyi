@@ -205,6 +205,15 @@ class Artifact:
         r"""
         Push the artifact to remote registry.
         """
+    def save(self, path: builtins.str | os.PathLike | pathlib.Path) -> None:
+        r"""
+        Save the artifact as a `.ommx` OCI archive file at `path`.
+
+        The archive is an exchange-format export of the registry-resident
+        artifact. Loading the archive back via
+        {meth}`Artifact.load_archive` reimports it into the SQLite Local
+        Registry under the same image name.
+        """
     def get_layer_descriptor(self, digest: builtins.str) -> Descriptor:
         r"""
         Look up a layer descriptor by digest.
@@ -289,48 +298,13 @@ class ArtifactBuilder:
     ```
     """
     @staticmethod
-    def new_archive(
-        path: builtins.str | os.PathLike | pathlib.Path, image_name: builtins.str
-    ) -> ArtifactBuilder:
-        r"""
-        Create a new artifact archive with a named image name.
-        """
-    @staticmethod
-    def new_archive_unnamed(
-        path: builtins.str | os.PathLike | pathlib.Path,
-    ) -> ArtifactBuilder:
-        r"""
-        Create a new artifact archive without inventing an image name.
-
-        UX shortcut: a synthetic ref of the form
-        `local.ommx/anonymous-<UTC-timestamp>:tmp` is generated and
-        used for both the archive's `org.opencontainers.image.ref.name`
-        annotation and the SQLite Local Registry key. v3 stores every
-        artifact in the registry, so unnamed archives still need a key
-        — the timestamp suffix lets you identify entries by when they
-        were created. Use `ommx artifact prune-anonymous` (or
-        {meth}`~ommx.artifact.LocalRegistry.prune_anonymous_archive_refs`
-        on the Python side) to clean accumulated anonymous entries.
-        Pick a real name with {meth}`new_archive` if you want a stable,
-        human-readable one.
-
-        ```python
-        >>> from ommx.testing import SingleFeasibleLPGenerator, DataType
-        >>> generator = SingleFeasibleLPGenerator(3, DataType.INT)
-        >>> instance = generator.get_v1_instance()
-        >>> import uuid
-        >>> filename = f"data/single_feasible_lp.ommx.{uuid.uuid4()}"
-        >>> builder = ArtifactBuilder.new_archive_unnamed(filename)
-        >>> _desc = builder.add_instance(instance)
-        >>> artifact = builder.build()
-        >>> assert artifact.image_name.startswith("local.ommx/anonymous-")
-
-        ```
-        """
-    @staticmethod
     def new(image_name: builtins.str) -> ArtifactBuilder:
         r"""
-        Create a new artifact in local registry with a named image name.
+        Create a new artifact builder with an explicit image name. The
+        artifact is published into the user's persistent SQLite Local
+        Registry on `build()`; call {meth}`Artifact.save(path)` on the
+        returned handle if you also want a `.ommx` archive file for
+        sharing.
 
         ```python
         >>> from ommx.testing import SingleFeasibleLPGenerator, DataType
@@ -347,11 +321,41 @@ class ArtifactBuilder:
         ```
         """
     @staticmethod
+    def new_anonymous() -> ArtifactBuilder:
+        r"""
+        Create a new artifact builder without inventing an image name.
+
+        UX shortcut: a synthetic image name of the form
+        `ommx.local/anonymous:<local-timestamp>` is generated and used
+        as the SQLite Local Registry key. v3 stores every artifact in
+        the registry, so anonymous artifacts still need a key — the
+        timestamp lets you identify entries by when they were created
+        (use `Artifact.image_name` to read it back). The hostname
+        `ommx.local` uses the `.local` mDNS link-local TLD so any
+        attempt to push the artifact will not leak to a real remote
+        registry. Use `ommx artifact prune-anonymous` to clean
+        accumulated entries.
+
+        Call {meth}`Artifact.save(path)` on the returned handle to also
+        write a `.ommx` archive file for sharing.
+
+        ```python
+        >>> from ommx.testing import SingleFeasibleLPGenerator, DataType
+        >>> generator = SingleFeasibleLPGenerator(3, DataType.INT)
+        >>> instance = generator.get_v1_instance()
+        >>> builder = ArtifactBuilder.new_anonymous()
+        >>> _desc = builder.add_instance(instance)
+        >>> artifact = builder.build()
+        >>> assert artifact.image_name.startswith("ommx.local/anonymous:")
+
+        ```
+        """
+    @staticmethod
     def temp() -> ArtifactBuilder:
         r"""
-        Create a new artifact as a temporary file.
-
-        Note that this is insecure and should only be used for testing.
+        Create a new artifact builder under a random `ttl.sh` image name.
+        Insecure; for tests only. `ttl.sh` is a public registry that
+        expires images after one hour.
 
         ```python
         >>> builder = ArtifactBuilder.temp()

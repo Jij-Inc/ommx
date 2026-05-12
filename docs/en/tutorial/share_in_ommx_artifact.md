@@ -129,18 +129,21 @@ filename = "my_instance.ommx"
 if os.path.exists(filename):
     os.remove(filename)
 
-# 1. Create a builder to create the OMMX Artifact file
-builder = ArtifactBuilder.new_archive_unnamed(filename)
+# 1. Create a builder; v3 publishes every artifact into the SQLite
+#    Local Registry, so the builder takes (or synthesizes) an image
+#    name. Use `new_anonymous()` if you don't want to invent one.
+builder = ArtifactBuilder.new_anonymous()
 ```
 
-[`ArtifactBuilder`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder) has several constructors. Pick by whether you want to manage the artifact by image name (like a container) or just produce an archive file for sharing. `new_archive_unnamed` is the shortcut for the latter — v3 still keys every artifact in the SQLite Local Registry, but the builder synthesizes a placeholder name of the form `local.ommx/anonymous-<UTC-timestamp>:tmp` so you don't have to. The timestamp makes it easy to spot when each anonymous entry was created later (you can inspect it through `Artifact.image_name`). Bulk-clean accumulated anonymous entries with `ommx artifact prune-anonymous`.
+[`ArtifactBuilder`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder) has two primary constructors. v3 always publishes into the SQLite Local Registry, so a build produces a registry entry; if you also want a `.ommx` file for sharing, call `Artifact.save(path)` afterward.
 
 | Constructor | Description |
 | --- | --- |
-| [`ArtifactBuilder.new`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.new) | Manage by name in the SQLite Local Registry |
-| [`ArtifactBuilder.new_archive`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.new_archive) | Manage as both an archive file and a registry entry |
-| [`ArtifactBuilder.new_archive_unnamed`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.new_archive_unnamed) | Same as `new_archive`, with a synthesized placeholder image name |
-| [`ArtifactBuilder.for_github`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.for_github) | Determine the container name according to the GitHub Container Registry |
+| [`ArtifactBuilder.new`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.new) | Caller-supplied image name |
+| [`ArtifactBuilder.new_anonymous`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.new_anonymous) | Synthesized name `ommx.local/anonymous:<local-timestamp>` for share-and-discard archives |
+| [`ArtifactBuilder.for_github`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.for_github) | Convenience for GitHub Container Registry naming |
+
+`new_anonymous` uses the `.local` mDNS link-local TLD so an accidental push won't leak to a real remote registry. Clean accumulated anonymous entries with `ommx artifact prune-anonymous`.
 
 Regardless of the initialization method, you can save `ommx.v1.Instance` and other data in the same way. Let's add the data prepared above.
 
@@ -166,14 +169,17 @@ desc_json.to_dict()
 
 The part added as `title="..."` in `add_json` is saved as an annotation of the layer. OMMX Artifact is a data format for humans, so this is basically information for humans to read. The `ArtifactBuilder.add_*` functions all accept optional keyword arguments and automatically convert them to the `org.ommx.user.` namespace.
 
-Finally, call `build` to save it to a file.
+Finally, call `build` to publish the artifact into the SQLite Local Registry, then `save` to export it as a `.ommx` file.
 
 ```{code-cell} ipython3
-# 3. Create the OMMX Artifact file
+# 3. Publish into the local registry
 artifact = builder.build()
+
+# 4. Export to a .ommx archive for sharing
+artifact.save(filename)
 ```
 
-This `artifact` is the same as the one that will be explained in the next section, which is the one you just saved. Let's check if the file has been created:
+Let's check if the file has been created:
 
 ```{code-cell} ipython3
 import os
