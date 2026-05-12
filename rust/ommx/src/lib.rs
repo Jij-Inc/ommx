@@ -130,4 +130,7 @@ pub mod doc {
 
     #[doc = include_str!("../doc/release_note.md")]
     pub mod release_note {}
+
+    #[doc = include_str!("../doc/artifact_design.md")]
+    pub mod artifact_design {}
 }
