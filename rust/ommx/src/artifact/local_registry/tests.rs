@@ -10,6 +10,7 @@ use ocipkg::{
     oci_spec::image::{Descriptor, DescriptorBuilder, ImageManifestBuilder},
 };
 use std::collections::HashMap;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -986,6 +987,53 @@ fn import_oci_archive_synthesizes_anonymous_name_for_unnamed_input() -> Result<(
     Ok(())
 }
 
+#[test]
+fn import_oci_archive_normalizes_dot_slash_prefixed_entries() -> Result<()> {
+    // `tar -cf foo.ommx -C dir .` produces entries with a leading
+    // `./` — `./oci-layout`, `./index.json`, `./blobs/sha256/<hex>`.
+    // Both shapes are valid OCI Image Layouts (the prefix carries no
+    // semantic information), so `import_oci_archive` must accept
+    // them. Build a canonical archive, repack it with every entry's
+    // path re-rooted under `./`, and confirm import succeeds.
+    let dir = tempfile::tempdir()?;
+    let registry = Arc::new(LocalRegistry::open(dir.path())?);
+    let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:dot-slash")?;
+    let archive_path = dir.path().join("canonical.ommx");
+    save_test_archive(
+        &archive_path,
+        image_name.clone(),
+        b"dot-slash-payload".to_vec(),
+    )?;
+
+    let dot_archive = dir.path().join("dot-prefixed.ommx");
+    {
+        let src = std::fs::File::open(&archive_path)?;
+        let mut src_tar = tar::Archive::new(src);
+        let dst = std::fs::File::create(&dot_archive)?;
+        let mut dst_tar = tar::Builder::new(dst);
+        for entry in src_tar.entries()? {
+            let mut entry = entry?;
+            if !matches!(entry.header().entry_type(), tar::EntryType::Regular) {
+                continue;
+            }
+            let original = entry.path()?.into_owned();
+            let prefixed = std::path::PathBuf::from("./").join(&original);
+            let mut header = entry.header().clone();
+            // `set_path` rewrites the header's path-name fields; the
+            // checksum is recomputed by `append_data`.
+            header.set_path(&prefixed)?;
+            let mut buf = Vec::with_capacity(entry.header().size().unwrap_or(0) as usize);
+            entry.read_to_end(&mut buf)?;
+            dst_tar.append_data(&mut header, &prefixed, std::io::Cursor::new(&buf))?;
+        }
+        dst_tar.finish()?;
+    }
+
+    let outcome = import_oci_archive(&registry, &dot_archive)?;
+    assert_eq!(outcome.image_name.as_ref(), Some(&image_name));
+    Ok(())
+}
+
 #[cfg(feature = "remote-artifact")]
 #[test]
 fn pull_image_short_circuits_when_ref_is_present_with_blob() -> Result<()> {
@@ -1054,10 +1102,9 @@ fn local_artifact_save_round_trip_preserves_layers() -> Result<()> {
     // Verify the produced archive: (a) is a valid OCI archive that
     // `Artifact::from_oci_archive` can open, (b) exposes the OMMX
     // artifactType, (c) preserves layer descriptors and bytes
-    // byte-for-byte. The manifest digest is **not** asserted equal:
-    // `OciArchiveBuilder::build` re-serialises the parsed
-    // `ImageManifest`, which can produce a different byte
-    // representation (see `save.rs`'s module doc).
+    // byte-for-byte, (d) preserves the manifest digest byte-for-byte
+    // — `save.rs` writes the SQLite manifest bytes verbatim, so the
+    // saved archive's manifest digest must match the registry's.
     use ocipkg::image::{Image, OciArchive};
     let dir = tempfile::tempdir()?;
     let registry = Arc::new(LocalRegistry::open(dir.path())?);
@@ -1075,6 +1122,25 @@ fn local_artifact_save_round_trip_preserves_layers() -> Result<()> {
     );
 
     let mut archive = ocipkg::image::OciArtifact::<OciArchive>::from_oci_archive(&archive_path)?;
+    // `save.rs` writes the SQLite manifest bytes verbatim, so the
+    // manifest blob stored under the same digest must round-trip
+    // through the archive byte-for-byte. We can't read the archive's
+    // `index.json` directly (ocipkg's `get_index` is crate-private),
+    // but if the manifest blob lives at `blobs/sha256/<expected>`
+    // with bytes whose sha256 equals that digest, the on-disk
+    // manifest is identity-preserved end-to-end.
+    let expected_manifest_digest = local_artifact.manifest_digest().to_string();
+    let saved_manifest_bytes: Vec<u8> = archive
+        .get_blob(
+            &oci_spec::image::Digest::from_str(&expected_manifest_digest)
+                .expect("manifest digest is valid OCI digest"),
+        )?
+        .to_vec();
+    assert_eq!(
+        crate::artifact::sha256_digest(&saved_manifest_bytes),
+        expected_manifest_digest,
+        "save() must write manifest bytes verbatim (digest must round-trip)",
+    );
     let manifest = archive.get_manifest()?;
     assert_eq!(
         manifest.artifact_type().as_ref(),

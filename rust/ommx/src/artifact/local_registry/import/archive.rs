@@ -102,7 +102,11 @@ fn read_archive_index(path: &Path) -> Result<(String, Option<ImageName>)> {
         if !matches!(entry.header().entry_type(), tar::EntryType::Regular) {
             continue;
         }
-        if entry_path.to_string_lossy() != "index.json" {
+        // `tar -cf foo.tar -C dir .` writes entries with a leading
+        // `./`; both shapes describe the same OCI Image Layout.
+        let raw = entry_path.to_string_lossy();
+        let path_str = raw.strip_prefix("./").unwrap_or(&raw);
+        if path_str != "index.json" {
             continue;
         }
         let mut bytes = Vec::with_capacity(entry.header().size().unwrap_or(0) as usize);
@@ -141,11 +145,12 @@ fn read_archive_blob(path: &Path, digest: &str) -> Result<Vec<u8>> {
             .path()
             .with_context(|| format!("Failed to decode tar entry path in {}", path.display()))?
             .into_owned();
-        let path_str = entry_path.to_string_lossy();
+        let raw = entry_path.to_string_lossy();
+        let path_str = raw.strip_prefix("./").unwrap_or(&raw);
         if !matches!(entry.header().entry_type(), tar::EntryType::Regular) {
             continue;
         }
-        if let Some(entry_digest) = blob_path_to_digest(&path_str) {
+        if let Some(entry_digest) = blob_path_to_digest(path_str) {
             if entry_digest == digest {
                 let mut bytes = Vec::with_capacity(entry.header().size().unwrap_or(0) as usize);
                 entry.read_to_end(&mut bytes).with_context(|| {
@@ -395,7 +400,12 @@ fn scan_archive<R: Read>(reader: R, blobs: &FileBlobStore, archive_path: &Path) 
                 )
             })?
             .into_owned();
-        let path_str = path.to_string_lossy();
+        let raw_path_str = path.to_string_lossy();
+        // `tar -cf foo.tar -C dir .` writes every member with a
+        // leading `./`; both shapes describe the same OCI Image
+        // Layout, so normalise before matching against the well-known
+        // `oci-layout` / `index.json` / `blobs/...` paths.
+        let path_str = raw_path_str.strip_prefix("./").unwrap_or(&raw_path_str);
 
         // tar archives can carry directory entries; OCI Image Layout
         // archives don't strictly need them, but `tar -cf` adds them
@@ -421,7 +431,7 @@ fn scan_archive<R: Read>(reader: R, blobs: &FileBlobStore, archive_path: &Path) 
             scanned.index_json = Some(bytes);
             continue;
         }
-        if let Some(digest) = blob_path_to_digest(&path_str) {
+        if let Some(digest) = blob_path_to_digest(path_str) {
             let mut bytes = Vec::with_capacity(header.size().unwrap_or(0) as usize);
             entry.read_to_end(&mut bytes).with_context(|| {
                 format!(
@@ -429,15 +439,19 @@ fn scan_archive<R: Read>(reader: R, blobs: &FileBlobStore, archive_path: &Path) 
                     archive_path.display()
                 )
             })?;
-            let actual_digest = sha256_digest(&bytes);
-            anyhow::ensure!(
-                actual_digest == digest,
-                "Blob digest mismatch in archive {}: entry path is {path_str}, sha256 is {actual_digest}",
-                archive_path.display(),
-            );
-            blobs
+            // `put_bytes` hashes once internally and returns the
+            // digest of what it stored; comparing against the
+            // expected `digest` (derived from the entry path) costs
+            // one string compare instead of a second SHA-256 pass.
+            let record = blobs
                 .put_bytes(&bytes)
                 .with_context(|| format!("Failed to write blob {digest} to FileBlobStore"))?;
+            anyhow::ensure!(
+                record.digest == digest,
+                "Blob digest mismatch in archive {}: entry path is {path_str}, sha256 is {}",
+                archive_path.display(),
+                record.digest,
+            );
             continue;
         }
         // Forwards-compatible: ignore unknown entries (referrers,

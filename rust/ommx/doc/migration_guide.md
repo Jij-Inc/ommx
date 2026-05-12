@@ -666,11 +666,11 @@ exports a `.ommx` file. Constructors:
   `<registry-id8>.ommx.local/anonymous:<local-timestamp>-<nonce>`
   against the destination registry's `registry_id` (a random UUID
   generated once per `LocalRegistry` and persisted in SQLite
-  metadata). The local-time `YYYYMMDDTHHMMSS` tag lets you read the
-  creation time at a glance, and the 8-hex random nonce keeps
-  concurrent / scripted anonymous builds collision-free regardless of
-  the host's clock resolution. The `.local` mDNS TLD prevents an
-  accidental push from leaking to a real remote registry.
+  metadata). The local-time `YYYYMMDDTHHMMSS` prefix lets you read
+  the creation time at a glance, and the 12-hex (48-bit) random nonce
+  keeps concurrent / scripted anonymous builds collision-free
+  regardless of the host's clock resolution. The `.local` mDNS TLD
+  prevents an accidental push from leaking to a real remote registry.
   `ommx artifact prune-anonymous` bulk-cleans every registry-id
   prefix's anonymous refs.
 - `LocalArtifactBuilder::temp()` — random `ttl.sh/<uuid>:1h` name;
@@ -689,6 +689,9 @@ exports a `.ommx` file. Constructors:
 - [ ] Replace `Builder::new_archive(path, name)` + `.build()` with
       `LocalArtifactBuilder::new(name).build()?.save(&path)?`.
 - [ ] Replace `Builder::new_archive_unnamed(path)` with
-      `LocalArtifactBuilder::new_anonymous()?.build()?.save(&path)?`.
+      `LocalArtifactBuilder::new_anonymous().build()?.save(&path)?`.
+      (`new_anonymous()` returns `Self`, not `Result`, so no `?` on
+      that call; `build()` materialises the anonymous name against
+      the default registry's `registry_id`.)
 - [ ] Replace `Builder::for_github` with `LocalArtifactBuilder::for_github`.
 - [ ] Replace `temp_archive()` with `LocalArtifactBuilder::temp()?.build()?.save(&path)?`.

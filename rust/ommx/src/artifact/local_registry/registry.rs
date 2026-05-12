@@ -92,10 +92,11 @@ impl LocalRegistry {
     /// List every SQLite ref whose `(name, reference)` matches the
     /// shape an anonymous artifact's image name would take:
     /// `<registry-id8>.ommx.local/anonymous` (8 lowercase hex chars
-    /// prefix + suffix) for the name, and `YYYYMMDDTHHMMSS` for the
-    /// reference. Both must match — a substring check on the suffix
-    /// alone would over-match a human-pushed ref against a real mDNS
-    /// host like `myhost.ommx.local/anonymous:v1`. Returned in
+    /// prefix + suffix) for the name, and `YYYYMMDDTHHMMSS-<nonce>`
+    /// (timestamp + 12-hex random suffix) for the reference. Both
+    /// must match — a substring check on the suffix alone would
+    /// over-match a human-pushed ref against a real mDNS host like
+    /// `myhost.ommx.local/anonymous:v1`. Returned in
     /// `(name, reference)` order to match
     /// [`SqliteIndexStore::list_refs`].
     pub fn list_anonymous_artifact_refs(

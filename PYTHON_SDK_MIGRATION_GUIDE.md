@@ -627,11 +627,11 @@ artifact.save("my_instance.ommx")         # explicit export
 
 ### 13.2 `ArtifactBuilder.new_archive_unnamed` → `ArtifactBuilder.new_anonymous`
 
-`new_archive_unnamed` is replaced by `new_anonymous`, which takes no path and synthesizes an OMMX-local image name of the form `<registry-id8>.ommx.local/anonymous:<local-timestamp>-<nonce>` (e.g. `99ea32f6.ommx.local/anonymous:20260512T124922-a363c62f`). Components:
+`new_archive_unnamed` is replaced by `new_anonymous`, which takes no path and synthesizes an OMMX-local image name of the form `<registry-id8>.ommx.local/anonymous:<local-timestamp>-<nonce>` (e.g. `99ea32f6.ommx.local/anonymous:20260512T124922-c2eb4f21f7e6`). Components:
 
 - `<registry-id8>` — first 8 hex chars of a random UUID generated once when the SQLite Local Registry is created. Identifies which registry produced the artifact.
 - `<local-timestamp>` — `YYYYMMDDTHHMMSS` in the caller's local time zone (no timezone marker; OCI tag syntax forbids `+` and using a fixed UTC marker would defeat the at-a-glance readability of the date).
-- `<nonce>` — 8-hex random suffix, so concurrent / scripted anonymous builds (MINTO-style workflows) never collide on the same wall-clock second.
+- `<nonce>` — 12-hex (48-bit) random suffix, so concurrent / scripted anonymous builds (MINTO-style workflows) never collide on the same wall-clock second.
 
 The hostname `<registry-id8>.ommx.local` uses the `.local` mDNS link-local TLD (RFC 6762), so an accidental `ommx push` of an anonymous artifact does **not** leak to a real remote registry.
 
@@ -649,12 +649,12 @@ builder = ArtifactBuilder.new_anonymous()
 builder.add_instance(instance)
 artifact = builder.build()
 artifact.save("my_instance.ommx")
-print(artifact.image_name)        # "99ea32f6.ommx.local/anonymous:20260512T124922-a363c62f"
+print(artifact.image_name)        # "99ea32f6.ommx.local/anonymous:20260512T124922-c2eb4f21f7e6"
 ```
 
 Two behavioural shifts:
 
-1. `image_name` is now a (synthesized) string, never `None`. v2 anonymous archives surfaced `None`; in v3 the SQLite Local Registry needs a key for every artifact so the builder synthesizes one. Code that branched on `image_name is None` to detect "unnamed archive" needs to switch to checking the `local.ommx/anonymous:` substring or — better — call `ArtifactBuilder.new(image_name)` with an explicit name when you care about identity.
+1. `image_name` is now a (synthesized) string, never `None`. v2 anonymous archives surfaced `None`; in v3 the SQLite Local Registry needs a key for every artifact so the builder synthesizes one. Code that branched on `image_name is None` to detect "unnamed archive" needs to switch to checking the `.ommx.local/anonymous:` substring or — better — call `ArtifactBuilder.new(image_name)` with an explicit name when you care about identity.
 2. `new_anonymous` accumulates entries in the SQLite Local Registry. Run `ommx artifact prune-anonymous` to clean them up periodically; the manifest / blob CAS records are intentionally left in place for a future GC sweep to reclaim.
 
 **Timezone caveat**: the timestamp portion is the **builder's local time**, not UTC. If you ship an anonymous archive to someone in another timezone, the recipient reads the same digits as their own local time — the time component loses absolute meaning across machines. If absolute time matters, use `ArtifactBuilder.new(image_name)` with an explicit name.
