@@ -19,14 +19,16 @@ What this document **does not** cover:
 
 ## What is an OMMX Artifact?
 
-An **Artifact** is a named, immutable bundle of optimization data —
+An **Artifact** is an immutable bundle of optimization data —
 typically one or more of: [`Instance`](crate::Instance) (problem
 definition), [`Solution`](crate::Solution) /
 [`SampleSet`](crate::SampleSet) (results),
 [`ParametricInstance`](crate::ParametricInstance), `ndarray` /
-`DataFrame` payloads, and JSON / generic blobs. Each Artifact is
-identified by an image reference like
-`ghcr.io/myorg/myproblem:v1` or `name@sha256:<digest>`.
+`DataFrame` payloads, and JSON / generic blobs. Every Artifact has
+an image reference like `ghcr.io/myorg/myproblem:v1` or
+`name@sha256:<digest>`, but the reference is **optional at build
+time**: callers that do not pick a name get an auto-synthesized
+anonymous ref (see §1.1).
 
 OMMX rides the [OCI Image / Distribution
 specifications](https://github.com/opencontainers/) — the same
@@ -40,7 +42,7 @@ with off-the-shelf tools (`oras`, `crane`, `skopeo`).
 
 | Concept | What it is |
 |---|---|
-| Image reference | The name an Artifact is known by — `host[:port]/name(:tag\|@digest)` |
+| Image reference | The name an Artifact is known by — `host[:port]/name(:tag\|@digest)`. Optional at build time (§1.1) |
 | Manifest | Small JSON describing the Artifact: `artifactType`, `config`, an ordered list of layer descriptors, optional `subject` for lineage. An OCI Image Manifest, stored verbatim |
 | Descriptor | `{ mediaType, digest, size, annotations }` — a typed pointer to a content-addressed blob (OCI 1.1) |
 | Layer / blob | The actual payload bytes (a serialized [`v1::Instance`](crate::v1::Instance), a Parquet `DataFrame`, …). Identified by digest. OMMX-typed layers carry protobuf wire bytes under `crate::v1::*`; the semantic Rust wrappers (`crate::Instance`, etc.) are SDK conveniences, not what is written to disk |
@@ -63,13 +65,67 @@ There are three storage locations, all interoperating:
 | **`.ommx` archive** | Single-file exchange format. A tar of OCI Image Layout (`oci-layout` + `index.json` + `blobs/`) |
 
 The interchange semantics between these locations are fixed by the
-sections below: §1 pins the manifest bytes, §2 pins the OCI Image
-Layout boundary that connects the three, §3 pins the behaviour on
-remote registry interactions.
+sections below: §1 pins how an Artifact is named, §2 pins the
+manifest bytes, §3 pins the OCI Image Layout boundary that connects
+the three locations, §4 pins the behaviour on remote registry
+interactions.
 
 ---
 
-## 1. Manifest format
+## 1. Image references
+
+The reference is parsed and rendered by
+[`ImageRef`](crate::artifact::ImageRef), which is a newtype around
+[`oci_spec::distribution::Reference`]. Canonical Display form is
+
+```text
+host[:port]/name(:tag|@digest)
+```
+
+The reference parser follows the standard Docker / OCI distribution
+heuristic: a leading segment containing `.`, `:`, or equal to
+`localhost` is the registry host; otherwise the host defaults to
+`docker.io` and a single-segment name gets the implicit `library/`
+prefix. The legacy ocipkg-era spelling `registry-1.docker.io/…` is
+rewritten to the canonical `docker.io/…` at parse time so v2-era
+annotations and v3 canonical writes resolve to the same SQLite row.
+
+### 1.1 Anonymous artifacts
+
+Image references are **optional at build time**. The SDK exposes
+`LocalArtifactBuilder::new_anonymous()` for callers that do not want
+to pick a name; the builder synthesizes one at publish time. The
+synthesized form is:
+
+```text
+<registry-id8>.ommx.local/anonymous:<local-timestamp>-<nonce>
+```
+
+- `<registry-id8>` is the first 8 hex characters of the destination
+  `LocalRegistry`'s random UUID v4 (lazily minted on first use,
+  persisted in SQLite metadata). Different registries on the same
+  machine get different prefixes; cloning a registry directory to
+  another machine preserves the prefix.
+- `.ommx.local` deliberately uses the `.local` mDNS link-local TLD
+  (RFC 6762). An accidental `ommx push` of an anonymous artifact
+  resolves nowhere and fails locally, instead of leaking to a public
+  registry.
+- `<local-timestamp>` is `YYYYMMDDTHHMMSS` in local time (no
+  timezone suffix because OCI tag grammar rejects `+`).
+- `<nonce>` is 12 hex chars of cryptographic randomness, defending
+  against same-second collisions in parallel anonymous builds.
+
+A third-party reader inspecting a `.ommx` archive that contains
+refs matching this shape is looking at an anonymous OMMX
+build. Both shape predicates
+([`is_anonymous_artifact_ref_name`](crate::artifact::is_anonymous_artifact_ref_name)
+and [`is_anonymous_artifact_tag`](crate::artifact::is_anonymous_artifact_tag))
+must hold for a ref to count as anonymous — this avoids
+misclassifying a human-pushed `myhost.ommx.local/anonymous:v1`.
+
+---
+
+## 2. Manifest format
 
 The OMMX Artifact manifest is an OCI Image Manifest
 (`application/vnd.oci.image.manifest.v1+json`) **only**. The
@@ -84,7 +140,7 @@ parse time — readers must not accept it. Rationale:
   reference registry) rejects Artifact Manifest with
   `MANIFEST_INVALID` under default configuration.
 
-### 1.1 Identification
+### 2.1 Identification
 
 An OMMX Artifact is identified by the manifest's top-level
 `artifactType` field:
@@ -100,7 +156,7 @@ legacy v2 OMMX manifest that carries
 remains a valid OMMX Artifact under this spec, and readers must not
 reject it.
 
-### 1.2 Required fields
+### 2.2 Required fields
 
 ```jsonc
 {
@@ -151,7 +207,7 @@ Field-by-field:
 Other top-level fields defined by OCI Image Manifest (`annotations`)
 are permitted but not required.
 
-### 1.3 Byte-level reproducibility
+### 2.3 Byte-level reproducibility
 
 The Rust SDK serialises manifests with JSON fields sorted
 alphabetically, so the same logical manifest always produces the
@@ -159,11 +215,11 @@ same bytes and therefore the same manifest digest. This is a
 property of the canonical OMMX writer; readers should not assume
 alphabetical ordering on input. Manifests authored by other tools or
 by OMMX v2 (which used Rust struct declaration order) are valid as
-long as the JSON parses and the identification rule in §1.1 holds.
+long as the JSON parses and the identification rule in §2.1 holds.
 
 ---
 
-## 2. OCI Image Layout boundary
+## 3. OCI Image Layout boundary
 
 OCI Image Layout (`oci-layout` marker file + `index.json` + `blobs/`
 directory) is **not** the Local Registry's internal format. It is an
@@ -202,7 +258,7 @@ content addressing.
 
 ---
 
-## 3. Registry compatibility
+## 4. Registry compatibility
 
 OCI v1.1 `subject` and the Referrers API are not uniformly supported
 across registries. OMMX takes no implicit fallback:
