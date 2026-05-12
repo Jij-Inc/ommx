@@ -99,9 +99,9 @@ the "pull from remote then open" steps shown above.
 The rest of this doc is the **architectural reference** for two
 internal layers:
 
-1. **OCI implementation policy** — what OMMX implements itself versus
-   what it delegates to external OCI crates, and how the manifest
-   format is fixed.
+1. **OCI layer semantics** — how OMMX presents itself within the OCI
+   ecosystem: the public API surface, the OCI Image Layout boundary,
+   `subject` / Referrers behaviour, and the fixed manifest format.
 2. **Local Registry model** — the IndexStore + BlobStore split, the
    atomic publish primitive, and how the registry interoperates with
    `.ommx` archives, remote registries, and the v2-era path/tag
@@ -115,45 +115,9 @@ steps, see [`crate::doc::release_note`] and
 
 ---
 
-## 1. OCI Implementation Policy
+## 1. OCI Layer Semantics
 
-### 1.1 External crate scope
-
-OMMX does not absorb a full OCI-stack implementation. The Local Registry
-is an IndexStore + BlobStore, not an OCI Image Layout, so a single
-"archive / dir / remote" trait abstraction would not fit the central
-model.
-
-External OCI crates are scoped to remote registry transport:
-
-| Area | Policy |
-|---|---|
-| Remote manifest GET / PUT | `oci-client` (ORAS project) |
-| Remote blob upload / download | `oci-client` |
-| Auth / credential handling | `oci-client` + `docker_credential` |
-| Cross-repository mount | `oci-client` if supported |
-| Referrers API | `oci-client` if supported |
-
-`oci-client` selection rationale:
-
-- Built on `oci-spec` 0.9, which OMMX already uses. `oci_client::Reference`
-  is a re-export of `oci_spec::distribution::Reference`, so the parser
-  used by `ImageRef` and the type pushed by the transport are the same
-  type.
-- Apache-2.0, actively maintained as an ORAS sub-project.
-
-OMMX-owned implementations:
-
-- Artifact manifest / config / layer semantics.
-- Descriptor / digest / media-type public API.
-- IndexStore / BlobStore.
-- Atomic publish and GC.
-- `.ommx` archive import / export (native tar reader/writer).
-- Explicit OCI directory layout import / export.
-- Legacy v2 path/tag OCI dir layout migration.
-- Image reference public API (`ommx::artifact::ImageRef`).
-
-### 1.2 Public API surface
+### 1.1 Public API surface
 
 Descriptor / digest / media-type / image-reference types are
 OMMX-owned. The crate does not re-export third-party OCI types on its
@@ -167,7 +131,7 @@ canonicalisation invariant — see the rustdoc on `ImageRef` for the
 specific rules (Docker Hub host normalisation, `library/` prefix
 completion).
 
-### 1.3 Registry compatibility
+### 1.2 Registry compatibility
 
 OCI v1.1 `subject` and the Referrers API are not uniformly supported
 across registries. v3 takes no implicit fallback:
@@ -179,7 +143,7 @@ across registries. v3 takes no implicit fallback:
   encoding. A fallback shape will be designed when a real incompatible
   registry case appears.
 
-### 1.4 OCI Image Layout role
+### 1.3 OCI Image Layout role
 
 OCI Image Layout (`oci-layout`, `index.json`, `blobs/`) is **not** the
 Local Registry's internal format. The BlobStore root does not contain
@@ -200,7 +164,7 @@ content-addressed bytes. When standard OCI Image Layout is required,
 both stores are materialised into a directory or archive containing
 `oci-layout`, `index.json`, and `blobs/`.
 
-### 1.5 Manifest format
+### 1.4 Manifest format
 
 The Local Registry stores manifests as OCI Image Manifest
 (`application/vnd.oci.image.manifest.v1+json`) **only**. OMMX-specific
@@ -421,7 +385,7 @@ OCI Image Layout compatibility lives at the import / export boundary.
 
 **Import.** Reads external OCI-format content and registers
 `manifest bytes / each blob byte-for-byte` into IndexStore + BlobStore.
-Accepted manifest format is OCI Image Manifest only (see §1.5).
+Accepted manifest format is OCI Image Manifest only (see §1.4).
 Identity is preserved — no format conversion, no rewriting of bytes
 or digests. Supported sources:
 
