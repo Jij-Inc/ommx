@@ -75,13 +75,15 @@ impl LocalRegistry {
         self.index.resolve_image_name(image_name)
     }
 
-    /// List every SQLite ref whose name ends with the anonymous
-    /// suffix `.ommx.local/anonymous`. Each anonymous artifact's
-    /// `name` column carries a per-machine UID prefix
-    /// (`<uid8>.ommx.local/anonymous`), so suffix matching picks up
-    /// entries from every machine ever to write into this registry —
-    /// not just the current host. Returned in `(name, reference)`
-    /// order to match [`SqliteIndexStore::list_refs`].
+    /// List every SQLite ref whose `(name, reference)` matches the
+    /// shape an anonymous artifact's image name would take:
+    /// `<registry-id8>.ommx.local/anonymous` (8 lowercase hex chars
+    /// prefix + suffix) for the name, and `YYYYMMDDTHHMMSS` for the
+    /// reference. Both must match — a substring check on the suffix
+    /// alone would over-match a human-pushed ref against a real mDNS
+    /// host like `myhost.ommx.local/anonymous:v1`. Returned in
+    /// `(name, reference)` order to match
+    /// [`SqliteIndexStore::list_refs`].
     pub fn list_anonymous_artifact_refs(
         &self,
     ) -> Result<Vec<crate::artifact::local_registry::RefRecord>> {
@@ -89,8 +91,8 @@ impl LocalRegistry {
         Ok(all
             .into_iter()
             .filter(|r| {
-                r.name
-                    .ends_with(crate::artifact::ANONYMOUS_ARTIFACT_REF_NAME_SUFFIX)
+                crate::artifact::is_anonymous_artifact_ref_name(&r.name)
+                    && crate::artifact::is_anonymous_artifact_tag(&r.reference)
             })
             .collect())
     }

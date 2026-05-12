@@ -14,9 +14,8 @@
 //!
 //! ## Implementation shape
 //!
-//! Step D (§12.4) replaced the previous "remote → temp OCI Image Layout
-//! → import_oci_dir" two-stage pipeline with a single network-to-SQLite
-//! pass through [`super::super::super::remote_transport::RemoteTransport`]:
+//! Single network-to-SQLite pass through
+//! [`super::super::super::remote_transport::RemoteTransport`]:
 //!
 //! 1. Pre-pull SQLite check short-circuits the network fetch when the
 //!    registry already resolves `image_name` to a manifest digest **and**

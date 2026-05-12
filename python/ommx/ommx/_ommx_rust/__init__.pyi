@@ -339,6 +339,14 @@ class ArtifactBuilder:
         accidental push from leaking to a real remote registry. Use
         `ommx artifact prune-anonymous` to clean accumulated entries.
 
+        The timestamp is the **caller's local time** with no timezone
+        marker. If an anonymous archive is shared with someone in a
+        different timezone, the recipient will see the same digits but
+        interpret them as their own local time — the time component
+        loses absolute meaning across machines. Anonymous artifacts
+        are not intended for cross-timezone sharing; pick an explicit
+        name via `ArtifactBuilder.new(...)` if absolute time matters.
+
         Call {meth}`Artifact.save(path)` on the returned handle to also
         write a `.ommx` archive file for sharing.
 

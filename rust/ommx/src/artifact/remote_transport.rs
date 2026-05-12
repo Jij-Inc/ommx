@@ -10,17 +10,17 @@
 //!
 //! Public callers see no `async`, no `tokio` re-export, and no runtime
 //! lifetime — the wrapper is the only seam where async crosses into the
-//! rest of the SDK. Later milestones expand the async boundary outward
-//! (see `ARTIFACT_V3.md` §12.3 Step B) until pyo3-async runtimes expose
-//! `await` on the Python side; until then this `block_on` wrapper is the
-//! single point that needs to change.
+//! rest of the SDK. Later refinements may expand the async boundary
+//! outward until pyo3-async-runtimes exposes `await` on the Python
+//! side; until then this `block_on` wrapper is the single point that
+//! needs to change.
 //!
-//! Push (Step B) and pull (Step D) surfaces are both implemented here.
-//! `pull_manifest_raw` returns the manifest body verbatim so the digest
-//! the registry computes and the digest we store locally agree
+//! Both push and pull surfaces are implemented here.
+//! `pull_manifest_raw` returns the manifest body verbatim so the
+//! digest the registry computes and the digest we store locally agree
 //! byte-for-byte; `pull_blob_to_vec` collects a blob into a `Vec<u8>`
 //! over `oci-client`'s streaming reader. Layer-blob streaming straight
-//! into [`super::local_registry::FileBlobStore`] is a later refinement
+//! into [`super::local_registry::FileBlobStore`] is a future refinement
 //! once `FileBlobStore` grows an `AsyncWrite`-compatible put path.
 //!
 //! Credentials are resolved by [`resolve_auth`] in a three-tier chain:

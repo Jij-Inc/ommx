@@ -16,8 +16,8 @@ pub use annotations::*;
 pub use config::*;
 pub use digest::sha256_digest;
 pub use manifest::{
-    anonymous_artifact_image_name, LocalArtifact, LocalArtifactBuilder, LocalManifest,
-    ANONYMOUS_ARTIFACT_REF_NAME_SUFFIX,
+    is_anonymous_artifact_ref_name, is_anonymous_artifact_tag, LocalArtifact, LocalArtifactBuilder,
+    LocalManifest, ANONYMOUS_ARTIFACT_REF_NAME_SUFFIX,
 };
 pub(crate) use manifest::{stable_json_bytes, StagedArtifactBlob};
 pub use media_types::OCI_IMAGE_MANIFEST_MEDIA_TYPE;
@@ -147,10 +147,11 @@ pub fn get_images() -> Result<Vec<ImageName>> {
         .collect()
 }
 
-// `Artifact<Base: Image>` and its concrete impls `Artifact<OciArchive>` /
-// `Artifact<OciDir>` / `Artifact<Remote>` are gone in v3. Archive
-// reads and pushes flow through [`OmmxArchive`]; OCI Image Layout
-// directory reads flow through [`local_registry::import_oci_dir`] +
-// `LocalArtifact`; remote pulls flow through
-// [`local_registry::pull_image`]. The ocipkg `Image` trait surface is
-// only retained for the `ImageName` type (Step H removes that).
+// v3 artifact entry points:
+//   - Archive ingest: `local_registry::import_oci_archive(path)`
+//   - OCI Image Layout directory ingest: `local_registry::import_oci_dir(path)`
+//   - Remote pull into SQLite: `local_registry::pull_image(name)`
+//   - Build into SQLite: `LocalArtifactBuilder::new(...).build()`
+//   - Export to archive file: `LocalArtifact::save(path)`
+// The only ocipkg surface still used here is the `ImageName` type for
+// image-ref parsing.

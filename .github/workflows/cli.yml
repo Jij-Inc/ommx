@@ -99,9 +99,16 @@ jobs:
       - name: Build image
         run: cargo run --release --example create_artifact --features cli
 
-      # Push image to GitHub Container Registry
+      # Push image to GitHub Container Registry.
+      # v3: `cargo run --example create_artifact` already publishes the
+      # artifact into the SQLite Local Registry under
+      # `ghcr.io/jij-inc/ommx/random_lp_instance:<git-short>`, so the
+      # push step references it by name. (`ommx push <archive-file>`
+      # was the v2 one-step path; v3 archives are an exchange format,
+      # so push always sources from the registry by image name.)
       - name: Push image to ghcr.io
-        run: ./ommx push ./data/random_lp_instance.ommx
+        run: |
+          ./ommx push ghcr.io/jij-inc/ommx/random_lp_instance:$(git rev-parse --short HEAD)
         env:
           OMMX_BASIC_AUTH_DOMAIN: ghcr.io
           OMMX_BASIC_AUTH_USERNAME: ${{ github.actor }}

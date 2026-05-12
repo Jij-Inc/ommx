@@ -1,8 +1,6 @@
 //! `.ommx` OCI archive → v3 SQLite Local Registry import.
 //!
-//! Step F (§12.4) replaced the previous ocipkg-based "extract to
-//! tempdir, then `import_oci_dir`" two-stage pipeline with a single
-//! native tar reader that writes blobs straight into
+//! A native tar reader writes blobs straight into
 //! [`super::super::FileBlobStore`] and publishes the manifest + ref
 //! atomically through [`super::super::SqliteIndexStore`]. There is no
 //! on-disk OCI Image Layout intermediate — SQLite + `FileBlobStore`

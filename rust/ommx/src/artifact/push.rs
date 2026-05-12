@@ -27,8 +27,8 @@ impl LocalArtifact {
     /// Pushes blobs first, manifest last, so a partial failure leaves
     /// the registry without a tag pointing at incomplete data. Blobs
     /// already present at the destination are still re-uploaded — the
-    /// OCI distribution protocol's mount/cross-repo-blob optimisation is
-    /// a Step B+ refinement.
+    /// OCI distribution protocol's mount/cross-repo-blob optimisation
+    /// is a future refinement.
     pub fn push(&self) -> crate::Result<()> {
         let manifest = self.get_manifest()?.clone();
         let blob_descriptors = collect_blob_descriptors(&manifest);

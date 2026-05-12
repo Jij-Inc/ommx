@@ -9,13 +9,13 @@
 //! `artifact::remote_transport::resolve_auth` plus the auth
 //! negotiation that `oci_client::Client::auth` performs.
 //!
-//! After Step D (§12.4) every push / pull path in the SDK shares the
-//! same `RemoteTransport` plumbing: `LocalArtifact::push` reads from
-//! SQLite, `Artifact<OciArchive>::push` reads from a `.ommx` archive
-//! on disk, and `pull_image` writes straight into SQLite. The suite
-//! mirrors that three-way split so any future divergence between
-//! "push from SQLite", "push from archive", and "pull into SQLite"
-//! surfaces here rather than only in production.
+//! Every push / pull path in the SDK shares the same `RemoteTransport`
+//! plumbing: `LocalArtifact::push` reads from SQLite, archive push
+//! goes through `ommx load <file>` then `LocalArtifact::push`, and
+//! `pull_image` writes straight into SQLite. The suite mirrors that
+//! split so any future divergence between "push from SQLite",
+//! "load-then-push from archive", and "pull into SQLite" surfaces
+//! here rather than only in production.
 //!
 //! All tests are `#[ignore]` so a plain `cargo test` does not require
 //! Docker. CI re-runs the suite with `--include-ignored auth_e2e`.
@@ -389,10 +389,10 @@ fn push_oci_archive_via_load_then_push() -> Result<()> {
 
 /// `pull_image` against an anonymous registry: push an artifact, then
 /// pull it back into a *fresh* SQLite Local Registry tempdir and
-/// verify the same instance layer round-trips. This is the end-to-end
-/// integration test for the Step D native pull pipeline. The previous
-/// `pull_image_short_circuits_when_ref_is_present_with_blob` unit test
-/// in `local_registry/tests.rs` covers the SQLite-resident fast path;
+/// verify the same instance layer round-trips. End-to-end integration
+/// test for the native pull pipeline. The unit test
+/// `pull_image_short_circuits_when_ref_is_present_with_blob` in
+/// `local_registry/tests.rs` covers the SQLite-resident fast path;
 /// this one covers the network-fetch slow path that the unit test
 /// stubs out.
 #[test]

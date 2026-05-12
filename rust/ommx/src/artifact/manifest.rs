@@ -423,17 +423,26 @@ impl LocalArtifactBuilder {
     pub fn build_in_registry(
         mut self,
         registry: Arc<LocalRegistry>,
-        policy: RefConflictPolicy,
+        mut policy: RefConflictPolicy,
     ) -> Result<LocalArtifact> {
         // Resolve a deferred anonymous name against the *actual*
         // target registry's id, so the synthesized hostname prefix
         // matches the destination registry (not the default
         // registry, which `LocalArtifactBuilder::new_anonymous`
         // could not have known at construction time).
+        //
+        // Anonymous builds are also transparently switched to
+        // `RefConflictPolicy::Replace`: two anonymous builds in the
+        // same second produce the same `YYYYMMDDTHHMMSS` tag, and the
+        // user's intent is "publish under an auto-generated name", so
+        // silently overwriting the older ref is more useful than
+        // failing with a `KeepExisting` conflict. Named builds keep
+        // the caller-supplied policy intact.
         if let BuilderImageName::Anonymous = self.image_name {
             let registry_id = registry.index().registry_id()?;
             self.image_name =
                 BuilderImageName::Explicit(anonymous_artifact_image_name(&registry_id)?);
+            policy = RefConflictPolicy::Replace;
         }
         let staged = self.stage()?;
         let ref_update = registry.publish_artifact_manifest(
@@ -650,14 +659,52 @@ const ANONYMOUS_REGISTRY_ID_HOST_LEN: usize = 8;
 ///   glance" intent). A registry shared across machines in different
 ///   timezones loses the time component's absolute meaning, which is
 ///   an explicit non-goal for anonymous artifacts.
-pub fn anonymous_artifact_image_name(registry_id: &str) -> Result<ocipkg::ImageName> {
+pub(crate) fn anonymous_artifact_image_name(registry_id: &str) -> Result<ocipkg::ImageName> {
     let prefix: String = registry_id
         .chars()
         .take(ANONYMOUS_REGISTRY_ID_HOST_LEN)
         .collect();
+    anyhow::ensure!(
+        prefix.len() == ANONYMOUS_REGISTRY_ID_HOST_LEN
+            && prefix
+                .chars()
+                .all(|c| c.is_ascii_digit() || ('a'..='f').contains(&c)),
+        "Anonymous artifact registry id must be at least {} lowercase hex chars; got {prefix:?}",
+        ANONYMOUS_REGISTRY_ID_HOST_LEN,
+    );
     let stamp = chrono::Local::now().format("%Y%m%dT%H%M%S");
     ocipkg::ImageName::parse(&format!("{prefix}.ommx.local/anonymous:{stamp}"))
         .with_context(|| format!("Failed to synthesise anonymous artifact image name: {prefix}"))
+}
+
+/// True iff `name` (the `host/path` portion of an OCI ref) matches the
+/// shape an anonymous artifact's image name would take: an 8-hex
+/// `<host>.ommx.local/anonymous` repository. Used by
+/// `prune-anonymous` to filter SQLite refs without false-positives on
+/// human-pushed refs that happen to share the suffix
+/// (e.g. an artifact pushed to a real mDNS host named
+/// `myhost.ommx.local`).
+pub fn is_anonymous_artifact_ref_name(name: &str) -> bool {
+    let Some(host_segment) = name.strip_suffix(ANONYMOUS_ARTIFACT_REF_NAME_SUFFIX) else {
+        return false;
+    };
+    host_segment.len() == ANONYMOUS_REGISTRY_ID_HOST_LEN
+        && host_segment
+            .chars()
+            .all(|c| c.is_ascii_digit() || ('a'..='f').contains(&c))
+}
+
+/// True iff `tag` matches the `YYYYMMDDTHHMMSS` shape that
+/// [`anonymous_artifact_image_name`] generates: 15 chars, digits with
+/// `T` at position 8. Combined with [`is_anonymous_artifact_ref_name`]
+/// this gives `prune-anonymous` a structural match instead of a
+/// substring match.
+pub fn is_anonymous_artifact_tag(tag: &str) -> bool {
+    tag.len() == 15
+        && tag
+            .chars()
+            .enumerate()
+            .all(|(i, c)| if i == 8 { c == 'T' } else { c.is_ascii_digit() })
 }
 
 #[cfg(test)]
@@ -697,6 +744,38 @@ mod tests {
         );
     }
 
+    /// `is_anonymous_artifact_ref_name` + `is_anonymous_artifact_tag`
+    /// must together accept only ref / tag pairs that
+    /// [`anonymous_artifact_image_name`] would generate, and reject
+    /// substring-match false positives a naive `ends_with` would let
+    /// through (the failure mode `ommx artifact prune-anonymous`
+    /// would otherwise have on a human-pushed
+    /// `myhost.ommx.local/anonymous:v1`).
+    #[test]
+    fn anonymous_ref_filter_rejects_false_positives() {
+        // Positive: a synthesized name + tag pair.
+        let synth = anonymous_artifact_image_name("0123456789abcdef0123456789abcdef")
+            .unwrap()
+            .to_string();
+        let (name, tag) = synth.rsplit_once(':').unwrap();
+        assert!(is_anonymous_artifact_ref_name(name));
+        assert!(is_anonymous_artifact_tag(tag));
+
+        // Negative: hostname has the suffix but a non-8-hex prefix.
+        assert!(!is_anonymous_artifact_ref_name(
+            "myhost.ommx.local/anonymous"
+        ));
+        assert!(!is_anonymous_artifact_ref_name(
+            "ABCDEFGH.ommx.local/anonymous"
+        ));
+
+        // Negative: tag is not the synthesized YYYYMMDDTHHMMSS shape.
+        assert!(!is_anonymous_artifact_tag("v1"));
+        assert!(!is_anonymous_artifact_tag("20260512-153045"));
+        assert!(!is_anonymous_artifact_tag("2026051215304500"));
+        assert!(!is_anonymous_artifact_tag("XXXXXXXXTXXXXXX"));
+    }
+
     /// Hostname prefix is truncated to the configured length even when
     /// the persisted registry-id is the full 32-hex UUID, so the
     /// rendered image name stays compact while the metadata column
@@ -711,6 +790,31 @@ mod tests {
             .expect("synthetic ref has a host segment");
         // `<8-hex>.ommx.local` → host segment is the 8-hex + `.ommx.local`.
         assert_eq!(host, format!("{}.ommx.local", &full[..8]));
+    }
+
+    /// Two anonymous builds with no sleep between them collide on the
+    /// `YYYYMMDDTHHMMSS` tag. The builder transparently overrides
+    /// `RefConflictPolicy::Replace` for the anonymous case so the
+    /// second build succeeds and silently overwrites the first. A
+    /// regression that left the policy at `KeepExisting` would surface
+    /// here as the second `build_in_registry` returning an `Err`
+    /// describing a ref conflict.
+    #[test]
+    fn anonymous_build_in_same_second_does_not_fail() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let registry = Arc::new(LocalRegistry::open(dir.path())?);
+        for tag in ["a", "b"] {
+            let mut builder = LocalArtifactBuilder::new_anonymous();
+            builder.add_layer_bytes(
+                MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
+                format!("anon-{tag}").into_bytes(),
+                HashMap::new(),
+            )?;
+            // Pass `KeepExisting` explicitly: the builder must still
+            // override to `Replace` internally for the anonymous case.
+            builder.build_in_registry(registry.clone(), RefConflictPolicy::KeepExisting)?;
+        }
+        Ok(())
     }
 
     #[test]

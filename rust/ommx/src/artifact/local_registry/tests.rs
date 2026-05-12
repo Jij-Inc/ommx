@@ -57,7 +57,7 @@ fn file_blob_store_round_trip() -> Result<()> {
 fn sqlite_index_store_round_trip() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let store = SqliteIndexStore::open(dir.path().join(SQLITE_INDEX_FILE_NAME))?;
-    assert_eq!(store.schema_version()?, 1);
+    assert_eq!(store.schema_version()?, 2);
 
     let manifest_digest = sha256_digest(b"manifest");
     let layer_digest = sha256_digest(b"layer");
@@ -879,9 +879,9 @@ fn import_oci_archive_surfaces_digest_conflict_for_same_ref() -> Result<()> {
 
 #[test]
 fn import_oci_archive_does_not_leave_legacy_dir_behind() -> Result<()> {
-    // Step C invariant: after a successful `import_oci_archive`, the
-    // v2-era path `registry.root().join(image_name.as_path())` must
-    // not exist. The archive's staging tempdir is created under the
+    // Invariant: after a successful `import_oci_archive`, the v2-era
+    // path `registry.root().join(image_name.as_path())` must not
+    // exist. The archive's staging tempdir is created under the
     // registry root and dropped before the function returns; SQLite +
     // FileBlobStore are the sole post-import home.
     let dir = tempfile::tempdir()?;
@@ -909,9 +909,9 @@ fn import_oci_archive_does_not_leave_legacy_dir_behind() -> Result<()> {
 #[cfg(feature = "remote-artifact")]
 #[test]
 fn pull_image_short_circuits_when_ref_is_present_with_blob() -> Result<()> {
-    // Step C fast path: `pull_image` against a ref already published
-    // in the SQLite Local Registry must return `Unchanged` without
-    // touching the network. Constructing the artifact via
+    // Fast path: `pull_image` against a ref already published in the
+    // SQLite Local Registry must return `Unchanged` without touching
+    // the network. Constructing the artifact via
     // `LocalArtifactBuilder` (no network) and then calling
     // `pull_image` against an unresolvable host exercises this — if
     // the short-circuit ever regresses, the call would attempt a DNS
@@ -970,14 +970,14 @@ fn pull_image_does_not_short_circuit_when_manifest_blob_is_missing() -> Result<(
 
 #[test]
 fn local_artifact_save_round_trip_preserves_layers() -> Result<()> {
-    // `LocalArtifact::save` is the CLI `save` command's only path
-    // post-Step C. Verify the produced archive: (a) is a valid OCI
-    // archive that `Artifact::from_oci_archive` can open, (b)
-    // exposes the OMMX artifactType, (c) preserves layer descriptors
-    // and bytes byte-for-byte. The manifest digest is **not**
-    // asserted equal: `OciArchiveBuilder::build` re-serialises the
-    // parsed `ImageManifest`, which can produce a different byte
-    // representation (this is documented in `save.rs`'s module doc).
+    // `LocalArtifact::save` is the CLI `save` command's only path.
+    // Verify the produced archive: (a) is a valid OCI archive that
+    // `Artifact::from_oci_archive` can open, (b) exposes the OMMX
+    // artifactType, (c) preserves layer descriptors and bytes
+    // byte-for-byte. The manifest digest is **not** asserted equal:
+    // `OciArchiveBuilder::build` re-serialises the parsed
+    // `ImageManifest`, which can produce a different byte
+    // representation (see `save.rs`'s module doc).
     use ocipkg::image::{Image, OciArchive};
     let dir = tempfile::tempdir()?;
     let registry = Arc::new(LocalRegistry::open(dir.path())?);

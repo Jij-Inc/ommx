@@ -23,7 +23,18 @@ pub struct PublishOutcome {
     pub ref_update: Option<RefUpdate>,
 }
 
-const SCHEMA_VERSION: i64 = 1;
+/// SQLite Local Registry schema version. Bumped whenever the schema
+/// changes in a way that needs distinct identification (new tables,
+/// new columns, semantic changes to existing rows). The current
+/// migration strategy is "open the registry and let `init_schema` run
+/// `CREATE TABLE IF NOT EXISTS` for every table"; bumping the version
+/// records the change so future incompatible migrations (column drop,
+/// type change) can branch on the stored version.
+///
+/// - v1: initial schema (`blobs`, `manifests`, `manifest_layers`, `refs`).
+/// - v2: adds `ommx_local_registry_metadata` (key/value table) holding
+///   per-registry `registry_id` for anonymous artifact synthesis.
+const SCHEMA_VERSION: i64 = 2;
 const SQLITE_BUSY_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// SQLite-backed index store for the v3 Local Registry.
@@ -466,10 +477,12 @@ impl SqliteIndexStore {
         Ok(PublishOutcome { ref_update })
     }
 
-    /// Per-registry stable identifier. Generated as a random 8-hex on
-    /// the first `init_schema` call and stored verbatim in the
-    /// `ommx_local_registry_metadata` table. Anonymous artifact ref
-    /// synthesis uses this as the hostname prefix
+    /// Per-registry stable identifier. Generated as a random UUID v4
+    /// (32 hex chars) on the first `init_schema` call and stored
+    /// verbatim in the `ommx_local_registry_metadata` table.
+    /// Anonymous artifact ref synthesis truncates the stored value to
+    /// the first [`super::super::manifest::ANONYMOUS_REGISTRY_ID_HOST_LEN`]
+    /// hex chars for the hostname prefix
     /// (`<registry-id>.ommx.local/anonymous`), so two artifacts built
     /// against the same registry share a prefix and can be told apart
     /// from artifacts imported from a different registry. Reading
@@ -482,6 +495,13 @@ impl SqliteIndexStore {
     /// of a registry is still "the same registry"); (3) a fresh
     /// registry gets a fresh prefix, matching user intent of "this is
     /// a new home for artifacts".
+    ///
+    /// **Privacy note**: the identifier IS stable per registry; a
+    /// recipient of two SQLite Local Registry exports from the same
+    /// source can correlate them via this column. The identifier
+    /// carries no PII or hardware fingerprint, but is itself a unique
+    /// correlator. Treat the SQLite registry file the same as any
+    /// other user-data export when sharing.
     pub fn registry_id(&self) -> Result<String> {
         let conn = self.lock();
         let row: Option<String> = conn
@@ -494,9 +514,10 @@ impl SqliteIndexStore {
         match row {
             Some(id) => Ok(id),
             None => {
-                // First read on a freshly-initialised registry. Generate
-                // a random 8-hex id and insert; concurrent racers
-                // converge on the first-write-wins via `OR IGNORE`.
+                // First read on a freshly-initialised registry.
+                // Generate a random UUID v4 and insert; concurrent
+                // racers converge on the first-write-wins via
+                // `OR IGNORE`.
                 let new_id = random_registry_id();
                 conn.execute(
                     r#"INSERT OR IGNORE INTO ommx_local_registry_metadata (key, value)
@@ -572,14 +593,24 @@ impl SqliteIndexStore {
                 version INTEGER NOT NULL
             );
 
+            -- Seed the schema row on fresh registries at the current
+            -- SCHEMA_VERSION. Pre-existing registries get migrated
+            -- below.
             INSERT INTO ommx_local_registry_schema (version)
-            SELECT 1
+            SELECT 2
             WHERE NOT EXISTS (SELECT 1 FROM ommx_local_registry_schema);
 
             CREATE TABLE IF NOT EXISTS ommx_local_registry_metadata (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
             );
+
+            -- v1 → v2 migration: the metadata table is additive (no
+            -- destructive change), so the only action is to bump the
+            -- recorded schema version. Pre-v2 registries still get
+            -- a `registry_id` lazily on the first call to
+            -- `SqliteIndexStore::registry_id()`.
+            UPDATE ommx_local_registry_schema SET version = 2 WHERE version = 1;
 
             CREATE TABLE IF NOT EXISTS blobs (
                 digest TEXT PRIMARY KEY,

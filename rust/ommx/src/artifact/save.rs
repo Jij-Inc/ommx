@@ -1,28 +1,24 @@
 //! Native `LocalArtifact::save` — SQLite + CAS → on-disk OCI archive.
 //!
-//! Step F (§12.4) replaced the previous `OciArchiveBuilder`-based
-//! writer (which re-serialised the parsed `ImageManifest` and so could
-//! shift the manifest digest under non-canonical input) with a direct
-//! tar writer over the [`tar`] crate. The resulting `.ommx` file is
-//! the standard "tar of OCI Image Layout": an `oci-layout` marker, a
-//! one-entry `index.json`, and `blobs/sha256/<digest>` entries for
-//! the manifest + config + every layer.
-//!
-//! v2 round-trip preserved: the manifest bytes the SQLite Local
-//! Registry already stores are appended verbatim, so the manifest
-//! digest is byte-identical to the digest the artifact was published
-//! under. `OciArchive` readers (including the v3 native
-//! [`super::local_registry::import_oci_archive`]) see the same digest
-//! they would see for the source artifact.
+//! Writes a `.ommx` file directly using the [`tar`] crate. The
+//! resulting archive is the standard "tar of OCI Image Layout": an
+//! `oci-layout` marker, a one-entry `index.json`, and
+//! `blobs/sha256/<digest>` entries for the manifest + config + every
+//! layer. The manifest bytes the SQLite Local Registry holds are
+//! written verbatim, so the manifest digest is byte-identical across
+//! the source registry and the produced archive — importing the
+//! archive back via
+//! [`super::local_registry::import_oci_archive`] round-trips to the
+//! same digest.
 //!
 //! Memory shape: each blob is read into a `Vec<u8>` and streamed
 //! through the tar writer; the writer itself is `BufWriter<File>`. A
 //! 200 MB layer therefore peaks at ~200 MB resident memory during the
-//! save, which is the same shape the v2 archive build had. A future
-//! refinement that streams blobs out of [`super::FileBlobStore`] via
-//! `std::io::copy` (the `FileBlobStore` already keeps each blob in its
-//! own file) would replace the `Vec<u8>` allocation with a fixed
-//! 64 KB copy buffer.
+//! save. A streaming variant that copies blobs out of
+//! [`super::FileBlobStore`] via `std::io::copy` (the `FileBlobStore`
+//! already keeps each blob in its own file) would replace the
+//! `Vec<u8>` allocation with a fixed 64 KB copy buffer; left as a
+//! future refinement.
 
 use super::{
     local_registry::{ValidatedDigest, OCI_IMAGE_REF_NAME_ANNOTATION},

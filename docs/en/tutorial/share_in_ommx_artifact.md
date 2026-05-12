@@ -145,6 +145,8 @@ builder = ArtifactBuilder.new_anonymous()
 
 `new_anonymous` uses the `.local` mDNS link-local TLD so an accidental push won't leak to a real remote registry. The registry-id prefix is generated once per `LocalRegistry` (a random UUID stored in the registry's SQLite metadata) — anonymous artifacts from the same registry share a prefix, so when an archive is shared you can tell artifacts apart by their source registry. Clean accumulated anonymous entries with `ommx artifact prune-anonymous` (which removes entries from every registry-id prefix, not just the current host's).
 
+**Caveat on the timestamp**: the synthesized tag is the **builder's local time** without a timezone marker. If an anonymous archive is shared with someone in a different timezone, the recipient will read the same digits as their own local time, so the time component is not absolute across machines. Pick an explicit name via `ArtifactBuilder.new(...)` if you need a stable, timezone-unambiguous tag.
+
 Regardless of the initialization method, you can save `ommx.v1.Instance` and other data in the same way. Let's add the data prepared above.
 
 ```{code-cell} ipython3

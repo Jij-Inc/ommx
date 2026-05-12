@@ -145,6 +145,8 @@ builder = ArtifactBuilder.new_anonymous()
 
 `new_anonymous` のホスト名は `<レジストリ ID8>.ommx.local` 形式で、`.local` (mDNS) link-local TLD を使っているので誤って push しても実際のリモートレジストリには到達しません。先頭のレジストリ ID は各 `LocalRegistry` の初回作成時に一度だけ生成されてメタデータに保存される UUID で、同じレジストリで作られた anonymous artifact は同じ prefix を共有します。アーカイブを共有した際にも「どのレジストリで作られたか」が判別できます。蓄積した anonymous エントリは `ommx artifact prune-anonymous` で一括削除できます (異なるレジストリ ID の prefix も含めて削除されます)。
 
+**タイムスタンプの注意**: 自動生成タグはビルダーの**ローカルタイム** (TZ マーカー無し) です。異なるタイムゾーンの相手にアーカイブを共有すると、受信者は同じ数字を自分のローカルタイムとして読むため、絶対時刻としての意味はマシン間で失われます。タイムゾーンに関係なく安定したタグが必要なら `ArtifactBuilder.new(...)` で明示的に名前を指定してください。
+
 どの方法で初期化しても同じように `ommx.v1.Instance` や他のデータを保存することが出来ます。上で用意したデータを追加してみましょう。
 
 ```{code-cell} ipython3
