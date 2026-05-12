@@ -75,6 +75,35 @@ impl LocalRegistry {
         self.index.resolve_image_name(image_name)
     }
 
+    /// List every SQLite ref whose name matches the anonymous-archive
+    /// synthetic prefix (`local.ommx/anonymous-`). Returned in
+    /// `(name, reference)` order to match [`SqliteIndexStore::list_refs`].
+    pub fn list_anonymous_archive_refs(
+        &self,
+    ) -> Result<Vec<crate::artifact::local_registry::RefRecord>> {
+        self.index
+            .list_refs(Some(crate::artifact::ANONYMOUS_ARCHIVE_REF_NAME_PREFIX))
+    }
+
+    /// Bulk-delete every SQLite ref produced by
+    /// [`crate::artifact::ArchiveArtifactBuilder::new_archive_unnamed`].
+    /// Returns the deleted records so callers (e.g. CLI
+    /// `ommx artifact prune-anonymous`) can report what changed. The
+    /// manifest / config / layer / blob CAS records the deleted refs
+    /// pointed at are **not** touched; they become unreferenced rows
+    /// reclaimable by a future GC sweep. This is intentional — the
+    /// prune is cheap and the orphan reclamation is the slower /
+    /// riskier operation.
+    pub fn prune_anonymous_archive_refs(
+        &self,
+    ) -> Result<Vec<crate::artifact::local_registry::RefRecord>> {
+        let refs = self.list_anonymous_archive_refs()?;
+        for r in &refs {
+            self.index.delete_ref(&r.name, &r.reference)?;
+        }
+        Ok(refs)
+    }
+
     /// Publish a staged OCI Image Manifest bundle to the SQLite Local
     /// Registry. Callers must construct `manifest` and `manifest_descriptor`
     /// via [`crate::artifact::LocalArtifactBuilder`] or the import paths

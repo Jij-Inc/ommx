@@ -742,7 +742,9 @@ Step D の境界: archive / dir に対する `LocalArtifact::push()` 経路 (Ste
 
 **Archive load semantics の変更**: v3 では archive を「直接読む」サポートを撤廃し、archive はあくまで交換用フォーマットとして扱う。`Artifact.load_archive(file)` は file を user の persistent SQLite Local Registry に import してから handle を返す形に変更 (副作用としてユーザの registry にエントリが残る)。CLI 側も `ommx inspect <archive>` のみ native tar pre-scan で manifest だけ読み取り、`ommx push <archive>` は migration hint で bail (load してから push する 2 段階フロー)。これに合わせて Rust 側の `Artifact<Base: Image>` / `Artifact<OciArchive>` / `Artifact<OciDir>` および中間的だった `OmmxArchive` は削除し、Python `PyArtifact` も `LocalArtifact` を直接保持する単純な struct にした。
 
-Step F の landing で ocipkg の `OciArchive` / `OciArchiveBuilder` / `OciDir` / `OciDirBuilder` / `OciArtifact` / `Image` / `ImageBuilder` の使用箇所が全て消え、`Artifact<Base: Image>` の generic 化も削除した。`ArchiveArtifactBuilder` は user persistent `LocalRegistry` 経由で `LocalArtifactBuilder::build_in_registry` → `LocalArtifact::save` を呼ぶ thin wrapper に書き換え、build 結果は user registry にも保存される (archive は単に shareable な export)。Python `ArtifactBuilder.new_archive_unnamed` は v3 model (SQLite registry が ref name を要求) と整合しないため削除した。
+Step F の landing で ocipkg の `OciArchive` / `OciArchiveBuilder` / `OciDir` / `OciDirBuilder` / `OciArtifact` / `Image` / `ImageBuilder` の使用箇所が全て消え、`Artifact<Base: Image>` の generic 化も削除した。`ArchiveArtifactBuilder` は user persistent `LocalRegistry` 経由で `LocalArtifactBuilder::build_in_registry` → `LocalArtifact::save` を呼ぶ thin wrapper に書き換え、build 結果は user registry にも保存される (archive は単に shareable な export)。
+
+**`new_archive_unnamed` UX**: 名前を考えるのが面倒というケース向けに `ArchiveArtifactBuilder::new_archive_unnamed(path)` および Python `ArtifactBuilder.new_archive_unnamed(path)` を残し、内部で `local.ommx/anonymous-<UTC タイムスタンプ>:tmp` 形式の synthetic ref を生成して user 永続 SQLite registry に書き込む形にした (タイムスタンプはユーザがあとからエントリを見つけたときに作成日時を一目で判別できるように)。蓄積した anonymous エントリは `ommx artifact prune-anonymous [--dry-run]` で一括削除できる (manifest / blob の CAS レコードは残り、将来の GC で回収される)。
 
 **Step H — `ImageName` 公開 surface 撤去** (§12.2 行 2)。
 

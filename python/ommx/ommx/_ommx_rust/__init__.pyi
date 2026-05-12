@@ -296,6 +296,38 @@ class ArtifactBuilder:
         Create a new artifact archive with a named image name.
         """
     @staticmethod
+    def new_archive_unnamed(
+        path: builtins.str | os.PathLike | pathlib.Path,
+    ) -> ArtifactBuilder:
+        r"""
+        Create a new artifact archive without inventing an image name.
+
+        UX shortcut: a synthetic ref of the form
+        `local.ommx/anonymous-<UTC-timestamp>:tmp` is generated and
+        used for both the archive's `org.opencontainers.image.ref.name`
+        annotation and the SQLite Local Registry key. v3 stores every
+        artifact in the registry, so unnamed archives still need a key
+        — the timestamp suffix lets you identify entries by when they
+        were created. Use `ommx artifact prune-anonymous` (or
+        {meth}`~ommx.artifact.LocalRegistry.prune_anonymous_archive_refs`
+        on the Python side) to clean accumulated anonymous entries.
+        Pick a real name with {meth}`new_archive` if you want a stable,
+        human-readable one.
+
+        ```python
+        >>> from ommx.testing import SingleFeasibleLPGenerator, DataType
+        >>> generator = SingleFeasibleLPGenerator(3, DataType.INT)
+        >>> instance = generator.get_v1_instance()
+        >>> import uuid
+        >>> filename = f"data/single_feasible_lp.ommx.{uuid.uuid4()}"
+        >>> builder = ArtifactBuilder.new_archive_unnamed(filename)
+        >>> _desc = builder.add_instance(instance)
+        >>> artifact = builder.build()
+        >>> assert artifact.image_name.startswith("local.ommx/anonymous-")
+
+        ```
+        """
+    @staticmethod
     def new(image_name: builtins.str) -> ArtifactBuilder:
         r"""
         Create a new artifact in local registry with a named image name.

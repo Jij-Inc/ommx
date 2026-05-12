@@ -26,11 +26,11 @@ use prost::Message;
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 use uuid::Uuid;
 
-/// Build an [`OmmxArchive`] (`.ommx` OCI archive output).
-///
-/// v3-native build into the user's SQLite Local Registry uses
+/// Build a `.ommx` OCI archive file backed by the user's SQLite Local
+/// Registry. v3-native build into the registry alone uses
 /// [`LocalArtifactBuilder`] instead; this type is the archive-output
-/// path, internally a temp registry + the native save writer. The
+/// convenience that also leaves a registry entry behind, so the
+/// resulting artifact is addressable by ref name afterward. The
 /// previous v2 surface that used `OciArchiveBuilder` is gone.
 pub struct ArchiveArtifactBuilder {
     inner: LocalArtifactBuilder,
@@ -60,6 +60,31 @@ impl ArchiveArtifactBuilder {
             output_path: path,
             registry,
         })
+    }
+
+    /// Build an archive at `path` without a caller-supplied image
+    /// name. UX shortcut for "I just want to share a `.ommx` file and
+    /// don't want to invent a ref". A per-call synthetic placeholder
+    /// of the form `local.ommx/anonymous-<UTC-timestamp>:tmp` is
+    /// generated and written into the archive's `index.json` as
+    /// `org.opencontainers.image.ref.name`, AND published into the
+    /// user's persistent SQLite Local Registry alongside the named
+    /// builds — the registry is the canonical store in v3, so anonymous
+    /// archives must be addressable there too. `LocalArtifact::image_name`
+    /// on the returned handle surfaces the synthesized name (in pre-v3
+    /// the equivalent path produced `image_name == None`).
+    ///
+    /// The placeholder hostname `local.ommx` is intentionally not a
+    /// real registry so a synthetic ref cannot accidentally resolve
+    /// against a remote registry; the timestamp suffix keeps two
+    /// anonymous builds in the same SQLite registry from colliding
+    /// **and** lets a user inspecting `ommx artifact prune-anonymous`
+    /// output later tell at a glance when each entry was created.
+    /// Consumers who want a stable, human-readable name should use
+    /// [`Self::new_archive`] instead. `ommx artifact prune-anonymous`
+    /// bulk-deletes accumulated synthetic refs.
+    pub fn new_archive_unnamed(path: PathBuf) -> Result<Self> {
+        Self::new_archive(path, anonymous_archive_image_name()?)
     }
 
     /// Create a temporary archive at the OS temp dir under a random
@@ -179,5 +204,55 @@ impl ArchiveArtifactBuilder {
         // an additional `Artifact.load(...)` round-trip. The archive
         // file at `output_path` is the exchange-format export.
         Ok(local)
+    }
+}
+
+/// Prefix shared by every synthetic ref the anonymous-archive UX
+/// shortcut generates. `ommx artifact prune-anonymous` deletes refs
+/// whose SQLite `name` column starts with this string.
+pub const ANONYMOUS_ARCHIVE_REF_NAME_PREFIX: &str = "local.ommx/anonymous-";
+
+/// Generate a synthetic `org.opencontainers.image.ref.name` for the
+/// anonymous-archive UX shortcut. The suffix is a UTC timestamp
+/// (`YYYY-MM-DD-HH-MM-SS-<nanos>`) so a user inspecting their SQLite
+/// Local Registry months later can tell at a glance when the entry
+/// was created. Nanosecond precision keeps two anonymous builds in
+/// the same second from colliding; if they ever did, the underlying
+/// builder uses `RefConflictPolicy::Replace`, which overwrites the
+/// older entry rather than failing.
+///
+/// The hostname segment `local.ommx` is deliberately a non-registry
+/// placeholder so a synthetic ref cannot collide with or resolve
+/// against a real remote registry. Used by
+/// [`ArchiveArtifactBuilder::new_archive_unnamed`] and the Python
+/// equivalent `ArtifactBuilder.new_archive_unnamed`.
+pub fn anonymous_archive_image_name() -> Result<ImageName> {
+    let stamp = chrono::Utc::now().format("%Y-%m-%d-%H-%M-%S-%9f");
+    ImageName::parse(&format!("{ANONYMOUS_ARCHIVE_REF_NAME_PREFIX}{stamp}:tmp")).with_context(
+        || format!("Failed to synthesise placeholder image name for unnamed archive: {stamp}"),
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `chrono::Utc::now().format("%Y-%m-%d-%H-%M-%S-%9f")` produces a
+    /// string whose every component is alphanumeric with `-` separators
+    /// — the OCI distribution spec accepts this as a name segment. A
+    /// regression that swapped the format to include `:` or `.` would
+    /// break `ImageName::parse` here.
+    #[test]
+    fn anonymous_image_name_parses() {
+        let name = anonymous_archive_image_name().expect("synthetic ref must parse");
+        let s = name.to_string();
+        assert!(
+            s.starts_with(ANONYMOUS_ARCHIVE_REF_NAME_PREFIX),
+            "synthetic ref `{s}` must start with `{ANONYMOUS_ARCHIVE_REF_NAME_PREFIX}`",
+        );
+        assert!(
+            s.ends_with(":tmp"),
+            "synthetic ref `{s}` must end with `:tmp`"
+        );
     }
 }

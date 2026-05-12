@@ -466,6 +466,20 @@ impl SqliteIndexStore {
         Ok(PublishOutcome { ref_update })
     }
 
+    /// Delete a single ref row by `(name, reference)`. Returns `true`
+    /// when a row was actually removed. Manifest / blob CAS records the
+    /// ref pointed at are **not** touched; an orphan manifest is the
+    /// expected post-state for a deleted ref and is reclaimed by a
+    /// future GC sweep, not by this primitive.
+    pub fn delete_ref(&self, name: &str, reference: &str) -> Result<bool> {
+        let conn = self.lock();
+        let affected = conn.execute(
+            r#"DELETE FROM refs WHERE name = ?1 AND reference = ?2"#,
+            params![name, reference],
+        )?;
+        Ok(affected > 0)
+    }
+
     pub fn list_refs(&self, name_prefix: Option<&str>) -> Result<Vec<RefRecord>> {
         let conn = self.lock();
         let mut out = Vec::new();

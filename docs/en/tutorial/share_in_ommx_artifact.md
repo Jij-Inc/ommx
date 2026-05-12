@@ -130,15 +130,16 @@ if os.path.exists(filename):
     os.remove(filename)
 
 # 1. Create a builder to create the OMMX Artifact file
-builder = ArtifactBuilder.new_archive(filename, "my-instance.ommx/local:v1")
+builder = ArtifactBuilder.new_archive_unnamed(filename)
 ```
 
-[`ArtifactBuilder`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder) has several constructors. In v3 every artifact carries an image name so it can be addressed in the SQLite Local Registry; the v2-era `new_archive_unnamed` constructor is gone. Pick a placeholder name like `my-instance.ommx/local:v1` when you only intend to share the archive file.
+[`ArtifactBuilder`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder) has several constructors. Pick by whether you want to manage the artifact by image name (like a container) or just produce an archive file for sharing. `new_archive_unnamed` is the shortcut for the latter — v3 still keys every artifact in the SQLite Local Registry, but the builder synthesizes a placeholder name of the form `local.ommx/anonymous-<UTC-timestamp>:tmp` so you don't have to. The timestamp makes it easy to spot when each anonymous entry was created later (you can inspect it through `Artifact.image_name`). Bulk-clean accumulated anonymous entries with `ommx artifact prune-anonymous`.
 
 | Constructor | Description |
 | --- | --- |
 | [`ArtifactBuilder.new`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.new) | Manage by name in the SQLite Local Registry |
 | [`ArtifactBuilder.new_archive`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.new_archive) | Manage as both an archive file and a registry entry |
+| [`ArtifactBuilder.new_archive_unnamed`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.new_archive_unnamed) | Same as `new_archive`, with a synthesized placeholder image name |
 | [`ArtifactBuilder.for_github`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.for_github) | Determine the container name according to the GitHub Container Registry |
 
 Regardless of the initialization method, you can save `ommx.v1.Instance` and other data in the same way. Let's add the data prepared above.

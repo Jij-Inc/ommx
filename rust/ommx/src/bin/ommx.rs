@@ -85,6 +85,23 @@ enum ArtifactCommand {
         #[clap(long)]
         replace: bool,
     },
+
+    /// Delete every SQLite ref produced by `ArtifactBuilder.new_archive_unnamed`.
+    ///
+    /// `new_archive_unnamed` writes archives under a synthetic
+    /// `local.ommx/anonymous-<UTC-timestamp>:tmp` ref so the SQLite Local
+    /// Registry has a key to address the artifact under. Use this command
+    /// to clean those entries out periodically. Manifest / blob CAS
+    /// records are left in place; a future GC sweep will reclaim them.
+    PruneAnonymous {
+        /// Local registry root. Defaults to OMMX_LOCAL_REGISTRY_ROOT or the OS default data dir.
+        #[clap(long)]
+        root: Option<PathBuf>,
+
+        /// List refs that would be removed without modifying the registry.
+        #[clap(long)]
+        dry_run: bool,
+    },
 }
 
 enum ImageNameOrPath {
@@ -348,6 +365,29 @@ fn main() -> Result<()> {
                         "Skipped {} conflicting ref(s); rerun with --replace to overwrite them",
                         report.conflicted_dirs
                     );
+                }
+            }
+            ArtifactCommand::PruneAnonymous { root, dry_run } => {
+                let registry = if let Some(root) = root {
+                    LocalRegistry::open(root)?
+                } else {
+                    LocalRegistry::open_default()?
+                };
+                let to_remove = registry.list_anonymous_archive_refs()?;
+                if to_remove.is_empty() {
+                    println!("No anonymous archive refs found.");
+                } else if *dry_run {
+                    println!("Would remove {} anonymous archive ref(s):", to_remove.len());
+                    for r in &to_remove {
+                        println!("  {}:{}  →  {}", r.name, r.reference, r.manifest_digest);
+                    }
+                    println!("(--dry-run: registry unchanged)");
+                } else {
+                    let removed = registry.prune_anonymous_archive_refs()?;
+                    println!("Removed {} anonymous archive ref(s):", removed.len());
+                    for r in &removed {
+                        println!("  {}:{}", r.name, r.reference);
+                    }
                 }
             }
         },

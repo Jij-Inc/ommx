@@ -648,11 +648,20 @@ use ommx::artifact::ArchiveArtifactBuilder;
 let mut builder = ArchiveArtifactBuilder::new_archive(path, image_name)?;
 ```
 
-`ArchiveArtifactBuilder` is a non-generic wrapper around
-`OciArtifactBuilder<OciArchiveBuilder>` and produces
-`Artifact<OciArchive>`. The constructors (`new_archive`,
-`new_archive_unnamed`, `temp_archive`) and the `add_*` / `build`
-signatures are unchanged from v2.
+`ArchiveArtifactBuilder` is a non-generic wrapper that builds into
+the user's SQLite Local Registry and saves the archive file out.
+Constructors:
+
+- `new_archive(path, image_name)` — caller-supplied ref name.
+- `new_archive_unnamed(path)` — v3 synthesizes a placeholder ref of
+  the form `local.ommx/anonymous-<UTC-timestamp>:tmp` so the SQLite
+  Local Registry has a key; the timestamp lets you identify entries
+  by when they were created. Use `ommx artifact prune-anonymous` to
+  bulk-clean accumulated anonymous refs.
+- `temp_archive()` — random `ttl.sh` name; insecure, tests only.
+
+`build()` returns `LocalArtifact` (was `Artifact<OciArchive>` in v2).
+The `add_*` signatures are unchanged.
 
 ## Migration Checklist
 
