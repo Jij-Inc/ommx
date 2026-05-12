@@ -41,7 +41,7 @@ katexit = "0.1.5"
 maplit = "1.0.2"
 num = "0.4.3"
 oci-client = { version = "0.16.1", default-features = false, features = ["rustls-tls"] }
-oci-spec = "0.8.4"
+oci-spec = "0.9.0"
 ocipkg = { version = "0.4.0", default-features = false }
 ordered-float = { version = "5.1.0", features = ["serde"] }
 petgraph = "0.8.3"
@@ -53,11 +53,11 @@ quote = "1.0.40"
 pyo3 = { version = "0.27.2", features = ["anyhow", "multiple-pymethods"] }
 pyo3-stub-gen = "0.22.2"
 pyo3-tracing-opentelemetry = "0.2.0"
-rusqlite = { version = "0.37.0", features = ["bundled"] }
+rusqlite = { version = "0.39.0", features = ["bundled"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde-pyobject = "0.8.0"
 serde_json = "1.0.149"
-sha2 = "0.10.9"
+sha2 = "0.11.0"
 similar = "3.1.0"
 smallvec = "1.15.1"
 serial_test = "3.4.0"
@@ -67,7 +67,7 @@ tempfile = "3.27.0"
 testcontainers = { version = "0.27.3", features = ["blocking"] }
 testcontainers-modules = { version = "0.15.0", features = ["cncf_distribution"] }
 thiserror = "2.0.18"
-tokio = { version = "1.48.0", default-features = false, features = ["rt", "time", "net", "io-util"] }
+tokio = { version = "1.52.3", default-features = false, features = ["rt", "time", "net", "io-util"] }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
 url = "2.5.8"
