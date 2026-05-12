@@ -298,9 +298,13 @@ to `host[:port]/name@<digest>` on Display (tag references keep the
 [`LocalArtifact::open`](crate::artifact::LocalArtifact::open),
 [`LocalArtifactBuilder::new`](crate::artifact::LocalArtifactBuilder::new),
 the SQLite Local Registry helpers, and the CLI parse path all now take
-[`ImageRef`](crate::artifact::ImageRef). The accessors mirror what
-`ImageName` offered (`hostname()`, `port()`, `name()`, `reference()`),
-but field access (`image_name.hostname`) becomes a method call.
+[`ImageRef`](crate::artifact::ImageRef). The accessor shape is
+`registry()` (the joined `host[:port]` form) plus `name()` /
+`reference()` — the v2 split accessors `hostname` / `port` have
+been removed since every internal consumer ended up rejoining them
+back to `host[:port]` at the call site (callers that genuinely need
+just the host portion, e.g. the localhost / 127.* heuristic in
+`remote_transport::protocol_for`, parse the joined form inline).
 Bare-namespace inputs without an explicit registry
 (`library/ubuntu:20.04`, `alpine`) default to `docker.io` via the
 standard Docker reference heuristic — the first segment is only
@@ -353,12 +357,6 @@ storage location.
   for SDK-internal use; external callers who manually pass the combined
   form should be aware that round-tripping `ImageRef` through
   `(repository_key, reference)` keeps only the digest.
-- `port()` parses through `u16::from_str` and returns `None` if the
-  port substring overflows. `oci_spec`'s upstream regex enforces
-  `:<digits>`, so an overflow here means the user supplied a port like
-  `99999` that the registry would also reject; the silent `None`
-  defends the SQLite key lookup at the cost of not surfacing the
-  oversized port as a separate error.
 
 ## Other notable changes
 

@@ -49,7 +49,9 @@ Artifact v3 では、この構造を整理する。
 | `media_types.rs` | OMMX 固有 media type 定義 |
 | `config.rs` | config 構造体 |
 
-`rust/ommx/Cargo.toml` は `ocipkg` に依存している。
+> **本セクション (§3) は v3 着手前の出発点の記述**。`ocipkg` 依存・公開 surface は Step D / F / H (§12.3 / §12.4) で全て撤去済み。現状の依存と公開 surface は §12.4 を参照。
+
+`rust/ommx/Cargo.toml` は v3 着手時点で `ocipkg` に依存していた。
 
 ```toml
 ocipkg = { version = "0.4.0", default-features = false }
@@ -59,7 +61,9 @@ default = ["remote-artifact"]
 remote-artifact = ["ocipkg/remote", "built"]
 ```
 
-### 3.2 `ocipkg` 利用面
+(Step H landing 時点で `ocipkg` の workspace dep / `ommx::ocipkg` re-export ともに削除済み。`oci-client` / `oci-spec` への置換は §12.3 / §12.4 を参照。)
+
+### 3.2 `ocipkg` 利用面 (v3 着手前)
 
 | `ocipkg` API | 用途 |
 |---|---|
@@ -72,13 +76,13 @@ remote-artifact = ["ocipkg/remote", "built"]
 | `ImageManifest` / `Descriptor` / `Digest` / `MediaType` | OCI 標準型 |
 | `image::copy()` | backend 間の artifact copy |
 
-実装上の依存は artifact 周辺に寄っているが、public surface には漏れている。
+実装上の依存は artifact 周辺に寄っていたが、public surface には漏れていた。
 
-- Rust SDK は `ommx::ocipkg` を re-export している。
-- Rust artifact API は `Descriptor` / `Digest` / `MediaType` を public signature に含む。
-- Python `Descriptor` は `oci-spec` の JSON shape を public API として見せている。
+- Rust SDK は `ommx::ocipkg` を re-export していた。
+- Rust artifact API は `Descriptor` / `Digest` / `MediaType` を public signature に含んでいた。
+- Python `Descriptor` は `oci-spec` の JSON shape を public API として見せていた。
 
-したがって `ocipkg` 削除は内部差し替えだけでは終わらない。v3 では Descriptor / Digest / MediaType / ImageReference を OMMX-owned public types として用意し、migration note を用意する。`oci-spec` 由来型を使う場合も internal serde helper に閉じ、public API には出さない。
+したがって `ocipkg` 削除は内部差し替えだけでは終わらないと判断し、v3 では Descriptor / Digest / MediaType / ImageReference を OMMX-owned public types として用意し、migration note を整備した。`oci-spec` 由来型を使う場合も internal serde helper に閉じ、public API には出さない方針を取った (実装は Step H §12.4 で完了)。
 
 ### 3.3 Python Artifact 実装
 

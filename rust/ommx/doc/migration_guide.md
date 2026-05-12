@@ -701,8 +701,15 @@ exports a `.ommx` file. Constructors:
       `host[:port]/name:tag`, `host[:port]/name@<digest>`, and the
       combined `tag@<digest>` form on parse, and canonicalises digest
       references to `name@<digest>` on `Display` (tag references keep
-      `:`). Field access (`image_name.hostname`, `image_name.port`,
-      …) becomes a method call. Bare-namespace inputs without an
+      `:`). The accessor shape is `registry()` (the joined
+      `host[:port]` form, same as
+      `oci_spec::distribution::Reference::registry`) plus `name()` /
+      `reference()`. The v2 split accessors `hostname` /
+      `port` are **gone**: every internal consumer ended up
+      rejoining them at the call site, so the wrapper now exposes
+      the joined form directly. Callers that genuinely need just the
+      host portion (e.g. a localhost / 127.* heuristic) should parse
+      `registry()` inline. Bare-namespace inputs without an
       explicit registry (`library/ubuntu:20.04`, `alpine`) default to
       `docker.io` via the standard Docker reference heuristic — the
       first segment is only treated as a host when it contains `.`
