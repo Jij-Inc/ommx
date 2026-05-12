@@ -10,18 +10,20 @@ SDK) needs to match it byte-for-byte to interoperate.
 What this document **does not** cover:
 
 - **SDK API specifics** (function signatures, error types, exact field
-  names) live in module rustdoc under `ommx::artifact::*`.
+  names) live in module rustdoc under [`crate::artifact`].
 - **Local Registry implementation** (SQLite + filesystem CAS, atomic
   publish primitives, lazy auto-migration) lives in the
-  `ommx::artifact::local_registry` module rustdoc.
+  [`crate::artifact::local_registry`] module rustdoc.
 - **User-facing API surface and migration steps** live in
   [`crate::doc::release_note`] and [`crate::doc::migration_guide`].
 
 ## What is an OMMX Artifact?
 
 An **Artifact** is a named, immutable bundle of optimization data —
-typically one or more of: `Instance` (problem definition),
-`Solution` / `SampleSet` (results), `ParametricInstance`, `ndarray` /
+typically one or more of: [`Instance`](crate::Instance) (problem
+definition), [`Solution`](crate::Solution) /
+[`SampleSet`](crate::SampleSet) (results),
+[`ParametricInstance`](crate::ParametricInstance), `ndarray` /
 `DataFrame` payloads, and JSON / generic blobs. Each Artifact is
 identified by an image reference like
 `ghcr.io/myorg/myproblem:v1` or `name@sha256:<digest>`.
@@ -41,7 +43,7 @@ with off-the-shelf tools (`oras`, `crane`, `skopeo`).
 | Image reference | The name an Artifact is known by — `host[:port]/name(:tag\|@digest)` |
 | Manifest | Small JSON describing the Artifact: `artifactType`, `config`, an ordered list of layer descriptors, optional `subject` for lineage. An OCI Image Manifest, stored verbatim |
 | Descriptor | `{ mediaType, digest, size, annotations }` — a typed pointer to a content-addressed blob (OCI 1.1) |
-| Layer / blob | The actual payload bytes (a serialized `Instance`, a Parquet `DataFrame`, …). Identified by digest |
+| Layer / blob | The actual payload bytes (a serialized [`Instance`](crate::Instance), a Parquet `DataFrame`, …). Identified by digest |
 | Tag | Mutable alias for a digest (e.g. `:v1`, `:latest`) |
 | Digest | Immutable identifier (`sha256:…`); the primary key for an Artifact version. Content hash of the manifest |
 
@@ -56,7 +58,7 @@ There are three storage locations, all interoperating:
 
 | Location | Purpose |
 |---|---|
-| **Local Registry** | Persistent on-disk store / cache / checkout area on the user's machine. Internal layout is SDK-specific — see the `local_registry` module rustdoc |
+| **Local Registry** | Persistent on-disk store / cache / checkout area on the user's machine. Internal layout is SDK-specific — see the [`local_registry`](crate::artifact::local_registry) module rustdoc |
 | **Remote registry** | Sharing and distribution across machines and teams. Any OCI-compliant HTTP registry, accessed over the OCI Distribution API |
 | **`.ommx` archive** | Single-file exchange format. A tar of OCI Image Layout (`oci-layout` + `index.json` + `blobs/`) |
 
