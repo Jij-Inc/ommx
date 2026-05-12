@@ -1578,33 +1578,6 @@
         },
         {
           "kind": "Function",
-          "name": "get_image_dir",
-          "doc": "Get the path where given image is stored in the local registry.\n\n- The directory may not exist if the image is not in the local registry.",
-          "signatures": [
-            {
-              "parameters": [
-                {
-                  "name": "image_name",
-                  "type_": {
-                    "display": "str",
-                    "link_target": null,
-                    "children": []
-                  },
-                  "default": null
-                }
-              ],
-              "return_type": {
-                "display": "Path",
-                "link_target": null,
-                "children": []
-              }
-            }
-          ],
-          "is_async": false,
-          "deprecated": null
-        },
-        {
-          "kind": "Function",
           "name": "get_images",
           "doc": "Get all image names stored in the local registry.\n\nReturns a list of image names (as strings) found in the local registry.",
           "signatures": [
@@ -25789,7 +25762,6 @@
     "ommx.artifact.Artifact": "ommx.artifact",
     "ommx.artifact.ArtifactBuilder": "ommx.artifact",
     "ommx.artifact.Descriptor": "ommx.artifact",
-    "ommx.artifact.get_image_dir": "ommx.artifact",
     "ommx.artifact.get_images": "ommx.artifact",
     "ommx.artifact.get_local_registry_root": "ommx.artifact",
     "ommx.artifact.set_local_registry_root": "ommx.artifact",

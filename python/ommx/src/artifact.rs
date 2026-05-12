@@ -1130,17 +1130,6 @@ pub fn set_local_registry_root(path: PathBuf) -> Result<()> {
     Ok(())
 }
 
-/// Get the path where given image is stored in the local registry.
-///
-/// - The directory may not exist if the image is not in the local registry.
-///
-#[pyo3_stub_gen::derive::gen_stub_pyfunction]
-#[pyfunction]
-pub fn get_image_dir(image_name: &str) -> Result<PathBuf> {
-    let image_name = ommx::artifact::ImageRef::parse(image_name)?;
-    Ok(ommx::artifact::get_image_dir(&image_name))
-}
-
 /// Get all image names stored in the local registry.
 ///
 /// Returns a list of image names (as strings) found in the local registry.

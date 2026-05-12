@@ -98,17 +98,6 @@ pub fn data_dir() -> Result<PathBuf> {
     Ok(path)
 }
 
-/// Get the directory for the given image name in the local registry
-pub fn get_image_dir(image_name: &ImageRef) -> PathBuf {
-    get_local_registry_root().join(image_name.as_path())
-}
-
-#[deprecated(note = "Use get_image_dir instead")]
-pub fn image_dir(image_name: &ImageRef) -> Result<PathBuf> {
-    #[allow(deprecated)]
-    Ok(data_dir()?.join(image_name.as_path()))
-}
-
 pub fn ghcr(org: &str, repo: &str, name: &str, tag: &str) -> Result<ImageRef> {
     ImageRef::parse(&format!(
         "ghcr.io/{}/{}/{}:{}",

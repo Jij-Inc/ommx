@@ -287,25 +287,41 @@ Two new domain traits accompany this shift:
 
 ## `ommx::artifact::ImageRef` replaces `ocipkg::ImageName`
 
-`ImageRef` is the OMMX-owned parsed form of an OCI image reference.
-It accepts `host[:port]/name:tag`, `host[:port]/name@<digest>`, and
-the legacy `host[:port]/name:algorithm:hex` digest spelling on parse,
-and canonicalises to `host[:port]/name@<digest>` for digest references
-on [`Display`](std::fmt::Display) (tag references keep the `:`
-separator). `ImageRef` supersedes the previously re-exported
+`ImageRef` is the OMMX-owned parsed form of an OCI image reference,
+implemented as a thin newtype around
+[`oci_spec::distribution::Reference`]. It accepts
+`host[:port]/name:tag`, `host[:port]/name@<digest>`, and the combined
+`name:tag@<digest>` form on parse, and canonicalises digest references
+to `host[:port]/name@<digest>` on Display (tag references keep the
+`:` separator). `ImageRef` supersedes the previously re-exported
 `ocipkg::ImageName` on every public surface:
 [`LocalArtifact::open`](crate::artifact::LocalArtifact::open),
 [`LocalArtifactBuilder::new`](crate::artifact::LocalArtifactBuilder::new),
 the SQLite Local Registry helpers, and the CLI parse path all now take
 [`ImageRef`](crate::artifact::ImageRef). The accessors mirror what
-`ImageName` offered (`hostname()`, `port()`, `name()`, `reference()`,
-plus the v2-cache-compatible `as_path()` / `from_path()`), but field
-access (`image_name.hostname`) becomes a method call. Bare-namespace
-inputs without an explicit registry (`library/ubuntu:20.04`,
-`jij-inc/ommx:tag`) default to `registry-1.docker.io` via the standard
-Docker reference heuristic — the first segment is only treated as a
-host when it contains `.` or `:` or equals `localhost`. The
-`ommx::ocipkg` re-export is removed.
+`ImageName` offered (`hostname()`, `port()`, `name()`, `reference()`),
+but field access (`image_name.hostname`) becomes a method call.
+Bare-namespace inputs without an explicit registry
+(`library/ubuntu:20.04`, `alpine`) default to `docker.io` via the
+standard Docker reference heuristic — the first segment is only
+treated as a host when it contains `.` or `:` or equals `localhost`.
+The `ommx::ocipkg` re-export is removed.
+
+`ocipkg::ImageName` exposed `as_path()` / `from_path()` for the v2
+disk-cache local registry layout (`<root>/<image_name>/<tag>/`). The
+v3 SQLite Local Registry stores blobs content-addressed and refs in
+SQLite, so per-image directory paths are no longer a v3 concept.
+The path helpers have moved off `ImageRef` and into
+[`local_registry::import::legacy`](crate::artifact::local_registry::import::legacy)
+as crate-private functions, used only while reading v2 caches during
+`ommx artifact import`. The
+[`legacy_local_registry_path`](crate::artifact::local_registry::legacy_local_registry_path)
+re-export is the only `pub` entry point that still computes a v2-shaped
+path. The previously public `get_image_dir` / `image_dir` functions
+and the `ommx image-dir` CLI subcommand are removed; their return
+value no longer corresponded to any v3 storage location, and the
+remaining v3-era use (`ommx push` legacy-only migration hint) goes
+through `legacy_local_registry_path` directly.
 
 ## Other notable changes
 

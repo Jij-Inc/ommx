@@ -696,15 +696,28 @@ exports a `.ommx` file. Constructors:
 - [ ] Replace `Builder::for_github` with `LocalArtifactBuilder::for_github`.
 - [ ] Replace `temp_archive()` with `LocalArtifactBuilder::temp()?.build()?.save(&path)?`.
 - [ ] Replace `ocipkg::ImageName` with `ommx::artifact::ImageRef`. The
-      type accepts `host[:port]/name:tag`, `host[:port]/name@<digest>`,
-      and the legacy `host[:port]/name:algorithm:hex` digest spelling
-      on parse, and canonicalises to `name@<digest>` for digest
-      references on `Display` (tag references keep `:`). Field
-      access (`image_name.hostname`, `image_name.port`, …) becomes a
-      method call. Bare-namespace inputs without an explicit registry
-      (`library/ubuntu:20.04`) now default to `registry-1.docker.io`
-      via the standard Docker reference heuristic — the first segment
-      is only treated as a host when it contains `.` or `:` or equals
-      `localhost`. The `ommx::ocipkg` re-export is removed in v3, so
-      any direct `use ommx::ocipkg::ImageName` call site needs to
-      switch.
+      type is a newtype around `oci_spec::distribution::Reference`,
+      so the full distribution-reference grammar applies. It accepts
+      `host[:port]/name:tag`, `host[:port]/name@<digest>`, and the
+      combined `tag@<digest>` form on parse, and canonicalises digest
+      references to `name@<digest>` on `Display` (tag references keep
+      `:`). Field access (`image_name.hostname`, `image_name.port`,
+      …) becomes a method call. Bare-namespace inputs without an
+      explicit registry (`library/ubuntu:20.04`, `alpine`) default to
+      `docker.io` via the standard Docker reference heuristic — the
+      first segment is only treated as a host when it contains `.`
+      or `:` or equals `localhost`. The `ommx::ocipkg` re-export is
+      removed in v3, so any direct `use ommx::ocipkg::ImageName` call
+      site needs to switch.
+- [ ] Drop calls to `ommx::artifact::get_image_dir` /
+      `ommx::artifact::image_dir`. These returned a v2 disk-cache
+      path (`<root>/<image_name>/<tag>/`) that no longer corresponds
+      to anything in the v3 SQLite Local Registry. The v2 → v3
+      migration check that previously read this path moves to
+      `ommx::artifact::local_registry::legacy_local_registry_path`,
+      which is the only `pub` entry point that still computes the
+      v2-shaped path (used internally by `ommx artifact import`).
+      The `ommx image-dir <name>` CLI subcommand and the Python
+      `ommx.get_image_dir` function are removed for the same
+      reason — pointing users at a path that is unrelated to v3
+      storage was actively misleading.

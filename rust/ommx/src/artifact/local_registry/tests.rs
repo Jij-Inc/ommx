@@ -894,7 +894,10 @@ fn import_oci_archive_does_not_leave_legacy_dir_behind() -> Result<()> {
     let outcome = import_oci_archive(&registry, &archive_path)?;
     assert_eq!(outcome.image_name.as_ref(), Some(&image_name));
 
-    let v2_path = registry.root().join(image_name.as_path());
+    let v2_path = crate::artifact::local_registry::import::legacy::legacy_local_registry_path(
+        registry.root(),
+        &image_name,
+    );
     assert!(
         !v2_path.exists(),
         "legacy v2 OCI dir must not be promoted under registry root, but {} exists",

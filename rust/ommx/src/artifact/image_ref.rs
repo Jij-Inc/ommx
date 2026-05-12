@@ -5,20 +5,18 @@
 //! which owns the full distribution-reference parser (Docker host
 //! heuristic, `name@<digest>` syntax, per-algorithm digest length
 //! validation). The newtype exists so the public API surface of `ommx`
-//! doesn't carry a foreign-crate type directly, lets us expose the
+//! doesn't carry a foreign-crate type directly and lets us expose the
 //! `hostname()` / `port()` / `name()` / `reference()` accessor shape
-//! that internal call sites rely on, and lets us provide the
-//! `as_path()` / `from_path()` legacy-layout helpers used by the v2 →
-//! v3 disk-cache import path.
+//! that internal call sites rely on. The legacy v2 disk-cache layout
+//! helpers live in
+//! [`local_registry::import::legacy`](super::local_registry::import::legacy),
+//! not here — v3 storage is SQLite + content-addressed blobs, not a
+//! path-tree keyed by image name.
 
 use anyhow::{Context, Result};
 use oci_spec::distribution::Reference;
 use serde::{Deserialize, Serialize};
-use std::{
-    fmt,
-    path::{Path, PathBuf},
-    str::FromStr,
-};
+use std::{fmt, str::FromStr};
 
 /// Tag substituted in when an image reference omits one. Matches the
 /// behaviour of `docker pull <name>` and
@@ -83,69 +81,6 @@ impl ImageRef {
             .digest()
             .or_else(|| self.0.tag())
             .unwrap_or(DEFAULT_TAG)
-    }
-
-    /// Encode the ref as `{hostname}/{name}/__{reference}` (or
-    /// `{hostname}__{port}/{name}/__{reference}` when a port is set).
-    /// This is the layout the SDK v2 disk-cache local registry used,
-    /// and the v3 SQLite import path still walks it via
-    /// [`Self::from_path`] when migrating user data.
-    ///
-    /// The legacy encoding maps `:` to `__`, inherited byte-for-byte
-    /// from SDK v2. That makes tags containing `__` (which the OCI
-    /// distribution tag grammar otherwise allows) ambiguous with
-    /// digest separators on round-trip — a path written from tag
-    /// `my__tag` decodes back as `my:tag`, which fails
-    /// `oci_spec::distribution::Reference`'s digest-length check
-    /// and surfaces as a parse error from [`Self::from_path`].
-    /// OMMX-generated refs never use `__` in tags, so the v2 → v3
-    /// import path is unaffected; the round-trip property only
-    /// holds for refs whose tag does not contain `__`. This
-    /// intentionally preserves on-disk compatibility with v2 caches
-    /// rather than switching to a percent-encoded layout that would
-    /// invalidate existing user data.
-    pub fn as_path(&self) -> PathBuf {
-        let reference = self.reference().replace(':', "__");
-        let host = match self.port() {
-            Some(port) => format!("{}__{port}", self.hostname()),
-            None => self.hostname().to_string(),
-        };
-        PathBuf::from(format!("{host}/{}/__{reference}", self.name()))
-    }
-
-    /// Inverse of [`Self::as_path`]. Returns an error when the path
-    /// shape doesn't match the encoding (so a stray directory inside
-    /// the legacy local registry root surfaces a clear error during
-    /// import rather than producing a corrupted ref).
-    pub fn from_path(path: &Path) -> Result<Self> {
-        let components = path
-            .components()
-            .map(|c| {
-                c.as_os_str()
-                    .to_str()
-                    .context("Path includes a non UTF-8 component")
-            })
-            .collect::<Result<Vec<&str>>>()?;
-        if components.len() < 3 {
-            anyhow::bail!(
-                "Path for image ref must contain registry, name, and tag components: {}",
-                path.display()
-            );
-        }
-
-        let registry = components[0].replace("__", ":");
-        let n = components.len();
-        let name = components[1..n - 1].join("/");
-        let last = components[n - 1]
-            .strip_prefix("__")
-            .with_context(|| format!("Missing tag prefix in path: {}", path.display()))?
-            .replace("__", ":");
-        // `:` only appears in the decoded reference when it originated
-        // as an `algorithm:hex` digest; pick the OCI-standard `@`
-        // separator in that case so the reassembled string round-trips
-        // through `oci_spec::distribution::Reference`.
-        let separator = if last.contains(':') { '@' } else { ':' };
-        Self::parse(&format!("{registry}/{name}{separator}{last}"))
     }
 
     /// Repository key for the SQLite Local Registry ref store, in the
@@ -321,44 +256,6 @@ mod tests {
     #[test]
     fn rejects_at_sign_in_non_digest_reference() {
         assert!(ImageRef::parse("ghcr.io/foo@nottag").is_err());
-    }
-
-    /// Path round-trip holds for every ref whose tag does not contain
-    /// `__` — the v2-inherited encoding maps `:` to `__`, so a tag
-    /// already containing `__` is the documented break point.
-    #[test]
-    fn round_trip_path_layout_for_non_underscore_tags() {
-        for input in [
-            "localhost:5000/test_repo:latest",
-            "ubuntu:20.04",
-            "alpine",
-            "quay.io/jitesoft/alpine@sha256:6755355f801f8e3694bffb1a925786813462cea16f1ce2b0290b6a48acf2500c",
-        ] {
-            let r = ImageRef::parse(input).unwrap();
-            let path = r.as_path();
-            let parsed = ImageRef::from_path(&path).unwrap();
-            assert_eq!(parsed, r, "round-trip failed for {input}");
-        }
-    }
-
-    /// Tags that legitimately contain `__` collide with the legacy
-    /// path encoding of `:`, so the round-trip is not lossless —
-    /// `from_path` decodes every `__` back to `:`, then reassembles
-    /// the ref with `@` as the digest separator. The result fails
-    /// `oci_spec::distribution::Reference`'s digest-length check
-    /// (a "tag" like `my__tag` won't satisfy any known
-    /// `algorithm:hex` shape), surfacing the lossy case as a clear
-    /// parse error rather than silent corruption. OMMX-generated
-    /// refs never use `__` in tags, so the v2 → v3 legacy import
-    /// path is unaffected.
-    #[test]
-    fn path_layout_round_trip_fails_for_double_underscore_tags() {
-        let r = ImageRef::parse("example.com/foo:my__tag").unwrap();
-        let path = r.as_path();
-        assert!(
-            ImageRef::from_path(&path).is_err(),
-            "from_path should reject the lossy round-trip rather than corrupt the ref",
-        );
     }
 
     #[test]

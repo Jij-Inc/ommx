@@ -12,5 +12,4 @@ ommx.artifact
    _items/ommx.artifact.Descriptor
    _items/ommx.artifact.get_local_registry_root
    _items/ommx.artifact.set_local_registry_root
-   _items/ommx.artifact.get_image_dir
    _items/ommx.artifact.get_images

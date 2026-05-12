@@ -3,10 +3,10 @@ use clap::{Parser, Subcommand};
 use colored::Colorize;
 use oci_spec::image::ImageManifest;
 use ommx::artifact::{
-    fetch_remote_manifest, get_image_dir,
+    fetch_remote_manifest, get_local_registry_root,
     local_registry::{
-        import_oci_archive, import_oci_dir, inspect_archive, oci_dir_ref, pull_image,
-        LocalRegistry, RefConflictPolicy,
+        import_oci_archive, import_oci_dir, inspect_archive, legacy_local_registry_path,
+        oci_dir_ref, pull_image, LocalRegistry, RefConflictPolicy,
     },
     ImageRef, LocalArtifact,
 };
@@ -56,12 +56,6 @@ enum Command {
 
     /// List the images in the local registry
     List,
-
-    /// Get the directory where the image is stored
-    ImageDirectory {
-        /// Container image name
-        image_name: String,
-    },
 
     /// Manage Artifact v3 local registry
     Artifact {
@@ -212,7 +206,7 @@ impl ImageRefOrPath {
 /// pre-v3 artifact. Returns `Ok(())` when no legacy dir is present,
 /// letting callers proceed with their normal remote / local fallback.
 fn migration_hint_if_legacy_only(name: &ImageRef) -> Result<()> {
-    if get_image_dir(name).exists() {
+    if legacy_local_registry_path(get_local_registry_root(), name).exists() {
         bail!(
             "{name} exists only in the legacy local registry directory. \
              Run `ommx artifact import` once to migrate it into the v3 \
@@ -322,12 +316,6 @@ fn main() -> Result<()> {
                     path.display()
                 );
             }
-        }
-
-        Command::ImageDirectory { image_name } => {
-            let name = ImageRef::parse(image_name)?;
-            let path = get_image_dir(&name);
-            println!("{}", path.display());
         }
 
         Command::List => {
