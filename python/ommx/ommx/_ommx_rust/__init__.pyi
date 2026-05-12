@@ -438,14 +438,14 @@ class ArtifactBuilder:
         `LocalRegistry` and persisted in its SQLite metadata)
         identifies which registry produced the artifact (useful when
         archives are shared), the local-time timestamp lets you
-        identify entries by when they were created, and the 8-hex
-        random nonce keeps concurrent anonymous builds (MINTO-style
-        scripts emitting many artifacts per second) collision-free
-        regardless of clock resolution. Use `Artifact.image_name` to
-        read the synthesized name back. The `.local` mDNS TLD prevents
-        an accidental push from leaking to a real remote registry.
-        Use `ommx artifact prune-anonymous` to clean accumulated
-        entries.
+        identify entries by when they were created, and the 12-hex
+        (48-bit) random nonce keeps concurrent anonymous builds
+        (MINTO-style scripts emitting many artifacts per second)
+        collision-free regardless of clock resolution. Use
+        `Artifact.image_name` to read the synthesized name back. The
+        `.local` mDNS TLD prevents an accidental push from leaking to
+        a real remote registry. Use `ommx artifact prune-anonymous`
+        to clean accumulated entries.
 
         The timestamp is the **caller's local time** with no timezone
         marker. If an anonymous archive is shared with someone in a
