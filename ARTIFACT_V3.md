@@ -129,7 +129,7 @@ Artifact の mutation semantics は 3 相に分ける。
 
 Build 相では同名 key の upsert を許容してよい。Seal 相で最終 DataStore view を snapshot として manifest に固定する。View 相には `add` / `update` を生やさない。
 
-Seal の I/O 段階 — manifest と layer blobs を実際に Local Registry に書き、ref を立てて discoverable にする atomic 動作 — は registry-internal primitive である `LocalRegistry::publish_artifact_atomic` (`ommx::artifact::local_registry` module rustdoc 参照) を呼ぶ。「publish」は OCI Distribution 由来の registry 側の動詞、「commit / build」は SDK ユーザが触る動詞。Git で言えば `git commit` (ユーザ視点) と "object を `.git/objects/` に書いて `refs/heads/<branch>` を進める" (内部実装) の関係に対応する。
+Seal の I/O 段階 — manifest と layer blobs を実際に Local Registry に書き、ref を立てて discoverable にする atomic 動作 — は registry-internal primitive である `SqliteIndexStore::publish_artifact_atomic` (`ommx::artifact::local_registry` module rustdoc 参照) を呼ぶ。「publish」は OCI Distribution 由来の registry 側の動詞、「commit / build」は SDK ユーザが触る動詞。Git で言えば `git commit` (ユーザ視点) と "object を `.git/objects/` に書いて `refs/heads/<branch>` を進める" (内部実装) の関係に対応する。
 
 永続層に update primitive は存在しない。永続化済み Artifact を変える唯一の方法は、新しい full-snapshot Artifact を作ることである。
 
