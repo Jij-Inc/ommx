@@ -57,7 +57,7 @@ fn file_blob_store_round_trip() -> Result<()> {
 fn sqlite_index_store_round_trip() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let store = SqliteIndexStore::open(dir.path().join(SQLITE_INDEX_FILE_NAME))?;
-    assert_eq!(store.schema_version()?, 2);
+    assert_eq!(store.schema_version()?, 1);
 
     let manifest_digest = sha256_digest(b"manifest");
     let layer_digest = sha256_digest(b"layer");

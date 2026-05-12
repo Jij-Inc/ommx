@@ -29,12 +29,11 @@ pub struct PublishOutcome {
 /// migration strategy is "open the registry and let `init_schema` run
 /// `CREATE TABLE IF NOT EXISTS` for every table"; bumping the version
 /// records the change so future incompatible migrations (column drop,
-/// type change) can branch on the stored version.
-///
-/// - v1: initial schema (`blobs`, `manifests`, `manifest_layers`, `refs`).
-/// - v2: adds `ommx_local_registry_metadata` (key/value table) holding
-///   per-registry `registry_id` for anonymous artifact synthesis.
-const SCHEMA_VERSION: i64 = 2;
+/// type change) can branch on the stored version. The SQLite Local
+/// Registry has not been released yet, so v1 is the only version
+/// shipped to date — the metadata table (`ommx_local_registry_metadata`)
+/// is part of v1.
+const SCHEMA_VERSION: i64 = 1;
 const SQLITE_BUSY_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// SQLite-backed index store for the v3 Local Registry.
@@ -593,24 +592,14 @@ impl SqliteIndexStore {
                 version INTEGER NOT NULL
             );
 
-            -- Seed the schema row on fresh registries at the current
-            -- SCHEMA_VERSION. Pre-existing registries get migrated
-            -- below.
             INSERT INTO ommx_local_registry_schema (version)
-            SELECT 2
+            SELECT 1
             WHERE NOT EXISTS (SELECT 1 FROM ommx_local_registry_schema);
 
             CREATE TABLE IF NOT EXISTS ommx_local_registry_metadata (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
             );
-
-            -- v1 → v2 migration: the metadata table is additive (no
-            -- destructive change), so the only action is to bump the
-            -- recorded schema version. Pre-v2 registries still get
-            -- a `registry_id` lazily on the first call to
-            -- `SqliteIndexStore::registry_id()`.
-            UPDATE ommx_local_registry_schema SET version = 2 WHERE version = 1;
 
             CREATE TABLE IF NOT EXISTS blobs (
                 digest TEXT PRIMARY KEY,
