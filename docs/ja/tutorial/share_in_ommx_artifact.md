@@ -140,10 +140,10 @@ builder = ArtifactBuilder.new_anonymous()
 | コンストラクタ | 説明 |
 | --- | --- |
 | [`ArtifactBuilder.new`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.new) | 呼び出し側で image_name を指定する |
-| [`ArtifactBuilder.new_anonymous`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.new_anonymous) | `ommx.local/anonymous:<ローカルタイムスタンプ>` 形式で名前を自動生成 |
+| [`ArtifactBuilder.new_anonymous`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.new_anonymous) | `<レジストリ ID8>.ommx.local/anonymous:<ローカルタイムスタンプ>` 形式で名前を自動生成 |
 | [`ArtifactBuilder.for_github`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.for_github) | GitHub Container Registry に合わせてコンテナの名前を決める |
 
-`new_anonymous` のホスト名 `ommx.local` は `.local` (mDNS) link-local TLD を使っているので、誤って push しても実際のリモートレジストリには到達しません。蓄積した anonymous エントリは `ommx artifact prune-anonymous` で一括削除できます。
+`new_anonymous` のホスト名は `<レジストリ ID8>.ommx.local` 形式で、`.local` (mDNS) link-local TLD を使っているので誤って push しても実際のリモートレジストリには到達しません。先頭のレジストリ ID は各 `LocalRegistry` の初回作成時に一度だけ生成されてメタデータに保存される UUID で、同じレジストリで作られた anonymous artifact は同じ prefix を共有します。アーカイブを共有した際にも「どのレジストリで作られたか」が判別できます。蓄積した anonymous エントリは `ommx artifact prune-anonymous` で一括削除できます (異なるレジストリ ID の prefix も含めて削除されます)。
 
 どの方法で初期化しても同じように `ommx.v1.Instance` や他のデータを保存することが出来ます。上で用意したデータを追加してみましょう。
 

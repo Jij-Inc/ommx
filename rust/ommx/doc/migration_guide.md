@@ -661,13 +661,15 @@ publishes into the SQLite Local Registry, and `LocalArtifact::save`
 exports a `.ommx` file. Constructors:
 
 - `LocalArtifactBuilder::new(image_name)` — caller-supplied ref name.
-- `LocalArtifactBuilder::new_anonymous()` — synthesizes a placeholder
-  image name `ommx.local/anonymous:<local-timestamp>` (the SQLite
-  Local Registry requires a ref; the local-time timestamp lets you
-  identify entries by when they were created). The `.local` mDNS TLD
-  prevents an accidental push from leaking to a real remote registry.
-  `ommx artifact prune-anonymous` bulk-cleans accumulated anonymous
-  refs.
+- `LocalArtifactBuilder::new_anonymous()` — defers name synthesis to
+  `build_in_registry`, which constructs
+  `<registry-id8>.ommx.local/anonymous:<local-timestamp>` against the
+  destination registry's `registry_id` (a random UUID generated once
+  per `LocalRegistry` and persisted in SQLite metadata). The local-time
+  `YYYYMMDDTHHMMSS` tag lets you read the creation time at a glance.
+  The `.local` mDNS TLD prevents an accidental push from leaking to
+  a real remote registry. `ommx artifact prune-anonymous`
+  bulk-cleans every registry-id prefix's anonymous refs.
 - `LocalArtifactBuilder::temp()` — random `ttl.sh/<uuid>:1h` name;
   insecure, tests only.
 - `LocalArtifactBuilder::for_github(org, repo, name, tag)` — GHCR

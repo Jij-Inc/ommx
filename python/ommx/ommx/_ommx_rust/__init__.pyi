@@ -326,15 +326,18 @@ class ArtifactBuilder:
         Create a new artifact builder without inventing an image name.
 
         UX shortcut: a synthetic image name of the form
-        `ommx.local/anonymous:<local-timestamp>` is generated and used
-        as the SQLite Local Registry key. v3 stores every artifact in
-        the registry, so anonymous artifacts still need a key — the
-        timestamp lets you identify entries by when they were created
-        (use `Artifact.image_name` to read it back). The hostname
-        `ommx.local` uses the `.local` mDNS link-local TLD so any
-        attempt to push the artifact will not leak to a real remote
-        registry. Use `ommx artifact prune-anonymous` to clean
-        accumulated entries.
+        `<registry-id8>.ommx.local/anonymous:<local-timestamp>` is
+        generated at build time and used as the SQLite Local Registry
+        key. v3 stores every artifact in the registry, so anonymous
+        artifacts still need a key — the registry-id prefix (a random
+        8-hex truncation of a UUID generated once per `LocalRegistry`
+        and persisted in its SQLite metadata) identifies which
+        registry produced the artifact, useful when archives are
+        shared, and the local-time timestamp lets you identify entries
+        by when they were created. Use `Artifact.image_name` to read
+        the synthesized name back. The `.local` mDNS TLD prevents an
+        accidental push from leaking to a real remote registry. Use
+        `ommx artifact prune-anonymous` to clean accumulated entries.
 
         Call {meth}`Artifact.save(path)` on the returned handle to also
         write a `.ommx` archive file for sharing.
@@ -346,7 +349,7 @@ class ArtifactBuilder:
         >>> builder = ArtifactBuilder.new_anonymous()
         >>> _desc = builder.add_instance(instance)
         >>> artifact = builder.build()
-        >>> assert artifact.image_name.startswith("ommx.local/anonymous:")
+        >>> assert ".ommx.local/anonymous:" in artifact.image_name
 
         ```
         """

@@ -75,21 +75,23 @@ impl LocalRegistry {
         self.index.resolve_image_name(image_name)
     }
 
-    /// List every SQLite ref published under the shared anonymous
-    /// repository name `ommx.local/anonymous`. Each anonymous artifact
-    /// has the same `name` column and a per-build timestamp as
-    /// `reference`, so this filters by exact name match (`list_refs`'
-    /// prefix would over-match if any future ref shared the same
-    /// prefix). Returned in `(name, reference)` order.
+    /// List every SQLite ref whose name ends with the anonymous
+    /// suffix `.ommx.local/anonymous`. Each anonymous artifact's
+    /// `name` column carries a per-machine UID prefix
+    /// (`<uid8>.ommx.local/anonymous`), so suffix matching picks up
+    /// entries from every machine ever to write into this registry —
+    /// not just the current host. Returned in `(name, reference)`
+    /// order to match [`SqliteIndexStore::list_refs`].
     pub fn list_anonymous_artifact_refs(
         &self,
     ) -> Result<Vec<crate::artifact::local_registry::RefRecord>> {
-        let all = self
-            .index
-            .list_refs(Some(crate::artifact::ANONYMOUS_ARTIFACT_REF_NAME))?;
+        let all = self.index.list_refs(None)?;
         Ok(all
             .into_iter()
-            .filter(|r| r.name == crate::artifact::ANONYMOUS_ARTIFACT_REF_NAME)
+            .filter(|r| {
+                r.name
+                    .ends_with(crate::artifact::ANONYMOUS_ARTIFACT_REF_NAME_SUFFIX)
+            })
             .collect())
     }
 

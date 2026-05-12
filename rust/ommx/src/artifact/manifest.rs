@@ -268,9 +268,23 @@ impl LocalManifest {
 /// artifact media type and the OCI 1.1 empty config descriptor as
 /// `config`. The layer blobs land in the Image Manifest's `layers[]`
 /// field.
+/// How the builder picks its image name at build time. Explicit
+/// values get used verbatim; the `Anonymous` variant lets
+/// [`LocalArtifactBuilder::build_in_registry`] synthesize a name
+/// against the actual target registry's `registry_id` instead of
+/// committing to one at construction time. Building an anonymous
+/// builder into a fresh `LocalRegistry` therefore stamps the
+/// destination-registry's id into the synthesized hostname, not the
+/// default registry's id.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum BuilderImageName {
+    Explicit(ocipkg::ImageName),
+    Anonymous,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LocalArtifactBuilder {
-    image_name: ocipkg::ImageName,
+    image_name: BuilderImageName,
     artifact_type: MediaType,
     layers: Vec<StagedArtifactBlob>,
     subject: Option<Descriptor>,
@@ -280,7 +294,7 @@ pub struct LocalArtifactBuilder {
 impl LocalArtifactBuilder {
     pub fn new(image_name: ocipkg::ImageName) -> Self {
         Self {
-            image_name,
+            image_name: BuilderImageName::Explicit(image_name),
             artifact_type: MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
             layers: Vec::new(),
             subject: None,
@@ -291,13 +305,23 @@ impl LocalArtifactBuilder {
     /// Builder for an artifact whose name is auto-generated. UX
     /// shortcut for "I just want to share this artifact, I don't want
     /// to invent a real name". The synthesized image name has the form
-    /// `ommx.local/anonymous:<local-timestamp>` (see
-    /// [`anonymous_artifact_image_name`] for the exact format); a user
-    /// inspecting the SQLite Local Registry later can tell at a glance
-    /// when each anonymous entry was created. Use
+    /// `<registry-id8>.ommx.local/anonymous:<local-timestamp>`; the
+    /// registry-id prefix is generated once when each
+    /// [`LocalRegistry`] is first created and persisted in its SQLite
+    /// metadata, so anonymous artifacts from the same registry share
+    /// a prefix and can be told apart from artifacts imported from
+    /// another registry. Name synthesis is deferred to
+    /// [`Self::build_in_registry`] so the prefix reflects the actual
+    /// target registry (not the default registry). Use
     /// `ommx artifact prune-anonymous` to clean accumulated entries.
-    pub fn new_anonymous() -> Result<Self> {
-        Ok(Self::new(anonymous_artifact_image_name()?))
+    pub fn new_anonymous() -> Self {
+        Self {
+            image_name: BuilderImageName::Anonymous,
+            artifact_type: MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
+            layers: Vec::new(),
+            subject: None,
+            annotations: HashMap::new(),
+        }
     }
 
     /// Builder under a random `ttl.sh/<uuid>:1h` image name. Insecure;
@@ -397,10 +421,20 @@ impl LocalArtifactBuilder {
     }
 
     pub fn build_in_registry(
-        self,
+        mut self,
         registry: Arc<LocalRegistry>,
         policy: RefConflictPolicy,
     ) -> Result<LocalArtifact> {
+        // Resolve a deferred anonymous name against the *actual*
+        // target registry's id, so the synthesized hostname prefix
+        // matches the destination registry (not the default
+        // registry, which `LocalArtifactBuilder::new_anonymous`
+        // could not have known at construction time).
+        if let BuilderImageName::Anonymous = self.image_name {
+            let registry_id = registry.index().registry_id()?;
+            self.image_name =
+                BuilderImageName::Explicit(anonymous_artifact_image_name(&registry_id)?);
+        }
         let staged = self.stage()?;
         let ref_update = registry.publish_artifact_manifest(
             &staged.image_name,
@@ -472,8 +506,23 @@ impl LocalArtifactBuilder {
         let manifest_bytes = stable_json_bytes(&manifest)?;
         let manifest_descriptor =
             descriptor_from_bytes(MediaType::ImageManifest, &manifest_bytes, HashMap::new())?;
+        // `build_in_registry` resolves the `Anonymous` variant before
+        // calling `stage()`, so reaching `stage()` with `Anonymous`
+        // here is a bug (someone bypassed the resolve step). Surface
+        // it as a clear internal error rather than letting it slip
+        // through as a mysterious empty-name.
+        let image_name = match self.image_name {
+            BuilderImageName::Explicit(name) => name,
+            BuilderImageName::Anonymous => {
+                crate::bail!(
+                    "LocalArtifactBuilder::stage called with an unresolved anonymous image \
+                     name. Use `build_in_registry` (which resolves the name against the target \
+                     registry's id) instead of calling `stage` directly."
+                );
+            }
+        };
         Ok(StagedArtifactManifest {
-            image_name: self.image_name,
+            image_name,
             manifest,
             manifest_bytes,
             manifest_descriptor,
@@ -562,32 +611,53 @@ fn ensure_ommx_image_manifest(manifest: &ImageManifest) -> Result<()> {
     Ok(())
 }
 
-/// Fully-qualified repository name shared by every anonymous artifact:
-/// `ommx.local/anonymous`. v3 stores each anonymous build as a separate
-/// `(name, reference)` row under this name, where the reference is the
-/// build's local timestamp.
+/// Suffix shared by every anonymous artifact repository name. The
+/// full SQLite ref name is `<registry-id8>.ommx.local/anonymous`; the
+/// registry-id prefix is randomised per registry, so filtering
+/// anonymous artifacts uses
+/// `name.ends_with(ANONYMOUS_ARTIFACT_REF_NAME_SUFFIX)`.
+/// `ommx artifact prune-anonymous` cleans entries from every prefix
+/// in the registry, not just the host's own.
 ///
-/// The hostname segment `ommx.local` deliberately uses the `.local`
+/// The hostname segment `.ommx.local` deliberately uses the `.local`
 /// link-local TLD (RFC 6762, multicast DNS). A push attempt against
 /// this name resolves through mDNS rather than DNS — so an accidental
 /// `ommx push <anonymous>` cannot leak the artifact to a real remote
 /// registry; absent an mDNS responder, the push just fails locally.
-pub const ANONYMOUS_ARTIFACT_REF_NAME: &str = "ommx.local/anonymous";
+pub const ANONYMOUS_ARTIFACT_REF_NAME_SUFFIX: &str = ".ommx.local/anonymous";
 
-/// Generate a synthetic [`ocipkg::ImageName`] for an anonymous artifact.
+/// Number of hex chars from the full registry-id used as the
+/// hostname prefix. The metadata column stores the full 32-hex UUID;
+/// only the hostname rendering truncates. Picked so the prefix is
+/// short enough to read at a glance but wide enough (2^32) to avoid
+/// realistic collisions across a single user's registries.
+const ANONYMOUS_REGISTRY_ID_HOST_LEN: usize = 8;
+
+/// Generate a synthetic [`ocipkg::ImageName`] for an anonymous
+/// artifact. Build the image name from the registry's persisted
+/// `registry_id` (so the prefix matches the destination registry,
+/// not the default registry), plus a local-time timestamp tag.
 ///
-/// Format: `ommx.local/anonymous:<local-time>` where the timestamp is
-/// `YYYY-MM-DD-HH-MM-SS-<nanoseconds>` in the caller's local time zone
-/// (not UTC) so a user inspecting the SQLite Local Registry later can
-/// read the creation time without time-zone arithmetic. Nanosecond
-/// precision keeps two anonymous builds in the same second from
-/// colliding; should they ever collide, the `ArchiveBuilder` /
-/// `Artifact.save` path uses `RefConflictPolicy::Replace` so the
-/// outcome is overwrite, not error.
-pub fn anonymous_artifact_image_name() -> Result<ocipkg::ImageName> {
-    let stamp = chrono::Local::now().format("%Y-%m-%d-%H-%M-%S-%9f");
-    ocipkg::ImageName::parse(&format!("{ANONYMOUS_ARTIFACT_REF_NAME}:{stamp}"))
-        .with_context(|| format!("Failed to synthesise anonymous artifact image name: {stamp}"))
+/// Format: `<registry-id8>.ommx.local/anonymous:<local-time>` where
+/// - `<registry-id8>` is the first
+///   [`ANONYMOUS_REGISTRY_ID_HOST_LEN`] hex chars of the registry's
+///   `registry_id` metadata (a random UUID generated once per
+///   [`LocalRegistry`] on first init). The full UUID stays on disk
+///   for future widening; only the rendering truncates.
+/// - `<local-time>` is `YYYYMMDDTHHMMSS` in the caller's **local**
+///   time zone (no `Z` / no offset — OCI tag syntax forbids `+`, and
+///   a fixed UTC marker would defeat the "I can read the date at a
+///   glance" intent). A registry shared across machines in different
+///   timezones loses the time component's absolute meaning, which is
+///   an explicit non-goal for anonymous artifacts.
+pub fn anonymous_artifact_image_name(registry_id: &str) -> Result<ocipkg::ImageName> {
+    let prefix: String = registry_id
+        .chars()
+        .take(ANONYMOUS_REGISTRY_ID_HOST_LEN)
+        .collect();
+    let stamp = chrono::Local::now().format("%Y%m%dT%H%M%S");
+    ocipkg::ImageName::parse(&format!("{prefix}.ommx.local/anonymous:{stamp}"))
+        .with_context(|| format!("Failed to synthesise anonymous artifact image name: {prefix}"))
 }
 
 #[cfg(test)]
@@ -598,19 +668,49 @@ mod tests {
         ocipkg::ImageName::parse(&format!("ghcr.io/jij-inc/ommx/demo:{tag}"))
     }
 
-    /// `chrono::Local::now().format("%Y-%m-%d-%H-%M-%S-%9f")` produces
-    /// a string whose every component is alphanumeric with `-`
-    /// separators — the OCI distribution spec accepts this as a tag.
-    /// A regression that swapped the format to include `:` or `.`
-    /// would break `ImageName::parse` here.
+    /// `<registry-id8>.ommx.local/anonymous:<YYYYMMDDTHHMMSS>` must
+    /// parse as a valid OCI image reference. A regression that
+    /// included `:` / `+` in the timestamp, or non-alphanumeric chars
+    /// in the registry-id prefix, would break `ImageName::parse`.
     #[test]
     fn anonymous_image_name_parses() {
-        let name = anonymous_artifact_image_name().expect("synthetic ref must parse");
+        let fake_registry_id = "deadbeef0123456789abcdef01234567";
+        let name = anonymous_artifact_image_name(fake_registry_id).expect("synthetic ref parses");
         let s = name.to_string();
+        // Repository portion ends with `.ommx.local/anonymous`; the
+        // tag follows the colon. e.g. `deadbeef.ommx.local/anonymous:20260512T153045`.
+        let (before_colon, tag) = s.rsplit_once(':').expect("ref must include `:tag`");
         assert!(
-            s.starts_with(&format!("{ANONYMOUS_ARTIFACT_REF_NAME}:")),
-            "synthetic ref `{s}` must start with `{ANONYMOUS_ARTIFACT_REF_NAME}:`",
+            before_colon.ends_with(ANONYMOUS_ARTIFACT_REF_NAME_SUFFIX),
+            "ref `{before_colon}` must end with `{ANONYMOUS_ARTIFACT_REF_NAME_SUFFIX}`",
         );
+        assert!(
+            before_colon.starts_with("deadbeef."),
+            "ref `{before_colon}` must start with the truncated registry-id prefix",
+        );
+        // Tag is `YYYYMMDDTHHMMSS` (15 chars), no separators except
+        // the alphabetic `T` between date and time.
+        assert_eq!(tag.len(), 15, "tag `{tag}` must be 15 chars");
+        assert!(
+            tag.chars().nth(8) == Some('T'),
+            "tag `{tag}` must have `T` at position 8",
+        );
+    }
+
+    /// Hostname prefix is truncated to the configured length even when
+    /// the persisted registry-id is the full 32-hex UUID, so the
+    /// rendered image name stays compact while the metadata column
+    /// keeps the full identifier for future use.
+    #[test]
+    fn anonymous_image_name_truncates_registry_id() {
+        let full = "0123456789abcdef0123456789abcdef";
+        let name = anonymous_artifact_image_name(full).unwrap().to_string();
+        let host = name
+            .split('/')
+            .next()
+            .expect("synthetic ref has a host segment");
+        // `<8-hex>.ommx.local` → host segment is the 8-hex + `.ommx.local`.
+        assert_eq!(host, format!("{}.ommx.local", &full[..8]));
     }
 
     #[test]

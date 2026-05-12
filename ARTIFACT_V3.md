@@ -744,11 +744,12 @@ Step D の境界: archive / dir に対する `LocalArtifact::push()` 経路 (Ste
 
 Step F の landing で ocipkg の `OciArchive` / `OciArchiveBuilder` / `OciDir` / `OciDirBuilder` / `OciArtifact` / `Image` / `ImageBuilder` の使用箇所が全て消え、`Artifact<Base: Image>` の generic 化も削除した。`ArchiveArtifactBuilder` も廃止し、全ビルドは `LocalArtifactBuilder` 経由で user 永続 SQLite registry に landing する。`.ommx` ファイルは `LocalArtifact::save(path)` (Rust) / `Artifact.save(path)` (Python) による exchange-format export であり、build target ではない。
 
-**Anonymous artifact UX**: 名前を考えるのが面倒というケース向けに `LocalArtifactBuilder::new_anonymous()` および Python `ArtifactBuilder.new_anonymous()` を提供する。内部で `ommx.local/anonymous:<ローカルタイムスタンプ>` 形式の synthetic image name を生成して user 永続 SQLite registry に書き込む。設計判断:
+**Anonymous artifact UX**: 名前を考えるのが面倒というケース向けに `LocalArtifactBuilder::new_anonymous()` および Python `ArtifactBuilder.new_anonymous()` を提供する。`build_in_registry` 時に destination registry の `registry_id` から `<registry-id8>.ommx.local/anonymous:<ローカルタイムスタンプ>` 形式の synthetic image name を生成して user 永続 SQLite registry に書き込む。設計判断:
 
-- **ホスト名 `ommx.local`** — `.local` は mDNS link-local TLD (RFC 6762) なので、誤って `ommx push` してもリモートレジストリには漏れず、mDNS responder が居なければ単に push が失敗する。
-- **タグ部分 (タイムスタンプ)** — ローカルタイム (`YYYY-MM-DD-HH-MM-SS-<nanoseconds>`) で、ユーザがあとからレジストリを覗いたときにタイムゾーン計算なしで作成日時を読めるようにしている。ナノ秒精度で同秒内 collision を防止。
-- **共有 repository name** — すべての anonymous artifact は同じ `ommx.local/anonymous` の下にタグだけ違う形で並ぶ。
+- **registry_id (lazy, registry 単位)** — 各 `LocalRegistry` の初回 init 時に random UUID v4 を生成して SQLite metadata table `ommx_local_registry_metadata` に永続化する。machine UID (OS vendor が confidential 扱いするもの) を使うのではなく registry 単位の random ID にすることで、(a) ホスト HW 識別子の漏洩無し、(b) registry ディレクトリを別マシンに clone しても同一の prefix が維持される、(c) 新規 registry には新 prefix が割り当てられる、というユーザ直感的な挙動になる。on-disk には full UUID を保存し、hostname 化時のみ 8 hex に truncate するので将来 prefix を広げる余地もある。
+- **ホスト名 `<registry-id8>.ommx.local`** — `.local` は mDNS link-local TLD (RFC 6762) なので誤って `ommx push` してもリモートレジストリには漏れない (mDNS responder が居なければ push が失敗するだけ)。
+- **タグ部分** — `YYYYMMDDTHHMMSS` (ISO 8601 basic、ローカルタイム、TZ マーカー無し) でコンパクト。OCI tag は `+` を使えないため RFC 3339 with offset は採用不可、UTC + `Z` だとユーザにとって読みにくいので TZ マーカーを省略する形に落ち着いた。
+- **共有 repository name サフィックス** — registry 毎に prefix が変わるので、anonymous artifact の prune は `name.ends_with(".ommx.local/anonymous")` の suffix match で全 prefix を拾う。
 
 蓄積した anonymous エントリは `ommx artifact prune-anonymous [--dry-run]` で一括削除できる (manifest / blob の CAS レコードは残り、将来の GC で回収される)。
 
