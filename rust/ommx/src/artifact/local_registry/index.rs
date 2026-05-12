@@ -23,6 +23,16 @@ pub struct PublishOutcome {
     pub ref_update: Option<RefUpdate>,
 }
 
+/// SQLite Local Registry schema version. Bumped whenever the schema
+/// changes in a way that needs distinct identification (new tables,
+/// new columns, semantic changes to existing rows). The current
+/// migration strategy is "open the registry and let `init_schema` run
+/// `CREATE TABLE IF NOT EXISTS` for every table"; bumping the version
+/// records the change so future incompatible migrations (column drop,
+/// type change) can branch on the stored version. The SQLite Local
+/// Registry has not been released yet, so v1 is the only version
+/// shipped to date — the metadata table (`ommx_local_registry_metadata`)
+/// is part of v1.
 const SCHEMA_VERSION: i64 = 1;
 const SQLITE_BUSY_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -466,6 +476,79 @@ impl SqliteIndexStore {
         Ok(PublishOutcome { ref_update })
     }
 
+    /// Per-registry stable identifier. Generated as a random UUID v4
+    /// (32 hex chars) on the first `init_schema` call and stored
+    /// verbatim in the `ommx_local_registry_metadata` table.
+    /// Anonymous artifact ref synthesis truncates the stored value to
+    /// the first [`super::super::manifest::ANONYMOUS_REGISTRY_ID_HOST_LEN`]
+    /// hex chars for the hostname prefix
+    /// (`<registry-id>.ommx.local/anonymous`), so two artifacts built
+    /// against the same registry share a prefix and can be told apart
+    /// from artifacts imported from a different registry. Reading
+    /// this is a single indexed SELECT; cheap enough to call at
+    /// every anonymous build.
+    ///
+    /// Random per-registry (not per-host) means: (1) no host hardware
+    /// identifier leaks through the registry; (2) cloning a registry
+    /// directory to another machine keeps the prefix stable (a clone
+    /// of a registry is still "the same registry"); (3) a fresh
+    /// registry gets a fresh prefix, matching user intent of "this is
+    /// a new home for artifacts".
+    ///
+    /// **Privacy note**: the identifier IS stable per registry; a
+    /// recipient of two SQLite Local Registry exports from the same
+    /// source can correlate them via this column. The identifier
+    /// carries no PII or hardware fingerprint, but is itself a unique
+    /// correlator. Treat the SQLite registry file the same as any
+    /// other user-data export when sharing.
+    pub fn registry_id(&self) -> Result<String> {
+        let conn = self.lock();
+        let row: Option<String> = conn
+            .query_row(
+                r#"SELECT value FROM ommx_local_registry_metadata WHERE key = 'registry_id'"#,
+                [],
+                |r| r.get(0),
+            )
+            .optional()?;
+        match row {
+            Some(id) => Ok(id),
+            None => {
+                // First read on a freshly-initialised registry.
+                // Generate a random UUID v4 and insert; concurrent
+                // racers converge on the first-write-wins via
+                // `OR IGNORE`.
+                let new_id = random_registry_id();
+                conn.execute(
+                    r#"INSERT OR IGNORE INTO ommx_local_registry_metadata (key, value)
+                       VALUES ('registry_id', ?1)"#,
+                    params![&new_id],
+                )?;
+                // Re-read to pick up the winning value if another
+                // writer beat us to the insert.
+                conn.query_row(
+                    r#"SELECT value FROM ommx_local_registry_metadata WHERE key = 'registry_id'"#,
+                    [],
+                    |r| r.get::<_, String>(0),
+                )
+                .context("Failed to read registry_id after insert")
+            }
+        }
+    }
+
+    /// Delete a single ref row by `(name, reference)`. Returns `true`
+    /// when a row was actually removed. Manifest / blob CAS records the
+    /// ref pointed at are **not** touched; an orphan manifest is the
+    /// expected post-state for a deleted ref and is reclaimed by a
+    /// future GC sweep, not by this primitive.
+    pub fn delete_ref(&self, name: &str, reference: &str) -> Result<bool> {
+        let conn = self.lock();
+        let affected = conn.execute(
+            r#"DELETE FROM refs WHERE name = ?1 AND reference = ?2"#,
+            params![name, reference],
+        )?;
+        Ok(affected > 0)
+    }
+
     pub fn list_refs(&self, name_prefix: Option<&str>) -> Result<Vec<RefRecord>> {
         let conn = self.lock();
         let mut out = Vec::new();
@@ -512,6 +595,11 @@ impl SqliteIndexStore {
             INSERT INTO ommx_local_registry_schema (version)
             SELECT 1
             WHERE NOT EXISTS (SELECT 1 FROM ommx_local_registry_schema);
+
+            CREATE TABLE IF NOT EXISTS ommx_local_registry_metadata (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
 
             CREATE TABLE IF NOT EXISTS blobs (
                 digest TEXT PRIMARY KEY,
@@ -623,4 +711,15 @@ fn read_u64(row: &rusqlite::Row<'_>, idx: usize) -> rusqlite::Result<u64> {
 fn read_u32(row: &rusqlite::Row<'_>, idx: usize) -> rusqlite::Result<u32> {
     let value: i64 = row.get(idx)?;
     u32::try_from(value).map_err(|_| rusqlite::Error::IntegralValueOutOfRange(idx, value))
+}
+
+/// Full UUID v4 (32 hex chars, no dashes) seeded on first registry
+/// init. The metadata column stores the full UUID; only the hostname
+/// rendering in [`super::super::anonymous_artifact_image_name`]
+/// truncates to 8 hex chars. Keeping the full UUID on disk leaves
+/// room to widen the rendered prefix later (or expose the full
+/// identifier through a different surface) without rewriting
+/// existing registry data.
+fn random_registry_id() -> String {
+    uuid::Uuid::new_v4().simple().to_string()
 }

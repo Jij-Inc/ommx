@@ -7,6 +7,126 @@
       "items": [
         {
           "kind": "Class",
+          "name": "ArchiveManifest",
+          "doc": "Read-only view of a `.ommx` archive's manifest produced by\n{meth}`Artifact.inspect_archive`. Surfaces the manifest descriptor\nfields without writing the archive into the SQLite Local Registry.",
+          "bases": [],
+          "methods": [],
+          "attributes": [
+            {
+              "name": "annotations",
+              "doc": "Manifest-level annotations (the `annotations` field of the\n`ImageManifest`, not per-layer annotations).",
+              "type_": {
+                "display": "dict[str, str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "config",
+              "doc": "Descriptor of the `config` blob (the OCI 1.1 empty config in\nv3-built archives; v2 archives may carry an OMMX-specific\nconfig blob). The descriptor exposes media type, digest, size,\nand annotations; the bytes themselves are not accessible from\n`ArchiveManifest` — import the archive via\n{meth}`Artifact.import_archive` if you need to read the config\npayload.",
+              "type_": {
+                "display": "Descriptor",
+                "link_target": {
+                  "fqn": "ommx.artifact.Descriptor",
+                  "doc_module": "ommx.artifact",
+                  "kind": "Class",
+                  "attribute": null
+                },
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "image_name",
+              "doc": "Image ref name read from the archive's `index.json`\n(`org.opencontainers.image.ref.name` annotation). `None` only\nfor archives that explicitly omit the annotation; archives\nbuilt by v3 always carry one.",
+              "type_": {
+                "display": "Optional[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "layers",
+              "doc": "Layer descriptors in manifest order.",
+              "type_": {
+                "display": "list[_ommx_rust.Descriptor]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "Descriptor",
+                    "link_target": {
+                      "fqn": "ommx.artifact.Descriptor",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "manifest_digest",
+              "doc": "SHA-256 digest of the manifest blob.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "subject",
+              "doc": "Optional `subject` descriptor on the OCI image manifest, used\nfor the OCI referrers API (cosign / sigstore signatures,\nSBOMs, …). `None` for ordinary OMMX artifacts; surfaced here\nso MINTO-style consumers that walk OCI referrer graphs do not\nhave to import each archive to discover whether it carries a\nsubject.",
+              "type_": {
+                "display": "Optional[_ommx_rust.Descriptor]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "Descriptor",
+                    "link_target": {
+                      "fqn": "ommx.artifact.Descriptor",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
           "name": "Artifact",
           "doc": "Reader for OMMX Artifacts.\n\nAn artifact is an OCI container image that stores OMMX data\n(instances, solutions, sample sets, etc.) as layers.\n\n```python\n>>> artifact = Artifact.load(\"ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f\")\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/random_lp_instance:4303c7f\n\n```",
           "bases": [],
@@ -353,6 +473,100 @@
               "deprecated": null
             },
             {
+              "name": "import_archive",
+              "doc": "Import an artifact from a `.ommx` OCI archive file (or an OCI\nImage Layout directory) into the user's v3 SQLite Local Registry,\nand return a handle to the imported registry entry.\n\n**Side effect (intentional)**: archive / directory contents are\npermanently written into the SQLite Local Registry under the\ndefault root (`$XDG_DATA_HOME/ommx/` on Linux,\n`$HOME/Library/Application Support/org.ommx.ommx/` on macOS, or\n`$OMMX_LOCAL_REGISTRY_ROOT` when set). Subsequent\n`Artifact.load(image_name)` calls resolve from SQLite without\nre-importing.\n\nFor a side-effect-free read that just surfaces the manifest /\nlayer descriptors without writing into the registry, use\n{meth}`Artifact.inspect_archive` instead.\n\nThe input must carry an `org.opencontainers.image.ref.name`\nannotation. Unnamed archives / directories cannot be addressed\nin the SQLite Local Registry and are rejected.\n\n```python\n>>> artifact = Artifact.import_archive(\"data/random_lp_instance.ommx\")\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/random_lp_instance:...\n\n```",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "path",
+                      "type_": {
+                        "display": "str | PathLike | Path",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "PathLike",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Path",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Artifact",
+                    "link_target": {
+                      "fqn": "ommx.artifact.Artifact",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "inspect_archive",
+              "doc": "Read a `.ommx` OCI archive's manifest and layer descriptors\nwithout importing it into the SQLite Local Registry. Useful\nwhen you want to inspect an archive's contents (e.g. iterate\nlayer media types or check the artifact type) without\ntriggering a registry write — the analogue of\n`ommx inspect <archive>` from the CLI.\n\nFor full registry import (so the artifact is reachable by\n`Artifact.load(image_name)` later), use\n{meth}`Artifact.import_archive`.\n\n```python\n>>> manifest = Artifact.inspect_archive(\"data/random_lp_instance.ommx\")\n>>> for layer in manifest.layers:\n...     print(layer.media_type)\napplication/org.ommx.v1.instance\n\n```",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "path",
+                      "type_": {
+                        "display": "str | PathLike | Path",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "PathLike",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Path",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ArchiveManifest",
+                    "link_target": {
+                      "fqn": "ommx.artifact.ArchiveManifest",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "load",
               "doc": "Load an artifact stored as a container image in local or remote registry.\n\nIf the image is not found in local registry, it will try to pull from remote registry.\n\n```python\n>>> artifact = Artifact.load(\"ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f\")\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/random_lp_instance:4303c7f\n\n```",
               "signatures": [
@@ -385,7 +599,7 @@
             },
             {
               "name": "load_archive",
-              "doc": "Load an artifact stored as a `.ommx` OCI archive file, or import\nan OCI Image Layout directory into the v3 SQLite Local Registry\nand return a handle to the registry entry.\n\nFile path → opened in-place via `Artifact<OciArchive>`; no\nregistry side effect. Directory path → **identity-preserving\nimport into the user's default SQLite Local Registry** (see\n`local_registry::import_oci_dir`), then opened by ref. The\ndistinction matches the v3 design: archives stay readable\nwithout registry state, while loose OCI Image Layouts live in\nthe registry.\n\n> **Side effect for the directory branch**: the OCI Image\n> Layout at `path` is permanently written into the SQLite\n> Local Registry under the default root\n> (`$XDG_DATA_HOME/ommx/` on Linux,\n> `$HOME/Library/Application Support/org.ommx.ommx/` on macOS,\n> or `$OMMX_LOCAL_REGISTRY_ROOT` when set). Subsequent\n> `Artifact.load(image_name)` calls resolve from SQLite without\n> another import. If a transient read with no registry write\n> is wanted, pack the directory into a `.ommx` archive first\n> and pass the file path instead.\n\n```python\n>>> artifact = Artifact.load_archive(\"data/random_lp_instance.ommx\")\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/random_lp_instance:...\n\n```",
+              "doc": "Removed in v3 — use {meth}`import_archive` or\n{meth}`inspect_archive` instead.\n\nIn v2 `Artifact.load_archive(file)` opened a `.ommx` archive\nin place without touching the SQLite Local Registry. v3\nchanged that contract: archive ingest now writes the artifact\npermanently into the user's persistent SQLite Local Registry.\nTo make the semantic shift visible (rather than silently\npolluting the registry on upgrade), the v2 name raises an\nexplicit migration error:\n\n- {meth}`Artifact.import_archive(file)\n  <Artifact.import_archive>` — the replacement with the v3\n  registry-write semantics.\n- {meth}`Artifact.inspect_archive(file)\n  <Artifact.inspect_archive>` — a side-effect-free read of the\n  manifest / layer descriptors without registry import.",
               "signatures": [
                 {
                   "parameters": [
@@ -436,6 +650,48 @@
               "signatures": [
                 {
                   "parameters": [],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "save",
+              "doc": "Save the artifact as a `.ommx` OCI archive file at `path`.\n\nThe archive is an exchange-format export of the registry-resident\nartifact. Loading the archive back via\n{meth}`Artifact.import_archive` reimports it into the SQLite Local\nRegistry under the same image name; {meth}`Artifact.inspect_archive`\nreads the manifest / layer descriptors without writing into the\nregistry.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "path",
+                      "type_": {
+                        "display": "str | PathLike | Path",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "PathLike",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Path",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
                   "return_type": {
                     "display": "None",
                     "link_target": null,
@@ -1021,7 +1277,7 @@
             },
             {
               "name": "new",
-              "doc": "Create a new artifact in local registry with a named image name.\n\n```python\n>>> from ommx.testing import SingleFeasibleLPGenerator, DataType\n>>> generator = SingleFeasibleLPGenerator(3, DataType.INT)\n>>> instance = generator.get_v1_instance()\n>>> import uuid\n>>> image_name = f\"ghcr.io/jij-inc/ommx/single_feasible_lp:{uuid.uuid4()}\"\n>>> builder = ArtifactBuilder.new(image_name)\n>>> _desc = builder.add_instance(instance)\n>>> artifact = builder.build()\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/single_feasible_lp:...\n\n```",
+              "doc": "Create a new artifact builder with an explicit image name. The\nartifact is published into the user's persistent SQLite Local\nRegistry on `build()`; call {meth}`Artifact.save(path)` on the\nreturned handle if you also want a `.ommx` archive file for\nsharing.\n\n```python\n>>> from ommx.testing import SingleFeasibleLPGenerator, DataType\n>>> generator = SingleFeasibleLPGenerator(3, DataType.INT)\n>>> instance = generator.get_v1_instance()\n>>> import uuid\n>>> image_name = f\"ghcr.io/jij-inc/ommx/single_feasible_lp:{uuid.uuid4()}\"\n>>> builder = ArtifactBuilder.new(image_name)\n>>> _desc = builder.add_instance(instance)\n>>> artifact = builder.build()\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/single_feasible_lp:...\n\n```",
               "signatures": [
                 {
                   "parameters": [
@@ -1051,93 +1307,11 @@
               "deprecated": null
             },
             {
-              "name": "new_archive",
-              "doc": "Create a new artifact archive with a named image name.",
+              "name": "new_anonymous",
+              "doc": "Create a new artifact builder without inventing an image name.\n\nUX shortcut: a synthetic image name of the form\n`<registry-id8>.ommx.local/anonymous:<local-timestamp>-<nonce>`\nis generated at build time and used as the SQLite Local\nRegistry key. v3 stores every artifact in the registry, so\nanonymous artifacts still need a key — the registry-id prefix\n(a random 8-hex truncation of a UUID generated once per\n`LocalRegistry` and persisted in its SQLite metadata)\nidentifies which registry produced the artifact (useful when\narchives are shared), the local-time timestamp lets you\nidentify entries by when they were created, and the 12-hex\n(48-bit) random nonce keeps concurrent anonymous builds\n(MINTO-style scripts emitting many artifacts per second)\ncollision-free regardless of clock resolution. Use\n`Artifact.image_name` to read the synthesized name back. The\n`.local` mDNS TLD prevents an accidental push from leaking to\na real remote registry. Use `ommx artifact prune-anonymous`\nto clean accumulated entries.\n\nThe timestamp is the **caller's local time** with no timezone\nmarker. If an anonymous archive is shared with someone in a\ndifferent timezone, the recipient will see the same digits but\ninterpret them as their own local time — the time component\nloses absolute meaning across machines. Anonymous artifacts\nare not intended for cross-timezone sharing; pick an explicit\nname via `ArtifactBuilder.new(...)` if absolute time matters.\n\nCall {meth}`Artifact.save(path)` on the returned handle to also\nwrite a `.ommx` archive file for sharing.\n\n```python\n>>> from ommx.testing import SingleFeasibleLPGenerator, DataType\n>>> generator = SingleFeasibleLPGenerator(3, DataType.INT)\n>>> instance = generator.get_v1_instance()\n>>> builder = ArtifactBuilder.new_anonymous()\n>>> _desc = builder.add_instance(instance)\n>>> artifact = builder.build()\n>>> assert \".ommx.local/anonymous:\" in artifact.image_name\n\n```",
               "signatures": [
                 {
-                  "parameters": [
-                    {
-                      "name": "path",
-                      "type_": {
-                        "display": "str | PathLike | Path",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "str",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "PathLike",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Path",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      },
-                      "default": null
-                    },
-                    {
-                      "name": "image_name",
-                      "type_": {
-                        "display": "str",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "ArtifactBuilder",
-                    "link_target": {
-                      "fqn": "ommx.artifact.ArtifactBuilder",
-                      "doc_module": "ommx.artifact",
-                      "kind": "Class",
-                      "attribute": null
-                    },
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "new_archive_unnamed",
-              "doc": "Create a new artifact archive with an unnamed image name.\n\nThis cannot be loaded into local registry nor pushed to remote registry.\n\n```python\n>>> from ommx.testing import SingleFeasibleLPGenerator, DataType\n>>> generator = SingleFeasibleLPGenerator(3, DataType.INT)\n>>> instance = generator.get_v1_instance()\n>>> import uuid\n>>> filename = f\"data/single_feasible_lp.ommx.{uuid.uuid4()}\"\n>>> builder = ArtifactBuilder.new_archive_unnamed(filename)\n>>> _desc = builder.add_instance(instance)\n>>> artifact = builder.build()\n>>> print(artifact.image_name)\nNone\n\n```",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "path",
-                      "type_": {
-                        "display": "str | PathLike | Path",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "str",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "PathLike",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Path",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      },
-                      "default": null
-                    }
-                  ],
+                  "parameters": [],
                   "return_type": {
                     "display": "ArtifactBuilder",
                     "link_target": {
@@ -1155,7 +1329,7 @@
             },
             {
               "name": "temp",
-              "doc": "Create a new artifact as a temporary file.\n\nNote that this is insecure and should only be used for testing.\n\n```python\n>>> builder = ArtifactBuilder.temp()\n>>> artifact = builder.build()\n>>> print(artifact.image_name)\nttl.sh/...-...-...-...-...:1h\n\n```",
+              "doc": "Create a new artifact builder under a random `ttl.sh` image name.\nInsecure; for tests only. `ttl.sh` is a public registry that\nexpires images after one hour.\n\n```python\n>>> builder = ArtifactBuilder.temp()\n>>> artifact = builder.build()\n>>> print(artifact.image_name)\nttl.sh/...-...-...-...-...:1h\n\n```",
               "signatures": [
                 {
                   "parameters": [],
@@ -25611,6 +25785,7 @@
     }
   },
   "export_map": {
+    "ommx.artifact.ArchiveManifest": "ommx.artifact",
     "ommx.artifact.Artifact": "ommx.artifact",
     "ommx.artifact.ArtifactBuilder": "ommx.artifact",
     "ommx.artifact.Descriptor": "ommx.artifact",

@@ -39,7 +39,7 @@ use std::collections::HashMap;
 pub use crate::artifact::digest::sha256_digest;
 pub(crate) use crate::artifact::digest::{validate_digest, ValidatedDigest};
 pub use blob::FileBlobStore;
-pub use import::archive::import_oci_archive;
+pub use import::archive::{import_oci_archive, inspect_archive, ArchiveInspectView};
 pub use import::legacy::{
     import_legacy_local_registry, import_legacy_local_registry_ref,
     import_legacy_local_registry_ref_with_policy, import_legacy_local_registry_with_policy,

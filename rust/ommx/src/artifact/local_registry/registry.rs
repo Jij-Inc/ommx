@@ -75,6 +75,62 @@ impl LocalRegistry {
         self.index.resolve_image_name(image_name)
     }
 
+    /// Synthesize a fresh anonymous image name keyed to this
+    /// registry's `registry_id`. Format matches
+    /// `LocalArtifactBuilder::new_anonymous` and the unnamed-archive
+    /// import path: `<registry-id8>.ommx.local/anonymous:<timestamp>-<nonce>`.
+    /// Each call returns a new name (the nonce differs); the structural
+    /// predicates [`crate::artifact::is_anonymous_artifact_ref_name`]
+    /// and [`crate::artifact::is_anonymous_artifact_tag`] match every
+    /// name produced this way, so
+    /// `ommx artifact prune-anonymous` cleans them uniformly.
+    pub fn synthesize_anonymous_image_name(&self) -> Result<ImageName> {
+        let registry_id = self.index.registry_id()?;
+        crate::artifact::anonymous_artifact_image_name(&registry_id)
+    }
+
+    /// List every SQLite ref whose `(name, reference)` matches the
+    /// shape an anonymous artifact's image name would take:
+    /// `<registry-id8>.ommx.local/anonymous` (8 lowercase hex chars
+    /// prefix + suffix) for the name, and `YYYYMMDDTHHMMSS-<nonce>`
+    /// (timestamp + 12-hex random suffix) for the reference. Both
+    /// must match — a substring check on the suffix alone would
+    /// over-match a human-pushed ref against a real mDNS host like
+    /// `myhost.ommx.local/anonymous:v1`. Returned in
+    /// `(name, reference)` order to match
+    /// [`SqliteIndexStore::list_refs`].
+    pub fn list_anonymous_artifact_refs(
+        &self,
+    ) -> Result<Vec<crate::artifact::local_registry::RefRecord>> {
+        let all = self.index.list_refs(None)?;
+        Ok(all
+            .into_iter()
+            .filter(|r| {
+                crate::artifact::is_anonymous_artifact_ref_name(&r.name)
+                    && crate::artifact::is_anonymous_artifact_tag(&r.reference)
+            })
+            .collect())
+    }
+
+    /// Bulk-delete every SQLite ref produced by
+    /// [`crate::artifact::LocalArtifactBuilder::new_anonymous`].
+    /// Returns the deleted records so callers (e.g. CLI
+    /// `ommx artifact prune-anonymous`) can report what changed. The
+    /// manifest / config / layer / blob CAS records the deleted refs
+    /// pointed at are **not** touched; they become unreferenced rows
+    /// reclaimable by a future GC sweep. This is intentional — the
+    /// prune is cheap and the orphan reclamation is the slower /
+    /// riskier operation.
+    pub fn prune_anonymous_artifact_refs(
+        &self,
+    ) -> Result<Vec<crate::artifact::local_registry::RefRecord>> {
+        let refs = self.list_anonymous_artifact_refs()?;
+        for r in &refs {
+            self.index.delete_ref(&r.name, &r.reference)?;
+        }
+        Ok(refs)
+    }
+
     /// Publish a staged OCI Image Manifest bundle to the SQLite Local
     /// Registry. Callers must construct `manifest` and `manifest_descriptor`
     /// via [`crate::artifact::LocalArtifactBuilder`] or the import paths

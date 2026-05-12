@@ -129,18 +129,23 @@ filename = "my_instance.ommx"
 if os.path.exists(filename):
     os.remove(filename)
 
-# 1. OMMX Artifactファイルを作成するためのビルダーを作成する
-builder = ArtifactBuilder.new_archive_unnamed(filename)
+# 1. ビルダーを作成 (v3 では全アーティファクトが SQLite Local Registry に
+#    入るので、ビルダーは image_name を要求します)。名前を考えるのが
+#    面倒なら `new_anonymous()` で自動生成できます。
+builder = ArtifactBuilder.new_anonymous()
 ```
 
-[`ArtifactBuilder`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder) にはいくつかコンストラクタがあり、コンテナとして名前で管理するか、アーカイブファイルとして管理するかを選択できます。コンテナのようにコンテナレジストリを使ってPushとPullを行う場合は名前が必須ですが、アーカイブファイルを使う場合は名前が不要です。ここではアーカイブファイルとして管理する `ArtifactBuilder.new_archive_unnamed` を使います。
+[`ArtifactBuilder`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder) は主に 2 つのコンストラクタを持ちます。v3 では build したアーティファクトは必ず SQLite Local Registry のエントリとして残り、`.ommx` ファイルとして共有したい場合は build 後に `Artifact.save(path)` を呼びます。
 
 | コンストラクタ | 説明 |
 | --- | --- |
-| [`ArtifactBuilder.new`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.new) | コンテナとして名前で管理する |
-| [`ArtifactBuilder.new_archive`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.new_archive) | アーカイブファイルとコンテナの両方として扱えるようにする |
-| [`ArtifactBuilder.new_archive_unnamed`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.new_archive_unnamed) | アーカイブファイルとして管理する |
-| [`ArtifactBuilder.for_github`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.for_github) | GitHub Container Registryに合わせてコンテナの名前を決める |
+| [`ArtifactBuilder.new`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.new) | 呼び出し側で image_name を指定する |
+| [`ArtifactBuilder.new_anonymous`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.new_anonymous) | `<レジストリ ID8>.ommx.local/anonymous:<ローカルタイムスタンプ>-<nonce>` 形式で名前を自動生成 |
+| [`ArtifactBuilder.for_github`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.for_github) | GitHub Container Registry に合わせてコンテナの名前を決める |
+
+`new_anonymous` のホスト名は `<レジストリ ID8>.ommx.local` 形式で、`.local` (mDNS) link-local TLD を使っているので誤って push しても実際のリモートレジストリには到達しません。先頭のレジストリ ID は各 `LocalRegistry` の初回作成時に一度だけ生成されてメタデータに保存される UUID で、同じレジストリで作られた anonymous artifact は同じ prefix を共有します。アーカイブを共有した際にも「どのレジストリで作られたか」が判別できます。蓄積した anonymous エントリは `ommx artifact prune-anonymous` で一括削除できます (異なるレジストリ ID の prefix も含めて削除されます)。
+
+**タイムスタンプの注意**: 自動生成タグはビルダーの**ローカルタイム** (TZ マーカー無し) です。異なるタイムゾーンの相手にアーカイブを共有すると、受信者は同じ数字を自分のローカルタイムとして読むため、絶対時刻としての意味はマシン間で失われます。タイムゾーンに関係なく安定したタグが必要なら `ArtifactBuilder.new(...)` で明示的に名前を指定してください。
 
 どの方法で初期化しても同じように `ommx.v1.Instance` や他のデータを保存することが出来ます。上で用意したデータを追加してみましょう。
 
@@ -166,14 +171,17 @@ desc_json.to_dict()
 
 `add_json` に追加した `title="..."` という部分はレイヤーのアノテーション（注釈）として保存されます。OMMX Artifactというのは人間のためのデータ形式なので、これは基本的には人間が読むための情報です。`ArtifactBuilder.add_*` 関数はいずれも任意のキーワード引数を受け取り、自動的に `org.ommx.user.` 以下の名前空間に変換します。
 
-さて最後に `build` を呼び出してファイルに保存しましょう。
+さて最後に `build` で SQLite Local Registry に publish し、`save` で `.ommx` ファイルにエクスポートします。
 
 ```{code-cell} ipython3
-# 3. OMMX Artifactファイルを作成する
+# 3. SQLite Local Registry に publish
 artifact = builder.build()
+
+# 4. 共有用に .ommx アーカイブにエクスポート
+artifact.save(filename)
 ```
 
-この `artifact` は次説で説明する、今保存したファイルを読み込んだものと同じものです。ファイルが出来上がったか確認してみましょう：
+ファイルが出来上がったか確認してみましょう：
 
 ```{code-cell} ipython3
 import os
@@ -186,13 +194,13 @@ print(os.path.exists(filename))
 
 ## OMMX Artfact形式のファイルを読み取る
 
-次に保存したOMMX Artifactを読み込みましょう。アーカイブ形式で保存したOMMX Artifactを読み込むには [`Artifact.load_archive`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.Artifact.load_archive) を使います
+次に保存したOMMX Artifactを読み込みましょう。v3 ではアーカイブ読み込みが 2 つのメソッドに分かれています: [`Artifact.import_archive`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.Artifact.import_archive) は アーカイブを SQLite Local Registry に import してフルハンドルを返します (全レイヤを読める)。[`Artifact.inspect_archive`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.Artifact.inspect_archive) は registry に書き込まずに manifest / layer descriptors だけを読みます。
 
 ```{code-cell} ipython3
 from ommx.artifact import Artifact
 
 # ローカルにあるOMMX Artifactファイルを読み込む
-artifact = Artifact.load_archive(filename)
+artifact = Artifact.import_archive(filename)
 ```
 
 OMMX Artifactはレイヤーという単位でデータを管理しますが、このレイヤーのデータはマニフェスト（目録）として内包されており、アーカイブファイル全体を読み込まずに確認することが可能です。[`Artifact.layers`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.Artifact.layers) によって含まれるレイヤーの `Descriptor` を取得できます。これにはそのレイヤーのMediaTypeとアノテーションが含まれています。

@@ -594,9 +594,141 @@ my_function   = restored.objective
 decision_variable = restored.decision_variables[0].detach()
 ```
 
-## 13. Convenience additions (not breaking)
+## 13. Artifact API: archive becomes an exchange format
 
-### 13.1 `DecisionVariable.binary` / `integer` / `continuous` accept `lower` / `upper` kwargs
+v3 redraws the artifact API around a single canonical store — the SQLite Local Registry — and treats `.ommx` files purely as an exchange format. Every artifact goes through `LocalArtifactBuilder` and lands in the registry; the archive file is produced as an explicit export afterward. The v2 split between "archive build" and "registry build" is gone, along with the v2 in-place "read archive without touching the registry" path.
+
+For PR references see [#872](https://github.com/Jij-Inc/ommx/pull/872).
+
+### 13.1 `ArtifactBuilder.new_archive` / `new_archive_unnamed` removed; use `new` + `Artifact.save(path)`
+
+`ArtifactBuilder.new_archive(path, image_name)` and `ArtifactBuilder.new_archive_unnamed(path)` are gone. The "produce a `.ommx` file" step is now a separate `Artifact.save(path)` call after `build()`.
+
+**Before (v2 / v3-alpha pre-#872)**:
+```python
+from ommx.artifact import ArtifactBuilder
+
+builder = ArtifactBuilder.new_archive("my_instance.ommx", "ghcr.io/jij-inc/ommx/demo:v1")
+builder.add_instance(instance)
+artifact = builder.build()    # writes the .ommx file as a side effect
+```
+
+**After (v3, ≥ #872)**:
+```python
+from ommx.artifact import ArtifactBuilder
+
+builder = ArtifactBuilder.new("ghcr.io/jij-inc/ommx/demo:v1")
+builder.add_instance(instance)
+artifact = builder.build()                # lands in the user's SQLite Local Registry
+artifact.save("my_instance.ommx")         # explicit export
+```
+
+`Artifact.save(path)` is the new method that emits a `.ommx` file. The path argument carries no naming information; the resulting archive's `org.opencontainers.image.ref.name` annotation is the artifact's registry image name. `save()` errors out with `Output file already exists: ...` if the path is occupied; delete the file first or pick a different name.
+
+### 13.2 `ArtifactBuilder.new_archive_unnamed` → `ArtifactBuilder.new_anonymous`
+
+`new_archive_unnamed` is replaced by `new_anonymous`, which takes no path and synthesizes an OMMX-local image name of the form `<registry-id8>.ommx.local/anonymous:<local-timestamp>-<nonce>` (e.g. `99ea32f6.ommx.local/anonymous:20260512T124922-c2eb4f21f7e6`). Components:
+
+- `<registry-id8>` — first 8 hex chars of a random UUID generated once when the SQLite Local Registry is created. Identifies which registry produced the artifact.
+- `<local-timestamp>` — `YYYYMMDDTHHMMSS` in the caller's local time zone (no timezone marker; OCI tag syntax forbids `+` and using a fixed UTC marker would defeat the at-a-glance readability of the date).
+- `<nonce>` — 12-hex (48-bit) random suffix, so concurrent / scripted anonymous builds (MINTO-style workflows) never collide on the same wall-clock second.
+
+The hostname `<registry-id8>.ommx.local` uses the `.local` mDNS link-local TLD (RFC 6762), so an accidental `ommx push` of an anonymous artifact does **not** leak to a real remote registry.
+
+**Before (v2 / v3-alpha pre-#872)**:
+```python
+builder = ArtifactBuilder.new_archive_unnamed("my_instance.ommx")
+builder.add_instance(instance)
+artifact = builder.build()
+print(artifact.image_name)        # None
+```
+
+**After (v3, ≥ #872)**:
+```python
+builder = ArtifactBuilder.new_anonymous()
+builder.add_instance(instance)
+artifact = builder.build()
+artifact.save("my_instance.ommx")
+print(artifact.image_name)        # "99ea32f6.ommx.local/anonymous:20260512T124922-c2eb4f21f7e6"
+```
+
+Two behavioural shifts:
+
+1. `image_name` is now a (synthesized) string, never `None`. v2 anonymous archives surfaced `None`; in v3 the SQLite Local Registry needs a key for every artifact so the builder synthesizes one. Code that branched on `image_name is None` to detect "unnamed archive" needs to switch to checking the `.ommx.local/anonymous:` substring or — better — call `ArtifactBuilder.new(image_name)` with an explicit name when you care about identity.
+2. `new_anonymous` accumulates entries in the SQLite Local Registry. Run `ommx artifact prune-anonymous` to clean them up periodically; the manifest / blob CAS records are intentionally left in place for a future GC sweep to reclaim.
+
+**Timezone caveat**: the timestamp portion is the **builder's local time**, not UTC. If you ship an anonymous archive to someone in another timezone, the recipient reads the same digits as their own local time — the time component loses absolute meaning across machines. If absolute time matters, use `ArtifactBuilder.new(image_name)` with an explicit name.
+
+### 13.3 `Artifact.load_archive` removed; pick `import_archive` (write) or `inspect_archive` (read-only)
+
+v2's `Artifact.load_archive(file)` opened a `.ommx` archive in place with no side effect on the local registry. v3 splits that contract into two named methods with explicit semantics, and the v2 name raises a migration error so an upgrade cannot silently write into the SQLite Local Registry:
+
+- {func}`Artifact.import_archive(file) <ommx.artifact.Artifact.import_archive>` — imports the archive into the user's persistent SQLite Local Registry under the archive's `org.opencontainers.image.ref.name` annotation, returns a full {class}`Artifact` handle (you can read every layer via `get_layer` / `get_blob`). The v3 replacement of `load_archive`'s "I want to use this archive" path.
+- {func}`Artifact.inspect_archive(file) <ommx.artifact.Artifact.inspect_archive>` — reads only the manifest + layer descriptors without writing into the registry. Returns a new lightweight {class}`ArchiveManifest <ommx.artifact.ArchiveManifest>` with `image_name` / `manifest_digest` / `layers` / `annotations`. Use this for "what is in this archive" without committing to an import. Blob bodies are not accessible from `ArchiveManifest`; import first if you need them.
+
+**Before (v2)**:
+```python
+# In-memory open, no registry side effect; layer access works.
+artifact = Artifact.load_archive("my_instance.ommx")
+print(artifact.image_name)
+print(artifact.instance)
+```
+
+**After (v3) — full import** (matches the v2 "I will work with this archive" use):
+```python
+# Imports into ~/Library/Application Support/org.ommx.ommx/
+# (or $OMMX_LOCAL_REGISTRY_ROOT). Subsequent Artifact.load(image_name)
+# calls resolve from SQLite without re-importing.
+artifact = Artifact.import_archive("my_instance.ommx")
+print(artifact.image_name)
+print(artifact.instance)
+```
+
+**After (v3) — read-only inspect** (no registry write):
+```python
+manifest = Artifact.inspect_archive("my_instance.ommx")
+print(manifest.image_name)
+for layer in manifest.layers:
+    print(layer.media_type)
+```
+
+Calling `Artifact.load_archive(...)` in v3 raises a `RuntimeError` whose message names both replacements and explains the semantic shift.
+
+If the archive's `index.json` descriptor lacks an `org.opencontainers.image.ref.name` annotation — the shape v2's `ArtifactBuilder.new_archive_unnamed(path)` produced — `import_archive` does **not** refuse the import. It synthesizes a fresh anonymous name (`<registry-id8>.ommx.local/anonymous:<local-timestamp>-<nonce>`, the same shape §13.2 documents) against the destination registry's `registry_id` and registers the archive under that name. v2 archives without a ref annotation therefore continue to load on upgrade; you can sweep them later via `ommx artifact prune-anonymous`. Anonymous archives produced by `ArtifactBuilder.new_anonymous` already carry their synthesized name and re-import under that name unchanged.
+
+`ommx inspect <archive>` (the CLI command) is the CLI equivalent of `Artifact.inspect_archive` — both read the manifest without touching the SQLite Local Registry.
+
+### 13.4 `ommx push <archive>` removed; load first, then push by name
+
+The CLI no longer accepts an archive file or OCI Image Layout directory as the argument to `push`. v3 pushes always source from the SQLite Local Registry. The migration is the explicit two-step pattern documented above:
+
+**Before**:
+```bash
+ommx push my_instance.ommx
+```
+
+**After**:
+```bash
+ommx load my_instance.ommx
+ommx push <image_name>
+```
+
+Running the old form prints a migration hint and exits non-zero.
+
+### 13.5 New CLI: `ommx artifact prune-anonymous [--dry-run] [--root <path>]`
+
+Bulk-delete every SQLite ref whose `(name, reference)` matches the anonymous-artifact synthetic shape (`<8-hex>.ommx.local/anonymous:<timestamp>-<nonce>`). Cleans entries from every registry-id prefix the SQLite registry has seen, not just the current host's. Manifest / blob CAS records survive the prune and will be reclaimed by a future GC sweep; the prune itself is intentionally cheap.
+
+```bash
+ommx artifact prune-anonymous --dry-run        # list what would be removed
+ommx artifact prune-anonymous                  # delete them
+```
+
+The structural match (8-hex registry-id prefix, timestamp-shaped tag, hex nonce) prevents a human-pushed real ref like `myhost.ommx.local/anonymous:v1` from being misclassified as anonymous.
+
+## 14. Convenience additions (not breaking)
+
+### 14.1 `DecisionVariable.binary` / `integer` / `continuous` accept `lower` / `upper` kwargs
 
 ```python
 # v3
@@ -605,7 +737,7 @@ y = DecisionVariable.continuous(2, lower=-1.0, upper=1.0)
 z = DecisionVariable.integer(3)                  # unbounded
 ```
 
-### 13.2 `DecisionVariable.equals_to(other)` for object equality
+### 14.2 `DecisionVariable.equals_to(other)` for object equality
 
 Because `==` creates a `Constraint`, v3 adds an explicit `equals_to` method (and the same for `Parameter` / `Linear` / …) for `bool` equality.
 
@@ -618,7 +750,7 @@ x.equals_to(y)      # True
 x.id == y.id        # True
 ```
 
-### 13.3 `Parameter` supports the same operators as `DecisionVariable`
+### 14.3 `Parameter` supports the same operators as `DecisionVariable`
 
 ```python
 from ommx.v1 import Parameter, DecisionVariable
@@ -658,6 +790,11 @@ expr = 2 * p + 3  # Linear
 - [ ] Drop the in-place `c.add_name(...)` mutation pattern on snapshot wrappers retrieved from an instance — those calls return a new object and don't write through to the host. Use the live handle returned by `instance.constraints[id]` (an `AttachedConstraint`) and call its `set_*` / `add_*` methods, or re-add via `from_components`.
 - [ ] Update return-type annotations / static analysis for `instance.constraints` etc. to expect `AttachedX` (`dict[int, AttachedConstraint]`, `list[AttachedDecisionVariable]`, …). Call `.detach()` if you need an independent snapshot.
 - [ ] Replace element-level `to_bytes()` / `from_bytes()` calls on `Function` / `Linear` / `Quadratic` / `Polynomial` / `Parameter` / the `NamedFunction` family / the `DecisionVariable` family with whole-`Instance` / `Solution` / `SampleSet` round-trips (or the `State` / `Samples` / `Parameters` DTOs for evaluate plumbing). See §12.
+- [ ] Replace `ArtifactBuilder.new_archive(path, image_name).build()` with `ArtifactBuilder.new(image_name).build()` + `artifact.save(path)`. See §13.1.
+- [ ] Replace `ArtifactBuilder.new_archive_unnamed(path).build()` with `ArtifactBuilder.new_anonymous().build()` + `artifact.save(path)`. Audit code that branched on `artifact.image_name is None` — anonymous artifacts now have a synthesized `<...>.ommx.local/anonymous:...` name. See §13.2.
+- [ ] Replace `Artifact.load_archive(file)` with `Artifact.import_archive(file)` (registry-write semantics, returns a full handle) for code that wants to use the archive's contents. Use `Artifact.inspect_archive(file)` for the side-effect-free read of the manifest / layer descriptors (returns an `ArchiveManifest`). The v3 `load_archive` raises a migration error pointing at both. See §13.3.
+- [ ] Update any `ommx push <archive-file>` invocation to the two-step `ommx load <file>` + `ommx push <image_name>` flow. See §13.4.
+- [ ] Add periodic `ommx artifact prune-anonymous` to clean accumulated entries if your workflow makes heavy use of `ArtifactBuilder.new_anonymous`. See §13.5.
 
 ---
 

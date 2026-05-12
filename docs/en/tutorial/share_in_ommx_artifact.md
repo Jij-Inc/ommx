@@ -129,18 +129,23 @@ filename = "my_instance.ommx"
 if os.path.exists(filename):
     os.remove(filename)
 
-# 1. Create a builder to create the OMMX Artifact file
-builder = ArtifactBuilder.new_archive_unnamed(filename)
+# 1. Create a builder; v3 publishes every artifact into the SQLite
+#    Local Registry, so the builder takes (or synthesizes) an image
+#    name. Use `new_anonymous()` if you don't want to invent one.
+builder = ArtifactBuilder.new_anonymous()
 ```
 
-[`ArtifactBuilder`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder) has several constructors, allowing you to choose whether to manage it by name like a container or as an archive file. If you use a container registry to push and pull like a container, a name is required, but if you use an archive file, a name is not necessary. Here, we use `ArtifactBuilder.new_archive_unnamed` to manage it as an archive file.
+[`ArtifactBuilder`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder) has two primary constructors. v3 always publishes into the SQLite Local Registry, so a build produces a registry entry; if you also want a `.ommx` file for sharing, call `Artifact.save(path)` afterward.
 
 | Constructor | Description |
 | --- | --- |
-| [`ArtifactBuilder.new`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.new) | Manage by name like a container |
-| [`ArtifactBuilder.new_archive`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.new_archive) | Manage as both an archive file and a container |
-| [`ArtifactBuilder.new_archive_unnamed`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.new_archive_unnamed) | Manage as an archive file |
-| [`ArtifactBuilder.for_github`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.for_github) | Determine the container name according to the GitHub Container Registry |
+| [`ArtifactBuilder.new`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.new) | Caller-supplied image name |
+| [`ArtifactBuilder.new_anonymous`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.new_anonymous) | Synthesized name `<registry-id8>.ommx.local/anonymous:<local-timestamp>-<nonce>` for share-and-discard archives |
+| [`ArtifactBuilder.for_github`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.for_github) | Convenience for GitHub Container Registry naming |
+
+`new_anonymous` uses the `.local` mDNS link-local TLD so an accidental push won't leak to a real remote registry. The registry-id prefix is generated once per `LocalRegistry` (a random UUID stored in the registry's SQLite metadata) — anonymous artifacts from the same registry share a prefix, so when an archive is shared you can tell artifacts apart by their source registry. Clean accumulated anonymous entries with `ommx artifact prune-anonymous` (which removes entries from every registry-id prefix, not just the current host's).
+
+**Caveat on the timestamp**: the synthesized tag is the **builder's local time** without a timezone marker. If an anonymous archive is shared with someone in a different timezone, the recipient will read the same digits as their own local time, so the time component is not absolute across machines. Pick an explicit name via `ArtifactBuilder.new(...)` if you need a stable, timezone-unambiguous tag.
 
 Regardless of the initialization method, you can save `ommx.v1.Instance` and other data in the same way. Let's add the data prepared above.
 
@@ -166,14 +171,17 @@ desc_json.to_dict()
 
 The part added as `title="..."` in `add_json` is saved as an annotation of the layer. OMMX Artifact is a data format for humans, so this is basically information for humans to read. The `ArtifactBuilder.add_*` functions all accept optional keyword arguments and automatically convert them to the `org.ommx.user.` namespace.
 
-Finally, call `build` to save it to a file.
+Finally, call `build` to publish the artifact into the SQLite Local Registry, then `save` to export it as a `.ommx` file.
 
 ```{code-cell} ipython3
-# 3. Create the OMMX Artifact file
+# 3. Publish into the local registry
 artifact = builder.build()
+
+# 4. Export to a .ommx archive for sharing
+artifact.save(filename)
 ```
 
-This `artifact` is the same as the one that will be explained in the next section, which is the one you just saved. Let's check if the file has been created:
+Let's check if the file has been created:
 
 ```{code-cell} ipython3
 import os
@@ -186,13 +194,13 @@ Now you can share this `my_instance.ommx` with others using the usual file shari
 
 ## Read OMMX Artifact file
 
-Next, let's read the OMMX Artifact we saved. When loading an OMMX Artifact in archive format, use [`Artifact.load_archive`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.Artifact.load_archive).
+Next, let's read the OMMX Artifact we saved. v3 splits archive reading into two methods: [`Artifact.import_archive`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.Artifact.import_archive) imports the archive into the SQLite Local Registry and returns a full handle (so you can read every layer); [`Artifact.inspect_archive`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.Artifact.inspect_archive) reads only the manifest / layer descriptors without writing into the registry.
 
 ```{code-cell} ipython3
 from ommx.artifact import Artifact
 
 # Load the OMMX Artifact file locally
-artifact = Artifact.load_archive(filename)
+artifact = Artifact.import_archive(filename)
 ```
 
 OMMX Artifacts store data in layers, with a manifest (catalog) that details their contents. You can check the `Descriptor` of each layer, including its Media Type and annotations, without reading the entire archive.

@@ -7,6 +7,7 @@ ommx.artifact
    :hidden:
 
    _items/ommx.artifact.Artifact
+   _items/ommx.artifact.ArchiveManifest
    _items/ommx.artifact.ArtifactBuilder
    _items/ommx.artifact.Descriptor
    _items/ommx.artifact.get_local_registry_root

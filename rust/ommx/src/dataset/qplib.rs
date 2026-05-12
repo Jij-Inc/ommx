@@ -1,11 +1,17 @@
 use crate::{
-    artifact::{ghcr, Artifact, InstanceAnnotations},
+    artifact::{
+        ghcr,
+        local_registry::{pull_image, LocalRegistry},
+        media_types, InstanceAnnotations, LocalArtifact,
+    },
     v1::Instance,
 };
 
-use anyhow::{ensure, Result};
+use anyhow::{ensure, Context, Result};
+use prost::Message;
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 /// CSV downloaded from [QPLIB website](http://qplib.zib.de/) on 2025-10-02
 pub const QPLIB_CSV: &str = include_str!("qplib.csv");
@@ -287,16 +293,26 @@ pub fn load(tag: &str) -> Result<(Instance, InstanceAnnotations)> {
     );
 
     let image_name = ghcr("Jij-Inc", "ommx", "qplib", tag)?;
-    let mut artifact = Artifact::from_remote(image_name)?.pull()?;
-    let mut instances = artifact.get_instances()?;
+    let registry = Arc::new(LocalRegistry::open_default()?);
+    pull_image(&registry, &image_name)?;
+    let artifact = LocalArtifact::open_in_registry(registry, image_name)?;
+    let layers = artifact.layers()?;
+    let mut instance_layers = layers
+        .into_iter()
+        .filter(|d| d.media_type() == &media_types::v1_instance());
+    let layer = instance_layers
+        .next()
+        .context("QPLIB Artifact does not contain an instance layer")?;
     ensure!(
-        instances.len() == 1,
+        instance_layers.next().is_none(),
         "QPLIB Artifact should contain exactly one instance"
     );
-    let (desc, instance) = instances.pop().unwrap();
+    let bytes = artifact.get_blob(layer.digest().as_ref())?;
+    let instance =
+        Instance::decode(bytes.as_slice()).context("Failed to decode QPLIB instance layer")?;
     Ok((
         instance,
-        InstanceAnnotations::from(desc.annotations().clone().unwrap_or_default()),
+        InstanceAnnotations::from(layer.annotations().clone().unwrap_or_default()),
     ))
 }
 

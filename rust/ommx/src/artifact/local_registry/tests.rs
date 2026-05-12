@@ -10,9 +10,32 @@ use ocipkg::{
     oci_spec::image::{Descriptor, DescriptorBuilder, ImageManifestBuilder},
 };
 use std::collections::HashMap;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
+
+/// Build a tiny single-layer artifact in a fresh temp SQLite registry,
+/// save it to `archive_path` via the v3 native save writer, and drop
+/// the temp registry. Used by archive-import tests that need a `.ommx`
+/// file on disk without polluting the test's main registry.
+fn save_test_archive(
+    archive_path: &Path,
+    image_name: ImageName,
+    layer_bytes: Vec<u8>,
+) -> Result<()> {
+    let sender_dir = tempfile::tempdir()?;
+    let sender_registry = Arc::new(LocalRegistry::open(sender_dir.path())?);
+    let mut builder = LocalArtifactBuilder::new(image_name);
+    builder.add_layer_bytes(
+        MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.into()),
+        layer_bytes,
+        HashMap::new(),
+    )?;
+    let local = builder.build_in_registry(sender_registry, RefConflictPolicy::Replace)?;
+    local.save(archive_path)?;
+    Ok(())
+}
 
 #[test]
 fn file_blob_store_round_trip() -> Result<()> {
@@ -826,31 +849,9 @@ fn import_oci_archive_surfaces_digest_conflict_for_same_ref() -> Result<()> {
     let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:reextract")?;
 
     let archive_path_a = dir.path().join("a.ommx");
-    {
-        let mut builder = crate::artifact::ArchiveArtifactBuilder::new_archive(
-            archive_path_a.clone(),
-            image_name.clone(),
-        )?;
-        builder.add_layer(
-            MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.into()),
-            b"archive-A",
-            HashMap::new(),
-        )?;
-        let _ = builder.build()?;
-    }
+    save_test_archive(&archive_path_a, image_name.clone(), b"archive-A".to_vec())?;
     let archive_path_b = dir.path().join("b.ommx");
-    {
-        let mut builder = crate::artifact::ArchiveArtifactBuilder::new_archive(
-            archive_path_b.clone(),
-            image_name.clone(),
-        )?;
-        builder.add_layer(
-            MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.into()),
-            b"archive-B",
-            HashMap::new(),
-        )?;
-        let _ = builder.build()?;
-    }
+    save_test_archive(&archive_path_b, image_name.clone(), b"archive-B".to_vec())?;
 
     let outcome_a = import_oci_archive(&registry, &archive_path_a)?;
     let digest_a = outcome_a.manifest_digest.clone();
@@ -879,27 +880,20 @@ fn import_oci_archive_surfaces_digest_conflict_for_same_ref() -> Result<()> {
 
 #[test]
 fn import_oci_archive_does_not_leave_legacy_dir_behind() -> Result<()> {
-    // Step C invariant: after a successful `import_oci_archive`, the
-    // v2-era path `registry.root().join(image_name.as_path())` must
-    // not exist. The archive's staging tempdir is created under the
+    // Invariant: after a successful `import_oci_archive`, the v2-era
+    // path `registry.root().join(image_name.as_path())` must not
+    // exist. The archive's staging tempdir is created under the
     // registry root and dropped before the function returns; SQLite +
     // FileBlobStore are the sole post-import home.
     let dir = tempfile::tempdir()?;
     let registry = Arc::new(LocalRegistry::open(dir.path())?);
     let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:no-legacy-dir")?;
     let archive_path = dir.path().join("artifact.ommx");
-    {
-        let mut builder = crate::artifact::ArchiveArtifactBuilder::new_archive(
-            archive_path.clone(),
-            image_name.clone(),
-        )?;
-        builder.add_layer(
-            MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.into()),
-            b"step-c-payload",
-            HashMap::new(),
-        )?;
-        let _ = builder.build()?;
-    }
+    save_test_archive(
+        &archive_path,
+        image_name.clone(),
+        b"step-c-payload".to_vec(),
+    )?;
 
     let outcome = import_oci_archive(&registry, &archive_path)?;
     assert_eq!(outcome.image_name.as_ref(), Some(&image_name));
@@ -913,12 +907,139 @@ fn import_oci_archive_does_not_leave_legacy_dir_behind() -> Result<()> {
     Ok(())
 }
 
+#[test]
+fn import_oci_archive_synthesizes_anonymous_name_for_unnamed_input() -> Result<()> {
+    // v2-era OMMX SDKs produced `.ommx` files whose `index.json`
+    // descriptor lacks the `org.opencontainers.image.ref.name`
+    // annotation. `import_oci_archive` must accept those by
+    // synthesizing a `<registry-id8>.ommx.local/anonymous:<ts>-<nonce>`
+    // ref on the fly rather than refusing the import. A regression
+    // that re-introduced the "no ref name → bail" behaviour would
+    // strand v2 user workflows on upgrade.
+    use oci_spec::image::{DescriptorBuilder, Digest, ImageIndexBuilder, MediaType};
+    use std::collections::HashMap;
+    use std::str::FromStr;
+
+    let dir = tempfile::tempdir()?;
+    let registry = Arc::new(LocalRegistry::open(dir.path())?);
+
+    // Build a normal named archive first, then surgically rewrite its
+    // `index.json` to drop the ref.name annotation — that is the
+    // shape v2 archives have.
+    let named = ImageName::parse("ghcr.io/jij-inc/ommx/demo:unnamed-input")?;
+    let archive_path = dir.path().join("unnamed.ommx");
+    save_test_archive(&archive_path, named.clone(), b"unnamed-payload".to_vec())?;
+
+    // Re-pack the archive without the ref annotation. Cheapest path:
+    // extract, drop annotation, repack.
+    let staging = dir.path().join("staging");
+    std::fs::create_dir_all(&staging)?;
+    {
+        let file = std::fs::File::open(&archive_path)?;
+        let mut tar = tar::Archive::new(file);
+        tar.unpack(&staging)?;
+    }
+    let index_path = staging.join("index.json");
+    let index_bytes = std::fs::read(&index_path)?;
+    let index: oci_spec::image::ImageIndex = serde_json::from_slice(&index_bytes)?;
+    let descriptor = index.manifests().first().unwrap();
+    let stripped_descriptor = DescriptorBuilder::default()
+        .media_type(MediaType::ImageManifest)
+        .digest(Digest::from_str(descriptor.digest().as_ref())?)
+        .size(descriptor.size())
+        .annotations(HashMap::new())
+        .build()?;
+    let stripped_index = ImageIndexBuilder::default()
+        .schema_version(2u32)
+        .media_type(MediaType::ImageIndex)
+        .manifests(vec![stripped_descriptor])
+        .build()?;
+    std::fs::write(&index_path, serde_json::to_vec(&stripped_index)?)?;
+
+    let unnamed_archive = dir.path().join("repacked.ommx");
+    {
+        let file = std::fs::File::create(&unnamed_archive)?;
+        let mut tar = tar::Builder::new(file);
+        tar.append_dir_all(".", &staging)?;
+        tar.finish()?;
+    }
+
+    // Now the test: import the unnamed archive and assert the
+    // returned ref is a synthesized anonymous name (no original ref
+    // annotation to preserve).
+    let outcome = import_oci_archive(&registry, &unnamed_archive)?;
+    let synthesized = outcome
+        .image_name
+        .as_ref()
+        .expect("import must synthesize a name for unnamed archives");
+    let synthesized_str = synthesized.to_string();
+    let (repo, tag) = synthesized_str
+        .rsplit_once(':')
+        .expect("synthesized image name must include a tag");
+    assert!(
+        crate::artifact::is_anonymous_artifact_ref_name(repo),
+        "synthesized repository `{repo}` must match the anonymous shape",
+    );
+    assert!(
+        crate::artifact::is_anonymous_artifact_tag(tag),
+        "synthesized tag `{tag}` must match the anonymous shape",
+    );
+    Ok(())
+}
+
+#[test]
+fn import_oci_archive_normalizes_dot_slash_prefixed_entries() -> Result<()> {
+    // `tar -cf foo.ommx -C dir .` produces entries with a leading
+    // `./` — `./oci-layout`, `./index.json`, `./blobs/sha256/<hex>`.
+    // Both shapes are valid OCI Image Layouts (the prefix carries no
+    // semantic information), so `import_oci_archive` must accept
+    // them. Build a canonical archive, repack it with every entry's
+    // path re-rooted under `./`, and confirm import succeeds.
+    let dir = tempfile::tempdir()?;
+    let registry = Arc::new(LocalRegistry::open(dir.path())?);
+    let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:dot-slash")?;
+    let archive_path = dir.path().join("canonical.ommx");
+    save_test_archive(
+        &archive_path,
+        image_name.clone(),
+        b"dot-slash-payload".to_vec(),
+    )?;
+
+    let dot_archive = dir.path().join("dot-prefixed.ommx");
+    {
+        let src = std::fs::File::open(&archive_path)?;
+        let mut src_tar = tar::Archive::new(src);
+        let dst = std::fs::File::create(&dot_archive)?;
+        let mut dst_tar = tar::Builder::new(dst);
+        for entry in src_tar.entries()? {
+            let mut entry = entry?;
+            if !matches!(entry.header().entry_type(), tar::EntryType::Regular) {
+                continue;
+            }
+            let original = entry.path()?.into_owned();
+            let prefixed = std::path::PathBuf::from("./").join(&original);
+            let mut header = entry.header().clone();
+            // `set_path` rewrites the header's path-name fields; the
+            // checksum is recomputed by `append_data`.
+            header.set_path(&prefixed)?;
+            let mut buf = Vec::with_capacity(entry.header().size().unwrap_or(0) as usize);
+            entry.read_to_end(&mut buf)?;
+            dst_tar.append_data(&mut header, &prefixed, std::io::Cursor::new(&buf))?;
+        }
+        dst_tar.finish()?;
+    }
+
+    let outcome = import_oci_archive(&registry, &dot_archive)?;
+    assert_eq!(outcome.image_name.as_ref(), Some(&image_name));
+    Ok(())
+}
+
 #[cfg(feature = "remote-artifact")]
 #[test]
 fn pull_image_short_circuits_when_ref_is_present_with_blob() -> Result<()> {
-    // Step C fast path: `pull_image` against a ref already published
-    // in the SQLite Local Registry must return `Unchanged` without
-    // touching the network. Constructing the artifact via
+    // Fast path: `pull_image` against a ref already published in the
+    // SQLite Local Registry must return `Unchanged` without touching
+    // the network. Constructing the artifact via
     // `LocalArtifactBuilder` (no network) and then calling
     // `pull_image` against an unresolvable host exercises this — if
     // the short-circuit ever regresses, the call would attempt a DNS
@@ -977,14 +1098,13 @@ fn pull_image_does_not_short_circuit_when_manifest_blob_is_missing() -> Result<(
 
 #[test]
 fn local_artifact_save_round_trip_preserves_layers() -> Result<()> {
-    // `LocalArtifact::save` is the CLI `save` command's only path
-    // post-Step C. Verify the produced archive: (a) is a valid OCI
-    // archive that `Artifact::from_oci_archive` can open, (b)
-    // exposes the OMMX artifactType, (c) preserves layer descriptors
-    // and bytes byte-for-byte. The manifest digest is **not**
-    // asserted equal: `OciArchiveBuilder::build` re-serialises the
-    // parsed `ImageManifest`, which can produce a different byte
-    // representation (this is documented in `save.rs`'s module doc).
+    // `LocalArtifact::save` is the CLI `save` command's only path.
+    // Verify the produced archive: (a) is a valid OCI archive that
+    // `Artifact::from_oci_archive` can open, (b) exposes the OMMX
+    // artifactType, (c) preserves layer descriptors and bytes
+    // byte-for-byte, (d) preserves the manifest digest byte-for-byte
+    // — `save.rs` writes the SQLite manifest bytes verbatim, so the
+    // saved archive's manifest digest must match the registry's.
     use ocipkg::image::{Image, OciArchive};
     let dir = tempfile::tempdir()?;
     let registry = Arc::new(LocalRegistry::open(dir.path())?);
@@ -1002,6 +1122,25 @@ fn local_artifact_save_round_trip_preserves_layers() -> Result<()> {
     );
 
     let mut archive = ocipkg::image::OciArtifact::<OciArchive>::from_oci_archive(&archive_path)?;
+    // `save.rs` writes the SQLite manifest bytes verbatim, so the
+    // manifest blob stored under the same digest must round-trip
+    // through the archive byte-for-byte. We can't read the archive's
+    // `index.json` directly (ocipkg's `get_index` is crate-private),
+    // but if the manifest blob lives at `blobs/sha256/<expected>`
+    // with bytes whose sha256 equals that digest, the on-disk
+    // manifest is identity-preserved end-to-end.
+    let expected_manifest_digest = local_artifact.manifest_digest().to_string();
+    let saved_manifest_bytes: Vec<u8> = archive
+        .get_blob(
+            &oci_spec::image::Digest::from_str(&expected_manifest_digest)
+                .expect("manifest digest is valid OCI digest"),
+        )?
+        .to_vec();
+    assert_eq!(
+        crate::artifact::sha256_digest(&saved_manifest_bytes),
+        expected_manifest_digest,
+        "save() must write manifest bytes verbatim (digest must round-trip)",
+    );
     let manifest = archive.get_manifest()?;
     assert_eq!(
         manifest.artifact_type().as_ref(),

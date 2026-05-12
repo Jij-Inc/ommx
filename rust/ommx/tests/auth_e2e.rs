@@ -1,12 +1,21 @@
-//! End-to-end authentication tests for `LocalArtifact::push()`.
+//! End-to-end authentication tests for the v3 native OCI transport.
 //!
 //! These tests start ephemeral OCI registries (anonymous or
 //! htpasswd-protected) via `testcontainers`, materialise the
 //! credentials the SDK is supposed to discover (env vars or a fake
-//! `~/.docker/config.json`), and then exercise the full push pipeline
-//! against the registry. They cover every tier of the three-tier
-//! credential resolver in `artifact::remote_transport::resolve_auth`
-//! plus the auth negotiation that `oci_client::Client::auth` performs.
+//! `~/.docker/config.json`), and then exercise the full push / pull
+//! pipeline against the registry. They cover every tier of the
+//! three-tier credential resolver in
+//! `artifact::remote_transport::resolve_auth` plus the auth
+//! negotiation that `oci_client::Client::auth` performs.
+//!
+//! Every push / pull path in the SDK shares the same `RemoteTransport`
+//! plumbing: `LocalArtifact::push` reads from SQLite, archive push
+//! goes through `ommx load <file>` then `LocalArtifact::push`, and
+//! `pull_image` writes straight into SQLite. The suite mirrors that
+//! split so any future divergence between "push from SQLite",
+//! "load-then-push from archive", and "pull into SQLite" surfaces
+//! here rather than only in production.
 //!
 //! All tests are `#[ignore]` so a plain `cargo test` does not require
 //! Docker. CI re-runs the suite with `--include-ignored auth_e2e`.
@@ -19,7 +28,7 @@
 use anyhow::Result;
 use ocipkg::ImageName;
 use ommx::artifact::{
-    local_registry::{LocalRegistry, RefConflictPolicy},
+    local_registry::{import_oci_archive, pull_image, LocalRegistry, RefConflictPolicy},
     media_types, LocalArtifact, LocalArtifactBuilder,
 };
 use serial_test::serial;
@@ -332,6 +341,94 @@ fn cli_push_routes_through_native_path() -> Result<()> {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr),
     );
+    Ok(())
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Archive push path
+// ──────────────────────────────────────────────────────────────────
+
+/// v3 treats `.ommx` archives as an exchange format: pushing an
+/// archive means "load it into the SQLite Local Registry, then push
+/// the resulting registry entry". This test exercises that two-step
+/// pipeline against an anonymous registry: build, save, drop the
+/// sender registry, then import into a fresh receiver registry and
+/// push from there. A regression that re-introduced ocipkg's
+/// `RemoteBuilder` / `auth_from_env` on the push side would fail
+/// because `LocalArtifact::push` routes through the v3
+/// `RemoteTransport`.
+#[test]
+#[ignore = "requires docker"]
+#[serial]
+fn push_oci_archive_via_load_then_push() -> Result<()> {
+    let _env = EnvGuard::new();
+    let registry = start_anonymous_registry();
+    let port = registry.get_host_port_ipv4(5000)?;
+    let image_name = ImageName::parse(&format!("localhost:{port}/ommx-test/archive-push:tag1"))?;
+
+    // Sender side: build in SQLite, save to archive on disk.
+    let (sender_local, _sender_dir) = build_test_artifact(image_name.clone())?;
+    let archive_dir = tempfile::tempdir()?;
+    let archive_path = archive_dir.path().join("artifact.ommx");
+    sender_local.save(&archive_path)?;
+    drop(sender_local);
+
+    // Receiver side: import the archive into a fresh SQLite registry,
+    // then push from that registry. Matches the v3 "archive is
+    // exchange format" model exactly.
+    let receiver_dir = tempfile::tempdir()?;
+    let receiver = Arc::new(LocalRegistry::open(receiver_dir.path())?);
+    import_oci_archive(&receiver, &archive_path)?;
+    let receiver_local = LocalArtifact::open_in_registry(receiver, image_name)?;
+    receiver_local.push()
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Pull path
+// ──────────────────────────────────────────────────────────────────
+
+/// `pull_image` against an anonymous registry: push an artifact, then
+/// pull it back into a *fresh* SQLite Local Registry tempdir and
+/// verify the same instance layer round-trips. End-to-end integration
+/// test for the native pull pipeline. The unit test
+/// `pull_image_short_circuits_when_ref_is_present_with_blob` in
+/// `local_registry/tests.rs` covers the SQLite-resident fast path;
+/// this one covers the network-fetch slow path that the unit test
+/// stubs out.
+#[test]
+#[ignore = "requires docker"]
+#[serial]
+fn pull_image_round_trips_through_anonymous_registry() -> Result<()> {
+    let _env = EnvGuard::new();
+    let registry = start_anonymous_registry();
+    let port = registry.get_host_port_ipv4(5000)?;
+    let image_name = ImageName::parse(&format!("localhost:{port}/ommx-test/pull-rt:tag1"))?;
+
+    // Push from a sender-side SQLite registry.
+    let (sender_local, _sender_dir) = build_test_artifact(image_name.clone())?;
+    let expected_layer_bytes = {
+        let layers = sender_local.layers()?;
+        assert_eq!(layers.len(), 1);
+        sender_local.get_blob(layers[0].digest().as_ref())?
+    };
+    sender_local.push()?;
+
+    // Pull into a fresh receiver-side SQLite registry tempdir.
+    let receiver_dir = tempfile::tempdir()?;
+    let receiver = Arc::new(LocalRegistry::open(receiver_dir.path())?);
+    let outcome = pull_image(&receiver, &image_name)?;
+    assert_eq!(outcome.image_name.as_ref(), Some(&image_name));
+
+    // The pulled artifact must be the same artifact: same manifest
+    // digest, same single layer, same layer bytes. Failure on any of
+    // these assertions means the native pull lost data on the way
+    // through `RemoteTransport` + `publish_artifact_atomic`.
+    let pulled = LocalArtifact::open_in_registry(receiver, image_name)?;
+    assert_eq!(pulled.manifest_digest(), outcome.manifest_digest);
+    let layers = pulled.layers()?;
+    assert_eq!(layers.len(), 1);
+    let pulled_bytes = pulled.get_blob(layers[0].digest().as_ref())?;
+    assert_eq!(pulled_bytes, expected_layer_bytes);
     Ok(())
 }
 

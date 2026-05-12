@@ -3,11 +3,12 @@ use clap::{Parser, Subcommand};
 use colored::Colorize;
 use ocipkg::{oci_spec::image::ImageManifest, ImageName};
 use ommx::artifact::{
-    get_image_dir,
+    fetch_remote_manifest, get_image_dir,
     local_registry::{
-        import_oci_archive, import_oci_dir, pull_image, LocalRegistry, RefConflictPolicy,
+        import_oci_archive, import_oci_dir, inspect_archive, oci_dir_ref, pull_image,
+        LocalRegistry, RefConflictPolicy,
     },
-    Artifact, LocalArtifact,
+    LocalArtifact,
 };
 use std::path::{Path, PathBuf};
 
@@ -84,6 +85,25 @@ enum ArtifactCommand {
         #[clap(long)]
         replace: bool,
     },
+
+    /// Delete every SQLite ref produced by `ArtifactBuilder.new_anonymous`.
+    ///
+    /// `new_anonymous` writes artifacts under the synthetic ref
+    /// `<registry-id8>.ommx.local/anonymous:<local-timestamp>-<nonce>`
+    /// so the SQLite Local Registry has a key to address the artifact
+    /// under. This command deletes every ref whose name + tag match
+    /// that structure, including entries imported from registries with
+    /// different `registry_id` prefixes. Manifest / blob CAS records
+    /// are left in place; a future GC sweep will reclaim them.
+    PruneAnonymous {
+        /// Local registry root. Defaults to OMMX_LOCAL_REGISTRY_ROOT or the OS default data dir.
+        #[clap(long)]
+        root: Option<PathBuf>,
+
+        /// List refs that would be removed without modifying the registry.
+        #[clap(long)]
+        dry_run: bool,
+    },
 }
 
 enum ImageNameOrPath {
@@ -132,10 +152,35 @@ impl ImageNameOrPath {
 
     fn get_manifest(&self) -> Result<ImageManifest> {
         let manifest = match self {
-            ImageNameOrPath::OciDir(path) => Artifact::from_oci_dir(path)?.get_manifest()?,
-            ImageNameOrPath::OciArchive(path) => {
-                Artifact::from_oci_archive(path)?.get_manifest()?
+            // OCI Image Layout directory inspect: read the manifest
+            // descriptor's digest out of `index.json` (via the existing
+            // `oci_dir_ref`) and load the manifest blob directly from
+            // disk. Avoids importing into SQLite for a read-only op.
+            ImageNameOrPath::OciDir(path) => {
+                let dir_ref = oci_dir_ref(path)?;
+                let manifest_blob_path = path
+                    .join("blobs")
+                    .join("sha256")
+                    .join(dir_ref.manifest_digest.trim_start_matches("sha256:"));
+                let bytes = std::fs::read(&manifest_blob_path).with_context(|| {
+                    format!(
+                        "Failed to read manifest blob at {}",
+                        manifest_blob_path.display()
+                    )
+                })?;
+                serde_json::from_slice::<ImageManifest>(&bytes).with_context(|| {
+                    format!(
+                        "Failed to parse OCI image manifest at {}",
+                        manifest_blob_path.display()
+                    )
+                })?
             }
+            // Read-only inspect: a native tar pre-scan extracts the
+            // manifest blob without touching the SQLite Local Registry.
+            // `Artifact.import_archive(file)` is the side-effecting
+            // import path; `ommx inspect <archive>` should not mutate
+            // the user's registry.
+            ImageNameOrPath::OciArchive(path) => inspect_archive(path)?.manifest,
             // `parse` only routes a ref to `Local` when SQLite resolves
             // it, so `LocalArtifact::open` should always succeed here;
             // if it doesn't, surface the SQLite-side migration message.
@@ -148,9 +193,12 @@ impl ImageNameOrPath {
             // through to `Remote`). Bail with the migration hint before
             // initiating a network fetch so `ommx inspect` does not
             // silently look up a ref the user already has locally.
+            // Manifest-only fetch (no blob pull, no SQLite write) keeps
+            // inspect cheap; users who want the bytes locally run
+            // `ommx pull <name>`.
             ImageNameOrPath::Remote(name) => {
                 migration_hint_if_legacy_only(name)?;
-                Artifact::from_remote(name.clone())?.get_manifest()?
+                fetch_remote_manifest(name)?
             }
         };
         Ok(manifest)
@@ -210,14 +258,23 @@ fn main() -> Result<()> {
         }
 
         Command::Push { image_name_or_path } => match ImageNameOrPath::parse(image_name_or_path)? {
-            ImageNameOrPath::OciDir(path) => {
-                let mut artifact = Artifact::from_oci_dir(&path)?;
-                artifact.push()?;
-            }
-            ImageNameOrPath::OciArchive(path) => {
-                let mut artifact = Artifact::from_oci_archive(&path)?;
-                artifact.push()?;
-            }
+            // v3 treats archive / OCI Image Layout dirs as exchange
+            // formats; push always goes from the SQLite Local Registry.
+            // Both paths bail with the same migration hint: load into
+            // the registry first, then push by image name.
+            ImageNameOrPath::OciDir(path) => bail!(
+                "Cannot push OCI Image Layout directory `{}` directly. Run \
+                 `ommx load <dir>` to import it into the SQLite Local Registry, \
+                 then `ommx push <image_name>`.",
+                path.display(),
+            ),
+            ImageNameOrPath::OciArchive(path) => bail!(
+                "Cannot push OCI archive `{}` directly. Run `ommx load <file>` \
+                 to import it into the SQLite Local Registry, then \
+                 `ommx push <image_name>`. (Archive is an exchange format; v3 \
+                 pushes always source from the registry.)",
+                path.display(),
+            ),
             // CLI and Python `Artifact.push()` share the same native
             // code path: `LocalArtifact::push()`. `parse` only routes
             // SQLite-resident refs to `Local`, so `open` is the right
@@ -310,6 +367,32 @@ fn main() -> Result<()> {
                         "Skipped {} conflicting ref(s); rerun with --replace to overwrite them",
                         report.conflicted_dirs
                     );
+                }
+            }
+            ArtifactCommand::PruneAnonymous { root, dry_run } => {
+                let registry = if let Some(root) = root {
+                    LocalRegistry::open(root)?
+                } else {
+                    LocalRegistry::open_default()?
+                };
+                let to_remove = registry.list_anonymous_artifact_refs()?;
+                if to_remove.is_empty() {
+                    println!("No anonymous artifact refs found.");
+                } else if *dry_run {
+                    println!(
+                        "Would remove {} anonymous artifact ref(s):",
+                        to_remove.len()
+                    );
+                    for r in &to_remove {
+                        println!("  {}:{}  →  {}", r.name, r.reference, r.manifest_digest);
+                    }
+                    println!("(--dry-run: registry unchanged)");
+                } else {
+                    let removed = registry.prune_anonymous_artifact_refs()?;
+                    println!("Removed {} anonymous artifact ref(s):", removed.len());
+                    for r in &removed {
+                        println!("  {}:{}", r.name, r.reference);
+                    }
                 }
             }
         },

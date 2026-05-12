@@ -10,14 +10,18 @@
 //!
 //! Public callers see no `async`, no `tokio` re-export, and no runtime
 //! lifetime — the wrapper is the only seam where async crosses into the
-//! rest of the SDK. Later milestones expand the async boundary outward
-//! (see `ARTIFACT_V3.md` §12.3 Step B) until pyo3-async runtimes expose
-//! `await` on the Python side; until then this `block_on` wrapper is the
-//! single point that needs to change.
+//! rest of the SDK. Later refinements may expand the async boundary
+//! outward until pyo3-async-runtimes exposes `await` on the Python
+//! side; until then this `block_on` wrapper is the single point that
+//! needs to change.
 //!
-//! Pull / list / probe surface is intentionally not implemented yet —
-//! Step B is push-only. The corresponding read paths still go through
-//! `ocipkg` in `local_registry::import::remote`.
+//! Both push and pull surfaces are implemented here.
+//! `pull_manifest_raw` returns the manifest body verbatim so the
+//! digest the registry computes and the digest we store locally agree
+//! byte-for-byte; `pull_blob_to_vec` collects a blob into a `Vec<u8>`
+//! over `oci-client`'s streaming reader. Layer-blob streaming straight
+//! into [`super::local_registry::FileBlobStore`] is a future refinement
+//! once `FileBlobStore` grows an `AsyncWrite`-compatible put path.
 //!
 //! Credentials are resolved by [`resolve_auth`] in a three-tier chain:
 //! `OMMX_BASIC_AUTH_*` env override → `~/.docker/config.json`
@@ -31,6 +35,7 @@
 
 use anyhow::Context;
 use docker_credential::{CredentialRetrievalError, DockerCredential};
+use futures_util::TryStreamExt;
 use http::HeaderValue;
 use oci_client::{
     client::{ClientConfig, ClientProtocol},
@@ -77,18 +82,27 @@ impl RemoteTransport {
 
     /// Authenticate to the registry once before issuing other requests.
     /// `oci-client` defers auth challenges until the first request, but
-    /// for push flows we want bearer-token negotiation to happen up
-    /// front so that errors surface with the operation that triggered
-    /// them rather than buried inside a blob upload.
-    pub(crate) fn auth(&self, image_name: &ocipkg::ImageName) -> crate::Result<()> {
+    /// for push / pull flows we want bearer-token negotiation to happen
+    /// up front so that errors surface with the operation that triggered
+    /// them rather than buried inside a blob transfer. Pass the
+    /// [`RegistryOperation`] matching the next call (`Push` vs `Pull`);
+    /// registries scope bearer tokens by operation.
+    pub(crate) fn auth_for(
+        &self,
+        image_name: &ocipkg::ImageName,
+        operation: RegistryOperation,
+    ) -> crate::Result<()> {
         let reference = to_reference(image_name)?;
         self.runtime
-            .block_on(
-                self.client
-                    .auth(&reference, &self.auth, RegistryOperation::Push),
-            )
+            .block_on(self.client.auth(&reference, &self.auth, operation))
             .with_context(|| format!("Failed to authenticate against {reference}"))?;
         Ok(())
+    }
+
+    /// Convenience: authenticate for a `Push` request. Most existing
+    /// call sites push; the explicit form is [`Self::auth_for`].
+    pub(crate) fn auth(&self, image_name: &ocipkg::ImageName) -> crate::Result<()> {
+        self.auth_for(image_name, RegistryOperation::Push)
     }
 
     /// Push a single blob to the registry. The caller passes the
@@ -134,7 +148,102 @@ impl RemoteTransport {
             .with_context(|| format!("Failed to push manifest to {reference}"))?;
         Ok(())
     }
+
+    /// Pull the manifest for `image_name` verbatim. Returns the raw
+    /// bytes (so the digest the registry computes and the digest we
+    /// store locally agree byte-for-byte) alongside the digest string
+    /// reported by the registry. `accepted_media_types` is forwarded
+    /// to the `Accept` header — pass the OMMX image-manifest media
+    /// type for a manifest pull.
+    pub(crate) fn pull_manifest_raw(
+        &self,
+        image_name: &ocipkg::ImageName,
+        accepted_media_types: &[&str],
+    ) -> crate::Result<(Vec<u8>, String)> {
+        let reference = to_reference(image_name)?;
+        let (bytes, digest) = self
+            .runtime
+            .block_on(
+                self.client
+                    .pull_manifest_raw(&reference, &self.auth, accepted_media_types),
+            )
+            .with_context(|| format!("Failed to pull manifest from {reference}"))?;
+        Ok((bytes.to_vec(), digest))
+    }
+
+    /// Pull a single blob into memory. The caller passes the manifest-
+    /// declared `expected_size`; the helper validates registry-reported
+    /// `Content-Length` if present, aborts the chunk loop the moment
+    /// accumulated bytes exceed `expected_size`, and caps the initial
+    /// `Vec::with_capacity` at [`BLOB_PREALLOC_CAP_BYTES`] so a manifest
+    /// that lies about a multi-gigabyte size cannot induce an
+    /// up-front OOM before any digest check has a chance to fire. The
+    /// buffer can still grow past the cap if the actual stream
+    /// genuinely produces that many bytes (legitimate large blobs
+    /// just pay an extra realloc).
+    ///
+    /// `oci_client::Client::pull_blob_stream` skips the digest
+    /// verification that `pull_blob` does on the streaming reader; the
+    /// caller writes the bytes into
+    /// [`super::local_registry::FileBlobStore`] which re-derives sha256
+    /// during `put_bytes` and then asserts the result matches the
+    /// expected digest, so the registry-side digest is enforced exactly
+    /// once at the storage boundary rather than twice in network and
+    /// store layers.
+    pub(crate) fn pull_blob_to_vec(
+        &self,
+        image_name: &ocipkg::ImageName,
+        digest: &str,
+        expected_size: u64,
+    ) -> crate::Result<Vec<u8>> {
+        let reference = to_reference(image_name)?;
+        let bytes = self
+            .runtime
+            .block_on(async {
+                let resp = self.client.pull_blob_stream(&reference, digest).await?;
+                if let Some(content_length) = resp.content_length {
+                    anyhow::ensure!(
+                        content_length == expected_size,
+                        "Registry reported Content-Length {content_length} for blob {digest}, \
+                         but the manifest descriptor declares size {expected_size}",
+                    );
+                }
+                // Cap preallocation. A malicious manifest claiming
+                // `size = u64::MAX` would otherwise be reduced to
+                // `usize::MAX` and OOM on the spot; capping at a
+                // sane upper bound forces the registry to actually
+                // serve that many bytes (which the accumulated check
+                // below catches) before we allocate them.
+                let prealloc = expected_size.min(BLOB_PREALLOC_CAP_BYTES) as usize;
+                let mut buf = Vec::with_capacity(prealloc);
+                let mut accumulated: u64 = 0;
+                let mut stream = resp.stream;
+                while let Some(chunk) = stream.try_next().await? {
+                    accumulated = accumulated
+                        .checked_add(chunk.len() as u64)
+                        .context("Pulled blob size overflowed u64")?;
+                    anyhow::ensure!(
+                        accumulated <= expected_size,
+                        "Pulled blob bytes for {digest} exceed declared size {expected_size}; \
+                         the registry served more data than the manifest descriptor allows",
+                    );
+                    buf.extend_from_slice(&chunk);
+                }
+                Ok::<_, anyhow::Error>(buf)
+            })
+            .with_context(|| format!("Failed to pull blob {digest} from {reference}"))?;
+        Ok(bytes)
+    }
 }
+
+/// Upper bound on `Vec::with_capacity` for blob downloads. Typical
+/// OMMX layer blobs (problem instances, solutions) are well under
+/// this, so legitimate traffic never hits the cap; a hostile manifest
+/// that claims a multi-gigabyte size is contained to a single 256 MiB
+/// pre-allocation rather than allocating from the claim directly.
+/// The buffer can still grow past the cap if the actual stream
+/// produces more bytes, at the cost of one or two reallocations.
+const BLOB_PREALLOC_CAP_BYTES: u64 = 256 * 1024 * 1024;
 
 /// Build a [`Reference`] from `ocipkg`'s `ImageName`. The two crates pull
 /// in different versions of `oci-spec`, so the canonical interchange is
@@ -143,7 +252,6 @@ fn to_reference(image_name: &ocipkg::ImageName) -> crate::Result<Reference> {
     let raw = image_name.to_string();
     raw.parse::<Reference>()
         .with_context(|| format!("Invalid OCI image reference: {raw}"))
-        .map_err(Into::into)
 }
 
 /// `oci-client` defaults to HTTPS; `localhost` registries (used in tests

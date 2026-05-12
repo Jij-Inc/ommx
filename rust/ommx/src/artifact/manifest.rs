@@ -268,9 +268,23 @@ impl LocalManifest {
 /// artifact media type and the OCI 1.1 empty config descriptor as
 /// `config`. The layer blobs land in the Image Manifest's `layers[]`
 /// field.
+/// How the builder picks its image name at build time. Explicit
+/// values get used verbatim; the `Anonymous` variant lets
+/// [`LocalArtifactBuilder::build_in_registry`] synthesize a name
+/// against the actual target registry's `registry_id` instead of
+/// committing to one at construction time. Building an anonymous
+/// builder into a fresh `LocalRegistry` therefore stamps the
+/// destination-registry's id into the synthesized hostname, not the
+/// default registry's id.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum BuilderImageName {
+    Explicit(ocipkg::ImageName),
+    Anonymous,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LocalArtifactBuilder {
-    image_name: ocipkg::ImageName,
+    image_name: BuilderImageName,
     artifact_type: MediaType,
     layers: Vec<StagedArtifactBlob>,
     subject: Option<Descriptor>,
@@ -280,12 +294,54 @@ pub struct LocalArtifactBuilder {
 impl LocalArtifactBuilder {
     pub fn new(image_name: ocipkg::ImageName) -> Self {
         Self {
-            image_name,
+            image_name: BuilderImageName::Explicit(image_name),
             artifact_type: MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
             layers: Vec::new(),
             subject: None,
             annotations: HashMap::new(),
         }
+    }
+
+    /// Builder for an artifact whose name is auto-generated. UX
+    /// shortcut for "I just want to share this artifact, I don't want
+    /// to invent a real name". The synthesized image name has the form
+    /// `<registry-id8>.ommx.local/anonymous:<local-timestamp>-<nonce>`;
+    /// the registry-id prefix is generated once when each
+    /// [`LocalRegistry`] is first created and persisted in its SQLite
+    /// metadata, so anonymous artifacts from the same registry share
+    /// a prefix and can be told apart from artifacts imported from
+    /// another registry. Name synthesis is deferred to
+    /// [`Self::build_in_registry`] so the prefix reflects the actual
+    /// target registry (not the default registry). Use
+    /// `ommx artifact prune-anonymous` to clean accumulated entries.
+    ///
+    /// **Note: [`RefConflictPolicy`] is forced to `Replace` for
+    /// anonymous builds** — [`Self::build_in_registry`] silently
+    /// overrides whatever policy the caller passes. Anonymous
+    /// artifacts are designed to be transient and unique by
+    /// timestamp + nonce; collision recovery is "silently overwrite
+    /// the older entry" rather than "fail with a ref conflict". The
+    /// 48-bit nonce in [`anonymous_artifact_image_name`] makes
+    /// collisions astronomically rare in practice, and the policy
+    /// override is kept as defense-in-depth. Callers who want
+    /// collision detection cannot opt out — pick an explicit name
+    /// via [`Self::new`] instead.
+    pub fn new_anonymous() -> Self {
+        Self {
+            image_name: BuilderImageName::Anonymous,
+            artifact_type: MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
+            layers: Vec::new(),
+            subject: None,
+            annotations: HashMap::new(),
+        }
+    }
+
+    /// Builder under a random `ttl.sh/<uuid>:1h` image name. Insecure;
+    /// for tests only.
+    pub fn temp() -> Result<Self> {
+        let id = uuid::Uuid::new_v4();
+        let image_name = ocipkg::ImageName::parse(&format!("ttl.sh/{id}:1h"))?;
+        Ok(Self::new(image_name))
     }
 
     /// Create a new artifact builder for a GitHub container registry image name.
@@ -377,10 +433,29 @@ impl LocalArtifactBuilder {
     }
 
     pub fn build_in_registry(
-        self,
+        mut self,
         registry: Arc<LocalRegistry>,
-        policy: RefConflictPolicy,
+        mut policy: RefConflictPolicy,
     ) -> Result<LocalArtifact> {
+        // Resolve a deferred anonymous name against the *actual*
+        // target registry's id, so the synthesized hostname prefix
+        // matches the destination registry (not the default
+        // registry, which `LocalArtifactBuilder::new_anonymous`
+        // could not have known at construction time).
+        //
+        // Anonymous builds are also transparently switched to
+        // `RefConflictPolicy::Replace`: two anonymous builds in the
+        // same second produce the same `YYYYMMDDTHHMMSS` tag, and the
+        // user's intent is "publish under an auto-generated name", so
+        // silently overwriting the older ref is more useful than
+        // failing with a `KeepExisting` conflict. Named builds keep
+        // the caller-supplied policy intact.
+        if let BuilderImageName::Anonymous = self.image_name {
+            let registry_id = registry.index().registry_id()?;
+            self.image_name =
+                BuilderImageName::Explicit(anonymous_artifact_image_name(&registry_id)?);
+            policy = RefConflictPolicy::Replace;
+        }
         let staged = self.stage()?;
         let ref_update = registry.publish_artifact_manifest(
             &staged.image_name,
@@ -452,8 +527,23 @@ impl LocalArtifactBuilder {
         let manifest_bytes = stable_json_bytes(&manifest)?;
         let manifest_descriptor =
             descriptor_from_bytes(MediaType::ImageManifest, &manifest_bytes, HashMap::new())?;
+        // `build_in_registry` resolves the `Anonymous` variant before
+        // calling `stage()`, so reaching `stage()` with `Anonymous`
+        // here is a bug (someone bypassed the resolve step). Surface
+        // it as a clear internal error rather than letting it slip
+        // through as a mysterious empty-name.
+        let image_name = match self.image_name {
+            BuilderImageName::Explicit(name) => name,
+            BuilderImageName::Anonymous => {
+                crate::bail!(
+                    "LocalArtifactBuilder::stage called with an unresolved anonymous image \
+                     name. Use `build_in_registry` (which resolves the name against the target \
+                     registry's id) instead of calling `stage` directly."
+                );
+            }
+        };
         Ok(StagedArtifactManifest {
-            image_name: self.image_name,
+            image_name,
             manifest,
             manifest_bytes,
             manifest_descriptor,
@@ -542,12 +632,283 @@ fn ensure_ommx_image_manifest(manifest: &ImageManifest) -> Result<()> {
     Ok(())
 }
 
+/// Suffix shared by every anonymous artifact repository name. The
+/// full SQLite ref name is `<registry-id8>.ommx.local/anonymous`; the
+/// registry-id prefix is randomised per registry, so filtering
+/// anonymous artifacts uses
+/// `name.ends_with(ANONYMOUS_ARTIFACT_REF_NAME_SUFFIX)`.
+/// `ommx artifact prune-anonymous` cleans entries from every prefix
+/// in the registry, not just the host's own.
+///
+/// The hostname segment `.ommx.local` deliberately uses the `.local`
+/// link-local TLD (RFC 6762, multicast DNS). A push attempt against
+/// this name resolves through mDNS rather than DNS — so an accidental
+/// `ommx push <anonymous>` cannot leak the artifact to a real remote
+/// registry; absent an mDNS responder, the push just fails locally.
+/// Internal-only suffix shared by every anonymous artifact ref name.
+/// Use [`is_anonymous_artifact_ref_name`] for the structural match
+/// predicate — that is the stable public API; this literal can change
+/// over time without breaking external users.
+pub(crate) const ANONYMOUS_ARTIFACT_REF_NAME_SUFFIX: &str = ".ommx.local/anonymous";
+
+/// Number of hex chars from the full registry-id used as the
+/// hostname prefix. The metadata column stores the full 32-hex UUID;
+/// only the hostname rendering truncates. Picked so the prefix is
+/// short enough to read at a glance but wide enough (2^32) to avoid
+/// realistic collisions across a single user's registries.
+const ANONYMOUS_REGISTRY_ID_HOST_LEN: usize = 8;
+
+/// Hex chars of the random nonce appended to the timestamp tag.
+/// 12 hex = 48 bits = ~2.8 × 10^14 possible nonces; at N=10 000
+/// concurrent anonymous builds the birthday-paradox collision
+/// probability is ~1.8 × 10^-7, which combined with the seconds-level
+/// timestamp prefix and the `RefConflictPolicy::Replace` fallback in
+/// `build_in_registry` gives a practical zero collision rate even on
+/// platforms whose `clock_gettime` resolution is only microseconds
+/// (notably macOS — chrono's `%.9f` pads with zeros there, so the
+/// timestamp alone would not differentiate builds within the same
+/// microsecond). 32 bits (8 hex) would only give P ~ 1.2 × 10^-2 at
+/// the same scale, so the extra 4 hex chars are worth the tag-length
+/// cost.
+const ANONYMOUS_TAG_NONCE_HEX_LEN: usize = 12;
+
+/// Generate a synthetic [`ocipkg::ImageName`] for an anonymous
+/// artifact. Build the image name from the registry's persisted
+/// `registry_id` (so the prefix matches the destination registry,
+/// not the default registry), plus a local-time timestamp + random
+/// nonce tag.
+///
+/// Format: `<registry-id8>.ommx.local/anonymous:<local-time>-<nonce>`
+/// where
+/// - `<registry-id8>` is the first
+///   [`ANONYMOUS_REGISTRY_ID_HOST_LEN`] hex chars of the registry's
+///   `registry_id` metadata (a random UUID generated once per
+///   [`LocalRegistry`] on first init). The full UUID stays on disk
+///   for future widening; only the rendering truncates.
+/// - `<local-time>` is `YYYYMMDDTHHMMSS` in the caller's **local**
+///   time zone (no `Z` / no offset — OCI tag syntax forbids `+`, and
+///   a fixed UTC marker would defeat the "I can read the date at a
+///   glance" intent). A registry shared across machines in different
+///   timezones loses the time component's absolute meaning, which is
+///   an explicit non-goal for anonymous artifacts.
+/// - `<nonce>` is [`ANONYMOUS_TAG_NONCE_HEX_LEN`] hex chars of a fresh
+///   UUID v4. Required for MINTO-style concurrent build patterns
+///   (scripts emitting many anonymous artifacts per second): without
+///   it, two builds in the same second would synthesize the same tag
+///   and overwrite each other. `RefConflictPolicy::Replace` in
+///   `build_in_registry` is kept as a defense-in-depth fallback for
+///   the astronomically rare nonce collision.
+pub(crate) fn anonymous_artifact_image_name(registry_id: &str) -> Result<ocipkg::ImageName> {
+    let prefix: String = registry_id
+        .chars()
+        .take(ANONYMOUS_REGISTRY_ID_HOST_LEN)
+        .collect();
+    anyhow::ensure!(
+        prefix.len() == ANONYMOUS_REGISTRY_ID_HOST_LEN
+            && prefix
+                .chars()
+                .all(|c| c.is_ascii_digit() || ('a'..='f').contains(&c)),
+        "Anonymous artifact registry id must be at least {} lowercase hex chars; got {prefix:?}",
+        ANONYMOUS_REGISTRY_ID_HOST_LEN,
+    );
+    let stamp = chrono::Local::now().format("%Y%m%dT%H%M%S");
+    let nonce: String = uuid::Uuid::new_v4()
+        .simple()
+        .to_string()
+        .chars()
+        .take(ANONYMOUS_TAG_NONCE_HEX_LEN)
+        .collect();
+    ocipkg::ImageName::parse(&format!("{prefix}.ommx.local/anonymous:{stamp}-{nonce}"))
+        .with_context(|| format!("Failed to synthesise anonymous artifact image name: {prefix}"))
+}
+
+/// True iff `name` (the `host/path` portion of an OCI ref) matches the
+/// shape an anonymous artifact's image name would take: an 8-hex
+/// `<host>.ommx.local/anonymous` repository. Used by
+/// `prune-anonymous` to filter SQLite refs without false-positives on
+/// human-pushed refs that happen to share the suffix
+/// (e.g. an artifact pushed to a real mDNS host named
+/// `myhost.ommx.local`).
+pub fn is_anonymous_artifact_ref_name(name: &str) -> bool {
+    let Some(host_segment) = name.strip_suffix(ANONYMOUS_ARTIFACT_REF_NAME_SUFFIX) else {
+        return false;
+    };
+    host_segment.len() == ANONYMOUS_REGISTRY_ID_HOST_LEN
+        && host_segment
+            .chars()
+            .all(|c| c.is_ascii_digit() || ('a'..='f').contains(&c))
+}
+
+/// True iff `tag` matches the `YYYYMMDDTHHMMSS-<nonce>` shape that
+/// [`anonymous_artifact_image_name`] generates: 15 timestamp chars
+/// (digits with `T` at position 8), `-` separator, and
+/// [`ANONYMOUS_TAG_NONCE_HEX_LEN`] lowercase hex chars. Combined with
+/// [`is_anonymous_artifact_ref_name`] this gives `prune-anonymous` a
+/// structural match instead of a substring match.
+pub fn is_anonymous_artifact_tag(tag: &str) -> bool {
+    let expected_len = 15 + 1 + ANONYMOUS_TAG_NONCE_HEX_LEN;
+    if tag.len() != expected_len {
+        return false;
+    }
+    let bytes = tag.as_bytes();
+    // Timestamp portion: 8 digits, 'T', 6 digits.
+    for (i, b) in bytes[..15].iter().enumerate() {
+        let ok = if i == 8 {
+            *b == b'T'
+        } else {
+            b.is_ascii_digit()
+        };
+        if !ok {
+            return false;
+        }
+    }
+    // Separator + nonce.
+    if bytes[15] != b'-' {
+        return false;
+    }
+    bytes[16..]
+        .iter()
+        .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(b))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn test_image_name(tag: &str) -> Result<ocipkg::ImageName> {
         ocipkg::ImageName::parse(&format!("ghcr.io/jij-inc/ommx/demo:{tag}"))
+    }
+
+    /// `<registry-id8>.ommx.local/anonymous:<YYYYMMDDTHHMMSS>-<nonce>`
+    /// must parse as a valid OCI image reference. A regression that
+    /// included `:` / `+` in the timestamp, or non-alphanumeric chars
+    /// in the registry-id prefix or the nonce, would break
+    /// `ImageName::parse`.
+    #[test]
+    fn anonymous_image_name_parses() {
+        let fake_registry_id = "deadbeef0123456789abcdef01234567";
+        let name = anonymous_artifact_image_name(fake_registry_id).expect("synthetic ref parses");
+        let s = name.to_string();
+        // Repository portion ends with `.ommx.local/anonymous`; the
+        // tag follows the colon.
+        // e.g. `deadbeef.ommx.local/anonymous:20260512T153045-a3f17b9c`.
+        let (before_colon, tag) = s.rsplit_once(':').expect("ref must include `:tag`");
+        assert!(
+            before_colon.ends_with(ANONYMOUS_ARTIFACT_REF_NAME_SUFFIX),
+            "ref `{before_colon}` must end with `{ANONYMOUS_ARTIFACT_REF_NAME_SUFFIX}`",
+        );
+        assert!(
+            before_colon.starts_with("deadbeef."),
+            "ref `{before_colon}` must start with the truncated registry-id prefix",
+        );
+        // Tag = 15 timestamp + `-` + nonce.
+        let expected_tag_len = 15 + 1 + ANONYMOUS_TAG_NONCE_HEX_LEN;
+        assert_eq!(
+            tag.len(),
+            expected_tag_len,
+            "tag `{tag}` must be {expected_tag_len} chars",
+        );
+        assert!(
+            tag.chars().nth(8) == Some('T'),
+            "tag `{tag}` must have `T` at position 8",
+        );
+        assert!(
+            tag.chars().nth(15) == Some('-'),
+            "tag `{tag}` must have `-` separator before the nonce",
+        );
+    }
+
+    /// Two anonymous image names generated back-to-back must differ in
+    /// the nonce portion even when the timestamp portion is the same.
+    /// MINTO-style concurrent build patterns rely on this for
+    /// collision-free unique naming; second-resolution timestamps
+    /// alone (especially on macOS where `clock_gettime` is microsecond
+    /// resolution) would not suffice.
+    #[test]
+    fn anonymous_image_name_nonce_differentiates_same_second_builds() {
+        let id = "0123456789abcdef0123456789abcdef";
+        let n1 = anonymous_artifact_image_name(id).unwrap().to_string();
+        let n2 = anonymous_artifact_image_name(id).unwrap().to_string();
+        assert_ne!(n1, n2, "back-to-back anonymous names must differ: {n1}");
+    }
+
+    /// `is_anonymous_artifact_ref_name` + `is_anonymous_artifact_tag`
+    /// must together accept only ref / tag pairs that
+    /// [`anonymous_artifact_image_name`] would generate, and reject
+    /// substring-match false positives a naive `ends_with` would let
+    /// through (the failure mode `ommx artifact prune-anonymous`
+    /// would otherwise have on a human-pushed
+    /// `myhost.ommx.local/anonymous:v1`).
+    #[test]
+    fn anonymous_ref_filter_rejects_false_positives() {
+        // Positive: a synthesized name + tag pair.
+        let synth = anonymous_artifact_image_name("0123456789abcdef0123456789abcdef")
+            .unwrap()
+            .to_string();
+        let (name, tag) = synth.rsplit_once(':').unwrap();
+        assert!(is_anonymous_artifact_ref_name(name));
+        assert!(is_anonymous_artifact_tag(tag));
+
+        // Negative: hostname has the suffix but a non-8-hex prefix.
+        assert!(!is_anonymous_artifact_ref_name(
+            "myhost.ommx.local/anonymous"
+        ));
+        assert!(!is_anonymous_artifact_ref_name(
+            "ABCDEFGH.ommx.local/anonymous"
+        ));
+
+        // Negative: tag is not the synthesized YYYYMMDDTHHMMSS-<nonce>
+        // shape.
+        assert!(!is_anonymous_artifact_tag("v1"));
+        // Right total length but wrong internal shape (no `T`, no `-`).
+        assert!(!is_anonymous_artifact_tag("20260512-15304500a3f17b9c"));
+        // Missing nonce.
+        assert!(!is_anonymous_artifact_tag("20260512T153045"));
+        // Nonce contains non-hex.
+        assert!(!is_anonymous_artifact_tag("20260512T153045-XXXXXXXX"));
+        // Wrong separator between timestamp and nonce.
+        assert!(!is_anonymous_artifact_tag("20260512T153045_a3f17b9c"));
+    }
+
+    /// Hostname prefix is truncated to the configured length even when
+    /// the persisted registry-id is the full 32-hex UUID, so the
+    /// rendered image name stays compact while the metadata column
+    /// keeps the full identifier for future use.
+    #[test]
+    fn anonymous_image_name_truncates_registry_id() {
+        let full = "0123456789abcdef0123456789abcdef";
+        let name = anonymous_artifact_image_name(full).unwrap().to_string();
+        let host = name
+            .split('/')
+            .next()
+            .expect("synthetic ref has a host segment");
+        // `<8-hex>.ommx.local` → host segment is the 8-hex + `.ommx.local`.
+        assert_eq!(host, format!("{}.ommx.local", &full[..8]));
+    }
+
+    /// Two anonymous builds with no sleep between them collide on the
+    /// `YYYYMMDDTHHMMSS` tag. The builder transparently overrides
+    /// `RefConflictPolicy::Replace` for the anonymous case so the
+    /// second build succeeds and silently overwrites the first. A
+    /// regression that left the policy at `KeepExisting` would surface
+    /// here as the second `build_in_registry` returning an `Err`
+    /// describing a ref conflict.
+    #[test]
+    fn anonymous_build_in_same_second_does_not_fail() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let registry = Arc::new(LocalRegistry::open(dir.path())?);
+        for tag in ["a", "b"] {
+            let mut builder = LocalArtifactBuilder::new_anonymous();
+            builder.add_layer_bytes(
+                MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
+                format!("anon-{tag}").into_bytes(),
+                HashMap::new(),
+            )?;
+            // Pass `KeepExisting` explicitly: the builder must still
+            // override to `Replace` internally for the anonymous case.
+            builder.build_in_registry(registry.clone(), RefConflictPolicy::KeepExisting)?;
+        }
+        Ok(())
     }
 
     #[test]
