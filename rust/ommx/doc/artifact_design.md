@@ -50,9 +50,17 @@ interchange boundaries that move bytes in and out.
 
 ## Typical workflows
 
-```rust,ignore
+```rust,no_run
+# use ommx::artifact::{InstanceAnnotations, SolutionAnnotations};
+# use ommx::v1;
+# fn example() -> ommx::Result<()> {
+# let instance = v1::Instance::default();
+# let instance_annotations = InstanceAnnotations::default();
+# let state = v1::State::default();
+# let solution_annotations = SolutionAnnotations::default();
 use ommx::artifact::{ImageRef, LocalArtifact, LocalArtifactBuilder};
 use ommx::artifact::local_registry::{pull_image, LocalRegistry};
+use std::sync::Arc;
 
 let image: ImageRef = "ghcr.io/myorg/myproblem:v1".parse()?;
 
@@ -66,7 +74,7 @@ let artifact = builder.build()?;
 let opened = LocalArtifact::open(image.clone())?;
 
 // 3. Pull from a remote registry into the Local Registry, then open.
-let registry = LocalRegistry::open_default()?;
+let registry = Arc::new(LocalRegistry::open_default()?);
 pull_image(&registry, &image)?;
 let pulled = LocalArtifact::open(image.clone())?;
 
@@ -75,6 +83,8 @@ artifact.push()?;
 
 // 5. Export to a `.ommx` archive for ad-hoc exchange.
 artifact.save(std::path::Path::new("myproblem-v1.ommx"))?;
+# Ok(())
+# }
 ```
 
 CLI equivalents — `ommx inspect`, `ommx push`, `ommx pull`,
