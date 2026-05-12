@@ -694,7 +694,7 @@ for layer in manifest.layers:
 
 Calling `Artifact.load_archive(...)` in v3 raises a `RuntimeError` whose message names both replacements and explains the semantic shift.
 
-The archive **must** carry an `org.opencontainers.image.ref.name` annotation (v3 archives always do; pre-v3 OMMX archives also did). Anonymous archives created by `ArtifactBuilder.new_anonymous` carry their synthesized name, so reloading them works without ambiguity.
+If the archive's `index.json` descriptor lacks an `org.opencontainers.image.ref.name` annotation — the shape v2's `ArtifactBuilder.new_archive_unnamed(path)` produced — `import_archive` does **not** refuse the import. It synthesizes a fresh anonymous name (`<registry-id8>.ommx.local/anonymous:<local-timestamp>-<nonce>`, the same shape §13.2 documents) against the destination registry's `registry_id` and registers the archive under that name. v2 archives without a ref annotation therefore continue to load on upgrade; you can sweep them later via `ommx artifact prune-anonymous`. Anonymous archives produced by `ArtifactBuilder.new_anonymous` already carry their synthesized name and re-import under that name unchanged.
 
 `ommx inspect <archive>` (the CLI command) is the CLI equivalent of `Artifact.inspect_archive` — both read the manifest without touching the SQLite Local Registry.
 

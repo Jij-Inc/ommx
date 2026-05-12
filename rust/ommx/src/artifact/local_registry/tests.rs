@@ -906,6 +906,86 @@ fn import_oci_archive_does_not_leave_legacy_dir_behind() -> Result<()> {
     Ok(())
 }
 
+#[test]
+fn import_oci_archive_synthesizes_anonymous_name_for_unnamed_input() -> Result<()> {
+    // v2-era OMMX SDKs produced `.ommx` files whose `index.json`
+    // descriptor lacks the `org.opencontainers.image.ref.name`
+    // annotation. `import_oci_archive` must accept those by
+    // synthesizing a `<registry-id8>.ommx.local/anonymous:<ts>-<nonce>`
+    // ref on the fly rather than refusing the import. A regression
+    // that re-introduced the "no ref name → bail" behaviour would
+    // strand v2 user workflows on upgrade.
+    use oci_spec::image::{DescriptorBuilder, Digest, ImageIndexBuilder, MediaType};
+    use std::collections::HashMap;
+    use std::str::FromStr;
+
+    let dir = tempfile::tempdir()?;
+    let registry = Arc::new(LocalRegistry::open(dir.path())?);
+
+    // Build a normal named archive first, then surgically rewrite its
+    // `index.json` to drop the ref.name annotation — that is the
+    // shape v2 archives have.
+    let named = ImageName::parse("ghcr.io/jij-inc/ommx/demo:unnamed-input")?;
+    let archive_path = dir.path().join("unnamed.ommx");
+    save_test_archive(&archive_path, named.clone(), b"unnamed-payload".to_vec())?;
+
+    // Re-pack the archive without the ref annotation. Cheapest path:
+    // extract, drop annotation, repack.
+    let staging = dir.path().join("staging");
+    std::fs::create_dir_all(&staging)?;
+    {
+        let file = std::fs::File::open(&archive_path)?;
+        let mut tar = tar::Archive::new(file);
+        tar.unpack(&staging)?;
+    }
+    let index_path = staging.join("index.json");
+    let index_bytes = std::fs::read(&index_path)?;
+    let index: oci_spec::image::ImageIndex = serde_json::from_slice(&index_bytes)?;
+    let descriptor = index.manifests().first().unwrap();
+    let stripped_descriptor = DescriptorBuilder::default()
+        .media_type(MediaType::ImageManifest)
+        .digest(Digest::from_str(descriptor.digest().as_ref())?)
+        .size(descriptor.size())
+        .annotations(HashMap::new())
+        .build()?;
+    let stripped_index = ImageIndexBuilder::default()
+        .schema_version(2u32)
+        .media_type(MediaType::ImageIndex)
+        .manifests(vec![stripped_descriptor])
+        .build()?;
+    std::fs::write(&index_path, serde_json::to_vec(&stripped_index)?)?;
+
+    let unnamed_archive = dir.path().join("repacked.ommx");
+    {
+        let file = std::fs::File::create(&unnamed_archive)?;
+        let mut tar = tar::Builder::new(file);
+        tar.append_dir_all(".", &staging)?;
+        tar.finish()?;
+    }
+
+    // Now the test: import the unnamed archive and assert the
+    // returned ref is a synthesized anonymous name (no original ref
+    // annotation to preserve).
+    let outcome = import_oci_archive(&registry, &unnamed_archive)?;
+    let synthesized = outcome
+        .image_name
+        .as_ref()
+        .expect("import must synthesize a name for unnamed archives");
+    let synthesized_str = synthesized.to_string();
+    let (repo, tag) = synthesized_str
+        .rsplit_once(':')
+        .expect("synthesized image name must include a tag");
+    assert!(
+        crate::artifact::is_anonymous_artifact_ref_name(repo),
+        "synthesized repository `{repo}` must match the anonymous shape",
+    );
+    assert!(
+        crate::artifact::is_anonymous_artifact_tag(tag),
+        "synthesized tag `{tag}` must match the anonymous shape",
+    );
+    Ok(())
+}
+
 #[cfg(feature = "remote-artifact")]
 #[test]
 fn pull_image_short_circuits_when_ref_is_present_with_blob() -> Result<()> {

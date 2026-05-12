@@ -173,9 +173,25 @@ fn read_archive_blob(path: &Path, digest: &str) -> Result<Vec<u8>> {
 /// asserts the recomputed digest matches the tar path), captures
 /// `oci-layout` + `index.json` into memory for the post-pass parse,
 /// and finally emits a single SQLite transaction that publishes the
-/// manifest + ref. Returns the [`OciDirImport`] outcome reported by
-/// the underlying publish (`Inserted` on first call for this image,
-/// `Unchanged` for an idempotent re-import of the same digest, or
+/// manifest + ref.
+///
+/// **Unnamed archives are accepted**: a `.ommx` whose `index.json`
+/// descriptor lacks the `org.opencontainers.image.ref.name`
+/// annotation (a shape v2-era OMMX SDKs produced in real workflows)
+/// is imported under a freshly-synthesized anonymous ref name of the
+/// form `<registry-id8>.ommx.local/anonymous:<timestamp>-<nonce>` —
+/// the same shape `LocalArtifactBuilder::new_anonymous` produces.
+/// The returned [`OciDirImport`]'s `image_name` is then `Some(...)`
+/// with the synthesized name, so callers always have a way to address
+/// the imported artifact. Each `import_oci_archive` call on the same
+/// unnamed archive synthesizes a fresh name (the nonce differs), so
+/// repeated imports accumulate distinct refs pointing at the same
+/// manifest digest (CAS-deduped). Use `ommx artifact prune-anonymous`
+/// to clean accumulated synthesized refs.
+///
+/// Returns the [`OciDirImport`] outcome reported by the underlying
+/// publish (`Inserted` on first call for this image, `Unchanged` for
+/// an idempotent re-import of the same digest under the same ref, or
 /// `Err` for a ref conflict when the new archive's manifest digest
 /// differs from the SQLite-recorded one under `KeepExisting` policy).
 pub fn import_oci_archive(registry: &Arc<LocalRegistry>, path: &Path) -> Result<OciDirImport> {
@@ -219,8 +235,30 @@ pub fn import_oci_archive(registry: &Arc<LocalRegistry>, path: &Path) -> Result<
         path.display()
     );
     let index_descriptor = image_index.manifests().first().unwrap();
-    let image_name = image_name_from_index_descriptor(index_descriptor)?;
     let manifest_digest = index_descriptor.digest().to_string();
+    // v2-era OMMX SDKs produced `.ommx` files whose `index.json`
+    // descriptor lacks the `org.opencontainers.image.ref.name`
+    // annotation (the v3 SDK always sets it). Rather than refuse to
+    // import those — which would strand real v2 user workflows — we
+    // synthesize an anonymous ref name here so the SQLite Local
+    // Registry has a key to address the imported artifact under.
+    // The synthesized name follows the same shape
+    // `LocalArtifactBuilder::new_anonymous` produces, so
+    // `ommx artifact prune-anonymous` cleans them by the same
+    // structural match.
+    let image_name = match image_name_from_index_descriptor(index_descriptor)? {
+        Some(name) => name,
+        None => {
+            let registry_id = registry.index().registry_id()?;
+            let synthesized = crate::artifact::anonymous_artifact_image_name(&registry_id)?;
+            tracing::info!(
+                "OCI archive at {} has no `org.opencontainers.image.ref.name` \
+                 annotation; importing under synthesized anonymous name {synthesized}",
+                path.display(),
+            );
+            synthesized
+        }
+    };
 
     // The manifest blob is now resident in the BlobStore (it was a
     // `blobs/sha256/<digest>` entry in the tar). Read it back to
@@ -313,7 +351,7 @@ pub fn import_oci_archive(registry: &Arc<LocalRegistry>, path: &Path) -> Result<
         &blob_records,
         &manifest_record,
         &layer_records,
-        image_name.as_ref(),
+        Some(&image_name),
         RefConflictPolicy::KeepExisting,
     )?;
     // Public entry point: surface a ref conflict as `Err`. Callers
@@ -324,17 +362,15 @@ pub fn import_oci_archive(registry: &Arc<LocalRegistry>, path: &Path) -> Result<
         incoming_manifest_digest,
     }) = &outcome.ref_update
     {
-        if let Some(image_name) = image_name.as_ref() {
-            anyhow::bail!(
-                "Local registry ref conflict for {image_name}: existing manifest \
-                 {existing_manifest_digest}, incoming manifest {incoming_manifest_digest}"
-            );
-        }
+        anyhow::bail!(
+            "Local registry ref conflict for {image_name}: existing manifest \
+             {existing_manifest_digest}, incoming manifest {incoming_manifest_digest}"
+        );
     }
 
     Ok(OciDirImport {
         manifest_digest,
-        image_name,
+        image_name: Some(image_name),
         ref_update: outcome.ref_update,
     })
 }

@@ -70,52 +70,42 @@ impl PyArtifact {
             std::sync::Arc::new(ommx::artifact::local_registry::LocalRegistry::open_default()?);
 
         let image_name = if path.is_file() {
-            // Preflight: validate the archive's ref annotation BEFORE
-            // running `import_oci_archive`. The import path writes
-            // blobs into `FileBlobStore` during the tar scan and only
-            // checks the ref annotation afterward; without this
-            // preflight, an archive with no `org.opencontainers.image.ref.name`
-            // would leave orphan CAS blobs in the user's registry on
-            // the same retry it then refuses to import. `inspect_archive`
-            // reads only `index.json` + the manifest blob, no
-            // registry mutation.
-            let view = ommx::artifact::local_registry::inspect_archive(&path)?;
-            let image_name = view.image_name.ok_or_else(|| {
-                anyhow::anyhow!(
-                    "OCI archive at {} has no `org.opencontainers.image.ref.name` \
-                     annotation; v3 SQLite Local Registry requires a ref name to \
-                     address an imported artifact. Rebuild the archive with an \
-                     image name via `ArtifactBuilder.new(image_name)` + `Artifact.save(path)`.",
-                    path.display(),
-                )
-            })?;
-            // Now run the actual import. The publish path will
-            // reproduce the same ref annotation; a mismatch is
-            // structurally impossible since both reads source the
-            // same tar entry.
+            // `import_oci_archive` synthesizes an anonymous ref name
+            // when the archive's `index.json` lacks the
+            // `org.opencontainers.image.ref.name` annotation (v2-era
+            // unnamed `.ommx` files), so the returned `image_name`
+            // is always `Some(...)`.
             let outcome = ommx::artifact::local_registry::import_oci_archive(&registry, &path)?;
-            debug_assert_eq!(outcome.image_name.as_ref(), Some(&image_name));
-            image_name
+            outcome.image_name.ok_or_else(|| {
+                anyhow::anyhow!(
+                    "import_oci_archive returned no image_name despite synthesizing on \
+                     unnamed input — this is a bug in the OMMX SDK; please report it."
+                )
+            })?
         } else if path.is_dir() {
-            // Validate the ref annotation BEFORE running `import_oci_dir`
-            // so an unnamed OCI Image Layout (no
-            // `org.opencontainers.image.ref.name`) bails without
-            // mutating the user's SQLite registry. Otherwise blobs +
-            // manifest are persisted under no ref and the same call
-            // re-orphans them on every retry.
-            let image_name = ommx::artifact::local_registry::oci_dir_image_name(&path)?
-                .ok_or_else(|| {
-                    anyhow::anyhow!(
+            // OCI Image Layout directories can also lack the
+            // `org.opencontainers.image.ref.name` annotation. Mirror
+            // the archive path's v2-compat behaviour: when the
+            // annotation is missing, synthesize an anonymous ref name
+            // and import under it via `import_oci_dir_as_ref`.
+            let image_name = match ommx::artifact::local_registry::oci_dir_image_name(&path)? {
+                Some(name) => name,
+                None => {
+                    let synthesized = registry.synthesize_anonymous_image_name()?;
+                    tracing::info!(
                         "OCI dir at {} has no `org.opencontainers.image.ref.name` \
-                         annotation; unannotated OCI Image Layouts cannot be addressed \
-                         by name in the SQLite Local Registry",
+                         annotation; importing under synthesized anonymous name \
+                         {synthesized}",
                         path.display(),
-                    )
-                })?;
-            ommx::artifact::local_registry::import_oci_dir(
+                    );
+                    synthesized
+                }
+            };
+            ommx::artifact::local_registry::import_oci_dir_as_ref(
                 registry.index(),
                 registry.blobs(),
                 &path,
+                &image_name,
             )?;
             image_name
         } else {

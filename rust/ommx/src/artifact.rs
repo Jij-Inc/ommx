@@ -15,6 +15,7 @@ mod save;
 pub use annotations::*;
 pub use config::*;
 pub use digest::sha256_digest;
+pub(crate) use manifest::anonymous_artifact_image_name;
 pub use manifest::{
     is_anonymous_artifact_ref_name, is_anonymous_artifact_tag, LocalArtifact, LocalArtifactBuilder,
     LocalManifest,
