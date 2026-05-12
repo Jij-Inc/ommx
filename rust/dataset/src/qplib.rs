@@ -1,8 +1,5 @@
 use anyhow::{anyhow, Context, Result};
-use ommx::{
-    artifact::{LocalArtifact, LocalArtifactBuilder},
-    ocipkg::ImageName,
-};
+use ommx::artifact::{ImageRef, LocalArtifact, LocalArtifactBuilder};
 use std::{fs, path::Path};
 use url::Url;
 use zip::ZipArchive;
@@ -41,7 +38,7 @@ pub fn package(path: &Path) -> Result<()> {
             .strip_prefix("QPLIB_")
             .ok_or_else(|| anyhow!("Expected QPLIB_ prefix in filename: {}", name))?;
 
-        let image_name = match ImageName::parse(&format!("ghcr.io/jij-inc/ommx/v3/qplib:{tag}")) {
+        let image_name = match ImageRef::parse(&format!("ghcr.io/jij-inc/ommx/v3/qplib:{tag}")) {
             Ok(name) => name,
             Err(err) => {
                 tracing::warn!("Skip: invalid image name for '{name}': {err}");

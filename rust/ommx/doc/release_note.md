@@ -285,6 +285,20 @@ Two new domain traits accompany this shift:
 - [`Substitute`](crate::Substitute) performs symbolic variable substitution,
   with an acyclic fast path and full cycle detection.
 
+## `ommx::artifact::ImageRef` replaces `ocipkg::ImageName`
+
+`ImageRef` is the OMMX-owned parsed form of an OCI image reference
+(`host[:port]/name:tag` or `host[:port]/name@sha256:...`). It supersedes
+the previously re-exported `ocipkg::ImageName` on every public surface:
+[`LocalArtifact::open`](crate::artifact::LocalArtifact::open),
+[`LocalArtifactBuilder::new`](crate::artifact::LocalArtifactBuilder::new),
+the SQLite Local Registry helpers, and the CLI parse path all now take
+[`ImageRef`](crate::artifact::ImageRef). The accessors mirror what
+`ImageName` offered (`hostname()`, `port()`, `name()`, `reference()`,
+plus the v2-cache-compatible `as_path()` / `from_path()`), but field
+access (`image_name.hostname`) becomes a method call. The
+`ommx::ocipkg` re-export is removed.
+
 ## Other notable changes
 
 - `ommx-derive` introduces `#[derive(LogicalMemoryProfile)]` for structural

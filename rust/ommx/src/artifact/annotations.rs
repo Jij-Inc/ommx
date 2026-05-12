@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Local};
 use derive_more::{Deref, From, Into};
-use ocipkg::{oci_spec::image::Descriptor, Digest};
+use oci_spec::image::{Descriptor, Digest};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 

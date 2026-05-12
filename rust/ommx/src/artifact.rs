@@ -4,6 +4,7 @@
 mod annotations;
 mod config;
 pub mod digest;
+mod image_ref;
 pub mod local_registry;
 mod manifest;
 pub mod media_types;
@@ -15,6 +16,7 @@ mod save;
 pub use annotations::*;
 pub use config::*;
 pub use digest::sha256_digest;
+pub use image_ref::ImageRef;
 pub(crate) use manifest::anonymous_artifact_image_name;
 pub use manifest::{
     is_anonymous_artifact_ref_name, is_anonymous_artifact_tag, LocalArtifact, LocalArtifactBuilder,
@@ -24,7 +26,7 @@ pub(crate) use manifest::{stable_json_bytes, StagedArtifactBlob};
 pub use media_types::OCI_IMAGE_MANIFEST_MEDIA_TYPE;
 
 use anyhow::{Context, Result};
-use ocipkg::{oci_spec::image::ImageManifest, ImageName};
+use oci_spec::image::ImageManifest;
 
 #[cfg(feature = "remote-artifact")]
 use crate::artifact::remote_transport::RemoteTransport;
@@ -97,18 +99,18 @@ pub fn data_dir() -> Result<PathBuf> {
 }
 
 /// Get the directory for the given image name in the local registry
-pub fn get_image_dir(image_name: &ImageName) -> PathBuf {
+pub fn get_image_dir(image_name: &ImageRef) -> PathBuf {
     get_local_registry_root().join(image_name.as_path())
 }
 
 #[deprecated(note = "Use get_image_dir instead")]
-pub fn image_dir(image_name: &ImageName) -> Result<PathBuf> {
+pub fn image_dir(image_name: &ImageRef) -> Result<PathBuf> {
     #[allow(deprecated)]
     Ok(data_dir()?.join(image_name.as_path()))
 }
 
-pub fn ghcr(org: &str, repo: &str, name: &str, tag: &str) -> Result<ImageName> {
-    ImageName::parse(&format!(
+pub fn ghcr(org: &str, repo: &str, name: &str, tag: &str) -> Result<ImageRef> {
+    ImageRef::parse(&format!(
         "ghcr.io/{}/{}/{}:{}",
         org.to_lowercase(),
         repo.to_lowercase(),
@@ -127,7 +129,7 @@ pub fn ghcr(org: &str, repo: &str, name: &str, tag: &str) -> Result<ImageName> {
 /// three-tier chain (env override → `~/.docker/config.json` →
 /// anonymous), matching every other network call on the SDK.
 #[cfg(feature = "remote-artifact")]
-pub fn fetch_remote_manifest(image_name: &ImageName) -> Result<ImageManifest> {
+pub fn fetch_remote_manifest(image_name: &ImageRef) -> Result<ImageManifest> {
     let transport = RemoteTransport::new(image_name)?;
     transport.auth_for(image_name, RegistryOperation::Pull)?;
     let (manifest_bytes, _digest) =
@@ -137,14 +139,14 @@ pub fn fetch_remote_manifest(image_name: &ImageName) -> Result<ImageManifest> {
 }
 
 /// Get all images stored in the local registry
-pub fn get_images() -> Result<Vec<ImageName>> {
+pub fn get_images() -> Result<Vec<ImageRef>> {
     let root = get_local_registry_root();
     let registry = local_registry::LocalRegistry::open(root)?;
     registry
         .index()
         .list_refs(None)?
         .into_iter()
-        .map(|reference| ImageName::parse(&format!("{}:{}", reference.name, reference.reference)))
+        .map(|reference| ImageRef::parse(&format!("{}:{}", reference.name, reference.reference)))
         .collect()
 }
 
@@ -154,5 +156,4 @@ pub fn get_images() -> Result<Vec<ImageName>> {
 //   - Remote pull into SQLite: `local_registry::pull_image(name)`
 //   - Build into SQLite: `LocalArtifactBuilder::new(...).build()`
 //   - Export to archive file: `LocalArtifact::save(path)`
-// The only ocipkg surface still used here is the `ImageName` type for
-// image-ref parsing.
+// Image-ref parsing for these entry points goes through [`ImageRef`].

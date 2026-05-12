@@ -1,6 +1,6 @@
 //! Sync wrapper around an async OCI Distribution client.
 //!
-//! v3 replaces `ocipkg`'s `RemoteBuilder` with [`oci-client`] (the ORAS
+//! v3 talks to OCI Distribution registries through [`oci-client`] (the ORAS
 //! project's actively-maintained successor to `oci-distribution`) as the
 //! OCI Distribution transport. `oci-client` is async-only; this module
 //! exposes a sync surface by owning a private `tokio` current-thread
@@ -60,14 +60,14 @@ impl RemoteTransport {
     /// anonymous as a final fallback. Anonymous is sufficient for
     /// unauthenticated public reads but will fail at push time on
     /// registries that require auth.
-    pub(crate) fn new(image_name: &ocipkg::ImageName) -> crate::Result<Self> {
+    pub(crate) fn new(image_name: &crate::artifact::ImageRef) -> crate::Result<Self> {
         let runtime = RuntimeBuilder::new_current_thread()
             .enable_all()
             .build()
             .context("Failed to build tokio runtime for OCI remote transport")?;
 
         let config = ClientConfig {
-            protocol: protocol_for(&image_name.hostname),
+            protocol: protocol_for(image_name.hostname()),
             ..ClientConfig::default()
         };
         let client = Client::new(config);
@@ -89,7 +89,7 @@ impl RemoteTransport {
     /// registries scope bearer tokens by operation.
     pub(crate) fn auth_for(
         &self,
-        image_name: &ocipkg::ImageName,
+        image_name: &crate::artifact::ImageRef,
         operation: RegistryOperation,
     ) -> crate::Result<()> {
         let reference = to_reference(image_name)?;
@@ -101,7 +101,7 @@ impl RemoteTransport {
 
     /// Convenience: authenticate for a `Push` request. Most existing
     /// call sites push; the explicit form is [`Self::auth_for`].
-    pub(crate) fn auth(&self, image_name: &ocipkg::ImageName) -> crate::Result<()> {
+    pub(crate) fn auth(&self, image_name: &crate::artifact::ImageRef) -> crate::Result<()> {
         self.auth_for(image_name, RegistryOperation::Push)
     }
 
@@ -113,7 +113,7 @@ impl RemoteTransport {
     /// value) so blobs the caller already owns don't get cloned.
     pub(crate) fn push_blob(
         &self,
-        image_name: &ocipkg::ImageName,
+        image_name: &crate::artifact::ImageRef,
         digest: &str,
         bytes: Vec<u8>,
     ) -> crate::Result<()> {
@@ -132,7 +132,7 @@ impl RemoteTransport {
     /// avoid cloning a manifest the caller already owns.
     pub(crate) fn push_manifest_bytes(
         &self,
-        image_name: &ocipkg::ImageName,
+        image_name: &crate::artifact::ImageRef,
         manifest_bytes: Vec<u8>,
         content_type: &str,
     ) -> crate::Result<()> {
@@ -157,7 +157,7 @@ impl RemoteTransport {
     /// type for a manifest pull.
     pub(crate) fn pull_manifest_raw(
         &self,
-        image_name: &ocipkg::ImageName,
+        image_name: &crate::artifact::ImageRef,
         accepted_media_types: &[&str],
     ) -> crate::Result<(Vec<u8>, String)> {
         let reference = to_reference(image_name)?;
@@ -192,7 +192,7 @@ impl RemoteTransport {
     /// store layers.
     pub(crate) fn pull_blob_to_vec(
         &self,
-        image_name: &ocipkg::ImageName,
+        image_name: &crate::artifact::ImageRef,
         digest: &str,
         expected_size: u64,
     ) -> crate::Result<Vec<u8>> {
@@ -245,18 +245,21 @@ impl RemoteTransport {
 /// produces more bytes, at the cost of one or two reallocations.
 const BLOB_PREALLOC_CAP_BYTES: u64 = 256 * 1024 * 1024;
 
-/// Build a [`Reference`] from `ocipkg`'s `ImageName`. The two crates pull
-/// in different versions of `oci-spec`, so the canonical interchange is
-/// the stringified image name rather than a typed conversion.
-fn to_reference(image_name: &ocipkg::ImageName) -> crate::Result<Reference> {
+/// Build an `oci_client::Reference` from OMMX's [`ImageRef`]. OMMX
+/// owns the parsed form (hostname / port / name / reference fields),
+/// but `oci-client` exposes its own `Reference` newtype and parses
+/// from a `host[:port]/name:tag` string, so the canonical interchange
+/// is the stringified ref rather than a typed conversion.
+fn to_reference(image_name: &crate::artifact::ImageRef) -> crate::Result<Reference> {
     let raw = image_name.to_string();
     raw.parse::<Reference>()
         .with_context(|| format!("Invalid OCI image reference: {raw}"))
 }
 
 /// `oci-client` defaults to HTTPS; `localhost` registries (used in tests
-/// and Docker-in-Docker setups) are HTTP. Match the heuristic ocipkg has
-/// historically used so the transition is transparent.
+/// and Docker-in-Docker setups) are HTTP. Apply the same `localhost`
+/// heuristic the docker tooling uses so unauthenticated local pushes
+/// don't require a custom client config.
 fn protocol_for(hostname: &str) -> ClientProtocol {
     if hostname == "localhost" || hostname.starts_with("127.") || hostname.starts_with("::1") {
         ClientProtocol::Http
@@ -270,10 +273,10 @@ fn protocol_for(hostname: &str) -> ClientProtocol {
 /// these forms in `~/.docker/config.json`, and `OMMX_BASIC_AUTH_DOMAIN`
 /// is documented to match the same shape. Using only `hostname` here
 /// would silently miss credentials on any non-443/80 registry.
-fn registry_key(image_name: &ocipkg::ImageName) -> String {
-    match image_name.port {
-        Some(port) => format!("{}:{}", image_name.hostname, port),
-        None => image_name.hostname.clone(),
+fn registry_key(image_name: &crate::artifact::ImageRef) -> String {
+    match image_name.port() {
+        Some(port) => format!("{}:{port}", image_name.hostname()),
+        None => image_name.hostname().to_string(),
     }
 }
 
@@ -444,6 +447,7 @@ fn classify_docker_credential(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::artifact::ImageRef;
 
     fn assert_basic(auth: Option<RegistryAuth>, expected_user: &str, expected_pass: &str) {
         match auth {
@@ -529,10 +533,10 @@ mod tests {
     /// credentials on non-443/80 registries.
     #[test]
     fn registry_key_includes_port_when_present() {
-        let with_port = ocipkg::ImageName::parse("localhost:5000/ommx/native-push:tag1").unwrap();
+        let with_port = ImageRef::parse("localhost:5000/ommx/native-push:tag1").unwrap();
         assert_eq!(registry_key(&with_port), "localhost:5000");
 
-        let no_port = ocipkg::ImageName::parse("ghcr.io/jij-inc/ommx:tag1").unwrap();
+        let no_port = ImageRef::parse("ghcr.io/jij-inc/ommx:tag1").unwrap();
         assert_eq!(registry_key(&no_port), "ghcr.io");
     }
 

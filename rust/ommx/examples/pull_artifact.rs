@@ -1,8 +1,7 @@
 use anyhow::Result;
-use ocipkg::ImageName;
 use ommx::artifact::{
     local_registry::{pull_image, LocalRegistry},
-    media_types, LocalArtifact,
+    media_types, ImageRef, LocalArtifact,
 };
 use std::sync::Arc;
 
@@ -15,7 +14,7 @@ fn main() -> Result<()> {
         )
         .init();
 
-    let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")?;
+    let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")?;
 
     // Pull the artifact from the remote registry into the v3 SQLite
     // Local Registry, then open it for read by ref.

@@ -2,8 +2,8 @@ use super::{
     now_rfc3339, validate_digest, BlobRecord, LayerRecord, ManifestRecord, RefConflictPolicy,
     RefRecord, RefUpdate, SQLITE_INDEX_FILE_NAME,
 };
+use crate::artifact::ImageRef;
 use anyhow::{ensure, Context, Result};
-use ocipkg::ImageName;
 use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
 use std::{
     fs,
@@ -440,7 +440,7 @@ impl SqliteIndexStore {
         blobs: &[BlobRecord],
         manifest: &ManifestRecord,
         layers: &[LayerRecord],
-        image_name: Option<&ImageName>,
+        image_name: Option<&ImageRef>,
         policy: RefConflictPolicy,
     ) -> Result<PublishOutcome> {
         // BEGIN IMMEDIATE acquires the RESERVED lock at the start so
@@ -455,7 +455,7 @@ impl SqliteIndexStore {
         Self::put_manifest_in(&tx, manifest, layers)?;
         let ref_update = if let Some(image_name) = image_name {
             let name = image_name_repository(image_name);
-            let reference = image_name.reference.as_str();
+            let reference = image_name.reference();
             let update =
                 Self::put_ref_with_policy_in(&tx, &name, reference, &manifest.digest, policy)?;
             // KeepExisting + different incoming digest → conflict.
@@ -656,41 +656,38 @@ impl SqliteIndexStore {
 }
 
 impl SqliteIndexStore {
-    pub fn put_image_ref(&self, image_name: &ImageName, manifest_digest: &str) -> Result<()> {
+    pub fn put_image_ref(&self, image_name: &ImageRef, manifest_digest: &str) -> Result<()> {
         self.put_ref(
             &image_name_repository(image_name),
-            image_name.reference.as_str(),
+            image_name.reference(),
             manifest_digest,
         )
     }
 
     pub fn put_image_ref_with_policy(
         &self,
-        image_name: &ImageName,
+        image_name: &ImageRef,
         manifest_digest: &str,
         policy: RefConflictPolicy,
     ) -> Result<RefUpdate> {
         self.put_ref_with_policy(
             &image_name_repository(image_name),
-            image_name.reference.as_str(),
+            image_name.reference(),
             manifest_digest,
             policy,
         )
     }
 
-    pub fn resolve_image_name(&self, image_name: &ImageName) -> Result<Option<String>> {
-        self.resolve_ref(
-            &image_name_repository(image_name),
-            image_name.reference.as_str(),
-        )
+    pub fn resolve_image_name(&self, image_name: &ImageRef) -> Result<Option<String>> {
+        self.resolve_ref(&image_name_repository(image_name), image_name.reference())
     }
 }
 
-fn image_name_repository(image_name: &ImageName) -> String {
-    if let Some(port) = image_name.port {
-        format!("{}:{}/{}", image_name.hostname, port, image_name.name)
+fn image_name_repository(image_name: &ImageRef) -> String {
+    if let Some(port) = image_name.port() {
+        format!("{}:{}/{}", image_name.hostname(), port, image_name.name())
     } else {
-        format!("{}/{}", image_name.hostname, image_name.name)
+        format!("{}/{}", image_name.hostname(), image_name.name())
     }
 }
 

@@ -1,14 +1,10 @@
 use super::*;
 use crate::artifact::{
-    media_types, LocalArtifact, LocalArtifactBuilder, LocalManifest, OCI_IMAGE_MANIFEST_MEDIA_TYPE,
+    media_types, ImageRef, LocalArtifact, LocalArtifactBuilder, LocalManifest,
+    OCI_IMAGE_MANIFEST_MEDIA_TYPE,
 };
 use anyhow::{Context, Result};
-use oci_spec::image::MediaType;
-use ocipkg::ImageName;
-use ocipkg::{
-    image::{ImageBuilder, OciDirBuilder},
-    oci_spec::image::{Descriptor, DescriptorBuilder, ImageManifestBuilder},
-};
+use oci_spec::image::{Descriptor, DescriptorBuilder, ImageManifestBuilder, MediaType};
 use std::collections::HashMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -21,7 +17,7 @@ use std::sync::Arc;
 /// file on disk without polluting the test's main registry.
 fn save_test_archive(
     archive_path: &Path,
-    image_name: ImageName,
+    image_name: ImageRef,
     layer_bytes: Vec<u8>,
 ) -> Result<()> {
     let sender_dir = tempfile::tempdir()?;
@@ -128,7 +124,7 @@ fn concurrent_keep_existing_ref_publish_keeps_one_digest() -> Result<()> {
     let root = dir.path().join("registry-v3");
     let index_store = SqliteIndexStore::open_in_registry_root(&root)?;
     let blob_store = FileBlobStore::open_in_registry_root(&root)?;
-    let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:race")?;
+    let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:race")?;
     let first_digest = put_test_manifest(&index_store, &blob_store, b"first-manifest")?;
     let second_digest = put_test_manifest(&index_store, &blob_store, b"second-manifest")?;
     assert_ne!(first_digest, second_digest);
@@ -179,7 +175,7 @@ fn concurrent_keep_existing_ref_publish_keeps_one_digest() -> Result<()> {
 fn imports_oci_dir_into_sqlite_registry_preserving_image_manifest() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let legacy_dir = dir.path().join("legacy");
-    let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:v1")?;
+    let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:v1")?;
     let layer = build_test_oci_dir(legacy_dir.clone(), image_name.clone())?;
     // The legacy import path must preserve the manifest digest and bytes,
     // so capture the legacy digest up front and assert identity is intact.
@@ -258,7 +254,7 @@ fn imports_oci_dir_into_sqlite_registry_preserving_image_manifest() -> Result<()
 fn imports_legacy_local_registry_explicitly() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let legacy_registry_root = dir.path().join("legacy-registry");
-    let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:v2")?;
+    let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:v2")?;
     let legacy_dir = legacy_local_registry_path(&legacy_registry_root, &image_name);
     build_test_oci_dir(legacy_dir, image_name.clone())?;
 
@@ -299,7 +295,7 @@ fn imports_legacy_local_registry_explicitly() -> Result<()> {
 fn import_legacy_local_registry_keeps_existing_ref_on_conflict() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let legacy_registry_root = dir.path().join("legacy-registry");
-    let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:conflict")?;
+    let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:conflict")?;
     let legacy_dir = legacy_local_registry_path(&legacy_registry_root, &image_name);
     build_test_oci_dir(legacy_dir.clone(), image_name.clone())?;
     let legacy_manifest_digest = oci_dir_ref(&legacy_dir)?.manifest_digest;
@@ -334,7 +330,7 @@ fn import_legacy_local_registry_keeps_existing_ref_on_conflict() -> Result<()> {
 fn import_legacy_local_registry_replaces_existing_ref_when_requested() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let legacy_registry_root = dir.path().join("legacy-registry");
-    let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:replace")?;
+    let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:replace")?;
     let legacy_dir = legacy_local_registry_path(&legacy_registry_root, &image_name);
     build_test_oci_dir(legacy_dir.clone(), image_name.clone())?;
     let legacy_manifest_digest = oci_dir_ref(&legacy_dir)?.manifest_digest;
@@ -373,7 +369,7 @@ fn import_legacy_local_registry_replaces_existing_ref_when_requested() -> Result
 #[test]
 fn local_registry_imports_legacy_refs_when_requested() -> Result<()> {
     let dir = tempfile::tempdir()?;
-    let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:v3")?;
+    let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:v3")?;
     let legacy_dir = legacy_local_registry_path(dir.path(), &image_name);
     build_test_oci_dir(legacy_dir, image_name.clone())?;
 
@@ -401,7 +397,7 @@ fn local_registry_imports_legacy_refs_when_requested() -> Result<()> {
 fn local_registry_builds_native_image_manifest_with_artifact_type() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let registry = Arc::new(LocalRegistry::open(dir.path())?);
-    let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:built")?;
+    let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:built")?;
 
     let artifact = build_test_local_artifact(&registry, &image_name, b"instance")?;
 
@@ -476,7 +472,7 @@ fn local_registry_builds_native_image_manifest_with_artifact_type() -> Result<()
 fn local_registry_build_keep_existing_skips_conflicting_manifest() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let registry = Arc::new(LocalRegistry::open(dir.path())?);
-    let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:keep")?;
+    let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:keep")?;
     let first = build_test_local_artifact(&registry, &image_name, b"first")?;
     let (second, second_blob) = new_test_local_artifact_builder(image_name.clone(), b"second")?;
 
@@ -496,7 +492,7 @@ fn local_registry_build_keep_existing_skips_conflicting_manifest() -> Result<()>
 fn concurrent_legacy_imports_are_idempotent() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let root = dir.path().to_path_buf();
-    let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:parallel")?;
+    let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:parallel")?;
     let legacy_dir = legacy_local_registry_path(&root, &image_name);
     build_test_oci_dir(legacy_dir, image_name.clone())?;
 
@@ -558,7 +554,7 @@ fn import_oci_dir_with_policy_surfaces_ref_update() -> Result<()> {
     // Unchanged. Both come back through the public OciDirImport.
     let dir = tempfile::tempdir()?;
     let legacy_dir = dir.path().join("legacy");
-    let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:ru1")?;
+    let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:ru1")?;
     build_test_oci_dir(legacy_dir.clone(), image_name.clone())?;
 
     let registry_root = dir.path().join("registry-v3");
@@ -592,7 +588,7 @@ fn local_registry_import_legacy_ref_with_policy_replaces_existing() -> Result<()
     // surface as the batch one). With Replace the ref ends up at the
     // legacy digest and the outcome is Replaced { previous }.
     let dir = tempfile::tempdir()?;
-    let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:rwp")?;
+    let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:rwp")?;
     let legacy_dir = legacy_local_registry_path(dir.path(), &image_name);
     build_test_oci_dir(legacy_dir.clone(), image_name.clone())?;
     let legacy_manifest_digest = oci_dir_ref(&legacy_dir)?.manifest_digest;
@@ -628,7 +624,7 @@ fn local_artifact_caches_manifest_across_clones() -> Result<()> {
     // clone must point at the same cached value.
     let dir = tempfile::tempdir()?;
     let registry = Arc::new(LocalRegistry::open(dir.path())?);
-    let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:cache")?;
+    let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:cache")?;
 
     let artifact = build_test_local_artifact(&registry, &image_name, b"cache-test")?;
     let m1 = artifact.get_manifest()? as *const LocalManifest;
@@ -651,7 +647,7 @@ fn local_artifact_subject_round_trips() -> Result<()> {
     // `set_subject`. None when no subject is set.
     let dir = tempfile::tempdir()?;
     let registry = Arc::new(LocalRegistry::open(dir.path())?);
-    let plain_image = ImageName::parse("ghcr.io/jij-inc/ommx/demo:plain")?;
+    let plain_image = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:plain")?;
     let plain = build_test_local_artifact(&registry, &plain_image, b"no-subject")?;
     assert_eq!(plain.subject()?, None);
 
@@ -663,7 +659,7 @@ fn local_artifact_subject_round_trips() -> Result<()> {
         .size(b"parent-manifest-bytes".len() as u64)
         .build()?;
 
-    let child_image = ImageName::parse("ghcr.io/jij-inc/ommx/demo:child")?;
+    let child_image = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:child")?;
     let mut builder = LocalArtifactBuilder::new(child_image.clone());
     builder.add_layer_bytes(
         MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
@@ -687,7 +683,7 @@ fn imports_legacy_v2_oci_dir_with_ommx_config_blob() -> Result<()> {
     // queries treat it consistently with the v3 empty-config path.
     let dir = tempfile::tempdir()?;
     let legacy_dir = dir.path().join("v2-legacy");
-    let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:v2-config")?;
+    let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:v2-config")?;
     let v2_config_bytes = br#"{"description":"v2 legacy config"}"#;
     let (config_descriptor, layer_descriptor) =
         build_test_oci_dir_with_v2_config(legacy_dir.clone(), image_name.clone(), v2_config_bytes)?;
@@ -733,7 +729,7 @@ fn rejects_import_of_deprecated_artifact_manifest_layout() -> Result<()> {
     // reject such layouts with a clear error, not silently fall back.
     let dir = tempfile::tempdir()?;
     let oci_dir = dir.path().join("oci-art");
-    let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:art")?;
+    let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:art")?;
     build_test_oci_dir_with_artifact_manifest(&oci_dir, &image_name, b"art-instance")?;
 
     let registry_root = dir.path().join("registry-v3");
@@ -759,7 +755,7 @@ fn concurrent_publish_different_digests_keeps_one_winner() -> Result<()> {
     // manifest digest claims the ref.
     let dir = tempfile::tempdir()?;
     let registry_root = dir.path().to_path_buf();
-    let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:race-publish")?;
+    let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:race-publish")?;
 
     let handles: Vec<_> = (0..2)
         .map(|i| {
@@ -846,7 +842,7 @@ fn import_oci_archive_surfaces_digest_conflict_for_same_ref() -> Result<()> {
     // digest rather than the prior archive's bytes.
     let dir = tempfile::tempdir()?;
     let registry = Arc::new(LocalRegistry::open(dir.path())?);
-    let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:reextract")?;
+    let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:reextract")?;
 
     let archive_path_a = dir.path().join("a.ommx");
     save_test_archive(&archive_path_a, image_name.clone(), b"archive-A".to_vec())?;
@@ -887,7 +883,7 @@ fn import_oci_archive_does_not_leave_legacy_dir_behind() -> Result<()> {
     // FileBlobStore are the sole post-import home.
     let dir = tempfile::tempdir()?;
     let registry = Arc::new(LocalRegistry::open(dir.path())?);
-    let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:no-legacy-dir")?;
+    let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:no-legacy-dir")?;
     let archive_path = dir.path().join("artifact.ommx");
     save_test_archive(
         &archive_path,
@@ -926,7 +922,7 @@ fn import_oci_archive_synthesizes_anonymous_name_for_unnamed_input() -> Result<(
     // Build a normal named archive first, then surgically rewrite its
     // `index.json` to drop the ref.name annotation — that is the
     // shape v2 archives have.
-    let named = ImageName::parse("ghcr.io/jij-inc/ommx/demo:unnamed-input")?;
+    let named = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:unnamed-input")?;
     let archive_path = dir.path().join("unnamed.ommx");
     save_test_archive(&archive_path, named.clone(), b"unnamed-payload".to_vec())?;
 
@@ -997,7 +993,7 @@ fn import_oci_archive_normalizes_dot_slash_prefixed_entries() -> Result<()> {
     // path re-rooted under `./`, and confirm import succeeds.
     let dir = tempfile::tempdir()?;
     let registry = Arc::new(LocalRegistry::open(dir.path())?);
-    let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:dot-slash")?;
+    let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:dot-slash")?;
     let archive_path = dir.path().join("canonical.ommx");
     save_test_archive(
         &archive_path,
@@ -1046,7 +1042,7 @@ fn pull_image_short_circuits_when_ref_is_present_with_blob() -> Result<()> {
     // lookup against a `.invalid` TLD and fail.
     let dir = tempfile::tempdir()?;
     let registry = Arc::new(LocalRegistry::open(dir.path())?);
-    let image_name = ImageName::parse("does-not-resolve.invalid/jij-inc/ommx/demo:short-circuit")?;
+    let image_name = ImageRef::parse("does-not-resolve.invalid/jij-inc/ommx/demo:short-circuit")?;
     let local_artifact =
         build_test_local_artifact(&registry, &image_name, b"step-c-pull-short-circuit")?;
     let expected_digest = local_artifact.manifest_digest().to_string();
@@ -1075,7 +1071,7 @@ fn pull_image_does_not_short_circuit_when_manifest_blob_is_missing() -> Result<(
     // happy-path `Unchanged` it would return without the blob check.
     let dir = tempfile::tempdir()?;
     let registry = Arc::new(LocalRegistry::open(dir.path())?);
-    let image_name = ImageName::parse("does-not-resolve.invalid/jij-inc/ommx/demo:blob-missing")?;
+    let image_name = ImageRef::parse("does-not-resolve.invalid/jij-inc/ommx/demo:blob-missing")?;
     let local_artifact =
         build_test_local_artifact(&registry, &image_name, b"step-c-blob-corruption")?;
 
@@ -1099,16 +1095,15 @@ fn pull_image_does_not_short_circuit_when_manifest_blob_is_missing() -> Result<(
 #[test]
 fn local_artifact_save_round_trip_preserves_layers() -> Result<()> {
     // `LocalArtifact::save` is the CLI `save` command's only path.
-    // Verify the produced archive: (a) is a valid OCI archive that
-    // `Artifact::from_oci_archive` can open, (b) exposes the OMMX
-    // artifactType, (c) preserves layer descriptors and bytes
-    // byte-for-byte, (d) preserves the manifest digest byte-for-byte
-    // — `save.rs` writes the SQLite manifest bytes verbatim, so the
-    // saved archive's manifest digest must match the registry's.
-    use ocipkg::image::{Image, OciArchive};
+    // Verify the produced archive: (a) reads back through the v3
+    // native `inspect_archive`, (b) exposes the OMMX artifactType,
+    // (c) preserves layer descriptors and bytes byte-for-byte,
+    // (d) preserves the manifest digest byte-for-byte — `save.rs`
+    // writes the SQLite manifest bytes verbatim, so the saved
+    // archive's manifest digest must match the registry's.
     let dir = tempfile::tempdir()?;
     let registry = Arc::new(LocalRegistry::open(dir.path())?);
-    let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/demo:save-round-trip")?;
+    let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:save-round-trip")?;
     let layer_bytes = b"step-c-save-round-trip-payload";
     let local_artifact = build_test_local_artifact(&registry, &image_name, layer_bytes)?;
     let expected_layers = local_artifact.layers()?;
@@ -1121,38 +1116,30 @@ fn local_artifact_save_round_trip_preserves_layers() -> Result<()> {
         archive_path.display(),
     );
 
-    let mut archive = ocipkg::image::OciArtifact::<OciArchive>::from_oci_archive(&archive_path)?;
-    // `save.rs` writes the SQLite manifest bytes verbatim, so the
-    // manifest blob stored under the same digest must round-trip
-    // through the archive byte-for-byte. We can't read the archive's
-    // `index.json` directly (ocipkg's `get_index` is crate-private),
-    // but if the manifest blob lives at `blobs/sha256/<expected>`
-    // with bytes whose sha256 equals that digest, the on-disk
-    // manifest is identity-preserved end-to-end.
+    // `save.rs` writes the SQLite manifest bytes verbatim. The
+    // public `inspect_archive` walks the tar with the native v3
+    // reader, recomputes the manifest digest from its blob payload,
+    // and would fail loudly if the bytes drifted — so the digest
+    // returned here is exactly the saved bytes' digest.
     let expected_manifest_digest = local_artifact.manifest_digest().to_string();
-    let saved_manifest_bytes: Vec<u8> = archive
-        .get_blob(
-            &oci_spec::image::Digest::from_str(&expected_manifest_digest)
-                .expect("manifest digest is valid OCI digest"),
-        )?
-        .to_vec();
+    let view = crate::artifact::local_registry::inspect_archive(&archive_path)?;
     assert_eq!(
-        crate::artifact::sha256_digest(&saved_manifest_bytes),
-        expected_manifest_digest,
+        view.manifest_digest, expected_manifest_digest,
         "save() must write manifest bytes verbatim (digest must round-trip)",
     );
-    let manifest = archive.get_manifest()?;
     assert_eq!(
-        manifest.artifact_type().as_ref(),
+        view.manifest.artifact_type().as_ref(),
         Some(&crate::artifact::media_types::v1_artifact()),
         "saved archive must carry the OMMX artifactType",
     );
     assert_eq!(
-        manifest.layers().len(),
+        view.manifest.layers().len(),
         expected_layers.len(),
         "saved archive layer count differs from source",
     );
-    for (expected, actual) in expected_layers.iter().zip(manifest.layers()) {
+
+    let archive_blobs = read_archive_blobs(&archive_path)?;
+    for (expected, actual) in expected_layers.iter().zip(view.manifest.layers()) {
         assert_eq!(expected.digest(), actual.digest(), "layer digest drift");
         assert_eq!(expected.size(), actual.size(), "layer size drift");
         assert_eq!(
@@ -1160,7 +1147,9 @@ fn local_artifact_save_round_trip_preserves_layers() -> Result<()> {
             actual.media_type(),
             "layer media_type drift",
         );
-        let blob: Vec<u8> = archive.get_blob(actual.digest())?.to_vec();
+        let blob = archive_blobs
+            .get(&actual.digest().to_string())
+            .with_context(|| format!("layer blob {} missing from archive", actual.digest()))?;
         assert_eq!(
             blob.as_slice(),
             layer_bytes,
@@ -1170,9 +1159,50 @@ fn local_artifact_save_round_trip_preserves_layers() -> Result<()> {
     Ok(())
 }
 
+/// Walk the tar archive once and collect every `blobs/<alg>/<encoded>`
+/// entry as a `<digest> -> bytes` map. Used by the round-trip test to
+/// check layer payloads without depending on the legacy ocipkg
+/// `OciArtifact` reader.
+fn read_archive_blobs(path: &Path) -> Result<HashMap<String, Vec<u8>>> {
+    let file = std::fs::File::open(path)
+        .with_context(|| format!("Failed to open archive {}", path.display()))?;
+    let mut archive = tar::Archive::new(std::io::BufReader::new(file));
+    let mut blobs = HashMap::new();
+    for entry in archive
+        .entries()
+        .with_context(|| format!("Failed to read tar entries in {}", path.display()))?
+    {
+        let mut entry =
+            entry.with_context(|| format!("Failed to read tar entry in {}", path.display()))?;
+        if !matches!(entry.header().entry_type(), tar::EntryType::Regular) {
+            continue;
+        }
+        let entry_path = entry
+            .path()
+            .with_context(|| format!("Failed to decode tar entry path in {}", path.display()))?
+            .into_owned();
+        let raw = entry_path.to_string_lossy();
+        let path_str = raw.strip_prefix("./").unwrap_or(&raw);
+        let Some(rest) = path_str.strip_prefix("blobs/") else {
+            continue;
+        };
+        let mut parts = rest.splitn(2, '/');
+        let (Some(alg), Some(encoded)) = (parts.next(), parts.next()) else {
+            continue;
+        };
+        let digest = format!("{alg}:{encoded}");
+        let mut bytes = Vec::with_capacity(entry.header().size().unwrap_or(0) as usize);
+        entry
+            .read_to_end(&mut bytes)
+            .with_context(|| format!("Failed to read blob {digest} from {}", path.display()))?;
+        blobs.insert(digest, bytes);
+    }
+    Ok(blobs)
+}
+
 fn build_test_local_artifact(
     registry: &Arc<LocalRegistry>,
-    image_name: &ImageName,
+    image_name: &ImageRef,
     layer_bytes: &[u8],
 ) -> Result<LocalArtifact> {
     let (builder, _) = new_test_local_artifact_builder(image_name.clone(), layer_bytes)?;
@@ -1180,7 +1210,7 @@ fn build_test_local_artifact(
 }
 
 fn new_test_local_artifact_builder(
-    image_name: ImageName,
+    image_name: ImageRef,
     layer_bytes: &[u8],
 ) -> Result<(LocalArtifactBuilder, Descriptor)> {
     let mut builder = LocalArtifactBuilder::new(image_name);
@@ -1195,7 +1225,7 @@ fn new_test_local_artifact_builder(
 fn put_test_manifest_ref(
     index_store: &SqliteIndexStore,
     blob_store: &FileBlobStore,
-    image_name: &ImageName,
+    image_name: &ImageRef,
     bytes: &[u8],
 ) -> Result<String> {
     let digest = put_test_manifest(index_store, blob_store, bytes)?;
@@ -1226,8 +1256,8 @@ fn put_test_manifest(
     Ok(blob.digest)
 }
 
-fn build_test_oci_dir(legacy_dir: PathBuf, image_name: ImageName) -> Result<Descriptor> {
-    let mut builder = OciDirBuilder::new(legacy_dir, image_name)?;
+fn build_test_oci_dir(legacy_dir: PathBuf, image_name: ImageRef) -> Result<Descriptor> {
+    let mut builder = TestOciDirBuilder::new(legacy_dir, Some(image_name))?;
 
     let config = builder.add_empty_json()?;
     let (layer_digest, layer_size) = builder.add_blob(b"instance")?;
@@ -1244,7 +1274,7 @@ fn build_test_oci_dir(legacy_dir: PathBuf, image_name: ImageName) -> Result<Desc
         .config(config)
         .layers(vec![layer.clone()])
         .build()?;
-    let _oci_dir = builder.build(manifest)?;
+    builder.finish(manifest)?;
     Ok(layer)
 }
 
@@ -1256,10 +1286,10 @@ fn build_test_oci_dir(legacy_dir: PathBuf, image_name: ImageName) -> Result<Desc
 /// exercised against the legacy variant the SDK still has to read.
 fn build_test_oci_dir_with_v2_config(
     legacy_dir: PathBuf,
-    image_name: ImageName,
+    image_name: ImageRef,
     config_bytes: &[u8],
 ) -> Result<(Descriptor, Descriptor)> {
-    let mut builder = OciDirBuilder::new(legacy_dir, image_name)?;
+    let mut builder = TestOciDirBuilder::new(legacy_dir, Some(image_name))?;
     let (config_digest, config_size) = builder.add_blob(config_bytes)?;
     let config = DescriptorBuilder::default()
         .media_type(MediaType::Other(media_types::V1_CONFIG_MEDIA_TYPE.into()))
@@ -1280,8 +1310,103 @@ fn build_test_oci_dir_with_v2_config(
         .config(config.clone())
         .layers(vec![layer.clone()])
         .build()?;
-    let _oci_dir = builder.build(manifest)?;
+    builder.finish(manifest)?;
     Ok((config, layer))
+}
+
+/// In-tests reimplementation of the ocipkg `OciDirBuilder`. Writes
+/// `oci-layout`, an `index.json` with the manifest descriptor (with the
+/// `org.opencontainers.image.ref.name` annotation when an
+/// [`ImageRef`] is supplied), and one `blobs/sha256/<encoded>` file per
+/// CAS write. Used by the legacy-import tests to materialise v2-shaped
+/// OCI dirs without keeping a runtime ocipkg dependency.
+struct TestOciDirBuilder {
+    oci_dir_root: PathBuf,
+    image_name: Option<ImageRef>,
+    is_finished: bool,
+}
+
+impl TestOciDirBuilder {
+    fn new(oci_dir_root: PathBuf, image_name: Option<ImageRef>) -> Result<Self> {
+        anyhow::ensure!(
+            !oci_dir_root.exists(),
+            "test oci-dir {} already exists",
+            oci_dir_root.display()
+        );
+        std::fs::create_dir_all(&oci_dir_root)?;
+        Ok(Self {
+            oci_dir_root,
+            image_name,
+            is_finished: false,
+        })
+    }
+
+    fn add_blob(&mut self, data: &[u8]) -> Result<(oci_spec::image::Digest, u64)> {
+        let digest_str = sha256_digest(data);
+        let encoded = digest_str
+            .strip_prefix("sha256:")
+            .expect("sha256_digest returns sha256: prefix");
+        let blobs_dir = self.oci_dir_root.join("blobs/sha256");
+        std::fs::create_dir_all(&blobs_dir)?;
+        std::fs::write(blobs_dir.join(encoded), data)?;
+        Ok((
+            oci_spec::image::Digest::from_str(&digest_str)?,
+            data.len() as u64,
+        ))
+    }
+
+    fn add_empty_json(&mut self) -> Result<Descriptor> {
+        let (digest, size) = self.add_blob(b"{}")?;
+        Ok(DescriptorBuilder::default()
+            .media_type(MediaType::EmptyJSON)
+            .size(size)
+            .digest(digest)
+            .build()?)
+    }
+
+    fn finish(&mut self, manifest: oci_spec::image::ImageManifest) -> Result<()> {
+        use oci_spec::image::ImageIndexBuilder;
+        let manifest_json = serde_json::to_vec(&manifest)?;
+        let (digest, size) = self.add_blob(&manifest_json)?;
+        let mut descriptor_builder = DescriptorBuilder::default()
+            .media_type(MediaType::ImageManifest)
+            .size(size)
+            .digest(digest);
+        if let Some(name) = &self.image_name {
+            let mut annotations = HashMap::new();
+            annotations.insert(
+                "org.opencontainers.image.ref.name".to_string(),
+                name.to_string(),
+            );
+            descriptor_builder = descriptor_builder.annotations(annotations);
+        }
+        let descriptor = descriptor_builder.build()?;
+        let index = ImageIndexBuilder::default()
+            .schema_version(2_u32)
+            .manifests(vec![descriptor])
+            .build()?;
+        std::fs::write(
+            self.oci_dir_root.join("oci-layout"),
+            r#"{"imageLayoutVersion":"1.0.0"}"#,
+        )?;
+        std::fs::write(
+            self.oci_dir_root.join("index.json"),
+            serde_json::to_vec(&index)?,
+        )?;
+        self.is_finished = true;
+        Ok(())
+    }
+}
+
+impl Drop for TestOciDirBuilder {
+    fn drop(&mut self) {
+        // Match the ocipkg behaviour: half-built dirs are cleaned up
+        // so a test-helper panic doesn't leave a poisoned layout
+        // behind for the next assertion.
+        if !self.is_finished && self.oci_dir_root.exists() {
+            let _ = std::fs::remove_dir_all(&self.oci_dir_root);
+        }
+    }
 }
 
 /// Build a v3-shaped OCI Image Layout directory whose manifest is an
@@ -1289,7 +1414,7 @@ fn build_test_oci_dir_with_v2_config(
 /// to exercise the Artifact-Manifest dispatch in `import_oci_dir`.
 fn build_test_oci_dir_with_artifact_manifest(
     oci_dir: &Path,
-    image_name: &ImageName,
+    image_name: &ImageRef,
     layer_bytes: &[u8],
 ) -> Result<(Descriptor, String)> {
     use oci_spec::image::{

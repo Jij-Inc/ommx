@@ -753,15 +753,15 @@ Step F の landing で ocipkg の `OciArchive` / `OciArchiveBuilder` / `OciDir` 
 
 蓄積した anonymous エントリは `ommx artifact prune-anonymous [--dry-run]` で一括削除できる (manifest / blob の CAS レコードは残り、将来の GC で回収される)。
 
-**Step H — `ImageName` 公開 surface 撤去** (§12.2 行 2)。
+**Step H — `ImageName` 公開 surface 撤去** (§12.2 行 2)。**完了。**
 
-最後に残る ocipkg surface。最大の blast radius (`LocalArtifact::open` / `LocalArtifactBuilder::new` / annotation builder / CLI parse / Python `Artifact.load(...)` 全てが `ocipkg::ImageName` を expose) を持つので、Step D / F の後に独立 PR として進める。
+最後に残っていた ocipkg surface。`ocipkg::ImageName` を expose していた `LocalArtifact::open` / `LocalArtifactBuilder::new` / annotation builder / CLI parse / Python `Artifact.load(...)` を、OMMX-owned な `ommx::artifact::ImageRef` に切り替えた。
 
-候補は `oci_client::Reference` (= `oci_spec::distribution::Reference` の re-export、`oci-client` が既に dep にあるので zero-add) だが、`ocipkg::ImageName` の `as_path` / `hostname` / `port` / `name` / `reference` フィールドアクセスは SQLite ref store の repository key 構築 (`image_name_repository`) や CLI parse 経路で深く使われており、`oci_client::Reference` の API shape とは微妙にズレる。**独自 type `ommx::artifact::ImageRef` で wrap し、`oci_client::Reference` を内部に保持しつつ Display / FromStr / fields accessor を新 type 側で提供する** ほうが現実的な見込み。最終 type 設計は Step H PR で確定する。
+`ImageRef` は `ocipkg::ImageName` と同じ `host[:port]/name:tag` 構造を持つ struct で、`hostname()` / `port()` / `name()` / `reference()` の accessor と、v2 disk-cache ローカルレジストリ互換の `as_path()` / `from_path()` を提供する。検証は OCI distribution spec の name / reference 正規表現を `regex` クレートで再現しているので、parse 結果は `ocipkg::ImageName::parse` と同等。Display は `host[:port]/name:reference` で `parse` と byte-level に round-trip する。
 
-Step H は公開 signature の breaking change を含むので、**v3.0 stable release 前に必ず land させる**。Python 側の `Artifact.load(image_name: str)` は `&str` を受け取って Rust 側で parse する形なので Python user 影響は限定的、影響は主に Rust SDK consumer に集中する。
+Python 側の `Artifact.load(image_name: str)` は `&str` を受け取って Rust 側で `ImageRef::parse` を呼ぶ形なので、Python user 影響は無し。影響は主に Rust SDK consumer に集中するが、`ocipkg::ImageName` を直接 import していた user は `ommx::artifact::ImageRef` に置換するだけで済む。
 
-Step H 完了で `ocipkg` を `Cargo.toml` から削除でき、v3 における ocipkg 依存撤去が完了する。
+Step H landing で `ocipkg` を `Cargo.toml` から削除し、v3 における ocipkg 依存撤去を完了した。`ommx::ocipkg` re-export も同時に消滅。
 
 **順序の依存関係:** D (network) と F (local format) は機能軸では独立だが、両者とも blob を `FileBlobStore` に直接書く経路を新設する。D が先行する場合は `FileBlobStore::put_bytes` を超える追加 API (例えば streaming upload / resumable write) を D PR で安易に拡張せず、まず Step B 時点の API surface で完結させること。F が同 store を再利用するため、D の internal API 拡張が F での再設計を強制すると interface churn が発生する。新規 API が必要になった場合は D の PR description で明示し、F でも同じ shape を採用できるよう review 段階で合意を取る。逆に F が先行する場合は同じ制約は無く、F が固めた writer 経路を D がそのまま再利用できる。
 

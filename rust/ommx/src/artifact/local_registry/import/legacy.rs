@@ -29,8 +29,8 @@ use super::oci_dir::{
     import_oci_dir_as_ref_with_policy, import_oci_dir_inner, oci_dir_image_name, oci_dir_ref,
     OciDirImport, RefConflictHandling,
 };
+use crate::artifact::ImageRef;
 use anyhow::{ensure, Context, Result};
-use ocipkg::ImageName;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -67,7 +67,7 @@ pub fn import_legacy_local_registry_ref(
     index_store: &SqliteIndexStore,
     blob_store: &FileBlobStore,
     legacy_registry_root: impl AsRef<Path>,
-    image_name: &ImageName,
+    image_name: &ImageRef,
 ) -> Result<OciDirImport> {
     import_legacy_local_registry_ref_with_policy(
         index_store,
@@ -82,7 +82,7 @@ pub fn import_legacy_local_registry_ref_with_policy(
     index_store: &SqliteIndexStore,
     blob_store: &FileBlobStore,
     legacy_registry_root: impl AsRef<Path>,
-    image_name: &ImageName,
+    image_name: &ImageRef,
     policy: RefConflictPolicy,
 ) -> Result<OciDirImport> {
     let legacy_path = legacy_local_registry_path(legacy_registry_root, image_name);
@@ -180,7 +180,7 @@ pub fn import_legacy_local_registry_with_policy(
 
 pub fn legacy_local_registry_path(
     legacy_registry_root: impl AsRef<Path>,
-    image_name: &ImageName,
+    image_name: &ImageRef,
 ) -> PathBuf {
     legacy_registry_root.as_ref().join(image_name.as_path())
 }
@@ -211,12 +211,12 @@ fn gather_legacy_oci_dirs_inner(dir: &Path, dirs: &mut Vec<PathBuf>) -> Result<(
     Ok(())
 }
 
-fn legacy_import_image_name(legacy_registry_root: &Path, legacy_dir: &Path) -> Result<ImageName> {
+fn legacy_import_image_name(legacy_registry_root: &Path, legacy_dir: &Path) -> Result<ImageRef> {
     let annotated = oci_dir_image_name(legacy_dir)?;
     let path_name = legacy_dir
         .strip_prefix(legacy_registry_root)
         .ok()
-        .and_then(|relative| ImageName::from_path(relative).ok());
+        .and_then(|relative| ImageRef::from_path(relative).ok());
 
     match (annotated, path_name) {
         (Some(annotated), Some(path_name)) => {

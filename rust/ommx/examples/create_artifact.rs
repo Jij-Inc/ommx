@@ -1,8 +1,7 @@
 use anyhow::{Context, Result};
 use colored::Colorize;
-use ocipkg::ImageName;
 use ommx::{
-    artifact::{InstanceAnnotations, LocalArtifactBuilder},
+    artifact::{ImageRef, InstanceAnnotations, LocalArtifactBuilder},
     random::random_deterministic,
     InstanceParameters,
 };
@@ -40,7 +39,7 @@ fn main() -> Result<()> {
         std::fs::remove_file(&out)?;
     }
 
-    let image_name = ImageName::parse(&format!(
+    let image_name = ImageRef::parse(&format!(
         "ghcr.io/jij-inc/ommx/random_lp_instance:{}",
         built_info::GIT_COMMIT_HASH_SHORT.context("Cannot get commit hash of Git")?
     ))?;

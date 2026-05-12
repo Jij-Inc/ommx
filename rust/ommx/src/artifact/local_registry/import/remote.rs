@@ -58,12 +58,11 @@ use super::super::{
 };
 use super::oci_dir::OciDirImport;
 use crate::artifact::{
-    media_types, remote_transport::RemoteTransport, OCI_IMAGE_MANIFEST_MEDIA_TYPE,
+    media_types, remote_transport::RemoteTransport, ImageRef, OCI_IMAGE_MANIFEST_MEDIA_TYPE,
 };
 use anyhow::{Context, Result};
 use oci_client::RegistryOperation;
 use oci_spec::image::{Descriptor, ImageManifest, MediaType};
-use ocipkg::ImageName;
 use std::sync::Arc;
 
 /// Pull `image_name` from its remote registry into the v3 SQLite
@@ -96,7 +95,7 @@ use std::sync::Arc;
 /// differ and the loser surfaces a `Conflicted` outcome under
 /// `KeepExisting`; callers that need last-writer-wins semantics in
 /// that case should drive the import with `RefConflictPolicy::Replace`.
-pub fn pull_image(registry: &Arc<LocalRegistry>, image_name: &ImageName) -> Result<OciDirImport> {
+pub fn pull_image(registry: &Arc<LocalRegistry>, image_name: &ImageRef) -> Result<OciDirImport> {
     if let Some(manifest_digest) = registry.index().resolve_image_name(image_name)? {
         if registry.blobs().exists(&manifest_digest)? {
             return Ok(OciDirImport {
@@ -242,7 +241,7 @@ fn ensure_ommx_image_manifest(manifest: &ImageManifest) -> Result<()> {
 fn pull_descriptor_blob(
     transport: &RemoteTransport,
     blob_store: &FileBlobStore,
-    image_name: &ImageName,
+    image_name: &ImageRef,
     descriptor: &Descriptor,
     kind: &str,
 ) -> Result<BlobRecord> {

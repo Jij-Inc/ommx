@@ -19,32 +19,20 @@
 //!   `<root>/<image_name>/<tag>/` tree and runs the per-directory
 //!   [`oci_dir`] import against each entry, aggregating outcomes into
 //!   a [`legacy::LegacyImportReport`].
-//! - [`archive`] — `.ommx` OCI archive ingest. **Currently a thin
-//!   ocipkg wrapper**: extracts the archive via
-//!   `Artifact::from_oci_archive(...).load_to(staging_path)` into a
-//!   [`tempfile::TempDir`] under the registry root, then funnels the
-//!   result through [`oci_dir::import_oci_dir_as_ref`]. The tempdir
-//!   is dropped before the function returns, so no on-disk OCI
-//!   Image Layout cache is left behind — SQLite + `FileBlobStore`
-//!   are the sole post-import home. The public signature stays
-//!   stable when the inner extraction is replaced with a native v3
-//!   streamer that writes blobs directly to the BlobStore.
-//! - [`remote`] — remote OCI registry pull. Same shape as
-//!   [`archive`]: `Artifact::from_remote(...).pull_to(staging_path)`
-//!   writes the image into a tempdir under the registry root,
-//!   [`oci_dir`] brings it into SQLite, and the tempdir is dropped.
-//!   A pre-pull SQLite check short-circuits the network fetch when
-//!   the registry already resolves the requested ref, replacing the
-//!   v2-era "skip if legacy dir exists" optimisation with a check
-//!   against the canonical ref store. Feature-gated behind
-//!   `remote-artifact` since it is the only network-touching path
-//!   in `local_registry`.
-//!
-//! [`archive`] and [`remote`] are explicitly the ocipkg-dependent
-//! seam. Removing ocipkg from the SDK is a follow-up PR scoped to
-//! these two modules; the rest of the `local_registry` tree is
-//! already ocipkg-free aside from the shared `ImageName` /
-//! `oci_spec` types.
+//! - [`archive`] — `.ommx` OCI archive ingest via the native v3
+//!   tar streamer. Walks the archive entries once, writes each
+//!   `blobs/sha256/<digest>` blob straight into [`super::FileBlobStore`]
+//!   (which recomputes sha256 and asserts it matches the tar path),
+//!   buffers `oci-layout` + `index.json` in memory for the post-pass
+//!   parse, and emits a single SQLite transaction that publishes the
+//!   manifest + ref. No on-disk OCI Image Layout cache is produced —
+//!   SQLite + `FileBlobStore` are the sole post-import home.
+//! - [`remote`] — remote OCI registry pull via [`oci_client`]. A
+//!   pre-pull SQLite check short-circuits the network fetch when the
+//!   registry already resolves the requested ref, replacing the v2-era
+//!   "skip if legacy dir exists" optimisation with a check against the
+//!   canonical ref store. Feature-gated behind `remote-artifact` since
+//!   it is the only network-touching path in `local_registry`.
 
 pub mod archive;
 pub mod legacy;

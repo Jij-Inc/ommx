@@ -12,7 +12,6 @@
 extern crate self as ommx;
 
 // Re-export the dependencies
-pub use ocipkg;
 pub use prost::Message;
 
 // Public modules

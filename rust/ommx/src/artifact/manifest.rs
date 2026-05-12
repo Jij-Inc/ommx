@@ -3,7 +3,8 @@ use super::{
     ghcr,
     local_registry::{LocalRegistry, RefConflictPolicy, RefUpdate},
     media_types::{self, OCI_EMPTY_CONFIG_BYTES},
-    InstanceAnnotations, ParametricInstanceAnnotations, SampleSetAnnotations, SolutionAnnotations,
+    ImageRef, InstanceAnnotations, ParametricInstanceAnnotations, SampleSetAnnotations,
+    SolutionAnnotations,
 };
 use crate::v1;
 use anyhow::{bail, Context, Result};
@@ -70,7 +71,7 @@ impl StagedArtifactBlob {
 #[derive(Debug, Clone)]
 pub struct LocalArtifact {
     registry: Arc<LocalRegistry>,
-    image_name: ocipkg::ImageName,
+    image_name: ImageRef,
     manifest_digest: String,
     manifest_cache: Arc<OnceLock<LocalManifest>>,
 }
@@ -78,7 +79,7 @@ pub struct LocalArtifact {
 impl LocalArtifact {
     pub(crate) fn from_parts(
         registry: Arc<LocalRegistry>,
-        image_name: ocipkg::ImageName,
+        image_name: ImageRef,
         manifest_digest: String,
     ) -> Self {
         Self {
@@ -89,15 +90,12 @@ impl LocalArtifact {
         }
     }
 
-    pub fn open(image_name: ocipkg::ImageName) -> Result<Self> {
+    pub fn open(image_name: ImageRef) -> Result<Self> {
         let registry = Arc::new(LocalRegistry::open_default()?);
         Self::open_in_registry(registry, image_name)
     }
 
-    pub fn open_in_registry(
-        registry: Arc<LocalRegistry>,
-        image_name: ocipkg::ImageName,
-    ) -> Result<Self> {
+    pub fn open_in_registry(registry: Arc<LocalRegistry>, image_name: ImageRef) -> Result<Self> {
         Self::try_open_in_registry(registry, image_name.clone())?.with_context(|| {
             format!(
                 "Artifact not found in the SQLite-backed local registry: {image_name}. \
@@ -107,14 +105,14 @@ impl LocalArtifact {
         })
     }
 
-    pub fn try_open(image_name: ocipkg::ImageName) -> Result<Option<Self>> {
+    pub fn try_open(image_name: ImageRef) -> Result<Option<Self>> {
         let registry = Arc::new(LocalRegistry::open_default()?);
         Self::try_open_in_registry(registry, image_name)
     }
 
     pub fn try_open_in_registry(
         registry: Arc<LocalRegistry>,
-        image_name: ocipkg::ImageName,
+        image_name: ImageRef,
     ) -> Result<Option<Self>> {
         let Some(manifest_digest) = registry.resolve_image_name(&image_name)? else {
             return Ok(None);
@@ -126,7 +124,7 @@ impl LocalArtifact {
         )))
     }
 
-    pub fn image_name(&self) -> &ocipkg::ImageName {
+    pub fn image_name(&self) -> &ImageRef {
         &self.image_name
     }
 
@@ -278,7 +276,7 @@ impl LocalManifest {
 /// default registry's id.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum BuilderImageName {
-    Explicit(ocipkg::ImageName),
+    Explicit(ImageRef),
     Anonymous,
 }
 
@@ -292,7 +290,7 @@ pub struct LocalArtifactBuilder {
 }
 
 impl LocalArtifactBuilder {
-    pub fn new(image_name: ocipkg::ImageName) -> Self {
+    pub fn new(image_name: ImageRef) -> Self {
         Self {
             image_name: BuilderImageName::Explicit(image_name),
             artifact_type: MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
@@ -340,7 +338,7 @@ impl LocalArtifactBuilder {
     /// for tests only.
     pub fn temp() -> Result<Self> {
         let id = uuid::Uuid::new_v4();
-        let image_name = ocipkg::ImageName::parse(&format!("ttl.sh/{id}:1h"))?;
+        let image_name = ImageRef::parse(&format!("ttl.sh/{id}:1h"))?;
         Ok(Self::new(image_name))
     }
 
@@ -572,7 +570,7 @@ impl LocalArtifactBuilder {
 /// manifest digest.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct StagedArtifactManifest {
-    image_name: ocipkg::ImageName,
+    image_name: ImageRef,
     manifest: ImageManifest,
     manifest_bytes: Vec<u8>,
     manifest_descriptor: Descriptor,
@@ -606,7 +604,7 @@ pub(crate) fn stable_json_bytes(value: &impl Serialize) -> Result<Vec<u8>> {
     serde_json::to_vec(&value).context("Failed to encode stable JSON bytes")
 }
 
-fn reject_conflicting_ref(image_name: &ocipkg::ImageName, ref_update: RefUpdate) -> Result<()> {
+fn reject_conflicting_ref(image_name: &ImageRef, ref_update: RefUpdate) -> Result<()> {
     if let RefUpdate::Conflicted {
         existing_manifest_digest,
         incoming_manifest_digest,
@@ -672,7 +670,7 @@ const ANONYMOUS_REGISTRY_ID_HOST_LEN: usize = 8;
 /// cost.
 const ANONYMOUS_TAG_NONCE_HEX_LEN: usize = 12;
 
-/// Generate a synthetic [`ocipkg::ImageName`] for an anonymous
+/// Generate a synthetic [`ImageRef`] for an anonymous
 /// artifact. Build the image name from the registry's persisted
 /// `registry_id` (so the prefix matches the destination registry,
 /// not the default registry), plus a local-time timestamp + random
@@ -698,7 +696,7 @@ const ANONYMOUS_TAG_NONCE_HEX_LEN: usize = 12;
 ///   and overwrite each other. `RefConflictPolicy::Replace` in
 ///   `build_in_registry` is kept as a defense-in-depth fallback for
 ///   the astronomically rare nonce collision.
-pub(crate) fn anonymous_artifact_image_name(registry_id: &str) -> Result<ocipkg::ImageName> {
+pub(crate) fn anonymous_artifact_image_name(registry_id: &str) -> Result<ImageRef> {
     let prefix: String = registry_id
         .chars()
         .take(ANONYMOUS_REGISTRY_ID_HOST_LEN)
@@ -718,7 +716,7 @@ pub(crate) fn anonymous_artifact_image_name(registry_id: &str) -> Result<ocipkg:
         .chars()
         .take(ANONYMOUS_TAG_NONCE_HEX_LEN)
         .collect();
-    ocipkg::ImageName::parse(&format!("{prefix}.ommx.local/anonymous:{stamp}-{nonce}"))
+    ImageRef::parse(&format!("{prefix}.ommx.local/anonymous:{stamp}-{nonce}"))
         .with_context(|| format!("Failed to synthesise anonymous artifact image name: {prefix}"))
 }
 
@@ -775,8 +773,8 @@ pub fn is_anonymous_artifact_tag(tag: &str) -> bool {
 mod tests {
     use super::*;
 
-    fn test_image_name(tag: &str) -> Result<ocipkg::ImageName> {
-        ocipkg::ImageName::parse(&format!("ghcr.io/jij-inc/ommx/demo:{tag}"))
+    fn test_image_name(tag: &str) -> Result<ImageRef> {
+        ImageRef::parse(&format!("ghcr.io/jij-inc/ommx/demo:{tag}"))
     }
 
     /// `<registry-id8>.ommx.local/anonymous:<YYYYMMDDTHHMMSS>-<nonce>`

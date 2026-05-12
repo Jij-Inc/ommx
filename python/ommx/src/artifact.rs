@@ -187,7 +187,7 @@ impl PyArtifact {
     #[staticmethod]
     pub fn load(py: Python<'_>, image_name: &str) -> Result<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let image_name_parsed = ocipkg::ImageName::parse(image_name)?;
+        let image_name_parsed = ommx::artifact::ImageRef::parse(image_name)?;
 
         // Fast path: the image is already published in the v3 SQLite Local
         // Registry. Subsequent calls for the same image always land here.
@@ -815,7 +815,7 @@ impl PyArtifactBuilder {
     /// ```
     #[staticmethod]
     pub fn new(image_name: &str) -> Result<Self> {
-        let image_name = ocipkg::ImageName::parse(image_name)?;
+        let image_name = ommx::artifact::ImageRef::parse(image_name)?;
         let builder = ommx::artifact::LocalArtifactBuilder::new(image_name);
         Ok(Self(BuilderInner::new(builder)))
     }
@@ -1137,7 +1137,7 @@ pub fn set_local_registry_root(path: PathBuf) -> Result<()> {
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
 pub fn get_image_dir(image_name: &str) -> Result<PathBuf> {
-    let image_name = ocipkg::ImageName::parse(image_name)?;
+    let image_name = ommx::artifact::ImageRef::parse(image_name)?;
     Ok(ommx::artifact::get_image_dir(&image_name))
 }
 

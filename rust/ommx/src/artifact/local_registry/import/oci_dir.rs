@@ -17,7 +17,7 @@
 //! under a new digest / new ref, not a side effect of import.
 //!
 //! The v2-OMMX-local-registry-specific code (the recursive scan of
-//! a path/tag-shaped tree, the path-to-`ImageName` heuristics) lives
+//! a path/tag-shaped tree, the path-to-`ImageRef` heuristics) lives
 //! in the sibling [`super::legacy`] module and uses this module's
 //! primitives.
 
@@ -26,12 +26,11 @@ use super::super::{
     ManifestRecord, RefConflictPolicy, RefUpdate, SqliteIndexStore, ValidatedDigest,
     BLOB_KIND_BLOB, BLOB_KIND_CONFIG, BLOB_KIND_MANIFEST, OCI_IMAGE_REF_NAME_ANNOTATION,
 };
-use crate::artifact::{media_types, OCI_IMAGE_MANIFEST_MEDIA_TYPE};
+use crate::artifact::{media_types, ImageRef, OCI_IMAGE_MANIFEST_MEDIA_TYPE};
 use anyhow::{ensure, Context, Result};
 use oci_spec::image::{
     Descriptor, DescriptorBuilder, Digest, ImageIndex, ImageManifest, MediaType, OciLayout,
 };
-use ocipkg::ImageName;
 use std::collections::HashMap;
 use std::{
     fs,
@@ -56,7 +55,7 @@ use std::{
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OciDirRef {
     pub manifest_digest: String,
-    pub image_name: Option<ImageName>,
+    pub image_name: Option<ImageRef>,
 }
 
 /// Outcome of importing a single OCI Image Layout directory into the
@@ -88,7 +87,7 @@ pub struct OciDirRef {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OciDirImport {
     pub manifest_digest: String,
-    pub image_name: Option<ImageName>,
+    pub image_name: Option<ImageRef>,
     pub ref_update: Option<RefUpdate>,
 }
 
@@ -134,7 +133,7 @@ pub(super) enum RefConflictHandling {
 /// Manifest is rejected at parse time.
 struct StagedOciDir {
     manifest_digest: String,
-    image_name: Option<ImageName>,
+    image_name: Option<ImageRef>,
     manifest_bytes: Vec<u8>,
     manifest_descriptor: Descriptor,
     layers: Vec<Descriptor>,
@@ -208,7 +207,7 @@ pub(super) fn import_oci_dir_inner(
     index_store: &SqliteIndexStore,
     blob_store: &FileBlobStore,
     oci_dir_root: impl AsRef<Path>,
-    target_image_name: Option<&ImageName>,
+    target_image_name: Option<&ImageRef>,
     policy: RefConflictPolicy,
     conflict_handling: RefConflictHandling,
 ) -> Result<(OciDirRef, Option<RefUpdate>)> {
@@ -348,7 +347,7 @@ pub fn import_oci_dir_as_ref(
     index_store: &SqliteIndexStore,
     blob_store: &FileBlobStore,
     oci_dir_root: impl AsRef<Path>,
-    image_name: &ImageName,
+    image_name: &ImageRef,
 ) -> Result<OciDirImport> {
     import_oci_dir_as_ref_with_policy(
         index_store,
@@ -363,7 +362,7 @@ pub fn import_oci_dir_as_ref_with_policy(
     index_store: &SqliteIndexStore,
     blob_store: &FileBlobStore,
     oci_dir_root: impl AsRef<Path>,
-    image_name: &ImageName,
+    image_name: &ImageRef,
     policy: RefConflictPolicy,
 ) -> Result<OciDirImport> {
     let (ref_info, ref_update) = import_oci_dir_inner(
@@ -377,7 +376,7 @@ pub fn import_oci_dir_as_ref_with_policy(
     Ok(OciDirImport::from_inner(ref_info, ref_update))
 }
 
-pub fn oci_dir_image_name(oci_dir_root: impl AsRef<Path>) -> Result<Option<ImageName>> {
+pub fn oci_dir_image_name(oci_dir_root: impl AsRef<Path>) -> Result<Option<ImageRef>> {
     Ok(oci_dir_ref(oci_dir_root)?.image_name)
 }
 
@@ -582,11 +581,11 @@ fn read_json_file<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T> {
     serde_json::from_slice(&bytes).with_context(|| format!("Failed to parse {}", path.display()))
 }
 
-fn image_name_from_index_descriptor(desc: &Descriptor) -> Result<Option<ImageName>> {
+fn image_name_from_index_descriptor(desc: &Descriptor) -> Result<Option<ImageRef>> {
     desc.annotations()
         .as_ref()
         .and_then(|annotations| annotations.get(OCI_IMAGE_REF_NAME_ANNOTATION))
-        .map(|name| ImageName::parse(name).with_context(|| format!("Invalid image ref: {name}")))
+        .map(|name| ImageRef::parse(name).with_context(|| format!("Invalid image ref: {name}")))
         .transpose()
 }
 

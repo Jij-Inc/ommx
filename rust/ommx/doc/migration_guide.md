@@ -695,3 +695,10 @@ exports a `.ommx` file. Constructors:
       the default registry's `registry_id`.)
 - [ ] Replace `Builder::for_github` with `LocalArtifactBuilder::for_github`.
 - [ ] Replace `temp_archive()` with `LocalArtifactBuilder::temp()?.build()?.save(&path)?`.
+- [ ] Replace `ocipkg::ImageName` with `ommx::artifact::ImageRef`. The
+      type exposes the same `host[:port]/name:reference` parsing and
+      `hostname()` / `port()` / `name()` / `reference()` / `as_path()`
+      accessors; field access (`image_name.hostname`, `image_name.port`,
+      …) becomes a method call. The `ommx::ocipkg` re-export is
+      removed in v3, so any direct `use ommx::ocipkg::ImageName` call
+      site needs to switch.
