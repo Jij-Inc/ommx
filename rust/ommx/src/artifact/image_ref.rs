@@ -42,8 +42,14 @@ impl ImageRef {
     }
 
     /// Hostname (without port). `oci_spec` keeps registry + port joined
-    /// as one `host[:port]` string; split on `:` to surface the host
-    /// portion alone.
+    /// as one `host[:port]` string; splitting on the last `:` is safe
+    /// because the upstream
+    /// [REFERENCE_REGEXP](https://github.com/containers/oci-spec-rs/blob/v0.8.4/src/distribution/reference.rs)
+    /// only admits ASCII-alphanumeric hostnames plus dots and an
+    /// optional `:<digits>` port. Bracketed IPv6 hosts (`[::1]`) fall
+    /// outside that grammar and are rejected at parse time, so
+    /// `hostname()` never sees an IPv6 address — when oci-spec grows
+    /// IPv6 support we revisit this with bracket-aware splitting.
     pub fn hostname(&self) -> &str {
         match self.0.registry().rsplit_once(':') {
             Some((host, _)) => host,
@@ -52,9 +58,10 @@ impl ImageRef {
     }
 
     /// Optional registry port. Returns `None` for hostnames without
-    /// `:port`. Anything after `:` that fails to parse as `u16` is
-    /// treated as "no port" (the upstream parser would have rejected
-    /// an invalid port already, so this is defensive only).
+    /// `:port`. The upstream parser already enforces `:<digits>` shape,
+    /// so the `parse::<u16>().ok()` fallback is defensive only — see
+    /// [`Self::hostname`] for why IPv6 host syntax cannot reach this
+    /// function via [`Self::parse`].
     pub fn port(&self) -> Option<u16> {
         self.0
             .registry()
@@ -90,6 +97,18 @@ impl ImageRef {
     /// host:port portion comes out verbatim (no manual port join).
     pub(crate) fn repository_key(&self) -> String {
         format!("{}/{}", self.0.registry(), self.0.repository())
+    }
+
+    /// Build an [`ImageRef`] from the SQLite Local Registry's stored
+    /// `(name, reference)` pair (or the v2 disk-cache path components).
+    /// Picks the OCI canonical separator at reassembly: `:` for tags,
+    /// `@` for digests. Using `:` unconditionally — as earlier code did
+    /// — makes
+    /// [`oci_spec::distribution::Reference`] reject every digest-pinned
+    /// ref, since `name:algorithm:hex` is not in its accepted grammar.
+    pub(crate) fn from_repository_and_reference(name: &str, reference: &str) -> Result<Self> {
+        let separator = if reference.contains(':') { '@' } else { ':' };
+        Self::parse(&format!("{name}{separator}{reference}"))
     }
 }
 
@@ -246,6 +265,27 @@ mod tests {
         assert!(ImageRef::parse("ghcr.io/foo@sha256:abc").is_err());
     }
 
+    /// IPv6 host syntax — bracketed or bare — sits outside
+    /// `oci_spec::distribution::Reference`'s grammar (ASCII alnum +
+    /// `.` + optional `:port`). `ImageRef::hostname()` relies on this
+    /// to safely split `host[:port]` with `rsplit_once(':')`; pin the
+    /// upstream rejection so the assumption can't drift silently if
+    /// `oci_spec` grows IPv6 support without us updating `hostname()`.
+    #[test]
+    fn rejects_ipv6_host_syntax() {
+        for input in [
+            "[::1]/repo:tag",
+            "[::1]:5000/repo:tag",
+            "[2001:db8::1]/repo:tag",
+            "::1/repo:tag",
+        ] {
+            assert!(
+                ImageRef::parse(input).is_err(),
+                "expected oci_spec to reject IPv6 host {input}; revisit hostname() if it starts accepting them",
+            );
+        }
+    }
+
     #[test]
     fn rejects_invalid_capital_in_name() {
         assert!(ImageRef::parse("ghcr.io/Foo:v1").is_err());
@@ -276,5 +316,28 @@ mod tests {
         assert_eq!(with_port.repository_key(), "localhost:5000/ommx/test");
         let no_port = ImageRef::parse("ghcr.io/jij-inc/ommx:tag1").unwrap();
         assert_eq!(no_port.repository_key(), "ghcr.io/jij-inc/ommx");
+    }
+
+    /// `from_repository_and_reference` is what `get_images()` (and the
+    /// legacy v2 path decoder) use to reassemble an [`ImageRef`] from a
+    /// `(repository, reference)` pair stored in the SQLite Local
+    /// Registry. The earlier code joined unconditionally with `:`,
+    /// which `oci_spec` rejects for digest references (`name:sha256:...`
+    /// is not in its accepted grammar). Verify the helper picks `@`
+    /// for digests and `:` for tags so `get_images()` survives a
+    /// digest-pinned ref in the registry.
+    #[test]
+    fn from_repository_and_reference_picks_at_for_digests() {
+        let tag = ImageRef::from_repository_and_reference("ghcr.io/jij-inc/ommx", "v1").unwrap();
+        assert_eq!(tag.to_string(), "ghcr.io/jij-inc/ommx:v1");
+
+        let digest = "sha256:0011223344556677889900112233445566778899001122334455667788990011";
+        let digest_ref =
+            ImageRef::from_repository_and_reference("ghcr.io/jij-inc/ommx", digest).unwrap();
+        assert_eq!(
+            digest_ref.to_string(),
+            format!("ghcr.io/jij-inc/ommx@{digest}"),
+            "digest reference must use `@`, not `:`, to survive oci_spec parsing",
+        );
     }
 }

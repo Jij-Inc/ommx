@@ -757,9 +757,11 @@ Step F の landing で ocipkg の `OciArchive` / `OciArchiveBuilder` / `OciDir` 
 
 最後に残っていた ocipkg surface。`ocipkg::ImageName` を expose していた `LocalArtifact::open` / `LocalArtifactBuilder::new` / annotation builder / CLI parse / Python `Artifact.load(...)` を、OMMX-owned な `ommx::artifact::ImageRef` に切り替えた。
 
-`ImageRef` は `ocipkg::ImageName` と同じ `host[:port]/name:tag` 構造を持つ struct で、`hostname()` / `port()` / `name()` / `reference()` の accessor と、v2 disk-cache ローカルレジストリ互換の `as_path()` / `from_path()` を提供する。検証は OCI distribution spec の name / reference 正規表現を `regex` クレートで再現しているので、parse 結果は `ocipkg::ImageName::parse` と同等。Display は `host[:port]/name:reference` で `parse` と byte-level に round-trip する。
+`ImageRef` は `oci_spec::distribution::Reference` を内側に持つ newtype で、parsing / validation / canonical Display を全て上流 crate に委譲する。`hostname()` / `port()` / `name()` / `reference()` の accessor は OMMX-owned API として残し、`reference()` は tag と digest の両方を 1 本の `&str` で返す (`digest()` があればそちらを優先 — SQLite Local Registry が digest pin を保持するため)。受け付ける入力は `host[:port]/name:tag` / `host[:port]/name@<digest>` / 組み合わせ `name:tag@<digest>` / Docker-Hub 省略形 (`alpine` → `docker.io/library/alpine:latest`) の全てで、registry host の判定は Docker 標準ヒューリスティック (`localhost` / `.` 含む / `:` 含む) に従う。Display は OCI canonical form で digest ref を `name@<digest>`、tag ref を `name:<tag>` に正規化するため、入力が legacy な `name:algorithm:hex` 形でも Display 経由で `name@<digest>` 形に揃う。
 
-Python 側の `Artifact.load(image_name: str)` は `&str` を受け取って Rust 側で `ImageRef::parse` を呼ぶ形なので、Python user 影響は無し。影響は主に Rust SDK consumer に集中するが、`ocipkg::ImageName` を直接 import していた user は `ommx::artifact::ImageRef` に置換するだけで済む。
+v2 disk-cache の `<root>/<image_name>/<tag>/` 互換 path helper (`as_path` / `from_path`) は `ImageRef` から `local_registry::import::legacy::image_ref_as_path` / `image_ref_from_path` (crate-private) に降ろし、`pub` 入口は `legacy_local_registry_path` のみ。v3 storage は SQLite + CAS なので per-image directory path という概念自体が無くなったため、v2 → v3 migration 経路に閉じた。これに伴い stale だった `ommx::artifact::get_image_dir` / `image_dir` の Rust API、CLI `ommx image-dir <name>` subcommand、Python `ommx.get_image_dir` を全て撤去した。
+
+Python 側の `Artifact.load(image_name: str)` は `&str` を受け取って Rust 側で `ImageRef::parse` を呼ぶ形なので、Python user 影響は最小限。影響は主に Rust SDK consumer に集中するが、`ocipkg::ImageName` を直接 import していた user は `ommx::artifact::ImageRef` に置換するだけで済む。フィールド直アクセス (`image_name.hostname`) は accessor method 呼び出し (`image_name.hostname()`) に変わる。
 
 Step H landing で `ocipkg` を `Cargo.toml` から削除し、v3 における ocipkg 依存撤去を完了した。`ommx::ocipkg` re-export も同時に消滅。
 

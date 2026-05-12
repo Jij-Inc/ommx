@@ -241,12 +241,7 @@ pub(crate) fn image_ref_from_path(path: &Path) -> Result<ImageRef> {
         .strip_prefix("__")
         .with_context(|| format!("Missing tag prefix in path: {}", path.display()))?
         .replace("__", ":");
-    // `:` only appears in the decoded reference when it originated
-    // as an `algorithm:hex` digest; pick the OCI-standard `@`
-    // separator in that case so the reassembled string round-trips
-    // through `oci_spec::distribution::Reference`.
-    let separator = if last.contains(':') { '@' } else { ':' };
-    ImageRef::parse(&format!("{registry}/{name}{separator}{last}"))
+    ImageRef::from_repository_and_reference(&format!("{registry}/{name}"), &last)
 }
 
 fn gather_legacy_oci_dirs(root: &Path) -> Result<Vec<PathBuf>> {

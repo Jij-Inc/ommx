@@ -127,7 +127,7 @@ pub fn fetch_remote_manifest(image_name: &ImageRef) -> Result<ImageManifest> {
         .context("Failed to parse OCI image manifest from the remote registry")
 }
 
-/// Get all images stored in the local registry
+/// Get all images stored in the local registry.
 pub fn get_images() -> Result<Vec<ImageRef>> {
     let root = get_local_registry_root();
     let registry = local_registry::LocalRegistry::open(root)?;
@@ -135,7 +135,7 @@ pub fn get_images() -> Result<Vec<ImageRef>> {
         .index()
         .list_refs(None)?
         .into_iter()
-        .map(|reference| ImageRef::parse(&format!("{}:{}", reference.name, reference.reference)))
+        .map(|r| ImageRef::from_repository_and_reference(&r.name, &r.reference))
         .collect()
 }
 
