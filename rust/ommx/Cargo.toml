@@ -58,7 +58,6 @@ ordered-float.workspace = true
 petgraph.workspace = true
 proptest.workspace = true
 prost.workspace = true
-regex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 rusqlite.workspace = true

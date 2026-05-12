@@ -49,7 +49,6 @@ proptest = "1.8.0"
 prost = "0.12.0"
 prost-build = "0.12.0"
 quote = "1.0.40"
-regex = "1.11.3"
 pyo3 = { version = "0.27.2", features = ["anyhow", "multiple-pymethods"] }
 pyo3-stub-gen = "0.22.2"
 pyo3-tracing-opentelemetry = "0.2.0"

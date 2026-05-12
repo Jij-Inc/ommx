@@ -454,7 +454,7 @@ impl SqliteIndexStore {
         }
         Self::put_manifest_in(&tx, manifest, layers)?;
         let ref_update = if let Some(image_name) = image_name {
-            let name = image_name_repository(image_name);
+            let name = image_name.repository_key();
             let reference = image_name.reference();
             let update =
                 Self::put_ref_with_policy_in(&tx, &name, reference, &manifest.digest, policy)?;
@@ -658,7 +658,7 @@ impl SqliteIndexStore {
 impl SqliteIndexStore {
     pub fn put_image_ref(&self, image_name: &ImageRef, manifest_digest: &str) -> Result<()> {
         self.put_ref(
-            &image_name_repository(image_name),
+            &image_name.repository_key(),
             image_name.reference(),
             manifest_digest,
         )
@@ -671,7 +671,7 @@ impl SqliteIndexStore {
         policy: RefConflictPolicy,
     ) -> Result<RefUpdate> {
         self.put_ref_with_policy(
-            &image_name_repository(image_name),
+            &image_name.repository_key(),
             image_name.reference(),
             manifest_digest,
             policy,
@@ -679,15 +679,7 @@ impl SqliteIndexStore {
     }
 
     pub fn resolve_image_name(&self, image_name: &ImageRef) -> Result<Option<String>> {
-        self.resolve_ref(&image_name_repository(image_name), image_name.reference())
-    }
-}
-
-fn image_name_repository(image_name: &ImageRef) -> String {
-    if let Some(port) = image_name.port() {
-        format!("{}:{}/{}", image_name.hostname(), port, image_name.name())
-    } else {
-        format!("{}/{}", image_name.hostname(), image_name.name())
+        self.resolve_ref(&image_name.repository_key(), image_name.reference())
     }
 }
 

@@ -1,86 +1,88 @@
 //! OMMX-owned image reference type.
 //!
-//! v3 drops the `ocipkg::ImageName` re-export in favour of
-//! [`ImageRef`]. The two types parse the same `host[:port]/name:tag`
-//! shape and expose the same `hostname` / `port` / `name` / `reference`
-//! accessors plus the `as_path` / `from_path` legacy-layout helpers
-//! used by the v2 → v3 disk-cache import path. Display round-trips
-//! through `parse` byte-for-byte.
-//!
-//! The struct exists so the public API surface of `ommx` doesn't carry
-//! a type from an external crate — `ocipkg` is unmaintained, and any
-//! ergonomic change to the v3 SDK should not have to wait on it.
+//! v3 drops the `ocipkg::ImageName` re-export in favour of [`ImageRef`].
+//! The type is a thin newtype around [`oci_spec::distribution::Reference`],
+//! which owns the full distribution-reference parser (Docker host
+//! heuristic, `name@<digest>` syntax, per-algorithm digest length
+//! validation). The newtype exists so the public API surface of `ommx`
+//! doesn't carry a foreign-crate type directly, lets us expose the
+//! `hostname()` / `port()` / `name()` / `reference()` accessor shape
+//! that internal call sites rely on, and lets us provide the
+//! `as_path()` / `from_path()` legacy-layout helpers used by the v2 →
+//! v3 disk-cache import path.
 
-use anyhow::{bail, Context, Result};
-use oci_spec::image::Digest;
-use regex::Regex;
+use anyhow::{Context, Result};
+use oci_spec::distribution::Reference;
 use serde::{Deserialize, Serialize};
 use std::{
     fmt,
     path::{Path, PathBuf},
     str::FromStr,
-    sync::LazyLock,
 };
 
-/// Hostname used when an image reference omits the registry, matching
-/// `docker pull <name>` behaviour.
-const DEFAULT_HOSTNAME: &str = "registry-1.docker.io";
-
-/// Tag substituted in when an image reference omits one.
+/// Tag substituted in when an image reference omits one. Matches the
+/// behaviour of `docker pull <name>` and
+/// [`oci_spec::distribution::Reference::tag`].
 const DEFAULT_TAG: &str = "latest";
-
-/// Repository-name regex from the OCI distribution spec v1.1.0:
-/// `[a-z0-9]+((\.|_|__|-+)[a-z0-9]+)*(\/[a-z0-9]+((\.|_|__|-+)[a-z0-9]+)*)*`.
-/// Matched at construction so `ImageRef::parse` rejects names that the
-/// registry would later reject with a 4xx.
-static NAME_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^[a-z0-9]+((\.|_|__|-+)[a-z0-9]+)*(/[a-z0-9]+((\.|_|__|-+)[a-z0-9]+)*)*$")
-        .expect("static OCI name regex compiles")
-});
-
-/// Tag-shape regex from the OCI distribution spec: 1-128 chars,
-/// `[a-zA-Z0-9_]` head followed by `[a-zA-Z0-9._-]`. Digest references
-/// fail this match and fall through to `Digest::from_str`.
-static TAG_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^[a-zA-Z0-9_][a-zA-Z0-9._-]{0,127}$").expect("static OCI tag regex compiles")
-});
 
 /// Parsed OCI image reference owned by the OMMX SDK.
 ///
-/// Fields are private; use the accessors. The string shape produced
-/// by [`fmt::Display`] is `host[:port]/name:reference` and round-trips
-/// through [`ImageRef::parse`] / [`FromStr`].
+/// Backed by [`oci_spec::distribution::Reference`]. Display produces
+/// the canonical `host[:port]/name(:tag|@digest)` form and round-trips
+/// through [`ImageRef::parse`].
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ImageRef {
-    hostname: String,
-    port: Option<u16>,
-    name: String,
-    reference: String,
-}
+pub struct ImageRef(Reference);
 
 impl ImageRef {
-    /// Parse a string image reference. Accepts `host[:port]/name:tag`,
-    /// `name:tag`, `host[:port]/name`, and `name` — the last two
-    /// default the missing component (`registry-1.docker.io` /
-    /// `latest`).
+    /// Parse a string image reference. Delegates to
+    /// [`oci_spec::distribution::Reference`], which accepts
+    /// `host[:port]/name:tag`, `host[:port]/name@<digest>`, the
+    /// combined `tag@<digest>` form, and Docker-Hub shorthand like
+    /// `library/ubuntu` (defaulted under `docker.io`).
     pub fn parse(input: &str) -> Result<Self> {
         Self::from_str(input)
     }
 
+    /// Hostname (without port). `oci_spec` keeps registry + port joined
+    /// as one `host[:port]` string; split on `:` to surface the host
+    /// portion alone.
     pub fn hostname(&self) -> &str {
-        &self.hostname
+        match self.0.registry().rsplit_once(':') {
+            Some((host, _)) => host,
+            None => self.0.registry(),
+        }
     }
 
+    /// Optional registry port. Returns `None` for hostnames without
+    /// `:port`. Anything after `:` that fails to parse as `u16` is
+    /// treated as "no port" (the upstream parser would have rejected
+    /// an invalid port already, so this is defensive only).
     pub fn port(&self) -> Option<u16> {
-        self.port
+        self.0
+            .registry()
+            .rsplit_once(':')
+            .and_then(|(_, port)| port.parse::<u16>().ok())
     }
 
+    /// Repository path (the part between the registry and the
+    /// tag/digest). Equivalent to
+    /// [`oci_spec::distribution::Reference::repository`].
     pub fn name(&self) -> &str {
-        &self.name
+        self.0.repository()
     }
 
+    /// Single string view of the tag-or-digest portion. Prefers the
+    /// digest when both are present (digest pins the image immutably
+    /// and is what the SQLite Local Registry stores), otherwise the
+    /// tag, otherwise the default `latest` (`oci_spec` only omits
+    /// both for the rare bare-name form that hasn't been defaulted
+    /// yet — `parse` always populates a tag, so in practice this
+    /// branch is unreachable from `parse`-d values).
     pub fn reference(&self) -> &str {
-        &self.reference
+        self.0
+            .digest()
+            .or_else(|| self.0.tag())
+            .unwrap_or(DEFAULT_TAG)
     }
 
     /// Encode the ref as `{hostname}/{name}/__{reference}` (or
@@ -93,20 +95,22 @@ impl ImageRef {
     /// from SDK v2. That makes tags containing `__` (which the OCI
     /// distribution tag grammar otherwise allows) ambiguous with
     /// digest separators on round-trip — a path written from tag
-    /// `my__tag` decodes back as ref `my:tag` and fails validation.
+    /// `my__tag` decodes back as `my:tag`, which fails
+    /// `oci_spec::distribution::Reference`'s digest-length check
+    /// and surfaces as a parse error from [`Self::from_path`].
     /// OMMX-generated refs never use `__` in tags, so the v2 → v3
-    /// import path is unaffected; the round-trip property only holds
-    /// for refs whose tag does not contain `__`. This intentionally
-    /// preserves on-disk compatibility with v2 caches rather than
-    /// switching to a percent-encoded layout that would invalidate
-    /// existing user data.
+    /// import path is unaffected; the round-trip property only
+    /// holds for refs whose tag does not contain `__`. This
+    /// intentionally preserves on-disk compatibility with v2 caches
+    /// rather than switching to a percent-encoded layout that would
+    /// invalidate existing user data.
     pub fn as_path(&self) -> PathBuf {
-        let reference = self.reference.replace(':', "__");
-        let host = match self.port {
-            Some(port) => format!("{}__{port}", self.hostname),
-            None => self.hostname.clone(),
+        let reference = self.reference().replace(':', "__");
+        let host = match self.port() {
+            Some(port) => format!("{}__{port}", self.hostname()),
+            None => self.hostname().to_string(),
         };
-        PathBuf::from(format!("{host}/{}/__{reference}", self.name))
+        PathBuf::from(format!("{host}/{}/__{reference}", self.name()))
     }
 
     /// Inverse of [`Self::as_path`]. Returns an error when the path
@@ -123,36 +127,34 @@ impl ImageRef {
             })
             .collect::<Result<Vec<&str>>>()?;
         if components.len() < 3 {
-            bail!(
+            anyhow::bail!(
                 "Path for image ref must contain registry, name, and tag components: {}",
                 path.display()
             );
         }
 
-        let registry = components[0];
-        let (hostname, port) = if let Some((host, port)) = registry.split_once("__") {
-            let port = port.parse::<u16>().context("Invalid port number")?;
-            (host.to_string(), Some(port))
-        } else {
-            (registry.to_string(), None)
-        };
-
+        let registry = components[0].replace("__", ":");
         let n = components.len();
         let name = components[1..n - 1].join("/");
-        validate_name(&name)?;
-
-        let reference = components[n - 1]
+        let last = components[n - 1]
             .strip_prefix("__")
             .with_context(|| format!("Missing tag prefix in path: {}", path.display()))?
             .replace("__", ":");
-        validate_reference(&reference)?;
+        // `:` only appears in the decoded reference when it originated
+        // as an `algorithm:hex` digest; pick the OCI-standard `@`
+        // separator in that case so the reassembled string round-trips
+        // through `oci_spec::distribution::Reference`.
+        let separator = if last.contains(':') { '@' } else { ':' };
+        Self::parse(&format!("{registry}/{name}{separator}{last}"))
+    }
 
-        Ok(Self {
-            hostname,
-            port,
-            name,
-            reference,
-        })
+    /// Repository key for the SQLite Local Registry ref store, in the
+    /// `host[:port]/repository` shape `docker login` and the OCI
+    /// distribution spec both use. Backed by
+    /// [`oci_spec::distribution::Reference`]'s `registry()` so the
+    /// host:port portion comes out verbatim (no manual port join).
+    pub(crate) fn repository_key(&self) -> String {
+        format!("{}/{}", self.0.registry(), self.0.repository())
     }
 }
 
@@ -160,95 +162,20 @@ impl FromStr for ImageRef {
     type Err = anyhow::Error;
 
     fn from_str(input: &str) -> Result<Self> {
-        let (hostname, port, rest) = split_registry(input)?;
-        let (name, reference) = parse_name_reference(rest)?;
-        Ok(Self {
-            hostname,
-            port,
-            name,
-            reference,
-        })
+        let reference = input
+            .parse::<Reference>()
+            .with_context(|| format!("Invalid image reference: {input}"))?;
+        Ok(Self(reference))
     }
 }
 
 impl fmt::Display for ImageRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // Canonicalise on Display: digest references use the OCI
-        // standard `name@<digest>` form, tag references use
-        // `name:<tag>`. Both forms are accepted on parse.
-        let separator = if is_digest_reference(&self.reference) {
-            '@'
-        } else {
-            ':'
-        };
-        match self.port {
-            Some(port) => write!(
-                f,
-                "{}:{port}/{}{separator}{}",
-                self.hostname, self.name, self.reference
-            ),
-            None => write!(
-                f,
-                "{}/{}{separator}{}",
-                self.hostname, self.name, self.reference
-            ),
-        }
+        // `oci_spec::distribution::Reference` already canonicalises
+        // tag refs to `name:tag` and digest refs to `name@digest`;
+        // its Display impl is what we want.
+        fmt::Display::fmt(&self.0, f)
     }
-}
-
-/// Apply the Docker / OCI distribution convention to decide whether the
-/// first `/`-separated segment is a registry host or part of the
-/// repository name. A leading segment is treated as a host only when it
-/// equals `localhost`, contains a `.` (a hostname always does), or
-/// contains a `:` (an explicit port). Otherwise the full input is a
-/// repository path under the default registry — so `library/ubuntu`
-/// parses as `registry-1.docker.io/library/ubuntu`, matching what
-/// `docker pull` would resolve.
-fn split_registry(input: &str) -> Result<(String, Option<u16>, &str)> {
-    if let Some((first, rest)) = input.split_once('/') {
-        if first == "localhost" || first.contains('.') || first.contains(':') {
-            let (hostname, port) = match first.split_once(':') {
-                Some((host, port)) => {
-                    let port = port.parse::<u16>().context("Invalid port number")?;
-                    (host.to_string(), Some(port))
-                }
-                None => (first.to_string(), None),
-            };
-            return Ok((hostname, port, rest));
-        }
-    }
-    Ok((DEFAULT_HOSTNAME.to_string(), None, input))
-}
-
-/// Split the post-registry portion into `(name, reference)`. Accepted
-/// shapes, in priority order:
-///
-/// 1. `name@<digest>` — OCI standard digest form. `@` cannot appear in
-///    valid tags, so splitting on `@` is unambiguous.
-/// 2. `name:<reference>` — tag form, or the legacy `name:algorithm:hex`
-///    digest spelling that the OCI distribution spec still accepts.
-///    `split_once(':')` finds the first `:`, leaving any trailing
-///    `algorithm:hex` intact for [`validate_reference`] to recognise.
-/// 3. `name` — bare path; tag defaults to `latest`.
-fn parse_name_reference(rest: &str) -> Result<(String, String)> {
-    if let Some((name, digest)) = rest.split_once('@') {
-        validate_name(name)?;
-        Digest::from_str(digest).with_context(|| format!("Invalid digest reference: {digest}"))?;
-        return Ok((name.to_string(), digest.to_string()));
-    }
-    if let Some((name, reference)) = rest.split_once(':') {
-        validate_name(name)?;
-        validate_reference(reference)?;
-        return Ok((name.to_string(), reference.to_string()));
-    }
-    validate_name(rest)?;
-    Ok((rest.to_string(), DEFAULT_TAG.to_string()))
-}
-
-/// True iff `reference` parses as an OCI digest (`algorithm:hex`).
-/// Used by [`Display`] to pick `@` vs `:` separator.
-fn is_digest_reference(reference: &str) -> bool {
-    Digest::from_str(reference).is_ok()
 }
 
 impl Serialize for ImageRef {
@@ -256,6 +183,10 @@ impl Serialize for ImageRef {
     where
         S: serde::Serializer,
     {
+        // Serialise as the canonical string rather than the struct
+        // form `oci_spec::distribution::Reference` defaults to, so
+        // OMMX's on-the-wire representation is the same string the
+        // user would type at the CLI.
         serializer.serialize_str(&self.to_string())
     }
 }
@@ -268,29 +199,6 @@ impl<'de> Deserialize<'de> for ImageRef {
         let raw = String::deserialize(deserializer)?;
         Self::parse(&raw).map_err(serde::de::Error::custom)
     }
-}
-
-fn validate_name(name: &str) -> Result<()> {
-    if NAME_RE.is_match(name) {
-        Ok(())
-    } else {
-        bail!("Invalid image name: {name}")
-    }
-}
-
-/// Tag references match `TAG_RE`; digest references (`sha256:...`) match
-/// `Digest::from_str`. Both forms are valid `<reference>` per the OCI
-/// distribution spec.
-fn validate_reference(reference: &str) -> Result<()> {
-    if TAG_RE.is_match(reference) {
-        return Ok(());
-    }
-    if reference.contains(':') {
-        Digest::from_str(reference)
-            .with_context(|| format!("Invalid digest reference: {reference}"))?;
-        return Ok(());
-    }
-    bail!("Invalid image reference: {reference}")
 }
 
 #[cfg(test)]
@@ -317,43 +225,44 @@ mod tests {
         assert_eq!(r.to_string(), "localhost:5000/test:tag1");
     }
 
+    /// `oci_spec::distribution::Reference` defaults Docker-Hub
+    /// shorthand to `docker.io/library/<name>:latest`, matching what
+    /// `docker pull <name>` resolves to. Verify the SDK exposes that
+    /// behaviour through the accessors.
     #[test]
-    fn defaults_hostname_when_omitted() {
-        let r = ImageRef::parse("ubuntu:20.04").unwrap();
-        assert_eq!(r.hostname(), "registry-1.docker.io");
-        assert_eq!(r.name(), "ubuntu");
-        assert_eq!(r.reference(), "20.04");
-    }
-
-    #[test]
-    fn defaults_reference_when_omitted() {
+    fn defaults_bare_name_to_docker_hub_with_library_prefix() {
         let r = ImageRef::parse("alpine").unwrap();
+        assert_eq!(r.hostname(), "docker.io");
+        assert_eq!(r.name(), "library/alpine");
         assert_eq!(r.reference(), "latest");
     }
 
     /// Docker Hub namespaced refs (`namespace/repo:tag`) must default
-    /// the hostname rather than treating `namespace` as a registry.
-    /// `docker pull library/ubuntu:20.04` resolves to
-    /// `registry-1.docker.io/library/ubuntu:20.04`, so OMMX should
-    /// parse the same way; without this heuristic the SDK would
-    /// silently route `library/ubuntu:20.04` to an `https://library/`
-    /// registry that does not exist.
+    /// the hostname to `docker.io` rather than treating `namespace`
+    /// as a registry. `docker pull library/ubuntu:20.04` resolves to
+    /// `docker.io/library/ubuntu:20.04`, so OMMX should parse the
+    /// same way — without this heuristic the SDK would silently
+    /// route the ref to a non-existent `https://library/` registry.
     #[test]
     fn docker_namespaced_refs_default_to_docker_hub() {
-        for input in ["library/ubuntu:20.04", "jij-inc/ommx:latest"] {
+        for (input, name) in [
+            ("library/ubuntu:20.04", "library/ubuntu"),
+            ("jij-inc/ommx:latest", "jij-inc/ommx"),
+        ] {
             let r = ImageRef::parse(input).unwrap();
             assert_eq!(
                 r.hostname(),
-                "registry-1.docker.io",
+                "docker.io",
                 "{input} should default the hostname",
             );
-            assert!(r.name().contains('/'), "{input} should keep the namespace");
+            assert_eq!(r.name(), name, "{input} should keep the namespace");
         }
     }
 
     /// The host heuristic activates on `.` (domain), `:` (port), or the
     /// literal `localhost`. A single bare segment without any of those
-    /// is not a hostname.
+    /// is not a hostname — see `defaults_bare_name_to_docker_hub_with_library_prefix`
+    /// for the alternative branch.
     #[test]
     fn host_heuristic_activates_on_dot_port_or_localhost() {
         assert_eq!(
@@ -371,25 +280,6 @@ mod tests {
         );
     }
 
-    /// Legacy digest spelling `name:algorithm:hex` is accepted (the OCI
-    /// distribution spec still recognises it), but the canonical
-    /// Display form uses the standard `name@algorithm:hex` separator.
-    #[test]
-    fn accepts_legacy_colon_digest_and_canonicalises_to_at() {
-        let s = "quay.io/jitesoft/alpine:sha256:6755355f801f8e3694bffb1a925786813462cea16f1ce2b0290b6a48acf2500c";
-        let r = ImageRef::parse(s).unwrap();
-        assert_eq!(r.name(), "jitesoft/alpine");
-        assert_eq!(
-            r.reference(),
-            "sha256:6755355f801f8e3694bffb1a925786813462cea16f1ce2b0290b6a48acf2500c"
-        );
-        assert_eq!(
-            r.to_string(),
-            "quay.io/jitesoft/alpine@sha256:6755355f801f8e3694bffb1a925786813462cea16f1ce2b0290b6a48acf2500c",
-            "Display must canonicalise digest refs to the `@` separator",
-        );
-    }
-
     /// OCI standard digest spelling `name@algorithm:hex` parses and
     /// round-trips through Display.
     #[test]
@@ -404,11 +294,21 @@ mod tests {
         assert_eq!(r.to_string(), s);
     }
 
-    /// Tag references keep the `:` separator on Display.
+    /// Tag references keep the `:` separator on Display (the upstream
+    /// `oci_spec::distribution::Reference` Display impl handles this).
     #[test]
     fn tag_references_keep_colon_separator_on_display() {
         let r = ImageRef::parse("ghcr.io/jij-inc/ommx:v1").unwrap();
         assert_eq!(r.to_string(), "ghcr.io/jij-inc/ommx:v1");
+    }
+
+    /// `oci_spec::distribution::Reference` validates per-algorithm
+    /// digest length (sha256 = 64 hex, sha384 = 96, sha512 = 128).
+    /// A short-hex digest should fail at parse time rather than reach
+    /// the registry.
+    #[test]
+    fn rejects_short_digest() {
+        assert!(ImageRef::parse("ghcr.io/foo@sha256:abc").is_err());
     }
 
     #[test]
@@ -416,9 +316,8 @@ mod tests {
         assert!(ImageRef::parse("ghcr.io/Foo:v1").is_err());
     }
 
-    /// `@` is only valid as the digest separator. A tag string that
-    /// contains `@` is rejected on the digest side because the part
-    /// after `@` must parse as `algorithm:hex`.
+    /// `@` is only valid as the digest separator. A non-digest after
+    /// `@` fails the upstream parser.
     #[test]
     fn rejects_at_sign_in_non_digest_reference() {
         assert!(ImageRef::parse("ghcr.io/foo@nottag").is_err());
@@ -433,7 +332,7 @@ mod tests {
             "localhost:5000/test_repo:latest",
             "ubuntu:20.04",
             "alpine",
-            "quay.io/jitesoft/alpine:sha256:6755355f801f8e3694bffb1a925786813462cea16f1ce2b0290b6a48acf2500c",
+            "quay.io/jitesoft/alpine@sha256:6755355f801f8e3694bffb1a925786813462cea16f1ce2b0290b6a48acf2500c",
         ] {
             let r = ImageRef::parse(input).unwrap();
             let path = r.as_path();
@@ -443,25 +342,23 @@ mod tests {
     }
 
     /// Tags that legitimately contain `__` collide with the legacy
-    /// path encoding of `:`, so the round-trip is not lossless for
-    /// that case — `from_path` decodes every `__` back to `:`, which
-    /// reshapes a tag `my__tag` into the digest-shaped reference
-    /// `my:tag`. The decoded reference still satisfies the OCI
-    /// digest grammar, so this is silent corruption rather than an
-    /// error, which is exactly why [`ImageRef::as_path`]'s doc
-    /// comment scopes the round-trip claim to refs whose tag does
-    /// not contain `__`. OMMX-generated refs never use `__` in tags,
-    /// so the v2 → v3 legacy import path is unaffected.
+    /// path encoding of `:`, so the round-trip is not lossless —
+    /// `from_path` decodes every `__` back to `:`, then reassembles
+    /// the ref with `@` as the digest separator. The result fails
+    /// `oci_spec::distribution::Reference`'s digest-length check
+    /// (a "tag" like `my__tag` won't satisfy any known
+    /// `algorithm:hex` shape), surfacing the lossy case as a clear
+    /// parse error rather than silent corruption. OMMX-generated
+    /// refs never use `__` in tags, so the v2 → v3 legacy import
+    /// path is unaffected.
     #[test]
-    fn path_layout_round_trip_is_lossy_for_double_underscore_tags() {
+    fn path_layout_round_trip_fails_for_double_underscore_tags() {
         let r = ImageRef::parse("example.com/foo:my__tag").unwrap();
         let path = r.as_path();
-        let decoded = ImageRef::from_path(&path).expect("decoded ref shape is still valid");
-        assert_ne!(
-            decoded, r,
-            "round-trip must visibly differ so the lossy case is testable",
+        assert!(
+            ImageRef::from_path(&path).is_err(),
+            "from_path should reject the lossy round-trip rather than corrupt the ref",
         );
-        assert_eq!(decoded.reference(), "my:tag");
     }
 
     #[test]
@@ -471,5 +368,16 @@ mod tests {
         assert_eq!(json, "\"ghcr.io/jij-inc/ommx/demo:v1\"");
         let r2: ImageRef = serde_json::from_str(&json).unwrap();
         assert_eq!(r, r2);
+    }
+
+    /// `repository_key` is the SQLite Local Registry's `name` column
+    /// value — `host[:port]/repository`. With ports it must include
+    /// the port; without ports it's just `host/repository`.
+    #[test]
+    fn repository_key_format() {
+        let with_port = ImageRef::parse("localhost:5000/ommx/test:tag1").unwrap();
+        assert_eq!(with_port.repository_key(), "localhost:5000/ommx/test");
+        let no_port = ImageRef::parse("ghcr.io/jij-inc/ommx:tag1").unwrap();
+        assert_eq!(no_port.repository_key(), "ghcr.io/jij-inc/ommx");
     }
 }

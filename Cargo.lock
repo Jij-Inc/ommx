@@ -2452,7 +2452,6 @@ dependencies = [
  "petgraph 0.8.3",
  "proptest",
  "prost 0.12.6",
- "regex",
  "rusqlite",
  "serde",
  "serde_json",
