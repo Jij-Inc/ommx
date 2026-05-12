@@ -5,10 +5,12 @@
 //! which owns the full distribution-reference parser (Docker host
 //! heuristic, `name@<digest>` syntax, per-algorithm digest length
 //! validation). The newtype exists so the public API surface of `ommx`
-//! doesn't carry a foreign-crate type directly and lets us expose the
-//! `hostname()` / `port()` / `name()` / `reference()` accessor shape
-//! that internal call sites rely on. The legacy v2 disk-cache layout
-//! helpers live in
+//! doesn't carry a foreign-crate type directly. The accessors
+//! ([`Self::registry`], [`Self::name`], [`Self::reference`]) follow
+//! the OCI distribution-spec shape: `registry()` returns the joined
+//! `host[:port]` form verbatim, mirroring
+//! [`oci_spec::distribution::Reference::registry`]. The legacy v2
+//! disk-cache layout helpers live in
 //! [`local_registry::import::legacy`](super::local_registry::import::legacy),
 //! not here — v3 storage is SQLite + content-addressed blobs, not a
 //! path-tree keyed by image name.
@@ -79,32 +81,20 @@ impl ImageRef {
         Self::from_str(input)
     }
 
-    /// Hostname (without port). `oci_spec` keeps registry + port joined
-    /// as one `host[:port]` string; splitting on the last `:` is safe
-    /// because the upstream
-    /// [REFERENCE_REGEXP](https://github.com/containers/oci-spec-rs/blob/v0.8.4/src/distribution/reference.rs)
-    /// only admits ASCII-alphanumeric hostnames plus dots and an
-    /// optional `:<digits>` port. Bracketed IPv6 hosts (`[::1]`) fall
-    /// outside that grammar and are rejected at parse time, so
-    /// `hostname()` never sees an IPv6 address — when oci-spec grows
-    /// IPv6 support we revisit this with bracket-aware splitting.
-    pub fn hostname(&self) -> &str {
-        match self.0.registry().rsplit_once(':') {
-            Some((host, _)) => host,
-            None => self.0.registry(),
-        }
-    }
-
-    /// Optional registry port. Returns `None` for hostnames without
-    /// `:port`. The upstream parser already enforces `:<digits>` shape,
-    /// so the `parse::<u16>().ok()` fallback is defensive only — see
-    /// [`Self::hostname`] for why IPv6 host syntax cannot reach this
-    /// function via [`Self::parse`].
-    pub fn port(&self) -> Option<u16> {
-        self.0
-            .registry()
-            .rsplit_once(':')
-            .and_then(|(_, port)| port.parse::<u16>().ok())
+    /// Registry hostname plus optional port (`host[:port]`), as a
+    /// single string in the OCI distribution-spec canonical shape.
+    /// Equivalent to
+    /// [`oci_spec::distribution::Reference::registry`]; the joined
+    /// form is exactly what `docker login` writes into
+    /// `~/.docker/config.json` and what the SQLite Local Registry's
+    /// `name` column carries. Callers that need the host portion
+    /// alone (e.g. a `localhost` heuristic) parse it inline; OMMX
+    /// does not expose `hostname()` / `port()` split accessors
+    /// because they were an ocipkg-shape artefact and every internal
+    /// consumer ended up rejoining them back to `host[:port]` at the
+    /// call site.
+    pub fn registry(&self) -> &str {
+        self.0.registry()
     }
 
     /// Repository path (the part between the registry and the
@@ -138,11 +128,21 @@ impl ImageRef {
 
     /// Repository key for the SQLite Local Registry ref store, in the
     /// `host[:port]/repository` shape `docker login` and the OCI
-    /// distribution spec both use. Backed by
-    /// [`oci_spec::distribution::Reference`]'s `registry()` so the
-    /// host:port portion comes out verbatim (no manual port join).
+    /// distribution spec both use.
     pub(crate) fn repository_key(&self) -> String {
-        format!("{}/{}", self.0.registry(), self.0.repository())
+        format!("{}/{}", self.registry(), self.name())
+    }
+
+    /// Borrow the inner [`oci_spec::distribution::Reference`]. This is
+    /// the same type [`oci_client`] uses for its remote-transport API
+    /// (`oci_client::Reference` is a `pub use` of
+    /// `oci_spec::distribution::Reference`), so callers can hand the
+    /// borrowed reference to [`oci_client::Client`] methods without
+    /// re-parsing the [`Display`] form. Crate-private to keep the
+    /// public surface decoupled from `oci_spec` — see the type-level
+    /// canonicalisation invariant.
+    pub(crate) fn as_inner(&self) -> &Reference {
+        &self.0
     }
 
     /// Build an [`ImageRef`] from the SQLite Local Registry's stored
@@ -244,8 +244,7 @@ mod tests {
     #[test]
     fn parses_canonical_form() {
         let r = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:v1").unwrap();
-        assert_eq!(r.hostname(), "ghcr.io");
-        assert_eq!(r.port(), None);
+        assert_eq!(r.registry(), "ghcr.io");
         assert_eq!(r.name(), "jij-inc/ommx/demo");
         assert_eq!(r.reference(), "v1");
         assert_eq!(r.to_string(), "ghcr.io/jij-inc/ommx/demo:v1");
@@ -254,8 +253,7 @@ mod tests {
     #[test]
     fn parses_with_port() {
         let r = ImageRef::parse("localhost:5000/test:tag1").unwrap();
-        assert_eq!(r.hostname(), "localhost");
-        assert_eq!(r.port(), Some(5000));
+        assert_eq!(r.registry(), "localhost:5000");
         assert_eq!(r.name(), "test");
         assert_eq!(r.reference(), "tag1");
         assert_eq!(r.to_string(), "localhost:5000/test:tag1");
@@ -268,13 +266,13 @@ mod tests {
     #[test]
     fn defaults_bare_name_to_docker_hub_with_library_prefix() {
         let r = ImageRef::parse("alpine").unwrap();
-        assert_eq!(r.hostname(), "docker.io");
+        assert_eq!(r.registry(), "docker.io");
         assert_eq!(r.name(), "library/alpine");
         assert_eq!(r.reference(), "latest");
     }
 
     /// Docker Hub namespaced refs (`namespace/repo:tag`) must default
-    /// the hostname to `docker.io` rather than treating `namespace`
+    /// the registry to `docker.io` rather than treating `namespace`
     /// as a registry. `docker pull library/ubuntu:20.04` resolves to
     /// `docker.io/library/ubuntu:20.04`, so OMMX should parse the
     /// same way — without this heuristic the SDK would silently
@@ -287,9 +285,9 @@ mod tests {
         ] {
             let r = ImageRef::parse(input).unwrap();
             assert_eq!(
-                r.hostname(),
+                r.registry(),
                 "docker.io",
-                "{input} should default the hostname",
+                "{input} should default the registry",
             );
             assert_eq!(r.name(), name, "{input} should keep the namespace");
         }
@@ -304,14 +302,13 @@ mod tests {
         assert_eq!(
             ImageRef::parse("ghcr.io/jij-inc/ommx:v1")
                 .unwrap()
-                .hostname(),
+                .registry(),
             "ghcr.io"
         );
         let with_port = ImageRef::parse("localhost:5000/repo:tag").unwrap();
-        assert_eq!(with_port.hostname(), "localhost");
-        assert_eq!(with_port.port(), Some(5000));
+        assert_eq!(with_port.registry(), "localhost:5000");
         assert_eq!(
-            ImageRef::parse("localhost/repo:tag").unwrap().hostname(),
+            ImageRef::parse("localhost/repo:tag").unwrap().registry(),
             "localhost",
         );
     }
@@ -349,10 +346,10 @@ mod tests {
 
     /// IPv6 host syntax — bracketed or bare — sits outside
     /// `oci_spec::distribution::Reference`'s grammar (ASCII alnum +
-    /// `.` + optional `:port`). `ImageRef::hostname()` relies on this
-    /// to safely split `host[:port]` with `rsplit_once(':')`; pin the
-    /// upstream rejection so the assumption can't drift silently if
-    /// `oci_spec` grows IPv6 support without us updating `hostname()`.
+    /// `.` + optional `:port`). The transport layer's
+    /// `protocol_for` heuristic splits `host[:port]` on `:` to
+    /// extract the host for a localhost check; pin the upstream
+    /// rejection so that split stays safe.
     #[test]
     fn rejects_ipv6_host_syntax() {
         for input in [
@@ -363,7 +360,7 @@ mod tests {
         ] {
             assert!(
                 ImageRef::parse(input).is_err(),
-                "expected oci_spec to reject IPv6 host {input}; revisit hostname() if it starts accepting them",
+                "expected oci_spec to reject IPv6 host {input}; revisit protocol_for if it starts accepting them",
             );
         }
     }
@@ -487,7 +484,7 @@ mod tests {
     fn parse_does_not_rewrite_lookalike_hosts() {
         let lookalike = ImageRef::parse("registry-1.docker.io.example/foo:v1").unwrap();
         assert_eq!(
-            lookalike.hostname(),
+            lookalike.registry(),
             "registry-1.docker.io.example",
             "substring-matching hostnames must not be rewritten to docker.io",
         );
@@ -507,7 +504,7 @@ mod tests {
     fn parse_does_not_rewrite_bare_registry_host_string() {
         let parsed = ImageRef::parse("registry-1.docker.io").unwrap();
         assert_eq!(parsed.name(), "library/registry-1.docker.io");
-        assert_eq!(parsed.hostname(), "docker.io");
+        assert_eq!(parsed.registry(), "docker.io");
     }
 
     /// Structural canonicalisation invariant (see the `ImageRef`

@@ -208,9 +208,14 @@ pub fn legacy_local_registry_path(
 /// encoding is preserved.
 pub(crate) fn image_ref_as_path(image_name: &ImageRef) -> PathBuf {
     let reference = image_name.reference().replace(':', "__");
-    let host = match image_name.port() {
-        Some(port) => format!("{}__{port}", image_name.hostname()),
-        None => image_name.hostname().to_string(),
+    // v2 disk layout encodes `host:port` as `host__port`. Split out
+    // the port from the canonical `host[:port]` form at the call
+    // site rather than via dedicated accessors — the split is a
+    // local detail of the legacy encoding, not a v3 concept on
+    // [`ImageRef`].
+    let host = match image_name.registry().rsplit_once(':') {
+        Some((host, port)) => format!("{host}__{port}"),
+        None => image_name.registry().to_string(),
     };
     PathBuf::from(format!("{host}/{}/__{reference}", image_name.name()))
 }

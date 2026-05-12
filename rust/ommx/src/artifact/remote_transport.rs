@@ -67,11 +67,11 @@ impl RemoteTransport {
             .context("Failed to build tokio runtime for OCI remote transport")?;
 
         let config = ClientConfig {
-            protocol: protocol_for(image_name.hostname()),
+            protocol: protocol_for(image_name.registry()),
             ..ClientConfig::default()
         };
         let client = Client::new(config);
-        let auth = resolve_auth(&registry_key(image_name))?;
+        let auth = resolve_auth(image_name.registry())?;
 
         Ok(Self {
             runtime,
@@ -92,9 +92,9 @@ impl RemoteTransport {
         image_name: &crate::artifact::ImageRef,
         operation: RegistryOperation,
     ) -> crate::Result<()> {
-        let reference = to_reference(image_name)?;
+        let reference = to_reference(image_name);
         self.runtime
-            .block_on(self.client.auth(&reference, &self.auth, operation))
+            .block_on(self.client.auth(reference, &self.auth, operation))
             .with_context(|| format!("Failed to authenticate against {reference}"))?;
         Ok(())
     }
@@ -117,9 +117,9 @@ impl RemoteTransport {
         digest: &str,
         bytes: Vec<u8>,
     ) -> crate::Result<()> {
-        let reference = to_reference(image_name)?;
+        let reference = to_reference(image_name);
         self.runtime
-            .block_on(self.client.push_blob(&reference, bytes, digest))
+            .block_on(self.client.push_blob(reference, bytes, digest))
             .with_context(|| format!("Failed to push blob {digest} to {reference}"))?;
         Ok(())
     }
@@ -136,14 +136,14 @@ impl RemoteTransport {
         manifest_bytes: Vec<u8>,
         content_type: &str,
     ) -> crate::Result<()> {
-        let reference = to_reference(image_name)?;
+        let reference = to_reference(image_name);
         let header: HeaderValue = content_type
             .parse()
             .with_context(|| format!("Invalid Content-Type {content_type}"))?;
         self.runtime
             .block_on(
                 self.client
-                    .push_manifest_raw(&reference, manifest_bytes, header),
+                    .push_manifest_raw(reference, manifest_bytes, header),
             )
             .with_context(|| format!("Failed to push manifest to {reference}"))?;
         Ok(())
@@ -160,12 +160,12 @@ impl RemoteTransport {
         image_name: &crate::artifact::ImageRef,
         accepted_media_types: &[&str],
     ) -> crate::Result<(Vec<u8>, String)> {
-        let reference = to_reference(image_name)?;
+        let reference = to_reference(image_name);
         let (bytes, digest) = self
             .runtime
             .block_on(
                 self.client
-                    .pull_manifest_raw(&reference, &self.auth, accepted_media_types),
+                    .pull_manifest_raw(reference, &self.auth, accepted_media_types),
             )
             .with_context(|| format!("Failed to pull manifest from {reference}"))?;
         Ok((bytes.to_vec(), digest))
@@ -196,11 +196,11 @@ impl RemoteTransport {
         digest: &str,
         expected_size: u64,
     ) -> crate::Result<Vec<u8>> {
-        let reference = to_reference(image_name)?;
+        let reference = to_reference(image_name);
         let bytes = self
             .runtime
             .block_on(async {
-                let resp = self.client.pull_blob_stream(&reference, digest).await?;
+                let resp = self.client.pull_blob_stream(reference, digest).await?;
                 if let Some(content_length) = resp.content_length {
                     anyhow::ensure!(
                         content_length == expected_size,
@@ -245,38 +245,33 @@ impl RemoteTransport {
 /// produces more bytes, at the cost of one or two reallocations.
 const BLOB_PREALLOC_CAP_BYTES: u64 = 256 * 1024 * 1024;
 
-/// Build an `oci_client::Reference` from OMMX's [`ImageRef`]. OMMX
-/// owns the parsed form (hostname / port / name / reference fields),
-/// but `oci-client` exposes its own `Reference` newtype and parses
-/// from a `host[:port]/name:tag` string, so the canonical interchange
-/// is the stringified ref rather than a typed conversion.
-fn to_reference(image_name: &crate::artifact::ImageRef) -> crate::Result<Reference> {
-    let raw = image_name.to_string();
-    raw.parse::<Reference>()
-        .with_context(|| format!("Invalid OCI image reference: {raw}"))
+/// Borrow the inner `oci_client::Reference` from an [`ImageRef`].
+/// `oci_client::Reference` is `pub use`d straight from
+/// `oci_spec::distribution::Reference`, which is the same type
+/// [`ImageRef`] wraps, so no reparse is required —
+/// [`ImageRef::as_inner`] hands out the borrow.
+fn to_reference(image_name: &crate::artifact::ImageRef) -> &Reference {
+    image_name.as_inner()
 }
 
 /// `oci-client` defaults to HTTPS; `localhost` registries (used in tests
 /// and Docker-in-Docker setups) are HTTP. Apply the same `localhost`
 /// heuristic the docker tooling uses so unauthenticated local pushes
 /// don't require a custom client config.
-fn protocol_for(hostname: &str) -> ClientProtocol {
-    if hostname == "localhost" || hostname.starts_with("127.") || hostname.starts_with("::1") {
+///
+/// `registry` is the joined `host[:port]` form straight out of
+/// [`ImageRef::registry`]. The host portion is parsed inline rather
+/// than via a dedicated accessor on [`ImageRef`] — it's a heuristic
+/// local to this transport, not a v3 concept worth a method.
+fn protocol_for(registry: &str) -> ClientProtocol {
+    let host = registry
+        .split_once(':')
+        .map(|(host, _)| host)
+        .unwrap_or(registry);
+    if host == "localhost" || host.starts_with("127.") || host.starts_with("::1") {
         ClientProtocol::Http
     } else {
         ClientProtocol::Https
-    }
-}
-
-/// `host[:port]` registry key for credential lookup. `docker login
-/// localhost:5000` and `docker login ghcr.io` write entries under
-/// these forms in `~/.docker/config.json`, and `OMMX_BASIC_AUTH_DOMAIN`
-/// is documented to match the same shape. Using only `hostname` here
-/// would silently miss credentials on any non-443/80 registry.
-fn registry_key(image_name: &crate::artifact::ImageRef) -> String {
-    match image_name.port() {
-        Some(port) => format!("{}:{port}", image_name.hostname()),
-        None => image_name.hostname().to_string(),
     }
 }
 
@@ -527,17 +522,39 @@ mod tests {
     }
 
     /// `registry_key` is what we hand to the env-var override comparison
-    /// and to `docker_credential::get_credential`. Both surfaces key on
-    /// `host[:port]` (matching `docker login localhost:5000`), not
-    /// hostname alone — using hostname only would silently miss
-    /// credentials on non-443/80 registries.
+    /// `image_name.registry()` is what we hand to the env-var override
+    /// comparison and to `docker_credential::get_credential`. Both
+    /// surfaces key on `host[:port]` (matching `docker login
+    /// localhost:5000`), not hostname alone — using hostname only
+    /// would silently miss credentials on non-443/80 registries.
     #[test]
-    fn registry_key_includes_port_when_present() {
+    fn registry_string_includes_port_when_present() {
         let with_port = ImageRef::parse("localhost:5000/ommx/native-push:tag1").unwrap();
-        assert_eq!(registry_key(&with_port), "localhost:5000");
+        assert_eq!(with_port.registry(), "localhost:5000");
 
         let no_port = ImageRef::parse("ghcr.io/jij-inc/ommx:tag1").unwrap();
-        assert_eq!(registry_key(&no_port), "ghcr.io");
+        assert_eq!(no_port.registry(), "ghcr.io");
+    }
+
+    /// `protocol_for` parses the host portion out of the joined
+    /// `host[:port]` form inline and switches HTTPS → HTTP for local
+    /// addresses. Regressing the inline split (e.g. by treating the
+    /// whole `host:port` as the host literal) would lose the
+    /// localhost-with-port case.
+    #[test]
+    fn protocol_for_picks_http_for_localhost_variants() {
+        for registry in ["localhost", "localhost:5000", "127.0.0.1", "127.0.0.1:5000"] {
+            assert!(
+                matches!(protocol_for(registry), ClientProtocol::Http),
+                "expected HTTP for local registry {registry}",
+            );
+        }
+        for registry in ["ghcr.io", "registry.example.com:443"] {
+            assert!(
+                matches!(protocol_for(registry), ClientProtocol::Https),
+                "expected HTTPS for remote registry {registry}",
+            );
+        }
     }
 
     fn env(domain: Option<&str>, username: Option<&str>, password: Option<&str>) -> EnvCredentials {
