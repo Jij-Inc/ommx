@@ -1,13 +1,107 @@
 # OMMX Artifact: OCI Layer and Local Registry
 
-OMMX Artifact distributes optimization problems, solutions, and
-experiment metadata on top of the OCI Image / Artifact specifications.
-This document is the architectural reference for the OCI layer and the
-SQLite-backed Local Registry. Per-API specifics live in module rustdoc
-under `ommx::artifact::*`.
+## What is an OMMX Artifact?
 
-For the user-visible API and v2 → v3 migration steps, see
-[`crate::doc::release_note`] and [`crate::doc::migration_guide`].
+An **Artifact** is a named, immutable bundle of optimization data —
+typically one or more of: `Instance` (problem definition),
+`Solution` / `SampleSet` (results), `ParametricInstance`, `ndarray` /
+`DataFrame` payloads, and JSON / generic blobs. Each Artifact is
+identified by an image reference like
+`ghcr.io/myorg/myproblem:v1` or `name@sha256:<digest>`.
+
+OMMX builds Artifact on top of the [OCI Image / Distribution
+specifications](https://github.com/opencontainers/) — the same
+standards container ecosystems use. Reusing OCI means an Artifact can
+be hosted on any OCI-compatible registry (GHCR, ECR, GAR, Docker Hub,
+self-hosted `distribution/distribution`, …) without OMMX needing its
+own server-side infrastructure, and the same content can be inspected
+with off-the-shelf tools (`oras`, `crane`, `skopeo`).
+
+## Conceptual model
+
+| Concept | What it is | OMMX type |
+|---|---|---|
+| Image reference | The name an Artifact is known by — `host[:port]/name(:tag\|@digest)` | `ommx::artifact::ImageRef` |
+| Manifest | Small JSON describing the Artifact: `artifactType`, `config`, an ordered list of layer descriptors, optional `subject` for lineage | An OCI Image Manifest, stored verbatim |
+| Descriptor | `{ mediaType, digest, size, annotations }` — a typed pointer to a content-addressed blob | OCI 1.1 descriptor |
+| Layer / blob | The actual payload bytes (a serialized `Instance`, a Parquet `DataFrame`, …). Identified by digest | Stored content-addressed |
+| Tag | Mutable alias for a digest (e.g. `:v1`, `:latest`) | Lives in the registry's index |
+| Digest | Immutable identifier (`sha256:…`); the primary key for an Artifact version | Content hash of the manifest |
+
+OMMX-specific Artifacts are identified by the manifest's top-level
+`artifactType` field set to `application/org.ommx.v1.artifact`. This
+is the OCI 1.1 pattern: an Image Manifest with `artifactType` plus an
+empty `config` descriptor.
+
+## Where Artifacts live
+
+There are three storage locations, all interoperating:
+
+| Location | Purpose | Implementation |
+|---|---|---|
+| **Local Registry** | Persistent on-disk store / cache / checkout area on the user's machine | SQLite (`SqliteIndexStore`) + filesystem CAS (`FileBlobStore`) under `$OMMX_LOCAL_REGISTRY_ROOT` or the OS data directory |
+| **Remote registry** | Sharing and distribution across machines and teams | Any OCI-compliant HTTP registry. Transport is `oci-client` |
+| **`.ommx` archive** | Single-file exchange format. A tar of OCI Image Layout | Native tar reader / writer; produced by `LocalArtifact::save` |
+
+The Local Registry is the centre of gravity for SDK calls: builds
+publish into it, loads read from it, pushes upload from it, and saves
+export from it. Remote registries and `.ommx` archives are
+interchange boundaries that move bytes in and out.
+
+## Typical workflows
+
+```rust,ignore
+use ommx::artifact::{ImageRef, LocalArtifact, LocalArtifactBuilder};
+use ommx::artifact::local_registry::{pull_image, LocalRegistry};
+
+let image: ImageRef = "ghcr.io/myorg/myproblem:v1".parse()?;
+
+// 1. Build a new Artifact and publish it to the default Local Registry.
+let mut builder = LocalArtifactBuilder::new(image.clone());
+builder.add_instance(instance, instance_annotations)?;
+builder.add_solution(state, solution_annotations)?;
+let artifact = builder.build()?;
+
+// 2. Open an existing Artifact from the Local Registry.
+let opened = LocalArtifact::open(image.clone())?;
+
+// 3. Pull from a remote registry into the Local Registry, then open.
+let registry = LocalRegistry::open_default()?;
+pull_image(&registry, &image)?;
+let pulled = LocalArtifact::open(image.clone())?;
+
+// 4. Share the Artifact by pushing it to its remote registry.
+artifact.push()?;
+
+// 5. Export to a `.ommx` archive for ad-hoc exchange.
+artifact.save(std::path::Path::new("myproblem-v1.ommx"))?;
+```
+
+CLI equivalents — `ommx inspect`, `ommx push`, `ommx pull`,
+`ommx save`, `ommx load`, `ommx artifact import` — live in the `ommx`
+binary. Building is programmatic (via the SDK). The Python SDK
+exposes the same operations through `ommx.v1.Artifact` /
+`ommx.v1.ArtifactBuilder`; on the Python side `Artifact.load` combines
+the "pull from remote then open" steps shown above.
+
+## What this document covers
+
+The rest of this doc is the **architectural reference** for two
+internal layers:
+
+1. **OCI implementation policy** — what OMMX implements itself versus
+   what it delegates to external OCI crates, and how the manifest
+   format is fixed.
+2. **Local Registry model** — the IndexStore + BlobStore split, the
+   atomic publish primitive, and how the registry interoperates with
+   `.ommx` archives, remote registries, and the v2-era path/tag
+   directory cache.
+
+Per-API specifics (function signatures, error types, exact field
+names) live in module rustdoc under `ommx::artifact::*` rather than
+this doc. For the user-visible API surface and v2 → v3 migration
+steps, see [`crate::doc::release_note`] and
+[`crate::doc::migration_guide`].
 
 ---
 
