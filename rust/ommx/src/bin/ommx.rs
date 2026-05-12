@@ -5,7 +5,7 @@ use ocipkg::{oci_spec::image::ImageManifest, ImageName};
 use ommx::artifact::{
     fetch_remote_manifest, get_image_dir,
     local_registry::{
-        import_oci_archive, import_oci_dir, oci_dir_ref, pull_image, read_archive_manifest,
+        import_oci_archive, import_oci_dir, inspect_archive, oci_dir_ref, pull_image,
         LocalRegistry, RefConflictPolicy,
     },
     LocalArtifact,
@@ -177,10 +177,10 @@ impl ImageNameOrPath {
             }
             // Read-only inspect: a native tar pre-scan extracts the
             // manifest blob without touching the SQLite Local Registry.
-            // `Artifact.load_archive(file)` is the side-effecting
+            // `Artifact.import_archive(file)` is the side-effecting
             // import path; `ommx inspect <archive>` should not mutate
             // the user's registry.
-            ImageNameOrPath::OciArchive(path) => read_archive_manifest(path)?,
+            ImageNameOrPath::OciArchive(path) => inspect_archive(path)?.manifest,
             // `parse` only routes a ref to `Local` when SQLite resolves
             // it, so `LocalArtifact::open` should always succeed here;
             // if it doesn't, surface the SQLite-side migration message.

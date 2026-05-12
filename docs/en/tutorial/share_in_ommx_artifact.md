@@ -194,13 +194,13 @@ Now you can share this `my_instance.ommx` with others using the usual file shari
 
 ## Read OMMX Artifact file
 
-Next, let's read the OMMX Artifact we saved. When loading an OMMX Artifact in archive format, use [`Artifact.load_archive`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.Artifact.load_archive).
+Next, let's read the OMMX Artifact we saved. v3 splits archive reading into two methods: [`Artifact.import_archive`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.Artifact.import_archive) imports the archive into the SQLite Local Registry and returns a full handle (so you can read every layer); [`Artifact.inspect_archive`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.Artifact.inspect_archive) reads only the manifest / layer descriptors without writing into the registry.
 
 ```{code-cell} ipython3
 from ommx.artifact import Artifact
 
 # Load the OMMX Artifact file locally
-artifact = Artifact.load_archive(filename)
+artifact = Artifact.import_archive(filename)
 ```
 
 OMMX Artifacts store data in layers, with a manifest (catalog) that details their contents. You can check the `Descriptor` of each layer, including its Media Type and annotations, without reading the entire archive.

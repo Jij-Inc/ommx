@@ -48,68 +48,44 @@ use std::{
 };
 use tar::Archive;
 
-/// Read just the OCI image manifest out of a `.ommx` archive without
-/// importing it into the SQLite Local Registry. Used by CLI
-/// `ommx inspect <archive>` to surface the manifest as JSON without
-/// the side effect of populating the user's registry. Streams the tar
-/// once: extracts `index.json` to locate the manifest descriptor, then
-/// re-opens the archive and walks tar entries to find the manifest
-/// blob by digest (manifest first in the v3 native writer's output, so
-/// the second pass terminates quickly for archives produced by v3).
-pub fn read_archive_manifest(path: &Path) -> Result<ImageManifest> {
-    let manifest_digest = read_archive_manifest_digest(path)?;
-
-    let file = File::open(path)
-        .with_context(|| format!("Failed to open OCI archive {}", path.display()))?;
-    let mut archive = Archive::new(BufReader::new(file));
-    for entry in archive
-        .entries()
-        .with_context(|| format!("Failed to read tar entries in {}", path.display()))?
-    {
-        let mut entry =
-            entry.with_context(|| format!("Failed to read tar entry in {}", path.display()))?;
-        let entry_path = entry
-            .path()
-            .with_context(|| format!("Failed to decode tar entry path in {}", path.display()))?
-            .into_owned();
-        let path_str = entry_path.to_string_lossy();
-        if !matches!(entry.header().entry_type(), tar::EntryType::Regular) {
-            continue;
-        }
-        if let Some(digest) = blob_path_to_digest(&path_str) {
-            if digest == manifest_digest {
-                let mut bytes = Vec::with_capacity(entry.header().size().unwrap_or(0) as usize);
-                entry.read_to_end(&mut bytes).with_context(|| {
-                    format!(
-                        "Failed to read manifest blob {manifest_digest} from {}",
-                        path.display()
-                    )
-                })?;
-                anyhow::ensure!(
-                    sha256_digest(&bytes) == manifest_digest,
-                    "Manifest blob {manifest_digest} in {} fails sha256 check",
-                    path.display()
-                );
-                let manifest: ImageManifest =
-                    serde_json::from_slice(&bytes).with_context(|| {
-                        format!(
-                            "Failed to parse OCI image manifest blob {manifest_digest} in {}",
-                            path.display()
-                        )
-                    })?;
-                return Ok(manifest);
-            }
-        }
-    }
-    anyhow::bail!(
-        "Manifest blob {manifest_digest} declared by index.json is missing from archive {}",
-        path.display()
-    );
+/// Read-only view of an OCI archive's identifying metadata: the
+/// parsed manifest, its digest, and the image ref name annotated on
+/// the index descriptor (when present). Produced by
+/// [`inspect_archive`] without touching the SQLite Local Registry.
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub struct ArchiveInspectView {
+    pub image_name: Option<ImageName>,
+    pub manifest: ImageManifest,
+    pub manifest_digest: String,
 }
 
-/// First-pass helper for [`read_archive_manifest`]: stream the tar to
-/// find `index.json` and return the manifest digest it points at.
-fn read_archive_manifest_digest(path: &Path) -> Result<String> {
+/// Inspect a `.ommx` archive without importing it into the SQLite
+/// Local Registry. Streams the tar twice: once for `index.json` (to
+/// locate the manifest descriptor + ref name annotation) and once for
+/// the manifest blob (verified by sha256). No layer / config blobs
+/// are read — only the manifest, which is small enough that the
+/// per-build allocation is negligible. Used by CLI
+/// `ommx inspect <archive>` and Python `Artifact.inspect_archive`.
+pub fn inspect_archive(path: &Path) -> Result<ArchiveInspectView> {
+    let (manifest_digest, image_name) = read_archive_index(path)?;
+    let manifest_bytes = read_archive_blob(path, &manifest_digest)?;
+    let manifest: ImageManifest = serde_json::from_slice(&manifest_bytes).with_context(|| {
+        format!(
+            "Failed to parse OCI image manifest blob {manifest_digest} in {}",
+            path.display()
+        )
+    })?;
+    Ok(ArchiveInspectView {
+        image_name,
+        manifest,
+        manifest_digest,
+    })
+}
+
+/// First-pass helper for [`inspect_archive`]: stream the tar to find
+/// `index.json` and return `(manifest_digest, ref_name)`.
+fn read_archive_index(path: &Path) -> Result<(String, Option<ImageName>)> {
     let file = File::open(path)
         .with_context(|| format!("Failed to open OCI archive {}", path.display()))?;
     let mut archive = Archive::new(BufReader::new(file));
@@ -140,14 +116,54 @@ fn read_archive_manifest_digest(path: &Path) -> Result<String> {
             "OMMX OCI archive must contain exactly one manifest in index.json: {}",
             path.display()
         );
-        return Ok(image_index
-            .manifests()
-            .first()
-            .unwrap()
-            .digest()
-            .to_string());
+        let descriptor = image_index.manifests().first().unwrap();
+        let image_name = image_name_from_index_descriptor(descriptor)?;
+        return Ok((descriptor.digest().to_string(), image_name));
     }
     anyhow::bail!("Missing index.json in {}", path.display())
+}
+
+/// Second-pass helper for [`inspect_archive`]: stream the tar a
+/// second time to read the blob at `digest` from
+/// `blobs/<algorithm>/<encoded>`. Manifests are first in the v3
+/// native writer's output so the scan terminates quickly there.
+fn read_archive_blob(path: &Path, digest: &str) -> Result<Vec<u8>> {
+    let file = File::open(path)
+        .with_context(|| format!("Failed to open OCI archive {}", path.display()))?;
+    let mut archive = Archive::new(BufReader::new(file));
+    for entry in archive
+        .entries()
+        .with_context(|| format!("Failed to read tar entries in {}", path.display()))?
+    {
+        let mut entry =
+            entry.with_context(|| format!("Failed to read tar entry in {}", path.display()))?;
+        let entry_path = entry
+            .path()
+            .with_context(|| format!("Failed to decode tar entry path in {}", path.display()))?
+            .into_owned();
+        let path_str = entry_path.to_string_lossy();
+        if !matches!(entry.header().entry_type(), tar::EntryType::Regular) {
+            continue;
+        }
+        if let Some(entry_digest) = blob_path_to_digest(&path_str) {
+            if entry_digest == digest {
+                let mut bytes = Vec::with_capacity(entry.header().size().unwrap_or(0) as usize);
+                entry.read_to_end(&mut bytes).with_context(|| {
+                    format!("Failed to read blob {digest} from {}", path.display())
+                })?;
+                anyhow::ensure!(
+                    sha256_digest(&bytes) == digest,
+                    "Blob {digest} in {} fails sha256 check",
+                    path.display()
+                );
+                return Ok(bytes);
+            }
+        }
+    }
+    anyhow::bail!(
+        "Blob {digest} declared by index.json is missing from archive {}",
+        path.display()
+    );
 }
 
 /// Import a `.ommx` OCI archive on disk into the v3 SQLite Local Registry.

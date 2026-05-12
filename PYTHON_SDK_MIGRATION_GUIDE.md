@@ -659,26 +659,44 @@ Two behavioural shifts:
 
 **Timezone caveat**: the timestamp portion is the **builder's local time**, not UTC. If you ship an anonymous archive to someone in another timezone, the recipient reads the same digits as their own local time — the time component loses absolute meaning across machines. If absolute time matters, use `ArtifactBuilder.new(image_name)` with an explicit name.
 
-### 13.3 `Artifact.load_archive(file)` semantics: now imports into the SQLite Local Registry
+### 13.3 `Artifact.load_archive` removed; pick `import_archive` (write) or `inspect_archive` (read-only)
 
-`Artifact.load_archive(file)` used to open a `.ommx` archive in place, with no side effect on the local registry. In v3 it **imports the archive into the user's persistent SQLite Local Registry** under the archive's `org.opencontainers.image.ref.name` annotation, then opens the imported entry by ref.
+v2's `Artifact.load_archive(file)` opened a `.ommx` archive in place with no side effect on the local registry. v3 splits that contract into two named methods with explicit semantics, and the v2 name raises a migration error so an upgrade cannot silently write into the SQLite Local Registry:
 
-**Before**:
+- {func}`Artifact.import_archive(file) <ommx.artifact.Artifact.import_archive>` — imports the archive into the user's persistent SQLite Local Registry under the archive's `org.opencontainers.image.ref.name` annotation, returns a full {class}`Artifact` handle (you can read every layer via `get_layer` / `get_blob`). The v3 replacement of `load_archive`'s "I want to use this archive" path.
+- {func}`Artifact.inspect_archive(file) <ommx.artifact.Artifact.inspect_archive>` — reads only the manifest + layer descriptors without writing into the registry. Returns a new lightweight {class}`ArchiveManifest <ommx.artifact.ArchiveManifest>` with `image_name` / `manifest_digest` / `layers` / `annotations`. Use this for "what is in this archive" without committing to an import. Blob bodies are not accessible from `ArchiveManifest`; import first if you need them.
+
+**Before (v2)**:
 ```python
-# No registry side effect; archive read in-memory.
+# In-memory open, no registry side effect; layer access works.
 artifact = Artifact.load_archive("my_instance.ommx")
+print(artifact.image_name)
+print(artifact.instance)
 ```
 
-**After**:
+**After (v3) — full import** (matches the v2 "I will work with this archive" use):
 ```python
-# Imports into ~/Library/Application Support/org.ommx.ommx/ (or $OMMX_LOCAL_REGISTRY_ROOT).
-# Subsequent Artifact.load(image_name) calls resolve from SQLite without re-importing.
-artifact = Artifact.load_archive("my_instance.ommx")
+# Imports into ~/Library/Application Support/org.ommx.ommx/
+# (or $OMMX_LOCAL_REGISTRY_ROOT). Subsequent Artifact.load(image_name)
+# calls resolve from SQLite without re-importing.
+artifact = Artifact.import_archive("my_instance.ommx")
+print(artifact.image_name)
+print(artifact.instance)
 ```
+
+**After (v3) — read-only inspect** (no registry write):
+```python
+manifest = Artifact.inspect_archive("my_instance.ommx")
+print(manifest.image_name)
+for layer in manifest.layers:
+    print(layer.media_type)
+```
+
+Calling `Artifact.load_archive(...)` in v3 raises a `RuntimeError` whose message names both replacements and explains the semantic shift.
 
 The archive **must** carry an `org.opencontainers.image.ref.name` annotation (v3 archives always do; pre-v3 OMMX archives also did). Anonymous archives created by `ArtifactBuilder.new_anonymous` carry their synthesized name, so reloading them works without ambiguity.
 
-`ommx inspect <archive>` (the CLI command) reads the archive's manifest **without** writing into the SQLite Local Registry — that path is still side-effect-free for read-only inspection.
+`ommx inspect <archive>` (the CLI command) is the CLI equivalent of `Artifact.inspect_archive` — both read the manifest without touching the SQLite Local Registry.
 
 ### 13.4 `ommx push <archive>` removed; load first, then push by name
 
@@ -774,7 +792,7 @@ expr = 2 * p + 3  # Linear
 - [ ] Replace element-level `to_bytes()` / `from_bytes()` calls on `Function` / `Linear` / `Quadratic` / `Polynomial` / `Parameter` / the `NamedFunction` family / the `DecisionVariable` family with whole-`Instance` / `Solution` / `SampleSet` round-trips (or the `State` / `Samples` / `Parameters` DTOs for evaluate plumbing). See §12.
 - [ ] Replace `ArtifactBuilder.new_archive(path, image_name).build()` with `ArtifactBuilder.new(image_name).build()` + `artifact.save(path)`. See §13.1.
 - [ ] Replace `ArtifactBuilder.new_archive_unnamed(path).build()` with `ArtifactBuilder.new_anonymous().build()` + `artifact.save(path)`. Audit code that branched on `artifact.image_name is None` — anonymous artifacts now have a synthesized `<...>.ommx.local/anonymous:...` name. See §13.2.
-- [ ] Be aware that `Artifact.load_archive(file)` now imports the archive into the user's SQLite Local Registry (side effect). If a previously side-effect-free read is required, fall back to `ommx inspect <archive>` from the CLI for manifest-only access. See §13.3.
+- [ ] Replace `Artifact.load_archive(file)` with `Artifact.import_archive(file)` (registry-write semantics, returns a full handle) for code that wants to use the archive's contents. Use `Artifact.inspect_archive(file)` for the side-effect-free read of the manifest / layer descriptors (returns an `ArchiveManifest`). The v3 `load_archive` raises a migration error pointing at both. See §13.3.
 - [ ] Update any `ommx push <archive-file>` invocation to the two-step `ommx load <file>` + `ommx push <image_name>` flow. See §13.4.
 - [ ] Add periodic `ommx artifact prune-anonymous` to clean accumulated entries if your workflow makes heavy use of `ArtifactBuilder.new_anonymous`. See §13.5.
 

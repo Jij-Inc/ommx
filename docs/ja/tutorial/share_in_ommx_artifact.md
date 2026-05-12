@@ -194,13 +194,13 @@ print(os.path.exists(filename))
 
 ## OMMX Artfact形式のファイルを読み取る
 
-次に保存したOMMX Artifactを読み込みましょう。アーカイブ形式で保存したOMMX Artifactを読み込むには [`Artifact.load_archive`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.Artifact.load_archive) を使います
+次に保存したOMMX Artifactを読み込みましょう。v3 ではアーカイブ読み込みが 2 つのメソッドに分かれています: [`Artifact.import_archive`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.Artifact.import_archive) は アーカイブを SQLite Local Registry に import してフルハンドルを返します (全レイヤを読める)。[`Artifact.inspect_archive`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.Artifact.inspect_archive) は registry に書き込まずに manifest / layer descriptors だけを読みます。
 
 ```{code-cell} ipython3
 from ommx.artifact import Artifact
 
 # ローカルにあるOMMX Artifactファイルを読み込む
-artifact = Artifact.load_archive(filename)
+artifact = Artifact.import_archive(filename)
 ```
 
 OMMX Artifactはレイヤーという単位でデータを管理しますが、このレイヤーのデータはマニフェスト（目録）として内包されており、アーカイブファイル全体を読み込まずに確認することが可能です。[`Artifact.layers`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.Artifact.layers) によって含まれるレイヤーの `Descriptor` を取得できます。これにはそのレイヤーのMediaTypeとアノテーションが含まれています。

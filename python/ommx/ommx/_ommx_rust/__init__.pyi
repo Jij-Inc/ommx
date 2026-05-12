@@ -14,6 +14,7 @@ from typing import TypeAlias
 
 __all__ = [
     "AdditionalCapability",
+    "ArchiveManifest",
     "Artifact",
     "ArtifactBuilder",
     "AttachedConstraint",
@@ -105,6 +106,38 @@ ToState: TypeAlias = (
 )
 
 @typing.final
+class ArchiveManifest:
+    r"""
+    Read-only view of a `.ommx` archive's manifest produced by
+    {meth}`Artifact.inspect_archive`. Surfaces the manifest descriptor
+    fields without writing the archive into the SQLite Local Registry.
+    """
+    @property
+    def image_name(self) -> typing.Optional[builtins.str]:
+        r"""
+        Image ref name read from the archive's `index.json`
+        (`org.opencontainers.image.ref.name` annotation). `None` only
+        for archives that explicitly omit the annotation; archives
+        built by v3 always carry one.
+        """
+    @property
+    def manifest_digest(self) -> builtins.str:
+        r"""
+        SHA-256 digest of the manifest blob.
+        """
+    @property
+    def layers(self) -> builtins.list[Descriptor]:
+        r"""
+        Layer descriptors in manifest order.
+        """
+    @property
+    def annotations(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Manifest-level annotations (the `annotations` field of the
+        `ImageManifest`, not per-layer annotations).
+        """
+
+@typing.final
 class Artifact:
     r"""
     Reader for OMMX Artifacts.
@@ -161,7 +194,7 @@ class Artifact:
         For multiple sample set layers, use {meth}`get_sample_set` with a descriptor.
         """
     @staticmethod
-    def load_archive(path: builtins.str | os.PathLike | pathlib.Path) -> Artifact:
+    def import_archive(path: builtins.str | os.PathLike | pathlib.Path) -> Artifact:
         r"""
         Import an artifact from a `.ommx` OCI archive file (or an OCI
         Image Layout directory) into the user's v3 SQLite Local Registry,
@@ -173,17 +206,65 @@ class Artifact:
         `$HOME/Library/Application Support/org.ommx.ommx/` on macOS, or
         `$OMMX_LOCAL_REGISTRY_ROOT` when set). Subsequent
         `Artifact.load(image_name)` calls resolve from SQLite without
-        re-importing. v3 treats `.ommx` files purely as an exchange
-        format; there is no in-place "open archive for read" path.
+        re-importing.
+
+        For a side-effect-free read that just surfaces the manifest /
+        layer descriptors without writing into the registry, use
+        {meth}`Artifact.inspect_archive` instead.
 
         The input must carry an `org.opencontainers.image.ref.name`
         annotation. Unnamed archives / directories cannot be addressed
         in the SQLite Local Registry and are rejected.
 
         ```python
-        >>> artifact = Artifact.load_archive("data/random_lp_instance.ommx")
+        >>> artifact = Artifact.import_archive("data/random_lp_instance.ommx")
         >>> print(artifact.image_name)
         ghcr.io/jij-inc/ommx/random_lp_instance:...
+
+        ```
+        """
+    @staticmethod
+    def load_archive(path: builtins.str | os.PathLike | pathlib.Path) -> Artifact:
+        r"""
+        Removed in v3 — use {meth}`import_archive` or
+        {meth}`inspect_archive` instead.
+
+        In v2 `Artifact.load_archive(file)` opened a `.ommx` archive
+        in place without touching the SQLite Local Registry. v3
+        changed that contract: archive ingest now writes the artifact
+        permanently into the user's persistent SQLite Local Registry.
+        To make the semantic shift visible (rather than silently
+        polluting the registry on upgrade), the v2 name raises an
+        explicit migration error:
+
+        - {meth}`Artifact.import_archive(file)
+          <Artifact.import_archive>` — the replacement with the v3
+          registry-write semantics.
+        - {meth}`Artifact.inspect_archive(file)
+          <Artifact.inspect_archive>` — a side-effect-free read of the
+          manifest / layer descriptors without registry import.
+        """
+    @staticmethod
+    def inspect_archive(
+        path: builtins.str | os.PathLike | pathlib.Path,
+    ) -> ArchiveManifest:
+        r"""
+        Read a `.ommx` OCI archive's manifest and layer descriptors
+        without importing it into the SQLite Local Registry. Useful
+        when you want to inspect an archive's contents (e.g. iterate
+        layer media types or check the artifact type) without
+        triggering a registry write — the analogue of
+        `ommx inspect <archive>` from the CLI.
+
+        For full registry import (so the artifact is reachable by
+        `Artifact.load(image_name)` later), use
+        {meth}`Artifact.import_archive`.
+
+        ```python
+        >>> manifest = Artifact.inspect_archive("data/random_lp_instance.ommx")
+        >>> for layer in manifest.layers:
+        ...     print(layer.media_type)
+        application/org.ommx.v1.instance
 
         ```
         """
@@ -211,8 +292,10 @@ class Artifact:
 
         The archive is an exchange-format export of the registry-resident
         artifact. Loading the archive back via
-        {meth}`Artifact.load_archive` reimports it into the SQLite Local
-        Registry under the same image name.
+        {meth}`Artifact.import_archive` reimports it into the SQLite Local
+        Registry under the same image name; {meth}`Artifact.inspect_archive`
+        reads the manifest / layer descriptors without writing into the
+        registry.
         """
     def get_layer_descriptor(self, digest: builtins.str) -> Descriptor:
         r"""

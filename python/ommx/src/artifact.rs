@@ -47,21 +47,24 @@ impl PyArtifact {
     /// `$HOME/Library/Application Support/org.ommx.ommx/` on macOS, or
     /// `$OMMX_LOCAL_REGISTRY_ROOT` when set). Subsequent
     /// `Artifact.load(image_name)` calls resolve from SQLite without
-    /// re-importing. v3 treats `.ommx` files purely as an exchange
-    /// format; there is no in-place "open archive for read" path.
+    /// re-importing.
+    ///
+    /// For a side-effect-free read that just surfaces the manifest /
+    /// layer descriptors without writing into the registry, use
+    /// {meth}`Artifact.inspect_archive` instead.
     ///
     /// The input must carry an `org.opencontainers.image.ref.name`
     /// annotation. Unnamed archives / directories cannot be addressed
     /// in the SQLite Local Registry and are rejected.
     ///
     /// ```python
-    /// >>> artifact = Artifact.load_archive("data/random_lp_instance.ommx")
+    /// >>> artifact = Artifact.import_archive("data/random_lp_instance.ommx")
     /// >>> print(artifact.image_name)
     /// ghcr.io/jij-inc/ommx/random_lp_instance:...
     ///
     /// ```
     #[staticmethod]
-    pub fn load_archive(py: Python<'_>, path: PathBuf) -> Result<Self> {
+    pub fn import_archive(py: Python<'_>, path: PathBuf) -> Result<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let registry =
             std::sync::Arc::new(ommx::artifact::local_registry::LocalRegistry::open_default()?);
@@ -111,6 +114,63 @@ impl PyArtifact {
         Ok(Self(artifact))
     }
 
+    /// Removed in v3 — use {meth}`import_archive` or
+    /// {meth}`inspect_archive` instead.
+    ///
+    /// In v2 `Artifact.load_archive(file)` opened a `.ommx` archive
+    /// in place without touching the SQLite Local Registry. v3
+    /// changed that contract: archive ingest now writes the artifact
+    /// permanently into the user's persistent SQLite Local Registry.
+    /// To make the semantic shift visible (rather than silently
+    /// polluting the registry on upgrade), the v2 name raises an
+    /// explicit migration error:
+    ///
+    /// - {meth}`Artifact.import_archive(file)
+    ///   <Artifact.import_archive>` — the replacement with the v3
+    ///   registry-write semantics.
+    /// - {meth}`Artifact.inspect_archive(file)
+    ///   <Artifact.inspect_archive>` — a side-effect-free read of the
+    ///   manifest / layer descriptors without registry import.
+    #[staticmethod]
+    pub fn load_archive(path: PathBuf) -> Result<Self> {
+        bail!(
+            "`Artifact.load_archive({path})` was renamed in v3. v2 read \
+             archives in place with no registry side effect; v3 imports them \
+             into the user's persistent SQLite Local Registry, so the old \
+             name was repurposed. Pick one of:\n\
+             - `Artifact.import_archive({path})` — write the archive into the \
+               SQLite Local Registry (the v3 replacement of `load_archive`).\n\
+             - `Artifact.inspect_archive({path})` — read the manifest / layer \
+               descriptors without touching the registry.",
+            path = path.display(),
+        )
+    }
+
+    /// Read a `.ommx` OCI archive's manifest and layer descriptors
+    /// without importing it into the SQLite Local Registry. Useful
+    /// when you want to inspect an archive's contents (e.g. iterate
+    /// layer media types or check the artifact type) without
+    /// triggering a registry write — the analogue of
+    /// `ommx inspect <archive>` from the CLI.
+    ///
+    /// For full registry import (so the artifact is reachable by
+    /// `Artifact.load(image_name)` later), use
+    /// {meth}`Artifact.import_archive`.
+    ///
+    /// ```python
+    /// >>> manifest = Artifact.inspect_archive("data/random_lp_instance.ommx")
+    /// >>> for layer in manifest.layers:
+    /// ...     print(layer.media_type)
+    /// application/org.ommx.v1.instance
+    ///
+    /// ```
+    #[staticmethod]
+    pub fn inspect_archive(py: Python<'_>, path: PathBuf) -> Result<PyArchiveManifest> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let view = ommx::artifact::local_registry::inspect_archive(&path)?;
+        Ok(PyArchiveManifest::from(view))
+    }
+
     /// Load an artifact stored as a container image in local or remote registry.
     ///
     /// If the image is not found in local registry, it will try to pull from remote registry.
@@ -156,8 +216,10 @@ impl PyArtifact {
     ///
     /// The archive is an exchange-format export of the registry-resident
     /// artifact. Loading the archive back via
-    /// {meth}`Artifact.load_archive` reimports it into the SQLite Local
-    /// Registry under the same image name.
+    /// {meth}`Artifact.import_archive` reimports it into the SQLite Local
+    /// Registry under the same image name; {meth}`Artifact.inspect_archive`
+    /// reads the manifest / layer descriptors without writing into the
+    /// registry.
     pub fn save(&mut self, py: Python<'_>, path: PathBuf) -> Result<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
         self.0.save(&path)
@@ -484,6 +546,85 @@ impl PyArtifact {
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
         let json = py.import("json")?;
         json.call_method1("loads", (PyBytes::new(py, &blob),))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// PyArchiveManifest: side-effect-free view of a `.ommx` archive's manifest
+// ---------------------------------------------------------------------------
+//
+// Returned by `Artifact.inspect_archive(path)`. Unlike `PyArtifact`,
+// the archive is not imported into the SQLite Local Registry, so the
+// view exposes only what the manifest blob contains: the ref name
+// (from index.json), manifest digest, layer descriptors, and
+// manifest-level annotations. Blob bodies are not accessible — to
+// read layer bytes, import the archive first via
+// `Artifact.import_archive(path)`.
+
+/// Read-only view of a `.ommx` archive's manifest produced by
+/// {meth}`Artifact.inspect_archive`. Surfaces the manifest descriptor
+/// fields without writing the archive into the SQLite Local Registry.
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
+#[pyclass]
+#[pyo3(module = "ommx._ommx_rust", name = "ArchiveManifest")]
+pub struct PyArchiveManifest {
+    image_name: Option<String>,
+    manifest_digest: String,
+    layers: Vec<PyDescriptor>,
+    annotations: HashMap<String, String>,
+}
+
+impl From<ommx::artifact::local_registry::ArchiveInspectView> for PyArchiveManifest {
+    fn from(view: ommx::artifact::local_registry::ArchiveInspectView) -> Self {
+        Self {
+            image_name: view.image_name.map(|n| n.to_string()),
+            manifest_digest: view.manifest_digest,
+            layers: view
+                .manifest
+                .layers()
+                .iter()
+                .cloned()
+                .map(PyDescriptor::from)
+                .collect(),
+            annotations: view
+                .manifest
+                .annotations()
+                .as_ref()
+                .cloned()
+                .unwrap_or_default(),
+        }
+    }
+}
+
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
+#[pymethods]
+impl PyArchiveManifest {
+    /// Image ref name read from the archive's `index.json`
+    /// (`org.opencontainers.image.ref.name` annotation). `None` only
+    /// for archives that explicitly omit the annotation; archives
+    /// built by v3 always carry one.
+    #[getter]
+    pub fn image_name(&self) -> Option<String> {
+        self.image_name.clone()
+    }
+
+    /// SHA-256 digest of the manifest blob.
+    #[getter]
+    pub fn manifest_digest(&self) -> String {
+        self.manifest_digest.clone()
+    }
+
+    /// Layer descriptors in manifest order.
+    #[getter]
+    pub fn layers(&self) -> Vec<PyDescriptor> {
+        self.layers.clone()
+    }
+
+    /// Manifest-level annotations (the `annotations` field of the
+    /// `ImageManifest`, not per-layer annotations).
+    #[getter]
+    pub fn annotations(&self) -> HashMap<String, String> {
+        self.annotations.clone()
     }
 }
 
