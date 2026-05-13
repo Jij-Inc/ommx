@@ -34,7 +34,7 @@ const DEFAULT_TAG: &str = "latest";
 /// # Canonicalisation invariant
 ///
 /// **Every `ImageRef` value is in canonical form**:
-/// 1. [`canonicalize_legacy_docker_hub_host`] has rewritten any
+/// 1. `canonicalize_legacy_docker_hub_host` has rewritten any
 ///    `registry-1.docker.io/` prefix (ocipkg's v2 default) to
 ///    `docker.io/`.
 /// 2. `oci_spec::distribution::Reference::split_domain` has
@@ -44,7 +44,7 @@ const DEFAULT_TAG: &str = "latest";
 ///
 /// The SQLite Local Registry relies on this invariant: the
 /// `(name, reference)` columns are populated from
-/// [`Self::repository_key`] and [`Self::reference`], both of which
+/// `Self::repository_key` and [`Self::reference`], both of which
 /// read out of the inner canonical [`Reference`]. A non-canonical
 /// `ImageRef` reaching the index would silently route the same image
 /// to duplicate SQLite rows, breaking lookups across spellings
@@ -58,7 +58,7 @@ const DEFAULT_TAG: &str = "latest";
 ///   canonicalisation layers.
 /// - `<Self as Deserialize>::deserialize` — routes through
 ///   [`Self::parse`].
-/// - [`Self::from_repository_and_reference`] — also routes through
+/// - `Self::from_repository_and_reference` — also routes through
 ///   [`Self::parse`].
 ///
 /// **Adding any new constructor that bypasses [`Self::parse`] would

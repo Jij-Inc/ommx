@@ -20,7 +20,7 @@ pub const V1_PARAMETRIC_INSTANCE_MEDIA_TYPE: &str = "application/org.ommx.v1.par
 pub const V1_SOLUTION_MEDIA_TYPE: &str = "application/org.ommx.v1.solution";
 pub const V1_SAMPLE_SET_MEDIA_TYPE: &str = "application/org.ommx.v1.sample-set";
 
-/// Media type of [crate::artifact::Artifact], `application/org.ommx.v1.artifact`
+/// Media type of [crate::artifact::LocalArtifact], `application/org.ommx.v1.artifact`
 pub fn v1_artifact() -> MediaType {
     MediaType::Other(V1_ARTIFACT_MEDIA_TYPE.to_string())
 }

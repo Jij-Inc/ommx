@@ -114,7 +114,7 @@ pub fn ghcr(org: &str, repo: &str, name: &str, tag: &str) -> Result<ImageRef> {
 /// other side of a ref without committing to a full pull. For the
 /// full pull-into-registry flow use [`local_registry::pull_image`].
 ///
-/// Credentials are resolved by [`remote_transport::RemoteTransport`]'s
+/// Credentials are resolved by `remote_transport::RemoteTransport`'s
 /// three-tier chain (env override → `~/.docker/config.json` →
 /// anonymous), matching every other network call on the SDK.
 #[cfg(feature = "remote-artifact")]

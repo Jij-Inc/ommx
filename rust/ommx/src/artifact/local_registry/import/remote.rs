@@ -83,7 +83,7 @@ use std::sync::Arc;
 /// fast path.
 ///
 /// Otherwise the manifest and each blob are pulled through
-/// [`RemoteTransport`] straight into [`FileBlobStore`], and a single
+/// `RemoteTransport` straight into [`FileBlobStore`], and a single
 /// SQLite transaction publishes the ref. There is no on-disk OCI Image
 /// Layout intermediate.
 ///

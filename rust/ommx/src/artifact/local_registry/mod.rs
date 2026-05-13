@@ -4,16 +4,16 @@
 //! [`FileBlobStore`] plus index records in [`SqliteIndexStore`]. It
 //! does **not** keep anything in OCI Image Layout (`oci-layout` +
 //! `index.json` + `blobs/`) form internally; that format is purely an
-//! interchange boundary handled in the [`import`] submodule.
+//! interchange boundary handled in the `import` submodule.
 //!
 //! Two distinct layers live here:
 //!
-//! - **Storage** — [`index`] / [`blob`] / [`types`] / [`registry`].
+//! - **Storage** — `index` / `blob` / `types` / `registry`.
 //!   The SQLite + filesystem CAS that owns v3 local state, plus the
 //!   shared row / policy types. [`LocalRegistry`] glues the two stores
 //!   into a single addressable unit and exposes the `publish` primitive
 //!   used by `LocalArtifactBuilder`.
-//! - **Import** — [`import`]. Boundary code that reads external content
+//! - **Import** — `import`. Boundary code that reads external content
 //!   in its native form and writes it through [`LocalRegistry`].
 //!   Currently `import::oci_dir` (a single OCI Image Layout directory)
 //!   and `import::legacy` (a v2 OMMX local registry path/tag tree of
