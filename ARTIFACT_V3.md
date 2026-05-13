@@ -418,7 +418,25 @@ Phase 2 は span / event schema を変更せず、同じ OTel signal を読む r
 
 ## 7. Artifact への写像
 
-### 7.1 Full snapshot manifest
+### 7.1 Manifest identity と Experiment profile
+
+`1 Experiment = 1 Artifact` とするが、Experiment 専用の top-level Artifact media type は初期設計では作らない。既存 Artifact 仕様と同じく、OCI manifest descriptor / transport 上の media type は `application/vnd.oci.image.manifest.v1+json`、manifest の `artifactType` は `application/org.ommx.v1.artifact` のままとする。
+
+Experiment であることは、OMMX Artifact の profile / kind として表す。
+
+| 場所 | 値 |
+|---|---|
+| OCI manifest descriptor media type | `application/vnd.oci.image.manifest.v1+json` |
+| OCI manifest `artifactType` | `application/org.ommx.v1.artifact` |
+| manifest annotation | `org.ommx.artifact.kind=experiment` |
+| manifest annotation | `org.ommx.experiment.schema=v1` |
+| optional index layer media type | `application/org.ommx.v1.experiment+json` |
+
+`Artifact.load()` は従来通り OMMX Artifact として読み、`Experiment.load()` は manifest annotation、Experiment metadata / index layer、DataStore layer annotations を見て Experiment view を復元する。これにより、Experiment は OMMX Artifact family の一種として扱え、既存の Local Registry / archive / remote transport / generic Artifact inspector と互換にできる。
+
+`OMMX Artifact v3` という media type は導入しない。v3 は SDK / 設計フェーズの名前であり、wire format の互換性境界とは分ける。将来、registry の referrers API などで Experiment だけを `artifactType` で filter したい要求が強くなった場合は、`application/org.ommx.v1.experiment` を追加で許容する余地を残す。ただし初期設計では、top-level は `application/org.ommx.v1.artifact` に統一する。
+
+### 7.2 Full snapshot manifest
 
 各 committed Artifact manifest は full snapshot とする。`layers[]` には、その時点の Experiment view を復元するために必要なすべての descriptor を載せる。
 
@@ -426,7 +444,7 @@ Phase 2 は span / event schema を変更せず、同じ OTel signal を読む r
 
 したがって、複数の Run が同一 bytes の Instance を保存する場合、論理的な run entry / descriptor は複数存在してよいが、BlobStore 上の実体は同じ digest の 1 blob に共有される。これは DataStore API を「run ごとの entry」として見せる設計とも、「DataStore が blob descriptor を直接管理する」設計とも両立する。重複排除の前提は serialized bytes が一致することであり、論理的に同じ Instance でも serialization に timestamp や非決定的 ordering が混ざる場合は別 digest になる。
 
-### 7.2 Layer annotations
+### 7.3 Layer annotations
 
 DataStore entry は Artifact layer descriptor annotations に以下を持つ。
 
@@ -443,7 +461,7 @@ Experiment name、created time、OMMX version などの experiment-level metadat
 
 MINTO 由来の `org.minto.*` annotation は新規書き込みでは使わない。既存 MINTO artifact の import compatibility が必要なら、compat loader が `org.minto.*` を読んで `org.ommx.*` entry model に変換する。
 
-### 7.3 Artifact からの復元
+### 7.4 Artifact からの復元
 
 `Experiment.load(...)` は Artifact を読み、layer annotations から immutable Experiment view を復元する。
 
