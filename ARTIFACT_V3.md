@@ -1,210 +1,295 @@
-# OMMX Artifact v3 Design
+# OMMX Experiment / Artifact v3 Proposal
 
-OMMX Artifact v3 の設計決定をまとめる内部文書。議論ログではなく、実装に入るための合意済み方針を記録する。実装完了後は本ファイルを削除し、内容を通常の Sphinx documentation / API reference に統合する。
+OMMX v3 における Experiment / Run / DataStore / Trace / Lineage / GC の未実装領域をまとめる proposal。
 
-`ocipkg` 置換、Local Registry、minto 由来機能の取り込み範囲、OTel 統合、trace layer、lineage、tag / digest、Garbage Collection の扱いは本書の方針で固定する。
+本ファイルは開発中の一時文書である。実装完了後は削除し、内容を通常の Sphinx documentation / API reference / module rustdoc に統合する。既に実装済みの Artifact manifest format、Local Registry、archive / remote transport の移行ログは本書では扱わない。必要な前提は `rust/ommx/doc/artifact_design.md` と `ommx::artifact::local_registry` の rustdoc を参照する。
 
-## 1. 最終方針
+本書の主眼は、MINTO が提供していた実験管理 UX を OMMX-owned な機能として再設計し、記録データ、実行 telemetry、Artifact snapshot、lineage を一貫した model に落とすことである。
 
-v3 における Artifact の最終形は以下とする。
+## 1. Target UX
 
-1. `ocipkg` 依存を撤去する。ただし `ocipkg` の archive / dir / remote 共通抽象を OMMX に丸ごと吸収しない。外部 OCI crate の利用候補は remote registry transport に限定し、Artifact manifest semantics、archive materialization、Local Registry は OMMX-owned implementation とする。
-2. 実験管理機構 (`Experiment`, `Run`, `DataStore`, `EnvironmentInfo`, table/export) は OMMX が直接提供する。ただし `jijmodeling` 依存は OMMX core に入れない。
-3. DataStore / Artifact は記録データの source of truth、OTel は実行テレメトリの source of truth とする。
-4. `MintoLogger` 相当の出力は OTel span / event の renderer として実装する。独立した logger class は作らない。
-5. Artifact は build 時の trace body を self-contained layer として持てる。Phase 1 は OTLP JSON trace layer、Phase 2 以降で Logs / Metrics や scoped streaming renderer を拡張する。
-6. OMMX は global `TracerProvider` を暗黙に設定しない。trace capture は `trace="auto"` を既定とし、明示要求の `trace="required"` / `with_trace()` だけを fail fast にする。
-7. Artifact lineage は OCI v1.1 `subject` で表す。v3 初期は単一 parent の linear history に限定し、merge commit 相当は後続拡張に回す。
-8. 各 manifest は full snapshot とする。`subject` は provenance / lineage 用リンクであり、artifact 復元に必須の dependency ではない。
-9. Artifact の primary identifier は digest とする。tag は Local Registry / remote registry 上の mutable ref alias に限定する。
-10. `history()`, `parent()`, `diff(other)` 相当の lineage 走査 API は提供する。子一覧取得は Referrers API 依存が強いため初期必須 API にしない。
-11. Local Registry は path / tag ごとの OCI dir ではなく、IndexStore (SQLite / PostgreSQL) と BlobStore (filesystem / GCS 等) の組として定義する。`index.json` は import / export / archive 用に materialize するもので、Local Registry の mutable index にはしない。
-12. SQLite Local Registry の native manifest format は OCI Image Manifest (`application/vnd.oci.image.manifest.v1+json`) のみとする。OMMX 固有 artifact の type 識別は OCI 1.1 推奨パターンに従い、manifest の `artifactType` field と `application/vnd.oci.empty.v1+json` empty config descriptor で行う。OCI Image Spec v1.1 で deprecated / removed 化された OCI Artifact Manifest (`application/vnd.oci.artifact.manifest.v1+json`) はサポートせず、生成・読み込みのいずれの経路でも扱わない。
-13. 外部 OCI 形式 content の取り込みは「import」操作で行い、manifest bytes と digest を保持する identity-preserving な動作とする。import の副作用として format 変換は行わない。
-14. `git gc` 相当の `ommx artifact gc` command を提供する。到達可能性解析に必要な hook も Artifact API 側に用意する。
+OMMX が提供する実験管理機構の最終 UX は、まず以下の形を目標にする。API 名は proposal であり、実装時に Python / Rust の慣習に合わせて調整してよい。
 
-## 2. 背景
+```python
+from ommx.experiment import Experiment
 
-OMMX Artifact は OCI Image / Artifact 仕様に乗せて最適化問題・解・実験メタデータを配布する仕組みである。現在は外部 crate `ocipkg` に依存している。一方、実験トラッキング層である `minto` は `ommx>=2.0.0` の Artifact API に依存しながら、Experiment / Run / DataStore 階層、provenance 収集、DataFrame 集計、階層的 console output といった「Artifact に居場所があるべき機能」を Python 側で抱えている。
+with Experiment("scip_reblock115", trace="auto", autosave=True) as exp:
+    exp.log_instance("reblock115", instance)
+    exp.log_parameter("dataset", "miplib2017")
 
-Artifact v3 では、この構造を整理する。
+    for timelimit in [0.1, 0.5, 1.0, 2.0]:
+        with exp.run() as run:
+            run.log_parameter("timelimit", timelimit)
 
-- `ocipkg` の責務を分解し、remote OCI registry transport 以外は OMMX の Artifact model に合わせて所有し直す。
-- Local Registry を shared / cloud-backed storage としても成立する形に設計し直す。
-- minto の汎用実験管理機構を OMMX に吸収する。
-- domain-specific な problem generator や `jijmodeling` storage は OMMX core から除外する。
-- 実験の可視化と実行履歴は OTel の span / event / resource に正規化する。
+            solution = solve(instance, timelimit=timelimit)
+            run.log_solution("scip", solution)
 
-## 3. v3 着手前の状態
+artifact = exp.commit(tag="scip_reblock115:latest")
 
-v3 着手時点では Rust / Python ともに `ocipkg` に依存しており、Local Registry は image name ごとの OCI Image Layout directory tree (`root/<image_name>/<tag>/`) だった。`ommx::ocipkg` re-export と `Descriptor` / `Digest` / `MediaType` を含む公開 API surface も `ocipkg` 由来型を直に見せていた。これらは §12 の milestone series ですべて撤去済み (詳細は `rust/ommx/doc/release_note.md` の §「`ommx::artifact::ImageRef` replaces `ocipkg::ImageName`」、`migration_guide.md` の §「Local Registry builder」 / §「Archive output goes through LocalArtifactBuilder」、および `rust/ommx/src/artifact/local_registry/mod.rs` の module rustdoc を参照)。
+table = exp.get_run_table()
+trace = artifact.get_trace()
+```
 
-v2 の path/tag-dir Local Registry layout は legacy として残し、`import_legacy_local_registry*` 経路でのみ読む。新規書き込みは SQLite + CAS のみ。
+この UX で保証したいこと:
 
-## 4. スコープ
+- experiment-wide data と run-specific data を明確に分離できる。
+- 固定の Instance / configuration / environment は experiment space に一度だけ記録できる。
+- run ごとに変わる parameter / solution / sample set / object を記録し、後から比較できる。
+- `log_*` は logger API ではなく、DataStore への記録 API である。
+- console output は記録の副作用ではなく、trace renderer が作る view である。
+- `commit()` は immutable Artifact snapshot を作る。
+- Artifact は digest primary、tag は mutable alias として共有に使う。
+- Artifact を archive / Local Registry / remote registry から reload して、table と trace を再構成できる。
+- 実験途中で process が落ちても、`autosave=True` なら既に記録した data を可能な範囲で復元できる。
 
-### 4.1 対象
+## 2. MINTO から維持する体験
 
-- `Cargo.toml` から `ocipkg` を削除し、`ocipkg` の archive / dir / remote 共通抽象を分解する。
-- `ocipkg` / OCI public type の migration 方針を明示する。
-- remote OCI registry transport は既存 crate (`oci-distribution` / `oci-client` 等) の利用を評価し、使える部分だけ採用する。
-- Artifact manifest semantics、archive materialization、explicit OCI directory import/export、legacy layout migration は OMMX-owned implementation として設計する。
-- Local Registry を IndexStore + BlobStore として再設計する。
-- Local Registry の query / resolve / atomic publish API を用意し、`get_image_dir()` 依存を legacy local registry layout の read / import path に閉じる。
-- OMMX core に `Experiment`, `Run`, `DataStore`, `EnvironmentInfo`, table/export を設計し直して取り込む。
-- Artifact と OTel の双方向接続を実装する。
-- build trace の self-contained trace layer を Artifact に埋め込む。
-- OCI v1.1 `subject` による single-parent linear lineage を実装する。
-- `history()`, `parent()`, `diff(other)` 相当の lineage 走査 API を提供する。
-- `ommx artifact gc` 相当の Garbage Collection command と、到達可能性解析に必要な API hook を提供する。
-- Artifact の Rust / Python tests を追加する。
+MINTO 互換 API は維持しない。ただし、以下の user experience は維持対象とする。
 
-### 4.2 対象外
+### 2.1 Two-space model
 
-- `ommx.v1` の Instance / Solution / SampleSet schema 変更。
-- 既存 `.ommx` file の OCI Image Layout compatibility を壊す変更。
-- `minto.problems.*` の problem generator 取り込み。
-- `jijmodeling` への OMMX core dependency。
-- `minto.datastore.ProblemStorage` の OMMX core 取り込み。
-- v3 初期での multi-parent merge lineage。
-- v3 初期での Referrers API based child listing。
-- v3 初期での OTel Logs / Metrics の Artifact 埋め込み。
+MINTO の中心 UX は、実験全体に属する data と run ごとに属する data の 2-space model である。
 
-### 4.3 互換性スタンス
-
-`minto` API compatibility は維持しない。`minto.Experiment` / `minto.Run` の class hierarchy や method signature をそのまま OMMX に持ち込む必要はない。
-
-維持するのは user experience である。つまり、ユーザが実験を作り、run を回し、parameters / solutions / artifacts / environment を記録し、Artifact として配布し、再ロードして解析できることを保証する。
-
-OMMX の公式 documentation / API reference では minto に言及しない。minto は設計上の参考元であり、公開 API の前提ではない。
-
-## 5. OCI 実装方針と Local Registry model
-
-§5 (OCI 実装方針) と §6 (Local Registry model) は実装完了済みで、本書ではなく以下を一次資料とする:
-
-- **OMMX Artifact format spec** (manifest 形式、OCI Image Layout boundary、registry compatibility) → `rust/ommx/doc/artifact_design.md` (docs.rs: `ommx::doc::artifact_design`)
-- **Local Registry の内部実装** (SQLite IndexStore + filesystem CAS BlobStore、atomic publish、lazy auto-migration、import / export) → `rust/ommx/src/artifact/local_registry/*.rs` の module rustdoc (docs.rs: `ommx::artifact::local_registry`)
-
-未着手領域 (§7 以降) からこれらを参照する場合も上記を指す。
-
-## 7. DataStore / Experiment model
-
-### 7.1 DataStore の構造
-
-minto `DataStore` は名前付きの型別 dict を束ねた構造である。v3 では OMMX core の DataStore を次のように整理する。
-
-| カテゴリ | 種別 | Artifact manifest mapping |
+| Space | 目的 | 例 |
 |---|---|---|
-| per-entry storage | instances, solutions, samplesets, objects, generic media entries | 名前ごとに 1 layer |
-| normalized scalar storage | parameters, metadata | key/value ごとに 1 layer |
-| environment storage | EnvironmentInfo | first-class artifact entry |
+| Experiment space | 全 run で共有される固定 data | dataset name, instance, model config, environment |
+| Run space | 各 run の条件と結果 | solver parameters, solution, sample set, result metadata |
 
-現 minto の aggregate dict (`parameters`, `meta_data`) は content-addressable Artifact model と相性が悪い。key 追加のたびに dict 全体を再 encode する必要があり、append-only ではなくなるためである。
+OMMX では `log_global_*` という命名は採用しない。Experiment object に対する `exp.log_*` は experiment space に、Run object に対する `run.log_*` は run space に記録する。保存先は receiver で決まり、ambient context では決めない。
 
-v3 では aggregate dict を per-entry に正規化する。例えば `parameters["alpha"] = 0.1` は `("alpha", 0.1)` の独立 entry になる。
+```python
+exp.log_instance("target", instance)       # experiment space
 
-### 7.2 Pluggable storage
+with exp.run() as run:
+    run.log_parameter("seed", 0)           # run space
+    run.log_solution("result", solution)   # run space
+```
 
-OMMX core は generic media type storage を持つ。外部 package は media type と codec を登録することで domain-specific data を保存できる。
+### 2.2 Analysis table
 
-ただし OMMX core は `jijmodeling` を import しない。`jijmodeling` problem storage が必要なら、OMMX core ではなく optional adapter / external package が提供する。
+`get_run_table()` 相当の table view は維持する。これは DataStore の source of truth ではなく、分析用の derived view である。
 
-### 7.3 EnvironmentInfo
+- parameter はそのまま column 化する。
+- `Solution` は objective / feasible / optimality / relaxation / start などの summary を column 化する。
+- `SampleSet` は sample count / objective mean, std, min, max / feasible count などの summary を column 化する。
+- JSON object や large binary payload は default table には展開しない。必要なら user が `exp.runs[run_id].objects[...]` や `artifact.get_*` から取り出す。
 
-`EnvironmentInfo` は Artifact / DataStore の first-class entry として永続化する。OTel `Resource` はその投影であり、情報本体ではない。
+Python SDK では pandas `DataFrame` を返す。Rust SDK では table data を構造化 representation として提供し、Python 側で DataFrame に変換してよい。
 
-OTel `Resource` へ写す属性は standard semantic conventions を優先する。OS / host / process / runtime / container などは `os.*`, `host.*`, `process.*`, `process.runtime.*`, `container.*` 等に寄せる。標準で表現できない OMMX 固有情報だけを `ommx.*` namespace に置く。
+### 2.3 Solver wrapper
 
-同じ意味の値を標準属性と `ommx.*` に二重記録しない。
+MINTO の `run.log_solver(...)` は便利な UX であり、OMMX でも Python convenience として提供する価値がある。
 
-### 7.4 Build / Seal / View
+目標:
 
-Artifact の mutation semantics は 3 相に分ける。
+- solver name を run parameter または run metadata として記録する。
+- scalar kwargs を parameters として記録する。
+- `Instance` kwargs は instance entry として記録できる。ただし巨大な固定 Instance を run ごとに重複保存しないため、`exclude_params` または explicit reference を使えるようにする。
+- return value が `Solution` / `SampleSet` なら自動で記録する。
+- execution duration は OTel span に記録し、DataStore の source of truth にはしない。
+
+`log_solver` は Python-level sugar とし、Artifact format の必須概念にはしない。
+
+### 2.4 Sharing
+
+MINTO の archive / registry sharing UX は維持する。ただし `Experiment` は最終的に OMMX Artifact を build / commit する front-end であり、共有の source of truth は Artifact である。
+
+```python
+artifact = exp.commit(tag="ghcr.io/org/repo/scip_reblock115:v1")
+artifact.push()
+
+loaded = Experiment.load("ghcr.io/org/repo/scip_reblock115:v1")
+loaded.get_run_table()
+```
+
+`save_as_ommx_archive()` / `load_from_ommx_archive()` のような名前は compatibility layer として置いてもよいが、core concept は `commit()` と `Artifact.load*` に寄せる。
+
+## 3. Responsibility Split
+
+Experiment v3 は、記録データ、実行 telemetry、表示、Artifact snapshot を明確に分ける。
+
+| 領域 | Source of truth | 例 |
+|---|---|---|
+| 記録データ | DataStore / Artifact | parameters, metadata, objects, Instance, Solution, SampleSet, EnvironmentInfo |
+| 実行 telemetry | OTel trace | lifecycle, duration, solver execution, IO, error, record event |
+| console / notebook 表示 | Trace renderer | text tree, live view, Chrome trace export |
+| version / sharing | Artifact manifest | digest, tag, subject lineage, layer descriptors |
+
+`run.log_parameter(...)` や `run.log_solution(...)` の一次効果は DataStore entry の追加である。同時に OTel span event を出すことはできるが、それは「この run で何が記録されたか」を可視化する telemetry であり、データ本体ではない。
+
+## 4. DataStore Model
+
+### 4.1 Entry model
+
+DataStore は名前付き entry の集合である。各 entry は space、kind、name、payload、metadata を持つ。
+
+| Field | 内容 |
+|---|---|
+| `space` | `experiment` または `run` |
+| `run_id` | run space の場合のみ必須 |
+| `kind` | `parameter`, `metadata`, `object`, `instance`, `solution`, `sampleset`, `environment`, `media` |
+| `name` | space + kind 内の user-facing key |
+| `payload` | serialized bytes または scalar value |
+| `media_type` | Artifact layer media type |
+| `annotations` | Artifact descriptor annotations に投影される metadata |
+
+Build phase では同じ `(space, run_id, kind, name)` に対する upsert を許容する。Seal / commit phase では最終 DataStore view を full snapshot として Artifact manifest に固定する。View phase の `Artifact` / loaded `Experiment` は immutable とし、追加や更新は新しい builder / Experiment から別 Artifact を作る。
+
+### 4.2 Scalar normalization
+
+MINTO は `parameters` / `meta_data` を aggregate JSON dict として保存していた。OMMX v3 では Artifact の content-addressable model に合わせ、scalar entry を key ごとに独立 layer として保存する。
+
+例:
+
+```python
+run.log_parameter("timelimit", 1.0)
+run.log_parameter("seed", 0)
+```
+
+これは manifest 上では `parameters_.json` 1 個ではなく、少なくとも `timelimit` と `seed` の 2 entry になる。理由:
+
+- key 追加ごとに dict 全体を再 encode しない。
+- entry 単位で digest / diff / table extraction ができる。
+- full snapshot manifest でも、同一 entry blob は CAS で共有できる。
+
+### 4.3 Supported entry kinds
+
+Core が直接扱う entry:
+
+| Kind | Payload | 備考 |
+|---|---|---|
+| `parameter` | scalar JSON | int / float / str / bool / null 相当。numpy scalar は Python 側で正規化する |
+| `metadata` | JSON | system metadata。user-facing config は `object` を優先 |
+| `object` | JSON | JSON serializable dict / list 等 |
+| `instance` | `ommx.v1.Instance` bytes | public API は `ommx.v1` |
+| `solution` | `ommx.v1.Solution` bytes | table summary を持つ |
+| `sampleset` | `ommx.v1.SampleSet` bytes | table summary を持つ |
+| `environment` | `EnvironmentInfo` JSON | OTel Resource への投影元 |
+| `media` | arbitrary bytes | external package 用 |
+
+OMMX core は `jijmodeling` を import しない。domain-specific problem storage は external package が `media_type` と codec を登録して提供する。
+
+### 4.4 EnvironmentInfo
+
+`EnvironmentInfo` は DataStore / Artifact の first-class entry として保存する。OTel `Resource` はその投影であり、情報本体ではない。
+
+保存対象:
+
+- OS / platform
+- host / CPU / memory
+- process / Python / Rust runtime
+- package versions
+- container / CI metadata, 取れる場合
+- OMMX / adapter version
+
+OTel Resource へ写す属性は standard semantic conventions を優先する。標準属性で表現できない OMMX 固有情報だけを `ommx.*` namespace に置く。同じ意味の値を標準属性と `ommx.*` に二重記録しない。
+
+## 5. Experiment Lifecycle
+
+### 5.1 Build / Seal / View
+
+Experiment / Artifact の mutation semantics は 3 相に分ける。
 
 | 相 | 性質 | API |
 |---|---|---|
-| Build | in-memory mutable | `ArtifactBuilder`, `Experiment`, `Run` |
-| Seal | snapshot を作る | `build()` / `commit()` |
-| View | immutable read-only | `Artifact` |
+| Build | in-memory mutable。autosave で durable draft を持てる | `Experiment`, `Run`, `ArtifactBuilder` |
+| Seal | immutable snapshot を作る | `commit()` / `build()` |
+| View | read-only | `Artifact`, loaded `Experiment`, table / trace view |
 
-Build 相では同名 key の upsert を許容してよい。Seal 相で最終 DataStore view を snapshot として manifest に固定する。View 相には `add` / `update` を生やさない。
+永続化済み Artifact を更新する API は作らない。既存 Artifact から派生して新しい full-snapshot Artifact を作る場合は、parent を lineage として記録する。
 
-Seal の I/O 段階 — manifest と layer blobs を実際に Local Registry に書き、ref を立てて discoverable にする atomic 動作 — は registry-internal primitive である `SqliteIndexStore::publish_artifact_atomic` (`ommx::artifact::local_registry` module rustdoc 参照) を呼ぶ。「publish」は OCI Distribution 由来の registry 側の動詞、「commit / build」は SDK ユーザが触る動詞。Git で言えば `git commit` (ユーザ視点) と "object を `.git/objects/` に書いて `refs/heads/<branch>` を進める" (内部実装) の関係に対応する。
+### 5.2 Commit granularity
 
-永続層に update primitive は存在しない。永続化済み Artifact を変える唯一の方法は、新しい full-snapshot Artifact を作ることである。
+Default は `1 Experiment = 1 manifest` とする。
 
-### 7.5 Commit granularity
-
-`1 manifest = 1 commit` とする。
-
-- Core primitive は明示 `build()` / `commit()`。
-- High-level `Experiment` は experiment 終了時に自動 commit する。
+- `Experiment.commit()` は実験全体の final snapshot を作る。
+- `with Experiment(...)` は正常終了時に自動 commit してよいが、明示 `commit()` との関係を API で明確にする。
 - `Run` 終了ごとに manifest を切る挙動は `commit_per_run=True` 相当の opt-in にする。
 - Default では run ごとに commit しない。
 
-## 8. OTel / Trace model
+理由:
 
-### 8.1 Source of truth
+- MINTO の UX は「複数 run を 1 experiment として比較する」ことが中心である。
+- run ごとに manifest を作ると lineage が細かくなりすぎ、table reconstruction と sharing が複雑になる。
+- 一方、長時間実験では途中結果を durable にしたいので autosave / draft storage は別に必要である。
 
-DataStore / Artifact と OTel の責務を分ける。
+### 5.3 Autosave
 
-| 領域 | Source of truth |
+`autosave=True` は「各 `log_*` のたびに最終 Artifact を commit する」ではない。
+
+目標:
+
+- process crash 後に記録済み entries を復元できる。
+- final `commit()` までは public tag / digest を進めない。
+- autosave storage は Local Registry の draft area または SDK-owned working directory として扱う。
+- autosave draft から final Artifact を作るときも、manifest は full snapshot である。
+
+autosave の storage format は user-facing compatibility surface にしない。directory layout compatibility より、復元可能性と final Artifact semantics を優先する。
+
+## 6. OTel / Trace Model
+
+### 6.1 Span hierarchy
+
+OMMX は global `TracerProvider` を暗黙に設定しない。Experiment / Run / ArtifactBuilder は active provider がある場合にそれを使い、ない場合は trace capture mode に従う。
+
+Span の基本構造:
+
+| 操作 | Span name | 親 |
+|---|---|---|
+| Experiment 開始 | `ommx.experiment` | active span があれば child、なければ root |
+| Run 開始 | `ommx.run` | `ommx.experiment` |
+| Solver wrapper 実行 | `ommx.solver` | `ommx.run` |
+| DataStore record | span event | current run / experiment span |
+| Artifact commit/build | `ommx.artifact.build` | active span |
+| Artifact load | `ommx.artifact.load` | active span |
+| Artifact push | `ommx.artifact.push` | active span |
+
+Trace ID は OTel が発行する。OMMX は独自 Trace ID を採番しない。
+
+### 6.2 Record events
+
+各 `log_*` は DataStore entry を追加した後、可能なら current span に event を追加する。
+
+Event name:
+
+- `ommx.datastore.record`
+
+Event attributes:
+
+| Attribute | 内容 |
 |---|---|
-| parameter / solution / sample set / object / environment | DataStore / Artifact |
-| lifecycle / duration / IO / error / record reference | OTel trace |
-| console rendering | OTel renderer |
+| `ommx.datastore.space` | `experiment` / `run` |
+| `ommx.datastore.run_id` | run space の場合 |
+| `ommx.datastore.kind` | `parameter`, `solution`, ... |
+| `ommx.datastore.name` | entry name |
+| `ommx.datastore.media_type` | payload media type |
+| `ommx.datastore.digest` | commit 後に分かる場合。Build 中は absent でもよい |
 
-`run.log_parameter(...)` や `run.log_solution(...)` は logger 呼び出しではない。一次効果は DataStore への記録であり、OTel span event は「この run で何が記録されたか」を可視化する副次的 telemetry である。
+Event は DataStore entry への reference であり、payload 本体を OTel event attribute に入れない。parameter の small scalar を display 用に入れるかは renderer policy として扱い、source of truth にはしない。
 
-### 8.2 MintoLogger の解体
+### 6.3 Trace capture mode
 
-`MintoLogger` 相当の単一 class は作らない。minto の logger が混ぜていた信号を分解する。
+Trace capture mode:
 
-| 元の機能 | v3 の所属 |
+| mode | 動作 |
 |---|---|
-| Experiment / Run / Solver の開始終了 | OTel span |
-| parameter / solution / sample set / object の記録 | DataStore entry + span event |
-| warning / error / debug | OTel Logs または Rust `tracing::{warn,error,debug}!` |
-| EnvironmentInfo 表示 | EnvironmentInfo entry + Resource projection + renderer |
-| indent 付き console output | post-hoc / streaming renderer |
+| `trace="auto"` | default。provider / collector が設定済みなら trace layer を埋め込む。未設定なら trace layer を省略し、status annotation を残す |
+| `trace="required"` | provider / collector が未設定なら setup error |
+| `trace=False` | trace layer を生成しない |
+| `with_trace()` | low-level builder の明示要求。未設定なら setup error |
 
-Phase 1 では OTel Logs を Artifact に埋め込まない。warning / error は span event と span status に寄せる。OTel Logs / Metrics の Artifact 埋め込みは Phase 2 以降で扱う。
+`trace="auto"` で trace layer を省略した場合の manifest annotations:
 
-### 8.3 Span hierarchy
+- `org.ommx.trace.status=not_recorded`
+- `org.ommx.trace.reason=no_tracer_provider`
 
-Trace ID は OMMX が独自採番しない。OTel の root span 作成時に発行される。
+既存の notebook / script tracing helper が UX のために provider を install する可能性は別途検討する。ただし Experiment / Artifact build の core path は global provider を勝手に install しない。
 
-Span 開始ルール:
+### 6.4 Trace layer
 
-- `Experiment` 開始時:
-  - active span がなければ `ommx.experiment` root span を開始し、新しい `trace_id` が発行される。
-  - active span があれば `ommx.experiment` はその child span となり、既存 `trace_id` を継承する。
-- `Run` 開始時:
-  - `ommx.run` は `ommx.experiment` の child span。
-  - 新しい `trace_id` は発行せず、`span_id` だけ新しくなる。
-- `ArtifactBuilder.build()`:
-  - `ommx.artifact.build` span を開始する。
-  - active span があれば child span となり、既存 `trace_id` を継承する。
-  - active span がなければ root span となり、新しい `trace_id` が発行される。
-- `Artifact.load*` / `push`:
-  - artifact を使う側の trace として現在の active span に接続する。
-  - build-time trace と同じ trace に無理に接続しない。
-  - artifact 内の build-time trace は load / push span から OTel Link として参照する。
-- 派生 Artifact:
-  - lineage は OCI `subject` で表す。
-  - trace は新しい `ommx.artifact.build` span を持つ。
-  - parent artifact の build trace は、存在すれば OTel Link として張る。
+Artifact は build-time trace body を dedicated layer として持てる。これは batch job や CI のように Artifact 入出力だけで完結する環境で重要である。
 
-Manifest annotation key:
-
-- `org.ommx.trace.build.trace_id`
-- `org.ommx.trace.build.span_id`
-
-### 8.4 Trace layer
-
-Artifact は build 時の trace body を dedicated layer として埋め込める。これは Cloud Run / batch job のように Artifact 入出力だけで完結する実行環境で重要である。
-
-Phase 1 の trace layer:
+Phase 1:
 
 | 項目 | 方針 |
 |---|---|
@@ -212,172 +297,178 @@ Phase 1 の trace layer:
 | media type | `application/vnd.ommx.trace.otlp+json` |
 | payload | OTLP JSON mapping の `ExportTraceServiceRequest` 互換 (`resourceSpans`) |
 | 対象 signal | span / span event |
-| derived format | Chrome Trace Event Format は読み出し時に生成 |
 | API | `artifact.get_trace() -> TraceResult` |
 
-Trace layer は DataStore の代替ではない。parameter / solution / sample set / environment の本体は通常の Artifact entry に保存し、trace layer は実行時系列と record reference を保存する。
+Trace layer は DataStore の代替ではない。parameter / solution / sample set / environment の本体は通常の DataStore entry layer に保存し、trace layer は実行時系列と record reference を保存する。
 
-### 8.5 Trace capture mode
+### 6.5 Renderer
 
-OMMX は global `TracerProvider` を暗黙に設定しない。import、`Experiment` 開始、`ArtifactBuilder.build()` のいずれでも `trace.set_tracer_provider()` を勝手に呼ばない。
+`MintoLogger` 相当の独立 logger class は作らない。console output は OTel span / event の renderer として実装する。
 
-Trace capture mode:
+Phase 1:
 
-| mode | 動作 |
-|---|---|
-| `trace="auto"` | default。provider / collector が設定済みなら trace layer を埋め込む。未設定なら trace layer を省略し、status annotation を残す |
-| `trace="required"` | 明示要求。provider / collector が未設定なら setup error |
-| `with_trace()` | 低レベル builder の明示要求。provider / collector が未設定なら setup error |
-| `trace=False` | 常に trace layer を生成しない |
+- post-hoc renderer のみ。
+- `TraceResult.text_tree(style="experiment")` 相当で階層表示する。
+- Chrome Trace Event Format は読み出し時に derived format として生成する。
 
-`trace="auto"` で trace layer を省略した場合の manifest annotations:
+Phase 2:
 
-- `org.ommx.trace.status=not_recorded`
-- `org.ommx.trace.reason=no_tracer_provider`
-
-この設計により、通常の Experiment 利用は OTel setup を必須にせず、trace を成果物として要求する利用では欠落を fail fast で検知できる。
-
-### 8.6 Renderer
-
-Phase 1 は post-hoc renderer のみを提供する。
-
-- `Experiment` / `Run` / `ArtifactBuilder.build()` が span / event を発行する。
-- `capture_trace()` または Experiment 内部 collector が span を収集する。
-- Experiment 終了後または Artifact load 後に `TraceResult` を作る。
-- `trace_result.text_tree(style="experiment")` 相当で描画する。
-
-Phase 2 で scoped streaming renderer を追加する。
-
+- scoped streaming renderer を追加する。
 - `Experiment(..., live=True)` 相当で opt-in。
-- 対象 `trace_id` だけを購読する scoped `SpanProcessor` を、呼び出し側が設定した SDK `TracerProvider` に attach する。
+- 対象 trace_id だけを購読する scoped processor を、呼び出し側が設定した SDK `TracerProvider` に attach する。
 - span end / event を逐次 render する。
-- Experiment 終了時に processor を deactivate / detach する。
 
-Phase 2 は span / event schema を変更せず、同じ OTel signal を読む renderer を増やす形で実装する。
+Phase 2 は span / event schema を変更せず、同じ OTel signal を読む renderer を増やす形にする。
 
-## 9. Lineage model
+## 7. Artifact Mapping
 
-### 9.1 Full snapshot manifest
+### 7.1 Full snapshot manifest
 
-各 manifest は full snapshot とする。派生 Artifact の `layers[]` には、その時点の DataStore view を復元するために必要なすべての descriptor を載せる。
+各 committed Artifact manifest は full snapshot とする。`layers[]` には、その時点の Experiment view を復元するために必要なすべての descriptor を載せる。
 
-既存 blob は同じ digest の descriptor として再利用できる。Local Registry では BlobStore の CAS として共有され、remote registry では dedup / mount され得る。一方、archive や明示 export された OCI directory layout では、その Artifact 単体で読めるよう参照 blob を含める。
+既存 blob は同じ digest の descriptor として再利用できる。Local Registry では CAS として共有され、remote registry では dedup / mount され得る。一方、archive export では、その Artifact 単体で読めるよう参照 blob を含める。
 
-`subject` は lineage / provenance のためのリンクであり、子 Artifact を読むための必須 dependency ではない。
+### 7.2 Layer annotations
 
-`subject` の参照先 manifest は OCI Image Manifest であり、`mediaType` は `application/vnd.oci.image.manifest.v1+json` 固定とする。Local Registry が単一 format に閉じている (`artifact_design.md` §2 (Manifest format)) ため、format 跨ぎ dispatch は不要。
+DataStore entry は Artifact layer descriptor annotations に以下を持つ。
 
-したがって単一 Artifact の archive export は、その Artifact の material closure だけを self-contained にする。これは Git の `depth=1` に近い。history に含まれる parent Artifact は default export の dependency ではなく、同梱したい場合は history bundle export を明示する。
+| Annotation | 必須 | 内容 |
+|---|---|---|
+| `org.ommx.experiment.space` | yes | `experiment` / `run` |
+| `org.ommx.experiment.run_id` | run only | decimal run id |
+| `org.ommx.datastore.kind` | yes | entry kind |
+| `org.ommx.datastore.name` | yes | entry name |
+| `org.ommx.datastore.scalar_type` | scalar only | `int`, `float`, `string`, `bool`, `null` 等 |
+| `org.ommx.codec` | media only | external codec identifier, 必要な場合 |
 
-```jsonc
-{
-  "schemaVersion": 2,
-  "artifactType": "application/org.ommx.v1.artifact",
-  "config": {
-    "mediaType": "application/vnd.oci.empty.v1+json",
-    "digest": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
-    "size": 2
-  },
-  "layers": [ ... full DataStore snapshot ... ],
-  "subject": {
-    "mediaType": "application/vnd.oci.image.manifest.v1+json",
-    "digest": "sha256:...",
-    "size": 1234
-  }
-}
-```
+Experiment name、created time、OMMX version などの experiment-level metadata は manifest annotations または dedicated metadata entries に保存する。巨大な metadata は manifest annotation に載せず DataStore entry にする。
 
-manifest top-level の `mediaType` field は v2 SDK と同様に出力しない (`artifact_design.md` §2 (Manifest format))。Content-Type は push 時に transport が個別に付与する。`subject` descriptor の `mediaType` は OCI Image Manifest 固定 (§9.1)。
+MINTO 由来の `org.minto.*` annotation は新規書き込みでは使わない。既存 MINTO artifact の import compatibility が必要なら、compat loader が `org.minto.*` を読んで `org.ommx.*` entry model に変換する。
 
-### 9.2 Linear history
+### 7.3 Loading
 
-v3 初期は OCI v1.1 `subject` の単一 parent に寄せ、linear history のみを扱う。
+`Experiment.load(...)` は Artifact を読み、layer annotations から immutable Experiment view を復元する。
 
-| 概念 | Git | OCI v1.1 | OMMX |
-|---|---|---|---|
-| content address | blob | descriptor -> blob | Instance / Solution / SampleSet 等 |
-| snapshot | tree | manifest (`layers[]`) | 1 つの experiment state |
-| history node | commit with parent | manifest + `subject` | 派生 Artifact |
-| mutable ref | tag / branch | tag | digest primary の ref alias |
-| history traversal | `git log` | `subject` chain | `history()` |
+復元に必要な invariants:
 
-複数 experiment の統合は lineage merge としては扱わない。必要なら新規 Artifact の DataStore entry として入力 Artifact digest を列挙する。これは parent ではなく data reference である。
+- `org.ommx.experiment.space` がない OMMX layer は Experiment DataStore entry ではないため無視してよい。
+- run id は 0-based integer とし、欠番がある場合は empty run view を作るか、strict mode で error にする。
+- 同一 `(space, run_id, kind, name)` が複数 layer に現れた場合、manifest order の最後を採用するか error にするかを決める必要がある。Proposal としては committed full snapshot では重複を禁止し、loader は error にする。
 
-多 parent が必要になった場合は、後続 version で annotation 規約または OCI 側の標準機能を再検討する。
+## 8. Lineage Model
 
-### 9.3 Digest and tag
-
-Artifact の primary identifier は digest とする。API / metadata / provenance で再現性が必要な場所には digest を保存する。
-
-`experiment:latest`, `experiment:v2` のような tag は Local Registry / remote registry 上の mutable ref alias として扱う。OMMX の Experiment API では branch concept を前面に出さない。
-
-### 9.4 Lineage API
-
-v3 初期で提供する lineage 走査 API:
+Artifact lineage は OCI v1.1 `subject` で表す。v3 初期は single-parent linear history のみを扱う。
 
 | API | 方針 |
 |---|---|
 | `parent()` | `subject` を読む。0/1 件 |
 | `history()` | `subject` chain を root 方向に辿る |
-| `diff(other)` | manifest の layer descriptor 列と DataStore entry metadata を比較する |
+| `diff(other)` | DataStore entry set と layer descriptor を比較する |
 
-Referrers API を使った「この Artifact を parent に持つ子一覧」は初期必須 API にしない。remote registry compatibility に依存するため、manifest と `subject` だけで完結する parent 方向の走査を先に安定させる。
+`subject` は provenance / lineage 用リンクであり、Artifact 復元に必須の dependency ではない。各 manifest は full snapshot なので、単一 Artifact archive は parent chain なしで読める。
 
-## 10. Garbage Collection
+複数 experiment の統合は lineage merge としては扱わない。必要なら新規 Artifact の DataStore entry として入力 Artifact digest を列挙する。これは parent ではなく data reference である。
 
-長期運用では古い manifest や未参照 blob が Local Registry / remote registry / exported layout に残る。v3 では `git gc` 相当の `ommx artifact gc` command を提供する。
+Referrers API を使った child listing は初期必須 API にしない。remote registry compatibility に依存するため、manifest と `subject` だけで完結する parent 方向の走査を先に安定させる。
 
-GC の責務は以下とする。
+## 9. Garbage Collection
 
-- Local Registry では、IndexStore の refs、explicit protected digest、`subject` chain を root として到達可能な manifest / blob を辿る。
-- BlobStore に存在するが IndexStore から参照されない blob は orphan blob として扱う。publish 途中の blob を誤削除しないよう、grace period を置いてから削除候補にする。
-- IndexStore に manifest / blob record があるが BlobStore に bytes がない場合は corruption として report する。自動修復は remote / archive 等の recovery source がある場合だけ行う。
-- legacy archive / OCI directory layout backend では、manifest / tag / explicit root digest から到達可能な blob を辿り、未到達 blob を削除対象にする。
-- remote registry では registry 実装ごとに deletion / retention policy が異なるため、v3 初期は到達可能性解析と削除候補の列挙を優先する。実削除は registry capability を検出できる場合だけ行う。
-- `subject` chain、tag alias、user-specified protected digest を GC root として扱う。
-- Artifact API 側に到達可能性解析 hook を用意し、CLI command と将来の storage-specific GC が同じ解析を使えるようにする。
+`ommx artifact gc` 相当の command と、到達可能性解析に必要な API hook を提供する。
 
-GC は data model を変えない。full snapshot、digest primary、single-parent lineage、IndexStore + BlobStore の方針は GC 実装と独立している。
+GC roots:
 
-## 11. リスク
+- Local Registry refs
+- user-specified protected digests
+- active autosave / draft sessions
+- protected root から辿れる `subject` chain
 
-未着手領域 (§7, §8, §9, §10) に固有の未解決リスクのみ列挙する。実装済み milestone (Steps A → H) で実証的に解消したリスクは省略する。
+Local Registry GC:
 
-- **OCI 1.1 `artifactType` への registry / tool 対応差**: SQLite Local Registry は Image Manifest 一形式に閉じるが、`artifactType` field を読み取らない古い tooling では OMMX artifact が generic Image として表示される。push 先 registry が `artifactType` を保持して serve するかは registry 実装依存で、Referrers API 等の lineage 系機能の対応差も生じる。
-- **IndexStore / BlobStore の整合性**: DB と object store は分散 transaction ではない。blob upload -> DB transaction commit の順序、orphan blob GC、missing blob detection を実装で徹底する必要がある。
-- **minto user への影響**: API compatibility は維持しないため、取り込み時期と migration messaging が必要。
-- **TracerProvider 所有権**: 現行 `ommx.tracing` の lazy setup が provider を install する挙動は v3 方針と衝突するため見直す必要がある。
-- **Logger output の期待差分**: Phase 1 は post-hoc 表示なので、従来の live console output を期待する環境では明示的な説明が必要。
-- **Registry の OCI v1.1 対応差**: `subject` 非対応 registry に当たる可能性がある。初期方針は explicit error とし、fallback は実ケースが出てから設計する。
+- IndexStore の manifest / blob records から到達可能性を解析する。
+- BlobStore に存在するが IndexStore から参照されない blob は orphan blob として扱う。
+- publish / autosave 途中の blob を誤削除しないよう grace period を置く。
+- IndexStore record があるが BlobStore に bytes がない場合は corruption として report する。
 
-## 12. 実装ステータス
+Archive / exported OCI directory:
 
-本書は全項目が完了した時点で削除し、内容を Sphinx documentation / API reference / module rustdoc に統合する。後続 PR の TODO は PR description ではなく本章に集約する (merged PR は後から検索しづらく、本書は branch を跨いで update できるため)。
+- manifest / index / explicit root digest から到達可能 blob を辿る。
+- 未到達 blob を削除候補にする。
 
-### 12.1 Landed milestones
+Remote registry:
 
-ocipkg 依存撤去と Local Registry の SQLite + CAS 化までは完了している。各 PR の差分が user-facing 説明として `rust/ommx/doc/release_note.md` / `rust/ommx/doc/migration_guide.md` に、設計詳細は `rust/ommx/src/artifact/` 配下の module rustdoc に展開されている。
+- registry 実装ごとに deletion / retention policy が異なるため、v3 初期は到達可能性解析と削除候補の列挙を優先する。
+- 実削除は registry capability を検出できる場合だけ行う。
 
-| 範囲 | PR |
-|---|---|
-| SQLite Local Registry foundation (`SqliteIndexStore` + `FileBlobStore`、`RefConflictPolicy::{KeepExisting, Replace}`、`Artifact.load` lazy auto-migration) | #863, #864 |
-| Image Manifest 一本化方針 (`artifact_design.md` §2 (Manifest format)) と milestone 構成の design merge | #868 |
-| v3 dataset namespace 移行 (Step A — `rust/dataset/{miplib2017,qplib}` を `LocalArtifactBuilder` 経由に切替、`ghcr.io/jij-inc/ommx/v3/*` 名前空間に publish) | #866 |
-| `LocalArtifactBuilder` の OCI Image Manifest + `artifactType` + empty config 化 (Step B' — deprecated Artifact Manifest variants / validators の撤去) | #869 |
-| SQLite → remote native push (Step B — `oci-client` 採用、`docker_credential` ベースの credential 解決、`testcontainers` の auth e2e) | #867 |
-| Clippy hardening | #870 |
-| Legacy disk OCI dir cache 撤廃 (Step C — `Artifact.load` の remote/archive → SQLite 直結化、`Artifact.load_archive` の SQLite import 化、`ArtifactInner::Dir` 削除) | #871 |
-| Native remote transport + native tar archive (Steps D + F — `Artifact<Base: Image>` 撤去、`LocalArtifact::save` の native tar writer、`Anonymous` builder UX) | #872 |
-| `ocipkg::ImageName` → `ommx::artifact::ImageRef` への置換 (Step H — `oci_spec::distribution::Reference` 内包、v2 Docker Hub `registry-1.docker.io/` shim、legacy path helper を `local_registry::import::legacy` に閉じる) | #874 |
+GC は data model を変えない。full snapshot、digest primary、single-parent lineage、DataStore entry model とは独立した maintenance operation とする。
 
-Step H landing で `ocipkg` workspace dep と `ommx::ocipkg` re-export はすべて消滅。残る ocipkg surface は 0。
+## 10. Open Decisions
 
-### 12.2 残作業
+実装前に決める必要がある点:
 
-| 項目 | 仕様参照章 | 備考 |
-|---|---|---|
-| Lineage API (`parent()`, `history()`, `diff(other)`) | §9.4 | full snapshot + `subject` chain 前提。child 一覧 (Referrers API) は初期対象外 |
-| OTel trace layer 埋め込み | §8.4, §8.5 | Phase 1 は OTLP JSON のみ。global `TracerProvider` は設定しない (`trace="auto"` / `"required"` mode) |
-| Trace renderer | §8.6 | Phase 1 は post-hoc renderer、Phase 2 で scoped streaming |
-| `ommx artifact gc` と reachability analysis hook | §10 | Local Registry / 旧 archive / OCI directory layout を対象。remote registry は capability 検出できる場合のみ実削除 |
-| DataStore / Experiment / Run / EnvironmentInfo の OMMX core 取り込み | §7 | minto-equivalent functionality を OMMX-owned で再設計。API compat は破棄 (§4.3) |
+1. `Experiment` の Python module path と API 名
+   `ommx.experiment.Experiment` とするか、`ommx.artifact.Experiment` 配下に置くか。
+
+2. Context manager の commit semantics
+   `with Experiment(...)` 正常終了時に自動 commit するか、autosave のみ行い `commit()` は常に明示にするか。
+
+3. Autosave storage
+   Local Registry draft として実装するか、SDK-owned working directory として実装するか。
+
+4. Duplicate entry handling
+   Build phase の upsert は許容するが、committed manifest に重複を残すか、Seal 時に正規化して 1 entry にするか。
+
+5. `log_solver` の範囲
+   Python convenience として十分か、Rust SDK にも類似 concept を入れるか。
+
+6. Table extraction の責務
+   summary extraction を Rust core に持つか、Python-only view に寄せるか。
+
+7. Trace provider setup UX
+   Experiment core は global provider を install しない方針で固定する。一方、notebook helper / magic が UX のため provider を install することを許すか。
+
+8. Legacy MINTO artifact import
+   `org.minto.*` annotation を読む compatibility loader を OMMX に持つか、別 migration tool にするか。
+
+## 11. Implementation Tracks
+
+### Track A: Experiment / Run / DataStore core
+
+- `Experiment`, `Run`, immutable loaded `ExperimentView` を設計する。
+- entry model と typed storage API を実装する。
+- `EnvironmentInfo` を first-class entry として実装する。
+- Build phase upsert と Seal phase normalization を実装する。
+- Python tests で MINTO の主要 UX を再現する。
+
+### Track B: Artifact mapping and table view
+
+- entry を Artifact layer に materialize する annotation schema を実装する。
+- Artifact から Experiment view を復元する loader を実装する。
+- `get_run_table()` / experiment-level table view を実装する。
+- `org.minto.*` compatibility の扱いを決め、必要なら import path を実装する。
+
+### Track C: OTel trace integration
+
+- Experiment / Run / solver / build / load / push span schema を実装する。
+- `log_*` record event を実装する。
+- `trace="auto" | "required" | False` を実装する。
+- global `TracerProvider` を暗黙に設定しないことを tests で固定する。
+
+### Track D: Trace layer and renderer
+
+- OTLP JSON trace layer を Artifact に埋め込む。
+- `artifact.get_trace() -> TraceResult` を実装する。
+- post-hoc text tree renderer を Experiment style に対応させる。
+- Chrome Trace Event Format export を derived view として提供する。
+
+### Track E: Lineage API
+
+- `subject` を使った `parent()` / `history()` を実装する。
+- DataStore entry set に基づく `diff(other)` を実装する。
+- single-parent linear history の制約を tests で固定する。
+
+### Track F: GC
+
+- reachability analysis hook を実装する。
+- Local Registry GC の dry-run / report / delete flow を実装する。
+- archive / OCI directory GC の候補列挙を実装する。
+- remote registry は capability detection と dry-run を優先する。
