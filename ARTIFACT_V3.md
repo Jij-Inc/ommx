@@ -228,8 +228,10 @@ Experiment state は名前付き Record set、Run parameter table、Run attribut
 | `kind` | `metadata`, `object`, `instance`, `solution`, `sampleset`, `diagnostic`, `media` |
 | `name` | space + kind 内の user-facing key |
 | `content` | scalar value、serialized bytes、または blob descriptor への参照 |
-| `media_type` | Artifact layer media type。単独 layer にならない Record では aggregate payload 内の type 情報でもよい |
+| `media_type` | Artifact layer media type。`media` Record では user / external package が指定する。単独 layer にならない Record では aggregate payload 内の type 情報でもよい |
 | `annotations` | Artifact descriptor annotations に投影される metadata |
+
+`media` Record は、OMMX core が schema を知らない user-defined payload の escape hatch とする。caller は bytes と `media_type`、必要なら codec identifier や annotations を指定できる。OMMX core は unknown media type を decode せず、digest / size / media type / annotations を Artifact descriptor として保持する。
 
 Run parameter table は Record とは別に、`run_id` と parameter name を key にした scalar table として持つ。Run attributes は `run_id` を key にした structured attributes であり、初期設計では実行環境属性を含む。
 
@@ -272,9 +274,9 @@ Core が直接扱う Record:
 | `solution` | `ommx.v1.Solution` bytes | table summary を持つ |
 | `sampleset` | `ommx.v1.SampleSet` bytes | table summary を持つ |
 | `diagnostic` | JSON または bytes | solver / adapter diagnostic evidence |
-| `media` | 任意の bytes | external package 用 |
+| `media` | 任意の bytes + user-specified media type | user / external package が所有する opaque payload |
 
-OMMX core は `jijmodeling` を import しない。domain-specific problem storage は external package が `media_type` と codec を登録して提供する。
+OMMX core は `jijmodeling` を import しない。domain-specific problem storage は external package が `media_type` と codec を登録して提供する。例えば `jijmodeling` の model payload は、`jijmodeling` package が media type / codec を所有し、OMMX には `media` Record として渡す。OMMX は descriptor を保持するだけで、parse / validation / round-trip guarantee はその media type owner の責務にする。
 
 ### 4.4 Run 実行環境属性
 
@@ -483,9 +485,11 @@ Record layer は Artifact layer descriptor annotations に以下を持つ。
 | `org.ommx.record.kind` | yes | Record kind |
 | `org.ommx.record.name` | yes | Record name |
 | `org.ommx.record.scalar_type` | scalar record only | `int`, `float`, `string`, `bool`, `null` 等 |
-| `org.ommx.codec` | media only | external codec identifier, 必要な場合 |
+| `org.ommx.codec` | optional | external codec identifier, 必要な場合 |
 
 Run parameter table と Run attributes は、必ずしも 1 cell / attribute = 1 layer descriptor にならない。run parameter の key-level metadata や実行環境属性は aggregate payload の内部 schema に持たせてよい。Experiment metadata を manifest annotation に物理化する場合も、`parameter` ではなく `metadata` として復元する。
+
+`media` Record の descriptor `mediaType` は caller / external package が指定した値をそのまま使う。OMMX core は unknown media type を拒否せず、`org.ommx.record.kind=media`、`org.ommx.record.name`、必要なら `org.ommx.codec` を保持して opaque bytes として扱う。
 
 Experiment name、created time、OMMX version などの experiment-level metadata は manifest annotations または dedicated metadata Record に保存する。巨大な metadata は manifest annotation に載せず Record にする。
 
