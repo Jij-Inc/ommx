@@ -298,6 +298,7 @@ Experiment / Artifact の変更可能性は 3 相に分ける。
 デフォルトは `1 Experiment = 1 manifest` とする。
 
 - `Experiment.commit()` は実験全体の final snapshot を作る。
+- Local Registry に public Artifact manifest / tag / ref として現れるのは `commit()` 時点である。
 - `with Experiment(...)` は正常終了時に自動 commit してよいが、明示 `commit()` との関係を API で明確にする。
 - `Run` 終了ごとに manifest を切る挙動は `commit_per_run=True` 相当の opt-in にする。
 - デフォルトでは run ごとに commit しない。
@@ -319,7 +320,9 @@ Experiment / Artifact の変更可能性は 3 相に分ける。
 - autosave storage は Local Registry の draft area または SDK-owned working directory として扱う。
 - autosave draft から final Artifact を作るときも、manifest は full snapshot である。
 
-autosave の storage format は user-facing compatibility surface にしない。directory layout compatibility より、復元可能性と final Artifact semantics を優先する。
+`log_*` 時点で大きな Instance / solver log / diagnostics payload を BlobStore や draft area に spill してよいが、それは未 publish の draft data である。public ref に到達可能な Artifact manifest は `commit()` まで作らない。
+
+autosave の storage format は user-facing compatibility surface にしない。directory layout compatibility より、復元可能性と final Artifact semantics を優先する。commit されずに残った draft metadata や、draft / spill のために作られた未到達 blob は GC の対象になる。
 
 ## 6. OTel / Trace モデル
 
@@ -502,6 +505,7 @@ Local Registry GC:
 
 - IndexStore の manifest / blob records から到達可能性を解析する。
 - BlobStore に存在するが IndexStore から参照されない blob は orphan blob として扱う。
+- `log_*` 時点の spill や autosave draft によって作られたが、final `commit()` に到達しなかった blob / draft metadata を削除候補にする。
 - publish / autosave 途中の blob を誤削除しないよう grace period を置く。
 - IndexStore record があるが BlobStore に bytes がない場合は corruption として report する。
 
