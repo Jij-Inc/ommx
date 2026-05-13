@@ -480,7 +480,7 @@ impl SqliteIndexStore {
     /// (32 hex chars) on the first `init_schema` call and stored
     /// verbatim in the `ommx_local_registry_metadata` table.
     /// Anonymous artifact ref synthesis truncates the stored value to
-    /// the first [`super::super::manifest::ANONYMOUS_REGISTRY_ID_HOST_LEN`]
+    /// the first `super::super::manifest::ANONYMOUS_REGISTRY_ID_HOST_LEN`
     /// hex chars for the hostname prefix
     /// (`<registry-id>.ommx.local/anonymous`), so two artifacts built
     /// against the same registry share a prefix and can be told apart

@@ -319,7 +319,7 @@ impl LocalArtifactBuilder {
     /// artifacts are designed to be transient and unique by
     /// timestamp + nonce; collision recovery is "silently overwrite
     /// the older entry" rather than "fail with a ref conflict". The
-    /// 48-bit nonce in [`anonymous_artifact_image_name`] makes
+    /// 48-bit nonce in `anonymous_artifact_image_name` makes
     /// collisions astronomically rare in practice, and the policy
     /// override is kept as defense-in-depth. Callers who want
     /// collision detection cannot opt out — pick an explicit name
@@ -738,9 +738,9 @@ pub fn is_anonymous_artifact_ref_name(name: &str) -> bool {
 }
 
 /// True iff `tag` matches the `YYYYMMDDTHHMMSS-<nonce>` shape that
-/// [`anonymous_artifact_image_name`] generates: 15 timestamp chars
+/// `anonymous_artifact_image_name` generates: 15 timestamp chars
 /// (digits with `T` at position 8), `-` separator, and
-/// [`ANONYMOUS_TAG_NONCE_HEX_LEN`] lowercase hex chars. Combined with
+/// `ANONYMOUS_TAG_NONCE_HEX_LEN` lowercase hex chars. Combined with
 /// [`is_anonymous_artifact_ref_name`] this gives `prune-anonymous` a
 /// structural match instead of a substring match.
 pub fn is_anonymous_artifact_tag(tag: &str) -> bool {

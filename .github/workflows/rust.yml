@@ -56,6 +56,22 @@ jobs:
       - name: Run tests
         run: cargo test
 
+  doc:
+    # Gate cargo doc against broken rustdoc: any unresolved intra-doc
+    # link or "public documentation links to private item" warning
+    # becomes a build error. Without this gate those warnings are
+    # only caught by manually running `cargo doc` locally.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-test-environment
+
+      - name: Check cargo doc has no warnings
+        run: task rust:doc:check
+
   auth-e2e:
     # End-to-end coverage of the remote-artifact push pipeline and
     # the three-tier credential resolver in

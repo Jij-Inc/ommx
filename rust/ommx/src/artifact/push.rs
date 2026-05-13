@@ -17,7 +17,7 @@ use oci_spec::image::Descriptor;
 
 impl LocalArtifact {
     /// Push this artifact to its OCI registry. Credentials are
-    /// resolved by [`super::remote_transport`]'s three-tier chain:
+    /// resolved by `super::remote_transport`'s three-tier chain:
     /// `OMMX_BASIC_AUTH_*` env vars (explicit override) →
     /// `~/.docker/config.json` plus credential helpers
     /// (`docker-credential-gcloud`, …) → anonymous. A workstation

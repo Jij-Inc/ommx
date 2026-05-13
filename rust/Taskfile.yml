@@ -8,6 +8,13 @@ tasks:
     cmds:
       - cargo doc --no-deps -p ommx {{.CLI_ARGS}}
 
+  doc:check:
+    desc: Run cargo doc with warnings-as-errors (CI gate against broken rustdoc)
+    env:
+      RUSTDOCFLAGS: -D warnings
+    cmds:
+      - cargo doc --no-deps -p ommx
+
   test:
     desc: Run tests for Rust SDK
     cmds:
