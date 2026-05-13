@@ -41,7 +41,7 @@ trace = artifact.get_trace()
 この UX で保証したいこと:
 
 - experiment 全体のデータと run 固有のデータを明確に分離できる。
-- dataset / source problem / baseline configuration / environment は experiment space に metadata / object / environment として記録できる。
+- dataset / source problem / baseline configuration は experiment space に metadata / object として記録できる。
 - run ごとに変わる formulation / solver kwargs などの parameter を Run table の列として記録し、後から比較できる。
 - Instance、solution、sample set、object、diagnostics は Experiment / Run のどちらにも Record として記録できる。
 - parameter は他の Record kind とは区別し、Experiment が持つ Run 一覧に付随する表形式データとして扱う。
@@ -60,16 +60,18 @@ MINTO 互換 API は維持しない。ただし、以下のユーザー体験は
 
 MINTO の中心 UX は、実験全体に属するデータと run ごとに属するデータを分ける 2 つの保存空間モデルである。
 
-このモデルは MLflow の Experiment / Run 階層と似ているが、OMMX では Experiment を単なる run のグループにはしない。数理最適化の実験では、同じ source problem から定式化を変える、一部の制約を無効化する、relaxation を変える、solver parameters を変える、といった複数 run を比較することが多い。したがって run 固有の Instance は自然に Run space に記録される。Experiment space は全 run に共通する source data、baseline、dataset identity、environment、analysis context を持ち、共有入力、複数試行、比較 table、共有 Artifact を 1 つの experiment bundle として扱う。
+このモデルは MLflow の Experiment / Run 階層と似ているが、OMMX では Experiment を単なる run のグループにはしない。数理最適化の実験では、同じ source problem から定式化を変える、一部の制約を無効化する、relaxation を変える、solver parameters を変える、といった複数 run を比較することが多い。したがって run 固有の Instance は自然に Run space に記録される。Experiment space は全 run に共通する source data、baseline、dataset identity、analysis context を持ち、共有入力、複数試行、比較 table、共有 Artifact を 1 つの experiment bundle として扱う。
 
 | 保存空間 | 目的 | 例 |
 |---|---|---|
-| Experiment space | 全 run で共有される context | dataset name, source problem, baseline config, environment |
-| Run space | 各 run の定式化、条件、結果 | run parameters, candidate instance, disabled constraints, solution, sample set |
+| Experiment space | 全 run で共有される context | dataset name, source problem, baseline config |
+| Run space | 各 run の定式化、条件、実行環境、結果 | run parameters, candidate instance, disabled constraints, environment, solution, sample set |
 
 OMMX では `log_global_*` という命名は採用しない。Experiment object に対する `exp.log_*` は experiment space に、Run object に対する `run.log_*` は run space に記録する。保存先は receiver で決まり、暗黙の context では決めない。ただし `parameter` は Record kind ではなく Run table の列データであり、Experiment には `exp.log_parameter` を持たせない。
 
-Record kind は space に依存しない。`metadata`, `object`, `instance`, `solution`, `sampleset`, `environment`, `diagnostic`, `media` はすべて Experiment space / Run space のどちらにも置ける。例えば全 run で共有する source Instance は Experiment space に、実際に各 run で解いた candidate Instance は Run space に置く。
+Record kind は基本的に space に依存しない。`metadata`, `object`, `instance`, `solution`, `sampleset`, `diagnostic`, `media` は Experiment space / Run space のどちらにも置ける。例えば全 run で共有する source Instance は Experiment space に、実際に各 run で解いた candidate Instance は Run space に置く。
+
+例外として `environment` は Run scope 専用の Record とする。保存済み Experiment から後で新しい Run を追加できる以上、実行環境は Experiment 全体の不変属性ではない。Experiment を作成した環境や import / load した環境を残したい場合は、`environment` ではなく metadata / provenance として扱う。
 
 ```python
 exp.log_metadata("dataset", "miplib2017")      # experiment space
@@ -217,7 +219,7 @@ Experiment state は名前付き Record set と Run parameter table からなる
 
 物理化戦略は kind ごとに変えてよい。`log_instance` / `log_solution` / `log_sample` / 大きな diagnostics payload は `log_*` 時点で BlobStore に保存し、Record が digest / size / media type / annotations を持つ descriptor reference になる設計が自然である。一方、`run.log_parameter` のような小さな scalar は Record にはせず、Experiment が持つ Run 一覧に付随した表形式データとして扱う。Experiment scope の scalar context は `parameter` ではなく `metadata` として扱い、必要なら manifest annotation または Experiment metadata JSON に物理化する。この節の field は論理モデルであり、最終的な Rust struct の field を固定するものではない。
 
-各 Record は概念的に space、kind、name、content、metadata を持つ。Record kind は space によって制限しない。すべての Record kind は Experiment scope / Run scope のどちらにも追加できる。`parameter` は Record ではないため、この規則の対象外である。
+各 Record は概念的に space、kind、name、content、metadata を持つ。Record kind は原則として space によって制限しない。ただし `environment` は Run scope 専用である。`parameter` は Record ではないため、この規則の対象外である。
 
 | Field | 内容 |
 |---|---|
@@ -269,7 +271,7 @@ Core が直接扱う Record:
 | `instance` | `ommx.v1.Instance` bytes | public API は `ommx.v1` |
 | `solution` | `ommx.v1.Solution` bytes | table summary を持つ |
 | `sampleset` | `ommx.v1.SampleSet` bytes | table summary を持つ |
-| `environment` | `EnvironmentInfo` JSON | OTel Resource への投影元 |
+| `environment` | `EnvironmentInfo` JSON | run scope only。OTel Resource への投影元 |
 | `diagnostic` | JSON または bytes | solver / adapter diagnostic evidence |
 | `media` | 任意の bytes | external package 用 |
 
@@ -277,7 +279,9 @@ OMMX core は `jijmodeling` を import しない。domain-specific problem stora
 
 ### 4.4 EnvironmentInfo
 
-`EnvironmentInfo` は Artifact の first-class Record として保存する。OTel `Resource` はその投影であり、情報本体ではない。
+`EnvironmentInfo` は Run scope の first-class Record として保存する。OTel `Resource` はその投影であり、情報本体ではない。
+
+Run は後から追加実行できるため、実行環境は Experiment 全体に固定できない。`EnvironmentInfo` は各 Run の実行環境を表す。Experiment 作成時の SDK / host 情報を残す必要がある場合は、実行環境ではなく provenance metadata として保存する。
 
 保存対象:
 
