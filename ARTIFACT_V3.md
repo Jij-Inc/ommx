@@ -119,6 +119,8 @@ Experiment / Artifact の変更可能性は 3 相に分ける。
 
 `1 Experiment commit = 1 Artifact manifest` をデフォルトとする。`Run` 終了ごとに manifest を切る挙動は初期設計では提供しない。必要になった場合も opt-in とし、通常の比較 UX を複雑にしない。
 
+Run は Artifact sub manifest ではなく、Experiment manifest 内の `run_id` で束ねられる logical entity とする。Run の保存実体は、Run parameter table の row、Run attributes の row、`space=run` / `run_id=N` annotation を持つ Record layer、trace layer 内の `ommx.run` span である。
+
 ### 3.3 Run context manager
 
 `with exp.run() as run:` は Run lifecycle を表す。
@@ -495,6 +497,18 @@ Experiment であることは、OMMX Artifact の profile / kind として表す
 ### 7.2 完全な descriptor set としての manifest
 
 各 committed Artifact manifest は、blob bytes の保存タイミングを表すものではない。`layers[]` には、その時点の Experiment view を復元するために必要な typed payload、aggregate JSON、index JSON などの descriptor を載せる。
+
+Run は manifest の子 manifest ではなく、Experiment manifest 内の layer 群から復元する。初期設計では、少なくとも以下の aggregate payload を通常の Artifact layer として載せる。
+
+| Layer | 目的 | 備考 |
+|---|---|---|
+| Experiment index JSON | run list、Record descriptor index、table reconstruction hints | `application/org.ommx.v1.experiment+json` など |
+| Run parameter table JSON | run ごとの scalar parameter table | 1 cell = 1 layer にはしない |
+| Run attributes JSON | run status、elapsed time、実行環境属性など | 実行環境は Record ではない |
+
+これらは manifest annotation だけで表現しない。Manifest annotations は Artifact kind / schema / small metadata を表すために使い、Run table や Run attributes の本体は layer payload として保存する。
+
+Run-scoped Record は個別 layer または aggregate layer として保存し、descriptor annotations に `org.ommx.experiment.space=run` と `org.ommx.experiment.run_id=<id>` を持たせる。`Experiment.load(...)` は aggregate payload と Record layer annotations を読んで `run_id` ごとに group 化し、Run view を復元する。
 
 Instance / Solution / diagnostics などの payload blob は `log_*` 時点で Local Registry の BlobStore / draft area、または SDK-owned working directory に逐次保存される。commit が行うのは、それらの blob と、Run parameter table / Run attributes JSON など commit 時に materialize する payload を含む最終 Experiment state を seal し、復元に必要な descriptor set を immutable manifest として固定することである。
 
