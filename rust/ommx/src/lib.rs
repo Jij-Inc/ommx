@@ -18,6 +18,7 @@ pub use prost::Message;
 pub mod artifact;
 #[cfg(feature = "remote-artifact")]
 pub mod dataset;
+pub mod experiment;
 pub(crate) mod logical_memory;
 pub(crate) use logical_memory::impl_logical_memory_profile;
 pub use logical_memory::MemoryProfile;
