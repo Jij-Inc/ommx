@@ -367,7 +367,7 @@ fn main() -> Result<()> {
                         to_remove.len()
                     );
                     for r in &to_remove {
-                        println!("  {}:{}  →  {}", r.name, r.reference, r.manifest_digest);
+                        println!("  {}:{}  →  {}", r.name, r.reference, r.descriptor.digest());
                     }
                     println!("(--dry-run: registry unchanged)");
                 } else {
