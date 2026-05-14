@@ -1,10 +1,9 @@
 //! v3 OMMX Local Registry.
 //!
-//! The Local Registry stores artifacts as content-addressed blobs in
-//! [`FileBlobStore`] plus index records in [`SqliteIndexStore`]. It
-//! does **not** keep anything in OCI Image Layout (`oci-layout` +
-//! `index.json` + `blobs/`) form internally; that format is purely an
-//! interchange boundary handled in the `import` submodule.
+//! The Local Registry stores artifact bytes as content-addressed blobs
+//! in [`FileBlobStore`]. [`SqliteIndexStore`] is the concurrency-safe
+//! equivalent of OCI `index.json`: it stores refs and their target
+//! manifest descriptors, not a cache of blobs, manifests, or layers.
 //!
 //! Two distinct layers live here:
 //!
@@ -32,9 +31,7 @@ mod types;
 #[cfg(test)]
 mod tests;
 
-use anyhow::{Context, Result};
 use chrono::Utc;
-use std::collections::HashMap;
 
 pub use crate::artifact::digest::sha256_digest;
 pub(crate) use crate::artifact::digest::{validate_digest, ValidatedDigest};
@@ -51,30 +48,13 @@ pub use import::oci_dir::{
 };
 #[cfg(feature = "remote-artifact")]
 pub use import::remote::pull_image;
-pub use index::{PublishOutcome, SqliteIndexStore};
+pub use index::SqliteIndexStore;
 pub use registry::LocalRegistry;
 pub use types::{
-    BlobRecord, LayerRecord, ManifestRecord, RefConflictPolicy, RefRecord, RefUpdate,
-    FILE_BLOB_STORE_DIR_NAME, OCI_IMAGE_REF_NAME_ANNOTATION, SQLITE_INDEX_FILE_NAME,
+    RefConflictPolicy, RefRecord, RefUpdate, FILE_BLOB_STORE_DIR_NAME,
+    OCI_IMAGE_REF_NAME_ANNOTATION, SQLITE_INDEX_FILE_NAME,
 };
 
 fn now_rfc3339() -> String {
     Utc::now().to_rfc3339()
-}
-
-/// Encode an optional annotation map as a stable JSON string.
-///
-/// Stable (key-sorted) encoding is required because the same annotation
-/// map must round-trip to the same bytes regardless of insertion order;
-/// otherwise the digest of any blob whose descriptor includes
-/// annotations would depend on a HashMap iteration order, and rows in
-/// `manifests.annotations_json` / `manifest_layers.annotations_json`
-/// would not be comparable across the legacy import path and the v3
-/// native build path.
-pub(super) fn annotations_json(annotations: Option<&HashMap<String, String>>) -> Result<String> {
-    match annotations {
-        Some(annotations) => String::from_utf8(crate::artifact::stable_json_bytes(annotations)?)
-            .context("Stable JSON bytes are not UTF-8"),
-        None => Ok("{}".to_string()),
-    }
 }

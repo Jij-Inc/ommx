@@ -1,41 +1,33 @@
 use super::{
-    now_rfc3339, validate_digest, BlobRecord, LayerRecord, ManifestRecord, RefConflictPolicy,
-    RefRecord, RefUpdate, SQLITE_INDEX_FILE_NAME,
+    now_rfc3339, validate_digest, RefConflictPolicy, RefRecord, RefUpdate, SQLITE_INDEX_FILE_NAME,
 };
 use crate::artifact::ImageRef;
 use anyhow::{ensure, Context, Result};
-use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
+use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, MediaType};
+use rusqlite::{params, types::Type, Connection, OptionalExtension, TransactionBehavior};
 use std::{
+    collections::HashMap,
     fs,
     path::Path,
+    str::FromStr,
     sync::{Mutex, MutexGuard},
     time::Duration,
 };
 
-/// Public outcome of [`SqliteIndexStore::publish_artifact_atomic`].
-///
-/// `ref_update` is `None` when the caller did not pass an `image_name`
-/// (digest-only publish, no SQLite ref written). Otherwise it carries
-/// the [`RefUpdate`] for that ref.
-#[non_exhaustive]
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PublishOutcome {
-    pub ref_update: Option<RefUpdate>,
-}
-
 /// SQLite Local Registry schema version. Bumped whenever the schema
 /// changes in a way that needs distinct identification (new tables,
-/// new columns, semantic changes to existing rows). The current
-/// migration strategy is "open the registry and let `init_schema` run
-/// `CREATE TABLE IF NOT EXISTS` for every table"; bumping the version
-/// records the change so future incompatible migrations (column drop,
-/// type change) can branch on the stored version. The SQLite Local
+/// new columns, semantic changes to existing rows). The SQLite Local
 /// Registry has not been released yet, so incompatible development
 /// schema changes fail fast instead of carrying an in-place migration.
-const SCHEMA_VERSION: i64 = 2;
+const SCHEMA_VERSION: i64 = 3;
 const SQLITE_BUSY_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// SQLite-backed index store for the v3 Local Registry.
+///
+/// This store is the concurrency-safe equivalent of an OCI `index.json`:
+/// it stores refs and their target manifest descriptors. Content bytes
+/// live in [`super::FileBlobStore`], and manifests / layers are read
+/// from that CAS by descriptor digest instead of being cached here.
 ///
 /// `rusqlite::Connection` is `Send` but `!Sync`, so it lives behind a
 /// [`Mutex`] here. That makes [`SqliteIndexStore`] (and the enclosing
@@ -80,12 +72,9 @@ impl SqliteIndexStore {
 
     /// Acquire the connection guard. If the mutex was poisoned by an
     /// earlier panic, fall back to the wrapped `Connection` (rusqlite's
-    /// internal state isn't damaged by Rust-level poisoning — the lock
+    /// internal state isn't damaged by Rust-level poisoning; the lock
     /// flag just records that some other thread paniced while holding
-    /// it) and log a warning. Better than letting one rogue panic
-    /// abort every subsequent registry call, which matters for the
-    /// Python bindings where the same process may run many independent
-    /// operations.
+    /// it) and log a warning.
     fn lock(&self) -> MutexGuard<'_, Connection> {
         match self.conn.lock() {
             Ok(guard) => guard,
@@ -109,218 +98,50 @@ impl SqliteIndexStore {
             .context("Failed to read local registry schema version")
     }
 
-    pub fn put_blob(&self, record: &BlobRecord) -> Result<()> {
-        let conn = self.lock();
-        Self::put_blob_in(&conn, record)
-    }
-
-    /// Connection-scoped variant of [`Self::put_blob`]. Lets callers
-    /// compose blob inserts with manifest / ref inserts inside one
-    /// transaction (see [`Self::publish_artifact_atomic`]). The
-    /// existence-and-size guard is run inside the same `conn`/`tx`
-    /// so the check + insert are read-after-write consistent.
-    fn put_blob_in(conn: &Connection, record: &BlobRecord) -> Result<()> {
-        validate_digest(&record.digest)?;
-        if let Some(existing_size) = conn
-            .query_row(
-                "SELECT size FROM blobs WHERE digest = ?1",
-                params![record.digest],
-                |row| read_u64(row, 0),
-            )
-            .optional()
-            .context("Failed to query existing blob size")?
-        {
-            ensure!(
-                existing_size == record.size,
-                "Blob size mismatch for digest {}: existing={}, new={}",
-                record.digest,
-                existing_size,
-                record.size
-            );
-        }
-        let now = now_rfc3339();
-        conn.execute(
-            r#"
-            INSERT INTO blobs (digest, size, created_at, last_verified_at)
-            VALUES (?1, ?2, ?3, ?4)
-            ON CONFLICT(digest) DO UPDATE SET
-                size = excluded.size,
-                last_verified_at = excluded.last_verified_at
-            "#,
-            params![
-                record.digest,
-                i64::try_from(record.size).context("Blob size does not fit in i64")?,
-                now,
-                record.last_verified_at,
-            ],
-        )?;
-        Ok(())
-    }
-
-    pub fn get_blob(&self, digest: &str) -> Result<Option<BlobRecord>> {
-        validate_digest(digest)?;
-        self.lock()
-            .query_row(
-                r#"
-                SELECT digest, size, last_verified_at
-                FROM blobs
-                WHERE digest = ?1
-                "#,
-                params![digest],
-                |row| {
-                    Ok(BlobRecord {
-                        digest: row.get(0)?,
-                        size: read_u64(row, 1)?,
-                        last_verified_at: row.get(2)?,
-                    })
-                },
-            )
-            .optional()
-            .context("Failed to query blob record")
-    }
-
-    pub fn put_manifest(&self, record: &ManifestRecord, layers: &[LayerRecord]) -> Result<()> {
+    pub fn put_ref(&self, name: &str, reference: &str, descriptor: &Descriptor) -> Result<()> {
         let mut conn = self.lock();
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        Self::put_manifest_in(&tx, record, layers)?;
+        Self::put_ref_in(&tx, name, reference, descriptor)?;
         tx.commit()?;
         Ok(())
-    }
-
-    /// Connection-scoped variant of [`Self::put_manifest`]. Caller is
-    /// responsible for opening / committing the transaction so the
-    /// manifest insert can be composed with other writes (blob
-    /// records, ref publish) atomically.
-    fn put_manifest_in(
-        conn: &Connection,
-        record: &ManifestRecord,
-        layers: &[LayerRecord],
-    ) -> Result<()> {
-        validate_digest(&record.digest)?;
-        conn.execute(
-            r#"
-            INSERT INTO manifests (digest, media_type, size, subject_digest, annotations_json, created_at)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-            ON CONFLICT(digest) DO UPDATE SET
-                media_type = excluded.media_type,
-                size = excluded.size,
-                subject_digest = excluded.subject_digest,
-                annotations_json = excluded.annotations_json
-            "#,
-            params![
-                record.digest,
-                record.media_type,
-                i64::try_from(record.size).context("Manifest size does not fit in i64")?,
-                record.subject_digest,
-                record.annotations_json,
-                record.created_at,
-            ],
-        )?;
-        conn.execute(
-            "DELETE FROM manifest_layers WHERE manifest_digest = ?1",
-            params![record.digest],
-        )?;
-        for layer in layers {
-            ensure!(
-                layer.manifest_digest == record.digest,
-                "Layer manifest digest mismatch: {} != {}",
-                layer.manifest_digest,
-                record.digest
-            );
-            validate_digest(&layer.digest)?;
-            conn.execute(
-                r#"
-                INSERT INTO manifest_layers
-                    (manifest_digest, position, digest, media_type, size, annotations_json)
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-                "#,
-                params![
-                    layer.manifest_digest,
-                    i64::from(layer.position),
-                    layer.digest,
-                    layer.media_type,
-                    i64::try_from(layer.size).context("Layer size does not fit in i64")?,
-                    layer.annotations_json,
-                ],
-            )?;
-        }
-        Ok(())
-    }
-
-    pub fn get_manifest(&self, digest: &str) -> Result<Option<ManifestRecord>> {
-        validate_digest(digest)?;
-        self.lock()
-            .query_row(
-                r#"
-                SELECT digest, media_type, size, subject_digest, annotations_json, created_at
-                FROM manifests
-                WHERE digest = ?1
-                "#,
-                params![digest],
-                |row| {
-                    Ok(ManifestRecord {
-                        digest: row.get(0)?,
-                        media_type: row.get(1)?,
-                        size: read_u64(row, 2)?,
-                        subject_digest: row.get(3)?,
-                        annotations_json: row.get(4)?,
-                        created_at: row.get(5)?,
-                    })
-                },
-            )
-            .optional()
-            .context("Failed to query manifest record")
-    }
-
-    pub fn get_layers(&self, manifest_digest: &str) -> Result<Vec<LayerRecord>> {
-        validate_digest(manifest_digest)?;
-        let conn = self.lock();
-        let mut stmt = conn.prepare(
-            r#"
-            SELECT manifest_digest, position, digest, media_type, size, annotations_json
-            FROM manifest_layers
-            WHERE manifest_digest = ?1
-            ORDER BY position
-            "#,
-        )?;
-        let rows = stmt.query_map(params![manifest_digest], |row| {
-            Ok(LayerRecord {
-                manifest_digest: row.get(0)?,
-                position: read_u32(row, 1)?,
-                digest: row.get(2)?,
-                media_type: row.get(3)?,
-                size: read_u64(row, 4)?,
-                annotations_json: row.get(5)?,
-            })
-        })?;
-        let mut out = Vec::new();
-        for row in rows {
-            out.push(row?);
-        }
-        Ok(out)
-    }
-
-    pub fn put_ref(&self, name: &str, reference: &str, manifest_digest: &str) -> Result<()> {
-        let conn = self.lock();
-        Self::put_ref_in(&conn, name, reference, manifest_digest)
     }
 
     fn put_ref_in(
         conn: &Connection,
         name: &str,
         reference: &str,
-        manifest_digest: &str,
+        descriptor: &Descriptor,
     ) -> Result<()> {
-        validate_digest(manifest_digest)?;
+        validate_digest(descriptor.digest().as_ref())?;
+        let annotations_json = descriptor_annotations_json(descriptor)?;
         conn.execute(
             r#"
-            INSERT INTO refs (name, reference, manifest_digest, updated_at)
-            VALUES (?1, ?2, ?3, ?4)
+            INSERT INTO refs (
+                name,
+                reference,
+                manifest_media_type,
+                manifest_digest,
+                manifest_size,
+                manifest_annotations_json,
+                updated_at
+            )
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
             ON CONFLICT(name, reference) DO UPDATE SET
+                manifest_media_type = excluded.manifest_media_type,
                 manifest_digest = excluded.manifest_digest,
+                manifest_size = excluded.manifest_size,
+                manifest_annotations_json = excluded.manifest_annotations_json,
                 updated_at = excluded.updated_at
             "#,
-            params![name, reference, manifest_digest, now_rfc3339()],
+            params![
+                name,
+                reference,
+                descriptor.media_type().to_string(),
+                descriptor.digest().to_string(),
+                i64::try_from(descriptor.size()).context("Manifest size does not fit in i64")?,
+                annotations_json,
+                now_rfc3339(),
+            ],
         )?;
         Ok(())
     }
@@ -329,50 +150,69 @@ impl SqliteIndexStore {
         &self,
         name: &str,
         reference: &str,
-        manifest_digest: &str,
+        descriptor: &Descriptor,
         policy: RefConflictPolicy,
     ) -> Result<RefUpdate> {
-        let conn = self.lock();
-        Self::put_ref_with_policy_in(&conn, name, reference, manifest_digest, policy)
+        let mut conn = self.lock();
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let update = Self::put_ref_with_policy_in(&tx, name, reference, descriptor, policy)?;
+        tx.commit()?;
+        Ok(update)
     }
 
-    /// Connection-scoped variant of [`Self::put_ref_with_policy`].
-    /// Lets callers compose ref publish with blob / manifest inserts
-    /// inside one transaction (see [`Self::publish_artifact_atomic`]).
     fn put_ref_with_policy_in(
         conn: &Connection,
         name: &str,
         reference: &str,
-        manifest_digest: &str,
+        descriptor: &Descriptor,
         policy: RefConflictPolicy,
     ) -> Result<RefUpdate> {
-        validate_digest(manifest_digest)?;
+        validate_digest(descriptor.digest().as_ref())?;
         if policy == RefConflictPolicy::Replace {
-            return Self::replace_ref_in(conn, name, reference, manifest_digest);
+            return Self::replace_ref_in(conn, name, reference, descriptor);
         }
 
+        let annotations_json = descriptor_annotations_json(descriptor)?;
         let inserted = conn.execute(
             r#"
-            INSERT INTO refs (name, reference, manifest_digest, updated_at)
-            VALUES (?1, ?2, ?3, ?4)
+            INSERT INTO refs (
+                name,
+                reference,
+                manifest_media_type,
+                manifest_digest,
+                manifest_size,
+                manifest_annotations_json,
+                updated_at
+            )
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
             ON CONFLICT(name, reference) DO NOTHING
             "#,
-            params![name, reference, manifest_digest, now_rfc3339()],
+            params![
+                name,
+                reference,
+                descriptor.media_type().to_string(),
+                descriptor.digest().to_string(),
+                i64::try_from(descriptor.size()).context("Manifest size does not fit in i64")?,
+                annotations_json,
+                now_rfc3339(),
+            ],
         )?;
         if inserted == 1 {
             return Ok(RefUpdate::Inserted);
         }
 
-        let existing_manifest_digest =
+        let existing_descriptor =
             Self::resolve_ref_in(conn, name, reference)?.with_context(|| {
                 format!("Ref disappeared while resolving conflict: {name}:{reference}")
             })?;
-        if existing_manifest_digest == manifest_digest {
+        let existing_manifest_digest = existing_descriptor.digest().to_string();
+        let incoming_manifest_digest = descriptor.digest().to_string();
+        if existing_manifest_digest == incoming_manifest_digest {
             Ok(RefUpdate::Unchanged)
         } else {
             Ok(RefUpdate::Conflicted {
                 existing_manifest_digest,
-                incoming_manifest_digest: manifest_digest.to_string(),
+                incoming_manifest_digest,
             })
         }
     }
@@ -381,116 +221,48 @@ impl SqliteIndexStore {
         conn: &Connection,
         name: &str,
         reference: &str,
-        manifest_digest: &str,
+        descriptor: &Descriptor,
     ) -> Result<RefUpdate> {
-        let previous_manifest_digest = Self::resolve_ref_in(conn, name, reference)?;
-        if previous_manifest_digest.as_deref() == Some(manifest_digest) {
+        let previous_descriptor = Self::resolve_ref_in(conn, name, reference)?;
+        if previous_descriptor.as_ref().map(|d| d.digest()) == Some(descriptor.digest()) {
             return Ok(RefUpdate::Unchanged);
         }
 
-        Self::put_ref_in(conn, name, reference, manifest_digest)?;
-        Ok(match previous_manifest_digest {
-            Some(previous_manifest_digest) => RefUpdate::Replaced {
-                previous_manifest_digest,
+        Self::put_ref_in(conn, name, reference, descriptor)?;
+        Ok(match previous_descriptor {
+            Some(previous_descriptor) => RefUpdate::Replaced {
+                previous_manifest_digest: previous_descriptor.digest().to_string(),
             },
             None => RefUpdate::Inserted,
         })
     }
 
-    fn resolve_ref_in(conn: &Connection, name: &str, reference: &str) -> Result<Option<String>> {
+    fn resolve_ref_in(
+        conn: &Connection,
+        name: &str,
+        reference: &str,
+    ) -> Result<Option<Descriptor>> {
         conn.query_row(
-            "SELECT manifest_digest FROM refs WHERE name = ?1 AND reference = ?2",
+            r#"
+            SELECT manifest_media_type, manifest_digest, manifest_size, manifest_annotations_json
+            FROM refs
+            WHERE name = ?1 AND reference = ?2
+            "#,
             params![name, reference],
-            |row| row.get(0),
+            descriptor_from_row,
         )
         .optional()
         .context("Failed to resolve local registry ref")
     }
 
-    pub fn resolve_ref(&self, name: &str, reference: &str) -> Result<Option<String>> {
+    pub fn resolve_ref(&self, name: &str, reference: &str) -> Result<Option<Descriptor>> {
         let conn = self.lock();
         Self::resolve_ref_in(&conn, name, reference)
-    }
-
-    /// Atomic publish: in one SQLite transaction, insert all `blobs`
-    /// records, the `manifest` + `layers`, and (if `image_name` is
-    /// `Some`) the corresponding ref under `policy`. CAS bytes must
-    /// already have been written to [`super::FileBlobStore`] before
-    /// this call — only the IndexStore rows are batched here.
-    ///
-    /// On a `Replace` policy the function still returns
-    /// `RefUpdate::Replaced { previous_manifest_digest }` so callers
-    /// can record the prior state. A `Conflicted` outcome under
-    /// `KeepExisting` aborts the transaction (so the manifest /
-    /// layers / blob rows are not committed) and returns
-    /// `Ok(PublishOutcome { ref_update: Some(Conflicted { .. }) })`;
-    /// callers that prefer to bail can match on the variant.
-    pub fn publish_artifact_atomic(
-        &self,
-        blobs: &[BlobRecord],
-        manifest: &ManifestRecord,
-        layers: &[LayerRecord],
-        image_name: Option<&ImageRef>,
-        policy: RefConflictPolicy,
-    ) -> Result<PublishOutcome> {
-        // BEGIN IMMEDIATE acquires the RESERVED lock at the start so
-        // `busy_timeout` waits cleanly when another writer is active,
-        // instead of upgrading mid-transaction and risking SQLITE_BUSY
-        // from two writers each holding a SHARED lock.
-        let mut conn = self.lock();
-        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        for blob in blobs {
-            Self::put_blob_in(&tx, blob)?;
-        }
-        Self::put_manifest_in(&tx, manifest, layers)?;
-        let ref_update = if let Some(image_name) = image_name {
-            let name = image_name.repository_key();
-            let reference = image_name.reference();
-            let update =
-                Self::put_ref_with_policy_in(&tx, &name, reference, &manifest.digest, policy)?;
-            // KeepExisting + different incoming digest → conflict.
-            // Roll back the manifest / blob inserts so we don't leave
-            // unreferenced rows committed under a ref that resolved
-            // to a different artifact.
-            if let RefUpdate::Conflicted { .. } = &update {
-                drop(tx);
-                return Ok(PublishOutcome {
-                    ref_update: Some(update),
-                });
-            }
-            Some(update)
-        } else {
-            None
-        };
-        tx.commit()?;
-        Ok(PublishOutcome { ref_update })
     }
 
     /// Per-registry stable identifier. Generated as a random UUID v4
     /// (32 hex chars) on the first `init_schema` call and stored
     /// verbatim in the `ommx_local_registry_metadata` table.
-    /// Anonymous artifact ref synthesis truncates the stored value to
-    /// the first `super::super::manifest::ANONYMOUS_REGISTRY_ID_HOST_LEN`
-    /// hex chars for the hostname prefix
-    /// (`<registry-id>.ommx.local/anonymous`), so two artifacts built
-    /// against the same registry share a prefix and can be told apart
-    /// from artifacts imported from a different registry. Reading
-    /// this is a single indexed SELECT; cheap enough to call at
-    /// every anonymous build.
-    ///
-    /// Random per-registry (not per-host) means: (1) no host hardware
-    /// identifier leaks through the registry; (2) cloning a registry
-    /// directory to another machine keeps the prefix stable (a clone
-    /// of a registry is still "the same registry"); (3) a fresh
-    /// registry gets a fresh prefix, matching user intent of "this is
-    /// a new home for artifacts".
-    ///
-    /// **Privacy note**: the identifier IS stable per registry; a
-    /// recipient of two SQLite Local Registry exports from the same
-    /// source can correlate them via this column. The identifier
-    /// carries no PII or hardware fingerprint, but is itself a unique
-    /// correlator. Treat the SQLite registry file the same as any
-    /// other user-data export when sharing.
     pub fn registry_id(&self) -> Result<String> {
         let conn = self.lock();
         let row: Option<String> = conn
@@ -503,18 +275,12 @@ impl SqliteIndexStore {
         match row {
             Some(id) => Ok(id),
             None => {
-                // First read on a freshly-initialised registry.
-                // Generate a random UUID v4 and insert; concurrent
-                // racers converge on the first-write-wins via
-                // `OR IGNORE`.
                 let new_id = random_registry_id();
                 conn.execute(
                     r#"INSERT OR IGNORE INTO ommx_local_registry_metadata (key, value)
                        VALUES ('registry_id', ?1)"#,
                     params![&new_id],
                 )?;
-                // Re-read to pick up the winning value if another
-                // writer beat us to the insert.
                 conn.query_row(
                     r#"SELECT value FROM ommx_local_registry_metadata WHERE key = 'registry_id'"#,
                     [],
@@ -526,16 +292,17 @@ impl SqliteIndexStore {
     }
 
     /// Delete a single ref row by `(name, reference)`. Returns `true`
-    /// when a row was actually removed. Manifest / blob CAS records the
-    /// ref pointed at are **not** touched; an orphan manifest is the
-    /// expected post-state for a deleted ref and is reclaimed by a
-    /// future GC sweep, not by this primitive.
+    /// when a row was actually removed. Content blobs are not touched;
+    /// unreferenced CAS bytes are reclaimed by a future GC sweep, not
+    /// by this primitive.
     pub fn delete_ref(&self, name: &str, reference: &str) -> Result<bool> {
-        let conn = self.lock();
-        let affected = conn.execute(
+        let mut conn = self.lock();
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let affected = tx.execute(
             r#"DELETE FROM refs WHERE name = ?1 AND reference = ?2"#,
             params![name, reference],
         )?;
+        tx.commit()?;
         Ok(affected > 0)
     }
 
@@ -547,7 +314,14 @@ impl SqliteIndexStore {
                 .context("Ref prefix length does not fit in i64")?;
             let mut stmt = conn.prepare(
                 r#"
-                SELECT name, reference, manifest_digest, updated_at
+                SELECT
+                    name,
+                    reference,
+                    manifest_media_type,
+                    manifest_digest,
+                    manifest_size,
+                    manifest_annotations_json,
+                    updated_at
                 FROM refs
                 WHERE substr(name, 1, ?1) = ?2
                 ORDER BY name, reference
@@ -560,7 +334,14 @@ impl SqliteIndexStore {
         } else {
             let mut stmt = conn.prepare(
                 r#"
-                SELECT name, reference, manifest_digest, updated_at
+                SELECT
+                    name,
+                    reference,
+                    manifest_media_type,
+                    manifest_digest,
+                    manifest_size,
+                    manifest_annotations_json,
+                    updated_at
                 FROM refs
                 ORDER BY name, reference
                 "#,
@@ -583,7 +364,7 @@ impl SqliteIndexStore {
             );
 
             INSERT INTO ommx_local_registry_schema (version)
-            SELECT 2
+            SELECT 3
             WHERE NOT EXISTS (SELECT 1 FROM ommx_local_registry_schema);
 
             CREATE TABLE IF NOT EXISTS ommx_local_registry_metadata (
@@ -591,46 +372,18 @@ impl SqliteIndexStore {
                 value TEXT NOT NULL
             );
 
-            CREATE TABLE IF NOT EXISTS blobs (
-                digest TEXT PRIMARY KEY,
-                size INTEGER NOT NULL CHECK(size >= 0),
-                created_at TEXT NOT NULL,
-                last_verified_at TEXT
-            );
-
-            CREATE TABLE IF NOT EXISTS manifests (
-                digest TEXT PRIMARY KEY,
-                media_type TEXT NOT NULL,
-                size INTEGER NOT NULL CHECK(size >= 0),
-                subject_digest TEXT,
-                annotations_json TEXT NOT NULL DEFAULT '{}',
-                created_at TEXT NOT NULL,
-                FOREIGN KEY(digest) REFERENCES blobs(digest)
-            );
-
-            CREATE TABLE IF NOT EXISTS manifest_layers (
-                manifest_digest TEXT NOT NULL,
-                position INTEGER NOT NULL CHECK(position >= 0),
-                digest TEXT NOT NULL,
-                media_type TEXT NOT NULL,
-                size INTEGER NOT NULL CHECK(size >= 0),
-                annotations_json TEXT NOT NULL DEFAULT '{}',
-                PRIMARY KEY(manifest_digest, position),
-                FOREIGN KEY(manifest_digest) REFERENCES manifests(digest) ON DELETE CASCADE,
-                FOREIGN KEY(digest) REFERENCES blobs(digest)
-            );
-
             CREATE TABLE IF NOT EXISTS refs (
                 name TEXT NOT NULL,
                 reference TEXT NOT NULL,
+                manifest_media_type TEXT NOT NULL,
                 manifest_digest TEXT NOT NULL,
+                manifest_size INTEGER NOT NULL CHECK(manifest_size >= 0),
+                manifest_annotations_json TEXT NOT NULL DEFAULT '{}',
                 updated_at TEXT NOT NULL,
-                PRIMARY KEY(name, reference),
-                FOREIGN KEY(manifest_digest) REFERENCES manifests(digest)
+                PRIMARY KEY(name, reference)
             );
 
             CREATE INDEX IF NOT EXISTS idx_refs_name ON refs(name);
-            CREATE INDEX IF NOT EXISTS idx_manifest_layers_digest ON manifest_layers(digest);
             "#,
         )?;
         let version = self.schema_version()?;
@@ -643,30 +396,36 @@ impl SqliteIndexStore {
 }
 
 impl SqliteIndexStore {
-    pub fn put_image_ref(&self, image_name: &ImageRef, manifest_digest: &str) -> Result<()> {
+    pub fn put_image_ref(&self, image_name: &ImageRef, descriptor: &Descriptor) -> Result<()> {
         self.put_ref(
             &image_name.repository_key(),
             image_name.reference(),
-            manifest_digest,
+            descriptor,
         )
     }
 
     pub fn put_image_ref_with_policy(
         &self,
         image_name: &ImageRef,
-        manifest_digest: &str,
+        descriptor: &Descriptor,
         policy: RefConflictPolicy,
     ) -> Result<RefUpdate> {
         self.put_ref_with_policy(
             &image_name.repository_key(),
             image_name.reference(),
-            manifest_digest,
+            descriptor,
             policy,
         )
     }
 
-    pub fn resolve_image_name(&self, image_name: &ImageRef) -> Result<Option<String>> {
+    pub fn resolve_image_descriptor(&self, image_name: &ImageRef) -> Result<Option<Descriptor>> {
         self.resolve_ref(&image_name.repository_key(), image_name.reference())
+    }
+
+    pub fn resolve_image_name(&self, image_name: &ImageRef) -> Result<Option<String>> {
+        Ok(self
+            .resolve_image_descriptor(image_name)?
+            .map(|descriptor| descriptor.digest().to_string()))
     }
 }
 
@@ -674,9 +433,65 @@ fn ref_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<RefRecord> {
     Ok(RefRecord {
         name: row.get(0)?,
         reference: row.get(1)?,
-        manifest_digest: row.get(2)?,
-        updated_at: row.get(3)?,
+        descriptor: descriptor_from_ref_row(row, 2)?,
+        updated_at: row.get(6)?,
     })
+}
+
+fn descriptor_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Descriptor> {
+    descriptor_from_ref_row(row, 0)
+}
+
+fn descriptor_from_ref_row(row: &rusqlite::Row<'_>, offset: usize) -> rusqlite::Result<Descriptor> {
+    let media_type: String = row.get(offset)?;
+    let digest: String = row.get(offset + 1)?;
+    let size = read_u64(row, offset + 2)?;
+    let annotations_json: String = row.get(offset + 3)?;
+    let annotations = parse_annotations_json(&annotations_json, offset + 3)?;
+    let digest = Digest::from_str(&digest).map_err(|err| {
+        rusqlite::Error::FromSqlConversionFailure(offset + 1, Type::Text, Box::new(err))
+    })?;
+    let mut builder = DescriptorBuilder::default()
+        .media_type(media_type_from_string(media_type))
+        .digest(digest)
+        .size(size);
+    if !annotations.is_empty() {
+        builder = builder.annotations(annotations);
+    }
+    builder
+        .build()
+        .map_err(|err| rusqlite::Error::FromSqlConversionFailure(offset, Type::Text, err.into()))
+}
+
+fn descriptor_annotations_json(descriptor: &Descriptor) -> Result<String> {
+    match descriptor.annotations() {
+        Some(annotations) => String::from_utf8(crate::artifact::stable_json_bytes(annotations)?)
+            .context("Stable descriptor annotation JSON is not UTF-8"),
+        None => Ok("{}".to_string()),
+    }
+}
+
+fn parse_annotations_json(
+    json: &str,
+    column_index: usize,
+) -> rusqlite::Result<HashMap<String, String>> {
+    serde_json::from_str(json).map_err(|err| {
+        rusqlite::Error::FromSqlConversionFailure(column_index, Type::Text, Box::new(err))
+    })
+}
+
+fn media_type_from_string(media_type: String) -> MediaType {
+    if media_type == MediaType::ImageManifest.to_string() {
+        MediaType::ImageManifest
+    } else if media_type == MediaType::ImageIndex.to_string() {
+        MediaType::ImageIndex
+    } else if media_type == MediaType::EmptyJSON.to_string() {
+        MediaType::EmptyJSON
+    } else if media_type == MediaType::ArtifactManifest.to_string() {
+        MediaType::ArtifactManifest
+    } else {
+        MediaType::Other(media_type)
+    }
 }
 
 fn read_u64(row: &rusqlite::Row<'_>, idx: usize) -> rusqlite::Result<u64> {
@@ -684,18 +499,6 @@ fn read_u64(row: &rusqlite::Row<'_>, idx: usize) -> rusqlite::Result<u64> {
     u64::try_from(value).map_err(|_| rusqlite::Error::IntegralValueOutOfRange(idx, value))
 }
 
-fn read_u32(row: &rusqlite::Row<'_>, idx: usize) -> rusqlite::Result<u32> {
-    let value: i64 = row.get(idx)?;
-    u32::try_from(value).map_err(|_| rusqlite::Error::IntegralValueOutOfRange(idx, value))
-}
-
-/// Full UUID v4 (32 hex chars, no dashes) seeded on first registry
-/// init. The metadata column stores the full UUID; only the hostname
-/// rendering in [`super::super::anonymous_artifact_image_name`]
-/// truncates to 8 hex chars. Keeping the full UUID on disk leaves
-/// room to widen the rendered prefix later (or expose the full
-/// identifier through a different surface) without rewriting
-/// existing registry data.
 fn random_registry_id() -> String {
     uuid::Uuid::new_v4().simple().to_string()
 }

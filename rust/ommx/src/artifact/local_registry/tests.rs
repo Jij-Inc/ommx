@@ -4,7 +4,7 @@ use crate::artifact::{
     OCI_IMAGE_MANIFEST_MEDIA_TYPE,
 };
 use anyhow::{Context, Result};
-use oci_spec::image::{Descriptor, DescriptorBuilder, ImageManifestBuilder, MediaType};
+use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, ImageManifestBuilder, MediaType};
 use std::collections::HashMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -37,14 +37,14 @@ fn save_test_archive(
 fn file_blob_store_round_trip() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let store = FileBlobStore::open(dir.path().join("blobs"))?;
-    let record = store.put_bytes(b"hello")?;
+    let digest = store.put_bytes(b"hello")?;
 
     assert_eq!(
-        record.digest,
+        digest,
         "sha256:2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
     );
-    assert!(store.exists(&record.digest)?);
-    assert_eq!(store.read_bytes(&record.digest)?, b"hello");
+    assert!(store.exists(&digest)?);
+    assert_eq!(store.read_bytes(&digest)?, b"hello");
     assert!(store.path_for_digest("sha256:../../outside").is_err());
     assert!(store.exists("sha256:../../outside").is_err());
     Ok(())
@@ -54,61 +54,34 @@ fn file_blob_store_round_trip() -> Result<()> {
 fn sqlite_index_store_round_trip() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let store = SqliteIndexStore::open(dir.path().join(SQLITE_INDEX_FILE_NAME))?;
-    assert_eq!(store.schema_version()?, 2);
+    assert_eq!(store.schema_version()?, 3);
 
-    let manifest_digest = sha256_digest(b"manifest");
-    let layer_digest = sha256_digest(b"layer");
-
-    store.put_blob(&BlobRecord {
-        digest: manifest_digest.clone(),
-        size: b"manifest".len() as u64,
-        last_verified_at: None,
-    })?;
-    store.put_blob(&BlobRecord {
-        digest: layer_digest.clone(),
-        size: b"layer".len() as u64,
-        last_verified_at: None,
-    })?;
-
-    let manifest = ManifestRecord {
-        digest: manifest_digest.clone(),
-        media_type: "application/vnd.oci.image.manifest.v1+json".to_string(),
-        size: b"manifest".len() as u64,
-        subject_digest: None,
-        annotations_json: "{}".to_string(),
-        created_at: now_rfc3339(),
-    };
-    let layers = [LayerRecord {
-        manifest_digest: manifest_digest.clone(),
-        position: 0,
-        digest: layer_digest.clone(),
-        media_type: "application/octet-stream".to_string(),
-        size: b"layer".len() as u64,
-        annotations_json: "{}".to_string(),
-    }];
-    store.put_manifest(&manifest, &layers)?;
-    store.put_ref("example.com/ommx/experiment", "latest", &manifest_digest)?;
-
-    assert_eq!(
-        store.get_blob(&layer_digest)?.unwrap().size,
-        b"layer".len() as u64
-    );
-    assert_eq!(
-        store.get_manifest(&manifest_digest)?.unwrap().media_type,
-        "application/vnd.oci.image.manifest.v1+json"
-    );
-    let stored_layers = store.get_layers(&manifest_digest)?;
-    assert_eq!(stored_layers, layers);
+    let manifest_descriptor = test_manifest_descriptor(b"manifest")?;
+    store.put_ref(
+        "example.com/ommx/experiment",
+        "latest",
+        &manifest_descriptor,
+    )?;
     assert_eq!(
         store.resolve_ref("example.com/ommx/experiment", "latest")?,
-        Some(manifest_digest.clone())
+        Some(manifest_descriptor.clone())
     );
     let refs = store.list_refs(Some("example.com/ommx"))?;
     assert_eq!(refs.len(), 1);
     assert_eq!(refs[0].reference, "latest");
+    assert_eq!(refs[0].descriptor, manifest_descriptor);
 
-    store.put_ref("example.com/foo_bar/experiment", "latest", &manifest_digest)?;
-    store.put_ref("example.com/fooXbar/experiment", "latest", &manifest_digest)?;
+    let manifest_descriptor = test_manifest_descriptor(b"other-manifest")?;
+    store.put_ref(
+        "example.com/foo_bar/experiment",
+        "latest",
+        &manifest_descriptor,
+    )?;
+    store.put_ref(
+        "example.com/fooXbar/experiment",
+        "latest",
+        &manifest_descriptor,
+    )?;
     let refs = store.list_refs(Some("example.com/foo_bar"))?;
     assert_eq!(refs.len(), 1);
     assert_eq!(refs[0].name, "example.com/foo_bar/experiment");
@@ -122,20 +95,22 @@ fn concurrent_keep_existing_ref_publish_keeps_one_digest() -> Result<()> {
     let index_store = SqliteIndexStore::open_in_registry_root(&root)?;
     let blob_store = FileBlobStore::open_in_registry_root(&root)?;
     let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:race")?;
-    let first_digest = put_test_manifest(&index_store, &blob_store, b"first-manifest")?;
-    let second_digest = put_test_manifest(&index_store, &blob_store, b"second-manifest")?;
+    let first_descriptor = put_test_manifest(&index_store, &blob_store, b"first-manifest")?;
+    let second_descriptor = put_test_manifest(&index_store, &blob_store, b"second-manifest")?;
+    let first_digest = first_descriptor.digest().to_string();
+    let second_digest = second_descriptor.digest().to_string();
     assert_ne!(first_digest, second_digest);
 
-    let handles: Vec<_> = [first_digest.clone(), second_digest.clone()]
+    let handles: Vec<_> = [first_descriptor.clone(), second_descriptor.clone()]
         .into_iter()
-        .map(|manifest_digest| {
+        .map(|manifest_descriptor| {
             let root = root.clone();
             let image_name = image_name.clone();
             std::thread::spawn(move || -> Result<RefUpdate> {
                 let index_store = SqliteIndexStore::open_in_registry_root(root)?;
                 index_store.put_image_ref_with_policy(
                     &image_name,
-                    &manifest_digest,
+                    &manifest_descriptor,
                     RefConflictPolicy::KeepExisting,
                 )
             })
@@ -215,21 +190,22 @@ fn imports_oci_dir_into_sqlite_registry_preserving_image_manifest() -> Result<()
         legacy_manifest_bytes
     );
 
-    let manifest = index_store
-        .get_manifest(&imported.manifest_digest)?
-        .context("Imported manifest is missing")?;
-    assert_eq!(manifest.media_type, OCI_IMAGE_MANIFEST_MEDIA_TYPE);
-    let manifest_blob = index_store
-        .get_blob(&manifest.digest)?
-        .context("Imported manifest blob is missing")?;
-    assert_eq!(manifest_blob.size, legacy_manifest_bytes.len() as u64);
-    let layers = index_store.get_layers(&imported.manifest_digest)?;
-    assert_eq!(layers.len(), 1);
-    assert_eq!(layers[0].digest, layer.digest().to_string());
-    let layer_blob = index_store
-        .get_blob(&layers[0].digest)?
-        .context("Imported layer blob is missing")?;
-    assert_eq!(layer_blob.size, layer.size());
+    let manifest_descriptor = index_store
+        .resolve_image_descriptor(&image_name)?
+        .context("Imported ref descriptor is missing")?;
+    assert_eq!(manifest_descriptor.media_type(), &MediaType::ImageManifest);
+    assert_eq!(
+        manifest_descriptor.digest().to_string(),
+        imported.manifest_digest
+    );
+    assert_eq!(
+        manifest_descriptor.size(),
+        legacy_manifest_bytes.len() as u64
+    );
+    assert_eq!(
+        blob_store.read_bytes(layer.digest().as_ref())?.len() as u64,
+        layer.size()
+    );
 
     let artifact = LocalArtifact::open_in_registry(
         Arc::new(LocalRegistry::open(&registry_root)?),
@@ -457,7 +433,15 @@ fn local_registry_imports_legacy_refs_when_requested() -> Result<()> {
         .resolve_image_name(&image_name)?
         .context("Legacy local registry ref was not imported")?;
     assert!(registry.blobs().exists(&imported_digest)?);
-    assert!(registry.index().get_manifest(&imported_digest)?.is_some());
+    assert_eq!(
+        registry
+            .index()
+            .resolve_image_descriptor(&image_name)?
+            .context("Legacy local registry descriptor was not imported")?
+            .digest()
+            .to_string(),
+        imported_digest
+    );
     Ok(())
 }
 
@@ -480,15 +464,15 @@ fn local_registry_builds_native_image_manifest_with_artifact_type() -> Result<()
         .first()
         .context("Published layer is missing")?;
 
-    let manifest_record = registry
+    let manifest_descriptor = registry
         .index()
-        .get_manifest(&manifest_digest)?
-        .context("Published manifest is missing")?;
-    assert_eq!(manifest_record.media_type, OCI_IMAGE_MANIFEST_MEDIA_TYPE);
-    assert_eq!(manifest_record.size, manifest_bytes.len() as u64);
+        .resolve_image_descriptor(&image_name)?
+        .context("Published manifest descriptor is missing")?;
+    assert_eq!(manifest_descriptor.media_type(), &MediaType::ImageManifest);
+    assert_eq!(manifest_descriptor.size(), manifest_bytes.len() as u64);
     // Manifest's own `mediaType` field is left unset to match the v2 /
-    // ArchiveArtifactBuilder shape; the IndexStore record's `media_type`
-    // column carries the format for query / dispatch purposes.
+    // ArchiveArtifactBuilder shape; the ref descriptor carries the
+    // format for query / dispatch purposes.
     assert_eq!(manifest.media_type().as_ref(), None);
     assert_eq!(
         manifest.artifact_type().as_ref(),
@@ -513,26 +497,22 @@ fn local_registry_builds_native_image_manifest_with_artifact_type() -> Result<()
         &MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string())
     );
 
-    let layers = registry.index().get_layers(&manifest_digest)?;
-    assert_eq!(layers.len(), 1);
-    assert_eq!(layers[0].digest, layer.digest().to_string());
-    assert_eq!(layers[0].media_type, media_types::V1_INSTANCE_MEDIA_TYPE);
+    assert_eq!(manifest.layers().len(), 1);
+    assert_eq!(manifest.layers()[0].digest(), layer.digest());
+    assert_eq!(
+        manifest.layers()[0].media_type(),
+        &media_types::v1_instance()
+    );
     assert_eq!(artifact.get_blob(layer.digest().as_ref())?, b"instance");
 
-    // Empty config blob must be readable from the registry and present
-    // in the blob index.
+    // Empty config blob must be readable from the registry CAS.
     assert_eq!(
         artifact.get_blob(media_types::OCI_EMPTY_CONFIG_DIGEST)?,
         media_types::OCI_EMPTY_CONFIG_BYTES
     );
-    let config_record = registry
-        .index()
-        .get_blob(media_types::OCI_EMPTY_CONFIG_DIGEST)?
-        .context("Empty config blob record is missing")?;
-    assert_eq!(
-        config_record.size,
-        media_types::OCI_EMPTY_CONFIG_BYTES.len() as u64
-    );
+    assert!(registry
+        .blobs()
+        .exists(media_types::OCI_EMPTY_CONFIG_DIGEST)?);
     Ok(())
 }
 
@@ -764,14 +744,9 @@ fn imports_legacy_v2_oci_dir_with_ommx_config_blob() -> Result<()> {
     assert!(blob_store.exists(&imported.manifest_digest)?);
     assert!(blob_store.exists(layer_descriptor.digest().as_ref())?);
 
-    // OMMX-specific config blob is preserved in the BlobStore and blob
-    // index.
+    // OMMX-specific config blob is preserved in the BlobStore.
     let config_digest_str = config_descriptor.digest().to_string();
     assert!(blob_store.exists(&config_digest_str)?);
-    let config_blob = index_store
-        .get_blob(&config_digest_str)?
-        .context("Imported config blob is missing")?;
-    assert_eq!(config_blob.size, v2_config_bytes.len() as u64);
     assert_eq!(blob_store.read_bytes(&config_digest_str)?, v2_config_bytes);
 
     // LocalArtifact reads the legacy manifest (parse-time check is on
@@ -876,7 +851,7 @@ fn concurrent_blob_writes_publish_one_complete_blob() -> Result<()> {
         .map(|_| {
             let root = root.clone();
             let bytes = bytes.clone();
-            std::thread::spawn(move || -> Result<BlobRecord> {
+            std::thread::spawn(move || -> Result<String> {
                 let store = FileBlobStore::open(root)?;
                 store.put_bytes(&bytes)
             })
@@ -889,7 +864,7 @@ fn concurrent_blob_writes_publish_one_complete_blob() -> Result<()> {
         .collect::<Result<_>>()?;
 
     let digest = sha256_digest(&bytes);
-    assert!(records.iter().all(|record| record.digest == digest));
+    assert!(records.iter().all(|record| record == &digest));
     let store = FileBlobStore::open(&root)?;
     assert_eq!(store.read_bytes(&digest)?, bytes);
     Ok(())
@@ -1295,30 +1270,31 @@ fn put_test_manifest_ref(
     image_name: &ImageRef,
     bytes: &[u8],
 ) -> Result<String> {
-    let digest = put_test_manifest(index_store, blob_store, bytes)?;
-    index_store.put_image_ref(image_name, &digest)?;
-    Ok(digest)
+    let descriptor = put_test_manifest(index_store, blob_store, bytes)?;
+    index_store.put_image_ref(image_name, &descriptor)?;
+    Ok(descriptor.digest().to_string())
 }
 
 fn put_test_manifest(
-    index_store: &SqliteIndexStore,
+    _index_store: &SqliteIndexStore,
     blob_store: &FileBlobStore,
     bytes: &[u8],
-) -> Result<String> {
-    let blob = blob_store.put_bytes(bytes)?;
-    index_store.put_blob(&blob)?;
-    index_store.put_manifest(
-        &ManifestRecord {
-            digest: blob.digest.clone(),
-            media_type: "application/vnd.oci.image.manifest.v1+json".to_string(),
-            size: bytes.len() as u64,
-            subject_digest: None,
-            annotations_json: "{}".to_string(),
-            created_at: now_rfc3339(),
-        },
-        &[],
-    )?;
-    Ok(blob.digest)
+) -> Result<Descriptor> {
+    let digest = blob_store.put_bytes(bytes)?;
+    test_manifest_descriptor_with_digest(&digest, bytes.len() as u64)
+}
+
+fn test_manifest_descriptor(bytes: &[u8]) -> Result<Descriptor> {
+    test_manifest_descriptor_with_digest(&sha256_digest(bytes), bytes.len() as u64)
+}
+
+fn test_manifest_descriptor_with_digest(digest: &str, size: u64) -> Result<Descriptor> {
+    DescriptorBuilder::default()
+        .media_type(MediaType::ImageManifest)
+        .digest(Digest::from_str(digest)?)
+        .size(size)
+        .build()
+        .context("Failed to build test manifest descriptor")
 }
 
 fn build_test_oci_dir(legacy_dir: PathBuf, image_name: ImageRef) -> Result<Descriptor> {

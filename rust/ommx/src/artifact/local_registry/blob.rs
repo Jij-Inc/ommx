@@ -1,4 +1,4 @@
-use super::{now_rfc3339, sha256_digest, BlobRecord, ValidatedDigest, FILE_BLOB_STORE_DIR_NAME};
+use super::{sha256_digest, ValidatedDigest, FILE_BLOB_STORE_DIR_NAME};
 use anyhow::{ensure, Context, Result};
 use std::{
     fs,
@@ -29,7 +29,7 @@ impl FileBlobStore {
         &self.root
     }
 
-    pub fn put_bytes(&self, bytes: &[u8]) -> Result<BlobRecord> {
+    pub fn put_bytes(&self, bytes: &[u8]) -> Result<String> {
         let digest = sha256_digest(bytes);
         let path = self.path_for_digest(&digest)?;
         if let Some(parent) = path.parent() {
@@ -41,11 +41,7 @@ impl FileBlobStore {
         } else {
             self.write_blob_atomically(bytes, &digest, &path)?;
         }
-        Ok(BlobRecord {
-            digest,
-            size: bytes.len() as u64,
-            last_verified_at: Some(now_rfc3339()),
-        })
+        Ok(digest)
     }
 
     pub fn read_bytes(&self, digest: &str) -> Result<Vec<u8>> {

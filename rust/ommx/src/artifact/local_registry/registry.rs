@@ -1,8 +1,8 @@
 use super::{
-    annotations_json, import_legacy_local_registry, import_legacy_local_registry_ref,
+    import_legacy_local_registry, import_legacy_local_registry_ref,
     import_legacy_local_registry_ref_with_policy, import_legacy_local_registry_with_policy,
-    now_rfc3339, BlobRecord, FileBlobStore, LayerRecord, LegacyImportReport, ManifestRecord,
-    OciDirImport, RefConflictPolicy, RefUpdate, SqliteIndexStore,
+    FileBlobStore, LegacyImportReport, OciDirImport, RefConflictPolicy, RefUpdate,
+    SqliteIndexStore,
 };
 use crate::artifact::{media_types, ImageRef, StagedArtifactBlob};
 use anyhow::{ensure, Context, Result};
@@ -213,79 +213,36 @@ impl LocalRegistry {
         }
 
         // Stage 1: write CAS bytes (idempotent, outside any SQLite tx).
-        // Stage 2: a single SQLite transaction covers all blob records
-        // + manifest + ref so a crash or conflict can never leave
-        // committed manifest / blob rows under a ref that wasn't
-        // actually published.
-        //
-        let mut blob_records = Vec::with_capacity(blobs.len() + 1);
+        // Stage 2: publish only the OCI manifest descriptor into the
+        // SQLite ref index. If stage 2 conflicts or crashes, the CAS
+        // may contain unreferenced bytes; that is the expected state
+        // for GC, not an index-storage cache entry.
         for blob in blobs {
-            blob_records.push(self.stage_blob_record(blob.descriptor(), blob.bytes())?);
+            self.stage_blob(blob.descriptor(), blob.bytes())?;
         }
-        blob_records.push(self.stage_blob_record(manifest_descriptor, manifest_bytes)?);
+        self.stage_blob(manifest_descriptor, manifest_bytes)?;
 
-        let layer_records = manifest
-            .layers()
-            .iter()
-            .enumerate()
-            .map(|(position, layer)| -> Result<LayerRecord> {
-                Ok(LayerRecord {
-                    manifest_digest: manifest_digest.clone(),
-                    position: u32::try_from(position)
-                        .context("Layer position does not fit in u32")?,
-                    digest: layer.digest().to_string(),
-                    media_type: layer.media_type().to_string(),
-                    size: layer.size(),
-                    annotations_json: annotations_json(layer.annotations().as_ref())
-                        .context("Failed to encode layer annotations")?,
-                })
-            })
-            .collect::<Result<Vec<_>>>()?;
-        let manifest_record = ManifestRecord {
-            digest: manifest_digest.clone(),
-            media_type: manifest_descriptor.media_type().to_string(),
-            size: manifest_descriptor.size(),
-            subject_digest: manifest
-                .subject()
-                .as_ref()
-                .map(|subject| subject.digest().to_string()),
-            annotations_json: annotations_json(manifest.annotations().as_ref())
-                .context("Failed to encode manifest annotations")?,
-            created_at: now_rfc3339(),
-        };
-
-        let outcome = self.index.publish_artifact_atomic(
-            &blob_records,
-            &manifest_record,
-            &layer_records,
-            Some(image_name),
-            policy,
-        )?;
-        outcome.ref_update.context(
-            "publish_artifact_atomic returned no RefUpdate for an explicit image_name; \
-             this is a bug",
-        )
+        self.index
+            .put_image_ref_with_policy(image_name, manifest_descriptor, policy)
     }
 
-    /// CAS-write a descriptor's bytes and produce a [`BlobRecord`] for
-    /// the IndexStore. The DB row is *not* inserted here; the caller
-    /// passes the records to [`SqliteIndexStore::publish_artifact_atomic`]
-    /// so the inserts happen inside the publish transaction.
-    fn stage_blob_record(&self, descriptor: &Descriptor, bytes: &[u8]) -> Result<BlobRecord> {
-        let record = self.blobs.put_bytes(bytes)?;
+    /// CAS-write a descriptor's bytes and verify the concrete bytes
+    /// match the descriptor the manifest will reference.
+    fn stage_blob(&self, descriptor: &Descriptor, bytes: &[u8]) -> Result<()> {
+        let digest = self.blobs.put_bytes(bytes)?;
         ensure!(
-            record.digest == descriptor.digest().to_string(),
+            digest == descriptor.digest().to_string(),
             "Descriptor digest mismatch: descriptor={}, actual={}",
             descriptor.digest(),
-            record.digest
+            digest
         );
         ensure!(
-            record.size == descriptor.size(),
+            bytes.len() as u64 == descriptor.size(),
             "Descriptor size mismatch for {}: descriptor={}, actual={}",
             descriptor.digest(),
             descriptor.size(),
-            record.size
+            bytes.len()
         );
-        Ok(record)
+        Ok(())
     }
 }

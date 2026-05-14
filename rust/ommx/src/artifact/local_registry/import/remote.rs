@@ -31,18 +31,13 @@
 //!    offered, expressed against the canonical SQLite ref store.
 //! 2. Open a [`RemoteTransport`], authenticate for `Pull`, fetch the
 //!    manifest bytes verbatim, then walk the manifest's config +
-//!    layer descriptors. Each blob is pulled into memory, written to
-//!    [`FileBlobStore`], and the matching [`BlobRecord`] / [`LayerRecord`]
-//!    is staged. The manifest is staged last so it sits behind its
-//!    blobs in the BlobStore (matching the OCI distribution publish
-//!    order).
-//! 3. One SQLite transaction (`publish_artifact_atomic`) commits every
-//!    [`BlobRecord`] + the [`ManifestRecord`] + the ref update under
-//!    the requested `image_name`. A crash between blob writes and the
-//!    publish leaves orphan CAS bytes (recovered by GC, not visible
-//!    through the index); a crash inside the SQLite transaction never
-//!    leaves a partially-published ref. Concurrent first-miss pulls
-//!    for the same image converge inside this transaction.
+//!    layer descriptors. Each blob is pulled into memory and written
+//!    to [`FileBlobStore`]. The manifest is staged last so it sits
+//!    behind its blobs in the BlobStore (matching the OCI distribution
+//!    publish order).
+//! 3. SQLite publishes only the manifest descriptor under the requested
+//!    `image_name`. A crash between blob writes and ref publish leaves
+//!    orphan CAS bytes (recovered by GC, not visible through the index).
 //!
 //! v3 has no on-disk OCI Image Layout intermediate for pulls — SQLite
 //! plus [`FileBlobStore`] are the sole post-import home of the bytes.
@@ -51,18 +46,15 @@
 //! is, and because this is the only place in `local_registry` that
 //! touches the network.
 
-use super::super::{
-    annotations_json, now_rfc3339, BlobRecord, FileBlobStore, LayerRecord, LocalRegistry,
-    ManifestRecord, RefConflictPolicy, RefUpdate,
-};
+use super::super::{FileBlobStore, LocalRegistry, RefConflictPolicy, RefUpdate};
 use super::oci_dir::OciDirImport;
 use crate::artifact::{
     media_types, remote_transport::RemoteTransport, ImageRef, OCI_IMAGE_MANIFEST_MEDIA_TYPE,
 };
 use anyhow::{Context, Result};
 use oci_client::RegistryOperation;
-use oci_spec::image::{Descriptor, ImageManifest, MediaType};
-use std::sync::Arc;
+use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, ImageManifest, MediaType};
+use std::{str::FromStr, sync::Arc};
 
 /// Pull `image_name` from its remote registry into the v3 SQLite
 /// Local Registry.
@@ -76,18 +68,17 @@ use std::sync::Arc;
 /// to a fresh pull rather than handing back a stale `Unchanged` — that
 /// would surface later as an opaque `get_blob` failure with no
 /// recovery hint. Layer-blob completeness is not probed: if the
-/// manifest is present, layers are assumed to follow from the same
-/// publish transaction (`publish_artifact_atomic`); a layer-only gap
-/// is a strict registry-corruption case and out of scope for this
-/// fast path.
+/// manifest is present, layer completeness is checked when the
+/// artifact is opened; a layer-only gap is a strict registry
+/// corruption case and out of scope for this fast path.
 ///
 /// Otherwise the manifest and each blob are pulled through
-/// `RemoteTransport` straight into [`FileBlobStore`], and a single
-/// SQLite transaction publishes the ref. There is no on-disk OCI Image
-/// Layout intermediate.
+/// `RemoteTransport` straight into [`FileBlobStore`], and a SQLite
+/// transaction publishes the ref descriptor. There is no on-disk OCI
+/// Image Layout intermediate.
 ///
 /// Concurrent first-miss pulls for the same image race at the SQLite
-/// `publish_artifact_atomic` boundary. **Assuming the remote registry
+/// ref publish boundary. **Assuming the remote registry
 /// returns byte-identical manifests across both requests**, the second
 /// writer sees `Unchanged`. If the remote serves non-deterministic
 /// manifest bytes (field reorder, whitespace drift) the two digests
@@ -125,58 +116,28 @@ pub fn pull_image(registry: &Arc<LocalRegistry>, image_name: &ImageRef) -> Resul
         .context("Failed to parse OCI image manifest pulled from the remote registry")?;
     ensure_ommx_image_manifest(&manifest)?;
 
-    let blob_count = manifest.layers().len() + 2;
-    let mut blob_records = Vec::with_capacity(blob_count);
-    let mut layer_records = Vec::with_capacity(manifest.layers().len());
+    let manifest_descriptor = DescriptorBuilder::default()
+        .media_type(MediaType::ImageManifest)
+        .digest(
+            Digest::from_str(&manifest_digest)
+                .with_context(|| format!("Invalid remote manifest digest: {manifest_digest}"))?,
+        )
+        .size(manifest_bytes.len() as u64)
+        .build()
+        .context("Failed to build remote manifest descriptor")?;
 
     let config_descriptor = manifest.config();
-    blob_records.push(pull_descriptor_blob(
-        &transport,
-        registry.blobs(),
-        image_name,
-        config_descriptor,
-    )?);
+    pull_descriptor_blob(&transport, registry.blobs(), image_name, config_descriptor)?;
 
-    for (position, layer) in manifest.layers().iter().enumerate() {
-        blob_records.push(pull_descriptor_blob(
-            &transport,
-            registry.blobs(),
-            image_name,
-            layer,
-        )?);
-        layer_records.push(LayerRecord {
-            manifest_digest: manifest_digest.clone(),
-            position: u32::try_from(position).context("Layer position does not fit in u32")?,
-            digest: layer.digest().to_string(),
-            media_type: layer.media_type().to_string(),
-            size: layer.size(),
-            annotations_json: annotations_json(layer.annotations().as_ref())?,
-        });
+    for layer in manifest.layers() {
+        pull_descriptor_blob(&transport, registry.blobs(), image_name, layer)?;
     }
 
-    blob_records.push(stage_manifest_blob(
-        registry.blobs(),
-        &manifest_bytes,
-        &manifest_digest,
-    )?);
+    stage_manifest_blob(registry.blobs(), &manifest_bytes, &manifest_digest)?;
 
-    let manifest_record = ManifestRecord {
-        digest: manifest_digest.clone(),
-        media_type: OCI_IMAGE_MANIFEST_MEDIA_TYPE.to_string(),
-        size: manifest_bytes.len() as u64,
-        subject_digest: manifest
-            .subject()
-            .as_ref()
-            .map(|subject| subject.digest().to_string()),
-        annotations_json: annotations_json(manifest.annotations().as_ref())?,
-        created_at: now_rfc3339(),
-    };
-
-    let outcome = registry.index().publish_artifact_atomic(
-        &blob_records,
-        &manifest_record,
-        &layer_records,
-        Some(image_name),
+    let ref_update = registry.index().put_image_ref_with_policy(
+        image_name,
+        &manifest_descriptor,
         RefConflictPolicy::KeepExisting,
     )?;
     // Surface a ref conflict as `Err` rather than `Ok(Conflicted)`:
@@ -188,10 +149,10 @@ pub fn pull_image(registry: &Arc<LocalRegistry>, image_name: &ImageRef) -> Resul
     // silently surface the local cache, not the remote bytes. Forcing
     // an explicit error lets callers decide between `--replace`
     // semantics and aborting.
-    if let Some(RefUpdate::Conflicted {
+    if let RefUpdate::Conflicted {
         existing_manifest_digest,
         incoming_manifest_digest,
-    }) = &outcome.ref_update
+    } = &ref_update
     {
         anyhow::bail!(
             "Local registry ref conflict for {image_name}: existing manifest \
@@ -204,7 +165,7 @@ pub fn pull_image(registry: &Arc<LocalRegistry>, image_name: &ImageRef) -> Resul
     Ok(OciDirImport {
         manifest_digest,
         image_name: Some(image_name.clone()),
-        ref_update: outcome.ref_update,
+        ref_update: Some(ref_update),
     })
 }
 
@@ -231,16 +192,14 @@ fn ensure_ommx_image_manifest(manifest: &ImageManifest) -> Result<()> {
 }
 
 /// Pull a single descriptor's blob from the registry, write it into
-/// [`FileBlobStore`] under its content digest, and produce the matching
-/// [`BlobRecord`]. The DB row is *not* inserted here — the caller hands
-/// the record to [`SqliteIndexStore::publish_artifact_atomic`] so blob /
-/// manifest / ref inserts share one transaction.
+/// [`FileBlobStore`] under its content digest, and verify the written
+/// bytes match the descriptor.
 fn pull_descriptor_blob(
     transport: &RemoteTransport,
     blob_store: &FileBlobStore,
     image_name: &ImageRef,
     descriptor: &Descriptor,
-) -> Result<BlobRecord> {
+) -> Result<()> {
     let digest = descriptor.digest().to_string();
     // The manifest descriptor's `size` bounds the network read: the
     // transport's pull helper allocates from this value (not from the
@@ -253,13 +212,13 @@ fn pull_descriptor_blob(
         descriptor.size(),
         bytes.len()
     );
-    let record = blob_store.put_bytes(&bytes)?;
+    let actual_digest = blob_store.put_bytes(&bytes)?;
     anyhow::ensure!(
-        record.digest == digest,
+        actual_digest == digest,
         "Blob digest mismatch: descriptor={digest}, actual={}",
-        record.digest
+        actual_digest
     );
-    Ok(record)
+    Ok(())
 }
 
 /// Stage the manifest bytes into [`FileBlobStore`] under their
@@ -272,13 +231,13 @@ fn stage_manifest_blob(
     blob_store: &FileBlobStore,
     manifest_bytes: &[u8],
     expected_digest: &str,
-) -> Result<BlobRecord> {
-    let record = blob_store.put_bytes(manifest_bytes)?;
+) -> Result<()> {
+    let actual_digest = blob_store.put_bytes(manifest_bytes)?;
     anyhow::ensure!(
-        record.digest == expected_digest,
+        actual_digest == expected_digest,
         "Manifest blob digest mismatch: registry reported {expected_digest}, sha256 of \
          pulled bytes is {}",
-        record.digest
+        actual_digest
     );
-    Ok(record)
+    Ok(())
 }
