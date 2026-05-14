@@ -18,11 +18,11 @@ pub use config::*;
 pub use digest::sha256_digest;
 pub use image_ref::ImageRef;
 pub(crate) use manifest::anonymous_artifact_image_name;
+pub(crate) use manifest::stable_json_bytes;
 pub use manifest::{
     is_anonymous_artifact_ref_name, is_anonymous_artifact_tag, LocalArtifact, LocalArtifactBuilder,
     LocalManifest,
 };
-pub(crate) use manifest::{stable_json_bytes, StagedArtifactBlob};
 pub use media_types::OCI_IMAGE_MANIFEST_MEDIA_TYPE;
 
 use anyhow::{Context, Result};

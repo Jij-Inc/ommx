@@ -428,25 +428,22 @@ impl LocalArtifactBuilder {
             policy = RefConflictPolicy::Replace;
         }
         let staged = self.stage()?;
-        let ref_update = registry.publish_artifact_manifest(
-            &staged.image_name,
-            &staged.manifest,
-            &staged.manifest_descriptor,
-            &staged.manifest_bytes,
-            &staged.blobs,
-            policy,
-        )?;
+        for blob in &staged.blobs {
+            registry.stage_blob(blob.descriptor(), blob.bytes())?;
+        }
+        let (manifest_descriptor, ref_update) =
+            registry.publish_artifact_manifest(&staged.image_name, &staged.manifest, policy)?;
         reject_conflicting_ref(&staged.image_name, ref_update)?;
         Ok(LocalArtifact::from_parts(
             registry,
             staged.image_name,
-            staged.manifest_descriptor.digest().clone(),
+            manifest_descriptor.digest().clone(),
         ))
     }
 
-    /// Compute the manifest, its stable JSON bytes, and the matching
-    /// descriptor from the in-memory builder state, returning a
-    /// [`StagedArtifactManifest`] that the registry can later publish.
+    /// Compute the manifest from the in-memory builder state, returning
+    /// a [`StagedArtifactManifest`] whose non-manifest blobs can be
+    /// written before the registry publishes the manifest itself.
     /// Pure: no I/O, no registry interaction.
     ///
     /// Materialises the empty config blob as one of the staged blobs so
@@ -495,9 +492,6 @@ impl LocalArtifactBuilder {
         let manifest = builder
             .build()
             .context("Failed to build OCI image manifest")?;
-        let manifest_bytes = stable_json_bytes(&manifest)?;
-        let manifest_descriptor =
-            descriptor_from_bytes(MediaType::ImageManifest, &manifest_bytes, HashMap::new())?;
         // `build_in_registry` resolves the `Anonymous` variant before
         // calling `stage()`, so reaching `stage()` with `Anonymous`
         // here is a bug (someone bypassed the resolve step). Surface
@@ -516,25 +510,21 @@ impl LocalArtifactBuilder {
         Ok(StagedArtifactManifest {
             image_name,
             manifest,
-            manifest_bytes,
-            manifest_descriptor,
             blobs,
         })
     }
 }
 
 /// The whole-artifact analogue of [`StagedArtifactBlob`]: bundles the
-/// `OCI ImageManifest` together with its stable JSON bytes, the
-/// matching `Descriptor` (digest / size / media type), every blob
-/// staged for upload (layers + the OCI 1.1 empty config), and the
-/// target `ImageName`.
+/// `OCI ImageManifest`, every non-manifest blob staged for upload
+/// (layers + the OCI 1.1 empty config), and the target `ImageName`.
 ///
 /// Produced purely by in-memory computation (`LocalArtifactBuilder::stage`)
-/// and consumed by the registry publish path
-/// (`LocalRegistry::publish_artifact_manifest`). Splitting the Build
-/// phase ("compute everything we need") from the Seal phase ("write
-/// blobs / insert manifest record / update ref atomically") keeps
-/// publish a pure I/O step that only validates the staged bundle.
+/// and consumed by `build_in_registry`. Splitting the Build phase
+/// ("compute the manifest and its dependent blobs") from the Seal
+/// phase ("write dependent blobs / serialize and write manifest /
+/// update ref") keeps manifest serialization in the registry publish
+/// path.
 ///
 /// The Git analogy is the constructed-but-not-yet-written tree +
 /// commit object — a `git commit` materialises objects in
@@ -545,8 +535,6 @@ impl LocalArtifactBuilder {
 struct StagedArtifactManifest {
     image_name: ImageRef,
     manifest: ImageManifest,
-    manifest_bytes: Vec<u8>,
-    manifest_descriptor: Descriptor,
     blobs: Vec<StagedArtifactBlob>,
 }
 
@@ -922,16 +910,16 @@ mod tests {
             .iter()
             .any(|blob| blob.descriptor.digest() == config.digest()));
 
+        let manifest_bytes = stable_json_bytes(&staged.manifest)?;
+        let manifest_descriptor =
+            descriptor_from_bytes(MediaType::ImageManifest, &manifest_bytes, HashMap::new())?;
+        assert_eq!(manifest_descriptor.media_type(), &MediaType::ImageManifest);
         assert_eq!(
-            staged.manifest_descriptor.media_type(),
-            &MediaType::ImageManifest
-        );
-        assert_eq!(
-            staged.manifest_descriptor.digest().to_string(),
-            sha256_digest(&staged.manifest_bytes)
+            manifest_descriptor.digest().to_string(),
+            sha256_digest(&manifest_bytes)
         );
 
-        let parsed: ImageManifest = serde_json::from_slice(&staged.manifest_bytes)?;
+        let parsed: ImageManifest = serde_json::from_slice(&manifest_bytes)?;
         assert_eq!(parsed, staged.manifest);
         Ok(())
     }
@@ -941,11 +929,15 @@ mod tests {
         let first = staged_with_annotations("order-a", [("b", "2"), ("a", "1")])?;
         let second = staged_with_annotations("order-b", [("a", "1"), ("b", "2")])?;
 
-        assert_eq!(first.manifest_bytes, second.manifest_bytes);
-        assert_eq!(
-            first.manifest_descriptor.digest(),
-            second.manifest_descriptor.digest()
-        );
+        let first_bytes = stable_json_bytes(&first.manifest)?;
+        let second_bytes = stable_json_bytes(&second.manifest)?;
+        let first_descriptor =
+            descriptor_from_bytes(MediaType::ImageManifest, &first_bytes, HashMap::new())?;
+        let second_descriptor =
+            descriptor_from_bytes(MediaType::ImageManifest, &second_bytes, HashMap::new())?;
+
+        assert_eq!(first_bytes, second_bytes);
+        assert_eq!(first_descriptor.digest(), second_descriptor.digest());
         Ok(())
     }
 

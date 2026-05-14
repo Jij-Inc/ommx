@@ -576,7 +576,10 @@ fn local_registry_build_keep_existing_skips_conflicting_manifest() -> Result<()>
         registry.resolve_image_name(&image_name)?,
         Some(first.manifest_digest().clone())
     );
-    assert!(!registry.blobs().exists(second_blob.digest())?);
+    // The builder writes non-manifest blobs before asking the registry
+    // to publish the manifest. On conflict, the ref is left unchanged,
+    // but already-staged CAS bytes may remain for later GC.
+    assert!(registry.blobs().exists(second_blob.digest())?);
     Ok(())
 }
 

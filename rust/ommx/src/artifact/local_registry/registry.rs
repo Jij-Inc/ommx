@@ -4,10 +4,11 @@ use super::{
     FileBlobStore, LegacyImportReport, OciDirImport, RefConflictPolicy, RefUpdate,
     SqliteIndexStore,
 };
-use crate::artifact::{media_types, ImageRef, StagedArtifactBlob};
+use crate::artifact::{media_types, sha256_digest, stable_json_bytes, ImageRef};
 use anyhow::{ensure, Context, Result};
-use oci_spec::image::{Descriptor, Digest, ImageManifest, MediaType};
+use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, ImageManifest, MediaType};
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
 #[derive(Debug)]
 pub struct LocalRegistry {
@@ -129,46 +130,21 @@ impl LocalRegistry {
         Ok(refs)
     }
 
-    /// Publish a staged OCI Image Manifest bundle to the SQLite Local
-    /// Registry. Callers must construct `manifest` and `manifest_descriptor`
-    /// via [`crate::artifact::LocalArtifactBuilder`] or the import paths
-    /// in `local_registry::import::*`, both of which produce an OCI
-    /// Image Manifest with the OMMX `artifactType` field set. The
-    /// publish path does not dispatch on manifest format — the SQLite
-    /// Local Registry stores OCI Image Manifest exclusively.
+    /// Publish an OCI Image Manifest to the SQLite Local Registry.
+    /// Callers must write every config/layer blob referenced by the
+    /// manifest into the BlobStore before calling this method. The
+    /// registry serializes the manifest itself, writes that manifest
+    /// blob, and publishes the resulting descriptor into the index.
     pub(crate) fn publish_artifact_manifest(
         &self,
         image_name: &ImageRef,
         manifest: &ImageManifest,
-        manifest_descriptor: &Descriptor,
-        manifest_bytes: &[u8],
-        blobs: &[StagedArtifactBlob],
         policy: RefConflictPolicy,
-    ) -> Result<RefUpdate> {
-        Self::validate_manifest_descriptor(manifest, manifest_descriptor, manifest_bytes)?;
-        // OCI Image Manifest `blobs` = manifest layers + the `config`
-        // descriptor (which is the OCI 1.1 empty config blob in OMMX's
-        // builder). Callers stage all of these in `blobs[]`.
-        let manifest_descriptor_count = manifest.layers().len() + 1;
-        ensure!(
-            manifest_descriptor_count == blobs.len(),
-            "Manifest descriptor count ({manifest_descriptor_count}) does not match pending blob count ({})",
-            blobs.len()
-        );
-        let staged_descriptors: Vec<&Descriptor> =
-            blobs.iter().map(|blob| blob.descriptor()).collect();
-        let descriptor_is_staged = |d: &Descriptor| staged_descriptors.contains(&d);
-        ensure!(
-            descriptor_is_staged(manifest.config()),
-            "Manifest config descriptor is not staged for upload"
-        );
-        for layer in manifest.layers() {
-            ensure!(
-                descriptor_is_staged(layer),
-                "Manifest layer descriptor is not staged for upload: {}",
-                layer.digest()
-            );
-        }
+    ) -> Result<(Descriptor, RefUpdate)> {
+        Self::validate_manifest(manifest)?;
+        self.ensure_manifest_dependencies_exist(manifest)?;
+        let manifest_bytes = stable_json_bytes(manifest)?;
+        let manifest_descriptor = Self::build_manifest_descriptor(&manifest_bytes)?;
 
         // Pre-check: under `KeepExisting`, return the conflict before
         // we waste any CAS writes. The atomic publish in stage 2
@@ -178,109 +154,44 @@ impl LocalRegistry {
         if policy == RefConflictPolicy::KeepExisting {
             if let Some(existing_descriptor) = self.index.resolve_image_descriptor(image_name)? {
                 if existing_descriptor.digest() != manifest_descriptor.digest() {
-                    return Ok(RefUpdate::Conflicted {
-                        existing_manifest_digest: existing_descriptor.digest().clone(),
-                        incoming_manifest_digest: manifest_descriptor.digest().clone(),
-                    });
+                    let incoming_manifest_digest = manifest_descriptor.digest().clone();
+                    return Ok((
+                        manifest_descriptor,
+                        RefUpdate::Conflicted {
+                            existing_manifest_digest: existing_descriptor.digest().clone(),
+                            incoming_manifest_digest,
+                        },
+                    ));
                 }
             }
         }
 
-        // Stage 1: write CAS bytes (idempotent, outside any SQLite tx).
-        // Stage 2: publish only the OCI manifest descriptor into the
-        // SQLite ref index. If stage 2 conflicts or crashes, the CAS
-        // may contain unreferenced bytes; that is the expected state
-        // for GC, not an index-storage cache entry.
-        for blob in blobs {
-            self.stage_blob(blob.descriptor(), blob.bytes())?;
-        }
-        self.stage_blob(manifest_descriptor, manifest_bytes)?;
-
-        self.index
-            .put_image_ref_with_policy(image_name, manifest_descriptor, policy)
+        self.stage_blob(&manifest_descriptor, &manifest_bytes)?;
+        let ref_update =
+            self.index
+                .put_image_ref_with_policy(image_name, &manifest_descriptor, policy)?;
+        Ok((manifest_descriptor, ref_update))
     }
 
-    /// Publish an OCI Image Manifest whose layer and config blobs are
-    /// already present in the [`FileBlobStore`] — e.g. written
-    /// incrementally by `ommx::experiment` at `log_*` time. The caller
-    /// passes the distinct blob descriptors the manifest depends on;
-    /// payload bytes are not held in memory until publish.
-    pub(crate) fn publish_prestaged_artifact_manifest(
-        &self,
-        image_name: &ImageRef,
-        manifest: &ImageManifest,
-        manifest_descriptor: &Descriptor,
-        manifest_bytes: &[u8],
-        blob_descriptors: &[Descriptor],
-        policy: RefConflictPolicy,
-    ) -> Result<RefUpdate> {
-        Self::validate_manifest_descriptor(manifest, manifest_descriptor, manifest_bytes)?;
-        let staged_digests: std::collections::HashSet<_> =
-            blob_descriptors.iter().map(|d| d.digest()).collect();
-        ensure!(
-            staged_digests.contains(manifest.config().digest()),
-            "Manifest config blob is not staged in the BlobStore"
-        );
-        ensure!(
-            self.blobs.exists(manifest.config().digest())?,
-            "Manifest config blob is missing from the BlobStore: {}",
-            manifest.config().digest()
-        );
+    fn ensure_manifest_dependencies_exist(&self, manifest: &ImageManifest) -> Result<()> {
+        self.ensure_blob_exists("Manifest config", manifest.config())?;
         for layer in manifest.layers() {
-            ensure!(
-                staged_digests.contains(layer.digest()),
-                "Manifest layer blob is not staged in the BlobStore: {}",
-                layer.digest()
-            );
-            ensure!(
-                self.blobs.exists(layer.digest())?,
-                "Manifest layer blob is missing from the BlobStore: {}",
-                layer.digest()
-            );
+            self.ensure_blob_exists("Manifest layer", layer)?;
         }
-
-        if policy == RefConflictPolicy::KeepExisting {
-            if let Some(existing_descriptor) = self.index.resolve_image_descriptor(image_name)? {
-                if existing_descriptor.digest() != manifest_descriptor.digest() {
-                    return Ok(RefUpdate::Conflicted {
-                        existing_manifest_digest: existing_descriptor.digest().clone(),
-                        incoming_manifest_digest: manifest_descriptor.digest().clone(),
-                    });
-                }
-            }
-        }
-
-        // Layer / config blobs are already in CAS; only the manifest
-        // blob itself still needs to be written before publishing the
-        // manifest descriptor into the SQLite ref index.
-        self.stage_blob(manifest_descriptor, manifest_bytes)?;
-        self.index
-            .put_image_ref_with_policy(image_name, manifest_descriptor, policy)
+        Ok(())
     }
 
-    /// Validate that `manifest_descriptor` is a self-consistent OCI
-    /// Image Manifest descriptor carrying the OMMX `artifactType`.
-    /// Shared by both publish entry points.
-    fn validate_manifest_descriptor(
-        manifest: &ImageManifest,
-        manifest_descriptor: &Descriptor,
-        manifest_bytes: &[u8],
-    ) -> Result<()> {
+    fn ensure_blob_exists(&self, label: &str, descriptor: &Descriptor) -> Result<()> {
         ensure!(
-            manifest_descriptor.media_type() == &MediaType::ImageManifest,
-            "Manifest descriptor must be `{:?}`, got `{}`",
-            MediaType::ImageManifest,
-            manifest_descriptor.media_type(),
+            self.blobs.exists(descriptor.digest())?,
+            "{label} blob is missing from the BlobStore: {}",
+            descriptor.digest()
         );
-        ensure!(
-            manifest_descriptor.digest().to_string()
-                == crate::artifact::sha256_digest(manifest_bytes),
-            "Manifest descriptor digest does not match manifest bytes"
-        );
-        ensure!(
-            manifest_descriptor.size() == manifest_bytes.len() as u64,
-            "Manifest descriptor size does not match manifest bytes"
-        );
+        Ok(())
+    }
+
+    /// Validate that the manifest carries the OMMX `artifactType`.
+    fn validate_manifest(manifest: &ImageManifest) -> Result<()> {
         let artifact_type = manifest
             .artifact_type()
             .as_ref()
@@ -294,9 +205,21 @@ impl LocalRegistry {
         Ok(())
     }
 
+    fn build_manifest_descriptor(manifest_bytes: &[u8]) -> Result<Descriptor> {
+        DescriptorBuilder::default()
+            .media_type(MediaType::ImageManifest)
+            .digest(
+                Digest::from_str(&sha256_digest(manifest_bytes))
+                    .context("Failed to parse manifest digest")?,
+            )
+            .size(manifest_bytes.len() as u64)
+            .build()
+            .context("Failed to build manifest descriptor")
+    }
+
     /// CAS-write a descriptor's bytes and verify the concrete bytes
     /// match the descriptor the manifest will reference.
-    fn stage_blob(&self, descriptor: &Descriptor, bytes: &[u8]) -> Result<()> {
+    pub(crate) fn stage_blob(&self, descriptor: &Descriptor, bytes: &[u8]) -> Result<()> {
         let digest = self.blobs.put_bytes(bytes)?;
         ensure!(
             &digest == descriptor.digest(),

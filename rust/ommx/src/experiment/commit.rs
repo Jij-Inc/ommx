@@ -8,11 +8,11 @@ use super::{
     RUN_ATTRIBUTES_MEDIA_TYPE,
 };
 use crate::artifact::local_registry::{LocalRegistry, RefConflictPolicy, RefUpdate};
-use crate::artifact::{media_types, sha256_digest, stable_json_bytes, LocalArtifact};
+use crate::artifact::{media_types, sha256_digest, LocalArtifact};
 use anyhow::Result;
 use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, ImageManifestBuilder, MediaType};
 use serde_json::json;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -24,24 +24,19 @@ pub(super) fn build_and_publish(
     state: &ExperimentState,
 ) -> Result<LocalArtifact> {
     let mut layers: Vec<Descriptor> = Vec::new();
-    let mut blob_descriptors: Vec<Descriptor> = Vec::new();
-    let mut seen_digests: HashSet<Digest> = HashSet::new();
 
     // Record layers: experiment space first, then each run's space.
     // `layers[]` keeps one descriptor per record (digests may repeat
-    // across annotation-distinct layers); `blob_records` is de-duped
-    // by digest, since the BlobStore shares identical payloads.
+    // across annotation-distinct layers). The payload bytes were
+    // already written to the BlobStore when each record was logged.
     let run_records = state.runs.iter().flat_map(|run| run.records.iter());
     for record in state.records.iter().chain(run_records) {
-        layers.push(record.descriptor.clone());
         let digest = record.descriptor.digest().clone();
-        if seen_digests.insert(digest.clone()) {
-            let descriptor = state
-                .staged_blobs
-                .get(&digest)
-                .ok_or_else(|| crate::error!("Staged blob {digest} is missing"))?;
-            blob_descriptors.push(descriptor.clone());
-        }
+        state
+            .staged_blobs
+            .get(&digest)
+            .ok_or_else(|| crate::error!("Staged blob {digest} is missing"))?;
+        layers.push(record.descriptor.clone());
     }
 
     // Aggregate layers, materialised at commit time.
@@ -53,10 +48,7 @@ pub(super) fn build_and_publish(
         LAYER_KIND_RUN_ATTRIBUTES,
         &run_attributes,
     )?;
-    layers.push(descriptor.clone());
-    if seen_digests.insert(descriptor.digest().clone()) {
-        blob_descriptors.push(descriptor);
-    }
+    layers.push(descriptor);
 
     let index = serde_json::to_vec(&experiment_index_json(state))
         .map_err(|e| crate::error!("Failed to encode experiment index JSON: {e}"))?;
@@ -66,10 +58,7 @@ pub(super) fn build_and_publish(
         LAYER_KIND_INDEX,
         &index,
     )?;
-    layers.push(descriptor.clone());
-    if seen_digests.insert(descriptor.digest().clone()) {
-        blob_descriptors.push(descriptor);
-    }
+    layers.push(descriptor);
 
     // OCI 1.1 empty config blob. Built without an `annotations` field
     // to match `LocalArtifactBuilder::stage`.
@@ -83,10 +72,7 @@ pub(super) fn build_and_publish(
         .size(empty_config_bytes.len() as u64)
         .build()
         .map_err(|e| crate::error!("Failed to build empty config descriptor: {e}"))?;
-    registry.blobs().put_bytes(&empty_config_bytes)?;
-    if seen_digests.insert(config_descriptor.digest().clone()) {
-        blob_descriptors.push(config_descriptor.clone());
-    }
+    registry.stage_blob(&config_descriptor, &empty_config_bytes)?;
 
     let manifest = ImageManifestBuilder::default()
         .schema_version(2u32)
@@ -98,28 +84,14 @@ pub(super) fn build_and_publish(
         .annotations(manifest_annotations(state))
         .build()
         .map_err(|e| crate::error!("Failed to build experiment OCI image manifest: {e}"))?;
-    let manifest_bytes = stable_json_bytes(&manifest)?;
-    let manifest_descriptor = DescriptorBuilder::default()
-        .media_type(MediaType::ImageManifest)
-        .digest(
-            Digest::from_str(&sha256_digest(&manifest_bytes))
-                .map_err(|e| crate::error!("Failed to parse manifest digest: {e}"))?,
-        )
-        .size(manifest_bytes.len() as u64)
-        .build()
-        .map_err(|e| crate::error!("Failed to build manifest descriptor: {e}"))?;
-
     let image_name = match &state.requested_ref {
         Some(image_ref) => image_ref.clone(),
         None => registry.synthesize_anonymous_image_name()?,
     };
 
-    let ref_update = registry.publish_prestaged_artifact_manifest(
+    let (manifest_descriptor, ref_update) = registry.publish_artifact_manifest(
         &image_name,
         &manifest,
-        &manifest_descriptor,
-        &manifest_bytes,
-        &blob_descriptors,
         RefConflictPolicy::KeepExisting,
     )?;
     if let RefUpdate::Conflicted {

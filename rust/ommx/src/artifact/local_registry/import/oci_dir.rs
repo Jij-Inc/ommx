@@ -113,11 +113,10 @@ pub(super) enum RefConflictHandling {
 /// layer descriptors enumerated from the manifest, and the config
 /// blob.
 ///
-/// "Staged" parallels the build-side vocabulary
-/// ([`crate::artifact::StagedArtifactBlob`],
-/// [`crate::artifact::LocalArtifactBuilder::stage`]): the data is
-/// fully computed and ready for publish, but the IndexStore writes
-/// have not happened yet.
+/// "Staged" parallels the build-side vocabulary in
+/// [`crate::artifact::LocalArtifactBuilder`]: the data is fully
+/// computed and ready for publish, but the IndexStore writes have not
+/// happened yet.
 ///
 /// Built once by [`stage_oci_dir`] and consumed by
 /// [`import_oci_dir_inner`]. v3 import is identity-preserving:
