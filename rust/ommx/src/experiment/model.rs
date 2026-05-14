@@ -1,0 +1,110 @@
+//! In-memory state of an experiment session: the domain enums and the
+//! `Record` / `RunState` / `ExperimentState` structs.
+
+use crate::artifact::local_registry::BlobRecord;
+use crate::artifact::{ImageRef, LocalArtifact};
+use oci_spec::image::Descriptor;
+use std::time::Instant;
+
+/// The storage space a [`Record`] belongs to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Space {
+    /// Shared by the whole experiment (dataset, source problem, ...).
+    Experiment,
+    /// Owned by a single run.
+    Run,
+}
+
+impl Space {
+    pub(super) fn as_str(self) -> &'static str {
+        match self {
+            Space::Experiment => "experiment",
+            Space::Run => "run",
+        }
+    }
+}
+
+/// The kind of payload a [`Record`] holds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum RecordKind {
+    /// Small JSON context (dataset name, source problem id, ...).
+    Metadata,
+    /// JSON-serialisable structured object.
+    Object,
+    /// An [`crate::Instance`].
+    Instance,
+    /// A [`crate::Solution`].
+    Solution,
+    /// A [`crate::SampleSet`].
+    SampleSet,
+}
+
+impl RecordKind {
+    pub(super) fn as_str(self) -> &'static str {
+        match self {
+            RecordKind::Metadata => "metadata",
+            RecordKind::Object => "object",
+            RecordKind::Instance => "instance",
+            RecordKind::Solution => "solution",
+            RecordKind::SampleSet => "sampleset",
+        }
+    }
+}
+
+/// Lifecycle status of a run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum RunStatus {
+    /// The run is open and still accepting records.
+    Running,
+    /// The run finished normally.
+    Finished,
+    /// The run ended via a failure.
+    Failed,
+}
+
+impl RunStatus {
+    pub(super) fn as_str(self) -> &'static str {
+        match self {
+            RunStatus::Running => "running",
+            RunStatus::Finished => "finished",
+            RunStatus::Failed => "failed",
+        }
+    }
+}
+
+/// A named payload that has already been written to the BlobStore.
+#[derive(Debug, Clone)]
+pub(super) struct Record {
+    pub(super) kind: RecordKind,
+    pub(super) name: String,
+    /// OCI layer descriptor; carries the experiment / record annotations.
+    pub(super) descriptor: Descriptor,
+    /// IndexStore blob record for the CAS-written payload.
+    pub(super) blob: BlobRecord,
+}
+
+/// In-memory state of a single run.
+#[derive(Debug)]
+pub(super) struct RunState {
+    pub(super) run_id: u64,
+    pub(super) records: Vec<Record>,
+    pub(super) status: RunStatus,
+    pub(super) started_at: Instant,
+    pub(super) elapsed_secs: Option<f64>,
+}
+
+/// In-memory state shared by an [`super::Experiment`] and all its
+/// [`super::Run`] handles.
+#[derive(Debug)]
+pub(super) struct ExperimentState {
+    pub(super) name: String,
+    /// Image name the committed artifact is published under. `None`
+    /// means an anonymous name is synthesised at commit time.
+    pub(super) requested_ref: Option<ImageRef>,
+    /// Experiment-space records.
+    pub(super) records: Vec<Record>,
+    pub(super) runs: Vec<RunState>,
+    pub(super) next_run_id: u64,
+    pub(super) committed: bool,
+    pub(super) artifact: Option<LocalArtifact>,
+}
