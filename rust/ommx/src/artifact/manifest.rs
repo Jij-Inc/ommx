@@ -163,7 +163,7 @@ impl LocalArtifact {
         Ok(self.get_manifest()?.subject())
     }
 
-    pub fn get_blob(&self, digest: impl AsRef<str>) -> Result<Vec<u8>> {
+    pub fn get_blob(&self, digest: &Digest) -> Result<Vec<u8>> {
         self.registry.blobs().read_bytes(digest)
     }
 }

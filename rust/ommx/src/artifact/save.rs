@@ -20,10 +20,7 @@
 //! `Vec<u8>` allocation with a fixed 64 KB copy buffer; left as a
 //! future refinement.
 
-use super::{
-    local_registry::{ValidatedDigest, OCI_IMAGE_REF_NAME_ANNOTATION},
-    LocalArtifact,
-};
+use super::{local_registry::OCI_IMAGE_REF_NAME_ANNOTATION, LocalArtifact};
 use anyhow::Context;
 use oci_spec::image::{
     Descriptor, DescriptorBuilder, Digest, ImageIndexBuilder, ImageManifest, MediaType,
@@ -34,7 +31,6 @@ use std::{
     fs::OpenOptions,
     io::{BufWriter, Cursor, Write},
     path::Path,
-    str::FromStr,
 };
 use tar::{EntryType, Header};
 
@@ -51,7 +47,7 @@ impl LocalArtifact {
     /// produced archive. Importing the archive back into a fresh
     /// registry round-trips to the same digest.
     pub fn save(&self, output: &Path) -> crate::Result<()> {
-        let manifest_digest = self.manifest_digest().to_string();
+        let manifest_digest = self.manifest_digest().clone();
         let manifest_bytes = self.get_blob(&manifest_digest)?;
         let manifest: ImageManifest = serde_json::from_slice(&manifest_bytes)
             .context("Failed to parse manifest from SQLite Local Registry")?;
@@ -91,26 +87,24 @@ impl LocalArtifact {
         //    contain"), then config, then layers. Order is not
         //    semantically significant — OCI Image Layout readers index
         //    by `blobs/<algorithm>/<encoded>` regardless of tar order.
-        append_blob_entry(&mut tar, &manifest_digest, &manifest_bytes, "manifest")?;
+        append_blob_entry(&mut tar, &manifest_digest, &manifest_bytes)?;
         let config = manifest.config();
-        let config_bytes = self.get_blob(config.digest().as_ref())?;
+        let config_bytes = self.get_blob(config.digest())?;
         verify_blob(config, config_bytes.len(), "config")?;
-        append_blob_entry(&mut tar, config.digest().as_ref(), &config_bytes, "config")?;
+        append_blob_entry(&mut tar, config.digest(), &config_bytes)?;
         for layer in manifest.layers() {
-            let layer_bytes = self.get_blob(layer.digest().as_ref())?;
+            let layer_bytes = self.get_blob(layer.digest())?;
             verify_blob(layer, layer_bytes.len(), "layer")?;
-            append_blob_entry(&mut tar, layer.digest().as_ref(), &layer_bytes, "layer")?;
+            append_blob_entry(&mut tar, layer.digest(), &layer_bytes)?;
         }
 
         // 3. `index.json` — single-entry ImageIndex pointing at the
         //    manifest, annotated with the image ref so the archive can
         //    be imported back under the same name without a side
         //    channel.
-        let manifest_digest_parsed = Digest::from_str(&manifest_digest)
-            .with_context(|| format!("Invalid manifest digest: {manifest_digest}"))?;
         let manifest_descriptor = DescriptorBuilder::default()
             .media_type(MediaType::ImageManifest)
-            .digest(manifest_digest_parsed)
+            .digest(manifest_digest)
             .size(manifest_bytes.len() as u64)
             .annotations({
                 let mut map = HashMap::new();
@@ -164,14 +158,10 @@ fn append_tar_file<W: Write>(
 /// the full `algorithm:encoded` form the manifest stores.
 fn append_blob_entry<W: Write>(
     tar: &mut tar::Builder<W>,
-    digest: &str,
+    digest: &Digest,
     bytes: &[u8],
-    kind: &str,
 ) -> crate::Result<()> {
-    let parsed = ValidatedDigest::parse(digest).with_context(|| {
-        format!("Invalid {kind} digest while writing archive blob entry: {digest}")
-    })?;
-    let path = format!("blobs/{}/{}", parsed.algorithm(), parsed.encoded());
+    let path = format!("blobs/{}/{}", digest.algorithm().as_ref(), digest.digest());
     append_tar_file(tar, &path, bytes)
 }
 

@@ -45,8 +45,7 @@ fn file_blob_store_round_trip() -> Result<()> {
     );
     assert!(store.exists(&digest)?);
     assert_eq!(store.read_bytes(&digest)?, b"hello");
-    assert!(store.path_for_digest("sha256:../../outside").is_err());
-    assert!(store.exists("sha256:../../outside").is_err());
+    assert!(Digest::from_str("sha256:../../outside").is_err());
     Ok(())
 }
 
@@ -179,7 +178,7 @@ fn imports_oci_dir_into_sqlite_registry_preserving_image_manifest() -> Result<()
         Some(imported.manifest_digest.clone())
     );
     assert!(blob_store.exists(&imported.manifest_digest)?);
-    assert!(blob_store.exists(layer.digest().as_ref())?);
+    assert!(blob_store.exists(layer.digest())?);
 
     // Strict identity: the manifest bytes the v3 BlobStore returns must
     // be exactly the bytes that lived in the legacy OCI dir. Digest
@@ -201,7 +200,7 @@ fn imports_oci_dir_into_sqlite_registry_preserving_image_manifest() -> Result<()
         legacy_manifest_bytes.len() as u64
     );
     assert_eq!(
-        blob_store.read_bytes(layer.digest().as_ref())?.len() as u64,
+        blob_store.read_bytes(layer.digest())?.len() as u64,
         layer.size()
     );
 
@@ -217,7 +216,7 @@ fn imports_oci_dir_into_sqlite_registry_preserving_image_manifest() -> Result<()
         OCI_IMAGE_MANIFEST_MEDIA_TYPE
     );
     assert_eq!(artifact.layers()?, vec![layer.clone()]);
-    assert_eq!(artifact.get_blob(layer.digest().as_ref())?, b"instance");
+    assert_eq!(artifact.get_blob(layer.digest())?, b"instance");
     Ok(())
 }
 
@@ -500,16 +499,16 @@ fn local_registry_builds_native_image_manifest_with_artifact_type() -> Result<()
         manifest.layers()[0].media_type(),
         &media_types::v1_instance()
     );
-    assert_eq!(artifact.get_blob(layer.digest().as_ref())?, b"instance");
+    assert_eq!(artifact.get_blob(layer.digest())?, b"instance");
 
     // Empty config blob must be readable from the registry CAS.
     assert_eq!(
-        artifact.get_blob(media_types::OCI_EMPTY_CONFIG_DIGEST)?,
+        artifact.get_blob(&Digest::from_str(media_types::OCI_EMPTY_CONFIG_DIGEST)?)?,
         media_types::OCI_EMPTY_CONFIG_BYTES
     );
     assert!(registry
         .blobs()
-        .exists(media_types::OCI_EMPTY_CONFIG_DIGEST)?);
+        .exists(&Digest::from_str(media_types::OCI_EMPTY_CONFIG_DIGEST)?)?);
     Ok(())
 }
 
@@ -529,7 +528,7 @@ fn local_registry_build_keep_existing_skips_conflicting_manifest() -> Result<()>
         registry.resolve_image_name(&image_name)?,
         Some(first.manifest_digest().clone())
     );
-    assert!(!registry.blobs().exists(second_blob.digest().as_ref())?);
+    assert!(!registry.blobs().exists(second_blob.digest())?);
     Ok(())
 }
 
@@ -739,12 +738,12 @@ fn imports_legacy_v2_oci_dir_with_ommx_config_blob() -> Result<()> {
 
     assert_eq!(imported.image_name, Some(image_name.clone()));
     assert!(blob_store.exists(&imported.manifest_digest)?);
-    assert!(blob_store.exists(layer_descriptor.digest().as_ref())?);
+    assert!(blob_store.exists(layer_descriptor.digest())?);
 
     // OMMX-specific config blob is preserved in the BlobStore.
-    let config_digest_str = config_descriptor.digest().to_string();
-    assert!(blob_store.exists(&config_digest_str)?);
-    assert_eq!(blob_store.read_bytes(&config_digest_str)?, v2_config_bytes);
+    let config_digest = config_descriptor.digest();
+    assert!(blob_store.exists(config_digest)?);
+    assert_eq!(blob_store.read_bytes(config_digest)?, v2_config_bytes);
 
     // LocalArtifact reads the legacy manifest (parse-time check is on
     // artifactType only, so the OMMX-specific config is not rejected).
@@ -860,8 +859,8 @@ fn concurrent_blob_writes_publish_one_complete_blob() -> Result<()> {
         .map(|handle| handle.join().expect("blob writer thread panicked"))
         .collect::<Result<_>>()?;
 
-    let digest = sha256_digest(&bytes);
-    assert!(records.iter().all(|record| record.as_ref() == digest));
+    let digest = Digest::from_str(&sha256_digest(&bytes))?;
+    assert!(records.iter().all(|record| record == &digest));
     let store = FileBlobStore::open(&root)?;
     assert_eq!(store.read_bytes(&digest)?, bytes);
     Ok(())
@@ -1116,7 +1115,7 @@ fn pull_image_does_not_short_circuit_when_manifest_blob_is_missing() -> Result<(
 
     // Simulate corruption: remove the manifest blob file under the
     // FileBlobStore while keeping the SQLite ref intact.
-    let manifest_digest = local_artifact.manifest_digest().to_string();
+    let manifest_digest = local_artifact.manifest_digest().clone();
     let blob_path = registry.blobs().path_for_digest(&manifest_digest)?;
     std::fs::remove_file(&blob_path)
         .with_context(|| format!("Failed to remove manifest blob at {}", blob_path.display()))?;

@@ -1,4 +1,4 @@
-use super::{sha256_digest, ValidatedDigest, FILE_BLOB_STORE_DIR_NAME};
+use super::{sha256_digest, FILE_BLOB_STORE_DIR_NAME};
 use anyhow::{ensure, Context, Result};
 use oci_spec::image::Digest;
 use std::{
@@ -41,33 +41,34 @@ impl FileBlobStore {
         if path.exists() {
             verify_existing_blob(&path, bytes, digest.as_ref())?;
         } else {
-            self.write_blob_atomically(bytes, digest.as_ref(), &path)?;
+            self.write_blob_atomically(bytes, &digest, &path)?;
         }
         Ok(digest)
     }
 
-    pub fn read_bytes(&self, digest: impl AsRef<str>) -> Result<Vec<u8>> {
-        let digest = digest.as_ref();
+    pub fn read_bytes(&self, digest: &Digest) -> Result<Vec<u8>> {
         let path = self.path_for_digest(digest)?;
         let bytes =
             fs::read(&path).with_context(|| format!("Failed to read blob {}", path.display()))?;
         ensure!(
-            sha256_digest(&bytes) == digest,
+            sha256_digest(&bytes) == digest.as_ref(),
             "Blob digest verification failed for {digest}"
         );
         Ok(bytes)
     }
 
-    pub fn exists(&self, digest: impl AsRef<str>) -> Result<bool> {
+    pub fn exists(&self, digest: &Digest) -> Result<bool> {
         Ok(self.path_for_digest(digest)?.exists())
     }
 
-    pub fn path_for_digest(&self, digest: impl AsRef<str>) -> Result<PathBuf> {
-        let digest = ValidatedDigest::parse(digest.as_ref())?;
-        Ok(self.root.join(digest.algorithm()).join(digest.encoded()))
+    pub fn path_for_digest(&self, digest: &Digest) -> Result<PathBuf> {
+        Ok(self
+            .root
+            .join(digest.algorithm().as_ref())
+            .join(digest.digest()))
     }
 
-    fn write_blob_atomically(&self, bytes: &[u8], digest: &str, path: &Path) -> Result<()> {
+    fn write_blob_atomically(&self, bytes: &[u8], digest: &Digest, path: &Path) -> Result<()> {
         let temp_path = self.temp_path_for_digest(digest)?;
         let mut temp_file = OpenOptions::new()
             .write(true)
@@ -89,14 +90,14 @@ impl FileBlobStore {
             }
             Err(error) if error.kind() == ErrorKind::AlreadyExists => {
                 let _ = fs::remove_file(&temp_path);
-                verify_existing_blob(path, bytes, digest)
+                verify_existing_blob(path, bytes, digest.as_ref())
             }
             Err(error) => {
                 let _ = fs::remove_file(&temp_path);
                 Err(error).with_context(|| {
                     format!(
                         "Failed to publish blob {} from {} to {}",
-                        digest,
+                        digest.as_ref(),
                         temp_path.display(),
                         path.display()
                     )
@@ -105,7 +106,7 @@ impl FileBlobStore {
         }
     }
 
-    fn temp_path_for_digest(&self, digest: &str) -> Result<PathBuf> {
+    fn temp_path_for_digest(&self, digest: &Digest) -> Result<PathBuf> {
         let path = self.path_for_digest(digest)?;
         let encoded = path
             .file_name()

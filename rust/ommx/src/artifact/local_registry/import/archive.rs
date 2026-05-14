@@ -456,9 +456,9 @@ fn ensure_blob_exists(
     descriptor: &Descriptor,
     archive_path: &Path,
 ) -> Result<()> {
-    let digest = descriptor.digest().to_string();
+    let digest = descriptor.digest();
     anyhow::ensure!(
-        blobs.exists(&digest)?,
+        blobs.exists(digest)?,
         "Blob {digest} referenced by manifest is missing from {}",
         archive_path.display()
     );

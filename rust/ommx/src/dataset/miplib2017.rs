@@ -271,7 +271,7 @@ pub fn load(name: &str) -> Result<(Instance, InstanceAnnotations)> {
         instance_layers.next().is_none(),
         "MIPLIB2017 Artifact should contain exactly one instance"
     );
-    let bytes = artifact.get_blob(layer.digest().as_ref())?;
+    let bytes = artifact.get_blob(layer.digest())?;
     let instance =
         Instance::decode(bytes.as_slice()).context("Failed to decode MIPLIB2017 instance layer")?;
     Ok((

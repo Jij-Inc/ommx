@@ -408,7 +408,7 @@ fn pull_image_round_trips_through_anonymous_registry() -> Result<()> {
     let expected_layer_bytes = {
         let layers = sender_local.layers()?;
         assert_eq!(layers.len(), 1);
-        sender_local.get_blob(layers[0].digest().as_ref())?
+        sender_local.get_blob(layers[0].digest())?
     };
     sender_local.push()?;
 
@@ -426,7 +426,7 @@ fn pull_image_round_trips_through_anonymous_registry() -> Result<()> {
     assert_eq!(pulled.manifest_digest(), &outcome.manifest_digest);
     let layers = pulled.layers()?;
     assert_eq!(layers.len(), 1);
-    let pulled_bytes = pulled.get_blob(layers[0].digest().as_ref())?;
+    let pulled_bytes = pulled.get_blob(layers[0].digest())?;
     assert_eq!(pulled_bytes, expected_layer_bytes);
     Ok(())
 }
