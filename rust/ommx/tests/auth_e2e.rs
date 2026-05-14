@@ -423,7 +423,7 @@ fn pull_image_round_trips_through_anonymous_registry() -> Result<()> {
     // these assertions means the native pull lost data on the way
     // through `RemoteTransport` + `publish_artifact_atomic`.
     let pulled = LocalArtifact::open_in_registry(receiver, image_name)?;
-    assert_eq!(pulled.manifest_digest(), outcome.manifest_digest);
+    assert_eq!(pulled.manifest_digest(), &outcome.manifest_digest);
     let layers = pulled.layers()?;
     assert_eq!(layers.len(), 1);
     let pulled_bytes = pulled.get_blob(layers[0].digest().as_ref())?;

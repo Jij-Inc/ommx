@@ -35,7 +35,7 @@ use super::super::{
 use super::oci_dir::OciDirImport;
 use crate::artifact::{media_types, ImageRef};
 use anyhow::{Context, Result};
-use oci_spec::image::{Descriptor, ImageIndex, ImageManifest, MediaType, OciLayout};
+use oci_spec::image::{Descriptor, Digest, ImageIndex, ImageManifest, MediaType, OciLayout};
 use std::{
     fs::File,
     io::{BufReader, Read},
@@ -53,7 +53,7 @@ use tar::Archive;
 pub struct ArchiveInspectView {
     pub image_name: Option<ImageRef>,
     pub manifest: ImageManifest,
-    pub manifest_digest: String,
+    pub manifest_digest: Digest,
 }
 
 /// Inspect a `.ommx` archive without importing it into the SQLite
@@ -81,7 +81,7 @@ pub fn inspect_archive(path: &Path) -> Result<ArchiveInspectView> {
 
 /// First-pass helper for [`inspect_archive`]: stream the tar to find
 /// `index.json` and return `(manifest_digest, ref_name)`.
-fn read_archive_index(path: &Path) -> Result<(String, Option<ImageRef>)> {
+fn read_archive_index(path: &Path) -> Result<(Digest, Option<ImageRef>)> {
     let file = File::open(path)
         .with_context(|| format!("Failed to open OCI archive {}", path.display()))?;
     let mut archive = Archive::new(BufReader::new(file));
@@ -118,7 +118,7 @@ fn read_archive_index(path: &Path) -> Result<(String, Option<ImageRef>)> {
         );
         let descriptor = image_index.manifests().first().unwrap();
         let image_name = image_name_from_index_descriptor(descriptor)?;
-        return Ok((descriptor.digest().to_string(), image_name));
+        return Ok((descriptor.digest().clone(), image_name));
     }
     anyhow::bail!("Missing index.json in {}", path.display())
 }
@@ -127,7 +127,7 @@ fn read_archive_index(path: &Path) -> Result<(String, Option<ImageRef>)> {
 /// second time to read the blob at `digest` from
 /// `blobs/<algorithm>/<encoded>`. Manifests are first in the v3
 /// native writer's output so the scan terminates quickly there.
-fn read_archive_blob(path: &Path, digest: &str) -> Result<Vec<u8>> {
+fn read_archive_blob(path: &Path, digest: &Digest) -> Result<Vec<u8>> {
     let file = File::open(path)
         .with_context(|| format!("Failed to open OCI archive {}", path.display()))?;
     let mut archive = Archive::new(BufReader::new(file));
@@ -147,13 +147,13 @@ fn read_archive_blob(path: &Path, digest: &str) -> Result<Vec<u8>> {
             continue;
         }
         if let Some(entry_digest) = blob_path_to_digest(path_str) {
-            if entry_digest == digest {
+            if entry_digest == digest.as_ref() {
                 let mut bytes = Vec::with_capacity(entry.header().size().unwrap_or(0) as usize);
                 entry.read_to_end(&mut bytes).with_context(|| {
                     format!("Failed to read blob {digest} from {}", path.display())
                 })?;
                 anyhow::ensure!(
-                    sha256_digest(&bytes) == digest,
+                    sha256_digest(&bytes) == digest.as_ref(),
                     "Blob {digest} in {} fails sha256 check",
                     path.display()
                 );
@@ -236,7 +236,7 @@ pub fn import_oci_archive(registry: &Arc<LocalRegistry>, path: &Path) -> Result<
         path.display()
     );
     let index_descriptor = image_index.manifests().first().unwrap();
-    let manifest_digest = index_descriptor.digest().to_string();
+    let manifest_digest = index_descriptor.digest().clone();
     // v2-era OMMX SDKs produced `.ommx` files whose `index.json`
     // descriptor lacks the `org.opencontainers.image.ref.name`
     // annotation (the v3 SDK always sets it). Rather than refuse to
@@ -400,7 +400,7 @@ fn scan_archive<R: Read>(reader: R, blobs: &FileBlobStore, archive_path: &Path) 
                 .put_bytes(&bytes)
                 .with_context(|| format!("Failed to write blob {digest} to FileBlobStore"))?;
             anyhow::ensure!(
-                actual_digest == digest,
+                actual_digest.as_ref() == digest,
                 "Blob digest mismatch in archive {}: entry path is {path_str}, sha256 is {}",
                 archive_path.display(),
                 actual_digest,

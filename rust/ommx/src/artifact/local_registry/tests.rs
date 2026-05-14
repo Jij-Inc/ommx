@@ -40,7 +40,7 @@ fn file_blob_store_round_trip() -> Result<()> {
     let digest = store.put_bytes(b"hello")?;
 
     assert_eq!(
-        digest,
+        digest.as_ref(),
         "sha256:2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
     );
     assert!(store.exists(&digest)?);
@@ -97,8 +97,8 @@ fn concurrent_keep_existing_ref_publish_keeps_one_digest() -> Result<()> {
     let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:race")?;
     let first_descriptor = put_test_manifest(&index_store, &blob_store, b"first-manifest")?;
     let second_descriptor = put_test_manifest(&index_store, &blob_store, b"second-manifest")?;
-    let first_digest = first_descriptor.digest().to_string();
-    let second_digest = second_descriptor.digest().to_string();
+    let first_digest = first_descriptor.digest().clone();
+    let second_digest = second_descriptor.digest().clone();
     assert_ne!(first_digest, second_digest);
 
     let handles: Vec<_> = [first_descriptor.clone(), second_descriptor.clone()]
@@ -160,6 +160,7 @@ fn imports_oci_dir_into_sqlite_registry_preserving_image_manifest() -> Result<()
     // Snapshot the original legacy manifest bytes so we can assert
     // byte-for-byte equality with what ends up in the v3 BlobStore.
     let (legacy_algorithm, legacy_encoded) = expected_digest
+        .as_ref()
         .split_once(':')
         .expect("manifest digest is `algorithm:encoded`");
     let legacy_manifest_bytes = std::fs::read(
@@ -194,10 +195,7 @@ fn imports_oci_dir_into_sqlite_registry_preserving_image_manifest() -> Result<()
         .resolve_image_descriptor(&image_name)?
         .context("Imported ref descriptor is missing")?;
     assert_eq!(manifest_descriptor.media_type(), &MediaType::ImageManifest);
-    assert_eq!(
-        manifest_descriptor.digest().to_string(),
-        imported.manifest_digest
-    );
+    assert_eq!(manifest_descriptor.digest(), &imported.manifest_digest);
     assert_eq!(
         manifest_descriptor.size(),
         legacy_manifest_bytes.len() as u64
@@ -328,7 +326,7 @@ fn imports_legacy_docker_hub_short_name_via_normalisation_shim() -> Result<()> {
             .resolve_image_name(&parsed)?
             .with_context(|| format!("post-import resolve missed for spelling {spelling}"))?;
         assert!(
-            resolved.starts_with("sha256:"),
+            resolved.as_ref().starts_with("sha256:"),
             "resolved digest must be sha256 for {spelling}, got {resolved}",
         );
     }
@@ -438,9 +436,8 @@ fn local_registry_imports_legacy_refs_when_requested() -> Result<()> {
             .index()
             .resolve_image_descriptor(&image_name)?
             .context("Legacy local registry descriptor was not imported")?
-            .digest()
-            .to_string(),
-        imported_digest
+            .digest(),
+        &imported_digest
     );
     Ok(())
 }
@@ -456,7 +453,7 @@ fn local_registry_builds_native_image_manifest_with_artifact_type() -> Result<()
     let manifest_digest = registry
         .resolve_image_name(&image_name)?
         .context("Published ref is missing")?;
-    assert_eq!(manifest_digest, artifact.manifest_digest());
+    assert_eq!(&manifest_digest, artifact.manifest_digest());
     let manifest_bytes = registry.blobs().read_bytes(&manifest_digest)?;
     let manifest: oci_spec::image::ImageManifest = serde_json::from_slice(&manifest_bytes)?;
     let layer = manifest
@@ -530,7 +527,7 @@ fn local_registry_build_keep_existing_skips_conflicting_manifest() -> Result<()>
     assert!(error.to_string().contains("already points to"));
     assert_eq!(
         registry.resolve_image_name(&image_name)?,
-        Some(first.manifest_digest().to_string())
+        Some(first.manifest_digest().clone())
     );
     assert!(!registry.blobs().exists(second_blob.digest().as_ref())?);
     Ok(())
@@ -835,7 +832,7 @@ fn concurrent_publish_different_digests_keeps_one_winner() -> Result<()> {
         .resolve_image_name(&image_name)?
         .context("ref disappeared after concurrent publish")?;
     assert!(
-        !resolved.is_empty(),
+        !resolved.as_ref().is_empty(),
         "ref must still resolve to the winning manifest digest"
     );
     Ok(())
@@ -851,7 +848,7 @@ fn concurrent_blob_writes_publish_one_complete_blob() -> Result<()> {
         .map(|_| {
             let root = root.clone();
             let bytes = bytes.clone();
-            std::thread::spawn(move || -> Result<String> {
+            std::thread::spawn(move || -> Result<Digest> {
                 let store = FileBlobStore::open(root)?;
                 store.put_bytes(&bytes)
             })
@@ -864,7 +861,7 @@ fn concurrent_blob_writes_publish_one_complete_blob() -> Result<()> {
         .collect::<Result<_>>()?;
 
     let digest = sha256_digest(&bytes);
-    assert!(records.iter().all(|record| record == &digest));
+    assert!(records.iter().all(|record| record.as_ref() == digest));
     let store = FileBlobStore::open(&root)?;
     assert_eq!(store.read_bytes(&digest)?, bytes);
     Ok(())
@@ -899,7 +896,7 @@ fn import_oci_archive_surfaces_digest_conflict_for_same_ref() -> Result<()> {
         .expect_err("second import with a different manifest digest must surface a conflict");
     let msg = err.to_string();
     assert!(
-        msg.contains(&digest_a),
+        msg.contains(digest_a.as_ref()),
         "conflict message should mention archive A's existing digest, got: {msg}",
     );
     // The "incoming" side of the conflict must be a digest distinct
@@ -1087,7 +1084,7 @@ fn pull_image_short_circuits_when_ref_is_present_with_blob() -> Result<()> {
     let image_name = ImageRef::parse("does-not-resolve.invalid/jij-inc/ommx/demo:short-circuit")?;
     let local_artifact =
         build_test_local_artifact(&registry, &image_name, b"step-c-pull-short-circuit")?;
-    let expected_digest = local_artifact.manifest_digest().to_string();
+    let expected_digest = local_artifact.manifest_digest().clone();
 
     let outcome = super::import::remote::pull_image(&registry, &image_name)?;
     assert_eq!(outcome.image_name.as_ref(), Some(&image_name));
@@ -1163,7 +1160,7 @@ fn local_artifact_save_round_trip_preserves_layers() -> Result<()> {
     // reader, recomputes the manifest digest from its blob payload,
     // and would fail loudly if the bytes drifted — so the digest
     // returned here is exactly the saved bytes' digest.
-    let expected_manifest_digest = local_artifact.manifest_digest().to_string();
+    let expected_manifest_digest = local_artifact.manifest_digest().clone();
     let view = crate::artifact::local_registry::inspect_archive(&archive_path)?;
     assert_eq!(
         view.manifest_digest, expected_manifest_digest,
@@ -1269,10 +1266,10 @@ fn put_test_manifest_ref(
     blob_store: &FileBlobStore,
     image_name: &ImageRef,
     bytes: &[u8],
-) -> Result<String> {
+) -> Result<Digest> {
     let descriptor = put_test_manifest(index_store, blob_store, bytes)?;
     index_store.put_image_ref(image_name, &descriptor)?;
-    Ok(descriptor.digest().to_string())
+    Ok(descriptor.digest().clone())
 }
 
 fn put_test_manifest(
@@ -1281,17 +1278,20 @@ fn put_test_manifest(
     bytes: &[u8],
 ) -> Result<Descriptor> {
     let digest = blob_store.put_bytes(bytes)?;
-    test_manifest_descriptor_with_digest(&digest, bytes.len() as u64)
+    test_manifest_descriptor_with_digest(digest, bytes.len() as u64)
 }
 
 fn test_manifest_descriptor(bytes: &[u8]) -> Result<Descriptor> {
-    test_manifest_descriptor_with_digest(&sha256_digest(bytes), bytes.len() as u64)
+    test_manifest_descriptor_with_digest(
+        Digest::from_str(&sha256_digest(bytes))?,
+        bytes.len() as u64,
+    )
 }
 
-fn test_manifest_descriptor_with_digest(digest: &str, size: u64) -> Result<Descriptor> {
+fn test_manifest_descriptor_with_digest(digest: Digest, size: u64) -> Result<Descriptor> {
     DescriptorBuilder::default()
         .media_type(MediaType::ImageManifest)
-        .digest(Digest::from_str(digest)?)
+        .digest(digest)
         .size(size)
         .build()
         .context("Failed to build test manifest descriptor")

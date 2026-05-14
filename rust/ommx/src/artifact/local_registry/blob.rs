@@ -1,10 +1,12 @@
 use super::{sha256_digest, ValidatedDigest, FILE_BLOB_STORE_DIR_NAME};
 use anyhow::{ensure, Context, Result};
+use oci_spec::image::Digest;
 use std::{
     fs,
     fs::OpenOptions,
     io::{ErrorKind, Write},
     path::{Path, PathBuf},
+    str::FromStr,
 };
 use uuid::Uuid;
 
@@ -29,22 +31,23 @@ impl FileBlobStore {
         &self.root
     }
 
-    pub fn put_bytes(&self, bytes: &[u8]) -> Result<String> {
-        let digest = sha256_digest(bytes);
+    pub fn put_bytes(&self, bytes: &[u8]) -> Result<Digest> {
+        let digest = Digest::from_str(&sha256_digest(bytes)).context("Failed to parse digest")?;
         let path = self.path_for_digest(&digest)?;
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)
                 .with_context(|| format!("Failed to create {}", parent.display()))?;
         }
         if path.exists() {
-            verify_existing_blob(&path, bytes, &digest)?;
+            verify_existing_blob(&path, bytes, digest.as_ref())?;
         } else {
-            self.write_blob_atomically(bytes, &digest, &path)?;
+            self.write_blob_atomically(bytes, digest.as_ref(), &path)?;
         }
         Ok(digest)
     }
 
-    pub fn read_bytes(&self, digest: &str) -> Result<Vec<u8>> {
+    pub fn read_bytes(&self, digest: impl AsRef<str>) -> Result<Vec<u8>> {
+        let digest = digest.as_ref();
         let path = self.path_for_digest(digest)?;
         let bytes =
             fs::read(&path).with_context(|| format!("Failed to read blob {}", path.display()))?;
@@ -55,12 +58,12 @@ impl FileBlobStore {
         Ok(bytes)
     }
 
-    pub fn exists(&self, digest: &str) -> Result<bool> {
+    pub fn exists(&self, digest: impl AsRef<str>) -> Result<bool> {
         Ok(self.path_for_digest(digest)?.exists())
     }
 
-    pub fn path_for_digest(&self, digest: &str) -> Result<PathBuf> {
-        let digest = ValidatedDigest::parse(digest)?;
+    pub fn path_for_digest(&self, digest: impl AsRef<str>) -> Result<PathBuf> {
+        let digest = ValidatedDigest::parse(digest.as_ref())?;
         Ok(self.root.join(digest.algorithm()).join(digest.encoded()))
     }
 

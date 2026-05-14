@@ -205,8 +205,8 @@ impl SqliteIndexStore {
             Self::resolve_ref_in(conn, name, reference)?.with_context(|| {
                 format!("Ref disappeared while resolving conflict: {name}:{reference}")
             })?;
-        let existing_manifest_digest = existing_descriptor.digest().to_string();
-        let incoming_manifest_digest = descriptor.digest().to_string();
+        let existing_manifest_digest = existing_descriptor.digest().clone();
+        let incoming_manifest_digest = descriptor.digest().clone();
         if existing_manifest_digest == incoming_manifest_digest {
             Ok(RefUpdate::Unchanged)
         } else {
@@ -231,7 +231,7 @@ impl SqliteIndexStore {
         Self::put_ref_in(conn, name, reference, descriptor)?;
         Ok(match previous_descriptor {
             Some(previous_descriptor) => RefUpdate::Replaced {
-                previous_manifest_digest: previous_descriptor.digest().to_string(),
+                previous_manifest_digest: previous_descriptor.digest().clone(),
             },
             None => RefUpdate::Inserted,
         })
@@ -422,10 +422,10 @@ impl SqliteIndexStore {
         self.resolve_ref(&image_name.repository_key(), image_name.reference())
     }
 
-    pub fn resolve_image_name(&self, image_name: &ImageRef) -> Result<Option<String>> {
+    pub fn resolve_image_name(&self, image_name: &ImageRef) -> Result<Option<Digest>> {
         Ok(self
             .resolve_image_descriptor(image_name)?
-            .map(|descriptor| descriptor.digest().to_string()))
+            .map(|descriptor| descriptor.digest().clone()))
     }
 }
 

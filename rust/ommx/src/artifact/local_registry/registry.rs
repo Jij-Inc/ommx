@@ -6,7 +6,7 @@ use super::{
 };
 use crate::artifact::{media_types, ImageRef, StagedArtifactBlob};
 use anyhow::{ensure, Context, Result};
-use oci_spec::image::{Descriptor, ImageManifest, MediaType};
+use oci_spec::image::{Descriptor, Digest, ImageManifest, MediaType};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
@@ -69,7 +69,7 @@ impl LocalRegistry {
         import_legacy_local_registry_with_policy(&self.index, &self.blobs, &self.root, policy)
     }
 
-    pub fn resolve_image_name(&self, image_name: &ImageRef) -> Result<Option<String>> {
+    pub fn resolve_image_name(&self, image_name: &ImageRef) -> Result<Option<Digest>> {
         self.index.resolve_image_name(image_name)
     }
 
@@ -194,19 +194,17 @@ impl LocalRegistry {
             );
         }
 
-        let manifest_digest = manifest_descriptor.digest().to_string();
-
         // Pre-check: under `KeepExisting`, return the conflict before
         // we waste any CAS writes. The atomic publish in stage 2
         // re-validates the same condition inside the SQLite
         // transaction, so concurrent racers can't slip through; this
         // is purely a fast path for the common single-writer case.
         if policy == RefConflictPolicy::KeepExisting {
-            if let Some(existing_manifest_digest) = self.resolve_image_name(image_name)? {
-                if existing_manifest_digest != manifest_digest.as_str() {
+            if let Some(existing_descriptor) = self.index.resolve_image_descriptor(image_name)? {
+                if existing_descriptor.digest() != manifest_descriptor.digest() {
                     return Ok(RefUpdate::Conflicted {
-                        existing_manifest_digest,
-                        incoming_manifest_digest: manifest_digest,
+                        existing_manifest_digest: existing_descriptor.digest().clone(),
+                        incoming_manifest_digest: manifest_descriptor.digest().clone(),
                     });
                 }
             }
@@ -231,7 +229,7 @@ impl LocalRegistry {
     fn stage_blob(&self, descriptor: &Descriptor, bytes: &[u8]) -> Result<()> {
         let digest = self.blobs.put_bytes(bytes)?;
         ensure!(
-            digest == descriptor.digest().to_string(),
+            &digest == descriptor.digest(),
             "Descriptor digest mismatch: descriptor={}, actual={}",
             descriptor.digest(),
             digest

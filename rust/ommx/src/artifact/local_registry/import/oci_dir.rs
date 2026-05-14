@@ -33,7 +33,6 @@ use oci_spec::image::{
 use std::{
     fs,
     path::{Path, PathBuf},
-    str::FromStr,
 };
 
 /// Identity of an OCI Image Layout directory entry: the manifest
@@ -46,13 +45,12 @@ use std::{
 /// describing what happened to the SQLite ref.
 ///
 /// Marked `#[non_exhaustive]` so future identity attributes (for
-/// example a parsed `oci_spec::image::Digest` or a typed media type)
-/// can be added without breaking exhaustive destructuring at call
-/// sites.
+/// example a typed media type) can be added without breaking
+/// exhaustive destructuring at call sites.
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OciDirRef {
-    pub manifest_digest: String,
+    pub manifest_digest: Digest,
     pub image_name: Option<ImageRef>,
 }
 
@@ -84,7 +82,7 @@ pub struct OciDirRef {
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OciDirImport {
-    pub manifest_digest: String,
+    pub manifest_digest: Digest,
     pub image_name: Option<ImageRef>,
     pub ref_update: Option<RefUpdate>,
 }
@@ -130,7 +128,7 @@ pub(super) enum RefConflictHandling {
 /// set to the OMMX artifact media type); the deprecated OCI Artifact
 /// Manifest is rejected at parse time.
 struct StagedOciDir {
-    manifest_digest: String,
+    manifest_digest: Digest,
     image_name: Option<ImageRef>,
     manifest_bytes: Vec<u8>,
     manifest_descriptor: Descriptor,
@@ -231,19 +229,19 @@ pub(super) fn import_oci_dir_inner(
     // path for the common single-writer case.
     if policy == RefConflictPolicy::KeepExisting {
         if let Some(image_name) = effective_image_name.as_ref() {
-            if let Some(existing_manifest_digest) = index_store.resolve_image_name(image_name)? {
-                if existing_manifest_digest != manifest_digest {
+            if let Some(existing_descriptor) = index_store.resolve_image_descriptor(image_name)? {
+                if existing_descriptor.digest() != staged.manifest_descriptor.digest() {
                     if conflict_handling == RefConflictHandling::Error {
                         anyhow::bail!(
                             "Local registry ref conflict for {}: existing manifest {}, incoming manifest {}",
                             image_name,
-                            existing_manifest_digest,
-                            manifest_digest,
+                            existing_descriptor.digest(),
+                            staged.manifest_descriptor.digest(),
                         );
                     }
                     let conflict = RefUpdate::Conflicted {
-                        existing_manifest_digest,
-                        incoming_manifest_digest: manifest_digest.clone(),
+                        existing_manifest_digest: existing_descriptor.digest().clone(),
+                        incoming_manifest_digest: staged.manifest_descriptor.digest().clone(),
                     };
                     return Ok((
                         OciDirRef {
@@ -378,8 +376,9 @@ fn stage_oci_dir(oci_dir_root: impl AsRef<Path>) -> Result<StagedOciDir> {
     );
     let index_descriptor = image_index.manifests().first().unwrap();
     let image_name = image_name_from_index_descriptor(index_descriptor)?;
-    let manifest_digest = digest_to_string(index_descriptor.digest());
-    let manifest_bytes = read_oci_dir_blob(oci_dir_root, &manifest_digest)
+    let manifest_digest = index_descriptor.digest().clone();
+    let manifest_digest_str = digest_to_string(&manifest_digest);
+    let manifest_bytes = read_oci_dir_blob(oci_dir_root, &manifest_digest_str)
         .with_context(|| format!("Failed to read manifest blob {manifest_digest}"))?;
     ensure!(
         manifest_bytes.len() as u64 == index_descriptor.size(),
@@ -403,11 +402,9 @@ fn stage_oci_dir(oci_dir_root: impl AsRef<Path>) -> Result<StagedOciDir> {
         ),
     };
 
-    let manifest_digest_parsed = Digest::from_str(&manifest_digest)
-        .with_context(|| format!("Invalid manifest digest: {manifest_digest}"))?;
     let manifest_descriptor = DescriptorBuilder::default()
         .media_type(MediaType::ImageManifest)
-        .digest(manifest_digest_parsed)
+        .digest(manifest_digest.clone())
         .size(manifest_bytes.len() as u64)
         .build()
         .context("Failed to build OCI manifest descriptor")?;
@@ -491,7 +488,7 @@ fn stage_descriptor_bytes(
 ) -> Result<()> {
     let digest = blob_store.put_bytes(bytes)?;
     ensure!(
-        digest == digest_to_string(desc.digest()),
+        &digest == desc.digest(),
         "Blob digest mismatch: descriptor={}, actual={}",
         desc.digest(),
         digest

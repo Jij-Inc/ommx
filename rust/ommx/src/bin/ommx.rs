@@ -152,10 +152,12 @@ impl ImageRefOrPath {
             // disk. Avoids importing into SQLite for a read-only op.
             ImageRefOrPath::OciDir(path) => {
                 let dir_ref = oci_dir_ref(path)?;
-                let manifest_blob_path = path
-                    .join("blobs")
-                    .join("sha256")
-                    .join(dir_ref.manifest_digest.trim_start_matches("sha256:"));
+                let manifest_blob_path = path.join("blobs").join("sha256").join(
+                    dir_ref
+                        .manifest_digest
+                        .as_ref()
+                        .trim_start_matches("sha256:"),
+                );
                 let bytes = std::fs::read(&manifest_blob_path).with_context(|| {
                     format!(
                         "Failed to read manifest blob at {}",

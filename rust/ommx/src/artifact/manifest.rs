@@ -72,7 +72,7 @@ impl StagedArtifactBlob {
 pub struct LocalArtifact {
     registry: Arc<LocalRegistry>,
     image_name: ImageRef,
-    manifest_digest: String,
+    manifest_digest: Digest,
     manifest_cache: Arc<OnceLock<LocalManifest>>,
 }
 
@@ -80,7 +80,7 @@ impl LocalArtifact {
     pub(crate) fn from_parts(
         registry: Arc<LocalRegistry>,
         image_name: ImageRef,
-        manifest_digest: String,
+        manifest_digest: Digest,
     ) -> Self {
         Self {
             registry,
@@ -128,7 +128,7 @@ impl LocalArtifact {
         &self.image_name
     }
 
-    pub fn manifest_digest(&self) -> &str {
+    pub fn manifest_digest(&self) -> &Digest {
         &self.manifest_digest
     }
 
@@ -163,7 +163,7 @@ impl LocalArtifact {
         Ok(self.get_manifest()?.subject())
     }
 
-    pub fn get_blob(&self, digest: &str) -> Result<Vec<u8>> {
+    pub fn get_blob(&self, digest: impl AsRef<str>) -> Result<Vec<u8>> {
         self.registry.blobs().read_bytes(digest)
     }
 }
@@ -440,7 +440,7 @@ impl LocalArtifactBuilder {
         Ok(LocalArtifact::from_parts(
             registry,
             staged.image_name,
-            staged.manifest_descriptor.digest().to_string(),
+            staged.manifest_descriptor.digest().clone(),
         ))
     }
 

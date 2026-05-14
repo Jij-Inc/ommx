@@ -116,12 +116,11 @@ pub fn pull_image(registry: &Arc<LocalRegistry>, image_name: &ImageRef) -> Resul
         .context("Failed to parse OCI image manifest pulled from the remote registry")?;
     ensure_ommx_image_manifest(&manifest)?;
 
+    let manifest_digest = Digest::from_str(&manifest_digest)
+        .with_context(|| format!("Invalid remote manifest digest: {manifest_digest}"))?;
     let manifest_descriptor = DescriptorBuilder::default()
         .media_type(MediaType::ImageManifest)
-        .digest(
-            Digest::from_str(&manifest_digest)
-                .with_context(|| format!("Invalid remote manifest digest: {manifest_digest}"))?,
-        )
+        .digest(manifest_digest.clone())
         .size(manifest_bytes.len() as u64)
         .build()
         .context("Failed to build remote manifest descriptor")?;
@@ -214,7 +213,7 @@ fn pull_descriptor_blob(
     );
     let actual_digest = blob_store.put_bytes(&bytes)?;
     anyhow::ensure!(
-        actual_digest == digest,
+        actual_digest.as_ref() == digest,
         "Blob digest mismatch: descriptor={digest}, actual={}",
         actual_digest
     );
@@ -230,11 +229,11 @@ fn pull_descriptor_blob(
 fn stage_manifest_blob(
     blob_store: &FileBlobStore,
     manifest_bytes: &[u8],
-    expected_digest: &str,
+    expected_digest: &Digest,
 ) -> Result<()> {
     let actual_digest = blob_store.put_bytes(manifest_bytes)?;
     anyhow::ensure!(
-        actual_digest == expected_digest,
+        actual_digest == *expected_digest,
         "Manifest blob digest mismatch: registry reported {expected_digest}, sha256 of \
          pulled bytes is {}",
         actual_digest
