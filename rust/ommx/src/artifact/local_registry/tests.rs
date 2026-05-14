@@ -221,6 +221,54 @@ fn imports_oci_dir_into_sqlite_registry_preserving_image_manifest() -> Result<()
 }
 
 #[test]
+fn imports_oci_dir_preserves_index_descriptor_annotations() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let oci_dir = dir.path().join("oci-dir");
+    let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:descriptor-annotation")?;
+    let mut builder = TestOciDirBuilder::new(oci_dir.clone(), Some(image_name.clone()))?;
+    builder.add_index_descriptor_annotation("org.ommx.test.descriptor", "preserved");
+
+    let config = builder.add_empty_json()?;
+    let (layer_digest, layer_size) = builder.add_blob(b"instance")?;
+    let layer = DescriptorBuilder::default()
+        .media_type(media_types::v1_instance())
+        .digest(layer_digest)
+        .size(layer_size)
+        .build()?;
+    let manifest = ImageManifestBuilder::default()
+        .schema_version(2_u32)
+        .artifact_type(media_types::v1_artifact())
+        .config(config)
+        .layers(vec![layer])
+        .build()?;
+    builder.finish(manifest)?;
+
+    let registry_root = dir.path().join("registry");
+    let index_store = SqliteIndexStore::open_in_registry_root(&registry_root)?;
+    let blob_store = FileBlobStore::open_in_registry_root(&registry_root)?;
+    import_oci_dir(&index_store, &blob_store, &oci_dir)?;
+
+    let descriptor = index_store
+        .resolve_image_descriptor(&image_name)?
+        .context("Imported ref descriptor is missing")?;
+    let annotations = descriptor
+        .annotations()
+        .as_ref()
+        .context("Imported ref descriptor should preserve index.json descriptor annotations")?;
+    assert_eq!(
+        annotations
+            .get("org.ommx.test.descriptor")
+            .map(String::as_str),
+        Some("preserved")
+    );
+    assert_eq!(
+        annotations.get(OCI_IMAGE_REF_NAME_ANNOTATION),
+        Some(&image_name.to_string())
+    );
+    Ok(())
+}
+
+#[test]
 fn imports_legacy_local_registry_explicitly() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let legacy_registry_root = dir.path().join("legacy-registry");
@@ -723,7 +771,7 @@ fn imports_legacy_v2_oci_dir_with_ommx_config_blob() -> Result<()> {
     // the v3 builder's OCI 1.1 empty descriptor). v3 import / read must
     // preserve such manifests verbatim: parse-time check is artifactType
     // only (no config-shape requirement), and the config blob lands in
-    // both the BlobStore and blob index.
+    // the BlobStore.
     let dir = tempfile::tempdir()?;
     let legacy_dir = dir.path().join("v2-legacy");
     let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:v2-config")?;
@@ -1363,6 +1411,7 @@ fn build_test_oci_dir_with_v2_config(
 struct TestOciDirBuilder {
     oci_dir_root: PathBuf,
     ref_name_annotation: Option<String>,
+    index_descriptor_annotations: HashMap<String, String>,
     is_finished: bool,
 }
 
@@ -1394,8 +1443,14 @@ impl TestOciDirBuilder {
         Ok(Self {
             oci_dir_root,
             ref_name_annotation,
+            index_descriptor_annotations: HashMap::new(),
             is_finished: false,
         })
+    }
+
+    fn add_index_descriptor_annotation(&mut self, key: &str, value: &str) {
+        self.index_descriptor_annotations
+            .insert(key.to_string(), value.to_string());
     }
 
     fn add_blob(&mut self, data: &[u8]) -> Result<(oci_spec::image::Digest, u64)> {
@@ -1429,12 +1484,14 @@ impl TestOciDirBuilder {
             .media_type(MediaType::ImageManifest)
             .size(size)
             .digest(digest);
+        let mut annotations = self.index_descriptor_annotations.clone();
         if let Some(name) = &self.ref_name_annotation {
-            let mut annotations = HashMap::new();
             annotations.insert(
                 "org.opencontainers.image.ref.name".to_string(),
                 name.clone(),
             );
+        }
+        if !annotations.is_empty() {
             descriptor_builder = descriptor_builder.annotations(annotations);
         }
         let descriptor = descriptor_builder.build()?;

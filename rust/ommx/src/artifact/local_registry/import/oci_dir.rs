@@ -27,9 +27,7 @@ use super::super::{
 };
 use crate::artifact::{media_types, ImageRef};
 use anyhow::{ensure, Context, Result};
-use oci_spec::image::{
-    Descriptor, DescriptorBuilder, Digest, ImageIndex, ImageManifest, MediaType, OciLayout,
-};
+use oci_spec::image::{Descriptor, Digest, ImageIndex, ImageManifest, MediaType, OciLayout};
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -402,18 +400,11 @@ fn stage_oci_dir(oci_dir_root: impl AsRef<Path>) -> Result<StagedOciDir> {
         ),
     };
 
-    let manifest_descriptor = DescriptorBuilder::default()
-        .media_type(MediaType::ImageManifest)
-        .digest(manifest_digest.clone())
-        .size(manifest_bytes.len() as u64)
-        .build()
-        .context("Failed to build OCI manifest descriptor")?;
-
     Ok(StagedOciDir {
         manifest_digest,
         image_name,
         manifest_bytes,
-        manifest_descriptor,
+        manifest_descriptor: index_descriptor.clone(),
         layers,
         image_config,
     })
