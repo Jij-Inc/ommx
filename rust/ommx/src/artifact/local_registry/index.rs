@@ -2,7 +2,7 @@ use super::{
     now_rfc3339, validate_digest, RefConflictPolicy, RefRecord, RefUpdate, SQLITE_INDEX_FILE_NAME,
 };
 use crate::artifact::ImageRef;
-use anyhow::{ensure, Context, Result};
+use anyhow::{bail, ensure, Context, Result};
 use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, MediaType};
 use rusqlite::{params, types::Type, Connection, OptionalExtension, TransactionBehavior};
 use std::{
@@ -14,12 +14,10 @@ use std::{
     time::Duration,
 };
 
-/// SQLite Local Registry schema version. Bumped whenever the schema
-/// changes in a way that needs distinct identification (new tables,
-/// new columns, semantic changes to existing rows). The SQLite Local
-/// Registry has not been released yet, so incompatible development
-/// schema changes fail fast instead of carrying an in-place migration.
-const SCHEMA_VERSION: i64 = 3;
+/// SQLite Local Registry schema version stored in `PRAGMA user_version`.
+/// The SQLite Local Registry has not been released yet, so incompatible
+/// development schemas fail fast instead of carrying in-place migrations.
+const SCHEMA_VERSION: i64 = 1;
 const SQLITE_BUSY_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// SQLite-backed index store for the v3 Local Registry.
@@ -73,7 +71,7 @@ impl SqliteIndexStore {
     /// Acquire the connection guard. If the mutex was poisoned by an
     /// earlier panic, fall back to the wrapped `Connection` (rusqlite's
     /// internal state isn't damaged by Rust-level poisoning; the lock
-    /// flag just records that some other thread paniced while holding
+    /// flag just records that some other thread panicked while holding
     /// it) and log a warning.
     fn lock(&self) -> MutexGuard<'_, Connection> {
         match self.conn.lock() {
@@ -90,11 +88,7 @@ impl SqliteIndexStore {
 
     pub fn schema_version(&self) -> Result<i64> {
         self.lock()
-            .query_row(
-                "SELECT version FROM ommx_local_registry_schema LIMIT 1",
-                [],
-                |row| row.get(0),
-            )
+            .pragma_query_value(None, "user_version", |row| row.get(0))
             .context("Failed to read local registry schema version")
     }
 
@@ -355,18 +349,28 @@ impl SqliteIndexStore {
     }
 
     fn init_schema(&self) -> Result<()> {
-        self.lock().execute_batch(
-            r#"
-            PRAGMA foreign_keys = ON;
+        let conn = self.lock();
+        conn.execute_batch("PRAGMA foreign_keys = ON;")?;
 
-            CREATE TABLE IF NOT EXISTS ommx_local_registry_schema (
-                version INTEGER NOT NULL
+        let version = conn
+            .pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
+            .context("Failed to read local registry schema version")?;
+        if version == 0 {
+            if has_user_tables(&conn)? {
+                bail!(
+                    "Unsupported local registry schema version: 0. \
+                     Remove the development local registry and recreate it."
+                );
+            }
+        } else {
+            ensure!(
+                version == SCHEMA_VERSION,
+                "Unsupported local registry schema version: {version}"
             );
+        }
 
-            INSERT INTO ommx_local_registry_schema (version)
-            SELECT 3
-            WHERE NOT EXISTS (SELECT 1 FROM ommx_local_registry_schema);
-
+        conn.execute_batch(
+            r#"
             CREATE TABLE IF NOT EXISTS ommx_local_registry_metadata (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
@@ -384,13 +388,10 @@ impl SqliteIndexStore {
             );
 
             CREATE INDEX IF NOT EXISTS idx_refs_name ON refs(name);
+
+            PRAGMA user_version = 1;
             "#,
         )?;
-        let version = self.schema_version()?;
-        ensure!(
-            version == SCHEMA_VERSION,
-            "Unsupported local registry schema version: {version}"
-        );
         Ok(())
     }
 }
@@ -440,6 +441,22 @@ fn ref_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<RefRecord> {
 
 fn descriptor_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Descriptor> {
     descriptor_from_ref_row(row, 0)
+}
+
+fn has_user_tables(conn: &Connection) -> Result<bool> {
+    let count: i64 = conn
+        .query_row(
+            r#"
+            SELECT COUNT(*)
+            FROM sqlite_master
+            WHERE type = 'table'
+              AND name NOT LIKE 'sqlite_%'
+            "#,
+            [],
+            |row| row.get(0),
+        )
+        .context("Failed to inspect local registry schema tables")?;
+    Ok(count > 0)
 }
 
 fn descriptor_from_ref_row(row: &rusqlite::Row<'_>, offset: usize) -> rusqlite::Result<Descriptor> {
