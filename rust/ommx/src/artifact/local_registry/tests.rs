@@ -1,6 +1,6 @@
 use super::*;
 use crate::artifact::{
-    media_types, ImageRef, LocalArtifact, LocalArtifactBuilder, LocalManifest,
+    media_types, ArtifactDraft, ImageRef, LocalArtifact, LocalManifest,
     OCI_IMAGE_MANIFEST_MEDIA_TYPE,
 };
 use anyhow::{Context, Result};
@@ -22,13 +22,17 @@ fn save_test_archive(
 ) -> Result<()> {
     let sender_dir = tempfile::tempdir()?;
     let sender_registry = Arc::new(LocalRegistry::open(sender_dir.path())?);
-    let mut builder = LocalArtifactBuilder::new(image_name);
+    let mut builder = ArtifactDraft::with_registry(
+        sender_registry.clone(),
+        image_name,
+        RefConflictPolicy::Replace,
+    );
     builder.add_layer_bytes(
         MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.into()),
         layer_bytes,
         HashMap::new(),
     )?;
-    let local = builder.build_in_registry(sender_registry, RefConflictPolicy::Replace)?;
+    let local = builder.commit()?;
     local.save(archive_path)?;
     Ok(())
 }
@@ -566,10 +570,11 @@ fn local_registry_build_keep_existing_skips_conflicting_manifest() -> Result<()>
     let registry = Arc::new(LocalRegistry::open(dir.path())?);
     let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:keep")?;
     let first = build_test_local_artifact(&registry, &image_name, b"first")?;
-    let (second, second_blob) = new_test_local_artifact_builder(image_name.clone(), b"second")?;
+    let (second, second_blob) =
+        new_test_local_artifact_builder(&registry, image_name.clone(), b"second")?;
 
     let error = second
-        .build_in_registry(registry.clone(), RefConflictPolicy::KeepExisting)
+        .commit_with_policy(RefConflictPolicy::KeepExisting)
         .expect_err("conflicting local registry ref should fail");
     assert!(error.to_string().contains("already points to"));
     assert_eq!(
@@ -738,7 +743,7 @@ fn local_artifact_caches_manifest_across_clones() -> Result<()> {
 #[test]
 fn local_artifact_subject_round_trips() -> Result<()> {
     // LocalArtifact::subject() goes through the cached LocalManifest
-    // and surfaces the Descriptor that LocalArtifactBuilder set via
+    // and surfaces the Descriptor that ArtifactDraft set via
     // `set_subject`. None when no subject is set.
     let dir = tempfile::tempdir()?;
     let registry = Arc::new(LocalRegistry::open(dir.path())?);
@@ -755,14 +760,18 @@ fn local_artifact_subject_round_trips() -> Result<()> {
         .build()?;
 
     let child_image = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:child")?;
-    let mut builder = LocalArtifactBuilder::new(child_image.clone());
+    let mut builder = ArtifactDraft::with_registry(
+        registry.clone(),
+        child_image.clone(),
+        RefConflictPolicy::KeepExisting,
+    );
     builder.add_layer_bytes(
         MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
         b"child-layer".to_vec(),
         HashMap::new(),
     )?;
     builder.set_subject(subject_descriptor.clone());
-    let child = builder.build_in_registry(registry.clone(), RefConflictPolicy::KeepExisting)?;
+    let child = builder.commit()?;
     assert_eq!(child.subject()?, Some(subject_descriptor));
     Ok(())
 }
@@ -771,7 +780,7 @@ fn local_artifact_subject_round_trips() -> Result<()> {
 fn imports_legacy_v2_oci_dir_with_ommx_config_blob() -> Result<()> {
     // v2 SDK can produce Image Manifests whose `config` blob is an
     // OMMX-specific `application/org.ommx.v1.config+json` (instead of
-    // the v3 builder's OCI 1.1 empty descriptor). v3 import / read must
+    // the v3 draft's OCI 1.1 empty descriptor). v3 import / read must
     // preserve such manifests verbatim: parse-time check is artifactType
     // only (no config-shape requirement), and the config blob lands in
     // the BlobStore.
@@ -833,7 +842,7 @@ fn rejects_import_of_deprecated_artifact_manifest_layout() -> Result<()> {
 
 #[test]
 fn concurrent_publish_different_digests_keeps_one_winner() -> Result<()> {
-    // Two LocalArtifactBuilder writers race to publish *different*
+    // Two ArtifactDraft writers race to publish *different*
     // manifest digests under the same image_name. With KeepExisting
     // policy the atomic publish must let exactly one writer win
     // (`Inserted`) and the other must surface as a conflict-error,
@@ -850,15 +859,18 @@ fn concurrent_publish_different_digests_keeps_one_winner() -> Result<()> {
             std::thread::spawn(move || -> Result<bool> {
                 let registry = Arc::new(LocalRegistry::open(registry_root)?);
                 let bytes = format!("racer-{i}");
-                let (builder, _) =
-                    new_test_local_artifact_builder(image_name.clone(), bytes.as_bytes())?;
-                match builder.build_in_registry(registry, RefConflictPolicy::KeepExisting) {
+                let (builder, _) = new_test_local_artifact_builder(
+                    &registry,
+                    image_name.clone(),
+                    bytes.as_bytes(),
+                )?;
+                match builder.commit_with_policy(RefConflictPolicy::KeepExisting) {
                     Ok(_) => Ok(true),
                     Err(err) => {
                         // Only the conflict outcome is acceptable here.
                         assert!(
                             err.to_string().contains("already points to"),
-                            "unexpected build_in_registry error: {err}"
+                            "unexpected commit error: {err}"
                         );
                         Ok(false)
                     }
@@ -1125,7 +1137,7 @@ fn pull_image_short_circuits_when_ref_is_present_with_blob() -> Result<()> {
     // Fast path: `pull_image` against a ref already published in the
     // SQLite Local Registry must return `Unchanged` without touching
     // the network. Constructing the artifact via
-    // `LocalArtifactBuilder` (no network) and then calling
+    // `ArtifactDraft` (no network) and then calling
     // `pull_image` against an unresolvable host exercises this — if
     // the short-circuit ever regresses, the call would attempt a DNS
     // lookup against a `.invalid` TLD and fail.
@@ -1294,15 +1306,20 @@ fn build_test_local_artifact(
     image_name: &ImageRef,
     layer_bytes: &[u8],
 ) -> Result<LocalArtifact> {
-    let (builder, _) = new_test_local_artifact_builder(image_name.clone(), layer_bytes)?;
-    builder.build_in_registry(registry.clone(), RefConflictPolicy::KeepExisting)
+    let (builder, _) = new_test_local_artifact_builder(registry, image_name.clone(), layer_bytes)?;
+    builder.commit_with_policy(RefConflictPolicy::KeepExisting)
 }
 
 fn new_test_local_artifact_builder(
+    registry: &Arc<LocalRegistry>,
     image_name: ImageRef,
     layer_bytes: &[u8],
-) -> Result<(LocalArtifactBuilder, Descriptor)> {
-    let mut builder = LocalArtifactBuilder::new(image_name);
+) -> Result<(ArtifactDraft, Descriptor)> {
+    let mut builder = ArtifactDraft::with_registry(
+        Arc::clone(registry),
+        image_name,
+        RefConflictPolicy::KeepExisting,
+    );
     let descriptor = builder.add_layer_bytes(
         MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
         layer_bytes.to_vec(),

@@ -20,7 +20,7 @@ pub use image_ref::ImageRef;
 pub(crate) use manifest::anonymous_artifact_image_name;
 pub(crate) use manifest::stable_json_bytes;
 pub use manifest::{
-    is_anonymous_artifact_ref_name, is_anonymous_artifact_tag, LocalArtifact, LocalArtifactBuilder,
+    is_anonymous_artifact_ref_name, is_anonymous_artifact_tag, ArtifactDraft, LocalArtifact,
     LocalManifest,
 };
 pub use media_types::OCI_IMAGE_MANIFEST_MEDIA_TYPE;
@@ -143,6 +143,6 @@ pub fn get_images() -> Result<Vec<ImageRef>> {
 //   - Archive ingest: `local_registry::import_oci_archive(path)`
 //   - OCI Image Layout directory ingest: `local_registry::import_oci_dir(path)`
 //   - Remote pull into SQLite: `local_registry::pull_image(name)`
-//   - Build into SQLite: `LocalArtifactBuilder::new(...).build()`
+//   - Commit into SQLite: `ArtifactDraft::new(...)?.commit()`
 //   - Export to archive file: `LocalArtifact::save(path)`
 // Image-ref parsing for these entry points goes through [`ImageRef`].

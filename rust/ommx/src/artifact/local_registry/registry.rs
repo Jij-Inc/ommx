@@ -76,7 +76,7 @@ impl LocalRegistry {
 
     /// Synthesize a fresh anonymous image name keyed to this
     /// registry's `registry_id`. Format matches
-    /// `LocalArtifactBuilder::new_anonymous` and the unnamed-archive
+    /// `ArtifactDraft::new_anonymous` and the unnamed-archive
     /// import path: `<registry-id8>.ommx.local/anonymous:<timestamp>-<nonce>`.
     /// Each call returns a new name (the nonce differs); the structural
     /// predicates [`crate::artifact::is_anonymous_artifact_ref_name`]
@@ -112,7 +112,7 @@ impl LocalRegistry {
     }
 
     /// Bulk-delete every SQLite ref produced by
-    /// [`crate::artifact::LocalArtifactBuilder::new_anonymous`].
+    /// [`crate::artifact::ArtifactDraft::new_anonymous`].
     /// Returns the deleted records so callers (e.g. CLI
     /// `ommx artifact prune-anonymous`) can report what changed. The
     /// manifest / config / layer / blob CAS records the deleted refs

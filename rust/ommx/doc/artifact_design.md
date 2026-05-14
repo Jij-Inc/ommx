@@ -42,7 +42,7 @@ with off-the-shelf tools (`oras`, `crane`, `skopeo`).
 
 | Concept | What it is |
 |---|---|
-| Image reference | The name an Artifact is known by — `host[:port]/name(:tag\|@digest)`. Optional at build time (§1.1) |
+| Image reference | The name an Artifact is known by — `host[:port]/name(:tag\|@digest)`. Optional at commit time (§1.1) |
 | Manifest | Small JSON describing the Artifact: `artifactType`, `config`, an ordered list of layer descriptors, optional `subject` for lineage. An OCI Image Manifest, stored verbatim |
 | Descriptor | `{ mediaType, digest, size, annotations }` — a typed pointer to a content-addressed blob (OCI 1.1) |
 | Layer / blob | The actual payload bytes (a serialized [`v1::Instance`](crate::v1::Instance), a Parquet `DataFrame`, …). Identified by digest. OMMX-typed layers carry protobuf wire bytes under `crate::v1::*`; the semantic Rust wrappers (`crate::Instance`, etc.) are SDK conveniences, not what is written to disk |
@@ -92,9 +92,9 @@ annotations and v3 canonical writes resolve to the same SQLite row.
 
 ### 1.1 Anonymous artifacts
 
-Image references are **optional at build time**. The SDK exposes
-`LocalArtifactBuilder::new_anonymous()` for callers that do not want
-to pick a name; the builder synthesizes one at publish time. The
+Image references are **optional at commit time**. The SDK exposes
+`ArtifactDraft::new_anonymous()` for callers that do not want
+to pick a name; the draft synthesizes one at publish time. The
 synthesized form is:
 
 ```text
@@ -195,7 +195,7 @@ Field-by-field:
 - `layers`: ordered list of layer descriptors. Each descriptor
   renders the `annotations` field, including an empty object `{}` if
   no annotations apply. Layer ordering is preserved across
-  build / import / pull / push round-trips and forms part of the
+  commit / import / pull / push round-trips and forms part of the
   manifest digest.
 - `subject`: optional. If present, points at a parent OMMX manifest
   for lineage. `mediaType` is fixed at

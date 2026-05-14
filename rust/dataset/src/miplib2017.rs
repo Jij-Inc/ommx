@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use ommx::artifact::{ImageRef, LocalArtifact, LocalArtifactBuilder};
+use ommx::artifact::{ArtifactDraft, ImageRef, LocalArtifact};
 use std::{fs, path::Path};
 use url::Url;
 use zip::ZipArchive;
@@ -56,10 +56,10 @@ pub fn package(path: &Path) -> Result<()> {
         let mut annotations = annotations.clone();
         annotations.set_created_now();
 
-        let mut builder = LocalArtifactBuilder::new(image_name);
+        let mut builder = ArtifactDraft::new(image_name)?;
         builder.add_source(&source_url);
         builder.add_instance(instance.into(), annotations)?;
-        let _artifact = builder.build()?;
+        let _artifact = builder.commit()?;
         // Do not push here. Use `ommx push` command to upload the artifacts.
     }
     Ok(())

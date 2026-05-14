@@ -181,7 +181,7 @@ fn read_archive_blob(path: &Path, digest: &Digest) -> Result<Vec<u8>> {
 /// annotation (a shape v2-era OMMX SDKs produced in real workflows)
 /// is imported under a freshly-synthesized anonymous ref name of the
 /// form `<registry-id8>.ommx.local/anonymous:<timestamp>-<nonce>` —
-/// the same shape `LocalArtifactBuilder::new_anonymous` produces.
+/// the same shape `ArtifactDraft::new_anonymous` produces.
 /// The returned [`OciDirImport`]'s `image_name` is then `Some(...)`
 /// with the synthesized name, so callers always have a way to address
 /// the imported artifact. Each `import_oci_archive` call on the same
@@ -244,7 +244,7 @@ pub fn import_oci_archive(registry: &Arc<LocalRegistry>, path: &Path) -> Result<
     // synthesize an anonymous ref name here so the SQLite Local
     // Registry has a key to address the imported artifact under.
     // The synthesized name follows the same shape
-    // `LocalArtifactBuilder::new_anonymous` produces, so
+    // `ArtifactDraft::new_anonymous` produces, so
     // `ommx artifact prune-anonymous` cleans them by the same
     // structural match.
     let image_name = match image_name_from_index_descriptor(index_descriptor)? {

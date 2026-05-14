@@ -114,7 +114,7 @@ pub(super) enum RefConflictHandling {
 /// blob.
 ///
 /// "Staged" parallels the build-side vocabulary in
-/// [`crate::artifact::LocalArtifactBuilder`]: the data is fully
+/// [`crate::artifact::ArtifactDraft`]: the data is fully
 /// computed and ready for publish, but the IndexStore writes have not
 /// happened yet.
 ///

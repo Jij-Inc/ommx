@@ -3,7 +3,7 @@
 This document covers migration of the OMMX Rust SDK (`ommx` crate) across major versions.
 
 - [v3 (Stage Pattern)](#rust-sdk-v3-stage-pattern-migration-guide) — Constraint lifecycle stage parameterization
-- [v3 (Artifact API)](#rust-sdk-v3-artifact-api-migration-guide) — Local registry / archive builder split and renames
+- [v3 (Artifact API)](#rust-sdk-v3-artifact-api-migration-guide) — Local registry / archive draft split and renames
 
 ---
 
@@ -599,15 +599,15 @@ Image Layout per `image:tag`.
 Artifact construction was a single generic `Builder<Base: ImageBuilder>`
 that switched between `.ommx` archive output and a legacy on-disk
 "OCI Image Layout" local registry depending on the `Base` type. v3
-collapses that split: every build goes through `LocalArtifactBuilder`
+collapses that split: every commit goes through `ArtifactDraft`
 and lands in the SQLite Local Registry. A `.ommx` file is just an
 exchange-format export of a registry-resident artifact, produced by
 `LocalArtifact::save(path)`.
 
 | v2 | v3 |
 |---|---|
-| `Builder<OciDirBuilder>` (local registry) | `LocalArtifactBuilder` |
-| `Builder<OciArchiveBuilder>` (`.ommx` file) | `LocalArtifactBuilder::new(...).build()?.save(path)?` |
+| `Builder<OciDirBuilder>` (local registry) | `ArtifactDraft` |
+| `Builder<OciArchiveBuilder>` (`.ommx` file) | `ArtifactDraft::new(...).commit()?.save(path)?` |
 
 The local-registry path now writes an OCI Image Manifest (per OCI 1.1
 spec, with `artifactType`) into a SQLite-backed registry instead of an
@@ -618,7 +618,7 @@ functions — pulled bytes (manifest digest and JSON) round-trip verbatim.
 
 ## Breaking Changes
 
-### 1. Local Registry builder
+### 1. Local Registry draft
 
 ```rust,ignore
 // ❌ Before
@@ -628,18 +628,18 @@ builder.add_instance(instance, annotations)?;
 let artifact = builder.build()?;
 
 // ✅ After
-use ommx::artifact::LocalArtifactBuilder;
-let mut builder = LocalArtifactBuilder::for_github("Jij-Inc", "demo", "experiment", "v1")?;
-builder.add_instance(instance, annotations)?;
-let artifact = builder.build()?;
+use ommx::artifact::ArtifactDraft;
+let mut draft = ArtifactDraft::for_github("Jij-Inc", "demo", "experiment", "v1")?;
+draft.add_instance(instance, annotations)?;
+let artifact = draft.commit()?;
 ```
 
 `Builder<OciDirBuilder>::{new, for_github}` are removed. Use
-`LocalArtifactBuilder::{new, for_github}` instead. Output lands in the
+`ArtifactDraft::{new, for_github}` instead. Output lands in the
 v3 SQLite registry rather than the legacy `<root>/<image>/<tag>/`
 OCI Image Layout directory.
 
-### 2. Archive output goes through LocalArtifactBuilder
+### 2. Archive output goes through ArtifactDraft
 
 ```rust,ignore
 // ❌ Before
@@ -649,52 +649,49 @@ builder.add_instance(instance, ann)?;
 let artifact = builder.build()?;
 
 // ✅ After
-use ommx::artifact::LocalArtifactBuilder;
-let mut builder = LocalArtifactBuilder::new(image_name);
-builder.add_instance(instance, ann)?;
-let artifact = builder.build()?;
+use ommx::artifact::ArtifactDraft;
+let mut draft = ArtifactDraft::new(image_name)?;
+draft.add_instance(instance, ann)?;
+let artifact = draft.commit()?;
 artifact.save(&path)?;
 ```
 
-`ArchiveArtifactBuilder` is gone. The same `LocalArtifactBuilder`
+`ArchiveArtifactBuilder` is gone. The same `ArtifactDraft`
 publishes into the SQLite Local Registry, and `LocalArtifact::save`
 exports a `.ommx` file. Constructors:
 
-- `LocalArtifactBuilder::new(image_name)` — caller-supplied ref name.
-- `LocalArtifactBuilder::new_anonymous()` — defers name synthesis to
-  `build_in_registry`, which constructs
+- `ArtifactDraft::new(image_name)?` — caller-supplied ref name.
+- `ArtifactDraft::new_anonymous()?` — constructs
   `<registry-id8>.ommx.local/anonymous:<local-timestamp>-<nonce>`
-  against the destination registry's `registry_id` (a random UUID
+  against the default registry's `registry_id` (a random UUID
   generated once per `LocalRegistry` and persisted in SQLite
   metadata). The local-time `YYYYMMDDTHHMMSS` prefix lets you read
   the creation time at a glance, and the 12-hex (48-bit) random nonce
-  keeps concurrent / scripted anonymous builds collision-free
+  keeps concurrent / scripted anonymous commits collision-free
   regardless of the host's clock resolution. The `.local` mDNS TLD
   prevents an accidental push from leaking to a real remote registry.
   `ommx artifact prune-anonymous` bulk-cleans every registry-id
   prefix's anonymous refs.
-- `LocalArtifactBuilder::temp()` — random `ttl.sh/<uuid>:1h` name;
+- `ArtifactDraft::temp()` — random `ttl.sh/<uuid>:1h` name;
   insecure, tests only.
-- `LocalArtifactBuilder::for_github(org, repo, name, tag)` — GHCR
+- `ArtifactDraft::for_github(org, repo, name, tag)` — GHCR
   helper.
 
-`build()` returns `LocalArtifact`. The `add_*` signatures are
+`commit()` returns `LocalArtifact`. The `add_*` signatures are
 `add_layer_bytes` / `add_instance` / `add_solution` /
 `add_parametric_instance` / `add_sample_set`.
 
 ## Migration Checklist
 
 - [ ] Replace `ommx::artifact::Builder` (both `OciDirBuilder` and
-      `OciArchiveBuilder` variants) with `LocalArtifactBuilder`.
+      `OciArchiveBuilder` variants) with `ArtifactDraft`.
 - [ ] Replace `Builder::new_archive(path, name)` + `.build()` with
-      `LocalArtifactBuilder::new(name).build()?.save(&path)?`.
+      `ArtifactDraft::new(name)?.commit()?.save(&path)?`.
 - [ ] Replace `Builder::new_archive_unnamed(path)` with
-      `LocalArtifactBuilder::new_anonymous().build()?.save(&path)?`.
-      (`new_anonymous()` returns `Self`, not `Result`, so no `?` on
-      that call; `build()` materialises the anonymous name against
-      the default registry's `registry_id`.)
-- [ ] Replace `Builder::for_github` with `LocalArtifactBuilder::for_github`.
-- [ ] Replace `temp_archive()` with `LocalArtifactBuilder::temp()?.build()?.save(&path)?`.
+      `ArtifactDraft::new_anonymous()?.commit()?.save(&path)?`.
+
+- [ ] Replace `Builder::for_github` with `ArtifactDraft::for_github`.
+- [ ] Replace `temp_archive()` with `ArtifactDraft::temp()?.commit()?.save(&path)?`.
 - [ ] Replace `ocipkg::ImageName` with `ommx::artifact::ImageRef`. The
       type is a newtype around `oci_spec::distribution::Reference`,
       so the full distribution-reference grammar applies. It accepts

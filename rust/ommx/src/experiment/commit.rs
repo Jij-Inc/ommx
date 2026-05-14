@@ -61,7 +61,7 @@ pub(super) fn build_and_publish(
     layers.push(descriptor);
 
     // OCI 1.1 empty config blob. Built without an `annotations` field
-    // to match `LocalArtifactBuilder::stage`.
+    // to match `ArtifactDraft`'s manifest shape.
     let empty_config_bytes = media_types::OCI_EMPTY_CONFIG_BYTES.to_vec();
     let config_descriptor = DescriptorBuilder::default()
         .media_type(MediaType::EmptyJSON)

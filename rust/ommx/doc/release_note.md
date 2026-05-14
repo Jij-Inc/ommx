@@ -296,7 +296,7 @@ to `host[:port]/name@<digest>` on Display (tag references keep the
 `:` separator). `ImageRef` supersedes the previously re-exported
 `ocipkg::ImageName` on every public surface:
 [`LocalArtifact::open`](crate::artifact::LocalArtifact::open),
-[`LocalArtifactBuilder::new`](crate::artifact::LocalArtifactBuilder::new),
+[`ArtifactDraft::new`](crate::artifact::ArtifactDraft::new),
 the SQLite Local Registry helpers, and the CLI parse path all now take
 [`ImageRef`](crate::artifact::ImageRef). The accessor shape is
 `registry()` (the joined `host[:port]` form) plus `name()` /

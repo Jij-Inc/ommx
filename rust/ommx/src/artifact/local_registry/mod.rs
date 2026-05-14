@@ -11,7 +11,7 @@
 //!   The SQLite + filesystem CAS that owns v3 local state, plus the
 //!   shared row / policy types. [`LocalRegistry`] glues the two stores
 //!   into a single addressable unit and exposes the `publish` primitive
-//!   used by `LocalArtifactBuilder`.
+//!   used by `ArtifactDraft`.
 //! - **Import** — `import`. Boundary code that reads external content
 //!   in its native form and writes it through [`LocalRegistry`].
 //!   Currently `import::oci_dir` (a single OCI Image Layout directory)
