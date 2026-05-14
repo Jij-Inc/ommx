@@ -55,7 +55,6 @@ pub use index::{PublishOutcome, SqliteIndexStore};
 pub use registry::LocalRegistry;
 pub use types::{
     BlobRecord, LayerRecord, ManifestRecord, RefConflictPolicy, RefRecord, RefUpdate,
-    BLOB_KIND_BLOB, BLOB_KIND_CONFIG, BLOB_KIND_LAYER, BLOB_KIND_MANIFEST,
     FILE_BLOB_STORE_DIR_NAME, OCI_IMAGE_REF_NAME_ANNOTATION, SQLITE_INDEX_FILE_NAME,
 };
 

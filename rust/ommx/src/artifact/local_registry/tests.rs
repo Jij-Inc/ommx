@@ -54,7 +54,7 @@ fn file_blob_store_round_trip() -> Result<()> {
 fn sqlite_index_store_round_trip() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let store = SqliteIndexStore::open(dir.path().join(SQLITE_INDEX_FILE_NAME))?;
-    assert_eq!(store.schema_version()?, 1);
+    assert_eq!(store.schema_version()?, 2);
 
     let manifest_digest = sha256_digest(b"manifest");
     let layer_digest = sha256_digest(b"layer");
@@ -62,17 +62,11 @@ fn sqlite_index_store_round_trip() -> Result<()> {
     store.put_blob(&BlobRecord {
         digest: manifest_digest.clone(),
         size: b"manifest".len() as u64,
-        media_type: Some("application/vnd.oci.image.manifest.v1+json".to_string()),
-        storage_uri: "blobs/sha256/manifest".to_string(),
-        kind: BLOB_KIND_MANIFEST.to_string(),
         last_verified_at: None,
     })?;
     store.put_blob(&BlobRecord {
         digest: layer_digest.clone(),
         size: b"layer".len() as u64,
-        media_type: Some("application/octet-stream".to_string()),
-        storage_uri: "blobs/sha256/layer".to_string(),
-        kind: BLOB_KIND_LAYER.to_string(),
         last_verified_at: None,
     })?;
 
@@ -95,7 +89,10 @@ fn sqlite_index_store_round_trip() -> Result<()> {
     store.put_manifest(&manifest, &layers)?;
     store.put_ref("example.com/ommx/experiment", "latest", &manifest_digest)?;
 
-    assert_eq!(store.get_blob(&layer_digest)?.unwrap().kind, "layer");
+    assert_eq!(
+        store.get_blob(&layer_digest)?.unwrap().size,
+        b"layer".len() as u64
+    );
     assert_eq!(
         store.get_manifest(&manifest_digest)?.unwrap().media_type,
         "application/vnd.oci.image.manifest.v1+json"
@@ -225,14 +222,14 @@ fn imports_oci_dir_into_sqlite_registry_preserving_image_manifest() -> Result<()
     let manifest_blob = index_store
         .get_blob(&manifest.digest)?
         .context("Imported manifest blob is missing")?;
-    assert_eq!(manifest_blob.kind, BLOB_KIND_MANIFEST);
+    assert_eq!(manifest_blob.size, legacy_manifest_bytes.len() as u64);
     let layers = index_store.get_layers(&imported.manifest_digest)?;
     assert_eq!(layers.len(), 1);
     assert_eq!(layers[0].digest, layer.digest().to_string());
     let layer_blob = index_store
         .get_blob(&layers[0].digest)?
         .context("Imported layer blob is missing")?;
-    assert_eq!(layer_blob.kind, BLOB_KIND_BLOB);
+    assert_eq!(layer_blob.size, layer.size());
 
     let artifact = LocalArtifact::open_in_registry(
         Arc::new(LocalRegistry::open(&registry_root)?),
@@ -522,11 +519,8 @@ fn local_registry_builds_native_image_manifest_with_artifact_type() -> Result<()
     assert_eq!(layers[0].media_type, media_types::V1_INSTANCE_MEDIA_TYPE);
     assert_eq!(artifact.get_blob(layer.digest().as_ref())?, b"instance");
 
-    // Empty config blob must be readable from the registry and persisted
-    // with `BLOB_KIND_CONFIG`, matching the OCI dir import path. A
-    // mis-classified config blob (e.g. recorded as `BLOB_KIND_BLOB`)
-    // would break GC reachability analysis and queries that filter by
-    // blob kind.
+    // Empty config blob must be readable from the registry and present
+    // in the blob index.
     assert_eq!(
         artifact.get_blob(media_types::OCI_EMPTY_CONFIG_DIGEST)?,
         media_types::OCI_EMPTY_CONFIG_BYTES
@@ -535,7 +529,10 @@ fn local_registry_builds_native_image_manifest_with_artifact_type() -> Result<()
         .index()
         .get_blob(media_types::OCI_EMPTY_CONFIG_DIGEST)?
         .context("Empty config blob record is missing")?;
-    assert_eq!(config_record.kind, BLOB_KIND_CONFIG);
+    assert_eq!(
+        config_record.size,
+        media_types::OCI_EMPTY_CONFIG_BYTES.len() as u64
+    );
     Ok(())
 }
 
@@ -749,9 +746,8 @@ fn imports_legacy_v2_oci_dir_with_ommx_config_blob() -> Result<()> {
     // OMMX-specific `application/org.ommx.v1.config+json` (instead of
     // the v3 builder's OCI 1.1 empty descriptor). v3 import / read must
     // preserve such manifests verbatim: parse-time check is artifactType
-    // only (no config-shape requirement), and the config blob lands as
-    // `BLOB_KIND_CONFIG` in the IndexStore so GC reachability and
-    // queries treat it consistently with the v3 empty-config path.
+    // only (no config-shape requirement), and the config blob lands in
+    // both the BlobStore and blob index.
     let dir = tempfile::tempdir()?;
     let legacy_dir = dir.path().join("v2-legacy");
     let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:v2-config")?;
@@ -768,17 +764,14 @@ fn imports_legacy_v2_oci_dir_with_ommx_config_blob() -> Result<()> {
     assert!(blob_store.exists(&imported.manifest_digest)?);
     assert!(blob_store.exists(layer_descriptor.digest().as_ref())?);
 
-    // OMMX-specific config blob is preserved with `BLOB_KIND_CONFIG`.
+    // OMMX-specific config blob is preserved in the BlobStore and blob
+    // index.
     let config_digest_str = config_descriptor.digest().to_string();
     assert!(blob_store.exists(&config_digest_str)?);
     let config_blob = index_store
         .get_blob(&config_digest_str)?
         .context("Imported config blob is missing")?;
-    assert_eq!(config_blob.kind, BLOB_KIND_CONFIG);
-    assert_eq!(
-        config_blob.media_type.as_deref(),
-        Some(media_types::V1_CONFIG_MEDIA_TYPE)
-    );
+    assert_eq!(config_blob.size, v2_config_bytes.len() as u64);
     assert_eq!(blob_store.read_bytes(&config_digest_str)?, v2_config_bytes);
 
     // LocalArtifact reads the legacy manifest (parse-time check is on
@@ -1312,9 +1305,7 @@ fn put_test_manifest(
     blob_store: &FileBlobStore,
     bytes: &[u8],
 ) -> Result<String> {
-    let mut blob = blob_store.put_bytes(bytes)?;
-    blob.media_type = Some("application/vnd.oci.image.manifest.v1+json".to_string());
-    blob.kind = BLOB_KIND_MANIFEST.to_string();
+    let blob = blob_store.put_bytes(bytes)?;
     index_store.put_blob(&blob)?;
     index_store.put_manifest(
         &ManifestRecord {

@@ -1,7 +1,4 @@
-use super::{
-    now_rfc3339, sha256_digest, BlobRecord, ValidatedDigest, BLOB_KIND_BLOB,
-    FILE_BLOB_STORE_DIR_NAME,
-};
+use super::{now_rfc3339, sha256_digest, BlobRecord, ValidatedDigest, FILE_BLOB_STORE_DIR_NAME};
 use anyhow::{ensure, Context, Result};
 use std::{
     fs,
@@ -47,9 +44,6 @@ impl FileBlobStore {
         Ok(BlobRecord {
             digest,
             size: bytes.len() as u64,
-            media_type: None,
-            storage_uri: path.to_string_lossy().into_owned(),
-            kind: BLOB_KIND_BLOB.to_string(),
             last_verified_at: Some(now_rfc3339()),
         })
     }

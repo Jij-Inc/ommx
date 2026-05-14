@@ -53,8 +53,7 @@
 
 use super::super::{
     annotations_json, now_rfc3339, BlobRecord, FileBlobStore, LayerRecord, LocalRegistry,
-    ManifestRecord, RefConflictPolicy, RefUpdate, BLOB_KIND_BLOB, BLOB_KIND_CONFIG,
-    BLOB_KIND_MANIFEST,
+    ManifestRecord, RefConflictPolicy, RefUpdate,
 };
 use super::oci_dir::OciDirImport;
 use crate::artifact::{
@@ -136,7 +135,6 @@ pub fn pull_image(registry: &Arc<LocalRegistry>, image_name: &ImageRef) -> Resul
         registry.blobs(),
         image_name,
         config_descriptor,
-        BLOB_KIND_CONFIG,
     )?);
 
     for (position, layer) in manifest.layers().iter().enumerate() {
@@ -145,7 +143,6 @@ pub fn pull_image(registry: &Arc<LocalRegistry>, image_name: &ImageRef) -> Resul
             registry.blobs(),
             image_name,
             layer,
-            BLOB_KIND_BLOB,
         )?);
         layer_records.push(LayerRecord {
             manifest_digest: manifest_digest.clone(),
@@ -243,7 +240,6 @@ fn pull_descriptor_blob(
     blob_store: &FileBlobStore,
     image_name: &ImageRef,
     descriptor: &Descriptor,
-    kind: &str,
 ) -> Result<BlobRecord> {
     let digest = descriptor.digest().to_string();
     // The manifest descriptor's `size` bounds the network read: the
@@ -253,18 +249,16 @@ fn pull_descriptor_blob(
     let bytes = transport.pull_blob_to_vec(image_name, &digest, descriptor.size())?;
     anyhow::ensure!(
         bytes.len() as u64 == descriptor.size(),
-        "{kind} blob size mismatch for {digest}: descriptor={}, actual={}",
+        "Blob size mismatch for {digest}: descriptor={}, actual={}",
         descriptor.size(),
         bytes.len()
     );
-    let mut record = blob_store.put_bytes(&bytes)?;
+    let record = blob_store.put_bytes(&bytes)?;
     anyhow::ensure!(
         record.digest == digest,
-        "{kind} blob digest mismatch: descriptor={digest}, actual={}",
+        "Blob digest mismatch: descriptor={digest}, actual={}",
         record.digest
     );
-    record.media_type = Some(descriptor.media_type().to_string());
-    record.kind = kind.to_string();
     Ok(record)
 }
 
@@ -279,14 +273,12 @@ fn stage_manifest_blob(
     manifest_bytes: &[u8],
     expected_digest: &str,
 ) -> Result<BlobRecord> {
-    let mut record = blob_store.put_bytes(manifest_bytes)?;
+    let record = blob_store.put_bytes(manifest_bytes)?;
     anyhow::ensure!(
         record.digest == expected_digest,
         "Manifest blob digest mismatch: registry reported {expected_digest}, sha256 of \
          pulled bytes is {}",
         record.digest
     );
-    record.media_type = Some(OCI_IMAGE_MANIFEST_MEDIA_TYPE.to_string());
-    record.kind = BLOB_KIND_MANIFEST.to_string();
     Ok(record)
 }

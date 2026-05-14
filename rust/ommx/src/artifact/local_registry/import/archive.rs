@@ -32,11 +32,11 @@
 
 use super::super::{
     annotations_json, now_rfc3339, sha256_digest, BlobRecord, FileBlobStore, LayerRecord,
-    LocalRegistry, ManifestRecord, RefConflictPolicy, RefUpdate, ValidatedDigest, BLOB_KIND_BLOB,
-    BLOB_KIND_CONFIG, BLOB_KIND_MANIFEST, OCI_IMAGE_REF_NAME_ANNOTATION,
+    LocalRegistry, ManifestRecord, RefConflictPolicy, RefUpdate, ValidatedDigest,
+    OCI_IMAGE_REF_NAME_ANNOTATION,
 };
 use super::oci_dir::OciDirImport;
-use crate::artifact::{media_types, ImageRef, OCI_IMAGE_MANIFEST_MEDIA_TYPE};
+use crate::artifact::{media_types, ImageRef};
 use anyhow::{Context, Result};
 use oci_spec::image::{Descriptor, ImageIndex, ImageManifest, MediaType, OciLayout};
 use std::{
@@ -310,19 +310,9 @@ pub fn import_oci_archive(registry: &Arc<LocalRegistry>, path: &Path) -> Result<
     let mut blob_records = Vec::with_capacity(layer_count + 2);
     let mut layer_records = Vec::with_capacity(layer_count);
 
-    blob_records.push(record_for_blob(
-        registry.blobs(),
-        manifest.config(),
-        BLOB_KIND_CONFIG,
-        path,
-    )?);
+    blob_records.push(record_for_blob(registry.blobs(), manifest.config(), path)?);
     for (position, layer) in manifest.layers().iter().enumerate() {
-        blob_records.push(record_for_blob(
-            registry.blobs(),
-            layer,
-            BLOB_KIND_BLOB,
-            path,
-        )?);
+        blob_records.push(record_for_blob(registry.blobs(), layer, path)?);
         layer_records.push(LayerRecord {
             manifest_digest: manifest_digest.clone(),
             position: u32::try_from(position).context("Layer position does not fit in u32")?,
@@ -332,11 +322,8 @@ pub fn import_oci_archive(registry: &Arc<LocalRegistry>, path: &Path) -> Result<
             annotations_json: annotations_json(layer.annotations().as_ref())?,
         });
     }
-    let manifest_record_blob = record_for_manifest_blob(
-        registry.blobs(),
-        &manifest_digest,
-        manifest_bytes.len() as u64,
-    )?;
+    let manifest_record_blob =
+        record_for_manifest_blob(&manifest_digest, manifest_bytes.len() as u64)?;
     blob_records.push(manifest_record_blob);
 
     let manifest_record = ManifestRecord {
@@ -500,39 +487,26 @@ fn ensure_ommx_artifact_type(artifact_type: Option<&MediaType>) -> Result<()> {
 fn record_for_blob(
     blobs: &FileBlobStore,
     descriptor: &Descriptor,
-    kind: &str,
     archive_path: &Path,
 ) -> Result<BlobRecord> {
     let digest = descriptor.digest().to_string();
     anyhow::ensure!(
         blobs.exists(&digest)?,
-        "{kind} blob {digest} referenced by manifest is missing from {}",
+        "Blob {digest} referenced by manifest is missing from {}",
         archive_path.display()
     );
     Ok(BlobRecord {
         digest: digest.clone(),
         size: descriptor.size(),
-        media_type: Some(descriptor.media_type().to_string()),
-        storage_uri: blobs
-            .path_for_digest(&digest)?
-            .to_string_lossy()
-            .into_owned(),
-        kind: kind.to_string(),
         last_verified_at: Some(now_rfc3339()),
     })
 }
 
 /// Build a [`BlobRecord`] for the manifest blob itself.
-fn record_for_manifest_blob(blobs: &FileBlobStore, digest: &str, size: u64) -> Result<BlobRecord> {
+fn record_for_manifest_blob(digest: &str, size: u64) -> Result<BlobRecord> {
     Ok(BlobRecord {
         digest: digest.to_string(),
         size,
-        media_type: Some(OCI_IMAGE_MANIFEST_MEDIA_TYPE.to_string()),
-        storage_uri: blobs
-            .path_for_digest(digest)?
-            .to_string_lossy()
-            .into_owned(),
-        kind: BLOB_KIND_MANIFEST.to_string(),
         last_verified_at: Some(now_rfc3339()),
     })
 }

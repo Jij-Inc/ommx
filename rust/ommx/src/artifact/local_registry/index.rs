@@ -30,10 +30,9 @@ pub struct PublishOutcome {
 /// `CREATE TABLE IF NOT EXISTS` for every table"; bumping the version
 /// records the change so future incompatible migrations (column drop,
 /// type change) can branch on the stored version. The SQLite Local
-/// Registry has not been released yet, so v1 is the only version
-/// shipped to date — the metadata table (`ommx_local_registry_metadata`)
-/// is part of v1.
-const SCHEMA_VERSION: i64 = 1;
+/// Registry has not been released yet, so incompatible development
+/// schema changes fail fast instead of carrying an in-place migration.
+const SCHEMA_VERSION: i64 = 2;
 const SQLITE_BUSY_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// SQLite-backed index store for the v3 Local Registry.
@@ -142,21 +141,15 @@ impl SqliteIndexStore {
         let now = now_rfc3339();
         conn.execute(
             r#"
-            INSERT INTO blobs (digest, size, media_type, storage_uri, kind, created_at, last_verified_at)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            INSERT INTO blobs (digest, size, created_at, last_verified_at)
+            VALUES (?1, ?2, ?3, ?4)
             ON CONFLICT(digest) DO UPDATE SET
                 size = excluded.size,
-                media_type = excluded.media_type,
-                storage_uri = excluded.storage_uri,
-                kind = excluded.kind,
                 last_verified_at = excluded.last_verified_at
             "#,
             params![
                 record.digest,
                 i64::try_from(record.size).context("Blob size does not fit in i64")?,
-                record.media_type,
-                record.storage_uri,
-                record.kind,
                 now,
                 record.last_verified_at,
             ],
@@ -169,7 +162,7 @@ impl SqliteIndexStore {
         self.lock()
             .query_row(
                 r#"
-                SELECT digest, size, media_type, storage_uri, kind, last_verified_at
+                SELECT digest, size, last_verified_at
                 FROM blobs
                 WHERE digest = ?1
                 "#,
@@ -178,10 +171,7 @@ impl SqliteIndexStore {
                     Ok(BlobRecord {
                         digest: row.get(0)?,
                         size: read_u64(row, 1)?,
-                        media_type: row.get(2)?,
-                        storage_uri: row.get(3)?,
-                        kind: row.get(4)?,
-                        last_verified_at: row.get(5)?,
+                        last_verified_at: row.get(2)?,
                     })
                 },
             )
@@ -593,7 +583,7 @@ impl SqliteIndexStore {
             );
 
             INSERT INTO ommx_local_registry_schema (version)
-            SELECT 1
+            SELECT 2
             WHERE NOT EXISTS (SELECT 1 FROM ommx_local_registry_schema);
 
             CREATE TABLE IF NOT EXISTS ommx_local_registry_metadata (
@@ -604,9 +594,6 @@ impl SqliteIndexStore {
             CREATE TABLE IF NOT EXISTS blobs (
                 digest TEXT PRIMARY KEY,
                 size INTEGER NOT NULL CHECK(size >= 0),
-                media_type TEXT,
-                storage_uri TEXT NOT NULL,
-                kind TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 last_verified_at TEXT
             );

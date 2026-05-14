@@ -2,8 +2,7 @@ use super::{
     annotations_json, import_legacy_local_registry, import_legacy_local_registry_ref,
     import_legacy_local_registry_ref_with_policy, import_legacy_local_registry_with_policy,
     now_rfc3339, BlobRecord, FileBlobStore, LayerRecord, LegacyImportReport, ManifestRecord,
-    OciDirImport, RefConflictPolicy, RefUpdate, SqliteIndexStore, BLOB_KIND_BLOB, BLOB_KIND_CONFIG,
-    BLOB_KIND_MANIFEST,
+    OciDirImport, RefConflictPolicy, RefUpdate, SqliteIndexStore,
 };
 use crate::artifact::{media_types, ImageRef, StagedArtifactBlob};
 use anyhow::{ensure, Context, Result};
@@ -219,27 +218,11 @@ impl LocalRegistry {
         // committed manifest / blob rows under a ref that wasn't
         // actually published.
         //
-        // Tag the manifest's `config` descriptor with `BLOB_KIND_CONFIG`
-        // (matching the OCI-dir import path) and everything else with
-        // `BLOB_KIND_BLOB`. Without this dispatch the empty config blob
-        // built by `LocalArtifactBuilder::stage` would be persisted as a
-        // generic layer, diverging from imports of legacy v2 dirs and
-        // breaking GC / query logic that filters on `kind`.
-        let config_digest = manifest.config().digest();
         let mut blob_records = Vec::with_capacity(blobs.len() + 1);
         for blob in blobs {
-            let kind = if blob.descriptor().digest() == config_digest {
-                BLOB_KIND_CONFIG
-            } else {
-                BLOB_KIND_BLOB
-            };
-            blob_records.push(self.stage_blob_record(blob.descriptor(), blob.bytes(), kind)?);
+            blob_records.push(self.stage_blob_record(blob.descriptor(), blob.bytes())?);
         }
-        blob_records.push(self.stage_blob_record(
-            manifest_descriptor,
-            manifest_bytes,
-            BLOB_KIND_MANIFEST,
-        )?);
+        blob_records.push(self.stage_blob_record(manifest_descriptor, manifest_bytes)?);
 
         let layer_records = manifest
             .layers()
@@ -288,13 +271,8 @@ impl LocalRegistry {
     /// the IndexStore. The DB row is *not* inserted here; the caller
     /// passes the records to [`SqliteIndexStore::publish_artifact_atomic`]
     /// so the inserts happen inside the publish transaction.
-    fn stage_blob_record(
-        &self,
-        descriptor: &Descriptor,
-        bytes: &[u8],
-        kind: &str,
-    ) -> Result<BlobRecord> {
-        let mut record = self.blobs.put_bytes(bytes)?;
+    fn stage_blob_record(&self, descriptor: &Descriptor, bytes: &[u8]) -> Result<BlobRecord> {
+        let record = self.blobs.put_bytes(bytes)?;
         ensure!(
             record.digest == descriptor.digest().to_string(),
             "Descriptor digest mismatch: descriptor={}, actual={}",
@@ -308,8 +286,6 @@ impl LocalRegistry {
             descriptor.size(),
             record.size
         );
-        record.media_type = Some(descriptor.media_type().to_string());
-        record.kind = kind.to_string();
         Ok(record)
     }
 }

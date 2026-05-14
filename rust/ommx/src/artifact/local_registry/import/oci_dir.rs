@@ -24,7 +24,7 @@
 use super::super::{
     annotations_json, now_rfc3339, sha256_digest, BlobRecord, FileBlobStore, LayerRecord,
     ManifestRecord, RefConflictPolicy, RefUpdate, SqliteIndexStore, ValidatedDigest,
-    BLOB_KIND_BLOB, BLOB_KIND_CONFIG, BLOB_KIND_MANIFEST, OCI_IMAGE_REF_NAME_ANNOTATION,
+    OCI_IMAGE_REF_NAME_ANNOTATION,
 };
 use crate::artifact::{media_types, ImageRef, OCI_IMAGE_MANIFEST_MEDIA_TYPE};
 use anyhow::{ensure, Context, Result};
@@ -268,8 +268,7 @@ pub(super) fn import_oci_dir_inner(
     let mut blob_records = Vec::with_capacity(layer_descriptors.len() + 2);
     let mut layer_records = Vec::with_capacity(layer_descriptors.len());
     for (position, layer) in layer_descriptors.iter().enumerate() {
-        let record =
-            stage_oci_dir_descriptor_blob(blob_store, oci_dir_root, layer, BLOB_KIND_BLOB)?;
+        let record = stage_oci_dir_descriptor_blob(blob_store, oci_dir_root, layer)?;
         blob_records.push(record);
         layer_records.push(LayerRecord {
             manifest_digest: manifest_digest.clone(),
@@ -285,13 +284,11 @@ pub(super) fn import_oci_dir_inner(
         blob_store,
         config_descriptor,
         config_bytes,
-        BLOB_KIND_CONFIG,
     )?);
     blob_records.push(stage_descriptor_bytes(
         blob_store,
         &staged.manifest_descriptor,
         &staged.manifest_bytes,
-        BLOB_KIND_MANIFEST,
     )?);
 
     let manifest_record = ManifestRecord {
@@ -517,18 +514,17 @@ fn stage_oci_dir_descriptor_blob(
     blob_store: &FileBlobStore,
     oci_dir_root: &Path,
     desc: &Descriptor,
-    kind: &str,
 ) -> Result<BlobRecord> {
     let digest = digest_to_string(desc.digest());
     let bytes = read_oci_dir_blob(oci_dir_root, &digest)
-        .with_context(|| format!("Failed to read {kind} blob {digest}"))?;
+        .with_context(|| format!("Failed to read blob {digest}"))?;
     ensure!(
         bytes.len() as u64 == desc.size(),
-        "{kind} blob size mismatch for {digest}: descriptor={}, actual={}",
+        "Blob size mismatch for {digest}: descriptor={}, actual={}",
         desc.size(),
         bytes.len()
     );
-    stage_descriptor_bytes(blob_store, desc, &bytes, kind)
+    stage_descriptor_bytes(blob_store, desc, &bytes)
 }
 
 /// CAS-write `bytes` for `desc` and return the matching
@@ -537,24 +533,21 @@ fn stage_descriptor_bytes(
     blob_store: &FileBlobStore,
     desc: &Descriptor,
     bytes: &[u8],
-    kind: &str,
 ) -> Result<BlobRecord> {
-    let mut record = blob_store.put_bytes(bytes)?;
+    let record = blob_store.put_bytes(bytes)?;
     ensure!(
         record.digest == digest_to_string(desc.digest()),
-        "{kind} blob digest mismatch: descriptor={}, actual={}",
+        "Blob digest mismatch: descriptor={}, actual={}",
         desc.digest(),
         record.digest
     );
     ensure!(
         record.size == desc.size(),
-        "{kind} blob size mismatch for {}: descriptor={}, actual={}",
+        "Blob size mismatch for {}: descriptor={}, actual={}",
         desc.digest(),
         desc.size(),
         record.size
     );
-    record.media_type = Some(desc.media_type().to_string());
-    record.kind = kind.to_string();
     Ok(record)
 }
 
