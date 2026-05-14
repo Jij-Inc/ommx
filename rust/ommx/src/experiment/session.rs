@@ -2,11 +2,11 @@
 
 use super::model::{ExperimentState, RecordRef, RunState, RunStatus, Space};
 use super::{build_descriptor, commit, ANN_RECORD_NAME, ANN_RUN_ID, ANN_SPACE};
-use crate::artifact::local_registry::{BlobRecord, LocalRegistry};
+use crate::artifact::local_registry::LocalRegistry;
 use crate::artifact::{media_types, ImageRef, LocalArtifact};
 use crate::{Instance, SampleSet, Solution};
 use anyhow::Result;
-use oci_spec::image::MediaType;
+use oci_spec::image::{Descriptor, MediaType};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
@@ -265,11 +265,11 @@ fn find_run_mut(state: &mut ExperimentState, run_id: u64) -> Result<&mut RunStat
         .ok_or_else(|| crate::error!("Run {run_id} not found in experiment"))
 }
 
-fn remember_staged_blob(state: &mut ExperimentState, blob: BlobRecord) {
+fn remember_staged_blob(state: &mut ExperimentState, descriptor: Descriptor) {
     state
         .staged_blobs
-        .entry(blob.digest.clone())
-        .or_insert(blob);
+        .entry(descriptor.digest().clone())
+        .or_insert(descriptor);
 }
 
 /// Build-phase upsert: a record with the same `(media_type, name)`
@@ -297,7 +297,7 @@ fn encode_json(name: &str, value: impl serde::Serialize) -> Result<Vec<u8>> {
 
 /// Write `bytes` to the registry's BlobStore and build the in-memory
 /// [`RecordRef`]: an OCI layer descriptor carrying the experiment /
-/// record annotations, plus the matching blob record for commit-time
+/// record annotations, plus the matching descriptor for commit-time
 /// publication.
 fn stage_record_ref(
     registry: &LocalRegistry,
@@ -306,9 +306,8 @@ fn stage_record_ref(
     name: &str,
     media_type: MediaType,
     bytes: &[u8],
-) -> Result<(RecordRef, BlobRecord)> {
-    let mut blob = registry.blobs().put_bytes(bytes)?;
-    blob.media_type = Some(media_type.to_string());
+) -> Result<(RecordRef, Descriptor)> {
+    let digest = registry.blobs().put_bytes(bytes)?;
 
     let mut annotations = HashMap::new();
     annotations.insert(ANN_SPACE.to_string(), space.as_str().to_string());
@@ -317,12 +316,12 @@ fn stage_record_ref(
     }
     annotations.insert(ANN_RECORD_NAME.to_string(), name.to_string());
 
-    let descriptor = build_descriptor(media_type, &blob, annotations)?;
+    let descriptor = build_descriptor(media_type, &digest, bytes.len() as u64, annotations)?;
     Ok((
         RecordRef {
             name: name.to_string(),
-            descriptor,
+            descriptor: descriptor.clone(),
         },
-        blob,
+        descriptor,
     ))
 }

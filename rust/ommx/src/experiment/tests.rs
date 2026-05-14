@@ -77,7 +77,7 @@ fn log_writes_blob_to_blobstore_immediately() {
     let digest = {
         let state = experiment.state.lock().unwrap();
         assert_eq!(state.runs[0].records.len(), 1);
-        let digest = state.runs[0].records[0].descriptor.digest().to_string();
+        let digest = state.runs[0].records[0].descriptor.digest().clone();
         assert!(state.staged_blobs.contains_key(&digest));
         digest
     };
@@ -109,7 +109,7 @@ fn log_upserts_same_space_media_type_name() {
     let bytes = experiment
         .registry
         .blobs()
-        .read_bytes(json_record.descriptor.digest().as_ref())
+        .read_bytes(json_record.descriptor.digest())
         .unwrap();
     assert_eq!(bytes, serde_json::to_vec(&json!("qplib")).unwrap());
 }
@@ -174,7 +174,7 @@ fn commit_produces_experiment_artifact() {
     );
     assert_eq!(candidate.media_type(), &media_types::v1_instance());
     assert_eq!(
-        artifact.get_blob(candidate.digest().as_ref()).unwrap(),
+        artifact.get_blob(candidate.digest()).unwrap(),
         instance.to_bytes()
     );
 
@@ -269,7 +269,7 @@ fn log_record_accepts_caller_defined_media_type() {
     let source_model = find_layer(&layers, ANN_RECORD_NAME, "source-model");
     assert_eq!(source_model.media_type(), &media_type);
     assert_eq!(
-        artifact.get_blob(source_model.digest().as_ref()).unwrap(),
+        artifact.get_blob(source_model.digest()).unwrap(),
         br#"{"variables": []}"#
     );
 }

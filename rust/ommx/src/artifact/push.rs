@@ -38,7 +38,7 @@ impl LocalArtifact {
 
         for descriptor in &blob_descriptors {
             let digest = descriptor.digest().to_string();
-            let bytes = self.get_blob(&digest)?;
+            let bytes = self.get_blob(descriptor.digest())?;
             tracing::debug!(
                 size = bytes.len(),
                 "Pushing blob {digest} of {}",

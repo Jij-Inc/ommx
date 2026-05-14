@@ -22,20 +22,15 @@
 //! primitives.
 
 use super::super::{
-    annotations_json, now_rfc3339, sha256_digest, BlobRecord, FileBlobStore, LayerRecord,
-    ManifestRecord, RefConflictPolicy, RefUpdate, SqliteIndexStore, ValidatedDigest,
-    BLOB_KIND_BLOB, BLOB_KIND_CONFIG, BLOB_KIND_MANIFEST, OCI_IMAGE_REF_NAME_ANNOTATION,
+    sha256_digest, FileBlobStore, RefConflictPolicy, RefUpdate, SqliteIndexStore, ValidatedDigest,
+    OCI_IMAGE_REF_NAME_ANNOTATION,
 };
-use crate::artifact::{media_types, ImageRef, OCI_IMAGE_MANIFEST_MEDIA_TYPE};
+use crate::artifact::{media_types, ImageRef};
 use anyhow::{ensure, Context, Result};
-use oci_spec::image::{
-    Descriptor, DescriptorBuilder, Digest, ImageIndex, ImageManifest, MediaType, OciLayout,
-};
-use std::collections::HashMap;
+use oci_spec::image::{Descriptor, Digest, ImageIndex, ImageManifest, MediaType, OciLayout};
 use std::{
     fs,
     path::{Path, PathBuf},
-    str::FromStr,
 };
 
 /// Identity of an OCI Image Layout directory entry: the manifest
@@ -48,13 +43,12 @@ use std::{
 /// describing what happened to the SQLite ref.
 ///
 /// Marked `#[non_exhaustive]` so future identity attributes (for
-/// example a parsed `oci_spec::image::Digest` or a typed media type)
-/// can be added without breaking exhaustive destructuring at call
-/// sites.
+/// example a typed media type) can be added without breaking
+/// exhaustive destructuring at call sites.
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OciDirRef {
-    pub manifest_digest: String,
+    pub manifest_digest: Digest,
     pub image_name: Option<ImageRef>,
 }
 
@@ -86,7 +80,7 @@ pub struct OciDirRef {
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OciDirImport {
-    pub manifest_digest: String,
+    pub manifest_digest: Digest,
     pub image_name: Option<ImageRef>,
     pub ref_update: Option<RefUpdate>,
 }
@@ -132,13 +126,11 @@ pub(super) enum RefConflictHandling {
 /// set to the OMMX artifact media type); the deprecated OCI Artifact
 /// Manifest is rejected at parse time.
 struct StagedOciDir {
-    manifest_digest: String,
+    manifest_digest: Digest,
     image_name: Option<ImageRef>,
     manifest_bytes: Vec<u8>,
     manifest_descriptor: Descriptor,
     layers: Vec<Descriptor>,
-    annotations: Option<HashMap<String, String>>,
-    subject: Option<Descriptor>,
     image_config: (Descriptor, Vec<u8>),
 }
 
@@ -149,9 +141,9 @@ struct StagedOciDir {
 /// of how it was produced. The v3 registry does not keep `index.json` as
 /// mutable state; it only reads it to discover the single manifest, and
 /// then copies the exact content-addressed blobs into [`FileBlobStore`]
-/// while inserting the matching records into [`SqliteIndexStore`]. The
-/// manifest digest is preserved verbatim — import never rewrites the
-/// manifest.
+/// while inserting the manifest descriptor into [`SqliteIndexStore`].
+/// The manifest digest is preserved verbatim — import never rewrites
+/// the manifest.
 ///
 /// OCI Image Layouts that use the deprecated OCI Artifact Manifest
 /// (`application/vnd.oci.artifact.manifest.v1+json`) are rejected at
@@ -235,19 +227,19 @@ pub(super) fn import_oci_dir_inner(
     // path for the common single-writer case.
     if policy == RefConflictPolicy::KeepExisting {
         if let Some(image_name) = effective_image_name.as_ref() {
-            if let Some(existing_manifest_digest) = index_store.resolve_image_name(image_name)? {
-                if existing_manifest_digest != manifest_digest {
+            if let Some(existing_descriptor) = index_store.resolve_image_descriptor(image_name)? {
+                if existing_descriptor.digest() != staged.manifest_descriptor.digest() {
                     if conflict_handling == RefConflictHandling::Error {
                         anyhow::bail!(
                             "Local registry ref conflict for {}: existing manifest {}, incoming manifest {}",
                             image_name,
-                            existing_manifest_digest,
-                            manifest_digest,
+                            existing_descriptor.digest(),
+                            staged.manifest_descriptor.digest(),
                         );
                     }
                     let conflict = RefUpdate::Conflicted {
-                        existing_manifest_digest,
-                        incoming_manifest_digest: manifest_digest.clone(),
+                        existing_manifest_digest: existing_descriptor.digest().clone(),
+                        incoming_manifest_digest: staged.manifest_descriptor.digest().clone(),
                     };
                     return Ok((
                         OciDirRef {
@@ -262,76 +254,45 @@ pub(super) fn import_oci_dir_inner(
     }
 
     // Stage 1: write CAS bytes for layers, optional config, and the
-    // manifest itself. These are idempotent so they don't need to
-    // share a SQLite transaction.
+    // manifest itself. These are idempotent and independent of the
+    // SQLite ref index.
     let layer_descriptors = staged.layers.as_slice();
-    let mut blob_records = Vec::with_capacity(layer_descriptors.len() + 2);
-    let mut layer_records = Vec::with_capacity(layer_descriptors.len());
-    for (position, layer) in layer_descriptors.iter().enumerate() {
-        let record =
-            stage_oci_dir_descriptor_blob(blob_store, oci_dir_root, layer, BLOB_KIND_BLOB)?;
-        blob_records.push(record);
-        layer_records.push(LayerRecord {
-            manifest_digest: manifest_digest.clone(),
-            position: u32::try_from(position).context("Layer position does not fit in u32")?,
-            digest: digest_to_string(layer.digest()),
-            media_type: layer.media_type().to_string(),
-            size: layer.size(),
-            annotations_json: annotations_json(layer.annotations().as_ref())?,
-        });
+    for layer in layer_descriptors {
+        stage_oci_dir_descriptor_blob(blob_store, oci_dir_root, layer)?;
     }
     let (config_descriptor, config_bytes) = &staged.image_config;
-    blob_records.push(stage_descriptor_bytes(
-        blob_store,
-        config_descriptor,
-        config_bytes,
-        BLOB_KIND_CONFIG,
-    )?);
-    blob_records.push(stage_descriptor_bytes(
+    stage_descriptor_bytes(blob_store, config_descriptor, config_bytes)?;
+    stage_descriptor_bytes(
         blob_store,
         &staged.manifest_descriptor,
         &staged.manifest_bytes,
-        BLOB_KIND_MANIFEST,
-    )?);
-
-    let manifest_record = ManifestRecord {
-        digest: manifest_digest.clone(),
-        media_type: OCI_IMAGE_MANIFEST_MEDIA_TYPE.to_string(),
-        size: staged.manifest_descriptor.size(),
-        subject_digest: staged
-            .subject
-            .as_ref()
-            .map(|d| digest_to_string(d.digest())),
-        annotations_json: annotations_json(staged.annotations.as_ref())?,
-        created_at: now_rfc3339(),
-    };
-
-    // Stage 2: one SQLite transaction commits blob records + manifest
-    // + ref. A crash or conflict between stages can never leave
-    // committed manifest / blob rows under a ref the caller did not
-    // actually publish.
-    let outcome = index_store.publish_artifact_atomic(
-        &blob_records,
-        &manifest_record,
-        &layer_records,
-        effective_image_name.as_ref(),
-        policy,
     )?;
-    let ref_update = match outcome.ref_update {
-        Some(RefUpdate::Conflicted {
-            existing_manifest_digest,
-            incoming_manifest_digest,
-        }) if conflict_handling == RefConflictHandling::Error => {
-            anyhow::bail!(
-                "Local registry ref conflict for {}: existing manifest {}, incoming manifest {}",
-                effective_image_name
-                    .as_ref()
-                    .expect("Conflicted requires an effective image_name"),
+
+    // Stage 2: publish the OCI manifest descriptor into the SQLite
+    // ref index. If no ref annotation / target ref exists, the import
+    // is digest-only and the CAS bytes remain reachable by digest.
+    let ref_update = if let Some(image_name) = effective_image_name.as_ref() {
+        let update = index_store.put_image_ref_with_policy(
+            image_name,
+            &staged.manifest_descriptor,
+            policy,
+        )?;
+        match update {
+            RefUpdate::Conflicted {
                 existing_manifest_digest,
-                incoming_manifest_digest
-            )
+                incoming_manifest_digest,
+            } if conflict_handling == RefConflictHandling::Error => {
+                anyhow::bail!(
+                    "Local registry ref conflict for {}: existing manifest {}, incoming manifest {}",
+                    image_name,
+                    existing_manifest_digest,
+                    incoming_manifest_digest
+                )
+            }
+            update => Some(update),
         }
-        update => update,
+    } else {
+        None
     };
 
     Ok((
@@ -413,8 +374,9 @@ fn stage_oci_dir(oci_dir_root: impl AsRef<Path>) -> Result<StagedOciDir> {
     );
     let index_descriptor = image_index.manifests().first().unwrap();
     let image_name = image_name_from_index_descriptor(index_descriptor)?;
-    let manifest_digest = digest_to_string(index_descriptor.digest());
-    let manifest_bytes = read_oci_dir_blob(oci_dir_root, &manifest_digest)
+    let manifest_digest = index_descriptor.digest().clone();
+    let manifest_digest_str = digest_to_string(&manifest_digest);
+    let manifest_bytes = read_oci_dir_blob(oci_dir_root, &manifest_digest_str)
         .with_context(|| format!("Failed to read manifest blob {manifest_digest}"))?;
     ensure!(
         manifest_bytes.len() as u64 == index_descriptor.size(),
@@ -425,7 +387,7 @@ fn stage_oci_dir(oci_dir_root: impl AsRef<Path>) -> Result<StagedOciDir> {
 
     // v3 supports only OCI Image Manifest. The deprecated OCI Artifact
     // Manifest is rejected at parse time.
-    let (layers, annotations, subject, image_config) = match index_descriptor.media_type() {
+    let (layers, image_config) = match index_descriptor.media_type() {
         MediaType::ImageManifest => stage_image_manifest(oci_dir_root, &manifest_bytes)?,
         MediaType::ArtifactManifest => anyhow::bail!(
             "OCI dir uses the deprecated OCI Artifact Manifest \
@@ -438,34 +400,18 @@ fn stage_oci_dir(oci_dir_root: impl AsRef<Path>) -> Result<StagedOciDir> {
         ),
     };
 
-    let manifest_digest_parsed = Digest::from_str(&manifest_digest)
-        .with_context(|| format!("Invalid manifest digest: {manifest_digest}"))?;
-    let manifest_descriptor = DescriptorBuilder::default()
-        .media_type(MediaType::ImageManifest)
-        .digest(manifest_digest_parsed)
-        .size(manifest_bytes.len() as u64)
-        .build()
-        .context("Failed to build OCI manifest descriptor")?;
-
     Ok(StagedOciDir {
         manifest_digest,
         image_name,
         manifest_bytes,
-        manifest_descriptor,
+        manifest_descriptor: index_descriptor.clone(),
         layers,
-        annotations,
-        subject,
         image_config,
     })
 }
 
 /// Manifest-derived fields filled into [`StagedOciDir`] by `stage_oci_dir`.
-type StagedManifestFields = (
-    Vec<Descriptor>,
-    Option<HashMap<String, String>>,
-    Option<Descriptor>,
-    (Descriptor, Vec<u8>),
-);
+type StagedManifestFields = (Vec<Descriptor>, (Descriptor, Vec<u8>));
 
 fn stage_image_manifest(
     oci_dir_root: &Path,
@@ -490,8 +436,6 @@ fn stage_image_manifest(
 
     Ok((
         manifest.layers().to_vec(),
-        manifest.annotations().clone(),
-        manifest.subject().clone(),
         (config_descriptor, config_bytes),
     ))
 }
@@ -508,54 +452,46 @@ fn ensure_ommx_artifact_type(artifact_type: Option<&MediaType>) -> Result<()> {
 }
 
 /// Read a layer / config blob out of the legacy OCI dir, write it to
-/// the v3 [`FileBlobStore`] under its content digest, and return the
-/// matching [`BlobRecord`] for the IndexStore. The DB row is *not*
-/// inserted here — the caller hands the records to
-/// [`SqliteIndexStore::publish_artifact_atomic`] so all blob /
-/// manifest / ref inserts share one transaction.
+/// the v3 [`FileBlobStore`] under its content digest, and verify it
+/// matches the descriptor from the source layout.
 fn stage_oci_dir_descriptor_blob(
     blob_store: &FileBlobStore,
     oci_dir_root: &Path,
     desc: &Descriptor,
-    kind: &str,
-) -> Result<BlobRecord> {
+) -> Result<()> {
     let digest = digest_to_string(desc.digest());
     let bytes = read_oci_dir_blob(oci_dir_root, &digest)
-        .with_context(|| format!("Failed to read {kind} blob {digest}"))?;
+        .with_context(|| format!("Failed to read blob {digest}"))?;
     ensure!(
         bytes.len() as u64 == desc.size(),
-        "{kind} blob size mismatch for {digest}: descriptor={}, actual={}",
+        "Blob size mismatch for {digest}: descriptor={}, actual={}",
         desc.size(),
         bytes.len()
     );
-    stage_descriptor_bytes(blob_store, desc, &bytes, kind)
+    stage_descriptor_bytes(blob_store, desc, &bytes)
 }
 
-/// CAS-write `bytes` for `desc` and return the matching
-/// [`BlobRecord`] (no DB write).
+/// CAS-write `bytes` for `desc` and verify the written content address.
 fn stage_descriptor_bytes(
     blob_store: &FileBlobStore,
     desc: &Descriptor,
     bytes: &[u8],
-    kind: &str,
-) -> Result<BlobRecord> {
-    let mut record = blob_store.put_bytes(bytes)?;
+) -> Result<()> {
+    let digest = blob_store.put_bytes(bytes)?;
     ensure!(
-        record.digest == digest_to_string(desc.digest()),
-        "{kind} blob digest mismatch: descriptor={}, actual={}",
+        &digest == desc.digest(),
+        "Blob digest mismatch: descriptor={}, actual={}",
         desc.digest(),
-        record.digest
+        digest
     );
     ensure!(
-        record.size == desc.size(),
-        "{kind} blob size mismatch for {}: descriptor={}, actual={}",
+        bytes.len() as u64 == desc.size(),
+        "Blob size mismatch for {}: descriptor={}, actual={}",
         desc.digest(),
         desc.size(),
-        record.size
+        bytes.len()
     );
-    record.media_type = Some(desc.media_type().to_string());
-    record.kind = kind.to_string();
-    Ok(record)
+    Ok(())
 }
 
 fn read_oci_dir_blob(oci_dir_root: &Path, digest: &str) -> Result<Vec<u8>> {

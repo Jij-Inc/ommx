@@ -7,9 +7,7 @@ use super::{
     EXPERIMENT_SCHEMA_V1, EXPERIMENT_STATUS_FINISHED, LAYER_KIND_INDEX, LAYER_KIND_RUN_ATTRIBUTES,
     RUN_ATTRIBUTES_MEDIA_TYPE,
 };
-use crate::artifact::local_registry::{
-    BlobRecord, LocalRegistry, RefConflictPolicy, RefUpdate, BLOB_KIND_CONFIG,
-};
+use crate::artifact::local_registry::{LocalRegistry, RefConflictPolicy, RefUpdate};
 use crate::artifact::{media_types, sha256_digest, stable_json_bytes, LocalArtifact};
 use anyhow::Result;
 use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, ImageManifestBuilder, MediaType};
@@ -26,8 +24,8 @@ pub(super) fn build_and_publish(
     state: &ExperimentState,
 ) -> Result<LocalArtifact> {
     let mut layers: Vec<Descriptor> = Vec::new();
-    let mut blob_records: Vec<BlobRecord> = Vec::new();
-    let mut seen_digests: HashSet<String> = HashSet::new();
+    let mut blob_descriptors: Vec<Descriptor> = Vec::new();
+    let mut seen_digests: HashSet<Digest> = HashSet::new();
 
     // Record layers: experiment space first, then each run's space.
     // `layers[]` keeps one descriptor per record (digests may repeat
@@ -36,41 +34,41 @@ pub(super) fn build_and_publish(
     let run_records = state.runs.iter().flat_map(|run| run.records.iter());
     for record in state.records.iter().chain(run_records) {
         layers.push(record.descriptor.clone());
-        let digest = record.descriptor.digest().to_string();
+        let digest = record.descriptor.digest().clone();
         if seen_digests.insert(digest.clone()) {
-            let blob = state
+            let descriptor = state
                 .staged_blobs
                 .get(&digest)
                 .ok_or_else(|| crate::error!("Staged blob {digest} is missing"))?;
-            blob_records.push(blob.clone());
+            blob_descriptors.push(descriptor.clone());
         }
     }
 
     // Aggregate layers, materialised at commit time.
     let run_attributes = serde_json::to_vec(&run_attributes_json(state))
         .map_err(|e| crate::error!("Failed to encode run attributes JSON: {e}"))?;
-    let (descriptor, blob) = stage_aggregate_layer(
+    let descriptor = stage_aggregate_layer(
         registry,
         RUN_ATTRIBUTES_MEDIA_TYPE,
         LAYER_KIND_RUN_ATTRIBUTES,
         &run_attributes,
     )?;
-    layers.push(descriptor);
-    if seen_digests.insert(blob.digest.clone()) {
-        blob_records.push(blob);
+    layers.push(descriptor.clone());
+    if seen_digests.insert(descriptor.digest().clone()) {
+        blob_descriptors.push(descriptor);
     }
 
     let index = serde_json::to_vec(&experiment_index_json(state))
         .map_err(|e| crate::error!("Failed to encode experiment index JSON: {e}"))?;
-    let (descriptor, blob) = stage_aggregate_layer(
+    let descriptor = stage_aggregate_layer(
         registry,
         EXPERIMENT_INDEX_MEDIA_TYPE,
         LAYER_KIND_INDEX,
         &index,
     )?;
-    layers.push(descriptor);
-    if seen_digests.insert(blob.digest.clone()) {
-        blob_records.push(blob);
+    layers.push(descriptor.clone());
+    if seen_digests.insert(descriptor.digest().clone()) {
+        blob_descriptors.push(descriptor);
     }
 
     // OCI 1.1 empty config blob. Built without an `annotations` field
@@ -85,11 +83,9 @@ pub(super) fn build_and_publish(
         .size(empty_config_bytes.len() as u64)
         .build()
         .map_err(|e| crate::error!("Failed to build empty config descriptor: {e}"))?;
-    let mut config_blob = registry.blobs().put_bytes(&empty_config_bytes)?;
-    config_blob.media_type = Some(MediaType::EmptyJSON.to_string());
-    config_blob.kind = BLOB_KIND_CONFIG.to_string();
-    if seen_digests.insert(config_blob.digest.clone()) {
-        blob_records.push(config_blob);
+    registry.blobs().put_bytes(&empty_config_bytes)?;
+    if seen_digests.insert(config_descriptor.digest().clone()) {
+        blob_descriptors.push(config_descriptor.clone());
     }
 
     let manifest = ImageManifestBuilder::default()
@@ -123,7 +119,7 @@ pub(super) fn build_and_publish(
         &manifest,
         &manifest_descriptor,
         &manifest_bytes,
-        &blob_records,
+        &blob_descriptors,
         RefConflictPolicy::KeepExisting,
     )?;
     if let RefUpdate::Conflicted {
@@ -140,26 +136,27 @@ pub(super) fn build_and_publish(
     Ok(LocalArtifact::from_parts(
         Arc::clone(registry),
         image_name,
-        manifest_descriptor.digest().to_string(),
+        manifest_descriptor.digest().clone(),
     ))
 }
 
 /// CAS-write a commit-time aggregate JSON layer and return its
-/// descriptor (with the `org.ommx.experiment.layer` annotation) plus
-/// blob record.
+/// descriptor (with the `org.ommx.experiment.layer` annotation).
 fn stage_aggregate_layer(
     registry: &LocalRegistry,
     media_type: &str,
     layer_kind: &str,
     bytes: &[u8],
-) -> Result<(Descriptor, BlobRecord)> {
-    let mut blob = registry.blobs().put_bytes(bytes)?;
-    blob.media_type = Some(media_type.to_string());
+) -> Result<Descriptor> {
+    let digest = registry.blobs().put_bytes(bytes)?;
     let mut annotations = HashMap::new();
     annotations.insert(ANN_LAYER.to_string(), layer_kind.to_string());
-    let descriptor =
-        build_descriptor(MediaType::Other(media_type.to_string()), &blob, annotations)?;
-    Ok((descriptor, blob))
+    build_descriptor(
+        MediaType::Other(media_type.to_string()),
+        &digest,
+        bytes.len() as u64,
+        annotations,
+    )
 }
 
 fn manifest_annotations(state: &ExperimentState) -> HashMap<String, String> {

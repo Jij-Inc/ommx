@@ -1,14 +1,12 @@
 use super::{
-    annotations_json, import_legacy_local_registry, import_legacy_local_registry_ref,
+    import_legacy_local_registry, import_legacy_local_registry_ref,
     import_legacy_local_registry_ref_with_policy, import_legacy_local_registry_with_policy,
-    now_rfc3339, BlobRecord, FileBlobStore, LayerRecord, LegacyImportReport, ManifestRecord,
-    OciDirImport, RefConflictPolicy, RefUpdate, SqliteIndexStore, BLOB_KIND_BLOB, BLOB_KIND_CONFIG,
-    BLOB_KIND_MANIFEST,
+    FileBlobStore, LegacyImportReport, OciDirImport, RefConflictPolicy, RefUpdate,
+    SqliteIndexStore,
 };
 use crate::artifact::{media_types, ImageRef, StagedArtifactBlob};
 use anyhow::{ensure, Context, Result};
-use oci_spec::image::{Descriptor, ImageManifest, MediaType};
-use std::collections::HashSet;
+use oci_spec::image::{Descriptor, Digest, ImageManifest, MediaType};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
@@ -71,7 +69,7 @@ impl LocalRegistry {
         import_legacy_local_registry_with_policy(&self.index, &self.blobs, &self.root, policy)
     }
 
-    pub fn resolve_image_name(&self, image_name: &ImageRef) -> Result<Option<String>> {
+    pub fn resolve_image_name(&self, image_name: &ImageRef) -> Result<Option<Digest>> {
         self.index.resolve_image_name(image_name)
     }
 
@@ -173,116 +171,91 @@ impl LocalRegistry {
         }
 
         // Pre-check: under `KeepExisting`, return the conflict before
-        // we waste any CAS writes. The atomic publish in
-        // `publish_blob_records` re-validates the same condition inside
-        // the SQLite transaction, so concurrent racers can't slip
-        // through; this is purely a fast path for the common
-        // single-writer case.
-        if let Some(conflict) =
-            self.keep_existing_conflict(image_name, manifest_descriptor, policy)?
-        {
-            return Ok(conflict);
+        // we waste any CAS writes. The atomic publish in stage 2
+        // re-validates the same condition inside the SQLite
+        // transaction, so concurrent racers can't slip through; this
+        // is purely a fast path for the common single-writer case.
+        if policy == RefConflictPolicy::KeepExisting {
+            if let Some(existing_descriptor) = self.index.resolve_image_descriptor(image_name)? {
+                if existing_descriptor.digest() != manifest_descriptor.digest() {
+                    return Ok(RefUpdate::Conflicted {
+                        existing_manifest_digest: existing_descriptor.digest().clone(),
+                        incoming_manifest_digest: manifest_descriptor.digest().clone(),
+                    });
+                }
+            }
         }
 
         // Stage 1: write CAS bytes (idempotent, outside any SQLite tx).
-        // Stage 2 (in `publish_blob_records`): a single SQLite
-        // transaction covers all blob records + manifest + ref so a
-        // crash or conflict can never leave committed manifest / blob
-        // rows under a ref that wasn't actually published.
-        //
-        // Tag the manifest's `config` descriptor with `BLOB_KIND_CONFIG`
-        // (matching the OCI-dir import path) and everything else with
-        // `BLOB_KIND_BLOB`. Without this dispatch the empty config blob
-        // built by `LocalArtifactBuilder::stage` would be persisted as a
-        // generic layer, diverging from imports of legacy v2 dirs and
-        // breaking GC / query logic that filters on `kind`.
-        let config_digest = manifest.config().digest();
-        let mut blob_records = Vec::with_capacity(blobs.len() + 1);
+        // Stage 2: publish only the OCI manifest descriptor into the
+        // SQLite ref index. If stage 2 conflicts or crashes, the CAS
+        // may contain unreferenced bytes; that is the expected state
+        // for GC, not an index-storage cache entry.
         for blob in blobs {
-            let kind = if blob.descriptor().digest() == config_digest {
-                BLOB_KIND_CONFIG
-            } else {
-                BLOB_KIND_BLOB
-            };
-            blob_records.push(self.stage_blob_record(blob.descriptor(), blob.bytes(), kind)?);
+            self.stage_blob(blob.descriptor(), blob.bytes())?;
         }
-        blob_records.push(self.stage_blob_record(
-            manifest_descriptor,
-            manifest_bytes,
-            BLOB_KIND_MANIFEST,
-        )?);
+        self.stage_blob(manifest_descriptor, manifest_bytes)?;
 
-        self.publish_blob_records(
-            image_name,
-            manifest,
-            manifest_descriptor,
-            &blob_records,
-            policy,
-        )
+        self.index
+            .put_image_ref_with_policy(image_name, manifest_descriptor, policy)
     }
 
     /// Publish an OCI Image Manifest whose layer and config blobs are
     /// already present in the [`FileBlobStore`] — e.g. written
-    /// incrementally by `ommx::experiment` at `log_*` time. Unlike
-    /// [`Self::publish_artifact_manifest`], the caller passes
-    /// [`BlobRecord`]s instead of `(Descriptor, bytes)` pairs, so
-    /// payload bytes never have to be held in memory until publish.
-    ///
-    /// `blob_records` must be de-duplicated by digest and cover every
-    /// distinct `manifest.layers()` digest plus `manifest.config()`.
-    /// Layer↔blob correspondence is checked by digest membership, not
-    /// full descriptor equality: a [`BlobRecord`] carries no
-    /// annotations, and the same blob digest may back several layer
-    /// descriptors that differ only in their annotations (e.g. the
-    /// same `Instance` logged under two `run_id`s).
+    /// incrementally by `ommx::experiment` at `log_*` time. The caller
+    /// passes the distinct blob descriptors the manifest depends on;
+    /// payload bytes are not held in memory until publish.
     pub(crate) fn publish_prestaged_artifact_manifest(
         &self,
         image_name: &ImageRef,
         manifest: &ImageManifest,
         manifest_descriptor: &Descriptor,
         manifest_bytes: &[u8],
-        blob_records: &[BlobRecord],
+        blob_descriptors: &[Descriptor],
         policy: RefConflictPolicy,
     ) -> Result<RefUpdate> {
         Self::validate_manifest_descriptor(manifest, manifest_descriptor, manifest_bytes)?;
-        let staged_digests: HashSet<String> = blob_records
-            .iter()
-            .map(|blob| blob.digest.clone())
-            .collect();
+        let staged_digests: std::collections::HashSet<_> =
+            blob_descriptors.iter().map(|d| d.digest()).collect();
         ensure!(
-            staged_digests.contains(&manifest.config().digest().to_string()),
+            staged_digests.contains(manifest.config().digest()),
             "Manifest config blob is not staged in the BlobStore"
+        );
+        ensure!(
+            self.blobs.exists(manifest.config().digest())?,
+            "Manifest config blob is missing from the BlobStore: {}",
+            manifest.config().digest()
         );
         for layer in manifest.layers() {
             ensure!(
-                staged_digests.contains(&layer.digest().to_string()),
+                staged_digests.contains(layer.digest()),
                 "Manifest layer blob is not staged in the BlobStore: {}",
+                layer.digest()
+            );
+            ensure!(
+                self.blobs.exists(layer.digest())?,
+                "Manifest layer blob is missing from the BlobStore: {}",
                 layer.digest()
             );
         }
 
-        if let Some(conflict) =
-            self.keep_existing_conflict(image_name, manifest_descriptor, policy)?
-        {
-            return Ok(conflict);
+        if policy == RefConflictPolicy::KeepExisting {
+            if let Some(existing_descriptor) = self.index.resolve_image_descriptor(image_name)? {
+                if existing_descriptor.digest() != manifest_descriptor.digest() {
+                    return Ok(RefUpdate::Conflicted {
+                        existing_manifest_digest: existing_descriptor.digest().clone(),
+                        incoming_manifest_digest: manifest_descriptor.digest().clone(),
+                    });
+                }
+            }
         }
 
         // Layer / config blobs are already in CAS; only the manifest
-        // blob itself still needs to be written.
-        let mut all_records = blob_records.to_vec();
-        all_records.push(self.stage_blob_record(
-            manifest_descriptor,
-            manifest_bytes,
-            BLOB_KIND_MANIFEST,
-        )?);
-
-        self.publish_blob_records(
-            image_name,
-            manifest,
-            manifest_descriptor,
-            &all_records,
-            policy,
-        )
+        // blob itself still needs to be written before publishing the
+        // manifest descriptor into the SQLite ref index.
+        self.stage_blob(manifest_descriptor, manifest_bytes)?;
+        self.index
+            .put_image_ref_with_policy(image_name, manifest_descriptor, policy)
     }
 
     /// Validate that `manifest_descriptor` is a self-consistent OCI
@@ -321,112 +294,23 @@ impl LocalRegistry {
         Ok(())
     }
 
-    /// `KeepExisting` fast-path conflict check, run before any CAS
-    /// writes. Returns `Some(RefUpdate::Conflicted { .. })` when the
-    /// ref already resolves to a different manifest digest.
-    fn keep_existing_conflict(
-        &self,
-        image_name: &ImageRef,
-        manifest_descriptor: &Descriptor,
-        policy: RefConflictPolicy,
-    ) -> Result<Option<RefUpdate>> {
-        if policy != RefConflictPolicy::KeepExisting {
-            return Ok(None);
-        }
-        let incoming_manifest_digest = manifest_descriptor.digest().to_string();
-        if let Some(existing_manifest_digest) = self.resolve_image_name(image_name)? {
-            if existing_manifest_digest != incoming_manifest_digest {
-                return Ok(Some(RefUpdate::Conflicted {
-                    existing_manifest_digest,
-                    incoming_manifest_digest,
-                }));
-            }
-        }
-        Ok(None)
-    }
-
-    /// Build the manifest / layer index records and run the atomic
-    /// IndexStore publish. `blob_records` must already include every
-    /// CAS-written blob plus the manifest blob itself. Shared tail of
-    /// both publish entry points.
-    fn publish_blob_records(
-        &self,
-        image_name: &ImageRef,
-        manifest: &ImageManifest,
-        manifest_descriptor: &Descriptor,
-        blob_records: &[BlobRecord],
-        policy: RefConflictPolicy,
-    ) -> Result<RefUpdate> {
-        let manifest_digest = manifest_descriptor.digest().to_string();
-        let layer_records = manifest
-            .layers()
-            .iter()
-            .enumerate()
-            .map(|(position, layer)| -> Result<LayerRecord> {
-                Ok(LayerRecord {
-                    manifest_digest: manifest_digest.clone(),
-                    position: u32::try_from(position)
-                        .context("Layer position does not fit in u32")?,
-                    digest: layer.digest().to_string(),
-                    media_type: layer.media_type().to_string(),
-                    size: layer.size(),
-                    annotations_json: annotations_json(layer.annotations().as_ref())
-                        .context("Failed to encode layer annotations")?,
-                })
-            })
-            .collect::<Result<Vec<_>>>()?;
-        let manifest_record = ManifestRecord {
-            digest: manifest_digest.clone(),
-            media_type: manifest_descriptor.media_type().to_string(),
-            size: manifest_descriptor.size(),
-            subject_digest: manifest
-                .subject()
-                .as_ref()
-                .map(|subject| subject.digest().to_string()),
-            annotations_json: annotations_json(manifest.annotations().as_ref())
-                .context("Failed to encode manifest annotations")?,
-            created_at: now_rfc3339(),
-        };
-
-        let outcome = self.index.publish_artifact_atomic(
-            blob_records,
-            &manifest_record,
-            &layer_records,
-            Some(image_name),
-            policy,
-        )?;
-        outcome.ref_update.context(
-            "publish_artifact_atomic returned no RefUpdate for an explicit image_name; \
-             this is a bug",
-        )
-    }
-
-    /// CAS-write a descriptor's bytes and produce a [`BlobRecord`] for
-    /// the IndexStore. The DB row is *not* inserted here; the caller
-    /// passes the records to [`SqliteIndexStore::publish_artifact_atomic`]
-    /// so the inserts happen inside the publish transaction.
-    fn stage_blob_record(
-        &self,
-        descriptor: &Descriptor,
-        bytes: &[u8],
-        kind: &str,
-    ) -> Result<BlobRecord> {
-        let mut record = self.blobs.put_bytes(bytes)?;
+    /// CAS-write a descriptor's bytes and verify the concrete bytes
+    /// match the descriptor the manifest will reference.
+    fn stage_blob(&self, descriptor: &Descriptor, bytes: &[u8]) -> Result<()> {
+        let digest = self.blobs.put_bytes(bytes)?;
         ensure!(
-            record.digest == descriptor.digest().to_string(),
+            &digest == descriptor.digest(),
             "Descriptor digest mismatch: descriptor={}, actual={}",
             descriptor.digest(),
-            record.digest
+            digest
         );
         ensure!(
-            record.size == descriptor.size(),
+            bytes.len() as u64 == descriptor.size(),
             "Descriptor size mismatch for {}: descriptor={}, actual={}",
             descriptor.digest(),
             descriptor.size(),
-            record.size
+            bytes.len()
         );
-        record.media_type = Some(descriptor.media_type().to_string());
-        record.kind = kind.to_string();
-        Ok(record)
+        Ok(())
     }
 }

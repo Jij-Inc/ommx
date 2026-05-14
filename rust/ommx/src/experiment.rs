@@ -40,11 +40,9 @@ mod tests;
 
 pub use session::{Experiment, Run};
 
-use crate::artifact::local_registry::BlobRecord;
 use anyhow::Result;
 use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, MediaType};
 use std::collections::HashMap;
-use std::str::FromStr;
 
 // --- Artifact mapping constants ---------------------------------------------
 
@@ -71,15 +69,14 @@ const LAYER_KIND_RUN_ATTRIBUTES: &str = "run-attributes";
 /// `session`) and the commit-time aggregate layers (in `commit`).
 fn build_descriptor(
     media_type: MediaType,
-    blob: &BlobRecord,
+    digest: &Digest,
+    size: u64,
     annotations: HashMap<String, String>,
 ) -> Result<Descriptor> {
-    let digest = Digest::from_str(&blob.digest)
-        .map_err(|e| crate::error!("Failed to parse blob digest `{}`: {e}", blob.digest))?;
     DescriptorBuilder::default()
         .media_type(media_type)
-        .digest(digest)
-        .size(blob.size)
+        .digest(digest.clone())
+        .size(size)
         .annotations(annotations)
         .build()
         .map_err(|e| crate::error!("Failed to build OCI descriptor: {e}"))
