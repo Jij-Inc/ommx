@@ -362,6 +362,14 @@ impl SqliteIndexStore {
                      Remove the development local registry and recreate it."
                 );
             }
+            // Mark the fresh database before creating tables. Multiple
+            // processes may open a new registry concurrently; setting
+            // `user_version` first prevents another opener from
+            // observing newly-created tables while the version still
+            // reads as 0 and misclassifying the registry as an old
+            // development schema.
+            conn.pragma_update(None, "user_version", SCHEMA_VERSION)
+                .context("Failed to initialize local registry schema version")?;
         } else {
             ensure!(
                 version == SCHEMA_VERSION,
@@ -388,8 +396,6 @@ impl SqliteIndexStore {
             );
 
             CREATE INDEX IF NOT EXISTS idx_refs_name ON refs(name);
-
-            PRAGMA user_version = 1;
             "#,
         )?;
         Ok(())
