@@ -21,38 +21,6 @@ use std::{
 };
 use url::Url;
 
-/// A blob whose `Descriptor` has already been computed and that is
-/// staged in memory for the next `publish_artifact_manifest` call.
-///
-/// Bridges the in-memory `LocalArtifactBuilder` (Build phase) and the
-/// I/O-side registry publish (Seal phase) — the analogue of a Git
-/// blob entry sitting in the index after `git add`, before `git
-/// commit` writes it to `.git/objects/`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct StagedArtifactBlob {
-    descriptor: Descriptor,
-    bytes: Vec<u8>,
-}
-
-impl StagedArtifactBlob {
-    pub(crate) fn new(
-        media_type: MediaType,
-        bytes: Vec<u8>,
-        annotations: HashMap<String, String>,
-    ) -> Result<Self> {
-        let descriptor = descriptor_from_bytes(media_type, &bytes, annotations)?;
-        Ok(Self { descriptor, bytes })
-    }
-
-    pub(crate) fn descriptor(&self) -> &Descriptor {
-        &self.descriptor
-    }
-
-    pub(crate) fn bytes(&self) -> &[u8] {
-        &self.bytes
-    }
-}
-
 /// OMMX Artifact stored in the SQLite-backed Local Registry.
 ///
 /// Holds an [`Arc`]ed [`LocalRegistry`] so that several artifacts opened
@@ -257,7 +225,8 @@ enum BuilderImageName {
 pub struct LocalArtifactBuilder {
     image_name: BuilderImageName,
     artifact_type: MediaType,
-    layers: Vec<StagedArtifactBlob>,
+    layers: Vec<Descriptor>,
+    blob_bytes: HashMap<Digest, Vec<u8>>,
     subject: Option<Descriptor>,
     annotations: HashMap<String, String>,
 }
@@ -268,6 +237,7 @@ impl LocalArtifactBuilder {
             image_name: BuilderImageName::Explicit(image_name),
             artifact_type: MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
             layers: Vec::new(),
+            blob_bytes: HashMap::new(),
             subject: None,
             annotations: HashMap::new(),
         }
@@ -302,6 +272,7 @@ impl LocalArtifactBuilder {
             image_name: BuilderImageName::Anonymous,
             artifact_type: MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
             layers: Vec::new(),
+            blob_bytes: HashMap::new(),
             subject: None,
             annotations: HashMap::new(),
         }
@@ -331,9 +302,11 @@ impl LocalArtifactBuilder {
         bytes: Vec<u8>,
         annotations: HashMap<String, String>,
     ) -> Result<Descriptor> {
-        let blob = StagedArtifactBlob::new(media_type, bytes, annotations)?;
-        let descriptor = blob.descriptor.clone();
-        self.layers.push(blob);
+        let descriptor = descriptor_from_bytes(media_type, &bytes, annotations)?;
+        self.blob_bytes
+            .entry(descriptor.digest().clone())
+            .or_insert(bytes);
+        self.layers.push(descriptor.clone());
         Ok(descriptor)
     }
 
@@ -427,23 +400,29 @@ impl LocalArtifactBuilder {
                 BuilderImageName::Explicit(anonymous_artifact_image_name(&registry_id)?);
             policy = RefConflictPolicy::Replace;
         }
-        let staged = self.stage()?;
-        for blob in &staged.blobs {
-            registry.stage_blob(blob.descriptor(), blob.bytes())?;
+        let (image_name, manifest, blob_bytes) = self.prepare_manifest()?;
+        for descriptor in manifest
+            .layers()
+            .iter()
+            .chain(std::iter::once(manifest.config()))
+        {
+            let bytes = blob_bytes.get(descriptor.digest()).ok_or_else(|| {
+                crate::error!("Blob bytes for {} are missing", descriptor.digest())
+            })?;
+            registry.stage_blob(descriptor, bytes)?;
         }
         let (manifest_descriptor, ref_update) =
-            registry.publish_artifact_manifest(&staged.image_name, &staged.manifest, policy)?;
-        reject_conflicting_ref(&staged.image_name, ref_update)?;
+            registry.publish_artifact_manifest(&image_name, &manifest, policy)?;
+        reject_conflicting_ref(&image_name, ref_update)?;
         Ok(LocalArtifact::from_parts(
             registry,
-            staged.image_name,
+            image_name,
             manifest_descriptor.digest().clone(),
         ))
     }
 
-    /// Compute the manifest from the in-memory builder state, returning
-    /// a [`StagedArtifactManifest`] whose non-manifest blobs can be
-    /// written before the registry publishes the manifest itself.
+    /// Compute the manifest from the in-memory builder state together
+    /// with the non-manifest blobs that must exist before publishing.
     /// Pure: no I/O, no registry interaction.
     ///
     /// Materialises the empty config blob as one of the staged blobs so
@@ -454,8 +433,8 @@ impl LocalArtifactBuilder {
     /// own `mediaType` field intentionally absent so `LocalArtifactBuilder`
     /// and the archive build path produce structurally identical
     /// manifests.
-    fn stage(self) -> Result<StagedArtifactManifest> {
-        let mut blobs = self.layers;
+    fn prepare_manifest(self) -> Result<(ImageRef, ImageManifest, HashMap<Digest, Vec<u8>>)> {
+        let mut blob_bytes = self.blob_bytes;
         // V2 SDK's `ocipkg::OciArtifactBuilder::add_empty_json` emits the
         // empty config descriptor without an `annotations` field; build
         // it directly here (bypassing `descriptor_from_bytes`, which
@@ -471,18 +450,13 @@ impl LocalArtifactBuilder {
             .size(empty_config_bytes.len() as u64)
             .build()
             .context("Failed to build empty config descriptor")?;
-        let layer_descriptors: Vec<Descriptor> =
-            blobs.iter().map(|blob| blob.descriptor.clone()).collect();
-        blobs.push(StagedArtifactBlob {
-            descriptor: config_descriptor.clone(),
-            bytes: empty_config_bytes,
-        });
+        blob_bytes.insert(config_descriptor.digest().clone(), empty_config_bytes);
 
         let mut builder = OciImageManifestBuilder::default()
             .schema_version(2u32)
             .artifact_type(self.artifact_type)
             .config(config_descriptor)
-            .layers(layer_descriptors);
+            .layers(self.layers);
         if let Some(subject) = self.subject {
             builder = builder.subject(subject);
         }
@@ -493,49 +467,22 @@ impl LocalArtifactBuilder {
             .build()
             .context("Failed to build OCI image manifest")?;
         // `build_in_registry` resolves the `Anonymous` variant before
-        // calling `stage()`, so reaching `stage()` with `Anonymous`
-        // here is a bug (someone bypassed the resolve step). Surface
+        // calling `prepare_manifest()`, so reaching `prepare_manifest()`
+        // with `Anonymous` here is a bug (someone bypassed the resolve step). Surface
         // it as a clear internal error rather than letting it slip
         // through as a mysterious empty-name.
         let image_name = match self.image_name {
             BuilderImageName::Explicit(name) => name,
             BuilderImageName::Anonymous => {
                 crate::bail!(
-                    "LocalArtifactBuilder::stage called with an unresolved anonymous image \
+                    "LocalArtifactBuilder::prepare_manifest called with an unresolved anonymous image \
                      name. Use `build_in_registry` (which resolves the name against the target \
-                     registry's id) instead of calling `stage` directly."
+                     registry's id) instead of calling `prepare_manifest` directly."
                 );
             }
         };
-        Ok(StagedArtifactManifest {
-            image_name,
-            manifest,
-            blobs,
-        })
+        Ok((image_name, manifest, blob_bytes))
     }
-}
-
-/// The whole-artifact analogue of [`StagedArtifactBlob`]: bundles the
-/// `OCI ImageManifest`, every non-manifest blob staged for upload
-/// (layers + the OCI 1.1 empty config), and the target `ImageName`.
-///
-/// Produced purely by in-memory computation (`LocalArtifactBuilder::stage`)
-/// and consumed by `build_in_registry`. Splitting the Build phase
-/// ("compute the manifest and its dependent blobs") from the Seal
-/// phase ("write dependent blobs / serialize and write manifest /
-/// update ref") keeps manifest serialization in the registry publish
-/// path.
-///
-/// The Git analogy is the constructed-but-not-yet-written tree +
-/// commit object — a `git commit` materialises objects in
-/// `.git/objects/` and updates `refs/heads/<branch>`; here, publish
-/// materialises CAS bytes and updates the IndexStore ref to the new
-/// manifest digest.
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct StagedArtifactManifest {
-    image_name: ImageRef,
-    manifest: ImageManifest,
-    blobs: Vec<StagedArtifactBlob>,
 }
 
 pub(crate) fn descriptor_from_bytes(
@@ -880,22 +827,22 @@ mod tests {
         )?;
         builder.add_annotation("org.opencontainers.image.ref.name", "example.com/demo:v1");
 
-        let staged = builder.stage()?;
+        let (_, manifest, blobs) = builder.prepare_manifest()?;
         // Manifest's own `mediaType` field is intentionally not set, matching
         // the v2 / `ArchiveArtifactBuilder` shape; the OCI Distribution
         // Content-Type header is supplied separately at push time.
-        assert_eq!(staged.manifest.media_type().as_ref(), None);
+        assert_eq!(manifest.media_type().as_ref(), None);
         assert_eq!(
-            staged.manifest.artifact_type().as_ref(),
+            manifest.artifact_type().as_ref(),
             Some(&MediaType::Other(
                 media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()
             ))
         );
-        assert_eq!(staged.manifest.layers(), &[layer]);
+        assert_eq!(manifest.layers(), &[layer]);
 
         // OCI 1.1 empty config descriptor is set as the manifest's config and
         // staged for upload alongside the layers.
-        let config = staged.manifest.config();
+        let config = manifest.config();
         assert_eq!(config.media_type(), &MediaType::EmptyJSON);
         assert_eq!(
             config.size(),
@@ -905,12 +852,9 @@ mod tests {
             config.digest().to_string(),
             media_types::OCI_EMPTY_CONFIG_DIGEST
         );
-        assert!(staged
-            .blobs
-            .iter()
-            .any(|blob| blob.descriptor.digest() == config.digest()));
+        assert!(blobs.contains_key(config.digest()));
 
-        let manifest_bytes = stable_json_bytes(&staged.manifest)?;
+        let manifest_bytes = stable_json_bytes(&manifest)?;
         let manifest_descriptor =
             descriptor_from_bytes(MediaType::ImageManifest, &manifest_bytes, HashMap::new())?;
         assert_eq!(manifest_descriptor.media_type(), &MediaType::ImageManifest);
@@ -920,7 +864,7 @@ mod tests {
         );
 
         let parsed: ImageManifest = serde_json::from_slice(&manifest_bytes)?;
-        assert_eq!(parsed, staged.manifest);
+        assert_eq!(parsed, manifest);
         Ok(())
     }
 
@@ -929,8 +873,8 @@ mod tests {
         let first = staged_with_annotations("order-a", [("b", "2"), ("a", "1")])?;
         let second = staged_with_annotations("order-b", [("a", "1"), ("b", "2")])?;
 
-        let first_bytes = stable_json_bytes(&first.manifest)?;
-        let second_bytes = stable_json_bytes(&second.manifest)?;
+        let first_bytes = stable_json_bytes(&first)?;
+        let second_bytes = stable_json_bytes(&second)?;
         let first_descriptor =
             descriptor_from_bytes(MediaType::ImageManifest, &first_bytes, HashMap::new())?;
         let second_descriptor =
@@ -953,8 +897,8 @@ mod tests {
         )?;
         builder.set_subject(subject.clone());
 
-        let staged = builder.stage()?;
-        assert_eq!(staged.manifest.subject(), &Some(subject));
+        let (_, manifest, _) = builder.prepare_manifest()?;
+        assert_eq!(manifest.subject(), &Some(subject));
         Ok(())
     }
 
@@ -966,7 +910,7 @@ mod tests {
     fn staged_with_annotations(
         tag: &str,
         annotations: impl IntoIterator<Item = (&'static str, &'static str)>,
-    ) -> Result<StagedArtifactManifest> {
+    ) -> Result<ImageManifest> {
         let mut builder = LocalArtifactBuilder::new(test_image_name(tag)?);
         builder.add_layer_bytes(
             MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
@@ -976,6 +920,7 @@ mod tests {
         for (key, value) in annotations {
             builder.add_annotation(key, value);
         }
-        builder.stage()
+        let (_, manifest, _) = builder.prepare_manifest()?;
+        Ok(manifest)
     }
 }
