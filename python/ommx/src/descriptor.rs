@@ -11,6 +11,12 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, PartialEq, From, Deref)]
 pub struct PyDescriptor(Descriptor);
 
+impl PyDescriptor {
+    pub(crate) fn as_oci_descriptor(&self) -> &Descriptor {
+        &self.0
+    }
+}
+
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl PyDescriptor {

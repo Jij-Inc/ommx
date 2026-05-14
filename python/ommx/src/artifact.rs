@@ -268,18 +268,18 @@ impl PyArtifact {
         digest_or_descriptor: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyBytes>> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let digest = if let Ok(desc) = digest_or_descriptor.extract::<PyRef<PyDescriptor>>() {
-            descriptor_digest(&desc)
+        let blob = if let Ok(desc) = digest_or_descriptor.extract::<PyRef<PyDescriptor>>() {
+            self.0
+                .get_blob(desc.as_oci_descriptor().digest())
                 .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?
         } else {
             let digest = digest_or_descriptor.extract::<String>()?;
-            parse_digest(&digest)
+            let digest = parse_digest(&digest)
+                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+            self.0
+                .get_blob(&digest)
                 .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?
         };
-        let blob = self
-            .0
-            .get_blob(&digest)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
         Ok(PyBytes::new(py, &blob))
     }
 
@@ -527,11 +527,9 @@ impl PyArtifact {
     ) -> PyResult<Bound<'py, PyAny>> {
         let _guard = crate::TRACING.attach_parent_context(py);
         assert_media_type(descriptor, "application/vnd.apache.parquet")?;
-        let digest = descriptor_digest(descriptor)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
         let blob = self
             .0
-            .get_blob(&digest)
+            .get_blob(descriptor.as_oci_descriptor().digest())
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
         let io = py.import("io")?;
         let pandas = py.import("pandas")?;
@@ -547,11 +545,9 @@ impl PyArtifact {
     ) -> PyResult<Bound<'py, PyAny>> {
         let _guard = crate::TRACING.attach_parent_context(py);
         assert_media_type(descriptor, "application/json")?;
-        let digest = descriptor_digest(descriptor)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
         let blob = self
             .0
-            .get_blob(&digest)
+            .get_blob(descriptor.as_oci_descriptor().digest())
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
         let json = py.import("json")?;
         json.call_method1("loads", (PyBytes::new(py, &blob),))
@@ -667,8 +663,7 @@ impl PyArchiveManifest {
 impl PyArtifact {
     fn get_instance_inner(&mut self, descriptor: &PyDescriptor) -> Result<crate::Instance> {
         assert_media_type(descriptor, "application/org.ommx.v1.instance")?;
-        let digest = descriptor_digest(descriptor)?;
-        let blob = self.0.get_blob(&digest)?;
+        let blob = self.0.get_blob(descriptor.as_oci_descriptor().digest())?;
         Ok(crate::Instance {
             inner: ommx::Instance::from_bytes(&blob)?,
             annotations: descriptor.annotations(),
@@ -677,8 +672,7 @@ impl PyArtifact {
 
     fn get_solution_inner(&mut self, descriptor: &PyDescriptor) -> Result<crate::Solution> {
         assert_media_type(descriptor, "application/org.ommx.v1.solution")?;
-        let digest = descriptor_digest(descriptor)?;
-        let blob = self.0.get_blob(&digest)?;
+        let blob = self.0.get_blob(descriptor.as_oci_descriptor().digest())?;
         Ok(crate::Solution {
             inner: ommx::Solution::from_bytes(&blob)?,
             annotations: descriptor.annotations(),
@@ -690,8 +684,7 @@ impl PyArtifact {
         descriptor: &PyDescriptor,
     ) -> Result<crate::ParametricInstance> {
         assert_media_type(descriptor, "application/org.ommx.v1.parametric-instance")?;
-        let digest = descriptor_digest(descriptor)?;
-        let blob = self.0.get_blob(&digest)?;
+        let blob = self.0.get_blob(descriptor.as_oci_descriptor().digest())?;
         Ok(crate::ParametricInstance {
             inner: ommx::ParametricInstance::from_bytes(&blob)?,
             annotations: descriptor.annotations(),
@@ -700,8 +693,7 @@ impl PyArtifact {
 
     fn get_sample_set_inner(&mut self, descriptor: &PyDescriptor) -> Result<crate::SampleSet> {
         assert_media_type(descriptor, "application/org.ommx.v1.sample-set")?;
-        let digest = descriptor_digest(descriptor)?;
-        let blob = self.0.get_blob(&digest)?;
+        let blob = self.0.get_blob(descriptor.as_oci_descriptor().digest())?;
         Ok(crate::SampleSet {
             inner: ommx::SampleSet::from_bytes(&blob)?,
             annotations: descriptor.annotations(),
@@ -714,11 +706,9 @@ impl PyArtifact {
         descriptor: &PyDescriptor,
     ) -> PyResult<Bound<'py, PyAny>> {
         assert_media_type(descriptor, "application/vnd.numpy")?;
-        let digest = descriptor_digest(descriptor)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
         let blob = self
             .0
-            .get_blob(&digest)
+            .get_blob(descriptor.as_oci_descriptor().digest())
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
         let io = py.import("io")?;
         let numpy = py.import("numpy")?;
@@ -729,10 +719,6 @@ impl PyArtifact {
 
 fn parse_digest(digest: &str) -> Result<Digest> {
     Digest::from_str(digest).with_context(|| format!("Invalid digest: {digest}"))
-}
-
-fn descriptor_digest(descriptor: &PyDescriptor) -> Result<Digest> {
-    parse_digest(&descriptor.digest())
 }
 
 fn assert_media_type(descriptor: &PyDescriptor, expected: &str) -> Result<()> {
