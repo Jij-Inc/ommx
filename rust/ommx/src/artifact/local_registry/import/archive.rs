@@ -23,22 +23,19 @@
 //!
 //! After the pass: parse `index.json`, locate the named manifest in
 //! [`super::super::FileBlobStore`] by digest, parse the manifest, and
-//! emit one [`super::super::SqliteIndexStore::publish_artifact_atomic`]
-//! call with the manifest / config / layer records under the
+//! write the manifest descriptor under the
 //! `org.opencontainers.image.ref.name` annotated ref. A crash between
-//! blob writes and publish leaves orphan CAS bytes recoverable by GC;
-//! a crash inside the SQLite transaction never leaves a partially-
-//! published ref.
+//! blob writes and ref publish leaves orphan CAS bytes recoverable by
+//! GC; the SQLite index never stores a manifest / layer cache.
 
 use super::super::{
-    annotations_json, now_rfc3339, sha256_digest, BlobRecord, FileBlobStore, LayerRecord,
-    LocalRegistry, ManifestRecord, RefConflictPolicy, RefUpdate, ValidatedDigest, BLOB_KIND_BLOB,
-    BLOB_KIND_CONFIG, BLOB_KIND_MANIFEST, OCI_IMAGE_REF_NAME_ANNOTATION,
+    sha256_digest, FileBlobStore, LocalRegistry, RefConflictPolicy, RefUpdate, ValidatedDigest,
+    OCI_IMAGE_REF_NAME_ANNOTATION,
 };
 use super::oci_dir::OciDirImport;
-use crate::artifact::{media_types, ImageRef, OCI_IMAGE_MANIFEST_MEDIA_TYPE};
+use crate::artifact::{media_types, ImageRef};
 use anyhow::{Context, Result};
-use oci_spec::image::{Descriptor, ImageIndex, ImageManifest, MediaType, OciLayout};
+use oci_spec::image::{Descriptor, Digest, ImageIndex, ImageManifest, MediaType, OciLayout};
 use std::{
     fs::File,
     io::{BufReader, Read},
@@ -56,7 +53,7 @@ use tar::Archive;
 pub struct ArchiveInspectView {
     pub image_name: Option<ImageRef>,
     pub manifest: ImageManifest,
-    pub manifest_digest: String,
+    pub manifest_digest: Digest,
 }
 
 /// Inspect a `.ommx` archive without importing it into the SQLite
@@ -84,7 +81,7 @@ pub fn inspect_archive(path: &Path) -> Result<ArchiveInspectView> {
 
 /// First-pass helper for [`inspect_archive`]: stream the tar to find
 /// `index.json` and return `(manifest_digest, ref_name)`.
-fn read_archive_index(path: &Path) -> Result<(String, Option<ImageRef>)> {
+fn read_archive_index(path: &Path) -> Result<(Digest, Option<ImageRef>)> {
     let file = File::open(path)
         .with_context(|| format!("Failed to open OCI archive {}", path.display()))?;
     let mut archive = Archive::new(BufReader::new(file));
@@ -121,7 +118,7 @@ fn read_archive_index(path: &Path) -> Result<(String, Option<ImageRef>)> {
         );
         let descriptor = image_index.manifests().first().unwrap();
         let image_name = image_name_from_index_descriptor(descriptor)?;
-        return Ok((descriptor.digest().to_string(), image_name));
+        return Ok((descriptor.digest().clone(), image_name));
     }
     anyhow::bail!("Missing index.json in {}", path.display())
 }
@@ -130,7 +127,7 @@ fn read_archive_index(path: &Path) -> Result<(String, Option<ImageRef>)> {
 /// second time to read the blob at `digest` from
 /// `blobs/<algorithm>/<encoded>`. Manifests are first in the v3
 /// native writer's output so the scan terminates quickly there.
-fn read_archive_blob(path: &Path, digest: &str) -> Result<Vec<u8>> {
+fn read_archive_blob(path: &Path, digest: &Digest) -> Result<Vec<u8>> {
     let file = File::open(path)
         .with_context(|| format!("Failed to open OCI archive {}", path.display()))?;
     let mut archive = Archive::new(BufReader::new(file));
@@ -150,13 +147,13 @@ fn read_archive_blob(path: &Path, digest: &str) -> Result<Vec<u8>> {
             continue;
         }
         if let Some(entry_digest) = blob_path_to_digest(path_str) {
-            if entry_digest == digest {
+            if entry_digest == digest.as_ref() {
                 let mut bytes = Vec::with_capacity(entry.header().size().unwrap_or(0) as usize);
                 entry.read_to_end(&mut bytes).with_context(|| {
                     format!("Failed to read blob {digest} from {}", path.display())
                 })?;
                 anyhow::ensure!(
-                    sha256_digest(&bytes) == digest,
+                    sha256_digest(&bytes) == digest.as_ref(),
                     "Blob {digest} in {} fails sha256 check",
                     path.display()
                 );
@@ -239,7 +236,7 @@ pub fn import_oci_archive(registry: &Arc<LocalRegistry>, path: &Path) -> Result<
         path.display()
     );
     let index_descriptor = image_index.manifests().first().unwrap();
-    let manifest_digest = index_descriptor.digest().to_string();
+    let manifest_digest = index_descriptor.digest().clone();
     // v2-era OMMX SDKs produced `.ommx` files whose `index.json`
     // descriptor lacks the `org.opencontainers.image.ref.name`
     // annotation (the v3 SDK always sets it). Rather than refuse to
@@ -284,8 +281,8 @@ pub fn import_oci_archive(registry: &Arc<LocalRegistry>, path: &Path) -> Result<
         index_descriptor.size(),
         manifest_bytes.len()
     );
-    let media_type = match index_descriptor.media_type() {
-        MediaType::ImageManifest => MediaType::ImageManifest,
+    match index_descriptor.media_type() {
+        MediaType::ImageManifest => {}
         MediaType::ArtifactManifest => anyhow::bail!(
             "OCI archive in {} uses the deprecated OCI Artifact Manifest \
              (application/vnd.oci.artifact.manifest.v1+json), which is not supported. \
@@ -302,69 +299,26 @@ pub fn import_oci_archive(registry: &Arc<LocalRegistry>, path: &Path) -> Result<
         .with_context(|| format!("Failed to parse OCI image manifest in {}", path.display()))?;
     ensure_ommx_artifact_type(manifest.artifact_type().as_ref())?;
 
-    // Build the BlobRecord / LayerRecord / ManifestRecord trio. All
-    // referenced blobs are already in `FileBlobStore` (we wrote them
-    // during the tar scan); we just need to surface the records the
-    // SQLite publish wants.
-    let layer_count = manifest.layers().len();
-    let mut blob_records = Vec::with_capacity(layer_count + 2);
-    let mut layer_records = Vec::with_capacity(layer_count);
-
-    blob_records.push(record_for_blob(
-        registry.blobs(),
-        manifest.config(),
-        BLOB_KIND_CONFIG,
-        path,
-    )?);
-    for (position, layer) in manifest.layers().iter().enumerate() {
-        blob_records.push(record_for_blob(
-            registry.blobs(),
-            layer,
-            BLOB_KIND_BLOB,
-            path,
-        )?);
-        layer_records.push(LayerRecord {
-            manifest_digest: manifest_digest.clone(),
-            position: u32::try_from(position).context("Layer position does not fit in u32")?,
-            digest: layer.digest().to_string(),
-            media_type: layer.media_type().to_string(),
-            size: layer.size(),
-            annotations_json: annotations_json(layer.annotations().as_ref())?,
-        });
+    // All referenced blobs are already in `FileBlobStore` (written
+    // during the tar scan). Verify the manifest is self-contained
+    // before publishing the ref descriptor.
+    ensure_blob_exists(registry.blobs(), manifest.config(), path)?;
+    for layer in manifest.layers() {
+        ensure_blob_exists(registry.blobs(), layer, path)?;
     }
-    let manifest_record_blob = record_for_manifest_blob(
-        registry.blobs(),
-        &manifest_digest,
-        manifest_bytes.len() as u64,
-    )?;
-    blob_records.push(manifest_record_blob);
 
-    let manifest_record = ManifestRecord {
-        digest: manifest_digest.clone(),
-        media_type: media_type.to_string(),
-        size: manifest_bytes.len() as u64,
-        subject_digest: manifest
-            .subject()
-            .as_ref()
-            .map(|subject| subject.digest().to_string()),
-        annotations_json: annotations_json(manifest.annotations().as_ref())?,
-        created_at: now_rfc3339(),
-    };
-
-    let outcome = registry.index().publish_artifact_atomic(
-        &blob_records,
-        &manifest_record,
-        &layer_records,
-        Some(&image_name),
+    let ref_update = registry.index().put_image_ref_with_policy(
+        &image_name,
+        index_descriptor,
         RefConflictPolicy::KeepExisting,
     )?;
     // Public entry point: surface a ref conflict as `Err`. Callers
     // that need batch / report-style handling (e.g. legacy import)
-    // drive `publish_artifact_atomic` directly with their own policy.
-    if let Some(RefUpdate::Conflicted {
+    // use the directory import path, which can return conflicts.
+    if let RefUpdate::Conflicted {
         existing_manifest_digest,
         incoming_manifest_digest,
-    }) = &outcome.ref_update
+    } = &ref_update
     {
         anyhow::bail!(
             "Local registry ref conflict for {image_name}: existing manifest \
@@ -375,7 +329,7 @@ pub fn import_oci_archive(registry: &Arc<LocalRegistry>, path: &Path) -> Result<
     Ok(OciDirImport {
         manifest_digest,
         image_name: Some(image_name),
-        ref_update: outcome.ref_update,
+        ref_update: Some(ref_update),
     })
 }
 
@@ -442,14 +396,14 @@ fn scan_archive<R: Read>(reader: R, blobs: &FileBlobStore, archive_path: &Path) 
             // digest of what it stored; comparing against the
             // expected `digest` (derived from the entry path) costs
             // one string compare instead of a second SHA-256 pass.
-            let record = blobs
+            let actual_digest = blobs
                 .put_bytes(&bytes)
                 .with_context(|| format!("Failed to write blob {digest} to FileBlobStore"))?;
             anyhow::ensure!(
-                record.digest == digest,
+                actual_digest.as_ref() == digest,
                 "Blob digest mismatch in archive {}: entry path is {path_str}, sha256 is {}",
                 archive_path.display(),
-                record.digest,
+                actual_digest,
             );
             continue;
         }
@@ -494,47 +448,21 @@ fn ensure_ommx_artifact_type(artifact_type: Option<&MediaType>) -> Result<()> {
     Ok(())
 }
 
-/// Build a [`BlobRecord`] for a manifest-referenced blob. The blob is
-/// already on disk in [`FileBlobStore`] (written during the tar scan);
-/// this is a metadata-only construction.
-fn record_for_blob(
+/// Verify a manifest-referenced blob is present in [`FileBlobStore`].
+/// The blob was written during the tar scan; the SQLite index only
+/// needs the manifest descriptor.
+fn ensure_blob_exists(
     blobs: &FileBlobStore,
     descriptor: &Descriptor,
-    kind: &str,
     archive_path: &Path,
-) -> Result<BlobRecord> {
-    let digest = descriptor.digest().to_string();
+) -> Result<()> {
+    let digest = descriptor.digest();
     anyhow::ensure!(
-        blobs.exists(&digest)?,
-        "{kind} blob {digest} referenced by manifest is missing from {}",
+        blobs.exists(digest)?,
+        "Blob {digest} referenced by manifest is missing from {}",
         archive_path.display()
     );
-    Ok(BlobRecord {
-        digest: digest.clone(),
-        size: descriptor.size(),
-        media_type: Some(descriptor.media_type().to_string()),
-        storage_uri: blobs
-            .path_for_digest(&digest)?
-            .to_string_lossy()
-            .into_owned(),
-        kind: kind.to_string(),
-        last_verified_at: Some(now_rfc3339()),
-    })
-}
-
-/// Build a [`BlobRecord`] for the manifest blob itself.
-fn record_for_manifest_blob(blobs: &FileBlobStore, digest: &str, size: u64) -> Result<BlobRecord> {
-    Ok(BlobRecord {
-        digest: digest.to_string(),
-        size,
-        media_type: Some(OCI_IMAGE_MANIFEST_MEDIA_TYPE.to_string()),
-        storage_uri: blobs
-            .path_for_digest(digest)?
-            .to_string_lossy()
-            .into_owned(),
-        kind: BLOB_KIND_MANIFEST.to_string(),
-        last_verified_at: Some(now_rfc3339()),
-    })
+    Ok(())
 }
 
 /// Extract the `org.opencontainers.image.ref.name` annotation from the

@@ -307,7 +307,7 @@ pub fn load(tag: &str) -> Result<(Instance, InstanceAnnotations)> {
         instance_layers.next().is_none(),
         "QPLIB Artifact should contain exactly one instance"
     );
-    let bytes = artifact.get_blob(layer.digest().as_ref())?;
+    let bytes = artifact.get_blob(layer.digest())?;
     let instance =
         Instance::decode(bytes.as_slice()).context("Failed to decode QPLIB instance layer")?;
     Ok((

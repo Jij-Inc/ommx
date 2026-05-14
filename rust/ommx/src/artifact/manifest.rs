@@ -72,7 +72,7 @@ impl StagedArtifactBlob {
 pub struct LocalArtifact {
     registry: Arc<LocalRegistry>,
     image_name: ImageRef,
-    manifest_digest: String,
+    manifest_digest: Digest,
     manifest_cache: Arc<OnceLock<LocalManifest>>,
 }
 
@@ -80,7 +80,7 @@ impl LocalArtifact {
     pub(crate) fn from_parts(
         registry: Arc<LocalRegistry>,
         image_name: ImageRef,
-        manifest_digest: String,
+        manifest_digest: Digest,
     ) -> Self {
         Self {
             registry,
@@ -128,7 +128,7 @@ impl LocalArtifact {
         &self.image_name
     }
 
-    pub fn manifest_digest(&self) -> &str {
+    pub fn manifest_digest(&self) -> &Digest {
         &self.manifest_digest
     }
 
@@ -147,33 +147,6 @@ impl LocalArtifact {
     }
 
     fn read_manifest_uncached(&self) -> Result<LocalManifest> {
-        // Verify the IndexStore has a manifest record for this digest so a
-        // missing index entry surfaces as a clear "manifest not found"
-        // error instead of bubbling up as a parse failure or stale-cache
-        // hit. The record's `media_type` column is informational for the
-        // common Image Manifest case, but is also used here to detect
-        // entries written by earlier v3-alpha builds (`#864` / `#866`)
-        // as OCI Artifact Manifest and surface a targeted error instead
-        // of an opaque image-manifest parse failure.
-        let record = self
-            .registry
-            .index()
-            .get_manifest(&self.manifest_digest)?
-            .with_context(|| {
-                format!(
-                    "Manifest record {} not found in IndexStore",
-                    self.manifest_digest
-                )
-            })?;
-        if record.media_type != media_types::OCI_IMAGE_MANIFEST_MEDIA_TYPE {
-            bail!(
-                "Manifest {} was persisted as `{}`, which is not supported in this build. \
-                 Only OCI Image Manifest (`{}`) is read from the SQLite Local Registry.",
-                self.manifest_digest,
-                record.media_type,
-                media_types::OCI_IMAGE_MANIFEST_MEDIA_TYPE,
-            );
-        }
         let bytes = self.registry.blobs().read_bytes(&self.manifest_digest)?;
         LocalManifest::parse(&bytes)
     }
@@ -190,7 +163,7 @@ impl LocalArtifact {
         Ok(self.get_manifest()?.subject())
     }
 
-    pub fn get_blob(&self, digest: &str) -> Result<Vec<u8>> {
+    pub fn get_blob(&self, digest: &Digest) -> Result<Vec<u8>> {
         self.registry.blobs().read_bytes(digest)
     }
 }
@@ -467,7 +440,7 @@ impl LocalArtifactBuilder {
         Ok(LocalArtifact::from_parts(
             registry,
             staged.image_name,
-            staged.manifest_descriptor.digest().to_string(),
+            staged.manifest_descriptor.digest().clone(),
         ))
     }
 
