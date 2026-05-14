@@ -1,12 +1,12 @@
 //! In-memory state of an experiment session: the domain state enums and
-//! the `Record` / `RunState` / `ExperimentState` structs.
+//! the `RecordRef` / `RunState` / `ExperimentState` structs.
 
 use crate::artifact::local_registry::BlobRecord;
 use crate::artifact::{ImageRef, LocalArtifact};
 use oci_spec::image::Descriptor;
 use std::time::Instant;
 
-/// The storage space a [`Record`] belongs to.
+/// The storage space a [`RecordRef`] belongs to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Space {
     /// Shared by the whole experiment (dataset, source problem, ...).
@@ -45,9 +45,10 @@ impl RunStatus {
     }
 }
 
-/// A named payload that has already been written to the BlobStore.
+/// A named reference to a payload that has already been written to the
+/// BlobStore.
 #[derive(Debug, Clone)]
-pub(super) struct Record {
+pub(super) struct RecordRef {
     pub(super) name: String,
     /// OCI layer descriptor; carries the payload media type and the
     /// experiment / record annotations.
@@ -60,7 +61,7 @@ pub(super) struct Record {
 #[derive(Debug)]
 pub(super) struct RunState {
     pub(super) run_id: u64,
-    pub(super) records: Vec<Record>,
+    pub(super) records: Vec<RecordRef>,
     pub(super) status: RunStatus,
     pub(super) started_at: Instant,
     pub(super) elapsed_secs: Option<f64>,
@@ -75,7 +76,7 @@ pub(super) struct ExperimentState {
     /// means an anonymous name is synthesised at commit time.
     pub(super) requested_ref: Option<ImageRef>,
     /// Experiment-space records.
-    pub(super) records: Vec<Record>,
+    pub(super) records: Vec<RecordRef>,
     pub(super) runs: Vec<RunState>,
     pub(super) next_run_id: u64,
     pub(super) committed: bool,

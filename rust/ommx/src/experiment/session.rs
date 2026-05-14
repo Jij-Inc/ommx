@@ -1,6 +1,6 @@
 //! The public `Experiment` / `Run` handles and their `log_*` API.
 
-use super::model::{ExperimentState, Record, RunState, RunStatus, Space};
+use super::model::{ExperimentState, RecordRef, RunState, RunStatus, Space};
 use super::{build_descriptor, commit, ANN_RECORD_NAME, ANN_RUN_ID, ANN_SPACE};
 use crate::artifact::local_registry::LocalRegistry;
 use crate::artifact::{media_types, ImageRef, LocalArtifact};
@@ -120,7 +120,7 @@ impl Experiment {
     fn add_record(&self, name: &str, media_type: MediaType, bytes: &[u8]) -> Result<()> {
         let mut state = lock_state(&self.state)?;
         ensure_open(&state)?;
-        let record = stage_record(
+        let record_ref = stage_record_ref(
             &self.registry,
             Space::Experiment,
             None,
@@ -128,7 +128,7 @@ impl Experiment {
             media_type,
             bytes,
         )?;
-        upsert_record(&mut state.records, record);
+        upsert_record_ref(&mut state.records, record_ref);
         Ok(())
     }
 
@@ -217,7 +217,7 @@ impl Run {
     fn add_record(&self, name: &str, media_type: MediaType, bytes: &[u8]) -> Result<()> {
         let mut state = lock_state(&self.state)?;
         ensure_open(&state)?;
-        let record = stage_record(
+        let record_ref = stage_record_ref(
             &self.registry,
             Space::Run,
             Some(self.run_id),
@@ -226,7 +226,7 @@ impl Run {
             bytes,
         )?;
         let run = find_run_mut(&mut state, self.run_id)?;
-        upsert_record(&mut run.records, record);
+        upsert_record_ref(&mut run.records, record_ref);
         Ok(())
     }
 
@@ -266,13 +266,13 @@ fn find_run_mut(state: &mut ExperimentState, run_id: u64) -> Result<&mut RunStat
 /// within a space replaces the previous one. Within one `Vec` the space
 /// and `run_id` are already fixed, so `(media_type, name)` is the
 /// remaining key.
-fn upsert_record(records: &mut Vec<Record>, record: Record) {
+fn upsert_record_ref(records: &mut Vec<RecordRef>, record_ref: RecordRef) {
     if let Some(existing) = records.iter_mut().find(|r| {
-        r.descriptor.media_type() == record.descriptor.media_type() && r.name == record.name
+        r.descriptor.media_type() == record_ref.descriptor.media_type() && r.name == record_ref.name
     }) {
-        *existing = record;
+        *existing = record_ref;
     } else {
-        records.push(record);
+        records.push(record_ref);
     }
 }
 
@@ -286,16 +286,16 @@ fn encode_json(name: &str, value: impl serde::Serialize) -> Result<Vec<u8>> {
 }
 
 /// Write `bytes` to the registry's BlobStore and build the in-memory
-/// [`Record`]: an OCI layer descriptor carrying the experiment / record
-/// annotations, plus the matching blob record.
-fn stage_record(
+/// [`RecordRef`]: an OCI layer descriptor carrying the experiment /
+/// record annotations, plus the matching blob record.
+fn stage_record_ref(
     registry: &LocalRegistry,
     space: Space,
     run_id: Option<u64>,
     name: &str,
     media_type: MediaType,
     bytes: &[u8],
-) -> Result<Record> {
+) -> Result<RecordRef> {
     let mut blob = registry.blobs().put_bytes(bytes)?;
     blob.media_type = Some(media_type.to_string());
 
@@ -307,7 +307,7 @@ fn stage_record(
     annotations.insert(ANN_RECORD_NAME.to_string(), name.to_string());
 
     let descriptor = build_descriptor(media_type, &blob, annotations)?;
-    Ok(Record {
+    Ok(RecordRef {
         name: name.to_string(),
         descriptor,
         blob,

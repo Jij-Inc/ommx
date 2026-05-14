@@ -1,6 +1,6 @@
 //! Sealing an experiment session into an immutable OMMX Artifact.
 
-use super::model::{ExperimentState, Record};
+use super::model::{ExperimentState, RecordRef};
 use super::{
     build_descriptor, ANN_ARTIFACT_KIND, ANN_EXPERIMENT_NAME, ANN_EXPERIMENT_SCHEMA,
     ANN_EXPERIMENT_STATUS, ANN_LAYER, ARTIFACT_KIND_EXPERIMENT, EXPERIMENT_INDEX_MEDIA_TYPE,
@@ -209,7 +209,7 @@ fn experiment_index_json(state: &ExperimentState) -> serde_json::Value {
     })
 }
 
-fn record_index_entry(record: &Record) -> serde_json::Value {
+fn record_index_entry(record: &RecordRef) -> serde_json::Value {
     json!({
         "name": record.name,
         "media_type": record.descriptor.media_type().to_string(),
