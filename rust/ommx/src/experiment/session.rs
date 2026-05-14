@@ -1,10 +1,7 @@
 //! The public `Experiment` / `Run` handles and their `log_*` API.
 
-use super::model::{ExperimentState, Record, RecordKind, RunState, RunStatus, Space};
-use super::{
-    build_descriptor, commit, ANN_RECORD_KIND, ANN_RECORD_NAME, ANN_RUN_ID, ANN_SPACE,
-    JSON_MEDIA_TYPE,
-};
+use super::model::{ExperimentState, Record, RunState, RunStatus, Space};
+use super::{build_descriptor, commit, ANN_RECORD_NAME, ANN_RUN_ID, ANN_SPACE};
 use crate::artifact::local_registry::LocalRegistry;
 use crate::artifact::{media_types, ImageRef, LocalArtifact};
 use crate::{Instance, SampleSet, Solution};
@@ -13,6 +10,9 @@ use oci_spec::image::MediaType;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
+
+/// OCI layer media type for JSON record payloads.
+const JSON_MEDIA_TYPE: &str = "application/json";
 
 /// A mutable experiment session. See the [module documentation](super).
 #[derive(Debug, Clone)]
@@ -85,65 +85,48 @@ impl Experiment {
         })
     }
 
-    /// Record JSON metadata in the experiment space.
-    pub fn log_metadata(&self, name: &str, value: serde_json::Value) -> Result<()> {
-        let bytes = encode_json(RecordKind::Metadata, name, &value)?;
-        self.add_record(RecordKind::Metadata, name, json_media_type(), bytes)
+    /// Record arbitrary bytes with an explicit OCI media type in the
+    /// experiment space.
+    pub fn log_record(
+        &self,
+        name: &str,
+        media_type: MediaType,
+        bytes: impl AsRef<[u8]>,
+    ) -> Result<()> {
+        self.add_record(name, media_type, bytes.as_ref())
     }
 
-    /// Record a JSON-serialisable object in the experiment space.
-    pub fn log_object(&self, name: &str, value: serde_json::Value) -> Result<()> {
-        let bytes = encode_json(RecordKind::Object, name, &value)?;
-        self.add_record(RecordKind::Object, name, json_media_type(), bytes)
+    /// Record a JSON-serialisable value in the experiment space.
+    pub fn log_json(&self, name: &str, value: impl serde::Serialize) -> Result<()> {
+        let bytes = encode_json(name, &value)?;
+        self.log_record(name, json_media_type(), bytes)
     }
 
     /// Record an [`Instance`] in the experiment space.
     pub fn log_instance(&self, name: &str, instance: &Instance) -> Result<()> {
-        self.add_record(
-            RecordKind::Instance,
-            name,
-            media_types::v1_instance(),
-            instance.to_bytes(),
-        )
+        self.log_record(name, media_types::v1_instance(), instance.to_bytes())
     }
 
     /// Record a [`Solution`] in the experiment space.
     pub fn log_solution(&self, name: &str, solution: &Solution) -> Result<()> {
-        self.add_record(
-            RecordKind::Solution,
-            name,
-            media_types::v1_solution(),
-            solution.to_bytes(),
-        )
+        self.log_record(name, media_types::v1_solution(), solution.to_bytes())
     }
 
     /// Record a [`SampleSet`] in the experiment space.
     pub fn log_sample_set(&self, name: &str, sample_set: &SampleSet) -> Result<()> {
-        self.add_record(
-            RecordKind::SampleSet,
-            name,
-            media_types::v1_sample_set(),
-            sample_set.to_bytes(),
-        )
+        self.log_record(name, media_types::v1_sample_set(), sample_set.to_bytes())
     }
 
-    fn add_record(
-        &self,
-        kind: RecordKind,
-        name: &str,
-        media_type: MediaType,
-        bytes: Vec<u8>,
-    ) -> Result<()> {
+    fn add_record(&self, name: &str, media_type: MediaType, bytes: &[u8]) -> Result<()> {
         let mut state = lock_state(&self.state)?;
         ensure_open(&state)?;
         let record = stage_record(
             &self.registry,
             Space::Experiment,
             None,
-            kind,
             name,
             media_type,
-            &bytes,
+            bytes,
         )?;
         upsert_record(&mut state.records, record);
         Ok(())
@@ -187,46 +170,36 @@ impl Run {
         self.run_id
     }
 
-    /// Record JSON metadata in this run's space.
-    pub fn log_metadata(&self, name: &str, value: serde_json::Value) -> Result<()> {
-        let bytes = encode_json(RecordKind::Metadata, name, &value)?;
-        self.add_record(RecordKind::Metadata, name, json_media_type(), bytes)
+    /// Record arbitrary bytes with an explicit OCI media type in this
+    /// run's space.
+    pub fn log_record(
+        &self,
+        name: &str,
+        media_type: MediaType,
+        bytes: impl AsRef<[u8]>,
+    ) -> Result<()> {
+        self.add_record(name, media_type, bytes.as_ref())
     }
 
-    /// Record a JSON-serialisable object in this run's space.
-    pub fn log_object(&self, name: &str, value: serde_json::Value) -> Result<()> {
-        let bytes = encode_json(RecordKind::Object, name, &value)?;
-        self.add_record(RecordKind::Object, name, json_media_type(), bytes)
+    /// Record a JSON-serialisable value in this run's space.
+    pub fn log_json(&self, name: &str, value: impl serde::Serialize) -> Result<()> {
+        let bytes = encode_json(name, &value)?;
+        self.log_record(name, json_media_type(), bytes)
     }
 
     /// Record an [`Instance`] in this run's space.
     pub fn log_instance(&self, name: &str, instance: &Instance) -> Result<()> {
-        self.add_record(
-            RecordKind::Instance,
-            name,
-            media_types::v1_instance(),
-            instance.to_bytes(),
-        )
+        self.log_record(name, media_types::v1_instance(), instance.to_bytes())
     }
 
     /// Record a [`Solution`] in this run's space.
     pub fn log_solution(&self, name: &str, solution: &Solution) -> Result<()> {
-        self.add_record(
-            RecordKind::Solution,
-            name,
-            media_types::v1_solution(),
-            solution.to_bytes(),
-        )
+        self.log_record(name, media_types::v1_solution(), solution.to_bytes())
     }
 
     /// Record a [`SampleSet`] in this run's space.
     pub fn log_sample_set(&self, name: &str, sample_set: &SampleSet) -> Result<()> {
-        self.add_record(
-            RecordKind::SampleSet,
-            name,
-            media_types::v1_sample_set(),
-            sample_set.to_bytes(),
-        )
+        self.log_record(name, media_types::v1_sample_set(), sample_set.to_bytes())
     }
 
     /// Close the run with the `finished` status and record its elapsed
@@ -241,23 +214,16 @@ impl Run {
         self.close(RunStatus::Failed)
     }
 
-    fn add_record(
-        &self,
-        kind: RecordKind,
-        name: &str,
-        media_type: MediaType,
-        bytes: Vec<u8>,
-    ) -> Result<()> {
+    fn add_record(&self, name: &str, media_type: MediaType, bytes: &[u8]) -> Result<()> {
         let mut state = lock_state(&self.state)?;
         ensure_open(&state)?;
         let record = stage_record(
             &self.registry,
             Space::Run,
             Some(self.run_id),
-            kind,
             name,
             media_type,
-            &bytes,
+            bytes,
         )?;
         let run = find_run_mut(&mut state, self.run_id)?;
         upsert_record(&mut run.records, record);
@@ -296,14 +262,14 @@ fn find_run_mut(state: &mut ExperimentState, run_id: u64) -> Result<&mut RunStat
         .ok_or_else(|| crate::error!("Run {run_id} not found in experiment"))
 }
 
-/// Build-phase upsert: a record with the same `(kind, name)` within a
-/// space replaces the previous one. Within one `Vec` the space and
-/// `run_id` are already fixed, so `(kind, name)` is the remaining key.
+/// Build-phase upsert: a record with the same `(media_type, name)`
+/// within a space replaces the previous one. Within one `Vec` the space
+/// and `run_id` are already fixed, so `(media_type, name)` is the
+/// remaining key.
 fn upsert_record(records: &mut Vec<Record>, record: Record) {
-    if let Some(existing) = records
-        .iter_mut()
-        .find(|r| r.kind == record.kind && r.name == record.name)
-    {
+    if let Some(existing) = records.iter_mut().find(|r| {
+        r.descriptor.media_type() == record.descriptor.media_type() && r.name == record.name
+    }) {
         *existing = record;
     } else {
         records.push(record);
@@ -314,13 +280,9 @@ fn json_media_type() -> MediaType {
     MediaType::Other(JSON_MEDIA_TYPE.to_string())
 }
 
-fn encode_json(kind: RecordKind, name: &str, value: &serde_json::Value) -> Result<Vec<u8>> {
-    serde_json::to_vec(value).map_err(|e| {
-        crate::error!(
-            "Failed to encode {} record `{name}` as JSON: {e}",
-            kind.as_str()
-        )
-    })
+fn encode_json(name: &str, value: impl serde::Serialize) -> Result<Vec<u8>> {
+    serde_json::to_vec(&value)
+        .map_err(|e| crate::error!("Failed to encode JSON record `{name}`: {e}"))
 }
 
 /// Write `bytes` to the registry's BlobStore and build the in-memory
@@ -330,7 +292,6 @@ fn stage_record(
     registry: &LocalRegistry,
     space: Space,
     run_id: Option<u64>,
-    kind: RecordKind,
     name: &str,
     media_type: MediaType,
     bytes: &[u8],
@@ -343,12 +304,10 @@ fn stage_record(
     if let Some(run_id) = run_id {
         annotations.insert(ANN_RUN_ID.to_string(), run_id.to_string());
     }
-    annotations.insert(ANN_RECORD_KIND.to_string(), kind.as_str().to_string());
     annotations.insert(ANN_RECORD_NAME.to_string(), name.to_string());
 
     let descriptor = build_descriptor(media_type, &blob, annotations)?;
     Ok(Record {
-        kind,
         name: name.to_string(),
         descriptor,
         blob,

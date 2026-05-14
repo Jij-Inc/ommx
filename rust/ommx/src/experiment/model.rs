@@ -1,5 +1,5 @@
-//! In-memory state of an experiment session: the domain enums and the
-//! `Record` / `RunState` / `ExperimentState` structs.
+//! In-memory state of an experiment session: the domain state enums and
+//! the `Record` / `RunState` / `ExperimentState` structs.
 
 use crate::artifact::local_registry::BlobRecord;
 use crate::artifact::{ImageRef, LocalArtifact};
@@ -20,33 +20,6 @@ impl Space {
         match self {
             Space::Experiment => "experiment",
             Space::Run => "run",
-        }
-    }
-}
-
-/// The kind of payload a [`Record`] holds.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum RecordKind {
-    /// Small JSON context (dataset name, source problem id, ...).
-    Metadata,
-    /// JSON-serialisable structured object.
-    Object,
-    /// An [`crate::Instance`].
-    Instance,
-    /// A [`crate::Solution`].
-    Solution,
-    /// A [`crate::SampleSet`].
-    SampleSet,
-}
-
-impl RecordKind {
-    pub(super) fn as_str(self) -> &'static str {
-        match self {
-            RecordKind::Metadata => "metadata",
-            RecordKind::Object => "object",
-            RecordKind::Instance => "instance",
-            RecordKind::Solution => "solution",
-            RecordKind::SampleSet => "sampleset",
         }
     }
 }
@@ -75,9 +48,9 @@ impl RunStatus {
 /// A named payload that has already been written to the BlobStore.
 #[derive(Debug, Clone)]
 pub(super) struct Record {
-    pub(super) kind: RecordKind,
     pub(super) name: String,
-    /// OCI layer descriptor; carries the experiment / record annotations.
+    /// OCI layer descriptor; carries the payload media type and the
+    /// experiment / record annotations.
     pub(super) descriptor: Descriptor,
     /// IndexStore blob record for the CAS-written payload.
     pub(super) blob: BlobRecord,

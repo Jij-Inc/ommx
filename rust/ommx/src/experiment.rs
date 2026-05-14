@@ -1,8 +1,9 @@
 //! Experiment / Run session model.
 //!
 //! An [`Experiment`] is a mutable session that groups a set of named
-//! payloads (records) — instances, solutions, sample sets, JSON
-//! metadata — together with one or more [`Run`]s. Records belong either
+//! payloads (records) — instances, solutions, sample sets, JSON values,
+//! or caller-defined media types — together with one or more [`Run`]s.
+//! Records belong either
 //! to the *experiment space* (shared by the whole experiment) or to a
 //! *run space* (owned by a single [`Run`]).
 //!
@@ -16,7 +17,7 @@
 //! use ommx::experiment::Experiment;
 //!
 //! let exp = Experiment::new("scip_reblock115")?;
-//! exp.log_metadata("dataset", serde_json::json!("miplib2017"))?;
+//! exp.log_json("dataset", serde_json::json!("miplib2017"))?;
 //!
 //! let run = exp.run()?;
 //! run.log_instance("candidate", &instance)?;
@@ -25,9 +26,9 @@
 //! let artifact = exp.commit()?;
 //! ```
 //!
-//! The module is split into three concerns: [`model`] holds the
-//! in-memory state types, [`session`] the public `Experiment` / `Run`
-//! handles and their `log_*` API, and [`commit`] the mapping onto an
+//! The module is split into three concerns: `model` holds the
+//! in-memory state types, `session` the public `Experiment` / `Run`
+//! handles and their `log_*` API, and `commit` the mapping onto an
 //! OMMX Artifact.
 
 mod commit;
@@ -58,10 +59,8 @@ const ANN_EXPERIMENT_STATUS: &str = "org.ommx.experiment.status";
 const ANN_SPACE: &str = "org.ommx.experiment.space";
 const ANN_RUN_ID: &str = "org.ommx.experiment.run_id";
 const ANN_LAYER: &str = "org.ommx.experiment.layer";
-const ANN_RECORD_KIND: &str = "org.ommx.record.kind";
 const ANN_RECORD_NAME: &str = "org.ommx.record.name";
 
-const JSON_MEDIA_TYPE: &str = "application/json";
 const EXPERIMENT_INDEX_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment+json";
 const RUN_ATTRIBUTES_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment.run-attributes+json";
 const LAYER_KIND_INDEX: &str = "index";

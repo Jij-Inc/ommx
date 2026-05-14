@@ -211,7 +211,6 @@ fn experiment_index_json(state: &ExperimentState) -> serde_json::Value {
 
 fn record_index_entry(record: &Record) -> serde_json::Value {
     json!({
-        "kind": record.kind.as_str(),
         "name": record.name,
         "media_type": record.descriptor.media_type().to_string(),
         "digest": record.descriptor.digest().to_string(),

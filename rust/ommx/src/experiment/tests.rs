@@ -3,7 +3,7 @@
 use super::model::RunStatus;
 use super::{
     Experiment, ANN_ARTIFACT_KIND, ANN_EXPERIMENT_NAME, ANN_EXPERIMENT_SCHEMA,
-    ANN_EXPERIMENT_STATUS, ANN_LAYER, ANN_RECORD_KIND, ANN_RECORD_NAME, ANN_RUN_ID, ANN_SPACE,
+    ANN_EXPERIMENT_STATUS, ANN_LAYER, ANN_RECORD_NAME, ANN_RUN_ID, ANN_SPACE,
     ARTIFACT_KIND_EXPERIMENT, EXPERIMENT_SCHEMA_V1, EXPERIMENT_STATUS_FINISHED, LAYER_KIND_INDEX,
     LAYER_KIND_RUN_ATTRIBUTES,
 };
@@ -72,7 +72,7 @@ fn run_lifecycle_assigns_ids_and_records_status() {
 fn log_writes_blob_to_blobstore_immediately() {
     let (_dir, experiment) = temp_experiment("eager-write");
     let run = experiment.run().unwrap();
-    run.log_metadata("solver", json!("scip")).unwrap();
+    run.log_json("solver", json!("scip")).unwrap();
 
     let digest = {
         let state = experiment.state.lock().unwrap();
@@ -83,21 +83,31 @@ fn log_writes_blob_to_blobstore_immediately() {
     assert!(!experiment.is_committed().unwrap());
 }
 
-/// Logging the same `(space, kind, name)` again replaces the record.
+/// Logging the same `(space, media type, name)` again replaces the
+/// record.
 #[test]
-fn log_upserts_same_space_kind_name() {
+fn log_upserts_same_space_media_type_name() {
     let (_dir, experiment) = temp_experiment("upsert");
-    experiment
-        .log_metadata("dataset", json!("miplib2017"))
-        .unwrap();
-    experiment.log_metadata("dataset", json!("qplib")).unwrap();
+    experiment.log_json("dataset", json!("miplib2017")).unwrap();
+    experiment.log_json("dataset", json!("qplib")).unwrap();
+
+    let instance: Instance =
+        crate::random::random_deterministic(crate::InstanceParameters::default_lp());
+    experiment.log_instance("dataset", &instance).unwrap();
 
     let state = experiment.state.lock().unwrap();
-    assert_eq!(state.records.len(), 1);
+    assert_eq!(state.records.len(), 2);
+    let json_record = state
+        .records
+        .iter()
+        .find(|record| {
+            record.descriptor.media_type() == &MediaType::Other("application/json".into())
+        })
+        .unwrap();
     let bytes = experiment
         .registry
         .blobs()
-        .read_bytes(&state.records[0].blob.digest)
+        .read_bytes(&json_record.blob.digest)
         .unwrap();
     assert_eq!(bytes, serde_json::to_vec(&json!("qplib")).unwrap());
 }
@@ -107,16 +117,13 @@ fn log_upserts_same_space_kind_name() {
 #[test]
 fn commit_produces_experiment_artifact() {
     let (_dir, experiment) = temp_experiment("commit");
-    experiment
-        .log_metadata("dataset", json!("miplib2017"))
-        .unwrap();
+    experiment.log_json("dataset", json!("miplib2017")).unwrap();
 
     let instance: Instance =
         crate::random::random_deterministic(crate::InstanceParameters::default_lp());
     let run = experiment.run().unwrap();
     run.log_instance("candidate", &instance).unwrap();
-    run.log_object("config", json!({ "relaxed": true }))
-        .unwrap();
+    run.log_json("config", json!({ "relaxed": true })).unwrap();
     run.finish().unwrap();
 
     let artifact = experiment.commit().unwrap();
@@ -149,8 +156,8 @@ fn commit_produces_experiment_artifact() {
         Some("experiment")
     );
     assert_eq!(
-        layer_annotation(dataset, ANN_RECORD_KIND).as_deref(),
-        Some("metadata")
+        dataset.media_type(),
+        &MediaType::Other("application/json".into())
     );
     assert!(layer_annotation(dataset, ANN_RUN_ID).is_none());
 
@@ -162,10 +169,6 @@ fn commit_produces_experiment_artifact() {
     assert_eq!(
         layer_annotation(candidate, ANN_RUN_ID).as_deref(),
         Some("0")
-    );
-    assert_eq!(
-        layer_annotation(candidate, ANN_RECORD_KIND).as_deref(),
-        Some("instance")
     );
     assert_eq!(candidate.media_type(), &media_types::v1_instance());
     assert_eq!(
@@ -192,13 +195,13 @@ fn commit_produces_experiment_artifact() {
 fn mutation_after_commit_is_rejected() {
     let (_dir, experiment) = temp_experiment("sealed");
     let run = experiment.run().unwrap();
-    run.log_metadata("seed", json!(0)).unwrap();
+    run.log_json("seed", json!(0)).unwrap();
     run.finish().unwrap();
     experiment.commit().unwrap();
 
-    assert!(experiment.log_metadata("late", json!(1)).is_err());
+    assert!(experiment.log_json("late", json!(1)).is_err());
     assert!(experiment.run().is_err());
-    assert!(run.log_metadata("late", json!(1)).is_err());
+    assert!(run.log_json("late", json!(1)).is_err());
 }
 
 /// `commit()` is idempotent: the second call returns the artifact
@@ -206,9 +209,7 @@ fn mutation_after_commit_is_rejected() {
 #[test]
 fn commit_is_idempotent() {
     let (_dir, experiment) = temp_experiment("idempotent");
-    experiment
-        .log_metadata("dataset", json!("miplib2017"))
-        .unwrap();
+    experiment.log_json("dataset", json!("miplib2017")).unwrap();
     let first = experiment.commit().unwrap();
     let second = experiment.commit().unwrap();
     assert_eq!(first.manifest_digest(), second.manifest_digest());
@@ -223,11 +224,11 @@ fn byte_identical_record_across_runs_shares_one_blob() {
     let payload = json!({ "formulation": "relaxed" });
 
     let run0 = experiment.run().unwrap();
-    run0.log_object("candidate", payload.clone()).unwrap();
+    run0.log_json("candidate", payload.clone()).unwrap();
     run0.finish().unwrap();
 
     let run1 = experiment.run().unwrap();
-    run1.log_object("candidate", payload.clone()).unwrap();
+    run1.log_json("candidate", payload.clone()).unwrap();
     run1.finish().unwrap();
 
     let artifact = experiment.commit().unwrap();
@@ -248,5 +249,25 @@ fn byte_identical_record_across_runs_shares_one_blob() {
     assert_eq!(
         candidates[0].digest().to_string(),
         candidates[1].digest().to_string()
+    );
+}
+
+/// Caller-defined payload types are represented directly by OCI media
+/// type, without an additional OMMX record-kind axis.
+#[test]
+fn log_record_accepts_caller_defined_media_type() {
+    let (_dir, experiment) = temp_experiment("custom-media-type");
+    let media_type = MediaType::Other("application/vnd.jijmodeling.model+json".to_string());
+    experiment
+        .log_record("source-model", media_type.clone(), br#"{"variables": []}"#)
+        .unwrap();
+
+    let artifact = experiment.commit().unwrap();
+    let layers = artifact.layers().unwrap();
+    let source_model = find_layer(&layers, ANN_RECORD_NAME, "source-model");
+    assert_eq!(source_model.media_type(), &media_type);
+    assert_eq!(
+        artifact.get_blob(source_model.digest().as_ref()).unwrap(),
+        br#"{"variables": []}"#
     );
 }
