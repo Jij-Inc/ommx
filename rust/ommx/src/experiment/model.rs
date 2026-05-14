@@ -4,7 +4,7 @@
 use crate::artifact::local_registry::BlobRecord;
 use crate::artifact::{ImageRef, LocalArtifact};
 use oci_spec::image::Descriptor;
-use std::time::Instant;
+use std::{collections::HashMap, time::Instant};
 
 /// The storage space a [`RecordRef`] belongs to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -53,8 +53,6 @@ pub(super) struct RecordRef {
     /// OCI layer descriptor; carries the payload media type and the
     /// experiment / record annotations.
     pub(super) descriptor: Descriptor,
-    /// IndexStore blob record for the CAS-written payload.
-    pub(super) blob: BlobRecord,
 }
 
 /// In-memory state of a single run.
@@ -78,6 +76,9 @@ pub(super) struct ExperimentState {
     /// Experiment-space records.
     pub(super) records: Vec<RecordRef>,
     pub(super) runs: Vec<RunState>,
+    /// CAS-written blobs available for commit-time publication, keyed
+    /// by digest.
+    pub(super) staged_blobs: HashMap<String, BlobRecord>,
     pub(super) next_run_id: u64,
     pub(super) committed: bool,
     pub(super) artifact: Option<LocalArtifact>,

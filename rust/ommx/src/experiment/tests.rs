@@ -77,7 +77,9 @@ fn log_writes_blob_to_blobstore_immediately() {
     let digest = {
         let state = experiment.state.lock().unwrap();
         assert_eq!(state.runs[0].records.len(), 1);
-        state.runs[0].records[0].blob.digest.clone()
+        let digest = state.runs[0].records[0].descriptor.digest().to_string();
+        assert!(state.staged_blobs.contains_key(&digest));
+        digest
     };
     assert!(experiment.registry.blobs().exists(&digest).unwrap());
     assert!(!experiment.is_committed().unwrap());
@@ -107,7 +109,7 @@ fn log_upserts_same_space_media_type_name() {
     let bytes = experiment
         .registry
         .blobs()
-        .read_bytes(&json_record.blob.digest)
+        .read_bytes(json_record.descriptor.digest().as_ref())
         .unwrap();
     assert_eq!(bytes, serde_json::to_vec(&json!("qplib")).unwrap());
 }

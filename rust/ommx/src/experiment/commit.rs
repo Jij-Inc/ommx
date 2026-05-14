@@ -36,8 +36,13 @@ pub(super) fn build_and_publish(
     let run_records = state.runs.iter().flat_map(|run| run.records.iter());
     for record in state.records.iter().chain(run_records) {
         layers.push(record.descriptor.clone());
-        if seen_digests.insert(record.blob.digest.clone()) {
-            blob_records.push(record.blob.clone());
+        let digest = record.descriptor.digest().to_string();
+        if seen_digests.insert(digest.clone()) {
+            let blob = state
+                .staged_blobs
+                .get(&digest)
+                .ok_or_else(|| crate::error!("Staged blob {digest} is missing"))?;
+            blob_records.push(blob.clone());
         }
     }
 
