@@ -64,8 +64,9 @@ pub(super) struct RunState {
     pub(super) elapsed_secs: Option<f64>,
 }
 
-/// In-memory state shared by an [`super::Experiment`] and all its
-/// [`super::Run`] handles.
+/// In-memory state owned by an [`super::Experiment`]. A live
+/// [`super::Run`] mutably borrows the parent experiment while it adds
+/// run-scoped records or closes the run lifecycle.
 #[derive(Debug)]
 pub(super) struct ExperimentState {
     pub(super) name: String,

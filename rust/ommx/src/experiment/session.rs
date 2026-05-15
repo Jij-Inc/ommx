@@ -8,28 +8,29 @@ use crate::{Instance, SampleSet, Solution};
 use anyhow::Result;
 use oci_spec::image::{Descriptor, MediaType};
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::Arc;
 use std::time::Instant;
 
 /// OCI layer media type for JSON record payloads.
 const JSON_MEDIA_TYPE: &str = "application/json";
 
 /// A mutable experiment session. See the [module documentation](super).
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Experiment {
     pub(super) registry: Arc<LocalRegistry>,
-    pub(super) state: Arc<Mutex<ExperimentState>>,
+    pub(super) state: ExperimentState,
 }
 
 /// A handle to a single run within an [`Experiment`].
 ///
-/// `Run` shares the parent experiment's state: `log_*` calls add records
-/// to the run space, and [`Run::finish`] / [`Run::fail`] close the run's
-/// lifecycle. Cloning a `Run` yields another handle to the same run.
-#[derive(Debug, Clone)]
-pub struct Run {
-    pub(super) registry: Arc<LocalRegistry>,
-    pub(super) state: Arc<Mutex<ExperimentState>>,
+/// `Run` borrows its parent experiment mutably. This is intentional:
+/// while a run is open, the parent session cannot be committed or used
+/// to start another run. PyO3 bindings may wrap this with a different
+/// state machine later, but the Rust core keeps the lifecycle explicit
+/// in the type system.
+#[derive(Debug)]
+pub struct Run<'exp> {
+    pub(super) experiment: &'exp mut Experiment,
     pub(super) run_id: u64,
 }
 
@@ -53,7 +54,7 @@ impl Experiment {
     ) -> Self {
         Experiment {
             registry,
-            state: Arc::new(Mutex::new(ExperimentState {
+            state: ExperimentState {
                 name: name.into(),
                 requested_ref,
                 records: Vec::new(),
@@ -62,17 +63,16 @@ impl Experiment {
                 next_run_id: 0,
                 committed: false,
                 artifact: None,
-            })),
+            },
         }
     }
 
     /// Start a new [`Run`]. Each run gets a fresh 0-based `run_id`.
-    pub fn run(&self) -> Result<Run> {
-        let mut state = lock_state(&self.state)?;
-        ensure_open(&state)?;
-        let run_id = state.next_run_id;
-        state.next_run_id += 1;
-        state.runs.push(RunState {
+    pub fn run(&mut self) -> Result<Run<'_>> {
+        ensure_open(&self.state)?;
+        let run_id = self.state.next_run_id;
+        self.state.next_run_id += 1;
+        self.state.runs.push(RunState {
             run_id,
             records: Vec::new(),
             status: RunStatus::Running,
@@ -80,8 +80,7 @@ impl Experiment {
             elapsed_secs: None,
         });
         Ok(Run {
-            registry: Arc::clone(&self.registry),
-            state: Arc::clone(&self.state),
+            experiment: self,
             run_id,
         })
     }
@@ -89,7 +88,7 @@ impl Experiment {
     /// Record arbitrary bytes with an explicit OCI media type in the
     /// experiment space.
     pub fn log_record(
-        &self,
+        &mut self,
         name: &str,
         media_type: MediaType,
         bytes: impl AsRef<[u8]>,
@@ -98,29 +97,28 @@ impl Experiment {
     }
 
     /// Record a JSON-serialisable value in the experiment space.
-    pub fn log_json(&self, name: &str, value: impl serde::Serialize) -> Result<()> {
+    pub fn log_json(&mut self, name: &str, value: impl serde::Serialize) -> Result<()> {
         let bytes = encode_json(name, &value)?;
         self.log_record(name, json_media_type(), bytes)
     }
 
     /// Record an [`Instance`] in the experiment space.
-    pub fn log_instance(&self, name: &str, instance: &Instance) -> Result<()> {
+    pub fn log_instance(&mut self, name: &str, instance: &Instance) -> Result<()> {
         self.log_record(name, media_types::v1_instance(), instance.to_bytes())
     }
 
     /// Record a [`Solution`] in the experiment space.
-    pub fn log_solution(&self, name: &str, solution: &Solution) -> Result<()> {
+    pub fn log_solution(&mut self, name: &str, solution: &Solution) -> Result<()> {
         self.log_record(name, media_types::v1_solution(), solution.to_bytes())
     }
 
     /// Record a [`SampleSet`] in the experiment space.
-    pub fn log_sample_set(&self, name: &str, sample_set: &SampleSet) -> Result<()> {
+    pub fn log_sample_set(&mut self, name: &str, sample_set: &SampleSet) -> Result<()> {
         self.log_record(name, media_types::v1_sample_set(), sample_set.to_bytes())
     }
 
-    fn add_record(&self, name: &str, media_type: MediaType, bytes: &[u8]) -> Result<()> {
-        let mut state = lock_state(&self.state)?;
-        ensure_open(&state)?;
+    fn add_record(&mut self, name: &str, media_type: MediaType, bytes: &[u8]) -> Result<()> {
+        ensure_open(&self.state)?;
         let (record_ref, blob) = stage_record_ref(
             &self.registry,
             Space::Experiment,
@@ -129,44 +127,43 @@ impl Experiment {
             media_type,
             bytes,
         )?;
-        remember_staged_blob(&mut state, blob);
-        upsert_record_ref(&mut state.records, record_ref);
+        remember_staged_blob(&mut self.state, blob);
+        upsert_record_ref(&mut self.state.records, record_ref);
         Ok(())
     }
 
     /// Seal the session into an immutable OMMX Artifact and publish it
     /// to the Local Registry. Idempotent: a second call returns the
     /// artifact produced by the first.
-    pub fn commit(&self) -> Result<LocalArtifact> {
-        let mut state = lock_state(&self.state)?;
-        if state.committed {
-            return state.artifact.clone().ok_or_else(|| {
+    pub fn commit(&mut self) -> Result<LocalArtifact> {
+        if self.state.committed {
+            return self.state.artifact.clone().ok_or_else(|| {
                 crate::error!("Experiment is committed but its artifact is missing")
             });
         }
-        let artifact = commit::build_and_publish(&self.registry, &state)?;
-        state.committed = true;
-        state.artifact = Some(artifact.clone());
+        ensure_no_running_runs(&self.state)?;
+        let artifact = commit::build_and_publish(&self.registry, &self.state)?;
+        self.state.committed = true;
+        self.state.artifact = Some(artifact.clone());
         Ok(artifact)
     }
 
     /// The committed artifact. Errors if [`Experiment::commit`] has not
     /// been called yet.
     pub fn artifact(&self) -> Result<LocalArtifact> {
-        let state = lock_state(&self.state)?;
-        state
+        self.state
             .artifact
             .clone()
             .ok_or_else(|| crate::error!("Experiment has not been committed yet"))
     }
 
     /// Whether [`Experiment::commit`] has been called.
-    pub fn is_committed(&self) -> Result<bool> {
-        Ok(lock_state(&self.state)?.committed)
+    pub fn is_committed(&self) -> bool {
+        self.state.committed
     }
 }
 
-impl Run {
+impl Run<'_> {
     /// This run's 0-based id within the experiment.
     pub fn run_id(&self) -> u64 {
         self.run_id
@@ -175,7 +172,7 @@ impl Run {
     /// Record arbitrary bytes with an explicit OCI media type in this
     /// run's space.
     pub fn log_record(
-        &self,
+        &mut self,
         name: &str,
         media_type: MediaType,
         bytes: impl AsRef<[u8]>,
@@ -184,58 +181,57 @@ impl Run {
     }
 
     /// Record a JSON-serialisable value in this run's space.
-    pub fn log_json(&self, name: &str, value: impl serde::Serialize) -> Result<()> {
+    pub fn log_json(&mut self, name: &str, value: impl serde::Serialize) -> Result<()> {
         let bytes = encode_json(name, &value)?;
         self.log_record(name, json_media_type(), bytes)
     }
 
     /// Record an [`Instance`] in this run's space.
-    pub fn log_instance(&self, name: &str, instance: &Instance) -> Result<()> {
+    pub fn log_instance(&mut self, name: &str, instance: &Instance) -> Result<()> {
         self.log_record(name, media_types::v1_instance(), instance.to_bytes())
     }
 
     /// Record a [`Solution`] in this run's space.
-    pub fn log_solution(&self, name: &str, solution: &Solution) -> Result<()> {
+    pub fn log_solution(&mut self, name: &str, solution: &Solution) -> Result<()> {
         self.log_record(name, media_types::v1_solution(), solution.to_bytes())
     }
 
     /// Record a [`SampleSet`] in this run's space.
-    pub fn log_sample_set(&self, name: &str, sample_set: &SampleSet) -> Result<()> {
+    pub fn log_sample_set(&mut self, name: &str, sample_set: &SampleSet) -> Result<()> {
         self.log_record(name, media_types::v1_sample_set(), sample_set.to_bytes())
     }
 
     /// Close the run with the `finished` status and record its elapsed
     /// time. A no-op if the run is already closed.
-    pub fn finish(&self) -> Result<()> {
+    pub fn finish(&mut self) -> Result<()> {
         self.close(RunStatus::Finished)
     }
 
     /// Close the run with the `failed` status and record its elapsed
     /// time. A no-op if the run is already closed.
-    pub fn fail(&self) -> Result<()> {
+    pub fn fail(&mut self) -> Result<()> {
         self.close(RunStatus::Failed)
     }
 
-    fn add_record(&self, name: &str, media_type: MediaType, bytes: &[u8]) -> Result<()> {
-        let mut state = lock_state(&self.state)?;
-        ensure_open(&state)?;
+    fn add_record(&mut self, name: &str, media_type: MediaType, bytes: &[u8]) -> Result<()> {
+        ensure_open(&self.experiment.state)?;
         let (record_ref, blob) = stage_record_ref(
-            &self.registry,
+            &self.experiment.registry,
             Space::Run,
             Some(self.run_id),
             name,
             media_type,
             bytes,
         )?;
-        remember_staged_blob(&mut state, blob);
-        let run = find_run_mut(&mut state, self.run_id)?;
+        remember_staged_blob(&mut self.experiment.state, blob);
+        let run = find_run_mut(&mut self.experiment.state, self.run_id)?;
         upsert_record_ref(&mut run.records, record_ref);
         Ok(())
     }
 
-    fn close(&self, status: RunStatus) -> Result<()> {
-        let mut state = lock_state(&self.state)?;
-        let run = find_run_mut(&mut state, self.run_id)?;
+    fn close(&mut self, status: RunStatus) -> Result<()> {
+        ensure_open(&self.experiment.state)?;
+        let run = find_run_mut(&mut self.experiment.state, self.run_id)?;
         if run.status == RunStatus::Running {
             run.elapsed_secs = Some(run.started_at.elapsed().as_secs_f64());
             run.status = status;
@@ -244,15 +240,23 @@ impl Run {
     }
 }
 
-fn lock_state(state: &Mutex<ExperimentState>) -> Result<MutexGuard<'_, ExperimentState>> {
-    state
-        .lock()
-        .map_err(|_| crate::error!("Experiment state mutex is poisoned"))
-}
-
 fn ensure_open(state: &ExperimentState) -> Result<()> {
     if state.committed {
         crate::bail!("Experiment has already been committed; no further mutation is allowed");
+    }
+    Ok(())
+}
+
+fn ensure_no_running_runs(state: &ExperimentState) -> Result<()> {
+    if let Some(run) = state
+        .runs
+        .iter()
+        .find(|run| run.status == RunStatus::Running)
+    {
+        crate::bail!(
+            "Run {} is still running; finish or fail it before committing the experiment",
+            run.run_id
+        );
     }
     Ok(())
 }

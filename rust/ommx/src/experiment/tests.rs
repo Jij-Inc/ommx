@@ -49,47 +49,53 @@ fn find_layer<'a>(layers: &'a [Descriptor], key: &str, value: &str) -> &'a Descr
 /// final status and elapsed time, and re-closing is a no-op.
 #[test]
 fn run_lifecycle_assigns_ids_and_records_status() {
-    let (_dir, experiment) = temp_experiment("lifecycle");
-    let run0 = experiment.run().unwrap();
-    let run1 = experiment.run().unwrap();
-    assert_eq!(run0.run_id(), 0);
-    assert_eq!(run1.run_id(), 1);
+    let (_dir, mut experiment) = temp_experiment("lifecycle");
+    {
+        let mut run0 = experiment.run().unwrap();
+        assert_eq!(run0.run_id(), 0);
+        run0.finish().unwrap();
+        run0.finish().unwrap(); // already closed: no-op
+    }
+    {
+        let mut run1 = experiment.run().unwrap();
+        assert_eq!(run1.run_id(), 1);
+        run1.fail().unwrap();
+    }
 
-    run0.finish().unwrap();
-    run1.fail().unwrap();
-    run0.finish().unwrap(); // already closed: no-op
-
-    let state = experiment.state.lock().unwrap();
-    assert_eq!(state.runs[0].status, RunStatus::Finished);
-    assert!(state.runs[0].elapsed_secs.is_some());
-    assert_eq!(state.runs[1].status, RunStatus::Failed);
-    assert!(state.runs[1].elapsed_secs.is_some());
+    assert_eq!(experiment.state.runs[0].status, RunStatus::Finished);
+    assert!(experiment.state.runs[0].elapsed_secs.is_some());
+    assert_eq!(experiment.state.runs[1].status, RunStatus::Failed);
+    assert!(experiment.state.runs[1].elapsed_secs.is_some());
 }
 
 /// `log_*` writes the payload to the BlobStore immediately, before any
 /// commit advances a public ref.
 #[test]
 fn log_writes_blob_to_blobstore_immediately() {
-    let (_dir, experiment) = temp_experiment("eager-write");
-    let run = experiment.run().unwrap();
-    run.log_json("solver", json!("scip")).unwrap();
+    let (_dir, mut experiment) = temp_experiment("eager-write");
+    {
+        let mut run = experiment.run().unwrap();
+        run.log_json("solver", json!("scip")).unwrap();
+    }
 
     let digest = {
-        let state = experiment.state.lock().unwrap();
-        assert_eq!(state.runs[0].records.len(), 1);
-        let digest = state.runs[0].records[0].descriptor.digest().clone();
-        assert!(state.staged_blobs.contains_key(&digest));
+        assert_eq!(experiment.state.runs[0].records.len(), 1);
+        let digest = experiment.state.runs[0].records[0]
+            .descriptor
+            .digest()
+            .clone();
+        assert!(experiment.state.staged_blobs.contains_key(&digest));
         digest
     };
     assert!(experiment.registry.blobs().exists(&digest).unwrap());
-    assert!(!experiment.is_committed().unwrap());
+    assert!(!experiment.is_committed());
 }
 
 /// Logging the same `(space, media type, name)` again replaces the
 /// record.
 #[test]
 fn log_upserts_same_space_media_type_name() {
-    let (_dir, experiment) = temp_experiment("upsert");
+    let (_dir, mut experiment) = temp_experiment("upsert");
     experiment.log_json("dataset", json!("miplib2017")).unwrap();
     experiment.log_json("dataset", json!("qplib")).unwrap();
 
@@ -97,9 +103,9 @@ fn log_upserts_same_space_media_type_name() {
         crate::random::random_deterministic(crate::InstanceParameters::default_lp());
     experiment.log_instance("dataset", &instance).unwrap();
 
-    let state = experiment.state.lock().unwrap();
-    assert_eq!(state.records.len(), 2);
-    let json_record = state
+    assert_eq!(experiment.state.records.len(), 2);
+    let json_record = experiment
+        .state
         .records
         .iter()
         .find(|record| {
@@ -118,15 +124,17 @@ fn log_upserts_same_space_media_type_name() {
 /// layer annotations describe the experiment / run records.
 #[test]
 fn commit_produces_experiment_artifact() {
-    let (_dir, experiment) = temp_experiment("commit");
+    let (_dir, mut experiment) = temp_experiment("commit");
     experiment.log_json("dataset", json!("miplib2017")).unwrap();
 
     let instance: Instance =
         crate::random::random_deterministic(crate::InstanceParameters::default_lp());
-    let run = experiment.run().unwrap();
-    run.log_instance("candidate", &instance).unwrap();
-    run.log_json("config", json!({ "relaxed": true })).unwrap();
-    run.finish().unwrap();
+    {
+        let mut run = experiment.run().unwrap();
+        run.log_instance("candidate", &instance).unwrap();
+        run.log_json("config", json!({ "relaxed": true })).unwrap();
+        run.finish().unwrap();
+    }
 
     let artifact = experiment.commit().unwrap();
 
@@ -192,25 +200,41 @@ fn commit_produces_experiment_artifact() {
 }
 
 /// After `commit()` the session is sealed: further `log_*` / `run()`
-/// calls — including via a previously obtained `Run` — are errors.
+/// calls are errors. A live `Run` cannot coexist with `commit()` in
+/// Rust because it mutably borrows the parent experiment.
 #[test]
 fn mutation_after_commit_is_rejected() {
-    let (_dir, experiment) = temp_experiment("sealed");
-    let run = experiment.run().unwrap();
-    run.log_json("seed", json!(0)).unwrap();
-    run.finish().unwrap();
+    let (_dir, mut experiment) = temp_experiment("sealed");
+    {
+        let mut run = experiment.run().unwrap();
+        run.log_json("seed", json!(0)).unwrap();
+        run.finish().unwrap();
+    }
     experiment.commit().unwrap();
 
     assert!(experiment.log_json("late", json!(1)).is_err());
     assert!(experiment.run().is_err());
-    assert!(run.log_json("late", json!(1)).is_err());
+}
+
+/// Dropping a run handle without closing it does not implicitly mark
+/// the run finished; the experiment must not publish a `finished`
+/// manifest while a run is still `running`.
+#[test]
+fn commit_rejects_unclosed_run() {
+    let (_dir, mut experiment) = temp_experiment("unclosed-run");
+    {
+        let mut run = experiment.run().unwrap();
+        run.log_json("seed", json!(0)).unwrap();
+    }
+
+    assert!(experiment.commit().is_err());
 }
 
 /// `commit()` is idempotent: the second call returns the artifact
 /// produced by the first.
 #[test]
 fn commit_is_idempotent() {
-    let (_dir, experiment) = temp_experiment("idempotent");
+    let (_dir, mut experiment) = temp_experiment("idempotent");
     experiment.log_json("dataset", json!("miplib2017")).unwrap();
     let first = experiment.commit().unwrap();
     let second = experiment.commit().unwrap();
@@ -222,16 +246,20 @@ fn commit_is_idempotent() {
 /// distinct layer descriptors backed by one shared CAS blob.
 #[test]
 fn byte_identical_record_across_runs_shares_one_blob() {
-    let (_dir, experiment) = temp_experiment("shared-blob");
+    let (_dir, mut experiment) = temp_experiment("shared-blob");
     let payload = json!({ "formulation": "relaxed" });
 
-    let run0 = experiment.run().unwrap();
-    run0.log_json("candidate", payload.clone()).unwrap();
-    run0.finish().unwrap();
+    {
+        let mut run0 = experiment.run().unwrap();
+        run0.log_json("candidate", payload.clone()).unwrap();
+        run0.finish().unwrap();
+    }
 
-    let run1 = experiment.run().unwrap();
-    run1.log_json("candidate", payload.clone()).unwrap();
-    run1.finish().unwrap();
+    {
+        let mut run1 = experiment.run().unwrap();
+        run1.log_json("candidate", payload.clone()).unwrap();
+        run1.finish().unwrap();
+    }
 
     let artifact = experiment.commit().unwrap();
     let layers = artifact.layers().unwrap();
@@ -258,7 +286,7 @@ fn byte_identical_record_across_runs_shares_one_blob() {
 /// type, without an additional OMMX record-kind axis.
 #[test]
 fn log_record_accepts_caller_defined_media_type() {
-    let (_dir, experiment) = temp_experiment("custom-media-type");
+    let (_dir, mut experiment) = temp_experiment("custom-media-type");
     let media_type = MediaType::Other("application/vnd.jijmodeling.model+json".to_string());
     experiment
         .log_record("source-model", media_type.clone(), br#"{"variables": []}"#)
