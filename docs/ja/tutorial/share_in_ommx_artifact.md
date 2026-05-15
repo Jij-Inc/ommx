@@ -112,7 +112,7 @@ df = pd.DataFrame.from_dict(
 
 +++
 
-## ファイルとしてOMMX Artfactを作成する
+## ファイルとしてOMMX Artifactを作成する
 
 OMMX Artifactはファイルで管理する方法と、コンテナのように名前で管理する方法がありますが、ここではまずファイルを使った方法を紹介します。OMMX SDKを使って、上記のデータをOMMX Artifact形式の新しいファイル `my_instance.ommx` に保存しましょう。まず `ArtifactDraft` を用意します。
 
@@ -135,7 +135,7 @@ if os.path.exists(filename):
 draft = ArtifactDraft.new_anonymous()
 ```
 
-[`ArtifactDraft`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactDraft) は主に 2 つのコンストラクタを持ちます。v3 では commit したアーティファクトは必ず SQLite Local Registry のエントリとして残り、`.ommx` ファイルとして共有したい場合は commit 後に `Artifact.save(path)` を呼びます。
+[`ArtifactDraft`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactDraft) は主に 3 つのコンストラクタを持ちます。v3 では commit したアーティファクトは必ず SQLite Local Registry のエントリとして残り、`.ommx` ファイルとして共有したい場合は commit 後に `Artifact.save(path)` を呼びます。
 
 | コンストラクタ | 説明 |
 | --- | --- |
@@ -192,7 +192,7 @@ print(os.path.exists(filename))
 
 +++
 
-## OMMX Artfact形式のファイルを読み取る
+## OMMX Artifact形式のファイルを読み取る
 
 次に保存したOMMX Artifactを読み込みましょう。v3 ではアーカイブ読み込みが 2 つのメソッドに分かれています: [`Artifact.import_archive`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.Artifact.import_archive) は アーカイブを SQLite Local Registry に import してフルハンドルを返します (全レイヤを読める)。[`Artifact.inspect_archive`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.Artifact.inspect_archive) は registry に書き込まずに manifest / layer descriptors だけを読みます。
 

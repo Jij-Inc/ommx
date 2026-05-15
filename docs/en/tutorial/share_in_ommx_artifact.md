@@ -135,7 +135,7 @@ if os.path.exists(filename):
 draft = ArtifactDraft.new_anonymous()
 ```
 
-[`ArtifactDraft`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactDraft) has two primary constructors. v3 always publishes into the SQLite Local Registry, so a commit produces a registry entry; if you also want a `.ommx` file for sharing, call `Artifact.save(path)` afterward.
+[`ArtifactDraft`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactDraft) has three primary constructors. v3 always publishes into the SQLite Local Registry, so a commit produces a registry entry; if you also want a `.ommx` file for sharing, call `Artifact.save(path)` afterward.
 
 | Constructor | Description |
 | --- | --- |

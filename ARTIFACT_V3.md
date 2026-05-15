@@ -878,7 +878,7 @@ OCI manifest descriptor の media type と `artifactType` は既存 Artifact 仕
 - run lifecycle（`run()` での `run_id` 採番、`finish()` / `fail()` による status / elapsed 反映）
 - `log_*` 時点で payload が temp registry（`with_registry`）の BlobStore に書かれること、同一 `(space, run_id, media type, name)` の upsert
 - `commit()` 後の manifest annotations / Record layer annotations / aggregate layer
-- commit 後の `log_*` / `run()` が error になること、`commit()` の idempotency
+- `commit(self)` が Experiment を consume するため、commit 後の `log_*` / `run()` 経路が Rust core では型として作れないこと
 
 ### 12.5 後続イテレーション
 

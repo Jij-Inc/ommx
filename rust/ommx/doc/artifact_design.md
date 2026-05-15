@@ -94,7 +94,7 @@ annotations and v3 canonical writes resolve to the same SQLite row.
 
 Image references are **optional at commit time**. The SDK exposes
 `ArtifactDraft::new_anonymous()` for callers that do not want
-to pick a name; the draft synthesizes one at publish time. The
+to pick a name; the draft synthesizes one when it is created. The
 synthesized form is:
 
 ```text

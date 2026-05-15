@@ -657,7 +657,7 @@ Two behavioural shifts:
 1. `image_name` is now a (synthesized) string, never `None`. v2 anonymous archives surfaced `None`; in v3 the SQLite Local Registry needs a key for every artifact so the draft synthesizes one. Code that branched on `image_name is None` to detect "unnamed archive" needs to switch to checking the `.ommx.local/anonymous:` substring or — better — call `ArtifactDraft.new(image_name)` with an explicit name when you care about identity.
 2. `new_anonymous` accumulates entries in the SQLite Local Registry. Run `ommx artifact prune-anonymous` to clean them up periodically; the manifest / blob CAS records are intentionally left in place for a future GC sweep to reclaim.
 
-**Timezone caveat**:  the timestamp portion is the **draft's local time**, not UTC. If you ship an anonymous archive to someone in another timezone, the recipient reads the same digits as their own local time — the time component loses absolute meaning across machines. If absolute time matters, use `ArtifactDraft.new(image_name)` with an explicit name.
+**Timezone caveat**: the timestamp portion is the **draft's local time**, not UTC. If you ship an anonymous archive to someone in another timezone, the recipient reads the same digits as their own local time — the time component loses absolute meaning across machines. If absolute time matters, use `ArtifactDraft.new(image_name)` with an explicit name.
 
 ### 13.3 `Artifact.load_archive` removed; pick `import_archive` (write) or `inspect_archive` (read-only)
 
