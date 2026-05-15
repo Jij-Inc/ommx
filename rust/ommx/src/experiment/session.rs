@@ -1,9 +1,6 @@
 //! The public `Experiment` / `Run` handles and their `log_*` API.
 
-use super::model::{
-    ExperimentState, RecordRef, RunState, RunStatus, SealedExperimentState, Space,
-    UnsealedExperimentState,
-};
+use super::model::{RecordRef, RunState, RunStatus, Space, UnsealedExperimentState};
 use super::{build_descriptor, commit, ANN_RECORD_NAME, ANN_RUN_ID, ANN_SPACE};
 use crate::artifact::local_registry::LocalRegistry;
 use crate::artifact::{media_types, sha256_digest, ImageRef, LocalArtifact};
@@ -17,11 +14,18 @@ use std::{str::FromStr, sync::Arc};
 /// OCI layer media type for JSON record payloads.
 const JSON_MEDIA_TYPE: &str = "application/json";
 
-/// A mutable experiment session. See the [module documentation](super).
+/// A mutable, unsealed experiment session. See the [module documentation](super).
 #[derive(Debug)]
 pub struct Experiment {
     pub(super) registry: Arc<LocalRegistry>,
-    pub(super) state: ExperimentState,
+    pub(super) state: UnsealedExperimentState,
+}
+
+/// A sealed experiment session whose root artifact manifest has been
+/// written and published.
+#[derive(Debug, Clone)]
+pub struct SealedExperiment {
+    artifact: LocalArtifact,
 }
 
 /// A handle to a single run within an [`Experiment`].
@@ -57,22 +61,21 @@ impl Experiment {
     ) -> Self {
         Experiment {
             registry,
-            state: ExperimentState::Unsealed(UnsealedExperimentState {
+            state: UnsealedExperimentState {
                 name: name.into(),
                 requested_ref,
                 records: Vec::new(),
                 runs: Vec::new(),
                 next_run_id: 0,
-            }),
+            },
         }
     }
 
     /// Start a new [`Run`]. Each run gets a fresh 0-based `run_id`.
     pub fn run(&mut self) -> Result<Run<'_>> {
-        let state = unsealed_mut(&mut self.state)?;
-        let run_id = state.next_run_id;
-        state.next_run_id += 1;
-        state.runs.push(RunState {
+        let run_id = self.state.next_run_id;
+        self.state.next_run_id += 1;
+        self.state.runs.push(RunState {
             run_id,
             records: Vec::new(),
             status: RunStatus::Running,
@@ -118,7 +121,6 @@ impl Experiment {
     }
 
     fn add_record(&mut self, name: &str, media_type: MediaType, bytes: &[u8]) -> Result<()> {
-        ensure_unsealed(&self.state)?;
         let record_ref = store_record_ref(
             &self.registry,
             Space::Experiment,
@@ -127,42 +129,29 @@ impl Experiment {
             media_type,
             bytes,
         )?;
-        let state = unsealed_mut(&mut self.state)?;
-        upsert_record_ref(&mut state.records, record_ref);
+        upsert_record_ref(&mut self.state.records, record_ref);
         Ok(())
     }
 
     /// Seal the session into an immutable OMMX Artifact and publish it
-    /// to the Local Registry. Idempotent: a second call returns the
-    /// artifact produced by the first.
-    pub fn commit(&mut self) -> Result<LocalArtifact> {
-        let artifact = match &self.state {
-            ExperimentState::Sealed(state) => return Ok(state.artifact.clone()),
-            ExperimentState::Unsealed(state) => {
-                ensure_no_running_runs(state)?;
-                commit::commit_experiment_state(&self.registry, state)?
-            }
-        };
-        self.state = ExperimentState::Sealed(SealedExperimentState {
-            artifact: artifact.clone(),
-        });
-        Ok(artifact)
+    /// to the Local Registry. Consumes the unsealed session, so further
+    /// mutation is impossible in Rust.
+    pub fn commit(self) -> Result<SealedExperiment> {
+        ensure_no_running_runs(&self.state)?;
+        let artifact = commit::commit_experiment_state(&self.registry, &self.state)?;
+        Ok(SealedExperiment { artifact })
+    }
+}
+
+impl SealedExperiment {
+    /// The committed artifact handle.
+    pub fn artifact(&self) -> LocalArtifact {
+        self.artifact.clone()
     }
 
-    /// The committed artifact. Errors if [`Experiment::commit`] has not
-    /// been called yet.
-    pub fn artifact(&self) -> Result<LocalArtifact> {
-        match &self.state {
-            ExperimentState::Sealed(state) => Ok(state.artifact.clone()),
-            ExperimentState::Unsealed(_) => {
-                Err(crate::error!("Experiment has not been committed yet"))
-            }
-        }
-    }
-
-    /// Whether [`Experiment::commit`] has been called.
-    pub fn is_committed(&self) -> bool {
-        matches!(self.state, ExperimentState::Sealed(_))
+    /// Consume the sealed experiment and return its artifact handle.
+    pub fn into_artifact(self) -> LocalArtifact {
+        self.artifact
     }
 }
 
@@ -219,7 +208,6 @@ impl Run<'_> {
     }
 
     fn add_record(&mut self, name: &str, media_type: MediaType, bytes: &[u8]) -> Result<()> {
-        ensure_unsealed(&self.experiment.state)?;
         let record_ref = store_record_ref(
             &self.experiment.registry,
             Space::Run,
@@ -228,36 +216,18 @@ impl Run<'_> {
             media_type,
             bytes,
         )?;
-        let state = unsealed_mut(&mut self.experiment.state)?;
-        let run = find_run_mut(state, self.run_id)?;
+        let run = find_run_mut(&mut self.experiment.state, self.run_id)?;
         upsert_record_ref(&mut run.records, record_ref);
         Ok(())
     }
 
     fn close(self, status: RunStatus) -> Result<()> {
-        let state = unsealed_mut(&mut self.experiment.state)?;
-        let run = find_run_mut(state, self.run_id)?;
+        let run = find_run_mut(&mut self.experiment.state, self.run_id)?;
         if run.status == RunStatus::Running {
             run.elapsed_secs = Some(run.started_at.elapsed().as_secs_f64());
             run.status = status;
         }
         Ok(())
-    }
-}
-
-fn ensure_unsealed(state: &ExperimentState) -> Result<()> {
-    if matches!(state, ExperimentState::Sealed(_)) {
-        crate::bail!("Experiment has already been committed; no further mutation is allowed");
-    }
-    Ok(())
-}
-
-fn unsealed_mut(state: &mut ExperimentState) -> Result<&mut UnsealedExperimentState> {
-    match state {
-        ExperimentState::Unsealed(state) => Ok(state),
-        ExperimentState::Sealed(_) => {
-            crate::bail!("Experiment has already been committed; no further mutation is allowed")
-        }
     }
 }
 

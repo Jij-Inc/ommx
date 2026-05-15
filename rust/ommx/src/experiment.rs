@@ -28,7 +28,7 @@
 //! run.log_instance("candidate", &instance)?;
 //! run.finish()?;
 //!
-//! let artifact = exp.commit()?;
+//! let artifact = exp.commit()?.into_artifact();
 //! ```
 //!
 //! The module is split into three concerns: `model` holds the
@@ -43,7 +43,7 @@ mod session;
 #[cfg(test)]
 mod tests;
 
-pub use session::{Experiment, Run};
+pub use session::{Experiment, Run, SealedExperiment};
 
 use anyhow::Result;
 use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, MediaType};

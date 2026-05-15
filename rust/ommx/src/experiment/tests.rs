@@ -1,6 +1,6 @@
 //! Tests for the experiment session model.
 
-use super::model::{ExperimentState, RunStatus, UnsealedExperimentState};
+use super::model::{RunStatus, UnsealedExperimentState};
 use super::{
     Experiment, ANN_ARTIFACT_KIND, ANN_EXPERIMENT_NAME, ANN_EXPERIMENT_SCHEMA,
     ANN_EXPERIMENT_STATUS, ANN_LAYER, ANN_RECORD_NAME, ANN_RUN_ID, ANN_SPACE,
@@ -25,10 +25,7 @@ fn temp_experiment(name: &str) -> (TempDir, Experiment) {
 }
 
 fn unsealed_state(experiment: &Experiment) -> &UnsealedExperimentState {
-    match &experiment.state {
-        ExperimentState::Unsealed(state) => state,
-        ExperimentState::Sealed(_) => panic!("expected unsealed experiment state"),
-    }
+    &experiment.state
 }
 
 fn layer_annotation(layer: &Descriptor, key: &str) -> Option<String> {
@@ -92,7 +89,6 @@ fn log_writes_blob_to_blobstore_immediately() {
         digest
     };
     assert!(experiment.registry.blobs().exists(&digest).unwrap());
-    assert!(!experiment.is_committed());
 }
 
 /// Logging the same `(space, media type, name)` again replaces the
@@ -140,7 +136,8 @@ fn commit_produces_experiment_artifact() {
         run.finish().unwrap();
     }
 
-    let artifact = experiment.commit().unwrap();
+    let sealed = experiment.commit().unwrap();
+    let artifact = sealed.artifact();
 
     let annotations = artifact.annotations().unwrap();
     assert_eq!(
@@ -203,21 +200,28 @@ fn commit_produces_experiment_artifact() {
     );
 }
 
-/// After `commit()` the session is sealed: further `log_*` / `run()`
-/// calls are errors. A live `Run` cannot coexist with `commit()` in
-/// Rust because it mutably borrows the parent experiment.
+/// `commit()` consumes the unsealed session and returns a sealed handle.
+/// Further `log_*` / `run()` calls on the original session are impossible
+/// in Rust because the original `Experiment` value has moved.
 #[test]
-fn mutation_after_commit_is_rejected() {
+fn commit_returns_sealed_experiment() {
     let (_dir, mut experiment) = temp_experiment("sealed");
     {
         let mut run = experiment.run().unwrap();
         run.log_json("seed", json!(0)).unwrap();
         run.finish().unwrap();
     }
-    experiment.commit().unwrap();
 
-    assert!(experiment.log_json("late", json!(1)).is_err());
-    assert!(experiment.run().is_err());
+    let sealed = experiment.commit().unwrap();
+    let artifact = sealed.artifact();
+    assert_eq!(
+        artifact
+            .annotations()
+            .unwrap()
+            .get(ANN_EXPERIMENT_NAME)
+            .map(String::as_str),
+        Some("sealed")
+    );
 }
 
 /// Dropping a run handle without closing it does not implicitly mark
@@ -232,18 +236,6 @@ fn commit_rejects_unclosed_run() {
     }
 
     assert!(experiment.commit().is_err());
-}
-
-/// `commit()` is idempotent: the second call returns the artifact
-/// produced by the first.
-#[test]
-fn commit_is_idempotent() {
-    let (_dir, mut experiment) = temp_experiment("idempotent");
-    experiment.log_json("dataset", json!("miplib2017")).unwrap();
-    let first = experiment.commit().unwrap();
-    let second = experiment.commit().unwrap();
-    assert_eq!(first.manifest_digest(), second.manifest_digest());
-    assert_eq!(first.image_name(), second.image_name());
 }
 
 /// A byte-identical record logged by two runs yields two annotation-
@@ -265,7 +257,7 @@ fn byte_identical_record_across_runs_shares_one_blob() {
         run1.finish().unwrap();
     }
 
-    let artifact = experiment.commit().unwrap();
+    let artifact = experiment.commit().unwrap().into_artifact();
     let layers = artifact.layers().unwrap();
 
     let candidates: Vec<&Descriptor> = layers
@@ -296,7 +288,7 @@ fn log_record_accepts_caller_defined_media_type() {
         .log_record("source-model", media_type.clone(), br#"{"variables": []}"#)
         .unwrap();
 
-    let artifact = experiment.commit().unwrap();
+    let artifact = experiment.commit().unwrap().into_artifact();
     let layers = artifact.layers().unwrap();
     let source_model = find_layer(&layers, ANN_RECORD_NAME, "source-model");
     assert_eq!(source_model.media_type(), &media_type);

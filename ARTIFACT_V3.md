@@ -797,11 +797,10 @@ Track A の中核のうち、最小の happy path を最初に通す。Local Reg
 
 | 型 | 役割 |
 |---|---|
-| `Experiment` | `Arc<LocalRegistry>` + `ExperimentState`。Unsealed / Sealed state を所有する session handle |
+| `Experiment` | `Arc<LocalRegistry>` + `UnsealedExperimentState`。mutable session handle |
+| `SealedExperiment` | commit 済み `LocalArtifact` を持つ immutable session handle |
 | `Run<'exp>` | `&'exp mut Experiment` + `run_id`。Rust core では live Run が親 Experiment を mutable borrow する |
-| `ExperimentState`（private enum） | `Unsealed(UnsealedExperimentState)` / `Sealed(SealedExperimentState)` |
 | `UnsealedExperimentState`（private） | name, requested ref, experiment space records, runs, next run id |
-| `SealedExperimentState`（private） | commit 済み `LocalArtifact`。`committed` flag と `Option<LocalArtifact>` の二重管理はしない |
 | `RunState`（private） | run_id, run space records, status, started_at, elapsed |
 | `Record`（private） | space, run_id, media type, name, BlobStore に書き込み済み blob を指す descriptor |
 | `Space` / `RunStatus` enum | `experiment`/`run`、`running`/`finished`/`failed` |
@@ -811,9 +810,9 @@ API:
 - `Experiment::new(name)`（default Local Registry を開く） / `Experiment::with_registry(name, Arc<LocalRegistry>, Option<ImageRef>)`（テスト用に registry / requested ref を差し替え可能）
 - `Experiment::log_record` / `log_json` / `log_instance` / `log_solution` / `log_sample_set`（experiment space、`&mut self`）
 - `Experiment::run(&mut self) -> Run<'_>`（`run_id` を 0-based で採番）
-- `Experiment::commit(&mut self) -> LocalArtifact`
-- `Experiment::artifact() -> LocalArtifact`（commit 後のみ available、commit 前は error）
-- `Experiment::is_committed() -> bool`
+- `Experiment::commit(self) -> SealedExperiment`
+- `SealedExperiment::artifact() -> LocalArtifact`
+- `SealedExperiment::into_artifact(self) -> LocalArtifact`
 - `Run::run_id()`、`Run::log_record` / `log_json` / `log_instance` / `log_solution` / `log_sample_set`（run space）、`Run::finish(self)` / `Run::fail(self)`
 
 挙動:
@@ -823,9 +822,7 @@ API:
 - Rust core では live `Run<'_>` が親 `Experiment` を mutable borrow するため、Run が生きている間は `commit()` や別 Run の作成は型で禁止される。
 - `Run::finish(self)` / `Run::fail(self)` は Run handle を消費する。終了済み Run に後から Record を追加する経路は Rust core では型で作らない。
 - `finish()` / `fail()` されずに drop された Run は `running` のまま残る。`commit()` は running Run が残っている場合 error とし、`finished` manifest を publish しない。
-- `commit()` は `ExperimentState::Unsealed` を `ExperimentState::Sealed` に遷移させる。Sealed state は常に `LocalArtifact` を持つ。
-- commit 済み Experiment への `log_*` / `run()` は error。
-- `commit()` は idempotent。2 回目は既存 `LocalArtifact` を返す。
+- `commit(self)` は unsealed `Experiment` を消費し、`SealedExperiment` を返す。commit 済み Experiment への `log_*` / `run()` 経路は Rust core では型で作らない。
 - error は `crate::bail!` / `crate::error!` fail-site macro を使う。
 
 ### 12.3 Artifact への写像と新規 primitive
