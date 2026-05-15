@@ -7,6 +7,7 @@ use super::{
 use crate::artifact::{media_types, sha256_digest, stable_json_bytes, ImageRef};
 use anyhow::{ensure, Context, Result};
 use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, ImageManifest, MediaType};
+use std::collections::HashMap;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -38,6 +39,51 @@ impl Deref for StoredDescriptor {
 impl From<StoredDescriptor> for Descriptor {
     fn from(value: StoredDescriptor) -> Self {
         value.into_inner()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct StoredArtifactManifest {
+    artifact_type: MediaType,
+    config: StoredDescriptor,
+    layers: Vec<StoredDescriptor>,
+    subject: Option<Descriptor>,
+    annotations: HashMap<String, String>,
+}
+
+impl StoredArtifactManifest {
+    pub(crate) fn new(
+        artifact_type: MediaType,
+        config: StoredDescriptor,
+        layers: Vec<StoredDescriptor>,
+        subject: Option<Descriptor>,
+        annotations: HashMap<String, String>,
+    ) -> Self {
+        Self {
+            artifact_type,
+            config,
+            layers,
+            subject,
+            annotations,
+        }
+    }
+
+    pub(crate) fn into_oci_image_manifest(self) -> Result<ImageManifest> {
+        let config: Descriptor = self.config.into();
+        let mut builder = oci_spec::image::ImageManifestBuilder::default()
+            .schema_version(2u32)
+            .artifact_type(self.artifact_type)
+            .config(config)
+            .layers(self.layers.into_iter().map(Into::into).collect::<Vec<_>>());
+        if let Some(subject) = self.subject {
+            builder = builder.subject(subject);
+        }
+        if !self.annotations.is_empty() {
+            builder = builder.annotations(self.annotations);
+        }
+        builder
+            .build()
+            .context("Failed to build OCI image manifest")
     }
 }
 
@@ -162,26 +208,29 @@ impl LocalRegistry {
     }
 
     /// Publish an OCI Image Manifest to the SQLite Local Registry.
-    /// Callers must write every config/layer blob referenced by the
-    /// manifest into the BlobStore before calling this method. The
-    /// registry serializes the manifest itself, writes that manifest
-    /// blob, and publishes the resulting descriptor into the index.
+    /// The manifest's config/layers are represented as
+    /// [`StoredDescriptor`] before this method is called, so this
+    /// method does not re-validate dependency blob existence. It only
+    /// serializes the manifest itself, writes the manifest blob, and
+    /// publishes the resulting descriptor into the index.
     pub(crate) fn publish_artifact_manifest(
         &self,
         image_name: &ImageRef,
-        manifest: &ImageManifest,
+        manifest: StoredArtifactManifest,
         policy: RefConflictPolicy,
-    ) -> Result<(Descriptor, RefUpdate)> {
-        Self::validate_manifest(manifest)?;
-        self.ensure_manifest_dependencies_exist(manifest)?;
-        let manifest_bytes = stable_json_bytes(manifest)?;
+    ) -> Result<(StoredDescriptor, RefUpdate)> {
+        let manifest = manifest.into_oci_image_manifest()?;
+        Self::validate_manifest(&manifest)?;
+        let manifest_bytes = stable_json_bytes(&manifest)?;
         let manifest_descriptor = Self::build_manifest_descriptor(&manifest_bytes)?;
+        let manifest_descriptor = self.stage_blob(manifest_descriptor, &manifest_bytes)?;
 
         // Pre-check: under `KeepExisting`, return the conflict before
-        // we waste any CAS writes. The atomic publish in stage 2
-        // re-validates the same condition inside the SQLite
-        // transaction, so concurrent racers can't slip through; this
-        // is purely a fast path for the common single-writer case.
+        // touching the SQLite ref. The manifest blob is already in
+        // CAS, so the returned descriptor still satisfies the
+        // `StoredDescriptor` invariant. The atomic publish in stage 2
+        // re-validates the same condition inside the SQLite transaction,
+        // so concurrent racers can't slip through.
         if policy == RefConflictPolicy::KeepExisting {
             if let Some(existing_descriptor) = self.index.resolve_image_descriptor(image_name)? {
                 if existing_descriptor.digest() != manifest_descriptor.digest() {
@@ -197,29 +246,10 @@ impl LocalRegistry {
             }
         }
 
-        let manifest_descriptor = self.stage_blob(manifest_descriptor, &manifest_bytes)?;
-        let manifest_descriptor: Descriptor = manifest_descriptor.into();
         let ref_update =
             self.index
                 .put_image_ref_with_policy(image_name, &manifest_descriptor, policy)?;
         Ok((manifest_descriptor, ref_update))
-    }
-
-    fn ensure_manifest_dependencies_exist(&self, manifest: &ImageManifest) -> Result<()> {
-        self.ensure_blob_exists("Manifest config", manifest.config())?;
-        for layer in manifest.layers() {
-            self.ensure_blob_exists("Manifest layer", layer)?;
-        }
-        Ok(())
-    }
-
-    fn ensure_blob_exists(&self, label: &str, descriptor: &Descriptor) -> Result<()> {
-        ensure!(
-            self.blobs.exists(descriptor.digest())?,
-            "{label} blob is missing from the BlobStore: {}",
-            descriptor.digest()
-        );
-        Ok(())
     }
 
     /// Validate that the manifest carries the OMMX `artifactType`.

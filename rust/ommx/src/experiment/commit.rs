@@ -7,10 +7,12 @@ use super::{
     EXPERIMENT_SCHEMA_V1, EXPERIMENT_STATUS_FINISHED, LAYER_KIND_INDEX, LAYER_KIND_RUN_ATTRIBUTES,
     RUN_ATTRIBUTES_MEDIA_TYPE,
 };
-use crate::artifact::local_registry::{LocalRegistry, RefConflictPolicy, RefUpdate};
+use crate::artifact::local_registry::{
+    LocalRegistry, RefConflictPolicy, RefUpdate, StoredArtifactManifest, StoredDescriptor,
+};
 use crate::artifact::{media_types, sha256_digest, LocalArtifact};
 use anyhow::Result;
-use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, ImageManifestBuilder, MediaType};
+use oci_spec::image::{DescriptorBuilder, Digest, MediaType};
 use serde_json::json;
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -23,7 +25,7 @@ pub(super) fn build_and_publish(
     registry: &Arc<LocalRegistry>,
     state: &ExperimentState,
 ) -> Result<LocalArtifact> {
-    let mut layers: Vec<Descriptor> = Vec::new();
+    let mut layers = Vec::new();
 
     // Record layers: experiment space first, then each run's space.
     // `layers[]` keeps one descriptor per record (digests may repeat
@@ -36,7 +38,7 @@ pub(super) fn build_and_publish(
             .staged_blobs
             .get(&digest)
             .ok_or_else(|| crate::error!("Staged blob {digest} is missing"))?;
-        layers.push(record.descriptor.clone().into());
+        layers.push(record.descriptor.clone());
     }
 
     // Aggregate layers, materialised at commit time.
@@ -72,20 +74,15 @@ pub(super) fn build_and_publish(
         .size(empty_config_bytes.len() as u64)
         .build()
         .map_err(|e| crate::error!("Failed to build empty config descriptor: {e}"))?;
-    let config_descriptor: Descriptor = registry
-        .stage_blob(config_descriptor, &empty_config_bytes)?
-        .into();
+    let config_descriptor = registry.stage_blob(config_descriptor, &empty_config_bytes)?;
 
-    let manifest = ImageManifestBuilder::default()
-        .schema_version(2u32)
-        .artifact_type(MediaType::Other(
-            media_types::V1_ARTIFACT_MEDIA_TYPE.to_string(),
-        ))
-        .config(config_descriptor)
-        .layers(layers)
-        .annotations(manifest_annotations(state))
-        .build()
-        .map_err(|e| crate::error!("Failed to build experiment OCI image manifest: {e}"))?;
+    let manifest = StoredArtifactManifest::new(
+        MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
+        config_descriptor,
+        layers,
+        None,
+        manifest_annotations(state),
+    );
     let image_name = match &state.requested_ref {
         Some(image_ref) => image_ref.clone(),
         None => registry.synthesize_anonymous_image_name()?,
@@ -93,7 +90,7 @@ pub(super) fn build_and_publish(
 
     let (manifest_descriptor, ref_update) = registry.publish_artifact_manifest(
         &image_name,
-        &manifest,
+        manifest,
         RefConflictPolicy::KeepExisting,
     )?;
     if let RefUpdate::Conflicted {
@@ -121,7 +118,7 @@ fn stage_aggregate_layer(
     media_type: &str,
     layer_kind: &str,
     bytes: &[u8],
-) -> Result<Descriptor> {
+) -> Result<StoredDescriptor> {
     let digest = Digest::from_str(&sha256_digest(bytes))
         .map_err(|e| crate::error!("Failed to parse aggregate layer digest: {e}"))?;
     let mut annotations = HashMap::new();
@@ -132,7 +129,7 @@ fn stage_aggregate_layer(
         bytes.len() as u64,
         annotations,
     )?;
-    Ok(registry.stage_blob(descriptor, bytes)?.into())
+    registry.stage_blob(descriptor, bytes)
 }
 
 fn manifest_annotations(state: &ExperimentState) -> HashMap<String, String> {

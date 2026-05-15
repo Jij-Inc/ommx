@@ -1,17 +1,16 @@
 use super::{
     digest::sha256_digest,
     ghcr,
-    local_registry::{LocalRegistry, RefConflictPolicy, RefUpdate, StoredDescriptor},
+    local_registry::{
+        LocalRegistry, RefConflictPolicy, RefUpdate, StoredArtifactManifest, StoredDescriptor,
+    },
     media_types::{self, OCI_EMPTY_CONFIG_BYTES},
     ImageRef, InstanceAnnotations, ParametricInstanceAnnotations, SampleSetAnnotations,
     SolutionAnnotations,
 };
 use crate::v1;
 use anyhow::{bail, Context, Result};
-use oci_spec::image::{
-    Descriptor, DescriptorBuilder, Digest, ImageManifest,
-    ImageManifestBuilder as OciImageManifestBuilder, MediaType,
-};
+use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, ImageManifest, MediaType};
 use prost::Message;
 use serde::Serialize;
 use std::{
@@ -380,7 +379,7 @@ impl ArtifactDraft {
         let image_name = self.image_name.clone();
         let manifest = self.prepare_manifest()?;
         let (manifest_descriptor, ref_update) =
-            registry.publish_artifact_manifest(&image_name, &manifest, policy)?;
+            registry.publish_artifact_manifest(&image_name, manifest, policy)?;
         reject_conflicting_ref(&image_name, ref_update)?;
         Ok(LocalArtifact::from_parts(
             registry,
@@ -389,19 +388,15 @@ impl ArtifactDraft {
         ))
     }
 
-    /// Compute the manifest from the in-memory builder state together
-    /// with the non-manifest blobs that must exist before publishing.
-    /// Pure: no I/O, no registry interaction.
-    ///
-    /// Materialises the empty config blob as one of the staged blobs so
-    /// the publish path uploads it alongside the layers. Matches the
+    /// Compute the manifest input from the in-memory draft state and
+    /// the stored empty-config descriptor. Matches the
     /// SDK v2 / `ArchiveArtifactBuilder` manifest shape (see
     /// `ocipkg::image::OciArtifactBuilder::new`): `schemaVersion: 2` +
     /// `artifactType` + empty config + layers, with the manifest's
     /// own `mediaType` field intentionally absent so `ArtifactDraft`
     /// and the archive build path produce structurally identical
     /// manifests.
-    fn prepare_manifest(self) -> Result<ImageManifest> {
+    fn prepare_manifest(self) -> Result<StoredArtifactManifest> {
         // V2 SDK's `ocipkg::OciArtifactBuilder::add_empty_json` emits the
         // empty config descriptor without an `annotations` field; build
         // it directly here (bypassing `descriptor_from_bytes`, which
@@ -417,26 +412,17 @@ impl ArtifactDraft {
             .size(empty_config_bytes.len() as u64)
             .build()
             .context("Failed to build empty config descriptor")?;
-        let config_descriptor: Descriptor = self
+        let config_descriptor = self
             .registry
-            .stage_blob(config_descriptor, &empty_config_bytes)?
-            .into();
+            .stage_blob(config_descriptor, &empty_config_bytes)?;
 
-        let mut builder = OciImageManifestBuilder::default()
-            .schema_version(2u32)
-            .artifact_type(self.artifact_type)
-            .config(config_descriptor)
-            .layers(self.layers.into_iter().map(Into::into).collect::<Vec<_>>());
-        if let Some(subject) = self.subject {
-            builder = builder.subject(subject);
-        }
-        if !self.annotations.is_empty() {
-            builder = builder.annotations(self.annotations);
-        }
-        let manifest = builder
-            .build()
-            .context("Failed to build OCI image manifest")?;
-        Ok(manifest)
+        Ok(StoredArtifactManifest::new(
+            self.artifact_type,
+            config_descriptor,
+            self.layers,
+            self.subject,
+            self.annotations,
+        ))
     }
 }
 
@@ -783,7 +769,7 @@ mod tests {
         )?;
         builder.add_annotation("org.opencontainers.image.ref.name", "example.com/demo:v1");
 
-        let manifest = builder.prepare_manifest()?;
+        let manifest = builder.prepare_manifest()?.into_oci_image_manifest()?;
         // Manifest's own `mediaType` field is intentionally not set, matching
         // the v2 / `ArchiveArtifactBuilder` shape; the OCI Distribution
         // Content-Type header is supplied separately at push time.
@@ -858,7 +844,7 @@ mod tests {
         )?;
         builder.set_subject(subject.clone());
 
-        let manifest = builder.prepare_manifest()?;
+        let manifest = builder.prepare_manifest()?.into_oci_image_manifest()?;
         assert_eq!(manifest.subject(), &Some(subject));
         Ok(())
     }
@@ -887,6 +873,6 @@ mod tests {
         for (key, value) in annotations {
             builder.add_annotation(key, value);
         }
-        builder.prepare_manifest()
+        builder.prepare_manifest()?.into_oci_image_manifest()
     }
 }
