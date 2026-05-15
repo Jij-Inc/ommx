@@ -302,19 +302,18 @@ impl ArtifactDraft {
         media_type: MediaType,
         bytes: Vec<u8>,
         annotations: HashMap<String, String>,
-    ) -> Result<Descriptor> {
+    ) -> Result<StoredDescriptor> {
         let descriptor = descriptor_from_bytes(media_type, &bytes, annotations)?;
         let stored_descriptor = self.registry.stage_blob(descriptor, &bytes)?;
-        let descriptor = stored_descriptor.clone().into();
-        self.layers.push(stored_descriptor);
-        Ok(descriptor)
+        self.layers.push(stored_descriptor.clone());
+        Ok(stored_descriptor)
     }
 
     pub fn add_instance(
         &mut self,
         instance: v1::Instance,
         annotations: InstanceAnnotations,
-    ) -> Result<Descriptor> {
+    ) -> Result<StoredDescriptor> {
         self.add_layer_bytes(
             media_types::v1_instance(),
             instance.encode_to_vec(),
@@ -326,7 +325,7 @@ impl ArtifactDraft {
         &mut self,
         solution: v1::State,
         annotations: SolutionAnnotations,
-    ) -> Result<Descriptor> {
+    ) -> Result<StoredDescriptor> {
         self.add_layer_bytes(
             media_types::v1_solution(),
             solution.encode_to_vec(),
@@ -338,7 +337,7 @@ impl ArtifactDraft {
         &mut self,
         instance: v1::ParametricInstance,
         annotations: ParametricInstanceAnnotations,
-    ) -> Result<Descriptor> {
+    ) -> Result<StoredDescriptor> {
         self.add_layer_bytes(
             media_types::v1_parametric_instance(),
             instance.encode_to_vec(),
@@ -350,7 +349,7 @@ impl ArtifactDraft {
         &mut self,
         sample_set: v1::SampleSet,
         annotations: SampleSetAnnotations,
-    ) -> Result<Descriptor> {
+    ) -> Result<StoredDescriptor> {
         self.add_layer_bytes(
             media_types::v1_sample_set(),
             sample_set.encode_to_vec(),
@@ -795,7 +794,7 @@ mod tests {
                 media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()
             ))
         );
-        assert_eq!(manifest.layers(), &[layer]);
+        assert_eq!(manifest.layers(), &[Descriptor::from(layer)]);
 
         // OCI 1.1 empty config descriptor is set as the manifest's config and
         // staged for upload alongside the layers.

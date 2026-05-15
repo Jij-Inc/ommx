@@ -763,7 +763,7 @@ impl DraftInner {
         let desc = self
             .as_mut()?
             .add_layer_bytes(media_type.into(), blob.to_vec(), annotations)?;
-        Ok(PyDescriptor::from(desc))
+        Ok(PyDescriptor::from(oci_spec::image::Descriptor::from(desc)))
     }
 
     fn add_annotation(&mut self, key: &str, value: &str) -> Result<()> {

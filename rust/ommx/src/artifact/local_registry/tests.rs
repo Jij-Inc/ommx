@@ -1325,7 +1325,7 @@ fn new_test_local_artifact_builder(
         layer_bytes.to_vec(),
         HashMap::from([("org.ommx.v1.instance.title".to_string(), "demo".to_string())]),
     )?;
-    Ok((builder, descriptor))
+    Ok((builder, descriptor.into()))
 }
 
 fn put_test_manifest_ref(

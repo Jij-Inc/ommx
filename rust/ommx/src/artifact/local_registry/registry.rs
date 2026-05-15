@@ -19,7 +19,7 @@ use std::str::FromStr;
 /// [`LocalRegistry`] operations that have written or verified the
 /// content-addressed blob.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct StoredDescriptor(Descriptor);
+pub struct StoredDescriptor(Descriptor);
 
 impl StoredDescriptor {
     fn into_inner(self) -> Descriptor {
