@@ -24,13 +24,13 @@
 //! ```ignore
 //! use ommx::experiment::Experiment;
 //!
-//! let mut exp = Experiment::new("scip_reblock115")?;
+//! let exp = Experiment::new("scip_reblock115")?;
 //! exp.log_json("dataset", serde_json::json!("miplib2017"))?;
 //!
 //! let mut run = exp.run()?;
 //! run.log_parameter("solver", "scip")?;
 //! run.log_instance("candidate", &instance)?;
-//! run.finish(&mut exp)?;
+//! run.finish()?;
 //!
 //! let artifact = exp.commit()?.into_artifact();
 //! ```

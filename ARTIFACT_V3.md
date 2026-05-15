@@ -794,13 +794,13 @@ Track A の中核のうち、最小の happy path を最初に通す。Local Reg
 
 ### 12.2 Rust core: `ommx::experiment`
 
-`rust/ommx/src/experiment.rs` を新設し、`lib.rs` に `pub mod experiment;` を追加する。`Experiment` は構築時に `Arc<LocalRegistry>` を保持し、`log_*` のたびに BlobStore へ書き込む。
+`rust/ommx/src/experiment.rs` を新設し、`lib.rs` に `pub mod experiment;` を追加する。`Experiment` は構築時に `Arc<LocalRegistry>` を保持し、`log_*` のたびに BlobStore へ書き込む。Rust core では `Experiment` の lifetime と Rust value の lifetime を合わせ、commit は `Experiment` を consume する。`Run<'exp>` は親 `Experiment` を immutable borrow し、複数の Run を同時に生成できる。Experiment state への書き込みは close 時に Mutex で同期する。
 
 | 型 | 役割 |
 |---|---|
-| `Experiment` | `Arc<LocalRegistry>` + `UnsealedExperimentState`。mutable session handle |
+| `Experiment` | `Arc<LocalRegistry>` + `Mutex<UnsealedExperimentState>`。mutable session handle |
 | `SealedExperiment` | commit 済み `LocalArtifact` を持つ immutable session handle |
-| `Run` | `Arc<LocalRegistry>` + local `RunState`。Record / parameter は Run 側に保持し、close 時だけ Experiment に反映する |
+| `Run<'exp>` | `&'exp Experiment` + local `RunState`。Record / parameter は Run 側に保持し、close 時だけ Experiment に反映する |
 | `UnsealedExperimentState`（private） | name, requested ref, experiment space records, runs, next run id |
 | `RunState`（private） | run_id, run space records, status, started_at, elapsed |
 | `Record`（private） | space, run_id, media type, name, BlobStore に書き込み済み blob を指す descriptor |
@@ -809,21 +809,21 @@ Track A の中核のうち、最小の happy path を最初に通す。Local Reg
 API:
 
 - `Experiment::new(name)`（default Local Registry を開く） / `Experiment::with_registry(name, Arc<LocalRegistry>, Option<ImageRef>)`（テスト用に registry / requested ref を差し替え可能）
-- `Experiment::log_record` / `log_json` / `log_instance` / `log_solution` / `log_sample_set`（experiment space、`&mut self`）
-- `Experiment::run(&mut self) -> Run`（`run_id` を 0-based で採番し、以降の Run lifecycle は Experiment を borrow しない）
+- `Experiment::log_record` / `log_json` / `log_instance` / `log_solution` / `log_sample_set`（experiment space、`&self`。内部 state 更新は Mutex で同期）
+- `Experiment::run(&self) -> Run<'_>`（`run_id` を 0-based で採番し、Run lifecycle 中は Experiment を immutable borrow する）
 - `Experiment::commit(self) -> SealedExperiment`
 - `SealedExperiment::artifact() -> LocalArtifact`
 - `SealedExperiment::into_artifact(self) -> LocalArtifact`
-- `Run::run_id()`、`Run::log_parameter`、`Run::log_record` / `log_json` / `log_instance` / `log_solution` / `log_sample_set`（run space）、`Run::finish(self, &mut Experiment)` / `Run::fail(self, &mut Experiment)`
+- `Run::run_id()`、`Run::log_parameter`、`Run::log_record` / `log_json` / `log_instance` / `log_solution` / `log_sample_set`（run space）、`Run::finish(self)` / `Run::fail(self)`
 
 挙動:
 
 - `log_*` は payload を即 `FileBlobStore::put_bytes` で BlobStore に書き、戻り値から組んだ descriptor を `Record` に保持する。payload bytes は in-memory に残さない。
 - `log_*` は同じ `(space, run_id, media type, name)` を upsert（replace）する。upsert で捨てられた古い blob は orphan blob になり GC に委ねる。
 - `Run::log_parameter` は JSON scalar のみを受け付け、RunState 内の parameter map を upsert する。Parameter は Record ではなく、commit 時に Run parameter table JSON として materialize する。
-- Rust core でも複数の `Run` handle を同時に開ける。Run-scoped Record / parameter は Run 側の local state に入り、Experiment state への書き込みは `finish(self, &mut Experiment)` / `fail(self, &mut Experiment)` の close 時だけ行う。
-- `Run::finish(self, &mut Experiment)` / `Run::fail(self, &mut Experiment)` は Run handle を消費する。終了済み Run に後から Record を追加する経路は Rust core では型で作らない。
-- close されていない live Run が残っている間、`commit()` は error とし、`finished` manifest を publish しない。drop された未 close Run の local state は Experiment に反映されず、CAS に書かれた blob は orphan blob として GC に委ねる。
+- Rust core でも複数の `Run<'_>` handle を同時に開ける。Run-scoped Record / parameter は Run 側の local state に入り、Experiment state への書き込みは `finish(self)` / `fail(self)` の close 時だけ行う。
+- `Run::finish(self)` / `Run::fail(self)` は Run handle を消費する。終了済み Run に後から Record を追加する経路は Rust core では型で作らない。
+- close されていない live Run が残っている間、`commit(self)` は `Experiment` の move を必要とするため Rust の borrow checker により呼べない。drop された未 close Run の local state は Experiment に反映されず、CAS に書かれた blob は orphan blob として GC に委ねる。
 - `commit(self)` は unsealed `Experiment` を消費し、`SealedExperiment` を返す。commit 済み Experiment への `log_*` / `run()` 経路は Rust core では型で作らない。
 - error は `crate::bail!` / `crate::error!` fail-site macro を使う。
 
