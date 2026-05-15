@@ -378,14 +378,13 @@ impl ArtifactDraft {
         let registry = Arc::clone(&self.registry);
         let image_name = self.image_name.clone();
         let artifact = self.into_unsealed_artifact()?;
-        let manifest_descriptor = registry.seal_artifact(artifact)?;
-        let ref_update =
-            registry.publish_manifest_ref(&image_name, &manifest_descriptor, policy)?;
+        let sealed_artifact = registry.seal_artifact(artifact)?;
+        let ref_update = registry.publish_manifest_ref(&image_name, &sealed_artifact, policy)?;
         reject_conflicting_ref(&image_name, ref_update)?;
         Ok(LocalArtifact::from_parts(
             registry,
             image_name,
-            manifest_descriptor.digest().clone(),
+            sealed_artifact.digest().clone(),
         ))
     }
 

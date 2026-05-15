@@ -1,6 +1,9 @@
 //! The public `Experiment` / `Run` handles and their `log_*` API.
 
-use super::model::{ExperimentState, RecordRef, RunState, RunStatus, Space};
+use super::model::{
+    ExperimentState, RecordRef, RunState, RunStatus, SealedExperimentState, Space,
+    UnsealedExperimentState,
+};
 use super::{build_descriptor, commit, ANN_RECORD_NAME, ANN_RUN_ID, ANN_SPACE};
 use crate::artifact::local_registry::LocalRegistry;
 use crate::artifact::{media_types, sha256_digest, ImageRef, LocalArtifact};
@@ -54,24 +57,22 @@ impl Experiment {
     ) -> Self {
         Experiment {
             registry,
-            state: ExperimentState {
+            state: ExperimentState::Unsealed(UnsealedExperimentState {
                 name: name.into(),
                 requested_ref,
                 records: Vec::new(),
                 runs: Vec::new(),
                 next_run_id: 0,
-                committed: false,
-                artifact: None,
-            },
+            }),
         }
     }
 
     /// Start a new [`Run`]. Each run gets a fresh 0-based `run_id`.
     pub fn run(&mut self) -> Result<Run<'_>> {
-        ensure_open(&self.state)?;
-        let run_id = self.state.next_run_id;
-        self.state.next_run_id += 1;
-        self.state.runs.push(RunState {
+        let state = unsealed_mut(&mut self.state)?;
+        let run_id = state.next_run_id;
+        state.next_run_id += 1;
+        state.runs.push(RunState {
             run_id,
             records: Vec::new(),
             status: RunStatus::Running,
@@ -117,7 +118,7 @@ impl Experiment {
     }
 
     fn add_record(&mut self, name: &str, media_type: MediaType, bytes: &[u8]) -> Result<()> {
-        ensure_open(&self.state)?;
+        ensure_unsealed(&self.state)?;
         let record_ref = store_record_ref(
             &self.registry,
             Space::Experiment,
@@ -126,7 +127,8 @@ impl Experiment {
             media_type,
             bytes,
         )?;
-        upsert_record_ref(&mut self.state.records, record_ref);
+        let state = unsealed_mut(&mut self.state)?;
+        upsert_record_ref(&mut state.records, record_ref);
         Ok(())
     }
 
@@ -134,30 +136,33 @@ impl Experiment {
     /// to the Local Registry. Idempotent: a second call returns the
     /// artifact produced by the first.
     pub fn commit(&mut self) -> Result<LocalArtifact> {
-        if self.state.committed {
-            return self.state.artifact.clone().ok_or_else(|| {
-                crate::error!("Experiment is committed but its artifact is missing")
-            });
-        }
-        ensure_no_running_runs(&self.state)?;
-        let artifact = commit::commit_experiment_state(&self.registry, &self.state)?;
-        self.state.committed = true;
-        self.state.artifact = Some(artifact.clone());
+        let artifact = match &self.state {
+            ExperimentState::Sealed(state) => return Ok(state.artifact.clone()),
+            ExperimentState::Unsealed(state) => {
+                ensure_no_running_runs(state)?;
+                commit::commit_experiment_state(&self.registry, state)?
+            }
+        };
+        self.state = ExperimentState::Sealed(SealedExperimentState {
+            artifact: artifact.clone(),
+        });
         Ok(artifact)
     }
 
     /// The committed artifact. Errors if [`Experiment::commit`] has not
     /// been called yet.
     pub fn artifact(&self) -> Result<LocalArtifact> {
-        self.state
-            .artifact
-            .clone()
-            .ok_or_else(|| crate::error!("Experiment has not been committed yet"))
+        match &self.state {
+            ExperimentState::Sealed(state) => Ok(state.artifact.clone()),
+            ExperimentState::Unsealed(_) => {
+                Err(crate::error!("Experiment has not been committed yet"))
+            }
+        }
     }
 
     /// Whether [`Experiment::commit`] has been called.
     pub fn is_committed(&self) -> bool {
-        self.state.committed
+        matches!(self.state, ExperimentState::Sealed(_))
     }
 }
 
@@ -200,19 +205,21 @@ impl Run<'_> {
     }
 
     /// Close the run with the `finished` status and record its elapsed
-    /// time. A no-op if the run is already closed.
-    pub fn finish(&mut self) -> Result<()> {
+    /// time. Consumes the handle so no further run-scoped records can be
+    /// added after closure.
+    pub fn finish(self) -> Result<()> {
         self.close(RunStatus::Finished)
     }
 
     /// Close the run with the `failed` status and record its elapsed
-    /// time. A no-op if the run is already closed.
-    pub fn fail(&mut self) -> Result<()> {
+    /// time. Consumes the handle so no further run-scoped records can be
+    /// added after closure.
+    pub fn fail(self) -> Result<()> {
         self.close(RunStatus::Failed)
     }
 
     fn add_record(&mut self, name: &str, media_type: MediaType, bytes: &[u8]) -> Result<()> {
-        ensure_open(&self.experiment.state)?;
+        ensure_unsealed(&self.experiment.state)?;
         let record_ref = store_record_ref(
             &self.experiment.registry,
             Space::Run,
@@ -221,14 +228,15 @@ impl Run<'_> {
             media_type,
             bytes,
         )?;
-        let run = find_run_mut(&mut self.experiment.state, self.run_id)?;
+        let state = unsealed_mut(&mut self.experiment.state)?;
+        let run = find_run_mut(state, self.run_id)?;
         upsert_record_ref(&mut run.records, record_ref);
         Ok(())
     }
 
-    fn close(&mut self, status: RunStatus) -> Result<()> {
-        ensure_open(&self.experiment.state)?;
-        let run = find_run_mut(&mut self.experiment.state, self.run_id)?;
+    fn close(self, status: RunStatus) -> Result<()> {
+        let state = unsealed_mut(&mut self.experiment.state)?;
+        let run = find_run_mut(state, self.run_id)?;
         if run.status == RunStatus::Running {
             run.elapsed_secs = Some(run.started_at.elapsed().as_secs_f64());
             run.status = status;
@@ -237,14 +245,23 @@ impl Run<'_> {
     }
 }
 
-fn ensure_open(state: &ExperimentState) -> Result<()> {
-    if state.committed {
+fn ensure_unsealed(state: &ExperimentState) -> Result<()> {
+    if matches!(state, ExperimentState::Sealed(_)) {
         crate::bail!("Experiment has already been committed; no further mutation is allowed");
     }
     Ok(())
 }
 
-fn ensure_no_running_runs(state: &ExperimentState) -> Result<()> {
+fn unsealed_mut(state: &mut ExperimentState) -> Result<&mut UnsealedExperimentState> {
+    match state {
+        ExperimentState::Unsealed(state) => Ok(state),
+        ExperimentState::Sealed(_) => {
+            crate::bail!("Experiment has already been committed; no further mutation is allowed")
+        }
+    }
+}
+
+fn ensure_no_running_runs(state: &UnsealedExperimentState) -> Result<()> {
     if let Some(run) = state
         .runs
         .iter()
@@ -258,7 +275,7 @@ fn ensure_no_running_runs(state: &ExperimentState) -> Result<()> {
     Ok(())
 }
 
-fn find_run_mut(state: &mut ExperimentState, run_id: u64) -> Result<&mut RunState> {
+fn find_run_mut(state: &mut UnsealedExperimentState, run_id: u64) -> Result<&mut RunState> {
     state
         .runs
         .iter_mut()

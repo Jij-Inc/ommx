@@ -42,6 +42,21 @@ impl From<StoredDescriptor> for Descriptor {
     }
 }
 
+/// Sealed OMMX Artifact.
+///
+/// The inner descriptor is stored in this registry, and it is known to
+/// be the root manifest descriptor produced by [`LocalRegistry::seal_artifact`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SealedArtifact(StoredDescriptor);
+
+impl Deref for SealedArtifact {
+    type Target = StoredDescriptor;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct UnsealedArtifact {
     artifact_type: MediaType,
@@ -213,13 +228,14 @@ impl LocalRegistry {
     /// [`StoredDescriptor`] before this method is called, so sealing
     /// does not re-validate dependency blob existence. It serializes
     /// and stores only the root manifest blob, yielding its root
-    /// [`StoredDescriptor`].
-    pub(crate) fn seal_artifact(&self, artifact: UnsealedArtifact) -> Result<StoredDescriptor> {
+    /// [`SealedArtifact`].
+    pub(crate) fn seal_artifact(&self, artifact: UnsealedArtifact) -> Result<SealedArtifact> {
         let manifest = artifact.into_oci_image_manifest()?;
         Self::validate_manifest(&manifest)?;
         let manifest_bytes = stable_json_bytes(&manifest)?;
         let manifest_descriptor = Self::build_manifest_descriptor(&manifest_bytes)?;
-        self.store_blob(manifest_descriptor, &manifest_bytes)
+        let stored_manifest = self.store_blob(manifest_descriptor, &manifest_bytes)?;
+        Ok(SealedArtifact(stored_manifest))
     }
 
     /// Publish a sealed root manifest descriptor under an image ref.
@@ -229,11 +245,11 @@ impl LocalRegistry {
     pub(crate) fn publish_manifest_ref(
         &self,
         image_name: &ImageRef,
-        sealed_manifest: &StoredDescriptor,
+        sealed_artifact: &SealedArtifact,
         policy: RefConflictPolicy,
     ) -> Result<RefUpdate> {
         self.index
-            .put_image_ref_with_policy(image_name, sealed_manifest, policy)
+            .put_image_ref_with_policy(image_name, &sealed_artifact.0, policy)
     }
 
     /// Validate that the manifest carries the OMMX `artifactType`.

@@ -1,5 +1,6 @@
 //! In-memory state of an experiment session: the domain state enums and
-//! the `RecordRef` / `RunState` / `ExperimentState` structs.
+//! the `RecordRef` / `RunState` / unsealed/sealed experiment state
+//! structs.
 
 use crate::artifact::local_registry::StoredDescriptor;
 use crate::artifact::{ImageRef, LocalArtifact};
@@ -65,11 +66,21 @@ pub(super) struct RunState {
     pub(super) elapsed_secs: Option<f64>,
 }
 
-/// In-memory state owned by an [`super::Experiment`]. A live
+/// In-memory state owned by an [`super::Experiment`].
+#[derive(Debug)]
+pub(super) enum ExperimentState {
+    /// Mutable session state whose component blobs may already be stored
+    /// but whose root manifest has not been sealed.
+    Unsealed(UnsealedExperimentState),
+    /// Committed session state with an immutable artifact handle.
+    Sealed(SealedExperimentState),
+}
+
+/// Mutable experiment state before the root manifest is sealed. A live
 /// [`super::Run`] mutably borrows the parent experiment while it adds
 /// run-scoped records or closes the run lifecycle.
 #[derive(Debug)]
-pub(super) struct ExperimentState {
+pub(super) struct UnsealedExperimentState {
     pub(super) name: String,
     /// Image name the committed artifact is published under. `None`
     /// means an anonymous name is synthesised at commit time.
@@ -78,6 +89,11 @@ pub(super) struct ExperimentState {
     pub(super) records: Vec<RecordRef>,
     pub(super) runs: Vec<RunState>,
     pub(super) next_run_id: u64,
-    pub(super) committed: bool,
-    pub(super) artifact: Option<LocalArtifact>,
+}
+
+/// Experiment state after commit. The artifact handle is always present
+/// in this variant, so no extra `committed` flag is needed.
+#[derive(Debug)]
+pub(super) struct SealedExperimentState {
+    pub(super) artifact: LocalArtifact,
 }

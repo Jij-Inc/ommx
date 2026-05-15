@@ -1,6 +1,6 @@
 //! Tests for the experiment session model.
 
-use super::model::RunStatus;
+use super::model::{ExperimentState, RunStatus, UnsealedExperimentState};
 use super::{
     Experiment, ANN_ARTIFACT_KIND, ANN_EXPERIMENT_NAME, ANN_EXPERIMENT_SCHEMA,
     ANN_EXPERIMENT_STATUS, ANN_LAYER, ANN_RECORD_NAME, ANN_RUN_ID, ANN_SPACE,
@@ -24,6 +24,13 @@ fn temp_experiment(name: &str) -> (TempDir, Experiment) {
     (dir, experiment)
 }
 
+fn unsealed_state(experiment: &Experiment) -> &UnsealedExperimentState {
+    match &experiment.state {
+        ExperimentState::Unsealed(state) => state,
+        ExperimentState::Sealed(_) => panic!("expected unsealed experiment state"),
+    }
+}
+
 fn layer_annotation(layer: &Descriptor, key: &str) -> Option<String> {
     layer
         .annotations()
@@ -45,27 +52,27 @@ fn find_layer<'a>(layers: &'a [Descriptor], key: &str, value: &str) -> &'a Descr
     matches[0]
 }
 
-/// `run()` hands out fresh 0-based ids; `finish()` / `fail()` record the
-/// final status and elapsed time, and re-closing is a no-op.
+/// `run()` hands out fresh 0-based ids; `finish()` / `fail()` consume the
+/// run handle, record the final status, and set elapsed time.
 #[test]
 fn run_lifecycle_assigns_ids_and_records_status() {
     let (_dir, mut experiment) = temp_experiment("lifecycle");
     {
-        let mut run0 = experiment.run().unwrap();
+        let run0 = experiment.run().unwrap();
         assert_eq!(run0.run_id(), 0);
         run0.finish().unwrap();
-        run0.finish().unwrap(); // already closed: no-op
     }
     {
-        let mut run1 = experiment.run().unwrap();
+        let run1 = experiment.run().unwrap();
         assert_eq!(run1.run_id(), 1);
         run1.fail().unwrap();
     }
 
-    assert_eq!(experiment.state.runs[0].status, RunStatus::Finished);
-    assert!(experiment.state.runs[0].elapsed_secs.is_some());
-    assert_eq!(experiment.state.runs[1].status, RunStatus::Failed);
-    assert!(experiment.state.runs[1].elapsed_secs.is_some());
+    let state = unsealed_state(&experiment);
+    assert_eq!(state.runs[0].status, RunStatus::Finished);
+    assert!(state.runs[0].elapsed_secs.is_some());
+    assert_eq!(state.runs[1].status, RunStatus::Failed);
+    assert!(state.runs[1].elapsed_secs.is_some());
 }
 
 /// `log_*` writes the payload to the BlobStore immediately, before any
@@ -79,11 +86,9 @@ fn log_writes_blob_to_blobstore_immediately() {
     }
 
     let digest = {
-        assert_eq!(experiment.state.runs[0].records.len(), 1);
-        let digest = experiment.state.runs[0].records[0]
-            .descriptor
-            .digest()
-            .clone();
+        let state = unsealed_state(&experiment);
+        assert_eq!(state.runs[0].records.len(), 1);
+        let digest = state.runs[0].records[0].descriptor.digest().clone();
         digest
     };
     assert!(experiment.registry.blobs().exists(&digest).unwrap());
@@ -102,9 +107,9 @@ fn log_upserts_same_space_media_type_name() {
         crate::random::random_deterministic(crate::InstanceParameters::default_lp());
     experiment.log_instance("dataset", &instance).unwrap();
 
-    assert_eq!(experiment.state.records.len(), 2);
-    let json_record = experiment
-        .state
+    let state = unsealed_state(&experiment);
+    assert_eq!(state.records.len(), 2);
+    let json_record = state
         .records
         .iter()
         .find(|record| {

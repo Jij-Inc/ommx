@@ -38,9 +38,9 @@
 //!   whose root manifest blob has not yet been stored. The object is
 //!   still being constructed as a whole.
 //! - **Sealed** is the state after the root manifest blob has been
-//!   stored and the root manifest has its own [`StoredDescriptor`].
+//!   stored and represented by `SealedArtifact`.
 //! - **Published** is the state where [`SqliteIndexStore`] records a
-//!   ref pointing at a sealed root manifest descriptor.
+//!   ref pointing at a `SealedArtifact`.
 //!
 //! Operation terms:
 //!
@@ -48,7 +48,7 @@
 //!   writes bytes as a content-addressed blob and yields a
 //!   [`StoredDescriptor`] after digest / size verification.
 //! - **Seal** stores the root manifest blob for unsealed state and
-//!   yields the root [`StoredDescriptor`]. It does not write
+//!   yields a `SealedArtifact`. It does not write
 //!   [`SqliteIndexStore`].
 //! - **Publish** belongs to the registry index. Publishing records that
 //!   a ref points at a sealed root manifest descriptor in

@@ -27,7 +27,6 @@
 //! let mut run = exp.run()?;
 //! run.log_instance("candidate", &instance)?;
 //! run.finish()?;
-//! drop(run);
 //!
 //! let artifact = exp.commit()?;
 //! ```

@@ -1,6 +1,6 @@
 //! Sealing an experiment session into an immutable OMMX Artifact.
 
-use super::model::{ExperimentState, RecordRef};
+use super::model::{RecordRef, UnsealedExperimentState};
 use super::{
     build_descriptor, ANN_ARTIFACT_KIND, ANN_EXPERIMENT_NAME, ANN_EXPERIMENT_SCHEMA,
     ANN_EXPERIMENT_STATUS, ANN_LAYER, ARTIFACT_KIND_EXPERIMENT, EXPERIMENT_INDEX_MEDIA_TYPE,
@@ -21,7 +21,7 @@ use std::sync::Arc;
 /// Commit an unsealed experiment state as one immutable artifact.
 pub(super) fn commit_experiment_state(
     registry: &Arc<LocalRegistry>,
-    state: &ExperimentState,
+    state: &UnsealedExperimentState,
 ) -> Result<LocalArtifact> {
     let mut layers = Vec::new();
 
@@ -81,10 +81,10 @@ pub(super) fn commit_experiment_state(
         None => registry.synthesize_anonymous_image_name()?,
     };
 
-    let manifest_descriptor = registry.seal_artifact(artifact)?;
+    let sealed_artifact = registry.seal_artifact(artifact)?;
     let ref_update = registry.publish_manifest_ref(
         &image_name,
-        &manifest_descriptor,
+        &sealed_artifact,
         RefConflictPolicy::KeepExisting,
     )?;
     if let RefUpdate::Conflicted {
@@ -101,7 +101,7 @@ pub(super) fn commit_experiment_state(
     Ok(LocalArtifact::from_parts(
         Arc::clone(registry),
         image_name,
-        manifest_descriptor.digest().clone(),
+        sealed_artifact.digest().clone(),
     ))
 }
 
@@ -126,7 +126,7 @@ fn store_aggregate_layer(
     registry.store_blob(descriptor, bytes)
 }
 
-fn manifest_annotations(state: &ExperimentState) -> HashMap<String, String> {
+fn manifest_annotations(state: &UnsealedExperimentState) -> HashMap<String, String> {
     HashMap::from([
         (
             ANN_ARTIFACT_KIND.to_string(),
@@ -144,7 +144,7 @@ fn manifest_annotations(state: &ExperimentState) -> HashMap<String, String> {
     ])
 }
 
-fn run_attributes_json(state: &ExperimentState) -> serde_json::Value {
+fn run_attributes_json(state: &UnsealedExperimentState) -> serde_json::Value {
     json!({
         "runs": state
             .runs
@@ -158,7 +158,7 @@ fn run_attributes_json(state: &ExperimentState) -> serde_json::Value {
     })
 }
 
-fn experiment_index_json(state: &ExperimentState) -> serde_json::Value {
+fn experiment_index_json(state: &UnsealedExperimentState) -> serde_json::Value {
     json!({
         "schema": EXPERIMENT_SCHEMA_V1,
         "name": state.name,

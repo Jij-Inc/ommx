@@ -54,9 +54,11 @@ impl PyArtifact {
     /// layer descriptors without writing into the registry, use
     /// {meth}`Artifact.inspect_archive` instead.
     ///
-    /// The input must carry an `org.opencontainers.image.ref.name`
-    /// annotation. Unnamed archives / directories cannot be addressed
-    /// in the SQLite Local Registry and are rejected.
+    /// If the input lacks an `org.opencontainers.image.ref.name`
+    /// annotation, v3 synthesizes an anonymous Local Registry ref and
+    /// imports the content under that name. This keeps v2 unnamed
+    /// archives importable while still making the imported artifact
+    /// addressable in SQLite.
     ///
     /// ```python
     /// >>> artifact = Artifact.import_archive("data/random_lp_instance.ommx")
