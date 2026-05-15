@@ -8,24 +8,24 @@ use crate::{Instance, SampleSet, Solution};
 use anyhow::Result;
 use oci_spec::image::MediaType;
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::time::Instant;
-use std::{str::FromStr, sync::Arc};
 
 /// OCI layer media type for JSON record payloads.
 const JSON_MEDIA_TYPE: &str = "application/json";
 
 /// A mutable, unsealed experiment session. See the [module documentation](super).
 #[derive(Debug)]
-pub struct Experiment {
-    pub(super) registry: Arc<LocalRegistry>,
-    pub(super) state: UnsealedExperimentState,
+pub struct Experiment<'reg> {
+    pub(super) registry: &'reg LocalRegistry,
+    pub(super) state: UnsealedExperimentState<'reg>,
 }
 
 /// A sealed experiment session whose root artifact manifest has been
 /// written and published.
 #[derive(Debug, Clone)]
-pub struct SealedExperiment {
-    artifact: LocalArtifact,
+pub struct SealedExperiment<'reg> {
+    artifact: LocalArtifact<'reg>,
 }
 
 /// A handle to a single run within an [`Experiment`].
@@ -36,27 +36,29 @@ pub struct SealedExperiment {
 /// state machine later, but the Rust core keeps the lifecycle explicit
 /// in the type system.
 #[derive(Debug)]
-pub struct Run<'exp> {
-    pub(super) experiment: &'exp mut Experiment,
+pub struct Run<'exp, 'reg> {
+    pub(super) experiment: &'exp mut Experiment<'reg>,
     pub(super) run_id: u64,
 }
 
-impl Experiment {
+impl Experiment<'static> {
     /// Start a new experiment session backed by the user's default
     /// Local Registry. The committed artifact is published under an
     /// auto-generated anonymous image name.
     pub fn new(name: impl Into<String>) -> Result<Self> {
-        let registry = Arc::new(LocalRegistry::open_default()?);
+        let registry = LocalRegistry::shared_default()?;
         Ok(Self::with_registry(name, registry, None))
     }
+}
 
+impl<'reg> Experiment<'reg> {
     /// Start a new experiment session against an explicit Local
     /// Registry. When `requested_ref` is set the committed artifact is
     /// published under that image name; otherwise an anonymous image
     /// name is synthesised at commit time.
     pub fn with_registry(
         name: impl Into<String>,
-        registry: Arc<LocalRegistry>,
+        registry: &'reg LocalRegistry,
         requested_ref: Option<ImageRef>,
     ) -> Self {
         Experiment {
@@ -72,7 +74,7 @@ impl Experiment {
     }
 
     /// Start a new [`Run`]. Each run gets a fresh 0-based `run_id`.
-    pub fn run(&mut self) -> Result<Run<'_>> {
+    pub fn run(&mut self) -> Result<Run<'_, 'reg>> {
         let run_id = self.state.next_run_id;
         self.state.next_run_id += 1;
         self.state.runs.push(RunState {
@@ -136,26 +138,26 @@ impl Experiment {
     /// Seal the session into an immutable OMMX Artifact and publish it
     /// to the Local Registry. Consumes the unsealed session, so further
     /// mutation is impossible in Rust.
-    pub fn commit(self) -> Result<SealedExperiment> {
+    pub fn commit(self) -> Result<SealedExperiment<'reg>> {
         ensure_no_running_runs(&self.state)?;
-        let artifact = commit::commit_experiment_state(&self.registry, &self.state)?;
+        let artifact = commit::commit_experiment_state(self.registry, &self.state)?;
         Ok(SealedExperiment { artifact })
     }
 }
 
-impl SealedExperiment {
+impl<'reg> SealedExperiment<'reg> {
     /// The committed artifact handle.
-    pub fn artifact(&self) -> LocalArtifact {
+    pub fn artifact(&self) -> LocalArtifact<'reg> {
         self.artifact.clone()
     }
 
     /// Consume the sealed experiment and return its artifact handle.
-    pub fn into_artifact(self) -> LocalArtifact {
+    pub fn into_artifact(self) -> LocalArtifact<'reg> {
         self.artifact
     }
 }
 
-impl Run<'_> {
+impl Run<'_, '_> {
     /// This run's 0-based id within the experiment.
     pub fn run_id(&self) -> u64 {
         self.run_id
@@ -231,7 +233,7 @@ impl Run<'_> {
     }
 }
 
-fn ensure_no_running_runs(state: &UnsealedExperimentState) -> Result<()> {
+fn ensure_no_running_runs(state: &UnsealedExperimentState<'_>) -> Result<()> {
     if let Some(run) = state
         .runs
         .iter()
@@ -245,7 +247,10 @@ fn ensure_no_running_runs(state: &UnsealedExperimentState) -> Result<()> {
     Ok(())
 }
 
-fn find_run_mut(state: &mut UnsealedExperimentState, run_id: u64) -> Result<&mut RunState> {
+fn find_run_mut<'state, 'reg>(
+    state: &'state mut UnsealedExperimentState<'reg>,
+    run_id: u64,
+) -> Result<&'state mut RunState<'reg>> {
     state
         .runs
         .iter_mut()
@@ -257,7 +262,7 @@ fn find_run_mut(state: &mut UnsealedExperimentState, run_id: u64) -> Result<&mut
 /// within a space replaces the previous one. Within one `Vec` the space
 /// and `run_id` are already fixed, so `(media_type, name)` is the
 /// remaining key.
-fn upsert_record_ref(records: &mut Vec<RecordRef>, record_ref: RecordRef) {
+fn upsert_record_ref<'reg>(records: &mut Vec<RecordRef<'reg>>, record_ref: RecordRef<'reg>) {
     if let Some(existing) = records.iter_mut().find(|r| {
         r.descriptor.media_type() == record_ref.descriptor.media_type() && r.name == record_ref.name
     }) {
@@ -280,14 +285,14 @@ fn encode_json(name: &str, value: impl serde::Serialize) -> Result<Vec<u8>> {
 /// [`RecordRef`]: an OCI layer descriptor carrying the experiment /
 /// record annotations, plus the matching descriptor for commit-time
 /// publication.
-fn store_record_ref(
-    registry: &LocalRegistry,
+fn store_record_ref<'reg>(
+    registry: &'reg LocalRegistry,
     space: Space,
     run_id: Option<u64>,
     name: &str,
     media_type: MediaType,
     bytes: &[u8],
-) -> Result<RecordRef> {
+) -> Result<RecordRef<'reg>> {
     let digest = sha256_digest(bytes);
     let digest = oci_spec::image::Digest::from_str(&digest)
         .map_err(|e| crate::error!("Failed to parse record blob digest: {e}"))?;

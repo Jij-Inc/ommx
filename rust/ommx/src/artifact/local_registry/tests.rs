@@ -9,7 +9,6 @@ use std::collections::HashMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use std::sync::Arc;
 
 /// Build a tiny single-layer artifact in a fresh temp SQLite registry,
 /// save it to `archive_path` via the v3 native save writer, and drop
@@ -21,8 +20,8 @@ fn save_test_archive(
     layer_bytes: Vec<u8>,
 ) -> Result<()> {
     let sender_dir = tempfile::tempdir()?;
-    let sender_registry = Arc::new(LocalRegistry::open(sender_dir.path())?);
-    let mut builder = ArtifactDraft::with_registry(sender_registry.clone(), image_name);
+    let sender_registry = LocalRegistry::open(sender_dir.path())?;
+    let mut builder = ArtifactDraft::with_registry(&sender_registry, image_name);
     builder.add_layer_bytes(
         MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.into()),
         layer_bytes,
@@ -200,10 +199,8 @@ fn imports_oci_dir_into_sqlite_registry_preserving_image_manifest() -> Result<()
         layer.size()
     );
 
-    let artifact = LocalArtifact::open_in_registry(
-        Arc::new(LocalRegistry::open(&registry_root)?),
-        image_name,
-    )?;
+    let registry = LocalRegistry::open(&registry_root)?;
+    let artifact = LocalArtifact::open_in_registry(&registry, image_name)?;
     // LocalArtifact must dispatch on the stored manifest media type and
     // surface the legacy Image Manifest's layer descriptors through the
     // common LocalManifest view.
@@ -483,7 +480,7 @@ fn local_registry_imports_legacy_refs_when_requested() -> Result<()> {
 #[test]
 fn local_registry_builds_native_image_manifest_with_artifact_type() -> Result<()> {
     let dir = tempfile::tempdir()?;
-    let registry = Arc::new(LocalRegistry::open(dir.path())?);
+    let registry = LocalRegistry::open(dir.path())?;
     let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:built")?;
 
     let artifact = build_test_local_artifact(&registry, &image_name, b"instance")?;
@@ -554,7 +551,7 @@ fn local_registry_builds_native_image_manifest_with_artifact_type() -> Result<()
 #[test]
 fn local_registry_build_publish_skips_conflicting_manifest() -> Result<()> {
     let dir = tempfile::tempdir()?;
-    let registry = Arc::new(LocalRegistry::open(dir.path())?);
+    let registry = LocalRegistry::open(dir.path())?;
     let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:keep")?;
     let first = build_test_local_artifact(&registry, &image_name, b"first")?;
     let (second, second_blob) =
@@ -578,7 +575,7 @@ fn local_registry_build_publish_skips_conflicting_manifest() -> Result<()> {
 #[test]
 fn local_registry_build_replace_moves_conflicting_ref() -> Result<()> {
     let dir = tempfile::tempdir()?;
-    let registry = Arc::new(LocalRegistry::open(dir.path())?);
+    let registry = LocalRegistry::open(dir.path())?;
     let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:replace-build")?;
     let first = build_test_local_artifact(&registry, &image_name, b"first")?;
     let (second_builder, _) =
@@ -716,7 +713,7 @@ fn local_artifact_caches_manifest_across_clones() -> Result<()> {
     // returned by one handle and another reference returned by its
     // clone must point at the same cached value.
     let dir = tempfile::tempdir()?;
-    let registry = Arc::new(LocalRegistry::open(dir.path())?);
+    let registry = LocalRegistry::open(dir.path())?;
     let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:cache")?;
 
     let artifact = build_test_local_artifact(&registry, &image_name, b"cache-test")?;
@@ -739,7 +736,7 @@ fn local_artifact_subject_round_trips() -> Result<()> {
     // and surfaces the Descriptor that ArtifactDraft set via
     // `set_subject`. None when no subject is set.
     let dir = tempfile::tempdir()?;
-    let registry = Arc::new(LocalRegistry::open(dir.path())?);
+    let registry = LocalRegistry::open(dir.path())?;
     let plain_image = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:plain")?;
     let plain = build_test_local_artifact(&registry, &plain_image, b"no-subject")?;
     assert_eq!(plain.subject()?, None);
@@ -753,7 +750,7 @@ fn local_artifact_subject_round_trips() -> Result<()> {
         .build()?;
 
     let child_image = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:child")?;
-    let mut builder = ArtifactDraft::with_registry(registry.clone(), child_image.clone());
+    let mut builder = ArtifactDraft::with_registry(&registry, child_image.clone());
     builder.add_layer_bytes(
         MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
         b"child-layer".to_vec(),
@@ -796,8 +793,8 @@ fn imports_legacy_v2_oci_dir_with_ommx_config_blob() -> Result<()> {
 
     // LocalArtifact reads the legacy manifest (parse-time check is on
     // artifactType only, so the OMMX-specific config is not rejected).
-    let registry = Arc::new(LocalRegistry::open(&registry_root)?);
-    let artifact = LocalArtifact::open_in_registry(registry, image_name)?;
+    let registry = LocalRegistry::open(&registry_root)?;
+    let artifact = LocalArtifact::open_in_registry(&registry, image_name)?;
     assert_eq!(
         artifact.get_manifest()?.media_type(),
         OCI_IMAGE_MANIFEST_MEDIA_TYPE
@@ -846,7 +843,7 @@ fn concurrent_publish_different_digests_keeps_one_winner() -> Result<()> {
             let registry_root = registry_root.clone();
             let image_name = image_name.clone();
             std::thread::spawn(move || -> Result<bool> {
-                let registry = Arc::new(LocalRegistry::open(registry_root)?);
+                let registry = LocalRegistry::open(registry_root)?;
                 let bytes = format!("racer-{i}");
                 let (builder, _) = new_test_local_artifact_builder(
                     &registry,
@@ -928,7 +925,7 @@ fn import_oci_archive_surfaces_digest_conflict_for_same_ref() -> Result<()> {
     // conflict check sees the new archive's freshly hashed manifest
     // digest rather than the prior archive's bytes.
     let dir = tempfile::tempdir()?;
-    let registry = Arc::new(LocalRegistry::open(dir.path())?);
+    let registry = LocalRegistry::open(dir.path())?;
     let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:reextract")?;
 
     let archive_path_a = dir.path().join("a.ommx");
@@ -969,7 +966,7 @@ fn import_oci_archive_does_not_leave_legacy_dir_behind() -> Result<()> {
     // registry root and dropped before the function returns; SQLite +
     // FileBlobStore are the sole post-import home.
     let dir = tempfile::tempdir()?;
-    let registry = Arc::new(LocalRegistry::open(dir.path())?);
+    let registry = LocalRegistry::open(dir.path())?;
     let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:no-legacy-dir")?;
     let archive_path = dir.path().join("artifact.ommx");
     save_test_archive(
@@ -1007,7 +1004,7 @@ fn import_oci_archive_synthesizes_anonymous_name_for_unnamed_input() -> Result<(
     use std::str::FromStr;
 
     let dir = tempfile::tempdir()?;
-    let registry = Arc::new(LocalRegistry::open(dir.path())?);
+    let registry = LocalRegistry::open(dir.path())?;
 
     // Build a normal named archive first, then surgically rewrite its
     // `index.json` to drop the ref.name annotation — that is the
@@ -1082,7 +1079,7 @@ fn import_oci_archive_normalizes_dot_slash_prefixed_entries() -> Result<()> {
     // them. Build a canonical archive, repack it with every entry's
     // path re-rooted under `./`, and confirm import succeeds.
     let dir = tempfile::tempdir()?;
-    let registry = Arc::new(LocalRegistry::open(dir.path())?);
+    let registry = LocalRegistry::open(dir.path())?;
     let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:dot-slash")?;
     let archive_path = dir.path().join("canonical.ommx");
     save_test_archive(
@@ -1131,7 +1128,7 @@ fn pull_image_short_circuits_when_ref_is_present_with_blob() -> Result<()> {
     // the short-circuit ever regresses, the call would attempt a DNS
     // lookup against a `.invalid` TLD and fail.
     let dir = tempfile::tempdir()?;
-    let registry = Arc::new(LocalRegistry::open(dir.path())?);
+    let registry = LocalRegistry::open(dir.path())?;
     let image_name = ImageRef::parse("does-not-resolve.invalid/jij-inc/ommx/demo:short-circuit")?;
     let local_artifact =
         build_test_local_artifact(&registry, &image_name, b"step-c-pull-short-circuit")?;
@@ -1160,7 +1157,7 @@ fn pull_image_does_not_short_circuit_when_manifest_blob_is_missing() -> Result<(
     // error (i.e., the function did attempt the pull) rather than the
     // happy-path `Unchanged` it would return without the blob check.
     let dir = tempfile::tempdir()?;
-    let registry = Arc::new(LocalRegistry::open(dir.path())?);
+    let registry = LocalRegistry::open(dir.path())?;
     let image_name = ImageRef::parse("does-not-resolve.invalid/jij-inc/ommx/demo:blob-missing")?;
     let local_artifact =
         build_test_local_artifact(&registry, &image_name, b"step-c-blob-corruption")?;
@@ -1192,7 +1189,7 @@ fn local_artifact_save_round_trip_preserves_layers() -> Result<()> {
     // writes the SQLite manifest bytes verbatim, so the saved
     // archive's manifest digest must match the registry's.
     let dir = tempfile::tempdir()?;
-    let registry = Arc::new(LocalRegistry::open(dir.path())?);
+    let registry = LocalRegistry::open(dir.path())?;
     let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:save-round-trip")?;
     let layer_bytes = b"step-c-save-round-trip-payload";
     let local_artifact = build_test_local_artifact(&registry, &image_name, layer_bytes)?;
@@ -1290,21 +1287,21 @@ fn read_archive_blobs(path: &Path) -> Result<HashMap<String, Vec<u8>>> {
     Ok(blobs)
 }
 
-fn build_test_local_artifact(
-    registry: &Arc<LocalRegistry>,
+fn build_test_local_artifact<'reg>(
+    registry: &'reg LocalRegistry,
     image_name: &ImageRef,
     layer_bytes: &[u8],
-) -> Result<LocalArtifact> {
+) -> Result<LocalArtifact<'reg>> {
     let (builder, _) = new_test_local_artifact_builder(registry, image_name.clone(), layer_bytes)?;
     builder.commit()
 }
 
-fn new_test_local_artifact_builder(
-    registry: &Arc<LocalRegistry>,
+fn new_test_local_artifact_builder<'reg>(
+    registry: &'reg LocalRegistry,
     image_name: ImageRef,
     layer_bytes: &[u8],
-) -> Result<(ArtifactDraft, Descriptor)> {
-    let mut builder = ArtifactDraft::with_registry(Arc::clone(registry), image_name);
+) -> Result<(ArtifactDraft<'reg>, Descriptor)> {
+    let mut builder = ArtifactDraft::with_registry(registry, image_name);
     let descriptor = builder.add_layer_bytes(
         MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
         layer_bytes.to_vec(),

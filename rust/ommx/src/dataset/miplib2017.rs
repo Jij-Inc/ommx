@@ -11,7 +11,6 @@ use anyhow::{ensure, Context, Result};
 use prost::Message;
 use serde::{Deserialize, Deserializer};
 use std::collections::HashMap;
-use std::sync::Arc;
 
 /// CSV downloaded from [MIPLIB website](https://miplib.zib.de/tag_collection.html)
 pub const MIPLIB2017_CSV: &str = include_str!("miplib2017.csv");
@@ -257,8 +256,8 @@ pub fn load(name: &str) -> Result<(Instance, InstanceAnnotations)> {
     check_unsupported(name)?;
 
     let image_name = ghcr("Jij-Inc", "ommx", "miplib2017", name)?;
-    let registry = Arc::new(LocalRegistry::open_default()?);
-    pull_image(&registry, &image_name)?;
+    let registry = LocalRegistry::shared_default()?;
+    pull_image(registry, &image_name)?;
     let artifact = LocalArtifact::open_in_registry(registry, image_name)?;
     let layers = artifact.layers()?;
     let mut instance_layers = layers

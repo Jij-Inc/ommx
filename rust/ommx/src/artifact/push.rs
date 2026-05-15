@@ -15,7 +15,7 @@
 use super::{remote_transport::RemoteTransport, LocalArtifact, LocalManifest};
 use oci_spec::image::Descriptor;
 
-impl LocalArtifact {
+impl LocalArtifact<'_> {
     /// Push this artifact to its OCI registry. Credentials are
     /// resolved by `super::remote_transport`'s three-tier chain:
     /// `OMMX_BASIC_AUTH_*` env vars (explicit override) →

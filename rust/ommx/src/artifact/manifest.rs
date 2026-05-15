@@ -20,12 +20,10 @@ use url::Url;
 
 /// OMMX Artifact stored in the SQLite-backed Local Registry.
 ///
-/// Holds an [`Arc`]ed [`LocalRegistry`] so that several artifacts opened
-/// from the same registry share a single SQLite connection and blob
-/// store handle. Combined with the `Mutex<Connection>` inside
-/// [`super::local_registry::SqliteIndexStore`], this makes
-/// `LocalArtifact` `Sync` and `Clone`-friendly without any per-artifact
-/// connection duplication.
+/// Holds a reference to the [`LocalRegistry`] that stores the manifest
+/// and layer blobs. `LocalArtifact` is a lazy view: it owns the image
+/// name and manifest digest, but reads payload bytes through the
+/// registry reference on demand.
 ///
 /// The parsed manifest is memoised in an `Arc<OnceLock<LocalManifest>>`
 /// so repeated calls to [`Self::layers`] / [`Self::annotations`] /
@@ -34,16 +32,28 @@ use url::Url;
 /// time. Clones of the artifact share the same cell, so any clone that
 /// reads the manifest first warms it for the rest.
 #[derive(Debug, Clone)]
-pub struct LocalArtifact {
-    registry: Arc<LocalRegistry>,
+pub struct LocalArtifact<'reg> {
+    registry: &'reg LocalRegistry,
     image_name: ImageRef,
     manifest_digest: Digest,
     manifest_cache: Arc<OnceLock<LocalManifest>>,
 }
 
-impl LocalArtifact {
+impl LocalArtifact<'static> {
+    pub fn open(image_name: ImageRef) -> Result<Self> {
+        let registry = LocalRegistry::shared_default()?;
+        Self::open_in_registry(registry, image_name)
+    }
+
+    pub fn try_open(image_name: ImageRef) -> Result<Option<Self>> {
+        let registry = LocalRegistry::shared_default()?;
+        Self::try_open_in_registry(registry, image_name)
+    }
+}
+
+impl<'reg> LocalArtifact<'reg> {
     pub(crate) fn from_parts(
-        registry: Arc<LocalRegistry>,
+        registry: &'reg LocalRegistry,
         image_name: ImageRef,
         manifest_digest: Digest,
     ) -> Self {
@@ -55,12 +65,7 @@ impl LocalArtifact {
         }
     }
 
-    pub fn open(image_name: ImageRef) -> Result<Self> {
-        let registry = Arc::new(LocalRegistry::open_default()?);
-        Self::open_in_registry(registry, image_name)
-    }
-
-    pub fn open_in_registry(registry: Arc<LocalRegistry>, image_name: ImageRef) -> Result<Self> {
+    pub fn open_in_registry(registry: &'reg LocalRegistry, image_name: ImageRef) -> Result<Self> {
         Self::try_open_in_registry(registry, image_name.clone())?.with_context(|| {
             format!(
                 "Artifact not found in the SQLite-backed local registry: {image_name}. \
@@ -70,13 +75,8 @@ impl LocalArtifact {
         })
     }
 
-    pub fn try_open(image_name: ImageRef) -> Result<Option<Self>> {
-        let registry = Arc::new(LocalRegistry::open_default()?);
-        Self::try_open_in_registry(registry, image_name)
-    }
-
     pub fn try_open_in_registry(
-        registry: Arc<LocalRegistry>,
+        registry: &'reg LocalRegistry,
         image_name: ImageRef,
     ) -> Result<Option<Self>> {
         let Some(manifest_digest) = registry.resolve_image_name(&image_name)? else {
@@ -205,22 +205,47 @@ impl LocalManifest {
 /// `config`. The layer blobs land in the Image Manifest's `layers[]`
 /// field.
 #[derive(Debug, Clone)]
-pub struct ArtifactDraft {
-    registry: Arc<LocalRegistry>,
+pub struct ArtifactDraft<'reg> {
+    registry: &'reg LocalRegistry,
     image_name: ImageRef,
     artifact_type: MediaType,
-    layers: Vec<StoredDescriptor>,
+    layers: Vec<StoredDescriptor<'reg>>,
     subject: Option<Descriptor>,
     annotations: HashMap<String, String>,
 }
 
-impl ArtifactDraft {
+impl ArtifactDraft<'static> {
     pub fn new(image_name: ImageRef) -> Result<Self> {
-        let registry = Arc::new(LocalRegistry::open_default()?);
+        let registry = LocalRegistry::shared_default()?;
         Ok(Self::with_registry(registry, image_name))
     }
 
-    pub fn with_registry(registry: Arc<LocalRegistry>, image_name: ImageRef) -> Self {
+    pub fn new_anonymous() -> Result<Self> {
+        let registry = LocalRegistry::shared_default()?;
+        Self::new_anonymous_in_registry(registry)
+    }
+
+    /// Draft under a random `ttl.sh/<uuid>:1h` image name. Insecure;
+    /// for tests only.
+    pub fn temp() -> Result<Self> {
+        let id = uuid::Uuid::new_v4();
+        let image_name = ImageRef::parse(&format!("ttl.sh/{id}:1h"))?;
+        Self::new(image_name)
+    }
+
+    /// Create a new artifact draft for a GitHub container registry image name.
+    pub fn for_github(org: &str, repo: &str, name: &str, tag: &str) -> Result<Self> {
+        let image_name = ghcr(org, repo, name, tag)?;
+        let source = Url::parse(&format!("https://github.com/{org}/{repo}"))?;
+
+        let mut draft = Self::new(image_name)?;
+        draft.add_source(&source);
+        Ok(draft)
+    }
+}
+
+impl<'reg> ArtifactDraft<'reg> {
+    pub fn with_registry(registry: &'reg LocalRegistry, image_name: ImageRef) -> Self {
         Self {
             registry,
             image_name,
@@ -247,33 +272,10 @@ impl ArtifactDraft {
     /// `anonymous_artifact_image_name` makes collisions astronomically
     /// rare in practice; if one still occurs, commit surfaces it as a
     /// normal ref conflict.
-    pub fn new_anonymous() -> Result<Self> {
-        let registry = Arc::new(LocalRegistry::open_default()?);
-        Self::new_anonymous_in_registry(registry)
-    }
-
-    pub fn new_anonymous_in_registry(registry: Arc<LocalRegistry>) -> Result<Self> {
+    pub fn new_anonymous_in_registry(registry: &'reg LocalRegistry) -> Result<Self> {
         let registry_id = registry.index().registry_id()?;
         let image_name = anonymous_artifact_image_name(&registry_id)?;
         Ok(Self::with_registry(registry, image_name))
-    }
-
-    /// Draft under a random `ttl.sh/<uuid>:1h` image name. Insecure;
-    /// for tests only.
-    pub fn temp() -> Result<Self> {
-        let id = uuid::Uuid::new_v4();
-        let image_name = ImageRef::parse(&format!("ttl.sh/{id}:1h"))?;
-        Self::new(image_name)
-    }
-
-    /// Create a new artifact draft for a GitHub container registry image name.
-    pub fn for_github(org: &str, repo: &str, name: &str, tag: &str) -> Result<Self> {
-        let image_name = ghcr(org, repo, name, tag)?;
-        let source = Url::parse(&format!("https://github.com/{org}/{repo}"))?;
-
-        let mut draft = Self::new(image_name)?;
-        draft.add_source(&source);
-        Ok(draft)
     }
 
     pub fn add_layer_bytes(
@@ -281,7 +283,7 @@ impl ArtifactDraft {
         media_type: MediaType,
         bytes: Vec<u8>,
         annotations: HashMap<String, String>,
-    ) -> Result<StoredDescriptor> {
+    ) -> Result<StoredDescriptor<'reg>> {
         let descriptor = descriptor_from_bytes(media_type, &bytes, annotations)?;
         let stored_descriptor = self.registry.store_blob(descriptor, &bytes)?;
         self.layers.push(stored_descriptor.clone());
@@ -292,7 +294,7 @@ impl ArtifactDraft {
         &mut self,
         instance: v1::Instance,
         annotations: InstanceAnnotations,
-    ) -> Result<StoredDescriptor> {
+    ) -> Result<StoredDescriptor<'reg>> {
         self.add_layer_bytes(
             media_types::v1_instance(),
             instance.encode_to_vec(),
@@ -304,7 +306,7 @@ impl ArtifactDraft {
         &mut self,
         solution: v1::State,
         annotations: SolutionAnnotations,
-    ) -> Result<StoredDescriptor> {
+    ) -> Result<StoredDescriptor<'reg>> {
         self.add_layer_bytes(
             media_types::v1_solution(),
             solution.encode_to_vec(),
@@ -316,7 +318,7 @@ impl ArtifactDraft {
         &mut self,
         instance: v1::ParametricInstance,
         annotations: ParametricInstanceAnnotations,
-    ) -> Result<StoredDescriptor> {
+    ) -> Result<StoredDescriptor<'reg>> {
         self.add_layer_bytes(
             media_types::v1_parametric_instance(),
             instance.encode_to_vec(),
@@ -328,7 +330,7 @@ impl ArtifactDraft {
         &mut self,
         sample_set: v1::SampleSet,
         annotations: SampleSetAnnotations,
-    ) -> Result<StoredDescriptor> {
+    ) -> Result<StoredDescriptor<'reg>> {
         self.add_layer_bytes(
             media_types::v1_sample_set(),
             sample_set.encode_to_vec(),
@@ -349,16 +351,16 @@ impl ArtifactDraft {
         self.add_annotation("org.opencontainers.image.source", url.to_string());
     }
 
-    pub fn commit(self) -> Result<LocalArtifact> {
+    pub fn commit(self) -> Result<LocalArtifact<'reg>> {
         self.commit_inner(false)
     }
 
-    pub fn commit_replace(self) -> Result<LocalArtifact> {
+    pub fn commit_replace(self) -> Result<LocalArtifact<'reg>> {
         self.commit_inner(true)
     }
 
-    fn commit_inner(self, replace_ref: bool) -> Result<LocalArtifact> {
-        let registry = Arc::clone(&self.registry);
+    fn commit_inner(self, replace_ref: bool) -> Result<LocalArtifact<'reg>> {
+        let registry = self.registry;
         let image_name = self.image_name.clone();
         let artifact = self.into_unsealed_artifact()?;
         let sealed_artifact = registry.seal_artifact(artifact)?;
@@ -384,7 +386,7 @@ impl ArtifactDraft {
     /// own `mediaType` field intentionally absent so `ArtifactDraft`
     /// and the archive build path produce structurally identical
     /// manifests.
-    fn into_unsealed_artifact(self) -> Result<UnsealedArtifact> {
+    fn into_unsealed_artifact(self) -> Result<UnsealedArtifact<'reg>> {
         // V2 SDK's `ocipkg::OciArtifactBuilder::add_empty_json` emits the
         // empty config descriptor without an `annotations` field; build
         // it directly here (bypassing `descriptor_from_bytes`, which
@@ -724,9 +726,9 @@ mod tests {
     #[test]
     fn anonymous_build_in_same_second_does_not_fail() -> Result<()> {
         let dir = tempfile::tempdir()?;
-        let registry = Arc::new(LocalRegistry::open(dir.path())?);
+        let registry = LocalRegistry::open(dir.path())?;
         for tag in ["a", "b"] {
-            let mut builder = ArtifactDraft::new_anonymous_in_registry(registry.clone())?;
+            let mut builder = ArtifactDraft::new_anonymous_in_registry(&registry)?;
             builder.add_layer_bytes(
                 MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
                 format!("anon-{tag}").into_bytes(),
@@ -740,8 +742,8 @@ mod tests {
     #[test]
     fn builds_native_oci_image_manifest_with_artifact_type() -> Result<()> {
         let dir = tempfile::tempdir()?;
-        let registry = Arc::new(LocalRegistry::open(dir.path())?);
-        let mut builder = ArtifactDraft::with_registry(registry, test_image_name("v1")?);
+        let registry = LocalRegistry::open(dir.path())?;
+        let mut builder = ArtifactDraft::with_registry(&registry, test_image_name("v1")?);
         let layer = builder.add_layer_bytes(
             MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
             b"instance".to_vec(),
@@ -813,8 +815,8 @@ mod tests {
         let subject =
             descriptor_from_bytes(MediaType::ImageManifest, b"parent manifest", HashMap::new())?;
         let dir = tempfile::tempdir()?;
-        let registry = Arc::new(LocalRegistry::open(dir.path())?);
-        let mut builder = ArtifactDraft::with_registry(registry, test_image_name("subject")?);
+        let registry = LocalRegistry::open(dir.path())?;
+        let mut builder = ArtifactDraft::with_registry(&registry, test_image_name("subject")?);
         builder.add_layer_bytes(
             MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
             b"instance".to_vec(),
@@ -839,8 +841,8 @@ mod tests {
         annotations: impl IntoIterator<Item = (&'static str, &'static str)>,
     ) -> Result<ImageManifest> {
         let dir = tempfile::tempdir()?;
-        let registry = Arc::new(LocalRegistry::open(dir.path())?);
-        let mut builder = ArtifactDraft::with_registry(registry, test_image_name(tag)?);
+        let registry = LocalRegistry::open(dir.path())?;
+        let mut builder = ArtifactDraft::with_registry(&registry, test_image_name(tag)?);
         builder.add_layer_bytes(
             MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
             b"instance".to_vec(),
