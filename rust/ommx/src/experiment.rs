@@ -6,6 +6,9 @@
 //! Records belong either
 //! to the *experiment space* (shared by the whole experiment) or to a
 //! *run space* (owned by a single [`Run`]).
+//! Run parameters are separate table data: [`Run::log_parameter`] records
+//! scalar values for comparison views, and commit materialises them as
+//! an aggregate run-parameter layer instead of individual Records.
 //!
 //! Each `log_*` call writes its payload to the Local Registry's
 //! content-addressed BlobStore immediately, keeping only
@@ -21,10 +24,11 @@
 //! ```ignore
 //! use ommx::experiment::Experiment;
 //!
-//! let mut exp = Experiment::new("scip_reblock115")?;
+//! let exp = Experiment::new("scip_reblock115")?;
 //! exp.log_json("dataset", serde_json::json!("miplib2017"))?;
 //!
 //! let mut run = exp.run()?;
+//! run.log_parameter("solver", "scip")?;
 //! run.log_instance("candidate", &instance)?;
 //! run.finish()?;
 //!
@@ -65,8 +69,10 @@ const ANN_LAYER: &str = "org.ommx.experiment.layer";
 const ANN_RECORD_NAME: &str = "org.ommx.record.name";
 
 const EXPERIMENT_INDEX_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment+json";
+const RUN_PARAMETERS_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment.run-parameters+json";
 const RUN_ATTRIBUTES_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment.run-attributes+json";
 const LAYER_KIND_INDEX: &str = "index";
+const LAYER_KIND_RUN_PARAMETERS: &str = "run-parameters";
 const LAYER_KIND_RUN_ATTRIBUTES: &str = "run-attributes";
 
 /// Build an OCI layer descriptor from a CAS-written blob plus the

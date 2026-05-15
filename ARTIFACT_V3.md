@@ -784,7 +784,8 @@ Track A の中核のうち、最小の happy path を最初に通す。Local Reg
 |---|---|
 | `Experiment` / `Run` の Build phase session と lifecycle API（`run()` / `finish()` / `fail()` / `commit()`） | Python SDK への PyO3 expose（`ommx.experiment` / context manager） |
 | Record（`json` / `instance` / `solution` / `sample_set` / caller-defined media type）の experiment space / run space への追加 | 失敗時処理全般（3.4 の crash recovery manifest / orphan blob / autosave metadata） |
-| Run lifecycle（status / elapsed time の Run attributes 反映） | Run parameter table（`log_parameter` / `get_run_table`） |
+| Run parameter table（`Run::log_parameter` と commit 時の aggregate layer materialization） | `get_run_table` view API |
+| Run lifecycle（status / elapsed time の Run attributes 反映） | 実行環境属性の詳細収集 |
 | `log_*` 時点の BlobStore 逐次書き込みと `commit()` の root manifest seal / ref publish（新規 `local_registry` primitive を含む） | `Experiment.load()` による immutable view 復元 |
 | Build phase の `(space, run_id, media type, name)` upsert、commit 後 mutation 禁止 | OTel / trace layer / renderer、fork / lineage / `diff` |
 | | `log_solve` / `log_sample`、diagnostics sink、実行環境属性、GC |
@@ -793,35 +794,37 @@ Track A の中核のうち、最小の happy path を最初に通す。Local Reg
 
 ### 12.2 Rust core: `ommx::experiment`
 
-`rust/ommx/src/experiment.rs` を新設し、`lib.rs` に `pub mod experiment;` を追加する。`Experiment` は構築時に `Arc<LocalRegistry>` を保持し、`log_*` のたびに BlobStore へ書き込む。
+`rust/ommx/src/experiment.rs` を新設し、`lib.rs` に `pub mod experiment;` を追加する。`Experiment` は構築時に `Arc<LocalRegistry>` を保持し、`log_*` のたびに BlobStore へ書き込む。Rust core では `Experiment` の lifetime と Rust value の lifetime を合わせ、commit は `Experiment` を consume する。`Run<'exp>` は親 `Experiment` を immutable borrow し、複数の Run を同時に生成できる。Experiment state への書き込みは close 時に Mutex で同期する。
 
 | 型 | 役割 |
 |---|---|
-| `Experiment` | `Arc<LocalRegistry>` + `UnsealedExperimentState`。mutable session handle |
+| `Experiment` | `Arc<LocalRegistry>` + `Mutex<UnsealedExperimentState>`。mutable session handle |
 | `SealedExperiment` | commit 済み `LocalArtifact` を持つ immutable session handle |
-| `Run<'exp>` | `&'exp mut Experiment` + `run_id`。Rust core では live Run が親 Experiment を mutable borrow する |
+| `Run<'exp>` | `&'exp Experiment` + run_id, run space records, parameters, started_at。実行中の mutable handle |
 | `UnsealedExperimentState`（private） | name, requested ref, experiment space records, runs, next run id |
-| `RunState`（private） | run_id, run space records, status, started_at, elapsed |
+| `RunEntry`（private） | close 済み logical Run。run_id, run space records, parameters, status, elapsed |
 | `Record`（private） | space, run_id, media type, name, BlobStore に書き込み済み blob を指す descriptor |
 | `Space` / `RunStatus` enum | `experiment`/`run`、`running`/`finished`/`failed` |
 
 API:
 
 - `Experiment::new(name)`（default Local Registry を開く） / `Experiment::with_registry(name, Arc<LocalRegistry>, Option<ImageRef>)`（テスト用に registry / requested ref を差し替え可能）
-- `Experiment::log_record` / `log_json` / `log_instance` / `log_solution` / `log_sample_set`（experiment space、`&mut self`）
-- `Experiment::run(&mut self) -> Run<'_>`（`run_id` を 0-based で採番）
+- `Experiment::log_record` / `log_json` / `log_instance` / `log_solution` / `log_sample_set`（experiment space、`&self`。内部 state 更新は Mutex で同期）
+- `Experiment::run(&self) -> Run<'_>`（`run_id` を 0-based で採番し、Run lifecycle 中は Experiment を immutable borrow する）
 - `Experiment::commit(self) -> SealedExperiment`
 - `SealedExperiment::artifact() -> LocalArtifact`
 - `SealedExperiment::into_artifact(self) -> LocalArtifact`
-- `Run::run_id()`、`Run::log_record` / `log_json` / `log_instance` / `log_solution` / `log_sample_set`（run space）、`Run::finish(self)` / `Run::fail(self)`
+- `Run::run_id()`、`Run::log_parameter`、`Run::log_record` / `log_json` / `log_instance` / `log_solution` / `log_sample_set`（run space）、`Run::finish(self)` / `Run::fail(self)`
 
 挙動:
 
 - `log_*` は payload を即 `FileBlobStore::put_bytes` で BlobStore に書き、戻り値から組んだ descriptor を `Record` に保持する。payload bytes は in-memory に残さない。
 - `log_*` は同じ `(space, run_id, media type, name)` を upsert（replace）する。upsert で捨てられた古い blob は orphan blob になり GC に委ねる。
-- Rust core では live `Run<'_>` が親 `Experiment` を mutable borrow するため、Run が生きている間は `commit()` や別 Run の作成は型で禁止される。
+- `Run::log_parameter` は JSON scalar のみを受け付け、実行中の `Run` 内の parameter map を upsert する。Parameter は Record ではなく、commit 時に Run parameter table JSON として materialize する。
+- Rust core でも複数の `Run<'_>` handle を同時に開ける。Run-scoped Record / parameter は Run 側の local state に入り、Experiment state への書き込みは `finish(self)` / `fail(self)` の close 時だけ行う。
 - `Run::finish(self)` / `Run::fail(self)` は Run handle を消費する。終了済み Run に後から Record を追加する経路は Rust core では型で作らない。
-- `finish()` / `fail()` されずに drop された Run は `running` のまま残る。`commit()` は running Run が残っている場合 error とし、`finished` manifest を publish しない。
+- `Experiment.state.runs` は `Run<'exp>` handle ではなく `RunEntry` の一覧を持つ。`Run<'exp>` は親 Experiment への参照を含む実行中 handle であり、`RunEntry` は commit 時に parameter table / attributes / record index へ投影される lifetime-free な logical Run row である。
+- close されていない live Run が残っている間、`commit(self)` は `Experiment` の move を必要とするため Rust の borrow checker により呼べない。drop された未 close Run の local state は Experiment に反映されず、CAS に書かれた blob は orphan blob として GC に委ねる。
 - `commit(self)` は unsealed `Experiment` を消費し、`SealedExperiment` を返す。commit 済み Experiment への `log_*` / `run()` 経路は Rust core では型で作らない。
 - error は `crate::bail!` / `crate::error!` fail-site macro を使う。
 
@@ -831,7 +834,7 @@ API:
 
 `commit()` は次を行う:
 
-1. Run attributes JSON / Experiment index JSON / OCI empty config を Store し、それぞれ `StoredDescriptor` を得る。
+1. Run parameter table JSON / Run attributes JSON / Experiment index JSON / OCI empty config を Store し、それぞれ `StoredDescriptor` を得る。
 2. 全 Record descriptor + aggregate layer descriptor + empty config から `UnsealedArtifact` を作る。
 3. tag 未指定なら `registry.synthesize_anonymous_image_name()` で anonymous image name を採番する。
 4. `seal_artifact` で root manifest blob を Store し、`SealedArtifact` を得る。
@@ -866,6 +869,7 @@ aggregate layer（`org.ommx.experiment.space` を持たないので loader は R
 
 | Layer | media type | layer annotation |
 |---|---|---|
+| Run parameter table JSON | `application/org.ommx.v1.experiment.run-parameters+json` | `org.ommx.experiment.layer=run-parameters` |
 | Run attributes JSON | `application/org.ommx.v1.experiment.run-attributes+json` | `org.ommx.experiment.layer=run-attributes` |
 | Experiment index JSON | `application/org.ommx.v1.experiment+json` | `org.ommx.experiment.layer=index` |
 
@@ -877,9 +881,10 @@ OCI manifest descriptor の media type と `artifactType` は既存 Artifact 仕
 
 - run lifecycle（`run()` での `run_id` 採番、`finish()` / `fail()` による status / elapsed 反映）
 - `log_*` 時点で payload が temp registry（`with_registry`）の BlobStore に書かれること、同一 `(space, run_id, media type, name)` の upsert
+- `Run::log_parameter` が scalar parameter を Run parameter table として materialize し、同一 parameter name を upsert すること
 - `commit()` 後の manifest annotations / Record layer annotations / aggregate layer
 - `commit(self)` が Experiment を consume するため、commit 後の `log_*` / `run()` 経路が Rust core では型として作れないこと
 
 ### 12.5 後続イテレーション
 
-Python SDK への PyO3 expose（`ommx.experiment` の `Experiment` / `Run` / context manager）、失敗時処理（3.4 の BlobStore 逐次 autosave / recovery manifest / autosave metadata）、Run parameter table、`Experiment.load()`、trace、fork / lineage、`log_solve` / `log_sample` と diagnostics、GC は本計画のあとに追加する。
+Python SDK への PyO3 expose（`ommx.experiment` の `Experiment` / `Run` / context manager）、失敗時処理（3.4 の BlobStore 逐次 autosave / recovery manifest / autosave metadata）、`get_run_table` view API、`Experiment.load()`、trace、fork / lineage、`log_solve` / `log_sample` と diagnostics、GC は本計画のあとに追加する。
