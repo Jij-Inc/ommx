@@ -209,7 +209,7 @@ pub struct ArtifactDraft<'reg> {
     registry: &'reg LocalRegistry,
     image_name: ImageRef,
     artifact_type: MediaType,
-    layers: Vec<StoredDescriptor>,
+    layers: Vec<StoredDescriptor<'reg>>,
     subject: Option<Descriptor>,
     annotations: HashMap<String, String>,
 }
@@ -283,7 +283,7 @@ impl<'reg> ArtifactDraft<'reg> {
         media_type: MediaType,
         bytes: Vec<u8>,
         annotations: HashMap<String, String>,
-    ) -> Result<StoredDescriptor> {
+    ) -> Result<StoredDescriptor<'reg>> {
         let descriptor = descriptor_from_bytes(media_type, &bytes, annotations)?;
         let stored_descriptor = self.registry.store_blob(descriptor, &bytes)?;
         self.layers.push(stored_descriptor.clone());
@@ -294,7 +294,7 @@ impl<'reg> ArtifactDraft<'reg> {
         &mut self,
         instance: v1::Instance,
         annotations: InstanceAnnotations,
-    ) -> Result<StoredDescriptor> {
+    ) -> Result<StoredDescriptor<'reg>> {
         self.add_layer_bytes(
             media_types::v1_instance(),
             instance.encode_to_vec(),
@@ -306,7 +306,7 @@ impl<'reg> ArtifactDraft<'reg> {
         &mut self,
         solution: v1::State,
         annotations: SolutionAnnotations,
-    ) -> Result<StoredDescriptor> {
+    ) -> Result<StoredDescriptor<'reg>> {
         self.add_layer_bytes(
             media_types::v1_solution(),
             solution.encode_to_vec(),
@@ -318,7 +318,7 @@ impl<'reg> ArtifactDraft<'reg> {
         &mut self,
         instance: v1::ParametricInstance,
         annotations: ParametricInstanceAnnotations,
-    ) -> Result<StoredDescriptor> {
+    ) -> Result<StoredDescriptor<'reg>> {
         self.add_layer_bytes(
             media_types::v1_parametric_instance(),
             instance.encode_to_vec(),
@@ -330,7 +330,7 @@ impl<'reg> ArtifactDraft<'reg> {
         &mut self,
         sample_set: v1::SampleSet,
         annotations: SampleSetAnnotations,
-    ) -> Result<StoredDescriptor> {
+    ) -> Result<StoredDescriptor<'reg>> {
         self.add_layer_bytes(
             media_types::v1_sample_set(),
             sample_set.encode_to_vec(),
@@ -386,7 +386,7 @@ impl<'reg> ArtifactDraft<'reg> {
     /// own `mediaType` field intentionally absent so `ArtifactDraft`
     /// and the archive build path produce structurally identical
     /// manifests.
-    fn into_unsealed_artifact(self) -> Result<UnsealedArtifact> {
+    fn into_unsealed_artifact(self) -> Result<UnsealedArtifact<'reg>> {
         // V2 SDK's `ocipkg::OciArtifactBuilder::add_empty_json` emits the
         // empty config descriptor without an `annotations` field; build
         // it directly here (bypassing `descriptor_from_bytes`, which

@@ -18,7 +18,7 @@ const JSON_MEDIA_TYPE: &str = "application/json";
 #[derive(Debug)]
 pub struct Experiment<'reg> {
     pub(super) registry: &'reg LocalRegistry,
-    pub(super) state: UnsealedExperimentState,
+    pub(super) state: UnsealedExperimentState<'reg>,
 }
 
 /// A sealed experiment session whose root artifact manifest has been
@@ -233,7 +233,7 @@ impl Run<'_, '_> {
     }
 }
 
-fn ensure_no_running_runs(state: &UnsealedExperimentState) -> Result<()> {
+fn ensure_no_running_runs(state: &UnsealedExperimentState<'_>) -> Result<()> {
     if let Some(run) = state
         .runs
         .iter()
@@ -247,7 +247,10 @@ fn ensure_no_running_runs(state: &UnsealedExperimentState) -> Result<()> {
     Ok(())
 }
 
-fn find_run_mut(state: &mut UnsealedExperimentState, run_id: u64) -> Result<&mut RunState> {
+fn find_run_mut<'state, 'reg>(
+    state: &'state mut UnsealedExperimentState<'reg>,
+    run_id: u64,
+) -> Result<&'state mut RunState<'reg>> {
     state
         .runs
         .iter_mut()
@@ -259,7 +262,7 @@ fn find_run_mut(state: &mut UnsealedExperimentState, run_id: u64) -> Result<&mut
 /// within a space replaces the previous one. Within one `Vec` the space
 /// and `run_id` are already fixed, so `(media_type, name)` is the
 /// remaining key.
-fn upsert_record_ref(records: &mut Vec<RecordRef>, record_ref: RecordRef) {
+fn upsert_record_ref<'reg>(records: &mut Vec<RecordRef<'reg>>, record_ref: RecordRef<'reg>) {
     if let Some(existing) = records.iter_mut().find(|r| {
         r.descriptor.media_type() == record_ref.descriptor.media_type() && r.name == record_ref.name
     }) {
@@ -282,14 +285,14 @@ fn encode_json(name: &str, value: impl serde::Serialize) -> Result<Vec<u8>> {
 /// [`RecordRef`]: an OCI layer descriptor carrying the experiment /
 /// record annotations, plus the matching descriptor for commit-time
 /// publication.
-fn store_record_ref(
-    registry: &LocalRegistry,
+fn store_record_ref<'reg>(
+    registry: &'reg LocalRegistry,
     space: Space,
     run_id: Option<u64>,
     name: &str,
     media_type: MediaType,
     bytes: &[u8],
-) -> Result<RecordRef> {
+) -> Result<RecordRef<'reg>> {
     let digest = sha256_digest(bytes);
     let digest = oci_spec::image::Digest::from_str(&digest)
         .map_err(|e| crate::error!("Failed to parse record blob digest: {e}"))?;

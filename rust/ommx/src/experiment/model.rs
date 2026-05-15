@@ -48,19 +48,19 @@ impl RunStatus {
 /// A named reference to a payload that has already been written to the
 /// BlobStore.
 #[derive(Debug, Clone)]
-pub(super) struct RecordRef {
+pub(super) struct RecordRef<'reg> {
     pub(super) name: String,
     /// OCI layer descriptor whose payload bytes are present in the
     /// Local Registry BlobStore. Carries the payload media type and
     /// the experiment / record annotations.
-    pub(super) descriptor: StoredDescriptor,
+    pub(super) descriptor: StoredDescriptor<'reg>,
 }
 
 /// In-memory state of a single run.
 #[derive(Debug)]
-pub(super) struct RunState {
+pub(super) struct RunState<'reg> {
     pub(super) run_id: u64,
-    pub(super) records: Vec<RecordRef>,
+    pub(super) records: Vec<RecordRef<'reg>>,
     pub(super) status: RunStatus,
     pub(super) started_at: Instant,
     pub(super) elapsed_secs: Option<f64>,
@@ -70,13 +70,13 @@ pub(super) struct RunState {
 /// [`super::Run`] mutably borrows the parent experiment while it adds
 /// run-scoped records or closes the run lifecycle.
 #[derive(Debug)]
-pub(super) struct UnsealedExperimentState {
+pub(super) struct UnsealedExperimentState<'reg> {
     pub(super) name: String,
     /// Image name the committed artifact is published under. `None`
     /// means an anonymous name is synthesised at commit time.
     pub(super) requested_ref: Option<ImageRef>,
     /// Experiment-space records.
-    pub(super) records: Vec<RecordRef>,
-    pub(super) runs: Vec<RunState>,
+    pub(super) records: Vec<RecordRef<'reg>>,
+    pub(super) runs: Vec<RunState<'reg>>,
     pub(super) next_run_id: u64,
 }

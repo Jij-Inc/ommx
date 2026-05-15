@@ -25,7 +25,9 @@ fn temp_experiment(name: &str) -> (TempDir, Experiment<'static>) {
     (dir, experiment)
 }
 
-fn unsealed_state<'exp, 'reg>(experiment: &'exp Experiment<'reg>) -> &'exp UnsealedExperimentState {
+fn unsealed_state<'exp, 'reg>(
+    experiment: &'exp Experiment<'reg>,
+) -> &'exp UnsealedExperimentState<'reg> {
     &experiment.state
 }
 

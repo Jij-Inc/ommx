@@ -20,7 +20,7 @@ use std::str::FromStr;
 /// Commit an unsealed experiment state as one immutable artifact.
 pub(super) fn commit_experiment_state<'reg>(
     registry: &'reg LocalRegistry,
-    state: &UnsealedExperimentState,
+    state: &UnsealedExperimentState<'reg>,
 ) -> Result<LocalArtifact<'reg>> {
     let mut layers = Vec::new();
 
@@ -102,12 +102,12 @@ pub(super) fn commit_experiment_state<'reg>(
 
 /// Store a commit-time aggregate JSON layer and return its
 /// descriptor (with the `org.ommx.experiment.layer` annotation).
-fn store_aggregate_layer(
-    registry: &LocalRegistry,
+fn store_aggregate_layer<'reg>(
+    registry: &'reg LocalRegistry,
     media_type: &str,
     layer_kind: &str,
     bytes: &[u8],
-) -> Result<StoredDescriptor> {
+) -> Result<StoredDescriptor<'reg>> {
     let digest = Digest::from_str(&sha256_digest(bytes))
         .map_err(|e| crate::error!("Failed to parse aggregate layer digest: {e}"))?;
     let mut annotations = HashMap::new();
@@ -121,7 +121,7 @@ fn store_aggregate_layer(
     registry.store_blob(descriptor, bytes)
 }
 
-fn manifest_annotations(state: &UnsealedExperimentState) -> HashMap<String, String> {
+fn manifest_annotations(state: &UnsealedExperimentState<'_>) -> HashMap<String, String> {
     HashMap::from([
         (
             ANN_ARTIFACT_KIND.to_string(),
@@ -139,7 +139,7 @@ fn manifest_annotations(state: &UnsealedExperimentState) -> HashMap<String, Stri
     ])
 }
 
-fn run_attributes_json(state: &UnsealedExperimentState) -> serde_json::Value {
+fn run_attributes_json(state: &UnsealedExperimentState<'_>) -> serde_json::Value {
     json!({
         "runs": state
             .runs
@@ -153,7 +153,7 @@ fn run_attributes_json(state: &UnsealedExperimentState) -> serde_json::Value {
     })
 }
 
-fn experiment_index_json(state: &UnsealedExperimentState) -> serde_json::Value {
+fn experiment_index_json(state: &UnsealedExperimentState<'_>) -> serde_json::Value {
     json!({
         "schema": EXPERIMENT_SCHEMA_V1,
         "name": state.name,
@@ -173,7 +173,7 @@ fn experiment_index_json(state: &UnsealedExperimentState) -> serde_json::Value {
     })
 }
 
-fn record_index_entry(record: &RecordRef) -> serde_json::Value {
+fn record_index_entry(record: &RecordRef<'_>) -> serde_json::Value {
     json!({
         "name": record.name,
         "media_type": record.descriptor.media_type().to_string(),

@@ -14,32 +14,39 @@ use std::sync::OnceLock;
 
 static DEFAULT_LOCAL_REGISTRY: OnceLock<LocalRegistry> = OnceLock::new();
 
-/// OCI descriptor whose referenced bytes are known to exist in this
-/// Local Registry's BlobStore.
+/// OCI descriptor whose referenced bytes are known to exist in the
+/// referenced Local Registry's BlobStore.
 ///
 /// This is an OMMX / Local Registry invariant, not an invariant of
 /// [`oci_spec::image::Descriptor`] itself. Values are created only by
 /// [`LocalRegistry`] operations that have written or verified the
 /// content-addressed blob.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StoredDescriptor(Descriptor);
+#[derive(Debug, Clone)]
+pub struct StoredDescriptor<'reg> {
+    registry: &'reg LocalRegistry,
+    descriptor: Descriptor,
+}
 
-impl StoredDescriptor {
+impl StoredDescriptor<'_> {
+    fn is_stored_in(&self, registry: &LocalRegistry) -> bool {
+        std::ptr::eq(self.registry, registry)
+    }
+
     fn into_inner(self) -> Descriptor {
-        self.0
+        self.descriptor
     }
 }
 
-impl Deref for StoredDescriptor {
+impl Deref for StoredDescriptor<'_> {
     type Target = Descriptor;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        &self.descriptor
     }
 }
 
-impl From<StoredDescriptor> for Descriptor {
-    fn from(value: StoredDescriptor) -> Self {
+impl From<StoredDescriptor<'_>> for Descriptor {
+    fn from(value: StoredDescriptor<'_>) -> Self {
         value.into_inner()
     }
 }
@@ -48,11 +55,11 @@ impl From<StoredDescriptor> for Descriptor {
 ///
 /// The inner descriptor is stored in this registry, and it is known to
 /// be the root manifest descriptor produced by [`LocalRegistry::seal_artifact`].
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct SealedArtifact(StoredDescriptor);
+#[derive(Debug, Clone)]
+pub(crate) struct SealedArtifact<'reg>(StoredDescriptor<'reg>);
 
-impl Deref for SealedArtifact {
-    type Target = StoredDescriptor;
+impl<'reg> Deref for SealedArtifact<'reg> {
+    type Target = StoredDescriptor<'reg>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -60,19 +67,19 @@ impl Deref for SealedArtifact {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct UnsealedArtifact {
+pub(crate) struct UnsealedArtifact<'reg> {
     artifact_type: MediaType,
-    config: StoredDescriptor,
-    layers: Vec<StoredDescriptor>,
+    config: StoredDescriptor<'reg>,
+    layers: Vec<StoredDescriptor<'reg>>,
     subject: Option<Descriptor>,
     annotations: HashMap<String, String>,
 }
 
-impl UnsealedArtifact {
+impl<'reg> UnsealedArtifact<'reg> {
     pub(crate) fn new(
         artifact_type: MediaType,
-        config: StoredDescriptor,
-        layers: Vec<StoredDescriptor>,
+        config: StoredDescriptor<'reg>,
+        layers: Vec<StoredDescriptor<'reg>>,
         subject: Option<Descriptor>,
         annotations: HashMap<String, String>,
     ) -> Self {
@@ -101,6 +108,20 @@ impl UnsealedArtifact {
         builder
             .build()
             .context("Failed to build OCI image manifest")
+    }
+
+    fn ensure_stored_in(&self, registry: &LocalRegistry) -> Result<()> {
+        ensure!(
+            self.config.is_stored_in(registry),
+            "Artifact config descriptor belongs to a different Local Registry"
+        );
+        ensure!(
+            self.layers
+                .iter()
+                .all(|descriptor| descriptor.is_stored_in(registry)),
+            "Artifact layer descriptor belongs to a different Local Registry"
+        );
+        Ok(())
     }
 }
 
@@ -241,7 +262,11 @@ impl LocalRegistry {
     /// does not re-validate dependency blob existence. It serializes
     /// and stores only the root manifest blob, yielding its root
     /// [`SealedArtifact`].
-    pub(crate) fn seal_artifact(&self, artifact: UnsealedArtifact) -> Result<SealedArtifact> {
+    pub(crate) fn seal_artifact<'reg>(
+        &'reg self,
+        artifact: UnsealedArtifact<'reg>,
+    ) -> Result<SealedArtifact<'reg>> {
+        artifact.ensure_stored_in(self)?;
         let manifest = artifact.into_oci_image_manifest()?;
         Self::validate_manifest(&manifest)?;
         let manifest_bytes = stable_json_bytes(&manifest)?;
@@ -257,7 +282,7 @@ impl LocalRegistry {
     pub(crate) fn publish_manifest_ref(
         &self,
         image_name: &ImageRef,
-        sealed_artifact: &SealedArtifact,
+        sealed_artifact: &SealedArtifact<'_>,
     ) -> Result<RefUpdate> {
         self.index.publish_image_ref(image_name, &sealed_artifact.0)
     }
@@ -269,7 +294,7 @@ impl LocalRegistry {
     pub(crate) fn replace_manifest_ref(
         &self,
         image_name: &ImageRef,
-        sealed_artifact: &SealedArtifact,
+        sealed_artifact: &SealedArtifact<'_>,
     ) -> Result<RefUpdate> {
         self.index.replace_image_ref(image_name, &sealed_artifact.0)
     }
@@ -307,7 +332,7 @@ impl LocalRegistry {
         &self,
         descriptor: Descriptor,
         bytes: &[u8],
-    ) -> Result<StoredDescriptor> {
+    ) -> Result<StoredDescriptor<'_>> {
         let digest = self.blobs.put_bytes(bytes)?;
         ensure!(
             &digest == descriptor.digest(),
@@ -322,6 +347,9 @@ impl LocalRegistry {
             descriptor.size(),
             bytes.len()
         );
-        Ok(StoredDescriptor(descriptor))
+        Ok(StoredDescriptor {
+            registry: self,
+            descriptor,
+        })
     }
 }
