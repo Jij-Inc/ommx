@@ -726,9 +726,9 @@ mod tests {
     #[test]
     fn anonymous_build_in_same_second_does_not_fail() -> Result<()> {
         let dir = tempfile::tempdir()?;
-        let registry = Arc::new(LocalRegistry::open(dir.path())?);
+        let registry = LocalRegistry::open(dir.path())?;
         for tag in ["a", "b"] {
-            let mut builder = ArtifactDraft::new_anonymous_in_registry(registry.as_ref())?;
+            let mut builder = ArtifactDraft::new_anonymous_in_registry(&registry)?;
             builder.add_layer_bytes(
                 MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
                 format!("anon-{tag}").into_bytes(),
@@ -742,8 +742,8 @@ mod tests {
     #[test]
     fn builds_native_oci_image_manifest_with_artifact_type() -> Result<()> {
         let dir = tempfile::tempdir()?;
-        let registry = Arc::new(LocalRegistry::open(dir.path())?);
-        let mut builder = ArtifactDraft::with_registry(registry.as_ref(), test_image_name("v1")?);
+        let registry = LocalRegistry::open(dir.path())?;
+        let mut builder = ArtifactDraft::with_registry(&registry, test_image_name("v1")?);
         let layer = builder.add_layer_bytes(
             MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
             b"instance".to_vec(),
@@ -815,9 +815,8 @@ mod tests {
         let subject =
             descriptor_from_bytes(MediaType::ImageManifest, b"parent manifest", HashMap::new())?;
         let dir = tempfile::tempdir()?;
-        let registry = Arc::new(LocalRegistry::open(dir.path())?);
-        let mut builder =
-            ArtifactDraft::with_registry(registry.as_ref(), test_image_name("subject")?);
+        let registry = LocalRegistry::open(dir.path())?;
+        let mut builder = ArtifactDraft::with_registry(&registry, test_image_name("subject")?);
         builder.add_layer_bytes(
             MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
             b"instance".to_vec(),
@@ -842,8 +841,8 @@ mod tests {
         annotations: impl IntoIterator<Item = (&'static str, &'static str)>,
     ) -> Result<ImageManifest> {
         let dir = tempfile::tempdir()?;
-        let registry = Arc::new(LocalRegistry::open(dir.path())?);
-        let mut builder = ArtifactDraft::with_registry(registry.as_ref(), test_image_name(tag)?);
+        let registry = LocalRegistry::open(dir.path())?;
+        let mut builder = ArtifactDraft::with_registry(&registry, test_image_name(tag)?);
         builder.add_layer_bytes(
             MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
             b"instance".to_vec(),
