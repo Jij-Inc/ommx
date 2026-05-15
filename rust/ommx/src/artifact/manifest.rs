@@ -2,7 +2,7 @@ use super::{
     digest::sha256_digest,
     ghcr,
     local_registry::{
-        LocalRegistry, RefConflictPolicy, RefUpdate, StoredArtifactManifest, StoredDescriptor,
+        ArtifactManifestDraft, LocalRegistry, RefConflictPolicy, RefUpdate, StoredDescriptor,
     },
     media_types::{self, OCI_EMPTY_CONFIG_BYTES},
     ImageRef, InstanceAnnotations, ParametricInstanceAnnotations, SampleSetAnnotations,
@@ -396,7 +396,7 @@ impl ArtifactDraft {
     /// own `mediaType` field intentionally absent so `ArtifactDraft`
     /// and the archive build path produce structurally identical
     /// manifests.
-    fn prepare_manifest(self) -> Result<StoredArtifactManifest> {
+    fn prepare_manifest(self) -> Result<ArtifactManifestDraft> {
         // V2 SDK's `ocipkg::OciArtifactBuilder::add_empty_json` emits the
         // empty config descriptor without an `annotations` field; build
         // it directly here (bypassing `descriptor_from_bytes`, which
@@ -416,7 +416,7 @@ impl ArtifactDraft {
             .registry
             .stage_blob(config_descriptor, &empty_config_bytes)?;
 
-        Ok(StoredArtifactManifest::new(
+        Ok(ArtifactManifestDraft::new(
             self.artifact_type,
             config_descriptor,
             self.layers,

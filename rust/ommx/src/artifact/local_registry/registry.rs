@@ -43,7 +43,7 @@ impl From<StoredDescriptor> for Descriptor {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct StoredArtifactManifest {
+pub(crate) struct ArtifactManifestDraft {
     artifact_type: MediaType,
     config: StoredDescriptor,
     layers: Vec<StoredDescriptor>,
@@ -51,7 +51,7 @@ pub(crate) struct StoredArtifactManifest {
     annotations: HashMap<String, String>,
 }
 
-impl StoredArtifactManifest {
+impl ArtifactManifestDraft {
     pub(crate) fn new(
         artifact_type: MediaType,
         config: StoredDescriptor,
@@ -216,7 +216,7 @@ impl LocalRegistry {
     pub(crate) fn publish_artifact_manifest(
         &self,
         image_name: &ImageRef,
-        manifest: StoredArtifactManifest,
+        manifest: ArtifactManifestDraft,
         policy: RefConflictPolicy,
     ) -> Result<(StoredDescriptor, RefUpdate)> {
         let manifest = manifest.into_oci_image_manifest()?;

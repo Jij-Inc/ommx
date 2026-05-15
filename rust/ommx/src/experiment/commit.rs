@@ -8,7 +8,7 @@ use super::{
     RUN_ATTRIBUTES_MEDIA_TYPE,
 };
 use crate::artifact::local_registry::{
-    LocalRegistry, RefConflictPolicy, RefUpdate, StoredArtifactManifest, StoredDescriptor,
+    ArtifactManifestDraft, LocalRegistry, RefConflictPolicy, RefUpdate, StoredDescriptor,
 };
 use crate::artifact::{media_types, sha256_digest, LocalArtifact};
 use anyhow::Result;
@@ -76,7 +76,7 @@ pub(super) fn build_and_publish(
         .map_err(|e| crate::error!("Failed to build empty config descriptor: {e}"))?;
     let config_descriptor = registry.stage_blob(config_descriptor, &empty_config_bytes)?;
 
-    let manifest = StoredArtifactManifest::new(
+    let manifest = ArtifactManifestDraft::new(
         MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
         config_descriptor,
         layers,

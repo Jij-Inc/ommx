@@ -1,5 +1,54 @@
-//! Manage messages as container
+//! OMMX Artifact storage and exchange.
 //!
+//! This module deliberately separates data-model states from API
+//! lifecycle operations:
+//!
+//! Data-model terms:
+//!
+//! - **Descriptor** is the OCI descriptor itself. It states digest,
+//!   size, media type, and annotations, but does not prove that the
+//!   described bytes exist in any OMMX Local Registry.
+//! - **Stored** is a Local Registry storage invariant. A
+//!   [`local_registry::StoredDescriptor`] means the descriptor's digest
+//!   has corresponding bytes in that Local Registry's BlobStore. It
+//!   does not mean "this call wrote the bytes"; an already-present CAS
+//!   blob satisfies the same invariant.
+//! - **Unsealed** is the data-model state of a multi-blob object whose
+//!   component blobs may already be stored, but whose root manifest has
+//!   not yet been stored. Unsealed state can still change.
+//! - **Sealed** is the data-model state after the root manifest bytes
+//!   have been stored and a root `StoredDescriptor` exists. The sealed
+//!   artifact content is immutable and addressable by digest.
+//! - **Published** is the registry-index state where a ref points at a
+//!   sealed root manifest descriptor.
+//!
+//! API and operation terms:
+//!
+//! - **Draft** is an API lifecycle term for a mutable SDK-side object
+//!   being edited by the caller. [`ArtifactDraft`] owns unsealed
+//!   artifact state.
+//! - **Store** is the Local Registry / BlobStore operation that writes
+//!   bytes as a content-addressed blob and yields a
+//!   `StoredDescriptor`.
+//! - **Seal** is the data-model operation that creates and stores the
+//!   root manifest blob for unsealed state, yielding the root
+//!   `StoredDescriptor`. It does not update a ref.
+//! - **Publish** is the Local Registry / index operation that points a
+//!   ref at a sealed root manifest descriptor. It is not a payload
+//!   blob write.
+//! - **Commit** is the Artifact / Experiment lifecycle operation that
+//!   moves a draft from unsealed state to a sealed, normally published,
+//!   [`LocalArtifact`]. Public SDK code should describe this operation
+//!   as commit.
+//! - **Import** is a boundary operation that reads an external source
+//!   such as an OCI directory, archive, or remote registry and stores
+//!   the referenced bytes in the Local Registry while preserving the
+//!   source identity.
+//!
+//! In this model, `add_*` methods write payload bytes to the Local
+//! Registry immediately and return `StoredDescriptor`s. `commit()`
+//! then creates and stores the manifest blob and updates the registry
+//! ref.
 
 mod annotations;
 mod config;

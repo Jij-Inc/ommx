@@ -8,10 +8,15 @@
 //! *run space* (owned by a single [`Run`]).
 //!
 //! Each `log_*` call writes its payload to the Local Registry's
-//! content-addressed BlobStore immediately, keeping only an OCI
-//! descriptor in memory. [`Experiment::commit`] then seals the session
-//! into a single immutable OMMX Artifact whose manifest references
-//! those already-stored blobs.
+//! content-addressed BlobStore immediately, keeping only
+//! [`crate::artifact::local_registry::StoredDescriptor`] values in
+//! memory. Until commit, the experiment is unsealed: some or all
+//! component blobs may already be stored, but no root manifest has been
+//! stored for the whole experiment. [`Experiment::commit`] seals that
+//! mutable session into a single immutable OMMX Artifact whose manifest
+//! references those already-stored blobs. The registry-level operation
+//! that updates the image ref is publish; the Experiment-level
+//! operation remains commit.
 //!
 //! ```ignore
 //! use ommx::experiment::Experiment;
