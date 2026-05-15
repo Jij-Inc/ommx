@@ -10,7 +10,7 @@ use super::{
 use crate::artifact::local_registry::{
     LocalRegistry, RefUpdate, StoredDescriptor, UnsealedArtifact,
 };
-use crate::artifact::{media_types, sha256_digest, LocalArtifact};
+use crate::artifact::{media_types, sha256_digest, ImageRef, LocalArtifact};
 use anyhow::Result;
 use oci_spec::image::{DescriptorBuilder, Digest, MediaType};
 use serde_json::json;
@@ -21,94 +21,117 @@ use std::sync::Arc;
 /// Commit an unsealed experiment state as one immutable artifact.
 pub(super) fn commit_experiment_state(
     registry: &Arc<LocalRegistry>,
-    state: &UnsealedExperimentState,
+    state: UnsealedExperimentState,
 ) -> Result<LocalArtifact> {
-    let mut layers = Vec::new();
+    state.commit(Arc::clone(registry), registry)
+}
 
-    // Record layers: experiment space first, then each run's space.
-    // `layers[]` keeps one descriptor per record (digests may repeat
-    // across annotation-distinct layers). The payload bytes were
-    // already written to the BlobStore when each record was logged.
-    let run_records = state.runs.iter().flat_map(|run| run.records.iter());
-    for record in state.records.iter().chain(run_records) {
-        layers.push(record.descriptor.clone());
+impl UnsealedExperimentState {
+    /// Consume the unsealed experiment state and commit it as one
+    /// immutable artifact. This is the state-level counterpart of the
+    /// public `Experiment::commit(self)` lifecycle operation.
+    pub(super) fn commit(
+        self,
+        registry_handle: Arc<LocalRegistry>,
+        registry: &LocalRegistry,
+    ) -> Result<LocalArtifact> {
+        let image_name = self.image_name(registry)?;
+        let artifact = self.into_unsealed_artifact(registry)?;
+        let sealed_artifact = registry.seal_artifact(artifact)?;
+        let ref_update = registry.publish_manifest_ref(&image_name, &sealed_artifact)?;
+        if let RefUpdate::Conflicted {
+            existing_manifest_digest,
+            incoming_manifest_digest,
+        } = ref_update
+        {
+            crate::bail!(
+                "Local registry ref {image_name} already points to {existing_manifest_digest}; \
+                 experiment manifest {incoming_manifest_digest} was not published"
+            );
+        }
+
+        Ok(LocalArtifact::from_parts(
+            registry_handle,
+            image_name,
+            sealed_artifact.digest().clone(),
+        ))
     }
 
-    // Aggregate layers, materialised at commit time.
-    let run_parameters = serde_json::to_vec(&run_parameters_json(state))
-        .map_err(|e| crate::error!("Failed to encode run parameters JSON: {e}"))?;
-    let descriptor = store_aggregate_layer(
-        registry,
-        RUN_PARAMETERS_MEDIA_TYPE,
-        LAYER_KIND_RUN_PARAMETERS,
-        &run_parameters,
-    )?;
-    layers.push(descriptor);
+    /// Materialize commit-time aggregate layers and assemble the
+    /// unsealed root artifact. This stores component blobs but does not
+    /// create the root manifest blob and does not update any image ref.
+    fn into_unsealed_artifact(self, registry: &LocalRegistry) -> Result<UnsealedArtifact> {
+        let mut layers = Vec::new();
 
-    let run_attributes = serde_json::to_vec(&run_attributes_json(state))
-        .map_err(|e| crate::error!("Failed to encode run attributes JSON: {e}"))?;
-    let descriptor = store_aggregate_layer(
-        registry,
-        RUN_ATTRIBUTES_MEDIA_TYPE,
-        LAYER_KIND_RUN_ATTRIBUTES,
-        &run_attributes,
-    )?;
-    layers.push(descriptor);
+        // Record layers: experiment space first, then each run's
+        // space. `layers[]` keeps one descriptor per record (digests
+        // may repeat across annotation-distinct layers). The payload
+        // bytes were already written when each record was logged.
+        let run_records = self.runs.iter().flat_map(|run| run.records.iter());
+        for record in self.records.iter().chain(run_records) {
+            layers.push(record.descriptor.clone());
+        }
 
-    let index = serde_json::to_vec(&experiment_index_json(state))
-        .map_err(|e| crate::error!("Failed to encode experiment index JSON: {e}"))?;
-    let descriptor = store_aggregate_layer(
-        registry,
-        EXPERIMENT_INDEX_MEDIA_TYPE,
-        LAYER_KIND_INDEX,
-        &index,
-    )?;
-    layers.push(descriptor);
+        // Aggregate layers, materialised at commit time.
+        let run_parameters = serde_json::to_vec(&run_parameters_json(&self))
+            .map_err(|e| crate::error!("Failed to encode run parameters JSON: {e}"))?;
+        let descriptor = store_aggregate_layer(
+            registry,
+            RUN_PARAMETERS_MEDIA_TYPE,
+            LAYER_KIND_RUN_PARAMETERS,
+            &run_parameters,
+        )?;
+        layers.push(descriptor);
 
-    // OCI 1.1 empty config blob. Built without an `annotations` field
-    // to match `ArtifactDraft`'s manifest shape.
-    let empty_config_bytes = media_types::OCI_EMPTY_CONFIG_BYTES.to_vec();
-    let config_descriptor = DescriptorBuilder::default()
-        .media_type(MediaType::EmptyJSON)
-        .digest(
-            Digest::from_str(&sha256_digest(&empty_config_bytes))
-                .map_err(|e| crate::error!("Failed to parse empty config digest: {e}"))?,
-        )
-        .size(empty_config_bytes.len() as u64)
-        .build()
-        .map_err(|e| crate::error!("Failed to build empty config descriptor: {e}"))?;
-    let config_descriptor = registry.store_blob(config_descriptor, &empty_config_bytes)?;
+        let run_attributes = serde_json::to_vec(&run_attributes_json(&self))
+            .map_err(|e| crate::error!("Failed to encode run attributes JSON: {e}"))?;
+        let descriptor = store_aggregate_layer(
+            registry,
+            RUN_ATTRIBUTES_MEDIA_TYPE,
+            LAYER_KIND_RUN_ATTRIBUTES,
+            &run_attributes,
+        )?;
+        layers.push(descriptor);
 
-    let artifact = UnsealedArtifact::new(
-        MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
-        config_descriptor,
-        layers,
-        None,
-        manifest_annotations(state),
-    );
-    let image_name = match &state.requested_ref {
-        Some(image_ref) => image_ref.clone(),
-        None => registry.synthesize_anonymous_image_name()?,
-    };
+        let index = serde_json::to_vec(&experiment_index_json(&self))
+            .map_err(|e| crate::error!("Failed to encode experiment index JSON: {e}"))?;
+        let descriptor = store_aggregate_layer(
+            registry,
+            EXPERIMENT_INDEX_MEDIA_TYPE,
+            LAYER_KIND_INDEX,
+            &index,
+        )?;
+        layers.push(descriptor);
 
-    let sealed_artifact = registry.seal_artifact(artifact)?;
-    let ref_update = registry.publish_manifest_ref(&image_name, &sealed_artifact)?;
-    if let RefUpdate::Conflicted {
-        existing_manifest_digest,
-        incoming_manifest_digest,
-    } = ref_update
-    {
-        crate::bail!(
-            "Local registry ref {image_name} already points to {existing_manifest_digest}; \
-             experiment manifest {incoming_manifest_digest} was not published"
-        );
+        // OCI 1.1 empty config blob. Built without an `annotations`
+        // field to match `ArtifactDraft`'s manifest shape.
+        let empty_config_bytes = media_types::OCI_EMPTY_CONFIG_BYTES.to_vec();
+        let config_descriptor = DescriptorBuilder::default()
+            .media_type(MediaType::EmptyJSON)
+            .digest(
+                Digest::from_str(&sha256_digest(&empty_config_bytes))
+                    .map_err(|e| crate::error!("Failed to parse empty config digest: {e}"))?,
+            )
+            .size(empty_config_bytes.len() as u64)
+            .build()
+            .map_err(|e| crate::error!("Failed to build empty config descriptor: {e}"))?;
+        let config_descriptor = registry.store_blob(config_descriptor, &empty_config_bytes)?;
+
+        Ok(UnsealedArtifact::new(
+            MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
+            config_descriptor,
+            layers,
+            None,
+            manifest_annotations(&self),
+        ))
     }
 
-    Ok(LocalArtifact::from_parts(
-        Arc::clone(registry),
-        image_name,
-        sealed_artifact.digest().clone(),
-    ))
+    fn image_name(&self, registry: &LocalRegistry) -> Result<ImageRef> {
+        match &self.requested_ref {
+            Some(image_ref) => Ok(image_ref.clone()),
+            None => registry.synthesize_anonymous_image_name(),
+        }
+    }
 }
 
 /// Store a commit-time aggregate JSON layer and return its

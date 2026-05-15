@@ -71,9 +71,9 @@ fn run_lifecycle_assigns_ids_and_records_status() {
 
     with_unsealed_state(&experiment, |state| {
         assert_eq!(state.runs[0].status, RunStatus::Finished);
-        assert!(state.runs[0].elapsed_secs.is_some());
+        assert!(state.runs[0].elapsed_secs >= 0.0);
         assert_eq!(state.runs[1].status, RunStatus::Failed);
-        assert!(state.runs[1].elapsed_secs.is_some());
+        assert!(state.runs[1].elapsed_secs >= 0.0);
     });
 }
 

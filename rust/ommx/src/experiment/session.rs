@@ -1,6 +1,6 @@
 //! The public `Experiment` / `Run` handles and their `log_*` API.
 
-use super::model::{RecordRef, RunState, RunStatus, Space, UnsealedExperimentState};
+use super::model::{RecordRef, RunEntry, RunStatus, Space, UnsealedExperimentState};
 use super::{build_descriptor, commit, ANN_RECORD_NAME, ANN_RUN_ID, ANN_SPACE};
 use crate::artifact::local_registry::LocalRegistry;
 use crate::artifact::{media_types, sha256_digest, ImageRef, LocalArtifact};
@@ -8,7 +8,7 @@ use crate::{Instance, SampleSet, Solution};
 use anyhow::Result;
 use oci_spec::image::MediaType;
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::str::FromStr;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
@@ -42,7 +42,10 @@ pub struct SealedExperiment {
 #[derive(Debug)]
 pub struct Run<'exp> {
     experiment: &'exp Experiment,
-    state: Option<RunState>,
+    run_id: u64,
+    records: Vec<RecordRef>,
+    parameters: BTreeMap<String, Value>,
+    started_at: Instant,
 }
 
 impl Experiment {
@@ -82,7 +85,10 @@ impl Experiment {
         state.next_run_id += 1;
         Ok(Run {
             experiment: self,
-            state: Some(RunState::new(run_id)),
+            run_id,
+            records: Vec::new(),
+            parameters: BTreeMap::new(),
+            started_at: Instant::now(),
         })
     }
 
@@ -132,7 +138,7 @@ impl Experiment {
         Ok(())
     }
 
-    fn push_closed_run(&self, run: RunState) -> Result<()> {
+    fn push_closed_run(&self, run: RunEntry) -> Result<()> {
         let mut state = self.lock_state();
         if state
             .runs
@@ -168,22 +174,8 @@ impl Experiment {
                 poisoned.into_inner()
             }
         };
-        ensure_no_running_runs(&state)?;
-        let artifact = commit::commit_experiment_state(&self.registry, &state)?;
+        let artifact = commit::commit_experiment_state(&self.registry, state)?;
         Ok(SealedExperiment { artifact })
-    }
-}
-
-impl RunState {
-    fn new(run_id: u64) -> Self {
-        Self {
-            run_id,
-            records: Vec::new(),
-            parameters: Default::default(),
-            status: RunStatus::Running,
-            started_at: Instant::now(),
-            elapsed_secs: None,
-        }
     }
 }
 
@@ -202,7 +194,7 @@ impl SealedExperiment {
 impl<'exp> Run<'exp> {
     /// This run's 0-based id within the experiment.
     pub fn run_id(&self) -> u64 {
-        self.state_ref().run_id
+        self.run_id
     }
 
     /// Record a scalar parameter for this run. Parameters are not
@@ -217,7 +209,7 @@ impl<'exp> Run<'exp> {
         let value = serde_json::to_value(value)
             .map_err(|e| crate::error!("Failed to encode run parameter `{name}`: {e}"))?;
         ensure_parameter_scalar(&name, &value)?;
-        self.state_mut().parameters.insert(name, value);
+        self.parameters.insert(name, value);
         Ok(())
     }
 
@@ -267,41 +259,35 @@ impl<'exp> Run<'exp> {
         self.close(RunStatus::Failed)
     }
 
-    fn state_ref(&self) -> &RunState {
-        self.state
-            .as_ref()
-            .expect("Run state is present until finish/fail consumes the handle")
-    }
-
-    fn state_mut(&mut self) -> &mut RunState {
-        self.state
-            .as_mut()
-            .expect("Run state is present until finish/fail consumes the handle")
-    }
-
     fn add_record(&mut self, name: &str, media_type: MediaType, bytes: &[u8]) -> Result<()> {
-        let run_id = self.state_ref().run_id;
         let record_ref = store_record_ref(
             &self.experiment.registry,
             Space::Run,
-            Some(run_id),
+            Some(self.run_id),
             name,
             media_type,
             bytes,
         )?;
-        upsert_record_ref(&mut self.state_mut().records, record_ref);
+        upsert_record_ref(&mut self.records, record_ref);
         Ok(())
     }
 
-    fn close(mut self, status: RunStatus) -> Result<()> {
-        let run_id = self.state_ref().run_id;
-        let mut run = self
-            .state
-            .take()
-            .ok_or_else(|| crate::error!("Run {run_id} was already closed"))?;
-        run.elapsed_secs = Some(run.started_at.elapsed().as_secs_f64());
-        run.status = status;
-        self.experiment.push_closed_run(run)?;
+    fn close(self, status: RunStatus) -> Result<()> {
+        let Run {
+            experiment,
+            run_id,
+            records,
+            parameters,
+            started_at,
+        } = self;
+        let run = RunEntry {
+            run_id,
+            records,
+            parameters,
+            status,
+            elapsed_secs: started_at.elapsed().as_secs_f64(),
+        };
+        experiment.push_closed_run(run)?;
         Ok(())
     }
 }
@@ -313,20 +299,6 @@ fn ensure_parameter_scalar(name: &str, value: &Value) -> Result<()> {
             crate::bail!("Run parameter `{name}` must be a JSON scalar, got {value}")
         }
     }
-}
-
-fn ensure_no_running_runs(state: &UnsealedExperimentState) -> Result<()> {
-    if let Some(run) = state
-        .runs
-        .iter()
-        .find(|run| run.status == RunStatus::Running)
-    {
-        crate::bail!(
-            "Run {} is still running; finish or fail it before committing the experiment",
-            run.run_id
-        );
-    }
-    Ok(())
 }
 
 /// Build-phase upsert: a record with the same `(media_type, name)`
