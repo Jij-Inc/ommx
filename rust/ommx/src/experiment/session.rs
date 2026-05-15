@@ -20,7 +20,6 @@ const JSON_MEDIA_TYPE: &str = "application/json";
 #[derive(Debug)]
 pub struct Experiment {
     pub(super) registry: Arc<LocalRegistry>,
-    session_id: uuid::Uuid,
     pub(super) state: Mutex<UnsealedExperimentState>,
 }
 
@@ -66,7 +65,6 @@ impl Experiment {
     ) -> Self {
         Experiment {
             registry,
-            session_id: uuid::Uuid::new_v4(),
             state: Mutex::new(UnsealedExperimentState {
                 name: name.into(),
                 requested_ref,
@@ -134,10 +132,7 @@ impl Experiment {
         Ok(())
     }
 
-    fn push_closed_run(&self, run: RunState, session_id: uuid::Uuid) -> Result<()> {
-        if session_id != self.session_id {
-            crate::bail!("Run belongs to a different experiment session");
-        }
+    fn push_closed_run(&self, run: RunState) -> Result<()> {
         let mut state = self.lock_state();
         if state
             .runs
@@ -306,8 +301,7 @@ impl<'exp> Run<'exp> {
             .ok_or_else(|| crate::error!("Run {run_id} was already closed"))?;
         run.elapsed_secs = Some(run.started_at.elapsed().as_secs_f64());
         run.status = status;
-        self.experiment
-            .push_closed_run(run, self.experiment.session_id)?;
+        self.experiment.push_closed_run(run)?;
         Ok(())
     }
 }
