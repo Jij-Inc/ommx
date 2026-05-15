@@ -2,14 +2,14 @@
 
 use super::model::{ExperimentState, RecordRef, RunState, RunStatus, Space};
 use super::{build_descriptor, commit, ANN_RECORD_NAME, ANN_RUN_ID, ANN_SPACE};
-use crate::artifact::local_registry::LocalRegistry;
-use crate::artifact::{media_types, ImageRef, LocalArtifact};
+use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
+use crate::artifact::{media_types, sha256_digest, ImageRef, LocalArtifact};
 use crate::{Instance, SampleSet, Solution};
 use anyhow::Result;
-use oci_spec::image::{Descriptor, MediaType};
+use oci_spec::image::MediaType;
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::time::Instant;
+use std::{str::FromStr, sync::Arc};
 
 /// OCI layer media type for JSON record payloads.
 const JSON_MEDIA_TYPE: &str = "application/json";
@@ -269,7 +269,7 @@ fn find_run_mut(state: &mut ExperimentState, run_id: u64) -> Result<&mut RunStat
         .ok_or_else(|| crate::error!("Run {run_id} not found in experiment"))
 }
 
-fn remember_staged_blob(state: &mut ExperimentState, descriptor: Descriptor) {
+fn remember_staged_blob(state: &mut ExperimentState, descriptor: StoredDescriptor) {
     state
         .staged_blobs
         .entry(descriptor.digest().clone())
@@ -310,9 +310,10 @@ fn stage_record_ref(
     name: &str,
     media_type: MediaType,
     bytes: &[u8],
-) -> Result<(RecordRef, Descriptor)> {
-    let digest = registry.blobs().put_bytes(bytes)?;
-
+) -> Result<(RecordRef, StoredDescriptor)> {
+    let digest = sha256_digest(bytes);
+    let digest = oci_spec::image::Digest::from_str(&digest)
+        .map_err(|e| crate::error!("Failed to parse record blob digest: {e}"))?;
     let mut annotations = HashMap::new();
     annotations.insert(ANN_SPACE.to_string(), space.as_str().to_string());
     if let Some(run_id) = run_id {
@@ -321,6 +322,7 @@ fn stage_record_ref(
     annotations.insert(ANN_RECORD_NAME.to_string(), name.to_string());
 
     let descriptor = build_descriptor(media_type, &digest, bytes.len() as u64, annotations)?;
+    let descriptor = registry.stage_blob(descriptor, bytes)?;
     Ok((
         RecordRef {
             name: name.to_string(),

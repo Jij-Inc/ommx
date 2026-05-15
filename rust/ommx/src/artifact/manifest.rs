@@ -1,7 +1,7 @@
 use super::{
     digest::sha256_digest,
     ghcr,
-    local_registry::{LocalRegistry, RefConflictPolicy, RefUpdate},
+    local_registry::{LocalRegistry, RefConflictPolicy, RefUpdate, StoredDescriptor},
     media_types::{self, OCI_EMPTY_CONFIG_BYTES},
     ImageRef, InstanceAnnotations, ParametricInstanceAnnotations, SampleSetAnnotations,
     SolutionAnnotations,
@@ -213,7 +213,7 @@ pub struct ArtifactDraft {
     image_name: ImageRef,
     default_policy: RefConflictPolicy,
     artifact_type: MediaType,
-    layers: Vec<Descriptor>,
+    layers: Vec<StoredDescriptor>,
     subject: Option<Descriptor>,
     annotations: HashMap<String, String>,
 }
@@ -304,8 +304,9 @@ impl ArtifactDraft {
         annotations: HashMap<String, String>,
     ) -> Result<Descriptor> {
         let descriptor = descriptor_from_bytes(media_type, &bytes, annotations)?;
-        self.registry.stage_blob(&descriptor, &bytes)?;
-        self.layers.push(descriptor.clone());
+        let stored_descriptor = self.registry.stage_blob(descriptor, &bytes)?;
+        let descriptor = stored_descriptor.clone().into();
+        self.layers.push(stored_descriptor);
         Ok(descriptor)
     }
 
@@ -417,14 +418,16 @@ impl ArtifactDraft {
             .size(empty_config_bytes.len() as u64)
             .build()
             .context("Failed to build empty config descriptor")?;
-        self.registry
-            .stage_blob(&config_descriptor, &empty_config_bytes)?;
+        let config_descriptor: Descriptor = self
+            .registry
+            .stage_blob(config_descriptor, &empty_config_bytes)?
+            .into();
 
         let mut builder = OciImageManifestBuilder::default()
             .schema_version(2u32)
             .artifact_type(self.artifact_type)
             .config(config_descriptor)
-            .layers(self.layers);
+            .layers(self.layers.into_iter().map(Into::into).collect::<Vec<_>>());
         if let Some(subject) = self.subject {
             builder = builder.subject(subject);
         }

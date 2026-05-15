@@ -797,7 +797,7 @@ API:
 
 ### 12.3 Artifact への写像と新規 primitive
 
-`log_*` は `ArtifactDraft` と同じく「descriptor は Local Registry に保存済み blob への参照である」という不変条件に従う。payload を `registry.blobs().put_bytes(bytes)` で BlobStore に CAS blob として書き、その digest から experiment / record annotations を載せた descriptor を組み立てる。
+`log_*` は `ArtifactDraft` と同じく「OMMX 側の保存済み descriptor は Local Registry に保存済み blob への参照である」という不変条件に従う。ただしこれは `oci_spec::image::Descriptor` の不変条件ではないため、Rust core では `StoredDescriptor` newtype で表す。payload を BlobStore に CAS blob として書き、digest / size 検証を通った descriptor だけを `StoredDescriptor` に昇格させる。
 
 `commit()` は次を行う:
 
@@ -806,7 +806,7 @@ API:
 3. tag 未指定なら `registry.synthesize_anonymous_image_name()` で anonymous image name を採番する。
 4. `publish_artifact_manifest` で manifest dependency の blob が BlobStore に存在することを検証し、manifest blob を書いて IndexStore に publish する。
 
-この実装では `Descriptor` を「Local Registry に保存済み blob への参照」として扱う。`publish_artifact_manifest` は manifest の config / layers が指す blob の存在を digest 単位で検証し、bytes を再供給させない。ArtifactDraft と Experiment はどちらも、payload 追加時に blob を保存し、commit 時には未シリアライズの `ImageManifest` を組み立てて registry に publish する。
+この実装では、内部 state は `StoredDescriptor` を「Local Registry に保存済み blob への参照」として扱う。一方、manifest / archive / Python API に出す値は通常の `oci_spec::image::Descriptor` である。`StoredDescriptor` の作成経路は Local Registry の blob 書き込み / 検証後に限定し、作成後は `Deref<Target = Descriptor>` によって通常の descriptor として読める。`publish_artifact_manifest` は manifest の config / layers が指す blob の存在を digest 単位で検証し、bytes を再供給させない。ArtifactDraft と Experiment はどちらも、payload 追加時に blob を保存し、commit 時には未シリアライズの `ImageManifest` を組み立てて registry に publish する。
 
 byte-level で同一の payload は CAS で 1 物理 blob に共有される（§7.2）。論理 Record は `(space, run_id, media type, name)` 単位なので、複数 Run が同じ `name`・同じ bytes の Record を持つ場合でも `run_id` が異なれば別 Record として両立し、同じ digest を annotations 違い（`org.ommx.experiment.run_id` 等）の複数 descriptor が指す。したがって `commit()` は manifest `layers[]` には Record ごとの全 descriptor を載せる。BlobStore 上の実体は digest で自然に de-dup され、publish 時の検証も full descriptor 一致ではなく manifest dependency の digest 存在確認で行う。
 

@@ -36,7 +36,7 @@ pub(super) fn build_and_publish(
             .staged_blobs
             .get(&digest)
             .ok_or_else(|| crate::error!("Staged blob {digest} is missing"))?;
-        layers.push(record.descriptor.clone());
+        layers.push(record.descriptor.clone().into());
     }
 
     // Aggregate layers, materialised at commit time.
@@ -72,7 +72,9 @@ pub(super) fn build_and_publish(
         .size(empty_config_bytes.len() as u64)
         .build()
         .map_err(|e| crate::error!("Failed to build empty config descriptor: {e}"))?;
-    registry.stage_blob(&config_descriptor, &empty_config_bytes)?;
+    let config_descriptor: Descriptor = registry
+        .stage_blob(config_descriptor, &empty_config_bytes)?
+        .into();
 
     let manifest = ImageManifestBuilder::default()
         .schema_version(2u32)
@@ -120,15 +122,17 @@ fn stage_aggregate_layer(
     layer_kind: &str,
     bytes: &[u8],
 ) -> Result<Descriptor> {
-    let digest = registry.blobs().put_bytes(bytes)?;
+    let digest = Digest::from_str(&sha256_digest(bytes))
+        .map_err(|e| crate::error!("Failed to parse aggregate layer digest: {e}"))?;
     let mut annotations = HashMap::new();
     annotations.insert(ANN_LAYER.to_string(), layer_kind.to_string());
-    build_descriptor(
+    let descriptor = build_descriptor(
         MediaType::Other(media_type.to_string()),
         &digest,
         bytes.len() as u64,
         annotations,
-    )
+    )?;
+    Ok(registry.stage_blob(descriptor, bytes)?.into())
 }
 
 fn manifest_annotations(state: &ExperimentState) -> HashMap<String, String> {

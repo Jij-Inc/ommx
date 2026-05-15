@@ -7,8 +7,39 @@ use super::{
 use crate::artifact::{media_types, sha256_digest, stable_json_bytes, ImageRef};
 use anyhow::{ensure, Context, Result};
 use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, ImageManifest, MediaType};
+use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
+
+/// OCI descriptor whose referenced bytes are known to exist in this
+/// Local Registry's BlobStore.
+///
+/// This is an OMMX / Local Registry invariant, not an invariant of
+/// [`oci_spec::image::Descriptor`] itself. Values are created only by
+/// [`LocalRegistry`] operations that have written or verified the
+/// content-addressed blob.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct StoredDescriptor(Descriptor);
+
+impl StoredDescriptor {
+    fn into_inner(self) -> Descriptor {
+        self.0
+    }
+}
+
+impl Deref for StoredDescriptor {
+    type Target = Descriptor;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl From<StoredDescriptor> for Descriptor {
+    fn from(value: StoredDescriptor) -> Self {
+        value.into_inner()
+    }
+}
 
 #[derive(Debug)]
 pub struct LocalRegistry {
@@ -166,7 +197,8 @@ impl LocalRegistry {
             }
         }
 
-        self.stage_blob(&manifest_descriptor, &manifest_bytes)?;
+        let manifest_descriptor = self.stage_blob(manifest_descriptor, &manifest_bytes)?;
+        let manifest_descriptor: Descriptor = manifest_descriptor.into();
         let ref_update =
             self.index
                 .put_image_ref_with_policy(image_name, &manifest_descriptor, policy)?;
@@ -219,7 +251,11 @@ impl LocalRegistry {
 
     /// CAS-write a descriptor's bytes and verify the concrete bytes
     /// match the descriptor the manifest will reference.
-    pub(crate) fn stage_blob(&self, descriptor: &Descriptor, bytes: &[u8]) -> Result<()> {
+    pub(crate) fn stage_blob(
+        &self,
+        descriptor: Descriptor,
+        bytes: &[u8],
+    ) -> Result<StoredDescriptor> {
         let digest = self.blobs.put_bytes(bytes)?;
         ensure!(
             &digest == descriptor.digest(),
@@ -234,6 +270,6 @@ impl LocalRegistry {
             descriptor.size(),
             bytes.len()
         );
-        Ok(())
+        Ok(StoredDescriptor(descriptor))
     }
 }

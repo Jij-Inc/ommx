@@ -1,8 +1,9 @@
 //! In-memory state of an experiment session: the domain state enums and
 //! the `RecordRef` / `RunState` / `ExperimentState` structs.
 
+use crate::artifact::local_registry::StoredDescriptor;
 use crate::artifact::{ImageRef, LocalArtifact};
-use oci_spec::image::{Descriptor, Digest};
+use oci_spec::image::Digest;
 use std::{collections::HashMap, time::Instant};
 
 /// The storage space a [`RecordRef`] belongs to.
@@ -49,9 +50,10 @@ impl RunStatus {
 #[derive(Debug, Clone)]
 pub(super) struct RecordRef {
     pub(super) name: String,
-    /// OCI layer descriptor; carries the payload media type and the
-    /// experiment / record annotations.
-    pub(super) descriptor: Descriptor,
+    /// OCI layer descriptor whose payload bytes are present in the
+    /// Local Registry BlobStore. Carries the payload media type and
+    /// the experiment / record annotations.
+    pub(super) descriptor: StoredDescriptor,
 }
 
 /// In-memory state of a single run.
@@ -78,7 +80,7 @@ pub(super) struct ExperimentState {
     pub(super) runs: Vec<RunState>,
     /// CAS-written blobs available for commit-time publication, keyed
     /// by digest.
-    pub(super) staged_blobs: HashMap<Digest, Descriptor>,
+    pub(super) staged_blobs: HashMap<Digest, StoredDescriptor>,
     pub(super) next_run_id: u64,
     pub(super) committed: bool,
     pub(super) artifact: Option<LocalArtifact>,

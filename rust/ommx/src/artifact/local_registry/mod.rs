@@ -50,6 +50,7 @@ pub use import::oci_dir::{
 pub use import::remote::pull_image;
 pub use index::SqliteIndexStore;
 pub use registry::LocalRegistry;
+pub(crate) use registry::StoredDescriptor;
 pub use types::{
     RefConflictPolicy, RefRecord, RefUpdate, FILE_BLOB_STORE_DIR_NAME,
     OCI_IMAGE_REF_NAME_ANNOTATION, SQLITE_INDEX_FILE_NAME,
