@@ -13,12 +13,6 @@ pub struct RefRecord {
     pub updated_at: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RefConflictPolicy {
-    KeepExisting,
-    Replace,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RefUpdate {
     Inserted,

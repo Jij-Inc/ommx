@@ -4,7 +4,7 @@
 from ommx._ommx_rust import (
     ArchiveManifest,
     Artifact,
-    ArtifactBuilder,
+    ArtifactDraft,
     Descriptor,
     get_images,
     get_local_registry_root,
@@ -14,7 +14,7 @@ from ommx._ommx_rust import (
 __all__ = [
     "ArchiveManifest",
     "Artifact",
-    "ArtifactBuilder",
+    "ArtifactDraft",
     "Descriptor",
     "get_images",
     "get_local_registry_root",

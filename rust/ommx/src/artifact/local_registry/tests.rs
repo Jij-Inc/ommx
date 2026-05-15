@@ -1,6 +1,6 @@
 use super::*;
 use crate::artifact::{
-    media_types, ImageRef, LocalArtifact, LocalArtifactBuilder, LocalManifest,
+    media_types, ArtifactDraft, ImageRef, LocalArtifact, LocalManifest,
     OCI_IMAGE_MANIFEST_MEDIA_TYPE,
 };
 use anyhow::{Context, Result};
@@ -22,13 +22,13 @@ fn save_test_archive(
 ) -> Result<()> {
     let sender_dir = tempfile::tempdir()?;
     let sender_registry = Arc::new(LocalRegistry::open(sender_dir.path())?);
-    let mut builder = LocalArtifactBuilder::new(image_name);
+    let mut builder = ArtifactDraft::with_registry(sender_registry.clone(), image_name);
     builder.add_layer_bytes(
         MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.into()),
         layer_bytes,
         HashMap::new(),
     )?;
-    let local = builder.build_in_registry(sender_registry, RefConflictPolicy::Replace)?;
+    let local = builder.commit()?;
     local.save(archive_path)?;
     Ok(())
 }
@@ -56,7 +56,7 @@ fn sqlite_index_store_round_trip() -> Result<()> {
     assert_eq!(store.schema_version()?, 1);
 
     let manifest_descriptor = test_manifest_descriptor(b"manifest")?;
-    store.put_ref(
+    store.replace_ref(
         "example.com/ommx/experiment",
         "latest",
         &manifest_descriptor,
@@ -71,12 +71,12 @@ fn sqlite_index_store_round_trip() -> Result<()> {
     assert_eq!(refs[0].descriptor, manifest_descriptor);
 
     let manifest_descriptor = test_manifest_descriptor(b"other-manifest")?;
-    store.put_ref(
+    store.replace_ref(
         "example.com/foo_bar/experiment",
         "latest",
         &manifest_descriptor,
     )?;
-    store.put_ref(
+    store.replace_ref(
         "example.com/fooXbar/experiment",
         "latest",
         &manifest_descriptor,
@@ -107,11 +107,7 @@ fn concurrent_keep_existing_ref_publish_keeps_one_digest() -> Result<()> {
             let image_name = image_name.clone();
             std::thread::spawn(move || -> Result<RefUpdate> {
                 let index_store = SqliteIndexStore::open_in_registry_root(root)?;
-                index_store.put_image_ref_with_policy(
-                    &image_name,
-                    &manifest_descriptor,
-                    RefConflictPolicy::KeepExisting,
-                )
+                index_store.publish_image_ref(&image_name, &manifest_descriptor)
             })
         })
         .collect();
@@ -431,12 +427,7 @@ fn import_legacy_local_registry_replaces_existing_ref_when_requested() -> Result
         put_test_manifest_ref(&index_store, &blob_store, &image_name, b"existing-manifest")?;
     assert_ne!(existing_digest, legacy_manifest_digest);
 
-    let report = import_legacy_local_registry_with_policy(
-        &index_store,
-        &blob_store,
-        &legacy_registry_root,
-        RefConflictPolicy::Replace,
-    )?;
+    let report = replace_legacy_local_registry(&index_store, &blob_store, &legacy_registry_root)?;
     assert_eq!(
         report,
         LegacyImportReport {
@@ -561,22 +552,44 @@ fn local_registry_builds_native_image_manifest_with_artifact_type() -> Result<()
 }
 
 #[test]
-fn local_registry_build_keep_existing_skips_conflicting_manifest() -> Result<()> {
+fn local_registry_build_publish_skips_conflicting_manifest() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let registry = Arc::new(LocalRegistry::open(dir.path())?);
     let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:keep")?;
     let first = build_test_local_artifact(&registry, &image_name, b"first")?;
-    let (second, second_blob) = new_test_local_artifact_builder(image_name.clone(), b"second")?;
+    let (second, second_blob) =
+        new_test_local_artifact_builder(&registry, image_name.clone(), b"second")?;
 
     let error = second
-        .build_in_registry(registry.clone(), RefConflictPolicy::KeepExisting)
+        .commit()
         .expect_err("conflicting local registry ref should fail");
     assert!(error.to_string().contains("already points to"));
     assert_eq!(
         registry.resolve_image_name(&image_name)?,
         Some(first.manifest_digest().clone())
     );
-    assert!(!registry.blobs().exists(second_blob.digest())?);
+    // The builder writes non-manifest blobs before asking the registry
+    // to publish the manifest. On conflict, the ref is left unchanged,
+    // but already-stored CAS bytes may remain for later GC.
+    assert!(registry.blobs().exists(second_blob.digest())?);
+    Ok(())
+}
+
+#[test]
+fn local_registry_build_replace_moves_conflicting_ref() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = Arc::new(LocalRegistry::open(dir.path())?);
+    let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:replace-build")?;
+    let first = build_test_local_artifact(&registry, &image_name, b"first")?;
+    let (second_builder, _) =
+        new_test_local_artifact_builder(&registry, image_name.clone(), b"second")?;
+
+    let second = second_builder.commit_replace()?;
+    assert_ne!(first.manifest_digest(), second.manifest_digest());
+    assert_eq!(
+        registry.resolve_image_name(&image_name)?,
+        Some(second.manifest_digest().clone())
+    );
     Ok(())
 }
 
@@ -641,7 +654,7 @@ fn concurrent_legacy_imports_are_idempotent() -> Result<()> {
 }
 
 #[test]
-fn import_oci_dir_with_policy_surfaces_ref_update() -> Result<()> {
+fn import_oci_dir_surfaces_ref_update() -> Result<()> {
     // First import returns Inserted; an idempotent re-import returns
     // Unchanged. Both come back through the public OciDirImport.
     let dir = tempfile::tempdir()?;
@@ -653,31 +666,19 @@ fn import_oci_dir_with_policy_surfaces_ref_update() -> Result<()> {
     let index_store = SqliteIndexStore::open_in_registry_root(&registry_root)?;
     let blob_store = FileBlobStore::open_in_registry_root(&registry_root)?;
 
-    let first = import_oci_dir_with_policy(
-        &index_store,
-        &blob_store,
-        &legacy_dir,
-        RefConflictPolicy::KeepExisting,
-    )?;
+    let first = import_oci_dir(&index_store, &blob_store, &legacy_dir)?;
     assert_eq!(first.image_name.as_ref(), Some(&image_name));
     assert!(matches!(first.ref_update, Some(RefUpdate::Inserted)));
 
-    let second = import_oci_dir_with_policy(
-        &index_store,
-        &blob_store,
-        &legacy_dir,
-        RefConflictPolicy::KeepExisting,
-    )?;
+    let second = import_oci_dir(&index_store, &blob_store, &legacy_dir)?;
     assert_eq!(second.manifest_digest, first.manifest_digest);
     assert!(matches!(second.ref_update, Some(RefUpdate::Unchanged)));
     Ok(())
 }
 
 #[test]
-fn local_registry_import_legacy_ref_with_policy_replaces_existing() -> Result<()> {
-    // Exercises the `_with_policy` variant on `LocalRegistry::import_legacy_ref*`
-    // (added so the per-image import has the same Replace / KeepExisting
-    // surface as the batch one). With Replace the ref ends up at the
+fn local_registry_replace_legacy_ref_replaces_existing() -> Result<()> {
+    // Exercises the per-image replace variant. The ref ends up at the
     // legacy digest and the outcome is Replaced { previous }.
     let dir = tempfile::tempdir()?;
     let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:rwp")?;
@@ -694,7 +695,7 @@ fn local_registry_import_legacy_ref_with_policy_replaces_existing() -> Result<()
     )?;
     assert_ne!(existing_digest, legacy_manifest_digest);
 
-    let import = registry.import_legacy_ref_with_policy(&image_name, RefConflictPolicy::Replace)?;
+    let import = registry.replace_legacy_ref(&image_name)?;
     assert_eq!(import.manifest_digest, legacy_manifest_digest);
     assert!(matches!(
         import.ref_update,
@@ -735,7 +736,7 @@ fn local_artifact_caches_manifest_across_clones() -> Result<()> {
 #[test]
 fn local_artifact_subject_round_trips() -> Result<()> {
     // LocalArtifact::subject() goes through the cached LocalManifest
-    // and surfaces the Descriptor that LocalArtifactBuilder set via
+    // and surfaces the Descriptor that ArtifactDraft set via
     // `set_subject`. None when no subject is set.
     let dir = tempfile::tempdir()?;
     let registry = Arc::new(LocalRegistry::open(dir.path())?);
@@ -752,14 +753,14 @@ fn local_artifact_subject_round_trips() -> Result<()> {
         .build()?;
 
     let child_image = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:child")?;
-    let mut builder = LocalArtifactBuilder::new(child_image.clone());
+    let mut builder = ArtifactDraft::with_registry(registry.clone(), child_image.clone());
     builder.add_layer_bytes(
         MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
         b"child-layer".to_vec(),
         HashMap::new(),
     )?;
     builder.set_subject(subject_descriptor.clone());
-    let child = builder.build_in_registry(registry.clone(), RefConflictPolicy::KeepExisting)?;
+    let child = builder.commit()?;
     assert_eq!(child.subject()?, Some(subject_descriptor));
     Ok(())
 }
@@ -768,7 +769,7 @@ fn local_artifact_subject_round_trips() -> Result<()> {
 fn imports_legacy_v2_oci_dir_with_ommx_config_blob() -> Result<()> {
     // v2 SDK can produce Image Manifests whose `config` blob is an
     // OMMX-specific `application/org.ommx.v1.config+json` (instead of
-    // the v3 builder's OCI 1.1 empty descriptor). v3 import / read must
+    // the v3 draft's OCI 1.1 empty descriptor). v3 import / read must
     // preserve such manifests verbatim: parse-time check is artifactType
     // only (no config-shape requirement), and the config blob lands in
     // the BlobStore.
@@ -830,9 +831,9 @@ fn rejects_import_of_deprecated_artifact_manifest_layout() -> Result<()> {
 
 #[test]
 fn concurrent_publish_different_digests_keeps_one_winner() -> Result<()> {
-    // Two LocalArtifactBuilder writers race to publish *different*
-    // manifest digests under the same image_name. With KeepExisting
-    // policy the atomic publish must let exactly one writer win
+    // Two ArtifactDraft writers race to publish *different*
+    // manifest digests under the same image_name. The atomic publish
+    // operation must let exactly one writer win
     // (`Inserted`) and the other must surface as a conflict-error,
     // never leaving the registry in a state where a different
     // manifest digest claims the ref.
@@ -847,15 +848,18 @@ fn concurrent_publish_different_digests_keeps_one_winner() -> Result<()> {
             std::thread::spawn(move || -> Result<bool> {
                 let registry = Arc::new(LocalRegistry::open(registry_root)?);
                 let bytes = format!("racer-{i}");
-                let (builder, _) =
-                    new_test_local_artifact_builder(image_name.clone(), bytes.as_bytes())?;
-                match builder.build_in_registry(registry, RefConflictPolicy::KeepExisting) {
+                let (builder, _) = new_test_local_artifact_builder(
+                    &registry,
+                    image_name.clone(),
+                    bytes.as_bytes(),
+                )?;
+                match builder.commit() {
                     Ok(_) => Ok(true),
                     Err(err) => {
                         // Only the conflict outcome is acceptable here.
                         assert!(
                             err.to_string().contains("already points to"),
-                            "unexpected build_in_registry error: {err}"
+                            "unexpected commit error: {err}"
                         );
                         Ok(false)
                     }
@@ -918,8 +922,8 @@ fn concurrent_blob_writes_publish_one_complete_blob() -> Result<()> {
 fn import_oci_archive_surfaces_digest_conflict_for_same_ref() -> Result<()> {
     // Importing a second .ommx archive that shares the first's image
     // name but carries different bytes must surface a ref conflict
-    // under the default `KeepExisting` policy, not a stale `Unchanged`.
-    // Each call to `import_oci_archive` stages into a fresh tempdir
+    // under default publish semantics, not a stale `Unchanged`.
+    // Each call to `import_oci_archive` extracts into a fresh tempdir
     // that is dropped before the function returns, so SQLite's ref
     // conflict check sees the new archive's freshly hashed manifest
     // digest rather than the prior archive's bytes.
@@ -937,8 +941,8 @@ fn import_oci_archive_surfaces_digest_conflict_for_same_ref() -> Result<()> {
 
     // Stale legacy dir would silently shadow archive B's bytes. The
     // fix re-extracts B over the legacy path, so the second import sees
-    // B's digest and surfaces a ref conflict against A under the
-    // default `KeepExisting` policy.
+    // B's digest and surfaces a ref conflict against A under default
+    // publish semantics.
     let err = import_oci_archive(&registry, &archive_path_b)
         .expect_err("second import with a different manifest digest must surface a conflict");
     let msg = err.to_string();
@@ -1122,7 +1126,7 @@ fn pull_image_short_circuits_when_ref_is_present_with_blob() -> Result<()> {
     // Fast path: `pull_image` against a ref already published in the
     // SQLite Local Registry must return `Unchanged` without touching
     // the network. Constructing the artifact via
-    // `LocalArtifactBuilder` (no network) and then calling
+    // `ArtifactDraft` (no network) and then calling
     // `pull_image` against an unresolvable host exercises this — if
     // the short-circuit ever regresses, the call would attempt a DNS
     // lookup against a `.invalid` TLD and fail.
@@ -1291,21 +1295,22 @@ fn build_test_local_artifact(
     image_name: &ImageRef,
     layer_bytes: &[u8],
 ) -> Result<LocalArtifact> {
-    let (builder, _) = new_test_local_artifact_builder(image_name.clone(), layer_bytes)?;
-    builder.build_in_registry(registry.clone(), RefConflictPolicy::KeepExisting)
+    let (builder, _) = new_test_local_artifact_builder(registry, image_name.clone(), layer_bytes)?;
+    builder.commit()
 }
 
 fn new_test_local_artifact_builder(
+    registry: &Arc<LocalRegistry>,
     image_name: ImageRef,
     layer_bytes: &[u8],
-) -> Result<(LocalArtifactBuilder, Descriptor)> {
-    let mut builder = LocalArtifactBuilder::new(image_name);
+) -> Result<(ArtifactDraft, Descriptor)> {
+    let mut builder = ArtifactDraft::with_registry(Arc::clone(registry), image_name);
     let descriptor = builder.add_layer_bytes(
         MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
         layer_bytes.to_vec(),
         HashMap::from([("org.ommx.v1.instance.title".to_string(), "demo".to_string())]),
     )?;
-    Ok((builder, descriptor))
+    Ok((builder, descriptor.into()))
 }
 
 fn put_test_manifest_ref(
@@ -1315,7 +1320,7 @@ fn put_test_manifest_ref(
     bytes: &[u8],
 ) -> Result<Digest> {
     let descriptor = put_test_manifest(index_store, blob_store, bytes)?;
-    index_store.put_image_ref(image_name, &descriptor)?;
+    index_store.replace_image_ref(image_name, &descriptor)?;
     Ok(descriptor.digest().clone())
 }
 

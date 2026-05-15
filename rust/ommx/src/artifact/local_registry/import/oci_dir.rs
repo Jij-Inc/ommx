@@ -22,7 +22,7 @@
 //! primitives.
 
 use super::super::{
-    sha256_digest, FileBlobStore, RefConflictPolicy, RefUpdate, SqliteIndexStore, ValidatedDigest,
+    sha256_digest, FileBlobStore, RefUpdate, SqliteIndexStore, ValidatedDigest,
     OCI_IMAGE_REF_NAME_ANNOTATION,
 };
 use crate::artifact::{media_types, ImageRef};
@@ -65,8 +65,8 @@ pub struct OciDirRef {
 /// - `Some(Inserted)` — fresh ref published.
 /// - `Some(Unchanged)` — same `image_name` already pointed at the same
 ///   manifest digest; the import was an idempotent verify.
-/// - `Some(Replaced { previous_manifest_digest })` — caller passed
-///   `RefConflictPolicy::Replace` and an older digest was overwritten.
+/// - `Some(Replaced { previous_manifest_digest })` — a replace entry
+///   point overwrote an older digest.
 /// - `Some(Conflicted { existing, incoming })` — only seen by callers
 ///   that drive the import with `RefConflictHandling::Return` (e.g.
 ///   the legacy batch importer); the public functions still surface a
@@ -107,25 +107,26 @@ pub(super) enum RefConflictHandling {
     Return,
 }
 
-/// All the read-only state that a single OCI Image Layout directory
-/// contributes to a v3 import: identity (digest + ref-name annotation),
-/// the manifest bytes / descriptor that get persisted verbatim, the
-/// layer descriptors enumerated from the manifest, and the config
-/// blob.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum RefWriteMode {
+    Publish,
+    Replace,
+}
+
+/// The single manifest entry read from an OCI Image Layout directory.
 ///
-/// "Staged" parallels the build-side vocabulary
-/// ([`crate::artifact::StagedArtifactBlob`],
-/// [`crate::artifact::LocalArtifactBuilder::stage`]): the data is
-/// fully computed and ready for publish, but the IndexStore writes
-/// have not happened yet.
+/// This is source-side data, not Local Registry state: it carries the
+/// source identity (digest + ref-name annotation), the manifest bytes /
+/// descriptor that get imported verbatim, the layer descriptors
+/// enumerated from the manifest, and the config blob bytes.
 ///
-/// Built once by [`stage_oci_dir`] and consumed by
+/// Built once by [`read_oci_dir_entry`] and consumed by
 /// [`import_oci_dir_inner`]. v3 import is identity-preserving:
 /// `manifest_bytes` and `manifest_digest` are stored verbatim. The only
 /// supported manifest format is OCI Image Manifest (with `artifactType`
 /// set to the OMMX artifact media type); the deprecated OCI Artifact
 /// Manifest is rejected at parse time.
-struct StagedOciDir {
+struct OciDirEntry {
     manifest_digest: Digest,
     image_name: Option<ImageRef>,
     manifest_bytes: Vec<u8>,
@@ -153,26 +154,28 @@ pub fn import_oci_dir(
     blob_store: &FileBlobStore,
     oci_dir_root: impl AsRef<Path>,
 ) -> Result<OciDirImport> {
-    import_oci_dir_with_policy(
+    let (ref_info, ref_update) = import_oci_dir_inner(
         index_store,
         blob_store,
         oci_dir_root,
-        RefConflictPolicy::KeepExisting,
-    )
+        None,
+        RefWriteMode::Publish,
+        RefConflictHandling::Error,
+    )?;
+    Ok(OciDirImport::from_inner(ref_info, ref_update))
 }
 
-pub fn import_oci_dir_with_policy(
+pub fn replace_oci_dir(
     index_store: &SqliteIndexStore,
     blob_store: &FileBlobStore,
     oci_dir_root: impl AsRef<Path>,
-    policy: RefConflictPolicy,
 ) -> Result<OciDirImport> {
     let (ref_info, ref_update) = import_oci_dir_inner(
         index_store,
         blob_store,
         oci_dir_root,
         None,
-        policy,
+        RefWriteMode::Replace,
         RefConflictHandling::Error,
     )?;
     Ok(OciDirImport::from_inner(ref_info, ref_update))
@@ -200,13 +203,13 @@ pub(super) fn import_oci_dir_inner(
     blob_store: &FileBlobStore,
     oci_dir_root: impl AsRef<Path>,
     target_image_name: Option<&ImageRef>,
-    policy: RefConflictPolicy,
+    write_mode: RefWriteMode,
     conflict_handling: RefConflictHandling,
 ) -> Result<(OciDirRef, Option<RefUpdate>)> {
     let oci_dir_root = oci_dir_root.as_ref();
-    let staged = stage_oci_dir(oci_dir_root)?;
-    let manifest_digest = staged.manifest_digest.clone();
-    if let (Some(target), Some(annotated)) = (target_image_name, staged.image_name.as_ref()) {
+    let entry = read_oci_dir_entry(oci_dir_root)?;
+    let manifest_digest = entry.manifest_digest.clone();
+    if let (Some(target), Some(annotated)) = (target_image_name, entry.image_name.as_ref()) {
         ensure!(
             target == annotated,
             "OCI dir ref mismatch: requested={}, annotated={}",
@@ -218,28 +221,28 @@ pub(super) fn import_oci_dir_inner(
     // annotation; if neither is provided, no ref is written.
     let effective_image_name = target_image_name
         .cloned()
-        .or_else(|| staged.image_name.clone());
+        .or_else(|| entry.image_name.clone());
 
-    // Pre-check: under `KeepExisting`, surface the conflict before we
-    // stage any CAS writes. The atomic publish in stage 2 re-validates
+    // Pre-check: under publish semantics, surface the conflict before we
+    // store any CAS bytes. The atomic publish re-validates
     // the same condition inside the SQLite transaction, so concurrent
     // writers still get a consistent outcome; this is purely a fast
     // path for the common single-writer case.
-    if policy == RefConflictPolicy::KeepExisting {
+    if write_mode == RefWriteMode::Publish {
         if let Some(image_name) = effective_image_name.as_ref() {
             if let Some(existing_descriptor) = index_store.resolve_image_descriptor(image_name)? {
-                if existing_descriptor.digest() != staged.manifest_descriptor.digest() {
+                if existing_descriptor.digest() != entry.manifest_descriptor.digest() {
                     if conflict_handling == RefConflictHandling::Error {
                         anyhow::bail!(
                             "Local registry ref conflict for {}: existing manifest {}, incoming manifest {}",
                             image_name,
                             existing_descriptor.digest(),
-                            staged.manifest_descriptor.digest(),
+                            entry.manifest_descriptor.digest(),
                         );
                     }
                     let conflict = RefUpdate::Conflicted {
                         existing_manifest_digest: existing_descriptor.digest().clone(),
-                        incoming_manifest_digest: staged.manifest_descriptor.digest().clone(),
+                        incoming_manifest_digest: entry.manifest_descriptor.digest().clone(),
                     };
                     return Ok((
                         OciDirRef {
@@ -253,30 +256,33 @@ pub(super) fn import_oci_dir_inner(
         }
     }
 
-    // Stage 1: write CAS bytes for layers, optional config, and the
-    // manifest itself. These are idempotent and independent of the
-    // SQLite ref index.
-    let layer_descriptors = staged.layers.as_slice();
+    // Store source bytes for layers, config, and the manifest itself.
+    // These writes are idempotent and independent of the SQLite ref
+    // index.
+    let layer_descriptors = entry.layers.as_slice();
     for layer in layer_descriptors {
-        stage_oci_dir_descriptor_blob(blob_store, oci_dir_root, layer)?;
+        store_oci_dir_descriptor_blob(blob_store, oci_dir_root, layer)?;
     }
-    let (config_descriptor, config_bytes) = &staged.image_config;
-    stage_descriptor_bytes(blob_store, config_descriptor, config_bytes)?;
-    stage_descriptor_bytes(
+    let (config_descriptor, config_bytes) = &entry.image_config;
+    store_descriptor_bytes(blob_store, config_descriptor, config_bytes)?;
+    store_descriptor_bytes(
         blob_store,
-        &staged.manifest_descriptor,
-        &staged.manifest_bytes,
+        &entry.manifest_descriptor,
+        &entry.manifest_bytes,
     )?;
 
-    // Stage 2: publish the OCI manifest descriptor into the SQLite
-    // ref index. If no ref annotation / target ref exists, the import
-    // is digest-only and the CAS bytes remain reachable by digest.
+    // Publish the OCI manifest descriptor into the SQLite ref index.
+    // If no ref annotation / target ref exists, the import is
+    // digest-only and the CAS bytes remain reachable by digest.
     let ref_update = if let Some(image_name) = effective_image_name.as_ref() {
-        let update = index_store.put_image_ref_with_policy(
-            image_name,
-            &staged.manifest_descriptor,
-            policy,
-        )?;
+        let update = match write_mode {
+            RefWriteMode::Publish => {
+                index_store.publish_image_ref(image_name, &entry.manifest_descriptor)?
+            }
+            RefWriteMode::Replace => {
+                index_store.replace_image_ref(image_name, &entry.manifest_descriptor)?
+            }
+        };
         match update {
             RefUpdate::Conflicted {
                 existing_manifest_digest,
@@ -310,28 +316,29 @@ pub fn import_oci_dir_as_ref(
     oci_dir_root: impl AsRef<Path>,
     image_name: &ImageRef,
 ) -> Result<OciDirImport> {
-    import_oci_dir_as_ref_with_policy(
+    let (ref_info, ref_update) = import_oci_dir_inner(
         index_store,
         blob_store,
         oci_dir_root,
-        image_name,
-        RefConflictPolicy::KeepExisting,
-    )
+        Some(image_name),
+        RefWriteMode::Publish,
+        RefConflictHandling::Error,
+    )?;
+    Ok(OciDirImport::from_inner(ref_info, ref_update))
 }
 
-pub fn import_oci_dir_as_ref_with_policy(
+pub fn replace_oci_dir_as_ref(
     index_store: &SqliteIndexStore,
     blob_store: &FileBlobStore,
     oci_dir_root: impl AsRef<Path>,
     image_name: &ImageRef,
-    policy: RefConflictPolicy,
 ) -> Result<OciDirImport> {
     let (ref_info, ref_update) = import_oci_dir_inner(
         index_store,
         blob_store,
         oci_dir_root,
         Some(image_name),
-        policy,
+        RefWriteMode::Replace,
         RefConflictHandling::Error,
     )?;
     Ok(OciDirImport::from_inner(ref_info, ref_update))
@@ -342,10 +349,10 @@ pub fn oci_dir_image_name(oci_dir_root: impl AsRef<Path>) -> Result<Option<Image
 }
 
 pub fn oci_dir_ref(oci_dir_root: impl AsRef<Path>) -> Result<OciDirRef> {
-    let staged = stage_oci_dir(oci_dir_root)?;
+    let entry = read_oci_dir_entry(oci_dir_root)?;
     Ok(OciDirRef {
-        manifest_digest: staged.manifest_digest,
-        image_name: staged.image_name,
+        manifest_digest: entry.manifest_digest,
+        image_name: entry.image_name,
     })
 }
 
@@ -361,7 +368,7 @@ fn ensure_oci_layout(oci_dir_root: &Path) -> Result<()> {
     Ok(())
 }
 
-fn stage_oci_dir(oci_dir_root: impl AsRef<Path>) -> Result<StagedOciDir> {
+fn read_oci_dir_entry(oci_dir_root: impl AsRef<Path>) -> Result<OciDirEntry> {
     let oci_dir_root = oci_dir_root.as_ref();
     ensure_oci_layout(oci_dir_root)?;
 
@@ -388,7 +395,7 @@ fn stage_oci_dir(oci_dir_root: impl AsRef<Path>) -> Result<StagedOciDir> {
     // v3 supports only OCI Image Manifest. The deprecated OCI Artifact
     // Manifest is rejected at parse time.
     let (layers, image_config) = match index_descriptor.media_type() {
-        MediaType::ImageManifest => stage_image_manifest(oci_dir_root, &manifest_bytes)?,
+        MediaType::ImageManifest => read_image_manifest_fields(oci_dir_root, &manifest_bytes)?,
         MediaType::ArtifactManifest => anyhow::bail!(
             "OCI dir uses the deprecated OCI Artifact Manifest \
              (application/vnd.oci.artifact.manifest.v1+json), which is not supported. \
@@ -400,7 +407,7 @@ fn stage_oci_dir(oci_dir_root: impl AsRef<Path>) -> Result<StagedOciDir> {
         ),
     };
 
-    Ok(StagedOciDir {
+    Ok(OciDirEntry {
         manifest_digest,
         image_name,
         manifest_bytes,
@@ -410,13 +417,14 @@ fn stage_oci_dir(oci_dir_root: impl AsRef<Path>) -> Result<StagedOciDir> {
     })
 }
 
-/// Manifest-derived fields filled into [`StagedOciDir`] by `stage_oci_dir`.
-type StagedManifestFields = (Vec<Descriptor>, (Descriptor, Vec<u8>));
+/// Manifest-derived fields filled into [`OciDirEntry`] by
+/// [`read_oci_dir_entry`].
+type ImageManifestFields = (Vec<Descriptor>, (Descriptor, Vec<u8>));
 
-fn stage_image_manifest(
+fn read_image_manifest_fields(
     oci_dir_root: &Path,
     manifest_bytes: &[u8],
-) -> Result<StagedManifestFields> {
+) -> Result<ImageManifestFields> {
     let manifest: ImageManifest =
         serde_json::from_slice(manifest_bytes).context("Failed to parse OCI image manifest")?;
     ensure_ommx_artifact_type(manifest.artifact_type().as_ref())?;
@@ -454,7 +462,7 @@ fn ensure_ommx_artifact_type(artifact_type: Option<&MediaType>) -> Result<()> {
 /// Read a layer / config blob out of the legacy OCI dir, write it to
 /// the v3 [`FileBlobStore`] under its content digest, and verify it
 /// matches the descriptor from the source layout.
-fn stage_oci_dir_descriptor_blob(
+fn store_oci_dir_descriptor_blob(
     blob_store: &FileBlobStore,
     oci_dir_root: &Path,
     desc: &Descriptor,
@@ -468,11 +476,11 @@ fn stage_oci_dir_descriptor_blob(
         desc.size(),
         bytes.len()
     );
-    stage_descriptor_bytes(blob_store, desc, &bytes)
+    store_descriptor_bytes(blob_store, desc, &bytes)
 }
 
-/// CAS-write `bytes` for `desc` and verify the written content address.
-fn stage_descriptor_bytes(
+/// Store `bytes` for `desc` and verify the written content address.
+fn store_descriptor_bytes(
     blob_store: &FileBlobStore,
     desc: &Descriptor,
     bytes: &[u8],

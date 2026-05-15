@@ -27,8 +27,8 @@
 
 use anyhow::Result;
 use ommx::artifact::{
-    local_registry::{import_oci_archive, pull_image, LocalRegistry, RefConflictPolicy},
-    media_types, ImageRef, LocalArtifact, LocalArtifactBuilder,
+    local_registry::{import_oci_archive, pull_image, LocalRegistry},
+    media_types, ArtifactDraft, ImageRef, LocalArtifact,
 };
 use serial_test::serial;
 use std::collections::HashMap;
@@ -86,7 +86,7 @@ fn start_htpasswd_registry() -> Container<GenericImage> {
 fn build_test_artifact(image_name: ImageRef) -> Result<(LocalArtifact, tempfile::TempDir)> {
     let dir = tempfile::tempdir()?;
     let registry = Arc::new(LocalRegistry::open(dir.path())?);
-    let mut builder = LocalArtifactBuilder::new(image_name);
+    let mut builder = ArtifactDraft::with_registry(registry.clone(), image_name);
     builder.add_layer_bytes(
         oci_spec::image::MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
         b"auth-e2e-test".to_vec(),
@@ -95,7 +95,7 @@ fn build_test_artifact(image_name: ImageRef) -> Result<(LocalArtifact, tempfile:
             "auth-e2e".to_string(),
         )]),
     )?;
-    let artifact = builder.build_in_registry(registry, RefConflictPolicy::Replace)?;
+    let artifact = builder.commit()?;
     Ok((artifact, dir))
 }
 
@@ -316,13 +316,14 @@ fn cli_push_routes_through_native_path() -> Result<()> {
     let dir = tempfile::tempdir()?;
     {
         let local = Arc::new(LocalRegistry::open(dir.path())?);
-        let mut builder = LocalArtifactBuilder::new(ImageRef::parse(&image_name)?);
+        let mut builder =
+            ArtifactDraft::with_registry(local.clone(), ImageRef::parse(&image_name)?);
         builder.add_layer_bytes(
             oci_spec::image::MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
             b"cli-dispatch".to_vec(),
             HashMap::new(),
         )?;
-        builder.build_in_registry(local, RefConflictPolicy::Replace)?;
+        builder.commit()?;
     }
 
     // CARGO_BIN_EXE_ommx is set by Cargo whenever the `ommx` binary

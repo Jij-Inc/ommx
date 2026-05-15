@@ -29,7 +29,7 @@
 //! GC; the SQLite index never stores a manifest / layer cache.
 
 use super::super::{
-    sha256_digest, FileBlobStore, LocalRegistry, RefConflictPolicy, RefUpdate, ValidatedDigest,
+    sha256_digest, FileBlobStore, LocalRegistry, RefUpdate, ValidatedDigest,
     OCI_IMAGE_REF_NAME_ANNOTATION,
 };
 use super::oci_dir::OciDirImport;
@@ -181,7 +181,7 @@ fn read_archive_blob(path: &Path, digest: &Digest) -> Result<Vec<u8>> {
 /// annotation (a shape v2-era OMMX SDKs produced in real workflows)
 /// is imported under a freshly-synthesized anonymous ref name of the
 /// form `<registry-id8>.ommx.local/anonymous:<timestamp>-<nonce>` —
-/// the same shape `LocalArtifactBuilder::new_anonymous` produces.
+/// the same shape `ArtifactDraft::new_anonymous` produces.
 /// The returned [`OciDirImport`]'s `image_name` is then `Some(...)`
 /// with the synthesized name, so callers always have a way to address
 /// the imported artifact. Each `import_oci_archive` call on the same
@@ -194,7 +194,7 @@ fn read_archive_blob(path: &Path, digest: &Digest) -> Result<Vec<u8>> {
 /// publish (`Inserted` on first call for this image, `Unchanged` for
 /// an idempotent re-import of the same digest under the same ref, or
 /// `Err` for a ref conflict when the new archive's manifest digest
-/// differs from the SQLite-recorded one under `KeepExisting` policy).
+/// differs from the SQLite-recorded one).
 pub fn import_oci_archive(registry: &Arc<LocalRegistry>, path: &Path) -> Result<OciDirImport> {
     let file = File::open(path)
         .with_context(|| format!("Failed to open OCI archive {}", path.display()))?;
@@ -244,7 +244,7 @@ pub fn import_oci_archive(registry: &Arc<LocalRegistry>, path: &Path) -> Result<
     // synthesize an anonymous ref name here so the SQLite Local
     // Registry has a key to address the imported artifact under.
     // The synthesized name follows the same shape
-    // `LocalArtifactBuilder::new_anonymous` produces, so
+    // `ArtifactDraft::new_anonymous` produces, so
     // `ommx artifact prune-anonymous` cleans them by the same
     // structural match.
     let image_name = match image_name_from_index_descriptor(index_descriptor)? {
@@ -307,11 +307,9 @@ pub fn import_oci_archive(registry: &Arc<LocalRegistry>, path: &Path) -> Result<
         ensure_blob_exists(registry.blobs(), layer, path)?;
     }
 
-    let ref_update = registry.index().put_image_ref_with_policy(
-        &image_name,
-        index_descriptor,
-        RefConflictPolicy::KeepExisting,
-    )?;
+    let ref_update = registry
+        .index()
+        .publish_image_ref(&image_name, index_descriptor)?;
     // Public entry point: surface a ref conflict as `Err`. Callers
     // that need batch / report-style handling (e.g. legacy import)
     // use the directory import path, which can return conflicts.

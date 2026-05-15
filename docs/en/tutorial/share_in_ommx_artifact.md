@@ -114,13 +114,13 @@ df = pd.DataFrame.from_dict(
 
 ## Creating an OMMX Artifact as a File
 
-OMMX Artifacts can be managed as files or by assigning them container-like names. Here, we'll show how to save the data as a file. Using the OMMX SDK, we'll store the data in a new file called `my_instance.ommx`. First, we need an `ArtifactBuilder`.
+OMMX Artifacts can be managed as files or by assigning them container-like names. Here, we'll show how to save the data as a file. Using the OMMX SDK, we'll store the data in a new file called `my_instance.ommx`. First, we need an `ArtifactDraft`.
 
 ```{code-cell} ipython3
 :tags: [remove-output]
 
 import os
-from ommx.artifact import ArtifactBuilder
+from ommx.artifact import ArtifactDraft
 
 # Specify the name of the OMMX Artifact file
 filename = "my_instance.ommx"
@@ -129,38 +129,38 @@ filename = "my_instance.ommx"
 if os.path.exists(filename):
     os.remove(filename)
 
-# 1. Create a builder; v3 publishes every artifact into the SQLite
-#    Local Registry, so the builder takes (or synthesizes) an image
+# 1. Create a draft; v3 publishes every artifact into the SQLite
+#    Local Registry, so the draft takes (or synthesizes) an image
 #    name. Use `new_anonymous()` if you don't want to invent one.
-builder = ArtifactBuilder.new_anonymous()
+draft = ArtifactDraft.new_anonymous()
 ```
 
-[`ArtifactBuilder`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder) has two primary constructors. v3 always publishes into the SQLite Local Registry, so a build produces a registry entry; if you also want a `.ommx` file for sharing, call `Artifact.save(path)` afterward.
+[`ArtifactDraft`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactDraft) has three primary constructors. v3 always publishes into the SQLite Local Registry, so a commit produces a registry entry; if you also want a `.ommx` file for sharing, call `Artifact.save(path)` afterward.
 
 | Constructor | Description |
 | --- | --- |
-| [`ArtifactBuilder.new`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.new) | Caller-supplied image name |
-| [`ArtifactBuilder.new_anonymous`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.new_anonymous) | Synthesized name `<registry-id8>.ommx.local/anonymous:<local-timestamp>-<nonce>` for share-and-discard archives |
-| [`ArtifactBuilder.for_github`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.for_github) | Convenience for GitHub Container Registry naming |
+| [`ArtifactDraft.new`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactDraft.new) | Caller-supplied image name |
+| [`ArtifactDraft.new_anonymous`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactDraft.new_anonymous) | Synthesized name `<registry-id8>.ommx.local/anonymous:<local-timestamp>-<nonce>` for share-and-discard archives |
+| [`ArtifactDraft.for_github`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactDraft.for_github) | Convenience for GitHub Container Registry naming |
 
 `new_anonymous` uses the `.local` mDNS link-local TLD so an accidental push won't leak to a real remote registry. The registry-id prefix is generated once per `LocalRegistry` (a random UUID stored in the registry's SQLite metadata) — anonymous artifacts from the same registry share a prefix, so when an archive is shared you can tell artifacts apart by their source registry. Clean accumulated anonymous entries with `ommx artifact prune-anonymous` (which removes entries from every registry-id prefix, not just the current host's).
 
-**Caveat on the timestamp**: the synthesized tag is the **builder's local time** without a timezone marker. If an anonymous archive is shared with someone in a different timezone, the recipient will read the same digits as their own local time, so the time component is not absolute across machines. Pick an explicit name via `ArtifactBuilder.new(...)` if you need a stable, timezone-unambiguous tag.
+**Caveat on the timestamp**: the synthesized tag is the **draft's local time** without a timezone marker. If an anonymous archive is shared with someone in a different timezone, the recipient will read the same digits as their own local time, so the time component is not absolute across machines. Pick an explicit name via `ArtifactDraft.new(...)` if you need a stable, timezone-unambiguous tag.
 
 Regardless of the initialization method, you can save `ommx.v1.Instance` and other data in the same way. Let's add the data prepared above.
 
 ```{code-cell} ipython3
 # Add ommx.v1.Instance object
-desc_instance = builder.add_instance(instance)
+desc_instance = draft.add_instance(instance)
 
 # Add ommx.v1.Solution object
-desc_solution = builder.add_solution(solution)
+desc_solution = draft.add_solution(solution)
 
 # Add pandas.DataFrame object
-desc_df = builder.add_dataframe(df, title="Optimal Solution of Knapsack Problem")
+desc_df = draft.add_dataframe(df, title="Optimal Solution of Knapsack Problem")
 
 # Add an object that can be converted to JSON
-desc_json = builder.add_json(data, title="Data of Knapsack Problem")
+desc_json = draft.add_json(data, title="Data of Knapsack Problem")
 ```
 
 In OMMX Artifacts, data is stored in layers, each with a dedicated media type. Functions like `add_instance` automatically set these media types and add layers. These functions return a `Description` object with information about each created layer.
@@ -169,13 +169,13 @@ In OMMX Artifacts, data is stored in layers, each with a dedicated media type. F
 desc_json.to_dict()
 ```
 
-The part added as `title="..."` in `add_json` is saved as an annotation of the layer. OMMX Artifact is a data format for humans, so this is basically information for humans to read. The `ArtifactBuilder.add_*` functions all accept optional keyword arguments and automatically convert them to the `org.ommx.user.` namespace.
+The part added as `title="..."` in `add_json` is saved as an annotation of the layer. OMMX Artifact is a data format for humans, so this is basically information for humans to read. The `ArtifactDraft.add_*` functions all accept optional keyword arguments and automatically convert them to the `org.ommx.user.` namespace.
 
-Finally, call `build` to publish the artifact into the SQLite Local Registry, then `save` to export it as a `.ommx` file.
+Finally, call `commit` to publish the artifact into the SQLite Local Registry, then `save` to export it as a `.ommx` file.
 
 ```{code-cell} ipython3
 # 3. Publish into the local registry
-artifact = builder.build()
+artifact = draft.commit()
 
 # 4. Export to a .ommx archive for sharing
 artifact.save(filename)

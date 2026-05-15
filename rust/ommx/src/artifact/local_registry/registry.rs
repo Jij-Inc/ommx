@@ -1,13 +1,105 @@
 use super::{
-    import_legacy_local_registry, import_legacy_local_registry_ref,
-    import_legacy_local_registry_ref_with_policy, import_legacy_local_registry_with_policy,
-    FileBlobStore, LegacyImportReport, OciDirImport, RefConflictPolicy, RefUpdate,
+    import_legacy_local_registry, import_legacy_local_registry_ref, replace_legacy_local_registry,
+    replace_legacy_local_registry_ref, FileBlobStore, LegacyImportReport, OciDirImport, RefUpdate,
     SqliteIndexStore,
 };
-use crate::artifact::{media_types, ImageRef, StagedArtifactBlob};
+use crate::artifact::{media_types, sha256_digest, stable_json_bytes, ImageRef};
 use anyhow::{ensure, Context, Result};
-use oci_spec::image::{Descriptor, Digest, ImageManifest, MediaType};
+use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, ImageManifest, MediaType};
+use std::collections::HashMap;
+use std::ops::Deref;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
+
+/// OCI descriptor whose referenced bytes are known to exist in this
+/// Local Registry's BlobStore.
+///
+/// This is an OMMX / Local Registry invariant, not an invariant of
+/// [`oci_spec::image::Descriptor`] itself. Values are created only by
+/// [`LocalRegistry`] operations that have written or verified the
+/// content-addressed blob.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoredDescriptor(Descriptor);
+
+impl StoredDescriptor {
+    fn into_inner(self) -> Descriptor {
+        self.0
+    }
+}
+
+impl Deref for StoredDescriptor {
+    type Target = Descriptor;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl From<StoredDescriptor> for Descriptor {
+    fn from(value: StoredDescriptor) -> Self {
+        value.into_inner()
+    }
+}
+
+/// Sealed OMMX Artifact.
+///
+/// The inner descriptor is stored in this registry, and it is known to
+/// be the root manifest descriptor produced by [`LocalRegistry::seal_artifact`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SealedArtifact(StoredDescriptor);
+
+impl Deref for SealedArtifact {
+    type Target = StoredDescriptor;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct UnsealedArtifact {
+    artifact_type: MediaType,
+    config: StoredDescriptor,
+    layers: Vec<StoredDescriptor>,
+    subject: Option<Descriptor>,
+    annotations: HashMap<String, String>,
+}
+
+impl UnsealedArtifact {
+    pub(crate) fn new(
+        artifact_type: MediaType,
+        config: StoredDescriptor,
+        layers: Vec<StoredDescriptor>,
+        subject: Option<Descriptor>,
+        annotations: HashMap<String, String>,
+    ) -> Self {
+        Self {
+            artifact_type,
+            config,
+            layers,
+            subject,
+            annotations,
+        }
+    }
+
+    pub(crate) fn into_oci_image_manifest(self) -> Result<ImageManifest> {
+        let config: Descriptor = self.config.into();
+        let mut builder = oci_spec::image::ImageManifestBuilder::default()
+            .schema_version(2u32)
+            .artifact_type(self.artifact_type)
+            .config(config)
+            .layers(self.layers.into_iter().map(Into::into).collect::<Vec<_>>());
+        if let Some(subject) = self.subject {
+            builder = builder.subject(subject);
+        }
+        if !self.annotations.is_empty() {
+            builder = builder.annotations(self.annotations);
+        }
+        builder
+            .build()
+            .context("Failed to build OCI image manifest")
+    }
+}
 
 #[derive(Debug)]
 pub struct LocalRegistry {
@@ -44,29 +136,16 @@ impl LocalRegistry {
         import_legacy_local_registry_ref(&self.index, &self.blobs, &self.root, image_name)
     }
 
-    pub fn import_legacy_ref_with_policy(
-        &self,
-        image_name: &ImageRef,
-        policy: RefConflictPolicy,
-    ) -> Result<OciDirImport> {
-        import_legacy_local_registry_ref_with_policy(
-            &self.index,
-            &self.blobs,
-            &self.root,
-            image_name,
-            policy,
-        )
+    pub fn replace_legacy_ref(&self, image_name: &ImageRef) -> Result<OciDirImport> {
+        replace_legacy_local_registry_ref(&self.index, &self.blobs, &self.root, image_name)
     }
 
     pub fn import_legacy_layout(&self) -> Result<LegacyImportReport> {
         import_legacy_local_registry(&self.index, &self.blobs, &self.root)
     }
 
-    pub fn import_legacy_layout_with_policy(
-        &self,
-        policy: RefConflictPolicy,
-    ) -> Result<LegacyImportReport> {
-        import_legacy_local_registry_with_policy(&self.index, &self.blobs, &self.root, policy)
+    pub fn replace_legacy_layout(&self) -> Result<LegacyImportReport> {
+        replace_legacy_local_registry(&self.index, &self.blobs, &self.root)
     }
 
     pub fn resolve_image_name(&self, image_name: &ImageRef) -> Result<Option<Digest>> {
@@ -75,7 +154,7 @@ impl LocalRegistry {
 
     /// Synthesize a fresh anonymous image name keyed to this
     /// registry's `registry_id`. Format matches
-    /// `LocalArtifactBuilder::new_anonymous` and the unnamed-archive
+    /// `ArtifactDraft::new_anonymous` and the unnamed-archive
     /// import path: `<registry-id8>.ommx.local/anonymous:<timestamp>-<nonce>`.
     /// Each call returns a new name (the nonce differs); the structural
     /// predicates [`crate::artifact::is_anonymous_artifact_ref_name`]
@@ -111,7 +190,7 @@ impl LocalRegistry {
     }
 
     /// Bulk-delete every SQLite ref produced by
-    /// [`crate::artifact::LocalArtifactBuilder::new_anonymous`].
+    /// [`crate::artifact::ArtifactDraft::new_anonymous`].
     /// Returns the deleted records so callers (e.g. CLI
     /// `ommx artifact prune-anonymous`) can report what changed. The
     /// manifest / config / layer / blob CAS records the deleted refs
@@ -129,37 +208,48 @@ impl LocalRegistry {
         Ok(refs)
     }
 
-    /// Publish a staged OCI Image Manifest bundle to the SQLite Local
-    /// Registry. Callers must construct `manifest` and `manifest_descriptor`
-    /// via [`crate::artifact::LocalArtifactBuilder`] or the import paths
-    /// in `local_registry::import::*`, both of which produce an OCI
-    /// Image Manifest with the OMMX `artifactType` field set. The
-    /// publish path does not dispatch on manifest format — the SQLite
-    /// Local Registry stores OCI Image Manifest exclusively.
-    pub(crate) fn publish_artifact_manifest(
+    /// Seal an unsealed OMMX Artifact manifest into the BlobStore.
+    ///
+    /// The manifest's config/layers are represented as
+    /// [`StoredDescriptor`] before this method is called, so sealing
+    /// does not re-validate dependency blob existence. It serializes
+    /// and stores only the root manifest blob, yielding its root
+    /// [`SealedArtifact`].
+    pub(crate) fn seal_artifact(&self, artifact: UnsealedArtifact) -> Result<SealedArtifact> {
+        let manifest = artifact.into_oci_image_manifest()?;
+        Self::validate_manifest(&manifest)?;
+        let manifest_bytes = stable_json_bytes(&manifest)?;
+        let manifest_descriptor = Self::build_manifest_descriptor(&manifest_bytes)?;
+        let stored_manifest = self.store_blob(manifest_descriptor, &manifest_bytes)?;
+        Ok(SealedArtifact(stored_manifest))
+    }
+
+    /// Publish a sealed root manifest descriptor under an image ref.
+    ///
+    /// This is an IndexStore operation only. It does not write payload
+    /// blobs or manifest bytes.
+    pub(crate) fn publish_manifest_ref(
         &self,
         image_name: &ImageRef,
-        manifest: &ImageManifest,
-        manifest_descriptor: &Descriptor,
-        manifest_bytes: &[u8],
-        blobs: &[StagedArtifactBlob],
-        policy: RefConflictPolicy,
+        sealed_artifact: &SealedArtifact,
     ) -> Result<RefUpdate> {
-        ensure!(
-            manifest_descriptor.media_type() == &MediaType::ImageManifest,
-            "Manifest descriptor must be `{:?}`, got `{}`",
-            MediaType::ImageManifest,
-            manifest_descriptor.media_type(),
-        );
-        ensure!(
-            manifest_descriptor.digest().to_string()
-                == crate::artifact::sha256_digest(manifest_bytes),
-            "Manifest descriptor digest does not match manifest bytes"
-        );
-        ensure!(
-            manifest_descriptor.size() == manifest_bytes.len() as u64,
-            "Manifest descriptor size does not match manifest bytes"
-        );
+        self.index.publish_image_ref(image_name, &sealed_artifact.0)
+    }
+
+    /// Replace the ref target with a sealed root manifest descriptor.
+    ///
+    /// This is an IndexStore operation only. It does not write payload
+    /// blobs or manifest bytes.
+    pub(crate) fn replace_manifest_ref(
+        &self,
+        image_name: &ImageRef,
+        sealed_artifact: &SealedArtifact,
+    ) -> Result<RefUpdate> {
+        self.index.replace_image_ref(image_name, &sealed_artifact.0)
+    }
+
+    /// Validate that the manifest carries the OMMX `artifactType`.
+    fn validate_manifest(manifest: &ImageManifest) -> Result<()> {
         let artifact_type = manifest
             .artifact_type()
             .as_ref()
@@ -170,63 +260,28 @@ impl LocalRegistry {
             media_types::V1_ARTIFACT_MEDIA_TYPE,
             artifact_type,
         );
-        // OCI Image Manifest `blobs` = manifest layers + the `config`
-        // descriptor (which is the OCI 1.1 empty config blob in OMMX's
-        // builder). Callers stage all of these in `blobs[]`.
-        let manifest_descriptor_count = manifest.layers().len() + 1;
-        ensure!(
-            manifest_descriptor_count == blobs.len(),
-            "Manifest descriptor count ({manifest_descriptor_count}) does not match pending blob count ({})",
-            blobs.len()
-        );
-        let staged_descriptors: Vec<&Descriptor> =
-            blobs.iter().map(|blob| blob.descriptor()).collect();
-        let descriptor_is_staged = |d: &Descriptor| staged_descriptors.contains(&d);
-        ensure!(
-            descriptor_is_staged(manifest.config()),
-            "Manifest config descriptor is not staged for upload"
-        );
-        for layer in manifest.layers() {
-            ensure!(
-                descriptor_is_staged(layer),
-                "Manifest layer descriptor is not staged for upload: {}",
-                layer.digest()
-            );
-        }
-
-        // Pre-check: under `KeepExisting`, return the conflict before
-        // we waste any CAS writes. The atomic publish in stage 2
-        // re-validates the same condition inside the SQLite
-        // transaction, so concurrent racers can't slip through; this
-        // is purely a fast path for the common single-writer case.
-        if policy == RefConflictPolicy::KeepExisting {
-            if let Some(existing_descriptor) = self.index.resolve_image_descriptor(image_name)? {
-                if existing_descriptor.digest() != manifest_descriptor.digest() {
-                    return Ok(RefUpdate::Conflicted {
-                        existing_manifest_digest: existing_descriptor.digest().clone(),
-                        incoming_manifest_digest: manifest_descriptor.digest().clone(),
-                    });
-                }
-            }
-        }
-
-        // Stage 1: write CAS bytes (idempotent, outside any SQLite tx).
-        // Stage 2: publish only the OCI manifest descriptor into the
-        // SQLite ref index. If stage 2 conflicts or crashes, the CAS
-        // may contain unreferenced bytes; that is the expected state
-        // for GC, not an index-storage cache entry.
-        for blob in blobs {
-            self.stage_blob(blob.descriptor(), blob.bytes())?;
-        }
-        self.stage_blob(manifest_descriptor, manifest_bytes)?;
-
-        self.index
-            .put_image_ref_with_policy(image_name, manifest_descriptor, policy)
+        Ok(())
     }
 
-    /// CAS-write a descriptor's bytes and verify the concrete bytes
-    /// match the descriptor the manifest will reference.
-    fn stage_blob(&self, descriptor: &Descriptor, bytes: &[u8]) -> Result<()> {
+    fn build_manifest_descriptor(manifest_bytes: &[u8]) -> Result<Descriptor> {
+        DescriptorBuilder::default()
+            .media_type(MediaType::ImageManifest)
+            .digest(
+                Digest::from_str(&sha256_digest(manifest_bytes))
+                    .context("Failed to parse manifest digest")?,
+            )
+            .size(manifest_bytes.len() as u64)
+            .build()
+            .context("Failed to build manifest descriptor")
+    }
+
+    /// Store a descriptor's bytes as a content-addressed blob and
+    /// verify the concrete bytes match the descriptor.
+    pub(crate) fn store_blob(
+        &self,
+        descriptor: Descriptor,
+        bytes: &[u8],
+    ) -> Result<StoredDescriptor> {
         let digest = self.blobs.put_bytes(bytes)?;
         ensure!(
             &digest == descriptor.digest(),
@@ -241,6 +296,6 @@ impl LocalRegistry {
             descriptor.size(),
             bytes.len()
         );
-        Ok(())
+        Ok(StoredDescriptor(descriptor))
     }
 }

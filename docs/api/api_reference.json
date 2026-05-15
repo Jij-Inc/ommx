@@ -159,7 +159,7 @@
             },
             {
               "name": "get_dataframe",
-              "doc": "Get a pandas DataFrame from an artifact layer stored by {meth}`~ommx.artifact.ArtifactBuilder.add_dataframe`.",
+              "doc": "Get a pandas DataFrame from an artifact layer stored by {meth}`~ommx.artifact.ArtifactDraft.add_dataframe`.",
               "signatures": [
                 {
                   "parameters": [
@@ -230,7 +230,7 @@
             },
             {
               "name": "get_json",
-              "doc": "Get a JSON object from an artifact layer stored by {meth}`~ommx.artifact.ArtifactBuilder.add_json`.",
+              "doc": "Get a JSON object from an artifact layer stored by {meth}`~ommx.artifact.ArtifactDraft.add_json`.",
               "signatures": [
                 {
                   "parameters": [
@@ -323,7 +323,7 @@
             },
             {
               "name": "get_ndarray",
-              "doc": "Get a numpy array from an artifact layer stored by {meth}`~ommx.artifact.ArtifactBuilder.add_ndarray`.",
+              "doc": "Get a numpy array from an artifact layer stored by {meth}`~ommx.artifact.ArtifactDraft.add_ndarray`.",
               "signatures": [
                 {
                   "parameters": [
@@ -474,7 +474,7 @@
             },
             {
               "name": "import_archive",
-              "doc": "Import an artifact from a `.ommx` OCI archive file (or an OCI\nImage Layout directory) into the user's v3 SQLite Local Registry,\nand return a handle to the imported registry entry.\n\n**Side effect (intentional)**: archive / directory contents are\npermanently written into the SQLite Local Registry under the\ndefault root (`$XDG_DATA_HOME/ommx/` on Linux,\n`$HOME/Library/Application Support/org.ommx.ommx/` on macOS, or\n`$OMMX_LOCAL_REGISTRY_ROOT` when set). Subsequent\n`Artifact.load(image_name)` calls resolve from SQLite without\nre-importing.\n\nFor a side-effect-free read that just surfaces the manifest /\nlayer descriptors without writing into the registry, use\n{meth}`Artifact.inspect_archive` instead.\n\nThe input must carry an `org.opencontainers.image.ref.name`\nannotation. Unnamed archives / directories cannot be addressed\nin the SQLite Local Registry and are rejected.\n\n```python\n>>> artifact = Artifact.import_archive(\"data/random_lp_instance.ommx\")\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/random_lp_instance:...\n\n```",
+              "doc": "Import an artifact from a `.ommx` OCI archive file (or an OCI\nImage Layout directory) into the user's v3 SQLite Local Registry,\nand return a handle to the imported registry entry.\n\n**Side effect (intentional)**: archive / directory contents are\npermanently written into the SQLite Local Registry under the\ndefault root (`$XDG_DATA_HOME/ommx/` on Linux,\n`$HOME/Library/Application Support/org.ommx.ommx/` on macOS, or\n`$OMMX_LOCAL_REGISTRY_ROOT` when set). Subsequent\n`Artifact.load(image_name)` calls resolve from SQLite without\nre-importing.\n\nFor a side-effect-free read that just surfaces the manifest /\nlayer descriptors without writing into the registry, use\n{meth}`Artifact.inspect_archive` instead.\n\nIf the input lacks an `org.opencontainers.image.ref.name`\nannotation, v3 synthesizes an anonymous Local Registry ref and\nimports the content under that name. This keeps v2 unnamed\narchives importable while still making the imported artifact\naddressable in SQLite.\n\n```python\n>>> artifact = Artifact.import_archive(\"data/random_lp_instance.ommx\")\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/random_lp_instance:...\n\n```",
               "signatures": [
                 {
                   "parameters": [
@@ -814,8 +814,8 @@
         },
         {
           "kind": "Class",
-          "name": "ArtifactBuilder",
-          "doc": "Builder for OMMX Artifacts.\n\n```python\n>>> builder = ArtifactBuilder.temp()\n>>> artifact = builder.build()\n>>> print(artifact.image_name)\nttl.sh/...-...-...-...-...:1h\n\n```",
+          "name": "ArtifactDraft",
+          "doc": "Mutable draft for OMMX Artifacts.\n\n```python\n>>> draft = ArtifactDraft.temp()\n>>> artifact = draft.commit()\n>>> print(artifact.image_name)\nttl.sh/...-...-...-...-...:1h\n\n```",
           "bases": [],
           "methods": [
             {
@@ -855,7 +855,7 @@
             },
             {
               "name": "add_dataframe",
-              "doc": "Add a pandas DataFrame to the artifact with parquet format.\n\n```python\n>>> import pandas as pd\n>>> df = pd.DataFrame({\"a\": [1, 2], \"b\": [3, 4]})\n>>> builder = ArtifactBuilder.temp()\n>>> _desc = builder.add_dataframe(df, title=\"test_dataframe\")\n>>> artifact = builder.build()\n>>> layer = artifact.layers[0]\n>>> print(layer.media_type)\napplication/vnd.apache.parquet\n\n```",
+              "doc": "Add a pandas DataFrame to the artifact with parquet format.\n\n```python\n>>> import pandas as pd\n>>> df = pd.DataFrame({\"a\": [1, 2], \"b\": [3, 4]})\n>>> draft = ArtifactDraft.temp()\n>>> _desc = draft.add_dataframe(df, title=\"test_dataframe\")\n>>> artifact = draft.commit()\n>>> layer = artifact.layers[0]\n>>> print(layer.media_type)\napplication/vnd.apache.parquet\n\n```",
               "signatures": [
                 {
                   "parameters": [
@@ -907,7 +907,7 @@
             },
             {
               "name": "add_instance",
-              "doc": "Add an {class}`~ommx.v1.Instance` to the artifact with annotations.\n\n```python\n>>> from ommx.v1 import Instance\n>>> instance = Instance.empty()\n>>> instance.title = \"test instance\"\n>>> builder = ArtifactBuilder.temp()\n>>> desc = builder.add_instance(instance)\n>>> print(desc.annotations['org.ommx.v1.instance.title'])\ntest instance\n\n```",
+              "doc": "Add an {class}`~ommx.v1.Instance` to the artifact with annotations.\n\n```python\n>>> from ommx.v1 import Instance\n>>> instance = Instance.empty()\n>>> instance.title = \"test instance\"\n>>> draft = ArtifactDraft.temp()\n>>> desc = draft.add_instance(instance)\n>>> print(desc.annotations['org.ommx.v1.instance.title'])\ntest instance\n\n```",
               "signatures": [
                 {
                   "parameters": [
@@ -938,7 +938,7 @@
             },
             {
               "name": "add_json",
-              "doc": "Add a JSON object to the artifact.\n\n```python\n>>> obj = {\"a\": 1, \"b\": 2}\n>>> builder = ArtifactBuilder.temp()\n>>> _desc = builder.add_json(obj, title=\"test_json\")\n>>> artifact = builder.build()\n>>> layer = artifact.layers[0]\n>>> print(layer.media_type)\napplication/json\n\n```",
+              "doc": "Add a JSON object to the artifact.\n\n```python\n>>> obj = {\"a\": 1, \"b\": 2}\n>>> draft = ArtifactDraft.temp()\n>>> _desc = draft.add_json(obj, title=\"test_json\")\n>>> artifact = draft.commit()\n>>> layer = artifact.layers[0]\n>>> print(layer.media_type)\napplication/json\n\n```",
               "signatures": [
                 {
                   "parameters": [
@@ -1053,7 +1053,7 @@
             },
             {
               "name": "add_ndarray",
-              "doc": "Add a numpy ndarray to the artifact with npy format.\n\n```python\n>>> import numpy as np\n>>> array = np.array([1, 2, 3])\n>>> builder = ArtifactBuilder.temp()\n>>> _desc = builder.add_ndarray(array, title=\"test_array\")\n>>> artifact = builder.build()\n>>> layer = artifact.layers[0]\n>>> print(layer.media_type)\napplication/vnd.numpy\n>>> print(layer.annotations)\n{'org.ommx.user.title': 'test_array'}\n\n```",
+              "doc": "Add a numpy ndarray to the artifact with npy format.\n\n```python\n>>> import numpy as np\n>>> array = np.array([1, 2, 3])\n>>> draft = ArtifactDraft.temp()\n>>> _desc = draft.add_ndarray(array, title=\"test_array\")\n>>> artifact = draft.commit()\n>>> layer = artifact.layers[0]\n>>> print(layer.media_type)\napplication/vnd.numpy\n>>> print(layer.annotations)\n{'org.ommx.user.title': 'test_array'}\n\n```",
               "signatures": [
                 {
                   "parameters": [
@@ -1197,8 +1197,8 @@
               "deprecated": null
             },
             {
-              "name": "build",
-              "doc": "Build the artifact.",
+              "name": "commit",
+              "doc": "Commit the artifact draft.",
               "signatures": [
                 {
                   "parameters": [],
@@ -1261,9 +1261,9 @@
                     }
                   ],
                   "return_type": {
-                    "display": "ArtifactBuilder",
+                    "display": "ArtifactDraft",
                     "link_target": {
-                      "fqn": "ommx.artifact.ArtifactBuilder",
+                      "fqn": "ommx.artifact.ArtifactDraft",
                       "doc_module": "ommx.artifact",
                       "kind": "Class",
                       "attribute": null
@@ -1277,7 +1277,7 @@
             },
             {
               "name": "new",
-              "doc": "Create a new artifact builder with an explicit image name. The\nartifact is published into the user's persistent SQLite Local\nRegistry on `build()`; call {meth}`Artifact.save(path)` on the\nreturned handle if you also want a `.ommx` archive file for\nsharing.\n\n```python\n>>> from ommx.testing import SingleFeasibleLPGenerator, DataType\n>>> generator = SingleFeasibleLPGenerator(3, DataType.INT)\n>>> instance = generator.get_v1_instance()\n>>> import uuid\n>>> image_name = f\"ghcr.io/jij-inc/ommx/single_feasible_lp:{uuid.uuid4()}\"\n>>> builder = ArtifactBuilder.new(image_name)\n>>> _desc = builder.add_instance(instance)\n>>> artifact = builder.build()\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/single_feasible_lp:...\n\n```",
+              "doc": "Create a new artifact draft with an explicit image name. The\nartifact is published into the user's persistent SQLite Local\nRegistry on `commit()`; call {meth}`Artifact.save(path)` on the\nreturned handle if you also want a `.ommx` archive file for\nsharing.\n\n```python\n>>> from ommx.testing import SingleFeasibleLPGenerator, DataType\n>>> generator = SingleFeasibleLPGenerator(3, DataType.INT)\n>>> instance = generator.get_v1_instance()\n>>> import uuid\n>>> image_name = f\"ghcr.io/jij-inc/ommx/single_feasible_lp:{uuid.uuid4()}\"\n>>> draft = ArtifactDraft.new(image_name)\n>>> _desc = draft.add_instance(instance)\n>>> artifact = draft.commit()\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/single_feasible_lp:...\n\n```",
               "signatures": [
                 {
                   "parameters": [
@@ -1292,9 +1292,9 @@
                     }
                   ],
                   "return_type": {
-                    "display": "ArtifactBuilder",
+                    "display": "ArtifactDraft",
                     "link_target": {
-                      "fqn": "ommx.artifact.ArtifactBuilder",
+                      "fqn": "ommx.artifact.ArtifactDraft",
                       "doc_module": "ommx.artifact",
                       "kind": "Class",
                       "attribute": null
@@ -1308,14 +1308,14 @@
             },
             {
               "name": "new_anonymous",
-              "doc": "Create a new artifact builder without inventing an image name.\n\nUX shortcut: a synthetic image name of the form\n`<registry-id8>.ommx.local/anonymous:<local-timestamp>-<nonce>`\nis generated at build time and used as the SQLite Local\nRegistry key. v3 stores every artifact in the registry, so\nanonymous artifacts still need a key — the registry-id prefix\n(a random 8-hex truncation of a UUID generated once per\n`LocalRegistry` and persisted in its SQLite metadata)\nidentifies which registry produced the artifact (useful when\narchives are shared), the local-time timestamp lets you\nidentify entries by when they were created, and the 12-hex\n(48-bit) random nonce keeps concurrent anonymous builds\n(MINTO-style scripts emitting many artifacts per second)\ncollision-free regardless of clock resolution. Use\n`Artifact.image_name` to read the synthesized name back. The\n`.local` mDNS TLD prevents an accidental push from leaking to\na real remote registry. Use `ommx artifact prune-anonymous`\nto clean accumulated entries.\n\nThe timestamp is the **caller's local time** with no timezone\nmarker. If an anonymous archive is shared with someone in a\ndifferent timezone, the recipient will see the same digits but\ninterpret them as their own local time — the time component\nloses absolute meaning across machines. Anonymous artifacts\nare not intended for cross-timezone sharing; pick an explicit\nname via `ArtifactBuilder.new(...)` if absolute time matters.\n\nCall {meth}`Artifact.save(path)` on the returned handle to also\nwrite a `.ommx` archive file for sharing.\n\n```python\n>>> from ommx.testing import SingleFeasibleLPGenerator, DataType\n>>> generator = SingleFeasibleLPGenerator(3, DataType.INT)\n>>> instance = generator.get_v1_instance()\n>>> builder = ArtifactBuilder.new_anonymous()\n>>> _desc = builder.add_instance(instance)\n>>> artifact = builder.build()\n>>> assert \".ommx.local/anonymous:\" in artifact.image_name\n\n```",
+              "doc": "Create a new artifact draft without inventing an image name.\n\nUX shortcut: a synthetic image name of the form\n`<registry-id8>.ommx.local/anonymous:<local-timestamp>-<nonce>`\nis generated when the draft is created and used as the SQLite Local\nRegistry key. v3 stores every artifact in the registry, so\nanonymous artifacts still need a key — the registry-id prefix\n(a random 8-hex truncation of a UUID generated once per\n`LocalRegistry` and persisted in its SQLite metadata)\nidentifies which registry produced the artifact (useful when\narchives are shared), the local-time timestamp lets you\nidentify entries by when they were created, and the 12-hex\n(48-bit) random nonce keeps concurrent anonymous drafts\n(MINTO-style scripts emitting many artifacts per second)\ncollision-free regardless of clock resolution. Use\n`Artifact.image_name` to read the synthesized name back. The\n`.local` mDNS TLD prevents an accidental push from leaking to\na real remote registry. Use `ommx artifact prune-anonymous`\nto clean accumulated entries.\n\nThe timestamp is the **caller's local time** with no timezone\nmarker. If an anonymous archive is shared with someone in a\ndifferent timezone, the recipient will see the same digits but\ninterpret them as their own local time — the time component\nloses absolute meaning across machines. Anonymous artifacts\nare not intended for cross-timezone sharing; pick an explicit\nname via `ArtifactDraft.new(...)` if absolute time matters.\n\nCall {meth}`Artifact.save(path)` on the returned handle to also\nwrite a `.ommx` archive file for sharing.\n\n```python\n>>> from ommx.testing import SingleFeasibleLPGenerator, DataType\n>>> generator = SingleFeasibleLPGenerator(3, DataType.INT)\n>>> instance = generator.get_v1_instance()\n>>> draft = ArtifactDraft.new_anonymous()\n>>> _desc = draft.add_instance(instance)\n>>> artifact = draft.commit()\n>>> assert \".ommx.local/anonymous:\" in artifact.image_name\n\n```",
               "signatures": [
                 {
                   "parameters": [],
                   "return_type": {
-                    "display": "ArtifactBuilder",
+                    "display": "ArtifactDraft",
                     "link_target": {
-                      "fqn": "ommx.artifact.ArtifactBuilder",
+                      "fqn": "ommx.artifact.ArtifactDraft",
                       "doc_module": "ommx.artifact",
                       "kind": "Class",
                       "attribute": null
@@ -1329,14 +1329,14 @@
             },
             {
               "name": "temp",
-              "doc": "Create a new artifact builder under a random `ttl.sh` image name.\nInsecure; for tests only. `ttl.sh` is a public registry that\nexpires images after one hour.\n\n```python\n>>> builder = ArtifactBuilder.temp()\n>>> artifact = builder.build()\n>>> print(artifact.image_name)\nttl.sh/...-...-...-...-...:1h\n\n```",
+              "doc": "Create a new artifact draft under a random `ttl.sh` image name.\nInsecure; for tests only. `ttl.sh` is a public registry that\nexpires images after one hour.\n\n```python\n>>> draft = ArtifactDraft.temp()\n>>> artifact = draft.commit()\n>>> print(artifact.image_name)\nttl.sh/...-...-...-...-...:1h\n\n```",
               "signatures": [
                 {
                   "parameters": [],
                   "return_type": {
-                    "display": "ArtifactBuilder",
+                    "display": "ArtifactDraft",
                     "link_target": {
-                      "fqn": "ommx.artifact.ArtifactBuilder",
+                      "fqn": "ommx.artifact.ArtifactDraft",
                       "doc_module": "ommx.artifact",
                       "kind": "Class",
                       "attribute": null
@@ -25760,7 +25760,7 @@
   "export_map": {
     "ommx.artifact.ArchiveManifest": "ommx.artifact",
     "ommx.artifact.Artifact": "ommx.artifact",
-    "ommx.artifact.ArtifactBuilder": "ommx.artifact",
+    "ommx.artifact.ArtifactDraft": "ommx.artifact",
     "ommx.artifact.Descriptor": "ommx.artifact",
     "ommx.artifact.get_images": "ommx.artifact",
     "ommx.artifact.get_local_registry_root": "ommx.artifact",

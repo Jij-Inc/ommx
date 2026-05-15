@@ -1,6 +1,4 @@
-use super::{
-    now_rfc3339, validate_digest, RefConflictPolicy, RefRecord, RefUpdate, SQLITE_INDEX_FILE_NAME,
-};
+use super::{now_rfc3339, validate_digest, RefRecord, RefUpdate, SQLITE_INDEX_FILE_NAME};
 use crate::artifact::ImageRef;
 use anyhow::{bail, ensure, Context, Result};
 use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, MediaType};
@@ -92,15 +90,20 @@ impl SqliteIndexStore {
             .context("Failed to read local registry schema version")
     }
 
-    pub fn put_ref(&self, name: &str, reference: &str, descriptor: &Descriptor) -> Result<()> {
+    pub fn replace_ref(
+        &self,
+        name: &str,
+        reference: &str,
+        descriptor: &Descriptor,
+    ) -> Result<RefUpdate> {
         let mut conn = self.lock();
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        Self::put_ref_in(&tx, name, reference, descriptor)?;
+        let update = Self::replace_ref_in(&tx, name, reference, descriptor)?;
         tx.commit()?;
-        Ok(())
+        Ok(update)
     }
 
-    fn put_ref_in(
+    fn upsert_ref_in(
         conn: &Connection,
         name: &str,
         reference: &str,
@@ -140,32 +143,26 @@ impl SqliteIndexStore {
         Ok(())
     }
 
-    pub fn put_ref_with_policy(
+    pub fn publish_ref(
         &self,
         name: &str,
         reference: &str,
         descriptor: &Descriptor,
-        policy: RefConflictPolicy,
     ) -> Result<RefUpdate> {
         let mut conn = self.lock();
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let update = Self::put_ref_with_policy_in(&tx, name, reference, descriptor, policy)?;
+        let update = Self::publish_ref_in(&tx, name, reference, descriptor)?;
         tx.commit()?;
         Ok(update)
     }
 
-    fn put_ref_with_policy_in(
+    fn publish_ref_in(
         conn: &Connection,
         name: &str,
         reference: &str,
         descriptor: &Descriptor,
-        policy: RefConflictPolicy,
     ) -> Result<RefUpdate> {
         validate_digest(descriptor.digest().as_ref())?;
-        if policy == RefConflictPolicy::Replace {
-            return Self::replace_ref_in(conn, name, reference, descriptor);
-        }
-
         let annotations_json = descriptor_annotations_json(descriptor)?;
         let inserted = conn.execute(
             r#"
@@ -222,7 +219,7 @@ impl SqliteIndexStore {
             return Ok(RefUpdate::Unchanged);
         }
 
-        Self::put_ref_in(conn, name, reference, descriptor)?;
+        Self::upsert_ref_in(conn, name, reference, descriptor)?;
         Ok(match previous_descriptor {
             Some(previous_descriptor) => RefUpdate::Replaced {
                 previous_manifest_digest: previous_descriptor.digest().clone(),
@@ -403,25 +400,27 @@ impl SqliteIndexStore {
 }
 
 impl SqliteIndexStore {
-    pub fn put_image_ref(&self, image_name: &ImageRef, descriptor: &Descriptor) -> Result<()> {
-        self.put_ref(
+    pub fn publish_image_ref(
+        &self,
+        image_name: &ImageRef,
+        descriptor: &Descriptor,
+    ) -> Result<RefUpdate> {
+        self.publish_ref(
             &image_name.repository_key(),
             image_name.reference(),
             descriptor,
         )
     }
 
-    pub fn put_image_ref_with_policy(
+    pub fn replace_image_ref(
         &self,
         image_name: &ImageRef,
         descriptor: &Descriptor,
-        policy: RefConflictPolicy,
     ) -> Result<RefUpdate> {
-        self.put_ref_with_policy(
+        self.replace_ref(
             &image_name.repository_key(),
             image_name.reference(),
             descriptor,
-            policy,
         )
     }
 

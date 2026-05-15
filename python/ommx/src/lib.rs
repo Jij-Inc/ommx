@@ -126,7 +126,7 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<PyDescriptor>()?;
     m.add_class::<PyArtifact>()?;
     m.add_class::<PyArchiveManifest>()?;
-    m.add_class::<PyArtifactBuilder>()?;
+    m.add_class::<PyArtifactDraft>()?;
     m.add_function(wrap_pyfunction!(set_local_registry_root, m)?)?;
     m.add_function(wrap_pyfunction!(get_local_registry_root, m)?)?;
     m.add_function(wrap_pyfunction!(get_images, m)?)?;
@@ -263,7 +263,7 @@ pyo3_stub_gen::reexport_module_members!("ommx.v1" from "ommx._ommx_rust";
 pyo3_stub_gen::reexport_module_members!("ommx.artifact" from "ommx._ommx_rust";
     "Artifact",
     "ArchiveManifest",
-    "ArtifactBuilder",
+    "ArtifactDraft",
     "Descriptor",
     "get_local_registry_root",
     "set_local_registry_root",

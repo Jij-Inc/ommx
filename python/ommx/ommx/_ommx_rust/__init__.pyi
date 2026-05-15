@@ -16,7 +16,7 @@ __all__ = [
     "AdditionalCapability",
     "ArchiveManifest",
     "Artifact",
-    "ArtifactBuilder",
+    "ArtifactDraft",
     "AttachedConstraint",
     "AttachedDecisionVariable",
     "AttachedIndicatorConstraint",
@@ -232,9 +232,11 @@ class Artifact:
         layer descriptors without writing into the registry, use
         {meth}`Artifact.inspect_archive` instead.
 
-        The input must carry an `org.opencontainers.image.ref.name`
-        annotation. Unnamed archives / directories cannot be addressed
-        in the SQLite Local Registry and are rejected.
+        If the input lacks an `org.opencontainers.image.ref.name`
+        annotation, v3 synthesizes an anonymous Local Registry ref and
+        imports the content under that name. This keeps v2 unnamed
+        archives importable while still making the imported artifact
+        addressable in SQLite.
 
         ```python
         >>> artifact = Artifact.import_archive("data/random_lp_instance.ommx")
@@ -376,36 +378,36 @@ class Artifact:
         """
     def get_ndarray(self, descriptor: Descriptor) -> typing.Any:
         r"""
-        Get a numpy array from an artifact layer stored by {meth}`~ommx.artifact.ArtifactBuilder.add_ndarray`.
+        Get a numpy array from an artifact layer stored by {meth}`~ommx.artifact.ArtifactDraft.add_ndarray`.
         """
     def get_dataframe(self, descriptor: Descriptor) -> typing.Any:
         r"""
-        Get a pandas DataFrame from an artifact layer stored by {meth}`~ommx.artifact.ArtifactBuilder.add_dataframe`.
+        Get a pandas DataFrame from an artifact layer stored by {meth}`~ommx.artifact.ArtifactDraft.add_dataframe`.
         """
     def get_json(self, descriptor: Descriptor) -> typing.Any:
         r"""
-        Get a JSON object from an artifact layer stored by {meth}`~ommx.artifact.ArtifactBuilder.add_json`.
+        Get a JSON object from an artifact layer stored by {meth}`~ommx.artifact.ArtifactDraft.add_json`.
         """
 
 @typing.final
-class ArtifactBuilder:
+class ArtifactDraft:
     r"""
-    Builder for OMMX Artifacts.
+    Mutable draft for OMMX Artifacts.
 
     ```python
-    >>> builder = ArtifactBuilder.temp()
-    >>> artifact = builder.build()
+    >>> draft = ArtifactDraft.temp()
+    >>> artifact = draft.commit()
     >>> print(artifact.image_name)
     ttl.sh/...-...-...-...-...:1h
 
     ```
     """
     @staticmethod
-    def new(image_name: builtins.str) -> ArtifactBuilder:
+    def new(image_name: builtins.str) -> ArtifactDraft:
         r"""
-        Create a new artifact builder with an explicit image name. The
+        Create a new artifact draft with an explicit image name. The
         artifact is published into the user's persistent SQLite Local
-        Registry on `build()`; call {meth}`Artifact.save(path)` on the
+        Registry on `commit()`; call {meth}`Artifact.save(path)` on the
         returned handle if you also want a `.ommx` archive file for
         sharing.
 
@@ -415,22 +417,22 @@ class ArtifactBuilder:
         >>> instance = generator.get_v1_instance()
         >>> import uuid
         >>> image_name = f"ghcr.io/jij-inc/ommx/single_feasible_lp:{uuid.uuid4()}"
-        >>> builder = ArtifactBuilder.new(image_name)
-        >>> _desc = builder.add_instance(instance)
-        >>> artifact = builder.build()
+        >>> draft = ArtifactDraft.new(image_name)
+        >>> _desc = draft.add_instance(instance)
+        >>> artifact = draft.commit()
         >>> print(artifact.image_name)
         ghcr.io/jij-inc/ommx/single_feasible_lp:...
 
         ```
         """
     @staticmethod
-    def new_anonymous() -> ArtifactBuilder:
+    def new_anonymous() -> ArtifactDraft:
         r"""
-        Create a new artifact builder without inventing an image name.
+        Create a new artifact draft without inventing an image name.
 
         UX shortcut: a synthetic image name of the form
         `<registry-id8>.ommx.local/anonymous:<local-timestamp>-<nonce>`
-        is generated at build time and used as the SQLite Local
+        is generated when the draft is created and used as the SQLite Local
         Registry key. v3 stores every artifact in the registry, so
         anonymous artifacts still need a key — the registry-id prefix
         (a random 8-hex truncation of a UUID generated once per
@@ -438,7 +440,7 @@ class ArtifactBuilder:
         identifies which registry produced the artifact (useful when
         archives are shared), the local-time timestamp lets you
         identify entries by when they were created, and the 12-hex
-        (48-bit) random nonce keeps concurrent anonymous builds
+        (48-bit) random nonce keeps concurrent anonymous drafts
         (MINTO-style scripts emitting many artifacts per second)
         collision-free regardless of clock resolution. Use
         `Artifact.image_name` to read the synthesized name back. The
@@ -452,7 +454,7 @@ class ArtifactBuilder:
         interpret them as their own local time — the time component
         loses absolute meaning across machines. Anonymous artifacts
         are not intended for cross-timezone sharing; pick an explicit
-        name via `ArtifactBuilder.new(...)` if absolute time matters.
+        name via `ArtifactDraft.new(...)` if absolute time matters.
 
         Call {meth}`Artifact.save(path)` on the returned handle to also
         write a `.ommx` archive file for sharing.
@@ -461,23 +463,23 @@ class ArtifactBuilder:
         >>> from ommx.testing import SingleFeasibleLPGenerator, DataType
         >>> generator = SingleFeasibleLPGenerator(3, DataType.INT)
         >>> instance = generator.get_v1_instance()
-        >>> builder = ArtifactBuilder.new_anonymous()
-        >>> _desc = builder.add_instance(instance)
-        >>> artifact = builder.build()
+        >>> draft = ArtifactDraft.new_anonymous()
+        >>> _desc = draft.add_instance(instance)
+        >>> artifact = draft.commit()
         >>> assert ".ommx.local/anonymous:" in artifact.image_name
 
         ```
         """
     @staticmethod
-    def temp() -> ArtifactBuilder:
+    def temp() -> ArtifactDraft:
         r"""
-        Create a new artifact builder under a random `ttl.sh` image name.
+        Create a new artifact draft under a random `ttl.sh` image name.
         Insecure; for tests only. `ttl.sh` is a public registry that
         expires images after one hour.
 
         ```python
-        >>> builder = ArtifactBuilder.temp()
-        >>> artifact = builder.build()
+        >>> draft = ArtifactDraft.temp()
+        >>> artifact = draft.commit()
         >>> print(artifact.image_name)
         ttl.sh/...-...-...-...-...:1h
 
@@ -486,7 +488,7 @@ class ArtifactBuilder:
     @staticmethod
     def for_github(
         org: builtins.str, repo: builtins.str, name: builtins.str, tag: builtins.str
-    ) -> ArtifactBuilder:
+    ) -> ArtifactDraft:
         r"""
         An alias for {meth}`new` to create a new artifact in local registry
         with GitHub Container Registry image name.
@@ -502,8 +504,8 @@ class ArtifactBuilder:
         >>> from ommx.v1 import Instance
         >>> instance = Instance.empty()
         >>> instance.title = "test instance"
-        >>> builder = ArtifactBuilder.temp()
-        >>> desc = builder.add_instance(instance)
+        >>> draft = ArtifactDraft.temp()
+        >>> desc = draft.add_instance(instance)
         >>> print(desc.annotations['org.ommx.v1.instance.title'])
         test instance
 
@@ -534,9 +536,9 @@ class ArtifactBuilder:
         ```python
         >>> import numpy as np
         >>> array = np.array([1, 2, 3])
-        >>> builder = ArtifactBuilder.temp()
-        >>> _desc = builder.add_ndarray(array, title="test_array")
-        >>> artifact = builder.build()
+        >>> draft = ArtifactDraft.temp()
+        >>> _desc = draft.add_ndarray(array, title="test_array")
+        >>> artifact = draft.commit()
         >>> layer = artifact.layers[0]
         >>> print(layer.media_type)
         application/vnd.numpy
@@ -558,9 +560,9 @@ class ArtifactBuilder:
         ```python
         >>> import pandas as pd
         >>> df = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
-        >>> builder = ArtifactBuilder.temp()
-        >>> _desc = builder.add_dataframe(df, title="test_dataframe")
-        >>> artifact = builder.build()
+        >>> draft = ArtifactDraft.temp()
+        >>> _desc = draft.add_dataframe(df, title="test_dataframe")
+        >>> artifact = draft.commit()
         >>> layer = artifact.layers[0]
         >>> print(layer.media_type)
         application/vnd.apache.parquet
@@ -579,9 +581,9 @@ class ArtifactBuilder:
 
         ```python
         >>> obj = {"a": 1, "b": 2}
-        >>> builder = ArtifactBuilder.temp()
-        >>> _desc = builder.add_json(obj, title="test_json")
-        >>> artifact = builder.build()
+        >>> draft = ArtifactDraft.temp()
+        >>> _desc = draft.add_json(obj, title="test_json")
+        >>> artifact = draft.commit()
         >>> layer = artifact.layers[0]
         >>> print(layer.media_type)
         application/json
@@ -603,9 +605,9 @@ class ArtifactBuilder:
         r"""
         Add annotation to the artifact itself.
         """
-    def build(self) -> Artifact:
+    def commit(self) -> Artifact:
         r"""
-        Build the artifact.
+        Commit the artifact draft.
         """
 
 @typing.final

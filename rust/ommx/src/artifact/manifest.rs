@@ -1,17 +1,14 @@
 use super::{
     digest::sha256_digest,
     ghcr,
-    local_registry::{LocalRegistry, RefConflictPolicy, RefUpdate},
+    local_registry::{LocalRegistry, RefUpdate, StoredDescriptor, UnsealedArtifact},
     media_types::{self, OCI_EMPTY_CONFIG_BYTES},
     ImageRef, InstanceAnnotations, ParametricInstanceAnnotations, SampleSetAnnotations,
     SolutionAnnotations,
 };
 use crate::v1;
 use anyhow::{bail, Context, Result};
-use oci_spec::image::{
-    Descriptor, DescriptorBuilder, Digest, ImageManifest,
-    ImageManifestBuilder as OciImageManifestBuilder, MediaType,
-};
+use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, ImageManifest, MediaType};
 use prost::Message;
 use serde::Serialize;
 use std::{
@@ -20,38 +17,6 @@ use std::{
     sync::{Arc, OnceLock},
 };
 use url::Url;
-
-/// A blob whose `Descriptor` has already been computed and that is
-/// staged in memory for the next `publish_artifact_manifest` call.
-///
-/// Bridges the in-memory `LocalArtifactBuilder` (Build phase) and the
-/// I/O-side registry publish (Seal phase) — the analogue of a Git
-/// blob entry sitting in the index after `git add`, before `git
-/// commit` writes it to `.git/objects/`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct StagedArtifactBlob {
-    descriptor: Descriptor,
-    bytes: Vec<u8>,
-}
-
-impl StagedArtifactBlob {
-    pub(crate) fn new(
-        media_type: MediaType,
-        bytes: Vec<u8>,
-        annotations: HashMap<String, String>,
-    ) -> Result<Self> {
-        let descriptor = descriptor_from_bytes(media_type, &bytes, annotations)?;
-        Ok(Self { descriptor, bytes })
-    }
-
-    pub(crate) fn descriptor(&self) -> &Descriptor {
-        &self.descriptor
-    }
-
-    pub(crate) fn bytes(&self) -> &[u8] {
-        &self.bytes
-    }
-}
 
 /// OMMX Artifact stored in the SQLite-backed Local Registry.
 ///
@@ -233,39 +198,32 @@ impl LocalManifest {
     }
 }
 
-/// Builder for OMMX Artifacts stored in the SQLite-backed Local Registry.
+/// Mutable draft for an OMMX Artifact stored in the SQLite-backed Local Registry.
 ///
 /// Produces an OCI Image Manifest with `artifactType` set to the OMMX
 /// artifact media type and the OCI 1.1 empty config descriptor as
 /// `config`. The layer blobs land in the Image Manifest's `layers[]`
 /// field.
-/// How the builder picks its image name at build time. Explicit
-/// values get used verbatim; the `Anonymous` variant lets
-/// [`LocalArtifactBuilder::build_in_registry`] synthesize a name
-/// against the actual target registry's `registry_id` instead of
-/// committing to one at construction time. Building an anonymous
-/// builder into a fresh `LocalRegistry` therefore stamps the
-/// destination-registry's id into the synthesized hostname, not the
-/// default registry's id.
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum BuilderImageName {
-    Explicit(ImageRef),
-    Anonymous,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LocalArtifactBuilder {
-    image_name: BuilderImageName,
+#[derive(Debug, Clone)]
+pub struct ArtifactDraft {
+    registry: Arc<LocalRegistry>,
+    image_name: ImageRef,
     artifact_type: MediaType,
-    layers: Vec<StagedArtifactBlob>,
+    layers: Vec<StoredDescriptor>,
     subject: Option<Descriptor>,
     annotations: HashMap<String, String>,
 }
 
-impl LocalArtifactBuilder {
-    pub fn new(image_name: ImageRef) -> Self {
+impl ArtifactDraft {
+    pub fn new(image_name: ImageRef) -> Result<Self> {
+        let registry = Arc::new(LocalRegistry::open_default()?);
+        Ok(Self::with_registry(registry, image_name))
+    }
+
+    pub fn with_registry(registry: Arc<LocalRegistry>, image_name: ImageRef) -> Self {
         Self {
-            image_name: BuilderImageName::Explicit(image_name),
+            registry,
+            image_name,
             artifact_type: MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
             layers: Vec::new(),
             subject: None,
@@ -273,7 +231,7 @@ impl LocalArtifactBuilder {
         }
     }
 
-    /// Builder for an artifact whose name is auto-generated. UX
+    /// Draft for an artifact whose name is auto-generated. UX
     /// shortcut for "I just want to share this artifact, I don't want
     /// to invent a real name". The synthesized image name has the form
     /// `<registry-id8>.ommx.local/anonymous:<local-timestamp>-<nonce>`;
@@ -281,48 +239,41 @@ impl LocalArtifactBuilder {
     /// [`LocalRegistry`] is first created and persisted in its SQLite
     /// metadata, so anonymous artifacts from the same registry share
     /// a prefix and can be told apart from artifacts imported from
-    /// another registry. Name synthesis is deferred to
-    /// [`Self::build_in_registry`] so the prefix reflects the actual
-    /// target registry (not the default registry). Use
-    /// `ommx artifact prune-anonymous` to clean accumulated entries.
+    /// another registry. Use `ommx artifact prune-anonymous` to clean
+    /// accumulated entries.
     ///
-    /// **Note: [`RefConflictPolicy`] is forced to `Replace` for
-    /// anonymous builds** — [`Self::build_in_registry`] silently
-    /// overrides whatever policy the caller passes. Anonymous
-    /// artifacts are designed to be transient and unique by
-    /// timestamp + nonce; collision recovery is "silently overwrite
-    /// the older entry" rather than "fail with a ref conflict". The
-    /// 48-bit nonce in `anonymous_artifact_image_name` makes
-    /// collisions astronomically rare in practice, and the policy
-    /// override is kept as defense-in-depth. Callers who want
-    /// collision detection cannot opt out — pick an explicit name
-    /// via [`Self::new`] instead.
-    pub fn new_anonymous() -> Self {
-        Self {
-            image_name: BuilderImageName::Anonymous,
-            artifact_type: MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
-            layers: Vec::new(),
-            subject: None,
-            annotations: HashMap::new(),
-        }
+    /// Anonymous artifacts are designed to be transient and unique by
+    /// timestamp + nonce. The 48-bit nonce in
+    /// `anonymous_artifact_image_name` makes collisions astronomically
+    /// rare in practice; if one still occurs, commit surfaces it as a
+    /// normal ref conflict.
+    pub fn new_anonymous() -> Result<Self> {
+        let registry = Arc::new(LocalRegistry::open_default()?);
+        Self::new_anonymous_in_registry(registry)
     }
 
-    /// Builder under a random `ttl.sh/<uuid>:1h` image name. Insecure;
+    pub fn new_anonymous_in_registry(registry: Arc<LocalRegistry>) -> Result<Self> {
+        let registry_id = registry.index().registry_id()?;
+        let image_name = anonymous_artifact_image_name(&registry_id)?;
+        Ok(Self::with_registry(registry, image_name))
+    }
+
+    /// Draft under a random `ttl.sh/<uuid>:1h` image name. Insecure;
     /// for tests only.
     pub fn temp() -> Result<Self> {
         let id = uuid::Uuid::new_v4();
         let image_name = ImageRef::parse(&format!("ttl.sh/{id}:1h"))?;
-        Ok(Self::new(image_name))
+        Self::new(image_name)
     }
 
-    /// Create a new artifact builder for a GitHub container registry image name.
+    /// Create a new artifact draft for a GitHub container registry image name.
     pub fn for_github(org: &str, repo: &str, name: &str, tag: &str) -> Result<Self> {
         let image_name = ghcr(org, repo, name, tag)?;
         let source = Url::parse(&format!("https://github.com/{org}/{repo}"))?;
 
-        let mut builder = Self::new(image_name);
-        builder.add_source(&source);
-        Ok(builder)
+        let mut draft = Self::new(image_name)?;
+        draft.add_source(&source);
+        Ok(draft)
     }
 
     pub fn add_layer_bytes(
@@ -330,18 +281,18 @@ impl LocalArtifactBuilder {
         media_type: MediaType,
         bytes: Vec<u8>,
         annotations: HashMap<String, String>,
-    ) -> Result<Descriptor> {
-        let blob = StagedArtifactBlob::new(media_type, bytes, annotations)?;
-        let descriptor = blob.descriptor.clone();
-        self.layers.push(blob);
-        Ok(descriptor)
+    ) -> Result<StoredDescriptor> {
+        let descriptor = descriptor_from_bytes(media_type, &bytes, annotations)?;
+        let stored_descriptor = self.registry.store_blob(descriptor, &bytes)?;
+        self.layers.push(stored_descriptor.clone());
+        Ok(stored_descriptor)
     }
 
     pub fn add_instance(
         &mut self,
         instance: v1::Instance,
         annotations: InstanceAnnotations,
-    ) -> Result<Descriptor> {
+    ) -> Result<StoredDescriptor> {
         self.add_layer_bytes(
             media_types::v1_instance(),
             instance.encode_to_vec(),
@@ -353,7 +304,7 @@ impl LocalArtifactBuilder {
         &mut self,
         solution: v1::State,
         annotations: SolutionAnnotations,
-    ) -> Result<Descriptor> {
+    ) -> Result<StoredDescriptor> {
         self.add_layer_bytes(
             media_types::v1_solution(),
             solution.encode_to_vec(),
@@ -365,7 +316,7 @@ impl LocalArtifactBuilder {
         &mut self,
         instance: v1::ParametricInstance,
         annotations: ParametricInstanceAnnotations,
-    ) -> Result<Descriptor> {
+    ) -> Result<StoredDescriptor> {
         self.add_layer_bytes(
             media_types::v1_parametric_instance(),
             instance.encode_to_vec(),
@@ -377,7 +328,7 @@ impl LocalArtifactBuilder {
         &mut self,
         sample_set: v1::SampleSet,
         annotations: SampleSetAnnotations,
-    ) -> Result<Descriptor> {
+    ) -> Result<StoredDescriptor> {
         self.add_layer_bytes(
             media_types::v1_sample_set(),
             sample_set.encode_to_vec(),
@@ -398,67 +349,42 @@ impl LocalArtifactBuilder {
         self.add_annotation("org.opencontainers.image.source", url.to_string());
     }
 
-    pub fn build(self) -> Result<LocalArtifact> {
-        let registry = Arc::new(LocalRegistry::open_default()?);
-        self.build_in_registry(registry, RefConflictPolicy::KeepExisting)
+    pub fn commit(self) -> Result<LocalArtifact> {
+        self.commit_inner(false)
     }
 
-    pub fn build_in_registry(
-        mut self,
-        registry: Arc<LocalRegistry>,
-        mut policy: RefConflictPolicy,
-    ) -> Result<LocalArtifact> {
-        // Resolve a deferred anonymous name against the *actual*
-        // target registry's id, so the synthesized hostname prefix
-        // matches the destination registry (not the default
-        // registry, which `LocalArtifactBuilder::new_anonymous`
-        // could not have known at construction time).
-        //
-        // Anonymous builds are also transparently switched to
-        // `RefConflictPolicy::Replace`: two anonymous builds in the
-        // same second produce the same `YYYYMMDDTHHMMSS` tag, and the
-        // user's intent is "publish under an auto-generated name", so
-        // silently overwriting the older ref is more useful than
-        // failing with a `KeepExisting` conflict. Named builds keep
-        // the caller-supplied policy intact.
-        if let BuilderImageName::Anonymous = self.image_name {
-            let registry_id = registry.index().registry_id()?;
-            self.image_name =
-                BuilderImageName::Explicit(anonymous_artifact_image_name(&registry_id)?);
-            policy = RefConflictPolicy::Replace;
-        }
-        let staged = self.stage()?;
-        let ref_update = registry.publish_artifact_manifest(
-            &staged.image_name,
-            &staged.manifest,
-            &staged.manifest_descriptor,
-            &staged.manifest_bytes,
-            &staged.blobs,
-            policy,
-        )?;
-        reject_conflicting_ref(&staged.image_name, ref_update)?;
+    pub fn commit_replace(self) -> Result<LocalArtifact> {
+        self.commit_inner(true)
+    }
+
+    fn commit_inner(self, replace_ref: bool) -> Result<LocalArtifact> {
+        let registry = Arc::clone(&self.registry);
+        let image_name = self.image_name.clone();
+        let artifact = self.into_unsealed_artifact()?;
+        let sealed_artifact = registry.seal_artifact(artifact)?;
+        let ref_update = if replace_ref {
+            registry.replace_manifest_ref(&image_name, &sealed_artifact)?
+        } else {
+            registry.publish_manifest_ref(&image_name, &sealed_artifact)?
+        };
+        reject_conflicting_ref(&image_name, ref_update)?;
         Ok(LocalArtifact::from_parts(
             registry,
-            staged.image_name,
-            staged.manifest_descriptor.digest().clone(),
+            image_name,
+            sealed_artifact.digest().clone(),
         ))
     }
 
-    /// Compute the manifest, its stable JSON bytes, and the matching
-    /// descriptor from the in-memory builder state, returning a
-    /// [`StagedArtifactManifest`] that the registry can later publish.
-    /// Pure: no I/O, no registry interaction.
+    /// Convert the in-memory draft state into unsealed manifest state.
     ///
-    /// Materialises the empty config blob as one of the staged blobs so
-    /// the publish path uploads it alongside the layers. Matches the
+    /// Matches the
     /// SDK v2 / `ArchiveArtifactBuilder` manifest shape (see
     /// `ocipkg::image::OciArtifactBuilder::new`): `schemaVersion: 2` +
     /// `artifactType` + empty config + layers, with the manifest's
-    /// own `mediaType` field intentionally absent so `LocalArtifactBuilder`
+    /// own `mediaType` field intentionally absent so `ArtifactDraft`
     /// and the archive build path produce structurally identical
     /// manifests.
-    fn stage(self) -> Result<StagedArtifactManifest> {
-        let mut blobs = self.layers;
+    fn into_unsealed_artifact(self) -> Result<UnsealedArtifact> {
         // V2 SDK's `ocipkg::OciArtifactBuilder::add_empty_json` emits the
         // empty config descriptor without an `annotations` field; build
         // it directly here (bypassing `descriptor_from_bytes`, which
@@ -474,80 +400,18 @@ impl LocalArtifactBuilder {
             .size(empty_config_bytes.len() as u64)
             .build()
             .context("Failed to build empty config descriptor")?;
-        let layer_descriptors: Vec<Descriptor> =
-            blobs.iter().map(|blob| blob.descriptor.clone()).collect();
-        blobs.push(StagedArtifactBlob {
-            descriptor: config_descriptor.clone(),
-            bytes: empty_config_bytes,
-        });
+        let config_descriptor = self
+            .registry
+            .store_blob(config_descriptor, &empty_config_bytes)?;
 
-        let mut builder = OciImageManifestBuilder::default()
-            .schema_version(2u32)
-            .artifact_type(self.artifact_type)
-            .config(config_descriptor)
-            .layers(layer_descriptors);
-        if let Some(subject) = self.subject {
-            builder = builder.subject(subject);
-        }
-        if !self.annotations.is_empty() {
-            builder = builder.annotations(self.annotations);
-        }
-        let manifest = builder
-            .build()
-            .context("Failed to build OCI image manifest")?;
-        let manifest_bytes = stable_json_bytes(&manifest)?;
-        let manifest_descriptor =
-            descriptor_from_bytes(MediaType::ImageManifest, &manifest_bytes, HashMap::new())?;
-        // `build_in_registry` resolves the `Anonymous` variant before
-        // calling `stage()`, so reaching `stage()` with `Anonymous`
-        // here is a bug (someone bypassed the resolve step). Surface
-        // it as a clear internal error rather than letting it slip
-        // through as a mysterious empty-name.
-        let image_name = match self.image_name {
-            BuilderImageName::Explicit(name) => name,
-            BuilderImageName::Anonymous => {
-                crate::bail!(
-                    "LocalArtifactBuilder::stage called with an unresolved anonymous image \
-                     name. Use `build_in_registry` (which resolves the name against the target \
-                     registry's id) instead of calling `stage` directly."
-                );
-            }
-        };
-        Ok(StagedArtifactManifest {
-            image_name,
-            manifest,
-            manifest_bytes,
-            manifest_descriptor,
-            blobs,
-        })
+        Ok(UnsealedArtifact::new(
+            self.artifact_type,
+            config_descriptor,
+            self.layers,
+            self.subject,
+            self.annotations,
+        ))
     }
-}
-
-/// The whole-artifact analogue of [`StagedArtifactBlob`]: bundles the
-/// `OCI ImageManifest` together with its stable JSON bytes, the
-/// matching `Descriptor` (digest / size / media type), every blob
-/// staged for upload (layers + the OCI 1.1 empty config), and the
-/// target `ImageName`.
-///
-/// Produced purely by in-memory computation (`LocalArtifactBuilder::stage`)
-/// and consumed by the registry publish path
-/// (`LocalRegistry::publish_artifact_manifest`). Splitting the Build
-/// phase ("compute everything we need") from the Seal phase ("write
-/// blobs / insert manifest record / update ref atomically") keeps
-/// publish a pure I/O step that only validates the staged bundle.
-///
-/// The Git analogy is the constructed-but-not-yet-written tree +
-/// commit object — a `git commit` materialises objects in
-/// `.git/objects/` and updates `refs/heads/<branch>`; here, publish
-/// materialises CAS bytes and updates the IndexStore ref to the new
-/// manifest digest.
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct StagedArtifactManifest {
-    image_name: ImageRef,
-    manifest: ImageManifest,
-    manifest_bytes: Vec<u8>,
-    manifest_descriptor: Descriptor,
-    blobs: Vec<StagedArtifactBlob>,
 }
 
 pub(crate) fn descriptor_from_bytes(
@@ -632,10 +496,9 @@ const ANONYMOUS_REGISTRY_ID_HOST_LEN: usize = 8;
 /// Hex chars of the random nonce appended to the timestamp tag.
 /// 12 hex = 48 bits = ~2.8 × 10^14 possible nonces; at N=10 000
 /// concurrent anonymous builds the birthday-paradox collision
-/// probability is ~1.8 × 10^-7, which combined with the seconds-level
-/// timestamp prefix and the `RefConflictPolicy::Replace` fallback in
-/// `build_in_registry` gives a practical zero collision rate even on
-/// platforms whose `clock_gettime` resolution is only microseconds
+/// probability is ~1.8 × 10^-7. Combined with the seconds-level
+/// timestamp prefix, this gives a practical zero collision rate even
+/// on platforms whose `clock_gettime` resolution is only microseconds
 /// (notably macOS — chrono's `%.9f` pads with zeros there, so the
 /// timestamp alone would not differentiate builds within the same
 /// microsecond). 32 bits (8 hex) would only give P ~ 1.2 × 10^-2 at
@@ -666,9 +529,8 @@ const ANONYMOUS_TAG_NONCE_HEX_LEN: usize = 12;
 ///   UUID v4. Required for MINTO-style concurrent build patterns
 ///   (scripts emitting many anonymous artifacts per second): without
 ///   it, two builds in the same second would synthesize the same tag
-///   and overwrite each other. `RefConflictPolicy::Replace` in
-///   `build_in_registry` is kept as a defense-in-depth fallback for
-///   the astronomically rare nonce collision.
+///   and conflict on the same ref. A remaining astronomically rare
+///   nonce collision is reported as a normal publish conflict.
 pub(crate) fn anonymous_artifact_image_name(registry_id: &str) -> Result<ImageRef> {
     let prefix: String = registry_id
         .chars()
@@ -857,34 +719,29 @@ mod tests {
         assert_eq!(host, format!("{}.ommx.local", &full[..8]));
     }
 
-    /// Two anonymous builds with no sleep between them collide on the
-    /// `YYYYMMDDTHHMMSS` tag. The builder transparently overrides
-    /// `RefConflictPolicy::Replace` for the anonymous case so the
-    /// second build succeeds and silently overwrites the first. A
-    /// regression that left the policy at `KeepExisting` would surface
-    /// here as the second `build_in_registry` returning an `Err`
-    /// describing a ref conflict.
+    /// Two anonymous commits with no sleep between them must still
+    /// publish independently because their nonce portions differ.
     #[test]
     fn anonymous_build_in_same_second_does_not_fail() -> Result<()> {
         let dir = tempfile::tempdir()?;
         let registry = Arc::new(LocalRegistry::open(dir.path())?);
         for tag in ["a", "b"] {
-            let mut builder = LocalArtifactBuilder::new_anonymous();
+            let mut builder = ArtifactDraft::new_anonymous_in_registry(registry.clone())?;
             builder.add_layer_bytes(
                 MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
                 format!("anon-{tag}").into_bytes(),
                 HashMap::new(),
             )?;
-            // Pass `KeepExisting` explicitly: the builder must still
-            // override to `Replace` internally for the anonymous case.
-            builder.build_in_registry(registry.clone(), RefConflictPolicy::KeepExisting)?;
+            builder.commit()?;
         }
         Ok(())
     }
 
     #[test]
     fn builds_native_oci_image_manifest_with_artifact_type() -> Result<()> {
-        let mut builder = LocalArtifactBuilder::new(test_image_name("v1")?);
+        let dir = tempfile::tempdir()?;
+        let registry = Arc::new(LocalRegistry::open(dir.path())?);
+        let mut builder = ArtifactDraft::with_registry(registry, test_image_name("v1")?);
         let layer = builder.add_layer_bytes(
             MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
             b"instance".to_vec(),
@@ -892,22 +749,24 @@ mod tests {
         )?;
         builder.add_annotation("org.opencontainers.image.ref.name", "example.com/demo:v1");
 
-        let staged = builder.stage()?;
+        let manifest = builder
+            .into_unsealed_artifact()?
+            .into_oci_image_manifest()?;
         // Manifest's own `mediaType` field is intentionally not set, matching
         // the v2 / `ArchiveArtifactBuilder` shape; the OCI Distribution
         // Content-Type header is supplied separately at push time.
-        assert_eq!(staged.manifest.media_type().as_ref(), None);
+        assert_eq!(manifest.media_type().as_ref(), None);
         assert_eq!(
-            staged.manifest.artifact_type().as_ref(),
+            manifest.artifact_type().as_ref(),
             Some(&MediaType::Other(
                 media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()
             ))
         );
-        assert_eq!(staged.manifest.layers(), &[layer]);
+        assert_eq!(manifest.layers(), &[Descriptor::from(layer)]);
 
         // OCI 1.1 empty config descriptor is set as the manifest's config and
-        // staged for upload alongside the layers.
-        let config = staged.manifest.config();
+        // stored alongside the layers before the root manifest is sealed.
+        let config = manifest.config();
         assert_eq!(config.media_type(), &MediaType::EmptyJSON);
         assert_eq!(
             config.size(),
@@ -917,35 +776,35 @@ mod tests {
             config.digest().to_string(),
             media_types::OCI_EMPTY_CONFIG_DIGEST
         );
-        assert!(staged
-            .blobs
-            .iter()
-            .any(|blob| blob.descriptor.digest() == config.digest()));
 
+        let manifest_bytes = stable_json_bytes(&manifest)?;
+        let manifest_descriptor =
+            descriptor_from_bytes(MediaType::ImageManifest, &manifest_bytes, HashMap::new())?;
+        assert_eq!(manifest_descriptor.media_type(), &MediaType::ImageManifest);
         assert_eq!(
-            staged.manifest_descriptor.media_type(),
-            &MediaType::ImageManifest
-        );
-        assert_eq!(
-            staged.manifest_descriptor.digest().to_string(),
-            sha256_digest(&staged.manifest_bytes)
+            manifest_descriptor.digest().to_string(),
+            sha256_digest(&manifest_bytes)
         );
 
-        let parsed: ImageManifest = serde_json::from_slice(&staged.manifest_bytes)?;
-        assert_eq!(parsed, staged.manifest);
+        let parsed: ImageManifest = serde_json::from_slice(&manifest_bytes)?;
+        assert_eq!(parsed, manifest);
         Ok(())
     }
 
     #[test]
     fn stable_manifest_json_is_independent_of_annotation_insertion_order() -> Result<()> {
-        let first = staged_with_annotations("order-a", [("b", "2"), ("a", "1")])?;
-        let second = staged_with_annotations("order-b", [("a", "1"), ("b", "2")])?;
+        let first = unsealed_artifact_with_annotations("order-a", [("b", "2"), ("a", "1")])?;
+        let second = unsealed_artifact_with_annotations("order-b", [("a", "1"), ("b", "2")])?;
 
-        assert_eq!(first.manifest_bytes, second.manifest_bytes);
-        assert_eq!(
-            first.manifest_descriptor.digest(),
-            second.manifest_descriptor.digest()
-        );
+        let first_bytes = stable_json_bytes(&first)?;
+        let second_bytes = stable_json_bytes(&second)?;
+        let first_descriptor =
+            descriptor_from_bytes(MediaType::ImageManifest, &first_bytes, HashMap::new())?;
+        let second_descriptor =
+            descriptor_from_bytes(MediaType::ImageManifest, &second_bytes, HashMap::new())?;
+
+        assert_eq!(first_bytes, second_bytes);
+        assert_eq!(first_descriptor.digest(), second_descriptor.digest());
         Ok(())
     }
 
@@ -953,7 +812,9 @@ mod tests {
     fn builds_manifest_with_subject() -> Result<()> {
         let subject =
             descriptor_from_bytes(MediaType::ImageManifest, b"parent manifest", HashMap::new())?;
-        let mut builder = LocalArtifactBuilder::new(test_image_name("subject")?);
+        let dir = tempfile::tempdir()?;
+        let registry = Arc::new(LocalRegistry::open(dir.path())?);
+        let mut builder = ArtifactDraft::with_registry(registry, test_image_name("subject")?);
         builder.add_layer_bytes(
             MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
             b"instance".to_vec(),
@@ -961,8 +822,10 @@ mod tests {
         )?;
         builder.set_subject(subject.clone());
 
-        let staged = builder.stage()?;
-        assert_eq!(staged.manifest.subject(), &Some(subject));
+        let manifest = builder
+            .into_unsealed_artifact()?
+            .into_oci_image_manifest()?;
+        assert_eq!(manifest.subject(), &Some(subject));
         Ok(())
     }
 
@@ -971,11 +834,13 @@ mod tests {
         assert!(Digest::from_str("sha256:../bad").is_err());
     }
 
-    fn staged_with_annotations(
+    fn unsealed_artifact_with_annotations(
         tag: &str,
         annotations: impl IntoIterator<Item = (&'static str, &'static str)>,
-    ) -> Result<StagedArtifactManifest> {
-        let mut builder = LocalArtifactBuilder::new(test_image_name(tag)?);
+    ) -> Result<ImageManifest> {
+        let dir = tempfile::tempdir()?;
+        let registry = Arc::new(LocalRegistry::open(dir.path())?);
+        let mut builder = ArtifactDraft::with_registry(registry, test_image_name(tag)?);
         builder.add_layer_bytes(
             MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
             b"instance".to_vec(),
@@ -984,6 +849,6 @@ mod tests {
         for (key, value) in annotations {
             builder.add_annotation(key, value);
         }
-        builder.stage()
+        builder.into_unsealed_artifact()?.into_oci_image_manifest()
     }
 }
