@@ -21,6 +21,13 @@ static DEFAULT_LOCAL_REGISTRY: OnceLock<LocalRegistry> = OnceLock::new();
 /// [`oci_spec::image::Descriptor`] itself. Values are created only by
 /// [`LocalRegistry`] operations that have written or verified the
 /// content-addressed blob.
+///
+/// The invariant is tied to the concrete [`LocalRegistry`] instance,
+/// not merely to an equivalent registry root path or SQLite database.
+/// Re-opening the same directory yields a different `LocalRegistry`
+/// instance, and descriptors from that instance are not treated as
+/// stored in this one until they are explicitly verified or written
+/// through this instance.
 #[derive(Debug, Clone)]
 pub struct StoredDescriptor<'reg> {
     registry: &'reg LocalRegistry,
@@ -29,6 +36,10 @@ pub struct StoredDescriptor<'reg> {
 
 impl StoredDescriptor<'_> {
     fn is_stored_in(&self, registry: &LocalRegistry) -> bool {
+        // This intentionally checks registry-instance identity. Two
+        // LocalRegistry values may point at the same on-disk SQLite /
+        // BlobStore root, but a StoredDescriptor is only proven stored
+        // for the instance that created or verified it.
         std::ptr::eq(self.registry, registry)
     }
 

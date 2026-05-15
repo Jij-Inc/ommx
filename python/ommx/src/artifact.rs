@@ -33,7 +33,7 @@ use crate::PyDescriptor;
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust", name = "Artifact")]
-pub struct PyArtifact(ommx::artifact::LocalArtifact);
+pub struct PyArtifact(ommx::artifact::LocalArtifact<'static>);
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
@@ -69,8 +69,7 @@ impl PyArtifact {
     #[staticmethod]
     pub fn import_archive(py: Python<'_>, path: PathBuf) -> Result<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let registry =
-            std::sync::Arc::new(ommx::artifact::local_registry::LocalRegistry::open_default()?);
+        let registry = ommx::artifact::local_registry::LocalRegistry::shared_default()?;
 
         let image_name = if path.is_file() {
             // `import_oci_archive` synthesizes an anonymous ref name
@@ -78,7 +77,7 @@ impl PyArtifact {
             // `org.opencontainers.image.ref.name` annotation (v2-era
             // unnamed `.ommx` files), so the returned `image_name`
             // is always `Some(...)`.
-            let outcome = ommx::artifact::local_registry::import_oci_archive(&registry, &path)?;
+            let outcome = ommx::artifact::local_registry::import_oci_archive(registry, &path)?;
             outcome.image_name.ok_or_else(|| {
                 anyhow::anyhow!(
                     "import_oci_archive returned no image_name despite synthesizing on \
@@ -202,9 +201,8 @@ impl PyArtifact {
         // SQLite miss — pull from the remote registry directly into
         // SQLite via the v3 native `pull_image` (no on-disk OCI dir
         // intermediate; blobs land straight in FileBlobStore).
-        let registry =
-            std::sync::Arc::new(ommx::artifact::local_registry::LocalRegistry::open_default()?);
-        ommx::artifact::local_registry::pull_image(&registry, &image_name_parsed)?;
+        let registry = ommx::artifact::local_registry::LocalRegistry::shared_default()?;
+        ommx::artifact::local_registry::pull_image(registry, &image_name_parsed)?;
         let artifact =
             ommx::artifact::LocalArtifact::open_in_registry(registry, image_name_parsed)?;
         Ok(Self(artifact))
@@ -742,14 +740,14 @@ fn assert_media_type(descriptor: &PyDescriptor, expected: &str) -> Result<()> {
 // `.ommx` file. The `Option` is consumed on `commit()` so a second
 // call surfaces "Already committed artifact".
 
-struct DraftInner(Option<Box<ommx::artifact::ArtifactDraft>>);
+struct DraftInner(Option<Box<ommx::artifact::ArtifactDraft<'static>>>);
 
 impl DraftInner {
-    fn new(builder: ommx::artifact::ArtifactDraft) -> Self {
+    fn new(builder: ommx::artifact::ArtifactDraft<'static>) -> Self {
         Self(Some(Box::new(builder)))
     }
 
-    fn as_mut(&mut self) -> Result<&mut ommx::artifact::ArtifactDraft> {
+    fn as_mut(&mut self) -> Result<&mut ommx::artifact::ArtifactDraft<'static>> {
         self.0
             .as_mut()
             .map(|b| b.as_mut())
@@ -773,7 +771,7 @@ impl DraftInner {
         Ok(())
     }
 
-    fn commit(&mut self) -> Result<ommx::artifact::LocalArtifact> {
+    fn commit(&mut self) -> Result<ommx::artifact::LocalArtifact<'static>> {
         let builder = self
             .0
             .take()

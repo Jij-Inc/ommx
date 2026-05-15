@@ -1289,7 +1289,7 @@ fn read_archive_blobs(path: &Path) -> Result<HashMap<String, Vec<u8>>> {
 }
 
 fn build_test_local_artifact<'reg>(
-    registry: &'reg Arc<LocalRegistry>,
+    registry: &'reg LocalRegistry,
     image_name: &ImageRef,
     layer_bytes: &[u8],
 ) -> Result<LocalArtifact<'reg>> {
@@ -1298,11 +1298,11 @@ fn build_test_local_artifact<'reg>(
 }
 
 fn new_test_local_artifact_builder<'reg>(
-    registry: &'reg Arc<LocalRegistry>,
+    registry: &'reg LocalRegistry,
     image_name: ImageRef,
     layer_bytes: &[u8],
 ) -> Result<(ArtifactDraft<'reg>, Descriptor)> {
-    let mut builder = ArtifactDraft::with_registry(registry.as_ref(), image_name);
+    let mut builder = ArtifactDraft::with_registry(registry, image_name);
     let descriptor = builder.add_layer_bytes(
         MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
         layer_bytes.to_vec(),
