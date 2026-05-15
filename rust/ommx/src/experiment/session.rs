@@ -2,7 +2,7 @@
 
 use super::model::{ExperimentState, RecordRef, RunState, RunStatus, Space};
 use super::{build_descriptor, commit, ANN_RECORD_NAME, ANN_RUN_ID, ANN_SPACE};
-use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
+use crate::artifact::local_registry::LocalRegistry;
 use crate::artifact::{media_types, sha256_digest, ImageRef, LocalArtifact};
 use crate::{Instance, SampleSet, Solution};
 use anyhow::Result;
@@ -59,7 +59,6 @@ impl Experiment {
                 requested_ref,
                 records: Vec::new(),
                 runs: Vec::new(),
-                staged_blobs: HashMap::new(),
                 next_run_id: 0,
                 committed: false,
                 artifact: None,
@@ -119,7 +118,7 @@ impl Experiment {
 
     fn add_record(&mut self, name: &str, media_type: MediaType, bytes: &[u8]) -> Result<()> {
         ensure_open(&self.state)?;
-        let (record_ref, blob) = stage_record_ref(
+        let record_ref = store_record_ref(
             &self.registry,
             Space::Experiment,
             None,
@@ -127,7 +126,6 @@ impl Experiment {
             media_type,
             bytes,
         )?;
-        remember_staged_blob(&mut self.state, blob);
         upsert_record_ref(&mut self.state.records, record_ref);
         Ok(())
     }
@@ -142,7 +140,7 @@ impl Experiment {
             });
         }
         ensure_no_running_runs(&self.state)?;
-        let artifact = commit::build_and_publish(&self.registry, &self.state)?;
+        let artifact = commit::commit_experiment_state(&self.registry, &self.state)?;
         self.state.committed = true;
         self.state.artifact = Some(artifact.clone());
         Ok(artifact)
@@ -215,7 +213,7 @@ impl Run<'_> {
 
     fn add_record(&mut self, name: &str, media_type: MediaType, bytes: &[u8]) -> Result<()> {
         ensure_open(&self.experiment.state)?;
-        let (record_ref, blob) = stage_record_ref(
+        let record_ref = store_record_ref(
             &self.experiment.registry,
             Space::Run,
             Some(self.run_id),
@@ -223,7 +221,6 @@ impl Run<'_> {
             media_type,
             bytes,
         )?;
-        remember_staged_blob(&mut self.experiment.state, blob);
         let run = find_run_mut(&mut self.experiment.state, self.run_id)?;
         upsert_record_ref(&mut run.records, record_ref);
         Ok(())
@@ -269,13 +266,6 @@ fn find_run_mut(state: &mut ExperimentState, run_id: u64) -> Result<&mut RunStat
         .ok_or_else(|| crate::error!("Run {run_id} not found in experiment"))
 }
 
-fn remember_staged_blob(state: &mut ExperimentState, descriptor: StoredDescriptor) {
-    state
-        .staged_blobs
-        .entry(descriptor.digest().clone())
-        .or_insert(descriptor);
-}
-
 /// Build-phase upsert: a record with the same `(media_type, name)`
 /// within a space replaces the previous one. Within one `Vec` the space
 /// and `run_id` are already fixed, so `(media_type, name)` is the
@@ -303,14 +293,14 @@ fn encode_json(name: &str, value: impl serde::Serialize) -> Result<Vec<u8>> {
 /// [`RecordRef`]: an OCI layer descriptor carrying the experiment /
 /// record annotations, plus the matching descriptor for commit-time
 /// publication.
-fn stage_record_ref(
+fn store_record_ref(
     registry: &LocalRegistry,
     space: Space,
     run_id: Option<u64>,
     name: &str,
     media_type: MediaType,
     bytes: &[u8],
-) -> Result<(RecordRef, StoredDescriptor)> {
+) -> Result<RecordRef> {
     let digest = sha256_digest(bytes);
     let digest = oci_spec::image::Digest::from_str(&digest)
         .map_err(|e| crate::error!("Failed to parse record blob digest: {e}"))?;
@@ -322,12 +312,9 @@ fn stage_record_ref(
     annotations.insert(ANN_RECORD_NAME.to_string(), name.to_string());
 
     let descriptor = build_descriptor(media_type, &digest, bytes.len() as u64, annotations)?;
-    let descriptor = registry.stage_blob(descriptor, bytes)?;
-    Ok((
-        RecordRef {
-            name: name.to_string(),
-            descriptor: descriptor.clone(),
-        },
+    let descriptor = registry.store_blob(descriptor, bytes)?;
+    Ok(RecordRef {
+        name: name.to_string(),
         descriptor,
-    ))
+    })
 }

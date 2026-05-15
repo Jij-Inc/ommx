@@ -88,7 +88,7 @@ pub use import::oci_dir::{
 #[cfg(feature = "remote-artifact")]
 pub use import::remote::pull_image;
 pub use index::SqliteIndexStore;
-pub(crate) use registry::ArtifactManifestDraft;
+pub(crate) use registry::UnsealedArtifact;
 pub use registry::{LocalRegistry, StoredDescriptor};
 pub use types::{
     RefConflictPolicy, RefRecord, RefUpdate, FILE_BLOB_STORE_DIR_NAME,

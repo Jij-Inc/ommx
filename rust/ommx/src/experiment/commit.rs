@@ -8,7 +8,7 @@ use super::{
     RUN_ATTRIBUTES_MEDIA_TYPE,
 };
 use crate::artifact::local_registry::{
-    ArtifactManifestDraft, LocalRegistry, RefConflictPolicy, RefUpdate, StoredDescriptor,
+    LocalRegistry, RefConflictPolicy, RefUpdate, StoredDescriptor, UnsealedArtifact,
 };
 use crate::artifact::{media_types, sha256_digest, LocalArtifact};
 use anyhow::Result;
@@ -18,10 +18,8 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
 
-/// Assemble the experiment manifest from the already-staged record
-/// blobs plus the commit-time aggregate layers, and publish it to the
-/// Local Registry.
-pub(super) fn build_and_publish(
+/// Commit an unsealed experiment state as one immutable artifact.
+pub(super) fn commit_experiment_state(
     registry: &Arc<LocalRegistry>,
     state: &ExperimentState,
 ) -> Result<LocalArtifact> {
@@ -33,18 +31,13 @@ pub(super) fn build_and_publish(
     // already written to the BlobStore when each record was logged.
     let run_records = state.runs.iter().flat_map(|run| run.records.iter());
     for record in state.records.iter().chain(run_records) {
-        let digest = record.descriptor.digest().clone();
-        state
-            .staged_blobs
-            .get(&digest)
-            .ok_or_else(|| crate::error!("Staged blob {digest} is missing"))?;
         layers.push(record.descriptor.clone());
     }
 
     // Aggregate layers, materialised at commit time.
     let run_attributes = serde_json::to_vec(&run_attributes_json(state))
         .map_err(|e| crate::error!("Failed to encode run attributes JSON: {e}"))?;
-    let descriptor = stage_aggregate_layer(
+    let descriptor = store_aggregate_layer(
         registry,
         RUN_ATTRIBUTES_MEDIA_TYPE,
         LAYER_KIND_RUN_ATTRIBUTES,
@@ -54,7 +47,7 @@ pub(super) fn build_and_publish(
 
     let index = serde_json::to_vec(&experiment_index_json(state))
         .map_err(|e| crate::error!("Failed to encode experiment index JSON: {e}"))?;
-    let descriptor = stage_aggregate_layer(
+    let descriptor = store_aggregate_layer(
         registry,
         EXPERIMENT_INDEX_MEDIA_TYPE,
         LAYER_KIND_INDEX,
@@ -74,9 +67,9 @@ pub(super) fn build_and_publish(
         .size(empty_config_bytes.len() as u64)
         .build()
         .map_err(|e| crate::error!("Failed to build empty config descriptor: {e}"))?;
-    let config_descriptor = registry.stage_blob(config_descriptor, &empty_config_bytes)?;
+    let config_descriptor = registry.store_blob(config_descriptor, &empty_config_bytes)?;
 
-    let manifest = ArtifactManifestDraft::new(
+    let artifact = UnsealedArtifact::new(
         MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
         config_descriptor,
         layers,
@@ -88,9 +81,10 @@ pub(super) fn build_and_publish(
         None => registry.synthesize_anonymous_image_name()?,
     };
 
-    let (manifest_descriptor, ref_update) = registry.publish_artifact_manifest(
+    let manifest_descriptor = registry.seal_artifact(artifact)?;
+    let ref_update = registry.publish_manifest_ref(
         &image_name,
-        manifest,
+        &manifest_descriptor,
         RefConflictPolicy::KeepExisting,
     )?;
     if let RefUpdate::Conflicted {
@@ -111,9 +105,9 @@ pub(super) fn build_and_publish(
     ))
 }
 
-/// CAS-write a commit-time aggregate JSON layer and return its
+/// Store a commit-time aggregate JSON layer and return its
 /// descriptor (with the `org.ommx.experiment.layer` annotation).
-fn stage_aggregate_layer(
+fn store_aggregate_layer(
     registry: &LocalRegistry,
     media_type: &str,
     layer_kind: &str,
@@ -129,7 +123,7 @@ fn stage_aggregate_layer(
         bytes.len() as u64,
         annotations,
     )?;
-    registry.stage_blob(descriptor, bytes)
+    registry.store_blob(descriptor, bytes)
 }
 
 fn manifest_annotations(state: &ExperimentState) -> HashMap<String, String> {

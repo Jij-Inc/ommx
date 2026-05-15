@@ -789,7 +789,7 @@ Track A の中核のうち、最小の happy path を最初に通す。Local Reg
 | `Experiment` / `Run` の Build phase session と lifecycle API（`run()` / `finish()` / `fail()` / `commit()`） | Python SDK への PyO3 expose（`ommx.experiment` / context manager） |
 | Record（`metadata` / `object` / `instance` / `solution` / `sampleset`）の experiment space / run space への追加 | 失敗時処理全般（3.4 の crash recovery manifest / orphan blob / autosave metadata） |
 | Run lifecycle（status / elapsed time の Run attributes 反映） | Run parameter table（`log_parameter` / `get_run_table`） |
-| `log_*` 時点の BlobStore 逐次書き込みと `commit()` の manifest publish（新規 `local_registry` primitive を含む） | `Experiment.load()` による immutable view 復元 |
+| `log_*` 時点の BlobStore 逐次書き込みと `commit()` の root manifest seal / ref publish（新規 `local_registry` primitive を含む） | `Experiment.load()` による immutable view 復元 |
 | Build phase の `(space, run_id, media type, name)` upsert、commit 後 mutation 禁止 | OTel / trace layer / renderer、fork / lineage / `diff` |
 | | `log_solve` / `log_sample`、diagnostics sink、`media` Record、実行環境属性、GC |
 
@@ -834,14 +834,15 @@ API:
 
 `commit()` は次を行う:
 
-1. Run attributes JSON / Experiment index JSON / OCI empty config を `put_bytes` で BlobStore に書く。
-2. 全 Record descriptor + aggregate layer descriptor + empty config から `ImageManifest`（`artifactType` = `application/org.ommx.v1.artifact`、manifest annotations 付き）を組み、stable JSON bytes と manifest descriptor を計算する。
+1. Run attributes JSON / Experiment index JSON / OCI empty config を Store し、それぞれ `StoredDescriptor` を得る。
+2. 全 Record descriptor + aggregate layer descriptor + empty config から `UnsealedArtifact` を作る。
 3. tag 未指定なら `registry.synthesize_anonymous_image_name()` で anonymous image name を採番する。
-4. `publish_artifact_manifest` で manifest dependency の blob が BlobStore に存在することを検証し、manifest blob を書いて IndexStore に publish する。
+4. `seal_artifact` で root manifest blob を Store し、root `StoredDescriptor` を得る。
+5. `publish_manifest_ref` で root descriptor を IndexStore の ref に対応づける。
 
-この実装では、内部 state は `StoredDescriptor` を「Local Registry に保存済み blob への参照」として扱う。一方、manifest / archive / Python API に出す値は通常の `oci_spec::image::Descriptor` である。`StoredDescriptor` の作成経路は Local Registry の blob 書き込み / 検証後に限定し、作成後は `Deref<Target = Descriptor>` によって通常の descriptor として読める。`publish_artifact_manifest` は manifest の config / layers が指す blob の存在を digest 単位で検証し、bytes を再供給させない。ArtifactDraft と Experiment はどちらも、payload 追加時に blob を保存し、commit 時には未シリアライズの `ImageManifest` を組み立てて registry に publish する。
+この実装では、内部 state は `StoredDescriptor` を「Local Registry に保存済み blob への参照」として扱う。一方、manifest / archive / Python API に出す値は通常の `oci_spec::image::Descriptor` である。`StoredDescriptor` の作成経路は Local Registry の blob 書き込み / 検証後に限定し、作成後は `Deref<Target = Descriptor>` によって通常の descriptor として読める。ArtifactDraft と Experiment はどちらも、payload 追加時に component blob を Store し、commit 時には unsealed state から root manifest を Seal してから ref に Publish する。
 
-byte-level で同一の payload は CAS で 1 物理 blob に共有される（§7.2）。論理 Record は `(space, run_id, media type, name)` 単位なので、複数 Run が同じ `name`・同じ bytes の Record を持つ場合でも `run_id` が異なれば別 Record として両立し、同じ digest を annotations 違い（`org.ommx.experiment.run_id` 等）の複数 descriptor が指す。したがって `commit()` は manifest `layers[]` には Record ごとの全 descriptor を載せる。BlobStore 上の実体は digest で自然に de-dup され、publish 時の検証も full descriptor 一致ではなく manifest dependency の digest 存在確認で行う。
+byte-level で同一の payload は CAS で 1 物理 blob に共有される（§7.2）。論理 Record は `(space, run_id, media type, name)` 単位なので、複数 Run が同じ `name`・同じ bytes の Record を持つ場合でも `run_id` が異なれば別 Record として両立し、同じ digest を annotations 違い（`org.ommx.experiment.run_id` 等）の複数 descriptor が指す。したがって `commit()` は manifest `layers[]` には Record ごとの全 descriptor を載せる。BlobStore 上の実体は digest で自然に de-dup され、component blob の存在は `StoredDescriptor` の不変条件として表す。
 
 manifest annotations:
 

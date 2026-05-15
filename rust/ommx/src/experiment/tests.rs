@@ -84,7 +84,6 @@ fn log_writes_blob_to_blobstore_immediately() {
             .descriptor
             .digest()
             .clone();
-        assert!(experiment.state.staged_blobs.contains_key(&digest));
         digest
     };
     assert!(experiment.registry.blobs().exists(&digest).unwrap());

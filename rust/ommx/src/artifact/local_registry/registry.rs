@@ -43,7 +43,7 @@ impl From<StoredDescriptor> for Descriptor {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct ArtifactManifestDraft {
+pub(crate) struct UnsealedArtifact {
     artifact_type: MediaType,
     config: StoredDescriptor,
     layers: Vec<StoredDescriptor>,
@@ -51,7 +51,7 @@ pub(crate) struct ArtifactManifestDraft {
     annotations: HashMap<String, String>,
 }
 
-impl ArtifactManifestDraft {
+impl UnsealedArtifact {
     pub(crate) fn new(
         artifact_type: MediaType,
         config: StoredDescriptor,
@@ -207,49 +207,33 @@ impl LocalRegistry {
         Ok(refs)
     }
 
-    /// Publish an OCI Image Manifest to the SQLite Local Registry.
+    /// Seal an unsealed OMMX Artifact manifest into the BlobStore.
+    ///
     /// The manifest's config/layers are represented as
-    /// [`StoredDescriptor`] before this method is called, so this
-    /// method does not re-validate dependency blob existence. It only
-    /// serializes the manifest itself, writes the manifest blob, and
-    /// publishes the resulting descriptor into the index.
-    pub(crate) fn publish_artifact_manifest(
-        &self,
-        image_name: &ImageRef,
-        manifest: ArtifactManifestDraft,
-        policy: RefConflictPolicy,
-    ) -> Result<(StoredDescriptor, RefUpdate)> {
-        let manifest = manifest.into_oci_image_manifest()?;
+    /// [`StoredDescriptor`] before this method is called, so sealing
+    /// does not re-validate dependency blob existence. It serializes
+    /// and stores only the root manifest blob, yielding its root
+    /// [`StoredDescriptor`].
+    pub(crate) fn seal_artifact(&self, artifact: UnsealedArtifact) -> Result<StoredDescriptor> {
+        let manifest = artifact.into_oci_image_manifest()?;
         Self::validate_manifest(&manifest)?;
         let manifest_bytes = stable_json_bytes(&manifest)?;
         let manifest_descriptor = Self::build_manifest_descriptor(&manifest_bytes)?;
-        let manifest_descriptor = self.stage_blob(manifest_descriptor, &manifest_bytes)?;
+        self.store_blob(manifest_descriptor, &manifest_bytes)
+    }
 
-        // Pre-check: under `KeepExisting`, return the conflict before
-        // touching the SQLite ref. The manifest blob is already in
-        // CAS, so the returned descriptor still satisfies the
-        // `StoredDescriptor` invariant. The atomic publish in stage 2
-        // re-validates the same condition inside the SQLite transaction,
-        // so concurrent racers can't slip through.
-        if policy == RefConflictPolicy::KeepExisting {
-            if let Some(existing_descriptor) = self.index.resolve_image_descriptor(image_name)? {
-                if existing_descriptor.digest() != manifest_descriptor.digest() {
-                    let incoming_manifest_digest = manifest_descriptor.digest().clone();
-                    return Ok((
-                        manifest_descriptor,
-                        RefUpdate::Conflicted {
-                            existing_manifest_digest: existing_descriptor.digest().clone(),
-                            incoming_manifest_digest,
-                        },
-                    ));
-                }
-            }
-        }
-
-        let ref_update =
-            self.index
-                .put_image_ref_with_policy(image_name, &manifest_descriptor, policy)?;
-        Ok((manifest_descriptor, ref_update))
+    /// Publish a sealed root manifest descriptor under an image ref.
+    ///
+    /// This is an IndexStore operation only. It does not write payload
+    /// blobs or manifest bytes.
+    pub(crate) fn publish_manifest_ref(
+        &self,
+        image_name: &ImageRef,
+        sealed_manifest: &StoredDescriptor,
+        policy: RefConflictPolicy,
+    ) -> Result<RefUpdate> {
+        self.index
+            .put_image_ref_with_policy(image_name, sealed_manifest, policy)
     }
 
     /// Validate that the manifest carries the OMMX `artifactType`.
@@ -279,9 +263,9 @@ impl LocalRegistry {
             .context("Failed to build manifest descriptor")
     }
 
-    /// CAS-write a descriptor's bytes and verify the concrete bytes
-    /// match the descriptor the manifest will reference.
-    pub(crate) fn stage_blob(
+    /// Store a descriptor's bytes as a content-addressed blob and
+    /// verify the concrete bytes match the descriptor.
+    pub(crate) fn store_blob(
         &self,
         descriptor: Descriptor,
         bytes: &[u8],

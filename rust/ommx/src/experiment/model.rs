@@ -3,8 +3,7 @@
 
 use crate::artifact::local_registry::StoredDescriptor;
 use crate::artifact::{ImageRef, LocalArtifact};
-use oci_spec::image::Digest;
-use std::{collections::HashMap, time::Instant};
+use std::time::Instant;
 
 /// The storage space a [`RecordRef`] belongs to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -78,9 +77,6 @@ pub(super) struct ExperimentState {
     /// Experiment-space records.
     pub(super) records: Vec<RecordRef>,
     pub(super) runs: Vec<RunState>,
-    /// CAS-written blobs available for commit-time publication, keyed
-    /// by digest.
-    pub(super) staged_blobs: HashMap<Digest, StoredDescriptor>,
     pub(super) next_run_id: u64,
     pub(super) committed: bool,
     pub(super) artifact: Option<LocalArtifact>,

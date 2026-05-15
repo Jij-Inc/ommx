@@ -2,7 +2,7 @@ use super::{
     digest::sha256_digest,
     ghcr,
     local_registry::{
-        ArtifactManifestDraft, LocalRegistry, RefConflictPolicy, RefUpdate, StoredDescriptor,
+        LocalRegistry, RefConflictPolicy, RefUpdate, StoredDescriptor, UnsealedArtifact,
     },
     media_types::{self, OCI_EMPTY_CONFIG_BYTES},
     ImageRef, InstanceAnnotations, ParametricInstanceAnnotations, SampleSetAnnotations,
@@ -303,7 +303,7 @@ impl ArtifactDraft {
         annotations: HashMap<String, String>,
     ) -> Result<StoredDescriptor> {
         let descriptor = descriptor_from_bytes(media_type, &bytes, annotations)?;
-        let stored_descriptor = self.registry.stage_blob(descriptor, &bytes)?;
+        let stored_descriptor = self.registry.store_blob(descriptor, &bytes)?;
         self.layers.push(stored_descriptor.clone());
         Ok(stored_descriptor)
     }
@@ -377,9 +377,10 @@ impl ArtifactDraft {
     pub fn commit_with_policy(self, policy: RefConflictPolicy) -> Result<LocalArtifact> {
         let registry = Arc::clone(&self.registry);
         let image_name = self.image_name.clone();
-        let manifest = self.prepare_manifest()?;
-        let (manifest_descriptor, ref_update) =
-            registry.publish_artifact_manifest(&image_name, manifest, policy)?;
+        let artifact = self.into_unsealed_artifact()?;
+        let manifest_descriptor = registry.seal_artifact(artifact)?;
+        let ref_update =
+            registry.publish_manifest_ref(&image_name, &manifest_descriptor, policy)?;
         reject_conflicting_ref(&image_name, ref_update)?;
         Ok(LocalArtifact::from_parts(
             registry,
@@ -388,15 +389,16 @@ impl ArtifactDraft {
         ))
     }
 
-    /// Compute the manifest input from the in-memory draft state and
-    /// the stored empty-config descriptor. Matches the
+    /// Convert the in-memory draft state into unsealed manifest state.
+    ///
+    /// Matches the
     /// SDK v2 / `ArchiveArtifactBuilder` manifest shape (see
     /// `ocipkg::image::OciArtifactBuilder::new`): `schemaVersion: 2` +
     /// `artifactType` + empty config + layers, with the manifest's
     /// own `mediaType` field intentionally absent so `ArtifactDraft`
     /// and the archive build path produce structurally identical
     /// manifests.
-    fn prepare_manifest(self) -> Result<ArtifactManifestDraft> {
+    fn into_unsealed_artifact(self) -> Result<UnsealedArtifact> {
         // V2 SDK's `ocipkg::OciArtifactBuilder::add_empty_json` emits the
         // empty config descriptor without an `annotations` field; build
         // it directly here (bypassing `descriptor_from_bytes`, which
@@ -414,9 +416,9 @@ impl ArtifactDraft {
             .context("Failed to build empty config descriptor")?;
         let config_descriptor = self
             .registry
-            .stage_blob(config_descriptor, &empty_config_bytes)?;
+            .store_blob(config_descriptor, &empty_config_bytes)?;
 
-        Ok(ArtifactManifestDraft::new(
+        Ok(UnsealedArtifact::new(
             self.artifact_type,
             config_descriptor,
             self.layers,
@@ -769,7 +771,9 @@ mod tests {
         )?;
         builder.add_annotation("org.opencontainers.image.ref.name", "example.com/demo:v1");
 
-        let manifest = builder.prepare_manifest()?.into_oci_image_manifest()?;
+        let manifest = builder
+            .into_unsealed_artifact()?
+            .into_oci_image_manifest()?;
         // Manifest's own `mediaType` field is intentionally not set, matching
         // the v2 / `ArchiveArtifactBuilder` shape; the OCI Distribution
         // Content-Type header is supplied separately at push time.
@@ -783,7 +787,7 @@ mod tests {
         assert_eq!(manifest.layers(), &[Descriptor::from(layer)]);
 
         // OCI 1.1 empty config descriptor is set as the manifest's config and
-        // staged for upload alongside the layers.
+        // stored alongside the layers before the root manifest is sealed.
         let config = manifest.config();
         assert_eq!(config.media_type(), &MediaType::EmptyJSON);
         assert_eq!(
@@ -811,8 +815,8 @@ mod tests {
 
     #[test]
     fn stable_manifest_json_is_independent_of_annotation_insertion_order() -> Result<()> {
-        let first = staged_with_annotations("order-a", [("b", "2"), ("a", "1")])?;
-        let second = staged_with_annotations("order-b", [("a", "1"), ("b", "2")])?;
+        let first = unsealed_artifact_with_annotations("order-a", [("b", "2"), ("a", "1")])?;
+        let second = unsealed_artifact_with_annotations("order-b", [("a", "1"), ("b", "2")])?;
 
         let first_bytes = stable_json_bytes(&first)?;
         let second_bytes = stable_json_bytes(&second)?;
@@ -844,7 +848,9 @@ mod tests {
         )?;
         builder.set_subject(subject.clone());
 
-        let manifest = builder.prepare_manifest()?.into_oci_image_manifest()?;
+        let manifest = builder
+            .into_unsealed_artifact()?
+            .into_oci_image_manifest()?;
         assert_eq!(manifest.subject(), &Some(subject));
         Ok(())
     }
@@ -854,7 +860,7 @@ mod tests {
         assert!(Digest::from_str("sha256:../bad").is_err());
     }
 
-    fn staged_with_annotations(
+    fn unsealed_artifact_with_annotations(
         tag: &str,
         annotations: impl IntoIterator<Item = (&'static str, &'static str)>,
     ) -> Result<ImageManifest> {
@@ -873,6 +879,6 @@ mod tests {
         for (key, value) in annotations {
             builder.add_annotation(key, value);
         }
-        builder.prepare_manifest()?.into_oci_image_manifest()
+        builder.into_unsealed_artifact()?.into_oci_image_manifest()
     }
 }

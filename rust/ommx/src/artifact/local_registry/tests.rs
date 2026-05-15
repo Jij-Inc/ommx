@@ -583,7 +583,7 @@ fn local_registry_build_keep_existing_skips_conflicting_manifest() -> Result<()>
     );
     // The builder writes non-manifest blobs before asking the registry
     // to publish the manifest. On conflict, the ref is left unchanged,
-    // but already-staged CAS bytes may remain for later GC.
+    // but already-stored CAS bytes may remain for later GC.
     assert!(registry.blobs().exists(second_blob.digest())?);
     Ok(())
 }
@@ -934,7 +934,7 @@ fn import_oci_archive_surfaces_digest_conflict_for_same_ref() -> Result<()> {
     // Importing a second .ommx archive that shares the first's image
     // name but carries different bytes must surface a ref conflict
     // under the default `KeepExisting` policy, not a stale `Unchanged`.
-    // Each call to `import_oci_archive` stages into a fresh tempdir
+    // Each call to `import_oci_archive` extracts into a fresh tempdir
     // that is dropped before the function returns, so SQLite's ref
     // conflict check sees the new archive's freshly hashed manifest
     // digest rather than the prior archive's bytes.

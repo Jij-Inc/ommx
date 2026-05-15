@@ -32,7 +32,7 @@
 //! 2. Open a [`RemoteTransport`], authenticate for `Pull`, fetch the
 //!    manifest bytes verbatim, then walk the manifest's config +
 //!    layer descriptors. Each blob is pulled into memory and written
-//!    to [`FileBlobStore`]. The manifest is staged last so it sits
+//!    to [`FileBlobStore`]. The manifest is stored last so it sits
 //!    behind its blobs in the BlobStore (matching the OCI distribution
 //!    publish order).
 //! 3. SQLite publishes only the manifest descriptor under the requested
@@ -132,7 +132,7 @@ pub fn pull_image(registry: &Arc<LocalRegistry>, image_name: &ImageRef) -> Resul
         pull_descriptor_blob(&transport, registry.blobs(), image_name, layer)?;
     }
 
-    stage_manifest_blob(registry.blobs(), &manifest_bytes, &manifest_digest)?;
+    store_manifest_blob(registry.blobs(), &manifest_bytes, &manifest_digest)?;
 
     let ref_update = registry.index().put_image_ref_with_policy(
         image_name,
@@ -220,13 +220,13 @@ fn pull_descriptor_blob(
     Ok(())
 }
 
-/// Stage the manifest bytes into [`FileBlobStore`] under their
+/// Store the manifest bytes into [`FileBlobStore`] under their
 /// registry-reported digest. The check that local sha256 matches the
 /// registry-reported digest doubles as an integrity probe on the
 /// manifest body: an upstream proxy that rewrote the manifest would
 /// surface here instead of producing an artifact whose published ref
 /// points at a manifest blob the registry does not actually serve.
-fn stage_manifest_blob(
+fn store_manifest_blob(
     blob_store: &FileBlobStore,
     manifest_bytes: &[u8],
     expected_digest: &Digest,
