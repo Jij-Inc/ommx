@@ -4,6 +4,8 @@
 
 use crate::artifact::local_registry::StoredDescriptor;
 use crate::artifact::ImageRef;
+use serde_json::Value;
+use std::collections::BTreeMap;
 use std::time::Instant;
 
 /// The storage space a [`RecordRef`] belongs to.
@@ -61,6 +63,7 @@ pub(super) struct RecordRef {
 pub(super) struct RunState {
     pub(super) run_id: u64,
     pub(super) records: Vec<RecordRef>,
+    pub(super) parameters: BTreeMap<String, Value>,
     pub(super) status: RunStatus,
     pub(super) started_at: Instant,
     pub(super) elapsed_secs: Option<f64>,

@@ -5,7 +5,7 @@ use super::{
     build_descriptor, ANN_ARTIFACT_KIND, ANN_EXPERIMENT_NAME, ANN_EXPERIMENT_SCHEMA,
     ANN_EXPERIMENT_STATUS, ANN_LAYER, ARTIFACT_KIND_EXPERIMENT, EXPERIMENT_INDEX_MEDIA_TYPE,
     EXPERIMENT_SCHEMA_V1, EXPERIMENT_STATUS_FINISHED, LAYER_KIND_INDEX, LAYER_KIND_RUN_ATTRIBUTES,
-    RUN_ATTRIBUTES_MEDIA_TYPE,
+    LAYER_KIND_RUN_PARAMETERS, RUN_ATTRIBUTES_MEDIA_TYPE, RUN_PARAMETERS_MEDIA_TYPE,
 };
 use crate::artifact::local_registry::{
     LocalRegistry, RefUpdate, StoredDescriptor, UnsealedArtifact,
@@ -35,6 +35,16 @@ pub(super) fn commit_experiment_state(
     }
 
     // Aggregate layers, materialised at commit time.
+    let run_parameters = serde_json::to_vec(&run_parameters_json(state))
+        .map_err(|e| crate::error!("Failed to encode run parameters JSON: {e}"))?;
+    let descriptor = store_aggregate_layer(
+        registry,
+        RUN_PARAMETERS_MEDIA_TYPE,
+        LAYER_KIND_RUN_PARAMETERS,
+        &run_parameters,
+    )?;
+    layers.push(descriptor);
+
     let run_attributes = serde_json::to_vec(&run_attributes_json(state))
         .map_err(|e| crate::error!("Failed to encode run attributes JSON: {e}"))?;
     let descriptor = store_aggregate_layer(
@@ -154,6 +164,19 @@ fn run_attributes_json(state: &UnsealedExperimentState) -> serde_json::Value {
     })
 }
 
+fn run_parameters_json(state: &UnsealedExperimentState) -> serde_json::Value {
+    json!({
+        "runs": state
+            .runs
+            .iter()
+            .map(|run| json!({
+                "run_id": run.run_id,
+                "parameters": run.parameters,
+            }))
+            .collect::<Vec<_>>(),
+    })
+}
+
 fn experiment_index_json(state: &UnsealedExperimentState) -> serde_json::Value {
     json!({
         "schema": EXPERIMENT_SCHEMA_V1,
@@ -168,6 +191,7 @@ fn experiment_index_json(state: &UnsealedExperimentState) -> serde_json::Value {
             .iter()
             .map(|run| json!({
                 "run_id": run.run_id,
+                "parameter_names": run.parameters.keys().collect::<Vec<_>>(),
                 "records": run.records.iter().map(record_index_entry).collect::<Vec<_>>(),
             }))
             .collect::<Vec<_>>(),

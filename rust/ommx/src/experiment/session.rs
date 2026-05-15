@@ -7,7 +7,9 @@ use crate::artifact::{media_types, sha256_digest, ImageRef, LocalArtifact};
 use crate::{Instance, SampleSet, Solution};
 use anyhow::Result;
 use oci_spec::image::MediaType;
+use serde_json::Value;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
 use std::{str::FromStr, sync::Arc};
 
@@ -18,6 +20,8 @@ const JSON_MEDIA_TYPE: &str = "application/json";
 #[derive(Debug)]
 pub struct Experiment {
     pub(super) registry: Arc<LocalRegistry>,
+    session_id: uuid::Uuid,
+    active_runs: Arc<AtomicUsize>,
     pub(super) state: UnsealedExperimentState,
 }
 
@@ -30,15 +34,18 @@ pub struct SealedExperiment {
 
 /// A handle to a single run within an [`Experiment`].
 ///
-/// `Run` borrows its parent experiment mutably. This is intentional:
-/// while a run is open, the parent session cannot be committed or used
-/// to start another run. PyO3 bindings may wrap this with a different
-/// state machine later, but the Rust core keeps the lifecycle explicit
-/// in the type system.
+/// A `Run` does not mutably borrow the parent experiment. It writes
+/// payload bytes to the registry CAS immediately, keeps run-scoped
+/// records / parameters locally, and writes back to the parent
+/// experiment only when [`Self::finish`] or [`Self::fail`] consumes the
+/// handle. This lets multiple runs be open at once while keeping
+/// Experiment state updates at the run lifecycle boundary.
 #[derive(Debug)]
-pub struct Run<'exp> {
-    pub(super) experiment: &'exp mut Experiment,
-    pub(super) run_id: u64,
+pub struct Run {
+    registry: Arc<LocalRegistry>,
+    session_id: uuid::Uuid,
+    active_runs: Arc<AtomicUsize>,
+    state: Option<RunState>,
 }
 
 impl Experiment {
@@ -61,6 +68,8 @@ impl Experiment {
     ) -> Self {
         Experiment {
             registry,
+            session_id: uuid::Uuid::new_v4(),
+            active_runs: Arc::new(AtomicUsize::new(0)),
             state: UnsealedExperimentState {
                 name: name.into(),
                 requested_ref,
@@ -72,19 +81,15 @@ impl Experiment {
     }
 
     /// Start a new [`Run`]. Each run gets a fresh 0-based `run_id`.
-    pub fn run(&mut self) -> Result<Run<'_>> {
+    pub fn run(&mut self) -> Result<Run> {
         let run_id = self.state.next_run_id;
         self.state.next_run_id += 1;
-        self.state.runs.push(RunState {
-            run_id,
-            records: Vec::new(),
-            status: RunStatus::Running,
-            started_at: Instant::now(),
-            elapsed_secs: None,
-        });
+        self.active_runs.fetch_add(1, Ordering::SeqCst);
         Ok(Run {
-            experiment: self,
-            run_id,
+            registry: Arc::clone(&self.registry),
+            session_id: self.session_id,
+            active_runs: Arc::clone(&self.active_runs),
+            state: Some(RunState::new(run_id)),
         })
     }
 
@@ -133,13 +138,45 @@ impl Experiment {
         Ok(())
     }
 
+    fn push_closed_run(&mut self, run: RunState, session_id: uuid::Uuid) -> Result<()> {
+        if session_id != self.session_id {
+            crate::bail!("Run belongs to a different experiment session");
+        }
+        if self
+            .state
+            .runs
+            .iter()
+            .any(|existing| existing.run_id == run.run_id)
+        {
+            crate::bail!("Run {} has already been recorded", run.run_id);
+        }
+        self.state.runs.push(run);
+        Ok(())
+    }
+
     /// Seal the session into an immutable OMMX Artifact and publish it
     /// to the Local Registry. Consumes the unsealed session, so further
     /// mutation is impossible in Rust.
     pub fn commit(self) -> Result<SealedExperiment> {
+        if self.active_runs.load(Ordering::SeqCst) != 0 {
+            crate::bail!("There are still open runs; finish or fail them before committing");
+        }
         ensure_no_running_runs(&self.state)?;
         let artifact = commit::commit_experiment_state(&self.registry, &self.state)?;
         Ok(SealedExperiment { artifact })
+    }
+}
+
+impl RunState {
+    fn new(run_id: u64) -> Self {
+        Self {
+            run_id,
+            records: Vec::new(),
+            parameters: Default::default(),
+            status: RunStatus::Running,
+            started_at: Instant::now(),
+            elapsed_secs: None,
+        }
     }
 }
 
@@ -155,10 +192,26 @@ impl SealedExperiment {
     }
 }
 
-impl Run<'_> {
+impl Run {
     /// This run's 0-based id within the experiment.
     pub fn run_id(&self) -> u64 {
-        self.run_id
+        self.state_ref().run_id
+    }
+
+    /// Record a scalar parameter for this run. Parameters are not
+    /// Records: they are materialised at experiment commit time as a
+    /// run-parameter table payload used for comparison views.
+    pub fn log_parameter(
+        &mut self,
+        name: impl Into<String>,
+        value: impl serde::Serialize,
+    ) -> Result<()> {
+        let name = name.into();
+        let value = serde_json::to_value(value)
+            .map_err(|e| crate::error!("Failed to encode run parameter `{name}`: {e}"))?;
+        ensure_parameter_scalar(&name, &value)?;
+        self.state_mut().parameters.insert(name, value);
+        Ok(())
     }
 
     /// Record arbitrary bytes with an explicit OCI media type in this
@@ -193,41 +246,86 @@ impl Run<'_> {
         self.log_record(name, media_types::v1_sample_set(), sample_set.to_bytes())
     }
 
-    /// Close the run with the `finished` status and record its elapsed
-    /// time. Consumes the handle so no further run-scoped records can be
-    /// added after closure.
-    pub fn finish(self) -> Result<()> {
-        self.close(RunStatus::Finished)
+    /// Close the run with the `finished` status, record its elapsed
+    /// time, and append the closed run state to `experiment`. Consumes
+    /// the handle so no further run-scoped data can be added.
+    pub fn finish(self, experiment: &mut Experiment) -> Result<()> {
+        self.close(experiment, RunStatus::Finished)
     }
 
-    /// Close the run with the `failed` status and record its elapsed
-    /// time. Consumes the handle so no further run-scoped records can be
-    /// added after closure.
-    pub fn fail(self) -> Result<()> {
-        self.close(RunStatus::Failed)
+    /// Close the run with the `failed` status, record its elapsed time,
+    /// and append the closed run state to `experiment`. Consumes the
+    /// handle so no further run-scoped data can be added.
+    pub fn fail(self, experiment: &mut Experiment) -> Result<()> {
+        self.close(experiment, RunStatus::Failed)
+    }
+
+    fn state_ref(&self) -> &RunState {
+        self.state
+            .as_ref()
+            .expect("Run state is present until finish/fail consumes the handle")
+    }
+
+    fn state_mut(&mut self) -> &mut RunState {
+        self.state
+            .as_mut()
+            .expect("Run state is present until finish/fail consumes the handle")
     }
 
     fn add_record(&mut self, name: &str, media_type: MediaType, bytes: &[u8]) -> Result<()> {
+        let run_id = self.state_ref().run_id;
         let record_ref = store_record_ref(
-            &self.experiment.registry,
+            &self.registry,
             Space::Run,
-            Some(self.run_id),
+            Some(run_id),
             name,
             media_type,
             bytes,
         )?;
-        let run = find_run_mut(&mut self.experiment.state, self.run_id)?;
-        upsert_record_ref(&mut run.records, record_ref);
+        upsert_record_ref(&mut self.state_mut().records, record_ref);
         Ok(())
     }
 
-    fn close(self, status: RunStatus) -> Result<()> {
-        let run = find_run_mut(&mut self.experiment.state, self.run_id)?;
-        if run.status == RunStatus::Running {
-            run.elapsed_secs = Some(run.started_at.elapsed().as_secs_f64());
-            run.status = status;
+    fn close(mut self, experiment: &mut Experiment, status: RunStatus) -> Result<()> {
+        let run_id = self.state_ref().run_id;
+        if experiment.session_id != self.session_id {
+            crate::bail!("Run belongs to a different experiment session");
         }
+        if experiment
+            .state
+            .runs
+            .iter()
+            .any(|existing| existing.run_id == run_id)
+        {
+            crate::bail!("Run {run_id} has already been recorded");
+        }
+
+        let mut run = self
+            .state
+            .take()
+            .ok_or_else(|| crate::error!("Run {run_id} was already closed"))?;
+        run.elapsed_secs = Some(run.started_at.elapsed().as_secs_f64());
+        run.status = status;
+        experiment.push_closed_run(run, self.session_id)?;
+        self.active_runs.fetch_sub(1, Ordering::SeqCst);
         Ok(())
+    }
+}
+
+impl Drop for Run {
+    fn drop(&mut self) {
+        if self.state.is_some() {
+            self.active_runs.fetch_sub(1, Ordering::SeqCst);
+        }
+    }
+}
+
+fn ensure_parameter_scalar(name: &str, value: &Value) -> Result<()> {
+    match value {
+        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => Ok(()),
+        Value::Array(_) | Value::Object(_) => {
+            crate::bail!("Run parameter `{name}` must be a JSON scalar, got {value}")
+        }
     }
 }
 
@@ -243,14 +341,6 @@ fn ensure_no_running_runs(state: &UnsealedExperimentState) -> Result<()> {
         );
     }
     Ok(())
-}
-
-fn find_run_mut(state: &mut UnsealedExperimentState, run_id: u64) -> Result<&mut RunState> {
-    state
-        .runs
-        .iter_mut()
-        .find(|run| run.run_id == run_id)
-        .ok_or_else(|| crate::error!("Run {run_id} not found in experiment"))
 }
 
 /// Build-phase upsert: a record with the same `(media_type, name)`

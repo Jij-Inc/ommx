@@ -5,7 +5,7 @@ use super::{
     Experiment, ANN_ARTIFACT_KIND, ANN_EXPERIMENT_NAME, ANN_EXPERIMENT_SCHEMA,
     ANN_EXPERIMENT_STATUS, ANN_LAYER, ANN_RECORD_NAME, ANN_RUN_ID, ANN_SPACE,
     ARTIFACT_KIND_EXPERIMENT, EXPERIMENT_SCHEMA_V1, EXPERIMENT_STATUS_FINISHED, LAYER_KIND_INDEX,
-    LAYER_KIND_RUN_ATTRIBUTES,
+    LAYER_KIND_RUN_ATTRIBUTES, LAYER_KIND_RUN_PARAMETERS,
 };
 use crate::artifact::local_registry::LocalRegistry;
 use crate::artifact::media_types;
@@ -57,12 +57,12 @@ fn run_lifecycle_assigns_ids_and_records_status() {
     {
         let run0 = experiment.run().unwrap();
         assert_eq!(run0.run_id(), 0);
-        run0.finish().unwrap();
+        run0.finish(&mut experiment).unwrap();
     }
     {
         let run1 = experiment.run().unwrap();
         assert_eq!(run1.run_id(), 1);
-        run1.fail().unwrap();
+        run1.fail(&mut experiment).unwrap();
     }
 
     let state = unsealed_state(&experiment);
@@ -70,6 +70,29 @@ fn run_lifecycle_assigns_ids_and_records_status() {
     assert!(state.runs[0].elapsed_secs.is_some());
     assert_eq!(state.runs[1].status, RunStatus::Failed);
     assert!(state.runs[1].elapsed_secs.is_some());
+}
+
+/// Runs do not borrow the parent experiment after creation, so several
+/// runs can be built before any of them writes back at close.
+#[test]
+fn runs_can_be_open_concurrently_and_write_back_on_close() {
+    let (_dir, mut experiment) = temp_experiment("parallel-runs");
+    let mut run0 = experiment.run().unwrap();
+    let mut run1 = experiment.run().unwrap();
+
+    run0.log_json("candidate", json!("formulation-a")).unwrap();
+    run1.log_json("candidate", json!("formulation-b")).unwrap();
+
+    assert_eq!(unsealed_state(&experiment).runs.len(), 0);
+    run1.finish(&mut experiment).unwrap();
+    assert_eq!(unsealed_state(&experiment).runs.len(), 1);
+    run0.finish(&mut experiment).unwrap();
+
+    let state = unsealed_state(&experiment);
+    assert_eq!(state.runs.len(), 2);
+    let mut run_ids = state.runs.iter().map(|run| run.run_id).collect::<Vec<_>>();
+    run_ids.sort();
+    assert_eq!(run_ids, vec![0, 1]);
 }
 
 /// `log_*` writes the payload to the BlobStore immediately, before any
@@ -80,6 +103,7 @@ fn log_writes_blob_to_blobstore_immediately() {
     {
         let mut run = experiment.run().unwrap();
         run.log_json("solver", json!("scip")).unwrap();
+        run.finish(&mut experiment).unwrap();
     }
 
     let digest = {
@@ -133,7 +157,7 @@ fn commit_produces_experiment_artifact() {
         let mut run = experiment.run().unwrap();
         run.log_instance("candidate", &instance).unwrap();
         run.log_json("config", json!({ "relaxed": true })).unwrap();
-        run.finish().unwrap();
+        run.finish(&mut experiment).unwrap();
     }
 
     let sealed = experiment.commit().unwrap();
@@ -157,9 +181,10 @@ fn commit_produces_experiment_artifact() {
         Some(EXPERIMENT_STATUS_FINISHED)
     );
 
-    // 3 records (1 experiment-space + 2 run-space) + run-attributes + index.
+    // 3 records (1 experiment-space + 2 run-space) + run-parameters
+    // + run-attributes + index.
     let layers = artifact.layers().unwrap();
-    assert_eq!(layers.len(), 5);
+    assert_eq!(layers.len(), 6);
 
     let dataset = find_layer(&layers, ANN_RECORD_NAME, "dataset");
     assert_eq!(
@@ -188,6 +213,8 @@ fn commit_produces_experiment_artifact() {
     );
 
     // Aggregate layers are not tagged as records.
+    let run_params = find_layer(&layers, ANN_LAYER, LAYER_KIND_RUN_PARAMETERS);
+    assert!(layer_annotation(run_params, ANN_SPACE).is_none());
     let run_attrs = find_layer(&layers, ANN_LAYER, LAYER_KIND_RUN_ATTRIBUTES);
     assert!(layer_annotation(run_attrs, ANN_SPACE).is_none());
     let index = find_layer(&layers, ANN_LAYER, LAYER_KIND_INDEX);
@@ -200,6 +227,66 @@ fn commit_produces_experiment_artifact() {
     );
 }
 
+/// Run parameters are stored as table data, not as Records. Re-logging
+/// the same name updates the cell for that run.
+#[test]
+fn log_parameter_materializes_run_parameter_table() {
+    let (_dir, mut experiment) = temp_experiment("parameters");
+    {
+        let mut run0 = experiment.run().unwrap();
+        run0.log_parameter("solver", "scip").unwrap();
+        run0.log_parameter("time_limit", 10.0).unwrap();
+        run0.log_parameter("time_limit", 20.0).unwrap();
+        run0.finish(&mut experiment).unwrap();
+    }
+    {
+        let mut run1 = experiment.run().unwrap();
+        run1.log_parameter("solver", "highs").unwrap();
+        run1.log_parameter("presolve", true).unwrap();
+        run1.finish(&mut experiment).unwrap();
+    }
+
+    let artifact = experiment.commit().unwrap().into_artifact();
+    let layers = artifact.layers().unwrap();
+    let run_params = find_layer(&layers, ANN_LAYER, LAYER_KIND_RUN_PARAMETERS);
+    assert!(layer_annotation(run_params, ANN_RECORD_NAME).is_none());
+    let bytes = artifact.get_blob(run_params.digest()).unwrap();
+    let table: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+
+    assert_eq!(
+        table,
+        json!({
+            "runs": [
+                {
+                    "run_id": 0,
+                    "parameters": {
+                        "solver": "scip",
+                        "time_limit": 20.0,
+                    },
+                },
+                {
+                    "run_id": 1,
+                    "parameters": {
+                        "presolve": true,
+                        "solver": "highs",
+                    },
+                },
+            ],
+        })
+    );
+}
+
+#[test]
+fn log_parameter_rejects_non_scalar_values() {
+    let (_dir, mut experiment) = temp_experiment("bad-parameters");
+    let mut run = experiment.run().unwrap();
+
+    let err = run
+        .log_parameter("solver_options", json!({ "threads": 1 }))
+        .expect_err("parameter table accepts only scalar values");
+    assert!(err.to_string().contains("must be a JSON scalar"));
+}
+
 /// `commit()` consumes the unsealed session and returns a sealed handle.
 /// Further `log_*` / `run()` calls on the original session are impossible
 /// in Rust because the original `Experiment` value has moved.
@@ -209,7 +296,7 @@ fn commit_returns_sealed_experiment() {
     {
         let mut run = experiment.run().unwrap();
         run.log_json("seed", json!(0)).unwrap();
-        run.finish().unwrap();
+        run.finish(&mut experiment).unwrap();
     }
 
     let sealed = experiment.commit().unwrap();
@@ -230,10 +317,8 @@ fn commit_returns_sealed_experiment() {
 #[test]
 fn commit_rejects_unclosed_run() {
     let (_dir, mut experiment) = temp_experiment("unclosed-run");
-    {
-        let mut run = experiment.run().unwrap();
-        run.log_json("seed", json!(0)).unwrap();
-    }
+    let mut run = experiment.run().unwrap();
+    run.log_json("seed", json!(0)).unwrap();
 
     assert!(experiment.commit().is_err());
 }
@@ -248,13 +333,13 @@ fn byte_identical_record_across_runs_shares_one_blob() {
     {
         let mut run0 = experiment.run().unwrap();
         run0.log_json("candidate", payload.clone()).unwrap();
-        run0.finish().unwrap();
+        run0.finish(&mut experiment).unwrap();
     }
 
     {
         let mut run1 = experiment.run().unwrap();
         run1.log_json("candidate", payload.clone()).unwrap();
-        run1.finish().unwrap();
+        run1.finish(&mut experiment).unwrap();
     }
 
     let artifact = experiment.commit().unwrap().into_artifact();
