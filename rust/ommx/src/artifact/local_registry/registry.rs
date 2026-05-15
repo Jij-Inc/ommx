@@ -10,6 +10,9 @@ use std::collections::HashMap;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use std::sync::OnceLock;
+
+static DEFAULT_LOCAL_REGISTRY: OnceLock<LocalRegistry> = OnceLock::new();
 
 /// OCI descriptor whose referenced bytes are known to exist in this
 /// Local Registry's BlobStore.
@@ -118,6 +121,29 @@ impl LocalRegistry {
 
     pub fn open_default() -> Result<Self> {
         Self::open(crate::artifact::get_local_registry_root())
+    }
+
+    /// Return the process-wide default Local Registry.
+    ///
+    /// The default registry is opened lazily on the first call and then
+    /// reused for the rest of the process. Call
+    /// [`crate::artifact::set_local_registry_root`] before this method
+    /// if a non-default root is needed.
+    pub fn shared_default() -> Result<&'static Self> {
+        if let Some(registry) = DEFAULT_LOCAL_REGISTRY.get() {
+            return Ok(registry);
+        }
+
+        // OnceLock::get_or_try_init is still unstable on the supported
+        // toolchain. This open-then-set sequence can briefly open two
+        // SQLite connections if multiple threads race on the first
+        // call, but only one registry is retained. Replace this with
+        // get_or_try_init once it is stable.
+        let registry = Self::open_default()?;
+        let _ = DEFAULT_LOCAL_REGISTRY.set(registry);
+        Ok(DEFAULT_LOCAL_REGISTRY
+            .get()
+            .expect("default Local Registry was initialized"))
     }
 
     pub fn root(&self) -> &Path {
