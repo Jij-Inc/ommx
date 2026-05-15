@@ -9,7 +9,7 @@
 //!
 //! - **Storage** — `index` / `blob` / `types` / `registry`.
 //!   The SQLite + filesystem CAS that owns v3 local state, plus the
-//!   shared row / policy types. [`LocalRegistry`] glues the two stores
+//!   shared row / ref-update types. [`LocalRegistry`] glues the two stores
 //!   into a single addressable unit and contains the publish primitive
 //!   used by higher-level commit implementations.
 //! - **Import** — `import`. Boundary code that reads external content
@@ -52,11 +52,18 @@
 //!   [`SqliteIndexStore`].
 //! - **Publish** belongs to the registry index. Publishing records that
 //!   a ref points at a sealed root manifest descriptor in
-//!   [`SqliteIndexStore`]. It does not write payload blobs.
+//!   [`SqliteIndexStore`]. It succeeds for a new ref or an idempotent
+//!   same-digest ref, and reports a conflict when the ref already
+//!   points at a different digest. It does not write payload blobs.
+//! - **Replace** also belongs to the registry index. Replacing moves a
+//!   ref to a different sealed root manifest descriptor and reports
+//!   the previous digest when one existed.
 //! - **Commit** belongs to higher-level mutable objects such as
 //!   `ArtifactDraft` and Experiment sessions. A commit seals their
 //!   unsealed state into an immutable artifact, and normally publishes
-//!   the resulting root descriptor under a ref.
+//!   the resulting root descriptor under a ref. APIs that intentionally
+//!   move an existing ref expose that as a separate replace operation,
+//!   not as stored state on the unsealed object.
 //! - **Staged** is not a data-model state in the current design.
 //!   Payload blobs are stored eagerly; if a descriptor is kept in
 //!   unsealed state for a future commit, it is already stored.
@@ -77,13 +84,12 @@ pub(crate) use crate::artifact::digest::{validate_digest, ValidatedDigest};
 pub use blob::FileBlobStore;
 pub use import::archive::{import_oci_archive, inspect_archive, ArchiveInspectView};
 pub use import::legacy::{
-    import_legacy_local_registry, import_legacy_local_registry_ref,
-    import_legacy_local_registry_ref_with_policy, import_legacy_local_registry_with_policy,
-    legacy_local_registry_path, LegacyImportReport,
+    import_legacy_local_registry, import_legacy_local_registry_ref, legacy_local_registry_path,
+    replace_legacy_local_registry, replace_legacy_local_registry_ref, LegacyImportReport,
 };
 pub use import::oci_dir::{
-    import_oci_dir, import_oci_dir_as_ref, import_oci_dir_as_ref_with_policy,
-    import_oci_dir_with_policy, oci_dir_image_name, oci_dir_ref, OciDirImport, OciDirRef,
+    import_oci_dir, import_oci_dir_as_ref, oci_dir_image_name, oci_dir_ref, replace_oci_dir,
+    replace_oci_dir_as_ref, OciDirImport, OciDirRef,
 };
 #[cfg(feature = "remote-artifact")]
 pub use import::remote::pull_image;
@@ -91,8 +97,8 @@ pub use index::SqliteIndexStore;
 pub(crate) use registry::UnsealedArtifact;
 pub use registry::{LocalRegistry, StoredDescriptor};
 pub use types::{
-    RefConflictPolicy, RefRecord, RefUpdate, FILE_BLOB_STORE_DIR_NAME,
-    OCI_IMAGE_REF_NAME_ANNOTATION, SQLITE_INDEX_FILE_NAME,
+    RefRecord, RefUpdate, FILE_BLOB_STORE_DIR_NAME, OCI_IMAGE_REF_NAME_ANNOTATION,
+    SQLITE_INDEX_FILE_NAME,
 };
 
 fn now_rfc3339() -> String {

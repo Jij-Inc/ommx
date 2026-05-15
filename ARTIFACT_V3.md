@@ -837,7 +837,9 @@ API:
 4. `seal_artifact` で root manifest blob を Store し、`SealedArtifact` を得る。
 5. `publish_manifest_ref` で root descriptor を IndexStore の ref に対応づける。
 
-この実装では、内部 state は `StoredDescriptor` を「Local Registry に保存済み blob への参照」として扱う。一方、manifest / archive / Python API に出す値は通常の `oci_spec::image::Descriptor` である。`StoredDescriptor` の作成経路は Local Registry の blob 書き込み / 検証後に限定し、作成後は `Deref<Target = Descriptor>` によって通常の descriptor として読める。root manifest については `StoredDescriptor` ではなく `SealedArtifact` として表し、`publish_manifest_ref` は `SealedArtifact` だけを受け取る。ArtifactDraft と Experiment はどちらも、payload 追加時に component blob を Store し、commit 時には unsealed state から root manifest を Seal してから ref に Publish する。
+この実装では、内部 state は `StoredDescriptor` を「Local Registry に保存済み blob への参照」として扱う。一方、manifest / archive / Python API に出す値は通常の `oci_spec::image::Descriptor` である。`StoredDescriptor` の作成経路は Local Registry の blob 書き込み / 検証後に限定し、作成後は `Deref<Target = Descriptor>` によって通常の descriptor として読める。root manifest については `StoredDescriptor` ではなく `SealedArtifact` として表し、`publish_manifest_ref` / `replace_manifest_ref` は `SealedArtifact` だけを受け取る。ArtifactDraft と Experiment はどちらも、payload 追加時に component blob を Store し、commit 時には unsealed state から root manifest を Seal してから ref に Publish する。
+
+既存 ref との衝突処理は Store / Seal / Unsealed state の属性ではなく、IndexStore に root descriptor を対応づける publish 時の操作である。そのため data model としての `ConflictPolicy` は持たず、通常の `commit()` は既存 ref が別 digest を指していれば conflict とし、ref を明示的に動かす場合は `commit_replace()` / `replace_manifest_ref()` のような別操作として扱う。
 
 byte-level で同一の payload は CAS で 1 物理 blob に共有される（§7.2）。論理 Record は `(space, run_id, media type, name)` 単位なので、複数 Run が同じ `name`・同じ bytes の Record を持つ場合でも `run_id` が異なれば別 Record として両立し、同じ digest を annotations 違い（`org.ommx.experiment.run_id` 等）の複数 descriptor が指す。したがって `commit()` は manifest `layers[]` には Record ごとの全 descriptor を載せる。BlobStore 上の実体は digest で自然に de-dup され、component blob の存在は `StoredDescriptor` の不変条件として表す。
 

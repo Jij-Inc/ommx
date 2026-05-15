@@ -27,7 +27,7 @@
 
 use anyhow::Result;
 use ommx::artifact::{
-    local_registry::{import_oci_archive, pull_image, LocalRegistry, RefConflictPolicy},
+    local_registry::{import_oci_archive, pull_image, LocalRegistry},
     media_types, ArtifactDraft, ImageRef, LocalArtifact,
 };
 use serial_test::serial;
@@ -86,8 +86,7 @@ fn start_htpasswd_registry() -> Container<GenericImage> {
 fn build_test_artifact(image_name: ImageRef) -> Result<(LocalArtifact, tempfile::TempDir)> {
     let dir = tempfile::tempdir()?;
     let registry = Arc::new(LocalRegistry::open(dir.path())?);
-    let mut builder =
-        ArtifactDraft::with_registry(registry.clone(), image_name, RefConflictPolicy::Replace);
+    let mut builder = ArtifactDraft::with_registry(registry.clone(), image_name);
     builder.add_layer_bytes(
         oci_spec::image::MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
         b"auth-e2e-test".to_vec(),
@@ -317,11 +316,8 @@ fn cli_push_routes_through_native_path() -> Result<()> {
     let dir = tempfile::tempdir()?;
     {
         let local = Arc::new(LocalRegistry::open(dir.path())?);
-        let mut builder = ArtifactDraft::with_registry(
-            local.clone(),
-            ImageRef::parse(&image_name)?,
-            RefConflictPolicy::Replace,
-        );
+        let mut builder =
+            ArtifactDraft::with_registry(local.clone(), ImageRef::parse(&image_name)?);
         builder.add_layer_bytes(
             oci_spec::image::MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
             b"cli-dispatch".to_vec(),

@@ -1,9 +1,7 @@
 use super::{
     digest::sha256_digest,
     ghcr,
-    local_registry::{
-        LocalRegistry, RefConflictPolicy, RefUpdate, StoredDescriptor, UnsealedArtifact,
-    },
+    local_registry::{LocalRegistry, RefUpdate, StoredDescriptor, UnsealedArtifact},
     media_types::{self, OCI_EMPTY_CONFIG_BYTES},
     ImageRef, InstanceAnnotations, ParametricInstanceAnnotations, SampleSetAnnotations,
     SolutionAnnotations,
@@ -210,7 +208,6 @@ impl LocalManifest {
 pub struct ArtifactDraft {
     registry: Arc<LocalRegistry>,
     image_name: ImageRef,
-    default_policy: RefConflictPolicy,
     artifact_type: MediaType,
     layers: Vec<StoredDescriptor>,
     subject: Option<Descriptor>,
@@ -220,22 +217,13 @@ pub struct ArtifactDraft {
 impl ArtifactDraft {
     pub fn new(image_name: ImageRef) -> Result<Self> {
         let registry = Arc::new(LocalRegistry::open_default()?);
-        Ok(Self::with_registry(
-            registry,
-            image_name,
-            RefConflictPolicy::KeepExisting,
-        ))
+        Ok(Self::with_registry(registry, image_name))
     }
 
-    pub fn with_registry(
-        registry: Arc<LocalRegistry>,
-        image_name: ImageRef,
-        default_policy: RefConflictPolicy,
-    ) -> Self {
+    pub fn with_registry(registry: Arc<LocalRegistry>, image_name: ImageRef) -> Self {
         Self {
             registry,
             image_name,
-            default_policy,
             artifact_type: MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
             layers: Vec::new(),
             subject: None,
@@ -254,15 +242,11 @@ impl ArtifactDraft {
     /// another registry. Use `ommx artifact prune-anonymous` to clean
     /// accumulated entries.
     ///
-    /// **Note: [`RefConflictPolicy`] is forced to `Replace` for
-    /// anonymous commits**. Anonymous artifacts are designed to be
-    /// transient and unique by timestamp + nonce; collision recovery
-    /// is "silently overwrite the older entry" rather than "fail with
-    /// a ref conflict". The 48-bit nonce in
+    /// Anonymous artifacts are designed to be transient and unique by
+    /// timestamp + nonce. The 48-bit nonce in
     /// `anonymous_artifact_image_name` makes collisions astronomically
-    /// rare in practice, and the policy override is kept as
-    /// defense-in-depth. Callers who want collision detection cannot
-    /// opt out — pick an explicit name via [`Self::new`] instead.
+    /// rare in practice; if one still occurs, commit surfaces it as a
+    /// normal ref conflict.
     pub fn new_anonymous() -> Result<Self> {
         let registry = Arc::new(LocalRegistry::open_default()?);
         Self::new_anonymous_in_registry(registry)
@@ -271,11 +255,7 @@ impl ArtifactDraft {
     pub fn new_anonymous_in_registry(registry: Arc<LocalRegistry>) -> Result<Self> {
         let registry_id = registry.index().registry_id()?;
         let image_name = anonymous_artifact_image_name(&registry_id)?;
-        Ok(Self::with_registry(
-            registry,
-            image_name,
-            RefConflictPolicy::Replace,
-        ))
+        Ok(Self::with_registry(registry, image_name))
     }
 
     /// Draft under a random `ttl.sh/<uuid>:1h` image name. Insecure;
@@ -370,16 +350,23 @@ impl ArtifactDraft {
     }
 
     pub fn commit(self) -> Result<LocalArtifact> {
-        let policy = self.default_policy;
-        self.commit_with_policy(policy)
+        self.commit_inner(false)
     }
 
-    pub fn commit_with_policy(self, policy: RefConflictPolicy) -> Result<LocalArtifact> {
+    pub fn commit_replace(self) -> Result<LocalArtifact> {
+        self.commit_inner(true)
+    }
+
+    fn commit_inner(self, replace_ref: bool) -> Result<LocalArtifact> {
         let registry = Arc::clone(&self.registry);
         let image_name = self.image_name.clone();
         let artifact = self.into_unsealed_artifact()?;
         let sealed_artifact = registry.seal_artifact(artifact)?;
-        let ref_update = registry.publish_manifest_ref(&image_name, &sealed_artifact, policy)?;
+        let ref_update = if replace_ref {
+            registry.replace_manifest_ref(&image_name, &sealed_artifact)?
+        } else {
+            registry.publish_manifest_ref(&image_name, &sealed_artifact)?
+        };
         reject_conflicting_ref(&image_name, ref_update)?;
         Ok(LocalArtifact::from_parts(
             registry,
@@ -509,10 +496,9 @@ const ANONYMOUS_REGISTRY_ID_HOST_LEN: usize = 8;
 /// Hex chars of the random nonce appended to the timestamp tag.
 /// 12 hex = 48 bits = ~2.8 × 10^14 possible nonces; at N=10 000
 /// concurrent anonymous builds the birthday-paradox collision
-/// probability is ~1.8 × 10^-7, which combined with the seconds-level
-/// timestamp prefix and the `RefConflictPolicy::Replace` fallback in
-/// anonymous draft commits gives a practical zero collision rate even on
-/// platforms whose `clock_gettime` resolution is only microseconds
+/// probability is ~1.8 × 10^-7. Combined with the seconds-level
+/// timestamp prefix, this gives a practical zero collision rate even
+/// on platforms whose `clock_gettime` resolution is only microseconds
 /// (notably macOS — chrono's `%.9f` pads with zeros there, so the
 /// timestamp alone would not differentiate builds within the same
 /// microsecond). 32 bits (8 hex) would only give P ~ 1.2 × 10^-2 at
@@ -543,9 +529,8 @@ const ANONYMOUS_TAG_NONCE_HEX_LEN: usize = 12;
 ///   UUID v4. Required for MINTO-style concurrent build patterns
 ///   (scripts emitting many anonymous artifacts per second): without
 ///   it, two builds in the same second would synthesize the same tag
-///   and overwrite each other. Anonymous draft commits use
-///   `RefConflictPolicy::Replace` as a defense-in-depth fallback for
-///   the astronomically rare nonce collision.
+///   and conflict on the same ref. A remaining astronomically rare
+///   nonce collision is reported as a normal publish conflict.
 pub(crate) fn anonymous_artifact_image_name(registry_id: &str) -> Result<ImageRef> {
     let prefix: String = registry_id
         .chars()
@@ -734,10 +719,8 @@ mod tests {
         assert_eq!(host, format!("{}.ommx.local", &full[..8]));
     }
 
-    /// Two anonymous commits with no sleep between them collide on the
-    /// `YYYYMMDDTHHMMSS` tag. Anonymous drafts default to
-    /// `RefConflictPolicy::Replace`, so the second commit succeeds and
-    /// silently overwrites the first.
+    /// Two anonymous commits with no sleep between them must still
+    /// publish independently because their nonce portions differ.
     #[test]
     fn anonymous_build_in_same_second_does_not_fail() -> Result<()> {
         let dir = tempfile::tempdir()?;
@@ -758,11 +741,7 @@ mod tests {
     fn builds_native_oci_image_manifest_with_artifact_type() -> Result<()> {
         let dir = tempfile::tempdir()?;
         let registry = Arc::new(LocalRegistry::open(dir.path())?);
-        let mut builder = ArtifactDraft::with_registry(
-            registry,
-            test_image_name("v1")?,
-            RefConflictPolicy::KeepExisting,
-        );
+        let mut builder = ArtifactDraft::with_registry(registry, test_image_name("v1")?);
         let layer = builder.add_layer_bytes(
             MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
             b"instance".to_vec(),
@@ -835,11 +814,7 @@ mod tests {
             descriptor_from_bytes(MediaType::ImageManifest, b"parent manifest", HashMap::new())?;
         let dir = tempfile::tempdir()?;
         let registry = Arc::new(LocalRegistry::open(dir.path())?);
-        let mut builder = ArtifactDraft::with_registry(
-            registry,
-            test_image_name("subject")?,
-            RefConflictPolicy::KeepExisting,
-        );
+        let mut builder = ArtifactDraft::with_registry(registry, test_image_name("subject")?);
         builder.add_layer_bytes(
             MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
             b"instance".to_vec(),
@@ -865,11 +840,7 @@ mod tests {
     ) -> Result<ImageManifest> {
         let dir = tempfile::tempdir()?;
         let registry = Arc::new(LocalRegistry::open(dir.path())?);
-        let mut builder = ArtifactDraft::with_registry(
-            registry,
-            test_image_name(tag)?,
-            RefConflictPolicy::KeepExisting,
-        );
+        let mut builder = ArtifactDraft::with_registry(registry, test_image_name(tag)?);
         builder.add_layer_bytes(
             MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
             b"instance".to_vec(),

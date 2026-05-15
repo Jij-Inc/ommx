@@ -22,7 +22,7 @@
 //! primitives.
 
 use super::super::{
-    sha256_digest, FileBlobStore, RefConflictPolicy, RefUpdate, SqliteIndexStore, ValidatedDigest,
+    sha256_digest, FileBlobStore, RefUpdate, SqliteIndexStore, ValidatedDigest,
     OCI_IMAGE_REF_NAME_ANNOTATION,
 };
 use crate::artifact::{media_types, ImageRef};
@@ -65,8 +65,8 @@ pub struct OciDirRef {
 /// - `Some(Inserted)` — fresh ref published.
 /// - `Some(Unchanged)` — same `image_name` already pointed at the same
 ///   manifest digest; the import was an idempotent verify.
-/// - `Some(Replaced { previous_manifest_digest })` — caller passed
-///   `RefConflictPolicy::Replace` and an older digest was overwritten.
+/// - `Some(Replaced { previous_manifest_digest })` — a replace entry
+///   point overwrote an older digest.
 /// - `Some(Conflicted { existing, incoming })` — only seen by callers
 ///   that drive the import with `RefConflictHandling::Return` (e.g.
 ///   the legacy batch importer); the public functions still surface a
@@ -105,6 +105,12 @@ impl OciDirImport {
 pub(super) enum RefConflictHandling {
     Error,
     Return,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum RefWriteMode {
+    Publish,
+    Replace,
 }
 
 /// The single manifest entry read from an OCI Image Layout directory.
@@ -148,26 +154,28 @@ pub fn import_oci_dir(
     blob_store: &FileBlobStore,
     oci_dir_root: impl AsRef<Path>,
 ) -> Result<OciDirImport> {
-    import_oci_dir_with_policy(
+    let (ref_info, ref_update) = import_oci_dir_inner(
         index_store,
         blob_store,
         oci_dir_root,
-        RefConflictPolicy::KeepExisting,
-    )
+        None,
+        RefWriteMode::Publish,
+        RefConflictHandling::Error,
+    )?;
+    Ok(OciDirImport::from_inner(ref_info, ref_update))
 }
 
-pub fn import_oci_dir_with_policy(
+pub fn replace_oci_dir(
     index_store: &SqliteIndexStore,
     blob_store: &FileBlobStore,
     oci_dir_root: impl AsRef<Path>,
-    policy: RefConflictPolicy,
 ) -> Result<OciDirImport> {
     let (ref_info, ref_update) = import_oci_dir_inner(
         index_store,
         blob_store,
         oci_dir_root,
         None,
-        policy,
+        RefWriteMode::Replace,
         RefConflictHandling::Error,
     )?;
     Ok(OciDirImport::from_inner(ref_info, ref_update))
@@ -195,7 +203,7 @@ pub(super) fn import_oci_dir_inner(
     blob_store: &FileBlobStore,
     oci_dir_root: impl AsRef<Path>,
     target_image_name: Option<&ImageRef>,
-    policy: RefConflictPolicy,
+    write_mode: RefWriteMode,
     conflict_handling: RefConflictHandling,
 ) -> Result<(OciDirRef, Option<RefUpdate>)> {
     let oci_dir_root = oci_dir_root.as_ref();
@@ -215,12 +223,12 @@ pub(super) fn import_oci_dir_inner(
         .cloned()
         .or_else(|| entry.image_name.clone());
 
-    // Pre-check: under `KeepExisting`, surface the conflict before we
+    // Pre-check: under publish semantics, surface the conflict before we
     // store any CAS bytes. The atomic publish re-validates
     // the same condition inside the SQLite transaction, so concurrent
     // writers still get a consistent outcome; this is purely a fast
     // path for the common single-writer case.
-    if policy == RefConflictPolicy::KeepExisting {
+    if write_mode == RefWriteMode::Publish {
         if let Some(image_name) = effective_image_name.as_ref() {
             if let Some(existing_descriptor) = index_store.resolve_image_descriptor(image_name)? {
                 if existing_descriptor.digest() != entry.manifest_descriptor.digest() {
@@ -267,11 +275,14 @@ pub(super) fn import_oci_dir_inner(
     // If no ref annotation / target ref exists, the import is
     // digest-only and the CAS bytes remain reachable by digest.
     let ref_update = if let Some(image_name) = effective_image_name.as_ref() {
-        let update = index_store.put_image_ref_with_policy(
-            image_name,
-            &entry.manifest_descriptor,
-            policy,
-        )?;
+        let update = match write_mode {
+            RefWriteMode::Publish => {
+                index_store.publish_image_ref(image_name, &entry.manifest_descriptor)?
+            }
+            RefWriteMode::Replace => {
+                index_store.replace_image_ref(image_name, &entry.manifest_descriptor)?
+            }
+        };
         match update {
             RefUpdate::Conflicted {
                 existing_manifest_digest,
@@ -305,28 +316,29 @@ pub fn import_oci_dir_as_ref(
     oci_dir_root: impl AsRef<Path>,
     image_name: &ImageRef,
 ) -> Result<OciDirImport> {
-    import_oci_dir_as_ref_with_policy(
+    let (ref_info, ref_update) = import_oci_dir_inner(
         index_store,
         blob_store,
         oci_dir_root,
-        image_name,
-        RefConflictPolicy::KeepExisting,
-    )
+        Some(image_name),
+        RefWriteMode::Publish,
+        RefConflictHandling::Error,
+    )?;
+    Ok(OciDirImport::from_inner(ref_info, ref_update))
 }
 
-pub fn import_oci_dir_as_ref_with_policy(
+pub fn replace_oci_dir_as_ref(
     index_store: &SqliteIndexStore,
     blob_store: &FileBlobStore,
     oci_dir_root: impl AsRef<Path>,
     image_name: &ImageRef,
-    policy: RefConflictPolicy,
 ) -> Result<OciDirImport> {
     let (ref_info, ref_update) = import_oci_dir_inner(
         index_store,
         blob_store,
         oci_dir_root,
         Some(image_name),
-        policy,
+        RefWriteMode::Replace,
         RefConflictHandling::Error,
     )?;
     Ok(OciDirImport::from_inner(ref_info, ref_update))

@@ -6,7 +6,7 @@ use ommx::artifact::{
     fetch_remote_manifest, get_local_registry_root,
     local_registry::{
         import_oci_archive, import_oci_dir, inspect_archive, legacy_local_registry_path,
-        oci_dir_ref, pull_image, LocalRegistry, RefConflictPolicy,
+        oci_dir_ref, pull_image, LocalRegistry,
     },
     ImageRef, LocalArtifact,
 };
@@ -331,12 +331,11 @@ fn main() -> Result<()> {
                 } else {
                     LocalRegistry::open_default()?
                 };
-                let policy = if *replace {
-                    RefConflictPolicy::Replace
+                let report = if *replace {
+                    registry.replace_legacy_layout()?
                 } else {
-                    RefConflictPolicy::KeepExisting
+                    registry.import_legacy_layout()?
                 };
-                let report = registry.import_legacy_layout_with_policy(policy)?;
                 println!(
                     "Imported {} legacy OCI dir(s) into {}",
                     report.imported_dirs,

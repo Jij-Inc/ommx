@@ -46,7 +46,7 @@
 //! is, and because this is the only place in `local_registry` that
 //! touches the network.
 
-use super::super::{FileBlobStore, LocalRegistry, RefConflictPolicy, RefUpdate};
+use super::super::{FileBlobStore, LocalRegistry, RefUpdate};
 use super::oci_dir::OciDirImport;
 use crate::artifact::{
     media_types, remote_transport::RemoteTransport, ImageRef, OCI_IMAGE_MANIFEST_MEDIA_TYPE,
@@ -82,9 +82,7 @@ use std::{str::FromStr, sync::Arc};
 /// returns byte-identical manifests across both requests**, the second
 /// writer sees `Unchanged`. If the remote serves non-deterministic
 /// manifest bytes (field reorder, whitespace drift) the two digests
-/// differ and the loser surfaces a `Conflicted` outcome under
-/// `KeepExisting`; callers that need last-writer-wins semantics in
-/// that case should drive the import with `RefConflictPolicy::Replace`.
+/// differ and the loser surfaces a conflict.
 pub fn pull_image(registry: &Arc<LocalRegistry>, image_name: &ImageRef) -> Result<OciDirImport> {
     if let Some(manifest_digest) = registry.index().resolve_image_name(image_name)? {
         if registry.blobs().exists(&manifest_digest)? {
@@ -134,20 +132,18 @@ pub fn pull_image(registry: &Arc<LocalRegistry>, image_name: &ImageRef) -> Resul
 
     store_manifest_blob(registry.blobs(), &manifest_bytes, &manifest_digest)?;
 
-    let ref_update = registry.index().put_image_ref_with_policy(
-        image_name,
-        &manifest_descriptor,
-        RefConflictPolicy::KeepExisting,
-    )?;
+    let ref_update = registry
+        .index()
+        .publish_image_ref(image_name, &manifest_descriptor)?;
     // Surface a ref conflict as `Err` rather than `Ok(Conflicted)`:
     // callers (Python `Artifact.load`, CLI `ommx pull`, dataset
     // loaders) treat a successful return as "the freshly pulled bytes
-    // are now resident under `image_name`". Under `KeepExisting`, a
-    // conflict means the SQLite ref still points at the *prior*
+    // are now resident under `image_name`". Under publish semantics,
+    // a conflict means the SQLite ref still points at the *prior*
     // manifest digest; opening `LocalArtifact` after that would
     // silently surface the local cache, not the remote bytes. Forcing
-    // an explicit error lets callers decide between `--replace`
-    // semantics and aborting.
+    // an explicit error makes the caller choose an explicit replace
+    // operation or abort.
     if let RefUpdate::Conflicted {
         existing_manifest_digest,
         incoming_manifest_digest,
@@ -156,8 +152,7 @@ pub fn pull_image(registry: &Arc<LocalRegistry>, image_name: &ImageRef) -> Resul
         anyhow::bail!(
             "Local registry ref conflict for {image_name}: existing manifest \
              {existing_manifest_digest}, incoming manifest {incoming_manifest_digest}. \
-             The remote serves a different manifest than the one cached locally; \
-             retry with a replace policy if you want to overwrite the local ref."
+             The remote serves a different manifest than the one cached locally."
         );
     }
 

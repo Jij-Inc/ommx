@@ -8,7 +8,7 @@ use super::{
     RUN_ATTRIBUTES_MEDIA_TYPE,
 };
 use crate::artifact::local_registry::{
-    LocalRegistry, RefConflictPolicy, RefUpdate, StoredDescriptor, UnsealedArtifact,
+    LocalRegistry, RefUpdate, StoredDescriptor, UnsealedArtifact,
 };
 use crate::artifact::{media_types, sha256_digest, LocalArtifact};
 use anyhow::Result;
@@ -82,11 +82,7 @@ pub(super) fn commit_experiment_state(
     };
 
     let sealed_artifact = registry.seal_artifact(artifact)?;
-    let ref_update = registry.publish_manifest_ref(
-        &image_name,
-        &sealed_artifact,
-        RefConflictPolicy::KeepExisting,
-    )?;
+    let ref_update = registry.publish_manifest_ref(&image_name, &sealed_artifact)?;
     if let RefUpdate::Conflicted {
         existing_manifest_digest,
         incoming_manifest_digest,

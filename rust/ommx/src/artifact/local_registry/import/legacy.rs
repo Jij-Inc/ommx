@@ -19,17 +19,17 @@
 //!   ([`legacy_import_image_name`]),
 //! - the batch entry points that turn a v2 root into a series of
 //!   identity-preserving imports ([`import_legacy_local_registry`] and
-//!   the `_with_policy` / `_ref` variants), and the aggregated
+//!   the `replace_*` / `_ref` variants), and the aggregated
 //!   [`LegacyImportReport`].
 //!
 //! Reading and importing one OCI Image Layout directory in isolation is
 //! **not** v2-specific and lives in [`super::oci_dir`]; this module just
 //! drives that lower layer with v2-aware bookkeeping.
 
-use super::super::{FileBlobStore, RefConflictPolicy, RefUpdate, SqliteIndexStore};
+use super::super::{FileBlobStore, RefUpdate, SqliteIndexStore};
 use super::oci_dir::{
-    import_oci_dir_as_ref_with_policy, import_oci_dir_inner, oci_dir_image_name, oci_dir_ref,
-    OciDirImport, RefConflictHandling,
+    import_oci_dir_as_ref, import_oci_dir_inner, oci_dir_image_name, oci_dir_ref,
+    replace_oci_dir_as_ref, OciDirImport, RefConflictHandling, RefWriteMode,
 };
 use crate::artifact::ImageRef;
 use anyhow::{ensure, Context, Result};
@@ -71,24 +71,18 @@ pub fn import_legacy_local_registry_ref(
     legacy_registry_root: impl AsRef<Path>,
     image_name: &ImageRef,
 ) -> Result<OciDirImport> {
-    import_legacy_local_registry_ref_with_policy(
-        index_store,
-        blob_store,
-        legacy_registry_root,
-        image_name,
-        RefConflictPolicy::KeepExisting,
-    )
+    let legacy_path = legacy_local_registry_path(legacy_registry_root, image_name);
+    import_oci_dir_as_ref(index_store, blob_store, legacy_path, image_name)
 }
 
-pub fn import_legacy_local_registry_ref_with_policy(
+pub fn replace_legacy_local_registry_ref(
     index_store: &SqliteIndexStore,
     blob_store: &FileBlobStore,
     legacy_registry_root: impl AsRef<Path>,
     image_name: &ImageRef,
-    policy: RefConflictPolicy,
 ) -> Result<OciDirImport> {
     let legacy_path = legacy_local_registry_path(legacy_registry_root, image_name);
-    import_oci_dir_as_ref_with_policy(index_store, blob_store, legacy_path, image_name, policy)
+    replace_oci_dir_as_ref(index_store, blob_store, legacy_path, image_name)
 }
 
 pub fn import_legacy_local_registry(
@@ -96,19 +90,32 @@ pub fn import_legacy_local_registry(
     blob_store: &FileBlobStore,
     legacy_registry_root: impl AsRef<Path>,
 ) -> Result<LegacyImportReport> {
-    import_legacy_local_registry_with_policy(
+    import_legacy_local_registry_inner(
         index_store,
         blob_store,
         legacy_registry_root,
-        RefConflictPolicy::KeepExisting,
+        RefWriteMode::Publish,
     )
 }
 
-pub fn import_legacy_local_registry_with_policy(
+pub fn replace_legacy_local_registry(
     index_store: &SqliteIndexStore,
     blob_store: &FileBlobStore,
     legacy_registry_root: impl AsRef<Path>,
-    policy: RefConflictPolicy,
+) -> Result<LegacyImportReport> {
+    import_legacy_local_registry_inner(
+        index_store,
+        blob_store,
+        legacy_registry_root,
+        RefWriteMode::Replace,
+    )
+}
+
+fn import_legacy_local_registry_inner(
+    index_store: &SqliteIndexStore,
+    blob_store: &FileBlobStore,
+    legacy_registry_root: impl AsRef<Path>,
+    write_mode: RefWriteMode,
 ) -> Result<LegacyImportReport> {
     let legacy_registry_root = legacy_registry_root.as_ref();
     let legacy_dirs = gather_legacy_oci_dirs(legacy_registry_root)?;
@@ -126,7 +133,7 @@ pub fn import_legacy_local_registry_with_policy(
                     blob_store,
                     legacy_dir,
                     Some(&image_name),
-                    policy,
+                    write_mode,
                     RefConflictHandling::Return,
                 )
                 .with_context(|| {
@@ -143,7 +150,7 @@ pub fn import_legacy_local_registry_with_policy(
                     blob_store,
                     legacy_dir,
                     Some(&image_name),
-                    policy,
+                    write_mode,
                     RefConflictHandling::Return,
                 )
                 .with_context(|| {
@@ -154,7 +161,7 @@ pub fn import_legacy_local_registry_with_policy(
                 })?;
                 record_import_ref_update(&mut report, ref_update);
             }
-            Some(_) if policy == RefConflictPolicy::KeepExisting => {
+            Some(_) if write_mode == RefWriteMode::Publish => {
                 report.conflicted_dirs += 1;
             }
             Some(_) => {
@@ -163,7 +170,7 @@ pub fn import_legacy_local_registry_with_policy(
                     blob_store,
                     legacy_dir,
                     Some(&image_name),
-                    RefConflictPolicy::Replace,
+                    RefWriteMode::Replace,
                     RefConflictHandling::Return,
                 )
                 .with_context(|| {

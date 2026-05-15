@@ -1,7 +1,6 @@
 use super::{
-    import_legacy_local_registry, import_legacy_local_registry_ref,
-    import_legacy_local_registry_ref_with_policy, import_legacy_local_registry_with_policy,
-    FileBlobStore, LegacyImportReport, OciDirImport, RefConflictPolicy, RefUpdate,
+    import_legacy_local_registry, import_legacy_local_registry_ref, replace_legacy_local_registry,
+    replace_legacy_local_registry_ref, FileBlobStore, LegacyImportReport, OciDirImport, RefUpdate,
     SqliteIndexStore,
 };
 use crate::artifact::{media_types, sha256_digest, stable_json_bytes, ImageRef};
@@ -137,29 +136,16 @@ impl LocalRegistry {
         import_legacy_local_registry_ref(&self.index, &self.blobs, &self.root, image_name)
     }
 
-    pub fn import_legacy_ref_with_policy(
-        &self,
-        image_name: &ImageRef,
-        policy: RefConflictPolicy,
-    ) -> Result<OciDirImport> {
-        import_legacy_local_registry_ref_with_policy(
-            &self.index,
-            &self.blobs,
-            &self.root,
-            image_name,
-            policy,
-        )
+    pub fn replace_legacy_ref(&self, image_name: &ImageRef) -> Result<OciDirImport> {
+        replace_legacy_local_registry_ref(&self.index, &self.blobs, &self.root, image_name)
     }
 
     pub fn import_legacy_layout(&self) -> Result<LegacyImportReport> {
         import_legacy_local_registry(&self.index, &self.blobs, &self.root)
     }
 
-    pub fn import_legacy_layout_with_policy(
-        &self,
-        policy: RefConflictPolicy,
-    ) -> Result<LegacyImportReport> {
-        import_legacy_local_registry_with_policy(&self.index, &self.blobs, &self.root, policy)
+    pub fn replace_legacy_layout(&self) -> Result<LegacyImportReport> {
+        replace_legacy_local_registry(&self.index, &self.blobs, &self.root)
     }
 
     pub fn resolve_image_name(&self, image_name: &ImageRef) -> Result<Option<Digest>> {
@@ -246,10 +232,20 @@ impl LocalRegistry {
         &self,
         image_name: &ImageRef,
         sealed_artifact: &SealedArtifact,
-        policy: RefConflictPolicy,
     ) -> Result<RefUpdate> {
-        self.index
-            .put_image_ref_with_policy(image_name, &sealed_artifact.0, policy)
+        self.index.publish_image_ref(image_name, &sealed_artifact.0)
+    }
+
+    /// Replace the ref target with a sealed root manifest descriptor.
+    ///
+    /// This is an IndexStore operation only. It does not write payload
+    /// blobs or manifest bytes.
+    pub(crate) fn replace_manifest_ref(
+        &self,
+        image_name: &ImageRef,
+        sealed_artifact: &SealedArtifact,
+    ) -> Result<RefUpdate> {
+        self.index.replace_image_ref(image_name, &sealed_artifact.0)
     }
 
     /// Validate that the manifest carries the OMMX `artifactType`.
