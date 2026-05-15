@@ -22,7 +22,7 @@ fn save_test_archive(
 ) -> Result<()> {
     let sender_dir = tempfile::tempdir()?;
     let sender_registry = Arc::new(LocalRegistry::open(sender_dir.path())?);
-    let mut builder = ArtifactDraft::with_registry(sender_registry.clone(), image_name);
+    let mut builder = ArtifactDraft::with_registry(sender_registry.as_ref(), image_name);
     builder.add_layer_bytes(
         MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.into()),
         layer_bytes,
@@ -200,10 +200,8 @@ fn imports_oci_dir_into_sqlite_registry_preserving_image_manifest() -> Result<()
         layer.size()
     );
 
-    let artifact = LocalArtifact::open_in_registry(
-        Arc::new(LocalRegistry::open(&registry_root)?),
-        image_name,
-    )?;
+    let registry = LocalRegistry::open(&registry_root)?;
+    let artifact = LocalArtifact::open_in_registry(&registry, image_name)?;
     // LocalArtifact must dispatch on the stored manifest media type and
     // surface the legacy Image Manifest's layer descriptors through the
     // common LocalManifest view.
@@ -753,7 +751,7 @@ fn local_artifact_subject_round_trips() -> Result<()> {
         .build()?;
 
     let child_image = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:child")?;
-    let mut builder = ArtifactDraft::with_registry(registry.clone(), child_image.clone());
+    let mut builder = ArtifactDraft::with_registry(registry.as_ref(), child_image.clone());
     builder.add_layer_bytes(
         MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
         b"child-layer".to_vec(),
@@ -797,7 +795,7 @@ fn imports_legacy_v2_oci_dir_with_ommx_config_blob() -> Result<()> {
     // LocalArtifact reads the legacy manifest (parse-time check is on
     // artifactType only, so the OMMX-specific config is not rejected).
     let registry = Arc::new(LocalRegistry::open(&registry_root)?);
-    let artifact = LocalArtifact::open_in_registry(registry, image_name)?;
+    let artifact = LocalArtifact::open_in_registry(registry.as_ref(), image_name)?;
     assert_eq!(
         artifact.get_manifest()?.media_type(),
         OCI_IMAGE_MANIFEST_MEDIA_TYPE
@@ -1290,21 +1288,21 @@ fn read_archive_blobs(path: &Path) -> Result<HashMap<String, Vec<u8>>> {
     Ok(blobs)
 }
 
-fn build_test_local_artifact(
-    registry: &Arc<LocalRegistry>,
+fn build_test_local_artifact<'reg>(
+    registry: &'reg Arc<LocalRegistry>,
     image_name: &ImageRef,
     layer_bytes: &[u8],
-) -> Result<LocalArtifact> {
+) -> Result<LocalArtifact<'reg>> {
     let (builder, _) = new_test_local_artifact_builder(registry, image_name.clone(), layer_bytes)?;
     builder.commit()
 }
 
-fn new_test_local_artifact_builder(
-    registry: &Arc<LocalRegistry>,
+fn new_test_local_artifact_builder<'reg>(
+    registry: &'reg Arc<LocalRegistry>,
     image_name: ImageRef,
     layer_bytes: &[u8],
-) -> Result<(ArtifactDraft, Descriptor)> {
-    let mut builder = ArtifactDraft::with_registry(Arc::clone(registry), image_name);
+) -> Result<(ArtifactDraft<'reg>, Descriptor)> {
+    let mut builder = ArtifactDraft::with_registry(registry.as_ref(), image_name);
     let descriptor = builder.add_layer_bytes(
         MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
         layer_bytes.to_vec(),

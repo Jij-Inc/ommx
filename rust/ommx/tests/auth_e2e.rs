@@ -83,10 +83,12 @@ fn start_htpasswd_registry() -> Container<GenericImage> {
 /// Build a tiny LocalArtifact in a fresh tempdir-backed SQLite Local
 /// Registry. Returns the artifact (containing one INSTANCE layer) plus
 /// the registry's tempdir handle so it stays alive for the caller.
-fn build_test_artifact(image_name: ImageRef) -> Result<(LocalArtifact, tempfile::TempDir)> {
+fn build_test_artifact(
+    image_name: ImageRef,
+) -> Result<(LocalArtifact<'static>, tempfile::TempDir)> {
     let dir = tempfile::tempdir()?;
-    let registry = Arc::new(LocalRegistry::open(dir.path())?);
-    let mut builder = ArtifactDraft::with_registry(registry.clone(), image_name);
+    let registry = Box::leak(Box::new(LocalRegistry::open(dir.path())?));
+    let mut builder = ArtifactDraft::with_registry(registry, image_name);
     builder.add_layer_bytes(
         oci_spec::image::MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
         b"auth-e2e-test".to_vec(),
@@ -317,7 +319,7 @@ fn cli_push_routes_through_native_path() -> Result<()> {
     {
         let local = Arc::new(LocalRegistry::open(dir.path())?);
         let mut builder =
-            ArtifactDraft::with_registry(local.clone(), ImageRef::parse(&image_name)?);
+            ArtifactDraft::with_registry(local.as_ref(), ImageRef::parse(&image_name)?);
         builder.add_layer_bytes(
             oci_spec::image::MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
             b"cli-dispatch".to_vec(),
@@ -379,7 +381,7 @@ fn push_oci_archive_via_load_then_push() -> Result<()> {
     let receiver_dir = tempfile::tempdir()?;
     let receiver = Arc::new(LocalRegistry::open(receiver_dir.path())?);
     import_oci_archive(&receiver, &archive_path)?;
-    let receiver_local = LocalArtifact::open_in_registry(receiver, image_name)?;
+    let receiver_local = LocalArtifact::open_in_registry(receiver.as_ref(), image_name)?;
     receiver_local.push()
 }
 
@@ -423,7 +425,7 @@ fn pull_image_round_trips_through_anonymous_registry() -> Result<()> {
     // digest, same single layer, same layer bytes. Failure on any of
     // these assertions means the native pull lost data on the way
     // through `RemoteTransport` + `publish_artifact_atomic`.
-    let pulled = LocalArtifact::open_in_registry(receiver, image_name)?;
+    let pulled = LocalArtifact::open_in_registry(receiver.as_ref(), image_name)?;
     assert_eq!(pulled.manifest_digest(), &outcome.manifest_digest);
     let layers = pulled.layers()?;
     assert_eq!(layers.len(), 1);

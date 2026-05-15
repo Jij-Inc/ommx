@@ -38,7 +38,7 @@ use tar::{EntryType, Header};
 /// pins this string at `1.0.0`; importers reject anything else.
 const OCI_LAYOUT_VERSION: &str = "1.0.0";
 
-impl LocalArtifact {
+impl LocalArtifact<'_> {
     /// Pack this artifact into a `.ommx` OCI archive at `output`.
     ///
     /// Identity-preserving: the manifest bytes the SQLite Local

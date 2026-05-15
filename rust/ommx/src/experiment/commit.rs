@@ -16,13 +16,12 @@ use oci_spec::image::{DescriptorBuilder, Digest, MediaType};
 use serde_json::json;
 use std::collections::HashMap;
 use std::str::FromStr;
-use std::sync::Arc;
 
 /// Commit an unsealed experiment state as one immutable artifact.
-pub(super) fn commit_experiment_state(
-    registry: &Arc<LocalRegistry>,
+pub(super) fn commit_experiment_state<'reg>(
+    registry: &'reg LocalRegistry,
     state: &UnsealedExperimentState,
-) -> Result<LocalArtifact> {
+) -> Result<LocalArtifact<'reg>> {
     let mut layers = Vec::new();
 
     // Record layers: experiment space first, then each run's space.
@@ -95,7 +94,7 @@ pub(super) fn commit_experiment_state(
     }
 
     Ok(LocalArtifact::from_parts(
-        Arc::clone(registry),
+        registry,
         image_name,
         sealed_artifact.digest().clone(),
     ))

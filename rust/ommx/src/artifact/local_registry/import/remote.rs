@@ -54,7 +54,7 @@ use crate::artifact::{
 use anyhow::{Context, Result};
 use oci_client::RegistryOperation;
 use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, ImageManifest, MediaType};
-use std::{str::FromStr, sync::Arc};
+use std::str::FromStr;
 
 /// Pull `image_name` from its remote registry into the v3 SQLite
 /// Local Registry.
@@ -83,7 +83,7 @@ use std::{str::FromStr, sync::Arc};
 /// writer sees `Unchanged`. If the remote serves non-deterministic
 /// manifest bytes (field reorder, whitespace drift) the two digests
 /// differ and the loser surfaces a conflict.
-pub fn pull_image(registry: &Arc<LocalRegistry>, image_name: &ImageRef) -> Result<OciDirImport> {
+pub fn pull_image(registry: &LocalRegistry, image_name: &ImageRef) -> Result<OciDirImport> {
     if let Some(manifest_digest) = registry.index().resolve_image_name(image_name)? {
         if registry.blobs().exists(&manifest_digest)? {
             return Ok(OciDirImport {

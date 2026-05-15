@@ -12,19 +12,20 @@ use crate::artifact::media_types;
 use crate::Instance;
 use oci_spec::image::{Descriptor, MediaType};
 use serde_json::json;
-use std::sync::Arc;
 use tempfile::TempDir;
 
 /// A fresh experiment backed by a throwaway temp Local Registry. The
 /// returned `TempDir` must outlive the experiment.
-fn temp_experiment(name: &str) -> (TempDir, Experiment) {
+fn temp_experiment(name: &str) -> (TempDir, Experiment<'static>) {
     let dir = tempfile::tempdir().expect("create temp dir");
-    let registry = Arc::new(LocalRegistry::open(dir.path()).expect("open temp registry"));
+    let registry = Box::leak(Box::new(
+        LocalRegistry::open(dir.path()).expect("open temp registry"),
+    ));
     let experiment = Experiment::with_registry(name, registry, None);
     (dir, experiment)
 }
 
-fn unsealed_state(experiment: &Experiment) -> &UnsealedExperimentState {
+fn unsealed_state<'exp, 'reg>(experiment: &'exp Experiment<'reg>) -> &'exp UnsealedExperimentState {
     &experiment.state
 }
 
