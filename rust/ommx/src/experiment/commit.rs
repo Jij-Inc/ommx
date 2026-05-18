@@ -2,28 +2,19 @@
 
 use super::model::{ParameterValue, RecordRef, UnsealedExperimentState};
 use super::{
-    build_descriptor, ANN_ARTIFACT_KIND, ANN_EXPERIMENT_NAME, ANN_EXPERIMENT_SCHEMA,
-    ANN_EXPERIMENT_STATUS, ANN_LAYER, ARTIFACT_KIND_EXPERIMENT, EXPERIMENT_INDEX_MEDIA_TYPE,
-    EXPERIMENT_SCHEMA_V1, EXPERIMENT_STATUS_FINISHED, LAYER_KIND_INDEX, LAYER_KIND_RUN_ATTRIBUTES,
+    ANN_ARTIFACT_KIND, ANN_EXPERIMENT_NAME, ANN_EXPERIMENT_SCHEMA, ANN_EXPERIMENT_STATUS,
+    ANN_LAYER, ARTIFACT_KIND_EXPERIMENT, EXPERIMENT_INDEX_MEDIA_TYPE, EXPERIMENT_SCHEMA_V1,
+    EXPERIMENT_STATUS_FINISHED, LAYER_KIND_INDEX, LAYER_KIND_RUN_ATTRIBUTES,
     LAYER_KIND_RUN_PARAMETERS, RUN_ATTRIBUTES_MEDIA_TYPE, RUN_PARAMETERS_MEDIA_TYPE,
 };
 use crate::artifact::local_registry::{
     LocalRegistry, RefUpdate, StoredDescriptor, UnsealedArtifact,
 };
-use crate::artifact::{media_types, sha256_digest, ImageRef, LocalArtifact};
+use crate::artifact::{media_types, ImageRef, LocalArtifact};
 use anyhow::Result;
-use oci_spec::image::{Digest, MediaType};
+use oci_spec::image::MediaType;
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap};
-use std::str::FromStr;
-
-/// Commit an unsealed experiment state as one immutable artifact.
-pub(super) fn commit_experiment_state<'reg>(
-    registry: &'reg LocalRegistry,
-    state: UnsealedExperimentState<'reg>,
-) -> Result<LocalArtifact<'reg>> {
-    state.commit(registry)
-}
 
 impl<'reg> UnsealedExperimentState<'reg> {
     /// Consume the unsealed experiment state and commit it as one
@@ -31,7 +22,15 @@ impl<'reg> UnsealedExperimentState<'reg> {
     /// public `Experiment::commit(self)` lifecycle operation.
     pub(super) fn commit(self, registry: &'reg LocalRegistry) -> Result<LocalArtifact<'reg>> {
         let image_name = self.image_name(registry)?;
-        let artifact = self.into_unsealed_artifact(registry)?;
+        let config_descriptor = registry.store_empty_config()?;
+        let layers = self.materialize_layers(registry)?;
+        let artifact = UnsealedArtifact::new(
+            MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
+            config_descriptor,
+            layers,
+            None,
+            manifest_annotations(&self),
+        );
         let sealed_artifact = registry.seal_artifact(artifact)?;
         let ref_update = registry.publish_manifest_ref(&image_name, &sealed_artifact)?;
         if let RefUpdate::Conflicted {
@@ -49,25 +48,6 @@ impl<'reg> UnsealedExperimentState<'reg> {
             registry,
             image_name,
             sealed_artifact.digest().clone(),
-        ))
-    }
-
-    /// Materialize commit-time aggregate layers and assemble the
-    /// unsealed root artifact. This stores component blobs but does not
-    /// create the root manifest blob and does not update any image ref.
-    fn into_unsealed_artifact(
-        self,
-        registry: &'reg LocalRegistry,
-    ) -> Result<UnsealedArtifact<'reg>> {
-        let config_descriptor = registry.store_empty_config()?;
-        let layers = self.materialize_layers(registry)?;
-
-        Ok(UnsealedArtifact::new(
-            MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
-            config_descriptor,
-            layers,
-            None,
-            manifest_annotations(&self),
         ))
     }
 
@@ -135,30 +115,9 @@ fn store_aggregate_json_layer<'reg>(
     layer_kind: &str,
     value: &impl Serialize,
 ) -> Result<StoredDescriptor<'reg>> {
-    let bytes = serde_json::to_vec(value)
-        .map_err(|e| crate::error!("Failed to encode {layer_kind} JSON: {e}"))?;
-    store_aggregate_layer(registry, media_type, layer_kind, &bytes)
-}
-
-/// Store a commit-time aggregate JSON layer and return its
-/// descriptor (with the `org.ommx.experiment.layer` annotation).
-fn store_aggregate_layer<'reg>(
-    registry: &'reg LocalRegistry,
-    media_type: &str,
-    layer_kind: &str,
-    bytes: &[u8],
-) -> Result<StoredDescriptor<'reg>> {
-    let digest = Digest::from_str(&sha256_digest(bytes))
-        .map_err(|e| crate::error!("Failed to parse aggregate layer digest: {e}"))?;
     let mut annotations = HashMap::new();
     annotations.insert(ANN_LAYER.to_string(), layer_kind.to_string());
-    let descriptor = build_descriptor(
-        MediaType::Other(media_type.to_string()),
-        &digest,
-        bytes.len() as u64,
-        annotations,
-    )?;
-    registry.store_blob(descriptor, bytes)
+    registry.store_json_layer_blob(MediaType::Other(media_type.to_string()), value, annotations)
 }
 
 fn manifest_annotations(state: &UnsealedExperimentState<'_>) -> HashMap<String, String> {

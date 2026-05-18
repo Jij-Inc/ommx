@@ -3,7 +3,7 @@
 use super::model::{
     ParameterValue, RecordRef, RunEntry, RunStatus, Space, UnsealedExperimentState,
 };
-use super::{build_descriptor, commit, ANN_RECORD_NAME, ANN_RUN_ID, ANN_SPACE};
+use super::{build_descriptor, ANN_RECORD_NAME, ANN_RUN_ID, ANN_SPACE};
 use crate::artifact::local_registry::{LocalRegistry, TempLocalRegistry};
 use crate::artifact::{media_types, sha256_digest, ImageRef, LocalArtifact};
 use crate::{Instance, SampleSet, Solution};
@@ -191,7 +191,7 @@ impl<'reg> Experiment<'reg> {
                 poisoned.into_inner()
             }
         };
-        let artifact = commit::commit_experiment_state(self.registry, state)?;
+        let artifact = state.commit(self.registry)?;
         Ok(SealedExperiment { artifact })
     }
 }
