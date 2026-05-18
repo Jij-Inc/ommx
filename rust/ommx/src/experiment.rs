@@ -24,10 +24,11 @@
 //!
 //! ```ignore
 //! use ommx::artifact::ImageRef;
-//! use ommx::experiment::Experiment;
+//! use ommx::experiment::{Experiment, Name};
 //!
 //! let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/scip_reblock115:latest")?;
 //! let exp = Experiment::new(image_name)?;
+//! let anonymous_exp = Experiment::new(Name::Anonymous)?;
 //! exp.log_json("dataset", serde_json::json!("miplib2017"))?;
 //!
 //! let mut run = exp.run()?;
@@ -96,6 +97,36 @@ pub struct SealedExperiment<'reg> {
     artifact: LocalArtifact<'reg>,
 }
 
+/// User-facing name policy for a new Experiment.
+///
+/// `Name` is resolved to a concrete [`ImageRef`] when the Experiment
+/// is created. The unsealed Experiment state keeps only that resolved
+/// image name, so commit always publishes to a concrete Local Registry
+/// ref.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Name {
+    /// Publish under the caller-provided OCI image reference.
+    Named(ImageRef),
+    /// Generate a fresh local name of the form
+    /// `<registry-id8>.ommx.local/experiment:<timestamp>-<nonce>`.
+    Anonymous,
+}
+
+impl Name {
+    fn resolve(self, registry: &LocalRegistry) -> Result<ImageRef> {
+        match self {
+            Self::Named(image_name) => Ok(image_name),
+            Self::Anonymous => registry.synthesize_anonymous_experiment_image_name(),
+        }
+    }
+}
+
+impl From<ImageRef> for Name {
+    fn from(image_name: ImageRef) -> Self {
+        Self::Named(image_name)
+    }
+}
+
 /// A handle to a single run within an [`Experiment`].
 ///
 /// A `Run` borrows its parent experiment immutably for `'exp`. It
@@ -144,11 +175,11 @@ struct UnsealedExperimentState<'reg> {
 
 impl Experiment<'static> {
     /// Start a new experiment session backed by the user's default
-    /// Local Registry. The committed artifact is published under
-    /// `image_name`.
-    pub fn new(image_name: ImageRef) -> Result<Self> {
+    /// Local Registry. The committed artifact is published under the
+    /// resolved `name`.
+    pub fn new(name: impl Into<Name>) -> Result<Self> {
         let registry = LocalRegistry::shared_default()?;
-        Ok(Self::with_registry(registry, image_name))
+        Self::with_registry(registry, name)
     }
 }
 
@@ -160,19 +191,20 @@ impl<'reg> Experiment<'reg> {
     /// registry while still exercising the same Local Registry-backed
     /// artifact path as production code.
     pub fn with_temp_local_registry<T>(
-        image_name: ImageRef,
+        name: impl Into<Name>,
         f: impl FnOnce(Experiment<'_>) -> anyhow::Result<T>,
     ) -> Result<T> {
         let temp = TempLocalRegistry::new()?;
-        let experiment = Experiment::with_registry(temp.registry(), image_name);
+        let experiment = Experiment::with_registry(temp.registry(), name)?;
         f(experiment)
     }
 
     /// Start a new experiment session against an explicit Local
-    /// Registry. The committed artifact is published under
-    /// `image_name`.
-    pub fn with_registry(registry: &'reg LocalRegistry, image_name: ImageRef) -> Self {
-        Experiment {
+    /// Registry. The committed artifact is published under the
+    /// resolved `name`.
+    pub fn with_registry(registry: &'reg LocalRegistry, name: impl Into<Name>) -> Result<Self> {
+        let image_name = name.into().resolve(registry)?;
+        Ok(Experiment {
             registry,
             state: Mutex::new(UnsealedExperimentState {
                 image_name,
@@ -180,7 +212,7 @@ impl<'reg> Experiment<'reg> {
                 runs: BTreeMap::new(),
                 next_run_id: 0,
             }),
-        }
+        })
     }
 
     /// Start a new [`Run`]. Each run gets a fresh 0-based `run_id`.

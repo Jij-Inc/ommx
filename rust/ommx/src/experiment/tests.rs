@@ -2,7 +2,7 @@
 
 use super::UnsealedExperimentState;
 use super::{
-    Experiment, ANN_ARTIFACT_KIND, ANN_EXPERIMENT_SCHEMA, ANN_EXPERIMENT_STATUS, ANN_LAYER,
+    Experiment, Name, ANN_ARTIFACT_KIND, ANN_EXPERIMENT_SCHEMA, ANN_EXPERIMENT_STATUS, ANN_LAYER,
     ANN_RECORD_NAME, ANN_RUN_ID, ANN_SPACE, ARTIFACT_KIND_EXPERIMENT, EXPERIMENT_SCHEMA_V1,
     EXPERIMENT_STATUS_FINISHED, LAYER_KIND_RUN_PARAMETERS,
 };
@@ -399,11 +399,7 @@ fn commit_returns_sealed_experiment() {
 #[test]
 fn anonymous_experiment_uses_registry_generated_image_name() {
     let temp = crate::artifact::local_registry::TempLocalRegistry::new().unwrap();
-    let image_name = temp
-        .registry()
-        .synthesize_anonymous_experiment_image_name()
-        .unwrap();
-    let experiment = Experiment::with_registry(temp.registry(), image_name);
+    let experiment = Experiment::with_registry(temp.registry(), Name::Anonymous).unwrap();
     experiment.log_json("dataset", json!("miplib2017")).unwrap();
 
     let artifact = experiment.commit().unwrap().into_artifact();
