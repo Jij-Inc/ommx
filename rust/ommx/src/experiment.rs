@@ -149,6 +149,13 @@ impl Experiment<'static> {
         let image_name = ImageRef::parse(image_name.as_ref())?;
         Ok(Self::with_registry(image_name, registry))
     }
+
+    /// Start a new experiment session backed by the user's default
+    /// Local Registry and publish it under an anonymous image name.
+    pub fn anonymous() -> Result<Self> {
+        let registry = LocalRegistry::shared_default()?;
+        Self::with_anonymous_registry(registry)
+    }
 }
 
 impl<'reg> Experiment<'reg> {
@@ -166,6 +173,14 @@ impl<'reg> Experiment<'reg> {
         let image_name = ImageRef::parse(image_name.as_ref())?;
         let experiment = Experiment::with_registry(image_name, temp.registry());
         f(experiment)
+    }
+
+    /// Start a new experiment session against an explicit Local
+    /// Registry and publish it under an anonymous image name generated
+    /// by that registry.
+    pub fn with_anonymous_registry(registry: &'reg LocalRegistry) -> Result<Self> {
+        let image_name = registry.synthesize_anonymous_image_name()?;
+        Ok(Self::with_registry(image_name, registry))
     }
 
     /// Start a new experiment session against an explicit Local

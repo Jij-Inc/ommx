@@ -396,6 +396,28 @@ fn commit_returns_sealed_experiment() {
     });
 }
 
+#[test]
+fn anonymous_experiment_uses_registry_generated_image_name() {
+    let temp = crate::artifact::local_registry::TempLocalRegistry::new().unwrap();
+    let experiment = Experiment::with_anonymous_registry(temp.registry()).unwrap();
+    experiment.log_json("dataset", json!("miplib2017")).unwrap();
+
+    let artifact = experiment.commit().unwrap().into_artifact();
+    let image_name = artifact.image_name();
+    let repository_key = image_name.repository_key();
+    assert!(crate::artifact::is_anonymous_artifact_ref_name(
+        &repository_key
+    ));
+    assert!(crate::artifact::is_anonymous_artifact_tag(
+        image_name.reference()
+    ));
+    assert!(temp
+        .registry()
+        .resolve_image_name(image_name)
+        .unwrap()
+        .is_some());
+}
+
 /// Dropping a run handle without closing it does not write its local
 /// state back to the experiment. BlobStore payloads written before the
 /// drop may remain as orphan blobs until GC.

@@ -810,7 +810,7 @@ Track A の中核のうち、最小の happy path を最初に通す。Local Reg
 
 API:
 
-- `Experiment::new(image_name)`（default Local Registry を開く） / `Experiment::with_registry(ImageRef, &LocalRegistry)`（テスト用に registry を差し替え可能）
+- `Experiment::new(image_name)`（default Local Registry を開く） / `Experiment::anonymous()`（default Local Registry 上の anonymous image name を使う） / `Experiment::with_registry(ImageRef, &LocalRegistry)` / `Experiment::with_anonymous_registry(&LocalRegistry)`（テスト用に registry を差し替え可能）
 - `Experiment::log_record` / `log_json` / `log_instance` / `log_solution` / `log_sample_set`（experiment space、`&self`。内部 state 更新は Mutex で同期）
 - `Experiment::run(&self) -> Run<'_>`（`run_id` を 0-based で採番し、Run lifecycle 中は Experiment を immutable borrow する）
 - `Experiment::commit(self) -> SealedExperiment`
@@ -841,7 +841,7 @@ API:
 3. `seal_artifact` で root manifest blob を Store し、`SealedArtifact` を得る。
 4. `publish_manifest_ref` で root descriptor を IndexStore の ref に対応づける。
 
-Experiment は構築時点で `ImageRef` を受け取り、commit 時はその ref に publish する。Experiment name と Image Name を別々に持つと、Artifact としての実体の識別子と実験管理上の識別子が分岐するため、OMMX Experiment では Image Name を唯一の名前として扱う。匿名 ref が必要な場合は `LocalRegistry::synthesize_anonymous_image_name()` で得た `ImageRef` を Experiment 構築に渡す。
+Experiment は構築時点で `ImageRef` を確定し、commit 時はその ref に publish する。Experiment name と Image Name を別々に持つと、Artifact としての実体の識別子と実験管理上の識別子が分岐するため、OMMX Experiment では Image Name を唯一の名前として扱う。匿名 ref が必要な場合は `Experiment::anonymous()` / `Experiment::with_anonymous_registry(&LocalRegistry)` が `LocalRegistry::synthesize_anonymous_image_name()` で得た `ImageRef` を通常の Experiment 構築に渡す。
 
 この実装では、内部 state は `StoredDescriptor` を「Local Registry に保存済み blob への参照」として扱う。一方、manifest / archive / Python API に出す値は通常の `oci_spec::image::Descriptor` である。`StoredDescriptor` の作成経路は Local Registry の blob 書き込み / 検証後に限定し、作成後は `Deref<Target = Descriptor>` によって通常の descriptor として読める。root manifest については `StoredDescriptor` ではなく `SealedArtifact` として表し、`publish_manifest_ref` / `replace_manifest_ref` は `SealedArtifact` だけを受け取る。ArtifactDraft と Experiment はどちらも、payload 追加時に component blob を Store し、commit 時には unsealed state から root manifest を Seal してから ref に Publish する。
 
