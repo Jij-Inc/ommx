@@ -27,7 +27,7 @@
 
 use anyhow::Result;
 use ommx::artifact::{
-    local_registry::{import_oci_archive, pull_image, LocalRegistry, TempLocalRegistry},
+    local_registry::{import_oci_archive, pull_image, LocalRegistry},
     media_types, ArtifactDraft, ImageRef, LocalArtifact,
 };
 use serial_test::serial;
@@ -86,18 +86,18 @@ fn with_test_artifact<T>(
     image_name: ImageRef,
     f: impl FnOnce(LocalArtifact<'_>) -> Result<T>,
 ) -> Result<T> {
-    let temp = TempLocalRegistry::new()?;
-    let mut builder = ArtifactDraft::with_registry(&temp.registry, image_name);
-    builder.add_layer_bytes(
-        oci_spec::image::MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
-        b"auth-e2e-test".to_vec(),
-        HashMap::from([(
-            "org.ommx.v1.instance.title".to_string(),
-            "auth-e2e".to_string(),
-        )]),
-    )?;
-    let artifact = builder.commit()?;
-    f(artifact)
+    ArtifactDraft::on_temp_local_registry(image_name, |mut draft| {
+        draft.add_layer_bytes(
+            oci_spec::image::MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
+            b"auth-e2e-test".to_vec(),
+            HashMap::from([(
+                "org.ommx.v1.instance.title".to_string(),
+                "auth-e2e".to_string(),
+            )]),
+        )?;
+        let artifact = draft.commit()?;
+        f(artifact)
+    })
 }
 
 /// Materialise a fake `~/.docker/config.json` in a tempdir and point
