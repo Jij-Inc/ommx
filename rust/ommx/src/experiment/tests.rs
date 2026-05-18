@@ -1,21 +1,23 @@
 //! Tests for the experiment session model.
 
-use super::model::{RunStatus, UnsealedExperimentState};
+use super::UnsealedExperimentState;
 use super::{
     Experiment, ANN_ARTIFACT_KIND, ANN_EXPERIMENT_NAME, ANN_EXPERIMENT_SCHEMA,
     ANN_EXPERIMENT_STATUS, ANN_LAYER, ANN_RECORD_NAME, ANN_RUN_ID, ANN_SPACE,
-    ARTIFACT_KIND_EXPERIMENT, EXPERIMENT_SCHEMA_V1, EXPERIMENT_STATUS_FINISHED, LAYER_KIND_INDEX,
-    LAYER_KIND_RUN_ATTRIBUTES,
+    ARTIFACT_KIND_EXPERIMENT, EXPERIMENT_SCHEMA_V1, EXPERIMENT_STATUS_FINISHED,
+    LAYER_KIND_RUN_PARAMETERS,
 };
 use crate::artifact::media_types;
 use crate::Instance;
 use oci_spec::image::{Descriptor, MediaType};
 use serde_json::json;
 
-fn unsealed_state<'exp, 'reg>(
-    experiment: &'exp Experiment<'reg>,
-) -> &'exp UnsealedExperimentState<'reg> {
-    &experiment.state
+fn with_unsealed_state<T>(
+    experiment: &Experiment<'_>,
+    f: impl FnOnce(&UnsealedExperimentState<'_>) -> T,
+) -> T {
+    let state = experiment.state.lock().expect("experiment state lock");
+    f(&state)
 }
 
 fn layer_annotation(layer: &Descriptor, key: &str) -> Option<String> {
@@ -39,11 +41,11 @@ fn find_layer<'a>(layers: &'a [Descriptor], key: &str, value: &str) -> &'a Descr
     matches[0]
 }
 
-/// `run()` hands out fresh 0-based ids; `finish()` / `fail()` consume the
-/// run handle, record the final status, and set elapsed time.
+/// `run()` hands out fresh 0-based ids; `finish()` consumes the run
+/// handle and records the closed run.
 #[test]
-fn run_lifecycle_assigns_ids_and_records_status() {
-    Experiment::with_temp_local_registry("lifecycle", |mut experiment| {
+fn run_lifecycle_assigns_ids_and_records_closed_runs() {
+    Experiment::with_temp_local_registry("lifecycle", |experiment| {
         {
             let run0 = experiment.run().unwrap();
             assert_eq!(run0.run_id(), 0);
@@ -52,14 +54,58 @@ fn run_lifecycle_assigns_ids_and_records_status() {
         {
             let run1 = experiment.run().unwrap();
             assert_eq!(run1.run_id(), 1);
-            run1.fail().unwrap();
+            run1.finish().unwrap();
         }
 
-        let state = unsealed_state(&experiment);
-        assert_eq!(state.runs[0].status, RunStatus::Finished);
-        assert!(state.runs[0].elapsed_secs.is_some());
-        assert_eq!(state.runs[1].status, RunStatus::Failed);
-        assert!(state.runs[1].elapsed_secs.is_some());
+        with_unsealed_state(&experiment, |state| {
+            assert_eq!(state.runs.get(&0).unwrap().run_id, 0);
+            assert_eq!(state.runs.get(&1).unwrap().run_id, 1);
+        });
+        Ok(())
+    })
+    .unwrap();
+}
+
+/// Runs borrow the parent experiment immutably, so several runs can be
+/// built before any of them writes back at close.
+#[test]
+fn runs_can_be_open_concurrently_and_write_back_on_close() {
+    Experiment::with_temp_local_registry("parallel-runs", |experiment| {
+        let mut run0 = experiment.run().unwrap();
+        let mut run1 = experiment.run().unwrap();
+
+        run0.log_json("candidate", json!("formulation-a")).unwrap();
+        run1.log_json("candidate", json!("formulation-b")).unwrap();
+
+        assert_eq!(
+            with_unsealed_state(&experiment, |state| state.runs.len()),
+            0
+        );
+        run1.finish().unwrap();
+        assert_eq!(
+            with_unsealed_state(&experiment, |state| state.runs.len()),
+            1
+        );
+        run0.finish().unwrap();
+
+        with_unsealed_state(&experiment, |state| {
+            assert_eq!(state.runs.len(), 2);
+            let run_ids = state.runs.keys().copied().collect::<Vec<_>>();
+            assert_eq!(run_ids, vec![0, 1]);
+        });
+
+        let artifact = experiment.commit().unwrap().into_artifact();
+        let layers = artifact.layers().unwrap();
+        assert_eq!(
+            layers
+                .iter()
+                .filter(|layer| {
+                    layer_annotation(layer, ANN_RECORD_NAME).as_deref() == Some("candidate")
+                })
+                .map(|layer| layer_annotation(layer, ANN_RUN_ID).unwrap())
+                .collect::<Vec<_>>(),
+            vec!["0".to_string(), "1".to_string()]
+        );
         Ok(())
     })
     .unwrap();
@@ -69,18 +115,18 @@ fn run_lifecycle_assigns_ids_and_records_status() {
 /// commit advances a public ref.
 #[test]
 fn log_writes_blob_to_blobstore_immediately() {
-    Experiment::with_temp_local_registry("eager-write", |mut experiment| {
+    Experiment::with_temp_local_registry("eager-write", |experiment| {
         {
             let mut run = experiment.run().unwrap();
             run.log_json("solver", json!("scip")).unwrap();
+            run.finish().unwrap();
         }
 
-        let digest = {
-            let state = unsealed_state(&experiment);
-            assert_eq!(state.runs[0].records.len(), 1);
-            let digest = state.runs[0].records[0].descriptor.digest().clone();
-            digest
-        };
+        let digest = with_unsealed_state(&experiment, |state| {
+            let run = state.runs.get(&0).unwrap();
+            assert_eq!(run.records.len(), 1);
+            run.records[0].descriptor.digest().clone()
+        });
         assert!(experiment.registry.blobs().exists(&digest).unwrap());
         Ok(())
     })
@@ -91,7 +137,7 @@ fn log_writes_blob_to_blobstore_immediately() {
 /// record.
 #[test]
 fn log_upserts_same_space_media_type_name() {
-    Experiment::with_temp_local_registry("upsert", |mut experiment| {
+    Experiment::with_temp_local_registry("upsert", |experiment| {
         experiment.log_json("dataset", json!("miplib2017")).unwrap();
         experiment.log_json("dataset", json!("qplib")).unwrap();
 
@@ -99,19 +145,23 @@ fn log_upserts_same_space_media_type_name() {
             crate::random::random_deterministic(crate::InstanceParameters::default_lp());
         experiment.log_instance("dataset", &instance).unwrap();
 
-        let state = unsealed_state(&experiment);
-        assert_eq!(state.records.len(), 2);
-        let json_record = state
-            .records
-            .iter()
-            .find(|record| {
-                record.descriptor.media_type() == &MediaType::Other("application/json".into())
-            })
-            .unwrap();
+        let json_digest = with_unsealed_state(&experiment, |state| {
+            assert_eq!(state.records.len(), 2);
+            state
+                .records
+                .iter()
+                .find(|record| {
+                    record.descriptor.media_type() == &MediaType::Other("application/json".into())
+                })
+                .unwrap()
+                .descriptor
+                .digest()
+                .clone()
+        });
         let bytes = experiment
             .registry
             .blobs()
-            .read_bytes(json_record.descriptor.digest())
+            .read_bytes(&json_digest)
             .unwrap();
         assert_eq!(bytes, serde_json::to_vec(&json!("qplib")).unwrap());
         Ok(())
@@ -123,7 +173,7 @@ fn log_upserts_same_space_media_type_name() {
 /// layer annotations describe the experiment / run records.
 #[test]
 fn commit_produces_experiment_artifact() {
-    Experiment::with_temp_local_registry("commit", |mut experiment| {
+    Experiment::with_temp_local_registry("commit", |experiment| {
         experiment.log_json("dataset", json!("miplib2017")).unwrap();
 
         let instance: Instance =
@@ -156,9 +206,9 @@ fn commit_produces_experiment_artifact() {
             Some(EXPERIMENT_STATUS_FINISHED)
         );
 
-        // 3 records (1 experiment-space + 2 run-space) + run-attributes + index.
+        // 3 records (1 experiment-space + 2 run-space) + run-parameters.
         let layers = artifact.layers().unwrap();
-        assert_eq!(layers.len(), 5);
+        assert_eq!(layers.len(), 4);
 
         let dataset = find_layer(&layers, ANN_RECORD_NAME, "dataset");
         assert_eq!(
@@ -187,10 +237,8 @@ fn commit_produces_experiment_artifact() {
         );
 
         // Aggregate layers are not tagged as records.
-        let run_attrs = find_layer(&layers, ANN_LAYER, LAYER_KIND_RUN_ATTRIBUTES);
-        assert!(layer_annotation(run_attrs, ANN_SPACE).is_none());
-        let index = find_layer(&layers, ANN_LAYER, LAYER_KIND_INDEX);
-        assert!(layer_annotation(index, ANN_SPACE).is_none());
+        let run_params = find_layer(&layers, ANN_LAYER, LAYER_KIND_RUN_PARAMETERS);
+        assert!(layer_annotation(run_params, ANN_SPACE).is_none());
 
         // Config is the OCI 1.1 empty config.
         assert_eq!(
@@ -202,12 +250,145 @@ fn commit_produces_experiment_artifact() {
     .unwrap();
 }
 
+/// Run parameters are stored as table data, not as Records. Re-logging
+/// the same name updates the cell for that run.
+#[test]
+fn log_parameter_materializes_run_parameter_table() {
+    Experiment::with_temp_local_registry("parameters", |experiment| {
+        {
+            let mut run0 = experiment.run().unwrap();
+            run0.log_parameter("solver", "scip").unwrap();
+            run0.log_parameter("time_limit", 10.0).unwrap();
+            run0.log_parameter("time_limit", 20.0).unwrap();
+            run0.finish().unwrap();
+        }
+        {
+            let mut run1 = experiment.run().unwrap();
+            run1.log_parameter("solver", "highs").unwrap();
+            run1.log_parameter("presolve", true).unwrap();
+            run1.finish().unwrap();
+        }
+
+        let artifact = experiment.commit().unwrap().into_artifact();
+        let layers = artifact.layers().unwrap();
+        let run_params = find_layer(&layers, ANN_LAYER, LAYER_KIND_RUN_PARAMETERS);
+        assert!(layer_annotation(run_params, ANN_RECORD_NAME).is_none());
+        let bytes = artifact.get_blob(run_params.digest()).unwrap();
+        let table: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+
+        assert_eq!(
+            table,
+            json!({
+                "columns": {
+                    "presolve": {
+                        "type": "bool",
+                        "values": {
+                            "1": true,
+                        },
+                    },
+                    "solver": {
+                        "type": "string",
+                        "values": {
+                            "0": "scip",
+                            "1": "highs",
+                        },
+                    },
+                    "time_limit": {
+                        "type": "float64",
+                        "values": {
+                            "0": 20.0,
+                        },
+                    },
+                },
+            })
+        );
+        Ok(())
+    })
+    .unwrap();
+}
+
+#[test]
+fn log_parameter_rejects_non_finite_float_values() {
+    Experiment::with_temp_local_registry("bad-parameters", |experiment| {
+        let mut run = experiment.run().unwrap();
+
+        let err = run
+            .log_parameter("time_limit", f64::NAN)
+            .expect_err("parameter table accepts only finite float values");
+        assert!(err.to_string().contains("must be finite"));
+        Ok(())
+    })
+    .unwrap();
+}
+
+#[test]
+fn log_parameter_promotes_int_column_to_float_at_commit() {
+    Experiment::with_temp_local_registry("promote-parameters", |experiment| {
+        {
+            let mut run0 = experiment.run().unwrap();
+            run0.log_parameter("time_limit", 10).unwrap();
+            run0.finish().unwrap();
+        }
+        {
+            let mut run1 = experiment.run().unwrap();
+            run1.log_parameter("time_limit", 20.5).unwrap();
+            run1.finish().unwrap();
+        }
+
+        let artifact = experiment.commit().unwrap().into_artifact();
+        let layers = artifact.layers().unwrap();
+        let run_params = find_layer(&layers, ANN_LAYER, LAYER_KIND_RUN_PARAMETERS);
+        let bytes = artifact.get_blob(run_params.digest()).unwrap();
+        let table: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+
+        assert_eq!(
+            table,
+            json!({
+                "columns": {
+                    "time_limit": {
+                        "type": "float64",
+                        "values": {
+                            "0": 10.0,
+                            "1": 20.5,
+                        },
+                    },
+                },
+            })
+        );
+        Ok(())
+    })
+    .unwrap();
+}
+
+#[test]
+fn commit_rejects_mixed_parameter_column_types() {
+    Experiment::with_temp_local_registry("mixed-parameters", |experiment| {
+        {
+            let mut run0 = experiment.run().unwrap();
+            run0.log_parameter("seed", 1).unwrap();
+            run0.finish().unwrap();
+        }
+        {
+            let mut run1 = experiment.run().unwrap();
+            run1.log_parameter("seed", "1").unwrap();
+            run1.finish().unwrap();
+        }
+
+        let err = experiment
+            .commit()
+            .expect_err("mixed parameter column types must be rejected");
+        assert!(err.to_string().contains("mixed column types"));
+        Ok(())
+    })
+    .unwrap();
+}
+
 /// `commit()` consumes the unsealed session and returns a sealed handle.
 /// Further `log_*` / `run()` calls on the original session are impossible
 /// in Rust because the original `Experiment` value has moved.
 #[test]
 fn commit_returns_sealed_experiment() {
-    Experiment::with_temp_local_registry("sealed", |mut experiment| {
+    Experiment::with_temp_local_registry("sealed", |experiment| {
         {
             let mut run = experiment.run().unwrap();
             run.log_json("seed", json!(0)).unwrap();
@@ -229,18 +410,26 @@ fn commit_returns_sealed_experiment() {
     .unwrap();
 }
 
-/// Dropping a run handle without closing it does not implicitly mark
-/// the run finished; the experiment must not publish a `finished`
-/// manifest while a run is still `running`.
+/// Dropping a run handle without closing it does not write its local
+/// state back to the experiment. BlobStore payloads written before the
+/// drop may remain as orphan blobs until GC.
 #[test]
-fn commit_rejects_unclosed_run() {
-    Experiment::with_temp_local_registry("unclosed-run", |mut experiment| {
+fn dropping_unclosed_run_does_not_write_back() {
+    Experiment::with_temp_local_registry("unclosed-run", |experiment| {
         {
             let mut run = experiment.run().unwrap();
             run.log_json("seed", json!(0)).unwrap();
         }
 
-        assert!(experiment.commit().is_err());
+        assert_eq!(
+            with_unsealed_state(&experiment, |state| state.runs.len()),
+            0
+        );
+        let artifact = experiment.commit().unwrap().into_artifact();
+        let layers = artifact.layers().unwrap();
+        assert!(layers
+            .iter()
+            .all(|layer| layer_annotation(layer, ANN_RECORD_NAME).as_deref() != Some("seed")));
         Ok(())
     })
     .unwrap();
@@ -250,7 +439,7 @@ fn commit_rejects_unclosed_run() {
 /// distinct layer descriptors backed by one shared CAS blob.
 #[test]
 fn byte_identical_record_across_runs_shares_one_blob() {
-    Experiment::with_temp_local_registry("shared-blob", |mut experiment| {
+    Experiment::with_temp_local_registry("shared-blob", |experiment| {
         let payload = json!({ "formulation": "relaxed" });
 
         {
@@ -295,7 +484,7 @@ fn byte_identical_record_across_runs_shares_one_blob() {
 /// type, without an additional OMMX record-kind axis.
 #[test]
 fn log_record_accepts_caller_defined_media_type() {
-    Experiment::with_temp_local_registry("custom-media-type", |mut experiment| {
+    Experiment::with_temp_local_registry("custom-media-type", |experiment| {
         let media_type = MediaType::Other("application/vnd.jijmodeling.model+json".to_string());
         experiment
             .log_record("source-model", media_type.clone(), br#"{"variables": []}"#)

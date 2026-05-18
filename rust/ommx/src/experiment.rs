@@ -6,6 +6,10 @@
 //! Records belong either
 //! to the *experiment space* (shared by the whole experiment) or to a
 //! *run space* (owned by a single [`Run`]).
+//! Run parameters are separate table data: [`Run::log_parameter`] records
+//! bool / int64 / float64 / string scalar values for comparison views,
+//! and commit materialises them as a typed column-oriented aggregate
+//! run-parameter layer instead of individual Records.
 //!
 //! Each `log_*` call writes its payload to the Local Registry's
 //! content-addressed BlobStore immediately, keeping only
@@ -21,33 +25,43 @@
 //! ```ignore
 //! use ommx::experiment::Experiment;
 //!
-//! let mut exp = Experiment::new("scip_reblock115")?;
+//! let exp = Experiment::new("scip_reblock115")?;
 //! exp.log_json("dataset", serde_json::json!("miplib2017"))?;
 //!
 //! let mut run = exp.run()?;
+//! run.log_parameter("solver", "scip")?;
 //! run.log_instance("candidate", &instance)?;
 //! run.finish()?;
 //!
 //! let artifact = exp.commit()?.into_artifact();
 //! ```
 //!
-//! The module is split into three concerns: `model` holds the
-//! in-memory state types, `session` the public `Experiment` / `Run`
-//! handles and their `log_*` API, and `commit` the mapping onto an
-//! OMMX Artifact.
+//! The module is split by data terms: `run` contains `Run` and
+//! `RunEntry`, `record` contains `RecordRef`, `parameter` contains
+//! run-parameter table data, `index` contains the experiment index
+//! layer data, and `artifact` maps the unsealed experiment state onto
+//! an OMMX Artifact.
 
-mod commit;
-mod model;
-mod session;
+mod artifact;
+mod parameter;
+mod record;
+mod run;
 
 #[cfg(test)]
 mod tests;
 
-pub use session::{Experiment, Run, SealedExperiment};
+pub use parameter::ParameterValue;
 
+use crate::artifact::local_registry::{LocalRegistry, TempLocalRegistry};
+use crate::artifact::{media_types, ImageRef, LocalArtifact};
+use crate::{Instance, SampleSet, Solution};
 use anyhow::Result;
-use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, MediaType};
-use std::collections::HashMap;
+use oci_spec::image::MediaType;
+use record::{
+    encode_json, json_media_type, store_record_ref, upsert_record_ref, RecordRef, RecordSpace,
+};
+use std::collections::BTreeMap;
+use std::sync::{Mutex, MutexGuard};
 
 // --- Artifact mapping constants ---------------------------------------------
 
@@ -64,25 +78,220 @@ const ANN_RUN_ID: &str = "org.ommx.experiment.run_id";
 const ANN_LAYER: &str = "org.ommx.experiment.layer";
 const ANN_RECORD_NAME: &str = "org.ommx.record.name";
 
-const EXPERIMENT_INDEX_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment+json";
-const RUN_ATTRIBUTES_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment.run-attributes+json";
-const LAYER_KIND_INDEX: &str = "index";
-const LAYER_KIND_RUN_ATTRIBUTES: &str = "run-attributes";
+const RUN_PARAMETERS_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment.run-parameters+json";
+const LAYER_KIND_RUN_PARAMETERS: &str = "run-parameters";
 
-/// Build an OCI layer descriptor from a CAS-written blob plus the
-/// experiment / record annotations. Shared by record staging (in
-/// `session`) and the commit-time aggregate layers (in `commit`).
-fn build_descriptor(
-    media_type: MediaType,
-    digest: &Digest,
-    size: u64,
-    annotations: HashMap<String, String>,
-) -> Result<Descriptor> {
-    DescriptorBuilder::default()
-        .media_type(media_type)
-        .digest(digest.clone())
-        .size(size)
-        .annotations(annotations)
-        .build()
-        .map_err(|e| crate::error!("Failed to build OCI descriptor: {e}"))
+/// A mutable, unsealed experiment session. See the [module documentation](self).
+#[derive(Debug)]
+pub struct Experiment<'reg> {
+    registry: &'reg LocalRegistry,
+    state: Mutex<UnsealedExperimentState<'reg>>,
+}
+
+/// A sealed experiment session whose root artifact manifest has been
+/// written and published.
+#[derive(Debug, Clone)]
+pub struct SealedExperiment<'reg> {
+    artifact: LocalArtifact<'reg>,
+}
+
+/// A handle to a single run within an [`Experiment`].
+///
+/// A `Run` borrows its parent experiment immutably for `'exp`. It
+/// writes payload bytes to the registry CAS immediately, keeps
+/// run-scoped records / parameters locally, and writes back to the
+/// parent experiment only when [`Self::finish`] consumes the handle.
+/// This lets multiple runs be open at once while Rust prevents
+/// committing the parent experiment before live run handles are closed
+/// or dropped.
+#[derive(Debug)]
+pub struct Run<'exp, 'reg> {
+    experiment: &'exp Experiment<'reg>,
+    run_id: u64,
+    records: Vec<RecordRef<'reg>>,
+    parameters: BTreeMap<String, ParameterValue>,
+}
+
+/// A closed logical Run recorded in an unsealed Experiment.
+///
+/// `Run<'exp>` is the live handle: it borrows the parent Experiment and
+/// accepts run-scoped records and parameters. `RunEntry` is the row
+/// stored by the Experiment after `Run::finish` consumes that handle.
+/// Commit later projects it to aggregate parameter and record index
+/// layers.
+#[derive(Debug)]
+struct RunEntry<'reg> {
+    run_id: u64,
+    records: Vec<RecordRef<'reg>>,
+    parameters: BTreeMap<String, ParameterValue>,
+}
+
+/// Mutable experiment state before the root manifest is sealed. A live
+/// [`Run`] borrows the parent experiment while it adds run-scoped
+/// records. Closed runs are stored as [`RunEntry`] values.
+#[derive(Debug)]
+struct UnsealedExperimentState<'reg> {
+    name: String,
+    /// Image name the committed artifact is published under. `None`
+    /// means an anonymous name is synthesised at commit time.
+    requested_ref: Option<ImageRef>,
+    /// Experiment-space records.
+    records: Vec<RecordRef<'reg>>,
+    runs: BTreeMap<u64, RunEntry<'reg>>,
+    next_run_id: u64,
+}
+
+impl Experiment<'static> {
+    /// Start a new experiment session backed by the user's default
+    /// Local Registry. The committed artifact is published under an
+    /// auto-generated anonymous image name.
+    pub fn new(name: impl Into<String>) -> Result<Self> {
+        let registry = LocalRegistry::shared_default()?;
+        Ok(Self::with_registry(name, registry, None))
+    }
+}
+
+impl<'reg> Experiment<'reg> {
+    /// Create a temporary Local Registry, run an experiment callback
+    /// against it, and delete the registry when the callback returns.
+    ///
+    /// This is intended for Rust SDK tests that need an isolated
+    /// registry while still exercising the same Local Registry-backed
+    /// artifact path as production code.
+    pub fn with_temp_local_registry<T>(
+        name: impl Into<String>,
+        f: impl FnOnce(Experiment<'_>) -> anyhow::Result<T>,
+    ) -> Result<T> {
+        let temp = TempLocalRegistry::new()?;
+        let experiment = Experiment::with_registry(name, temp.registry(), None);
+        f(experiment)
+    }
+
+    /// Start a new experiment session against an explicit Local
+    /// Registry. When `requested_ref` is set the committed artifact is
+    /// published under that image name; otherwise an anonymous image
+    /// name is synthesised at commit time.
+    pub fn with_registry(
+        name: impl Into<String>,
+        registry: &'reg LocalRegistry,
+        requested_ref: Option<ImageRef>,
+    ) -> Self {
+        Experiment {
+            registry,
+            state: Mutex::new(UnsealedExperimentState {
+                name: name.into(),
+                requested_ref,
+                records: Vec::new(),
+                runs: BTreeMap::new(),
+                next_run_id: 0,
+            }),
+        }
+    }
+
+    /// Start a new [`Run`]. Each run gets a fresh 0-based `run_id`.
+    pub fn run(&self) -> Result<Run<'_, 'reg>> {
+        let mut state = self.lock_state();
+        let run_id = state.next_run_id;
+        state.next_run_id += 1;
+        Ok(Run {
+            experiment: self,
+            run_id,
+            records: Vec::new(),
+            parameters: BTreeMap::new(),
+        })
+    }
+
+    /// Record arbitrary bytes with an explicit OCI media type in the
+    /// experiment space.
+    pub fn log_record(
+        &self,
+        name: &str,
+        media_type: MediaType,
+        bytes: impl AsRef<[u8]>,
+    ) -> Result<()> {
+        self.add_record(name, media_type, bytes.as_ref())
+    }
+
+    /// Record a JSON-serialisable value in the experiment space.
+    pub fn log_json(&self, name: &str, value: impl serde::Serialize) -> Result<()> {
+        let bytes = encode_json(name, &value)?;
+        self.log_record(name, json_media_type(), bytes)
+    }
+
+    /// Record an [`Instance`] in the experiment space.
+    pub fn log_instance(&self, name: &str, instance: &Instance) -> Result<()> {
+        self.log_record(name, media_types::v1_instance(), instance.to_bytes())
+    }
+
+    /// Record a [`Solution`] in the experiment space.
+    pub fn log_solution(&self, name: &str, solution: &Solution) -> Result<()> {
+        self.log_record(name, media_types::v1_solution(), solution.to_bytes())
+    }
+
+    /// Record a [`SampleSet`] in the experiment space.
+    pub fn log_sample_set(&self, name: &str, sample_set: &SampleSet) -> Result<()> {
+        self.log_record(name, media_types::v1_sample_set(), sample_set.to_bytes())
+    }
+
+    fn add_record(&self, name: &str, media_type: MediaType, bytes: &[u8]) -> Result<()> {
+        let record_ref = store_record_ref(
+            self.registry,
+            RecordSpace::Experiment,
+            None,
+            name,
+            media_type,
+            bytes,
+        )?;
+        let mut state = self.lock_state();
+        upsert_record_ref(&mut state.records, record_ref);
+        Ok(())
+    }
+
+    fn push_closed_run(&self, run: RunEntry<'reg>) -> Result<()> {
+        let mut state = self.lock_state();
+        if state.runs.contains_key(&run.run_id) {
+            crate::bail!("Run {} has already been recorded", run.run_id);
+        }
+        state.runs.insert(run.run_id, run);
+        Ok(())
+    }
+
+    fn lock_state(&self) -> MutexGuard<'_, UnsealedExperimentState<'reg>> {
+        match self.state.lock() {
+            Ok(state) => state,
+            Err(poisoned) => {
+                tracing::warn!("Experiment state mutex was poisoned; continuing with inner state");
+                poisoned.into_inner()
+            }
+        }
+    }
+
+    /// Seal the session into an immutable OMMX Artifact and publish it
+    /// to the Local Registry. Consumes the unsealed session, so further
+    /// mutation is impossible in Rust. A live [`Run`] borrows this
+    /// experiment, so Rust also prevents committing while a run handle
+    /// is still in scope.
+    pub fn commit(self) -> Result<SealedExperiment<'reg>> {
+        let state = match self.state.into_inner() {
+            Ok(state) => state,
+            Err(poisoned) => {
+                tracing::warn!("Experiment state mutex was poisoned; committing inner state");
+                poisoned.into_inner()
+            }
+        };
+        let artifact = state.commit(self.registry)?;
+        Ok(SealedExperiment { artifact })
+    }
+}
+
+impl<'reg> SealedExperiment<'reg> {
+    /// The committed artifact handle.
+    pub fn artifact(&self) -> LocalArtifact<'reg> {
+        self.artifact.clone()
+    }
+
+    /// Consume the sealed experiment and return its artifact handle.
+    pub fn into_artifact(self) -> LocalArtifact<'reg> {
+        self.artifact
+    }
 }

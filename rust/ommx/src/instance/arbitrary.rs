@@ -206,10 +206,10 @@ impl Arbitrary for Instance {
                     let mut unique_ids: FnvHashSet<VariableID> =
                         objective.required_ids().into_iter().collect();
                     for c in constraints.values() {
-                        unique_ids.extend(c.function().required_ids().into_iter());
+                        unique_ids.extend(c.function().required_ids());
                     }
                     for nf in named_functions.values() {
-                        unique_ids.extend(nf.function.required_ids().into_iter());
+                        unique_ids.extend(nf.function.required_ids());
                     }
                     unique_ids.extend(irrelevant_candidates.into_iter().map(VariableID::from));
                     (
