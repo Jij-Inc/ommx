@@ -1,6 +1,6 @@
 //! Run parameter values and committed run-parameter table serialization.
 
-use super::run::RunEntry;
+use super::RunEntry;
 use anyhow::Result;
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -75,12 +75,12 @@ impl ParameterValue {
 }
 
 #[derive(Serialize)]
-pub(super) struct RunParameterTable {
+pub struct RunParameterTable {
     columns: BTreeMap<String, RunParameterColumn>,
 }
 
 impl RunParameterTable {
-    pub(super) fn from_runs<'reg>(runs: &[RunEntry<'reg>]) -> Result<Self> {
+    pub fn from_runs<'reg>(runs: &[RunEntry<'reg>]) -> Result<Self> {
         let mut columns = BTreeMap::new();
         for run in runs {
             for (name, value) in &run.parameters {

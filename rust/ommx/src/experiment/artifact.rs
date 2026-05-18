@@ -21,7 +21,7 @@ impl<'reg> UnsealedExperimentState<'reg> {
     /// Consume the unsealed experiment state and commit it as one
     /// immutable artifact. This is the state-level counterpart of the
     /// public `Experiment::commit(self)` lifecycle operation.
-    pub(super) fn commit(self, registry: &'reg LocalRegistry) -> Result<LocalArtifact<'reg>> {
+    pub fn commit(self, registry: &'reg LocalRegistry) -> Result<LocalArtifact<'reg>> {
         let image_name = self.image_name(registry)?;
         let config_descriptor = registry.store_empty_config()?;
         let layers = ExperimentArtifactLayers::from_state(&self, registry)?.into_descriptors();

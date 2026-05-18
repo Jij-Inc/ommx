@@ -8,7 +8,7 @@ use std::collections::HashMap;
 
 /// The storage space a [`RecordRef`] belongs to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum RecordSpace {
+pub enum RecordSpace {
     /// Shared by the whole experiment (dataset, source problem, ...).
     Experiment,
     /// Owned by a single run.
@@ -30,22 +30,19 @@ const JSON_MEDIA_TYPE: &str = "application/json";
 /// A named reference to a payload that has already been written to the
 /// BlobStore.
 #[derive(Debug, Clone)]
-pub(super) struct RecordRef<'reg> {
-    pub(super) name: String,
+pub struct RecordRef<'reg> {
+    pub name: String,
     /// OCI layer descriptor whose payload bytes are present in the
     /// Local Registry BlobStore. Carries the payload media type and
     /// the experiment / record annotations.
-    pub(super) descriptor: StoredDescriptor<'reg>,
+    pub descriptor: StoredDescriptor<'reg>,
 }
 
 /// Build-phase upsert: a record with the same `(media_type, name)`
 /// within a space replaces the previous one. Within one `Vec` the
 /// space and `run_id` are already fixed, so `(media_type, name)` is
 /// the remaining key.
-pub(super) fn upsert_record_ref<'reg>(
-    records: &mut Vec<RecordRef<'reg>>,
-    record_ref: RecordRef<'reg>,
-) {
+pub fn upsert_record_ref<'reg>(records: &mut Vec<RecordRef<'reg>>, record_ref: RecordRef<'reg>) {
     if let Some(existing) = records.iter_mut().find(|r| {
         r.descriptor.media_type() == record_ref.descriptor.media_type() && r.name == record_ref.name
     }) {
@@ -57,7 +54,7 @@ pub(super) fn upsert_record_ref<'reg>(
 
 /// Write `bytes` to the registry's BlobStore and build the in-memory
 /// [`RecordRef`].
-pub(super) fn store_record_ref<'reg>(
+pub fn store_record_ref<'reg>(
     registry: &'reg LocalRegistry,
     space: RecordSpace,
     run_id: Option<u64>,
@@ -79,11 +76,11 @@ pub(super) fn store_record_ref<'reg>(
     })
 }
 
-pub(super) fn json_media_type() -> MediaType {
+pub fn json_media_type() -> MediaType {
     MediaType::Other(JSON_MEDIA_TYPE.to_string())
 }
 
-pub(super) fn encode_json(name: &str, value: impl serde::Serialize) -> Result<Vec<u8>> {
+pub fn encode_json(name: &str, value: impl serde::Serialize) -> Result<Vec<u8>> {
     serde_json::to_vec(&value)
         .map_err(|e| crate::error!("Failed to encode JSON record `{name}`: {e}"))
 }

@@ -52,7 +52,6 @@ mod run;
 mod tests;
 
 pub use parameter::ParameterValue;
-pub use run::Run;
 
 use crate::artifact::local_registry::{LocalRegistry, TempLocalRegistry};
 use crate::artifact::{media_types, ImageRef, LocalArtifact};
@@ -62,7 +61,7 @@ use oci_spec::image::MediaType;
 use record::{
     encode_json, json_media_type, store_record_ref, upsert_record_ref, RecordRef, RecordSpace,
 };
-use run::RunEntry;
+use std::collections::BTreeMap;
 use std::sync::{Mutex, MutexGuard};
 
 // --- Artifact mapping constants ---------------------------------------------
@@ -97,6 +96,37 @@ pub struct Experiment<'reg> {
 #[derive(Debug, Clone)]
 pub struct SealedExperiment<'reg> {
     artifact: LocalArtifact<'reg>,
+}
+
+/// A handle to a single run within an [`Experiment`].
+///
+/// A `Run` borrows its parent experiment immutably for `'exp`. It
+/// writes payload bytes to the registry CAS immediately, keeps
+/// run-scoped records / parameters locally, and writes back to the
+/// parent experiment only when [`Self::finish`] consumes the handle.
+/// This lets multiple runs be open at once while Rust prevents
+/// committing the parent experiment before live run handles are closed
+/// or dropped.
+#[derive(Debug)]
+pub struct Run<'exp, 'reg> {
+    experiment: &'exp Experiment<'reg>,
+    run_id: u64,
+    records: Vec<RecordRef<'reg>>,
+    parameters: BTreeMap<String, ParameterValue>,
+}
+
+/// A closed logical Run recorded in an unsealed Experiment.
+///
+/// `Run<'exp>` is the live handle: it borrows the parent Experiment and
+/// accepts run-scoped records and parameters. `RunEntry` is the row
+/// stored by the Experiment after `Run::finish` consumes that handle.
+/// Commit later projects it to aggregate parameter and record index
+/// layers.
+#[derive(Debug)]
+struct RunEntry<'reg> {
+    run_id: u64,
+    records: Vec<RecordRef<'reg>>,
+    parameters: BTreeMap<String, ParameterValue>,
 }
 
 /// Mutable experiment state before the root manifest is sealed. A live
@@ -166,7 +196,12 @@ impl<'reg> Experiment<'reg> {
         let mut state = self.lock_state();
         let run_id = state.next_run_id;
         state.next_run_id += 1;
-        Ok(Run::new(self, run_id))
+        Ok(Run {
+            experiment: self,
+            run_id,
+            records: Vec::new(),
+            parameters: BTreeMap::new(),
+        })
     }
 
     /// Record arbitrary bytes with an explicit OCI media type in the

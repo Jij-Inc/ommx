@@ -1,57 +1,15 @@
 //! Experiment / Run handles and run lifecycle.
 
-use super::parameter::ParameterValue;
 use super::record::{
-    encode_json, json_media_type, store_record_ref, upsert_record_ref, RecordRef, RecordSpace,
+    encode_json, json_media_type, store_record_ref, upsert_record_ref, RecordSpace,
 };
-use super::Experiment;
+use super::{ParameterValue, Run, RunEntry};
 use crate::artifact::media_types;
 use crate::{Instance, SampleSet, Solution};
 use anyhow::Result;
 use oci_spec::image::MediaType;
-use std::collections::BTreeMap;
-
-/// A handle to a single run within an [`Experiment`].
-///
-/// A `Run` borrows its parent experiment immutably for `'exp`. It
-/// writes payload bytes to the registry CAS immediately, keeps
-/// run-scoped records / parameters locally, and writes back to the
-/// parent experiment only when [`Self::finish`] or [`Self::fail`]
-/// consumes the handle. This lets multiple runs be open at once while
-/// Rust prevents committing the parent experiment before live run
-/// handles are closed or dropped.
-#[derive(Debug)]
-pub struct Run<'exp, 'reg> {
-    experiment: &'exp Experiment<'reg>,
-    run_id: u64,
-    records: Vec<RecordRef<'reg>>,
-    parameters: BTreeMap<String, ParameterValue>,
-}
-
-/// A closed logical Run recorded in an unsealed Experiment.
-///
-/// `Run<'exp>` is the live handle: it borrows the parent Experiment and
-/// accepts run-scoped records and parameters. `RunEntry` is the row
-/// stored by the Experiment after `Run::finish` or `Run::fail` consumes
-/// that handle. Commit later projects it to aggregate parameter /
-/// attribute tables and record index layers.
-#[derive(Debug)]
-pub(super) struct RunEntry<'reg> {
-    pub(super) run_id: u64,
-    pub(super) records: Vec<RecordRef<'reg>>,
-    pub(super) parameters: BTreeMap<String, ParameterValue>,
-}
 
 impl<'exp, 'reg> Run<'exp, 'reg> {
-    pub(super) fn new(experiment: &'exp Experiment<'reg>, run_id: u64) -> Self {
-        Self {
-            experiment,
-            run_id,
-            records: Vec::new(),
-            parameters: BTreeMap::new(),
-        }
-    }
-
     /// This run's 0-based id within the experiment.
     pub fn run_id(&self) -> u64 {
         self.run_id

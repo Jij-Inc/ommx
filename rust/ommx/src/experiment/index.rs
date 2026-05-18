@@ -4,7 +4,7 @@ use super::{RecordRef, UnsealedExperimentState, EXPERIMENT_SCHEMA_V1};
 use serde::Serialize;
 
 #[derive(Serialize)]
-pub(super) struct ExperimentIndex {
+pub struct ExperimentIndex {
     schema: &'static str,
     name: String,
     experiment_records: Vec<RecordIndexEntry>,
@@ -12,7 +12,7 @@ pub(super) struct ExperimentIndex {
 }
 
 impl ExperimentIndex {
-    pub(super) fn from_state(state: &UnsealedExperimentState<'_>) -> Self {
+    pub fn from_state(state: &UnsealedExperimentState<'_>) -> Self {
         Self {
             schema: EXPERIMENT_SCHEMA_V1,
             name: state.name.clone(),
