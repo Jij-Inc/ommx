@@ -12,8 +12,8 @@ use crate::artifact::local_registry::{
 };
 use crate::artifact::{media_types, sha256_digest, ImageRef, LocalArtifact};
 use anyhow::Result;
-use oci_spec::image::{DescriptorBuilder, Digest, MediaType};
-use serde_json::json;
+use oci_spec::image::{Digest, MediaType};
+use serde::Serialize;
 use std::collections::{BTreeMap, HashMap};
 use std::str::FromStr;
 
@@ -59,61 +59,8 @@ impl<'reg> UnsealedExperimentState<'reg> {
         self,
         registry: &'reg LocalRegistry,
     ) -> Result<UnsealedArtifact<'reg>> {
-        let mut layers = Vec::new();
-
-        // Record layers: experiment space first, then each run's
-        // space. `layers[]` keeps one descriptor per record (digests
-        // may repeat across annotation-distinct layers). The payload
-        // bytes were already written when each record was logged.
-        let run_records = self.runs.iter().flat_map(|run| run.records.iter());
-        for record in self.records.iter().chain(run_records) {
-            layers.push(record.descriptor.clone());
-        }
-
-        // Aggregate layers, materialised at commit time.
-        let run_parameters = serde_json::to_vec(&run_parameters_json(&self)?)
-            .map_err(|e| crate::error!("Failed to encode run parameters JSON: {e}"))?;
-        let descriptor = store_aggregate_layer(
-            registry,
-            RUN_PARAMETERS_MEDIA_TYPE,
-            LAYER_KIND_RUN_PARAMETERS,
-            &run_parameters,
-        )?;
-        layers.push(descriptor);
-
-        let run_attributes = serde_json::to_vec(&run_attributes_json(&self))
-            .map_err(|e| crate::error!("Failed to encode run attributes JSON: {e}"))?;
-        let descriptor = store_aggregate_layer(
-            registry,
-            RUN_ATTRIBUTES_MEDIA_TYPE,
-            LAYER_KIND_RUN_ATTRIBUTES,
-            &run_attributes,
-        )?;
-        layers.push(descriptor);
-
-        let index = serde_json::to_vec(&experiment_index_json(&self))
-            .map_err(|e| crate::error!("Failed to encode experiment index JSON: {e}"))?;
-        let descriptor = store_aggregate_layer(
-            registry,
-            EXPERIMENT_INDEX_MEDIA_TYPE,
-            LAYER_KIND_INDEX,
-            &index,
-        )?;
-        layers.push(descriptor);
-
-        // OCI 1.1 empty config blob. Built without an `annotations`
-        // field to match `ArtifactDraft`'s manifest shape.
-        let empty_config_bytes = media_types::OCI_EMPTY_CONFIG_BYTES.to_vec();
-        let config_descriptor = DescriptorBuilder::default()
-            .media_type(MediaType::EmptyJSON)
-            .digest(
-                Digest::from_str(&sha256_digest(&empty_config_bytes))
-                    .map_err(|e| crate::error!("Failed to parse empty config digest: {e}"))?,
-            )
-            .size(empty_config_bytes.len() as u64)
-            .build()
-            .map_err(|e| crate::error!("Failed to build empty config descriptor: {e}"))?;
-        let config_descriptor = registry.store_blob(config_descriptor, &empty_config_bytes)?;
+        let config_descriptor = registry.store_empty_config()?;
+        let layers = self.materialize_layers(registry)?;
 
         Ok(UnsealedArtifact::new(
             MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
@@ -124,12 +71,73 @@ impl<'reg> UnsealedExperimentState<'reg> {
         ))
     }
 
+    /// Collect already-stored record descriptors and materialize the
+    /// commit-time aggregate JSON layers.
+    fn materialize_layers(
+        &self,
+        registry: &'reg LocalRegistry,
+    ) -> Result<Vec<StoredDescriptor<'reg>>> {
+        let mut layers = self.record_layers();
+        layers.extend(self.aggregate_layers(registry)?);
+        Ok(layers)
+    }
+
+    /// Record layers: experiment space first, then each run's space.
+    /// `layers[]` keeps one descriptor per record (digests may repeat
+    /// across annotation-distinct layers). The payload bytes were
+    /// already written when each record was logged.
+    fn record_layers(&self) -> Vec<StoredDescriptor<'reg>> {
+        let run_records = self.runs.iter().flat_map(|run| run.records.iter());
+        self.records
+            .iter()
+            .chain(run_records)
+            .map(|record| record.descriptor.clone())
+            .collect()
+    }
+
+    fn aggregate_layers(
+        &self,
+        registry: &'reg LocalRegistry,
+    ) -> Result<Vec<StoredDescriptor<'reg>>> {
+        Ok(vec![
+            store_aggregate_json_layer(
+                registry,
+                RUN_PARAMETERS_MEDIA_TYPE,
+                LAYER_KIND_RUN_PARAMETERS,
+                &run_parameters_json(self)?,
+            )?,
+            store_aggregate_json_layer(
+                registry,
+                RUN_ATTRIBUTES_MEDIA_TYPE,
+                LAYER_KIND_RUN_ATTRIBUTES,
+                &run_attributes_json(self),
+            )?,
+            store_aggregate_json_layer(
+                registry,
+                EXPERIMENT_INDEX_MEDIA_TYPE,
+                LAYER_KIND_INDEX,
+                &experiment_index_json(self),
+            )?,
+        ])
+    }
+
     fn image_name(&self, registry: &LocalRegistry) -> Result<ImageRef> {
         match &self.requested_ref {
             Some(image_ref) => Ok(image_ref.clone()),
             None => registry.synthesize_anonymous_image_name(),
         }
     }
+}
+
+fn store_aggregate_json_layer<'reg>(
+    registry: &'reg LocalRegistry,
+    media_type: &str,
+    layer_kind: &str,
+    value: &impl Serialize,
+) -> Result<StoredDescriptor<'reg>> {
+    let bytes = serde_json::to_vec(value)
+        .map_err(|e| crate::error!("Failed to encode {layer_kind} JSON: {e}"))?;
+    store_aggregate_layer(registry, media_type, layer_kind, &bytes)
 }
 
 /// Store a commit-time aggregate JSON layer and return its
@@ -171,25 +179,37 @@ fn manifest_annotations(state: &UnsealedExperimentState<'_>) -> HashMap<String, 
     ])
 }
 
-fn run_attributes_json(state: &UnsealedExperimentState<'_>) -> serde_json::Value {
-    json!({
-        "runs": state
+#[derive(Serialize)]
+struct RunAttributes {
+    runs: Vec<RunAttributeRow>,
+}
+
+#[derive(Serialize)]
+struct RunAttributeRow {
+    run_id: u64,
+    status: &'static str,
+    elapsed_seconds: f64,
+}
+
+fn run_attributes_json(state: &UnsealedExperimentState<'_>) -> RunAttributes {
+    RunAttributes {
+        runs: state
             .runs
             .iter()
-            .map(|run| json!({
-                "run_id": run.run_id,
-                "status": run.status.as_str(),
-                "elapsed_seconds": run.elapsed_secs,
-            }))
-            .collect::<Vec<_>>(),
-    })
+            .map(|run| RunAttributeRow {
+                run_id: run.run_id,
+                status: run.status.as_str(),
+                elapsed_seconds: run.elapsed_secs,
+            })
+            .collect(),
+    }
 }
 
-fn run_parameters_json(state: &UnsealedExperimentState<'_>) -> Result<serde_json::Value> {
-    let table = ParameterTable::from_runs(state)?;
-    Ok(table.to_json())
+fn run_parameters_json(state: &UnsealedExperimentState<'_>) -> Result<ParameterTable> {
+    ParameterTable::from_runs(state)
 }
 
+#[derive(Serialize)]
 struct ParameterTable {
     columns: BTreeMap<String, ParameterColumn>,
 }
@@ -207,22 +227,18 @@ impl ParameterTable {
         }
         Ok(Self { columns })
     }
-
-    fn to_json(&self) -> serde_json::Value {
-        json!({
-            "columns": self
-                .columns
-                .iter()
-                .map(|(name, column)| (name.clone(), column.to_json()))
-                .collect::<serde_json::Map<_, _>>(),
-        })
-    }
 }
 
+#[derive(Serialize)]
+#[serde(tag = "type", content = "values")]
 enum ParameterColumn {
+    #[serde(rename = "bool")]
     Bool(BTreeMap<u64, bool>),
+    #[serde(rename = "int64")]
     Int(BTreeMap<u64, i64>),
+    #[serde(rename = "float64")]
     Float(BTreeMap<u64, f64>),
+    #[serde(rename = "string")]
     String(BTreeMap<u64, String>),
 }
 
@@ -288,27 +304,6 @@ impl ParameterColumn {
             Self::String(_) => "string",
         }
     }
-
-    fn to_json(&self) -> serde_json::Value {
-        match self {
-            Self::Bool(values) => json!({
-                "type": self.type_name(),
-                "values": values,
-            }),
-            Self::Int(values) => json!({
-                "type": self.type_name(),
-                "values": values,
-            }),
-            Self::Float(values) => json!({
-                "type": self.type_name(),
-                "values": values,
-            }),
-            Self::String(values) => json!({
-                "type": self.type_name(),
-                "values": values,
-            }),
-        }
-    }
 }
 
 impl ParameterValue {
@@ -322,32 +317,51 @@ impl ParameterValue {
     }
 }
 
-fn experiment_index_json(state: &UnsealedExperimentState<'_>) -> serde_json::Value {
-    json!({
-        "schema": EXPERIMENT_SCHEMA_V1,
-        "name": state.name,
-        "experiment_records": state
-            .records
-            .iter()
-            .map(record_index_entry)
-            .collect::<Vec<_>>(),
-        "runs": state
-            .runs
-            .iter()
-            .map(|run| json!({
-                "run_id": run.run_id,
-                "parameter_names": run.parameters.keys().collect::<Vec<_>>(),
-                "records": run.records.iter().map(record_index_entry).collect::<Vec<_>>(),
-            }))
-            .collect::<Vec<_>>(),
-    })
+#[derive(Serialize)]
+struct ExperimentIndex {
+    schema: &'static str,
+    name: String,
+    experiment_records: Vec<RecordIndexEntry>,
+    runs: Vec<RunIndexEntry>,
 }
 
-fn record_index_entry(record: &RecordRef<'_>) -> serde_json::Value {
-    json!({
-        "name": record.name,
-        "media_type": record.descriptor.media_type().to_string(),
-        "digest": record.descriptor.digest().to_string(),
-        "size": record.descriptor.size(),
-    })
+#[derive(Serialize)]
+struct RunIndexEntry {
+    run_id: u64,
+    parameter_names: Vec<String>,
+    records: Vec<RecordIndexEntry>,
+}
+
+#[derive(Serialize)]
+struct RecordIndexEntry {
+    name: String,
+    media_type: String,
+    digest: String,
+    size: u64,
+}
+
+fn experiment_index_json(state: &UnsealedExperimentState<'_>) -> ExperimentIndex {
+    ExperimentIndex {
+        schema: EXPERIMENT_SCHEMA_V1,
+        name: state.name.clone(),
+        experiment_records: state.records.iter().map(record_index_entry).collect(),
+        runs: state
+            .runs
+            .iter()
+            .map(|run| RunIndexEntry {
+                run_id: run.run_id,
+                parameter_names: run.parameters.keys().cloned().collect(),
+                records: run.records.iter().map(record_index_entry).collect(),
+            })
+            .collect(),
+    }
+}
+
+fn record_index_entry(record: &RecordRef<'_>) -> RecordIndexEntry {
+    RecordIndexEntry {
+        name: record.name.clone(),
+        media_type: record.descriptor.media_type().to_string(),
+        digest: record.descriptor.digest().to_string(),
+        size: record.descriptor.size(),
+    }
 }
