@@ -1,7 +1,9 @@
 use super::{
     digest::sha256_digest,
     ghcr,
-    local_registry::{LocalRegistry, RefUpdate, StoredDescriptor, UnsealedArtifact},
+    local_registry::{
+        LocalRegistry, RefUpdate, StoredDescriptor, TempLocalRegistry, UnsealedArtifact,
+    },
     media_types::{self, OCI_EMPTY_CONFIG_BYTES},
     ImageRef, InstanceAnnotations, ParametricInstanceAnnotations, SampleSetAnnotations,
     SolutionAnnotations,
@@ -245,6 +247,22 @@ impl ArtifactDraft<'static> {
 }
 
 impl<'reg> ArtifactDraft<'reg> {
+    /// Create a temporary Local Registry, create an artifact draft
+    /// under `image_name`, and run a callback while the registry is
+    /// alive.
+    ///
+    /// This is intended for Rust SDK tests that need to exercise the
+    /// Local Registry-backed artifact path without writing to the
+    /// user's persistent registry.
+    pub fn on_temp_local_registry<T>(
+        image_name: ImageRef,
+        f: impl FnOnce(ArtifactDraft<'_>) -> Result<T>,
+    ) -> Result<T> {
+        let temp = TempLocalRegistry::new()?;
+        let draft = ArtifactDraft::with_registry(&temp.registry, image_name);
+        f(draft)
+    }
+
     pub fn with_registry(registry: &'reg LocalRegistry, image_name: ImageRef) -> Self {
         Self {
             registry,

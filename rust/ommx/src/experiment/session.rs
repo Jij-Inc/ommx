@@ -49,7 +49,9 @@ impl Experiment<'static> {
         let registry = LocalRegistry::shared_default()?;
         Ok(Self::with_registry(name, registry, None))
     }
+}
 
+impl<'reg> Experiment<'reg> {
     /// Create a temporary Local Registry, run an experiment callback
     /// against it, and delete the registry when the callback returns.
     ///
@@ -64,9 +66,6 @@ impl Experiment<'static> {
         let experiment = Experiment::with_registry(name, &temp.registry, None);
         f(experiment)
     }
-}
-
-impl<'reg> Experiment<'reg> {
     /// Start a new experiment session against an explicit Local
     /// Registry. When `requested_ref` is set the committed artifact is
     /// published under that image name; otherwise an anonymous image
