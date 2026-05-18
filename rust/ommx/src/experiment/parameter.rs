@@ -3,7 +3,7 @@
 use super::RunEntry;
 use anyhow::Result;
 use serde::Serialize;
-use std::collections::BTreeMap;
+use std::collections::{btree_map::Values, BTreeMap};
 
 /// A scalar cell value accepted by the run parameter table.
 ///
@@ -80,7 +80,7 @@ pub struct RunParameterTable {
 }
 
 impl RunParameterTable {
-    pub fn from_runs<'reg>(runs: &[RunEntry<'reg>]) -> Result<Self> {
+    pub fn from_runs<'reg>(runs: Values<'_, u64, RunEntry<'reg>>) -> Result<Self> {
         let mut columns = BTreeMap::new();
         for run in runs {
             for (name, value) in &run.parameters {

@@ -19,7 +19,7 @@ impl ExperimentIndex {
             experiment_records: state.records.iter().map(record_index_entry).collect(),
             runs: state
                 .runs
-                .iter()
+                .values()
                 .map(|run| RunIndexEntry {
                     run_id: run.run_id,
                     parameter_names: run.parameters.keys().cloned().collect(),

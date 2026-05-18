@@ -140,7 +140,7 @@ struct UnsealedExperimentState<'reg> {
     requested_ref: Option<ImageRef>,
     /// Experiment-space records.
     records: Vec<RecordRef<'reg>>,
-    runs: Vec<RunEntry<'reg>>,
+    runs: BTreeMap<u64, RunEntry<'reg>>,
     next_run_id: u64,
 }
 
@@ -185,7 +185,7 @@ impl<'reg> Experiment<'reg> {
                 name: name.into(),
                 requested_ref,
                 records: Vec::new(),
-                runs: Vec::new(),
+                runs: BTreeMap::new(),
                 next_run_id: 0,
             }),
         }
@@ -252,14 +252,10 @@ impl<'reg> Experiment<'reg> {
 
     fn push_closed_run(&self, run: RunEntry<'reg>) -> Result<()> {
         let mut state = self.lock_state();
-        if state
-            .runs
-            .iter()
-            .any(|existing| existing.run_id == run.run_id)
-        {
+        if state.runs.contains_key(&run.run_id) {
             crate::bail!("Run {} has already been recorded", run.run_id);
         }
-        state.runs.push(run);
+        state.runs.insert(run.run_id, run);
         Ok(())
     }
 

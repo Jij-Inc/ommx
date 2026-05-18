@@ -87,7 +87,7 @@ impl<'reg> ExperimentArtifactLayers<'reg> {
     /// The payload bytes were already written when each record was
     /// logged.
     fn record_descriptors(state: &UnsealedExperimentState<'reg>) -> Vec<StoredDescriptor<'reg>> {
-        let run_records = state.runs.iter().flat_map(|run| run.records.iter());
+        let run_records = state.runs.values().flat_map(|run| run.records.iter());
         state
             .records
             .iter()
@@ -105,7 +105,7 @@ impl<'reg> ExperimentArtifactLayers<'reg> {
                 registry,
                 RUN_PARAMETERS_MEDIA_TYPE,
                 LAYER_KIND_RUN_PARAMETERS,
-                &RunParameterTable::from_runs(&state.runs)?,
+                &RunParameterTable::from_runs(state.runs.values())?,
             )?,
             store_aggregate_json_layer(
                 registry,

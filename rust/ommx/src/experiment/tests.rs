@@ -58,8 +58,8 @@ fn run_lifecycle_assigns_ids_and_records_closed_runs() {
         }
 
         with_unsealed_state(&experiment, |state| {
-            assert_eq!(state.runs[0].run_id, 0);
-            assert_eq!(state.runs[1].run_id, 1);
+            assert_eq!(state.runs.get(&0).unwrap().run_id, 0);
+            assert_eq!(state.runs.get(&1).unwrap().run_id, 1);
         });
         Ok(())
     })
@@ -90,10 +90,24 @@ fn runs_can_be_open_concurrently_and_write_back_on_close() {
 
         with_unsealed_state(&experiment, |state| {
             assert_eq!(state.runs.len(), 2);
-            let mut run_ids = state.runs.iter().map(|run| run.run_id).collect::<Vec<_>>();
-            run_ids.sort();
+            let run_ids = state.runs.keys().copied().collect::<Vec<_>>();
             assert_eq!(run_ids, vec![0, 1]);
         });
+
+        let artifact = experiment.commit().unwrap().into_artifact();
+        let layers = artifact.layers().unwrap();
+        let index = find_layer(&layers, ANN_LAYER, LAYER_KIND_INDEX);
+        let bytes = artifact.get_blob(index.digest()).unwrap();
+        let index: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(
+            index["runs"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|run| run["run_id"].as_u64().unwrap())
+                .collect::<Vec<_>>(),
+            vec![0, 1]
+        );
         Ok(())
     })
     .unwrap();
@@ -111,8 +125,9 @@ fn log_writes_blob_to_blobstore_immediately() {
         }
 
         let digest = with_unsealed_state(&experiment, |state| {
-            assert_eq!(state.runs[0].records.len(), 1);
-            state.runs[0].records[0].descriptor.digest().clone()
+            let run = state.runs.get(&0).unwrap();
+            assert_eq!(run.records.len(), 1);
+            run.records[0].descriptor.digest().clone()
         });
         assert!(experiment.registry.blobs().exists(&digest).unwrap());
         Ok(())
