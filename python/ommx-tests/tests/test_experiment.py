@@ -74,3 +74,47 @@ def test_load_experiment_and_view_run_parameters(isolated_local_registry):
     assert bool(df.loc[1, "presolve"]) is True
     assert df.loc[0, "time_limit"] == 20.0
     assert pd.isna(df.loc[1, "time_limit"])
+
+
+def test_create_experiment_run_records_and_commit(isolated_local_registry):
+    experiment = Experiment.new()
+    assert ".ommx.local/experiment:" in experiment.image_name
+
+    experiment.log_json("dataset", {"name": "miplib2017"})
+    experiment.log_record("raw-config", "application/octet-stream", b"abc")
+
+    run = experiment.run()
+    assert run.run_id == 0
+    run.log_parameter("solver", "scip")
+    run.log_parameter("time_limit", 20.0)
+    run.log_json("candidate", {"formulation": "a"})
+    run.log_record("solver-log", "text/plain", b"solved")
+    run.finish()
+
+    artifact = experiment.commit()
+    image_name = artifact.image_name
+    assert image_name is not None
+
+    loaded = Experiment.load(image_name)
+    assert {(record.space, record.run_id, record.name) for record in loaded.records} == {
+        ("experiment", None, "dataset"),
+        ("experiment", None, "raw-config"),
+        ("run", 0, "candidate"),
+        ("run", 0, "solver-log"),
+    }
+
+    df = loaded.run_parameters_df()
+    assert list(df.index) == [0]
+    assert df.loc[0, "solver"] == "scip"
+    assert df.loc[0, "time_limit"] == 20.0
+
+
+def test_commit_rejects_open_run(isolated_local_registry):
+    experiment = Experiment.new()
+    run = experiment.run()
+
+    with pytest.raises(RuntimeError, match="Run handle"):
+        experiment.commit()
+
+    run.finish()
+    experiment.commit()

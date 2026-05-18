@@ -33,7 +33,7 @@ use crate::PyDescriptor;
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust", name = "Artifact")]
-pub struct PyArtifact(ommx::artifact::LocalArtifact<'static>);
+pub struct PyArtifact(pub(crate) ommx::artifact::LocalArtifact<'static>);
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]

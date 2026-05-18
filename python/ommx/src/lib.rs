@@ -131,6 +131,7 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<PyArtifactDraft>()?;
     m.add_class::<PyExperiment>()?;
     m.add_class::<PyExperimentRecord>()?;
+    m.add_class::<PyRun>()?;
     m.add_function(wrap_pyfunction!(set_local_registry_root, m)?)?;
     m.add_function(wrap_pyfunction!(get_local_registry_root, m)?)?;
     m.add_function(wrap_pyfunction!(get_images, m)?)?;
@@ -276,7 +277,8 @@ pyo3_stub_gen::reexport_module_members!("ommx.artifact" from "ommx._ommx_rust";
 
 pyo3_stub_gen::reexport_module_members!("ommx.experiment" from "ommx._ommx_rust";
     "Experiment",
-    "ExperimentRecord"
+    "ExperimentRecord",
+    "Run"
 );
 
 pyo3_stub_gen::define_stub_info_gatherer!(stub_info);

@@ -56,6 +56,7 @@ __all__ = [
     "RemovedOneHotConstraint",
     "RemovedSos1Constraint",
     "Rng",
+    "Run",
     "SampleSet",
     "SampledConstraint",
     "SampledDecisionVariable",
@@ -1655,9 +1656,48 @@ class Experiment:
     @property
     def records(self) -> builtins.list[ExperimentRecord]: ...
     @staticmethod
+    def new(image_name: typing.Optional[builtins.str] = None) -> Experiment:
+        r"""
+        Start a new Experiment in the local registry.
+
+        If `image_name` is omitted, OMMX generates an anonymous local
+        Experiment name.
+        """
+    @staticmethod
     def load(image_name: builtins.str) -> Experiment:
         r"""
         Load a committed Experiment Artifact from the local registry.
+        """
+    def run(self) -> Run:
+        r"""
+        Start a new Run in this unsealed Experiment.
+        """
+    def log_record(
+        self, name: builtins.str, media_type: builtins.str, bytes: bytes
+    ) -> None:
+        r"""
+        Record arbitrary bytes with an explicit OCI media type in the
+        experiment space.
+        """
+    def log_json(self, name: builtins.str, value: typing.Any) -> None:
+        r"""
+        Record a JSON-serialisable value in the experiment space.
+        """
+    def log_instance(self, name: builtins.str, instance: Instance) -> None:
+        r"""
+        Record an Instance in the experiment space.
+        """
+    def log_solution(self, name: builtins.str, solution: Solution) -> None:
+        r"""
+        Record a Solution in the experiment space.
+        """
+    def log_sample_set(self, name: builtins.str, sample_set: SampleSet) -> None:
+        r"""
+        Record a SampleSet in the experiment space.
+        """
+    def commit(self) -> Artifact:
+        r"""
+        Commit this unsealed Experiment into the local registry.
         """
     def run_parameters_df(self) -> pandas.DataFrame:
         r"""
@@ -4805,6 +4845,44 @@ class Rng:
         r"""
         Create a new random number generator with a deterministic seed.
         """
+
+@typing.final
+class Run:
+    @property
+    def run_id(self) -> builtins.int: ...
+    def log_parameter(
+        self, name: builtins.str, value: bool | int | float | str
+    ) -> None:
+        r"""
+        Record a scalar parameter for this run.
+        """
+    def log_record(
+        self, name: builtins.str, media_type: builtins.str, bytes: bytes
+    ) -> None:
+        r"""
+        Record arbitrary bytes with an explicit OCI media type in this run.
+        """
+    def log_json(self, name: builtins.str, value: typing.Any) -> None:
+        r"""
+        Record a JSON-serialisable value in this run.
+        """
+    def log_instance(self, name: builtins.str, instance: Instance) -> None:
+        r"""
+        Record an Instance in this run.
+        """
+    def log_solution(self, name: builtins.str, solution: Solution) -> None:
+        r"""
+        Record a Solution in this run.
+        """
+    def log_sample_set(self, name: builtins.str, sample_set: SampleSet) -> None:
+        r"""
+        Record a SampleSet in this run.
+        """
+    def finish(self) -> None:
+        r"""
+        Finish this run and append it to the parent Experiment.
+        """
+    def __repr__(self) -> builtins.str: ...
 
 @typing.final
 class SampleSet:

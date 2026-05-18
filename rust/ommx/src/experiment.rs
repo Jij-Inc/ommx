@@ -217,6 +217,12 @@ impl<'reg> Experiment<'reg> {
         })
     }
 
+    /// Concrete Local Registry image name this Experiment will publish
+    /// to when committed.
+    pub fn image_name(&self) -> ImageRef {
+        self.lock_state().image_name.clone()
+    }
+
     /// Start a new [`Run`]. Each run gets a fresh 0-based `run_id`.
     pub fn run(&self) -> Result<Run<'_, 'reg>> {
         let mut state = self.lock_state();
