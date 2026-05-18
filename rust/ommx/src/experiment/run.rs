@@ -1,34 +1,36 @@
-//! The public `Experiment` / `Run` handles and their `log_*` API.
+//! Experiment / Run handles and run lifecycle.
 
-use super::model::{
-    ParameterValue, RecordRef, RunEntry, RunStatus, Space, UnsealedExperimentState,
-};
-use super::{build_descriptor, ANN_RECORD_NAME, ANN_RUN_ID, ANN_SPACE};
+use super::parameter::ParameterValue;
+use super::record::{store_record_ref, upsert_record_ref, RecordRef, Space};
+use super::{Experiment, SealedExperiment, UnsealedExperimentState};
 use crate::artifact::local_registry::{LocalRegistry, TempLocalRegistry};
-use crate::artifact::{media_types, sha256_digest, ImageRef, LocalArtifact};
+use crate::artifact::{media_types, ImageRef, LocalArtifact};
 use crate::{Instance, SampleSet, Solution};
 use anyhow::Result;
 use oci_spec::image::MediaType;
-use std::collections::{BTreeMap, HashMap};
-use std::str::FromStr;
+use std::collections::BTreeMap;
 use std::sync::{Mutex, MutexGuard};
 use std::time::Instant;
 
 /// OCI layer media type for JSON record payloads.
 const JSON_MEDIA_TYPE: &str = "application/json";
 
-/// A mutable, unsealed experiment session. See the [module documentation](super).
-#[derive(Debug)]
-pub struct Experiment<'reg> {
-    pub(super) registry: &'reg LocalRegistry,
-    pub(super) state: Mutex<UnsealedExperimentState<'reg>>,
+/// Lifecycle status of a run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum RunStatus {
+    /// The run finished normally.
+    Finished,
+    /// The run ended via a failure.
+    Failed,
 }
 
-/// A sealed experiment session whose root artifact manifest has been
-/// written and published.
-#[derive(Debug, Clone)]
-pub struct SealedExperiment<'reg> {
-    artifact: LocalArtifact<'reg>,
+impl RunStatus {
+    pub(super) fn as_str(self) -> &'static str {
+        match self {
+            RunStatus::Finished => "finished",
+            RunStatus::Failed => "failed",
+        }
+    }
 }
 
 /// A handle to a single run within an [`Experiment`].
@@ -47,6 +49,22 @@ pub struct Run<'exp, 'reg> {
     records: Vec<RecordRef<'reg>>,
     parameters: BTreeMap<String, ParameterValue>,
     started_at: Instant,
+}
+
+/// A closed logical Run recorded in an unsealed Experiment.
+///
+/// `Run<'exp>` is the live handle: it borrows the parent Experiment and
+/// accepts run-scoped records and parameters. `RunEntry` is the row
+/// stored by the Experiment after `Run::finish` or `Run::fail` consumes
+/// that handle. Commit later projects it to aggregate parameter /
+/// attribute tables and record index layers.
+#[derive(Debug)]
+pub(super) struct RunEntry<'reg> {
+    pub(super) run_id: u64,
+    pub(super) records: Vec<RecordRef<'reg>>,
+    pub(super) parameters: BTreeMap<String, ParameterValue>,
+    pub(super) status: RunStatus,
+    pub(super) elapsed_secs: f64,
 }
 
 impl Experiment<'static> {
@@ -317,20 +335,6 @@ fn validate_parameter_value(name: &str, value: &ParameterValue) -> Result<()> {
     }
 }
 
-/// Build-phase upsert: a record with the same `(media_type, name)`
-/// within a space replaces the previous one. Within one `Vec` the space
-/// and `run_id` are already fixed, so `(media_type, name)` is the
-/// remaining key.
-fn upsert_record_ref<'reg>(records: &mut Vec<RecordRef<'reg>>, record_ref: RecordRef<'reg>) {
-    if let Some(existing) = records.iter_mut().find(|r| {
-        r.descriptor.media_type() == record_ref.descriptor.media_type() && r.name == record_ref.name
-    }) {
-        *existing = record_ref;
-    } else {
-        records.push(record_ref);
-    }
-}
-
 fn json_media_type() -> MediaType {
     MediaType::Other(JSON_MEDIA_TYPE.to_string())
 }
@@ -338,34 +342,4 @@ fn json_media_type() -> MediaType {
 fn encode_json(name: &str, value: impl serde::Serialize) -> Result<Vec<u8>> {
     serde_json::to_vec(&value)
         .map_err(|e| crate::error!("Failed to encode JSON record `{name}`: {e}"))
-}
-
-/// Write `bytes` to the registry's BlobStore and build the in-memory
-/// [`RecordRef`]: an OCI layer descriptor carrying the experiment /
-/// record annotations, plus the matching descriptor for commit-time
-/// publication.
-fn store_record_ref<'reg>(
-    registry: &'reg LocalRegistry,
-    space: Space,
-    run_id: Option<u64>,
-    name: &str,
-    media_type: MediaType,
-    bytes: &[u8],
-) -> Result<RecordRef<'reg>> {
-    let digest = sha256_digest(bytes);
-    let digest = oci_spec::image::Digest::from_str(&digest)
-        .map_err(|e| crate::error!("Failed to parse record blob digest: {e}"))?;
-    let mut annotations = HashMap::new();
-    annotations.insert(ANN_SPACE.to_string(), space.as_str().to_string());
-    if let Some(run_id) = run_id {
-        annotations.insert(ANN_RUN_ID.to_string(), run_id.to_string());
-    }
-    annotations.insert(ANN_RECORD_NAME.to_string(), name.to_string());
-
-    let descriptor = build_descriptor(media_type, &digest, bytes.len() as u64, annotations)?;
-    let descriptor = registry.store_blob(descriptor, bytes)?;
-    Ok(RecordRef {
-        name: name.to_string(),
-        descriptor,
-    })
 }

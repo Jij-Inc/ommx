@@ -36,24 +36,29 @@
 //! let artifact = exp.commit()?.into_artifact();
 //! ```
 //!
-//! The module is split into three concerns: `model` holds the
-//! in-memory state types, `session` the public `Experiment` / `Run`
-//! handles and their `log_*` API, and `commit` the mapping onto an
-//! OMMX Artifact.
+//! The module is split by domain terms: `run` contains the `Run`
+//! lifecycle and run-scoped `log_*` API, `record` contains Record
+//! references, `parameter` contains run parameter scalar values and
+//! table aggregation, and `commit` maps the unsealed experiment state
+//! onto an OMMX Artifact.
 
 mod commit;
-mod model;
-mod session;
+mod parameter;
+mod record;
+mod run;
 
 #[cfg(test)]
 mod tests;
 
-pub use model::ParameterValue;
-pub use session::{Experiment, Run, SealedExperiment};
+pub use parameter::ParameterValue;
+pub use run::Run;
 
-use anyhow::Result;
-use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, MediaType};
-use std::collections::HashMap;
+use crate::artifact::local_registry::LocalRegistry;
+use crate::artifact::ImageRef;
+use crate::artifact::LocalArtifact;
+use record::RecordRef;
+use run::RunEntry;
+use std::sync::Mutex;
 
 // --- Artifact mapping constants ---------------------------------------------
 
@@ -77,20 +82,31 @@ const LAYER_KIND_INDEX: &str = "index";
 const LAYER_KIND_RUN_PARAMETERS: &str = "run-parameters";
 const LAYER_KIND_RUN_ATTRIBUTES: &str = "run-attributes";
 
-/// Build an OCI layer descriptor from a CAS-written blob plus the
-/// experiment / record annotations. Shared by record staging (in
-/// `session`) and the commit-time aggregate layers (in `commit`).
-fn build_descriptor(
-    media_type: MediaType,
-    digest: &Digest,
-    size: u64,
-    annotations: HashMap<String, String>,
-) -> Result<Descriptor> {
-    DescriptorBuilder::default()
-        .media_type(media_type)
-        .digest(digest.clone())
-        .size(size)
-        .annotations(annotations)
-        .build()
-        .map_err(|e| crate::error!("Failed to build OCI descriptor: {e}"))
+/// A mutable, unsealed experiment session. See the [module documentation](self).
+#[derive(Debug)]
+pub struct Experiment<'reg> {
+    registry: &'reg LocalRegistry,
+    state: Mutex<UnsealedExperimentState<'reg>>,
+}
+
+/// A sealed experiment session whose root artifact manifest has been
+/// written and published.
+#[derive(Debug, Clone)]
+pub struct SealedExperiment<'reg> {
+    artifact: LocalArtifact<'reg>,
+}
+
+/// Mutable experiment state before the root manifest is sealed. A live
+/// [`Run`] borrows the parent experiment while it adds run-scoped
+/// records. Closed runs are stored as [`RunEntry`] values.
+#[derive(Debug)]
+struct UnsealedExperimentState<'reg> {
+    name: String,
+    /// Image name the committed artifact is published under. `None`
+    /// means an anonymous name is synthesised at commit time.
+    requested_ref: Option<ImageRef>,
+    /// Experiment-space records.
+    records: Vec<RecordRef<'reg>>,
+    runs: Vec<RunEntry<'reg>>,
+    next_run_id: u64,
 }

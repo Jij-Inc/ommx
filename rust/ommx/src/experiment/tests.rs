@@ -1,6 +1,7 @@
 //! Tests for the experiment session model.
 
-use super::model::{RunStatus, UnsealedExperimentState};
+use super::run::RunStatus;
+use super::UnsealedExperimentState;
 use super::{
     Experiment, ANN_ARTIFACT_KIND, ANN_EXPERIMENT_NAME, ANN_EXPERIMENT_SCHEMA,
     ANN_EXPERIMENT_STATUS, ANN_LAYER, ANN_RECORD_NAME, ANN_RUN_ID, ANN_SPACE,
