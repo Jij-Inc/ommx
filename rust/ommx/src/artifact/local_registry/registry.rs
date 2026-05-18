@@ -77,6 +77,12 @@ impl<'reg> Deref for SealedArtifact<'reg> {
     }
 }
 
+impl SealedArtifact<'_> {
+    fn is_stored_in(&self, registry: &LocalRegistry) -> bool {
+        self.0.is_stored_in(registry)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct UnsealedArtifact<'reg> {
     artifact_type: MediaType,
@@ -141,6 +147,25 @@ pub struct LocalRegistry {
     root: PathBuf,
     index: SqliteIndexStore,
     blobs: FileBlobStore,
+}
+
+/// Temporary Local Registry for tests and examples.
+///
+/// The temporary directory is owned by this value and is deleted when
+/// the value is dropped. Borrow `registry` while the `TempLocalRegistry`
+/// value is alive.
+#[derive(Debug)]
+pub struct TempLocalRegistry {
+    pub tempdir: tempfile::TempDir,
+    pub registry: LocalRegistry,
+}
+
+impl TempLocalRegistry {
+    pub fn new() -> Result<Self> {
+        let tempdir = tempfile::tempdir().context("Failed to create temporary Local Registry")?;
+        let registry = LocalRegistry::open(tempdir.path())?;
+        Ok(Self { tempdir, registry })
+    }
 }
 
 impl LocalRegistry {
@@ -295,6 +320,10 @@ impl LocalRegistry {
         image_name: &ImageRef,
         sealed_artifact: &SealedArtifact<'_>,
     ) -> Result<RefUpdate> {
+        ensure!(
+            sealed_artifact.is_stored_in(self),
+            "Sealed artifact descriptor belongs to a different Local Registry"
+        );
         self.index.publish_image_ref(image_name, &sealed_artifact.0)
     }
 
@@ -307,6 +336,10 @@ impl LocalRegistry {
         image_name: &ImageRef,
         sealed_artifact: &SealedArtifact<'_>,
     ) -> Result<RefUpdate> {
+        ensure!(
+            sealed_artifact.is_stored_in(self),
+            "Sealed artifact descriptor belongs to a different Local Registry"
+        );
         self.index.replace_image_ref(image_name, &sealed_artifact.0)
     }
 

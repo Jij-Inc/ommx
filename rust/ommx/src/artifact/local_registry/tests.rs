@@ -591,6 +591,47 @@ fn local_registry_build_replace_moves_conflicting_ref() -> Result<()> {
 }
 
 #[test]
+fn publish_rejects_sealed_artifact_from_different_registry_instance() -> Result<()> {
+    let source_dir = tempfile::tempdir()?;
+    let target_dir = tempfile::tempdir()?;
+    let source = LocalRegistry::open(source_dir.path())?;
+    let target = LocalRegistry::open(target_dir.path())?;
+
+    let config = DescriptorBuilder::default()
+        .media_type(MediaType::EmptyJSON)
+        .digest(Digest::from_str(media_types::OCI_EMPTY_CONFIG_DIGEST)?)
+        .size(media_types::OCI_EMPTY_CONFIG_BYTES.len() as u64)
+        .build()?;
+    let config = source.store_blob(config, media_types::OCI_EMPTY_CONFIG_BYTES)?;
+
+    let layer_bytes = b"instance";
+    let layer = DescriptorBuilder::default()
+        .media_type(media_types::v1_instance())
+        .digest(Digest::from_str(&sha256_digest(layer_bytes))?)
+        .size(layer_bytes.len() as u64)
+        .build()?;
+    let layer = source.store_blob(layer, layer_bytes)?;
+
+    let artifact = UnsealedArtifact::new(
+        MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
+        config,
+        vec![layer],
+        None,
+        HashMap::new(),
+    );
+    let sealed = source.seal_artifact(artifact)?;
+    let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:foreign-sealed")?;
+
+    let err = target
+        .publish_manifest_ref(&image_name, &sealed)
+        .expect_err("foreign sealed artifact must not be publishable");
+    assert!(err
+        .to_string()
+        .contains("belongs to a different Local Registry"));
+    Ok(())
+}
+
+#[test]
 fn concurrent_legacy_imports_are_idempotent() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let root = dir.path().to_path_buf();
