@@ -6,14 +6,13 @@ use super::{
     ANN_RECORD_NAME, ANN_RUN_ID, ANN_SPACE, ARTIFACT_KIND_EXPERIMENT, EXPERIMENT_SCHEMA_V1,
     EXPERIMENT_STATUS_FINISHED, LAYER_KIND_RUN_PARAMETERS,
 };
-use crate::artifact::{media_types, ImageRef};
+use crate::artifact::media_types;
 use crate::Instance;
 use oci_spec::image::{Descriptor, MediaType};
 use serde_json::json;
 
-fn with_temp_experiment<T>(tag: &str, f: impl FnOnce(Experiment<'_>) -> anyhow::Result<T>) -> T {
-    let image_name = format!("ghcr.io/jij-inc/ommx/experiment-test:{tag}");
-    Experiment::with_temp_local_registry(ImageRef::parse(&image_name).unwrap(), f).unwrap()
+fn with_temp_experiment<T>(f: impl FnOnce(Experiment<'_>) -> anyhow::Result<T>) -> T {
+    Experiment::with_temp_local_registry(Name::Anonymous, f).unwrap()
 }
 
 fn with_unsealed_state<T>(
@@ -49,7 +48,7 @@ fn find_layer<'a>(layers: &'a [Descriptor], key: &str, value: &str) -> &'a Descr
 /// handle and records the closed run.
 #[test]
 fn run_lifecycle_assigns_ids_and_records_closed_runs() {
-    with_temp_experiment("lifecycle", |experiment| {
+    with_temp_experiment(|experiment| {
         {
             let run0 = experiment.run().unwrap();
             assert_eq!(run0.run_id(), 0);
@@ -73,7 +72,7 @@ fn run_lifecycle_assigns_ids_and_records_closed_runs() {
 /// built before any of them writes back at close.
 #[test]
 fn runs_can_be_open_concurrently_and_write_back_on_close() {
-    with_temp_experiment("parallel-runs", |experiment| {
+    with_temp_experiment(|experiment| {
         let mut run0 = experiment.run().unwrap();
         let mut run1 = experiment.run().unwrap();
 
@@ -117,7 +116,7 @@ fn runs_can_be_open_concurrently_and_write_back_on_close() {
 /// commit advances a public ref.
 #[test]
 fn log_writes_blob_to_blobstore_immediately() {
-    with_temp_experiment("eager-write", |experiment| {
+    with_temp_experiment(|experiment| {
         {
             let mut run = experiment.run().unwrap();
             run.log_json("solver", json!("scip")).unwrap();
@@ -138,7 +137,7 @@ fn log_writes_blob_to_blobstore_immediately() {
 /// record.
 #[test]
 fn log_upserts_same_space_media_type_name() {
-    with_temp_experiment("upsert", |experiment| {
+    with_temp_experiment(|experiment| {
         experiment.log_json("dataset", json!("miplib2017")).unwrap();
         experiment.log_json("dataset", json!("qplib")).unwrap();
 
@@ -173,7 +172,7 @@ fn log_upserts_same_space_media_type_name() {
 /// layer annotations describe the experiment / run records.
 #[test]
 fn commit_produces_experiment_artifact() {
-    with_temp_experiment("commit", |experiment| {
+    with_temp_experiment(|experiment| {
         experiment.log_json("dataset", json!("miplib2017")).unwrap();
 
         let instance: Instance =
@@ -249,7 +248,7 @@ fn commit_produces_experiment_artifact() {
 /// the same name updates the cell for that run.
 #[test]
 fn log_parameter_materializes_run_parameter_table() {
-    with_temp_experiment("parameters", |experiment| {
+    with_temp_experiment(|experiment| {
         {
             let mut run0 = experiment.run().unwrap();
             run0.log_parameter("solver", "scip").unwrap();
@@ -303,7 +302,7 @@ fn log_parameter_materializes_run_parameter_table() {
 
 #[test]
 fn log_parameter_rejects_non_finite_float_values() {
-    with_temp_experiment("bad-parameters", |experiment| {
+    with_temp_experiment(|experiment| {
         let mut run = experiment.run().unwrap();
 
         let err = run
@@ -316,7 +315,7 @@ fn log_parameter_rejects_non_finite_float_values() {
 
 #[test]
 fn log_parameter_promotes_int_column_to_float_at_commit() {
-    with_temp_experiment("promote-parameters", |experiment| {
+    with_temp_experiment(|experiment| {
         {
             let mut run0 = experiment.run().unwrap();
             run0.log_parameter("time_limit", 10).unwrap();
@@ -354,7 +353,7 @@ fn log_parameter_promotes_int_column_to_float_at_commit() {
 
 #[test]
 fn commit_rejects_mixed_parameter_column_types() {
-    with_temp_experiment("mixed-parameters", |experiment| {
+    with_temp_experiment(|experiment| {
         {
             let mut run0 = experiment.run().unwrap();
             run0.log_parameter("seed", 1).unwrap();
@@ -379,7 +378,7 @@ fn commit_rejects_mixed_parameter_column_types() {
 /// in Rust because the original `Experiment` value has moved.
 #[test]
 fn commit_returns_sealed_experiment() {
-    with_temp_experiment("sealed", |experiment| {
+    with_temp_experiment(|experiment| {
         {
             let mut run = experiment.run().unwrap();
             run.log_json("seed", json!(0)).unwrap();
@@ -389,8 +388,12 @@ fn commit_returns_sealed_experiment() {
         let sealed = experiment.commit().unwrap();
         let artifact = sealed.artifact();
         assert_eq!(
-            artifact.image_name().to_string(),
-            "ghcr.io/jij-inc/ommx/experiment-test:sealed"
+            artifact
+                .annotations()
+                .unwrap()
+                .get(ANN_EXPERIMENT_STATUS)
+                .map(String::as_str),
+            Some(EXPERIMENT_STATUS_FINISHED)
         );
         Ok(())
     });
@@ -427,7 +430,7 @@ fn anonymous_experiment_uses_registry_generated_image_name() {
 /// drop may remain as orphan blobs until GC.
 #[test]
 fn dropping_unclosed_run_does_not_write_back() {
-    with_temp_experiment("unclosed-run", |experiment| {
+    with_temp_experiment(|experiment| {
         {
             let mut run = experiment.run().unwrap();
             run.log_json("seed", json!(0)).unwrap();
@@ -450,7 +453,7 @@ fn dropping_unclosed_run_does_not_write_back() {
 /// distinct layer descriptors backed by one shared CAS blob.
 #[test]
 fn byte_identical_record_across_runs_shares_one_blob() {
-    with_temp_experiment("shared-blob", |experiment| {
+    with_temp_experiment(|experiment| {
         let payload = json!({ "formulation": "relaxed" });
 
         {
@@ -494,7 +497,7 @@ fn byte_identical_record_across_runs_shares_one_blob() {
 /// type, without an additional OMMX record-kind axis.
 #[test]
 fn log_record_accepts_caller_defined_media_type() {
-    with_temp_experiment("custom-media-type", |experiment| {
+    with_temp_experiment(|experiment| {
         let media_type = MediaType::Other("application/vnd.jijmodeling.model+json".to_string());
         experiment
             .log_record("source-model", media_type.clone(), br#"{"variables": []}"#)
