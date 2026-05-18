@@ -11,7 +11,6 @@ use anyhow::{ensure, Context, Result};
 use prost::Message;
 use serde::Deserialize;
 use std::collections::HashMap;
-use std::sync::Arc;
 
 /// CSV downloaded from [QPLIB website](http://qplib.zib.de/) on 2025-10-02
 pub const QPLIB_CSV: &str = include_str!("qplib.csv");
@@ -293,8 +292,8 @@ pub fn load(tag: &str) -> Result<(Instance, InstanceAnnotations)> {
     );
 
     let image_name = ghcr("Jij-Inc", "ommx", "qplib", tag)?;
-    let registry = Arc::new(LocalRegistry::open_default()?);
-    pull_image(&registry, &image_name)?;
+    let registry = LocalRegistry::shared_default()?;
+    pull_image(registry, &image_name)?;
     let artifact = LocalArtifact::open_in_registry(registry, image_name)?;
     let layers = artifact.layers()?;
     let mut instance_layers = layers

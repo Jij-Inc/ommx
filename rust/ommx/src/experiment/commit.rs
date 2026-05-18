@@ -16,25 +16,20 @@ use oci_spec::image::{DescriptorBuilder, Digest, MediaType};
 use serde_json::json;
 use std::collections::HashMap;
 use std::str::FromStr;
-use std::sync::Arc;
 
 /// Commit an unsealed experiment state as one immutable artifact.
-pub(super) fn commit_experiment_state(
-    registry: &Arc<LocalRegistry>,
-    state: UnsealedExperimentState,
-) -> Result<LocalArtifact> {
-    state.commit(Arc::clone(registry), registry)
+pub(super) fn commit_experiment_state<'reg>(
+    registry: &'reg LocalRegistry,
+    state: UnsealedExperimentState<'reg>,
+) -> Result<LocalArtifact<'reg>> {
+    state.commit(registry)
 }
 
-impl UnsealedExperimentState {
+impl<'reg> UnsealedExperimentState<'reg> {
     /// Consume the unsealed experiment state and commit it as one
     /// immutable artifact. This is the state-level counterpart of the
     /// public `Experiment::commit(self)` lifecycle operation.
-    pub(super) fn commit(
-        self,
-        registry_handle: Arc<LocalRegistry>,
-        registry: &LocalRegistry,
-    ) -> Result<LocalArtifact> {
+    pub(super) fn commit(self, registry: &'reg LocalRegistry) -> Result<LocalArtifact<'reg>> {
         let image_name = self.image_name(registry)?;
         let artifact = self.into_unsealed_artifact(registry)?;
         let sealed_artifact = registry.seal_artifact(artifact)?;
@@ -51,7 +46,7 @@ impl UnsealedExperimentState {
         }
 
         Ok(LocalArtifact::from_parts(
-            registry_handle,
+            registry,
             image_name,
             sealed_artifact.digest().clone(),
         ))
@@ -60,7 +55,10 @@ impl UnsealedExperimentState {
     /// Materialize commit-time aggregate layers and assemble the
     /// unsealed root artifact. This stores component blobs but does not
     /// create the root manifest blob and does not update any image ref.
-    fn into_unsealed_artifact(self, registry: &LocalRegistry) -> Result<UnsealedArtifact> {
+    fn into_unsealed_artifact(
+        &self,
+        registry: &'reg LocalRegistry,
+    ) -> Result<UnsealedArtifact<'reg>> {
         let mut layers = Vec::new();
 
         // Record layers: experiment space first, then each run's
@@ -136,12 +134,12 @@ impl UnsealedExperimentState {
 
 /// Store a commit-time aggregate JSON layer and return its
 /// descriptor (with the `org.ommx.experiment.layer` annotation).
-fn store_aggregate_layer(
-    registry: &LocalRegistry,
+fn store_aggregate_layer<'reg>(
+    registry: &'reg LocalRegistry,
     media_type: &str,
     layer_kind: &str,
     bytes: &[u8],
-) -> Result<StoredDescriptor> {
+) -> Result<StoredDescriptor<'reg>> {
     let digest = Digest::from_str(&sha256_digest(bytes))
         .map_err(|e| crate::error!("Failed to parse aggregate layer digest: {e}"))?;
     let mut annotations = HashMap::new();
@@ -155,7 +153,7 @@ fn store_aggregate_layer(
     registry.store_blob(descriptor, bytes)
 }
 
-fn manifest_annotations(state: &UnsealedExperimentState) -> HashMap<String, String> {
+fn manifest_annotations(state: &UnsealedExperimentState<'_>) -> HashMap<String, String> {
     HashMap::from([
         (
             ANN_ARTIFACT_KIND.to_string(),
@@ -173,7 +171,7 @@ fn manifest_annotations(state: &UnsealedExperimentState) -> HashMap<String, Stri
     ])
 }
 
-fn run_attributes_json(state: &UnsealedExperimentState) -> serde_json::Value {
+fn run_attributes_json(state: &UnsealedExperimentState<'_>) -> serde_json::Value {
     json!({
         "runs": state
             .runs
@@ -187,7 +185,7 @@ fn run_attributes_json(state: &UnsealedExperimentState) -> serde_json::Value {
     })
 }
 
-fn run_parameters_json(state: &UnsealedExperimentState) -> serde_json::Value {
+fn run_parameters_json(state: &UnsealedExperimentState<'_>) -> serde_json::Value {
     json!({
         "runs": state
             .runs
@@ -200,7 +198,7 @@ fn run_parameters_json(state: &UnsealedExperimentState) -> serde_json::Value {
     })
 }
 
-fn experiment_index_json(state: &UnsealedExperimentState) -> serde_json::Value {
+fn experiment_index_json(state: &UnsealedExperimentState<'_>) -> serde_json::Value {
     json!({
         "schema": EXPERIMENT_SCHEMA_V1,
         "name": state.name,
@@ -221,7 +219,7 @@ fn experiment_index_json(state: &UnsealedExperimentState) -> serde_json::Value {
     })
 }
 
-fn record_index_entry(record: &RecordRef) -> serde_json::Value {
+fn record_index_entry(record: &RecordRef<'_>) -> serde_json::Value {
     json!({
         "name": record.name,
         "media_type": record.descriptor.media_type().to_string(),

@@ -46,12 +46,12 @@ impl RunStatus {
 /// A named reference to a payload that has already been written to the
 /// BlobStore.
 #[derive(Debug, Clone)]
-pub(super) struct RecordRef {
+pub(super) struct RecordRef<'reg> {
     pub(super) name: String,
     /// OCI layer descriptor whose payload bytes are present in the
     /// Local Registry BlobStore. Carries the payload media type and
     /// the experiment / record annotations.
-    pub(super) descriptor: StoredDescriptor,
+    pub(super) descriptor: StoredDescriptor<'reg>,
 }
 
 /// A closed logical Run recorded in an unsealed Experiment.
@@ -64,9 +64,9 @@ pub(super) struct RecordRef {
 /// model; commit later projects it to aggregate parameter / attribute
 /// tables and record index layers.
 #[derive(Debug)]
-pub(super) struct RunEntry {
+pub(super) struct RunEntry<'reg> {
     pub(super) run_id: u64,
-    pub(super) records: Vec<RecordRef>,
+    pub(super) records: Vec<RecordRef<'reg>>,
     pub(super) parameters: BTreeMap<String, Value>,
     pub(super) status: RunStatus,
     pub(super) elapsed_secs: f64,
@@ -76,13 +76,13 @@ pub(super) struct RunEntry {
 /// [`super::Run`] borrows the parent experiment while it adds
 /// run-scoped records. Closed runs are stored as [`RunEntry`] values.
 #[derive(Debug)]
-pub(super) struct UnsealedExperimentState {
+pub(super) struct UnsealedExperimentState<'reg> {
     pub(super) name: String,
     /// Image name the committed artifact is published under. `None`
     /// means an anonymous name is synthesised at commit time.
     pub(super) requested_ref: Option<ImageRef>,
     /// Experiment-space records.
-    pub(super) records: Vec<RecordRef>,
-    pub(super) runs: Vec<RunEntry>,
+    pub(super) records: Vec<RecordRef<'reg>>,
+    pub(super) runs: Vec<RunEntry<'reg>>,
     pub(super) next_run_id: u64,
 }

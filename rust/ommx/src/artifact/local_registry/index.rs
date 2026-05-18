@@ -27,9 +27,9 @@ const SQLITE_BUSY_TIMEOUT: Duration = Duration::from_secs(30);
 ///
 /// `rusqlite::Connection` is `Send` but `!Sync`, so it lives behind a
 /// [`Mutex`] here. That makes [`SqliteIndexStore`] (and the enclosing
-/// [`super::LocalRegistry`]) `Sync`, which lets a single registry be
-/// shared via [`std::sync::Arc`] across PyO3 wrappers without
-/// per-artifact connection duplication.
+/// [`super::LocalRegistry`]) `Sync`, which lets the process-wide
+/// default registry be shared as a `&'static LocalRegistry` across
+/// PyO3 wrappers without per-artifact connection duplication.
 #[derive(Debug)]
 pub struct SqliteIndexStore {
     conn: Mutex<Connection>,

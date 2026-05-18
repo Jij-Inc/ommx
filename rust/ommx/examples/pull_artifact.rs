@@ -3,7 +3,6 @@ use ommx::artifact::{
     local_registry::{pull_image, LocalRegistry},
     media_types, ImageRef, LocalArtifact,
 };
-use std::sync::Arc;
 
 fn main() -> Result<()> {
     tracing_subscriber::fmt()
@@ -18,8 +17,8 @@ fn main() -> Result<()> {
 
     // Pull the artifact from the remote registry into the v3 SQLite
     // Local Registry, then open it for read by ref.
-    let registry = Arc::new(LocalRegistry::open_default()?);
-    pull_image(&registry, &image_name)?;
+    let registry = LocalRegistry::shared_default()?;
+    pull_image(registry, &image_name)?;
     let local = LocalArtifact::open_in_registry(registry, image_name)?;
 
     // Print the digest of each instance layer.
