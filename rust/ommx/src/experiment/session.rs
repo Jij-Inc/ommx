@@ -63,7 +63,7 @@ impl<'reg> Experiment<'reg> {
         f: impl FnOnce(Experiment<'_>) -> anyhow::Result<T>,
     ) -> Result<T> {
         let temp = TempLocalRegistry::new()?;
-        let experiment = Experiment::with_registry(name, &temp.registry, None);
+        let experiment = Experiment::with_registry(name, temp.registry(), None);
         f(experiment)
     }
     /// Start a new experiment session against an explicit Local

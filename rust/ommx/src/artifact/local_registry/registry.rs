@@ -152,12 +152,12 @@ pub struct LocalRegistry {
 /// Temporary Local Registry for tests and examples.
 ///
 /// The temporary directory is owned by this value and is deleted when
-/// the value is dropped. Borrow `registry` while the `TempLocalRegistry`
+/// the value is dropped. Borrow the registry while the `TempLocalRegistry`
 /// value is alive.
 #[derive(Debug)]
 pub struct TempLocalRegistry {
-    pub registry: LocalRegistry,
-    pub tempdir: tempfile::TempDir,
+    registry: LocalRegistry,
+    tempdir: tempfile::TempDir,
 }
 
 impl TempLocalRegistry {
@@ -165,6 +165,14 @@ impl TempLocalRegistry {
         let tempdir = tempfile::tempdir().context("Failed to create temporary Local Registry")?;
         let registry = LocalRegistry::open(tempdir.path())?;
         Ok(Self { registry, tempdir })
+    }
+
+    pub fn registry(&self) -> &LocalRegistry {
+        &self.registry
+    }
+
+    pub fn path(&self) -> &Path {
+        self.tempdir.path()
     }
 }
 

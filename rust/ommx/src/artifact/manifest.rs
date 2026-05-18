@@ -259,7 +259,7 @@ impl<'reg> ArtifactDraft<'reg> {
         f: impl FnOnce(ArtifactDraft<'_>) -> Result<T>,
     ) -> Result<T> {
         let temp = TempLocalRegistry::new()?;
-        let draft = ArtifactDraft::with_registry(&temp.registry, image_name);
+        let draft = ArtifactDraft::with_registry(temp.registry(), image_name);
         f(draft)
     }
 
