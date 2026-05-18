@@ -2,7 +2,7 @@
 
 use super::model::{RecordRef, RunState, RunStatus, Space, UnsealedExperimentState};
 use super::{build_descriptor, commit, ANN_RECORD_NAME, ANN_RUN_ID, ANN_SPACE};
-use crate::artifact::local_registry::LocalRegistry;
+use crate::artifact::local_registry::{LocalRegistry, TempLocalRegistry};
 use crate::artifact::{media_types, sha256_digest, ImageRef, LocalArtifact};
 use crate::{Instance, SampleSet, Solution};
 use anyhow::Result;
@@ -48,6 +48,21 @@ impl Experiment<'static> {
     pub fn new(name: impl Into<String>) -> Result<Self> {
         let registry = LocalRegistry::shared_default()?;
         Ok(Self::with_registry(name, registry, None))
+    }
+
+    /// Create a temporary Local Registry, run an experiment callback
+    /// against it, and delete the registry when the callback returns.
+    ///
+    /// This is intended for Rust SDK tests that need an isolated
+    /// registry while still exercising the same Local Registry-backed
+    /// artifact path as production code.
+    pub fn on_temp_local_registry<T>(
+        name: impl Into<String>,
+        f: impl FnOnce(Experiment<'_>) -> anyhow::Result<T>,
+    ) -> Result<T> {
+        let temp = TempLocalRegistry::new()?;
+        let experiment = Experiment::with_registry(name, &temp.registry, None);
+        f(experiment)
     }
 }
 

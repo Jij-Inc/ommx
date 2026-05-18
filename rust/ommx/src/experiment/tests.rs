@@ -7,20 +7,10 @@ use super::{
     ARTIFACT_KIND_EXPERIMENT, EXPERIMENT_SCHEMA_V1, EXPERIMENT_STATUS_FINISHED, LAYER_KIND_INDEX,
     LAYER_KIND_RUN_ATTRIBUTES,
 };
-use crate::artifact::local_registry::TempLocalRegistry;
 use crate::artifact::media_types;
 use crate::Instance;
 use oci_spec::image::{Descriptor, MediaType};
 use serde_json::json;
-
-/// A fresh experiment backed by a throwaway temp Local Registry. The
-/// registry lives for the duration of the callback, matching the
-/// lifetime carried by `Experiment`.
-fn with_temp_experiment<T>(name: &str, f: impl FnOnce(Experiment<'_>) -> T) -> T {
-    let temp = TempLocalRegistry::new().expect("open temp registry");
-    let experiment = Experiment::with_registry(name, &temp.registry, None);
-    f(experiment)
-}
 
 fn unsealed_state<'exp, 'reg>(
     experiment: &'exp Experiment<'reg>,
@@ -53,7 +43,7 @@ fn find_layer<'a>(layers: &'a [Descriptor], key: &str, value: &str) -> &'a Descr
 /// run handle, record the final status, and set elapsed time.
 #[test]
 fn run_lifecycle_assigns_ids_and_records_status() {
-    with_temp_experiment("lifecycle", |mut experiment| {
+    Experiment::on_temp_local_registry("lifecycle", |mut experiment| {
         {
             let run0 = experiment.run().unwrap();
             assert_eq!(run0.run_id(), 0);
@@ -70,14 +60,16 @@ fn run_lifecycle_assigns_ids_and_records_status() {
         assert!(state.runs[0].elapsed_secs.is_some());
         assert_eq!(state.runs[1].status, RunStatus::Failed);
         assert!(state.runs[1].elapsed_secs.is_some());
-    });
+        Ok(())
+    })
+    .unwrap();
 }
 
 /// `log_*` writes the payload to the BlobStore immediately, before any
 /// commit advances a public ref.
 #[test]
 fn log_writes_blob_to_blobstore_immediately() {
-    with_temp_experiment("eager-write", |mut experiment| {
+    Experiment::on_temp_local_registry("eager-write", |mut experiment| {
         {
             let mut run = experiment.run().unwrap();
             run.log_json("solver", json!("scip")).unwrap();
@@ -90,14 +82,16 @@ fn log_writes_blob_to_blobstore_immediately() {
             digest
         };
         assert!(experiment.registry.blobs().exists(&digest).unwrap());
-    });
+        Ok(())
+    })
+    .unwrap();
 }
 
 /// Logging the same `(space, media type, name)` again replaces the
 /// record.
 #[test]
 fn log_upserts_same_space_media_type_name() {
-    with_temp_experiment("upsert", |mut experiment| {
+    Experiment::on_temp_local_registry("upsert", |mut experiment| {
         experiment.log_json("dataset", json!("miplib2017")).unwrap();
         experiment.log_json("dataset", json!("qplib")).unwrap();
 
@@ -120,14 +114,16 @@ fn log_upserts_same_space_media_type_name() {
             .read_bytes(json_record.descriptor.digest())
             .unwrap();
         assert_eq!(bytes, serde_json::to_vec(&json!("qplib")).unwrap());
-    });
+        Ok(())
+    })
+    .unwrap();
 }
 
 /// `commit()` seals the session into an OMMX Artifact whose manifest and
 /// layer annotations describe the experiment / run records.
 #[test]
 fn commit_produces_experiment_artifact() {
-    with_temp_experiment("commit", |mut experiment| {
+    Experiment::on_temp_local_registry("commit", |mut experiment| {
         experiment.log_json("dataset", json!("miplib2017")).unwrap();
 
         let instance: Instance =
@@ -201,7 +197,9 @@ fn commit_produces_experiment_artifact() {
             artifact.get_manifest().unwrap().config().media_type(),
             &MediaType::EmptyJSON
         );
-    });
+        Ok(())
+    })
+    .unwrap();
 }
 
 /// `commit()` consumes the unsealed session and returns a sealed handle.
@@ -209,7 +207,7 @@ fn commit_produces_experiment_artifact() {
 /// in Rust because the original `Experiment` value has moved.
 #[test]
 fn commit_returns_sealed_experiment() {
-    with_temp_experiment("sealed", |mut experiment| {
+    Experiment::on_temp_local_registry("sealed", |mut experiment| {
         {
             let mut run = experiment.run().unwrap();
             run.log_json("seed", json!(0)).unwrap();
@@ -226,7 +224,9 @@ fn commit_returns_sealed_experiment() {
                 .map(String::as_str),
             Some("sealed")
         );
-    });
+        Ok(())
+    })
+    .unwrap();
 }
 
 /// Dropping a run handle without closing it does not implicitly mark
@@ -234,21 +234,23 @@ fn commit_returns_sealed_experiment() {
 /// manifest while a run is still `running`.
 #[test]
 fn commit_rejects_unclosed_run() {
-    with_temp_experiment("unclosed-run", |mut experiment| {
+    Experiment::on_temp_local_registry("unclosed-run", |mut experiment| {
         {
             let mut run = experiment.run().unwrap();
             run.log_json("seed", json!(0)).unwrap();
         }
 
         assert!(experiment.commit().is_err());
-    });
+        Ok(())
+    })
+    .unwrap();
 }
 
 /// A byte-identical record logged by two runs yields two annotation-
 /// distinct layer descriptors backed by one shared CAS blob.
 #[test]
 fn byte_identical_record_across_runs_shares_one_blob() {
-    with_temp_experiment("shared-blob", |mut experiment| {
+    Experiment::on_temp_local_registry("shared-blob", |mut experiment| {
         let payload = json!({ "formulation": "relaxed" });
 
         {
@@ -284,14 +286,16 @@ fn byte_identical_record_across_runs_shares_one_blob() {
             candidates[0].digest().to_string(),
             candidates[1].digest().to_string()
         );
-    });
+        Ok(())
+    })
+    .unwrap();
 }
 
 /// Caller-defined payload types are represented directly by OCI media
 /// type, without an additional OMMX record-kind axis.
 #[test]
 fn log_record_accepts_caller_defined_media_type() {
-    with_temp_experiment("custom-media-type", |mut experiment| {
+    Experiment::on_temp_local_registry("custom-media-type", |mut experiment| {
         let media_type = MediaType::Other("application/vnd.jijmodeling.model+json".to_string());
         experiment
             .log_record("source-model", media_type.clone(), br#"{"variables": []}"#)
@@ -305,5 +309,7 @@ fn log_record_accepts_caller_defined_media_type() {
             artifact.get_blob(source_model.digest()).unwrap(),
             br#"{"variables": []}"#
         );
-    });
+        Ok(())
+    })
+    .unwrap();
 }
