@@ -405,9 +405,13 @@ fn anonymous_experiment_uses_registry_generated_image_name() {
     let artifact = experiment.commit().unwrap().into_artifact();
     let image_name = artifact.image_name();
     let repository_key = image_name.repository_key();
-    assert!(crate::artifact::is_anonymous_artifact_ref_name(
-        &repository_key
-    ));
+    let host = repository_key
+        .strip_suffix(".ommx.local/experiment")
+        .expect("anonymous experiment uses the experiment repository");
+    assert_eq!(host.len(), 8);
+    assert!(host
+        .chars()
+        .all(|c| c.is_ascii_digit() || ('a'..='f').contains(&c)));
     assert!(crate::artifact::is_anonymous_artifact_tag(
         image_name.reference()
     ));

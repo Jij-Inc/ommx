@@ -841,7 +841,7 @@ API:
 3. `seal_artifact` で root manifest blob を Store し、`SealedArtifact` を得る。
 4. `publish_manifest_ref` で root descriptor を IndexStore の ref に対応づける。
 
-Experiment は構築時点で `ImageRef` を確定し、commit 時はその ref に publish する。Experiment name と Image Name を別々に持つと、Artifact としての実体の識別子と実験管理上の識別子が分岐するため、OMMX Experiment では Image Name を唯一の名前として扱う。匿名 ref が必要な場合は `Experiment::anonymous()` / `Experiment::with_anonymous_registry(&LocalRegistry)` が `LocalRegistry::synthesize_anonymous_image_name()` で得た `ImageRef` を通常の Experiment 構築に渡す。
+Experiment は構築時点で `ImageRef` を確定し、commit 時はその ref に publish する。Experiment name と Image Name を別々に持つと、Artifact としての実体の識別子と実験管理上の識別子が分岐するため、OMMX Experiment では Image Name を唯一の名前として扱う。匿名 ref が必要な場合は `Experiment::anonymous()` / `Experiment::with_anonymous_registry(&LocalRegistry)` が `<registry-id8>.ommx.local/experiment:<timestamp>-<nonce>` 形式の `ImageRef` を通常の Experiment 構築に渡す。
 
 この実装では、内部 state は `StoredDescriptor` を「Local Registry に保存済み blob への参照」として扱う。一方、manifest / archive / Python API に出す値は通常の `oci_spec::image::Descriptor` である。`StoredDescriptor` の作成経路は Local Registry の blob 書き込み / 検証後に限定し、作成後は `Deref<Target = Descriptor>` によって通常の descriptor として読める。root manifest については `StoredDescriptor` ではなく `SealedArtifact` として表し、`publish_manifest_ref` / `replace_manifest_ref` は `SealedArtifact` だけを受け取る。ArtifactDraft と Experiment はどちらも、payload 追加時に component blob を Store し、commit 時には unsealed state から root manifest を Seal してから ref に Publish する。
 

@@ -179,7 +179,7 @@ impl<'reg> Experiment<'reg> {
     /// Registry and publish it under an anonymous image name generated
     /// by that registry.
     pub fn with_anonymous_registry(registry: &'reg LocalRegistry) -> Result<Self> {
-        let image_name = registry.synthesize_anonymous_image_name()?;
+        let image_name = registry.synthesize_anonymous_experiment_image_name()?;
         Ok(Self::with_registry(image_name, registry))
     }
 

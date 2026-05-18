@@ -552,6 +552,21 @@ const ANONYMOUS_TAG_NONCE_HEX_LEN: usize = 12;
 ///   and conflict on the same ref. A remaining astronomically rare
 ///   nonce collision is reported as a normal publish conflict.
 pub(crate) fn anonymous_artifact_image_name(registry_id: &str) -> Result<ImageRef> {
+    anonymous_local_image_name(registry_id, "anonymous", "anonymous artifact")
+}
+
+pub(crate) fn anonymous_local_image_name(
+    registry_id: &str,
+    repository: &str,
+    context: &str,
+) -> Result<ImageRef> {
+    anyhow::ensure!(
+        !repository.is_empty()
+            && repository
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_'),
+        "Anonymous local repository name must be lowercase OCI-safe text; got {repository:?}",
+    );
     let prefix: String = registry_id
         .chars()
         .take(ANONYMOUS_REGISTRY_ID_HOST_LEN)
@@ -571,8 +586,8 @@ pub(crate) fn anonymous_artifact_image_name(registry_id: &str) -> Result<ImageRe
         .chars()
         .take(ANONYMOUS_TAG_NONCE_HEX_LEN)
         .collect();
-    ImageRef::parse(&format!("{prefix}.ommx.local/anonymous:{stamp}-{nonce}"))
-        .with_context(|| format!("Failed to synthesise anonymous artifact image name: {prefix}"))
+    ImageRef::parse(&format!("{prefix}.ommx.local/{repository}:{stamp}-{nonce}"))
+        .with_context(|| format!("Failed to synthesise {context} image name: {prefix}"))
 }
 
 /// True iff `name` (the `host/path` portion of an OCI ref) matches the
