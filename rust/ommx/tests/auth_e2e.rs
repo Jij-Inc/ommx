@@ -86,7 +86,7 @@ fn with_test_artifact<T>(
     image_name: ImageRef,
     f: impl FnOnce(LocalArtifact<'_>) -> Result<T>,
 ) -> Result<T> {
-    ArtifactDraft::on_temp_local_registry(image_name, |mut draft| {
+    ArtifactDraft::with_temp_local_registry(image_name, |mut draft| {
         draft.add_layer_bytes(
             oci_spec::image::MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
             b"auth-e2e-test".to_vec(),

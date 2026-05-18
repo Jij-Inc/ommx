@@ -254,7 +254,7 @@ impl<'reg> ArtifactDraft<'reg> {
     /// This is intended for Rust SDK tests that need to exercise the
     /// Local Registry-backed artifact path without writing to the
     /// user's persistent registry.
-    pub fn on_temp_local_registry<T>(
+    pub fn with_temp_local_registry<T>(
         image_name: ImageRef,
         f: impl FnOnce(ArtifactDraft<'_>) -> Result<T>,
     ) -> Result<T> {

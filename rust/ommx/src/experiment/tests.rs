@@ -43,7 +43,7 @@ fn find_layer<'a>(layers: &'a [Descriptor], key: &str, value: &str) -> &'a Descr
 /// run handle, record the final status, and set elapsed time.
 #[test]
 fn run_lifecycle_assigns_ids_and_records_status() {
-    Experiment::on_temp_local_registry("lifecycle", |mut experiment| {
+    Experiment::with_temp_local_registry("lifecycle", |mut experiment| {
         {
             let run0 = experiment.run().unwrap();
             assert_eq!(run0.run_id(), 0);
@@ -69,7 +69,7 @@ fn run_lifecycle_assigns_ids_and_records_status() {
 /// commit advances a public ref.
 #[test]
 fn log_writes_blob_to_blobstore_immediately() {
-    Experiment::on_temp_local_registry("eager-write", |mut experiment| {
+    Experiment::with_temp_local_registry("eager-write", |mut experiment| {
         {
             let mut run = experiment.run().unwrap();
             run.log_json("solver", json!("scip")).unwrap();
@@ -91,7 +91,7 @@ fn log_writes_blob_to_blobstore_immediately() {
 /// record.
 #[test]
 fn log_upserts_same_space_media_type_name() {
-    Experiment::on_temp_local_registry("upsert", |mut experiment| {
+    Experiment::with_temp_local_registry("upsert", |mut experiment| {
         experiment.log_json("dataset", json!("miplib2017")).unwrap();
         experiment.log_json("dataset", json!("qplib")).unwrap();
 
@@ -123,7 +123,7 @@ fn log_upserts_same_space_media_type_name() {
 /// layer annotations describe the experiment / run records.
 #[test]
 fn commit_produces_experiment_artifact() {
-    Experiment::on_temp_local_registry("commit", |mut experiment| {
+    Experiment::with_temp_local_registry("commit", |mut experiment| {
         experiment.log_json("dataset", json!("miplib2017")).unwrap();
 
         let instance: Instance =
@@ -207,7 +207,7 @@ fn commit_produces_experiment_artifact() {
 /// in Rust because the original `Experiment` value has moved.
 #[test]
 fn commit_returns_sealed_experiment() {
-    Experiment::on_temp_local_registry("sealed", |mut experiment| {
+    Experiment::with_temp_local_registry("sealed", |mut experiment| {
         {
             let mut run = experiment.run().unwrap();
             run.log_json("seed", json!(0)).unwrap();
@@ -234,7 +234,7 @@ fn commit_returns_sealed_experiment() {
 /// manifest while a run is still `running`.
 #[test]
 fn commit_rejects_unclosed_run() {
-    Experiment::on_temp_local_registry("unclosed-run", |mut experiment| {
+    Experiment::with_temp_local_registry("unclosed-run", |mut experiment| {
         {
             let mut run = experiment.run().unwrap();
             run.log_json("seed", json!(0)).unwrap();
@@ -250,7 +250,7 @@ fn commit_rejects_unclosed_run() {
 /// distinct layer descriptors backed by one shared CAS blob.
 #[test]
 fn byte_identical_record_across_runs_shares_one_blob() {
-    Experiment::on_temp_local_registry("shared-blob", |mut experiment| {
+    Experiment::with_temp_local_registry("shared-blob", |mut experiment| {
         let payload = json!({ "formulation": "relaxed" });
 
         {
@@ -295,7 +295,7 @@ fn byte_identical_record_across_runs_shares_one_blob() {
 /// type, without an additional OMMX record-kind axis.
 #[test]
 fn log_record_accepts_caller_defined_media_type() {
-    Experiment::on_temp_local_registry("custom-media-type", |mut experiment| {
+    Experiment::with_temp_local_registry("custom-media-type", |mut experiment| {
         let media_type = MediaType::Other("application/vnd.jijmodeling.model+json".to_string());
         experiment
             .log_record("source-model", media_type.clone(), br#"{"variables": []}"#)

@@ -58,7 +58,7 @@ impl<'reg> Experiment<'reg> {
     /// This is intended for Rust SDK tests that need an isolated
     /// registry while still exercising the same Local Registry-backed
     /// artifact path as production code.
-    pub fn on_temp_local_registry<T>(
+    pub fn with_temp_local_registry<T>(
         name: impl Into<String>,
         f: impl FnOnce(Experiment<'_>) -> anyhow::Result<T>,
     ) -> Result<T> {
