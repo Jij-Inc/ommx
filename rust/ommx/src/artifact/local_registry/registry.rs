@@ -156,15 +156,15 @@ pub struct LocalRegistry {
 /// value is alive.
 #[derive(Debug)]
 pub struct TempLocalRegistry {
-    pub tempdir: tempfile::TempDir,
     pub registry: LocalRegistry,
+    pub tempdir: tempfile::TempDir,
 }
 
 impl TempLocalRegistry {
     pub fn new() -> Result<Self> {
         let tempdir = tempfile::tempdir().context("Failed to create temporary Local Registry")?;
         let registry = LocalRegistry::open(tempdir.path())?;
-        Ok(Self { tempdir, registry })
+        Ok(Self { registry, tempdir })
     }
 }
 
