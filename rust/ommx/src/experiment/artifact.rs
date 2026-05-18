@@ -1,13 +1,11 @@
 //! Mapping an unsealed Experiment state to an immutable OMMX Artifact.
 
-use super::index::ExperimentIndex;
 use super::parameter::RunParameterTable;
 use super::UnsealedExperimentState;
 use super::{
     ANN_ARTIFACT_KIND, ANN_EXPERIMENT_NAME, ANN_EXPERIMENT_SCHEMA, ANN_EXPERIMENT_STATUS,
-    ANN_LAYER, ARTIFACT_KIND_EXPERIMENT, EXPERIMENT_INDEX_MEDIA_TYPE, EXPERIMENT_SCHEMA_V1,
-    EXPERIMENT_STATUS_FINISHED, LAYER_KIND_INDEX, LAYER_KIND_RUN_PARAMETERS,
-    RUN_PARAMETERS_MEDIA_TYPE,
+    ANN_LAYER, ARTIFACT_KIND_EXPERIMENT, EXPERIMENT_SCHEMA_V1, EXPERIMENT_STATUS_FINISHED,
+    LAYER_KIND_RUN_PARAMETERS, RUN_PARAMETERS_MEDIA_TYPE,
 };
 use crate::artifact::local_registry::{
     LocalRegistry, RefUpdate, StoredDescriptor, UnsealedArtifact,
@@ -100,20 +98,12 @@ impl<'reg> ExperimentArtifactLayers<'reg> {
         state: &UnsealedExperimentState<'reg>,
         registry: &'reg LocalRegistry,
     ) -> Result<Vec<StoredDescriptor<'reg>>> {
-        Ok(vec![
-            store_aggregate_json_layer(
-                registry,
-                RUN_PARAMETERS_MEDIA_TYPE,
-                LAYER_KIND_RUN_PARAMETERS,
-                &RunParameterTable::from_runs(state.runs.values())?,
-            )?,
-            store_aggregate_json_layer(
-                registry,
-                EXPERIMENT_INDEX_MEDIA_TYPE,
-                LAYER_KIND_INDEX,
-                &ExperimentIndex::from_state(state),
-            )?,
-        ])
+        Ok(vec![store_aggregate_json_layer(
+            registry,
+            RUN_PARAMETERS_MEDIA_TYPE,
+            LAYER_KIND_RUN_PARAMETERS,
+            &RunParameterTable::from_runs(state.runs.values())?,
+        )?])
     }
 }
 

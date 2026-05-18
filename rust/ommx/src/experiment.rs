@@ -43,7 +43,6 @@
 //! an OMMX Artifact.
 
 mod artifact;
-mod index;
 mod parameter;
 mod record;
 mod run;
@@ -79,9 +78,7 @@ const ANN_RUN_ID: &str = "org.ommx.experiment.run_id";
 const ANN_LAYER: &str = "org.ommx.experiment.layer";
 const ANN_RECORD_NAME: &str = "org.ommx.record.name";
 
-const EXPERIMENT_INDEX_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment+json";
 const RUN_PARAMETERS_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment.run-parameters+json";
-const LAYER_KIND_INDEX: &str = "index";
 const LAYER_KIND_RUN_PARAMETERS: &str = "run-parameters";
 
 /// A mutable, unsealed experiment session. See the [module documentation](self).

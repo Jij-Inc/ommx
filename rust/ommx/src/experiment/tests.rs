@@ -4,7 +4,7 @@ use super::UnsealedExperimentState;
 use super::{
     Experiment, ANN_ARTIFACT_KIND, ANN_EXPERIMENT_NAME, ANN_EXPERIMENT_SCHEMA,
     ANN_EXPERIMENT_STATUS, ANN_LAYER, ANN_RECORD_NAME, ANN_RUN_ID, ANN_SPACE,
-    ARTIFACT_KIND_EXPERIMENT, EXPERIMENT_SCHEMA_V1, EXPERIMENT_STATUS_FINISHED, LAYER_KIND_INDEX,
+    ARTIFACT_KIND_EXPERIMENT, EXPERIMENT_SCHEMA_V1, EXPERIMENT_STATUS_FINISHED,
     LAYER_KIND_RUN_PARAMETERS,
 };
 use crate::artifact::media_types;
@@ -96,17 +96,15 @@ fn runs_can_be_open_concurrently_and_write_back_on_close() {
 
         let artifact = experiment.commit().unwrap().into_artifact();
         let layers = artifact.layers().unwrap();
-        let index = find_layer(&layers, ANN_LAYER, LAYER_KIND_INDEX);
-        let bytes = artifact.get_blob(index.digest()).unwrap();
-        let index: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(
-            index["runs"]
-                .as_array()
-                .unwrap()
+            layers
                 .iter()
-                .map(|run| run["run_id"].as_u64().unwrap())
+                .filter(|layer| {
+                    layer_annotation(layer, ANN_RECORD_NAME).as_deref() == Some("candidate")
+                })
+                .map(|layer| layer_annotation(layer, ANN_RUN_ID).unwrap())
                 .collect::<Vec<_>>(),
-            vec![0, 1]
+            vec!["0".to_string(), "1".to_string()]
         );
         Ok(())
     })
@@ -208,10 +206,9 @@ fn commit_produces_experiment_artifact() {
             Some(EXPERIMENT_STATUS_FINISHED)
         );
 
-        // 3 records (1 experiment-space + 2 run-space) + run-parameters
-        // + index.
+        // 3 records (1 experiment-space + 2 run-space) + run-parameters.
         let layers = artifact.layers().unwrap();
-        assert_eq!(layers.len(), 5);
+        assert_eq!(layers.len(), 4);
 
         let dataset = find_layer(&layers, ANN_RECORD_NAME, "dataset");
         assert_eq!(
@@ -242,8 +239,6 @@ fn commit_produces_experiment_artifact() {
         // Aggregate layers are not tagged as records.
         let run_params = find_layer(&layers, ANN_LAYER, LAYER_KIND_RUN_PARAMETERS);
         assert!(layer_annotation(run_params, ANN_SPACE).is_none());
-        let index = find_layer(&layers, ANN_LAYER, LAYER_KIND_INDEX);
-        assert!(layer_annotation(index, ANN_SPACE).is_none());
 
         // Config is the OCI 1.1 empty config.
         assert_eq!(
