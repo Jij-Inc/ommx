@@ -2,9 +2,10 @@
 
 use super::UnsealedExperimentState;
 use super::{
-    Experiment, Name, ANN_ARTIFACT_KIND, ANN_EXPERIMENT_SCHEMA, ANN_EXPERIMENT_STATUS, ANN_LAYER,
-    ANN_RECORD_NAME, ANN_RUN_ID, ANN_SPACE, ARTIFACT_KIND_EXPERIMENT, EXPERIMENT_SCHEMA_V1,
-    EXPERIMENT_STATUS_FINISHED, LAYER_KIND_RUN_PARAMETERS,
+    Experiment, ExperimentRecordSpace, LoadedExperiment, Name, ParameterValue, ANN_ARTIFACT_KIND,
+    ANN_EXPERIMENT_SCHEMA, ANN_EXPERIMENT_STATUS, ANN_LAYER, ANN_RECORD_NAME, ANN_RUN_ID,
+    ANN_SPACE, ARTIFACT_KIND_EXPERIMENT, EXPERIMENT_SCHEMA_V1, EXPERIMENT_STATUS_FINISHED,
+    LAYER_KIND_RUN_PARAMETERS,
 };
 use crate::artifact::media_types;
 use crate::Instance;
@@ -296,6 +297,60 @@ fn log_parameter_materializes_run_parameter_table() {
                 },
             })
         );
+        Ok(())
+    });
+}
+
+#[test]
+fn loaded_experiment_reads_records_and_run_parameters() {
+    with_temp_experiment(|experiment| {
+        experiment.log_json("dataset", json!("miplib2017")).unwrap();
+
+        {
+            let mut run0 = experiment.run().unwrap();
+            run0.log_parameter("solver", "scip").unwrap();
+            run0.log_parameter("time_limit", 20.0).unwrap();
+            run0.log_json("candidate", json!("formulation-a")).unwrap();
+            run0.finish().unwrap();
+        }
+        {
+            let mut run1 = experiment.run().unwrap();
+            run1.log_parameter("solver", "highs").unwrap();
+            run1.log_parameter("presolve", true).unwrap();
+            run1.finish().unwrap();
+        }
+
+        let artifact = experiment.commit().unwrap().into_artifact();
+        let loaded = LoadedExperiment::from_artifact(artifact).unwrap();
+
+        assert!(loaded.records().iter().any(|record| {
+            record.space == ExperimentRecordSpace::Experiment
+                && record.run_id.is_none()
+                && record.name == "dataset"
+                && record.media_type == "application/json"
+        }));
+        assert!(loaded.records().iter().any(|record| {
+            record.space == ExperimentRecordSpace::Run
+                && record.run_id == Some(0)
+                && record.name == "candidate"
+                && record.media_type == "application/json"
+        }));
+
+        let mut cells = loaded.run_parameter_cells();
+        cells.sort_by(|left, right| (left.run_id, &left.name).cmp(&(right.run_id, &right.name)));
+        assert_eq!(cells.len(), 4);
+        assert_eq!(cells[0].run_id, 0);
+        assert_eq!(cells[0].name, "solver");
+        assert_eq!(cells[0].value, ParameterValue::String("scip".to_string()));
+        assert_eq!(cells[1].run_id, 0);
+        assert_eq!(cells[1].name, "time_limit");
+        assert_eq!(cells[1].value, ParameterValue::Float(20.0));
+        assert_eq!(cells[2].run_id, 1);
+        assert_eq!(cells[2].name, "presolve");
+        assert_eq!(cells[2].value, ParameterValue::Bool(true));
+        assert_eq!(cells[3].run_id, 1);
+        assert_eq!(cells[3].name, "solver");
+        assert_eq!(cells[3].value, ParameterValue::String("highs".to_string()));
         Ok(())
     });
 }

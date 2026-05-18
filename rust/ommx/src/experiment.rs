@@ -49,11 +49,13 @@ mod artifact;
 mod parameter;
 mod record;
 mod run;
+mod view;
 
 #[cfg(test)]
 mod tests;
 
-pub use parameter::ParameterValue;
+pub use parameter::{ParameterValue, RunParameterCell};
+pub use view::{ExperimentRecord, ExperimentRecordSpace, LoadedExperiment};
 
 use crate::artifact::local_registry::{LocalRegistry, TempLocalRegistry};
 use crate::artifact::{media_types, ImageRef, LocalArtifact};

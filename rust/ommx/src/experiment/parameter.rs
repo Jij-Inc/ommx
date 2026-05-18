@@ -2,7 +2,7 @@
 
 use super::RunEntry;
 use anyhow::Result;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{btree_map::Values, BTreeMap};
 
 /// A scalar cell value accepted by the run parameter table.
@@ -74,12 +74,18 @@ impl ParameterValue {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RunParameterTable {
     columns: BTreeMap<String, RunParameterColumn>,
 }
 
 impl RunParameterTable {
+    pub fn empty() -> Self {
+        Self {
+            columns: BTreeMap::new(),
+        }
+    }
+
     pub fn from_runs<'reg>(runs: Values<'_, u64, RunEntry<'reg>>) -> Result<Self> {
         let mut columns = BTreeMap::new();
         for run in runs {
@@ -92,9 +98,16 @@ impl RunParameterTable {
         }
         Ok(Self { columns })
     }
+
+    pub fn cells(&self) -> Vec<RunParameterCell> {
+        self.columns
+            .iter()
+            .flat_map(|(name, column)| column.cells(name))
+            .collect()
+    }
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "values")]
 enum RunParameterColumn {
     #[serde(rename = "bool")]
@@ -108,6 +121,43 @@ enum RunParameterColumn {
 }
 
 impl RunParameterColumn {
+    fn cells(&self, name: &str) -> Vec<RunParameterCell> {
+        match self {
+            Self::Bool(values) => values
+                .iter()
+                .map(|(run_id, value)| RunParameterCell {
+                    run_id: *run_id,
+                    name: name.to_string(),
+                    value: ParameterValue::Bool(*value),
+                })
+                .collect(),
+            Self::Int(values) => values
+                .iter()
+                .map(|(run_id, value)| RunParameterCell {
+                    run_id: *run_id,
+                    name: name.to_string(),
+                    value: ParameterValue::Int(*value),
+                })
+                .collect(),
+            Self::Float(values) => values
+                .iter()
+                .map(|(run_id, value)| RunParameterCell {
+                    run_id: *run_id,
+                    name: name.to_string(),
+                    value: ParameterValue::Float(*value),
+                })
+                .collect(),
+            Self::String(values) => values
+                .iter()
+                .map(|(run_id, value)| RunParameterCell {
+                    run_id: *run_id,
+                    name: name.to_string(),
+                    value: ParameterValue::String(value.clone()),
+                })
+                .collect(),
+        }
+    }
+
     fn from_value(value: &ParameterValue) -> Self {
         match value {
             ParameterValue::Bool(_) => Self::Bool(BTreeMap::new()),
@@ -169,4 +219,11 @@ impl RunParameterColumn {
             Self::String(_) => "string",
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RunParameterCell {
+    pub run_id: u64,
+    pub name: String,
+    pub value: ParameterValue,
 }
