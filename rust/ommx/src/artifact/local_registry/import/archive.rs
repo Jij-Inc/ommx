@@ -40,7 +40,6 @@ use std::{
     fs::File,
     io::{BufReader, Read},
     path::Path,
-    sync::Arc,
 };
 use tar::Archive;
 
@@ -195,7 +194,7 @@ fn read_archive_blob(path: &Path, digest: &Digest) -> Result<Vec<u8>> {
 /// an idempotent re-import of the same digest under the same ref, or
 /// `Err` for a ref conflict when the new archive's manifest digest
 /// differs from the SQLite-recorded one).
-pub fn import_oci_archive(registry: &Arc<LocalRegistry>, path: &Path) -> Result<OciDirImport> {
+pub fn import_oci_archive(registry: &LocalRegistry, path: &Path) -> Result<OciDirImport> {
     let file = File::open(path)
         .with_context(|| format!("Failed to open OCI archive {}", path.display()))?;
     let scanned = scan_archive(BufReader::new(file), registry.blobs(), path)?;

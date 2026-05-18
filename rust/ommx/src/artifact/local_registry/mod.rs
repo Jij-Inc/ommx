@@ -95,7 +95,7 @@ pub use import::oci_dir::{
 pub use import::remote::pull_image;
 pub use index::SqliteIndexStore;
 pub(crate) use registry::UnsealedArtifact;
-pub use registry::{LocalRegistry, StoredDescriptor};
+pub use registry::{LocalRegistry, StoredDescriptor, TempLocalRegistry};
 pub use types::{
     RefRecord, RefUpdate, FILE_BLOB_STORE_DIR_NAME, OCI_IMAGE_REF_NAME_ANNOTATION,
     SQLITE_INDEX_FILE_NAME,
