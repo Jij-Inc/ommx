@@ -31,6 +31,8 @@ __all__ = [
     "EvaluatedConstraint",
     "EvaluatedDecisionVariable",
     "EvaluatedNamedFunction",
+    "Experiment",
+    "ExperimentRecord",
     "Function",
     "IndicatorConstraint",
     "Instance",
@@ -1645,6 +1647,37 @@ class EvaluatedNamedFunction:
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> EvaluatedNamedFunction: ...
     def __deepcopy__(self, _memo: typing.Any) -> EvaluatedNamedFunction: ...
+
+@typing.final
+class Experiment:
+    @property
+    def image_name(self) -> builtins.str: ...
+    @property
+    def records(self) -> builtins.list[ExperimentRecord]: ...
+    @staticmethod
+    def load(image_name: builtins.str) -> Experiment:
+        r"""
+        Load a committed Experiment Artifact from the local registry.
+        """
+    def run_parameters_df(self) -> pandas.DataFrame:
+        r"""
+        Wide DataFrame of run parameters, indexed by `run_id`.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class ExperimentRecord:
+    @property
+    def space(self) -> builtins.str: ...
+    @property
+    def run_id(self) -> typing.Optional[builtins.int]: ...
+    @property
+    def name(self) -> builtins.str: ...
+    @property
+    def media_type(self) -> builtins.str: ...
+    @property
+    def descriptor(self) -> Descriptor: ...
+    def __repr__(self) -> builtins.str: ...
 
 @typing.final
 class Function:

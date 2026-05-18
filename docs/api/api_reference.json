@@ -1662,6 +1662,213 @@
       ],
       "submodules": []
     },
+    "ommx.experiment": {
+      "name": "ommx.experiment",
+      "doc": "",
+      "items": [
+        {
+          "kind": "Class",
+          "name": "Experiment",
+          "doc": "",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "load",
+              "doc": "Load a committed Experiment Artifact from the local registry.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "image_name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Experiment",
+                    "link_target": {
+                      "fqn": "ommx.experiment.Experiment",
+                      "doc_module": "ommx.experiment",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "run_parameters_df",
+              "doc": "Wide DataFrame of run parameters, indexed by `run_id`.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "image_name",
+              "doc": "",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "records",
+              "doc": "",
+              "type_": {
+                "display": "list[_ommx_rust.ExperimentRecord]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "ExperimentRecord",
+                    "link_target": {
+                      "fqn": "ommx.experiment.ExperimentRecord",
+                      "doc_module": "ommx.experiment",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "ExperimentRecord",
+          "doc": "",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "descriptor",
+              "doc": "",
+              "type_": {
+                "display": "Descriptor",
+                "link_target": {
+                  "fqn": "ommx.artifact.Descriptor",
+                  "doc_module": "ommx.artifact",
+                  "kind": "Class",
+                  "attribute": null
+                },
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "media_type",
+              "doc": "",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "name",
+              "doc": "",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "run_id",
+              "doc": "",
+              "type_": {
+                "display": "Optional[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "space",
+              "doc": "",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        }
+      ],
+      "submodules": []
+    },
     "ommx.v1": {
       "name": "ommx.v1",
       "doc": "",
@@ -25765,6 +25972,8 @@
     "ommx.artifact.get_images": "ommx.artifact",
     "ommx.artifact.get_local_registry_root": "ommx.artifact",
     "ommx.artifact.set_local_registry_root": "ommx.artifact",
+    "ommx.experiment.Experiment": "ommx.experiment",
+    "ommx.experiment.ExperimentRecord": "ommx.experiment",
     "ommx.v1.AdditionalCapability": "ommx.v1",
     "ommx.v1.AttachedConstraint": "ommx.v1",
     "ommx.v1.AttachedDecisionVariable": "ommx.v1",
