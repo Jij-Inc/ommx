@@ -135,7 +135,7 @@ mod tests {
             .prop_map(|(ids, flips)| {
                 let mut a = State::default();
                 let mut b = State::default();
-                for (flip, (id, value)) in flips.into_iter().zip(ids.into_iter()) {
+                for (flip, (id, value)) in flips.into_iter().zip(ids) {
                     if flip {
                         a.entries.insert(id, value);
                     } else {

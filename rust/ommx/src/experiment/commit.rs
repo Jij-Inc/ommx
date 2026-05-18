@@ -56,7 +56,7 @@ impl<'reg> UnsealedExperimentState<'reg> {
     /// unsealed root artifact. This stores component blobs but does not
     /// create the root manifest blob and does not update any image ref.
     fn into_unsealed_artifact(
-        &self,
+        self,
         registry: &'reg LocalRegistry,
     ) -> Result<UnsealedArtifact<'reg>> {
         let mut layers = Vec::new();
@@ -71,7 +71,7 @@ impl<'reg> UnsealedExperimentState<'reg> {
         }
 
         // Aggregate layers, materialised at commit time.
-        let run_parameters = serde_json::to_vec(&run_parameters_json(self)?)
+        let run_parameters = serde_json::to_vec(&run_parameters_json(&self)?)
             .map_err(|e| crate::error!("Failed to encode run parameters JSON: {e}"))?;
         let descriptor = store_aggregate_layer(
             registry,
