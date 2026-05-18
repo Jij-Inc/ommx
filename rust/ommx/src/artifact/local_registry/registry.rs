@@ -257,6 +257,20 @@ impl LocalRegistry {
         crate::artifact::anonymous_artifact_image_name(&registry_id)
     }
 
+    /// Synthesize a fresh anonymous Experiment image name keyed to
+    /// this registry's `registry_id`.
+    ///
+    /// Format:
+    /// `<registry-id8>.ommx.local/experiment:<timestamp>-<nonce>`.
+    /// This keeps unnamed experiments under a distinct local
+    /// repository while preserving the same non-colliding tag shape as
+    /// anonymous artifacts.
+    pub fn synthesize_anonymous_experiment_image_name(&self) -> Result<ImageRef> {
+        let registry_id = self.index.registry_id()?;
+        crate::artifact::anonymous_local_image_name(&registry_id, "experiment")
+            .with_context(|| "Failed to synthesise anonymous experiment image name")
+    }
+
     /// List every SQLite ref whose `(name, reference)` matches the
     /// shape an anonymous artifact's image name would take:
     /// `<registry-id8>.ommx.local/anonymous` (8 lowercase hex chars
