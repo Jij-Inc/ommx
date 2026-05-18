@@ -267,11 +267,8 @@ impl LocalRegistry {
     /// anonymous artifacts.
     pub fn synthesize_anonymous_experiment_image_name(&self) -> Result<ImageRef> {
         let registry_id = self.index.registry_id()?;
-        crate::artifact::anonymous_local_image_name(
-            &registry_id,
-            "experiment",
-            "anonymous experiment",
-        )
+        crate::artifact::anonymous_local_image_name(&registry_id, "experiment")
+            .with_context(|| "Failed to synthesise anonymous experiment image name")
     }
 
     /// List every SQLite ref whose `(name, reference)` matches the
