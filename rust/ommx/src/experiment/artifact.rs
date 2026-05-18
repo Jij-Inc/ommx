@@ -1,7 +1,9 @@
-//! Sealing an experiment session into an immutable OMMX Artifact.
+//! Mapping an unsealed Experiment state to an immutable OMMX Artifact.
 
-use super::parameter::ParameterTable;
-use super::{RecordRef, UnsealedExperimentState};
+use super::attribute::RunAttributeTable;
+use super::index::ExperimentIndex;
+use super::parameter::RunParameterTable;
+use super::UnsealedExperimentState;
 use super::{
     ANN_ARTIFACT_KIND, ANN_EXPERIMENT_NAME, ANN_EXPERIMENT_SCHEMA, ANN_EXPERIMENT_STATUS,
     ANN_LAYER, ARTIFACT_KIND_EXPERIMENT, EXPERIMENT_INDEX_MEDIA_TYPE, EXPERIMENT_SCHEMA_V1,
@@ -14,7 +16,6 @@ use crate::artifact::local_registry::{
 use crate::artifact::{media_types, ImageRef, LocalArtifact};
 use anyhow::Result;
 use oci_spec::image::MediaType;
-use serde::Serialize;
 use std::collections::HashMap;
 
 impl<'reg> UnsealedExperimentState<'reg> {
@@ -24,7 +25,7 @@ impl<'reg> UnsealedExperimentState<'reg> {
     pub(super) fn commit(self, registry: &'reg LocalRegistry) -> Result<LocalArtifact<'reg>> {
         let image_name = self.image_name(registry)?;
         let config_descriptor = registry.store_empty_config()?;
-        let layers = self.materialize_layers(registry)?;
+        let layers = ExperimentArtifactLayers::from_state(&self, registry)?.into_descriptors();
         let artifact = UnsealedArtifact::new(
             MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
             config_descriptor,
@@ -52,56 +53,6 @@ impl<'reg> UnsealedExperimentState<'reg> {
         ))
     }
 
-    /// Collect already-stored record descriptors and materialize the
-    /// commit-time aggregate JSON layers.
-    fn materialize_layers(
-        &self,
-        registry: &'reg LocalRegistry,
-    ) -> Result<Vec<StoredDescriptor<'reg>>> {
-        let mut layers = self.record_layers();
-        layers.extend(self.aggregate_layers(registry)?);
-        Ok(layers)
-    }
-
-    /// Record layers: experiment space first, then each run's space.
-    /// `layers[]` keeps one descriptor per record (digests may repeat
-    /// across annotation-distinct layers). The payload bytes were
-    /// already written when each record was logged.
-    fn record_layers(&self) -> Vec<StoredDescriptor<'reg>> {
-        let run_records = self.runs.iter().flat_map(|run| run.records.iter());
-        self.records
-            .iter()
-            .chain(run_records)
-            .map(|record| record.descriptor.clone())
-            .collect()
-    }
-
-    fn aggregate_layers(
-        &self,
-        registry: &'reg LocalRegistry,
-    ) -> Result<Vec<StoredDescriptor<'reg>>> {
-        Ok(vec![
-            store_aggregate_json_layer(
-                registry,
-                RUN_PARAMETERS_MEDIA_TYPE,
-                LAYER_KIND_RUN_PARAMETERS,
-                &run_parameters_json(self)?,
-            )?,
-            store_aggregate_json_layer(
-                registry,
-                RUN_ATTRIBUTES_MEDIA_TYPE,
-                LAYER_KIND_RUN_ATTRIBUTES,
-                &run_attributes_json(self),
-            )?,
-            store_aggregate_json_layer(
-                registry,
-                EXPERIMENT_INDEX_MEDIA_TYPE,
-                LAYER_KIND_INDEX,
-                &experiment_index_json(self),
-            )?,
-        ])
-    }
-
     fn image_name(&self, registry: &LocalRegistry) -> Result<ImageRef> {
         match &self.requested_ref {
             Some(image_ref) => Ok(image_ref.clone()),
@@ -110,11 +61,74 @@ impl<'reg> UnsealedExperimentState<'reg> {
     }
 }
 
+/// OCI layer descriptors that make up the Experiment artifact.
+///
+/// Record descriptors are already stored when the corresponding
+/// `log_*` call returns. Aggregate descriptors are produced during
+/// commit from the in-memory run table data.
+struct ExperimentArtifactLayers<'reg> {
+    descriptors: Vec<StoredDescriptor<'reg>>,
+}
+
+impl<'reg> ExperimentArtifactLayers<'reg> {
+    fn from_state(
+        state: &UnsealedExperimentState<'reg>,
+        registry: &'reg LocalRegistry,
+    ) -> Result<Self> {
+        let mut descriptors = Self::record_descriptors(state);
+        descriptors.extend(Self::aggregate_descriptors(state, registry)?);
+        Ok(Self { descriptors })
+    }
+
+    fn into_descriptors(self) -> Vec<StoredDescriptor<'reg>> {
+        self.descriptors
+    }
+
+    /// Record layers: experiment space first, then each run's space.
+    /// The payload bytes were already written when each record was
+    /// logged.
+    fn record_descriptors(state: &UnsealedExperimentState<'reg>) -> Vec<StoredDescriptor<'reg>> {
+        let run_records = state.runs.iter().flat_map(|run| run.records.iter());
+        state
+            .records
+            .iter()
+            .chain(run_records)
+            .map(|record| record.descriptor.clone())
+            .collect()
+    }
+
+    fn aggregate_descriptors(
+        state: &UnsealedExperimentState<'reg>,
+        registry: &'reg LocalRegistry,
+    ) -> Result<Vec<StoredDescriptor<'reg>>> {
+        Ok(vec![
+            store_aggregate_json_layer(
+                registry,
+                RUN_PARAMETERS_MEDIA_TYPE,
+                LAYER_KIND_RUN_PARAMETERS,
+                &RunParameterTable::from_runs(&state.runs)?,
+            )?,
+            store_aggregate_json_layer(
+                registry,
+                RUN_ATTRIBUTES_MEDIA_TYPE,
+                LAYER_KIND_RUN_ATTRIBUTES,
+                &RunAttributeTable::from_runs(&state.runs),
+            )?,
+            store_aggregate_json_layer(
+                registry,
+                EXPERIMENT_INDEX_MEDIA_TYPE,
+                LAYER_KIND_INDEX,
+                &ExperimentIndex::from_state(state),
+            )?,
+        ])
+    }
+}
+
 fn store_aggregate_json_layer<'reg>(
     registry: &'reg LocalRegistry,
     media_type: &str,
     layer_kind: &str,
-    value: &impl Serialize,
+    value: &impl serde::Serialize,
 ) -> Result<StoredDescriptor<'reg>> {
     let mut annotations = HashMap::new();
     annotations.insert(ANN_LAYER.to_string(), layer_kind.to_string());
@@ -137,83 +151,4 @@ fn manifest_annotations(state: &UnsealedExperimentState<'_>) -> HashMap<String, 
             EXPERIMENT_STATUS_FINISHED.to_string(),
         ),
     ])
-}
-
-#[derive(Serialize)]
-struct RunAttributes {
-    runs: Vec<RunAttributeRow>,
-}
-
-#[derive(Serialize)]
-struct RunAttributeRow {
-    run_id: u64,
-    status: &'static str,
-    elapsed_seconds: f64,
-}
-
-fn run_attributes_json(state: &UnsealedExperimentState<'_>) -> RunAttributes {
-    RunAttributes {
-        runs: state
-            .runs
-            .iter()
-            .map(|run| RunAttributeRow {
-                run_id: run.run_id,
-                status: run.status.as_str(),
-                elapsed_seconds: run.elapsed_secs,
-            })
-            .collect(),
-    }
-}
-
-fn run_parameters_json(state: &UnsealedExperimentState<'_>) -> Result<ParameterTable> {
-    ParameterTable::from_runs(state)
-}
-
-#[derive(Serialize)]
-struct ExperimentIndex {
-    schema: &'static str,
-    name: String,
-    experiment_records: Vec<RecordIndexEntry>,
-    runs: Vec<RunIndexEntry>,
-}
-
-#[derive(Serialize)]
-struct RunIndexEntry {
-    run_id: u64,
-    parameter_names: Vec<String>,
-    records: Vec<RecordIndexEntry>,
-}
-
-#[derive(Serialize)]
-struct RecordIndexEntry {
-    name: String,
-    media_type: String,
-    digest: String,
-    size: u64,
-}
-
-fn experiment_index_json(state: &UnsealedExperimentState<'_>) -> ExperimentIndex {
-    ExperimentIndex {
-        schema: EXPERIMENT_SCHEMA_V1,
-        name: state.name.clone(),
-        experiment_records: state.records.iter().map(record_index_entry).collect(),
-        runs: state
-            .runs
-            .iter()
-            .map(|run| RunIndexEntry {
-                run_id: run.run_id,
-                parameter_names: run.parameters.keys().cloned().collect(),
-                records: run.records.iter().map(record_index_entry).collect(),
-            })
-            .collect(),
-    }
-}
-
-fn record_index_entry(record: &RecordRef<'_>) -> RecordIndexEntry {
-    RecordIndexEntry {
-        name: record.name.clone(),
-        media_type: record.descriptor.media_type().to_string(),
-        digest: record.descriptor.digest().to_string(),
-        size: record.descriptor.size(),
-    }
 }

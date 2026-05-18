@@ -1,6 +1,6 @@
-//! Run parameter values and committed parameter table serialization.
+//! Run parameter values and committed run-parameter table serialization.
 
-use super::UnsealedExperimentState;
+use super::run::RunEntry;
 use anyhow::Result;
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -75,18 +75,18 @@ impl ParameterValue {
 }
 
 #[derive(Serialize)]
-pub(super) struct ParameterTable {
-    columns: BTreeMap<String, ParameterColumn>,
+pub(super) struct RunParameterTable {
+    columns: BTreeMap<String, RunParameterColumn>,
 }
 
-impl ParameterTable {
-    pub(super) fn from_runs(state: &UnsealedExperimentState<'_>) -> Result<Self> {
+impl RunParameterTable {
+    pub(super) fn from_runs<'reg>(runs: &[RunEntry<'reg>]) -> Result<Self> {
         let mut columns = BTreeMap::new();
-        for run in &state.runs {
+        for run in runs {
             for (name, value) in &run.parameters {
                 columns
                     .entry(name.clone())
-                    .or_insert_with(|| ParameterColumn::from_value(value))
+                    .or_insert_with(|| RunParameterColumn::from_value(value))
                     .insert(name, run.run_id, value)?;
             }
         }
@@ -96,7 +96,7 @@ impl ParameterTable {
 
 #[derive(Serialize)]
 #[serde(tag = "type", content = "values")]
-enum ParameterColumn {
+enum RunParameterColumn {
     #[serde(rename = "bool")]
     Bool(BTreeMap<u64, bool>),
     #[serde(rename = "int64")]
@@ -107,7 +107,7 @@ enum ParameterColumn {
     String(BTreeMap<u64, String>),
 }
 
-impl ParameterColumn {
+impl RunParameterColumn {
     fn from_value(value: &ParameterValue) -> Self {
         match value {
             ParameterValue::Bool(_) => Self::Bool(BTreeMap::new()),

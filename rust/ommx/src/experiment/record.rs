@@ -8,21 +8,24 @@ use std::collections::HashMap;
 
 /// The storage space a [`RecordRef`] belongs to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Space {
+pub(super) enum RecordSpace {
     /// Shared by the whole experiment (dataset, source problem, ...).
     Experiment,
     /// Owned by a single run.
     Run,
 }
 
-impl Space {
+impl RecordSpace {
     fn as_str(self) -> &'static str {
         match self {
-            Space::Experiment => "experiment",
-            Space::Run => "run",
+            RecordSpace::Experiment => "experiment",
+            RecordSpace::Run => "run",
         }
     }
 }
+
+/// OCI layer media type for JSON record payloads.
+const JSON_MEDIA_TYPE: &str = "application/json";
 
 /// A named reference to a payload that has already been written to the
 /// BlobStore.
@@ -56,7 +59,7 @@ pub(super) fn upsert_record_ref<'reg>(
 /// [`RecordRef`].
 pub(super) fn store_record_ref<'reg>(
     registry: &'reg LocalRegistry,
-    space: Space,
+    space: RecordSpace,
     run_id: Option<u64>,
     name: &str,
     media_type: MediaType,
@@ -74,4 +77,13 @@ pub(super) fn store_record_ref<'reg>(
         name: name.to_string(),
         descriptor,
     })
+}
+
+pub(super) fn json_media_type() -> MediaType {
+    MediaType::Other(JSON_MEDIA_TYPE.to_string())
+}
+
+pub(super) fn encode_json(name: &str, value: impl serde::Serialize) -> Result<Vec<u8>> {
+    serde_json::to_vec(&value)
+        .map_err(|e| crate::error!("Failed to encode JSON record `{name}`: {e}"))
 }
