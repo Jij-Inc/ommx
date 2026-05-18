@@ -48,6 +48,7 @@ mod session;
 #[cfg(test)]
 mod tests;
 
+pub use model::ParameterValue;
 pub use session::{Experiment, Run, SealedExperiment};
 
 use anyhow::Result;

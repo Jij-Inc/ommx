@@ -60,11 +60,55 @@ pub(super) struct RecordRef<'reg> {
 /// JSON values. Missing cells are represented by the absence of a
 /// `(run_id, value)` entry in the committed column.
 #[derive(Debug, Clone, PartialEq)]
-pub(super) enum ParameterValue {
+pub enum ParameterValue {
     Bool(bool),
     Int(i64),
     Float(f64),
     String(String),
+}
+
+impl From<bool> for ParameterValue {
+    fn from(value: bool) -> Self {
+        Self::Bool(value)
+    }
+}
+
+macro_rules! impl_parameter_value_from_signed_integer {
+    ($($ty:ty),* $(,)?) => {
+        $(
+            impl From<$ty> for ParameterValue {
+                fn from(value: $ty) -> Self {
+                    Self::Int(i64::from(value))
+                }
+            }
+        )*
+    };
+}
+
+impl_parameter_value_from_signed_integer!(i8, i16, i32, i64);
+
+impl From<f32> for ParameterValue {
+    fn from(value: f32) -> Self {
+        Self::Float(f64::from(value))
+    }
+}
+
+impl From<f64> for ParameterValue {
+    fn from(value: f64) -> Self {
+        Self::Float(value)
+    }
+}
+
+impl From<String> for ParameterValue {
+    fn from(value: String) -> Self {
+        Self::String(value)
+    }
+}
+
+impl From<&str> for ParameterValue {
+    fn from(value: &str) -> Self {
+        Self::String(value.to_string())
+    }
 }
 
 /// A closed logical Run recorded in an unsealed Experiment.

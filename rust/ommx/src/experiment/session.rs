@@ -220,12 +220,11 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
     pub fn log_parameter(
         &mut self,
         name: impl Into<String>,
-        value: impl serde::Serialize,
+        value: impl Into<ParameterValue>,
     ) -> Result<()> {
         let name = name.into();
-        let value = serde_json::to_value(value)
-            .map_err(|e| crate::error!("Failed to encode run parameter `{name}`: {e}"))?;
-        let value = parameter_value_from_json(&name, value)?;
+        let value = value.into();
+        validate_parameter_value(&name, &value)?;
         self.parameters.insert(name, value);
         Ok(())
     }
@@ -309,32 +308,12 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
     }
 }
 
-fn parameter_value_from_json(name: &str, value: serde_json::Value) -> Result<ParameterValue> {
+fn validate_parameter_value(name: &str, value: &ParameterValue) -> Result<()> {
     match value {
-        serde_json::Value::Bool(value) => Ok(ParameterValue::Bool(value)),
-        serde_json::Value::Number(value) => {
-            if let Some(value) = value.as_i64() {
-                Ok(ParameterValue::Int(value))
-            } else if let Some(value) = value.as_u64() {
-                let value = i64::try_from(value).map_err(|_| {
-                    crate::error!("Run parameter `{name}` integer value exceeds i64 range")
-                })?;
-                Ok(ParameterValue::Int(value))
-            } else if let Some(value) = value.as_f64() {
-                Ok(ParameterValue::Float(value))
-            } else {
-                crate::bail!("Run parameter `{name}` must be finite")
-            }
+        ParameterValue::Float(value) if !value.is_finite() => {
+            crate::bail!("Run parameter `{name}` float value must be finite")
         }
-        serde_json::Value::String(value) => Ok(ParameterValue::String(value)),
-        serde_json::Value::Null => {
-            crate::bail!(
-                "Run parameter `{name}` must be bool, int, float, or string; null represents a missing cell"
-            )
-        }
-        serde_json::Value::Array(_) | serde_json::Value::Object(_) => {
-            crate::bail!("Run parameter `{name}` must be bool, int, float, or string")
-        }
+        _ => Ok(()),
     }
 }
 

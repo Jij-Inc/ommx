@@ -302,21 +302,14 @@ fn log_parameter_materializes_run_parameter_table() {
 }
 
 #[test]
-fn log_parameter_rejects_non_scalar_values() {
+fn log_parameter_rejects_non_finite_float_values() {
     Experiment::with_temp_local_registry("bad-parameters", |experiment| {
         let mut run = experiment.run().unwrap();
 
         let err = run
-            .log_parameter("solver_options", json!({ "threads": 1 }))
-            .expect_err("parameter table accepts only scalar values");
-        assert!(err
-            .to_string()
-            .contains("must be bool, int, float, or string"));
-
-        let err = run
-            .log_parameter("missing", serde_json::Value::Null)
-            .expect_err("null is represented by a missing table cell");
-        assert!(err.to_string().contains("null represents a missing cell"));
+            .log_parameter("time_limit", f64::NAN)
+            .expect_err("parameter table accepts only finite float values");
+        assert!(err.to_string().contains("must be finite"));
         Ok(())
     })
     .unwrap();
