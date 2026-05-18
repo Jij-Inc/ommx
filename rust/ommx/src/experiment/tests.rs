@@ -425,6 +425,25 @@ fn anonymous_experiment_uses_registry_generated_image_name() {
         .is_some());
 }
 
+#[test]
+fn named_experiment_uses_requested_image_name() {
+    let temp = crate::artifact::local_registry::TempLocalRegistry::new().unwrap();
+    let image_name =
+        crate::artifact::ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:requested-name")
+            .unwrap();
+    let experiment =
+        Experiment::with_registry(temp.registry(), Name::Named(image_name.clone())).unwrap();
+    experiment.log_json("dataset", json!("miplib2017")).unwrap();
+
+    let artifact = experiment.commit().unwrap().into_artifact();
+    assert_eq!(artifact.image_name(), &image_name);
+    assert!(temp
+        .registry()
+        .resolve_image_name(&image_name)
+        .unwrap()
+        .is_some());
+}
+
 /// Dropping a run handle without closing it does not write its local
 /// state back to the experiment. BlobStore payloads written before the
 /// drop may remain as orphan blobs until GC.
