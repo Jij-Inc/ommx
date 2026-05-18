@@ -1,6 +1,6 @@
 //! Sealing an experiment session into an immutable OMMX Artifact.
 
-use super::model::{RecordRef, UnsealedExperimentState};
+use super::model::{ParameterValue, RecordRef, UnsealedExperimentState};
 use super::{
     build_descriptor, ANN_ARTIFACT_KIND, ANN_EXPERIMENT_NAME, ANN_EXPERIMENT_SCHEMA,
     ANN_EXPERIMENT_STATUS, ANN_LAYER, ARTIFACT_KIND_EXPERIMENT, EXPERIMENT_INDEX_MEDIA_TYPE,
@@ -14,7 +14,7 @@ use crate::artifact::{media_types, sha256_digest, ImageRef, LocalArtifact};
 use anyhow::Result;
 use oci_spec::image::{DescriptorBuilder, Digest, MediaType};
 use serde_json::json;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::str::FromStr;
 
 /// Commit an unsealed experiment state as one immutable artifact.
@@ -71,7 +71,7 @@ impl<'reg> UnsealedExperimentState<'reg> {
         }
 
         // Aggregate layers, materialised at commit time.
-        let run_parameters = serde_json::to_vec(&run_parameters_json(&self))
+        let run_parameters = serde_json::to_vec(&run_parameters_json(self)?)
             .map_err(|e| crate::error!("Failed to encode run parameters JSON: {e}"))?;
         let descriptor = store_aggregate_layer(
             registry,
@@ -185,17 +185,141 @@ fn run_attributes_json(state: &UnsealedExperimentState<'_>) -> serde_json::Value
     })
 }
 
-fn run_parameters_json(state: &UnsealedExperimentState<'_>) -> serde_json::Value {
-    json!({
-        "runs": state
-            .runs
-            .iter()
-            .map(|run| json!({
-                "run_id": run.run_id,
-                "parameters": run.parameters,
-            }))
-            .collect::<Vec<_>>(),
-    })
+fn run_parameters_json(state: &UnsealedExperimentState<'_>) -> Result<serde_json::Value> {
+    let table = ParameterTable::from_runs(state)?;
+    Ok(table.to_json())
+}
+
+struct ParameterTable {
+    columns: BTreeMap<String, ParameterColumn>,
+}
+
+impl ParameterTable {
+    fn from_runs(state: &UnsealedExperimentState<'_>) -> Result<Self> {
+        let mut columns = BTreeMap::new();
+        for run in &state.runs {
+            for (name, value) in &run.parameters {
+                columns
+                    .entry(name.clone())
+                    .or_insert_with(|| ParameterColumn::from_value(value))
+                    .insert(name, run.run_id, value)?;
+            }
+        }
+        Ok(Self { columns })
+    }
+
+    fn to_json(&self) -> serde_json::Value {
+        json!({
+            "columns": self
+                .columns
+                .iter()
+                .map(|(name, column)| (name.clone(), column.to_json()))
+                .collect::<serde_json::Map<_, _>>(),
+        })
+    }
+}
+
+enum ParameterColumn {
+    Bool(BTreeMap<u64, bool>),
+    Int(BTreeMap<u64, i64>),
+    Float(BTreeMap<u64, f64>),
+    String(BTreeMap<u64, String>),
+}
+
+impl ParameterColumn {
+    fn from_value(value: &ParameterValue) -> Self {
+        match value {
+            ParameterValue::Bool(_) => Self::Bool(BTreeMap::new()),
+            ParameterValue::Int(_) => Self::Int(BTreeMap::new()),
+            ParameterValue::Float(_) => Self::Float(BTreeMap::new()),
+            ParameterValue::String(_) => Self::String(BTreeMap::new()),
+        }
+    }
+
+    fn insert(&mut self, name: &str, run_id: u64, value: &ParameterValue) -> Result<()> {
+        match (self, value) {
+            (Self::Bool(values), ParameterValue::Bool(value)) => {
+                values.insert(run_id, *value);
+                Ok(())
+            }
+            (Self::Int(values), ParameterValue::Int(value)) => {
+                values.insert(run_id, *value);
+                Ok(())
+            }
+            (column @ Self::Int(_), ParameterValue::Float(value)) => {
+                let mut values = match std::mem::replace(column, Self::Float(BTreeMap::new())) {
+                    Self::Int(values) => values
+                        .into_iter()
+                        .map(|(run_id, value)| (run_id, value as f64))
+                        .collect::<BTreeMap<_, _>>(),
+                    _ => unreachable!(),
+                };
+                values.insert(run_id, *value);
+                *column = Self::Float(values);
+                Ok(())
+            }
+            (Self::Float(values), ParameterValue::Int(value)) => {
+                values.insert(run_id, *value as f64);
+                Ok(())
+            }
+            (Self::Float(values), ParameterValue::Float(value)) => {
+                values.insert(run_id, *value);
+                Ok(())
+            }
+            (Self::String(values), ParameterValue::String(value)) => {
+                values.insert(run_id, value.clone());
+                Ok(())
+            }
+            (column, value) => {
+                crate::bail!(
+                    "Run parameter `{name}` has mixed column types: existing {}, incoming {}",
+                    column.type_name(),
+                    value.type_name()
+                )
+            }
+        }
+    }
+
+    fn type_name(&self) -> &'static str {
+        match self {
+            Self::Bool(_) => "bool",
+            Self::Int(_) => "int64",
+            Self::Float(_) => "float64",
+            Self::String(_) => "string",
+        }
+    }
+
+    fn to_json(&self) -> serde_json::Value {
+        match self {
+            Self::Bool(values) => json!({
+                "type": self.type_name(),
+                "values": values,
+            }),
+            Self::Int(values) => json!({
+                "type": self.type_name(),
+                "values": values,
+            }),
+            Self::Float(values) => json!({
+                "type": self.type_name(),
+                "values": values,
+            }),
+            Self::String(values) => json!({
+                "type": self.type_name(),
+                "values": values,
+            }),
+        }
+    }
+}
+
+impl ParameterValue {
+    fn type_name(&self) -> &'static str {
+        match self {
+            Self::Bool(_) => "bool",
+            Self::Int(_) => "int64",
+            Self::Float(_) => "float64",
+            Self::String(_) => "string",
+        }
+    }
 }
 
 fn experiment_index_json(state: &UnsealedExperimentState<'_>) -> serde_json::Value {

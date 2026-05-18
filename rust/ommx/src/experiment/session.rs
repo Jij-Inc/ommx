@@ -1,13 +1,14 @@
 //! The public `Experiment` / `Run` handles and their `log_*` API.
 
-use super::model::{RecordRef, RunEntry, RunStatus, Space, UnsealedExperimentState};
+use super::model::{
+    ParameterValue, RecordRef, RunEntry, RunStatus, Space, UnsealedExperimentState,
+};
 use super::{build_descriptor, commit, ANN_RECORD_NAME, ANN_RUN_ID, ANN_SPACE};
 use crate::artifact::local_registry::{LocalRegistry, TempLocalRegistry};
 use crate::artifact::{media_types, sha256_digest, ImageRef, LocalArtifact};
 use crate::{Instance, SampleSet, Solution};
 use anyhow::Result;
 use oci_spec::image::MediaType;
-use serde_json::Value;
 use std::collections::{BTreeMap, HashMap};
 use std::str::FromStr;
 use std::sync::{Mutex, MutexGuard};
@@ -44,7 +45,7 @@ pub struct Run<'exp, 'reg> {
     experiment: &'exp Experiment<'reg>,
     run_id: u64,
     records: Vec<RecordRef<'reg>>,
-    parameters: BTreeMap<String, Value>,
+    parameters: BTreeMap<String, ParameterValue>,
     started_at: Instant,
 }
 
@@ -224,7 +225,7 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
         let name = name.into();
         let value = serde_json::to_value(value)
             .map_err(|e| crate::error!("Failed to encode run parameter `{name}`: {e}"))?;
-        ensure_parameter_scalar(&name, &value)?;
+        let value = parameter_value_from_json(&name, value)?;
         self.parameters.insert(name, value);
         Ok(())
     }
@@ -308,11 +309,31 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
     }
 }
 
-fn ensure_parameter_scalar(name: &str, value: &Value) -> Result<()> {
+fn parameter_value_from_json(name: &str, value: serde_json::Value) -> Result<ParameterValue> {
     match value {
-        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => Ok(()),
-        Value::Array(_) | Value::Object(_) => {
-            crate::bail!("Run parameter `{name}` must be a JSON scalar, got {value}")
+        serde_json::Value::Bool(value) => Ok(ParameterValue::Bool(value)),
+        serde_json::Value::Number(value) => {
+            if let Some(value) = value.as_i64() {
+                Ok(ParameterValue::Int(value))
+            } else if let Some(value) = value.as_u64() {
+                let value = i64::try_from(value).map_err(|_| {
+                    crate::error!("Run parameter `{name}` integer value exceeds i64 range")
+                })?;
+                Ok(ParameterValue::Int(value))
+            } else if let Some(value) = value.as_f64() {
+                Ok(ParameterValue::Float(value))
+            } else {
+                crate::bail!("Run parameter `{name}` must be finite")
+            }
+        }
+        serde_json::Value::String(value) => Ok(ParameterValue::String(value)),
+        serde_json::Value::Null => {
+            crate::bail!(
+                "Run parameter `{name}` must be bool, int, float, or string; null represents a missing cell"
+            )
+        }
+        serde_json::Value::Array(_) | serde_json::Value::Object(_) => {
+            crate::bail!("Run parameter `{name}` must be bool, int, float, or string")
         }
     }
 }

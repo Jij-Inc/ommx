@@ -273,22 +273,27 @@ fn log_parameter_materializes_run_parameter_table() {
         assert_eq!(
             table,
             json!({
-                "runs": [
-                    {
-                        "run_id": 0,
-                        "parameters": {
-                            "solver": "scip",
-                            "time_limit": 20.0,
+                "columns": {
+                    "presolve": {
+                        "type": "bool",
+                        "values": {
+                            "1": true,
                         },
                     },
-                    {
-                        "run_id": 1,
-                        "parameters": {
-                            "presolve": true,
-                            "solver": "highs",
+                    "solver": {
+                        "type": "string",
+                        "values": {
+                            "0": "scip",
+                            "1": "highs",
                         },
                     },
-                ],
+                    "time_limit": {
+                        "type": "float64",
+                        "values": {
+                            "0": 20.0,
+                        },
+                    },
+                },
             })
         );
         Ok(())
@@ -304,7 +309,76 @@ fn log_parameter_rejects_non_scalar_values() {
         let err = run
             .log_parameter("solver_options", json!({ "threads": 1 }))
             .expect_err("parameter table accepts only scalar values");
-        assert!(err.to_string().contains("must be a JSON scalar"));
+        assert!(err
+            .to_string()
+            .contains("must be bool, int, float, or string"));
+
+        let err = run
+            .log_parameter("missing", serde_json::Value::Null)
+            .expect_err("null is represented by a missing table cell");
+        assert!(err.to_string().contains("null represents a missing cell"));
+        Ok(())
+    })
+    .unwrap();
+}
+
+#[test]
+fn log_parameter_promotes_int_column_to_float_at_commit() {
+    Experiment::with_temp_local_registry("promote-parameters", |experiment| {
+        {
+            let mut run0 = experiment.run().unwrap();
+            run0.log_parameter("time_limit", 10).unwrap();
+            run0.finish().unwrap();
+        }
+        {
+            let mut run1 = experiment.run().unwrap();
+            run1.log_parameter("time_limit", 20.5).unwrap();
+            run1.finish().unwrap();
+        }
+
+        let artifact = experiment.commit().unwrap().into_artifact();
+        let layers = artifact.layers().unwrap();
+        let run_params = find_layer(&layers, ANN_LAYER, LAYER_KIND_RUN_PARAMETERS);
+        let bytes = artifact.get_blob(run_params.digest()).unwrap();
+        let table: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+
+        assert_eq!(
+            table,
+            json!({
+                "columns": {
+                    "time_limit": {
+                        "type": "float64",
+                        "values": {
+                            "0": 10.0,
+                            "1": 20.5,
+                        },
+                    },
+                },
+            })
+        );
+        Ok(())
+    })
+    .unwrap();
+}
+
+#[test]
+fn commit_rejects_mixed_parameter_column_types() {
+    Experiment::with_temp_local_registry("mixed-parameters", |experiment| {
+        {
+            let mut run0 = experiment.run().unwrap();
+            run0.log_parameter("seed", 1).unwrap();
+            run0.finish().unwrap();
+        }
+        {
+            let mut run1 = experiment.run().unwrap();
+            run1.log_parameter("seed", "1").unwrap();
+            run1.finish().unwrap();
+        }
+
+        let err = experiment
+            .commit()
+            .expect_err("mixed parameter column types must be rejected");
+        assert!(err.to_string().contains("mixed column types"));
         Ok(())
     })
     .unwrap();

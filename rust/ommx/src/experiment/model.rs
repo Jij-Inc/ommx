@@ -4,7 +4,6 @@
 
 use crate::artifact::local_registry::StoredDescriptor;
 use crate::artifact::ImageRef;
-use serde_json::Value;
 use std::collections::BTreeMap;
 
 /// The storage space a [`RecordRef`] belongs to.
@@ -54,6 +53,20 @@ pub(super) struct RecordRef<'reg> {
     pub(super) descriptor: StoredDescriptor<'reg>,
 }
 
+/// A scalar cell value accepted by the run parameter table.
+///
+/// Parameters are intended to become DataFrame / Arrow-like columns at
+/// commit time, so this intentionally excludes nulls and structured
+/// JSON values. Missing cells are represented by the absence of a
+/// `(run_id, value)` entry in the committed column.
+#[derive(Debug, Clone, PartialEq)]
+pub(super) enum ParameterValue {
+    Bool(bool),
+    Int(i64),
+    Float(f64),
+    String(String),
+}
+
 /// A closed logical Run recorded in an unsealed Experiment.
 ///
 /// `Run<'exp>` is the live handle: it borrows the parent Experiment and
@@ -67,7 +80,7 @@ pub(super) struct RecordRef<'reg> {
 pub(super) struct RunEntry<'reg> {
     pub(super) run_id: u64,
     pub(super) records: Vec<RecordRef<'reg>>,
-    pub(super) parameters: BTreeMap<String, Value>,
+    pub(super) parameters: BTreeMap<String, ParameterValue>,
     pub(super) status: RunStatus,
     pub(super) elapsed_secs: f64,
 }

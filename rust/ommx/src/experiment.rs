@@ -7,8 +7,9 @@
 //! to the *experiment space* (shared by the whole experiment) or to a
 //! *run space* (owned by a single [`Run`]).
 //! Run parameters are separate table data: [`Run::log_parameter`] records
-//! scalar values for comparison views, and commit materialises them as
-//! an aggregate run-parameter layer instead of individual Records.
+//! bool / int64 / float64 / string scalar values for comparison views,
+//! and commit materialises them as a typed column-oriented aggregate
+//! run-parameter layer instead of individual Records.
 //!
 //! Each `log_*` call writes its payload to the Local Registry's
 //! content-addressed BlobStore immediately, keeping only

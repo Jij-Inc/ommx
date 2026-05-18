@@ -260,14 +260,39 @@ OMMX core は `jijmodeling` を import しない。domain-specific problem stora
 
 ### 4.3 Run parameter table
 
-Run parameter table は Record とは別に、`run_id` と parameter name を key にした scalar table として持つ。
+Run parameter table は Record とは別に、`run_id` と parameter name を key にした scalar table として持つ。Parameter は最終的に pandas DataFrame / Apache Arrow の column として見せることを前提に、column ごとに型を固定する。cell value として受け付けるのは `bool`、`int64`、`float64`、`string` のみとし、`null`、array、object は受け付けない。欠損は `null` value ではなく、その `(run_id, parameter_name)` cell が存在しないことで表す。
 
 ```python
 run.log_parameter("timelimit", 1.0)
 run.log_parameter("seed", 0)
 ```
 
-この 2 つは論理的には別 parameter cell である。ただし物理的には、run ごとの parameter aggregate JSON または Experiment index JSON にまとめて保存してよい。
+この 2 つは論理的には別 parameter cell である。ただし物理的には、run ごとの parameter aggregate JSON または Experiment index JSON にまとめて保存してよい。実行中の `Run` は row-local な parameter map を持つが、column type の確定は commit 時の集計で行う。`int64` と `float64` が混在した column は `float64` に昇格し、それ以外の型混在は commit error にする。構造値や型混在を意図的に保存したい場合は、ユーザーが JSON を string 化して parameter に入れるか、Record として `log_json` / `log_record` する。
+
+commit 時に materialize する Run parameter table JSON は column-oriented とする。
+
+```json
+{
+  "columns": {
+    "timelimit": {
+      "type": "float64",
+      "values": {
+        "0": 1.0,
+        "1": 10.0
+      }
+    },
+    "solver": {
+      "type": "string",
+      "values": {
+        "0": "scip",
+        "1": "highs"
+      }
+    }
+  }
+}
+```
+
+`values` の key は `run_id` であり、存在しない key は missing cell を意味する。
 
 物理化候補:
 
@@ -820,7 +845,7 @@ API:
 
 - `log_*` は payload を即 `FileBlobStore::put_bytes` で BlobStore に書き、戻り値から組んだ descriptor を `Record` に保持する。payload bytes は in-memory に残さない。
 - `log_*` は同じ `(space, run_id, media type, name)` を upsert（replace）する。upsert で捨てられた古い blob は orphan blob になり GC に委ねる。
-- `Run::log_parameter` は JSON scalar のみを受け付け、実行中の `Run` 内の parameter map を upsert する。Parameter は Record ではなく、commit 時に Run parameter table JSON として materialize する。
+- `Run::log_parameter` は `bool`、`int64`、`float64`、`string` の table scalar のみを受け付け、実行中の `Run` 内の parameter map を upsert する。Parameter は Record ではなく、commit 時に column-oriented Run parameter table JSON として materialize する。column type は commit 時に確定し、`int64 -> float64` の昇格だけを許す。
 - Rust core でも複数の `Run<'_>` handle を同時に開ける。Run-scoped Record / parameter は Run 側の local state に入り、Experiment state への書き込みは `finish(self)` / `fail(self)` の close 時だけ行う。
 - `Run::finish(self)` / `Run::fail(self)` は Run handle を消費する。終了済み Run に後から Record を追加する経路は Rust core では型で作らない。
 - `Experiment.state.runs` は `Run<'exp>` handle ではなく `RunEntry` の一覧を持つ。`Run<'exp>` は親 Experiment への参照を含む実行中 handle であり、`RunEntry` は commit 時に parameter table / attributes / record index へ投影される lifetime-free な logical Run row である。
