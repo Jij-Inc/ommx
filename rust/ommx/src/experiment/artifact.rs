@@ -1,14 +1,13 @@
 //! Mapping an unsealed Experiment state to an immutable OMMX Artifact.
 
-use super::attribute::RunAttributeTable;
 use super::index::ExperimentIndex;
 use super::parameter::RunParameterTable;
 use super::UnsealedExperimentState;
 use super::{
     ANN_ARTIFACT_KIND, ANN_EXPERIMENT_NAME, ANN_EXPERIMENT_SCHEMA, ANN_EXPERIMENT_STATUS,
     ANN_LAYER, ARTIFACT_KIND_EXPERIMENT, EXPERIMENT_INDEX_MEDIA_TYPE, EXPERIMENT_SCHEMA_V1,
-    EXPERIMENT_STATUS_FINISHED, LAYER_KIND_INDEX, LAYER_KIND_RUN_ATTRIBUTES,
-    LAYER_KIND_RUN_PARAMETERS, RUN_ATTRIBUTES_MEDIA_TYPE, RUN_PARAMETERS_MEDIA_TYPE,
+    EXPERIMENT_STATUS_FINISHED, LAYER_KIND_INDEX, LAYER_KIND_RUN_PARAMETERS,
+    RUN_PARAMETERS_MEDIA_TYPE,
 };
 use crate::artifact::local_registry::{
     LocalRegistry, RefUpdate, StoredDescriptor, UnsealedArtifact,
@@ -107,12 +106,6 @@ impl<'reg> ExperimentArtifactLayers<'reg> {
                 RUN_PARAMETERS_MEDIA_TYPE,
                 LAYER_KIND_RUN_PARAMETERS,
                 &RunParameterTable::from_runs(&state.runs)?,
-            )?,
-            store_aggregate_json_layer(
-                registry,
-                RUN_ATTRIBUTES_MEDIA_TYPE,
-                LAYER_KIND_RUN_ATTRIBUTES,
-                &RunAttributeTable::from_runs(&state.runs),
             )?,
             store_aggregate_json_layer(
                 registry,

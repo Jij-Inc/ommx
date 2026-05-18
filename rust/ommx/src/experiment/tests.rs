@@ -1,12 +1,11 @@
 //! Tests for the experiment session model.
 
-use super::run::RunStatus;
 use super::UnsealedExperimentState;
 use super::{
     Experiment, ANN_ARTIFACT_KIND, ANN_EXPERIMENT_NAME, ANN_EXPERIMENT_SCHEMA,
     ANN_EXPERIMENT_STATUS, ANN_LAYER, ANN_RECORD_NAME, ANN_RUN_ID, ANN_SPACE,
     ARTIFACT_KIND_EXPERIMENT, EXPERIMENT_SCHEMA_V1, EXPERIMENT_STATUS_FINISHED, LAYER_KIND_INDEX,
-    LAYER_KIND_RUN_ATTRIBUTES, LAYER_KIND_RUN_PARAMETERS,
+    LAYER_KIND_RUN_PARAMETERS,
 };
 use crate::artifact::media_types;
 use crate::Instance;
@@ -42,10 +41,10 @@ fn find_layer<'a>(layers: &'a [Descriptor], key: &str, value: &str) -> &'a Descr
     matches[0]
 }
 
-/// `run()` hands out fresh 0-based ids; `finish()` / `fail()` consume the
-/// run handle, record the final status, and set elapsed time.
+/// `run()` hands out fresh 0-based ids; `finish()` consumes the run
+/// handle and records the closed run.
 #[test]
-fn run_lifecycle_assigns_ids_and_records_status() {
+fn run_lifecycle_assigns_ids_and_records_closed_runs() {
     Experiment::with_temp_local_registry("lifecycle", |experiment| {
         {
             let run0 = experiment.run().unwrap();
@@ -55,14 +54,12 @@ fn run_lifecycle_assigns_ids_and_records_status() {
         {
             let run1 = experiment.run().unwrap();
             assert_eq!(run1.run_id(), 1);
-            run1.fail().unwrap();
+            run1.finish().unwrap();
         }
 
         with_unsealed_state(&experiment, |state| {
-            assert_eq!(state.runs[0].status, RunStatus::Finished);
-            assert!(state.runs[0].elapsed_secs >= 0.0);
-            assert_eq!(state.runs[1].status, RunStatus::Failed);
-            assert!(state.runs[1].elapsed_secs >= 0.0);
+            assert_eq!(state.runs[0].run_id, 0);
+            assert_eq!(state.runs[1].run_id, 1);
         });
         Ok(())
     })
@@ -197,9 +194,9 @@ fn commit_produces_experiment_artifact() {
         );
 
         // 3 records (1 experiment-space + 2 run-space) + run-parameters
-        // + run-attributes + index.
+        // + index.
         let layers = artifact.layers().unwrap();
-        assert_eq!(layers.len(), 6);
+        assert_eq!(layers.len(), 5);
 
         let dataset = find_layer(&layers, ANN_RECORD_NAME, "dataset");
         assert_eq!(
@@ -230,8 +227,6 @@ fn commit_produces_experiment_artifact() {
         // Aggregate layers are not tagged as records.
         let run_params = find_layer(&layers, ANN_LAYER, LAYER_KIND_RUN_PARAMETERS);
         assert!(layer_annotation(run_params, ANN_SPACE).is_none());
-        let run_attrs = find_layer(&layers, ANN_LAYER, LAYER_KIND_RUN_ATTRIBUTES);
-        assert!(layer_annotation(run_attrs, ANN_SPACE).is_none());
         let index = find_layer(&layers, ANN_LAYER, LAYER_KIND_INDEX);
         assert!(layer_annotation(index, ANN_SPACE).is_none());
 

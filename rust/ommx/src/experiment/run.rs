@@ -10,25 +10,6 @@ use crate::{Instance, SampleSet, Solution};
 use anyhow::Result;
 use oci_spec::image::MediaType;
 use std::collections::BTreeMap;
-use std::time::Instant;
-
-/// Lifecycle status of a run.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum RunStatus {
-    /// The run finished normally.
-    Finished,
-    /// The run ended via a failure.
-    Failed,
-}
-
-impl RunStatus {
-    pub(super) fn as_str(self) -> &'static str {
-        match self {
-            RunStatus::Finished => "finished",
-            RunStatus::Failed => "failed",
-        }
-    }
-}
 
 /// A handle to a single run within an [`Experiment`].
 ///
@@ -45,7 +26,6 @@ pub struct Run<'exp, 'reg> {
     run_id: u64,
     records: Vec<RecordRef<'reg>>,
     parameters: BTreeMap<String, ParameterValue>,
-    started_at: Instant,
 }
 
 /// A closed logical Run recorded in an unsealed Experiment.
@@ -60,8 +40,6 @@ pub(super) struct RunEntry<'reg> {
     pub(super) run_id: u64,
     pub(super) records: Vec<RecordRef<'reg>>,
     pub(super) parameters: BTreeMap<String, ParameterValue>,
-    pub(super) status: RunStatus,
-    pub(super) elapsed_secs: f64,
 }
 
 impl<'exp, 'reg> Run<'exp, 'reg> {
@@ -71,7 +49,6 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
             run_id,
             records: Vec::new(),
             parameters: BTreeMap::new(),
-            started_at: Instant::now(),
         }
     }
 
@@ -127,18 +104,11 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
         self.log_record(name, media_types::v1_sample_set(), sample_set.to_bytes())
     }
 
-    /// Close the run with the `finished` status, record its elapsed
-    /// time, and append the closed run state to the parent experiment.
-    /// Consumes the handle so no further run-scoped data can be added.
+    /// Close the run and append the closed run state to the parent
+    /// experiment. Consumes the handle so no further run-scoped data
+    /// can be added.
     pub fn finish(self) -> Result<()> {
-        self.close(RunStatus::Finished)
-    }
-
-    /// Close the run with the `failed` status, record its elapsed time,
-    /// and append the closed run state to the parent experiment.
-    /// Consumes the handle so no further run-scoped data can be added.
-    pub fn fail(self) -> Result<()> {
-        self.close(RunStatus::Failed)
+        self.close()
     }
 
     fn add_record(&mut self, name: &str, media_type: MediaType, bytes: &[u8]) -> Result<()> {
@@ -154,20 +124,17 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
         Ok(())
     }
 
-    fn close(self, status: RunStatus) -> Result<()> {
+    fn close(self) -> Result<()> {
         let Run {
             experiment,
             run_id,
             records,
             parameters,
-            started_at,
         } = self;
         let run = RunEntry {
             run_id,
             records,
             parameters,
-            status,
-            elapsed_secs: started_at.elapsed().as_secs_f64(),
         };
         experiment.push_closed_run(run)?;
         Ok(())

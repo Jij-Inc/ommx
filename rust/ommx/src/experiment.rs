@@ -38,13 +38,11 @@
 //!
 //! The module is split by data terms: `run` contains `Run` and
 //! `RunEntry`, `record` contains `RecordRef`, `parameter` contains
-//! run-parameter table data, `attribute` contains run-attribute table
-//! data, `index` contains the experiment index layer data, and
-//! `artifact` maps the unsealed experiment state onto an OMMX
-//! Artifact.
+//! run-parameter table data, `index` contains the experiment index
+//! layer data, and `artifact` maps the unsealed experiment state onto
+//! an OMMX Artifact.
 
 mod artifact;
-mod attribute;
 mod index;
 mod parameter;
 mod record;
@@ -84,10 +82,8 @@ const ANN_RECORD_NAME: &str = "org.ommx.record.name";
 
 const EXPERIMENT_INDEX_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment+json";
 const RUN_PARAMETERS_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment.run-parameters+json";
-const RUN_ATTRIBUTES_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment.run-attributes+json";
 const LAYER_KIND_INDEX: &str = "index";
 const LAYER_KIND_RUN_PARAMETERS: &str = "run-parameters";
-const LAYER_KIND_RUN_ATTRIBUTES: &str = "run-attributes";
 
 /// A mutable, unsealed experiment session. See the [module documentation](self).
 #[derive(Debug)]
