@@ -6,14 +6,14 @@ use super::{
     ANN_RECORD_NAME, ANN_RUN_ID, ANN_SPACE, ARTIFACT_KIND_EXPERIMENT, EXPERIMENT_SCHEMA_V1,
     EXPERIMENT_STATUS_FINISHED, LAYER_KIND_RUN_PARAMETERS,
 };
-use crate::artifact::media_types;
+use crate::artifact::{media_types, ImageRef};
 use crate::Instance;
 use oci_spec::image::{Descriptor, MediaType};
 use serde_json::json;
 
 fn with_temp_experiment<T>(tag: &str, f: impl FnOnce(Experiment<'_>) -> anyhow::Result<T>) -> T {
     let image_name = format!("ghcr.io/jij-inc/ommx/experiment-test:{tag}");
-    Experiment::with_temp_local_registry(&image_name, f).unwrap()
+    Experiment::with_temp_local_registry(ImageRef::parse(&image_name).unwrap(), f).unwrap()
 }
 
 fn with_unsealed_state<T>(
@@ -399,7 +399,11 @@ fn commit_returns_sealed_experiment() {
 #[test]
 fn anonymous_experiment_uses_registry_generated_image_name() {
     let temp = crate::artifact::local_registry::TempLocalRegistry::new().unwrap();
-    let experiment = Experiment::with_anonymous_registry(temp.registry()).unwrap();
+    let image_name = temp
+        .registry()
+        .synthesize_anonymous_experiment_image_name()
+        .unwrap();
+    let experiment = Experiment::with_registry(temp.registry(), image_name);
     experiment.log_json("dataset", json!("miplib2017")).unwrap();
 
     let artifact = experiment.commit().unwrap().into_artifact();

@@ -23,9 +23,11 @@
 //! operation remains commit.
 //!
 //! ```ignore
+//! use ommx::artifact::ImageRef;
 //! use ommx::experiment::Experiment;
 //!
-//! let exp = Experiment::new("ghcr.io/jij-inc/ommx/scip_reblock115:latest")?;
+//! let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/scip_reblock115:latest")?;
+//! let exp = Experiment::new(image_name)?;
 //! exp.log_json("dataset", serde_json::json!("miplib2017"))?;
 //!
 //! let mut run = exp.run()?;
@@ -144,17 +146,9 @@ impl Experiment<'static> {
     /// Start a new experiment session backed by the user's default
     /// Local Registry. The committed artifact is published under
     /// `image_name`.
-    pub fn new(image_name: impl AsRef<str>) -> Result<Self> {
+    pub fn new(image_name: ImageRef) -> Result<Self> {
         let registry = LocalRegistry::shared_default()?;
-        let image_name = ImageRef::parse(image_name.as_ref())?;
-        Ok(Self::with_registry(image_name, registry))
-    }
-
-    /// Start a new experiment session backed by the user's default
-    /// Local Registry and publish it under an anonymous image name.
-    pub fn anonymous() -> Result<Self> {
-        let registry = LocalRegistry::shared_default()?;
-        Self::with_anonymous_registry(registry)
+        Ok(Self::with_registry(registry, image_name))
     }
 }
 
@@ -166,27 +160,18 @@ impl<'reg> Experiment<'reg> {
     /// registry while still exercising the same Local Registry-backed
     /// artifact path as production code.
     pub fn with_temp_local_registry<T>(
-        image_name: impl AsRef<str>,
+        image_name: ImageRef,
         f: impl FnOnce(Experiment<'_>) -> anyhow::Result<T>,
     ) -> Result<T> {
         let temp = TempLocalRegistry::new()?;
-        let image_name = ImageRef::parse(image_name.as_ref())?;
-        let experiment = Experiment::with_registry(image_name, temp.registry());
+        let experiment = Experiment::with_registry(temp.registry(), image_name);
         f(experiment)
-    }
-
-    /// Start a new experiment session against an explicit Local
-    /// Registry and publish it under an anonymous image name generated
-    /// by that registry.
-    pub fn with_anonymous_registry(registry: &'reg LocalRegistry) -> Result<Self> {
-        let image_name = registry.synthesize_anonymous_experiment_image_name()?;
-        Ok(Self::with_registry(image_name, registry))
     }
 
     /// Start a new experiment session against an explicit Local
     /// Registry. The committed artifact is published under
     /// `image_name`.
-    pub fn with_registry(image_name: ImageRef, registry: &'reg LocalRegistry) -> Self {
+    pub fn with_registry(registry: &'reg LocalRegistry, image_name: ImageRef) -> Self {
         Experiment {
             registry,
             state: Mutex::new(UnsealedExperimentState {
