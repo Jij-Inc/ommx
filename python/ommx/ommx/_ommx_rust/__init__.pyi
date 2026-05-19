@@ -1664,9 +1664,24 @@ class Experiment:
         Experiment name.
         """
     @staticmethod
+    def with_temp_local_registry(
+        callback: typing.Any, image_name: typing.Optional[builtins.str] = None
+    ) -> typing.Any:
+        r"""
+        Run a callback with a new Experiment backed by a temporary Local
+        Registry. The temporary registry is deleted when the callback
+        returns, so registry-backed handles created inside the callback
+        must not be used afterwards.
+        """
+    @staticmethod
     def load(image_name: builtins.str) -> Experiment:
         r"""
         Load a committed Experiment Artifact from the local registry.
+        """
+    @staticmethod
+    def from_artifact(artifact: Artifact) -> Experiment:
+        r"""
+        Interpret an already-open Artifact as a committed Experiment.
         """
     def run(self) -> Run:
         r"""

@@ -1,72 +1,35 @@
 import pandas as pd
 import pytest
 
-from ommx.artifact import ArtifactDraft, set_local_registry_root
 from ommx.experiment import Experiment
 
 
-@pytest.fixture(scope="module", autouse=True)
-def isolated_local_registry(tmp_path_factory):
-    set_local_registry_root(tmp_path_factory.mktemp("experiment") / "registry")
+def test_view_run_parameters_from_committed_artifact():
+    def scenario(experiment: Experiment) -> pd.DataFrame:
+        experiment.log_json("dataset", {"name": "miplib2017"})
 
+        run0 = experiment.run()
+        run0.log_parameter("solver", "scip")
+        run0.log_parameter("time_limit", 20.0)
+        run0.log_json("candidate", {"formulation": "a"})
+        run0.finish()
 
-def test_load_experiment_and_view_run_parameters(isolated_local_registry):
-    draft = ArtifactDraft.new_anonymous()
-    draft.add_annotation("org.ommx.artifact.kind", "experiment")
-    draft.add_annotation("org.ommx.experiment.schema", "v1")
-    draft.add_annotation("org.ommx.experiment.status", "finished")
-    draft.add_layer(
-        "application/json",
-        b'{"name": "miplib2017"}',
-        {
-            "org.ommx.experiment.space": "experiment",
-            "org.ommx.record.name": "dataset",
-        },
-    )
-    draft.add_layer(
-        "application/json",
-        b'{"formulation": "a"}',
-        {
-            "org.ommx.experiment.space": "run",
-            "org.ommx.experiment.run_id": "0",
-            "org.ommx.record.name": "candidate",
-        },
-    )
-    draft.add_layer(
-        "application/org.ommx.v1.experiment.run-parameters+json",
-        b"""
-        {
-          "columns": {
-            "presolve": {
-              "type": "bool",
-              "values": { "1": true }
-            },
-            "solver": {
-              "type": "string",
-              "values": { "0": "scip", "1": "highs" }
-            },
-            "time_limit": {
-              "type": "float64",
-              "values": { "0": 20.0 }
-            }
-          }
+        run1 = experiment.run()
+        run1.log_parameter("solver", "highs")
+        run1.log_parameter("presolve", True)
+        run1.finish()
+
+        artifact = experiment.commit()
+        loaded = Experiment.from_artifact(artifact)
+        assert {
+            (record.space, record.run_id, record.name) for record in loaded.records
+        } == {
+            ("experiment", None, "dataset"),
+            ("run", 0, "candidate"),
         }
-        """,
-        {"org.ommx.experiment.layer": "run-parameters"},
-    )
-    artifact = draft.commit()
-    image_name = artifact.image_name
-    assert image_name is not None
+        return loaded.run_parameters_df()
 
-    experiment = Experiment.load(image_name)
-
-    assert experiment.image_name == image_name
-    assert {(record.space, record.run_id, record.name) for record in experiment.records} == {
-        ("experiment", None, "dataset"),
-        ("run", 0, "candidate"),
-    }
-
-    df = experiment.run_parameters_df()
+    df = Experiment.with_temp_local_registry(scenario)
     assert list(df.index) == [0, 1]
     assert df.index.name == "run_id"
     assert df.loc[0, "solver"] == "scip"
@@ -76,45 +39,59 @@ def test_load_experiment_and_view_run_parameters(isolated_local_registry):
     assert pd.isna(df.loc[1, "time_limit"])
 
 
-def test_create_experiment_run_records_and_commit(isolated_local_registry):
-    experiment = Experiment.new()
-    assert ".ommx.local/experiment:" in experiment.image_name
+def test_create_experiment_run_records_and_commit():
+    def scenario(experiment: Experiment) -> pd.DataFrame:
+        assert ".ommx.local/experiment:" in experiment.image_name
 
-    experiment.log_json("dataset", {"name": "miplib2017"})
-    experiment.log_record("raw-config", "application/octet-stream", b"abc")
+        experiment.log_json("dataset", {"name": "miplib2017"})
+        experiment.log_record("raw-config", "application/octet-stream", b"abc")
 
-    run = experiment.run()
-    assert run.run_id == 0
-    run.log_parameter("solver", "scip")
-    run.log_parameter("time_limit", 20.0)
-    run.log_json("candidate", {"formulation": "a"})
-    run.log_record("solver-log", "text/plain", b"solved")
-    run.finish()
+        run = experiment.run()
+        assert run.run_id == 0
+        run.log_parameter("solver", "scip")
+        run.log_parameter("time_limit", 20.0)
+        run.log_json("candidate", {"formulation": "a"})
+        run.log_record("solver-log", "text/plain", b"solved")
+        run.finish()
 
-    artifact = experiment.commit()
-    image_name = artifact.image_name
-    assert image_name is not None
+        artifact = experiment.commit()
+        loaded = Experiment.from_artifact(artifact)
+        assert {
+            (record.space, record.run_id, record.name) for record in loaded.records
+        } == {
+            ("experiment", None, "dataset"),
+            ("experiment", None, "raw-config"),
+            ("run", 0, "candidate"),
+            ("run", 0, "solver-log"),
+        }
+        return loaded.run_parameters_df()
 
-    loaded = Experiment.load(image_name)
-    assert {(record.space, record.run_id, record.name) for record in loaded.records} == {
-        ("experiment", None, "dataset"),
-        ("experiment", None, "raw-config"),
-        ("run", 0, "candidate"),
-        ("run", 0, "solver-log"),
-    }
-
-    df = loaded.run_parameters_df()
+    df = Experiment.with_temp_local_registry(scenario)
     assert list(df.index) == [0]
     assert df.loc[0, "solver"] == "scip"
     assert df.loc[0, "time_limit"] == 20.0
 
 
-def test_commit_rejects_open_run(isolated_local_registry):
-    experiment = Experiment.new()
-    run = experiment.run()
+def test_commit_rejects_open_run():
+    def scenario(experiment: Experiment) -> None:
+        run = experiment.run()
 
-    with pytest.raises(RuntimeError, match="Run handle"):
+        with pytest.raises(RuntimeError, match="Run handle"):
+            experiment.commit()
+
+        run.finish()
         experiment.commit()
 
-    run.finish()
-    experiment.commit()
+    Experiment.with_temp_local_registry(scenario)
+
+
+def test_temp_registry_requires_runs_to_finish_before_callback_returns():
+    escaped = {}
+
+    def scenario(experiment: Experiment) -> None:
+        escaped["run"] = experiment.run()
+
+    with pytest.raises(RuntimeError, match="must be finished"):
+        Experiment.with_temp_local_registry(scenario)
+    with pytest.raises(RuntimeError, match="Parent Experiment"):
+        escaped["run"].run_id

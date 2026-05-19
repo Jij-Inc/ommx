@@ -1710,6 +1710,42 @@
               "deprecated": null
             },
             {
+              "name": "from_artifact",
+              "doc": "Interpret an already-open Artifact as a committed Experiment.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "artifact",
+                      "type_": {
+                        "display": "Artifact",
+                        "link_target": {
+                          "fqn": "ommx.artifact.Artifact",
+                          "doc_module": "ommx.artifact",
+                          "kind": "Class",
+                          "attribute": null
+                        },
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Experiment",
+                    "link_target": {
+                      "fqn": "ommx.experiment.Experiment",
+                      "doc_module": "ommx.experiment",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "load",
               "doc": "Load a committed Experiment Artifact from the local registry.",
               "signatures": [
@@ -1993,6 +2029,50 @@
                   "parameters": [],
                   "return_type": {
                     "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "with_temp_local_registry",
+              "doc": "Run a callback with a new Experiment backed by a temporary Local\nRegistry. The temporary registry is deleted when the callback\nreturns, so registry-backed handles created inside the callback\nmust not be used afterwards.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "callback",
+                      "type_": {
+                        "display": "Any",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "image_name",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Any",
                     "link_target": null,
                     "children": []
                   }

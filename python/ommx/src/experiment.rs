@@ -1,6 +1,6 @@
 use anyhow::{bail, Result};
 use oci_spec::image::MediaType;
-use pyo3::{prelude::*, types::PyDict};
+use pyo3::{exceptions::PyRuntimeError, prelude::*, types::PyDict};
 use std::collections::BTreeMap;
 
 use crate::pandas::{raw_entries_to_dataframe, PyDataFrame};
@@ -45,6 +45,52 @@ impl PyExperiment {
         })
     }
 
+    /// Run a callback with a new Experiment backed by a temporary Local
+    /// Registry. The temporary registry is deleted when the callback
+    /// returns, so registry-backed handles created inside the callback
+    /// must not be used afterwards.
+    #[staticmethod]
+    #[pyo3(signature = (callback, image_name = None))]
+    pub fn with_temp_local_registry(
+        py: Python<'_>,
+        callback: &Bound<'_, PyAny>,
+        image_name: Option<&str>,
+    ) -> PyResult<Py<PyAny>> {
+        let name = parse_name(image_name).map_err(to_py_runtime_error)?;
+        let temp = ommx::artifact::local_registry::TempLocalRegistry::new()
+            .map_err(to_py_runtime_error)?;
+        let experiment = ommx::experiment::Experiment::with_registry(temp.registry(), name)
+            .map_err(to_py_runtime_error)?;
+
+        // The Python object is usable only while this function is
+        // executing. It is invalidated before the temporary registry
+        // is dropped, so escaped Experiment/Run handles fail before
+        // touching registry-backed Rust state.
+        let experiment = unsafe {
+            std::mem::transmute::<
+                ommx::experiment::Experiment<'_>,
+                ommx::experiment::Experiment<'static>,
+            >(experiment)
+        };
+        let py_experiment = Py::new(
+            py,
+            Self {
+                inner: PyExperimentInner::Unsealed {
+                    experiment: Some(Box::new(experiment)),
+                    open_runs: 0,
+                },
+            },
+        )?;
+
+        let result = callback.call1((py_experiment.clone_ref(py),));
+        let invalidation = Self::invalidate_temp_experiment(py, &py_experiment);
+        match (result, invalidation) {
+            (Ok(value), Ok(())) => Ok(value.unbind()),
+            (Err(err), _) => Err(err),
+            (Ok(_), Err(err)) => Err(err),
+        }
+    }
+
     /// Load a committed Experiment Artifact from the local registry.
     #[staticmethod]
     pub fn load(py: Python<'_>, image_name: &str) -> Result<Self> {
@@ -54,6 +100,16 @@ impl PyExperiment {
         Ok(Self {
             inner: PyExperimentInner::Loaded(ommx::experiment::LoadedExperiment::from_artifact(
                 artifact,
+            )?),
+        })
+    }
+
+    /// Interpret an already-open Artifact as a committed Experiment.
+    #[staticmethod]
+    pub fn from_artifact(artifact: &PyArtifact) -> Result<Self> {
+        Ok(Self {
+            inner: PyExperimentInner::Loaded(ommx::experiment::LoadedExperiment::from_artifact(
+                artifact.0.clone(),
             )?),
         })
     }
@@ -206,6 +262,25 @@ impl PyExperiment {
 }
 
 impl PyExperiment {
+    fn invalidate_temp_experiment(py: Python<'_>, experiment: &Py<Self>) -> PyResult<()> {
+        let mut experiment = experiment.borrow_mut(py);
+        let PyExperimentInner::Unsealed {
+            experiment: rust_experiment,
+            open_runs,
+        } = &mut experiment.inner
+        else {
+            return Ok(());
+        };
+        rust_experiment.take();
+        if *open_runs != 0 {
+            *open_runs = 0;
+            return Err(PyRuntimeError::new_err(
+                "All Run handles created in with_temp_local_registry() must be finished before the callback returns",
+            ));
+        }
+        Ok(())
+    }
+
     fn as_loaded(&self) -> Result<&ommx::experiment::LoadedExperiment<'static>> {
         match &self.inner {
             PyExperimentInner::Loaded(loaded) => Ok(loaded),
@@ -253,7 +328,8 @@ pub struct PyRun {
 #[pymethods]
 impl PyRun {
     #[getter]
-    pub fn run_id(&self) -> Result<u64> {
+    pub fn run_id(&self, py: Python<'_>) -> Result<u64> {
+        self.ensure_parent_active(py)?;
         Ok(self
             .run
             .as_ref()
@@ -262,18 +338,24 @@ impl PyRun {
     }
 
     /// Record a scalar parameter for this run.
-    pub fn log_parameter(&mut self, name: &str, value: ParameterValueInput) -> Result<()> {
-        self.as_open_mut()?.log_parameter(name, value.0)
+    pub fn log_parameter(
+        &mut self,
+        py: Python<'_>,
+        name: &str,
+        value: ParameterValueInput,
+    ) -> Result<()> {
+        self.as_open_mut(py)?.log_parameter(name, value.0)
     }
 
     /// Record arbitrary bytes with an explicit OCI media type in this run.
     pub fn log_record(
         &mut self,
+        py: Python<'_>,
         name: &str,
         media_type: &str,
         bytes: &Bound<pyo3::types::PyBytes>,
     ) -> Result<()> {
-        self.as_open_mut()?.log_record(
+        self.as_open_mut(py)?.log_record(
             name,
             MediaType::Other(media_type.to_string()),
             bytes.as_bytes(),
@@ -284,27 +366,47 @@ impl PyRun {
     pub fn log_json(&mut self, py: Python<'_>, name: &str, value: &Bound<PyAny>) -> Result<()> {
         let json = py.import("json")?;
         let blob: String = json.call_method1("dumps", (value,))?.extract()?;
-        self.as_open_mut()?
-            .log_record(name, MediaType::Other("application/json".to_string()), blob)
+        self.as_open_mut(py)?.log_record(
+            name,
+            MediaType::Other("application/json".to_string()),
+            blob,
+        )
     }
 
     /// Record an Instance in this run.
-    pub fn log_instance(&mut self, name: &str, instance: &crate::Instance) -> Result<()> {
-        self.as_open_mut()?.log_instance(name, &instance.inner)
+    pub fn log_instance(
+        &mut self,
+        py: Python<'_>,
+        name: &str,
+        instance: &crate::Instance,
+    ) -> Result<()> {
+        self.as_open_mut(py)?.log_instance(name, &instance.inner)
     }
 
     /// Record a Solution in this run.
-    pub fn log_solution(&mut self, name: &str, solution: &crate::Solution) -> Result<()> {
-        self.as_open_mut()?.log_solution(name, &solution.inner)
+    pub fn log_solution(
+        &mut self,
+        py: Python<'_>,
+        name: &str,
+        solution: &crate::Solution,
+    ) -> Result<()> {
+        self.as_open_mut(py)?.log_solution(name, &solution.inner)
     }
 
     /// Record a SampleSet in this run.
-    pub fn log_sample_set(&mut self, name: &str, sample_set: &crate::SampleSet) -> Result<()> {
-        self.as_open_mut()?.log_sample_set(name, &sample_set.inner)
+    pub fn log_sample_set(
+        &mut self,
+        py: Python<'_>,
+        name: &str,
+        sample_set: &crate::SampleSet,
+    ) -> Result<()> {
+        self.as_open_mut(py)?
+            .log_sample_set(name, &sample_set.inner)
     }
 
     /// Finish this run and append it to the parent Experiment.
     pub fn finish(&mut self, py: Python<'_>) -> Result<()> {
+        self.ensure_parent_active(py)?;
         let run = self
             .run
             .take()
@@ -315,7 +417,8 @@ impl PyRun {
         result
     }
 
-    pub fn __repr__(&self) -> Result<String> {
+    pub fn __repr__(&self, py: Python<'_>) -> Result<String> {
+        self.ensure_parent_active(py)?;
         Ok(match &self.run {
             Some(run) => format!("Run(run_id={})", run.run_id()),
             None => "Run(finished=True)".to_string(),
@@ -324,7 +427,25 @@ impl PyRun {
 }
 
 impl PyRun {
-    fn as_open_mut(&mut self) -> Result<&mut ommx::experiment::Run<'static, 'static>> {
+    fn ensure_parent_active(&self, py: Python<'_>) -> Result<()> {
+        let parent = self.parent.bind(py).borrow();
+        match &parent.inner {
+            PyExperimentInner::Unsealed {
+                experiment: Some(_),
+                ..
+            } => Ok(()),
+            PyExperimentInner::Unsealed {
+                experiment: None, ..
+            } => bail!("Parent Experiment is no longer active"),
+            PyExperimentInner::Loaded(_) => bail!("Parent Experiment is no longer unsealed"),
+        }
+    }
+
+    fn as_open_mut(
+        &mut self,
+        py: Python<'_>,
+    ) -> Result<&mut ommx::experiment::Run<'static, 'static>> {
+        self.ensure_parent_active(py)?;
         self.run
             .as_mut()
             .ok_or_else(|| anyhow::anyhow!("Run has already been finished"))
@@ -338,6 +459,19 @@ impl PyRun {
         *open_runs = open_runs.saturating_sub(1);
         Ok(())
     }
+}
+
+fn parse_name(image_name: Option<&str>) -> Result<ommx::experiment::Name> {
+    match image_name {
+        Some(image_name) => Ok(ommx::experiment::Name::Named(
+            ommx::artifact::ImageRef::parse(image_name)?,
+        )),
+        None => Ok(ommx::experiment::Name::Anonymous),
+    }
+}
+
+fn to_py_runtime_error(error: anyhow::Error) -> PyErr {
+    PyRuntimeError::new_err(error.to_string())
 }
 
 impl Drop for PyRun {
