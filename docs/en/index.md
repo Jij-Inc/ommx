@@ -102,6 +102,7 @@ user_guide/sample_set
 user_guide/special_constraints
 user_guide/capability_model
 user_guide/tracing
+user_guide/advanced_column_generation_openjij
 ```
 
 ```{toctree}
