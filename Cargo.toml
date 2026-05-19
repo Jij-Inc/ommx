@@ -50,7 +50,7 @@ prost = "0.12.0"
 prost-build = "0.12.0"
 quote = "1.0.40"
 pyo3 = { version = "0.27.2", features = ["anyhow", "multiple-pymethods"] }
-pyo3-stub-gen = "0.22.2"
+pyo3-stub-gen = "0.22.3"
 pyo3-tracing-opentelemetry = "0.2.0"
 rusqlite = { version = "0.39.0", features = ["bundled"] }
 serde = { version = "1.0.228", features = ["derive"] }
@@ -61,7 +61,7 @@ similar = "3.1.0"
 smallvec = "1.15.1"
 serial_test = "3.4.0"
 syn = "2.0.101"
-tar = { version = "0.4.44", default-features = false }
+tar = { version = "0.4.46", default-features = false }
 tempfile = "3.27.0"
 testcontainers = { version = "0.27.3", features = ["blocking"] }
 testcontainers-modules = { version = "0.15.0", features = ["cncf_distribution"] }
