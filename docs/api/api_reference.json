@@ -2039,19 +2039,10 @@
             },
             {
               "name": "with_temp_local_registry",
-              "doc": "Run a callback with a new Experiment backed by a temporary Local\nRegistry. The temporary registry is deleted when the callback\nreturns, so registry-backed handles created inside the callback\nmust not be used afterwards.",
+              "doc": "Create a context manager for an Experiment backed by a temporary\nLocal Registry. The temporary registry is deleted when the\ncontext exits, so registry-backed handles created inside the\ncontext must not be used afterwards.",
               "signatures": [
                 {
                   "parameters": [
-                    {
-                      "name": "callback",
-                      "type_": {
-                        "display": "Any",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    },
                     {
                       "name": "image_name",
                       "type_": {
@@ -2072,8 +2063,13 @@
                     }
                   ],
                   "return_type": {
-                    "display": "Any",
-                    "link_target": null,
+                    "display": "TempExperimentContext",
+                    "link_target": {
+                      "fqn": "ommx.experiment.TempExperimentContext",
+                      "doc_module": "ommx.experiment",
+                      "kind": "Class",
+                      "attribute": null
+                    },
                     "children": []
                   }
                 }
@@ -2504,6 +2500,108 @@
               "is_readonly": true
             }
           ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "TempExperimentContext",
+          "doc": "",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__enter__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "Experiment",
+                    "link_target": {
+                      "fqn": "ommx.experiment.Experiment",
+                      "doc_module": "ommx.experiment",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__exit__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "_exc_type",
+                      "type_": {
+                        "display": "Optional[Any]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Any",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "_exc_value",
+                      "type_": {
+                        "display": "Optional[Any]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Any",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "_traceback",
+                      "type_": {
+                        "display": "Optional[Any]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Any",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [],
           "deprecated": null
         }
       ],
@@ -26615,6 +26713,7 @@
     "ommx.experiment.Experiment": "ommx.experiment",
     "ommx.experiment.ExperimentRecord": "ommx.experiment",
     "ommx.experiment.Run": "ommx.experiment",
+    "ommx.experiment.TempExperimentContext": "ommx.experiment",
     "ommx.v1.AdditionalCapability": "ommx.v1",
     "ommx.v1.AttachedConstraint": "ommx.v1",
     "ommx.v1.AttachedDecisionVariable": "ommx.v1",

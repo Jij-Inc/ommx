@@ -5,7 +5,8 @@ from ommx.experiment import Experiment
 
 
 def test_view_run_parameters_from_committed_artifact():
-    def scenario(experiment: Experiment) -> pd.DataFrame:
+    df: pd.DataFrame | None = None
+    with Experiment.with_temp_local_registry() as experiment:
         experiment.log_json("dataset", {"name": "miplib2017"})
 
         run0 = experiment.run()
@@ -27,9 +28,9 @@ def test_view_run_parameters_from_committed_artifact():
             ("experiment", None, "dataset"),
             ("run", 0, "candidate"),
         }
-        return loaded.run_parameters_df()
+        df = loaded.run_parameters_df()
 
-    df = Experiment.with_temp_local_registry(scenario)
+    assert df is not None
     assert list(df.index) == [0, 1]
     assert df.index.name == "run_id"
     assert df.loc[0, "solver"] == "scip"
@@ -40,7 +41,8 @@ def test_view_run_parameters_from_committed_artifact():
 
 
 def test_create_experiment_run_records_and_commit():
-    def scenario(experiment: Experiment) -> pd.DataFrame:
+    df: pd.DataFrame | None = None
+    with Experiment.with_temp_local_registry() as experiment:
         assert ".ommx.local/experiment:" in experiment.image_name
 
         experiment.log_json("dataset", {"name": "miplib2017"})
@@ -64,16 +66,16 @@ def test_create_experiment_run_records_and_commit():
             ("run", 0, "candidate"),
             ("run", 0, "solver-log"),
         }
-        return loaded.run_parameters_df()
+        df = loaded.run_parameters_df()
 
-    df = Experiment.with_temp_local_registry(scenario)
+    assert df is not None
     assert list(df.index) == [0]
     assert df.loc[0, "solver"] == "scip"
     assert df.loc[0, "time_limit"] == 20.0
 
 
 def test_commit_rejects_open_run():
-    def scenario(experiment: Experiment) -> None:
+    with Experiment.with_temp_local_registry() as experiment:
         run = experiment.run()
 
         with pytest.raises(RuntimeError, match="Run handle"):
@@ -82,16 +84,33 @@ def test_commit_rejects_open_run():
         run.finish()
         experiment.commit()
 
-    Experiment.with_temp_local_registry(scenario)
 
-
-def test_temp_registry_requires_runs_to_finish_before_callback_returns():
+def test_temp_registry_requires_runs_to_finish_before_context_exits():
     escaped = {}
 
-    def scenario(experiment: Experiment) -> None:
-        escaped["run"] = experiment.run()
-
     with pytest.raises(RuntimeError, match="must be finished"):
-        Experiment.with_temp_local_registry(scenario)
+        with Experiment.with_temp_local_registry() as experiment:
+            escaped["experiment"] = experiment
+            escaped["run"] = experiment.run()
+
     with pytest.raises(RuntimeError, match="Parent Experiment"):
         escaped["run"].run_id
+    with pytest.raises(RuntimeError, match="already been committed"):
+        escaped["experiment"].image_name
+
+
+def test_temp_registry_invalidates_experiment_after_context_exit():
+    escaped: Experiment | None = None
+    with Experiment.with_temp_local_registry() as experiment:
+        escaped = experiment
+
+    assert escaped is not None
+    with pytest.raises(RuntimeError, match="already been committed"):
+        escaped.image_name
+
+
+def test_temp_registry_context_rejects_reenter():
+    context = Experiment.with_temp_local_registry()
+    with context:
+        with pytest.raises(RuntimeError, match="already been entered"):
+            context.__enter__()

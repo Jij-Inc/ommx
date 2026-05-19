@@ -45,50 +45,18 @@ impl PyExperiment {
         })
     }
 
-    /// Run a callback with a new Experiment backed by a temporary Local
-    /// Registry. The temporary registry is deleted when the callback
-    /// returns, so registry-backed handles created inside the callback
-    /// must not be used afterwards.
+    /// Create a context manager for an Experiment backed by a temporary
+    /// Local Registry. The temporary registry is deleted when the
+    /// context exits, so registry-backed handles created inside the
+    /// context must not be used afterwards.
     #[staticmethod]
-    #[pyo3(signature = (callback, image_name = None))]
-    pub fn with_temp_local_registry(
-        py: Python<'_>,
-        callback: &Bound<'_, PyAny>,
-        image_name: Option<&str>,
-    ) -> PyResult<Py<PyAny>> {
-        let name = parse_name(image_name).map_err(to_py_runtime_error)?;
-        let temp = ommx::artifact::local_registry::TempLocalRegistry::new()
-            .map_err(to_py_runtime_error)?;
-        let experiment = ommx::experiment::Experiment::with_registry(temp.registry(), name)
-            .map_err(to_py_runtime_error)?;
-
-        // The Python object is usable only while this function is
-        // executing. It is invalidated before the temporary registry
-        // is dropped, so escaped Experiment/Run handles fail before
-        // touching registry-backed Rust state.
-        let experiment = unsafe {
-            std::mem::transmute::<
-                ommx::experiment::Experiment<'_>,
-                ommx::experiment::Experiment<'static>,
-            >(experiment)
-        };
-        let py_experiment = Py::new(
-            py,
-            Self {
-                inner: PyExperimentInner::Unsealed {
-                    experiment: Some(Box::new(experiment)),
-                    open_runs: 0,
-                },
-            },
-        )?;
-
-        let result = callback.call1((py_experiment.clone_ref(py),));
-        let invalidation = Self::invalidate_temp_experiment(py, &py_experiment);
-        match (result, invalidation) {
-            (Ok(value), Ok(())) => Ok(value.unbind()),
-            (Err(err), _) => Err(err),
-            (Ok(_), Err(err)) => Err(err),
-        }
+    #[pyo3(signature = (image_name = None))]
+    pub fn with_temp_local_registry(image_name: Option<&str>) -> Result<PyTempExperimentContext> {
+        Ok(PyTempExperimentContext {
+            temp: Some(ommx::artifact::local_registry::TempLocalRegistry::new()?),
+            name: parse_name(image_name)?,
+            experiment: None,
+        })
     }
 
     /// Load a committed Experiment Artifact from the local registry.
@@ -275,7 +243,7 @@ impl PyExperiment {
         if *open_runs != 0 {
             *open_runs = 0;
             return Err(PyRuntimeError::new_err(
-                "All Run handles created in with_temp_local_registry() must be finished before the callback returns",
+                "All Run handles created in with_temp_local_registry() must be finished before the context exits",
             ));
         }
         Ok(())
@@ -312,6 +280,71 @@ impl PyExperiment {
             )),
             PyExperimentInner::Loaded(_) => bail!("Loaded Experiment is read-only"),
         }
+    }
+}
+
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
+#[pyclass]
+#[pyo3(module = "ommx._ommx_rust", name = "TempExperimentContext")]
+pub struct PyTempExperimentContext {
+    temp: Option<ommx::artifact::local_registry::TempLocalRegistry>,
+    name: ommx::experiment::Name,
+    experiment: Option<Py<PyExperiment>>,
+}
+
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
+#[pymethods]
+impl PyTempExperimentContext {
+    pub fn __enter__(slf: Bound<'_, Self>) -> PyResult<Py<PyExperiment>> {
+        let py = slf.py();
+        let mut context = slf.borrow_mut();
+        if context.experiment.is_some() {
+            return Err(PyRuntimeError::new_err(
+                "Temporary Experiment context has already been entered",
+            ));
+        }
+        let temp = context
+            .temp
+            .as_ref()
+            .ok_or_else(|| PyRuntimeError::new_err("Temporary Experiment context is closed"))?;
+        let experiment =
+            ommx::experiment::Experiment::with_registry(temp.registry(), context.name.clone())
+                .map_err(to_py_runtime_error)?;
+
+        // The Python Experiment is valid only until `__exit__`.
+        // `__exit__` invalidates it before dropping the TempLocalRegistry.
+        let experiment = unsafe {
+            std::mem::transmute::<
+                ommx::experiment::Experiment<'_>,
+                ommx::experiment::Experiment<'static>,
+            >(experiment)
+        };
+        let py_experiment = Py::new(
+            py,
+            PyExperiment {
+                inner: PyExperimentInner::Unsealed {
+                    experiment: Some(Box::new(experiment)),
+                    open_runs: 0,
+                },
+            },
+        )?;
+        context.experiment = Some(py_experiment.clone_ref(py));
+        Ok(py_experiment)
+    }
+
+    #[pyo3(signature = (_exc_type = None, _exc_value = None, _traceback = None))]
+    pub fn __exit__(
+        &mut self,
+        py: Python<'_>,
+        _exc_type: Option<&Bound<'_, PyAny>>,
+        _exc_value: Option<&Bound<'_, PyAny>>,
+        _traceback: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<bool> {
+        if let Some(experiment) = self.experiment.take() {
+            PyExperiment::invalidate_temp_experiment(py, &experiment)?;
+        }
+        self.temp.take();
+        Ok(false)
     }
 }
 

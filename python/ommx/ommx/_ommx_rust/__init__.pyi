@@ -67,6 +67,7 @@ __all__ = [
     "Solution",
     "Sos1Constraint",
     "State",
+    "TempExperimentContext",
     "ToFunction",
     "ToSamples",
     "ToState",
@@ -1665,13 +1666,13 @@ class Experiment:
         """
     @staticmethod
     def with_temp_local_registry(
-        callback: typing.Any, image_name: typing.Optional[builtins.str] = None
-    ) -> typing.Any:
+        image_name: typing.Optional[builtins.str] = None,
+    ) -> TempExperimentContext:
         r"""
-        Run a callback with a new Experiment backed by a temporary Local
-        Registry. The temporary registry is deleted when the callback
-        returns, so registry-backed handles created inside the callback
-        must not be used afterwards.
+        Create a context manager for an Experiment backed by a temporary
+        Local Registry. The temporary registry is deleted when the
+        context exits, so registry-backed handles created inside the
+        context must not be used afterwards.
         """
     @staticmethod
     def load(image_name: builtins.str) -> Experiment:
@@ -5931,6 +5932,16 @@ class State:
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> State: ...
     def __deepcopy__(self, _memo: typing.Any) -> State: ...
+
+@typing.final
+class TempExperimentContext:
+    def __enter__(self) -> Experiment: ...
+    def __exit__(
+        self,
+        _exc_type: typing.Optional[typing.Any] = None,
+        _exc_value: typing.Optional[typing.Any] = None,
+        _traceback: typing.Optional[typing.Any] = None,
+    ) -> builtins.bool: ...
 
 @typing.final
 class AdditionalCapability(enum.Enum):
