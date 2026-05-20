@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(super) struct ExperimentConfig {
     pub(super) schema: String,
-    pub(super) records: Vec<ExperimentConfigRecord>,
+    pub(super) records: Vec<Descriptor>,
     pub(super) runs: Vec<ExperimentConfigRun>,
     pub(super) run_parameters: Descriptor,
 }
@@ -20,11 +20,7 @@ impl ExperimentConfig {
     ) -> Self {
         Self {
             schema: EXPERIMENT_SCHEMA_V1.to_string(),
-            records: state
-                .records
-                .iter()
-                .map(ExperimentConfigRecord::from_record_ref)
-                .collect(),
+            records: state.records.iter().map(record_descriptor).collect(),
             runs: state
                 .runs
                 .values()
@@ -38,33 +34,18 @@ impl ExperimentConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(super) struct ExperimentConfigRun {
     pub(super) run_id: u64,
-    pub(super) records: Vec<ExperimentConfigRecord>,
+    pub(super) records: Vec<Descriptor>,
 }
 
 impl ExperimentConfigRun {
     fn from_run_entry(run: &RunEntry<'_>) -> Self {
         Self {
             run_id: run.run_id,
-            records: run
-                .records
-                .iter()
-                .map(ExperimentConfigRecord::from_record_ref)
-                .collect(),
+            records: run.records.iter().map(record_descriptor).collect(),
         }
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub(super) struct ExperimentConfigRecord {
-    pub(super) name: String,
-    pub(super) descriptor: Descriptor,
-}
-
-impl ExperimentConfigRecord {
-    fn from_record_ref(record: &super::record::RecordRef<'_>) -> Self {
-        Self {
-            name: record.name().to_string(),
-            descriptor: Descriptor::from(record.descriptor().clone()),
-        }
-    }
+fn record_descriptor(record: &super::record::RecordRef<'_>) -> Descriptor {
+    Descriptor::from(record.descriptor().clone())
 }

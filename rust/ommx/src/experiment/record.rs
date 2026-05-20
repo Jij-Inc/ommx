@@ -54,7 +54,8 @@ impl<'reg> RecordRef<'reg> {
 /// the remaining key.
 pub fn upsert_record_ref<'reg>(records: &mut Vec<RecordRef<'reg>>, record_ref: RecordRef<'reg>) {
     if let Some(existing) = records.iter_mut().find(|r| {
-        r.descriptor.media_type() == record_ref.descriptor.media_type() && r.name == record_ref.name
+        r.descriptor().media_type() == record_ref.descriptor().media_type()
+            && r.name() == record_ref.name()
     }) {
         *existing = record_ref;
     } else {

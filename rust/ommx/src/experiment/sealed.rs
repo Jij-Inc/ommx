@@ -1,10 +1,11 @@
 //! Read-only model reconstructed from a sealed Experiment Artifact.
 
-use super::config::{ExperimentConfig, ExperimentConfigRecord};
+use super::config::ExperimentConfig;
 use super::parameter::{RunParameterCell, RunParameterTable};
 use super::{
-    SealedExperiment, ANN_ARTIFACT_KIND, ANN_EXPERIMENT_SCHEMA, ARTIFACT_KIND_EXPERIMENT,
-    EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_SCHEMA_V1, RUN_PARAMETERS_MEDIA_TYPE,
+    SealedExperiment, ANN_ARTIFACT_KIND, ANN_EXPERIMENT_SCHEMA, ANN_RECORD_NAME,
+    ARTIFACT_KIND_EXPERIMENT, EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_SCHEMA_V1,
+    RUN_PARAMETERS_MEDIA_TYPE,
 };
 use crate::artifact::{ImageRef, LocalArtifact};
 use anyhow::{Context, Result};
@@ -92,11 +93,14 @@ pub struct ExperimentRecord {
 }
 
 impl ExperimentRecord {
-    fn from_config(record: ExperimentConfigRecord) -> Self {
-        Self {
-            name: record.name,
-            descriptor: record.descriptor,
-        }
+    fn from_descriptor(descriptor: Descriptor) -> Result<Self> {
+        let name = descriptor
+            .annotations()
+            .as_ref()
+            .and_then(|annotations| annotations.get(ANN_RECORD_NAME))
+            .with_context(|| format!("Experiment Record is missing `{ANN_RECORD_NAME}`"))?
+            .to_string();
+        Ok(Self { name, descriptor })
     }
 
     pub fn name(&self) -> &str {
@@ -153,14 +157,12 @@ fn validate_experiment_schema(schema: &str) -> Result<()> {
     Ok(())
 }
 
-fn decode_records(
-    records: Vec<ExperimentConfigRecord>,
-    owner: &str,
-) -> Result<Vec<ExperimentRecord>> {
+fn decode_records(records: Vec<Descriptor>, owner: &str) -> Result<Vec<ExperimentRecord>> {
     let mut decoded = Vec::new();
     let mut keys = BTreeSet::new();
-    for record in records {
-        let record = ExperimentRecord::from_config(record);
+    for descriptor in records {
+        let record = ExperimentRecord::from_descriptor(descriptor)
+            .with_context(|| format!("Failed to decode Record in {owner}"))?;
         let key = record.key();
         if !keys.insert(key) {
             crate::bail!(
