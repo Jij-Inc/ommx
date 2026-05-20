@@ -30,15 +30,20 @@ use std::sync::{Arc, Mutex, MutexGuard};
 /// do not need to duplicate these invariants.
 #[derive(Debug, Clone)]
 pub struct ExperimentDyn {
-    // `experiment_state` stores registry-backed descriptors whose
-    // lifetime is erased to `'static`; keep it before `registry_handle`
-    // so it is dropped first.
-    experiment_state: Arc<Mutex<ExperimentDynState>>,
+    state: Arc<Mutex<ExperimentDynState>>,
+}
+
+#[derive(Debug)]
+struct ExperimentDynState {
+    // `lifecycle` stores registry-backed descriptors whose lifetime is
+    // erased to `'static`; keep it before `registry_handle` so it is
+    // dropped first.
+    lifecycle: ExperimentDynLifecycle,
     registry_handle: LocalRegistryHandle,
 }
 
 #[derive(Debug)]
-enum ExperimentDynState {
+enum ExperimentDynLifecycle {
     Unsealed {
         state: Option<UnsealedExperimentState<'static>>,
         open_runs: usize,
@@ -53,9 +58,11 @@ enum ExperimentDynState {
 /// experiment before dropping it.
 #[derive(Debug)]
 pub struct RunDyn {
-    experiment_state: Arc<Mutex<ExperimentDynState>>,
+    // Run-scoped registry-backed descriptors must be dropped before
+    // releasing the parent Experiment state that owns the registry
+    // handle.
     run_state: Option<RunDynState>,
-    registry_handle: LocalRegistryHandle,
+    experiment_state: Arc<Mutex<ExperimentDynState>>,
 }
 
 #[derive(Debug)]
@@ -80,16 +87,18 @@ impl ExperimentDyn {
     ) -> Result<Self> {
         let image_name = name.into().resolve(registry_handle.registry())?;
         Ok(Self {
-            experiment_state: Arc::new(Mutex::new(ExperimentDynState::Unsealed {
-                state: Some(UnsealedExperimentState {
-                    image_name,
-                    records: Vec::new(),
-                    runs: BTreeMap::new(),
-                    next_run_id: 0,
-                }),
-                open_runs: 0,
+            state: Arc::new(Mutex::new(ExperimentDynState {
+                lifecycle: ExperimentDynLifecycle::Unsealed {
+                    state: Some(UnsealedExperimentState {
+                        image_name,
+                        records: Vec::new(),
+                        runs: BTreeMap::new(),
+                        next_run_id: 0,
+                    }),
+                    open_runs: 0,
+                },
+                registry_handle,
             })),
-            registry_handle,
         })
     }
 
@@ -100,33 +109,36 @@ impl ExperimentDyn {
     pub fn from_artifact(artifact: LocalArtifactDyn) -> Result<Self> {
         let sealed = SealedExperiment::from_artifact(artifact.local_artifact().clone())?;
         Ok(Self {
-            experiment_state: Arc::new(Mutex::new(ExperimentDynState::Sealed(sealed))),
-            registry_handle: artifact.registry_handle(),
+            state: Arc::new(Mutex::new(ExperimentDynState {
+                lifecycle: ExperimentDynLifecycle::Sealed(sealed),
+                registry_handle: artifact.registry_handle(),
+            })),
         })
     }
 
     pub fn is_unsealed(&self) -> bool {
         matches!(
-            &*lock_experiment_state(&self.experiment_state),
-            ExperimentDynState::Unsealed { .. }
+            &lock_experiment_state(&self.state).lifecycle,
+            ExperimentDynLifecycle::Unsealed { .. }
         )
     }
 
     pub fn image_name(&self) -> Result<crate::artifact::ImageRef> {
-        match &*lock_experiment_state(&self.experiment_state) {
-            ExperimentDynState::Unsealed { state, .. } => Ok(state
+        match &lock_experiment_state(&self.state).lifecycle {
+            ExperimentDynLifecycle::Unsealed { state, .. } => Ok(state
                 .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?
                 .image_name
                 .clone()),
-            ExperimentDynState::Sealed(sealed) => Ok(sealed.image_name().clone()),
+            ExperimentDynLifecycle::Sealed(sealed) => Ok(sealed.image_name().clone()),
         }
     }
 
     pub fn run(&self) -> Result<RunDyn> {
         let run = {
-            let mut dyn_state = lock_experiment_state(&self.experiment_state);
-            let ExperimentDynState::Unsealed { state, open_runs } = &mut *dyn_state else {
+            let mut dyn_state = lock_experiment_state(&self.state);
+            let ExperimentDynLifecycle::Unsealed { state, open_runs } = &mut dyn_state.lifecycle
+            else {
                 crate::bail!("Sealed Experiment is read-only");
             };
             let state = state
@@ -142,9 +154,8 @@ impl ExperimentDyn {
             }
         };
         Ok(RunDyn {
-            experiment_state: Arc::clone(&self.experiment_state),
             run_state: Some(run),
-            registry_handle: self.registry_handle.clone(),
+            experiment_state: Arc::clone(&self.state),
         })
     }
 
@@ -154,22 +165,14 @@ impl ExperimentDyn {
         media_type: MediaType,
         bytes: impl AsRef<[u8]>,
     ) -> Result<()> {
-        let mut dyn_state = lock_experiment_state(&self.experiment_state);
-        let ExperimentDynState::Unsealed { state, .. } = &mut *dyn_state else {
+        let mut dyn_state = lock_experiment_state(&self.state);
+        let record_ref = store_experiment_record_ref(&dyn_state, name, media_type, bytes.as_ref())?;
+        let ExperimentDynLifecycle::Unsealed { state, .. } = &mut dyn_state.lifecycle else {
             crate::bail!("Sealed Experiment is read-only");
         };
         let state = state
             .as_mut()
             .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
-        let record_ref = store_record_ref(
-            self.registry_handle.registry(),
-            RecordSpace::Experiment,
-            None,
-            name,
-            media_type,
-            bytes.as_ref(),
-        )?;
-        let record_ref = erase_record_ref_lifetime(record_ref);
         upsert_record_ref(&mut state.records, record_ref);
         Ok(())
     }
@@ -204,8 +207,8 @@ impl ExperimentDyn {
     }
 
     pub fn commit(&self) -> Result<LocalArtifactDyn> {
-        let mut dyn_state = lock_experiment_state(&self.experiment_state);
-        let ExperimentDynState::Unsealed { state, open_runs } = &mut *dyn_state else {
+        let mut dyn_state = lock_experiment_state(&self.state);
+        let ExperimentDynLifecycle::Unsealed { state, open_runs } = &mut dyn_state.lifecycle else {
             crate::bail!("Sealed Experiment is already committed");
         };
         if *open_runs != 0 {
@@ -214,36 +217,36 @@ impl ExperimentDyn {
         let state = state
             .take()
             .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
-        let artifact = state.commit(self.registry_handle.registry())?;
+        let artifact = state.commit(dyn_state.registry_handle.registry())?;
         let artifact =
-            LocalArtifactDyn::from_local_artifact(self.registry_handle.clone(), artifact);
+            LocalArtifactDyn::from_local_artifact(dyn_state.registry_handle.clone(), artifact);
         let sealed = SealedExperiment::from_artifact(artifact.local_artifact().clone())?;
-        *dyn_state = ExperimentDynState::Sealed(sealed);
+        dyn_state.lifecycle = ExperimentDynLifecycle::Sealed(sealed);
         Ok(artifact)
     }
 
     pub fn artifact(&self) -> Result<LocalArtifactDyn> {
-        let dyn_state = lock_experiment_state(&self.experiment_state);
-        let ExperimentDynState::Sealed(sealed) = &*dyn_state else {
+        let dyn_state = lock_experiment_state(&self.state);
+        let ExperimentDynLifecycle::Sealed(sealed) = &dyn_state.lifecycle else {
             crate::bail!("Experiment must be committed before accessing its artifact");
         };
         Ok(LocalArtifactDyn::from_local_artifact(
-            self.registry_handle.clone(),
+            dyn_state.registry_handle.clone(),
             sealed.artifact(),
         ))
     }
 
     pub fn records(&self) -> Result<Vec<ExperimentRecord>> {
-        let dyn_state = lock_experiment_state(&self.experiment_state);
-        let ExperimentDynState::Sealed(sealed) = &*dyn_state else {
+        let dyn_state = lock_experiment_state(&self.state);
+        let ExperimentDynLifecycle::Sealed(sealed) = &dyn_state.lifecycle else {
             crate::bail!("Experiment must be committed and loaded before using this view");
         };
         Ok(sealed.records().to_vec())
     }
 
     pub fn run_parameter_cells(&self) -> Result<Vec<RunParameterCell>> {
-        let dyn_state = lock_experiment_state(&self.experiment_state);
-        let ExperimentDynState::Sealed(sealed) = &*dyn_state else {
+        let dyn_state = lock_experiment_state(&self.state);
+        let ExperimentDynLifecycle::Sealed(sealed) = &dyn_state.lifecycle else {
             crate::bail!("Experiment must be committed and loaded before using this view");
         };
         Ok(sealed.run_parameter_cells())
@@ -274,15 +277,10 @@ impl RunDyn {
         bytes: impl AsRef<[u8]>,
     ) -> Result<()> {
         let run_id = self.open()?.run_id;
-        let record_ref = store_record_ref(
-            self.registry_handle.registry(),
-            RecordSpace::Run,
-            Some(run_id),
-            name,
-            media_type,
-            bytes.as_ref(),
-        )?;
-        let record_ref = erase_record_ref_lifetime(record_ref);
+        let record_ref = {
+            let dyn_state = lock_experiment_state(&self.experiment_state);
+            store_run_record_ref(&dyn_state, run_id, name, media_type, bytes.as_ref())?
+        };
         upsert_record_ref(&mut self.open_mut()?.records, record_ref);
         Ok(())
     }
@@ -318,7 +316,7 @@ impl RunDyn {
 
     pub fn finish(mut self) -> Result<()> {
         let mut dyn_state = lock_experiment_state(&self.experiment_state);
-        let ExperimentDynState::Unsealed { state, open_runs } = &mut *dyn_state else {
+        let ExperimentDynLifecycle::Unsealed { state, open_runs } = &mut dyn_state.lifecycle else {
             crate::bail!("Parent Experiment is no longer unsealed");
         };
         let state = state
@@ -381,9 +379,56 @@ fn lock_experiment_state(state: &Mutex<ExperimentDynState>) -> MutexGuard<'_, Ex
     }
 }
 
+fn store_experiment_record_ref(
+    state: &ExperimentDynState,
+    name: &str,
+    media_type: MediaType,
+    bytes: &[u8],
+) -> Result<super::record::RecordRef<'static>> {
+    ensure_unsealed_for_record_write(state)?;
+    let record_ref = store_record_ref(
+        state.registry_handle.registry(),
+        RecordSpace::Experiment,
+        None,
+        name,
+        media_type,
+        bytes,
+    )?;
+    Ok(erase_record_ref_lifetime(record_ref))
+}
+
+fn store_run_record_ref(
+    state: &ExperimentDynState,
+    run_id: u64,
+    name: &str,
+    media_type: MediaType,
+    bytes: &[u8],
+) -> Result<super::record::RecordRef<'static>> {
+    ensure_unsealed_for_record_write(state)?;
+    let record_ref = store_record_ref(
+        state.registry_handle.registry(),
+        RecordSpace::Run,
+        Some(run_id),
+        name,
+        media_type,
+        bytes,
+    )?;
+    Ok(erase_record_ref_lifetime(record_ref))
+}
+
+fn ensure_unsealed_for_record_write(state: &ExperimentDynState) -> Result<()> {
+    match &state.lifecycle {
+        ExperimentDynLifecycle::Unsealed { state: Some(_), .. } => Ok(()),
+        ExperimentDynLifecycle::Unsealed { state: None, .. } => {
+            crate::bail!("Experiment has already been committed")
+        }
+        ExperimentDynLifecycle::Sealed(_) => crate::bail!("Sealed Experiment is read-only"),
+    }
+}
+
 fn decrement_parent_open_runs(state: &Mutex<ExperimentDynState>) {
     let mut state = lock_experiment_state(state);
-    let ExperimentDynState::Unsealed { open_runs, .. } = &mut *state else {
+    let ExperimentDynLifecycle::Unsealed { open_runs, .. } = &mut state.lifecycle else {
         tracing::warn!("RunDyn closed after parent ExperimentDyn was sealed");
         return;
     };
@@ -401,10 +446,10 @@ fn decrement_open_runs(open_runs: &mut usize) {
 fn erase_record_ref_lifetime<'reg>(
     record_ref: super::record::RecordRef<'reg>,
 ) -> super::record::RecordRef<'static> {
-    // `ExperimentDyn` / `RunDyn` store the `LocalRegistryHandle` that
-    // produced this record descriptor. Their registry-backed state
-    // fields are declared before the handle, so erased descriptors are
-    // dropped before the registry owner.
+    // `ExperimentDynState` owns the `LocalRegistryHandle` that
+    // produced this record descriptor. Its lifecycle field is declared
+    // before the handle, so erased descriptors are dropped before the
+    // registry owner when the final shared state is dropped.
     unsafe {
         std::mem::transmute::<super::record::RecordRef<'reg>, super::record::RecordRef<'static>>(
             record_ref,
