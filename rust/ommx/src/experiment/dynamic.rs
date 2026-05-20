@@ -15,6 +15,7 @@ use super::{
     ExperimentRecord, Name, ParameterValue, RunEntry, RunParameterCell, SealedExperiment,
     UnsealedExperimentState,
 };
+use crate::artifact::ImageRef;
 use crate::artifact::{LocalArtifactDyn, LocalRegistryHandle};
 use crate::{Instance, SampleSet, Solution};
 use anyhow::Result;
@@ -49,6 +50,10 @@ enum ExperimentDynLifecycle {
         open_runs: usize,
     },
     Sealed(SealedExperiment<'static>),
+    Failed {
+        image_name: ImageRef,
+        reason: String,
+    },
 }
 
 /// Runtime-owned Run handle.
@@ -77,7 +82,7 @@ impl ExperimentDyn {
         Self::with_registry_handle(LocalRegistryHandle::shared_default()?, name)
     }
 
-    pub fn on_temp_local_registry(name: impl Into<Name>) -> Result<Self> {
+    pub fn with_temp_local_registry(name: impl Into<Name>) -> Result<Self> {
         Self::with_registry_handle(LocalRegistryHandle::temp()?, name)
     }
 
@@ -131,6 +136,22 @@ impl ExperimentDyn {
                 .image_name
                 .clone()),
             ExperimentDynLifecycle::Sealed(sealed) => Ok(sealed.image_name().clone()),
+            ExperimentDynLifecycle::Failed { image_name, .. } => Ok(image_name.clone()),
+        }
+    }
+
+    pub fn state_name(&self) -> &'static str {
+        match &lock_experiment_state(&self.state).lifecycle {
+            ExperimentDynLifecycle::Unsealed { .. } => "unsealed",
+            ExperimentDynLifecycle::Sealed(_) => "sealed",
+            ExperimentDynLifecycle::Failed { .. } => "failed",
+        }
+    }
+
+    pub fn open_run_count(&self) -> usize {
+        match &lock_experiment_state(&self.state).lifecycle {
+            ExperimentDynLifecycle::Unsealed { open_runs, .. } => *open_runs,
+            ExperimentDynLifecycle::Sealed(_) | ExperimentDynLifecycle::Failed { .. } => 0,
         }
     }
 
@@ -139,7 +160,7 @@ impl ExperimentDyn {
             let mut dyn_state = lock_experiment_state(&self.state);
             let ExperimentDynLifecycle::Unsealed { state, open_runs } = &mut dyn_state.lifecycle
             else {
-                crate::bail!("Sealed Experiment is read-only");
+                return bail_non_unsealed(&dyn_state.lifecycle);
             };
             let state = state
                 .as_mut()
@@ -168,7 +189,7 @@ impl ExperimentDyn {
         let mut dyn_state = lock_experiment_state(&self.state);
         let record_ref = store_experiment_record_ref(&dyn_state, name, media_type, bytes.as_ref())?;
         let ExperimentDynLifecycle::Unsealed { state, .. } = &mut dyn_state.lifecycle else {
-            crate::bail!("Sealed Experiment is read-only");
+            return bail_non_unsealed(&dyn_state.lifecycle);
         };
         let state = state
             .as_mut()
@@ -217,7 +238,15 @@ impl ExperimentDyn {
         let state = state
             .take()
             .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
-        let artifact = state.commit(dyn_state.registry_handle.registry())?;
+        let image_name = state.image_name.clone();
+        let artifact = match state.commit(dyn_state.registry_handle.registry()) {
+            Ok(artifact) => artifact,
+            Err(error) => {
+                let reason = error.to_string();
+                dyn_state.lifecycle = ExperimentDynLifecycle::Failed { image_name, reason };
+                return Err(error);
+            }
+        };
         let artifact =
             LocalArtifactDyn::from_local_artifact(dyn_state.registry_handle.clone(), artifact);
         let sealed = SealedExperiment::from_artifact(artifact.local_artifact().clone())?;
@@ -228,7 +257,7 @@ impl ExperimentDyn {
     pub fn artifact(&self) -> Result<LocalArtifactDyn> {
         let dyn_state = lock_experiment_state(&self.state);
         let ExperimentDynLifecycle::Sealed(sealed) = &dyn_state.lifecycle else {
-            crate::bail!("Experiment must be committed before accessing its artifact");
+            return bail_not_sealed(&dyn_state.lifecycle);
         };
         Ok(LocalArtifactDyn::from_local_artifact(
             dyn_state.registry_handle.clone(),
@@ -239,7 +268,7 @@ impl ExperimentDyn {
     pub fn records(&self) -> Result<Vec<ExperimentRecord>> {
         let dyn_state = lock_experiment_state(&self.state);
         let ExperimentDynLifecycle::Sealed(sealed) = &dyn_state.lifecycle else {
-            crate::bail!("Experiment must be committed and loaded before using this view");
+            return bail_not_sealed(&dyn_state.lifecycle);
         };
         Ok(sealed.records().to_vec())
     }
@@ -247,7 +276,7 @@ impl ExperimentDyn {
     pub fn run_parameter_cells(&self) -> Result<Vec<RunParameterCell>> {
         let dyn_state = lock_experiment_state(&self.state);
         let ExperimentDynLifecycle::Sealed(sealed) = &dyn_state.lifecycle else {
-            crate::bail!("Experiment must be committed and loaded before using this view");
+            return bail_not_sealed(&dyn_state.lifecycle);
         };
         Ok(sealed.run_parameter_cells())
     }
@@ -317,7 +346,7 @@ impl RunDyn {
     pub fn finish(mut self) -> Result<()> {
         let mut dyn_state = lock_experiment_state(&self.experiment_state);
         let ExperimentDynLifecycle::Unsealed { state, open_runs } = &mut dyn_state.lifecycle else {
-            crate::bail!("Parent Experiment is no longer unsealed");
+            return bail_non_unsealed(&dyn_state.lifecycle);
         };
         let state = state
             .as_mut()
@@ -422,7 +451,36 @@ fn ensure_unsealed_for_record_write(state: &ExperimentDynState) -> Result<()> {
         ExperimentDynLifecycle::Unsealed { state: None, .. } => {
             crate::bail!("Experiment has already been committed")
         }
+        other => bail_non_unsealed(other),
+    }
+}
+
+fn bail_non_unsealed<T>(lifecycle: &ExperimentDynLifecycle) -> Result<T> {
+    match lifecycle {
+        ExperimentDynLifecycle::Unsealed { state: None, .. } => {
+            crate::bail!("Experiment has already been committed")
+        }
+        ExperimentDynLifecycle::Unsealed { state: Some(_), .. } => {
+            unreachable!("unsealed lifecycle was handled by caller")
+        }
         ExperimentDynLifecycle::Sealed(_) => crate::bail!("Sealed Experiment is read-only"),
+        ExperimentDynLifecycle::Failed { reason, .. } => {
+            crate::bail!("Experiment commit has failed: {reason}")
+        }
+    }
+}
+
+fn bail_not_sealed<T>(lifecycle: &ExperimentDynLifecycle) -> Result<T> {
+    match lifecycle {
+        ExperimentDynLifecycle::Unsealed { .. } => {
+            crate::bail!("Experiment must be committed before accessing this view")
+        }
+        ExperimentDynLifecycle::Sealed(_) => {
+            unreachable!("sealed lifecycle was handled by caller")
+        }
+        ExperimentDynLifecycle::Failed { reason, .. } => {
+            crate::bail!("Experiment commit has failed: {reason}")
+        }
     }
 }
 

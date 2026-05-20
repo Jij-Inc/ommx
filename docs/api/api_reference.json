@@ -1765,6 +1765,46 @@
               "deprecated": null
             },
             {
+              "name": "__new__",
+              "doc": "Start a new Experiment in the local registry.\n\nIf `image_name` is omitted, OMMX generates an anonymous local\nExperiment name.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "image_name",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Experiment",
+                    "link_target": {
+                      "fqn": "ommx.experiment.Experiment",
+                      "doc_module": "ommx.experiment",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "__repr__",
               "doc": "",
               "signatures": [
@@ -2053,86 +2093,6 @@
               "deprecated": null
             },
             {
-              "name": "new",
-              "doc": "Start a new Experiment in the local registry.\n\nIf `image_name` is omitted, OMMX generates an anonymous local\nExperiment name.",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "image_name",
-                      "type_": {
-                        "display": "Optional[str]",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "str",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      },
-                      "default": {
-                        "kind": "Simple",
-                        "value": "None"
-                      }
-                    }
-                  ],
-                  "return_type": {
-                    "display": "Experiment",
-                    "link_target": {
-                      "fqn": "ommx.experiment.Experiment",
-                      "doc_module": "ommx.experiment",
-                      "kind": "Class",
-                      "attribute": null
-                    },
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "on_temp_local_registry",
-              "doc": "Start a new Experiment backed by a temporary Local Registry.\n\nThe temporary registry is kept alive by the returned Experiment\nand by Artifacts / loaded Experiments derived from it.",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "image_name",
-                      "type_": {
-                        "display": "Optional[str]",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "str",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      },
-                      "default": {
-                        "kind": "Simple",
-                        "value": "None"
-                      }
-                    }
-                  ],
-                  "return_type": {
-                    "display": "Experiment",
-                    "link_target": {
-                      "fqn": "ommx.experiment.Experiment",
-                      "doc_module": "ommx.experiment",
-                      "kind": "Class",
-                      "attribute": null
-                    },
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
               "name": "run",
               "doc": "Start a new Run in this unsealed Experiment.",
               "signatures": [
@@ -2171,7 +2131,7 @@
             },
             {
               "name": "with_temp_local_registry",
-              "doc": "Compatibility alias for {meth}`on_temp_local_registry`.",
+              "doc": "Start a new Experiment backed by a temporary Local Registry.\n\nThe temporary registry is kept alive by the returned Experiment\nand by Artifacts / loaded Experiments derived from it.",
               "signatures": [
                 {
                   "parameters": [

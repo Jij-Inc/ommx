@@ -7,7 +7,7 @@ use super::{
     ANN_RUN_ID, ANN_SPACE, ARTIFACT_KIND_EXPERIMENT, EXPERIMENT_SCHEMA_V1,
     EXPERIMENT_STATUS_FINISHED, LAYER_KIND_RUN_PARAMETERS,
 };
-use crate::artifact::media_types;
+use crate::artifact::{media_types, ImageRef, LocalRegistryHandle};
 use crate::Instance;
 use oci_spec::image::{Descriptor, MediaType};
 use serde_json::json;
@@ -591,7 +591,7 @@ fn log_record_accepts_caller_defined_media_type() {
 
 #[test]
 fn experiment_dyn_keeps_temp_registry_alive_for_derived_artifacts() {
-    let experiment = ExperimentDyn::on_temp_local_registry(Name::Anonymous).unwrap();
+    let experiment = ExperimentDyn::with_temp_local_registry(Name::Anonymous).unwrap();
     {
         let mut run = experiment.run().unwrap();
         run.log_parameter("solver", "scip").unwrap();
@@ -611,7 +611,7 @@ fn experiment_dyn_keeps_temp_registry_alive_for_derived_artifacts() {
 
 #[test]
 fn experiment_dyn_rejects_commit_while_run_is_open() {
-    let experiment = ExperimentDyn::on_temp_local_registry(Name::Anonymous).unwrap();
+    let experiment = ExperimentDyn::with_temp_local_registry(Name::Anonymous).unwrap();
     let run = experiment.run().unwrap();
 
     let err = experiment
@@ -625,7 +625,7 @@ fn experiment_dyn_rejects_commit_while_run_is_open() {
 
 #[test]
 fn experiment_dyn_drops_unfinished_run_as_abandoned() {
-    let experiment = ExperimentDyn::on_temp_local_registry(Name::Anonymous).unwrap();
+    let experiment = ExperimentDyn::with_temp_local_registry(Name::Anonymous).unwrap();
     {
         let mut run = experiment.run().unwrap();
         run.log_parameter("solver", "scip").unwrap();
@@ -633,4 +633,33 @@ fn experiment_dyn_drops_unfinished_run_as_abandoned() {
 
     experiment.commit().unwrap();
     assert!(experiment.run_parameter_cells().unwrap().is_empty());
+}
+
+#[test]
+fn experiment_dyn_marks_commit_failure_explicitly() {
+    let registry_handle = LocalRegistryHandle::temp().unwrap();
+    let image_name = ImageRef::parse("example.com/ommx/conflict:latest").unwrap();
+
+    ExperimentDyn::with_registry_handle(registry_handle.clone(), image_name.clone())
+        .unwrap()
+        .commit()
+        .unwrap();
+
+    let experiment = ExperimentDyn::with_registry_handle(registry_handle, image_name).unwrap();
+    {
+        let mut run = experiment.run().unwrap();
+        run.log_parameter("solver", "scip").unwrap();
+        run.finish().unwrap();
+    }
+    let err = experiment
+        .commit()
+        .expect_err("publishing the same ref must conflict");
+    assert!(err.to_string().contains("already points"));
+    assert_eq!(experiment.state_name(), "failed");
+    assert_eq!(experiment.open_run_count(), 0);
+
+    let err = experiment
+        .run()
+        .expect_err("failed Experiment must reject new runs");
+    assert!(err.to_string().contains("commit has failed"));
 }

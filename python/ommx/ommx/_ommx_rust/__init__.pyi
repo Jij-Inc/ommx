@@ -1657,8 +1657,7 @@ class Experiment:
     def records(self) -> builtins.list[ExperimentRecord]: ...
     @property
     def artifact(self) -> Artifact: ...
-    @staticmethod
-    def new(image_name: typing.Optional[builtins.str] = None) -> Experiment:
+    def __new__(cls, image_name: typing.Optional[builtins.str] = None) -> Experiment:
         r"""
         Start a new Experiment in the local registry.
 
@@ -1666,7 +1665,7 @@ class Experiment:
         Experiment name.
         """
     @staticmethod
-    def on_temp_local_registry(
+    def with_temp_local_registry(
         image_name: typing.Optional[builtins.str] = None,
     ) -> Experiment:
         r"""
@@ -1674,13 +1673,6 @@ class Experiment:
 
         The temporary registry is kept alive by the returned Experiment
         and by Artifacts / loaded Experiments derived from it.
-        """
-    @staticmethod
-    def with_temp_local_registry(
-        image_name: typing.Optional[builtins.str] = None,
-    ) -> Experiment:
-        r"""
-        Compatibility alias for {meth}`on_temp_local_registry`.
         """
     @staticmethod
     def load(image_name: builtins.str) -> Experiment:

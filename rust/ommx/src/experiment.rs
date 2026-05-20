@@ -41,9 +41,9 @@
 //!
 //! The module is split by data terms: `run` contains `Run` and
 //! `RunEntry`, `record` contains `RecordRef`, `parameter` contains
-//! run-parameter table data, `index` contains the experiment index
-//! layer data, and `artifact` maps the unsealed experiment state onto
-//! an OMMX Artifact.
+//! run-parameter table data, `view` reconstructs read-only views from
+//! sealed artifacts, and `artifact` maps the unsealed experiment state
+//! onto an OMMX Artifact.
 
 mod artifact;
 mod dynamic;

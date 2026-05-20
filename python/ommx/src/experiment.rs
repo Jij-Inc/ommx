@@ -1,6 +1,9 @@
 use anyhow::Result;
 use oci_spec::image::MediaType;
-use pyo3::{prelude::*, types::PyDict};
+use pyo3::{
+    prelude::*,
+    types::{PyBool, PyDict, PyFloat, PyInt, PyString},
+};
 use std::collections::BTreeMap;
 
 use crate::pandas::{raw_entries_to_dataframe, PyDataFrame};
@@ -20,7 +23,7 @@ impl PyExperiment {
     ///
     /// If `image_name` is omitted, OMMX generates an anonymous local
     /// Experiment name.
-    #[staticmethod]
+    #[new]
     #[pyo3(signature = (image_name = None))]
     pub fn new(image_name: Option<&str>) -> Result<Self> {
         Ok(Self {
@@ -34,19 +37,12 @@ impl PyExperiment {
     /// and by Artifacts / loaded Experiments derived from it.
     #[staticmethod]
     #[pyo3(signature = (image_name = None))]
-    pub fn on_temp_local_registry(image_name: Option<&str>) -> Result<Self> {
+    pub fn with_temp_local_registry(image_name: Option<&str>) -> Result<Self> {
         Ok(Self {
-            inner: ommx::experiment::ExperimentDyn::on_temp_local_registry(parse_name(
+            inner: ommx::experiment::ExperimentDyn::with_temp_local_registry(parse_name(
                 image_name,
             )?)?,
         })
-    }
-
-    /// Compatibility alias for {meth}`on_temp_local_registry`.
-    #[staticmethod]
-    #[pyo3(signature = (image_name = None))]
-    pub fn with_temp_local_registry(image_name: Option<&str>) -> Result<Self> {
-        Self::on_temp_local_registry(image_name)
     }
 
     /// Load a committed Experiment Artifact from the local registry.
@@ -190,7 +186,12 @@ impl PyExperiment {
     }
 
     pub fn __repr__(&self) -> Result<String> {
-        Ok(format!("Experiment(image_name='{}')", self.image_name()?))
+        Ok(format!(
+            "Experiment(image_name='{}', state='{}', open_runs={})",
+            self.image_name()?,
+            self.inner.state_name(),
+            self.inner.open_run_count(),
+        ))
     }
 }
 
@@ -322,16 +323,24 @@ impl<'py> FromPyObject<'_, 'py> for ParameterValueInput {
     type Error = PyErr;
 
     fn extract(ob: pyo3::Borrowed<'_, 'py, PyAny>) -> PyResult<Self> {
-        if let Ok(value) = ob.extract::<bool>() {
+        if ob.is_instance_of::<PyBool>() {
+            let value = ob.extract::<bool>()?;
             return Ok(Self(ommx::experiment::ParameterValue::Bool(value)));
         }
-        if let Ok(value) = ob.extract::<i64>() {
+        if ob.is_instance_of::<PyInt>() {
+            let value = ob.extract::<i64>().map_err(|_| {
+                pyo3::exceptions::PyOverflowError::new_err(
+                    "Run parameter int value must fit in int64",
+                )
+            })?;
             return Ok(Self(ommx::experiment::ParameterValue::Int(value)));
         }
-        if let Ok(value) = ob.extract::<f64>() {
+        if ob.is_instance_of::<PyFloat>() {
+            let value = ob.extract::<f64>()?;
             return Ok(Self(ommx::experiment::ParameterValue::Float(value)));
         }
-        if let Ok(value) = ob.extract::<String>() {
+        if ob.is_instance_of::<PyString>() {
+            let value = ob.extract::<String>()?;
             return Ok(Self(ommx::experiment::ParameterValue::String(value)));
         }
         Err(pyo3::exceptions::PyTypeError::new_err(

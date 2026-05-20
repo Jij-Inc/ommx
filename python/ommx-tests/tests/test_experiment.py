@@ -4,9 +4,12 @@ import pytest
 from ommx.experiment import Experiment
 
 
-def test_view_run_parameters_from_committed_artifact():
-    df: pd.DataFrame | None = None
-    with Experiment.on_temp_local_registry() as experiment:
+def _df_snap(df: pd.DataFrame) -> str:
+    return df.to_string(na_rep="<NA>")
+
+
+def test_view_run_parameters_from_committed_artifact(snapshot):
+    with Experiment.with_temp_local_registry() as experiment:
         experiment.log_json("dataset", {"name": "miplib2017"})
 
         with experiment.run() as run0:
@@ -28,20 +31,14 @@ def test_view_run_parameters_from_committed_artifact():
     }
     df = loaded.run_parameters_df()
 
-    assert df is not None
-    assert list(df.index) == [0, 1]
-    assert df.index.name == "run_id"
-    assert df.loc[0, "solver"] == "scip"
-    assert df.loc[1, "solver"] == "highs"
-    assert bool(df.loc[1, "presolve"]) is True
-    assert df.loc[0, "time_limit"] == 20.0
-    assert pd.isna(df.loc[1, "time_limit"])
+    assert _df_snap(df) == snapshot
 
 
-def test_create_experiment_run_records_and_commit():
-    df: pd.DataFrame | None = None
-    experiment = Experiment.on_temp_local_registry()
+def test_create_experiment_run_records_and_commit(snapshot):
+    experiment = Experiment.with_temp_local_registry()
     assert ".ommx.local/experiment:" in experiment.image_name
+    assert "state='unsealed'" in repr(experiment)
+    assert "open_runs=0" in repr(experiment)
 
     experiment.log_json("dataset", {"name": "miplib2017"})
     experiment.log_record("raw-config", "application/octet-stream", b"abc")
@@ -65,22 +62,21 @@ def test_create_experiment_run_records_and_commit():
     }
     df = loaded.run_parameters_df()
 
-    assert df is not None
-    assert list(df.index) == [0]
-    assert df.loc[0, "solver"] == "scip"
-    assert df.loc[0, "time_limit"] == 20.0
+    assert _df_snap(df) == snapshot
 
 
 def test_commit_rejects_open_run():
-    experiment = Experiment.on_temp_local_registry()
+    experiment = Experiment.with_temp_local_registry()
     with experiment.run():
+        assert "open_runs=1" in repr(experiment)
         with pytest.raises(RuntimeError, match="Run handle"):
             experiment.commit()
     experiment.commit()
+    assert "state='sealed'" in repr(experiment)
 
 
 def test_temp_registry_lives_with_artifact_after_experiment_drop():
-    experiment = Experiment.on_temp_local_registry()
+    experiment = Experiment.with_temp_local_registry()
     with experiment.run() as run:
         run.log_parameter("solver", "scip")
 
@@ -98,7 +94,7 @@ def test_temp_registry_lives_with_artifact_after_experiment_drop():
 def test_experiment_context_does_not_commit_on_exception():
     experiments: list[Experiment] = []
     with pytest.raises(ValueError):
-        with Experiment.on_temp_local_registry() as experiment:
+        with Experiment.with_temp_local_registry() as experiment:
             experiments.append(experiment)
             with experiment.run() as run:
                 run.log_parameter("solver", "scip")
@@ -110,8 +106,7 @@ def test_experiment_context_does_not_commit_on_exception():
 
 
 def test_run_context_does_not_finish_on_exception():
-    df: pd.DataFrame | None = None
-    experiment = Experiment.on_temp_local_registry()
+    experiment = Experiment.with_temp_local_registry()
     with pytest.raises(ValueError):
         with experiment.run() as run:
             run.log_parameter("solver", "scip")
@@ -123,3 +118,10 @@ def test_run_context_does_not_finish_on_exception():
 
     assert df is not None
     assert df.empty
+
+
+def test_log_parameter_rejects_python_int_outside_i64():
+    experiment = Experiment.with_temp_local_registry()
+    with experiment.run() as run:
+        with pytest.raises(OverflowError, match="int64"):
+            run.log_parameter("too_large", 2**63)
