@@ -2215,6 +2215,98 @@
           "bases": [],
           "methods": [
             {
+              "name": "__enter__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "Run",
+                    "link_target": {
+                      "fqn": "ommx.experiment.Run",
+                      "doc_module": "ommx.experiment",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__exit__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "exc_type",
+                      "type_": {
+                        "display": "Optional[Any]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Any",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "_exc_value",
+                      "type_": {
+                        "display": "Optional[Any]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Any",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "_traceback",
+                      "type_": {
+                        "display": "Optional[Any]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Any",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "__repr__",
               "doc": "",
               "signatures": [

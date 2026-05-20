@@ -2,7 +2,7 @@
 
 use super::UnsealedExperimentState;
 use super::{
-    Experiment, ExperimentRecordSpace, LoadedExperiment, Name, ParameterValue, ANN_ARTIFACT_KIND,
+    Experiment, ExperimentRecordSpace, Name, ParameterValue, SealedExperiment, ANN_ARTIFACT_KIND,
     ANN_EXPERIMENT_SCHEMA, ANN_EXPERIMENT_STATUS, ANN_LAYER, ANN_RECORD_NAME, ANN_RUN_ID,
     ANN_SPACE, ARTIFACT_KIND_EXPERIMENT, EXPERIMENT_SCHEMA_V1, EXPERIMENT_STATUS_FINISHED,
     LAYER_KIND_RUN_PARAMETERS,
@@ -321,7 +321,7 @@ fn loaded_experiment_reads_records_and_run_parameters() {
         }
 
         let artifact = experiment.commit().unwrap().into_artifact();
-        let loaded = LoadedExperiment::from_artifact(artifact).unwrap();
+        let loaded = SealedExperiment::from_artifact(artifact).unwrap();
 
         assert!(loaded.records().iter().any(|record| {
             record.space == ExperimentRecordSpace::Experiment

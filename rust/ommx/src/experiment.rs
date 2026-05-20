@@ -55,7 +55,7 @@ mod view;
 mod tests;
 
 pub use parameter::{ParameterValue, RunParameterCell};
-pub use view::{ExperimentRecord, ExperimentRecordSpace, LoadedExperiment};
+pub use view::{ExperimentRecord, ExperimentRecordSpace};
 
 use crate::artifact::local_registry::{LocalRegistry, TempLocalRegistry};
 use crate::artifact::{media_types, ImageRef, LocalArtifact};
@@ -97,6 +97,8 @@ pub struct Experiment<'reg> {
 #[derive(Debug, Clone)]
 pub struct SealedExperiment<'reg> {
     artifact: LocalArtifact<'reg>,
+    records: Vec<view::ExperimentRecord>,
+    run_parameters: parameter::RunParameterTable,
 }
 
 /// User-facing name policy for a new Experiment.
@@ -315,7 +317,7 @@ impl<'reg> Experiment<'reg> {
             }
         };
         let artifact = state.commit(self.registry)?;
-        Ok(SealedExperiment { artifact })
+        SealedExperiment::from_artifact(artifact)
     }
 }
 

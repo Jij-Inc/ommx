@@ -18,7 +18,7 @@ enum PyExperimentInner {
         experiment: Option<Box<ommx::experiment::Experiment<'static>>>,
         open_runs: usize,
     },
-    Loaded(ommx::experiment::LoadedExperiment<'static>),
+    Sealed(ommx::experiment::SealedExperiment<'static>),
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
@@ -66,7 +66,7 @@ impl PyExperiment {
         let image_name = ommx::artifact::ImageRef::parse(image_name)?;
         let artifact = ommx::artifact::LocalArtifact::open(image_name)?;
         Ok(Self {
-            inner: PyExperimentInner::Loaded(ommx::experiment::LoadedExperiment::from_artifact(
+            inner: PyExperimentInner::Sealed(ommx::experiment::SealedExperiment::from_artifact(
                 artifact,
             )?),
         })
@@ -76,7 +76,7 @@ impl PyExperiment {
     #[staticmethod]
     pub fn from_artifact(artifact: &PyArtifact) -> Result<Self> {
         Ok(Self {
-            inner: PyExperimentInner::Loaded(ommx::experiment::LoadedExperiment::from_artifact(
+            inner: PyExperimentInner::Sealed(ommx::experiment::SealedExperiment::from_artifact(
                 artifact.0.clone(),
             )?),
         })
@@ -90,14 +90,14 @@ impl PyExperiment {
                 .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?
                 .image_name()
                 .to_string()),
-            PyExperimentInner::Loaded(loaded) => Ok(loaded.image_name().to_string()),
+            PyExperimentInner::Sealed(sealed) => Ok(sealed.image_name().to_string()),
         }
     }
 
     #[getter]
     pub fn records(&self) -> Result<Vec<PyExperimentRecord>> {
-        let loaded = self.as_loaded()?;
-        Ok(loaded
+        let sealed = self.as_sealed()?;
+        Ok(sealed
             .records()
             .iter()
             .cloned()
@@ -179,7 +179,7 @@ impl PyExperiment {
             open_runs,
         } = &mut self.inner
         else {
-            bail!("Loaded Experiment is already committed");
+            bail!("Sealed Experiment is already committed");
         };
         if *open_runs != 0 {
             bail!("Cannot commit Experiment while {open_runs} Run handle(s) are still open");
@@ -192,9 +192,9 @@ impl PyExperiment {
 
     /// Wide DataFrame of run parameters, indexed by `run_id`.
     pub fn run_parameters_df<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDataFrame>> {
-        let loaded = self.as_loaded()?;
+        let sealed = self.as_sealed()?;
         let mut rows = BTreeMap::new();
-        for cell in loaded.run_parameter_cells() {
+        for cell in sealed.run_parameter_cells() {
             let row = rows.entry(cell.run_id).or_insert_with(|| {
                 let dict = PyDict::new(py);
                 dict.set_item("run_id", cell.run_id)
@@ -249,9 +249,9 @@ impl PyExperiment {
         Ok(())
     }
 
-    fn as_loaded(&self) -> Result<&ommx::experiment::LoadedExperiment<'static>> {
+    fn as_sealed(&self) -> Result<&ommx::experiment::SealedExperiment<'static>> {
         match &self.inner {
-            PyExperimentInner::Loaded(loaded) => Ok(loaded),
+            PyExperimentInner::Sealed(sealed) => Ok(sealed),
             PyExperimentInner::Unsealed { .. } => {
                 bail!("Experiment must be committed and loaded before using this view")
             }
@@ -263,7 +263,7 @@ impl PyExperiment {
             PyExperimentInner::Unsealed { experiment, .. } => experiment
                 .as_deref()
                 .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed")),
-            PyExperimentInner::Loaded(_) => bail!("Loaded Experiment is read-only"),
+            PyExperimentInner::Sealed(_) => bail!("Sealed Experiment is read-only"),
         }
     }
 
@@ -278,7 +278,7 @@ impl PyExperiment {
                     .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?,
                 open_runs,
             )),
-            PyExperimentInner::Loaded(_) => bail!("Loaded Experiment is read-only"),
+            PyExperimentInner::Sealed(_) => bail!("Sealed Experiment is read-only"),
         }
     }
 }
@@ -360,6 +360,31 @@ pub struct PyRun {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl PyRun {
+    pub fn __enter__(slf: Bound<'_, Self>) -> PyResult<Py<PyRun>> {
+        Ok(slf.unbind())
+    }
+
+    #[pyo3(signature = (exc_type = None, _exc_value = None, _traceback = None))]
+    pub fn __exit__(
+        &mut self,
+        py: Python<'_>,
+        exc_type: Option<&Bound<'_, PyAny>>,
+        _exc_value: Option<&Bound<'_, PyAny>>,
+        _traceback: Option<&Bound<'_, PyAny>>,
+    ) -> Result<bool> {
+        if self.run.is_none() {
+            return Ok(false);
+        }
+        if exc_type.is_none() {
+            self.finish(py)?;
+        } else {
+            self.run.take();
+            self.closed = true;
+            self.decrement_open_runs(py)?;
+        }
+        Ok(false)
+    }
+
     #[getter]
     pub fn run_id(&self, py: Python<'_>) -> Result<u64> {
         self.ensure_parent_active(py)?;
@@ -470,7 +495,7 @@ impl PyRun {
             PyExperimentInner::Unsealed {
                 experiment: None, ..
             } => bail!("Parent Experiment is no longer active"),
-            PyExperimentInner::Loaded(_) => bail!("Parent Experiment is no longer unsealed"),
+            PyExperimentInner::Sealed(_) => bail!("Parent Experiment is no longer unsealed"),
         }
     }
 

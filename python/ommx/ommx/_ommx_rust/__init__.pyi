@@ -4866,6 +4866,13 @@ class Rng:
 class Run:
     @property
     def run_id(self) -> builtins.int: ...
+    def __enter__(self) -> Run: ...
+    def __exit__(
+        self,
+        exc_type: typing.Optional[typing.Any] = None,
+        _exc_value: typing.Optional[typing.Any] = None,
+        _traceback: typing.Optional[typing.Any] = None,
+    ) -> builtins.bool: ...
     def log_parameter(
         self, name: builtins.str, value: bool | int | float | str
     ) -> None:

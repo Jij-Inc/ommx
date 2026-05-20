@@ -9,16 +9,14 @@ def test_view_run_parameters_from_committed_artifact():
     with Experiment.with_temp_local_registry() as experiment:
         experiment.log_json("dataset", {"name": "miplib2017"})
 
-        run0 = experiment.run()
-        run0.log_parameter("solver", "scip")
-        run0.log_parameter("time_limit", 20.0)
-        run0.log_json("candidate", {"formulation": "a"})
-        run0.finish()
+        with experiment.run() as run0:
+            run0.log_parameter("solver", "scip")
+            run0.log_parameter("time_limit", 20.0)
+            run0.log_json("candidate", {"formulation": "a"})
 
-        run1 = experiment.run()
-        run1.log_parameter("solver", "highs")
-        run1.log_parameter("presolve", True)
-        run1.finish()
+        with experiment.run() as run1:
+            run1.log_parameter("solver", "highs")
+            run1.log_parameter("presolve", True)
 
         artifact = experiment.commit()
         loaded = Experiment.from_artifact(artifact)
@@ -48,13 +46,12 @@ def test_create_experiment_run_records_and_commit():
         experiment.log_json("dataset", {"name": "miplib2017"})
         experiment.log_record("raw-config", "application/octet-stream", b"abc")
 
-        run = experiment.run()
-        assert run.run_id == 0
-        run.log_parameter("solver", "scip")
-        run.log_parameter("time_limit", 20.0)
-        run.log_json("candidate", {"formulation": "a"})
-        run.log_record("solver-log", "text/plain", b"solved")
-        run.finish()
+        with experiment.run() as run:
+            assert run.run_id == 0
+            run.log_parameter("solver", "scip")
+            run.log_parameter("time_limit", 20.0)
+            run.log_json("candidate", {"formulation": "a"})
+            run.log_record("solver-log", "text/plain", b"solved")
 
         artifact = experiment.commit()
         loaded = Experiment.from_artifact(artifact)
@@ -76,12 +73,9 @@ def test_create_experiment_run_records_and_commit():
 
 def test_commit_rejects_open_run():
     with Experiment.with_temp_local_registry() as experiment:
-        run = experiment.run()
-
-        with pytest.raises(RuntimeError, match="Run handle"):
-            experiment.commit()
-
-        run.finish()
+        with experiment.run():
+            with pytest.raises(RuntimeError, match="Run handle"):
+                experiment.commit()
         experiment.commit()
 
 
@@ -114,3 +108,19 @@ def test_temp_registry_context_rejects_reenter():
     with context:
         with pytest.raises(RuntimeError, match="already been entered"):
             context.__enter__()
+
+
+def test_run_context_does_not_finish_on_exception():
+    df: pd.DataFrame | None = None
+    with Experiment.with_temp_local_registry() as experiment:
+        with pytest.raises(ValueError):
+            with experiment.run() as run:
+                run.log_parameter("solver", "scip")
+                raise ValueError("failed")
+
+        artifact = experiment.commit()
+        loaded = Experiment.from_artifact(artifact)
+        df = loaded.run_parameters_df()
+
+    assert df is not None
+    assert df.empty

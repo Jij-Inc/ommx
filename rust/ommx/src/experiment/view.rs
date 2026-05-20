@@ -1,25 +1,18 @@
-//! Immutable Experiment view loaded from a committed Artifact.
+//! Read-only projection of a sealed Experiment Artifact.
 
 use super::parameter::{RunParameterCell, RunParameterTable};
 use super::{
-    ANN_ARTIFACT_KIND, ANN_EXPERIMENT_SCHEMA, ANN_LAYER, ANN_RECORD_NAME, ANN_RUN_ID, ANN_SPACE,
-    ARTIFACT_KIND_EXPERIMENT, EXPERIMENT_SCHEMA_V1, LAYER_KIND_RUN_PARAMETERS,
-    RUN_PARAMETERS_MEDIA_TYPE,
+    SealedExperiment, ANN_ARTIFACT_KIND, ANN_EXPERIMENT_SCHEMA, ANN_LAYER, ANN_RECORD_NAME,
+    ANN_RUN_ID, ANN_SPACE, ARTIFACT_KIND_EXPERIMENT, EXPERIMENT_SCHEMA_V1,
+    LAYER_KIND_RUN_PARAMETERS, RUN_PARAMETERS_MEDIA_TYPE,
 };
 use crate::artifact::{ImageRef, LocalArtifact};
 use anyhow::{Context, Result};
 use oci_spec::image::{Descriptor, MediaType};
 use std::collections::BTreeSet;
 
-/// Read-only Experiment reconstructed from a committed Experiment Artifact.
-#[derive(Debug, Clone)]
-pub struct LoadedExperiment<'reg> {
-    artifact: LocalArtifact<'reg>,
-    records: Vec<ExperimentRecord>,
-    run_parameters: RunParameterTable,
-}
-
-impl<'reg> LoadedExperiment<'reg> {
+impl<'reg> SealedExperiment<'reg> {
+    /// Reconstruct a sealed Experiment from a committed Experiment Artifact.
     pub fn from_artifact(artifact: LocalArtifact<'reg>) -> Result<Self> {
         validate_experiment_profile(&artifact)?;
         let layers = artifact.layers()?;
@@ -68,10 +61,6 @@ impl<'reg> LoadedExperiment<'reg> {
         self.artifact.image_name()
     }
 
-    pub fn artifact(&self) -> &LocalArtifact<'reg> {
-        &self.artifact
-    }
-
     pub fn records(&self) -> &[ExperimentRecord] {
         &self.records
     }
@@ -81,7 +70,7 @@ impl<'reg> LoadedExperiment<'reg> {
     }
 }
 
-/// Record descriptor visible through the immutable Experiment view.
+/// Record descriptor visible through a sealed Experiment.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExperimentRecord {
     pub space: ExperimentRecordSpace,

@@ -2,7 +2,6 @@
 # ruff: noqa: F401
 
 from ommx._ommx_rust import Experiment, ExperimentRecord, Run, TempExperimentContext
-
 __all__ = [
     "Experiment",
     "ExperimentRecord",
