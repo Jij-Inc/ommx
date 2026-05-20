@@ -30,12 +30,10 @@ use std::sync::{Arc, Mutex, MutexGuard};
 /// do not need to duplicate these invariants.
 #[derive(Debug, Clone)]
 pub struct ExperimentDyn {
-    inner: Arc<ExperimentDynInner>,
-}
-
-#[derive(Debug)]
-struct ExperimentDynInner {
-    state: Mutex<ExperimentDynState>,
+    // `experiment_state` stores registry-backed descriptors whose
+    // lifetime is erased to `'static`; keep it before `registry_handle`
+    // so it is dropped first.
+    experiment_state: Arc<Mutex<ExperimentDynState>>,
     registry_handle: LocalRegistryHandle,
 }
 
@@ -55,8 +53,9 @@ enum ExperimentDynState {
 /// experiment before dropping it.
 #[derive(Debug)]
 pub struct RunDyn {
-    parent: Arc<ExperimentDynInner>,
-    state: Option<RunDynState>,
+    experiment_state: Arc<Mutex<ExperimentDynState>>,
+    run_state: Option<RunDynState>,
+    registry_handle: LocalRegistryHandle,
 }
 
 #[derive(Debug)]
@@ -81,18 +80,16 @@ impl ExperimentDyn {
     ) -> Result<Self> {
         let image_name = name.into().resolve(registry_handle.registry())?;
         Ok(Self {
-            inner: Arc::new(ExperimentDynInner {
-                state: Mutex::new(ExperimentDynState::Unsealed {
-                    state: Some(UnsealedExperimentState {
-                        image_name,
-                        records: Vec::new(),
-                        runs: BTreeMap::new(),
-                        next_run_id: 0,
-                    }),
-                    open_runs: 0,
+            experiment_state: Arc::new(Mutex::new(ExperimentDynState::Unsealed {
+                state: Some(UnsealedExperimentState {
+                    image_name,
+                    records: Vec::new(),
+                    runs: BTreeMap::new(),
+                    next_run_id: 0,
                 }),
-                registry_handle,
-            }),
+                open_runs: 0,
+            })),
+            registry_handle,
         })
     }
 
@@ -103,22 +100,20 @@ impl ExperimentDyn {
     pub fn from_artifact(artifact: LocalArtifactDyn) -> Result<Self> {
         let sealed = SealedExperiment::from_artifact(artifact.local_artifact().clone())?;
         Ok(Self {
-            inner: Arc::new(ExperimentDynInner {
-                state: Mutex::new(ExperimentDynState::Sealed(sealed)),
-                registry_handle: artifact.registry_handle(),
-            }),
+            experiment_state: Arc::new(Mutex::new(ExperimentDynState::Sealed(sealed))),
+            registry_handle: artifact.registry_handle(),
         })
     }
 
     pub fn is_unsealed(&self) -> bool {
         matches!(
-            &*self.inner.lock_state(),
+            &*lock_experiment_state(&self.experiment_state),
             ExperimentDynState::Unsealed { .. }
         )
     }
 
     pub fn image_name(&self) -> Result<crate::artifact::ImageRef> {
-        match &*self.inner.lock_state() {
+        match &*lock_experiment_state(&self.experiment_state) {
             ExperimentDynState::Unsealed { state, .. } => Ok(state
                 .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?
@@ -130,7 +125,7 @@ impl ExperimentDyn {
 
     pub fn run(&self) -> Result<RunDyn> {
         let run = {
-            let mut dyn_state = self.inner.lock_state();
+            let mut dyn_state = lock_experiment_state(&self.experiment_state);
             let ExperimentDynState::Unsealed { state, open_runs } = &mut *dyn_state else {
                 crate::bail!("Sealed Experiment is read-only");
             };
@@ -147,8 +142,9 @@ impl ExperimentDyn {
             }
         };
         Ok(RunDyn {
-            parent: Arc::clone(&self.inner),
-            state: Some(run),
+            experiment_state: Arc::clone(&self.experiment_state),
+            run_state: Some(run),
+            registry_handle: self.registry_handle.clone(),
         })
     }
 
@@ -158,7 +154,7 @@ impl ExperimentDyn {
         media_type: MediaType,
         bytes: impl AsRef<[u8]>,
     ) -> Result<()> {
-        let mut dyn_state = self.inner.lock_state();
+        let mut dyn_state = lock_experiment_state(&self.experiment_state);
         let ExperimentDynState::Unsealed { state, .. } = &mut *dyn_state else {
             crate::bail!("Sealed Experiment is read-only");
         };
@@ -166,7 +162,7 @@ impl ExperimentDyn {
             .as_mut()
             .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
         let record_ref = store_record_ref(
-            self.inner.registry_handle.registry(),
+            self.registry_handle.registry(),
             RecordSpace::Experiment,
             None,
             name,
@@ -208,7 +204,7 @@ impl ExperimentDyn {
     }
 
     pub fn commit(&self) -> Result<LocalArtifactDyn> {
-        let mut dyn_state = self.inner.lock_state();
+        let mut dyn_state = lock_experiment_state(&self.experiment_state);
         let ExperimentDynState::Unsealed { state, open_runs } = &mut *dyn_state else {
             crate::bail!("Sealed Experiment is already committed");
         };
@@ -218,27 +214,27 @@ impl ExperimentDyn {
         let state = state
             .take()
             .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
-        let artifact = state.commit(self.inner.registry_handle.registry())?;
+        let artifact = state.commit(self.registry_handle.registry())?;
         let artifact =
-            LocalArtifactDyn::from_local_artifact(self.inner.registry_handle.clone(), artifact);
+            LocalArtifactDyn::from_local_artifact(self.registry_handle.clone(), artifact);
         let sealed = SealedExperiment::from_artifact(artifact.local_artifact().clone())?;
         *dyn_state = ExperimentDynState::Sealed(sealed);
         Ok(artifact)
     }
 
     pub fn artifact(&self) -> Result<LocalArtifactDyn> {
-        let dyn_state = self.inner.lock_state();
+        let dyn_state = lock_experiment_state(&self.experiment_state);
         let ExperimentDynState::Sealed(sealed) = &*dyn_state else {
             crate::bail!("Experiment must be committed before accessing its artifact");
         };
         Ok(LocalArtifactDyn::from_local_artifact(
-            self.inner.registry_handle.clone(),
+            self.registry_handle.clone(),
             sealed.artifact(),
         ))
     }
 
     pub fn records(&self) -> Result<Vec<ExperimentRecord>> {
-        let dyn_state = self.inner.lock_state();
+        let dyn_state = lock_experiment_state(&self.experiment_state);
         let ExperimentDynState::Sealed(sealed) = &*dyn_state else {
             crate::bail!("Experiment must be committed and loaded before using this view");
         };
@@ -246,7 +242,7 @@ impl ExperimentDyn {
     }
 
     pub fn run_parameter_cells(&self) -> Result<Vec<RunParameterCell>> {
-        let dyn_state = self.inner.lock_state();
+        let dyn_state = lock_experiment_state(&self.experiment_state);
         let ExperimentDynState::Sealed(sealed) = &*dyn_state else {
             crate::bail!("Experiment must be committed and loaded before using this view");
         };
@@ -279,7 +275,7 @@ impl RunDyn {
     ) -> Result<()> {
         let run_id = self.open()?.run_id;
         let record_ref = store_record_ref(
-            self.parent.registry_handle.registry(),
+            self.registry_handle.registry(),
             RecordSpace::Run,
             Some(run_id),
             name,
@@ -321,7 +317,7 @@ impl RunDyn {
     }
 
     pub fn finish(mut self) -> Result<()> {
-        let mut dyn_state = self.parent.lock_state();
+        let mut dyn_state = lock_experiment_state(&self.experiment_state);
         let ExperimentDynState::Unsealed { state, open_runs } = &mut *dyn_state else {
             crate::bail!("Parent Experiment is no longer unsealed");
         };
@@ -329,7 +325,7 @@ impl RunDyn {
             .as_mut()
             .ok_or_else(|| anyhow::anyhow!("Parent Experiment has already been committed"))?;
         let run = self
-            .state
+            .run_state
             .take()
             .ok_or_else(|| anyhow::anyhow!("Run has already been finished"))?;
         if state.runs.contains_key(&run.run_id) {
@@ -349,19 +345,19 @@ impl RunDyn {
     }
 
     pub fn abandon(mut self) {
-        if self.state.take().is_some() {
-            self.parent.decrement_open_runs();
+        if self.run_state.take().is_some() {
+            decrement_parent_open_runs(&self.experiment_state);
         }
     }
 
     fn open(&self) -> Result<&RunDynState> {
-        self.state
+        self.run_state
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("Run has already been finished"))
     }
 
     fn open_mut(&mut self) -> Result<&mut RunDynState> {
-        self.state
+        self.run_state
             .as_mut()
             .ok_or_else(|| anyhow::anyhow!("Run has already been finished"))
     }
@@ -369,33 +365,29 @@ impl RunDyn {
 
 impl Drop for RunDyn {
     fn drop(&mut self) {
-        if self.state.take().is_some() {
-            self.parent.decrement_open_runs();
+        if self.run_state.take().is_some() {
+            decrement_parent_open_runs(&self.experiment_state);
         }
     }
 }
 
-impl ExperimentDynInner {
-    fn lock_state(&self) -> MutexGuard<'_, ExperimentDynState> {
-        match self.state.lock() {
-            Ok(state) => state,
-            Err(poisoned) => {
-                tracing::warn!(
-                    "ExperimentDyn state mutex was poisoned; continuing with inner state"
-                );
-                poisoned.into_inner()
-            }
+fn lock_experiment_state(state: &Mutex<ExperimentDynState>) -> MutexGuard<'_, ExperimentDynState> {
+    match state.lock() {
+        Ok(state) => state,
+        Err(poisoned) => {
+            tracing::warn!("ExperimentDyn state mutex was poisoned; continuing with inner state");
+            poisoned.into_inner()
         }
     }
+}
 
-    fn decrement_open_runs(&self) {
-        let mut state = self.lock_state();
-        let ExperimentDynState::Unsealed { open_runs, .. } = &mut *state else {
-            tracing::warn!("RunDyn closed after parent ExperimentDyn was sealed");
-            return;
-        };
-        decrement_open_runs(open_runs);
-    }
+fn decrement_parent_open_runs(state: &Mutex<ExperimentDynState>) {
+    let mut state = lock_experiment_state(state);
+    let ExperimentDynState::Unsealed { open_runs, .. } = &mut *state else {
+        tracing::warn!("RunDyn closed after parent ExperimentDyn was sealed");
+        return;
+    };
+    decrement_open_runs(open_runs);
 }
 
 fn decrement_open_runs(open_runs: &mut usize) {
@@ -409,9 +401,10 @@ fn decrement_open_runs(open_runs: &mut usize) {
 fn erase_record_ref_lifetime<'reg>(
     record_ref: super::record::RecordRef<'reg>,
 ) -> super::record::RecordRef<'static> {
-    // `ExperimentDynInner` stores the `LocalRegistryHandle` that produced
-    // this record descriptor. The handle is dropped after the mutex state,
-    // so the erased descriptor remains tied to a live registry at runtime.
+    // `ExperimentDyn` / `RunDyn` store the `LocalRegistryHandle` that
+    // produced this record descriptor. Their registry-backed state
+    // fields are declared before the handle, so erased descriptors are
+    // dropped before the registry owner.
     unsafe {
         std::mem::transmute::<super::record::RecordRef<'reg>, super::record::RecordRef<'static>>(
             record_ref,
