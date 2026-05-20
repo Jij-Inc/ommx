@@ -2,8 +2,8 @@
 
 use super::{ANN_RECORD_NAME, ANN_RUN_ID, ANN_SPACE};
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
-use anyhow::Result;
-use oci_spec::image::MediaType;
+use anyhow::{Context, Result};
+use oci_spec::image::{Descriptor, MediaType};
 use std::collections::HashMap;
 
 /// The storage space a [`RecordRef`] belongs to.
@@ -27,14 +27,16 @@ impl RecordSpace {
 /// OCI layer media type for JSON record payloads.
 const JSON_MEDIA_TYPE: &str = "application/json";
 
-/// A named reference to a payload that has already been written to the
-/// BlobStore.
+/// A named reference to a Record payload.
+///
+/// The descriptor is an OCI descriptor stored in an Experiment config
+/// or produced immediately after writing the payload to the Local
+/// Registry BlobStore. `RecordRef` keeps the record name as a field so
+/// callers do not need to inspect descriptor annotations for the common
+/// lookup / display path.
 #[derive(Debug, Clone)]
 pub struct RecordRef<'reg> {
     name: String,
-    /// OCI layer descriptor whose payload bytes are present in the
-    /// Local Registry BlobStore. Carries the payload media type and
-    /// the experiment / record annotations.
     descriptor: StoredDescriptor<'reg>,
 }
 
@@ -46,13 +48,42 @@ impl<'reg> RecordRef<'reg> {
     pub fn descriptor(&self) -> &StoredDescriptor<'reg> {
         &self.descriptor
     }
+
+    pub(super) fn from_descriptor(
+        registry: &'reg LocalRegistry,
+        descriptor: Descriptor,
+    ) -> Result<Self> {
+        let name = descriptor
+            .annotations()
+            .as_ref()
+            .and_then(|annotations| annotations.get(ANN_RECORD_NAME))
+            .with_context(|| format!("Record descriptor is missing `{ANN_RECORD_NAME}`"))?
+            .to_string();
+        let descriptor = registry.stored_descriptor(descriptor)?;
+        Ok(Self { name, descriptor })
+    }
+
+    fn from_stored_descriptor(name: String, descriptor: StoredDescriptor<'reg>) -> Self {
+        Self { name, descriptor }
+    }
+
+    pub fn media_type(&self) -> String {
+        media_type_to_string(self.descriptor.media_type())
+    }
+
+    pub(super) fn key(&self) -> (String, String) {
+        (self.media_type(), self.name.clone())
+    }
 }
 
 /// Build-phase upsert: a record with the same `(media_type, name)`
 /// within a space replaces the previous one. Within one `Vec` the
 /// space and `run_id` are already fixed, so `(media_type, name)` is
 /// the remaining key.
-pub fn upsert_record_ref<'reg>(records: &mut Vec<RecordRef<'reg>>, record_ref: RecordRef<'reg>) {
+pub(super) fn upsert_record_ref<'reg>(
+    records: &mut Vec<RecordRef<'reg>>,
+    record_ref: RecordRef<'reg>,
+) {
     if let Some(existing) = records.iter_mut().find(|r| {
         r.descriptor().media_type() == record_ref.descriptor().media_type()
             && r.name() == record_ref.name()
@@ -81,10 +112,10 @@ pub fn store_record_ref<'reg>(
     annotations.insert(ANN_RECORD_NAME.to_string(), name.to_string());
 
     let descriptor = registry.store_layer_blob(media_type, bytes, annotations)?;
-    Ok(RecordRef {
-        name: name.to_string(),
+    Ok(RecordRef::from_stored_descriptor(
+        name.to_string(),
         descriptor,
-    })
+    ))
 }
 
 pub fn json_media_type() -> MediaType {
@@ -94,4 +125,11 @@ pub fn json_media_type() -> MediaType {
 pub fn encode_json(name: &str, value: impl serde::Serialize) -> Result<Vec<u8>> {
     serde_json::to_vec(&value)
         .map_err(|e| crate::error!("Failed to encode JSON record `{name}`: {e}"))
+}
+
+pub(super) fn media_type_to_string(media_type: &MediaType) -> String {
+    match media_type {
+        MediaType::Other(value) => value.clone(),
+        other => other.to_string(),
+    }
 }

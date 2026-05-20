@@ -2,10 +2,10 @@
 
 use super::config::ExperimentConfig;
 use super::parameter::{RunParameterCell, RunParameterTable};
+use super::record::{media_type_to_string, RecordRef};
 use super::{
-    SealedExperiment, ANN_ARTIFACT_KIND, ANN_EXPERIMENT_SCHEMA, ANN_RECORD_NAME,
-    ARTIFACT_KIND_EXPERIMENT, EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_SCHEMA_V1,
-    RUN_PARAMETERS_MEDIA_TYPE,
+    SealedExperiment, ANN_ARTIFACT_KIND, ANN_EXPERIMENT_SCHEMA, ARTIFACT_KIND_EXPERIMENT,
+    EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_SCHEMA_V1, RUN_PARAMETERS_MEDIA_TYPE,
 };
 use crate::artifact::{ImageRef, LocalArtifact};
 use anyhow::{Context, Result};
@@ -19,10 +19,14 @@ impl<'reg> SealedExperiment<'reg> {
         let config = load_experiment_config(&artifact)?;
         validate_experiment_schema(&config.schema)?;
 
-        let records = decode_records(config.records, "experiment")?;
+        let records = decode_records(artifact.registry(), config.records, "experiment")?;
         let mut runs = BTreeMap::new();
         for run in config.runs {
-            let records = decode_records(run.records, &format!("run {}", run.run_id))?;
+            let records = decode_records(
+                artifact.registry(),
+                run.records,
+                &format!("run {}", run.run_id),
+            )?;
             if runs
                 .insert(
                     run.run_id,
@@ -51,15 +55,15 @@ impl<'reg> SealedExperiment<'reg> {
         self.artifact.image_name()
     }
 
-    pub fn experiment_records(&self) -> &[ExperimentRecord] {
+    pub fn experiment_records(&self) -> &[RecordRef<'reg>] {
         &self.records
     }
 
-    pub fn runs(&self) -> impl Iterator<Item = &SealedRun> {
+    pub fn runs(&self) -> impl Iterator<Item = &SealedRun<'reg>> {
         self.runs.values()
     }
 
-    pub fn run(&self, run_id: u64) -> Option<&SealedRun> {
+    pub fn run(&self, run_id: u64) -> Option<&SealedRun<'reg>> {
         self.runs.get(&run_id)
     }
 
@@ -69,54 +73,19 @@ impl<'reg> SealedExperiment<'reg> {
 }
 
 /// Read-only Run reconstructed from a sealed Experiment config.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SealedRun {
+#[derive(Debug, Clone)]
+pub struct SealedRun<'reg> {
     run_id: u64,
-    records: Vec<ExperimentRecord>,
+    records: Vec<RecordRef<'reg>>,
 }
 
-impl SealedRun {
+impl<'reg> SealedRun<'reg> {
     pub fn run_id(&self) -> u64 {
         self.run_id
     }
 
-    pub fn records(&self) -> &[ExperimentRecord] {
+    pub fn records(&self) -> &[RecordRef<'reg>] {
         &self.records
-    }
-}
-
-/// Record descriptor visible through a sealed Experiment.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ExperimentRecord {
-    name: String,
-    descriptor: Descriptor,
-}
-
-impl ExperimentRecord {
-    fn from_descriptor(descriptor: Descriptor) -> Result<Self> {
-        let name = descriptor
-            .annotations()
-            .as_ref()
-            .and_then(|annotations| annotations.get(ANN_RECORD_NAME))
-            .with_context(|| format!("Experiment Record is missing `{ANN_RECORD_NAME}`"))?
-            .to_string();
-        Ok(Self { name, descriptor })
-    }
-
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
-    pub fn media_type(&self) -> String {
-        media_type_to_string(self.descriptor.media_type())
-    }
-
-    pub fn descriptor(&self) -> &Descriptor {
-        &self.descriptor
-    }
-
-    fn key(&self) -> (String, String) {
-        (self.media_type(), self.name.clone())
     }
 }
 
@@ -157,11 +126,15 @@ fn validate_experiment_schema(schema: &str) -> Result<()> {
     Ok(())
 }
 
-fn decode_records(records: Vec<Descriptor>, owner: &str) -> Result<Vec<ExperimentRecord>> {
+fn decode_records<'reg>(
+    registry: &'reg crate::artifact::local_registry::LocalRegistry,
+    records: Vec<Descriptor>,
+    owner: &str,
+) -> Result<Vec<RecordRef<'reg>>> {
     let mut decoded = Vec::new();
     let mut keys = BTreeSet::new();
     for descriptor in records {
-        let record = ExperimentRecord::from_descriptor(descriptor)
+        let record = RecordRef::from_descriptor(registry, descriptor)
             .with_context(|| format!("Failed to decode Record in {owner}"))?;
         let key = record.key();
         if !keys.insert(key) {
@@ -194,7 +167,7 @@ fn load_run_parameters(
 
 fn validate_run_parameters_reference_config_runs(
     run_parameters: &RunParameterTable,
-    runs: &BTreeMap<u64, SealedRun>,
+    runs: &BTreeMap<u64, SealedRun<'_>>,
 ) -> Result<()> {
     for cell in run_parameters.cells() {
         if !runs.contains_key(&cell.run_id) {
@@ -205,11 +178,4 @@ fn validate_run_parameters_reference_config_runs(
         }
     }
     Ok(())
-}
-
-fn media_type_to_string(media_type: &MediaType) -> String {
-    match media_type {
-        MediaType::Other(value) => value.clone(),
-        other => other.to_string(),
-    }
 }

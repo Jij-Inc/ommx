@@ -206,6 +206,10 @@ impl<'reg> LocalArtifact<'reg> {
         &self.manifest_digest
     }
 
+    pub(crate) fn registry(&self) -> &'reg LocalRegistry {
+        self.registry
+    }
+
     /// Read and cache the manifest associated with this artifact.
     ///
     /// The first successful call populates a shared `OnceLock`; later

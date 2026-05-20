@@ -2191,13 +2191,13 @@
               "name": "experiment_records",
               "doc": "",
               "type_": {
-                "display": "list[_ommx_rust.ExperimentRecord]",
+                "display": "list[_ommx_rust.RecordRef]",
                 "link_target": null,
                 "children": [
                   {
-                    "display": "ExperimentRecord",
+                    "display": "RecordRef",
                     "link_target": {
-                      "fqn": "ommx.experiment.ExperimentRecord",
+                      "fqn": "ommx.experiment.RecordRef",
                       "doc_module": "ommx.experiment",
                       "kind": "Class",
                       "attribute": null
@@ -2247,7 +2247,7 @@
         },
         {
           "kind": "Class",
-          "name": "ExperimentRecord",
+          "name": "RecordRef",
           "doc": "",
           "bases": [],
           "methods": [
@@ -2724,13 +2724,13 @@
               "name": "records",
               "doc": "",
               "type_": {
-                "display": "list[_ommx_rust.ExperimentRecord]",
+                "display": "list[_ommx_rust.RecordRef]",
                 "link_target": null,
                 "children": [
                   {
-                    "display": "ExperimentRecord",
+                    "display": "RecordRef",
                     "link_target": {
-                      "fqn": "ommx.experiment.ExperimentRecord",
+                      "fqn": "ommx.experiment.RecordRef",
                       "doc_module": "ommx.experiment",
                       "kind": "Class",
                       "attribute": null
@@ -26863,7 +26863,7 @@
     "ommx.artifact.get_local_registry_root": "ommx.artifact",
     "ommx.artifact.set_local_registry_root": "ommx.artifact",
     "ommx.experiment.Experiment": "ommx.experiment",
-    "ommx.experiment.ExperimentRecord": "ommx.experiment",
+    "ommx.experiment.RecordRef": "ommx.experiment",
     "ommx.experiment.Run": "ommx.experiment",
     "ommx.experiment.SealedRun": "ommx.experiment",
     "ommx.v1.AdditionalCapability": "ommx.v1",

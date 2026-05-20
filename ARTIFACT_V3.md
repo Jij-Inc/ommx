@@ -628,7 +628,7 @@ MINTO 由来の `org.minto.*` annotation は新規書き込みでは使わない
 復元に必要な invariants:
 
 - config media type は `application/org.ommx.v1.experiment.config+json` とする。
-- config は Experiment-space Record descriptor list、Run list、Run ごとの Record descriptor list、Run parameter table descriptor を持つ。Record name は各 descriptor の `org.ommx.record.name` annotation から検証して取り出し、load 後の `RecordRef` / `ExperimentRecord` は name を静的に読める field として保持してよい。
+- config は Experiment-space Record descriptor list、Run list、Run ごとの Record descriptor list、Run parameter table descriptor を持つ。Record name は各 descriptor の `org.ommx.record.name` annotation から検証して取り出し、load 後の `RecordRef` は name を静的に読める field として保持する。`RecordRef` は常に該当 blob が Local Registry に存在することを保証するため、通常の OCI `Descriptor` ではなく `StoredDescriptor` を保持する。
 - run id は 0-based integer とする。ただし復元対象の Run 集合は config の `runs[]` が source of truth であり、欠番を layer scan から補完しない。
 - 同一 Experiment / Run 内で同一 `(media type, name)` の Record が複数現れた場合、committed config では重複を禁止し、loader は error にする。
 - Run parameter table で同一 `(run_id, parameter_name)` が複数値を持つ場合も、committed manifest では重複を禁止し、loader は error にする。

@@ -32,7 +32,6 @@ __all__ = [
     "EvaluatedDecisionVariable",
     "EvaluatedNamedFunction",
     "Experiment",
-    "ExperimentRecord",
     "Function",
     "IndicatorConstraint",
     "Instance",
@@ -50,6 +49,7 @@ __all__ = [
     "Provenance",
     "ProvenanceKind",
     "Quadratic",
+    "RecordRef",
     "Relaxation",
     "RemovedConstraint",
     "RemovedIndicatorConstraint",
@@ -1655,7 +1655,7 @@ class Experiment:
     @property
     def image_name(self) -> builtins.str: ...
     @property
-    def experiment_records(self) -> builtins.list[ExperimentRecord]: ...
+    def experiment_records(self) -> builtins.list[RecordRef]: ...
     @property
     def runs(self) -> builtins.list[SealedRun]: ...
     @property
@@ -1729,16 +1729,6 @@ class Experiment:
         r"""
         Wide DataFrame of run parameters, indexed by `run_id`.
         """
-    def __repr__(self) -> builtins.str: ...
-
-@typing.final
-class ExperimentRecord:
-    @property
-    def name(self) -> builtins.str: ...
-    @property
-    def media_type(self) -> builtins.str: ...
-    @property
-    def descriptor(self) -> Descriptor: ...
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -4728,6 +4718,16 @@ class Quadratic:
         """
 
 @typing.final
+class RecordRef:
+    @property
+    def name(self) -> builtins.str: ...
+    @property
+    def media_type(self) -> builtins.str: ...
+    @property
+    def descriptor(self) -> Descriptor: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class RemovedConstraint:
     r"""
     RemovedConstraint wrapper for Python.
@@ -5463,7 +5463,7 @@ class SealedRun:
     @property
     def run_id(self) -> builtins.int: ...
     @property
-    def records(self) -> builtins.list[ExperimentRecord]: ...
+    def records(self) -> builtins.list[RecordRef]: ...
     def __repr__(self) -> builtins.str: ...
 
 @typing.final

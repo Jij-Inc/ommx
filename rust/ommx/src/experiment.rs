@@ -59,16 +59,15 @@ mod tests;
 
 pub use dynamic::{ExperimentDyn, RunDyn};
 pub use parameter::{ParameterValue, RunParameterCell};
-pub use sealed::{ExperimentRecord, SealedRun};
+pub use record::RecordRef;
+pub use sealed::SealedRun;
 
 use crate::artifact::local_registry::{LocalRegistry, TempLocalRegistry};
 use crate::artifact::{media_types, ImageRef, LocalArtifact};
 use crate::{Instance, SampleSet, Solution};
 use anyhow::Result;
 use oci_spec::image::MediaType;
-use record::{
-    encode_json, json_media_type, store_record_ref, upsert_record_ref, RecordRef, RecordSpace,
-};
+use record::{encode_json, json_media_type, store_record_ref, upsert_record_ref, RecordSpace};
 use std::collections::BTreeMap;
 use std::sync::{Mutex, MutexGuard};
 
@@ -102,8 +101,8 @@ pub struct Experiment<'reg> {
 #[derive(Debug, Clone)]
 pub struct SealedExperiment<'reg> {
     artifact: LocalArtifact<'reg>,
-    records: Vec<sealed::ExperimentRecord>,
-    runs: BTreeMap<u64, sealed::SealedRun>,
+    records: Vec<RecordRef<'reg>>,
+    runs: BTreeMap<u64, sealed::SealedRun<'reg>>,
     run_parameters: parameter::RunParameterTable,
 }
 
