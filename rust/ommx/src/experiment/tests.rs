@@ -2,9 +2,9 @@
 
 use super::UnsealedExperimentState;
 use super::{
-    Experiment, ExperimentDyn, ExperimentRecordSpace, Name, ParameterValue, SealedExperiment,
-    ANN_ARTIFACT_KIND, ANN_EXPERIMENT_SCHEMA, ANN_EXPERIMENT_STATUS, ANN_LAYER, ANN_RECORD_NAME,
-    ANN_RUN_ID, ANN_SPACE, ARTIFACT_KIND_EXPERIMENT, EXPERIMENT_SCHEMA_V1,
+    Experiment, ExperimentDyn, Name, ParameterValue, SealedExperiment, ANN_ARTIFACT_KIND,
+    ANN_EXPERIMENT_SCHEMA, ANN_EXPERIMENT_STATUS, ANN_LAYER, ANN_RECORD_NAME, ANN_RUN_ID,
+    ANN_SPACE, ARTIFACT_KIND_EXPERIMENT, EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_SCHEMA_V1,
     EXPERIMENT_STATUS_FINISHED, LAYER_KIND_RUN_PARAMETERS,
 };
 use crate::artifact::{media_types, ImageRef, LocalRegistryHandle};
@@ -127,7 +127,7 @@ fn log_writes_blob_to_blobstore_immediately() {
         let digest = with_unsealed_state(&experiment, |state| {
             let run = state.runs.get(&0).unwrap();
             assert_eq!(run.records.len(), 1);
-            run.records[0].descriptor.digest().clone()
+            run.records[0].descriptor().digest().clone()
         });
         assert!(experiment.registry.blobs().exists(&digest).unwrap());
         Ok(())
@@ -152,10 +152,10 @@ fn log_upserts_same_space_media_type_name() {
                 .records
                 .iter()
                 .find(|record| {
-                    record.descriptor.media_type() == &MediaType::Other("application/json".into())
+                    record.descriptor().media_type() == &MediaType::Other("application/json".into())
                 })
                 .unwrap()
-                .descriptor
+                .descriptor()
                 .digest()
                 .clone()
         });
@@ -236,10 +236,10 @@ fn commit_produces_experiment_artifact() {
         let run_params = find_layer(&layers, ANN_LAYER, LAYER_KIND_RUN_PARAMETERS);
         assert!(layer_annotation(run_params, ANN_SPACE).is_none());
 
-        // Config is the OCI 1.1 empty config.
+        // Config stores the Experiment structure; layers are payloads referenced from it.
         assert_eq!(
             artifact.get_manifest().unwrap().config().media_type(),
-            &MediaType::EmptyJSON
+            &MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string())
         );
         Ok(())
     });
@@ -323,18 +323,18 @@ fn loaded_experiment_reads_records_and_run_parameters() {
         let artifact = experiment.commit().unwrap().into_artifact();
         let loaded = SealedExperiment::from_artifact(artifact).unwrap();
 
-        assert!(loaded.records().iter().any(|record| {
-            record.space == ExperimentRecordSpace::Experiment
-                && record.run_id.is_none()
-                && record.name == "dataset"
-                && record.media_type == "application/json"
-        }));
-        assert!(loaded.records().iter().any(|record| {
-            record.space == ExperimentRecordSpace::Run
-                && record.run_id == Some(0)
-                && record.name == "candidate"
-                && record.media_type == "application/json"
-        }));
+        assert!(loaded
+            .experiment_records()
+            .iter()
+            .any(|record| record.name() == "dataset" && record.media_type() == "application/json"));
+        let run0 = loaded.run(0).expect("run 0 must be reconstructed");
+        assert_eq!(run0.run_id(), 0);
+        assert!(run0.records().iter().any(
+            |record| record.name() == "candidate" && record.media_type() == "application/json"
+        ));
+        let run1 = loaded.run(1).expect("run 1 must be reconstructed");
+        assert_eq!(run1.run_id(), 1);
+        assert!(run1.records().is_empty());
 
         let mut cells = loaded.run_parameter_cells();
         cells.sort_by(|left, right| (left.run_id, &left.name).cmp(&(right.run_id, &right.name)));

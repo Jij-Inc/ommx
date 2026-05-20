@@ -31,11 +31,21 @@ const JSON_MEDIA_TYPE: &str = "application/json";
 /// BlobStore.
 #[derive(Debug, Clone)]
 pub struct RecordRef<'reg> {
-    pub name: String,
+    name: String,
     /// OCI layer descriptor whose payload bytes are present in the
     /// Local Registry BlobStore. Carries the payload media type and
     /// the experiment / record annotations.
-    pub descriptor: StoredDescriptor<'reg>,
+    descriptor: StoredDescriptor<'reg>,
+}
+
+impl<'reg> RecordRef<'reg> {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn descriptor(&self) -> &StoredDescriptor<'reg> {
+        &self.descriptor
+    }
 }
 
 /// Build-phase upsert: a record with the same `(media_type, name)`

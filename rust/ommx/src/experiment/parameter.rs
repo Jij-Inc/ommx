@@ -80,12 +80,6 @@ pub struct RunParameterTable {
 }
 
 impl RunParameterTable {
-    pub fn empty() -> Self {
-        Self {
-            columns: BTreeMap::new(),
-        }
-    }
-
     pub fn from_runs<'reg>(runs: Values<'_, u64, RunEntry<'reg>>) -> Result<Self> {
         let mut columns = BTreeMap::new();
         for run in runs {

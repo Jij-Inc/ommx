@@ -2188,6 +2188,28 @@
               "is_readonly": true
             },
             {
+              "name": "experiment_records",
+              "doc": "",
+              "type_": {
+                "display": "list[_ommx_rust.ExperimentRecord]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "ExperimentRecord",
+                    "link_target": {
+                      "fqn": "ommx.experiment.ExperimentRecord",
+                      "doc_module": "ommx.experiment",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "image_name",
               "doc": "",
               "type_": {
@@ -2199,16 +2221,16 @@
               "is_readonly": true
             },
             {
-              "name": "records",
+              "name": "runs",
               "doc": "",
               "type_": {
-                "display": "list[_ommx_rust.ExperimentRecord]",
+                "display": "list[_ommx_rust.SealedRun]",
                 "link_target": null,
                 "children": [
                   {
-                    "display": "ExperimentRecord",
+                    "display": "SealedRun",
                     "link_target": {
-                      "fqn": "ommx.experiment.ExperimentRecord",
+                      "fqn": "ommx.experiment.SealedRun",
                       "doc_module": "ommx.experiment",
                       "kind": "Class",
                       "attribute": null
@@ -2276,34 +2298,6 @@
             },
             {
               "name": "name",
-              "doc": "",
-              "type_": {
-                "display": "str",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "run_id",
-              "doc": "",
-              "type_": {
-                "display": "Optional[int]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "int",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "space",
               "doc": "",
               "type_": {
                 "display": "str",
@@ -2688,6 +2682,66 @@
             }
           ],
           "attributes": [
+            {
+              "name": "run_id",
+              "doc": "",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "SealedRun",
+          "doc": "",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "records",
+              "doc": "",
+              "type_": {
+                "display": "list[_ommx_rust.ExperimentRecord]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "ExperimentRecord",
+                    "link_target": {
+                      "fqn": "ommx.experiment.ExperimentRecord",
+                      "doc_module": "ommx.experiment",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
             {
               "name": "run_id",
               "doc": "",
@@ -26811,6 +26865,7 @@
     "ommx.experiment.Experiment": "ommx.experiment",
     "ommx.experiment.ExperimentRecord": "ommx.experiment",
     "ommx.experiment.Run": "ommx.experiment",
+    "ommx.experiment.SealedRun": "ommx.experiment",
     "ommx.v1.AdditionalCapability": "ommx.v1",
     "ommx.v1.AttachedConstraint": "ommx.v1",
     "ommx.v1.AttachedDecisionVariable": "ommx.v1",

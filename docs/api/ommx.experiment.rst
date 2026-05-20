@@ -9,3 +9,4 @@ ommx.experiment
    _items/ommx.experiment.Experiment
    _items/ommx.experiment.ExperimentRecord
    _items/ommx.experiment.Run
+   _items/ommx.experiment.SealedRun

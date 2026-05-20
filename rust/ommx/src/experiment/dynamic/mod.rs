@@ -10,7 +10,9 @@
 use super::record::{
     encode_json, json_media_type, store_record_ref, upsert_record_ref, RecordSpace,
 };
-use super::{ExperimentRecord, Name, RunParameterCell, SealedExperiment, UnsealedExperimentState};
+use super::{
+    ExperimentRecord, Name, RunParameterCell, SealedExperiment, SealedRun, UnsealedExperimentState,
+};
 use crate::artifact::ImageRef;
 use crate::artifact::{LocalArtifactDyn, LocalRegistryHandle};
 use crate::{Instance, SampleSet, Solution};
@@ -237,12 +239,20 @@ impl ExperimentDyn {
         ))
     }
 
-    pub fn records(&self) -> Result<Vec<ExperimentRecord>> {
+    pub fn experiment_records(&self) -> Result<Vec<ExperimentRecord>> {
         let dyn_state = lock_experiment_state(&self.state);
         let ExperimentDynLifecycle::Sealed(sealed) = &dyn_state.lifecycle else {
             return bail_not_sealed(&dyn_state.lifecycle);
         };
-        Ok(sealed.records().to_vec())
+        Ok(sealed.experiment_records().to_vec())
+    }
+
+    pub fn runs(&self) -> Result<Vec<SealedRun>> {
+        let dyn_state = lock_experiment_state(&self.state);
+        let ExperimentDynLifecycle::Sealed(sealed) = &dyn_state.lifecycle else {
+            return bail_not_sealed(&dyn_state.lifecycle);
+        };
+        Ok(sealed.runs().cloned().collect())
     }
 
     pub fn run_parameter_cells(&self) -> Result<Vec<RunParameterCell>> {

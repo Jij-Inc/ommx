@@ -41,11 +41,13 @@
 //!
 //! The module is split by data terms: `run` contains `Run` and
 //! `RunEntry`, `record` contains `RecordRef`, `parameter` contains
-//! run-parameter table data, `sealed` contains read-only sealed
-//! Experiment data reconstructed from committed artifacts, and `artifact`
-//! maps the unsealed experiment state onto an OMMX Artifact.
+//! run-parameter table data, `config` contains the serialized Experiment
+//! structure, `sealed` contains read-only sealed Experiment data
+//! reconstructed from committed artifacts, and `artifact` maps the
+//! unsealed experiment state onto an OMMX Artifact.
 
 mod artifact;
+mod config;
 mod dynamic;
 mod parameter;
 mod record;
@@ -57,7 +59,7 @@ mod tests;
 
 pub use dynamic::{ExperimentDyn, RunDyn};
 pub use parameter::{ParameterValue, RunParameterCell};
-pub use sealed::{ExperimentRecord, ExperimentRecordSpace};
+pub use sealed::{ExperimentRecord, SealedRun};
 
 use crate::artifact::local_registry::{LocalRegistry, TempLocalRegistry};
 use crate::artifact::{media_types, ImageRef, LocalArtifact};
@@ -85,6 +87,7 @@ const ANN_LAYER: &str = "org.ommx.experiment.layer";
 const ANN_RECORD_NAME: &str = "org.ommx.record.name";
 
 const RUN_PARAMETERS_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment.run-parameters+json";
+const EXPERIMENT_CONFIG_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment.config+json";
 const LAYER_KIND_RUN_PARAMETERS: &str = "run-parameters";
 
 /// A mutable, unsealed experiment session. See the [module documentation](self).
@@ -100,6 +103,7 @@ pub struct Experiment<'reg> {
 pub struct SealedExperiment<'reg> {
     artifact: LocalArtifact<'reg>,
     records: Vec<sealed::ExperimentRecord>,
+    runs: BTreeMap<u64, sealed::SealedRun>,
     run_parameters: parameter::RunParameterTable,
 }
 

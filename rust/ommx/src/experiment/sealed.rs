@@ -1,59 +1,48 @@
 //! Read-only model reconstructed from a sealed Experiment Artifact.
 
+use super::config::{ExperimentConfig, ExperimentConfigRecord};
 use super::parameter::{RunParameterCell, RunParameterTable};
 use super::{
-    SealedExperiment, ANN_ARTIFACT_KIND, ANN_EXPERIMENT_SCHEMA, ANN_LAYER, ANN_RECORD_NAME,
-    ANN_RUN_ID, ANN_SPACE, ARTIFACT_KIND_EXPERIMENT, EXPERIMENT_SCHEMA_V1,
-    LAYER_KIND_RUN_PARAMETERS, RUN_PARAMETERS_MEDIA_TYPE,
+    SealedExperiment, ANN_ARTIFACT_KIND, ANN_EXPERIMENT_SCHEMA, ARTIFACT_KIND_EXPERIMENT,
+    EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_SCHEMA_V1, RUN_PARAMETERS_MEDIA_TYPE,
 };
 use crate::artifact::{ImageRef, LocalArtifact};
 use anyhow::{Context, Result};
 use oci_spec::image::{Descriptor, MediaType};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 impl<'reg> SealedExperiment<'reg> {
     /// Reconstruct a sealed Experiment from a committed Experiment Artifact.
     pub fn from_artifact(artifact: LocalArtifact<'reg>) -> Result<Self> {
         validate_experiment_profile(&artifact)?;
-        let layers = artifact.layers()?;
-        let mut records = Vec::new();
-        let mut record_keys = BTreeSet::new();
-        let mut run_parameters = None;
+        let config = load_experiment_config(&artifact)?;
+        validate_experiment_schema(&config.schema)?;
 
-        for layer in layers {
-            if is_run_parameter_layer(&layer) {
-                if run_parameters.is_some() {
-                    crate::bail!("Experiment Artifact contains multiple run-parameter layers");
-                }
-                let bytes = artifact.get_blob(layer.digest())?;
-                run_parameters = Some(
-                    serde_json::from_slice::<RunParameterTable>(&bytes)
-                        .context("Failed to decode run-parameter table JSON")?,
-                );
-                continue;
+        let records = decode_records(config.records, "experiment")?;
+        let mut runs = BTreeMap::new();
+        for run in config.runs {
+            let records = decode_records(run.records, &format!("run {}", run.run_id))?;
+            if runs
+                .insert(
+                    run.run_id,
+                    SealedRun {
+                        run_id: run.run_id,
+                        records,
+                    },
+                )
+                .is_some()
+            {
+                crate::bail!("Experiment config contains duplicate Run {}", run.run_id);
             }
-
-            let Some(record) = ExperimentRecord::from_descriptor(layer)? else {
-                continue;
-            };
-            let key = record.key();
-            if !record_keys.insert(key) {
-                crate::bail!(
-                    "Experiment Artifact contains duplicate Record: space={}, run_id={:?}, \
-                     media_type={}, name={}",
-                    record.space.as_str(),
-                    record.run_id,
-                    record.media_type,
-                    record.name,
-                );
-            }
-            records.push(record);
         }
+        let run_parameters = load_run_parameters(&artifact, &config.run_parameters)?;
+        validate_run_parameters_reference_config_runs(&run_parameters, &runs)?;
 
         Ok(Self {
             artifact,
             records,
-            run_parameters: run_parameters.unwrap_or_else(RunParameterTable::empty),
+            runs,
+            run_parameters,
         })
     }
 
@@ -61,8 +50,16 @@ impl<'reg> SealedExperiment<'reg> {
         self.artifact.image_name()
     }
 
-    pub fn records(&self) -> &[ExperimentRecord] {
+    pub fn experiment_records(&self) -> &[ExperimentRecord] {
         &self.records
+    }
+
+    pub fn runs(&self) -> impl Iterator<Item = &SealedRun> {
+        self.runs.values()
+    }
+
+    pub fn run(&self, run_id: u64) -> Option<&SealedRun> {
+        self.runs.get(&run_id)
     }
 
     pub fn run_parameter_cells(&self) -> Vec<RunParameterCell> {
@@ -70,80 +67,52 @@ impl<'reg> SealedExperiment<'reg> {
     }
 }
 
+/// Read-only Run reconstructed from a sealed Experiment config.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SealedRun {
+    run_id: u64,
+    records: Vec<ExperimentRecord>,
+}
+
+impl SealedRun {
+    pub fn run_id(&self) -> u64 {
+        self.run_id
+    }
+
+    pub fn records(&self) -> &[ExperimentRecord] {
+        &self.records
+    }
+}
+
 /// Record descriptor visible through a sealed Experiment.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExperimentRecord {
-    pub space: ExperimentRecordSpace,
-    pub run_id: Option<u64>,
-    pub name: String,
-    pub media_type: String,
-    pub descriptor: Descriptor,
+    name: String,
+    descriptor: Descriptor,
 }
 
 impl ExperimentRecord {
-    fn from_descriptor(descriptor: Descriptor) -> Result<Option<Self>> {
-        let annotations = descriptor.annotations().as_ref();
-        let Some(space) = annotation(annotations, ANN_SPACE) else {
-            return Ok(None);
-        };
-        let space = ExperimentRecordSpace::parse(space)?;
-        let run_id = match space {
-            ExperimentRecordSpace::Experiment => {
-                if annotation(annotations, ANN_RUN_ID).is_some() {
-                    crate::bail!("Experiment-space Record must not have `{ANN_RUN_ID}`");
-                }
-                None
-            }
-            ExperimentRecordSpace::Run => Some(
-                annotation(annotations, ANN_RUN_ID)
-                    .with_context(|| format!("Run-space Record is missing `{ANN_RUN_ID}`"))?
-                    .parse::<u64>()
-                    .with_context(|| format!("Invalid `{ANN_RUN_ID}` annotation"))?,
-            ),
-        };
-        let name = annotation(annotations, ANN_RECORD_NAME)
-            .with_context(|| format!("Experiment Record is missing `{ANN_RECORD_NAME}`"))?
-            .to_string();
-        let media_type = media_type_to_string(descriptor.media_type());
-        Ok(Some(Self {
-            space,
-            run_id,
-            name,
-            media_type,
-            descriptor,
-        }))
-    }
-
-    fn key(&self) -> (ExperimentRecordSpace, Option<u64>, String, String) {
-        (
-            self.space,
-            self.run_id,
-            self.media_type.clone(),
-            self.name.clone(),
-        )
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum ExperimentRecordSpace {
-    Experiment,
-    Run,
-}
-
-impl ExperimentRecordSpace {
-    fn parse(value: &str) -> Result<Self> {
-        match value {
-            "experiment" => Ok(Self::Experiment),
-            "run" => Ok(Self::Run),
-            other => crate::bail!("Unknown `{ANN_SPACE}` annotation value: {other}"),
+    fn from_config(record: ExperimentConfigRecord) -> Self {
+        Self {
+            name: record.name,
+            descriptor: record.descriptor,
         }
     }
 
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Experiment => "experiment",
-            Self::Run => "run",
-        }
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn media_type(&self) -> String {
+        media_type_to_string(self.descriptor.media_type())
+    }
+
+    pub fn descriptor(&self) -> &Descriptor {
+        &self.descriptor
+    }
+
+    fn key(&self) -> (String, String) {
+        (self.media_type(), self.name.clone())
     }
 }
 
@@ -164,20 +133,76 @@ fn validate_experiment_profile(artifact: &LocalArtifact<'_>) -> Result<()> {
     Ok(())
 }
 
-fn is_run_parameter_layer(descriptor: &Descriptor) -> bool {
-    descriptor.media_type() == &MediaType::Other(RUN_PARAMETERS_MEDIA_TYPE.to_string())
-        && descriptor
-            .annotations()
-            .as_ref()
-            .and_then(|annotations| annotations.get(ANN_LAYER))
-            .is_some_and(|layer| layer == LAYER_KIND_RUN_PARAMETERS)
+fn load_experiment_config(artifact: &LocalArtifact<'_>) -> Result<ExperimentConfig> {
+    let config = artifact.get_manifest()?.config();
+    if config.media_type() != &MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()) {
+        crate::bail!(
+            "Experiment config media type is {}, expected {}",
+            media_type_to_string(config.media_type()),
+            EXPERIMENT_CONFIG_MEDIA_TYPE
+        );
+    }
+    let bytes = artifact.get_blob(config.digest())?;
+    serde_json::from_slice::<ExperimentConfig>(&bytes).context("Failed to decode Experiment config")
 }
 
-fn annotation<'a>(
-    annotations: Option<&'a std::collections::HashMap<String, String>>,
-    key: &str,
-) -> Option<&'a str> {
-    annotations.and_then(|annotations| annotations.get(key).map(String::as_str))
+fn validate_experiment_schema(schema: &str) -> Result<()> {
+    if schema != EXPERIMENT_SCHEMA_V1 {
+        crate::bail!("Unsupported Experiment config schema `{schema}`");
+    }
+    Ok(())
+}
+
+fn decode_records(
+    records: Vec<ExperimentConfigRecord>,
+    owner: &str,
+) -> Result<Vec<ExperimentRecord>> {
+    let mut decoded = Vec::new();
+    let mut keys = BTreeSet::new();
+    for record in records {
+        let record = ExperimentRecord::from_config(record);
+        let key = record.key();
+        if !keys.insert(key) {
+            crate::bail!(
+                "Experiment config contains duplicate Record in {owner}: media_type={}, name={}",
+                record.media_type(),
+                record.name(),
+            );
+        }
+        decoded.push(record);
+    }
+    Ok(decoded)
+}
+
+fn load_run_parameters(
+    artifact: &LocalArtifact<'_>,
+    descriptor: &Descriptor,
+) -> Result<RunParameterTable> {
+    if descriptor.media_type() != &MediaType::Other(RUN_PARAMETERS_MEDIA_TYPE.to_string()) {
+        crate::bail!(
+            "Run-parameter descriptor media type is {}, expected {}",
+            media_type_to_string(descriptor.media_type()),
+            RUN_PARAMETERS_MEDIA_TYPE
+        );
+    }
+    let bytes = artifact.get_blob(descriptor.digest())?;
+    serde_json::from_slice::<RunParameterTable>(&bytes)
+        .context("Failed to decode run-parameter table JSON")
+}
+
+fn validate_run_parameters_reference_config_runs(
+    run_parameters: &RunParameterTable,
+    runs: &BTreeMap<u64, SealedRun>,
+) -> Result<()> {
+    for cell in run_parameters.cells() {
+        if !runs.contains_key(&cell.run_id) {
+            crate::bail!(
+                "Run-parameter table references Run {}, but Experiment config does not contain it",
+                cell.run_id
+            );
+        }
+    }
+    Ok(())
 }
 
 fn media_type_to_string(media_type: &MediaType) -> String {

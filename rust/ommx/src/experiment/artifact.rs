@@ -1,11 +1,12 @@
 //! Mapping an unsealed Experiment state to an immutable OMMX Artifact.
 
+use super::config::ExperimentConfig;
 use super::parameter::RunParameterTable;
 use super::UnsealedExperimentState;
 use super::{
     ANN_ARTIFACT_KIND, ANN_EXPERIMENT_SCHEMA, ANN_EXPERIMENT_STATUS, ANN_LAYER,
-    ARTIFACT_KIND_EXPERIMENT, EXPERIMENT_SCHEMA_V1, EXPERIMENT_STATUS_FINISHED,
-    LAYER_KIND_RUN_PARAMETERS, RUN_PARAMETERS_MEDIA_TYPE,
+    ARTIFACT_KIND_EXPERIMENT, EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_SCHEMA_V1,
+    EXPERIMENT_STATUS_FINISHED, LAYER_KIND_RUN_PARAMETERS, RUN_PARAMETERS_MEDIA_TYPE,
 };
 use crate::artifact::local_registry::{
     LocalRegistry, RefUpdate, StoredDescriptor, UnsealedArtifact,
@@ -20,8 +21,12 @@ impl<'reg> UnsealedExperimentState<'reg> {
     /// immutable artifact. This is the state-level counterpart of the
     /// public `Experiment::commit(self)` lifecycle operation.
     pub fn commit(self, registry: &'reg LocalRegistry) -> Result<LocalArtifact<'reg>> {
-        let config_descriptor = registry.store_empty_config()?;
-        let layers = self.artifact_layer_descriptors(registry)?;
+        let run_parameters = self.run_parameter_descriptor(registry)?;
+        let config_descriptor = registry.store_json_blob(
+            MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()),
+            &ExperimentConfig::from_unsealed_state(&self, &run_parameters),
+        )?;
+        let layers = self.artifact_layer_descriptors(run_parameters);
         let artifact = UnsealedArtifact::new(
             MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
             config_descriptor,
@@ -57,11 +62,11 @@ impl<'reg> UnsealedExperimentState<'reg> {
     /// commit from the in-memory run table data.
     fn artifact_layer_descriptors(
         &self,
-        registry: &'reg LocalRegistry,
-    ) -> Result<Vec<StoredDescriptor<'reg>>> {
+        run_parameters: StoredDescriptor<'reg>,
+    ) -> Vec<StoredDescriptor<'reg>> {
         let mut descriptors = self.record_descriptors();
-        descriptors.extend(self.aggregate_descriptors(registry)?);
-        Ok(descriptors)
+        descriptors.push(run_parameters);
+        descriptors
     }
 
     /// Record layers: experiment space first, then each run's space.
@@ -72,20 +77,20 @@ impl<'reg> UnsealedExperimentState<'reg> {
         self.records
             .iter()
             .chain(run_records)
-            .map(|record| record.descriptor.clone())
+            .map(|record| record.descriptor().clone())
             .collect()
     }
 
-    fn aggregate_descriptors(
+    fn run_parameter_descriptor(
         &self,
         registry: &'reg LocalRegistry,
-    ) -> Result<Vec<StoredDescriptor<'reg>>> {
-        Ok(vec![store_aggregate_json_layer(
+    ) -> Result<StoredDescriptor<'reg>> {
+        store_aggregate_json_layer(
             registry,
             RUN_PARAMETERS_MEDIA_TYPE,
             LAYER_KIND_RUN_PARAMETERS,
             &RunParameterTable::from_runs(self.runs.values())?,
-        )?])
+        )
     }
 }
 

@@ -23,12 +23,11 @@ def test_view_run_parameters_from_committed_artifact(snapshot):
 
     artifact = experiment.artifact
     loaded = Experiment.from_artifact(artifact)
-    assert {
-        (record.space, record.run_id, record.name) for record in loaded.records
-    } == {
-        ("experiment", None, "dataset"),
-        ("run", 0, "candidate"),
-    }
+    assert {record.name for record in loaded.experiment_records} == {"dataset"}
+    runs = {run.run_id: run for run in loaded.runs}
+    assert set(runs) == {0, 1}
+    assert {record.name for record in runs[0].records} == {"candidate"}
+    assert runs[1].records == []
     df = loaded.run_parameters_df()
 
     assert _df_snap(df) == snapshot
@@ -52,14 +51,13 @@ def test_create_experiment_run_records_and_commit(snapshot):
 
     artifact = experiment.commit()
     loaded = Experiment.from_artifact(artifact)
-    assert {
-        (record.space, record.run_id, record.name) for record in loaded.records
-    } == {
-        ("experiment", None, "dataset"),
-        ("experiment", None, "raw-config"),
-        ("run", 0, "candidate"),
-        ("run", 0, "solver-log"),
+    assert {record.name for record in loaded.experiment_records} == {
+        "dataset",
+        "raw-config",
     }
+    runs = {run.run_id: run for run in loaded.runs}
+    assert set(runs) == {0}
+    assert {record.name for record in runs[0].records} == {"candidate", "solver-log"}
     df = loaded.run_parameters_df()
 
     assert _df_snap(df) == snapshot

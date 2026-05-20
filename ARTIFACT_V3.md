@@ -569,11 +569,12 @@ Experiment であることは、OMMX Artifact の profile / kind として表す
 |---|---|
 | OCI manifest descriptor media type | `application/vnd.oci.image.manifest.v1+json` |
 | OCI manifest `artifactType` | `application/org.ommx.v1.artifact` |
+| OCI manifest `config.mediaType` | `application/org.ommx.v1.experiment.config+json` |
 | manifest annotation | `org.ommx.artifact.kind=experiment` |
 | manifest annotation | `org.ommx.experiment.schema=v1` |
 | optional manifest annotation | `org.ommx.experiment.status=finished|failed` |
 | optional manifest annotation | `org.ommx.experiment.recovery=true` |
-`Artifact.load()` は従来通り OMMX Artifact として読み、`Experiment.load()` は manifest annotation、Record layer annotations、Run parameter table を見て Experiment view を復元する。これにより、Experiment は OMMX Artifact family の一種として扱え、既存の Local Registry / archive / remote transport / generic Artifact inspector と互換にできる。
+`Artifact.load()` は従来通り OMMX Artifact として読み、`Experiment.load()` は manifest annotation で Experiment profile を確認した上で、OCI config blob の Experiment config JSON から immutable Experiment view を復元する。Layer annotations は inspector / compatibility 用の補助情報であり、loader が全 layer を scan して意味を推測する設計にはしない。これにより、Experiment は OMMX Artifact family の一種として扱え、既存の Local Registry / archive / remote transport / generic Artifact inspector と互換にできる。
 
 通常の成功 commit は `status=finished` 相当の Experiment Artifact として requested tag / ref に publish する。例外終了時に作る failed recovery manifest は `status=failed` と `recovery=true` 相当の annotation を持ち、`<registry-id8>.ommx.local/crashed:<local-timestamp>-<nonce>` のような reserved ref に publish する。`Experiment.load(tag)` の通常 UX は requested tag / ref の成功 Artifact を読む。recovery manifest は recovery command / inspector から明示的に扱う。
 
@@ -583,7 +584,7 @@ Experiment であることは、OMMX Artifact の profile / kind として表す
 
 各 committed Artifact manifest は、blob bytes の保存タイミングを表すものではない。`layers[]` には、その時点の Experiment view を復元するために必要な typed payload と aggregate JSON などの descriptor を載せる。
 
-Run は manifest の子 manifest ではなく、Experiment manifest 内の layer 群から復元する。初期設計では、少なくとも以下の aggregate payload を通常の Artifact layer として載せる。
+Run は manifest の子 manifest ではなく、OCI config blob に保存した Experiment config の `runs[]` から復元する。Manifest `layers[]` は config が参照する payload descriptor set であり、構造復元の source of truth ではない。初期設計では、少なくとも以下の aggregate payload を通常の Artifact layer として載せる。
 
 | Layer | 目的 | 備考 |
 |---|---|---|
@@ -591,7 +592,7 @@ Run は manifest の子 manifest ではなく、Experiment manifest 内の layer
 
 これらは manifest annotation だけで表現しない。Manifest annotations は Artifact kind / schema / small metadata を表すために使い、Run parameter table の本体は layer payload として保存する。
 
-Run-scoped Record は個別 layer または aggregate layer として保存し、descriptor annotations に `org.ommx.experiment.space=run` と `org.ommx.experiment.run_id=<id>` を持たせる。`Experiment.load(...)` は aggregate payload と Record layer annotations を読んで `run_id` ごとに group 化し、Run view を復元する。
+Run-scoped Record は個別 layer または aggregate layer として保存し、descriptor annotations に `org.ommx.experiment.space=run` と `org.ommx.experiment.run_id=<id>` を持たせてよい。ただし `Experiment.load(...)` は layer annotations を scan せず、Experiment config JSON に保存された Run ごとの Record descriptor list を読む。Annotation は generic Artifact inspector や migration compatibility のための redundant metadata として扱う。
 
 Instance / Solution / diagnostics などの payload blob は `log_*` 時点で Local Registry の BlobStore に逐次保存される。commit が行うのは、それらの blob と、Run parameter table JSON など commit 時に materialize する payload を含む最終 Experiment state を seal し、復元に必要な descriptor set を immutable manifest として IndexStore に publish することである。
 
@@ -622,14 +623,16 @@ MINTO 由来の `org.minto.*` annotation は新規書き込みでは使わない
 
 ### 7.4 Artifact からの復元
 
-`Experiment.load(...)` は Artifact を読み、layer annotations から immutable Experiment view を復元する。
+`Experiment.load(...)` は Artifact を読み、root manifest の config descriptor が指す Experiment config JSON から immutable Experiment view を復元する。`layers[]` 全体を scan して Run / Record の意味を推測しない。
 
 復元に必要な invariants:
 
-- `org.ommx.experiment.space` がない OMMX layer は Experiment Record ではないため無視してよい。
-- run id は 0-based integer とし、欠番がある場合は empty run view を作るか、strict mode で error にする。
-- 同一 `(space, run_id, media type, name)` の Record が複数 layer に現れた場合、committed manifest では重複を禁止し、loader は error にする。
+- config media type は `application/org.ommx.v1.experiment.config+json` とする。
+- config は Experiment-space Record list、Run list、Run ごとの Record list、Run parameter table descriptor を持つ。
+- run id は 0-based integer とする。ただし復元対象の Run 集合は config の `runs[]` が source of truth であり、欠番を layer scan から補完しない。
+- 同一 Experiment / Run 内で同一 `(media type, name)` の Record が複数現れた場合、committed config では重複を禁止し、loader は error にする。
 - Run parameter table で同一 `(run_id, parameter_name)` が複数値を持つ場合も、committed manifest では重複を禁止し、loader は error にする。
+- Run parameter table が config に存在しない run id を参照する場合、loader は error にする。
 
 ## 8. Lineage
 
@@ -836,10 +839,11 @@ API:
 
 `commit()` は次を行う:
 
-1. Run parameter table JSON / OCI empty config を Store し、それぞれ `StoredDescriptor` を得る。
-2. 全 Record descriptor + aggregate layer descriptor + empty config から `UnsealedArtifact` を作る。
-3. `seal_artifact` で root manifest blob を Store し、`SealedArtifact` を得る。
-4. `publish_manifest_ref` で root descriptor を IndexStore の ref に対応づける。
+1. Run parameter table JSON を Store し、`StoredDescriptor` を得る。
+2. Experiment config JSON を Store し、config descriptor を得る。config には Experiment-space Record、Run list、Run ごとの Record、Run parameter table descriptor を保存する。
+3. Experiment config descriptor を OCI config とし、全 Record descriptor + aggregate layer descriptor を `layers[]` として `UnsealedArtifact` を作る。
+4. `seal_artifact` で root manifest blob を Store し、`SealedArtifact` を得る。
+5. `publish_manifest_ref` で root descriptor を IndexStore の ref に対応づける。
 
 Experiment は構築時点で `Name` を具体的な `ImageRef` に解決し、commit 時はその ref に publish する。Experiment name と Image Name を別々に持つと、Artifact としての実体の識別子と実験管理上の識別子が分岐するため、OMMX Experiment では解決済み Image Name を唯一の名前として扱う。`Name::Anonymous` は `LocalRegistry::synthesize_anonymous_experiment_image_name()` により `<registry-id8>.ommx.local/experiment:<timestamp>-<nonce>` 形式の `ImageRef` に解決される。
 
@@ -867,7 +871,7 @@ Record layer（`log_*` 時に descriptor へ付与）:
 
 Record media type は descriptor の `mediaType` field に置く。`instance` / `solution` / `sample_set` は `application/org.ommx.v1.*`、JSON payload は `application/json`、caller-defined payload は caller が指定した media type を使う。
 
-aggregate layer（`org.ommx.experiment.space` を持たないので loader は Record として扱わない）:
+aggregate layer（loader は Experiment config の descriptor 参照から読む。`org.ommx.experiment.space` を持たないので Record ではない）:
 
 | Layer | media type | layer annotation |
 |---|---|---|

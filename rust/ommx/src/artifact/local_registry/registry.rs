@@ -392,25 +392,6 @@ impl LocalRegistry {
             .context("Failed to build manifest descriptor")
     }
 
-    /// Store the OCI 1.1 empty config blob and return its descriptor.
-    ///
-    /// The descriptor is intentionally built without annotations to
-    /// match the standard artifact manifest shape used throughout the
-    /// local registry.
-    pub(crate) fn store_empty_config(&self) -> Result<StoredDescriptor<'_>> {
-        let bytes = media_types::OCI_EMPTY_CONFIG_BYTES;
-        let descriptor = DescriptorBuilder::default()
-            .media_type(MediaType::EmptyJSON)
-            .digest(
-                Digest::from_str(media_types::OCI_EMPTY_CONFIG_DIGEST)
-                    .context("Failed to parse empty config digest")?,
-            )
-            .size(bytes.len() as u64)
-            .build()
-            .context("Failed to build empty config descriptor")?;
-        self.store_blob(descriptor, bytes)
-    }
-
     /// Store bytes as an OCI layer descriptor in this registry's
     /// BlobStore. The descriptor carries the supplied media type and
     /// annotations, and its digest / size are derived from `bytes`.
@@ -442,6 +423,25 @@ impl LocalRegistry {
     ) -> Result<StoredDescriptor<'_>> {
         let bytes = serde_json::to_vec(value).context("Failed to encode JSON layer")?;
         self.store_layer_blob(media_type, &bytes, annotations)
+    }
+
+    /// Serialize `value` as JSON and store it as a generic OCI blob
+    /// descriptor without layer annotations.
+    pub(crate) fn store_json_blob(
+        &self,
+        media_type: MediaType,
+        value: &impl serde::Serialize,
+    ) -> Result<StoredDescriptor<'_>> {
+        let bytes = serde_json::to_vec(value).context("Failed to encode JSON blob")?;
+        let digest =
+            Digest::from_str(&sha256_digest(&bytes)).context("Failed to parse JSON blob digest")?;
+        let descriptor = DescriptorBuilder::default()
+            .media_type(media_type)
+            .digest(digest)
+            .size(bytes.len() as u64)
+            .build()
+            .context("Failed to build JSON blob descriptor")?;
+        self.store_blob(descriptor, &bytes)
     }
 
     /// Store a descriptor's bytes as a content-addressed blob and

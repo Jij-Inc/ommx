@@ -87,13 +87,18 @@ impl PyExperiment {
     }
 
     #[getter]
-    pub fn records(&self) -> Result<Vec<PyExperimentRecord>> {
+    pub fn experiment_records(&self) -> Result<Vec<PyExperimentRecord>> {
         Ok(self
             .inner
-            .records()?
+            .experiment_records()?
             .into_iter()
             .map(PyExperimentRecord)
             .collect())
+    }
+
+    #[getter]
+    pub fn runs(&self) -> Result<Vec<PySealedRun>> {
+        Ok(self.inner.runs()?.into_iter().map(PySealedRun).collect())
     }
 
     #[getter]
@@ -366,6 +371,39 @@ impl pyo3_stub_gen::PyStubType for ParameterValueInput {
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
+#[pyo3(module = "ommx._ommx_rust", name = "SealedRun")]
+#[derive(Clone)]
+pub struct PySealedRun(ommx::experiment::SealedRun);
+
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
+#[pymethods]
+impl PySealedRun {
+    #[getter]
+    pub fn run_id(&self) -> u64 {
+        self.0.run_id()
+    }
+
+    #[getter]
+    pub fn records(&self) -> Vec<PyExperimentRecord> {
+        self.0
+            .records()
+            .iter()
+            .cloned()
+            .map(PyExperimentRecord)
+            .collect()
+    }
+
+    pub fn __repr__(&self) -> String {
+        format!(
+            "SealedRun(run_id={}, records={})",
+            self.run_id(),
+            self.0.records().len(),
+        )
+    }
+}
+
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
+#[pyclass]
 #[pyo3(module = "ommx._ommx_rust", name = "ExperimentRecord")]
 #[derive(Clone)]
 pub struct PyExperimentRecord(ommx::experiment::ExperimentRecord);
@@ -374,35 +412,23 @@ pub struct PyExperimentRecord(ommx::experiment::ExperimentRecord);
 #[pymethods]
 impl PyExperimentRecord {
     #[getter]
-    pub fn space(&self) -> &'static str {
-        self.0.space.as_str()
-    }
-
-    #[getter]
-    pub fn run_id(&self) -> Option<u64> {
-        self.0.run_id
-    }
-
-    #[getter]
     pub fn name(&self) -> &str {
-        &self.0.name
+        self.0.name()
     }
 
     #[getter]
-    pub fn media_type(&self) -> &str {
-        &self.0.media_type
+    pub fn media_type(&self) -> String {
+        self.0.media_type()
     }
 
     #[getter]
     pub fn descriptor(&self) -> PyDescriptor {
-        PyDescriptor::from(self.0.descriptor.clone())
+        PyDescriptor::from(self.0.descriptor().clone())
     }
 
     pub fn __repr__(&self) -> String {
         format!(
-            "ExperimentRecord(space='{}', run_id={:?}, name='{}', media_type='{}')",
-            self.space(),
-            self.run_id(),
+            "ExperimentRecord(name='{}', media_type='{}')",
             self.name(),
             self.media_type(),
         )

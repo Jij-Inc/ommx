@@ -63,6 +63,7 @@ __all__ = [
     "SampledNamedFunction",
     "Samples",
     "ScalarLike",
+    "SealedRun",
     "Sense",
     "Solution",
     "Sos1Constraint",
@@ -1654,7 +1655,9 @@ class Experiment:
     @property
     def image_name(self) -> builtins.str: ...
     @property
-    def records(self) -> builtins.list[ExperimentRecord]: ...
+    def experiment_records(self) -> builtins.list[ExperimentRecord]: ...
+    @property
+    def runs(self) -> builtins.list[SealedRun]: ...
     @property
     def artifact(self) -> Artifact: ...
     def __new__(cls, image_name: typing.Optional[builtins.str] = None) -> Experiment:
@@ -1730,10 +1733,6 @@ class Experiment:
 
 @typing.final
 class ExperimentRecord:
-    @property
-    def space(self) -> builtins.str: ...
-    @property
-    def run_id(self) -> typing.Optional[builtins.int]: ...
     @property
     def name(self) -> builtins.str: ...
     @property
@@ -5458,6 +5457,14 @@ class Samples:
         r"""
         Append a sample with the given sample IDs and state
         """
+
+@typing.final
+class SealedRun:
+    @property
+    def run_id(self) -> builtins.int: ...
+    @property
+    def records(self) -> builtins.list[ExperimentRecord]: ...
+    def __repr__(self) -> builtins.str: ...
 
 @typing.final
 class Solution:
