@@ -1,4 +1,4 @@
-//! Read-only projection of a sealed Experiment Artifact.
+//! Read-only model reconstructed from a sealed Experiment Artifact.
 
 use super::parameter::{RunParameterCell, RunParameterTable};
 use super::{

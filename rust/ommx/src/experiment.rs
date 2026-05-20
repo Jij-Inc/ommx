@@ -41,23 +41,23 @@
 //!
 //! The module is split by data terms: `run` contains `Run` and
 //! `RunEntry`, `record` contains `RecordRef`, `parameter` contains
-//! run-parameter table data, `view` reconstructs read-only views from
-//! sealed artifacts, and `artifact` maps the unsealed experiment state
-//! onto an OMMX Artifact.
+//! run-parameter table data, `sealed` contains read-only sealed
+//! Experiment data reconstructed from committed artifacts, and `artifact`
+//! maps the unsealed experiment state onto an OMMX Artifact.
 
 mod artifact;
 mod dynamic;
 mod parameter;
 mod record;
 mod run;
-mod view;
+mod sealed;
 
 #[cfg(test)]
 mod tests;
 
 pub use dynamic::{ExperimentDyn, RunDyn};
 pub use parameter::{ParameterValue, RunParameterCell};
-pub use view::{ExperimentRecord, ExperimentRecordSpace};
+pub use sealed::{ExperimentRecord, ExperimentRecordSpace};
 
 use crate::artifact::local_registry::{LocalRegistry, TempLocalRegistry};
 use crate::artifact::{media_types, ImageRef, LocalArtifact};
@@ -99,7 +99,7 @@ pub struct Experiment<'reg> {
 #[derive(Debug, Clone)]
 pub struct SealedExperiment<'reg> {
     artifact: LocalArtifact<'reg>,
-    records: Vec<view::ExperimentRecord>,
+    records: Vec<sealed::ExperimentRecord>,
     run_parameters: parameter::RunParameterTable,
 }
 
