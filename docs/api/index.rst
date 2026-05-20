@@ -9,6 +9,7 @@ Core
 
    ommx.v1
    ommx.artifact
+   ommx.experiment
 
 Utilities
 ---------
