@@ -46,6 +46,7 @@
 //! an OMMX Artifact.
 
 mod artifact;
+mod dynamic;
 mod parameter;
 mod record;
 mod run;
@@ -54,6 +55,7 @@ mod view;
 #[cfg(test)]
 mod tests;
 
+pub use dynamic::{ExperimentDyn, RunDyn};
 pub use parameter::{ParameterValue, RunParameterCell};
 pub use view::{ExperimentRecord, ExperimentRecordSpace};
 

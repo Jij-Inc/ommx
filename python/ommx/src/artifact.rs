@@ -1,7 +1,7 @@
 use anyhow::{bail, Context, Result};
 use oci_spec::image::Digest;
 use pyo3::{prelude::*, types::PyBytes};
-use std::{collections::HashMap, path::PathBuf, str::FromStr, sync::Arc};
+use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
 use crate::PyDescriptor;
 
@@ -10,32 +10,9 @@ use crate::PyDescriptor;
 // ---------------------------------------------------------------------------
 //
 // v3 collapses the prior `Archive` / `Local` enum into a single
-// `LocalArtifact`: archives are an exchange format that must be
-// imported into a SQLite Local Registry before any read / push
-// happens. Python cannot express the Rust registry lifetime, so
-// registry-backed Python handles carry the owner that keeps non-static
-// registries, such as temporary registries, alive.
-
-#[derive(Clone)]
-pub(crate) enum PyRegistryOwner {
-    Default,
-    Temp(Arc<ommx::artifact::local_registry::TempLocalRegistry>),
-}
-
-impl PyRegistryOwner {
-    pub(crate) fn temp() -> Result<Self> {
-        Ok(Self::Temp(Arc::new(
-            ommx::artifact::local_registry::TempLocalRegistry::new()?,
-        )))
-    }
-
-    pub(crate) fn registry(&self) -> Result<&ommx::artifact::local_registry::LocalRegistry> {
-        match self {
-            Self::Default => ommx::artifact::local_registry::LocalRegistry::shared_default(),
-            Self::Temp(temp) => Ok(temp.registry()),
-        }
-    }
-}
+// `LocalArtifactDyn`: archives are an exchange format that must be
+// imported into a SQLite Local Registry before any read / push happens,
+// and the Rust SDK-owned dynamic handle keeps temporary registries alive.
 
 // ---------------------------------------------------------------------------
 // PyArtifact
@@ -56,28 +33,16 @@ impl PyRegistryOwner {
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust", name = "Artifact")]
 pub struct PyArtifact {
-    inner: ommx::artifact::LocalArtifact<'static>,
-    owner: PyRegistryOwner,
+    inner: ommx::artifact::LocalArtifactDyn,
 }
 
 impl PyArtifact {
-    pub(crate) fn new(
-        inner: ommx::artifact::LocalArtifact<'static>,
-        owner: PyRegistryOwner,
-    ) -> Self {
-        Self { inner, owner }
+    pub(crate) fn new(inner: ommx::artifact::LocalArtifactDyn) -> Self {
+        Self { inner }
     }
 
-    pub(crate) fn new_default(inner: ommx::artifact::LocalArtifact<'static>) -> Self {
-        Self::new(inner, PyRegistryOwner::Default)
-    }
-
-    pub(crate) fn inner(&self) -> &ommx::artifact::LocalArtifact<'static> {
+    pub(crate) fn inner(&self) -> &ommx::artifact::LocalArtifactDyn {
         &self.inner
-    }
-
-    pub(crate) fn owner(&self) -> PyRegistryOwner {
-        self.owner.clone()
     }
 }
 
@@ -160,8 +125,9 @@ impl PyArtifact {
             bail!("Path must be a file or a directory")
         };
 
-        let artifact = ommx::artifact::LocalArtifact::open_in_registry(registry, image_name)?;
-        Ok(Self::new_default(artifact))
+        Ok(Self::new(ommx::artifact::LocalArtifactDyn::open(
+            image_name,
+        )?))
     }
 
     /// Removed in v3 — use {meth}`import_archive` or
@@ -241,7 +207,9 @@ impl PyArtifact {
         // Registry. Subsequent calls for the same image always land here.
         if let Some(artifact) = ommx::artifact::LocalArtifact::try_open(image_name_parsed.clone())?
         {
-            return Ok(Self::new_default(artifact));
+            return Ok(Self::new(ommx::artifact::LocalArtifactDyn::open(
+                artifact.image_name().clone(),
+            )?));
         }
 
         // SQLite miss — pull from the remote registry directly into
@@ -249,16 +217,16 @@ impl PyArtifact {
         // intermediate; blobs land straight in FileBlobStore).
         let registry = ommx::artifact::local_registry::LocalRegistry::shared_default()?;
         ommx::artifact::local_registry::pull_image(registry, &image_name_parsed)?;
-        let artifact =
-            ommx::artifact::LocalArtifact::open_in_registry(registry, image_name_parsed)?;
-        Ok(Self::new_default(artifact))
+        Ok(Self::new(ommx::artifact::LocalArtifactDyn::open(
+            image_name_parsed,
+        )?))
     }
 
     /// Push the artifact to remote registry.
     #[cfg(feature = "remote-artifact")]
     pub fn push(&mut self, py: Python<'_>) -> Result<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        self.inner.push()
+        self.inner.local_artifact().push()
     }
 
     /// Save the artifact as a `.ommx` OCI archive file at `path`.
@@ -271,7 +239,7 @@ impl PyArtifact {
     /// registry.
     pub fn save(&mut self, py: Python<'_>, path: PathBuf) -> Result<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        self.inner.save(&path)
+        self.inner.local_artifact().save(&path)
     }
 
     #[getter]
@@ -1137,7 +1105,9 @@ impl PyArtifactDraft {
     pub fn commit(&mut self, py: Python<'_>) -> Result<PyArtifact> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let inner = self.0.commit()?;
-        Ok(PyArtifact::new_default(inner))
+        Ok(PyArtifact::new(ommx::artifact::LocalArtifactDyn::open(
+            inner.image_name().clone(),
+        )?))
     }
 }
 

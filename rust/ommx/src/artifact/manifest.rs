@@ -41,6 +41,113 @@ pub struct LocalArtifact<'reg> {
     manifest_cache: Arc<OnceLock<LocalManifest>>,
 }
 
+/// Runtime-owned Local Registry handle.
+///
+/// This is the dynamic-lifetime counterpart of `&LocalRegistry`.
+/// It exists for bindings and other dynamic runtimes that cannot
+/// express Rust lifetimes in their object model. Values that borrow a
+/// registry with an erased `'static` lifetime must carry the same
+/// handle so the registry owner outlives those values.
+#[derive(Debug, Clone)]
+pub struct LocalRegistryHandle {
+    inner: Arc<LocalRegistryHandleInner>,
+}
+
+#[derive(Debug)]
+enum LocalRegistryHandleInner {
+    Default(&'static LocalRegistry),
+    Temp(TempLocalRegistry),
+}
+
+impl LocalRegistryHandle {
+    pub fn shared_default() -> Result<Self> {
+        Ok(Self {
+            inner: Arc::new(LocalRegistryHandleInner::Default(
+                LocalRegistry::shared_default()?,
+            )),
+        })
+    }
+
+    pub fn temp() -> Result<Self> {
+        Ok(Self {
+            inner: Arc::new(LocalRegistryHandleInner::Temp(TempLocalRegistry::new()?)),
+        })
+    }
+
+    pub fn registry(&self) -> &LocalRegistry {
+        match self.inner.as_ref() {
+            LocalRegistryHandleInner::Default(registry) => registry,
+            LocalRegistryHandleInner::Temp(temp) => temp.registry(),
+        }
+    }
+}
+
+/// [`LocalArtifact`] with runtime-managed registry ownership.
+///
+/// The wrapped `LocalArtifact<'static>` may point at a temporary
+/// registry. The accompanying [`LocalRegistryHandle`] keeps that
+/// registry alive for as long as this value exists.
+#[derive(Debug, Clone)]
+pub struct LocalArtifactDyn {
+    artifact: LocalArtifact<'static>,
+    registry_handle: LocalRegistryHandle,
+}
+
+impl LocalArtifactDyn {
+    pub fn open(image_name: ImageRef) -> Result<Self> {
+        let registry_handle = LocalRegistryHandle::shared_default()?;
+        Self::open_in_registry_handle(registry_handle, image_name)
+    }
+
+    pub fn open_in_registry_handle(
+        registry_handle: LocalRegistryHandle,
+        image_name: ImageRef,
+    ) -> Result<Self> {
+        let open_handle = registry_handle.clone();
+        let artifact = LocalArtifact::open_in_registry(open_handle.registry(), image_name)?;
+        Ok(Self::from_local_artifact(registry_handle, artifact))
+    }
+
+    pub(crate) fn from_local_artifact<'reg>(
+        registry_handle: LocalRegistryHandle,
+        artifact: LocalArtifact<'reg>,
+    ) -> Self {
+        // The artifact was created from `registry_handle.registry()`.
+        // Store the handle next to the erased artifact so the borrowed
+        // registry remains alive for the artifact's runtime lifetime.
+        let artifact =
+            unsafe { std::mem::transmute::<LocalArtifact<'reg>, LocalArtifact<'static>>(artifact) };
+        Self {
+            artifact,
+            registry_handle,
+        }
+    }
+
+    pub fn local_artifact(&self) -> &LocalArtifact<'static> {
+        &self.artifact
+    }
+
+    pub fn registry_handle(&self) -> LocalRegistryHandle {
+        self.registry_handle.clone()
+    }
+
+    pub fn image_name(&self) -> &ImageRef {
+        self.artifact.image_name()
+    }
+
+    pub fn annotations(&self) -> Result<HashMap<String, String>> {
+        self.artifact.annotations()
+    }
+
+    pub fn layers(&self) -> Result<Vec<Descriptor>> {
+        self.artifact.layers()
+    }
+
+    pub fn get_blob(&self, digest: &Digest) -> Result<Vec<u8>> {
+        self.artifact.get_blob(digest)
+    }
+}
+
 impl LocalArtifact<'static> {
     pub fn open(image_name: ImageRef) -> Result<Self> {
         let registry = LocalRegistry::shared_default()?;

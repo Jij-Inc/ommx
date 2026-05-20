@@ -2,10 +2,10 @@
 
 use super::UnsealedExperimentState;
 use super::{
-    Experiment, ExperimentRecordSpace, Name, ParameterValue, SealedExperiment, ANN_ARTIFACT_KIND,
-    ANN_EXPERIMENT_SCHEMA, ANN_EXPERIMENT_STATUS, ANN_LAYER, ANN_RECORD_NAME, ANN_RUN_ID,
-    ANN_SPACE, ARTIFACT_KIND_EXPERIMENT, EXPERIMENT_SCHEMA_V1, EXPERIMENT_STATUS_FINISHED,
-    LAYER_KIND_RUN_PARAMETERS,
+    Experiment, ExperimentDyn, ExperimentRecordSpace, Name, ParameterValue, SealedExperiment,
+    ANN_ARTIFACT_KIND, ANN_EXPERIMENT_SCHEMA, ANN_EXPERIMENT_STATUS, ANN_LAYER, ANN_RECORD_NAME,
+    ANN_RUN_ID, ANN_SPACE, ARTIFACT_KIND_EXPERIMENT, EXPERIMENT_SCHEMA_V1,
+    EXPERIMENT_STATUS_FINISHED, LAYER_KIND_RUN_PARAMETERS,
 };
 use crate::artifact::media_types;
 use crate::Instance;
@@ -587,4 +587,50 @@ fn log_record_accepts_caller_defined_media_type() {
         );
         Ok(())
     });
+}
+
+#[test]
+fn experiment_dyn_keeps_temp_registry_alive_for_derived_artifacts() {
+    let experiment = ExperimentDyn::on_temp_local_registry(Name::Anonymous).unwrap();
+    {
+        let mut run = experiment.run().unwrap();
+        run.log_parameter("solver", "scip").unwrap();
+        run.finish().unwrap();
+    }
+
+    let artifact = experiment.commit().unwrap();
+    drop(experiment);
+
+    let loaded = ExperimentDyn::from_artifact(artifact).unwrap();
+    let cells = loaded.run_parameter_cells().unwrap();
+    assert_eq!(cells.len(), 1);
+    assert_eq!(cells[0].run_id, 0);
+    assert_eq!(cells[0].name, "solver");
+    assert_eq!(cells[0].value, ParameterValue::String("scip".to_string()));
+}
+
+#[test]
+fn experiment_dyn_rejects_commit_while_run_is_open() {
+    let experiment = ExperimentDyn::on_temp_local_registry(Name::Anonymous).unwrap();
+    let run = experiment.run().unwrap();
+
+    let err = experiment
+        .commit()
+        .expect_err("open RunDyn must block commit");
+    assert!(err.to_string().contains("Run handle"));
+
+    run.abandon();
+    experiment.commit().unwrap();
+}
+
+#[test]
+fn experiment_dyn_drops_unfinished_run_as_abandoned() {
+    let experiment = ExperimentDyn::on_temp_local_registry(Name::Anonymous).unwrap();
+    {
+        let mut run = experiment.run().unwrap();
+        run.log_parameter("solver", "scip").unwrap();
+    }
+
+    experiment.commit().unwrap();
+    assert!(experiment.run_parameter_cells().unwrap().is_empty());
 }
