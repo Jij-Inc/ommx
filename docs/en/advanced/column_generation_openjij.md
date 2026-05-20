@@ -11,10 +11,12 @@ kernelspec:
   name: python3
 ---
 
-# Advanced Example: Annealing-Assisted Column Generation
+# Column Generation with HiGHS and OpenJij
 
-This page shows how to express the pricing subproblem used in column generation as an
-`ommx.v1.Instance`, then sample it with the OpenJij adapter.
+This page sketches a practical column generation workflow in OMMX: solve the
+restricted master problem (RMP) with HiGHS, build the pricing subproblem as another
+`ommx.v1.Instance`, and solve that subproblem through a pricing oracle backed by the
+OpenJij adapter.
 
 The formulation follows the idea of
 [Annealing-Assisted Column Generation for Inequality-Constrained Combinatorial Optimization Problems](https://arxiv.org/abs/2406.01887v1):
@@ -43,9 +45,131 @@ OMMX can represent both sides. The RMP is a linear `Instance` suitable for adapt
 such as HiGHS, while the pricing subproblem is a binary constrained `Instance`
 suitable for `OMMXOpenJijSAAdapter`.
 
-The rest of this page focuses on one pricing solve, assuming that the current RMP
-has already produced customer dual values $y_i$ and the vehicle-count dual value
-$y_0$.
+In this example, both master problems are solved with HiGHS:
+
+- RMP relaxation: continuous route variables, solved by HiGHS to obtain dual values.
+- Final master: binary route variables, solved by HiGHS after the route pool has been generated.
+- Pricing subproblem: binary route construction model, solved by an oracle that calls OpenJij.
+
+## Reusable API Shape
+
+A reusable `ommx.algorithm.column_generation` helper should not depend directly on
+`ommx-highs-adapter` or `ommx-openjij-adapter`. Adapter packages depend on `ommx`, so
+the core algorithm should accept solver and pricing callbacks.
+
+The generic part is the restricted master problem. It only needs rows and columns:
+
+```python
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass, field
+from typing import Any, Literal
+
+from ommx.v1 import Instance, Solution
+
+
+RowId = Any
+ColumnId = Any
+RowSense = Literal["<=", ">=", "=="]
+
+
+@dataclass(frozen=True)
+class MasterRow:
+    id: RowId
+    sense: RowSense
+    rhs: float
+    name: str | None = None
+
+
+@dataclass(frozen=True)
+class Column:
+    id: ColumnId
+    cost: float
+    coefficients: dict[RowId, float]
+    payload: Any = None
+
+
+@dataclass
+class ColumnGenerationProblem:
+    rows: list[MasterRow]
+    columns: list[Column] = field(default_factory=list)
+
+    def to_ommx(self, *, relax: bool) -> Instance:
+        ...
+```
+
+The pricing side is intentionally a callback. A CVRP pricing oracle, a cutting-stock
+pattern oracle, and a crew-scheduling duty oracle have different variables and
+decoders, but they all consume dual values and return candidate columns.
+
+```python
+@dataclass(frozen=True)
+class PricingContext:
+    iteration: int
+    rows: list[MasterRow]
+    columns: list[Column]
+    master_solution: Solution
+    duals: dict[RowId, float]
+    tolerance: float
+
+
+@dataclass(frozen=True)
+class PricingResult:
+    columns: list[Column]
+    proven_no_negative_reduced_cost: bool = False
+
+
+MasterSolver = Callable[[Instance], Solution]
+PricingOracle = Callable[[PricingContext], PricingResult]
+
+
+def solve_column_generation(
+    problem: ColumnGenerationProblem,
+    *,
+    master_solver: MasterSolver,
+    pricing_oracle: PricingOracle,
+    final_solver: MasterSolver | None = None,
+    max_iterations: int = 100,
+    tolerance: float = 1e-6,
+) -> Solution:
+    ...
+```
+
+With that shape, a HiGHS + OpenJij configuration would look like this:
+
+```python
+from ommx_highs_adapter import OMMXHighsAdapter
+from ommx_openjij_adapter import OMMXOpenJijSAAdapter
+
+
+def highs_solver(instance: Instance) -> Solution:
+    return OMMXHighsAdapter.solve(instance)
+
+
+def openjij_pricing_oracle(ctx: PricingContext) -> PricingResult:
+    pricing_instance = build_pricing_instance_from_duals(ctx.duals)
+    sample_set = OMMXOpenJijSAAdapter.sample(
+        pricing_instance,
+        num_reads=64,
+        uniform_penalty_weight=choose_penalty_weight(ctx),
+    )
+    return decode_negative_reduced_cost_columns(sample_set, ctx)
+
+
+solution = solve_column_generation(
+    problem,
+    master_solver=highs_solver,
+    final_solver=highs_solver,
+    pricing_oracle=openjij_pricing_oracle,
+)
+```
+
+The important status distinction is whether the oracle is exact. If a heuristic oracle
+such as OpenJij returns no negative reduced-cost column, the algorithm can stop, but it
+has not proven LP optimality. A production result type should therefore distinguish
+`proven_no_negative_reduced_cost=True` from heuristic termination.
+
+The rest of this page builds the concrete pieces for the CVRP pricing oracle and a
+HiGHS-solvable RMP skeleton.
 
 ## CVRP Data
 
