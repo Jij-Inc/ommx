@@ -1,7 +1,7 @@
 use anyhow::{bail, Context, Result};
 use oci_spec::image::Digest;
 use pyo3::{prelude::*, types::PyBytes};
-use std::{collections::HashMap, path::PathBuf, str::FromStr};
+use std::{collections::HashMap, path::PathBuf, str::FromStr, sync::Arc};
 
 use crate::PyDescriptor;
 
@@ -11,9 +11,31 @@ use crate::PyDescriptor;
 //
 // v3 collapses the prior `Archive` / `Local` enum into a single
 // `LocalArtifact`: archives are an exchange format that must be
-// imported into the SQLite Local Registry before any read / push
-// happens, so every PyArtifact value points into the user's
-// persistent SQLite registry.
+// imported into a SQLite Local Registry before any read / push
+// happens. Python cannot express the Rust registry lifetime, so
+// registry-backed Python handles carry the owner that keeps non-static
+// registries, such as temporary registries, alive.
+
+#[derive(Clone)]
+pub(crate) enum PyRegistryOwner {
+    Default,
+    Temp(Arc<ommx::artifact::local_registry::TempLocalRegistry>),
+}
+
+impl PyRegistryOwner {
+    pub(crate) fn temp() -> Result<Self> {
+        Ok(Self::Temp(Arc::new(
+            ommx::artifact::local_registry::TempLocalRegistry::new()?,
+        )))
+    }
+
+    pub(crate) fn registry(&self) -> Result<&ommx::artifact::local_registry::LocalRegistry> {
+        match self {
+            Self::Default => ommx::artifact::local_registry::LocalRegistry::shared_default(),
+            Self::Temp(temp) => Ok(temp.registry()),
+        }
+    }
+}
 
 // ---------------------------------------------------------------------------
 // PyArtifact
@@ -33,7 +55,31 @@ use crate::PyDescriptor;
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust", name = "Artifact")]
-pub struct PyArtifact(pub(crate) ommx::artifact::LocalArtifact<'static>);
+pub struct PyArtifact {
+    inner: ommx::artifact::LocalArtifact<'static>,
+    owner: PyRegistryOwner,
+}
+
+impl PyArtifact {
+    pub(crate) fn new(
+        inner: ommx::artifact::LocalArtifact<'static>,
+        owner: PyRegistryOwner,
+    ) -> Self {
+        Self { inner, owner }
+    }
+
+    pub(crate) fn new_default(inner: ommx::artifact::LocalArtifact<'static>) -> Self {
+        Self::new(inner, PyRegistryOwner::Default)
+    }
+
+    pub(crate) fn inner(&self) -> &ommx::artifact::LocalArtifact<'static> {
+        &self.inner
+    }
+
+    pub(crate) fn owner(&self) -> PyRegistryOwner {
+        self.owner.clone()
+    }
+}
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
@@ -115,7 +161,7 @@ impl PyArtifact {
         };
 
         let artifact = ommx::artifact::LocalArtifact::open_in_registry(registry, image_name)?;
-        Ok(Self(artifact))
+        Ok(Self::new_default(artifact))
     }
 
     /// Removed in v3 — use {meth}`import_archive` or
@@ -195,7 +241,7 @@ impl PyArtifact {
         // Registry. Subsequent calls for the same image always land here.
         if let Some(artifact) = ommx::artifact::LocalArtifact::try_open(image_name_parsed.clone())?
         {
-            return Ok(Self(artifact));
+            return Ok(Self::new_default(artifact));
         }
 
         // SQLite miss — pull from the remote registry directly into
@@ -205,14 +251,14 @@ impl PyArtifact {
         ommx::artifact::local_registry::pull_image(registry, &image_name_parsed)?;
         let artifact =
             ommx::artifact::LocalArtifact::open_in_registry(registry, image_name_parsed)?;
-        Ok(Self(artifact))
+        Ok(Self::new_default(artifact))
     }
 
     /// Push the artifact to remote registry.
     #[cfg(feature = "remote-artifact")]
     pub fn push(&mut self, py: Python<'_>) -> Result<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        self.0.push()
+        self.inner.push()
     }
 
     /// Save the artifact as a `.ommx` OCI archive file at `path`.
@@ -225,24 +271,24 @@ impl PyArtifact {
     /// registry.
     pub fn save(&mut self, py: Python<'_>, path: PathBuf) -> Result<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        self.0.save(&path)
+        self.inner.save(&path)
     }
 
     #[getter]
     pub fn image_name(&mut self) -> Option<String> {
-        Some(self.0.image_name().to_string())
+        Some(self.inner.image_name().to_string())
     }
 
     /// Annotations in the artifact manifest.
     #[getter]
     pub fn annotations(&mut self) -> Result<HashMap<String, String>> {
-        self.0.annotations()
+        self.inner.annotations()
     }
 
     #[getter]
     pub fn layers(&mut self) -> Result<Vec<PyDescriptor>> {
         Ok(self
-            .0
+            .inner
             .layers()?
             .into_iter()
             .map(PyDescriptor::from)
@@ -252,7 +298,7 @@ impl PyArtifact {
     /// Look up a layer descriptor by digest.
     pub fn get_layer_descriptor(&mut self, py: Python<'_>, digest: &str) -> Result<PyDescriptor> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let layers = self.0.layers()?;
+        let layers = self.inner.layers()?;
         for layer in layers {
             if layer.digest().as_ref() == digest {
                 return Ok(PyDescriptor::from(layer));
@@ -269,14 +315,14 @@ impl PyArtifact {
     ) -> PyResult<Bound<'py, PyBytes>> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let blob = if let Ok(desc) = digest_or_descriptor.extract::<PyRef<PyDescriptor>>() {
-            self.0
+            self.inner
                 .get_blob(desc.as_oci_descriptor().digest())
                 .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?
         } else {
             let digest = digest_or_descriptor.extract::<String>()?;
             let digest = parse_digest(&digest)
                 .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-            self.0
+            self.inner
                 .get_blob(&digest)
                 .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?
         };
@@ -380,7 +426,7 @@ impl PyArtifact {
                 .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string())),
             None => {
                 let layers = self
-                    .0
+                    .inner
                     .layers()
                     .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
                 for desc in layers {
@@ -417,7 +463,7 @@ impl PyArtifact {
                 .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string())),
             None => {
                 let layers = self
-                    .0
+                    .inner
                     .layers()
                     .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
                 for desc in layers {
@@ -454,7 +500,7 @@ impl PyArtifact {
                 .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string())),
             None => {
                 let layers = self
-                    .0
+                    .inner
                     .layers()
                     .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
                 for desc in layers {
@@ -491,7 +537,7 @@ impl PyArtifact {
                 .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string())),
             None => {
                 let layers = self
-                    .0
+                    .inner
                     .layers()
                     .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
                 for desc in layers {
@@ -528,7 +574,7 @@ impl PyArtifact {
         let _guard = crate::TRACING.attach_parent_context(py);
         assert_media_type(descriptor, "application/vnd.apache.parquet")?;
         let blob = self
-            .0
+            .inner
             .get_blob(descriptor.as_oci_descriptor().digest())
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
         let io = py.import("io")?;
@@ -546,7 +592,7 @@ impl PyArtifact {
         let _guard = crate::TRACING.attach_parent_context(py);
         assert_media_type(descriptor, "application/json")?;
         let blob = self
-            .0
+            .inner
             .get_blob(descriptor.as_oci_descriptor().digest())
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
         let json = py.import("json")?;
@@ -663,7 +709,9 @@ impl PyArchiveManifest {
 impl PyArtifact {
     fn get_instance_inner(&mut self, descriptor: &PyDescriptor) -> Result<crate::Instance> {
         assert_media_type(descriptor, "application/org.ommx.v1.instance")?;
-        let blob = self.0.get_blob(descriptor.as_oci_descriptor().digest())?;
+        let blob = self
+            .inner
+            .get_blob(descriptor.as_oci_descriptor().digest())?;
         Ok(crate::Instance {
             inner: ommx::Instance::from_bytes(&blob)?,
             annotations: descriptor.annotations(),
@@ -672,7 +720,9 @@ impl PyArtifact {
 
     fn get_solution_inner(&mut self, descriptor: &PyDescriptor) -> Result<crate::Solution> {
         assert_media_type(descriptor, "application/org.ommx.v1.solution")?;
-        let blob = self.0.get_blob(descriptor.as_oci_descriptor().digest())?;
+        let blob = self
+            .inner
+            .get_blob(descriptor.as_oci_descriptor().digest())?;
         Ok(crate::Solution {
             inner: ommx::Solution::from_bytes(&blob)?,
             annotations: descriptor.annotations(),
@@ -684,7 +734,9 @@ impl PyArtifact {
         descriptor: &PyDescriptor,
     ) -> Result<crate::ParametricInstance> {
         assert_media_type(descriptor, "application/org.ommx.v1.parametric-instance")?;
-        let blob = self.0.get_blob(descriptor.as_oci_descriptor().digest())?;
+        let blob = self
+            .inner
+            .get_blob(descriptor.as_oci_descriptor().digest())?;
         Ok(crate::ParametricInstance {
             inner: ommx::ParametricInstance::from_bytes(&blob)?,
             annotations: descriptor.annotations(),
@@ -693,7 +745,9 @@ impl PyArtifact {
 
     fn get_sample_set_inner(&mut self, descriptor: &PyDescriptor) -> Result<crate::SampleSet> {
         assert_media_type(descriptor, "application/org.ommx.v1.sample-set")?;
-        let blob = self.0.get_blob(descriptor.as_oci_descriptor().digest())?;
+        let blob = self
+            .inner
+            .get_blob(descriptor.as_oci_descriptor().digest())?;
         Ok(crate::SampleSet {
             inner: ommx::SampleSet::from_bytes(&blob)?,
             annotations: descriptor.annotations(),
@@ -707,7 +761,7 @@ impl PyArtifact {
     ) -> PyResult<Bound<'py, PyAny>> {
         assert_media_type(descriptor, "application/vnd.numpy")?;
         let blob = self
-            .0
+            .inner
             .get_blob(descriptor.as_oci_descriptor().digest())
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
         let io = py.import("io")?;
@@ -1083,7 +1137,7 @@ impl PyArtifactDraft {
     pub fn commit(&mut self, py: Python<'_>) -> Result<PyArtifact> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let inner = self.0.commit()?;
-        Ok(PyArtifact(inner))
+        Ok(PyArtifact::new_default(inner))
     }
 }
 

@@ -67,7 +67,6 @@ __all__ = [
     "Solution",
     "Sos1Constraint",
     "State",
-    "TempExperimentContext",
     "ToFunction",
     "ToSamples",
     "ToState",
@@ -1656,6 +1655,8 @@ class Experiment:
     def image_name(self) -> builtins.str: ...
     @property
     def records(self) -> builtins.list[ExperimentRecord]: ...
+    @property
+    def artifact(self) -> Artifact: ...
     @staticmethod
     def new(image_name: typing.Optional[builtins.str] = None) -> Experiment:
         r"""
@@ -1665,14 +1666,21 @@ class Experiment:
         Experiment name.
         """
     @staticmethod
+    def on_temp_local_registry(
+        image_name: typing.Optional[builtins.str] = None,
+    ) -> Experiment:
+        r"""
+        Start a new Experiment backed by a temporary Local Registry.
+
+        The temporary registry is kept alive by the returned Experiment
+        and by Artifacts / loaded Experiments derived from it.
+        """
+    @staticmethod
     def with_temp_local_registry(
         image_name: typing.Optional[builtins.str] = None,
-    ) -> TempExperimentContext:
+    ) -> Experiment:
         r"""
-        Create a context manager for an Experiment backed by a temporary
-        Local Registry. The temporary registry is deleted when the
-        context exits, so registry-backed handles created inside the
-        context must not be used afterwards.
+        Compatibility alias for {meth}`on_temp_local_registry`.
         """
     @staticmethod
     def load(image_name: builtins.str) -> Experiment:
@@ -1684,6 +1692,13 @@ class Experiment:
         r"""
         Interpret an already-open Artifact as a committed Experiment.
         """
+    def __enter__(self) -> Experiment: ...
+    def __exit__(
+        self,
+        exc_type: typing.Optional[typing.Any] = None,
+        _exc_value: typing.Optional[typing.Any] = None,
+        _traceback: typing.Optional[typing.Any] = None,
+    ) -> builtins.bool: ...
     def run(self) -> Run:
         r"""
         Start a new Run in this unsealed Experiment.
@@ -5939,16 +5954,6 @@ class State:
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> State: ...
     def __deepcopy__(self, _memo: typing.Any) -> State: ...
-
-@typing.final
-class TempExperimentContext:
-    def __enter__(self) -> Experiment: ...
-    def __exit__(
-        self,
-        _exc_type: typing.Optional[typing.Any] = None,
-        _exc_value: typing.Optional[typing.Any] = None,
-        _traceback: typing.Optional[typing.Any] = None,
-    ) -> builtins.bool: ...
 
 @typing.final
 class AdditionalCapability(enum.Enum):

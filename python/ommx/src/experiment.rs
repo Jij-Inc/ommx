@@ -1,16 +1,17 @@
 use anyhow::{bail, Result};
 use oci_spec::image::MediaType;
-use pyo3::{exceptions::PyRuntimeError, prelude::*, types::PyDict};
+use pyo3::{prelude::*, types::PyDict};
 use std::collections::BTreeMap;
 
 use crate::pandas::{raw_entries_to_dataframe, PyDataFrame};
-use crate::{PyArtifact, PyDescriptor};
+use crate::{PyArtifact, PyDescriptor, PyRegistryOwner};
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust", name = "Experiment")]
 pub struct PyExperiment {
     inner: PyExperimentInner,
+    owner: PyRegistryOwner,
 }
 
 enum PyExperimentInner {
@@ -31,32 +32,24 @@ impl PyExperiment {
     #[staticmethod]
     #[pyo3(signature = (image_name = None))]
     pub fn new(image_name: Option<&str>) -> Result<Self> {
-        let name = match image_name {
-            Some(image_name) => {
-                ommx::experiment::Name::Named(ommx::artifact::ImageRef::parse(image_name)?)
-            }
-            None => ommx::experiment::Name::Anonymous,
-        };
-        Ok(Self {
-            inner: PyExperimentInner::Unsealed {
-                experiment: Some(Box::new(ommx::experiment::Experiment::new(name)?)),
-                open_runs: 0,
-            },
-        })
+        Self::new_unsealed(parse_name(image_name)?, PyRegistryOwner::Default)
     }
 
-    /// Create a context manager for an Experiment backed by a temporary
-    /// Local Registry. The temporary registry is deleted when the
-    /// context exits, so registry-backed handles created inside the
-    /// context must not be used afterwards.
+    /// Start a new Experiment backed by a temporary Local Registry.
+    ///
+    /// The temporary registry is kept alive by the returned Experiment
+    /// and by Artifacts / loaded Experiments derived from it.
     #[staticmethod]
     #[pyo3(signature = (image_name = None))]
-    pub fn with_temp_local_registry(image_name: Option<&str>) -> Result<PyTempExperimentContext> {
-        Ok(PyTempExperimentContext {
-            temp: Some(ommx::artifact::local_registry::TempLocalRegistry::new()?),
-            name: parse_name(image_name)?,
-            experiment: None,
-        })
+    pub fn on_temp_local_registry(image_name: Option<&str>) -> Result<Self> {
+        Self::new_unsealed(parse_name(image_name)?, PyRegistryOwner::temp()?)
+    }
+
+    /// Compatibility alias for {meth}`on_temp_local_registry`.
+    #[staticmethod]
+    #[pyo3(signature = (image_name = None))]
+    pub fn with_temp_local_registry(image_name: Option<&str>) -> Result<Self> {
+        Self::on_temp_local_registry(image_name)
     }
 
     /// Load a committed Experiment Artifact from the local registry.
@@ -69,6 +62,7 @@ impl PyExperiment {
             inner: PyExperimentInner::Sealed(ommx::experiment::SealedExperiment::from_artifact(
                 artifact,
             )?),
+            owner: PyRegistryOwner::Default,
         })
     }
 
@@ -77,9 +71,28 @@ impl PyExperiment {
     pub fn from_artifact(artifact: &PyArtifact) -> Result<Self> {
         Ok(Self {
             inner: PyExperimentInner::Sealed(ommx::experiment::SealedExperiment::from_artifact(
-                artifact.0.clone(),
+                artifact.inner().clone(),
             )?),
+            owner: artifact.owner(),
         })
+    }
+
+    pub fn __enter__(slf: Bound<'_, Self>) -> PyResult<Py<PyExperiment>> {
+        Ok(slf.unbind())
+    }
+
+    #[pyo3(signature = (exc_type = None, _exc_value = None, _traceback = None))]
+    pub fn __exit__(
+        &mut self,
+        py: Python<'_>,
+        exc_type: Option<&Bound<'_, PyAny>>,
+        _exc_value: Option<&Bound<'_, PyAny>>,
+        _traceback: Option<&Bound<'_, PyAny>>,
+    ) -> Result<bool> {
+        if exc_type.is_none() && self.is_unsealed() {
+            self.commit(py)?;
+        }
+        Ok(false)
     }
 
     #[getter]
@@ -103,6 +116,12 @@ impl PyExperiment {
             .cloned()
             .map(PyExperimentRecord)
             .collect())
+    }
+
+    #[getter]
+    pub fn artifact(&self) -> Result<PyArtifact> {
+        let sealed = self.as_sealed()?;
+        Ok(PyArtifact::new(sealed.artifact(), self.owner.clone()))
     }
 
     /// Start a new Run in this unsealed Experiment.
@@ -187,7 +206,10 @@ impl PyExperiment {
         let experiment = experiment
             .take()
             .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
-        Ok(PyArtifact(experiment.commit()?.into_artifact()))
+        let sealed = experiment.commit()?;
+        let artifact = sealed.artifact();
+        self.inner = PyExperimentInner::Sealed(sealed);
+        Ok(PyArtifact::new(artifact, self.owner.clone()))
     }
 
     /// Wide DataFrame of run parameters, indexed by `run_id`.
@@ -230,23 +252,28 @@ impl PyExperiment {
 }
 
 impl PyExperiment {
-    fn invalidate_temp_experiment(py: Python<'_>, experiment: &Py<Self>) -> PyResult<()> {
-        let mut experiment = experiment.borrow_mut(py);
-        let PyExperimentInner::Unsealed {
-            experiment: rust_experiment,
-            open_runs,
-        } = &mut experiment.inner
-        else {
-            return Ok(());
+    fn new_unsealed(name: ommx::experiment::Name, owner: PyRegistryOwner) -> Result<Self> {
+        let experiment = ommx::experiment::Experiment::with_registry(owner.registry()?, name)?;
+        // PyO3 classes cannot carry Rust lifetimes. The registry owner is
+        // stored in the same Python object and cloned into derived handles,
+        // so the erased Experiment lifetime is preserved at runtime.
+        let experiment = unsafe {
+            std::mem::transmute::<
+                ommx::experiment::Experiment<'_>,
+                ommx::experiment::Experiment<'static>,
+            >(experiment)
         };
-        rust_experiment.take();
-        if *open_runs != 0 {
-            *open_runs = 0;
-            return Err(PyRuntimeError::new_err(
-                "All Run handles created in with_temp_local_registry() must be finished before the context exits",
-            ));
-        }
-        Ok(())
+        Ok(Self {
+            inner: PyExperimentInner::Unsealed {
+                experiment: Some(Box::new(experiment)),
+                open_runs: 0,
+            },
+            owner,
+        })
+    }
+
+    fn is_unsealed(&self) -> bool {
+        matches!(&self.inner, PyExperimentInner::Unsealed { .. })
     }
 
     fn as_sealed(&self) -> Result<&ommx::experiment::SealedExperiment<'static>> {
@@ -280,71 +307,6 @@ impl PyExperiment {
             )),
             PyExperimentInner::Sealed(_) => bail!("Sealed Experiment is read-only"),
         }
-    }
-}
-
-#[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass]
-#[pyo3(module = "ommx._ommx_rust", name = "TempExperimentContext")]
-pub struct PyTempExperimentContext {
-    temp: Option<ommx::artifact::local_registry::TempLocalRegistry>,
-    name: ommx::experiment::Name,
-    experiment: Option<Py<PyExperiment>>,
-}
-
-#[pyo3_stub_gen::derive::gen_stub_pymethods]
-#[pymethods]
-impl PyTempExperimentContext {
-    pub fn __enter__(slf: Bound<'_, Self>) -> PyResult<Py<PyExperiment>> {
-        let py = slf.py();
-        let mut context = slf.borrow_mut();
-        if context.experiment.is_some() {
-            return Err(PyRuntimeError::new_err(
-                "Temporary Experiment context has already been entered",
-            ));
-        }
-        let temp = context
-            .temp
-            .as_ref()
-            .ok_or_else(|| PyRuntimeError::new_err("Temporary Experiment context is closed"))?;
-        let experiment =
-            ommx::experiment::Experiment::with_registry(temp.registry(), context.name.clone())
-                .map_err(to_py_runtime_error)?;
-
-        // The Python Experiment is valid only until `__exit__`.
-        // `__exit__` invalidates it before dropping the TempLocalRegistry.
-        let experiment = unsafe {
-            std::mem::transmute::<
-                ommx::experiment::Experiment<'_>,
-                ommx::experiment::Experiment<'static>,
-            >(experiment)
-        };
-        let py_experiment = Py::new(
-            py,
-            PyExperiment {
-                inner: PyExperimentInner::Unsealed {
-                    experiment: Some(Box::new(experiment)),
-                    open_runs: 0,
-                },
-            },
-        )?;
-        context.experiment = Some(py_experiment.clone_ref(py));
-        Ok(py_experiment)
-    }
-
-    #[pyo3(signature = (_exc_type = None, _exc_value = None, _traceback = None))]
-    pub fn __exit__(
-        &mut self,
-        py: Python<'_>,
-        _exc_type: Option<&Bound<'_, PyAny>>,
-        _exc_value: Option<&Bound<'_, PyAny>>,
-        _traceback: Option<&Bound<'_, PyAny>>,
-    ) -> PyResult<bool> {
-        if let Some(experiment) = self.experiment.take() {
-            PyExperiment::invalidate_temp_experiment(py, &experiment)?;
-        }
-        self.temp.take();
-        Ok(false)
     }
 }
 
@@ -526,10 +488,6 @@ fn parse_name(image_name: Option<&str>) -> Result<ommx::experiment::Name> {
         )),
         None => Ok(ommx::experiment::Name::Anonymous),
     }
-}
-
-fn to_py_runtime_error(error: anyhow::Error) -> PyErr {
-    PyRuntimeError::new_err(error.to_string())
 }
 
 impl Drop for PyRun {
