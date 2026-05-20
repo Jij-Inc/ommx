@@ -99,7 +99,7 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
     }
 }
 
-fn validate_parameter_value(name: &str, value: &ParameterValue) -> Result<()> {
+pub(super) fn validate_parameter_value(name: &str, value: &ParameterValue) -> Result<()> {
     match value {
         ParameterValue::Float(value) if !value.is_finite() => {
             crate::bail!("Run parameter `{name}` float value must be finite")

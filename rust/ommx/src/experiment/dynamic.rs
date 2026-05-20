@@ -7,17 +7,25 @@
 //! their object model, so this module provides owned handles that keep
 //! the required registry / parent owners alive at runtime.
 
-use super::{Experiment, ExperimentRecord, Name, ParameterValue, Run, RunParameterCell};
+use super::record::{
+    encode_json, json_media_type, store_record_ref, upsert_record_ref, RecordSpace,
+};
+use super::run::validate_parameter_value;
+use super::{
+    ExperimentRecord, Name, ParameterValue, RunEntry, RunParameterCell, SealedExperiment,
+    UnsealedExperimentState,
+};
 use crate::artifact::{LocalArtifactDyn, LocalRegistryHandle};
 use crate::{Instance, SampleSet, Solution};
 use anyhow::Result;
 use oci_spec::image::MediaType;
+use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 /// Runtime-owned Experiment handle.
 ///
-/// This is the dynamic-lifetime counterpart of [`Experiment`]. It
-/// stores the registry owner, the unsealed / sealed state, and the
+/// This is the dynamic-lifetime counterpart of [`super::Experiment`].
+/// It stores the registry owner, the unsealed / sealed state, and the
 /// count of still-open [`RunDyn`] handles in Rust SDK code so bindings
 /// do not need to duplicate these invariants.
 #[derive(Debug, Clone)]
@@ -34,10 +42,10 @@ struct ExperimentDynInner {
 #[derive(Debug)]
 enum ExperimentDynState {
     Unsealed {
-        experiment: Option<Box<Experiment<'static>>>,
+        state: Option<UnsealedExperimentState<'static>>,
         open_runs: usize,
     },
-    Sealed(super::SealedExperiment<'static>),
+    Sealed(SealedExperiment<'static>),
 }
 
 /// Runtime-owned Run handle.
@@ -48,7 +56,14 @@ enum ExperimentDynState {
 #[derive(Debug)]
 pub struct RunDyn {
     parent: Arc<ExperimentDynInner>,
-    run: Option<Run<'static, 'static>>,
+    state: Option<RunDynState>,
+}
+
+#[derive(Debug)]
+struct RunDynState {
+    run_id: u64,
+    records: Vec<super::record::RecordRef<'static>>,
+    parameters: BTreeMap<String, ParameterValue>,
 }
 
 impl ExperimentDyn {
@@ -64,12 +79,16 @@ impl ExperimentDyn {
         registry_handle: LocalRegistryHandle,
         name: impl Into<Name>,
     ) -> Result<Self> {
-        let experiment = Experiment::with_registry(registry_handle.registry(), name)?;
-        let experiment = erase_experiment_lifetime(experiment);
+        let image_name = name.into().resolve(registry_handle.registry())?;
         Ok(Self {
             inner: Arc::new(ExperimentDynInner {
                 state: Mutex::new(ExperimentDynState::Unsealed {
-                    experiment: Some(Box::new(experiment)),
+                    state: Some(UnsealedExperimentState {
+                        image_name,
+                        records: Vec::new(),
+                        runs: BTreeMap::new(),
+                        next_run_id: 0,
+                    }),
                     open_runs: 0,
                 }),
                 registry_handle,
@@ -82,7 +101,7 @@ impl ExperimentDyn {
     }
 
     pub fn from_artifact(artifact: LocalArtifactDyn) -> Result<Self> {
-        let sealed = super::SealedExperiment::from_artifact(artifact.local_artifact().clone())?;
+        let sealed = SealedExperiment::from_artifact(artifact.local_artifact().clone())?;
         Ok(Self {
             inner: Arc::new(ExperimentDynInner {
                 state: Mutex::new(ExperimentDynState::Sealed(sealed)),
@@ -100,34 +119,36 @@ impl ExperimentDyn {
 
     pub fn image_name(&self) -> Result<crate::artifact::ImageRef> {
         match &*self.inner.lock_state() {
-            ExperimentDynState::Unsealed { experiment, .. } => Ok(experiment
+            ExperimentDynState::Unsealed { state, .. } => Ok(state
                 .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?
-                .image_name()),
+                .image_name
+                .clone()),
             ExperimentDynState::Sealed(sealed) => Ok(sealed.image_name().clone()),
         }
     }
 
     pub fn run(&self) -> Result<RunDyn> {
         let run = {
-            let mut state = self.inner.lock_state();
-            let ExperimentDynState::Unsealed {
-                experiment,
-                open_runs,
-            } = &mut *state
-            else {
+            let mut dyn_state = self.inner.lock_state();
+            let ExperimentDynState::Unsealed { state, open_runs } = &mut *dyn_state else {
                 crate::bail!("Sealed Experiment is read-only");
             };
-            let experiment = experiment
-                .as_deref()
+            let state = state
+                .as_mut()
                 .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
-            let run = experiment.run()?;
+            let run_id = state.next_run_id;
+            state.next_run_id += 1;
             *open_runs += 1;
-            erase_run_lifetime(run)
+            RunDynState {
+                run_id,
+                records: Vec::new(),
+                parameters: BTreeMap::new(),
+            }
         };
         Ok(RunDyn {
             parent: Arc::clone(&self.inner),
-            run: Some(run),
+            state: Some(run),
         })
     }
 
@@ -137,25 +158,29 @@ impl ExperimentDyn {
         media_type: MediaType,
         bytes: impl AsRef<[u8]>,
     ) -> Result<()> {
-        let state = self.inner.lock_state();
-        let ExperimentDynState::Unsealed { experiment, .. } = &*state else {
+        let mut dyn_state = self.inner.lock_state();
+        let ExperimentDynState::Unsealed { state, .. } = &mut *dyn_state else {
             crate::bail!("Sealed Experiment is read-only");
         };
-        experiment
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?
-            .log_record(name, media_type, bytes)
+        let state = state
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
+        let record_ref = store_record_ref(
+            self.inner.registry_handle.registry(),
+            RecordSpace::Experiment,
+            None,
+            name,
+            media_type,
+            bytes.as_ref(),
+        )?;
+        let record_ref = erase_record_ref_lifetime(record_ref);
+        upsert_record_ref(&mut state.records, record_ref);
+        Ok(())
     }
 
     pub fn log_json(&self, name: &str, value: impl serde::Serialize) -> Result<()> {
-        let state = self.inner.lock_state();
-        let ExperimentDynState::Unsealed { experiment, .. } = &*state else {
-            crate::bail!("Sealed Experiment is read-only");
-        };
-        experiment
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?
-            .log_json(name, value)
+        let bytes = encode_json(name, value)?;
+        self.log_record(name, json_media_type(), bytes)
     }
 
     pub fn log_instance(&self, name: &str, instance: &Instance) -> Result<()> {
@@ -183,31 +208,27 @@ impl ExperimentDyn {
     }
 
     pub fn commit(&self) -> Result<LocalArtifactDyn> {
-        let mut state = self.inner.lock_state();
-        let ExperimentDynState::Unsealed {
-            experiment,
-            open_runs,
-        } = &mut *state
-        else {
+        let mut dyn_state = self.inner.lock_state();
+        let ExperimentDynState::Unsealed { state, open_runs } = &mut *dyn_state else {
             crate::bail!("Sealed Experiment is already committed");
         };
         if *open_runs != 0 {
             crate::bail!("Cannot commit Experiment while {open_runs} Run handle(s) are still open");
         }
-        let experiment = experiment
+        let state = state
             .take()
             .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
-        let sealed = experiment.commit()?;
-        let artifact = sealed.artifact();
+        let artifact = state.commit(self.inner.registry_handle.registry())?;
         let artifact =
             LocalArtifactDyn::from_local_artifact(self.inner.registry_handle.clone(), artifact);
-        *state = ExperimentDynState::Sealed(sealed);
+        let sealed = SealedExperiment::from_artifact(artifact.local_artifact().clone())?;
+        *dyn_state = ExperimentDynState::Sealed(sealed);
         Ok(artifact)
     }
 
     pub fn artifact(&self) -> Result<LocalArtifactDyn> {
-        let state = self.inner.lock_state();
-        let ExperimentDynState::Sealed(sealed) = &*state else {
+        let dyn_state = self.inner.lock_state();
+        let ExperimentDynState::Sealed(sealed) = &*dyn_state else {
             crate::bail!("Experiment must be committed before accessing its artifact");
         };
         Ok(LocalArtifactDyn::from_local_artifact(
@@ -217,16 +238,16 @@ impl ExperimentDyn {
     }
 
     pub fn records(&self) -> Result<Vec<ExperimentRecord>> {
-        let state = self.inner.lock_state();
-        let ExperimentDynState::Sealed(sealed) = &*state else {
+        let dyn_state = self.inner.lock_state();
+        let ExperimentDynState::Sealed(sealed) = &*dyn_state else {
             crate::bail!("Experiment must be committed and loaded before using this view");
         };
         Ok(sealed.records().to_vec())
     }
 
     pub fn run_parameter_cells(&self) -> Result<Vec<RunParameterCell>> {
-        let state = self.inner.lock_state();
-        let ExperimentDynState::Sealed(sealed) = &*state else {
+        let dyn_state = self.inner.lock_state();
+        let ExperimentDynState::Sealed(sealed) = &*dyn_state else {
             crate::bail!("Experiment must be committed and loaded before using this view");
         };
         Ok(sealed.run_parameter_cells())
@@ -235,7 +256,7 @@ impl ExperimentDyn {
 
 impl RunDyn {
     pub fn run_id(&self) -> Result<u64> {
-        Ok(self.open()?.run_id())
+        Ok(self.open()?.run_id)
     }
 
     pub fn log_parameter(
@@ -243,7 +264,11 @@ impl RunDyn {
         name: impl Into<String>,
         value: impl Into<ParameterValue>,
     ) -> Result<()> {
-        self.open_mut()?.log_parameter(name, value)
+        let name = name.into();
+        let value = value.into();
+        validate_parameter_value(&name, &value)?;
+        self.open_mut()?.parameters.insert(name, value);
+        Ok(())
     }
 
     pub fn log_record(
@@ -252,49 +277,91 @@ impl RunDyn {
         media_type: MediaType,
         bytes: impl AsRef<[u8]>,
     ) -> Result<()> {
-        self.open_mut()?.log_record(name, media_type, bytes)
+        let run_id = self.open()?.run_id;
+        let record_ref = store_record_ref(
+            self.parent.registry_handle.registry(),
+            RecordSpace::Run,
+            Some(run_id),
+            name,
+            media_type,
+            bytes.as_ref(),
+        )?;
+        let record_ref = erase_record_ref_lifetime(record_ref);
+        upsert_record_ref(&mut self.open_mut()?.records, record_ref);
+        Ok(())
     }
 
     pub fn log_json(&mut self, name: &str, value: impl serde::Serialize) -> Result<()> {
-        self.open_mut()?.log_json(name, value)
+        let bytes = encode_json(name, value)?;
+        self.log_record(name, json_media_type(), bytes)
     }
 
     pub fn log_instance(&mut self, name: &str, instance: &Instance) -> Result<()> {
-        self.open_mut()?.log_instance(name, instance)
+        self.log_record(
+            name,
+            crate::artifact::media_types::v1_instance(),
+            instance.to_bytes(),
+        )
     }
 
     pub fn log_solution(&mut self, name: &str, solution: &Solution) -> Result<()> {
-        self.open_mut()?.log_solution(name, solution)
+        self.log_record(
+            name,
+            crate::artifact::media_types::v1_solution(),
+            solution.to_bytes(),
+        )
     }
 
     pub fn log_sample_set(&mut self, name: &str, sample_set: &SampleSet) -> Result<()> {
-        self.open_mut()?.log_sample_set(name, sample_set)
+        self.log_record(
+            name,
+            crate::artifact::media_types::v1_sample_set(),
+            sample_set.to_bytes(),
+        )
     }
 
     pub fn finish(mut self) -> Result<()> {
+        let mut dyn_state = self.parent.lock_state();
+        let ExperimentDynState::Unsealed { state, open_runs } = &mut *dyn_state else {
+            crate::bail!("Parent Experiment is no longer unsealed");
+        };
+        let state = state
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("Parent Experiment has already been committed"))?;
         let run = self
-            .run
+            .state
             .take()
             .ok_or_else(|| anyhow::anyhow!("Run has already been finished"))?;
-        let result = run.finish();
-        self.parent.decrement_open_runs();
-        result
+        if state.runs.contains_key(&run.run_id) {
+            decrement_open_runs(open_runs);
+            crate::bail!("Run {} has already been recorded", run.run_id);
+        }
+        state.runs.insert(
+            run.run_id,
+            RunEntry {
+                run_id: run.run_id,
+                records: run.records,
+                parameters: run.parameters,
+            },
+        );
+        decrement_open_runs(open_runs);
+        Ok(())
     }
 
     pub fn abandon(mut self) {
-        if self.run.take().is_some() {
+        if self.state.take().is_some() {
             self.parent.decrement_open_runs();
         }
     }
 
-    fn open(&self) -> Result<&Run<'static, 'static>> {
-        self.run
+    fn open(&self) -> Result<&RunDynState> {
+        self.state
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("Run has already been finished"))
     }
 
-    fn open_mut(&mut self) -> Result<&mut Run<'static, 'static>> {
-        self.run
+    fn open_mut(&mut self) -> Result<&mut RunDynState> {
+        self.state
             .as_mut()
             .ok_or_else(|| anyhow::anyhow!("Run has already been finished"))
     }
@@ -302,7 +369,7 @@ impl RunDyn {
 
 impl Drop for RunDyn {
     fn drop(&mut self) {
-        if self.run.take().is_some() {
+        if self.state.take().is_some() {
             self.parent.decrement_open_runs();
         }
     }
@@ -327,25 +394,27 @@ impl ExperimentDynInner {
             tracing::warn!("RunDyn closed after parent ExperimentDyn was sealed");
             return;
         };
-        if *open_runs == 0 {
-            tracing::warn!("RunDyn open-run counter underflow avoided");
-            return;
-        }
-        *open_runs -= 1;
+        decrement_open_runs(open_runs);
     }
 }
 
-fn erase_experiment_lifetime<'reg>(experiment: Experiment<'reg>) -> Experiment<'static> {
-    // The caller stores a `LocalRegistryHandle` in the same
-    // `ExperimentDynInner`, and fields are dropped in declaration order:
-    // state first, registry handle second. This preserves the erased
-    // registry lifetime at runtime.
-    unsafe { std::mem::transmute::<Experiment<'reg>, Experiment<'static>>(experiment) }
+fn decrement_open_runs(open_runs: &mut usize) {
+    if *open_runs == 0 {
+        tracing::warn!("RunDyn open-run counter underflow avoided");
+        return;
+    }
+    *open_runs -= 1;
 }
 
-fn erase_run_lifetime<'exp, 'reg>(run: Run<'exp, 'reg>) -> Run<'static, 'static> {
-    // The returned `RunDyn` keeps the parent `ExperimentDynInner` alive
-    // and increments `open_runs`, preventing the parent experiment from
-    // being committed while the erased run handle exists.
-    unsafe { std::mem::transmute::<Run<'exp, 'reg>, Run<'static, 'static>>(run) }
+fn erase_record_ref_lifetime<'reg>(
+    record_ref: super::record::RecordRef<'reg>,
+) -> super::record::RecordRef<'static> {
+    // `ExperimentDynInner` stores the `LocalRegistryHandle` that produced
+    // this record descriptor. The handle is dropped after the mutex state,
+    // so the erased descriptor remains tied to a live registry at runtime.
+    unsafe {
+        std::mem::transmute::<super::record::RecordRef<'reg>, super::record::RecordRef<'static>>(
+            record_ref,
+        )
+    }
 }
