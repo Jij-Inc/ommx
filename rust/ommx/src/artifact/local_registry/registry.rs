@@ -474,13 +474,13 @@ impl LocalRegistry {
     /// Verify that the blob referenced by `descriptor` exists in this
     /// registry and promote it to a [`StoredDescriptor`].
     pub(crate) fn stored_descriptor(&self, descriptor: Descriptor) -> Result<StoredDescriptor<'_>> {
-        let bytes = self.blobs.read_bytes(descriptor.digest())?;
+        let size = self.blobs.size(descriptor.digest())?;
         ensure!(
-            bytes.len() as u64 == descriptor.size(),
+            size == descriptor.size(),
             "Descriptor size mismatch for {}: descriptor={}, actual={}",
             descriptor.digest(),
             descriptor.size(),
-            bytes.len()
+            size
         );
         Ok(StoredDescriptor {
             registry: self,
