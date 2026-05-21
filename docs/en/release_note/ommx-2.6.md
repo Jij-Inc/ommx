@@ -11,5 +11,3 @@ See the GitHub Releases above for full details. The following summarizes the mai
 `Instance.substitute` is now exposed in the Python SDK.
 
 This method rewrites an `Instance` by substituting decision variables with expressions. The substituted variables are recorded as dependent variables so their values can be reconstructed when evaluating a solution.
-
-See [Symbolic substitution](../user_guide/instance.ipynb#id3) in the user guide for details and cautions.
