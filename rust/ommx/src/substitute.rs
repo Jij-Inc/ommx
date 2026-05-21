@@ -297,6 +297,9 @@ pub fn substitute_acyclic<T>(
 where
     T: Substitute<Output = T> + Clone,
 {
+    if acyclic.is_empty() {
+        return Ok(());
+    }
     let updated = substituted.clone().substitute_acyclic(acyclic)?;
     *substituted = updated;
     Ok(())

@@ -512,7 +512,7 @@ def test_substitute_recursive_assignment_raises():
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0] + x[1],
-        constraints={},
+        constraints=[],
         sense=Instance.MAXIMIZE,
     )
     objective_before = instance.objective

@@ -8,6 +8,12 @@ See the GitHub Releases above for full details. The following summarizes the mai
 
 ## New Features
 
+### `Instance.substitute` and rollback-safe Rust helpers (2.5.3, [#892](https://github.com/Jij-Inc/ommx/pull/892))
+
+`Instance.substitute` is now exposed in the Python SDK.
+
+The Rust in-place helpers `ommx::substitute`, `ommx::substitute_one`, and `ommx::substitute_acyclic` now clone the input, run the consuming substitution API, and commit the result only on success. If substitution fails, the original value is left unchanged. This changes the helper bound from `T: Default` to `T: Clone`; callers that need explicit ownership or clone control should use the consuming `Substitute` methods directly.
+
 ### `NamedFunction` (2.5.0, [#748](https://github.com/Jij-Inc/ommx/pull/748))
 
 A new `NamedFunction` message and corresponding Python class have been introduced for tracking auxiliary functions (costs, penalties, KPIs, etc.) alongside optimization problems. Related types `EvaluatedNamedFunction` and `SampledNamedFunction` are also added.
