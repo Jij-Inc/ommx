@@ -2,12 +2,13 @@
 
 use super::config::ExperimentConfig;
 use super::parameter::{RunParameterCell, RunParameterTable};
-use super::record::RecordRef;
+use super::record::record_name;
 use super::{SealedExperiment, EXPERIMENT_CONFIG_MEDIA_TYPE, RUN_PARAMETERS_MEDIA_TYPE};
+use crate::artifact::local_registry::StoredDescriptor;
 use crate::artifact::{ImageRef, LocalArtifact};
 use anyhow::{Context, Result};
 use oci_spec::image::{Descriptor, MediaType};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 impl<'reg> SealedExperiment<'reg> {
     /// Reconstruct a sealed Experiment from a committed Experiment Artifact.
@@ -50,7 +51,7 @@ impl<'reg> SealedExperiment<'reg> {
         self.artifact.image_name()
     }
 
-    pub fn experiment_records(&self) -> &[RecordRef<'reg>] {
+    pub fn experiment_records(&self) -> &[StoredDescriptor<'reg>] {
         &self.records
     }
 
@@ -71,7 +72,7 @@ impl<'reg> SealedExperiment<'reg> {
 #[derive(Debug, Clone)]
 pub struct SealedRun<'reg> {
     run_id: u64,
-    records: Vec<RecordRef<'reg>>,
+    records: Vec<StoredDescriptor<'reg>>,
 }
 
 impl<'reg> SealedRun<'reg> {
@@ -79,7 +80,7 @@ impl<'reg> SealedRun<'reg> {
         self.run_id
     }
 
-    pub fn records(&self) -> &[RecordRef<'reg>] {
+    pub fn records(&self) -> &[StoredDescriptor<'reg>] {
         &self.records
     }
 }
@@ -101,21 +102,17 @@ fn decode_records<'reg>(
     registry: &'reg crate::artifact::local_registry::LocalRegistry,
     records: Vec<Descriptor>,
     owner: &str,
-) -> Result<Vec<RecordRef<'reg>>> {
+) -> Result<Vec<StoredDescriptor<'reg>>> {
     let mut decoded = Vec::new();
-    let mut keys = BTreeSet::new();
     for descriptor in records {
-        let record = RecordRef::from_descriptor(registry, descriptor)
-            .with_context(|| format!("Failed to decode Record in {owner}"))?;
-        let key = (record.media_type(), record.name().to_string());
-        if !keys.insert(key) {
-            crate::bail!(
-                "Experiment config contains duplicate Record in {owner}: media_type={}, name={}",
-                record.media_type(),
-                record.name(),
-            );
+        if record_name(&descriptor).is_none() {
+            crate::bail!("Record descriptor in {owner} is missing `org.ommx.record.name`");
         }
-        decoded.push(record);
+        decoded.push(
+            registry
+                .stored_descriptor(descriptor)
+                .with_context(|| format!("Failed to decode Record in {owner}"))?,
+        );
     }
     Ok(decoded)
 }

@@ -49,7 +49,6 @@ __all__ = [
     "Provenance",
     "ProvenanceKind",
     "Quadratic",
-    "RecordRef",
     "Relaxation",
     "RemovedConstraint",
     "RemovedIndicatorConstraint",
@@ -1655,7 +1654,7 @@ class Experiment:
     @property
     def image_name(self) -> builtins.str: ...
     @property
-    def experiment_records(self) -> builtins.list[RecordRef]: ...
+    def experiment_records(self) -> builtins.list[Descriptor]: ...
     @property
     def runs(self) -> builtins.list[SealedRun]: ...
     @property
@@ -4718,16 +4717,6 @@ class Quadratic:
         """
 
 @typing.final
-class RecordRef:
-    @property
-    def name(self) -> builtins.str: ...
-    @property
-    def media_type(self) -> builtins.str: ...
-    @property
-    def descriptor(self) -> Descriptor: ...
-    def __repr__(self) -> builtins.str: ...
-
-@typing.final
 class RemovedConstraint:
     r"""
     RemovedConstraint wrapper for Python.
@@ -5463,7 +5452,7 @@ class SealedRun:
     @property
     def run_id(self) -> builtins.int: ...
     @property
-    def records(self) -> builtins.list[RecordRef]: ...
+    def records(self) -> builtins.list[Descriptor]: ...
     def __repr__(self) -> builtins.str: ...
 
 @typing.final

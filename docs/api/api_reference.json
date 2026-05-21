@@ -2191,14 +2191,14 @@
               "name": "experiment_records",
               "doc": "",
               "type_": {
-                "display": "list[_ommx_rust.RecordRef]",
+                "display": "list[_ommx_rust.Descriptor]",
                 "link_target": null,
                 "children": [
                   {
-                    "display": "RecordRef",
+                    "display": "Descriptor",
                     "link_target": {
-                      "fqn": "ommx.experiment.RecordRef",
-                      "doc_module": "ommx.experiment",
+                      "fqn": "ommx.artifact.Descriptor",
+                      "doc_module": "ommx.artifact",
                       "kind": "Class",
                       "attribute": null
                     },
@@ -2238,71 +2238,6 @@
                     "children": []
                   }
                 ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            }
-          ],
-          "deprecated": null
-        },
-        {
-          "kind": "Class",
-          "name": "RecordRef",
-          "doc": "",
-          "bases": [],
-          "methods": [
-            {
-              "name": "__repr__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "str",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            }
-          ],
-          "attributes": [
-            {
-              "name": "descriptor",
-              "doc": "",
-              "type_": {
-                "display": "Descriptor",
-                "link_target": {
-                  "fqn": "ommx.artifact.Descriptor",
-                  "doc_module": "ommx.artifact",
-                  "kind": "Class",
-                  "attribute": null
-                },
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "media_type",
-              "doc": "",
-              "type_": {
-                "display": "str",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "name",
-              "doc": "",
-              "type_": {
-                "display": "str",
-                "link_target": null,
-                "children": []
               },
               "is_property": true,
               "is_readonly": true
@@ -2724,14 +2659,14 @@
               "name": "records",
               "doc": "",
               "type_": {
-                "display": "list[_ommx_rust.RecordRef]",
+                "display": "list[_ommx_rust.Descriptor]",
                 "link_target": null,
                 "children": [
                   {
-                    "display": "RecordRef",
+                    "display": "Descriptor",
                     "link_target": {
-                      "fqn": "ommx.experiment.RecordRef",
-                      "doc_module": "ommx.experiment",
+                      "fqn": "ommx.artifact.Descriptor",
+                      "doc_module": "ommx.artifact",
                       "kind": "Class",
                       "attribute": null
                     },
@@ -26863,7 +26798,6 @@
     "ommx.artifact.get_local_registry_root": "ommx.artifact",
     "ommx.artifact.set_local_registry_root": "ommx.artifact",
     "ommx.experiment.Experiment": "ommx.experiment",
-    "ommx.experiment.RecordRef": "ommx.experiment",
     "ommx.experiment.Run": "ommx.experiment",
     "ommx.experiment.SealedRun": "ommx.experiment",
     "ommx.v1.AdditionalCapability": "ommx.v1",

@@ -40,9 +40,9 @@
 //! ```
 //!
 //! The module is split by data terms: `run` contains `Run` lifecycle
-//! operations, `record` contains `RecordRef` and record-set upsert
-//! rules, `parameter` contains parameter values, run-local parameter
-//! sets, and the committed run-parameter table, `config` contains the
+//! operations, `record` contains Record descriptor helpers,
+//! `parameter` contains parameter values, run-local parameter sets,
+//! and the committed run-parameter table, `config` contains the
 //! serialized Experiment structure, `sealed` contains read-only sealed
 //! Experiment data reconstructed from committed artifacts, and
 //! `artifact` maps the unsealed experiment state onto an OMMX Artifact.
@@ -60,16 +60,15 @@ mod tests;
 
 pub use dynamic::{ExperimentDyn, RunDyn};
 pub use parameter::{ParameterValue, RunParameterCell};
-pub use record::RecordRef;
 pub use sealed::SealedRun;
 
-use crate::artifact::local_registry::{LocalRegistry, TempLocalRegistry};
+use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor, TempLocalRegistry};
 use crate::artifact::{media_types, ImageRef, LocalArtifact};
 use crate::{Instance, SampleSet, Solution};
 use anyhow::Result;
 use oci_spec::image::MediaType;
 use parameter::ParameterSet;
-use record::{encode_json, json_media_type, store_record_ref, RecordSet, RecordSpace};
+use record::{encode_json, json_media_type, store_record_descriptor, RecordSpace};
 use std::collections::BTreeMap;
 use std::sync::{Mutex, MutexGuard};
 
@@ -98,7 +97,7 @@ pub struct Experiment<'reg> {
 #[derive(Debug, Clone)]
 pub struct SealedExperiment<'reg> {
     artifact: LocalArtifact<'reg>,
-    records: Vec<RecordRef<'reg>>,
+    records: Vec<StoredDescriptor<'reg>>,
     runs: BTreeMap<u64, sealed::SealedRun<'reg>>,
     run_parameters: parameter::RunParameterTable,
 }
@@ -146,7 +145,7 @@ impl From<ImageRef> for Name {
 pub struct Run<'exp, 'reg> {
     experiment: &'exp Experiment<'reg>,
     run_id: u64,
-    records: RecordSet<'reg>,
+    records: Vec<StoredDescriptor<'reg>>,
     parameters: ParameterSet,
 }
 
@@ -160,7 +159,7 @@ pub struct Run<'exp, 'reg> {
 #[derive(Debug)]
 struct RunEntry<'reg> {
     run_id: u64,
-    records: RecordSet<'reg>,
+    records: Vec<StoredDescriptor<'reg>>,
     parameters: ParameterSet,
 }
 
@@ -174,7 +173,7 @@ struct UnsealedExperimentState<'reg> {
     /// no separate experiment-name field in the artifact model.
     image_name: ImageRef,
     /// Experiment-space records.
-    records: RecordSet<'reg>,
+    records: Vec<StoredDescriptor<'reg>>,
     runs: BTreeMap<u64, RunEntry<'reg>>,
     next_run_id: u64,
 }
@@ -214,7 +213,7 @@ impl<'reg> Experiment<'reg> {
             registry,
             state: Mutex::new(UnsealedExperimentState {
                 image_name,
-                records: RecordSet::new(),
+                records: Vec::new(),
                 runs: BTreeMap::new(),
                 next_run_id: 0,
             }),
@@ -235,7 +234,7 @@ impl<'reg> Experiment<'reg> {
         Ok(Run {
             experiment: self,
             run_id,
-            records: RecordSet::new(),
+            records: Vec::new(),
             parameters: ParameterSet::new(),
         })
     }
@@ -273,7 +272,7 @@ impl<'reg> Experiment<'reg> {
     }
 
     fn add_record(&self, name: &str, media_type: MediaType, bytes: &[u8]) -> Result<()> {
-        let record_ref = store_record_ref(
+        let descriptor = store_record_descriptor(
             self.registry,
             RecordSpace::Experiment,
             None,
@@ -282,7 +281,7 @@ impl<'reg> Experiment<'reg> {
             bytes,
         )?;
         let mut state = self.lock_state();
-        state.records.upsert(record_ref);
+        state.records.push(descriptor);
         Ok(())
     }
 

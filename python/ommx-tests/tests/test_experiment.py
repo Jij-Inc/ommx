@@ -3,9 +3,15 @@ import pytest
 
 from ommx.experiment import Experiment
 
+_RECORD_NAME = "org.ommx.record.name"
+
 
 def _df_snap(df: pd.DataFrame) -> str:
     return df.to_string(na_rep="<NA>")
+
+
+def _record_names(records) -> set[str]:
+    return {record.annotations[_RECORD_NAME] for record in records}
 
 
 def test_view_run_parameters_from_committed_artifact(snapshot):
@@ -23,10 +29,10 @@ def test_view_run_parameters_from_committed_artifact(snapshot):
 
     artifact = experiment.artifact
     loaded = Experiment.from_artifact(artifact)
-    assert {record.name for record in loaded.experiment_records} == {"dataset"}
+    assert _record_names(loaded.experiment_records) == {"dataset"}
     runs = {run.run_id: run for run in loaded.runs}
     assert set(runs) == {0, 1}
-    assert {record.name for record in runs[0].records} == {"candidate"}
+    assert _record_names(runs[0].records) == {"candidate"}
     assert runs[1].records == []
     df = loaded.run_parameters_df()
 
@@ -51,13 +57,13 @@ def test_create_experiment_run_records_and_commit(snapshot):
 
     artifact = experiment.commit()
     loaded = Experiment.from_artifact(artifact)
-    assert {record.name for record in loaded.experiment_records} == {
+    assert _record_names(loaded.experiment_records) == {
         "dataset",
         "raw-config",
     }
     runs = {run.run_id: run for run in loaded.runs}
     assert set(runs) == {0}
-    assert {record.name for record in runs[0].records} == {"candidate", "solver-log"}
+    assert _record_names(runs[0].records) == {"candidate", "solver-log"}
     df = loaded.run_parameters_df()
 
     assert _df_snap(df) == snapshot

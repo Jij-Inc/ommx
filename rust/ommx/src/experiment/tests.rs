@@ -125,24 +125,19 @@ fn log_writes_blob_to_blobstore_immediately() {
 
         let digest = with_unsealed_state(&experiment, |state| {
             let run = state.runs.get(&0).unwrap();
-            assert_eq!(run.records.iter().count(), 1);
-            run.records
-                .iter()
-                .next()
-                .unwrap()
-                .descriptor()
-                .digest()
-                .clone()
+            assert_eq!(run.records.len(), 1);
+            run.records[0].digest().clone()
         });
         assert!(experiment.registry.blobs().exists(&digest).unwrap());
         Ok(())
     });
 }
 
-/// Logging the same `(space, media type, name)` again replaces the
-/// record.
+/// Record descriptors are append-only within the Experiment/Run state.
+/// BlobStore still deduplicates byte-identical payloads by digest, but
+/// the Experiment model preserves each log call as a descriptor entry.
 #[test]
-fn log_upserts_same_space_media_type_name() {
+fn log_preserves_record_descriptor_log_order() {
     with_temp_experiment(|experiment| {
         experiment.log_json("dataset", json!("miplib2017")).unwrap();
         experiment.log_json("dataset", json!("qplib")).unwrap();
@@ -151,25 +146,54 @@ fn log_upserts_same_space_media_type_name() {
             crate::random::random_deterministic(crate::InstanceParameters::default_lp());
         experiment.log_instance("dataset", &instance).unwrap();
 
-        let json_digest = with_unsealed_state(&experiment, |state| {
-            assert_eq!(state.records.iter().count(), 2);
+        let json_digests = with_unsealed_state(&experiment, |state| {
+            assert_eq!(state.records.len(), 3);
+            assert_eq!(
+                state
+                    .records
+                    .iter()
+                    .map(|record| layer_annotation(record, ANN_RECORD_NAME).unwrap())
+                    .collect::<Vec<_>>(),
+                vec![
+                    "dataset".to_string(),
+                    "dataset".to_string(),
+                    "dataset".to_string()
+                ]
+            );
+            assert_eq!(
+                state
+                    .records
+                    .iter()
+                    .map(|record| record.media_type().clone())
+                    .collect::<Vec<_>>(),
+                vec![
+                    MediaType::Other("application/json".into()),
+                    MediaType::Other("application/json".into()),
+                    media_types::v1_instance(),
+                ]
+            );
             state
                 .records
                 .iter()
-                .find(|record| {
-                    record.descriptor().media_type() == &MediaType::Other("application/json".into())
-                })
-                .unwrap()
-                .descriptor()
-                .digest()
-                .clone()
+                .take(2)
+                .map(|record| record.digest().clone())
+                .collect::<Vec<_>>()
         });
-        let bytes = experiment
+        let first_bytes = experiment
             .registry
             .blobs()
-            .read_bytes(&json_digest)
+            .read_bytes(&json_digests[0])
             .unwrap();
-        assert_eq!(bytes, serde_json::to_vec(&json!("qplib")).unwrap());
+        let second_bytes = experiment
+            .registry
+            .blobs()
+            .read_bytes(&json_digests[1])
+            .unwrap();
+        assert_eq!(
+            first_bytes,
+            serde_json::to_vec(&json!("miplib2017")).unwrap()
+        );
+        assert_eq!(second_bytes, serde_json::to_vec(&json!("qplib")).unwrap());
         Ok(())
     });
 }
@@ -332,12 +356,16 @@ fn loaded_experiment_reads_records_and_run_parameters() {
         assert!(loaded
             .experiment_records()
             .iter()
-            .any(|record| record.name() == "dataset" && record.media_type() == "application/json"));
+            .any(
+                |record| layer_annotation(record, ANN_RECORD_NAME).as_deref() == Some("dataset")
+                    && record.media_type() == &MediaType::Other("application/json".into())
+            ));
         let run0 = loaded.run(0).expect("run 0 must be reconstructed");
         assert_eq!(run0.run_id(), 0);
-        assert!(run0.records().iter().any(
-            |record| record.name() == "candidate" && record.media_type() == "application/json"
-        ));
+        assert!(run0.records().iter().any(|record| {
+            layer_annotation(record, ANN_RECORD_NAME).as_deref() == Some("candidate")
+                && record.media_type() == &MediaType::Other("application/json".into())
+        }));
         let run1 = loaded.run(1).expect("run 1 must be reconstructed");
         assert_eq!(run1.run_id(), 1);
         assert!(run1.records().is_empty());

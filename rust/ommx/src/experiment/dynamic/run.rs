@@ -1,11 +1,12 @@
 //! Dynamic-lifetime Run handle.
 
-use super::super::record::{encode_json, json_media_type, RecordSet};
+use super::super::record::{encode_json, json_media_type};
 use super::super::{ParameterSet, ParameterValue, RunEntry};
 use super::{
-    bail_non_unsealed, lock_experiment_state, store_run_record_ref, ExperimentDyn,
+    bail_non_unsealed, lock_experiment_state, store_run_record_descriptor, ExperimentDyn,
     ExperimentDynLifecycle, ExperimentDynState,
 };
+use crate::artifact::local_registry::StoredDescriptor;
 use crate::artifact::media_types;
 use crate::{Instance, SampleSet, Solution};
 use anyhow::Result;
@@ -29,7 +30,7 @@ pub struct RunDyn {
 #[derive(Debug)]
 struct RunDynState {
     run_id: u64,
-    records: RecordSet<'static>,
+    records: Vec<StoredDescriptor<'static>>,
     parameters: ParameterSet,
 }
 
@@ -58,7 +59,7 @@ impl RunDyn {
         Self {
             run_state: Some(RunDynState {
                 run_id,
-                records: RecordSet::new(),
+                records: Vec::new(),
                 parameters: ParameterSet::new(),
             }),
             experiment_state,
@@ -86,11 +87,11 @@ impl RunDyn {
         bytes: impl AsRef<[u8]>,
     ) -> Result<()> {
         let run_id = self.open()?.run_id;
-        let record_ref = {
+        let descriptor = {
             let dyn_state = lock_experiment_state(&self.experiment_state);
-            store_run_record_ref(&dyn_state, run_id, name, media_type, bytes.as_ref())?
+            store_run_record_descriptor(&dyn_state, run_id, name, media_type, bytes.as_ref())?
         };
-        self.open_mut()?.records.upsert(record_ref);
+        self.open_mut()?.records.push(descriptor);
         Ok(())
     }
 

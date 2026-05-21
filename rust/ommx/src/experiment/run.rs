@@ -1,6 +1,6 @@
 //! Experiment / Run handles and run lifecycle.
 
-use super::record::{encode_json, json_media_type, store_record_ref, RecordSpace};
+use super::record::{encode_json, json_media_type, store_record_descriptor, RecordSpace};
 use super::{ParameterValue, Run, RunEntry};
 use crate::artifact::media_types;
 use crate::{Instance, SampleSet, Solution};
@@ -66,7 +66,7 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
     }
 
     fn add_record(&mut self, name: &str, media_type: MediaType, bytes: &[u8]) -> Result<()> {
-        let record_ref = store_record_ref(
+        let descriptor = store_record_descriptor(
             self.experiment.registry,
             RecordSpace::Run,
             Some(self.run_id),
@@ -74,7 +74,7 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
             media_type,
             bytes,
         )?;
-        self.records.upsert(record_ref);
+        self.records.push(descriptor);
         Ok(())
     }
 

@@ -72,11 +72,7 @@ impl<'reg> UnsealedExperimentState<'reg> {
     /// logged.
     fn record_descriptors(&self) -> Vec<StoredDescriptor<'reg>> {
         let run_records = self.runs.values().flat_map(|run| run.records.iter());
-        self.records
-            .iter()
-            .chain(run_records)
-            .map(|record| record.descriptor().clone())
-            .collect()
+        self.records.iter().chain(run_records).cloned().collect()
     }
 
     fn run_parameter_descriptor(
@@ -108,8 +104,8 @@ impl<'reg> UnsealedExperimentState<'reg> {
     }
 }
 
-fn record_descriptor(record: &super::RecordRef<'_>) -> oci_spec::image::Descriptor {
-    oci_spec::image::Descriptor::from(record.descriptor().clone())
+fn record_descriptor(record: &StoredDescriptor<'_>) -> oci_spec::image::Descriptor {
+    oci_spec::image::Descriptor::from(record.clone())
 }
 
 fn store_aggregate_json_layer<'reg>(

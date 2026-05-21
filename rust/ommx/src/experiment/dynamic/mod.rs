@@ -7,8 +7,9 @@
 //! their object model, so this module provides owned handles that keep
 //! the required registry / parent owners alive at runtime.
 
-use super::record::{encode_json, json_media_type, store_record_ref, RecordRef, RecordSpace};
+use super::record::{encode_json, json_media_type, store_record_descriptor, RecordSpace};
 use super::{Name, RunParameterCell, SealedExperiment, SealedRun, UnsealedExperimentState};
+use crate::artifact::local_registry::StoredDescriptor;
 use crate::artifact::ImageRef;
 use crate::artifact::{LocalArtifactDyn, LocalRegistryHandle};
 use crate::{Instance, SampleSet, Solution};
@@ -73,7 +74,7 @@ impl ExperimentDyn {
                 lifecycle: ExperimentDynLifecycle::Unsealed {
                     state: Some(UnsealedExperimentState {
                         image_name,
-                        records: super::record::RecordSet::new(),
+                        records: Vec::new(),
                         runs: BTreeMap::new(),
                         next_run_id: 0,
                     }),
@@ -139,14 +140,15 @@ impl ExperimentDyn {
         bytes: impl AsRef<[u8]>,
     ) -> Result<()> {
         let mut dyn_state = lock_experiment_state(&self.state);
-        let record_ref = store_experiment_record_ref(&dyn_state, name, media_type, bytes.as_ref())?;
+        let descriptor =
+            store_experiment_record_descriptor(&dyn_state, name, media_type, bytes.as_ref())?;
         let ExperimentDynLifecycle::Unsealed { state, .. } = &mut dyn_state.lifecycle else {
             return bail_non_unsealed(&dyn_state.lifecycle);
         };
         let state = state
             .as_mut()
             .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
-        state.records.upsert(record_ref);
+        state.records.push(descriptor);
         Ok(())
     }
 
@@ -217,7 +219,7 @@ impl ExperimentDyn {
         ))
     }
 
-    pub fn experiment_records(&self) -> Result<Vec<RecordRef<'static>>> {
+    pub fn experiment_records(&self) -> Result<Vec<StoredDescriptor<'static>>> {
         let dyn_state = lock_experiment_state(&self.state);
         let ExperimentDynLifecycle::Sealed(sealed) = &dyn_state.lifecycle else {
             return bail_not_sealed(&dyn_state.lifecycle);
@@ -252,14 +254,14 @@ fn lock_experiment_state(state: &Mutex<ExperimentDynState>) -> MutexGuard<'_, Ex
     }
 }
 
-fn store_experiment_record_ref(
+fn store_experiment_record_descriptor(
     state: &ExperimentDynState,
     name: &str,
     media_type: MediaType,
     bytes: &[u8],
-) -> Result<RecordRef<'static>> {
+) -> Result<StoredDescriptor<'static>> {
     ensure_unsealed_for_record_write(state)?;
-    let record_ref = store_record_ref(
+    let descriptor = store_record_descriptor(
         state.registry_handle.registry(),
         RecordSpace::Experiment,
         None,
@@ -267,18 +269,18 @@ fn store_experiment_record_ref(
         media_type,
         bytes,
     )?;
-    Ok(erase_record_ref_lifetime(record_ref))
+    Ok(erase_stored_descriptor_lifetime(descriptor))
 }
 
-fn store_run_record_ref(
+fn store_run_record_descriptor(
     state: &ExperimentDynState,
     run_id: u64,
     name: &str,
     media_type: MediaType,
     bytes: &[u8],
-) -> Result<RecordRef<'static>> {
+) -> Result<StoredDescriptor<'static>> {
     ensure_unsealed_for_record_write(state)?;
-    let record_ref = store_record_ref(
+    let descriptor = store_record_descriptor(
         state.registry_handle.registry(),
         RecordSpace::Run,
         Some(run_id),
@@ -286,7 +288,7 @@ fn store_run_record_ref(
         media_type,
         bytes,
     )?;
-    Ok(erase_record_ref_lifetime(record_ref))
+    Ok(erase_stored_descriptor_lifetime(descriptor))
 }
 
 fn ensure_unsealed_for_record_write(state: &ExperimentDynState) -> Result<()> {
@@ -328,10 +330,12 @@ fn bail_not_sealed<T>(lifecycle: &ExperimentDynLifecycle) -> Result<T> {
     }
 }
 
-fn erase_record_ref_lifetime<'reg>(record_ref: RecordRef<'reg>) -> RecordRef<'static> {
+fn erase_stored_descriptor_lifetime<'reg>(
+    descriptor: StoredDescriptor<'reg>,
+) -> StoredDescriptor<'static> {
     // `ExperimentDynState` owns the `LocalRegistryHandle` that
-    // produced this record descriptor. Its lifecycle field is declared
+    // produced this descriptor. Its lifecycle field is declared
     // before the handle, so erased descriptors are dropped before the
     // registry owner when the final shared state is dropped.
-    unsafe { std::mem::transmute::<RecordRef<'reg>, RecordRef<'static>>(record_ref) }
+    unsafe { std::mem::transmute::<StoredDescriptor<'reg>, StoredDescriptor<'static>>(descriptor) }
 }

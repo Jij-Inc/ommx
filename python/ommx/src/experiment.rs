@@ -87,12 +87,12 @@ impl PyExperiment {
     }
 
     #[getter]
-    pub fn experiment_records(&self) -> Result<Vec<PyRecordRef>> {
+    pub fn experiment_records(&self) -> Result<Vec<PyDescriptor>> {
         Ok(self
             .inner
             .experiment_records()?
             .into_iter()
-            .map(PyRecordRef)
+            .map(|descriptor| PyDescriptor::from(Descriptor::from(descriptor)))
             .collect())
     }
 
@@ -384,8 +384,13 @@ impl PySealedRun {
     }
 
     #[getter]
-    pub fn records(&self) -> Vec<PyRecordRef> {
-        self.0.records().iter().cloned().map(PyRecordRef).collect()
+    pub fn records(&self) -> Vec<PyDescriptor> {
+        self.0
+            .records()
+            .iter()
+            .cloned()
+            .map(|descriptor| PyDescriptor::from(Descriptor::from(descriptor)))
+            .collect()
     }
 
     pub fn __repr__(&self) -> String {
@@ -393,39 +398,6 @@ impl PySealedRun {
             "SealedRun(run_id={}, records={})",
             self.run_id(),
             self.0.records().len(),
-        )
-    }
-}
-
-#[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass]
-#[pyo3(module = "ommx._ommx_rust", name = "RecordRef")]
-#[derive(Clone)]
-pub struct PyRecordRef(ommx::experiment::RecordRef<'static>);
-
-#[pyo3_stub_gen::derive::gen_stub_pymethods]
-#[pymethods]
-impl PyRecordRef {
-    #[getter]
-    pub fn name(&self) -> &str {
-        self.0.name()
-    }
-
-    #[getter]
-    pub fn media_type(&self) -> String {
-        self.0.media_type()
-    }
-
-    #[getter]
-    pub fn descriptor(&self) -> PyDescriptor {
-        PyDescriptor::from(Descriptor::from(self.0.descriptor().clone()))
-    }
-
-    pub fn __repr__(&self) -> String {
-        format!(
-            "RecordRef(name='{}', media_type='{}')",
-            self.name(),
-            self.media_type(),
         )
     }
 }
