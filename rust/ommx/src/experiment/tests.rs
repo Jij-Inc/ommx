@@ -736,6 +736,12 @@ fn experiment_dyn_marks_commit_failure_explicitly() {
     assert_eq!(experiment.open_run_count(), 0);
 
     let err = experiment
+        .commit()
+        .expect_err("failed Experiment must report the stored failure reason");
+    assert!(err.to_string().contains("commit has failed"));
+    assert!(err.to_string().contains("already points"));
+
+    let err = experiment
         .run()
         .expect_err("failed Experiment must reject new runs");
     assert!(err.to_string().contains("commit has failed"));

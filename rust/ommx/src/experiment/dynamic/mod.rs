@@ -219,8 +219,9 @@ impl ExperimentDyn {
 
     pub fn commit(&self) -> Result<LocalArtifactDyn> {
         let mut dyn_state = lock_experiment_state(&self.state);
-        let ExperimentDynLifecycle::Unsealed { state, open_runs } = &mut dyn_state.lifecycle else {
-            crate::bail!("Sealed Experiment is already committed");
+        let (state, open_runs) = match &mut dyn_state.lifecycle {
+            ExperimentDynLifecycle::Unsealed { state, open_runs } => (state, open_runs),
+            lifecycle => return bail_non_unsealed(lifecycle),
         };
         if *open_runs != 0 {
             crate::bail!("Cannot commit Experiment while {open_runs} Run handle(s) are still open");
