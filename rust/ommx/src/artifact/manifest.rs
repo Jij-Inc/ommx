@@ -107,31 +107,22 @@ impl LocalArtifactDyn {
         registry_handle: LocalRegistryHandle,
         image_name: ImageRef,
     ) -> Result<Self> {
-        let open_handle = registry_handle.clone();
-        let artifact = LocalArtifact::open_in_registry(open_handle.registry(), image_name)?;
-        Ok(Self::from_local_artifact(registry_handle, artifact))
-    }
-
-    pub(crate) fn from_local_artifact<'reg>(
-        registry_handle: LocalRegistryHandle,
-        artifact: LocalArtifact<'reg>,
-    ) -> Self {
-        let LocalArtifact {
-            registry,
-            image_name,
-            manifest_digest,
-            manifest_cache,
-        } = artifact;
-        debug_assert!(
-            std::ptr::eq(registry_handle.registry(), registry),
-            "LocalArtifactDyn must be built from the supplied registry handle",
-        );
-        Self {
+        let manifest_digest = registry_handle
+            .registry()
+            .resolve_image_name(&image_name)?
+            .with_context(|| {
+                format!(
+                    "Artifact not found in the SQLite-backed local registry: {image_name}. \
+                         If this artifact exists in the legacy OCI directory local registry, \
+                         run `ommx artifact import` once, then retry."
+                )
+            })?;
+        Ok(Self {
             registry_handle,
             image_name,
             manifest_digest,
-            manifest_cache,
-        }
+            manifest_cache: Arc::new(OnceLock::new()),
+        })
     }
 
     pub(crate) fn as_local_artifact(&self) -> LocalArtifact<'_> {

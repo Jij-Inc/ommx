@@ -10,8 +10,7 @@
 use super::record::{encode_json, json_media_type, store_record_descriptor, RecordSpace};
 use super::{Name, RunEntry, RunParameterCell, SealedExperiment, UnsealedExperimentState};
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
-use crate::artifact::{ImageRef, LocalArtifact};
-use crate::artifact::{LocalArtifactDyn, LocalRegistryHandle};
+use crate::artifact::{ImageRef, LocalArtifact, LocalArtifactDyn, LocalRegistryHandle};
 use crate::{Instance, SampleSet, Solution};
 use anyhow::Result;
 use oci_spec::image::{Descriptor, MediaType};
@@ -230,7 +229,14 @@ impl ExperimentDyn {
             .take()
             .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
         let image_name = state.image_name.clone();
-        let artifact = match state.commit(dyn_state.registry_handle.registry()) {
+        let artifact = match state
+            .commit(dyn_state.registry_handle.registry())
+            .and_then(|_| {
+                LocalArtifactDyn::open_in_registry_handle(
+                    dyn_state.registry_handle.clone(),
+                    image_name.clone(),
+                )
+            }) {
             Ok(artifact) => artifact,
             Err(error) => {
                 let reason = error.to_string();
@@ -238,8 +244,6 @@ impl ExperimentDyn {
                 return Err(error);
             }
         };
-        let artifact =
-            LocalArtifactDyn::from_local_artifact(dyn_state.registry_handle.clone(), artifact);
         let sealed = match SealedExperimentDynState::from_artifact(artifact.clone()) {
             Ok(sealed) => sealed,
             Err(error) => {
