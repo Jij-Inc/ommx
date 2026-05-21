@@ -570,7 +570,7 @@ Experiment であることは、OMMX Artifact の profile / kind として表す
 | OCI manifest descriptor media type | `application/vnd.oci.image.manifest.v1+json` |
 | OCI manifest `artifactType` | `application/org.ommx.v1.artifact` |
 | OCI manifest `config.mediaType` | `application/org.ommx.v1.experiment.config+json` |
-| Experiment config JSON | `schema=v1`, `status=finished|failed`, Run / Record descriptor index |
+| Experiment config JSON | `status=finished|failed`, Run / Record descriptor index |
 `Artifact.load()` は従来通り OMMX Artifact として読み、`Experiment.load()` は OCI config descriptor の media type で Experiment profile を確認した上で、config blob の Experiment config JSON から immutable Experiment view を復元する。`config.mediaType` が `application/vnd.oci.empty.v1+json` なら v1 互換の通常 Artifact、`application/org.ommx.v1.experiment.config+json` なら Experiment と判定する。Layer annotations は inspector / compatibility 用の補助情報であり、loader が全 layer を scan して意味を推測する設計にはしない。これにより、Experiment は OMMX Artifact family の一種として扱え、既存の Local Registry / archive / remote transport / generic Artifact inspector と互換にできる。
 
 通常の成功 commit は config JSON に `status=finished` を持つ Experiment Artifact として requested tag / ref に publish する。例外終了時に作る failed recovery artifact は config JSON に `status=failed` と recovery marker を持ち、`<registry-id8>.ommx.local/crashed:<local-timestamp>-<nonce>` のような reserved ref に publish する。`Experiment.load(tag)` の通常 UX は requested tag / ref の成功 Artifact を読む。recovery artifact は recovery command / inspector から明示的に扱う。
@@ -587,7 +587,7 @@ Run は manifest の子 manifest ではなく、OCI config blob に保存した 
 |---|---|---|
 | Run parameter table JSON | run ごとの scalar parameter table | 1 cell = 1 layer にはしない |
 
-これらは manifest annotation で表現しない。Experiment profile / schema / status は OCI config descriptor の media type と config JSON で表し、Run parameter table の本体は layer payload として保存する。
+これらは manifest annotation で表現しない。Experiment profile / schema は OCI config descriptor の media type で表し、status は config JSON で表す。Run parameter table の本体は layer payload として保存する。
 
 Run-scoped Record は個別 layer または aggregate layer として保存し、descriptor annotations に `org.ommx.experiment.space=run` と `org.ommx.experiment.run_id=<id>` を持たせてよい。ただし `Experiment.load(...)` は layer annotations を scan せず、Experiment config JSON に保存された Run ごとの Record descriptor list を読む。Annotation は generic Artifact inspector や migration compatibility のための redundant metadata として扱う。
 
@@ -854,7 +854,6 @@ Experiment config JSON:
 
 | Key | Value |
 |---|---|
-| `schema` | `v1` |
 | `status` | `finished` |
 | `records` | Experiment-space Record descriptor list |
 | `runs` | Run list |
