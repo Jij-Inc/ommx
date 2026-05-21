@@ -17,6 +17,7 @@ impl<'reg> SealedExperiment<'reg> {
     /// Reconstruct a sealed Experiment from a committed Experiment Artifact.
     pub fn from_artifact(artifact: LocalArtifact<'reg>) -> Result<Self> {
         let config = load_experiment_config(&artifact)?;
+        validate_config_descriptors_are_manifest_layers(&artifact, &config)?;
 
         let records = decode_records(artifact.registry(), config.records, "experiment")?;
         let mut runs = BTreeMap::new();
@@ -108,6 +109,41 @@ fn load_experiment_config(artifact: &LocalArtifact<'_>) -> Result<ExperimentConf
         );
     }
     Ok(config)
+}
+
+fn validate_config_descriptors_are_manifest_layers(
+    artifact: &LocalArtifact<'_>,
+    config: &ExperimentConfig,
+) -> Result<()> {
+    let layers = artifact.layers()?;
+    validate_descriptor_is_manifest_layer(&layers, &config.run_parameters, "run-parameter table")?;
+    for descriptor in &config.records {
+        validate_descriptor_is_manifest_layer(&layers, descriptor, "experiment record")?;
+    }
+    for run in &config.runs {
+        for descriptor in &run.records {
+            validate_descriptor_is_manifest_layer(
+                &layers,
+                descriptor,
+                &format!("run {} record", run.run_id),
+            )?;
+        }
+    }
+    Ok(())
+}
+
+fn validate_descriptor_is_manifest_layer(
+    layers: &[Descriptor],
+    descriptor: &Descriptor,
+    owner: &str,
+) -> Result<()> {
+    if layers.iter().any(|layer| layer == descriptor) {
+        return Ok(());
+    }
+    crate::bail!(
+        "Experiment config references {owner} descriptor {}, but it is not listed in artifact layers",
+        descriptor.digest()
+    );
 }
 
 fn decode_records<'reg>(

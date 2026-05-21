@@ -1,6 +1,6 @@
 //! Tests for the experiment session model.
 
-use super::config::ExperimentConfig;
+use super::config::{ExperimentConfig, ExperimentConfigRun};
 use super::UnsealedExperimentState;
 use super::{
     Experiment, ExperimentDyn, Name, ParameterValue, SealedExperiment, ANN_LAYER, ANN_RECORD_NAME,
@@ -431,6 +431,156 @@ fn loaded_experiment_rejects_non_finished_status() {
         .expect_err("non-finished experiment configs must not load as sealed experiments");
     assert!(err.to_string().contains("status is crashed"));
     assert!(err.to_string().contains(EXPERIMENT_STATUS_FINISHED));
+}
+
+#[test]
+fn loaded_experiment_rejects_config_record_not_listed_in_layers() {
+    let temp = crate::artifact::local_registry::TempLocalRegistry::new().unwrap();
+    let registry = temp.registry();
+    let mut annotations = HashMap::new();
+    annotations.insert(ANN_SPACE.to_string(), "experiment".to_string());
+    annotations.insert(ANN_RECORD_NAME.to_string(), "outside".to_string());
+    let outside_record = registry
+        .store_layer_blob(
+            MediaType::Other("application/json".to_string()),
+            br#""outside""#,
+            annotations,
+        )
+        .unwrap();
+    let run_parameters = registry
+        .store_json_layer_blob(
+            MediaType::Other(RUN_PARAMETERS_MEDIA_TYPE.to_string()),
+            &json!({ "columns": {} }),
+            HashMap::new(),
+        )
+        .unwrap();
+    let config = ExperimentConfig {
+        status: EXPERIMENT_STATUS_FINISHED.to_string(),
+        records: vec![Descriptor::from(outside_record)],
+        runs: Vec::new(),
+        run_parameters: Descriptor::from(run_parameters.clone()),
+    };
+    let config_descriptor = registry
+        .store_json_blob(
+            MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()),
+            &config,
+        )
+        .unwrap();
+    let unsealed = UnsealedArtifact::new(
+        MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
+        config_descriptor,
+        vec![run_parameters],
+        None,
+        HashMap::new(),
+    );
+    let sealed_artifact = registry.seal_artifact(unsealed).unwrap();
+    let image_name =
+        ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:outside-record").unwrap();
+    let artifact =
+        LocalArtifact::from_parts(registry, image_name, sealed_artifact.digest().clone());
+
+    let err = SealedExperiment::from_artifact(artifact)
+        .expect_err("config must not reference records outside artifact layers");
+    assert!(err.to_string().contains("experiment record descriptor"));
+    assert!(err.to_string().contains("not listed in artifact layers"));
+}
+
+#[test]
+fn loaded_experiment_rejects_config_run_record_not_listed_in_layers() {
+    let temp = crate::artifact::local_registry::TempLocalRegistry::new().unwrap();
+    let registry = temp.registry();
+    let mut annotations = HashMap::new();
+    annotations.insert(ANN_SPACE.to_string(), "run".to_string());
+    annotations.insert(ANN_RUN_ID.to_string(), "0".to_string());
+    annotations.insert(ANN_RECORD_NAME.to_string(), "outside".to_string());
+    let outside_record = registry
+        .store_layer_blob(
+            MediaType::Other("application/json".to_string()),
+            br#""outside""#,
+            annotations,
+        )
+        .unwrap();
+    let run_parameters = registry
+        .store_json_layer_blob(
+            MediaType::Other(RUN_PARAMETERS_MEDIA_TYPE.to_string()),
+            &json!({ "columns": {} }),
+            HashMap::new(),
+        )
+        .unwrap();
+    let config = ExperimentConfig {
+        status: EXPERIMENT_STATUS_FINISHED.to_string(),
+        records: Vec::new(),
+        runs: vec![ExperimentConfigRun {
+            run_id: 0,
+            records: vec![Descriptor::from(outside_record)],
+        }],
+        run_parameters: Descriptor::from(run_parameters.clone()),
+    };
+    let config_descriptor = registry
+        .store_json_blob(
+            MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()),
+            &config,
+        )
+        .unwrap();
+    let unsealed = UnsealedArtifact::new(
+        MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
+        config_descriptor,
+        vec![run_parameters],
+        None,
+        HashMap::new(),
+    );
+    let sealed_artifact = registry.seal_artifact(unsealed).unwrap();
+    let image_name =
+        ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:outside-run-record").unwrap();
+    let artifact =
+        LocalArtifact::from_parts(registry, image_name, sealed_artifact.digest().clone());
+
+    let err = SealedExperiment::from_artifact(artifact)
+        .expect_err("config must not reference run records outside artifact layers");
+    assert!(err.to_string().contains("run 0 record descriptor"));
+    assert!(err.to_string().contains("not listed in artifact layers"));
+}
+
+#[test]
+fn loaded_experiment_rejects_run_parameters_not_listed_in_layers() {
+    let temp = crate::artifact::local_registry::TempLocalRegistry::new().unwrap();
+    let registry = temp.registry();
+    let run_parameters = registry
+        .store_json_layer_blob(
+            MediaType::Other(RUN_PARAMETERS_MEDIA_TYPE.to_string()),
+            &json!({ "columns": {} }),
+            HashMap::new(),
+        )
+        .unwrap();
+    let config = ExperimentConfig {
+        status: EXPERIMENT_STATUS_FINISHED.to_string(),
+        records: Vec::new(),
+        runs: Vec::new(),
+        run_parameters: Descriptor::from(run_parameters),
+    };
+    let config_descriptor = registry
+        .store_json_blob(
+            MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()),
+            &config,
+        )
+        .unwrap();
+    let unsealed = UnsealedArtifact::new(
+        MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
+        config_descriptor,
+        Vec::new(),
+        None,
+        HashMap::new(),
+    );
+    let sealed_artifact = registry.seal_artifact(unsealed).unwrap();
+    let image_name =
+        ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:outside-run-parameters").unwrap();
+    let artifact =
+        LocalArtifact::from_parts(registry, image_name, sealed_artifact.digest().clone());
+
+    let err = SealedExperiment::from_artifact(artifact)
+        .expect_err("config must not reference run parameters outside artifact layers");
+    assert!(err.to_string().contains("run-parameter table descriptor"));
+    assert!(err.to_string().contains("not listed in artifact layers"));
 }
 
 #[test]
