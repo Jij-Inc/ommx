@@ -232,42 +232,57 @@ pub(crate) fn check_self_assignment(
 }
 
 /// In-place version of [`Substitute::substitute`].
+///
+/// This clones the current value, runs the consuming substitution API on the
+/// clone, and commits the result back only on success. If substitution fails,
+/// `substituted` is left unchanged. Use [`Substitute::substitute`] directly
+/// when you want explicit control over cloning or ownership.
 pub fn substitute<T>(
     substituted: &mut T,
     assignments: impl IntoIterator<Item = (VariableID, Function)>,
 ) -> Result<(), SubstitutionError>
 where
-    T: Substitute<Output = T> + Default,
+    T: Substitute<Output = T> + Clone,
 {
-    let inner = std::mem::take(substituted);
-    *substituted = inner.substitute(assignments)?;
+    let updated = substituted.clone().substitute(assignments)?;
+    *substituted = updated;
     Ok(())
 }
 
 /// In-place version of [`Substitute::substitute_one`].
+///
+/// This clones the current value and commits the substituted value back only on
+/// success. If substitution fails, `substituted` is left unchanged. Use
+/// [`Substitute::substitute_one`] directly when you want explicit control over
+/// cloning or ownership.
 pub fn substitute_one<T>(
     substituted: &mut T,
     assigned: VariableID,
     linear: &Function,
 ) -> Result<(), SubstitutionError>
 where
-    T: Substitute<Output = T> + Default,
+    T: Substitute<Output = T> + Clone,
 {
-    let inner = std::mem::take(substituted);
-    *substituted = inner.substitute_one(assigned, linear)?;
+    let updated = substituted.clone().substitute_one(assigned, linear)?;
+    *substituted = updated;
     Ok(())
 }
 
 /// In-place version of [`Substitute::substitute_acyclic`].
+///
+/// This clones the current value and commits the substituted value back only on
+/// success. If substitution fails, `substituted` is left unchanged. Use
+/// [`Substitute::substitute_acyclic`] directly when you want explicit control
+/// over cloning or ownership.
 pub fn substitute_acyclic<T>(
     substituted: &mut T,
     acyclic: &AcyclicAssignments,
 ) -> Result<(), SubstitutionError>
 where
-    T: Substitute<Output = T> + Default,
+    T: Substitute<Output = T> + Clone,
 {
-    let inner = std::mem::take(substituted);
-    *substituted = inner.substitute_acyclic(acyclic)?;
+    let updated = substituted.clone().substitute_acyclic(acyclic)?;
+    *substituted = updated;
     Ok(())
 }
 
@@ -294,4 +309,52 @@ pub(crate) fn substitute_one_via_acyclic<T: Substitute>(
 ) -> Result<<T as Substitute>::Output, SubstitutionError> {
     let acyclic = AcyclicAssignments::new([(assigned, f.clone())])?;
     substituted.substitute_acyclic(&acyclic)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{coeff, linear};
+
+    #[test]
+    fn in_place_substitute_preserves_value_on_error() {
+        let mut function = Function::from(linear!(1) + coeff!(2.0));
+        let original = function.clone();
+
+        let err = substitute(
+            &mut function,
+            [(
+                VariableID::from(1),
+                Function::from(linear!(1) + coeff!(1.0)),
+            )],
+        )
+        .unwrap_err();
+
+        assert!(matches!(
+            err,
+            SubstitutionError::RecursiveAssignment { var_id }
+                if var_id == VariableID::from(1)
+        ));
+        assert!(function == original);
+    }
+
+    #[test]
+    fn in_place_substitute_one_preserves_value_on_error() {
+        let mut function = Function::from(linear!(1) + coeff!(2.0));
+        let original = function.clone();
+
+        let err = substitute_one(
+            &mut function,
+            VariableID::from(1),
+            &Function::from(linear!(1) + coeff!(1.0)),
+        )
+        .unwrap_err();
+
+        assert!(matches!(
+            err,
+            SubstitutionError::RecursiveAssignment { var_id }
+                if var_id == VariableID::from(1)
+        ));
+        assert!(function == original);
+    }
 }
