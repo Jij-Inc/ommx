@@ -32,6 +32,21 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Determine base branch
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "branch" ]]; then
+            BASE_BRANCH="${GITHUB_REF_NAME}"
+          elif git merge-base --is-ancestor "${GITHUB_SHA}" origin/dev-2.x; then
+            BASE_BRANCH="dev-2.x"
+          else
+            BASE_BRANCH="${{ github.event.repository.default_branch }}"
+          fi
+
+          echo "BASE_BRANCH=${BASE_BRANCH}" >> "$GITHUB_ENV"
+          git checkout -B "${BASE_BRANCH}" "origin/${BASE_BRANCH}"
 
       - name: Install cargo-edit
         run: cargo install cargo-edit
@@ -39,7 +54,7 @@ jobs:
       - name: Bump version
         run: |
           cargo set-version --bump patch
-          echo "NEW_VERSION=$(cargo metadata --no-deps --format-version=1 | jq -r '.packages[0].version')" >> $GITHUB_ENV
+          echo "NEW_VERSION=$(cargo metadata --no-deps --format-version=1 | jq -r '.packages[0].version')" >> "$GITHUB_ENV"
 
       - uses: actions/create-github-app-token@v3
         id: app-token
@@ -53,4 +68,4 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
           title: "Start developing ${{ env.NEW_VERSION }}"
           branch: "rust-version-update/${{ env.NEW_VERSION }}"
-          base: "main"
+          base: ${{ env.BASE_BRANCH }}

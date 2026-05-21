@@ -200,6 +200,21 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Determine base branch
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "branch" ]]; then
+            BASE_BRANCH="${GITHUB_REF_NAME}"
+          elif git merge-base --is-ancestor "${GITHUB_SHA}" origin/dev-2.x; then
+            BASE_BRANCH="dev-2.x"
+          else
+            BASE_BRANCH="${{ github.event.repository.default_branch }}"
+          fi
+
+          echo "BASE_BRANCH=${BASE_BRANCH}" >> "$GITHUB_ENV"
+          git checkout -B "${BASE_BRANCH}" "origin/${BASE_BRANCH}"
 
       - name: Setup Environment
         uses: ./.github/actions/setup-test-environment
@@ -208,7 +223,7 @@ jobs:
 
       - name: Bump version
         run: |
-          echo "NEW_VERSION=$(uv run python/set-version.py)" >> $GITHUB_ENV
+          echo "NEW_VERSION=$(uv run python/set-version.py)" >> "$GITHUB_ENV"
           task python:sync
 
       - uses: actions/create-github-app-token@v3
@@ -223,7 +238,7 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
           title: "Start developing OMMX Python SDK ${{ env.NEW_VERSION }}"
           branch: "python-version-update/${{ env.NEW_VERSION }}"
-          base: "main"
+          base: ${{ env.BASE_BRANCH }}
 
   update_docs_deps:
     # Runs only if new tag is pushed
@@ -244,11 +259,11 @@ jobs:
 
       - name: Extract released version from tag
         run: |
-          echo "RELEASED_VERSION=${GITHUB_REF#refs/tags/python-}" >> $GITHUB_ENV
+          echo "RELEASED_VERSION=${GITHUB_REF#refs/tags/python-}" >> "$GITHUB_ENV"
 
       - name: Update docs dependencies
         run: |
-          task python:update-docs-deps -- ${RELEASED_VERSION}
+          task python:update-docs-deps -- "${RELEASED_VERSION}"
           task upgrade
 
       - uses: actions/create-github-app-token@v3
