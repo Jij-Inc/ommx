@@ -27,13 +27,17 @@ def test_view_run_parameters_from_committed_artifact(snapshot):
             run1.log_parameter("solver", "highs")
             run1.log_parameter("presolve", True)
 
+        with experiment.run():
+            pass
+
     artifact = experiment.artifact
     loaded = Experiment.from_artifact(artifact)
     assert _record_names(loaded.experiment_records) == {"dataset"}
     runs = {run.run_id: run for run in loaded.runs}
-    assert set(runs) == {0, 1}
+    assert set(runs) == {0, 1, 2}
     assert _record_names(runs[0].records) == {"candidate"}
     assert runs[1].records == []
+    assert runs[2].records == []
     df = loaded.run_parameters_df()
 
     assert _df_snap(df) == snapshot

@@ -1,15 +1,18 @@
 //! Tests for the experiment session model.
 
+use super::config::ExperimentConfig;
 use super::UnsealedExperimentState;
 use super::{
     Experiment, ExperimentDyn, Name, ParameterValue, SealedExperiment, ANN_LAYER, ANN_RECORD_NAME,
     ANN_RUN_ID, ANN_SPACE, EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_STATUS_FINISHED,
-    LAYER_KIND_RUN_PARAMETERS,
+    LAYER_KIND_RUN_PARAMETERS, RUN_PARAMETERS_MEDIA_TYPE,
 };
-use crate::artifact::{media_types, ImageRef, LocalRegistryHandle};
+use crate::artifact::local_registry::UnsealedArtifact;
+use crate::artifact::{media_types, ImageRef, LocalArtifact, LocalRegistryHandle};
 use crate::Instance;
 use oci_spec::image::{Descriptor, MediaType};
 use serde_json::json;
+use std::collections::HashMap;
 
 fn with_temp_experiment<T>(f: impl FnOnce(Experiment<'_>) -> anyhow::Result<T>) -> T {
     Experiment::with_temp_local_registry(Name::Anonymous, f).unwrap()
@@ -387,6 +390,47 @@ fn loaded_experiment_reads_records_and_run_parameters() {
         assert_eq!(cells[3].value, ParameterValue::String("highs".to_string()));
         Ok(())
     });
+}
+
+#[test]
+fn loaded_experiment_rejects_non_finished_status() {
+    let temp = crate::artifact::local_registry::TempLocalRegistry::new().unwrap();
+    let registry = temp.registry();
+    let run_parameters = registry
+        .store_json_layer_blob(
+            MediaType::Other(RUN_PARAMETERS_MEDIA_TYPE.to_string()),
+            &json!({ "columns": {} }),
+            HashMap::new(),
+        )
+        .unwrap();
+    let config = ExperimentConfig {
+        status: "crashed".to_string(),
+        records: Vec::new(),
+        runs: Vec::new(),
+        run_parameters: Descriptor::from(run_parameters.clone()),
+    };
+    let config_descriptor = registry
+        .store_json_blob(
+            MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()),
+            &config,
+        )
+        .unwrap();
+    let unsealed = UnsealedArtifact::new(
+        MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
+        config_descriptor,
+        vec![run_parameters],
+        None,
+        HashMap::new(),
+    );
+    let sealed_artifact = registry.seal_artifact(unsealed).unwrap();
+    let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:crashed").unwrap();
+    let artifact =
+        LocalArtifact::from_parts(registry, image_name, sealed_artifact.digest().clone());
+
+    let err = SealedExperiment::from_artifact(artifact)
+        .expect_err("non-finished experiment configs must not load as sealed experiments");
+    assert!(err.to_string().contains("status is crashed"));
+    assert!(err.to_string().contains(EXPERIMENT_STATUS_FINISHED));
 }
 
 #[test]

@@ -3,7 +3,10 @@
 use super::config::ExperimentConfig;
 use super::parameter::{RunParameterCell, RunParameterTable};
 use super::record::record_name;
-use super::{SealedExperiment, EXPERIMENT_CONFIG_MEDIA_TYPE, RUN_PARAMETERS_MEDIA_TYPE};
+use super::{
+    SealedExperiment, EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_STATUS_FINISHED,
+    RUN_PARAMETERS_MEDIA_TYPE,
+};
 use crate::artifact::local_registry::StoredDescriptor;
 use crate::artifact::{ImageRef, LocalArtifact};
 use anyhow::{Context, Result};
@@ -95,7 +98,16 @@ fn load_experiment_config(artifact: &LocalArtifact<'_>) -> Result<ExperimentConf
         );
     }
     let bytes = artifact.get_blob(config.digest())?;
-    serde_json::from_slice::<ExperimentConfig>(&bytes).context("Failed to decode Experiment config")
+    let config = serde_json::from_slice::<ExperimentConfig>(&bytes)
+        .context("Failed to decode Experiment config")?;
+    if config.status != EXPERIMENT_STATUS_FINISHED {
+        crate::bail!(
+            "Experiment config status is {}, expected {}",
+            config.status,
+            EXPERIMENT_STATUS_FINISHED
+        );
+    }
+    Ok(config)
 }
 
 fn decode_records<'reg>(

@@ -4,7 +4,7 @@ use pyo3::{
     prelude::*,
     types::{PyBool, PyDict, PyFloat, PyInt, PyString},
 };
-use std::collections::BTreeMap;
+use std::collections::{btree_map::Entry, BTreeMap};
 
 use crate::pandas::{raw_entries_to_dataframe, PyDataFrame};
 use crate::{PyArtifact, PyDescriptor};
@@ -160,13 +160,21 @@ impl PyExperiment {
     /// Wide DataFrame of run parameters, indexed by `run_id`.
     pub fn run_parameters_df<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDataFrame>> {
         let mut rows = BTreeMap::new();
+        for run in self.inner.runs()? {
+            let run_id = run.run_id();
+            let dict = PyDict::new(py);
+            dict.set_item("run_id", run_id)?;
+            rows.insert(run_id, dict);
+        }
         for cell in self.inner.run_parameter_cells()? {
-            let row = rows.entry(cell.run_id).or_insert_with(|| {
-                let dict = PyDict::new(py);
-                dict.set_item("run_id", cell.run_id)
-                    .expect("setting run_id in a new Python dict cannot fail");
-                dict
-            });
+            let row = match rows.entry(cell.run_id) {
+                Entry::Occupied(entry) => entry.into_mut(),
+                Entry::Vacant(entry) => {
+                    let dict = PyDict::new(py);
+                    dict.set_item("run_id", cell.run_id)?;
+                    entry.insert(dict)
+                }
+            };
             match cell.value {
                 ommx::experiment::ParameterValue::Bool(value) => {
                     row.set_item(cell.name, value)?;
