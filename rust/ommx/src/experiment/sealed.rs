@@ -8,10 +8,9 @@ use super::{
     RUN_PARAMETERS_MEDIA_TYPE,
 };
 use crate::artifact::local_registry::StoredDescriptor;
-use crate::artifact::{ImageRef, LocalArtifact};
+use crate::artifact::{stable_json_bytes, ImageRef, LocalArtifact};
 use anyhow::{Context, Result};
 use oci_spec::image::{Descriptor, MediaType};
-use serde_json::Value;
 use std::collections::{BTreeMap, HashSet};
 
 impl<'reg> SealedExperiment<'reg> {
@@ -156,30 +155,7 @@ fn validate_descriptor_is_manifest_layer(
 }
 
 fn descriptor_json_key(descriptor: &Descriptor) -> Result<Vec<u8>> {
-    let mut value =
-        serde_json::to_value(descriptor).context("Failed to encode OCI Descriptor as JSON")?;
-    sort_json_object_keys(&mut value);
-    serde_json::to_vec(&value).context("Failed to serialize OCI Descriptor JSON key")
-}
-
-fn sort_json_object_keys(value: &mut Value) {
-    match value {
-        Value::Object(object) => {
-            for value in object.values_mut() {
-                sort_json_object_keys(value);
-            }
-            let sorted = std::mem::take(object)
-                .into_iter()
-                .collect::<BTreeMap<_, _>>();
-            *object = sorted.into_iter().collect();
-        }
-        Value::Array(values) => {
-            for value in values {
-                sort_json_object_keys(value);
-            }
-        }
-        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => {}
-    }
+    stable_json_bytes(descriptor).context("Failed to encode stable OCI Descriptor JSON key")
 }
 
 fn decode_records<'reg>(
