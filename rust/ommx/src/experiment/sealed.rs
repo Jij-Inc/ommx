@@ -11,7 +11,8 @@ use crate::artifact::local_registry::StoredDescriptor;
 use crate::artifact::{ImageRef, LocalArtifact};
 use anyhow::{Context, Result};
 use oci_spec::image::{Descriptor, MediaType};
-use std::collections::BTreeMap;
+use serde_json::Value;
+use std::collections::{BTreeMap, HashSet};
 
 impl<'reg> SealedExperiment<'reg> {
     /// Reconstruct a sealed Experiment from a committed Experiment Artifact.
@@ -115,15 +116,23 @@ fn validate_config_descriptors_are_manifest_layers(
     artifact: &LocalArtifact<'_>,
     config: &ExperimentConfig,
 ) -> Result<()> {
-    let layers = artifact.layers()?;
-    validate_descriptor_is_manifest_layer(&layers, &config.run_parameters, "run-parameter table")?;
+    let layer_keys = artifact
+        .layers()?
+        .iter()
+        .map(descriptor_json_key)
+        .collect::<Result<HashSet<_>>>()?;
+    validate_descriptor_is_manifest_layer(
+        &layer_keys,
+        &config.run_parameters,
+        "run-parameter table",
+    )?;
     for descriptor in &config.records {
-        validate_descriptor_is_manifest_layer(&layers, descriptor, "experiment record")?;
+        validate_descriptor_is_manifest_layer(&layer_keys, descriptor, "experiment record")?;
     }
     for run in &config.runs {
         for descriptor in &run.records {
             validate_descriptor_is_manifest_layer(
-                &layers,
+                &layer_keys,
                 descriptor,
                 &format!("run {} record", run.run_id),
             )?;
@@ -133,17 +142,44 @@ fn validate_config_descriptors_are_manifest_layers(
 }
 
 fn validate_descriptor_is_manifest_layer(
-    layers: &[Descriptor],
+    layer_keys: &HashSet<Vec<u8>>,
     descriptor: &Descriptor,
     owner: &str,
 ) -> Result<()> {
-    if layers.iter().any(|layer| layer == descriptor) {
+    if layer_keys.contains(&descriptor_json_key(descriptor)?) {
         return Ok(());
     }
     crate::bail!(
         "Experiment config references {owner} descriptor {}, but it is not listed in artifact layers",
         descriptor.digest()
     );
+}
+
+fn descriptor_json_key(descriptor: &Descriptor) -> Result<Vec<u8>> {
+    let mut value =
+        serde_json::to_value(descriptor).context("Failed to encode OCI Descriptor as JSON")?;
+    sort_json_object_keys(&mut value);
+    serde_json::to_vec(&value).context("Failed to serialize OCI Descriptor JSON key")
+}
+
+fn sort_json_object_keys(value: &mut Value) {
+    match value {
+        Value::Object(object) => {
+            for value in object.values_mut() {
+                sort_json_object_keys(value);
+            }
+            let sorted = std::mem::take(object)
+                .into_iter()
+                .collect::<BTreeMap<_, _>>();
+            *object = sorted.into_iter().collect();
+        }
+        Value::Array(values) => {
+            for value in values {
+                sort_json_object_keys(value);
+            }
+        }
+        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => {}
+    }
 }
 
 fn decode_records<'reg>(

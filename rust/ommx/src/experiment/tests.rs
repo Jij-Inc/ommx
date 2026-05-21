@@ -486,6 +486,70 @@ fn loaded_experiment_rejects_config_record_not_listed_in_layers() {
 }
 
 #[test]
+fn loaded_experiment_rejects_config_record_with_unlisted_descriptor_metadata() {
+    let temp = crate::artifact::local_registry::TempLocalRegistry::new().unwrap();
+    let registry = temp.registry();
+    let mut manifest_annotations = HashMap::new();
+    manifest_annotations.insert(ANN_SPACE.to_string(), "experiment".to_string());
+    manifest_annotations.insert(ANN_RECORD_NAME.to_string(), "listed".to_string());
+    let listed_record = registry
+        .store_layer_blob(
+            MediaType::Other("application/json".to_string()),
+            br#""same-blob""#,
+            manifest_annotations,
+        )
+        .unwrap();
+    let mut config_annotations = HashMap::new();
+    config_annotations.insert(ANN_SPACE.to_string(), "experiment".to_string());
+    config_annotations.insert(ANN_RECORD_NAME.to_string(), "outside".to_string());
+    let outside_record = registry
+        .store_layer_blob(
+            MediaType::Other("application/json".to_string()),
+            br#""same-blob""#,
+            config_annotations,
+        )
+        .unwrap();
+    assert_eq!(listed_record.digest(), outside_record.digest());
+
+    let run_parameters = registry
+        .store_json_layer_blob(
+            MediaType::Other(RUN_PARAMETERS_MEDIA_TYPE.to_string()),
+            &json!({ "columns": {} }),
+            HashMap::new(),
+        )
+        .unwrap();
+    let config = ExperimentConfig {
+        status: EXPERIMENT_STATUS_FINISHED.to_string(),
+        records: vec![Descriptor::from(outside_record)],
+        runs: Vec::new(),
+        run_parameters: Descriptor::from(run_parameters.clone()),
+    };
+    let config_descriptor = registry
+        .store_json_blob(
+            MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()),
+            &config,
+        )
+        .unwrap();
+    let unsealed = UnsealedArtifact::new(
+        MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
+        config_descriptor,
+        vec![listed_record, run_parameters],
+        None,
+        HashMap::new(),
+    );
+    let sealed_artifact = registry.seal_artifact(unsealed).unwrap();
+    let image_name =
+        ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:unlisted-record-metadata").unwrap();
+    let artifact =
+        LocalArtifact::from_parts(registry, image_name, sealed_artifact.digest().clone());
+
+    let err = SealedExperiment::from_artifact(artifact)
+        .expect_err("config must reference a descriptor listed in artifact layers");
+    assert!(err.to_string().contains("experiment record descriptor"));
+    assert!(err.to_string().contains("not listed in artifact layers"));
+}
+
+#[test]
 fn loaded_experiment_rejects_config_run_record_not_listed_in_layers() {
     let temp = crate::artifact::local_registry::TempLocalRegistry::new().unwrap();
     let registry = temp.registry();
