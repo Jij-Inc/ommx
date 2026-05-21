@@ -1678,7 +1678,21 @@ class Instance(UserAnnotationBase):
                 return
         self.raw.log_encode(decision_variable_ids)
 
-    def substitute(self, assignments: Mapping[int, object]):
+    def substitute(
+        self,
+        assignments: Mapping[
+            int,
+            int
+            | float
+            | DecisionVariable
+            | Linear
+            | Quadratic
+            | Polynomial
+            | Function
+            | _Function
+            | _ommx_rust.Function,
+        ],
+    ):
         """
         Substitute decision variables with function expressions in-place.
 
