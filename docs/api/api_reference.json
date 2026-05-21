@@ -12412,6 +12412,48 @@
               "deprecated": null
             },
             {
+              "name": "substitute",
+              "doc": "Substitute decision variables with function expressions (in-place).\n\nReplaces each given decision variable with the provided function in the\nobjective and all active constraints. This is the general substitution\nmechanism behind {meth}`~ommx.v1.Instance.log_encode`, exposed so that\nusers can implement their own integer encodings (e.g. unary, one-hot).\n\n**Args:**\n- `assignments`: A dict mapping decision variable IDs to the function\n  expressions that should replace them.\n\nRaises ``ValueError`` on cyclic or recursive assignments, or when\nsubstituting a variable that is a member of an indicator, one-hot, or\nSOS1 constraint.\n\n# Examples\n\nEncode an integer variable x0 in range $[0, 3]$ into two binary\nvariables by hand, instead of using {meth}`~ommx.v1.Instance.log_encode`:\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable\n>>> x = DecisionVariable.integer(0, lower=0, upper=3, name=\"x\")\n>>> b = [DecisionVariable.binary(i, name=\"b\", subscripts=[i]) for i in (1, 2)]\n>>> instance = Instance.from_components(\n...     decision_variables=[x, *b],\n...     objective=x,\n...     constraints=[],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.substitute({0: b[0] + 2 * b[1]})\n>>> instance.objective\nFunction(x1 + 2*x2)\n```",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "assignments",
+                      "type_": {
+                        "display": "Mapping[int, _ommx_rust.ToFunction]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "ToFunction",
+                            "link_target": {
+                              "fqn": "ommx._ommx_rust.ToFunction",
+                              "doc_module": "ommx._ommx_rust",
+                              "kind": "Class",
+                              "attribute": null
+                            },
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "to_bytes",
               "doc": "",
               "signatures": [

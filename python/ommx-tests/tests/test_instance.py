@@ -394,3 +394,78 @@ def test_multiple_log_encodes():
     instance.log_encode()
     second_encode = instance.decision_variables
     assert first_encode == second_encode
+
+
+def test_substitute_unary_encode():
+    """Custom unary (thermometer) encoding of an integer variable via `substitute`.
+
+    An integer x in [0, 4] is replaced by the linear expression x = sum(b_i).
+    Validity (a "thermometer" pattern) is enforced by ordering constraints
+    b_{i+1} <= b_i, which the user adds separately with `add_constraint`.
+    """
+    x = DecisionVariable.integer(0, lower=0, upper=4, name="x")
+    b = [DecisionVariable.binary(i + 1, name="b", subscripts=[i]) for i in range(4)]
+    instance = Instance.from_components(
+        decision_variables=[x, *b],
+        objective=x,
+        constraints={},
+        sense=Instance.MAXIMIZE,
+    )
+
+    instance.substitute({0: b[0] + b[1] + b[2] + b[3]})  # x = sum(b_i)
+    for i in range(3):
+        instance.add_constraint(b[i + 1] - b[i] <= 0)  # b_{i+1} <= b_i
+
+    # Thermometer assignments are feasible and decode to the original integer.
+    for k in range(5):  # number of bits set to 1
+        state = {i + 1: (1 if i < k else 0) for i in range(4)}
+        solution = instance.evaluate(state)
+        assert solution.feasible
+        assert solution.objective == pytest.approx(k)
+
+    # A non-thermometer assignment violates the ordering constraints.
+    assert not instance.evaluate({1: 0, 2: 1, 3: 0, 4: 0}).feasible
+
+
+def test_substitute_one_hot_encode():
+    """Custom one-hot encoding of an integer variable via `substitute`.
+
+    An integer x in [0, 3] is replaced by x = sum(v * b_v), with a one-hot
+    constraint sum(b_v) == 1 added separately by the user. Unlike unary, the
+    decode is still linear but the structural constraint is an equality.
+    """
+    x = DecisionVariable.integer(0, lower=0, upper=3, name="x")
+    b = [DecisionVariable.binary(i + 1, name="b", subscripts=[i]) for i in range(4)]
+    instance = Instance.from_components(
+        decision_variables=[x, *b],
+        objective=x,
+        constraints={},
+        sense=Instance.MAXIMIZE,
+    )
+
+    instance.substitute({0: b[1] + 2 * b[2] + 3 * b[3]})  # x = sum(v * b_v)
+    instance.add_constraint((b[0] + b[1] + b[2] + b[3]) == 1)  # one-hot constraint
+
+    # One-hot assignments are feasible and decode to the selected domain value.
+    for v in range(4):
+        state = {i + 1: (1 if i == v else 0) for i in range(4)}
+        solution = instance.evaluate(state)
+        assert solution.feasible
+        assert solution.objective == pytest.approx(v)
+
+    # Multiple bits set or all bits unset violate the one-hot constraint.
+    assert not instance.evaluate({1: 1, 2: 1, 3: 0, 4: 0}).feasible
+    assert not instance.evaluate({1: 0, 2: 0, 3: 0, 4: 0}).feasible
+
+
+def test_substitute_recursive_assignment_raises():
+    """`substitute` rejects an assignment that depends on the variable itself."""
+    x = [DecisionVariable.integer(i, lower=0, upper=3, name="x") for i in range(2)]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=x[0] + x[1],
+        constraints={},
+        sense=Instance.MAXIMIZE,
+    )
+    with pytest.raises(ValueError):
+        instance.substitute({0: x[0] + x[1]})

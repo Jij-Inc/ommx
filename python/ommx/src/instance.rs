@@ -1723,6 +1723,55 @@ impl Instance {
         Ok(())
     }
 
+    /// Substitute decision variables with function expressions (in-place).
+    ///
+    /// Replaces each given decision variable with the provided function in the
+    /// objective and all active constraints. This is the general substitution
+    /// mechanism behind {meth}`~ommx.v1.Instance.log_encode`, exposed so that
+    /// users can implement their own integer encodings (e.g. unary, one-hot).
+    ///
+    /// **Args:**
+    /// - `assignments`: A dict mapping decision variable IDs to the function
+    ///   expressions that should replace them.
+    ///
+    /// Raises ``ValueError`` on cyclic or recursive assignments, or when
+    /// substituting a variable that is a member of an indicator, one-hot, or
+    /// SOS1 constraint.
+    ///
+    /// # Examples
+    ///
+    /// Encode an integer variable x0 in range $[0, 3]$ into two binary
+    /// variables by hand, instead of using {meth}`~ommx.v1.Instance.log_encode`:
+    ///
+    /// ```python
+    /// >>> from ommx.v1 import Instance, DecisionVariable
+    /// >>> x = DecisionVariable.integer(0, lower=0, upper=3, name="x")
+    /// >>> b = [DecisionVariable.binary(i, name="b", subscripts=[i]) for i in (1, 2)]
+    /// >>> instance = Instance.from_components(
+    /// ...     decision_variables=[x, *b],
+    /// ...     objective=x,
+    /// ...     constraints=[],
+    /// ...     sense=Instance.MAXIMIZE,
+    /// ... )
+    /// >>> instance.substitute({0: b[0] + 2 * b[1]})
+    /// >>> instance.objective
+    /// Function(x1 + 2*x2)
+    /// ```
+    #[pyo3(signature = (assignments))]
+    pub fn substitute(
+        &mut self,
+        py: Python<'_>,
+        assignments: HashMap<u64, Function>,
+    ) -> PyResult<()> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let iter = assignments
+            .into_iter()
+            .map(|(id, f)| (VariableID::from(id), f.0));
+        ommx::substitute(&mut self.inner, iter)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        Ok(())
+    }
+
     /// Convert an inequality constraint $f(x) \leq 0$ to an equality constraint $f(x) + s/a = 0$ with an integer slack variable $s$.
     ///
     /// - Since $a$ is determined as the minimal multiplier to make every coefficient of $a f(x)$ integer,
