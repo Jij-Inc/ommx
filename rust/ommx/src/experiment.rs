@@ -47,7 +47,7 @@
 //! unsealed experiment state onto an OMMX Artifact.
 
 mod artifact;
-mod config;
+pub mod config;
 mod dynamic;
 mod parameter;
 mod record;

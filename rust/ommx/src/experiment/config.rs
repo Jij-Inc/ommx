@@ -6,11 +6,12 @@ use oci_spec::image::Descriptor;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(super) struct ExperimentConfig {
-    pub(super) status: String,
-    pub(super) records: Vec<Descriptor>,
-    pub(super) runs: Vec<ExperimentConfigRun>,
-    pub(super) run_parameters: Descriptor,
+#[non_exhaustive]
+pub struct ExperimentConfig {
+    pub status: String,
+    pub records: Vec<Descriptor>,
+    pub runs: Vec<ExperimentConfigRun>,
+    pub run_parameters: Descriptor,
 }
 
 impl ExperimentConfig {
@@ -32,9 +33,10 @@ impl ExperimentConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(super) struct ExperimentConfigRun {
-    pub(super) run_id: u64,
-    pub(super) records: Vec<Descriptor>,
+#[non_exhaustive]
+pub struct ExperimentConfigRun {
+    pub run_id: u64,
+    pub records: Vec<Descriptor>,
 }
 
 impl ExperimentConfigRun {
