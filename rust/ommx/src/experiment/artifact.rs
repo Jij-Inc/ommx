@@ -4,9 +4,7 @@ use super::config::ExperimentConfig;
 use super::parameter::RunParameterTable;
 use super::UnsealedExperimentState;
 use super::{
-    ANN_ARTIFACT_KIND, ANN_EXPERIMENT_SCHEMA, ANN_EXPERIMENT_STATUS, ANN_LAYER,
-    ARTIFACT_KIND_EXPERIMENT, EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_SCHEMA_V1,
-    EXPERIMENT_STATUS_FINISHED, LAYER_KIND_RUN_PARAMETERS, RUN_PARAMETERS_MEDIA_TYPE,
+    ANN_LAYER, EXPERIMENT_CONFIG_MEDIA_TYPE, LAYER_KIND_RUN_PARAMETERS, RUN_PARAMETERS_MEDIA_TYPE,
 };
 use crate::artifact::local_registry::{
     LocalRegistry, RefUpdate, StoredDescriptor, UnsealedArtifact,
@@ -32,7 +30,7 @@ impl<'reg> UnsealedExperimentState<'reg> {
             config_descriptor,
             layers,
             None,
-            manifest_annotations(),
+            HashMap::new(),
         );
         let sealed_artifact = registry.seal_artifact(artifact)?;
         let ref_update = registry.publish_manifest_ref(&self.image_name, &sealed_artifact)?;
@@ -103,21 +101,4 @@ fn store_aggregate_json_layer<'reg>(
     let mut annotations = HashMap::new();
     annotations.insert(ANN_LAYER.to_string(), layer_kind.to_string());
     registry.store_json_layer_blob(MediaType::Other(media_type.to_string()), value, annotations)
-}
-
-fn manifest_annotations() -> HashMap<String, String> {
-    HashMap::from([
-        (
-            ANN_ARTIFACT_KIND.to_string(),
-            ARTIFACT_KIND_EXPERIMENT.to_string(),
-        ),
-        (
-            ANN_EXPERIMENT_SCHEMA.to_string(),
-            EXPERIMENT_SCHEMA_V1.to_string(),
-        ),
-        (
-            ANN_EXPERIMENT_STATUS.to_string(),
-            EXPERIMENT_STATUS_FINISHED.to_string(),
-        ),
-    ])
 }

@@ -4,8 +4,7 @@ use super::config::ExperimentConfig;
 use super::parameter::{RunParameterCell, RunParameterTable};
 use super::record::{media_type_to_string, RecordRef};
 use super::{
-    SealedExperiment, ANN_ARTIFACT_KIND, ANN_EXPERIMENT_SCHEMA, ARTIFACT_KIND_EXPERIMENT,
-    EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_SCHEMA_V1, RUN_PARAMETERS_MEDIA_TYPE,
+    SealedExperiment, EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_SCHEMA_V1, RUN_PARAMETERS_MEDIA_TYPE,
 };
 use crate::artifact::{ImageRef, LocalArtifact};
 use anyhow::{Context, Result};
@@ -15,8 +14,8 @@ use std::collections::{BTreeMap, BTreeSet};
 impl<'reg> SealedExperiment<'reg> {
     /// Reconstruct a sealed Experiment from a committed Experiment Artifact.
     pub fn from_artifact(artifact: LocalArtifact<'reg>) -> Result<Self> {
-        validate_experiment_profile(&artifact)?;
         let config = load_experiment_config(&artifact)?;
+        validate_experiment_schema(&config.schema)?;
 
         let records = decode_records(artifact.registry(), config.records, "experiment")?;
         let mut runs = BTreeMap::new();
@@ -88,23 +87,6 @@ impl<'reg> SealedRun<'reg> {
     }
 }
 
-fn validate_experiment_profile(artifact: &LocalArtifact<'_>) -> Result<()> {
-    let annotations = artifact.annotations()?;
-    let kind = annotations
-        .get(ANN_ARTIFACT_KIND)
-        .with_context(|| format!("Artifact is missing `{ANN_ARTIFACT_KIND}` annotation"))?;
-    if kind != ARTIFACT_KIND_EXPERIMENT {
-        crate::bail!("Artifact kind is `{kind}`, expected `{ARTIFACT_KIND_EXPERIMENT}`");
-    }
-    let schema = annotations
-        .get(ANN_EXPERIMENT_SCHEMA)
-        .with_context(|| format!("Experiment Artifact is missing `{ANN_EXPERIMENT_SCHEMA}`"))?;
-    if schema != EXPERIMENT_SCHEMA_V1 {
-        crate::bail!("Unsupported Experiment schema `{schema}`");
-    }
-    Ok(())
-}
-
 fn load_experiment_config(artifact: &LocalArtifact<'_>) -> Result<ExperimentConfig> {
     let config = artifact.get_manifest()?.config();
     if config.media_type() != &MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()) {
@@ -116,6 +98,13 @@ fn load_experiment_config(artifact: &LocalArtifact<'_>) -> Result<ExperimentConf
     }
     let bytes = artifact.get_blob(config.digest())?;
     serde_json::from_slice::<ExperimentConfig>(&bytes).context("Failed to decode Experiment config")
+}
+
+fn validate_experiment_schema(schema: &str) -> Result<()> {
+    if schema != EXPERIMENT_SCHEMA_V1 {
+        crate::bail!("Unsupported Experiment schema `{schema}`");
+    }
+    Ok(())
 }
 
 fn decode_records<'reg>(

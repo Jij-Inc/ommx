@@ -2,9 +2,8 @@
 
 use super::UnsealedExperimentState;
 use super::{
-    Experiment, ExperimentDyn, Name, ParameterValue, SealedExperiment, ANN_ARTIFACT_KIND,
-    ANN_EXPERIMENT_SCHEMA, ANN_EXPERIMENT_STATUS, ANN_LAYER, ANN_RECORD_NAME, ANN_RUN_ID,
-    ANN_SPACE, ARTIFACT_KIND_EXPERIMENT, EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_SCHEMA_V1,
+    Experiment, ExperimentDyn, Name, ParameterValue, SealedExperiment, ANN_LAYER, ANN_RECORD_NAME,
+    ANN_RUN_ID, ANN_SPACE, EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_SCHEMA_V1,
     EXPERIMENT_STATUS_FINISHED, LAYER_KIND_RUN_PARAMETERS,
 };
 use crate::artifact::{media_types, ImageRef, LocalRegistryHandle};
@@ -189,16 +188,21 @@ fn commit_produces_experiment_artifact() {
         let artifact = sealed.artifact();
 
         let annotations = artifact.annotations().unwrap();
+        assert!(annotations.is_empty());
+
+        let config = artifact.get_manifest().unwrap().config();
         assert_eq!(
-            annotations.get(ANN_ARTIFACT_KIND).map(String::as_str),
-            Some(ARTIFACT_KIND_EXPERIMENT)
+            config.media_type(),
+            &MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string())
         );
+        let config_json: serde_json::Value =
+            serde_json::from_slice(&artifact.get_blob(config.digest()).unwrap()).unwrap();
         assert_eq!(
-            annotations.get(ANN_EXPERIMENT_SCHEMA).map(String::as_str),
+            config_json.get("schema").and_then(|value| value.as_str()),
             Some(EXPERIMENT_SCHEMA_V1)
         );
         assert_eq!(
-            annotations.get(ANN_EXPERIMENT_STATUS).map(String::as_str),
+            config_json.get("status").and_then(|value| value.as_str()),
             Some(EXPERIMENT_STATUS_FINISHED)
         );
 
@@ -442,12 +446,11 @@ fn commit_returns_sealed_experiment() {
 
         let sealed = experiment.commit().unwrap();
         let artifact = sealed.artifact();
+        let config = artifact.get_manifest().unwrap().config();
+        let config_json: serde_json::Value =
+            serde_json::from_slice(&artifact.get_blob(config.digest()).unwrap()).unwrap();
         assert_eq!(
-            artifact
-                .annotations()
-                .unwrap()
-                .get(ANN_EXPERIMENT_STATUS)
-                .map(String::as_str),
+            config_json.get("status").and_then(|value| value.as_str()),
             Some(EXPERIMENT_STATUS_FINISHED)
         );
         Ok(())

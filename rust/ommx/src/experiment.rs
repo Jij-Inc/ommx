@@ -73,13 +73,9 @@ use std::sync::{Mutex, MutexGuard};
 
 // --- Artifact mapping constants ---------------------------------------------
 
-const ARTIFACT_KIND_EXPERIMENT: &str = "experiment";
 const EXPERIMENT_SCHEMA_V1: &str = "v1";
 const EXPERIMENT_STATUS_FINISHED: &str = "finished";
 
-const ANN_ARTIFACT_KIND: &str = "org.ommx.artifact.kind";
-const ANN_EXPERIMENT_SCHEMA: &str = "org.ommx.experiment.schema";
-const ANN_EXPERIMENT_STATUS: &str = "org.ommx.experiment.status";
 const ANN_SPACE: &str = "org.ommx.experiment.space";
 const ANN_RUN_ID: &str = "org.ommx.experiment.run_id";
 const ANN_LAYER: &str = "org.ommx.experiment.layer";
