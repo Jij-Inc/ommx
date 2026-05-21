@@ -467,5 +467,11 @@ def test_substitute_recursive_assignment_raises():
         constraints={},
         sense=Instance.MAXIMIZE,
     )
+    objective_before = Function(instance.objective)
+    decision_variable_ids_before = {v.id for v in instance.decision_variables}
+
     with pytest.raises(ValueError):
         instance.substitute({0: x[0] + x[1]})
+
+    assert {v.id for v in instance.decision_variables} == decision_variable_ids_before
+    assert instance.objective.almost_equal(objective_before)
