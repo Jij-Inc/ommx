@@ -264,7 +264,6 @@ fn store_experiment_record_descriptor(
     let descriptor = store_record_descriptor(
         state.registry_handle.registry(),
         RecordSpace::Experiment,
-        None,
         name,
         media_type,
         bytes,
@@ -282,8 +281,7 @@ fn store_run_record_descriptor(
     ensure_unsealed_for_record_write(state)?;
     let descriptor = store_record_descriptor(
         state.registry_handle.registry(),
-        RecordSpace::Run,
-        Some(run_id),
+        RecordSpace::Run(run_id),
         name,
         media_type,
         bytes,

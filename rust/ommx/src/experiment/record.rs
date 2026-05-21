@@ -12,14 +12,21 @@ pub enum RecordSpace {
     /// Shared by the whole experiment (dataset, source problem, ...).
     Experiment,
     /// Owned by a single run.
-    Run,
+    Run(u64),
 }
 
 impl RecordSpace {
     fn as_str(self) -> &'static str {
         match self {
             RecordSpace::Experiment => "experiment",
-            RecordSpace::Run => "run",
+            RecordSpace::Run(_) => "run",
+        }
+    }
+
+    fn run_id(self) -> Option<u64> {
+        match self {
+            RecordSpace::Experiment => None,
+            RecordSpace::Run(run_id) => Some(run_id),
         }
     }
 }
@@ -32,14 +39,13 @@ const JSON_MEDIA_TYPE: &str = "application/json";
 pub fn store_record_descriptor<'reg>(
     registry: &'reg LocalRegistry,
     space: RecordSpace,
-    run_id: Option<u64>,
     name: &str,
     media_type: MediaType,
     bytes: &[u8],
 ) -> Result<StoredDescriptor<'reg>> {
     let mut annotations = HashMap::new();
     annotations.insert(ANN_SPACE.to_string(), space.as_str().to_string());
-    if let Some(run_id) = run_id {
+    if let Some(run_id) = space.run_id() {
         annotations.insert(ANN_RUN_ID.to_string(), run_id.to_string());
     }
     annotations.insert(ANN_RECORD_NAME.to_string(), name.to_string());

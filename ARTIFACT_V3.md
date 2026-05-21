@@ -807,7 +807,7 @@ Track A の中核のうち、最小の happy path を最初に通す。Local Reg
 | `Run<'exp, 'reg>` | `&'exp Experiment<'reg>` + run_id, run space records, parameters。実行中の mutable handle |
 | `UnsealedExperimentState`（private） | image name, experiment space records, `BTreeMap<run_id, RunEntry>`, next run id |
 | `RunEntry`（private） | close 済み logical Run。run_id, run space records, parameters |
-| `RecordSpace` enum | `experiment`/`run` |
+| `RecordSpace` enum | `experiment` / `run(run_id)` |
 
 API:
 

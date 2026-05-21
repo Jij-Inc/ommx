@@ -68,8 +68,7 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
     fn add_record(&mut self, name: &str, media_type: MediaType, bytes: &[u8]) -> Result<()> {
         let descriptor = store_record_descriptor(
             self.experiment.registry,
-            RecordSpace::Run,
-            Some(self.run_id),
+            RecordSpace::Run(self.run_id),
             name,
             media_type,
             bytes,

@@ -275,7 +275,6 @@ impl<'reg> Experiment<'reg> {
         let descriptor = store_record_descriptor(
             self.registry,
             RecordSpace::Experiment,
-            None,
             name,
             media_type,
             bytes,
