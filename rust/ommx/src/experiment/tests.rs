@@ -701,6 +701,19 @@ fn experiment_dyn_rejects_commit_while_run_is_open() {
 }
 
 #[test]
+fn experiment_dyn_rejects_second_commit_as_sealed() {
+    let experiment = ExperimentDyn::with_temp_local_registry(Name::Anonymous).unwrap();
+    experiment.log_json("dataset", json!("miplib2017")).unwrap();
+    experiment.commit().unwrap();
+
+    let err = experiment
+        .commit()
+        .expect_err("sealed Experiment must reject a second commit");
+    assert!(err.to_string().contains("read-only"));
+    assert_eq!(experiment.state_name(), "sealed");
+}
+
+#[test]
 fn experiment_dyn_drops_unfinished_run_as_abandoned() {
     let experiment = ExperimentDyn::with_temp_local_registry(Name::Anonymous).unwrap();
     {
