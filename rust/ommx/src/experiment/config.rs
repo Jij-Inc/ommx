@@ -1,13 +1,12 @@
 //! Serialized Experiment structure stored in the OCI config blob.
 
-use super::{RunEntry, UnsealedExperimentState, EXPERIMENT_SCHEMA_V1};
+use super::{RunEntry, UnsealedExperimentState};
 use crate::artifact::local_registry::StoredDescriptor;
 use oci_spec::image::Descriptor;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(super) struct ExperimentConfig {
-    pub(super) schema: String,
     pub(super) records: Vec<Descriptor>,
     pub(super) runs: Vec<ExperimentConfigRun>,
     pub(super) run_parameters: Descriptor,
@@ -19,7 +18,6 @@ impl ExperimentConfig {
         run_parameters: &StoredDescriptor<'_>,
     ) -> Self {
         Self {
-            schema: EXPERIMENT_SCHEMA_V1.to_string(),
             records: state.records.iter().map(record_descriptor).collect(),
             runs: state
                 .runs

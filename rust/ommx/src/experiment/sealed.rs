@@ -17,7 +17,6 @@ impl<'reg> SealedExperiment<'reg> {
     pub fn from_artifact(artifact: LocalArtifact<'reg>) -> Result<Self> {
         validate_experiment_profile(&artifact)?;
         let config = load_experiment_config(&artifact)?;
-        validate_experiment_schema(&config.schema)?;
 
         let records = decode_records(artifact.registry(), config.records, "experiment")?;
         let mut runs = BTreeMap::new();
@@ -117,13 +116,6 @@ fn load_experiment_config(artifact: &LocalArtifact<'_>) -> Result<ExperimentConf
     }
     let bytes = artifact.get_blob(config.digest())?;
     serde_json::from_slice::<ExperimentConfig>(&bytes).context("Failed to decode Experiment config")
-}
-
-fn validate_experiment_schema(schema: &str) -> Result<()> {
-    if schema != EXPERIMENT_SCHEMA_V1 {
-        crate::bail!("Unsupported Experiment config schema `{schema}`");
-    }
-    Ok(())
 }
 
 fn decode_records<'reg>(
