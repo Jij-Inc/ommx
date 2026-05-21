@@ -115,3 +115,28 @@ You can also use the [`constraints`](https://jij-inc.github.io/ommx/python/ommx/
 for cid, c in instance.constraints.items():
     print(f"id={cid}: {c}")
 ```
+
+## Symbolic substitution
+
+`Instance.substitute` replaces decision variables with function expressions in the objective and active constraints. This is useful for transformations such as binary encodings, where an integer variable is removed and represented by newly introduced binary variables.
+
+This operation is an algebraic rewrite. It does not automatically translate the substituted variable's `kind`, `lower`, or `upper` into constraints on the replacement expression. For example, if `x1` is binary and you substitute `x1` with `x2 + x3`, OMMX does not add the constraints `0 <= x2 + x3` and `x2 + x3 <= 1`. If `x1` is integer, OMMX also does not add a constraint that the replacement expression must be integral.
+
+The substituted variable is recorded as a dependent variable, so its value can be reconstructed when evaluating a solution. Its bound and kind are checked by `Solution.feasible()`, but they are not passed to solvers as constraints on the replacement expression. In other words, `substitute` does not by itself guarantee an equivalent optimization model.
+
+This is intentional. Some transformations, such as relaxing a constraint, deliberately change the model. Other transformations, such as log encoding or a custom binary encoding, are valid because the encoding itself is constructed to preserve the original variable's domain.
+
+If a general substitution must preserve the model, add the necessary constraints explicitly. A common conservative pattern is to keep the original variable and add a linking equality instead of eliminating it:
+
+```python
+instance.add_constraint(x1 - (x2 + x3) == 0)
+```
+
+If you do eliminate `x1` with `substitute`, add any required bound constraints on the replacement expression yourself:
+
+```python
+expr = x2 + x3
+instance.substitute({1: expr})
+instance.add_constraint(expr >= 0)
+instance.add_constraint(expr <= 1)
+```

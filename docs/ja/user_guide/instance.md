@@ -115,3 +115,28 @@ print(f"{c.name=}")
 for cid, c in instance.constraints.items():
     print(f"id={cid}: {c}")
 ```
+
+## 記号的な代入
+
+`Instance.substitute` は目的関数と有効な制約条件に現れる決定変数を、指定した関数式で置き換えます。これは整数変数を新しいバイナリ変数で表現する binary encoding のような変換で使われます。
+
+この操作は代数的な書き換えです。代入された変数の `kind`, `lower`, `upper` を、置換後の式に対する制約へ自動的には変換しません。例えば `x1` が binary で、`x1` を `x2 + x3` に置き換えても、OMMX は `0 <= x2 + x3` や `x2 + x3 <= 1` を追加しません。`x1` が integer の場合も、置換後の式が整数値を取るという制約は追加されません。
+
+代入された変数は従属変数として記録されるため、解を評価するときに値を復元できます。その bound や kind は `Solution.feasible()` で検証されますが、置換後の式に対するソルバー制約としては渡されません。つまり `substitute` だけでは、最適化モデルとして等価な変換であることは保証されません。
+
+これは意図した仕様です。制約を緩和する操作のように、モデルを意図的に変える変換もあります。一方で log encoding や独自の binary encoding のような変換は、エンコーディング自体が元の変数の domain を保つように構築されるため正当化できます。
+
+一般の代入でモデルの意味を保存したい場合は、必要な制約を明示的に追加してください。保守的な方法は、元の変数を消去せずに linking equality を追加することです。
+
+```python
+instance.add_constraint(x1 - (x2 + x3) == 0)
+```
+
+`substitute` で `x1` を消去する場合は、置換後の式に必要な bound 制約を別途追加します。
+
+```python
+expr = x2 + x3
+instance.substitute({1: expr})
+instance.add_constraint(expr >= 0)
+instance.add_constraint(expr <= 1)
+```
