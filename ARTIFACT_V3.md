@@ -687,179 +687,51 @@ Remote registry:
 
 GC は data model を変えない。完全な descriptor list を持つ manifest、digest primary、single-parent lineage、Record model / Run parameter table とは独立した maintenance operation とする。
 
-## 10. 未決定事項
+## 10. 現在の実装範囲
 
-実装前に決める必要がある点:
+PR #886 時点で、Experiment / Artifact v3 提案のうち、Rust core と Python から使う最小の Experiment UX は実装済みである。この節は、本ファイルが一時ドキュメントである間に、未実装 Proposal と実装済み仕様を混同しないための作業メモである。
 
-1. `Experiment` の Python module path と API 名
-   `ommx.experiment.Experiment` とするか、`ommx.artifact.Experiment` 配下に置くか。
+### 10.1 Rust core
 
-2. Context manager の詳細 semantics
-   `with Experiment(...)` は正常終了時に自動 commit する方針とする。残る論点は、commit 済み session への追加を禁止する API、`exp.artifact` の availability、例外終了時の failed recovery manifest UX、`crashed:<timestamp>-<nonce>` ref の表示 / pruning、tag が省略された場合の扱いである。
+実装済み:
 
-3. Fork semantics
-   `exp.fork(tag=...)` の tag 解釈、parent metadata の継承 / 上書き、forked session の名前、同一 parent から複数 child が作られる場合の UX を決める。
+- `ommx::experiment::{Experiment, Run, SealedExperiment, SealedRun}`。
+- `Experiment::new(Name)` / `Experiment::with_registry(&LocalRegistry, Name)` / `Experiment::with_temp_local_registry(...)`。
+- `Name::Named(ImageRef)` と `Name::Anonymous`。anonymous Experiment は `<registry-id8>.ommx.local/experiment:<timestamp>-<nonce>` に解決する。
+- `Experiment::log_record` / `log_json` / `log_instance` / `log_solution` / `log_sample_set`。
+- `Run::log_parameter` / `log_record` / `log_json` / `log_instance` / `log_solution` / `log_sample_set`。
+- `Run::finish(self)`。Rust 側では finish が `Run` を消費するため、終了済み Run に後から Record / parameter を追加する経路は型として存在しない。
+- `Experiment::commit(self) -> SealedExperiment<'reg>`。Rust 側では commit が `Experiment` を消費するため、commit 後 mutation は型として存在しない。
+- `SealedExperiment::from_artifact(LocalArtifact)` による config-based load。
+- `SealedExperiment::experiment_records()`、`runs()`、`run(id)`、`run_parameter_cells()`。
 
-4. Autosave metadata
-   Blob 本体は Local Registry BlobStore に逐次保存する。未 commit の Experiment state / recovery metadata をどこに置くか、failed recovery manifest にどこまで含めるか、どの粒度で復元可能にするかを決める。
+Rust core の `Experiment<'reg>` は `&'reg LocalRegistry` を持つ。`Run<'exp, 'reg>` は親 Experiment を immutable borrow し、Run local state を持つ。close 済み Run は `RunEntry` として `Experiment` state の `BTreeMap<run_id, RunEntry>` に保存され、commit 時に `run_id` 順で materialize される。
 
-5. Record / Run parameter table の物理化境界
-   大きな Record payload は `log_*` 時点で BlobStore に書く前提で、どの media type を即 descriptor 化するか。Run parameter table をどの aggregate JSON に materialize するか。
+`log_*` は payload を即 Local Registry の BlobStore に保存し、in-memory には `StoredDescriptor` を保持する。同じ bytes は CAS blob として物理的に共有されるが、Record descriptor list はユーザーの log call 順と重複を保持する。
 
-6. Duplicate parameter handling
-   Record descriptor list は保存順と重複を保持する方針で固定する。Parameter は Run table の cell なので、同一 `(run_id, parameter_name)` の上書きをどう view / trace に出すかを決める。
+### 10.2 Artifact への写像
 
-7. Run deletion と lineage retention
-   派生 Experiment version で run を省く API をどの範囲で提供するか。また、削除された run の blob を物理的に reclaim するための parent lineage pruning / retention policy をどう設計するか。
+実装済みの wire shape:
 
-8. Adapter diagnostics protocol
-   `diagnostics` kwarg を signature inspection で渡すか、`SupportsDiagnostics` marker / class attribute で検出するか。`DiagnosticEntry` / `DiagnosticsSink` / `DiagnosticCollector` の Python / Rust 型定義と media type validation を決める。
-
-9. Table extraction の責務
-   summary extraction を Rust core に持つか、Python-only view に寄せるか。
-
-10. Trace provider setup UX
-    Experiment core は global provider を install しない方針で固定する。一方、notebook helper / magic が UX のため provider を install することを許すか。
-
-11. Legacy MINTO artifact import
-    `org.minto.*` annotation を読む compatibility loader を OMMX に持つか、別 migration tool にするか。
-
-## 11. 実装トラック
-
-### Track A: Experiment / Run / Record model の中核
-
-- `Experiment`, `Run`, immutable loaded `Experiment` view, forked session を設計する。
-- Record model、Run parameter table、typed storage API を実装する。
-- Record descriptor list は log 順に保持し、Seal phase では正規化しない。Parameter table の upsert と materialization を実装する。
-- `with Experiment(...)` の正常終了 auto commit、例外終了時の failed recovery manifest、commit 後 mutation 禁止を実装する。
-- Python tests で MINTO の主要 UX を再現する。
-
-### Track B: Artifact への写像と table view
-
-- Record、Run parameter table を Artifact layer / aggregate JSON に materialize する annotation schema を実装する。
-- Artifact から Experiment view を復元する loader を実装する。
-- `get_run_table()` / experiment-level table view を実装する。
-- `org.minto.*` compatibility の扱いを決め、必要なら import path を実装する。
-
-### Track C: Adapter execution / diagnostics
-
-- `run.log_solve(...)` / `run.log_sample(...)` を adapter protocol に沿って実装する。
-- scalar kwargs を Run parameter table に記録する。
-- adapter diagnostics optional protocol を設計する。
-- diagnostics Record と OTel summary event の連携を実装する。
-
-### Track D: OTel trace integration
-
-- Experiment / Run / solver / build / load / push span schema を実装する。
-- `log_*` record / parameter event を実装する。
-- `trace="auto" | "required" | False` を実装する。
-- global `TracerProvider` を暗黙に設定しないことを tests で固定する。
-
-### Track E: Trace layer と renderer
-
-- OTLP JSON trace layer を Artifact に埋め込む。
-- `artifact.get_trace() -> TraceResult` を実装する。
-- post-hoc text tree renderer を Experiment style に対応させる。
-- Chrome Trace Event Format export を derived view として提供する。
-
-### Track F: Lineage / fork API
-
-- `subject` を使った `parent()` / `history()` を実装する。
-- `exp.fork(tag=...)` を実装する。
-- Record descriptor list、Run parameter table に基づく `diff(other)` を実装する。
-- 各 Artifact が 0/1 parent を持つ single-parent history の制約を tests で固定する。
-
-### Track G: GC
-
-- reachability analysis hook を実装する。
-- Local Registry GC の dry-run / report / delete flow を実装する。
-- archive / OCI directory GC の候補列挙を実装する。
-- remote registry は capability detection と dry-run を優先する。
-
-## 12. 第1イテレーション実装計画
-
-Track A の中核のうち、最小の happy path を最初に通す。Local Registry / `ArtifactDraft` は Rust 専用機能なので、まず `ommx` crate にコア `experiment` モジュールだけを実装する。Python SDK への PyO3 expose は本イテレーションでは扱わない。
-
-### 12.1 スコープ
-
-到達点: `Experiment` 開始 → `Run` 開始 → `Record` 追加 → `Run` 終了 → `Experiment` 終了で 1 Artifact を commit する Rust core API。
-
-| 含む | 含まない（後続イテレーション） |
+| 要素 | 値 / 方針 |
 |---|---|
-| `Experiment` / `Run` の Build phase session と lifecycle API（`run()` / `finish()` / `commit()`） | Python SDK への PyO3 expose（`ommx.experiment` / context manager） |
-| Record（`json` / `instance` / `solution` / `sample_set` / caller-defined media type）の experiment space / run space への追加 | 失敗時処理全般（3.4 の crash recovery manifest / orphan blob / autosave metadata） |
-| Run parameter table（`Run::log_parameter` と commit 時の aggregate layer materialization） | `get_run_table` view API |
-| Run lifecycle（`finish()` による close 済み Run の記録） | status / elapsed time / 実行環境属性の data model |
-| `log_*` 時点の BlobStore 逐次書き込みと `commit()` の root manifest seal / ref publish（新規 `local_registry` primitive を含む） | `Experiment.load()` による immutable view 復元 |
-| Record descriptor list の保存順保持、parameter upsert、commit 後 mutation 禁止 | OTel / trace layer / renderer、fork / lineage / `diff` |
-| | `log_solve` / `log_sample`、diagnostics sink、実行環境属性、GC |
+| OCI manifest descriptor media type | `application/vnd.oci.image.manifest.v1+json` |
+| OCI manifest `artifactType` | `application/org.ommx.v1.artifact` |
+| OCI config media type | `application/org.ommx.v1.experiment.config+json` |
+| Experiment config `status` | 成功 commit は `finished` |
+| Run parameter layer media type | `application/org.ommx.v1.experiment.run-parameters+json` |
 
-第1イテレーションから逐次書き込みを採用する。`log_*` は payload をその場で Local Registry の BlobStore に CAS blob として書き、in-memory には descriptor だけを残す。`commit()` は BlobStore に書き込み済みの blob 群を参照する manifest を組んで IndexStore に publish する。bytes を commit まで in-memory に貯める設計は、最終形（逐次書き込み）で捨てる throwaway になるため採らない。本イテレーションで外すのは crash recovery の機構（recovery manifest / autosave metadata / orphan blob 回収）であって、逐次書き込みという機構自体は最初から入れる。crash した場合は orphan blob が残るが、その回収は GC イテレーションに委ねる。
+Experiment config JSON は、Experiment-space Record descriptor list、Run list、Run ごとの Record descriptor list、Run parameter table descriptor を持つ。`SealedExperiment::from_artifact` は root manifest の config media type を見て Experiment profile を判定し、config blob を読んで構造を復元する。`layers[]` 全体を scan して Run / Record の意味を推測しない。
 
-### 12.2 Rust core: `ommx::experiment`
+Load 時の検証:
 
-`rust/ommx/src/experiment.rs` を新設し、`lib.rs` に `pub mod experiment;` を追加する。`Experiment` は構築時に `&LocalRegistry` を保持し、`log_*` のたびに BlobStore へ書き込む。Rust core では `Experiment` の lifetime と Rust value の lifetime を合わせ、commit は `Experiment` を consume する。`Run<'exp>` は親 `Experiment` を immutable borrow し、複数の Run を同時に生成できる。Experiment state への書き込みは close 時に Mutex で同期する。
+- config media type が `application/org.ommx.v1.experiment.config+json` である。
+- config `status` は `finished` である。`failed` / `crashed` などの recovery artifact は通常の `SealedExperiment` として読まない。
+- config に書かれた Record descriptor は `org.ommx.record.name` annotation を持つ。
+- descriptor が指す blob はその Local Registry に存在し、size が一致する。
+- Run parameter table が config に存在しない run id を参照する場合は error にする。
 
-| 型 | 役割 |
-|---|---|
-| `Experiment<'reg>` | `&'reg LocalRegistry` + `Mutex<UnsealedExperimentState<'reg>>`。mutable session handle |
-| `SealedExperiment` | commit 済み `LocalArtifact` を持つ immutable session handle |
-| `Run<'exp, 'reg>` | `&'exp Experiment<'reg>` + run_id, run space records, parameters。実行中の mutable handle |
-| `UnsealedExperimentState`（private） | image name, experiment space records, `BTreeMap<run_id, RunEntry>`, next run id |
-| `RunEntry`（private） | close 済み logical Run。run_id, run space records, parameters |
-| `RecordSpace` enum | `experiment` / `run(run_id)` |
-
-API:
-
-- `Experiment::new(Name)`（default Local Registry を開く） / `Experiment::with_registry(&LocalRegistry, Name)`（テスト用に registry を差し替え可能）。`Name` は `Named(ImageRef)` / `Anonymous` を持つ Experiment 作成時の名前指定で、作成時に具体的な `ImageRef` へ解決される。
-- `Experiment::log_record` / `log_json` / `log_instance` / `log_solution` / `log_sample_set`（experiment space、`&self`。内部 state 更新は Mutex で同期）
-- `Experiment::run(&self) -> Run<'_>`（`run_id` を 0-based で採番し、Run lifecycle 中は Experiment を immutable borrow する）
-- `Experiment::commit(self) -> SealedExperiment`
-- `SealedExperiment::artifact() -> LocalArtifact`
-- `SealedExperiment::into_artifact(self) -> LocalArtifact`
-- `Run::run_id()`、`Run::log_parameter`、`Run::log_record` / `log_json` / `log_instance` / `log_solution` / `log_sample_set`（run space）、`Run::finish(self)`
-
-挙動:
-
-- `log_*` は payload を即 `FileBlobStore::put_bytes` で BlobStore に書き、戻り値から組んだ `StoredDescriptor` を Record descriptor list に push する。payload bytes は in-memory に残さない。同じ digest の blob は BlobStore で物理 dedup されるが、Record descriptor list はユーザーの `log_*` 呼び出し順と重複を保持する。
-- `Run::log_parameter` は `bool`、`int64`、`float64`、`string` の table scalar のみを受け付け、実行中の `Run` 内の parameter map を upsert する。Parameter は Record ではなく、commit 時に column-oriented Run parameter table JSON として materialize する。column type は commit 時に確定し、`int64 -> float64` の昇格だけを許す。
-- Rust core でも複数の `Run<'_>` handle を同時に開ける。Run-scoped Record / parameter は Run 側の local state に入り、Experiment state への書き込みは `finish(self)` の close 時だけ行う。
-- `Run::finish(self)` は Run handle を消費する。終了済み Run に後から Record を追加する経路は Rust core では型で作らない。
-- `Experiment.state.runs` は `Run<'exp>` handle ではなく `BTreeMap<run_id, RunEntry>` を持つ。`Run<'exp>` は親 Experiment への参照を含む実行中 handle であり、`RunEntry` は commit 時に parameter table / record index へ投影される lifetime-free な logical Run row である。close 順ではなく `run_id` 順で materialize する。
-- close されていない live Run が残っている間、`commit(self)` は `Experiment` の move を必要とするため Rust の borrow checker により呼べない。drop された未 close Run の local state は Experiment に反映されず、CAS に書かれた blob は orphan blob として GC に委ねる。
-- `commit(self)` は unsealed `Experiment` を消費し、`SealedExperiment` を返す。commit 済み Experiment への `log_*` / `run()` 経路は Rust core では型で作らない。
-- error は `crate::bail!` / `crate::error!` fail-site macro を使う。
-
-### 12.3 Artifact への写像と新規 primitive
-
-`log_*` は `ArtifactDraft` と同じく「OMMX 側の保存済み descriptor は Local Registry に保存済み blob への参照である」という不変条件に従う。ただしこれは `oci_spec::image::Descriptor` の不変条件ではないため、Rust core では `StoredDescriptor` newtype で表す。payload を BlobStore に CAS blob として書き、digest / size 検証を通った descriptor だけを `StoredDescriptor` に昇格させる。
-
-`commit()` は次を行う:
-
-1. Run parameter table JSON を Store し、`StoredDescriptor` を得る。
-2. Experiment config JSON を Store し、config descriptor を得る。config には Experiment-space Record、Run list、Run ごとの Record、Run parameter table descriptor を保存する。
-3. Experiment config descriptor を OCI config とし、全 Record descriptor + aggregate layer descriptor を `layers[]` として `UnsealedArtifact` を作る。
-4. `seal_artifact` で root manifest blob を Store し、`SealedArtifact` を得る。
-5. `publish_manifest_ref` で root descriptor を IndexStore の ref に対応づける。
-
-Experiment は構築時点で `Name` を具体的な `ImageRef` に解決し、commit 時はその ref に publish する。Experiment name と Image Name を別々に持つと、Artifact としての実体の識別子と実験管理上の識別子が分岐するため、OMMX Experiment では解決済み Image Name を唯一の名前として扱う。`Name::Anonymous` は `LocalRegistry::synthesize_anonymous_experiment_image_name()` により `<registry-id8>.ommx.local/experiment:<timestamp>-<nonce>` 形式の `ImageRef` に解決される。
-
-この実装では、内部 state は `StoredDescriptor` を「Local Registry に保存済み blob への参照」として扱う。一方、manifest / archive / Python API に出す値は通常の `oci_spec::image::Descriptor` である。`StoredDescriptor` の作成経路は Local Registry の blob 書き込み / 検証後に限定し、作成後は `Deref<Target = Descriptor>` によって通常の descriptor として読める。root manifest については `StoredDescriptor` ではなく `SealedArtifact` として表し、`publish_manifest_ref` / `replace_manifest_ref` は `SealedArtifact` だけを受け取る。ArtifactDraft と Experiment はどちらも、payload 追加時に component blob を Store し、commit 時には unsealed state から root manifest を Seal してから ref に Publish する。
-
-既存 ref との衝突処理は Store / Seal / Unsealed state の属性ではなく、IndexStore に root descriptor を対応づける publish 時の操作である。そのため data model としての `ConflictPolicy` は持たず、通常の `commit()` は既存 ref が別 digest を指していれば conflict とし、ref を明示的に動かす場合は `commit_replace()` / `replace_manifest_ref()` のような別操作として扱う。
-
-byte-level で同一の payload は CAS で 1 物理 blob に共有される（§7.2）。論理 Record は `(space, run_id, media type, name)` 単位なので、複数 Run が同じ `name`・同じ bytes の Record を持つ場合でも `run_id` が異なれば別 Record として両立し、同じ digest を annotations 違い（`org.ommx.experiment.run_id` 等）の複数 descriptor が指す。したがって `commit()` は manifest `layers[]` には Record ごとの全 descriptor を載せる。BlobStore 上の実体は digest で自然に de-dup され、component blob の存在は `StoredDescriptor` の不変条件として表す。
-
-Experiment config JSON:
-
-| Key | Value |
-|---|---|
-| `status` | `finished` |
-| `records` | Experiment-space Record descriptor list |
-| `runs` | Run list |
-| `run_parameters` | Run parameter table descriptor |
-
-Record layer（`log_*` 時に descriptor へ付与）:
+Record layer annotations:
 
 | Annotation | 内容 |
 |---|---|
@@ -867,26 +739,163 @@ Record layer（`log_*` 時に descriptor へ付与）:
 | `org.ommx.experiment.run_id` | run space のみ |
 | `org.ommx.record.name` | Record name |
 
-Record media type は descriptor の `mediaType` field に置く。`instance` / `solution` / `sample_set` は `application/org.ommx.v1.*`、JSON payload は `application/json`、caller-defined payload は caller が指定した media type を使う。
+Run parameter table は column-oriented JSON として aggregate layer に保存する。column type は commit 時に確定し、`int64 -> float64` の昇格だけを許す。それ以外の型混在は commit error とする。欠損 cell は JSON `null` ではなく、該当 `(run_id, parameter_name)` entry が存在しないことで表す。
 
-aggregate layer（loader は Experiment config の descriptor 参照から読む。`org.ommx.experiment.space` を持たないので Record ではない）:
+### 10.3 Python SDK
 
-| Layer | media type | layer annotation |
-|---|---|---|
-| Run parameter table JSON | `application/org.ommx.v1.experiment.run-parameters+json` | `org.ommx.experiment.layer=run-parameters` |
+実装済み:
 
-OCI manifest descriptor の media type と `artifactType` は既存 Artifact 仕様のまま（`application/vnd.oci.image.manifest.v1+json` / `application/org.ommx.v1.artifact`）。
+- `ommx.experiment.Experiment` / `Run` / `SealedRun`。
+- `Experiment()` は default Local Registry 上に anonymous Experiment を作る。名前を指定する場合は `Experiment(image_name)` とする。
+- `Experiment.with_temp_local_registry()` は Python test / example 用の一時 Local Registry を持つ Experiment を作る。一時 registry は、その Experiment から commit された `Artifact` や `Experiment.from_artifact(...)` でロードされた Experiment が生きている間保持される。
+- `with Experiment(...) as exp:` は正常終了時に自動 commit する。例外終了時は commit しない。
+- `with exp.run() as run:` は正常終了時に Run を finish する。例外終了時は Run を abandon し、Experiment state に反映しない。
+- `Experiment.commit() -> Artifact`。
+- `Experiment.artifact` は commit 後だけ available。commit 前アクセスは error。
+- `Experiment.load(image_name)` は default Local Registry の committed Experiment Artifact を読む。
+- `Experiment.from_artifact(artifact)` は既存 `Artifact` を committed Experiment として解釈する。
+- `Experiment.experiment_records` は Experiment-space Record descriptors を返す。
+- `Experiment.runs` は `SealedRun` list を返す。
+- `SealedRun.records` は Run-space Record descriptors を返す。
+- `Experiment.run_parameters_df()` は pandas DataFrame を返す。parameter を持たない完了済み Run も index row として残す。
 
-### 12.4 テスト
+Python binding では、Rust lifetime を Python object model に露出できないため、`ExperimentDyn` / `RunDyn` / `LocalArtifactDyn` / `LocalRegistryHandle` を使う。`ExperimentDyn` は registry owner と lifecycle state を持ち、open Run count を追跡する。open Run が残っている間の commit は error にする。`RunDyn` は drop された live Run を abandon し、`finish(self)` では Run local state を parent Experiment に書き戻す。
 
-`experiment.rs` の `#[cfg(test)]` で次を検証する。
+`PyRun` は Python object が残ったまま Rust の `RunDyn::finish(self)` を呼ぶ必要があるため、内部に `Option<RunDyn>` を持つ。`Some` は open Run、`None` は finish / abandon 済みの handle を表す。
 
-- run lifecycle（`run()` での `run_id` 採番、`finish()` による close 済み Run の記録）
-- `log_*` 時点で payload が temp registry（`with_registry`）の BlobStore に書かれること、Record descriptor list が log 順と重複を保持すること
-- `Run::log_parameter` が scalar parameter を Run parameter table として materialize し、同一 parameter name を upsert すること
-- `commit()` 後の Experiment config / Record layer annotations / aggregate layer
-- `commit(self)` が Experiment を consume するため、commit 後の `log_*` / `run()` 経路が Rust core では型として作れないこと
+### 10.4 テスト済みの重要条件
 
-### 12.5 後続イテレーション
+Rust tests:
 
-Python SDK への PyO3 expose（`ommx.experiment` の `Experiment` / `Run` / context manager）、失敗時処理（3.4 の BlobStore 逐次 autosave / recovery manifest / autosave metadata）、`get_run_table` view API、`Experiment.load()`、trace、fork / lineage、`log_solve` / `log_sample` と diagnostics、GC は本計画のあとに追加する。
+- run id 採番、複数 Run の同時 open、finish による close 済み Run の記録。
+- log 時点で BlobStore に payload が保存されること。
+- Record descriptor list が保存順と重複を保持すること。
+- byte-identical Record が digest を共有しつつ、descriptor / Record としては別に保持されること。
+- scalar parameter の materialization、`int64 -> float64` 昇格、型混在 error、非有限 float rejection。
+- committed Artifact の config / Record layer annotation / aggregate layer。
+- config-based Experiment load、`status != finished` の rejection、Run parameter table が未知 run id を参照する場合の rejection。
+- dynamic Experiment が一時 Local Registry を保持し、open Run を持つ commit を拒否し、unfinished Run drop を abandon として扱うこと。
+
+Python tests:
+
+- `Experiment.with_temp_local_registry()` を使った Experiment / Run / Record / parameter / commit / load。
+- Experiment context manager 正常終了時の auto commit。
+- Experiment context manager 例外終了時に commit しないこと。
+- Run context manager 例外終了時に finish しないこと。
+- temp registry が Experiment drop 後も derived Artifact / loaded Experiment とともに生きること。
+- Python int が `int64` を超える場合の error。
+- `run_parameters_df()` が parameterless completed Run を index row として保持すること。
+
+## 11. 残り設計事項
+
+### 11.1 Failed recovery / autosave metadata
+
+Blob 本体は既に `log_*` 時点で BlobStore に逐次保存される。一方、process crash や Python context manager 例外時に、どの Record / Run / parameter がどの blob に対応していたかを復元する metadata は未実装である。
+
+残作業:
+
+- uncommitted Experiment state の autosave metadata format。
+- 例外終了時に `<registry-id8>.ommx.local/crashed:<timestamp>-<nonce>` のような reserved ref へ recovery artifact を publish するか。
+- recovery artifact の config `status` と、通常の `Experiment.load(...)` からは読まない UX。
+- recovery command / inspector の API。
+- orphan blob と autosave metadata の retention policy。
+
+### 11.2 Fork / lineage / run deletion
+
+`subject` を使った parent linkage、`Experiment.fork(...)`、`parent()`、`history()`、`diff(other)` は未実装である。保存済み Experiment に Run を追加する操作は、既存 Artifact を mutable に戻すのではなく、loaded Experiment view から新しい unsealed session を作り、parent を `subject` に持つ child Artifact として commit する。
+
+残作業:
+
+- forked session の名前 / tag 解釈。
+- parent の Record / Run / parameter を child state へどう投影するか。
+- new run id の採番規則。
+- run deletion を「child manifest から run を省く操作」として扱う API。
+- parent lineage と GC retention の関係。
+
+### 11.3 Adapter execution / diagnostics
+
+`run.log_solve(...)` / `run.log_sample(...)`、diagnostics sink protocol、adapter diagnostics Record は未実装である。
+
+残作業:
+
+- `DiagnosticsSink` / `DiagnosticCollector` / `DiagnosticEntry` の型と media type validation。
+- Adapter が diagnostics protocol に対応しているかの検出方法。
+- scalar kwargs を Run parameter table に記録する policy。
+- `Solution` / `SampleSet` の Record name と annotations。
+- solver native log、termination report、gap timeline などをどの media type と Record 名で保存するか。
+- OTel event には diagnostics payload 本体ではなく Record reference / summary だけを持たせる実装。
+
+### 11.4 Run attributes / environment
+
+Run status、elapsed time、実行環境 OS / package versions / backend solver version などは未実装である。この PR では Run attributes aggregate payload を導入していない。
+
+残作業:
+
+- Run status を Artifact data model に持つか、OTel span status だけに寄せるか。
+- 実行環境情報を Run の属性として保存する場合の schema。
+- 環境情報を Record として持たせるか、config / aggregate payload として持たせるか。
+- Python / Rust で取得できる情報の差分。
+
+### 11.5 OTel trace / renderer
+
+Experiment core はまだ OTel span / event / trace layer を生成しない。`trace="auto"` / `trace="required"` / `trace=False`、OTLP JSON trace layer、post-hoc renderer は未実装である。
+
+残作業:
+
+- Experiment / Run / solver / artifact build / load / push span schema。
+- `ommx.record.added` / `ommx.run.parameter.recorded` events。
+- global `TracerProvider` を暗黙に install しないことの tests。
+- trace layer media type と `artifact.get_trace()`。
+- text tree / Chrome trace export renderer。
+
+### 11.6 GC
+
+Local Registry GC は未実装である。BlobStore に存在するが IndexStore ref / manifest から到達できない orphan blob は、現時点では残り得る。
+
+残作業:
+
+- Local Registry refs、failed recovery refs、protected digests、subject chain からの到達可能性解析。
+- orphan blob / unreferenced manifest / autosave metadata の dry-run report。
+- retention / grace period。
+- archive / OCI directory の到達可能性解析。
+- remote registry は deletion capability を検出できる範囲で dry-run を優先する。
+
+### 11.7 Legacy MINTO import
+
+`org.minto.*` annotation を読む compatibility loader は未実装である。必要なら、OMMX core に持つか migration tool として外に出すかを決める。
+
+## 12. 項目別実装ステータス
+
+実装順を大きな工程名として固定せず、設計項目ごとに現在の状態を記録する。状態は本ファイル上の作業メモであり、実装が進んだら Sphinx docs / Rust API reference / Python API reference / issue に分解していく。
+
+| 項目 | 状態 | 現状 | 残作業 |
+|---|---|---|---|
+| Artifact manifest / Local Registry v3 | 実装済み | SQLite-backed Local Registry、BlobStore、Image Manifest、`StoredDescriptor`、`SealedArtifact`、`UnsealedArtifact` は実装済み | 本ファイルからは詳細を削除済み。正式 docs / rustdoc を正本にする |
+| Experiment Artifact profile | 実装済み | `config.mediaType=application/org.ommx.v1.experiment.config+json` で Experiment を判定する。top-level `artifactType` は `application/org.ommx.v1.artifact` のまま | Wire format の仕様文書化 |
+| Experiment config JSON | 実装済み | `status`、Experiment-space Record descriptors、Run list、Run-scoped Record descriptors、Run parameter table descriptor を保存する | schema evolution policy、unknown field / versioning の扱い |
+| Config status validation | 実装済み | `SealedExperiment::from_artifact` は `status=finished` だけを通常の sealed Experiment として読む | failed / crashed recovery artifact の別 loader |
+| Rust `Experiment<'reg>` / `Run<'exp, 'reg>` lifecycle | 実装済み | Rust lifetime で registry / Experiment / Run lifetime を表す。`Run::finish(self)` と `Experiment::commit(self)` は handle を消費する | 追加なし。API reference へ移す |
+| Rust `SealedExperiment` view | 実装済み | Config から Experiment-space Records、Run list、Run-scoped Records、Run parameter cells を復元する | higher-level table / summary views |
+| Dynamic lifetime handles | 実装済み | `ExperimentDyn` / `RunDyn` / `LocalArtifactDyn` / `LocalRegistryHandle` で Python 向けに owner を保持する | 名前 / rustdoc の整理、必要なら public surface の最小化 |
+| Python `ommx.experiment` module | 実装済み | `Experiment` / `Run` / `SealedRun` を公開。context manager、commit、load、from_artifact、temp registry を提供する | user guide / examples |
+| Python temporary Local Registry | 実装済み | `Experiment.with_temp_local_registry()` が temp registry owner を保持し、derived Artifact / loaded Experiment に寿命を伝播する | なし。API docs へ移す |
+| Experiment / Run Record logging | 実装済み | `log_record` / `log_json` / `log_instance` / `log_solution` / `log_sample_set` を Experiment space / Run space に追加する | user-defined media type の docs、codec convention |
+| Record descriptor list semantics | 実装済み | Record descriptor list は保存順と重複を保持する。dedup は BlobStore の digest 単位に限定する | diff view での表示方針 |
+| Run parameter table | 実装済み | `bool` / `int64` / `float64` / `string` の scalar cell を column-oriented JSON に materialize する。`int64 -> float64` だけ昇格する | Arrow / Parquet など別 physical format は必要が出るまで見送り |
+| Python `run_parameters_df()` | 実装済み | pandas DataFrame を返し、parameter を持たない完了済み Run も index row として保持する | column dtype の細部、summary / filtering API |
+| Open Run commit rejection | 実装済み | Python dynamic handle では open Run count を持ち、open Run が残る commit を拒否する | error message / docs |
+| Run exception handling in Python | 実装済み | `with run:` の例外終了では Run を abandon し、Experiment state へ書き戻さない | 例外時 diagnostics / partial records の recovery policy |
+| Experiment context manager auto commit | 実装済み | Python `with Experiment(...)` は正常終了時に auto commit し、例外終了時は commit しない | failed recovery artifact と接続するか |
+| Failed recovery / autosave metadata | 未実装 | Blob 本体は log 時点で保存されるが、uncommitted state を復元する metadata はない | metadata format、reserved ref、recovery command、retention policy |
+| Recovery artifact | 未実装 | `status != finished` は通常 load から拒否するところまで実装済み | `crashed:<timestamp>-<nonce>` ref、`status=failed` config、明示 loader / inspector |
+| Fork / lineage | 未実装 | `subject` を使う方針のみ | `parent()`、`history()`、`Experiment.fork(...)`、child commit、run id 採番 |
+| Run deletion as child projection | 未実装 | 設計方針のみ | child Artifact から run descriptors / parameter row を省く API |
+| Adapter `log_solve` / `log_sample` | 未実装 | 方針のみ | Adapter protocol integration、kwargs logging、Record name / annotations |
+| Diagnostics sink protocol | 未実装 | OTel ではなく Record / Artifact を正本にする方針のみ | `DiagnosticsSink` / `DiagnosticCollector` / `DiagnosticEntry`、media type、truncation / compression policy |
+| Run attributes / environment | 未実装 | この PR では aggregate payload を導入しない方針 | status、elapsed time、OS / package / solver version の schema |
+| OTel span / event integration | 未実装 | schema 方針のみ | Experiment / Run / solver / artifact operation spans、record / parameter events |
+| Trace layer | 未実装 | OTLP JSON layer 方針のみ | media type、capture mode、`artifact.get_trace()` |
+| Trace renderer | 未実装 | renderer を OTel signal の derived view とする方針のみ | text tree、Chrome trace export、streaming renderer |
+| GC | 未実装 | GC root / reachability 方針のみ | Local Registry dry-run / report / delete、orphan blob retention、archive / remote registry handling |
+| Legacy MINTO import | 未実装 | 新規書き込みでは `org.minto.*` を使わない方針 | compatibility loader を core に持つか migration tool にするか |
+| Documentation integration | 部分実装 | API reference は stubgen で更新済み。本ファイルは一時文書 | Sphinx guide、Rust API docs、wire format docs へ分割し、本ファイルを削除する |
