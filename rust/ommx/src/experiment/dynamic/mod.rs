@@ -8,13 +8,13 @@
 //! the required registry / parent owners alive at runtime.
 
 use super::record::{encode_json, json_media_type, store_record_descriptor, RecordSpace};
-use super::{Name, RunParameterCell, SealedExperiment, SealedRun, UnsealedExperimentState};
-use crate::artifact::local_registry::StoredDescriptor;
-use crate::artifact::ImageRef;
+use super::{Name, RunEntry, RunParameterCell, SealedExperiment, UnsealedExperimentState};
+use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
+use crate::artifact::{ImageRef, LocalArtifact};
 use crate::artifact::{LocalArtifactDyn, LocalRegistryHandle};
 use crate::{Instance, SampleSet, Solution};
 use anyhow::Result;
-use oci_spec::image::MediaType;
+use oci_spec::image::{Descriptor, MediaType};
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -35,9 +35,6 @@ pub struct ExperimentDyn {
 
 #[derive(Debug)]
 struct ExperimentDynState {
-    // `lifecycle` stores registry-backed descriptors whose lifetime is
-    // erased to `'static`; keep it before `registry_handle` so it is
-    // dropped first.
     lifecycle: ExperimentDynLifecycle,
     registry_handle: LocalRegistryHandle,
 }
@@ -45,14 +42,53 @@ struct ExperimentDynState {
 #[derive(Debug)]
 enum ExperimentDynLifecycle {
     Unsealed {
-        state: Option<UnsealedExperimentState<'static>>,
+        state: Option<UnsealedExperimentDynState>,
         open_runs: usize,
     },
-    Sealed(SealedExperiment<'static>),
+    Sealed(SealedExperimentDynState),
     Failed {
         image_name: ImageRef,
         reason: String,
     },
+}
+
+#[derive(Debug)]
+struct UnsealedExperimentDynState {
+    image_name: ImageRef,
+    records: Vec<Descriptor>,
+    runs: BTreeMap<u64, RunEntryDyn>,
+    next_run_id: u64,
+}
+
+#[derive(Debug)]
+struct RunEntryDyn {
+    run_id: u64,
+    records: Vec<Descriptor>,
+    parameters: super::parameter::ParameterSet,
+}
+
+#[derive(Debug, Clone)]
+struct SealedExperimentDynState {
+    artifact: LocalArtifactDyn,
+    records: Vec<Descriptor>,
+    runs: BTreeMap<u64, SealedRunDyn>,
+    run_parameters: super::parameter::RunParameterTable,
+}
+
+#[derive(Debug, Clone)]
+pub struct SealedRunDyn {
+    run_id: u64,
+    records: Vec<Descriptor>,
+}
+
+impl SealedRunDyn {
+    pub fn run_id(&self) -> u64 {
+        self.run_id
+    }
+
+    pub fn records(&self) -> &[Descriptor] {
+        &self.records
+    }
 }
 
 impl ExperimentDyn {
@@ -72,7 +108,7 @@ impl ExperimentDyn {
         Ok(Self {
             state: Arc::new(Mutex::new(ExperimentDynState {
                 lifecycle: ExperimentDynLifecycle::Unsealed {
-                    state: Some(UnsealedExperimentState {
+                    state: Some(UnsealedExperimentDynState {
                         image_name,
                         records: Vec::new(),
                         runs: BTreeMap::new(),
@@ -90,11 +126,12 @@ impl ExperimentDyn {
     }
 
     pub fn from_artifact(artifact: LocalArtifactDyn) -> Result<Self> {
-        let sealed = SealedExperiment::from_artifact(artifact.local_artifact().clone())?;
+        let sealed = SealedExperimentDynState::from_artifact(artifact)?;
+        let registry_handle = sealed.registry_handle();
         Ok(Self {
             state: Arc::new(Mutex::new(ExperimentDynState {
                 lifecycle: ExperimentDynLifecycle::Sealed(sealed),
-                registry_handle: artifact.registry_handle(),
+                registry_handle,
             })),
         })
     }
@@ -203,7 +240,7 @@ impl ExperimentDyn {
         };
         let artifact =
             LocalArtifactDyn::from_local_artifact(dyn_state.registry_handle.clone(), artifact);
-        let sealed = match SealedExperiment::from_artifact(artifact.local_artifact().clone()) {
+        let sealed = match SealedExperimentDynState::from_artifact(artifact.clone()) {
             Ok(sealed) => sealed,
             Err(error) => {
                 let reason = error.to_string();
@@ -220,26 +257,23 @@ impl ExperimentDyn {
         let ExperimentDynLifecycle::Sealed(sealed) = &dyn_state.lifecycle else {
             return bail_not_sealed(&dyn_state.lifecycle);
         };
-        Ok(LocalArtifactDyn::from_local_artifact(
-            dyn_state.registry_handle.clone(),
-            sealed.artifact(),
-        ))
+        Ok(sealed.artifact.clone())
     }
 
-    pub fn experiment_records(&self) -> Result<Vec<StoredDescriptor<'static>>> {
+    pub fn experiment_records(&self) -> Result<Vec<Descriptor>> {
         let dyn_state = lock_experiment_state(&self.state);
         let ExperimentDynLifecycle::Sealed(sealed) = &dyn_state.lifecycle else {
             return bail_not_sealed(&dyn_state.lifecycle);
         };
-        Ok(sealed.experiment_records().to_vec())
+        Ok(sealed.records.clone())
     }
 
-    pub fn runs(&self) -> Result<Vec<SealedRun<'static>>> {
+    pub fn runs(&self) -> Result<Vec<SealedRunDyn>> {
         let dyn_state = lock_experiment_state(&self.state);
         let ExperimentDynLifecycle::Sealed(sealed) = &dyn_state.lifecycle else {
             return bail_not_sealed(&dyn_state.lifecycle);
         };
-        Ok(sealed.runs().cloned().collect())
+        Ok(sealed.runs.values().cloned().collect())
     }
 
     pub fn run_parameter_cells(&self) -> Result<Vec<RunParameterCell>> {
@@ -247,8 +281,94 @@ impl ExperimentDyn {
         let ExperimentDynLifecycle::Sealed(sealed) = &dyn_state.lifecycle else {
             return bail_not_sealed(&dyn_state.lifecycle);
         };
-        Ok(sealed.run_parameter_cells())
+        Ok(sealed.run_parameters.cells())
     }
+}
+
+impl UnsealedExperimentDynState {
+    fn commit<'reg>(self, registry: &'reg LocalRegistry) -> Result<LocalArtifact<'reg>> {
+        self.into_unsealed_state(registry)?.commit(registry)
+    }
+
+    fn into_unsealed_state<'reg>(
+        self,
+        registry: &'reg LocalRegistry,
+    ) -> Result<UnsealedExperimentState<'reg>> {
+        Ok(UnsealedExperimentState {
+            image_name: self.image_name,
+            records: stored_descriptors(registry, self.records)?,
+            runs: self
+                .runs
+                .into_iter()
+                .map(|(run_id, run)| {
+                    Ok((
+                        run_id,
+                        RunEntry {
+                            run_id: run.run_id,
+                            records: stored_descriptors(registry, run.records)?,
+                            parameters: run.parameters,
+                        },
+                    ))
+                })
+                .collect::<Result<BTreeMap<_, _>>>()?,
+            next_run_id: self.next_run_id,
+        })
+    }
+}
+
+impl SealedExperimentDynState {
+    fn from_artifact(artifact: LocalArtifactDyn) -> Result<Self> {
+        let (records, runs, run_parameters) = {
+            let sealed = SealedExperiment::from_artifact(artifact.as_local_artifact())?;
+            let records = descriptors(sealed.experiment_records());
+            let runs = sealed
+                .runs()
+                .map(|run| {
+                    (
+                        run.run_id(),
+                        SealedRunDyn {
+                            run_id: run.run_id(),
+                            records: descriptors(run.records()),
+                        },
+                    )
+                })
+                .collect();
+            let run_parameters = sealed.run_parameters.clone();
+            (records, runs, run_parameters)
+        };
+        Ok(Self {
+            artifact,
+            records,
+            runs,
+            run_parameters,
+        })
+    }
+
+    fn registry_handle(&self) -> LocalRegistryHandle {
+        self.artifact.registry_handle()
+    }
+
+    fn image_name(&self) -> &ImageRef {
+        self.artifact.image_name()
+    }
+}
+
+fn descriptors(records: &[StoredDescriptor<'_>]) -> Vec<Descriptor> {
+    records
+        .iter()
+        .cloned()
+        .map(Descriptor::from)
+        .collect::<Vec<_>>()
+}
+
+fn stored_descriptors<'reg>(
+    registry: &'reg LocalRegistry,
+    records: Vec<Descriptor>,
+) -> Result<Vec<StoredDescriptor<'reg>>> {
+    records
+        .into_iter()
+        .map(|descriptor| registry.stored_descriptor(descriptor))
+        .collect()
 }
 
 fn lock_experiment_state(state: &Mutex<ExperimentDynState>) -> MutexGuard<'_, ExperimentDynState> {
@@ -266,7 +386,7 @@ fn store_experiment_record_descriptor(
     name: &str,
     media_type: MediaType,
     bytes: &[u8],
-) -> Result<StoredDescriptor<'static>> {
+) -> Result<Descriptor> {
     ensure_unsealed_for_record_write(state)?;
     let descriptor = store_record_descriptor(
         state.registry_handle.registry(),
@@ -275,7 +395,7 @@ fn store_experiment_record_descriptor(
         media_type,
         bytes,
     )?;
-    Ok(erase_stored_descriptor_lifetime(descriptor))
+    Ok(Descriptor::from(descriptor))
 }
 
 fn store_run_record_descriptor(
@@ -284,7 +404,7 @@ fn store_run_record_descriptor(
     name: &str,
     media_type: MediaType,
     bytes: &[u8],
-) -> Result<StoredDescriptor<'static>> {
+) -> Result<Descriptor> {
     ensure_unsealed_for_record_write(state)?;
     let descriptor = store_record_descriptor(
         state.registry_handle.registry(),
@@ -293,7 +413,7 @@ fn store_run_record_descriptor(
         media_type,
         bytes,
     )?;
-    Ok(erase_stored_descriptor_lifetime(descriptor))
+    Ok(Descriptor::from(descriptor))
 }
 
 fn ensure_unsealed_for_record_write(state: &ExperimentDynState) -> Result<()> {
@@ -333,14 +453,4 @@ fn bail_not_sealed<T>(lifecycle: &ExperimentDynLifecycle) -> Result<T> {
             crate::bail!("Experiment commit has failed: {reason}")
         }
     }
-}
-
-fn erase_stored_descriptor_lifetime<'reg>(
-    descriptor: StoredDescriptor<'reg>,
-) -> StoredDescriptor<'static> {
-    // `ExperimentDynState` owns the `LocalRegistryHandle` that
-    // produced this descriptor. Its lifecycle field is declared
-    // before the handle, so erased descriptors are dropped before the
-    // registry owner when the final shared state is dropped.
-    unsafe { std::mem::transmute::<StoredDescriptor<'reg>, StoredDescriptor<'static>>(descriptor) }
 }

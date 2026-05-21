@@ -58,7 +58,7 @@ mod sealed;
 #[cfg(test)]
 mod tests;
 
-pub use dynamic::{ExperimentDyn, RunDyn};
+pub use dynamic::{ExperimentDyn, RunDyn, SealedRunDyn};
 pub use parameter::{ParameterValue, RunParameterCell};
 pub use sealed::SealedRun;
 

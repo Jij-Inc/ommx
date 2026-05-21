@@ -226,7 +226,7 @@ impl PyArtifact {
     #[cfg(feature = "remote-artifact")]
     pub fn push(&mut self, py: Python<'_>) -> Result<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        self.inner.local_artifact().push()
+        self.inner.push()
     }
 
     /// Save the artifact as a `.ommx` OCI archive file at `path`.
@@ -239,7 +239,7 @@ impl PyArtifact {
     /// registry.
     pub fn save(&mut self, py: Python<'_>, path: PathBuf) -> Result<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        self.inner.local_artifact().save(&path)
+        self.inner.save(&path)
     }
 
     #[getter]

@@ -1,5 +1,5 @@
 use anyhow::Result;
-use oci_spec::image::{Descriptor, MediaType};
+use oci_spec::image::MediaType;
 use pyo3::{
     prelude::*,
     types::{PyBool, PyDict, PyFloat, PyInt, PyString},
@@ -92,7 +92,7 @@ impl PyExperiment {
             .inner
             .experiment_records()?
             .into_iter()
-            .map(|descriptor| PyDescriptor::from(Descriptor::from(descriptor)))
+            .map(PyDescriptor::from)
             .collect())
     }
 
@@ -373,7 +373,7 @@ impl pyo3_stub_gen::PyStubType for ParameterValueInput {
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust", name = "SealedRun")]
 #[derive(Clone)]
-pub struct PySealedRun(ommx::experiment::SealedRun<'static>);
+pub struct PySealedRun(ommx::experiment::SealedRunDyn);
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
@@ -389,7 +389,7 @@ impl PySealedRun {
             .records()
             .iter()
             .cloned()
-            .map(|descriptor| PyDescriptor::from(Descriptor::from(descriptor)))
+            .map(PyDescriptor::from)
             .collect()
     }
 

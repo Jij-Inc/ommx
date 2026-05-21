@@ -1,16 +1,16 @@
 //! Dynamic-lifetime Run handle.
 
+use super::super::parameter::ParameterSet;
 use super::super::record::{encode_json, json_media_type};
-use super::super::{ParameterSet, ParameterValue, RunEntry};
+use super::super::ParameterValue;
 use super::{
     bail_non_unsealed, lock_experiment_state, store_run_record_descriptor, ExperimentDyn,
-    ExperimentDynLifecycle, ExperimentDynState,
+    ExperimentDynLifecycle, ExperimentDynState, RunEntryDyn,
 };
-use crate::artifact::local_registry::StoredDescriptor;
 use crate::artifact::media_types;
 use crate::{Instance, SampleSet, Solution};
 use anyhow::Result;
-use oci_spec::image::MediaType;
+use oci_spec::image::{Descriptor, MediaType};
 use std::sync::{Arc, Mutex};
 
 /// Runtime-owned Run handle.
@@ -30,7 +30,7 @@ pub struct RunDyn {
 #[derive(Debug)]
 struct RunDynState {
     run_id: u64,
-    records: Vec<StoredDescriptor<'static>>,
+    records: Vec<Descriptor>,
     parameters: ParameterSet,
 }
 
@@ -130,7 +130,7 @@ impl RunDyn {
         }
         state.runs.insert(
             run.run_id,
-            RunEntry {
+            RunEntryDyn {
                 run_id: run.run_id,
                 records: run.records,
                 parameters: run.parameters,

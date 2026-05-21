@@ -15,6 +15,7 @@ use prost::Message;
 use serde::Serialize;
 use std::{
     collections::HashMap,
+    path::Path,
     str::FromStr,
     sync::{Arc, OnceLock},
 };
@@ -82,15 +83,18 @@ impl LocalRegistryHandle {
     }
 }
 
-/// [`LocalArtifact`] with runtime-managed registry ownership.
+/// Runtime-owned artifact handle for dynamic runtimes.
 ///
-/// The wrapped `LocalArtifact<'static>` may point at a temporary
-/// registry. The accompanying [`LocalRegistryHandle`] keeps that
-/// registry alive for as long as this value exists.
+/// This stores only owned artifact identity plus the registry owner.
+/// When an operation needs the lifetime-based [`LocalArtifact`] API, it
+/// reconstructs a short-lived `LocalArtifact<'_>` from the handle's
+/// current registry reference.
 #[derive(Debug, Clone)]
 pub struct LocalArtifactDyn {
-    artifact: LocalArtifact<'static>,
     registry_handle: LocalRegistryHandle,
+    image_name: ImageRef,
+    manifest_digest: Digest,
+    manifest_cache: Arc<OnceLock<LocalManifest>>,
 }
 
 impl LocalArtifactDyn {
@@ -112,19 +116,31 @@ impl LocalArtifactDyn {
         registry_handle: LocalRegistryHandle,
         artifact: LocalArtifact<'reg>,
     ) -> Self {
-        // The artifact was created from `registry_handle.registry()`.
-        // Store the handle next to the erased artifact so the borrowed
-        // registry remains alive for the artifact's runtime lifetime.
-        let artifact =
-            unsafe { std::mem::transmute::<LocalArtifact<'reg>, LocalArtifact<'static>>(artifact) };
+        let LocalArtifact {
+            registry,
+            image_name,
+            manifest_digest,
+            manifest_cache,
+        } = artifact;
+        debug_assert!(
+            std::ptr::eq(registry_handle.registry(), registry),
+            "LocalArtifactDyn must be built from the supplied registry handle",
+        );
         Self {
-            artifact,
             registry_handle,
+            image_name,
+            manifest_digest,
+            manifest_cache,
         }
     }
 
-    pub fn local_artifact(&self) -> &LocalArtifact<'static> {
-        &self.artifact
+    pub(crate) fn as_local_artifact(&self) -> LocalArtifact<'_> {
+        LocalArtifact {
+            registry: self.registry_handle.registry(),
+            image_name: self.image_name.clone(),
+            manifest_digest: self.manifest_digest.clone(),
+            manifest_cache: Arc::clone(&self.manifest_cache),
+        }
     }
 
     pub fn registry_handle(&self) -> LocalRegistryHandle {
@@ -132,19 +148,28 @@ impl LocalArtifactDyn {
     }
 
     pub fn image_name(&self) -> &ImageRef {
-        self.artifact.image_name()
+        &self.image_name
     }
 
     pub fn annotations(&self) -> Result<HashMap<String, String>> {
-        self.artifact.annotations()
+        self.as_local_artifact().annotations()
     }
 
     pub fn layers(&self) -> Result<Vec<Descriptor>> {
-        self.artifact.layers()
+        self.as_local_artifact().layers()
     }
 
     pub fn get_blob(&self, digest: &Digest) -> Result<Vec<u8>> {
-        self.artifact.get_blob(digest)
+        self.as_local_artifact().get_blob(digest)
+    }
+
+    pub fn save(&self, output: &Path) -> crate::Result<()> {
+        self.as_local_artifact().save(output)
+    }
+
+    #[cfg(feature = "remote-artifact")]
+    pub fn push(&self) -> crate::Result<()> {
+        self.as_local_artifact().push()
     }
 }
 
