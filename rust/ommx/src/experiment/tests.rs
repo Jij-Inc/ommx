@@ -125,8 +125,14 @@ fn log_writes_blob_to_blobstore_immediately() {
 
         let digest = with_unsealed_state(&experiment, |state| {
             let run = state.runs.get(&0).unwrap();
-            assert_eq!(run.records.len(), 1);
-            run.records[0].descriptor().digest().clone()
+            assert_eq!(run.records.iter().count(), 1);
+            run.records
+                .iter()
+                .next()
+                .unwrap()
+                .descriptor()
+                .digest()
+                .clone()
         });
         assert!(experiment.registry.blobs().exists(&digest).unwrap());
         Ok(())
@@ -146,7 +152,7 @@ fn log_upserts_same_space_media_type_name() {
         experiment.log_instance("dataset", &instance).unwrap();
 
         let json_digest = with_unsealed_state(&experiment, |state| {
-            assert_eq!(state.records.len(), 2);
+            assert_eq!(state.records.iter().count(), 2);
             state
                 .records
                 .iter()

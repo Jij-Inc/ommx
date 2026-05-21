@@ -1,7 +1,7 @@
 //! Dynamic-lifetime Run handle.
 
-use super::super::record::{encode_json, json_media_type, RecordRef};
-use super::super::{ParameterValue, RunEntry};
+use super::super::record::{encode_json, json_media_type, RecordSet};
+use super::super::{ParameterSet, ParameterValue, RunEntry};
 use super::{
     bail_non_unsealed, lock_experiment_state, store_run_record_ref, ExperimentDyn,
     ExperimentDynLifecycle, ExperimentDynState,
@@ -10,7 +10,6 @@ use crate::artifact::media_types;
 use crate::{Instance, SampleSet, Solution};
 use anyhow::Result;
 use oci_spec::image::MediaType;
-use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 /// Runtime-owned Run handle.
@@ -30,8 +29,8 @@ pub struct RunDyn {
 #[derive(Debug)]
 struct RunDynState {
     run_id: u64,
-    records: Vec<RecordRef<'static>>,
-    parameters: BTreeMap<String, ParameterValue>,
+    records: RecordSet<'static>,
+    parameters: ParameterSet,
 }
 
 impl ExperimentDyn {
@@ -59,8 +58,8 @@ impl RunDyn {
         Self {
             run_state: Some(RunDynState {
                 run_id,
-                records: Vec::new(),
-                parameters: BTreeMap::new(),
+                records: RecordSet::new(),
+                parameters: ParameterSet::new(),
             }),
             experiment_state,
         }
@@ -77,9 +76,7 @@ impl RunDyn {
     ) -> Result<()> {
         let name = name.into();
         let value = value.into();
-        value.validate_as_run_parameter(&name)?;
-        self.open_mut()?.parameters.insert(name, value);
-        Ok(())
+        self.open_mut()?.parameters.insert(name, value)
     }
 
     pub fn log_record(
@@ -93,7 +90,7 @@ impl RunDyn {
             let dyn_state = lock_experiment_state(&self.experiment_state);
             store_run_record_ref(&dyn_state, run_id, name, media_type, bytes.as_ref())?
         };
-        RecordRef::upsert_into(&mut self.open_mut()?.records, record_ref);
+        self.open_mut()?.records.upsert(record_ref);
         Ok(())
     }
 

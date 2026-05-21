@@ -39,12 +39,13 @@
 //! let artifact = exp.commit()?.into_artifact();
 //! ```
 //!
-//! The module is split by data terms: `run` contains `Run` and
-//! `RunEntry`, `record` contains `RecordRef`, `parameter` contains
-//! run-parameter table data, `config` contains the serialized Experiment
-//! structure, `sealed` contains read-only sealed Experiment data
-//! reconstructed from committed artifacts, and `artifact` maps the
-//! unsealed experiment state onto an OMMX Artifact.
+//! The module is split by data terms: `run` contains `Run` lifecycle
+//! operations, `record` contains `RecordRef` and record-set upsert
+//! rules, `parameter` contains parameter values, run-local parameter
+//! sets, and the committed run-parameter table, `config` contains the
+//! serialized Experiment structure, `sealed` contains read-only sealed
+//! Experiment data reconstructed from committed artifacts, and
+//! `artifact` maps the unsealed experiment state onto an OMMX Artifact.
 
 mod artifact;
 pub mod config;
@@ -67,7 +68,8 @@ use crate::artifact::{media_types, ImageRef, LocalArtifact};
 use crate::{Instance, SampleSet, Solution};
 use anyhow::Result;
 use oci_spec::image::MediaType;
-use record::{encode_json, json_media_type, store_record_ref, RecordSpace};
+use parameter::ParameterSet;
+use record::{encode_json, json_media_type, store_record_ref, RecordSet, RecordSpace};
 use std::collections::BTreeMap;
 use std::sync::{Mutex, MutexGuard};
 
@@ -144,8 +146,8 @@ impl From<ImageRef> for Name {
 pub struct Run<'exp, 'reg> {
     experiment: &'exp Experiment<'reg>,
     run_id: u64,
-    records: Vec<RecordRef<'reg>>,
-    parameters: BTreeMap<String, ParameterValue>,
+    records: RecordSet<'reg>,
+    parameters: ParameterSet,
 }
 
 /// A closed logical Run recorded in an unsealed Experiment.
@@ -158,8 +160,8 @@ pub struct Run<'exp, 'reg> {
 #[derive(Debug)]
 struct RunEntry<'reg> {
     run_id: u64,
-    records: Vec<RecordRef<'reg>>,
-    parameters: BTreeMap<String, ParameterValue>,
+    records: RecordSet<'reg>,
+    parameters: ParameterSet,
 }
 
 /// Mutable experiment state before the root manifest is sealed. A live
@@ -172,7 +174,7 @@ struct UnsealedExperimentState<'reg> {
     /// no separate experiment-name field in the artifact model.
     image_name: ImageRef,
     /// Experiment-space records.
-    records: Vec<RecordRef<'reg>>,
+    records: RecordSet<'reg>,
     runs: BTreeMap<u64, RunEntry<'reg>>,
     next_run_id: u64,
 }
@@ -212,7 +214,7 @@ impl<'reg> Experiment<'reg> {
             registry,
             state: Mutex::new(UnsealedExperimentState {
                 image_name,
-                records: Vec::new(),
+                records: RecordSet::new(),
                 runs: BTreeMap::new(),
                 next_run_id: 0,
             }),
@@ -233,8 +235,8 @@ impl<'reg> Experiment<'reg> {
         Ok(Run {
             experiment: self,
             run_id,
-            records: Vec::new(),
-            parameters: BTreeMap::new(),
+            records: RecordSet::new(),
+            parameters: ParameterSet::new(),
         })
     }
 
@@ -280,7 +282,7 @@ impl<'reg> Experiment<'reg> {
             bytes,
         )?;
         let mut state = self.lock_state();
-        RecordRef::upsert_into(&mut state.records, record_ref);
+        state.records.upsert(record_ref);
         Ok(())
     }
 

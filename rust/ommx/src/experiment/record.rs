@@ -67,20 +67,37 @@ impl<'reg> RecordRef<'reg> {
     pub fn media_type(&self) -> String {
         self.descriptor.media_type().to_string()
     }
+}
 
-    /// Build-phase upsert: a record with the same `(media_type, name)`
-    /// within a space replaces the previous one. Within one `Vec` the
-    /// space and `run_id` are already fixed, so `(media_type, name)` is
-    /// the remaining key.
-    pub(crate) fn upsert_into(records: &mut Vec<RecordRef<'reg>>, record_ref: RecordRef<'reg>) {
-        if let Some(existing) = records.iter_mut().find(|r| {
+/// A set of Records that belong to one fixed experiment/run space.
+#[derive(Debug, Clone, Default)]
+pub struct RecordSet<'reg> {
+    records: Vec<RecordRef<'reg>>,
+}
+
+impl<'reg> RecordSet<'reg> {
+    pub fn new() -> Self {
+        Self {
+            records: Vec::new(),
+        }
+    }
+
+    /// A record with the same `(media_type, name)` replaces the
+    /// previous one. Space and run id are fixed by the owner of this
+    /// collection.
+    pub fn upsert(&mut self, record_ref: RecordRef<'reg>) {
+        if let Some(existing) = self.records.iter_mut().find(|r| {
             r.descriptor().media_type() == record_ref.descriptor().media_type()
                 && r.name() == record_ref.name()
         }) {
             *existing = record_ref;
         } else {
-            records.push(record_ref);
+            self.records.push(record_ref);
         }
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &RecordRef<'reg>> {
+        self.records.iter()
     }
 }
 

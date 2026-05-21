@@ -73,7 +73,7 @@ impl ExperimentDyn {
                 lifecycle: ExperimentDynLifecycle::Unsealed {
                     state: Some(UnsealedExperimentState {
                         image_name,
-                        records: Vec::new(),
+                        records: super::record::RecordSet::new(),
                         runs: BTreeMap::new(),
                         next_run_id: 0,
                     }),
@@ -146,7 +146,7 @@ impl ExperimentDyn {
         let state = state
             .as_mut()
             .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
-        RecordRef::upsert_into(&mut state.records, record_ref);
+        state.records.upsert(record_ref);
         Ok(())
     }
 

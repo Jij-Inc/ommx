@@ -92,19 +92,19 @@ impl<'reg> UnsealedExperimentState<'reg> {
     }
 
     fn experiment_config(&self, run_parameters: &StoredDescriptor<'_>) -> ExperimentConfig {
-        ExperimentConfig::finished(
-            self.records.iter().map(record_descriptor).collect(),
-            self.runs
+        ExperimentConfig {
+            status: super::EXPERIMENT_STATUS_FINISHED.to_string(),
+            records: self.records.iter().map(record_descriptor).collect(),
+            runs: self
+                .runs
                 .values()
-                .map(|run| {
-                    ExperimentConfigRun::new(
-                        run.run_id,
-                        run.records.iter().map(record_descriptor).collect(),
-                    )
+                .map(|run| ExperimentConfigRun {
+                    run_id: run.run_id,
+                    records: run.records.iter().map(record_descriptor).collect(),
                 })
                 .collect(),
-            oci_spec::image::Descriptor::from(run_parameters.clone()),
-        )
+            run_parameters: oci_spec::image::Descriptor::from(run_parameters.clone()),
+        }
     }
 }
 

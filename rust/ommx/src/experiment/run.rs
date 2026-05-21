@@ -23,9 +23,7 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
     ) -> Result<()> {
         let name = name.into();
         let value = value.into();
-        value.validate_as_run_parameter(&name)?;
-        self.parameters.insert(name, value);
-        Ok(())
+        self.parameters.insert(name, value)
     }
 
     /// Record arbitrary bytes with an explicit OCI media type in this
@@ -76,7 +74,7 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
             media_type,
             bytes,
         )?;
-        super::RecordRef::upsert_into(&mut self.records, record_ref);
+        self.records.upsert(record_ref);
         Ok(())
     }
 

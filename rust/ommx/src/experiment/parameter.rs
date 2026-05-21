@@ -73,13 +73,36 @@ impl ParameterValue {
         }
     }
 
-    pub(crate) fn validate_as_run_parameter(&self, name: &str) -> Result<()> {
+    fn validate_as_run_parameter(&self, name: &str) -> Result<()> {
         match self {
             Self::Float(value) if !value.is_finite() => {
                 crate::bail!("Run parameter `{name}` float value must be finite")
             }
             _ => Ok(()),
         }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ParameterSet {
+    values: BTreeMap<String, ParameterValue>,
+}
+
+impl ParameterSet {
+    pub fn new() -> Self {
+        Self {
+            values: BTreeMap::new(),
+        }
+    }
+
+    pub fn insert(&mut self, name: String, value: ParameterValue) -> Result<()> {
+        value.validate_as_run_parameter(&name)?;
+        self.values.insert(name, value);
+        Ok(())
+    }
+
+    fn iter(&self) -> impl Iterator<Item = (&String, &ParameterValue)> {
+        self.values.iter()
     }
 }
 
@@ -92,7 +115,7 @@ impl RunParameterTable {
     pub fn from_runs<'reg>(runs: Values<'_, u64, RunEntry<'reg>>) -> Result<Self> {
         let mut columns = BTreeMap::new();
         for run in runs {
-            for (name, value) in &run.parameters {
+            for (name, value) in run.parameters.iter() {
                 columns
                     .entry(name.clone())
                     .or_insert_with(|| RunParameterColumn::from_value(value))
