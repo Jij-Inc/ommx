@@ -203,7 +203,14 @@ impl ExperimentDyn {
         };
         let artifact =
             LocalArtifactDyn::from_local_artifact(dyn_state.registry_handle.clone(), artifact);
-        let sealed = SealedExperiment::from_artifact(artifact.local_artifact().clone())?;
+        let sealed = match SealedExperiment::from_artifact(artifact.local_artifact().clone()) {
+            Ok(sealed) => sealed,
+            Err(error) => {
+                let reason = error.to_string();
+                dyn_state.lifecycle = ExperimentDynLifecycle::Failed { image_name, reason };
+                return Err(error);
+            }
+        };
         dyn_state.lifecycle = ExperimentDynLifecycle::Sealed(sealed);
         Ok(artifact)
     }
