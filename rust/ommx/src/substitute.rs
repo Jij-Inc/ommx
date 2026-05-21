@@ -13,6 +13,22 @@ pub use error::SubstitutionError;
 /// which is useful for optimization problems where some variables are dependent on others
 /// or where you want to eliminate certain variables by expressing them in terms of others.
 ///
+/// # Semantic Contract
+///
+/// Substitution is an algebraic rewrite. It replaces occurrences of the assigned
+/// variable with the right-hand-side function and records the assignment for
+/// dependent-variable reconstruction where the target type supports it. It does
+/// not, by itself, convert the substituted variable's kind or bound into
+/// additional constraints on the right-hand side.
+///
+/// For example, substituting a binary variable `x1` with `x2 + x3` does not
+/// automatically add `0 <= x2 + x3 <= 1`. Likewise, substituting an integer
+/// variable does not automatically enforce that the right-hand side is integral.
+/// Callers that need an optimization-model-preserving transformation must ensure
+/// those domain requirements themselves, either by constructing a
+/// domain-preserving encoding (as in binary encodings) or by adding suitable
+/// linking and bound constraints.
+///
 /// # Example
 ///
 /// Basic substitution of a variable in a linear function:

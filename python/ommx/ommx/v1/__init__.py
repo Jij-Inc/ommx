@@ -1685,6 +1685,17 @@ class Instance(UserAnnotationBase):
         Args:
             assignments: Mapping from decision variable IDs to expressions that
                 can be converted to :class:`Function`.
+
+        Important:
+            This method performs an algebraic rewrite. It does not automatically
+            translate the substituted variable's bound or kind into constraints
+            on the replacement expression. For example, substituting a binary
+            variable ``x`` with ``y + z`` does not add ``0 <= y + z <= 1``, and
+            substituting an integer variable does not ensure that the
+            replacement expression is integral. If the substitution must
+            preserve the optimization problem, provide a domain-preserving
+            encoding or add the required linking and bound constraints
+            explicitly.
         """
         rust_assignments = {}
         for variable_id, function in assignments.items():
