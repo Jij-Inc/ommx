@@ -1678,6 +1678,22 @@ class Instance(UserAnnotationBase):
                 return
         self.raw.log_encode(decision_variable_ids)
 
+    def substitute(self, assignments: Mapping[int, object]):
+        """
+        Substitute decision variables with function expressions in-place.
+
+        Args:
+            assignments: Mapping from decision variable IDs to expressions that
+                can be converted to :class:`Function`.
+        """
+        rust_assignments = {}
+        for variable_id, function in assignments.items():
+            if isinstance(function, Function):
+                rust_assignments[variable_id] = function.raw
+            else:
+                rust_assignments[variable_id] = Function(function).raw
+        self.raw.substitute(rust_assignments)
+
     def reduce_binary_power(self) -> bool:
         """
         Reduce binary powers in the instance.

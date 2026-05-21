@@ -5,7 +5,7 @@ use crate::{
 use anyhow::Result;
 use ommx::{ConstraintID, Evaluate, Message, NamedFunctionID, Parse, VariableID};
 use pyo3::{
-    exceptions::PyKeyError,
+    exceptions::{PyKeyError, PyValueError},
     prelude::*,
     types::{PyBytes, PyDict},
     Bound, PyAny,
@@ -311,6 +311,48 @@ impl Instance {
         for id in integer_variable_ids.iter() {
             self.0.log_encode((*id).into())?;
         }
+        Ok(())
+    }
+
+    /// Substitute decision variables with function expressions (in-place).
+    ///
+    /// Replaces each given decision variable with the provided function in the
+    /// objective and all active constraints. This is the general substitution
+    /// mechanism behind {meth}`~ommx.v1.Instance.log_encode`, exposed so that
+    /// users can implement their own integer encodings (e.g. unary, one-hot).
+    ///
+    /// **Args:**
+    /// - `assignments`: A dict mapping decision variable IDs to the function
+    ///   expressions that should replace them.
+    ///
+    /// Raises ``ValueError`` on cyclic or recursive assignments. Constraint
+    /// hints attached to constraints affected by the substitution are removed.
+    ///
+    /// # Examples
+    ///
+    /// Encode an integer variable x0 in range $[0, 3]$ into two binary
+    /// variables by hand, instead of using {meth}`~ommx.v1.Instance.log_encode`:
+    ///
+    /// ```python
+    /// >>> from ommx.v1 import Instance, DecisionVariable
+    /// >>> x = DecisionVariable.integer(0, lower=0, upper=3, name="x")
+    /// >>> b = [DecisionVariable.binary(i, name="b", subscripts=[i]) for i in (1, 2)]
+    /// >>> instance = Instance.from_components(
+    /// ...     decision_variables=[x, *b],
+    /// ...     objective=x,
+    /// ...     constraints=[],
+    /// ...     sense=Instance.MAXIMIZE,
+    /// ... )
+    /// >>> instance.substitute({0: b[0] + 2 * b[1]})
+    /// >>> instance.objective
+    /// Function(x1 + 2*x2)
+    /// ```
+    #[pyo3(signature = (assignments))]
+    pub fn substitute(&mut self, assignments: HashMap<u64, Function>) -> PyResult<()> {
+        let iter = assignments
+            .into_iter()
+            .map(|(id, f)| (VariableID::from(id), f.0));
+        ommx::substitute(&mut self.0, iter).map_err(|e| PyValueError::new_err(e.to_string()))?;
         Ok(())
     }
 
