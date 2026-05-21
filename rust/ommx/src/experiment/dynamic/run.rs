@@ -1,11 +1,10 @@
 //! Dynamic-lifetime Run handle.
 
-use super::super::record::{encode_json, json_media_type, upsert_record_ref, RecordRef};
-use super::super::run::validate_parameter_value;
+use super::super::record::{encode_json, json_media_type, RecordRef};
 use super::super::{ParameterValue, RunEntry};
 use super::{
-    bail_non_unsealed, lock_experiment_state, store_run_record_ref, ExperimentDynLifecycle,
-    ExperimentDynState,
+    bail_non_unsealed, lock_experiment_state, store_run_record_ref, ExperimentDyn,
+    ExperimentDynLifecycle, ExperimentDynState,
 };
 use crate::artifact::media_types;
 use crate::{Instance, SampleSet, Solution};
@@ -35,11 +34,28 @@ struct RunDynState {
     parameters: BTreeMap<String, ParameterValue>,
 }
 
+impl ExperimentDyn {
+    pub fn run(&self) -> Result<RunDyn> {
+        let run_id = {
+            let mut dyn_state = lock_experiment_state(&self.state);
+            let ExperimentDynLifecycle::Unsealed { state, open_runs } = &mut dyn_state.lifecycle
+            else {
+                return bail_non_unsealed(&dyn_state.lifecycle);
+            };
+            let state = state
+                .as_mut()
+                .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
+            let run_id = state.next_run_id;
+            state.next_run_id += 1;
+            *open_runs += 1;
+            run_id
+        };
+        Ok(RunDyn::from_open_run(run_id, Arc::clone(&self.state)))
+    }
+}
+
 impl RunDyn {
-    pub(in crate::experiment::dynamic) fn from_open_run(
-        run_id: u64,
-        experiment_state: Arc<Mutex<ExperimentDynState>>,
-    ) -> Self {
+    fn from_open_run(run_id: u64, experiment_state: Arc<Mutex<ExperimentDynState>>) -> Self {
         Self {
             run_state: Some(RunDynState {
                 run_id,
@@ -61,7 +77,7 @@ impl RunDyn {
     ) -> Result<()> {
         let name = name.into();
         let value = value.into();
-        validate_parameter_value(&name, &value)?;
+        value.validate_as_run_parameter(&name)?;
         self.open_mut()?.parameters.insert(name, value);
         Ok(())
     }
@@ -77,7 +93,7 @@ impl RunDyn {
             let dyn_state = lock_experiment_state(&self.experiment_state);
             store_run_record_ref(&dyn_state, run_id, name, media_type, bytes.as_ref())?
         };
-        upsert_record_ref(&mut self.open_mut()?.records, record_ref);
+        RecordRef::upsert_into(&mut self.open_mut()?.records, record_ref);
         Ok(())
     }
 

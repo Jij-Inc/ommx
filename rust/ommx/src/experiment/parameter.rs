@@ -72,6 +72,15 @@ impl ParameterValue {
             Self::String(_) => "string",
         }
     }
+
+    pub(crate) fn validate_as_run_parameter(&self, name: &str) -> Result<()> {
+        match self {
+            Self::Float(value) if !value.is_finite() => {
+                crate::bail!("Run parameter `{name}` float value must be finite")
+            }
+            _ => Ok(()),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,7 +1,5 @@
 //! Serialized Experiment structure stored in the OCI config blob.
 
-use super::{RunEntry, UnsealedExperimentState, EXPERIMENT_STATUS_FINISHED};
-use crate::artifact::local_registry::StoredDescriptor;
 use oci_spec::image::Descriptor;
 use serde::{Deserialize, Serialize};
 
@@ -15,19 +13,16 @@ pub struct ExperimentConfig {
 }
 
 impl ExperimentConfig {
-    pub(super) fn from_unsealed_state(
-        state: &UnsealedExperimentState<'_>,
-        run_parameters: &StoredDescriptor<'_>,
+    pub(crate) fn finished(
+        records: Vec<Descriptor>,
+        runs: Vec<ExperimentConfigRun>,
+        run_parameters: Descriptor,
     ) -> Self {
         Self {
-            status: EXPERIMENT_STATUS_FINISHED.to_string(),
-            records: state.records.iter().map(record_descriptor).collect(),
-            runs: state
-                .runs
-                .values()
-                .map(ExperimentConfigRun::from_run_entry)
-                .collect(),
-            run_parameters: Descriptor::from(run_parameters.clone()),
+            status: super::EXPERIMENT_STATUS_FINISHED.to_string(),
+            records,
+            runs,
+            run_parameters,
         }
     }
 }
@@ -40,14 +35,7 @@ pub struct ExperimentConfigRun {
 }
 
 impl ExperimentConfigRun {
-    fn from_run_entry(run: &RunEntry<'_>) -> Self {
-        Self {
-            run_id: run.run_id,
-            records: run.records.iter().map(record_descriptor).collect(),
-        }
+    pub(crate) fn new(run_id: u64, records: Vec<Descriptor>) -> Self {
+        Self { run_id, records }
     }
-}
-
-fn record_descriptor(record: &super::record::RecordRef<'_>) -> Descriptor {
-    Descriptor::from(record.descriptor().clone())
 }

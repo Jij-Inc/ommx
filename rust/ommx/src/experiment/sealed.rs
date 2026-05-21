@@ -2,7 +2,7 @@
 
 use super::config::ExperimentConfig;
 use super::parameter::{RunParameterCell, RunParameterTable};
-use super::record::{media_type_to_string, RecordRef};
+use super::record::RecordRef;
 use super::{SealedExperiment, EXPERIMENT_CONFIG_MEDIA_TYPE, RUN_PARAMETERS_MEDIA_TYPE};
 use crate::artifact::{ImageRef, LocalArtifact};
 use anyhow::{Context, Result};
@@ -89,7 +89,7 @@ fn load_experiment_config(artifact: &LocalArtifact<'_>) -> Result<ExperimentConf
     if config.media_type() != &MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()) {
         crate::bail!(
             "Experiment config media type is {}, expected {}",
-            media_type_to_string(config.media_type()),
+            config.media_type(),
             EXPERIMENT_CONFIG_MEDIA_TYPE
         );
     }
@@ -107,7 +107,7 @@ fn decode_records<'reg>(
     for descriptor in records {
         let record = RecordRef::from_descriptor(registry, descriptor)
             .with_context(|| format!("Failed to decode Record in {owner}"))?;
-        let key = record.key();
+        let key = (record.media_type(), record.name().to_string());
         if !keys.insert(key) {
             crate::bail!(
                 "Experiment config contains duplicate Record in {owner}: media_type={}, name={}",
@@ -127,7 +127,7 @@ fn load_run_parameters(
     if descriptor.media_type() != &MediaType::Other(RUN_PARAMETERS_MEDIA_TYPE.to_string()) {
         crate::bail!(
             "Run-parameter descriptor media type is {}, expected {}",
-            media_type_to_string(descriptor.media_type()),
+            descriptor.media_type(),
             RUN_PARAMETERS_MEDIA_TYPE
         );
     }

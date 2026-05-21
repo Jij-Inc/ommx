@@ -1,8 +1,6 @@
 //! Experiment / Run handles and run lifecycle.
 
-use super::record::{
-    encode_json, json_media_type, store_record_ref, upsert_record_ref, RecordSpace,
-};
+use super::record::{encode_json, json_media_type, store_record_ref, RecordSpace};
 use super::{ParameterValue, Run, RunEntry};
 use crate::artifact::media_types;
 use crate::{Instance, SampleSet, Solution};
@@ -25,7 +23,7 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
     ) -> Result<()> {
         let name = name.into();
         let value = value.into();
-        validate_parameter_value(&name, &value)?;
+        value.validate_as_run_parameter(&name)?;
         self.parameters.insert(name, value);
         Ok(())
     }
@@ -78,7 +76,7 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
             media_type,
             bytes,
         )?;
-        upsert_record_ref(&mut self.records, record_ref);
+        super::RecordRef::upsert_into(&mut self.records, record_ref);
         Ok(())
     }
 
@@ -96,14 +94,5 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
         };
         experiment.push_closed_run(run)?;
         Ok(())
-    }
-}
-
-pub(super) fn validate_parameter_value(name: &str, value: &ParameterValue) -> Result<()> {
-    match value {
-        ParameterValue::Float(value) if !value.is_finite() => {
-            crate::bail!("Run parameter `{name}` float value must be finite")
-        }
-        _ => Ok(()),
     }
 }

@@ -67,7 +67,7 @@ use crate::artifact::{media_types, ImageRef, LocalArtifact};
 use crate::{Instance, SampleSet, Solution};
 use anyhow::Result;
 use oci_spec::image::MediaType;
-use record::{encode_json, json_media_type, store_record_ref, upsert_record_ref, RecordSpace};
+use record::{encode_json, json_media_type, store_record_ref, RecordSpace};
 use std::collections::BTreeMap;
 use std::sync::{Mutex, MutexGuard};
 
@@ -280,7 +280,7 @@ impl<'reg> Experiment<'reg> {
             bytes,
         )?;
         let mut state = self.lock_state();
-        upsert_record_ref(&mut state.records, record_ref);
+        RecordRef::upsert_into(&mut state.records, record_ref);
         Ok(())
     }
 

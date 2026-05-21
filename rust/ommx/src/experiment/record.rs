@@ -49,10 +49,7 @@ impl<'reg> RecordRef<'reg> {
         &self.descriptor
     }
 
-    pub(super) fn from_descriptor(
-        registry: &'reg LocalRegistry,
-        descriptor: Descriptor,
-    ) -> Result<Self> {
+    pub fn from_descriptor(registry: &'reg LocalRegistry, descriptor: Descriptor) -> Result<Self> {
         let name = descriptor
             .annotations()
             .as_ref()
@@ -68,29 +65,22 @@ impl<'reg> RecordRef<'reg> {
     }
 
     pub fn media_type(&self) -> String {
-        media_type_to_string(self.descriptor.media_type())
+        self.descriptor.media_type().to_string()
     }
 
-    pub(super) fn key(&self) -> (String, String) {
-        (self.media_type(), self.name.clone())
-    }
-}
-
-/// Build-phase upsert: a record with the same `(media_type, name)`
-/// within a space replaces the previous one. Within one `Vec` the
-/// space and `run_id` are already fixed, so `(media_type, name)` is
-/// the remaining key.
-pub(super) fn upsert_record_ref<'reg>(
-    records: &mut Vec<RecordRef<'reg>>,
-    record_ref: RecordRef<'reg>,
-) {
-    if let Some(existing) = records.iter_mut().find(|r| {
-        r.descriptor().media_type() == record_ref.descriptor().media_type()
-            && r.name() == record_ref.name()
-    }) {
-        *existing = record_ref;
-    } else {
-        records.push(record_ref);
+    /// Build-phase upsert: a record with the same `(media_type, name)`
+    /// within a space replaces the previous one. Within one `Vec` the
+    /// space and `run_id` are already fixed, so `(media_type, name)` is
+    /// the remaining key.
+    pub(crate) fn upsert_into(records: &mut Vec<RecordRef<'reg>>, record_ref: RecordRef<'reg>) {
+        if let Some(existing) = records.iter_mut().find(|r| {
+            r.descriptor().media_type() == record_ref.descriptor().media_type()
+                && r.name() == record_ref.name()
+        }) {
+            *existing = record_ref;
+        } else {
+            records.push(record_ref);
+        }
     }
 }
 
@@ -125,11 +115,4 @@ pub fn json_media_type() -> MediaType {
 pub fn encode_json(name: &str, value: impl serde::Serialize) -> Result<Vec<u8>> {
     serde_json::to_vec(&value)
         .map_err(|e| crate::error!("Failed to encode JSON record `{name}`: {e}"))
-}
-
-pub(super) fn media_type_to_string(media_type: &MediaType) -> String {
-    match media_type {
-        MediaType::Other(value) => value.clone(),
-        other => other.to_string(),
-    }
 }

@@ -1,6 +1,6 @@
 //! Mapping an unsealed Experiment state to an immutable OMMX Artifact.
 
-use super::config::ExperimentConfig;
+use super::config::{ExperimentConfig, ExperimentConfigRun};
 use super::parameter::RunParameterTable;
 use super::UnsealedExperimentState;
 use super::{
@@ -22,7 +22,7 @@ impl<'reg> UnsealedExperimentState<'reg> {
         let run_parameters = self.run_parameter_descriptor(registry)?;
         let config_descriptor = registry.store_json_blob(
             MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()),
-            &ExperimentConfig::from_unsealed_state(&self, &run_parameters),
+            &self.experiment_config(&run_parameters),
         )?;
         let layers = self.artifact_layer_descriptors(run_parameters);
         let artifact = UnsealedArtifact::new(
@@ -90,6 +90,26 @@ impl<'reg> UnsealedExperimentState<'reg> {
             &RunParameterTable::from_runs(self.runs.values())?,
         )
     }
+
+    fn experiment_config(&self, run_parameters: &StoredDescriptor<'_>) -> ExperimentConfig {
+        ExperimentConfig::finished(
+            self.records.iter().map(record_descriptor).collect(),
+            self.runs
+                .values()
+                .map(|run| {
+                    ExperimentConfigRun::new(
+                        run.run_id,
+                        run.records.iter().map(record_descriptor).collect(),
+                    )
+                })
+                .collect(),
+            oci_spec::image::Descriptor::from(run_parameters.clone()),
+        )
+    }
+}
+
+fn record_descriptor(record: &super::RecordRef<'_>) -> oci_spec::image::Descriptor {
+    oci_spec::image::Descriptor::from(record.descriptor().clone())
 }
 
 fn store_aggregate_json_layer<'reg>(

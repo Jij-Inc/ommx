@@ -7,9 +7,7 @@
 //! their object model, so this module provides owned handles that keep
 //! the required registry / parent owners alive at runtime.
 
-use super::record::{
-    encode_json, json_media_type, store_record_ref, upsert_record_ref, RecordRef, RecordSpace,
-};
+use super::record::{encode_json, json_media_type, store_record_ref, RecordRef, RecordSpace};
 use super::{Name, RunParameterCell, SealedExperiment, SealedRun, UnsealedExperimentState};
 use crate::artifact::ImageRef;
 use crate::artifact::{LocalArtifactDyn, LocalRegistryHandle};
@@ -134,24 +132,6 @@ impl ExperimentDyn {
         }
     }
 
-    pub fn run(&self) -> Result<RunDyn> {
-        let run_id = {
-            let mut dyn_state = lock_experiment_state(&self.state);
-            let ExperimentDynLifecycle::Unsealed { state, open_runs } = &mut dyn_state.lifecycle
-            else {
-                return bail_non_unsealed(&dyn_state.lifecycle);
-            };
-            let state = state
-                .as_mut()
-                .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
-            let run_id = state.next_run_id;
-            state.next_run_id += 1;
-            *open_runs += 1;
-            run_id
-        };
-        Ok(RunDyn::from_open_run(run_id, Arc::clone(&self.state)))
-    }
-
     pub fn log_record(
         &self,
         name: &str,
@@ -166,7 +146,7 @@ impl ExperimentDyn {
         let state = state
             .as_mut()
             .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
-        upsert_record_ref(&mut state.records, record_ref);
+        RecordRef::upsert_into(&mut state.records, record_ref);
         Ok(())
     }
 
