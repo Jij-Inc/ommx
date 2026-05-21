@@ -40,6 +40,7 @@ parts:
         title: "OMMX Python SDK"
   - caption: "Release Note"
     chapters:
+      - file: release_note/ommx-2.6
       - file: release_note/ommx-2.5
       - file: release_note/ommx-2.4
       - file: release_note/ommx-2.3
