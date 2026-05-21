@@ -109,7 +109,8 @@ user_guide/tracing
 :maxdepth: 1
 :hidden:
 
-advanced/index
+advanced/about
+advanced/column_generation_openjij
 ```
 
 ```{toctree}
