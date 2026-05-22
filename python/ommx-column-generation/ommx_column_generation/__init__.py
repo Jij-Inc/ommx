@@ -2,7 +2,8 @@ r"""Minimal column generation primitives for OMMX.
 
 This package provides the small core needed to run a column generation loop.
 It deliberately does not require the pricing problem to be represented as an
-OMMX ``ParametricInstance``.  A pricing oracle can be implemented with an OMMX
+OMMX :class:`~ommx.v1.ParametricInstance`.  A
+:class:`~ommx_column_generation.PricingOracle` can be implemented with an OMMX
 model, a dynamic program, a shortest-path solver, an annealer, or any other
 problem-specific method.
 
@@ -44,36 +45,39 @@ represented as additional master rows or handled inside the pricing oracle.
 API Roles
 =========
 
-``MasterRow``
+:class:`~ommx_column_generation.MasterRow`
     Defines one row :math:`i \in I` of the RMP: its stable row ID, sense, and
     right-hand side :math:`b_i`.
 
-``Column``
+:class:`~ommx_column_generation.Column`
     Defines one generated column :math:`j`: its cost :math:`c_j` and row
-    coefficients :math:`a_{ij}` keyed by ``MasterRow.id``.  The optional
-    ``payload`` stores problem-specific data such as the original subproblem
-    solution.
+    coefficients :math:`a_{ij}` keyed by
+    :attr:`~ommx_column_generation.MasterRow.id`.  The optional
+    :attr:`~ommx_column_generation.Column.payload` stores problem-specific data
+    such as the original subproblem solution.
 
-``ColumnGenerationProblem``
+:class:`~ommx_column_generation.ColumnGenerationProblem`
     Holds the current working set of rows and columns.  Its
-    ``build_restricted_master`` method builds the current RMP as an
-    ``ommx.v1.Instance``.
+    :meth:`~ommx_column_generation.ColumnGenerationProblem.build_restricted_master`
+    method builds the current RMP as an :class:`~ommx.v1.Instance`.
 
-``RestrictedMasterProblem``
+:class:`~ommx_column_generation.RestrictedMasterProblem`
     Wraps the generated RMP instance and the ID mappings needed to read
-    :math:`\lambda_j` values and dual values back from an OMMX ``Solution``.
+    :math:`\lambda_j` values and dual values back from an OMMX
+    :class:`~ommx.v1.Solution`.
 
-``PricingContext`` and ``PricingResult``
+:class:`~ommx_column_generation.PricingContext` and :class:`~ommx_column_generation.PricingResult`
     Define the contract between the RMP loop and the pricing oracle.  The
     context contains the current solution and duals; the result returns newly
     generated columns and whether optimality of the pricing step was proven.
 
-``PricingOracle``
+:class:`~ommx_column_generation.PricingOracle`
     The problem-specific pricing boundary.  It receives duals and returns
-    columns.  This can internally solve an OMMX ``ParametricInstance`` or use a
-    completely different algorithm.
+    columns.  This can internally solve an OMMX
+    :class:`~ommx.v1.ParametricInstance` or use a completely different
+    algorithm.
 
-``solve_column_generation``
+:func:`~ommx_column_generation.solve_column_generation`
     Runs the loop: solve RMP, extract duals, call pricing, append accepted
     columns, and repeat until pricing returns no accepted columns or the
     iteration limit is reached.

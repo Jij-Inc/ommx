@@ -5,21 +5,24 @@ They assume that each generated column :math:`j` is already summarized by its
 objective coefficient :math:`c_j` and its master-row coefficients
 :math:`a_{ij}`.  The module does not inspect how a column was produced.
 
-For a current column set :math:`J'`, ``ColumnGenerationProblem`` builds the RMP
+For a current column set :math:`J'`,
+:class:`~ommx_column_generation.core.ColumnGenerationProblem` builds the RMP
 
 .. math::
 
    \min c_0 + \sum_{j \in J'} c_j \lambda_j
 
-subject to the ``MasterRow`` constraints
+subject to the :class:`~ommx_column_generation.core.MasterRow` constraints
 
 .. math::
 
    \sum_{j \in J'} a_{ij}\lambda_j \ \bowtie_i \ b_i,
    \quad i \in I.
 
-The pricing side is abstracted behind ``PricingOracle``.  The oracle receives
-the current RMP duals :math:`\pi_i` and returns additional ``Column`` objects.
+The pricing side is abstracted behind
+:class:`~ommx_column_generation.core.PricingOracle`.  The oracle receives the
+current RMP duals :math:`\pi_i` and returns additional
+:class:`~ommx_column_generation.core.Column` objects.
 """
 
 from __future__ import annotations
@@ -44,9 +47,12 @@ class MasterRow:
 
        \sum_j a_{ij}\lambda_j \ \bowtie_i \ b_i.
 
-    ``id`` is the stable key used by ``Column.coefficients`` and by dual values
-    exposed to ``PricingOracle``.  ``sense`` gives :math:`\bowtie_i`, and
-    ``rhs`` gives :math:`b_i`.
+    :attr:`~ommx_column_generation.core.MasterRow.id` is the stable key used by
+    :attr:`~ommx_column_generation.core.Column.coefficients` and by dual values
+    exposed to :class:`~ommx_column_generation.core.PricingOracle`.
+    :attr:`~ommx_column_generation.core.MasterRow.sense` gives
+    :math:`\bowtie_i`, and :attr:`~ommx_column_generation.core.MasterRow.rhs`
+    gives :math:`b_i`.
     """
 
     id: Hashable
@@ -63,13 +69,17 @@ class MasterRow:
 class Column:
     r"""A generated column :math:`j` of the restricted master problem.
 
-    ``cost`` is the objective coefficient :math:`c_j`.  ``coefficients`` stores
-    row activities :math:`a_{ij}` keyed by ``MasterRow.id``.  Missing row keys
-    are interpreted as zero coefficients.
+    :attr:`~ommx_column_generation.core.Column.cost` is the objective
+    coefficient :math:`c_j`.
+    :attr:`~ommx_column_generation.core.Column.coefficients` stores row
+    activities :math:`a_{ij}` keyed by
+    :attr:`~ommx_column_generation.core.MasterRow.id`.  Missing row keys are
+    interpreted as zero coefficients.
 
-    ``payload`` is deliberately opaque to the core loop.  It can hold the
-    pricing solution, original variable values, block IDs, modeler metadata, or
-    any other information needed by user code.
+    :attr:`~ommx_column_generation.core.Column.payload` is deliberately opaque
+    to the core loop.  It can hold the pricing solution, original variable
+    values, block IDs, modeler metadata, or any other information needed by user
+    code.
     """
 
     id: Hashable
@@ -82,10 +92,12 @@ class Column:
 class RestrictedMasterProblem:
     r"""OMMX representation of the current RMP.
 
-    ``instance`` is the RMP encoded as an ``ommx.v1.Instance`` with one
-    decision variable :math:`\lambda_j` per current ``Column``.  The mapping
-    fields connect public row and column IDs to OMMX constraint and variable
-    IDs so that values can be read back from ``Solution`` objects.
+    :attr:`~ommx_column_generation.core.RestrictedMasterProblem.instance` is the
+    RMP encoded as an :class:`~ommx.v1.Instance` with one decision variable
+    :math:`\lambda_j` per current
+    :class:`~ommx_column_generation.core.Column`.  The mapping fields connect
+    public row and column IDs to OMMX constraint and variable IDs so that values
+    can be read back from :class:`~ommx.v1.Solution` objects.
     """
 
     instance: Instance
@@ -94,11 +106,13 @@ class RestrictedMasterProblem:
     column_id_to_variable_id: dict[Hashable, int]
 
     def raw_duals(self, solution: Solution) -> dict[Hashable, float]:
-        """Extract adapter-native duals keyed by ``MasterRow.id``.
+        """Extract adapter-native duals keyed by
+        :attr:`~ommx_column_generation.core.MasterRow.id`.
 
         This method returns dual values exactly as stored in the given OMMX
-        ``Solution``.  Use ``duals`` for the sign-normalized values that should
-        be passed to pricing.
+        :class:`~ommx.v1.Solution`.  Use
+        :meth:`~ommx_column_generation.core.RestrictedMasterProblem.duals` for
+        the sign-normalized values that should be passed to pricing.
         """
 
         duals: dict[Hashable, float] = {}
@@ -110,12 +124,14 @@ class RestrictedMasterProblem:
         return duals
 
     def duals(self, solution: Solution) -> dict[Hashable, float]:
-        r"""Extract row duals in the original ``MasterRow`` orientation.
+        r"""Extract row duals in the original
+        :class:`~ommx_column_generation.core.MasterRow` orientation.
 
         RMP rows with sense ``>=`` are represented in OMMX as
         ``rhs - lhs <= 0``. Their adapter duals are therefore sign-flipped before
-        being exposed to pricing oracles.  The returned value is the
-        :math:`\pi_i` used in the pricing reduced-cost expression.
+        being exposed to :class:`~ommx_column_generation.core.PricingOracle`
+        implementations.  The returned value is the :math:`\pi_i` used in the
+        pricing reduced-cost expression.
         """
 
         raw = self.raw_duals(solution)
@@ -125,7 +141,8 @@ class RestrictedMasterProblem:
         }
 
     def column_values(self, solution: Solution) -> dict[Hashable, float]:
-        r"""Extract :math:`\lambda_j` values keyed by ``Column.id``."""
+        r"""Extract :math:`\lambda_j` values keyed by
+        :attr:`~ommx_column_generation.core.Column.id`."""
 
         entries = solution.state.entries
         values: dict[Hashable, float] = {}
@@ -139,9 +156,12 @@ class ColumnGenerationProblem:
     r"""Rows and current columns of a column generation master problem.
 
     This is the mutable working set :math:`(I, J')` used by the column
-    generation loop.  ``rows`` defines the master constraints.  ``columns`` is
-    the current restricted set of generated columns.  ``objective_offset`` is
-    the constant term :math:`c_0` in the RMP objective.
+    generation loop.  :attr:`~ommx_column_generation.core.ColumnGenerationProblem.rows`
+    defines the master constraints.
+    :attr:`~ommx_column_generation.core.ColumnGenerationProblem.columns` is the
+    current restricted set of generated columns.
+    :attr:`~ommx_column_generation.core.ColumnGenerationProblem.objective_offset`
+    is the constant term :math:`c_0` in the RMP objective.
     """
 
     rows: list[MasterRow]
@@ -160,8 +180,10 @@ class ColumnGenerationProblem:
     ) -> list[Column]:
         """Append generated columns and return the accepted subset.
 
-        Pricing oracles may return columns already present in the RMP.  When
-        ``skip_duplicates`` is true, those duplicates are ignored by ``Column.id``.
+        :class:`~ommx_column_generation.core.PricingOracle` implementations may
+        return columns already present in the RMP.  When ``skip_duplicates`` is
+        true, those duplicates are ignored by
+        :attr:`~ommx_column_generation.core.Column.id`.
         """
 
         known = {column.id for column in self.columns}
@@ -179,10 +201,14 @@ class ColumnGenerationProblem:
     def build_restricted_master(
         self, *, column_kind: ColumnVariableKind = "continuous"
     ) -> RestrictedMasterProblem:
-        r"""Build the current restricted master problem as an OMMX ``Instance``.
+        r"""Build the current restricted master problem as an OMMX
+        :class:`~ommx.v1.Instance`.
 
-        The method creates one OMMX decision variable :math:`\lambda_j` for
-        each current ``Column`` and one OMMX constraint for each ``MasterRow``.
+        The method creates one OMMX :class:`~ommx.v1.DecisionVariable`
+        :math:`\lambda_j` for each current
+        :class:`~ommx_column_generation.core.Column` and one OMMX
+        :class:`~ommx.v1.Constraint` for each
+        :class:`~ommx_column_generation.core.MasterRow`.
         With ``column_kind="continuous"``, the RMP is the LP relaxation used to
         obtain dual values.  With ``column_kind="binary"``, the same generated
         column pool is encoded with binary :math:`\lambda_j` variables for a
@@ -270,9 +296,13 @@ class ColumnGenerationProblem:
 class PricingContext:
     r"""Information passed from the current RMP solve to a pricing oracle.
 
-    ``duals`` contains :math:`\pi_i` keyed by ``MasterRow.id``.  ``rows`` and
-    ``columns`` expose the current RMP structure, and ``master_solution`` holds
-    the OMMX solution of the current LP RMP.
+    :attr:`~ommx_column_generation.core.PricingContext.duals` contains
+    :math:`\pi_i` keyed by :attr:`~ommx_column_generation.core.MasterRow.id`.
+    :attr:`~ommx_column_generation.core.PricingContext.rows` and
+    :attr:`~ommx_column_generation.core.PricingContext.columns` expose the
+    current RMP structure, and
+    :attr:`~ommx_column_generation.core.PricingContext.master_solution` holds
+    the :class:`~ommx.v1.Solution` of the current LP RMP.
     """
 
     iteration: int
@@ -287,11 +317,12 @@ class PricingContext:
 class PricingResult:
     r"""Columns returned by one pricing step.
 
-    ``columns`` are candidate columns, usually with negative reduced cost in a
-    minimization problem.  ``proven_no_negative_reduced_cost`` should be true
-    only when the pricing method has proven that no improving column exists.
-    Heuristic pricing may return columns but should leave this flag false when
-    it cannot prove optimality of the pricing problem.
+    :attr:`~ommx_column_generation.core.PricingResult.columns` are candidate
+    columns, usually with negative reduced cost in a minimization problem.
+    :attr:`~ommx_column_generation.core.PricingResult.proven_no_negative_reduced_cost`
+    should be true only when the pricing method has proven that no improving
+    column exists.  Heuristic pricing may return columns but should leave this
+    flag false when it cannot prove optimality of the pricing problem.
     """
 
     columns: list[Column]
@@ -309,8 +340,9 @@ class PricingOracle(Protocol):
        \bar{c}(x) = c(x) - \sum_i \pi_i a_i(x).
 
     The core loop does not require the oracle to be built from OMMX objects.  It
-    can solve a ``ParametricInstance``, call a specialized dynamic program, run
-    a graph algorithm, or use any other pricing implementation.
+    can solve a :class:`~ommx.v1.ParametricInstance`, call a specialized
+    dynamic program, run a graph algorithm, or use any other pricing
+    implementation.
     """
 
     def __call__(self, context: PricingContext) -> PricingResult: ...
@@ -333,11 +365,15 @@ class IterationRecord:
 
 @dataclass(frozen=True)
 class ColumnGenerationResult:
-    """Result returned by ``solve_column_generation``.
+    """Result returned by
+    :func:`~ommx_column_generation.core.solve_column_generation`.
 
-    ``master_solution`` is the final LP RMP solution.  ``final_solution`` is set
-    only when a separate ``final_solver`` was provided.  ``iterations`` records
-    generated and accepted columns at each pricing step.
+    :attr:`~ommx_column_generation.core.ColumnGenerationResult.master_solution`
+    is the final LP RMP solution.
+    :attr:`~ommx_column_generation.core.ColumnGenerationResult.final_solution`
+    is set only when a separate ``final_solver`` was provided.
+    :attr:`~ommx_column_generation.core.ColumnGenerationResult.iterations`
+    records generated and accepted columns at each pricing step.
     """
 
     master_solution: Solution
@@ -352,7 +388,8 @@ class ColumnGenerationResult:
 
     @property
     def column_values(self) -> dict[Hashable, float]:
-        r"""Final LP values :math:`\lambda_j` keyed by ``Column.id``."""
+        r"""Final LP values :math:`\lambda_j` keyed by
+        :attr:`~ommx_column_generation.core.Column.id`."""
 
         return self.restricted_master.column_values(self.master_solution)
 
