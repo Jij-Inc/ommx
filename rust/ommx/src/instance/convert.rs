@@ -137,7 +137,7 @@ impl ParametricInstance {
 }
 
 #[cfg(test)]
-mod with_parameters_tests {
+mod tests {
     use super::*;
     use crate::{linear, Function};
     use maplit::btreemap;
