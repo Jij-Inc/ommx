@@ -46,6 +46,64 @@ obtain dual values.  If an integer solution is needed, the generated column
 pool can be solved once as a restricted integer master problem after the loop;
 this is not branch-and-price.
 
+Example
+=======
+
+The following tiny covering problem starts with two single-cover columns.  The
+pricing oracle scans a finite catalog, finds a combined column with negative
+reduced cost, and adds it to the RMP.
+
+.. doctest::
+
+   >>> from ommx_column_generation import (
+   ...     Column,
+   ...     ColumnGenerationProblem,
+   ...     MasterRow,
+   ...     PricingResult,
+   ...     highs_master_solver,
+   ...     solve_column_generation,
+   ... )
+   >>> problem = ColumnGenerationProblem(
+   ...     rows=[
+   ...         MasterRow("cover_a", ">=", 1.0),
+   ...         MasterRow("cover_b", ">=", 1.0),
+   ...     ],
+   ...     columns=[
+   ...         Column("a", 2.0, {"cover_a": 1.0}),
+   ...         Column("b", 2.0, {"cover_b": 1.0}),
+   ...     ],
+   ... )
+   >>> catalog = [
+   ...     Column("ab", 3.0, {"cover_a": 1.0, "cover_b": 1.0}),
+   ... ]
+   >>> def pricing_oracle(context):
+   ...     existing_ids = {column.id for column in context.columns}
+   ...     improving_columns = []
+   ...     for column in catalog:
+   ...         if column.id in existing_ids:
+   ...             continue
+   ...         reduced_cost = column.cost - sum(
+   ...             context.duals[row_id] * coefficient
+   ...             for row_id, coefficient in column.coefficients.items()
+   ...         )
+   ...         if reduced_cost < -context.tolerance:
+   ...             improving_columns.append(column)
+   ...     return PricingResult(
+   ...         improving_columns,
+   ...         proven_no_negative_reduced_cost=not improving_columns,
+   ...     )
+   >>> result = solve_column_generation(
+   ...     problem,
+   ...     master_solver=highs_master_solver,
+   ...     pricing_oracle=pricing_oracle,
+   ... )
+   >>> result.master_solution.objective
+   3.0
+   >>> result.column_values
+   {'a': 0.0, 'b': 0.0, 'ab': 1.0}
+   >>> [record.accepted_column_ids for record in result.iterations]
+   [('ab',), ()]
+
 API Roles
 =========
 

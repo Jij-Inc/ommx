@@ -106,6 +106,7 @@ autoapi_member_order = "groupwise"
 autoapi_file_patterns = ["*.pyi", "*.py"]
 autoapi_ignore = [
     "**/tests/**",
+    "**/examples/**",
     "**/conftest.py",
     "**/ommx/v1/**",
     "**/ommx/artifact/**",
