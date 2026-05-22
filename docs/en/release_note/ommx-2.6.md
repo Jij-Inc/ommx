@@ -1,6 +1,7 @@
 # OMMX Python SDK 2.6.x
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.6.0-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.6.0)
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.6.1-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.6.1)
 
 See the GitHub Releases above for full details. The following summarizes the main changes.
 
