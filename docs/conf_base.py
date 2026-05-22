@@ -93,6 +93,7 @@ autoapi_dirs = [
     python_root / "ommx-pyscipopt-adapter",
     python_root / "ommx-highs-adapter",
     python_root / "ommx-openjij-adapter",
+    python_root / "ommx-column-generation",
 ]
 autoapi_options = [
     "members",
