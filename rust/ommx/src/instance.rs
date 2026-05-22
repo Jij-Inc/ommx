@@ -447,6 +447,10 @@ impl Instance {
 /// - The keys of [`Self::constraints`] and [`Self::removed_constraints`] are disjoint sets.
 /// - The keys of [`Self::decision_variable_dependency`] must be in [`Self::decision_variables`],
 ///   but must NOT be used in the objective function or constraints.
+///   The RHS expressions of [`Self::decision_variable_dependency`] may
+///   reference IDs from [`Self::decision_variables`] or [`Self::parameters`],
+///   and may not reference undefined IDs. Parameter IDs in RHS expressions are
+///   evaluated by [`Self::with_parameters`].
 ///   See also the document of [`DecisionVariableAnalysis`].
 /// - The following three sets must be pairwise disjoint (from [`DecisionVariableAnalysis`]):
 ///   - **used**: Variable IDs appearing in the objective function or constraints

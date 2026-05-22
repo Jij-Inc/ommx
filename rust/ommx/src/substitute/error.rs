@@ -20,6 +20,16 @@ pub enum SubstitutionError {
         constraint_id: crate::indicator_constraint::IndicatorConstraintID,
     },
 
+    /// `ParametricInstance::substitute` only substitutes decision variables.
+    #[error(
+        "Cannot substitute parameter {parameter:?}; use with_parameters to assign parameter values"
+    )]
+    ParameterSubstitution { parameter: VariableID },
+
+    /// Substitution assignments may only reference IDs defined by the host.
+    #[error("Undefined variable ID is used in substitution: {variable:?}")]
+    UndefinedSubstitutionVariable { variable: VariableID },
+
     /// Substituting a one-hot variable would change the constraint type.
     #[error("Cannot substitute variable {variable:?} of one-hot constraint {constraint_id:?}")]
     OneHotVariableSubstitution {

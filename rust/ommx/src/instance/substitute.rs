@@ -108,6 +108,108 @@ impl Substitute for Instance {
     }
 }
 
+impl Substitute for ParametricInstance {
+    type Output = Self;
+
+    fn substitute_acyclic(
+        mut self,
+        acyclic: &crate::AcyclicAssignments,
+    ) -> Result<Self::Output, crate::SubstitutionError> {
+        let substituted_variables: std::collections::BTreeSet<VariableID> =
+            acyclic.iter().map(|(var_id, _)| *var_id).collect();
+
+        for (var_id, function) in acyclic.iter() {
+            if self.parameters.contains_key(var_id) {
+                return Err(SubstitutionError::ParameterSubstitution { parameter: *var_id });
+            }
+            if !self.decision_variables.contains_key(var_id) {
+                return Err(SubstitutionError::UndefinedSubstitutionVariable { variable: *var_id });
+            }
+            for required_id in function.required_ids() {
+                if !self.decision_variables.contains_key(&required_id)
+                    && !self.parameters.contains_key(&required_id)
+                {
+                    return Err(SubstitutionError::UndefinedSubstitutionVariable {
+                        variable: required_id,
+                    });
+                }
+            }
+        }
+
+        let mut affected_constraint_ids = std::collections::BTreeSet::new();
+        for (constraint_id, constraint) in self.constraint_collection.active() {
+            let required_ids = constraint.required_ids();
+            if !required_ids.is_disjoint(&substituted_variables) {
+                affected_constraint_ids.insert(*constraint_id);
+            }
+        }
+
+        substitute_acyclic(&mut self.objective, acyclic)?;
+
+        for constraint_id in &affected_constraint_ids {
+            if let Some(constraint) = self
+                .constraint_collection
+                .active_mut()
+                .get_mut(constraint_id)
+            {
+                substitute_acyclic(&mut constraint.stage.function, acyclic)?;
+            }
+        }
+
+        for (&cid, ic) in self.indicator_constraint_collection.active().iter() {
+            if substituted_variables.contains(&ic.indicator_variable) {
+                return Err(SubstitutionError::IndicatorVariableSubstitution {
+                    indicator_variable: ic.indicator_variable,
+                    constraint_id: cid,
+                });
+            }
+        }
+        for ic in self
+            .indicator_constraint_collection
+            .active_mut()
+            .values_mut()
+        {
+            let required_ids = ic.stage.function.required_ids();
+            if !required_ids.is_disjoint(&substituted_variables) {
+                substitute_acyclic(&mut ic.stage.function, acyclic)?;
+            }
+        }
+
+        for (&cid, oh) in self.one_hot_constraint_collection.active().iter() {
+            for var_id in &oh.variables {
+                if substituted_variables.contains(var_id) {
+                    return Err(SubstitutionError::OneHotVariableSubstitution {
+                        variable: *var_id,
+                        constraint_id: cid,
+                    });
+                }
+            }
+        }
+        for (&cid, sos1) in self.sos1_constraint_collection.active().iter() {
+            for var_id in &sos1.variables {
+                if substituted_variables.contains(var_id) {
+                    return Err(SubstitutionError::Sos1VariableSubstitution {
+                        variable: *var_id,
+                        constraint_id: cid,
+                    });
+                }
+            }
+        }
+
+        substitute_acyclic(&mut self.decision_variable_dependency, acyclic)?;
+
+        Ok(self)
+    }
+
+    fn substitute_one(
+        self,
+        assigned: VariableID,
+        f: &Function,
+    ) -> Result<Self::Output, SubstitutionError> {
+        substitute_one_via_acyclic(self, assigned, f)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -155,6 +257,124 @@ mod tests {
             .decision_variable_dependency
             .get(&VariableID::from(1))
             .is_some());
+    }
+
+    #[test]
+    fn test_parametric_instance_substitute_parameterized_rhs() {
+        let mut decision_variables = BTreeMap::new();
+        decision_variables.insert(
+            VariableID::from(0),
+            DecisionVariable::continuous(VariableID::from(0)),
+        );
+        decision_variables.insert(
+            VariableID::from(1),
+            DecisionVariable::continuous(VariableID::from(1)),
+        );
+
+        let mut parameters = BTreeMap::new();
+        parameters.insert(
+            VariableID::from(100),
+            crate::v1::Parameter {
+                id: 100,
+                ..Default::default()
+            },
+        );
+
+        let objective = Function::from(linear!(0) + linear!(100));
+        let parametric = ParametricInstance::new(
+            Sense::Minimize,
+            objective,
+            decision_variables,
+            parameters,
+            BTreeMap::new(),
+        )
+        .unwrap();
+
+        let substituted = parametric
+            .substitute_one(
+                VariableID::from(0),
+                &Function::from(linear!(1) + linear!(100)),
+            )
+            .unwrap();
+
+        assert_eq!(substituted.decision_variable_dependency.len(), 1);
+        assert!(substituted
+            .decision_variable_dependency
+            .get(&VariableID::from(0))
+            .is_some());
+
+        let mut parameter_values = crate::v1::Parameters::default();
+        parameter_values.entries.insert(100, 2.0);
+        let instance = substituted.with_parameters(parameter_values).unwrap();
+        let state = crate::v1::State::from_iter([(1, 3.0)]);
+        let value = instance
+            .objective()
+            .evaluate(&state, crate::ATol::default())
+            .unwrap();
+        assert_eq!(value, 7.0);
+    }
+
+    #[test]
+    fn test_parametric_instance_substitute_parameter_target_fails() {
+        let mut decision_variables = BTreeMap::new();
+        decision_variables.insert(
+            VariableID::from(0),
+            DecisionVariable::continuous(VariableID::from(0)),
+        );
+
+        let mut parameters = BTreeMap::new();
+        parameters.insert(
+            VariableID::from(100),
+            crate::v1::Parameter {
+                id: 100,
+                ..Default::default()
+            },
+        );
+
+        let parametric = ParametricInstance::new(
+            Sense::Minimize,
+            Function::from(linear!(0) + linear!(100)),
+            decision_variables,
+            parameters,
+            BTreeMap::new(),
+        )
+        .unwrap();
+
+        let err = parametric
+            .substitute_one(VariableID::from(100), &Function::from(linear!(0)))
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            SubstitutionError::ParameterSubstitution { parameter }
+                if parameter == VariableID::from(100)
+        ));
+    }
+
+    #[test]
+    fn test_parametric_instance_substitute_undefined_rhs_fails() {
+        let mut decision_variables = BTreeMap::new();
+        decision_variables.insert(
+            VariableID::from(0),
+            DecisionVariable::continuous(VariableID::from(0)),
+        );
+
+        let parametric = ParametricInstance::new(
+            Sense::Minimize,
+            Function::from(linear!(0)),
+            decision_variables,
+            BTreeMap::new(),
+            BTreeMap::new(),
+        )
+        .unwrap();
+
+        let err = parametric
+            .substitute_one(VariableID::from(0), &Function::from(linear!(999)))
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            SubstitutionError::UndefinedSubstitutionVariable { variable }
+                if variable == VariableID::from(999)
+        ));
     }
 
     #[test]

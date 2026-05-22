@@ -4350,6 +4350,34 @@ class ParametricInstance:
 
         Parameters can be provided as a dict mapping parameter IDs to their values.
         """
+    def substitute(self, assignments: typing.Mapping[builtins.int, ToFunction]) -> None:
+        r"""
+        Substitute decision variables with function expressions (in-place).
+
+        Replaces each given decision variable with the provided function in the
+        objective and all active constraints. Replacement functions may still
+        reference parameters; those parameter references remain in this
+        parametric instance and are evaluated later by {meth}`with_parameters`.
+        Assignment targets must be existing decision variable IDs. Replacement
+        expressions may only reference existing decision variable or parameter
+        IDs; parameter IDs cannot be assignment targets.
+
+        **Args:**
+        - `assignments`: A dict mapping decision variable IDs to the function
+          expressions that should replace them.
+
+        **Important:**
+        This method performs an algebraic rewrite. It does not automatically
+        translate the substituted variable's bound or kind into constraints on
+        the replacement expression. If the substitution must preserve the
+        optimization problem, the caller must provide a domain-preserving
+        encoding or add the required linking and bound constraints explicitly.
+
+        Raises ``ValueError`` on cyclic or recursive assignments, undefined
+        IDs, when a parameter ID is used as an assignment target, or when
+        substituting a variable that is a member of an indicator, one-hot, or
+        SOS1 constraint.
+        """
     def add_decision_variable(
         self, variable: DecisionVariable
     ) -> AttachedDecisionVariable:

@@ -18713,6 +18713,48 @@
               "deprecated": null
             },
             {
+              "name": "substitute",
+              "doc": "Substitute decision variables with function expressions (in-place).\n\nReplaces each given decision variable with the provided function in the\nobjective and all active constraints. Replacement functions may still\nreference parameters; those parameter references remain in this\nparametric instance and are evaluated later by {meth}`with_parameters`.\nAssignment targets must be existing decision variable IDs. Replacement\nexpressions may only reference existing decision variable or parameter\nIDs; parameter IDs cannot be assignment targets.\n\n**Args:**\n- `assignments`: A dict mapping decision variable IDs to the function\n  expressions that should replace them.\n\n**Important:**\nThis method performs an algebraic rewrite. It does not automatically\ntranslate the substituted variable's bound or kind into constraints on\nthe replacement expression. If the substitution must preserve the\noptimization problem, the caller must provide a domain-preserving\nencoding or add the required linking and bound constraints explicitly.\n\nRaises ``ValueError`` on cyclic or recursive assignments, undefined\nIDs, when a parameter ID is used as an assignment target, or when\nsubstituting a variable that is a member of an indicator, one-hot, or\nSOS1 constraint.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "assignments",
+                      "type_": {
+                        "display": "Mapping[int, _ommx_rust.ToFunction]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "ToFunction",
+                            "link_target": {
+                              "fqn": "ommx._ommx_rust.ToFunction",
+                              "doc_module": "ommx._ommx_rust",
+                              "kind": "Class",
+                              "attribute": null
+                            },
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "to_bytes",
               "doc": "",
               "signatures": [

@@ -1,4 +1,4 @@
-from ommx.v1 import Instance, DecisionVariable, Function
+from ommx.v1 import Instance, DecisionVariable, Function, Parameter, ParametricInstance
 import math
 import pytest
 
@@ -475,3 +475,78 @@ def test_substitute_recursive_assignment_raises():
 
     assert {v.id for v in instance.decision_variables} == decision_variable_ids_before
     assert instance.objective.almost_equal(objective_before)
+
+
+def test_parametric_instance_substitute_with_parameterized_rhs():
+    """ParametricInstance.substitute keeps parameters symbolic until materialization."""
+    x = DecisionVariable.integer(0, lower=0, upper=10, name="x")
+    y = DecisionVariable.binary(1, name="y")
+    p = Parameter(100, name="p")
+    parametric = ParametricInstance.from_components(
+        decision_variables=[x, y],
+        parameters=[p],
+        objective=x + p * y,
+        constraints={0: x <= p + 1},
+        sense=Instance.MAXIMIZE,
+    )
+
+    parametric.substitute({0: p * y + 1})
+
+    instance = parametric.with_parameters({100: 2.0})
+    assert instance.objective.almost_equal(Function(4 * y + 1))
+    solution = instance.evaluate({1: 1})
+    assert solution.feasible
+    assert solution.objective == pytest.approx(5.0)
+
+
+def test_parametric_instance_substitute_recursive_assignment_raises():
+    x = [DecisionVariable.integer(i, lower=0, upper=3, name="x") for i in range(2)]
+    p = Parameter(100, name="p")
+    parametric = ParametricInstance.from_components(
+        decision_variables=x,
+        parameters=[p],
+        objective=x[0] + p * x[1],
+        constraints={},
+        sense=Instance.MAXIMIZE,
+    )
+    objective_before = Function(parametric.objective)
+
+    with pytest.raises(ValueError):
+        parametric.substitute({0: x[0] + p})
+
+    assert parametric.objective.almost_equal(objective_before)
+
+
+def test_parametric_instance_substitute_parameter_id_raises():
+    x = DecisionVariable.binary(0, name="x")
+    p = Parameter(100, name="p")
+    parametric = ParametricInstance.from_components(
+        decision_variables=[x],
+        parameters=[p],
+        objective=x + p,
+        constraints={},
+        sense=Instance.MAXIMIZE,
+    )
+    objective_before = Function(parametric.objective)
+
+    with pytest.raises(ValueError, match="Cannot substitute parameter"):
+        parametric.substitute({100: x})
+
+    assert parametric.objective.almost_equal(objective_before)
+
+
+def test_parametric_instance_substitute_undefined_rhs_id_raises():
+    x = DecisionVariable.binary(0, name="x")
+    parametric = ParametricInstance.from_components(
+        decision_variables=[x],
+        parameters=[],
+        objective=x,
+        constraints={},
+        sense=Instance.MAXIMIZE,
+    )
+    objective_before = Function(parametric.objective)
+
+    with pytest.raises(ValueError, match="Undefined variable ID is used in substitution"):
+        parametric.substitute({0: DecisionVariable.binary(999)})
+
+    assert parametric.objective.almost_equal(objective_before)
