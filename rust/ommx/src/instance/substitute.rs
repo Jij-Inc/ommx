@@ -15,6 +15,19 @@ impl Substitute for Instance {
             return Ok(self);
         }
 
+        for (var_id, function) in acyclic.iter() {
+            if !self.decision_variables.contains_key(var_id) {
+                return Err(SubstitutionError::UndefinedSubstitutionVariable { variable: *var_id });
+            }
+            for required_id in function.required_ids() {
+                if !self.decision_variables.contains_key(&required_id) {
+                    return Err(SubstitutionError::UndefinedSubstitutionVariable {
+                        variable: required_id,
+                    });
+                }
+            }
+        }
+
         // Get the set of variables being substituted
         let substituted_variables: std::collections::BTreeSet<VariableID> =
             acyclic.iter().map(|(var_id, _)| *var_id).collect();
@@ -171,6 +184,10 @@ mod tests {
             VariableID::from(2),
             DecisionVariable::continuous(VariableID::from(2)),
         );
+        decision_variables.insert(
+            VariableID::from(3),
+            DecisionVariable::continuous(VariableID::from(3)),
+        );
 
         // Create a simple instance: minimize x1 + 2*x2, subject to x1 + x2 <= 10
         let objective = Function::from(linear!(1) + coeff!(2.0) * linear!(2));
@@ -204,6 +221,32 @@ mod tests {
             .decision_variable_dependency
             .get(&VariableID::from(1))
             .is_some());
+    }
+
+    #[test]
+    fn test_instance_substitute_undefined_rhs_fails() {
+        let mut decision_variables = BTreeMap::new();
+        decision_variables.insert(
+            VariableID::from(0),
+            DecisionVariable::continuous(VariableID::from(0)),
+        );
+
+        let instance = Instance::new(
+            Sense::Minimize,
+            Function::from(linear!(0)),
+            decision_variables,
+            BTreeMap::new(),
+        )
+        .unwrap();
+
+        let err = instance
+            .substitute_one(VariableID::from(0), &Function::from(linear!(999)))
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            SubstitutionError::UndefinedSubstitutionVariable { variable }
+                if variable == VariableID::from(999)
+        ));
     }
 
     #[test]

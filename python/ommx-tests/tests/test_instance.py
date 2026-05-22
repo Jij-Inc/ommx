@@ -533,6 +533,26 @@ def test_substitute_recursive_assignment_raises():
     assert instance.objective.almost_equal(objective_before)
 
 
+def test_substitute_undefined_rhs_id_raises():
+    x = DecisionVariable.binary(0, name="x")
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        constraints=[],
+        sense=Instance.MAXIMIZE,
+    )
+    objective_before = instance.objective
+    decision_variable_ids_before = {v.id for v in instance.decision_variables}
+
+    with pytest.raises(
+        ValueError, match="Undefined variable ID is used in substitution"
+    ):
+        instance.substitute({0: DecisionVariable.binary(999)})
+
+    assert {v.id for v in instance.decision_variables} == decision_variable_ids_before
+    assert instance.objective.almost_equal(objective_before)
+
+
 def test_parametric_instance_substitute_with_parameterized_rhs():
     """ParametricInstance.substitute keeps parameters symbolic until materialization."""
     x = DecisionVariable.integer(0, lower=0, upper=10, name="x")
