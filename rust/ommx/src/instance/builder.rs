@@ -117,7 +117,7 @@ impl InstanceBuilder {
     /// Returns an error if:
     /// - Required fields (`sense`, `objective`, `decision_variables`, `constraints`) are not set
     /// - Map keys don't match their value's ID (decision_variables, constraints, removed_constraints)
-    /// - The objective function or constraints reference undefined variable IDs
+    /// - The objective function, constraints, or removed constraints reference undefined variable IDs
     /// - The keys of `constraints` and `removed_constraints` are not disjoint
     /// - The keys of `decision_variable_dependency` are not in `decision_variables`
     /// - `used`, `fixed`, and `dependent` are not pairwise disjoint (see [`DecisionVariableAnalysis`])

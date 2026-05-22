@@ -29,4 +29,4 @@ See the [ParametricInstance user guide](../user_guide/parametric_instance.ipynb)
 
 `Instance.substitute` now rejects substitution expressions whose right-hand side references an undefined decision variable ID. `ParametricInstance.substitute` accepts right-hand side references only when they are registered decision variables or parameters.
 
-`ParametricInstance.with_parameters` now also evaluates parameter references in `decision_variable_dependency`, so dependent-variable definitions are fully materialized when converting to an `Instance`.
+`ParametricInstance.with_parameters` now also evaluates parameter references in `decision_variable_dependency` and `removed_constraints`, so the resulting `Instance` does not keep parameter IDs in those fields.

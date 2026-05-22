@@ -115,7 +115,7 @@ impl ParametricInstanceBuilder {
     /// Returns an error if:
     /// - Required fields (`sense`, `objective`, `decision_variables`, `parameters`, `constraints`) are not set
     /// - Decision variable IDs and parameter IDs overlap
-    /// - The objective function or constraints reference undefined variable IDs
+    /// - The objective function, constraints, or removed constraints reference undefined variable IDs
     /// - The keys of `constraints` and `removed_constraints` are not disjoint
     /// - The keys of `decision_variable_dependency` are not in `decision_variables`
     /// - The RHS expressions of `decision_variable_dependency` reference IDs

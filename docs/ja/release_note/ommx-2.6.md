@@ -29,4 +29,4 @@ Python SDK で `ParametricInstance.substitute` を公開しました。
 
 `Instance.substitute` が、右辺で未定義の決定変数 ID を参照する置換式を拒否するようになりました。`ParametricInstance.substitute` では、右辺の参照が登録済みの決定変数またはパラメータであることを検証します。
 
-`ParametricInstance.with_parameters` は `decision_variable_dependency` 内のパラメータ参照も評価するようになり、`Instance` へ変換するときに従属変数の定義も具体化されます。
+`ParametricInstance.with_parameters` は `decision_variable_dependency` と `removed_constraints` 内のパラメータ参照も評価するようになり、生成される `Instance` のこれらのフィールドにパラメータ ID が残らないようになりました。

@@ -115,6 +115,10 @@ pub struct Instance {
 ///   - **used**: Variable IDs appearing in the objective function or constraints
 ///   - **fixed**: Variable IDs with `substituted_value` set
 ///   - **dependent**: Keys of `decision_variable_dependency`
+/// - [`Self::removed_constraints`] may contain fixed or dependent variable IDs and parameter IDs.
+///   Parameter IDs are evaluated by [`Self::with_parameters`]. Fixed and dependent
+///   variable IDs are substituted after materialization when the constraint is restored
+///   via [`Instance::restore_constraint`].
 /// - The keys of [`Self::named_functions`] match the `id()` of their values.
 /// - [`Self::named_functions`] may contain fixed or dependent variable IDs (like `removed_constraints`).
 ///   Variable IDs in `named_functions` must be registered in [`Self::decision_variables`],
