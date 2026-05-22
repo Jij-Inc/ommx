@@ -102,7 +102,8 @@ impl ParametricInstance {
         };
         let atol = ATol::default();
 
-        // Partially evaluate the objective, constraints, and named functions
+        // Partially evaluate the objective, constraints, removed constraints,
+        // and named functions.
         let mut objective = self.objective;
         objective.partial_evaluate(&state, atol)?;
 
@@ -111,10 +112,20 @@ impl ParametricInstance {
             constraint.function.partial_evaluate(&state, atol)?;
         }
 
+        let mut removed_constraints = self.removed_constraints;
+        for (_, removed_constraint) in removed_constraints.iter_mut() {
+            removed_constraint.partial_evaluate(&state, atol)?;
+        }
+
         let mut named_functions = self.named_functions;
         for (_, named_function) in named_functions.iter_mut() {
             named_function.partial_evaluate(&state, atol)?;
         }
+
+        // Dependency RHS expressions may reference parameter IDs. Substitute
+        // them before materializing an Instance, which has no parameter set.
+        let mut decision_variable_dependency = self.decision_variable_dependency;
+        decision_variable_dependency.partial_evaluate(&state, atol)?;
 
         Ok(Instance {
             sense: self.sense,
@@ -122,11 +133,119 @@ impl ParametricInstance {
             decision_variables: self.decision_variables,
             constraints,
             named_functions,
-            removed_constraints: self.removed_constraints,
-            decision_variable_dependency: self.decision_variable_dependency,
+            removed_constraints,
+            decision_variable_dependency,
             constraint_hints: self.constraint_hints,
             parameters: Some(parameters),
             description: self.description,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{constraint::Equality, linear, Function};
+    use maplit::btreemap;
+
+    #[test]
+    fn decision_variable_dependency_rhs_is_substituted() {
+        use crate::AcyclicAssignments;
+
+        let x = VariableID::from(1);
+        let dep = VariableID::from(2);
+        let p = VariableID::from(100);
+        let assignments =
+            AcyclicAssignments::new(vec![(dep, Function::from(linear!(1) + linear!(100)))])
+                .unwrap();
+
+        let parametric = ParametricInstance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(btreemap! {
+                x => DecisionVariable::binary(x),
+                dep => DecisionVariable::binary(dep),
+            })
+            .parameters(btreemap! {
+                p => crate::v1::Parameter { id: 100, ..Default::default() },
+            })
+            .constraints(BTreeMap::new())
+            .decision_variable_dependency(assignments)
+            .build()
+            .unwrap();
+
+        let params = crate::v1::Parameters {
+            entries: std::collections::HashMap::from([(100, 1.0)]),
+        };
+        let instance = parametric.with_parameters(params).unwrap();
+
+        let dep_rhs = instance
+            .decision_variable_dependency()
+            .get(&dep)
+            .expect("dependency entry survives materialization");
+        let rhs_required: VariableIDSet = dep_rhs.required_ids();
+        assert!(
+            !rhs_required.contains(&p),
+            "parameter id {p:?} survived in dependency RHS: {rhs_required:?}",
+        );
+        assert!(
+            rhs_required.contains(&x),
+            "decision variable id {x:?} should remain in dependency RHS: {rhs_required:?}",
+        );
+    }
+
+    #[test]
+    fn removed_constraint_parameters_are_substituted() {
+        let x = VariableID::from(1);
+        let p = VariableID::from(100);
+        let constraint_id = ConstraintID::from(1);
+        let removed_constraint = RemovedConstraint {
+            constraint: Constraint {
+                id: constraint_id,
+                function: Function::from(linear!(1) + linear!(100)),
+                equality: Equality::LessThanOrEqualToZero,
+                name: None,
+                subscripts: Vec::new(),
+                parameters: Default::default(),
+                description: None,
+            },
+            removed_reason: "test".to_string(),
+            removed_reason_parameters: Default::default(),
+        };
+
+        let parametric = ParametricInstance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(btreemap! {
+                x => DecisionVariable::binary(x),
+            })
+            .parameters(btreemap! {
+                p => crate::v1::Parameter { id: 100, ..Default::default() },
+            })
+            .constraints(BTreeMap::new())
+            .removed_constraints(btreemap! {
+                constraint_id => removed_constraint,
+            })
+            .build()
+            .unwrap();
+
+        let params = crate::v1::Parameters {
+            entries: std::collections::HashMap::from([(100, 2.0)]),
+        };
+        let instance = parametric.with_parameters(params).unwrap();
+
+        let removed = instance
+            .removed_constraints()
+            .get(&constraint_id)
+            .expect("removed constraint survives materialization");
+        let required_ids = removed.required_ids();
+        assert!(
+            !required_ids.contains(&p),
+            "parameter id {p:?} survived in removed constraint: {required_ids:?}",
+        );
+        assert!(
+            required_ids.contains(&x),
+            "decision variable id {x:?} should remain in removed constraint: {required_ids:?}",
+        );
     }
 }

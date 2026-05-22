@@ -2255,6 +2255,35 @@ class ParametricInstance(UserAnnotationBase):
         instance = pi.with_parameters(ps)
         return Instance(instance)
 
+    def substitute(
+        self,
+        assignments: Mapping[
+            int,
+            int
+            | float
+            | DecisionVariable
+            | Linear
+            | Quadratic
+            | Polynomial
+            | Function
+            | _Function
+            | _ommx_rust.Function,
+        ],
+    ):
+        """
+        Substitute decision variables with function expressions in-place.
+        """
+        rust_assignments = {}
+        for variable_id, function in assignments.items():
+            if isinstance(function, Function):
+                rust_assignments[variable_id] = function.raw
+            else:
+                rust_assignments[variable_id] = Function(function).raw
+        pi = _ommx_rust.ParametricInstance.from_bytes(self.to_bytes())
+        pi.substitute(rust_assignments)
+        self.raw = _ParametricInstance()
+        self.raw.ParseFromString(pi.to_bytes())
+
 
 class VariableBase(ABC):
     @property

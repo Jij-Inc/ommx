@@ -11,4 +11,14 @@ pub enum SubstitutionError {
     /// Error indicating that a cycle was detected in the assignment graph.
     #[error("Cyclic assignment detected: circular dependency found in variable assignments")]
     CyclicAssignmentDetected,
+
+    /// `ParametricInstance::substitute` only substitutes decision variables.
+    #[error(
+        "Cannot substitute parameter {parameter:?}; use with_parameters to assign parameter values"
+    )]
+    ParameterSubstitution { parameter: VariableID },
+
+    /// Substitution assignments may only reference IDs defined by the host.
+    #[error("Undefined variable ID is used in substitution: {variable:?}")]
+    UndefinedSubstitutionVariable { variable: VariableID },
 }
