@@ -61,6 +61,13 @@ impl FileBlobStore {
         Ok(self.path_for_digest(digest)?.exists())
     }
 
+    pub fn size(&self, digest: &Digest) -> Result<u64> {
+        let path = self.path_for_digest(digest)?;
+        Ok(fs::metadata(&path)
+            .with_context(|| format!("Failed to read blob metadata {}", path.display()))?
+            .len())
+    }
+
     pub fn path_for_digest(&self, digest: &Digest) -> Result<PathBuf> {
         Ok(self
             .root

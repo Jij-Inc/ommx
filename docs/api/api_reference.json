@@ -1662,6 +1662,1038 @@
       ],
       "submodules": []
     },
+    "ommx.experiment": {
+      "name": "ommx.experiment",
+      "doc": "",
+      "items": [
+        {
+          "kind": "Class",
+          "name": "Experiment",
+          "doc": "",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__enter__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "Experiment",
+                    "link_target": {
+                      "fqn": "ommx.experiment.Experiment",
+                      "doc_module": "ommx.experiment",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__exit__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "exc_type",
+                      "type_": {
+                        "display": "Optional[Any]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Any",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "_exc_value",
+                      "type_": {
+                        "display": "Optional[Any]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Any",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "_traceback",
+                      "type_": {
+                        "display": "Optional[Any]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Any",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__new__",
+              "doc": "Start a new Experiment in the local registry.\n\nIf `image_name` is omitted, OMMX generates an anonymous local\nExperiment name.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "image_name",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Experiment",
+                    "link_target": {
+                      "fqn": "ommx.experiment.Experiment",
+                      "doc_module": "ommx.experiment",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "commit",
+              "doc": "Commit this unsealed Experiment into the local registry.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "Artifact",
+                    "link_target": {
+                      "fqn": "ommx.artifact.Artifact",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "from_artifact",
+              "doc": "Interpret an already-open Artifact as a committed Experiment.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "artifact",
+                      "type_": {
+                        "display": "Artifact",
+                        "link_target": {
+                          "fqn": "ommx.artifact.Artifact",
+                          "doc_module": "ommx.artifact",
+                          "kind": "Class",
+                          "attribute": null
+                        },
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Experiment",
+                    "link_target": {
+                      "fqn": "ommx.experiment.Experiment",
+                      "doc_module": "ommx.experiment",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "load",
+              "doc": "Load a committed Experiment Artifact from the local registry.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "image_name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Experiment",
+                    "link_target": {
+                      "fqn": "ommx.experiment.Experiment",
+                      "doc_module": "ommx.experiment",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "log_instance",
+              "doc": "Record an Instance in the experiment space.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "instance",
+                      "type_": {
+                        "display": "Instance",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "log_json",
+              "doc": "Record a JSON-serialisable value in the experiment space.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "value",
+                      "type_": {
+                        "display": "Any",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "log_record",
+              "doc": "Record arbitrary bytes with an explicit OCI media type in the\nexperiment space.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "media_type",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "bytes",
+                      "type_": {
+                        "display": "bytes",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "log_sample_set",
+              "doc": "Record a SampleSet in the experiment space.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "sample_set",
+                      "type_": {
+                        "display": "SampleSet",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "log_solution",
+              "doc": "Record a Solution in the experiment space.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "solution",
+                      "type_": {
+                        "display": "Solution",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "run",
+              "doc": "Start a new Run in this unsealed Experiment.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "Run",
+                    "link_target": {
+                      "fqn": "ommx.experiment.Run",
+                      "doc_module": "ommx.experiment",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "run_parameters_df",
+              "doc": "Wide DataFrame of run parameters, indexed by `run_id`.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "with_temp_local_registry",
+              "doc": "Start a new Experiment backed by a temporary Local Registry.\n\nThe temporary registry is kept alive by the returned Experiment\nand by Artifacts / loaded Experiments derived from it.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "image_name",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Experiment",
+                    "link_target": {
+                      "fqn": "ommx.experiment.Experiment",
+                      "doc_module": "ommx.experiment",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "artifact",
+              "doc": "",
+              "type_": {
+                "display": "Artifact",
+                "link_target": {
+                  "fqn": "ommx.artifact.Artifact",
+                  "doc_module": "ommx.artifact",
+                  "kind": "Class",
+                  "attribute": null
+                },
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "experiment_records",
+              "doc": "",
+              "type_": {
+                "display": "list[_ommx_rust.Descriptor]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "Descriptor",
+                    "link_target": {
+                      "fqn": "ommx.artifact.Descriptor",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "image_name",
+              "doc": "",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "runs",
+              "doc": "",
+              "type_": {
+                "display": "list[_ommx_rust.SealedRun]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "SealedRun",
+                    "link_target": {
+                      "fqn": "ommx.experiment.SealedRun",
+                      "doc_module": "ommx.experiment",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "Run",
+          "doc": "",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__enter__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "Run",
+                    "link_target": {
+                      "fqn": "ommx.experiment.Run",
+                      "doc_module": "ommx.experiment",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__exit__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "exc_type",
+                      "type_": {
+                        "display": "Optional[Any]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Any",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "_exc_value",
+                      "type_": {
+                        "display": "Optional[Any]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Any",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "_traceback",
+                      "type_": {
+                        "display": "Optional[Any]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Any",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "finish",
+              "doc": "Finish this run and append it to the parent Experiment.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "log_instance",
+              "doc": "Record an Instance in this run.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "instance",
+                      "type_": {
+                        "display": "Instance",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "log_json",
+              "doc": "Record a JSON-serialisable value in this run.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "value",
+                      "type_": {
+                        "display": "Any",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "log_parameter",
+              "doc": "Record a scalar parameter for this run.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "value",
+                      "type_": {
+                        "display": "bool | int | float | str",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "bool",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "float",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "log_record",
+              "doc": "Record arbitrary bytes with an explicit OCI media type in this run.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "media_type",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "bytes",
+                      "type_": {
+                        "display": "bytes",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "log_sample_set",
+              "doc": "Record a SampleSet in this run.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "sample_set",
+                      "type_": {
+                        "display": "SampleSet",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "log_solution",
+              "doc": "Record a Solution in this run.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "solution",
+                      "type_": {
+                        "display": "Solution",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "run_id",
+              "doc": "",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "SealedRun",
+          "doc": "",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "records",
+              "doc": "",
+              "type_": {
+                "display": "list[_ommx_rust.Descriptor]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "Descriptor",
+                    "link_target": {
+                      "fqn": "ommx.artifact.Descriptor",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "run_id",
+              "doc": "",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        }
+      ],
+      "submodules": []
+    },
     "ommx.v1": {
       "name": "ommx.v1",
       "doc": "",
@@ -17681,6 +18713,48 @@
               "deprecated": null
             },
             {
+              "name": "substitute",
+              "doc": "Substitute decision variables with function expressions (in-place).\n\nReplaces each given decision variable with the provided function in the\nobjective and all active constraints. Replacement functions may still\nreference parameters; those parameter references remain in this\nparametric instance and are evaluated later by {meth}`with_parameters`.\nAssignment targets must be existing decision variable IDs. Replacement\nexpressions may only reference existing decision variable or parameter\nIDs; parameter IDs cannot be assignment targets.\n\n**Args:**\n- `assignments`: A dict mapping decision variable IDs to the function\n  expressions that should replace them.\n\n**Important:**\nThis method performs an algebraic rewrite. It does not automatically\ntranslate the substituted variable's bound or kind into constraints on\nthe replacement expression. If the substitution must preserve the\noptimization problem, the caller must provide a domain-preserving\nencoding or add the required linking and bound constraints explicitly.\n\nRaises ``ValueError`` on cyclic or recursive assignments, undefined\nIDs, when a parameter ID is used as an assignment target, or when\nsubstituting a variable that is a member of an indicator, one-hot, or\nSOS1 constraint.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "assignments",
+                      "type_": {
+                        "display": "Mapping[int, _ommx_rust.ToFunction]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "ToFunction",
+                            "link_target": {
+                              "fqn": "ommx._ommx_rust.ToFunction",
+                              "doc_module": "ommx._ommx_rust",
+                              "kind": "Class",
+                              "attribute": null
+                            },
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "to_bytes",
               "doc": "",
               "signatures": [
@@ -25807,6 +26881,9 @@
     "ommx.artifact.get_images": "ommx.artifact",
     "ommx.artifact.get_local_registry_root": "ommx.artifact",
     "ommx.artifact.set_local_registry_root": "ommx.artifact",
+    "ommx.experiment.Experiment": "ommx.experiment",
+    "ommx.experiment.Run": "ommx.experiment",
+    "ommx.experiment.SealedRun": "ommx.experiment",
     "ommx.v1.AdditionalCapability": "ommx.v1",
     "ommx.v1.AttachedConstraint": "ommx.v1",
     "ommx.v1.AttachedDecisionVariable": "ommx.v1",

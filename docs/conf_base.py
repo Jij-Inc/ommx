@@ -53,9 +53,10 @@ exclude_patterns = [
     "autoapi/ommx/index.rst",
 ]
 
-# The `ommx.v1`, `ommx._ommx_rust`, and `ommx.artifact` modules are documented
-# via pyo3_stub_gen_ext (not autoapi), so autoapi cannot resolve them when it
-# processes the autoapi-covered submodules. Silence those spurious warnings.
+# The `ommx.v1`, `ommx._ommx_rust`, `ommx.artifact`, and `ommx.experiment`
+# modules are documented via pyo3_stub_gen_ext (not autoapi), so autoapi cannot
+# resolve them when it processes the autoapi-covered submodules. Silence those
+# spurious warnings.
 suppress_warnings = ["autoapi.python_import_resolution"]
 
 # -- MyST / myst-nb settings ------------------------------------------------
@@ -107,6 +108,7 @@ autoapi_ignore = [
     "**/conftest.py",
     "**/ommx/v1/**",
     "**/ommx/artifact/**",
+    "**/ommx/experiment/**",
     "**/ommx/_ommx_rust/**",
     "**/pywasmcross/**",
 ]

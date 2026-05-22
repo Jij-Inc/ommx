@@ -1,8 +1,6 @@
 //! Experiment / Run handles and run lifecycle.
 
-use super::record::{
-    encode_json, json_media_type, store_record_ref, upsert_record_ref, RecordSpace,
-};
+use super::record::{encode_json, json_media_type, store_record_descriptor, RecordSpace};
 use super::{ParameterValue, Run, RunEntry};
 use crate::artifact::media_types;
 use crate::{Instance, SampleSet, Solution};
@@ -25,9 +23,7 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
     ) -> Result<()> {
         let name = name.into();
         let value = value.into();
-        validate_parameter_value(&name, &value)?;
-        self.parameters.insert(name, value);
-        Ok(())
+        self.parameters.insert(name, value)
     }
 
     /// Record arbitrary bytes with an explicit OCI media type in this
@@ -70,15 +66,14 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
     }
 
     fn add_record(&mut self, name: &str, media_type: MediaType, bytes: &[u8]) -> Result<()> {
-        let record_ref = store_record_ref(
+        let descriptor = store_record_descriptor(
             self.experiment.registry,
-            RecordSpace::Run,
-            Some(self.run_id),
+            RecordSpace::Run(self.run_id),
             name,
             media_type,
             bytes,
         )?;
-        upsert_record_ref(&mut self.records, record_ref);
+        self.records.push(descriptor);
         Ok(())
     }
 
@@ -96,14 +91,5 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
         };
         experiment.push_closed_run(run)?;
         Ok(())
-    }
-}
-
-fn validate_parameter_value(name: &str, value: &ParameterValue) -> Result<()> {
-    match value {
-        ParameterValue::Float(value) if !value.is_finite() => {
-            crate::bail!("Run parameter `{name}` float value must be finite")
-        }
-        _ => Ok(()),
     }
 }

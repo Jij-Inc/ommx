@@ -11,6 +11,7 @@ fn main() -> Result<()> {
         .arg(root.join("ommx/_ommx_rust/__init__.pyi"))
         .arg(root.join("ommx/v1/__init__.py"))
         .arg(root.join("ommx/artifact/__init__.py"))
+        .arg(root.join("ommx/experiment/__init__.py"))
         .status()?;
     Ok(())
 }

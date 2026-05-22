@@ -1,15 +1,18 @@
 //! Tests for the experiment session model.
 
+use super::config::{ExperimentConfig, ExperimentConfigRun};
 use super::UnsealedExperimentState;
 use super::{
-    Experiment, Name, ANN_ARTIFACT_KIND, ANN_EXPERIMENT_SCHEMA, ANN_EXPERIMENT_STATUS, ANN_LAYER,
-    ANN_RECORD_NAME, ANN_RUN_ID, ANN_SPACE, ARTIFACT_KIND_EXPERIMENT, EXPERIMENT_SCHEMA_V1,
-    EXPERIMENT_STATUS_FINISHED, LAYER_KIND_RUN_PARAMETERS,
+    Experiment, ExperimentDyn, Name, ParameterValue, SealedExperiment, ANN_LAYER, ANN_RECORD_NAME,
+    ANN_RUN_ID, ANN_SPACE, EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_STATUS_FINISHED,
+    LAYER_KIND_RUN_PARAMETERS, RUN_PARAMETERS_MEDIA_TYPE,
 };
-use crate::artifact::media_types;
+use crate::artifact::local_registry::UnsealedArtifact;
+use crate::artifact::{media_types, ImageRef, LocalArtifact, LocalRegistryHandle};
 use crate::Instance;
 use oci_spec::image::{Descriptor, MediaType};
 use serde_json::json;
+use std::collections::HashMap;
 
 fn with_temp_experiment<T>(f: impl FnOnce(Experiment<'_>) -> anyhow::Result<T>) -> T {
     Experiment::with_temp_local_registry(Name::Anonymous, f).unwrap()
@@ -126,17 +129,18 @@ fn log_writes_blob_to_blobstore_immediately() {
         let digest = with_unsealed_state(&experiment, |state| {
             let run = state.runs.get(&0).unwrap();
             assert_eq!(run.records.len(), 1);
-            run.records[0].descriptor.digest().clone()
+            run.records[0].digest().clone()
         });
         assert!(experiment.registry.blobs().exists(&digest).unwrap());
         Ok(())
     });
 }
 
-/// Logging the same `(space, media type, name)` again replaces the
-/// record.
+/// Record descriptors are append-only within the Experiment/Run state.
+/// BlobStore still deduplicates byte-identical payloads by digest, but
+/// the Experiment model preserves each log call as a descriptor entry.
 #[test]
-fn log_upserts_same_space_media_type_name() {
+fn log_preserves_record_descriptor_log_order() {
     with_temp_experiment(|experiment| {
         experiment.log_json("dataset", json!("miplib2017")).unwrap();
         experiment.log_json("dataset", json!("qplib")).unwrap();
@@ -145,25 +149,54 @@ fn log_upserts_same_space_media_type_name() {
             crate::random::random_deterministic(crate::InstanceParameters::default_lp());
         experiment.log_instance("dataset", &instance).unwrap();
 
-        let json_digest = with_unsealed_state(&experiment, |state| {
-            assert_eq!(state.records.len(), 2);
+        let json_digests = with_unsealed_state(&experiment, |state| {
+            assert_eq!(state.records.len(), 3);
+            assert_eq!(
+                state
+                    .records
+                    .iter()
+                    .map(|record| layer_annotation(record, ANN_RECORD_NAME).unwrap())
+                    .collect::<Vec<_>>(),
+                vec![
+                    "dataset".to_string(),
+                    "dataset".to_string(),
+                    "dataset".to_string()
+                ]
+            );
+            assert_eq!(
+                state
+                    .records
+                    .iter()
+                    .map(|record| record.media_type().clone())
+                    .collect::<Vec<_>>(),
+                vec![
+                    MediaType::Other("application/json".into()),
+                    MediaType::Other("application/json".into()),
+                    media_types::v1_instance(),
+                ]
+            );
             state
                 .records
                 .iter()
-                .find(|record| {
-                    record.descriptor.media_type() == &MediaType::Other("application/json".into())
-                })
-                .unwrap()
-                .descriptor
-                .digest()
-                .clone()
+                .take(2)
+                .map(|record| record.digest().clone())
+                .collect::<Vec<_>>()
         });
-        let bytes = experiment
+        let first_bytes = experiment
             .registry
             .blobs()
-            .read_bytes(&json_digest)
+            .read_bytes(&json_digests[0])
             .unwrap();
-        assert_eq!(bytes, serde_json::to_vec(&json!("qplib")).unwrap());
+        let second_bytes = experiment
+            .registry
+            .blobs()
+            .read_bytes(&json_digests[1])
+            .unwrap();
+        assert_eq!(
+            first_bytes,
+            serde_json::to_vec(&json!("miplib2017")).unwrap()
+        );
+        assert_eq!(second_bytes, serde_json::to_vec(&json!("qplib")).unwrap());
         Ok(())
     });
 }
@@ -188,16 +221,17 @@ fn commit_produces_experiment_artifact() {
         let artifact = sealed.artifact();
 
         let annotations = artifact.annotations().unwrap();
+        assert!(annotations.is_empty());
+
+        let config = artifact.get_manifest().unwrap().config();
         assert_eq!(
-            annotations.get(ANN_ARTIFACT_KIND).map(String::as_str),
-            Some(ARTIFACT_KIND_EXPERIMENT)
+            config.media_type(),
+            &MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string())
         );
+        let config_json: serde_json::Value =
+            serde_json::from_slice(&artifact.get_blob(config.digest()).unwrap()).unwrap();
         assert_eq!(
-            annotations.get(ANN_EXPERIMENT_SCHEMA).map(String::as_str),
-            Some(EXPERIMENT_SCHEMA_V1)
-        );
-        assert_eq!(
-            annotations.get(ANN_EXPERIMENT_STATUS).map(String::as_str),
+            config_json.get("status").and_then(|value| value.as_str()),
             Some(EXPERIMENT_STATUS_FINISHED)
         );
 
@@ -235,10 +269,10 @@ fn commit_produces_experiment_artifact() {
         let run_params = find_layer(&layers, ANN_LAYER, LAYER_KIND_RUN_PARAMETERS);
         assert!(layer_annotation(run_params, ANN_SPACE).is_none());
 
-        // Config is the OCI 1.1 empty config.
+        // Config stores the Experiment structure; layers are payloads referenced from it.
         assert_eq!(
             artifact.get_manifest().unwrap().config().media_type(),
-            &MediaType::EmptyJSON
+            &MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string())
         );
         Ok(())
     });
@@ -298,6 +332,319 @@ fn log_parameter_materializes_run_parameter_table() {
         );
         Ok(())
     });
+}
+
+#[test]
+fn loaded_experiment_reads_records_and_run_parameters() {
+    with_temp_experiment(|experiment| {
+        experiment.log_json("dataset", json!("miplib2017")).unwrap();
+
+        {
+            let mut run0 = experiment.run().unwrap();
+            run0.log_parameter("solver", "scip").unwrap();
+            run0.log_parameter("time_limit", 20.0).unwrap();
+            run0.log_json("candidate", json!("formulation-a")).unwrap();
+            run0.finish().unwrap();
+        }
+        {
+            let mut run1 = experiment.run().unwrap();
+            run1.log_parameter("solver", "highs").unwrap();
+            run1.log_parameter("presolve", true).unwrap();
+            run1.finish().unwrap();
+        }
+
+        let artifact = experiment.commit().unwrap().into_artifact();
+        let loaded = SealedExperiment::from_artifact(artifact).unwrap();
+
+        assert!(loaded
+            .experiment_records()
+            .iter()
+            .any(
+                |record| layer_annotation(record, ANN_RECORD_NAME).as_deref() == Some("dataset")
+                    && record.media_type() == &MediaType::Other("application/json".into())
+            ));
+        let run0 = loaded.run(0).expect("run 0 must be reconstructed");
+        assert_eq!(run0.run_id(), 0);
+        assert!(run0.records().iter().any(|record| {
+            layer_annotation(record, ANN_RECORD_NAME).as_deref() == Some("candidate")
+                && record.media_type() == &MediaType::Other("application/json".into())
+        }));
+        let run1 = loaded.run(1).expect("run 1 must be reconstructed");
+        assert_eq!(run1.run_id(), 1);
+        assert!(run1.records().is_empty());
+
+        let mut cells = loaded.run_parameter_cells();
+        cells.sort_by(|left, right| (left.run_id, &left.name).cmp(&(right.run_id, &right.name)));
+        assert_eq!(cells.len(), 4);
+        assert_eq!(cells[0].run_id, 0);
+        assert_eq!(cells[0].name, "solver");
+        assert_eq!(cells[0].value, ParameterValue::String("scip".to_string()));
+        assert_eq!(cells[1].run_id, 0);
+        assert_eq!(cells[1].name, "time_limit");
+        assert_eq!(cells[1].value, ParameterValue::Float(20.0));
+        assert_eq!(cells[2].run_id, 1);
+        assert_eq!(cells[2].name, "presolve");
+        assert_eq!(cells[2].value, ParameterValue::Bool(true));
+        assert_eq!(cells[3].run_id, 1);
+        assert_eq!(cells[3].name, "solver");
+        assert_eq!(cells[3].value, ParameterValue::String("highs".to_string()));
+        Ok(())
+    });
+}
+
+#[test]
+fn loaded_experiment_rejects_non_finished_status() {
+    let temp = crate::artifact::local_registry::TempLocalRegistry::new().unwrap();
+    let registry = temp.registry();
+    let run_parameters = registry
+        .store_json_layer_blob(
+            MediaType::Other(RUN_PARAMETERS_MEDIA_TYPE.to_string()),
+            &json!({ "columns": {} }),
+            HashMap::new(),
+        )
+        .unwrap();
+    let config = ExperimentConfig {
+        status: "crashed".to_string(),
+        records: Vec::new(),
+        runs: Vec::new(),
+        run_parameters: Descriptor::from(run_parameters.clone()),
+    };
+    let config_descriptor = registry
+        .store_json_blob(
+            MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()),
+            &config,
+        )
+        .unwrap();
+    let unsealed = UnsealedArtifact::new(
+        MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
+        config_descriptor,
+        vec![run_parameters],
+        None,
+        HashMap::new(),
+    );
+    let sealed_artifact = registry.seal_artifact(unsealed).unwrap();
+    let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:crashed").unwrap();
+    let artifact =
+        LocalArtifact::from_parts(registry, image_name, sealed_artifact.digest().clone());
+
+    let err = SealedExperiment::from_artifact(artifact)
+        .expect_err("non-finished experiment configs must not load as sealed experiments");
+    assert!(err.to_string().contains("status is crashed"));
+    assert!(err.to_string().contains(EXPERIMENT_STATUS_FINISHED));
+}
+
+#[test]
+fn loaded_experiment_rejects_config_record_not_listed_in_layers() {
+    let temp = crate::artifact::local_registry::TempLocalRegistry::new().unwrap();
+    let registry = temp.registry();
+    let mut annotations = HashMap::new();
+    annotations.insert(ANN_SPACE.to_string(), "experiment".to_string());
+    annotations.insert(ANN_RECORD_NAME.to_string(), "outside".to_string());
+    let outside_record = registry
+        .store_layer_blob(
+            MediaType::Other("application/json".to_string()),
+            br#""outside""#,
+            annotations,
+        )
+        .unwrap();
+    let run_parameters = registry
+        .store_json_layer_blob(
+            MediaType::Other(RUN_PARAMETERS_MEDIA_TYPE.to_string()),
+            &json!({ "columns": {} }),
+            HashMap::new(),
+        )
+        .unwrap();
+    let config = ExperimentConfig {
+        status: EXPERIMENT_STATUS_FINISHED.to_string(),
+        records: vec![Descriptor::from(outside_record)],
+        runs: Vec::new(),
+        run_parameters: Descriptor::from(run_parameters.clone()),
+    };
+    let config_descriptor = registry
+        .store_json_blob(
+            MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()),
+            &config,
+        )
+        .unwrap();
+    let unsealed = UnsealedArtifact::new(
+        MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
+        config_descriptor,
+        vec![run_parameters],
+        None,
+        HashMap::new(),
+    );
+    let sealed_artifact = registry.seal_artifact(unsealed).unwrap();
+    let image_name =
+        ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:outside-record").unwrap();
+    let artifact =
+        LocalArtifact::from_parts(registry, image_name, sealed_artifact.digest().clone());
+
+    let err = SealedExperiment::from_artifact(artifact)
+        .expect_err("config must not reference records outside artifact layers");
+    assert!(err.to_string().contains("experiment record descriptor"));
+    assert!(err.to_string().contains("not listed in artifact layers"));
+}
+
+#[test]
+fn loaded_experiment_rejects_config_record_with_unlisted_descriptor_metadata() {
+    let temp = crate::artifact::local_registry::TempLocalRegistry::new().unwrap();
+    let registry = temp.registry();
+    let mut manifest_annotations = HashMap::new();
+    manifest_annotations.insert(ANN_SPACE.to_string(), "experiment".to_string());
+    manifest_annotations.insert(ANN_RECORD_NAME.to_string(), "listed".to_string());
+    let listed_record = registry
+        .store_layer_blob(
+            MediaType::Other("application/json".to_string()),
+            br#""same-blob""#,
+            manifest_annotations,
+        )
+        .unwrap();
+    let mut config_annotations = HashMap::new();
+    config_annotations.insert(ANN_SPACE.to_string(), "experiment".to_string());
+    config_annotations.insert(ANN_RECORD_NAME.to_string(), "outside".to_string());
+    let outside_record = registry
+        .store_layer_blob(
+            MediaType::Other("application/json".to_string()),
+            br#""same-blob""#,
+            config_annotations,
+        )
+        .unwrap();
+    assert_eq!(listed_record.digest(), outside_record.digest());
+
+    let run_parameters = registry
+        .store_json_layer_blob(
+            MediaType::Other(RUN_PARAMETERS_MEDIA_TYPE.to_string()),
+            &json!({ "columns": {} }),
+            HashMap::new(),
+        )
+        .unwrap();
+    let config = ExperimentConfig {
+        status: EXPERIMENT_STATUS_FINISHED.to_string(),
+        records: vec![Descriptor::from(outside_record)],
+        runs: Vec::new(),
+        run_parameters: Descriptor::from(run_parameters.clone()),
+    };
+    let config_descriptor = registry
+        .store_json_blob(
+            MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()),
+            &config,
+        )
+        .unwrap();
+    let unsealed = UnsealedArtifact::new(
+        MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
+        config_descriptor,
+        vec![listed_record, run_parameters],
+        None,
+        HashMap::new(),
+    );
+    let sealed_artifact = registry.seal_artifact(unsealed).unwrap();
+    let image_name =
+        ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:unlisted-record-metadata").unwrap();
+    let artifact =
+        LocalArtifact::from_parts(registry, image_name, sealed_artifact.digest().clone());
+
+    let err = SealedExperiment::from_artifact(artifact)
+        .expect_err("config must reference a descriptor listed in artifact layers");
+    assert!(err.to_string().contains("experiment record descriptor"));
+    assert!(err.to_string().contains("not listed in artifact layers"));
+}
+
+#[test]
+fn loaded_experiment_rejects_config_run_record_not_listed_in_layers() {
+    let temp = crate::artifact::local_registry::TempLocalRegistry::new().unwrap();
+    let registry = temp.registry();
+    let mut annotations = HashMap::new();
+    annotations.insert(ANN_SPACE.to_string(), "run".to_string());
+    annotations.insert(ANN_RUN_ID.to_string(), "0".to_string());
+    annotations.insert(ANN_RECORD_NAME.to_string(), "outside".to_string());
+    let outside_record = registry
+        .store_layer_blob(
+            MediaType::Other("application/json".to_string()),
+            br#""outside""#,
+            annotations,
+        )
+        .unwrap();
+    let run_parameters = registry
+        .store_json_layer_blob(
+            MediaType::Other(RUN_PARAMETERS_MEDIA_TYPE.to_string()),
+            &json!({ "columns": {} }),
+            HashMap::new(),
+        )
+        .unwrap();
+    let config = ExperimentConfig {
+        status: EXPERIMENT_STATUS_FINISHED.to_string(),
+        records: Vec::new(),
+        runs: vec![ExperimentConfigRun {
+            run_id: 0,
+            records: vec![Descriptor::from(outside_record)],
+        }],
+        run_parameters: Descriptor::from(run_parameters.clone()),
+    };
+    let config_descriptor = registry
+        .store_json_blob(
+            MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()),
+            &config,
+        )
+        .unwrap();
+    let unsealed = UnsealedArtifact::new(
+        MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
+        config_descriptor,
+        vec![run_parameters],
+        None,
+        HashMap::new(),
+    );
+    let sealed_artifact = registry.seal_artifact(unsealed).unwrap();
+    let image_name =
+        ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:outside-run-record").unwrap();
+    let artifact =
+        LocalArtifact::from_parts(registry, image_name, sealed_artifact.digest().clone());
+
+    let err = SealedExperiment::from_artifact(artifact)
+        .expect_err("config must not reference run records outside artifact layers");
+    assert!(err.to_string().contains("run 0 record descriptor"));
+    assert!(err.to_string().contains("not listed in artifact layers"));
+}
+
+#[test]
+fn loaded_experiment_rejects_run_parameters_not_listed_in_layers() {
+    let temp = crate::artifact::local_registry::TempLocalRegistry::new().unwrap();
+    let registry = temp.registry();
+    let run_parameters = registry
+        .store_json_layer_blob(
+            MediaType::Other(RUN_PARAMETERS_MEDIA_TYPE.to_string()),
+            &json!({ "columns": {} }),
+            HashMap::new(),
+        )
+        .unwrap();
+    let config = ExperimentConfig {
+        status: EXPERIMENT_STATUS_FINISHED.to_string(),
+        records: Vec::new(),
+        runs: Vec::new(),
+        run_parameters: Descriptor::from(run_parameters),
+    };
+    let config_descriptor = registry
+        .store_json_blob(
+            MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()),
+            &config,
+        )
+        .unwrap();
+    let unsealed = UnsealedArtifact::new(
+        MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
+        config_descriptor,
+        Vec::new(),
+        None,
+        HashMap::new(),
+    );
+    let sealed_artifact = registry.seal_artifact(unsealed).unwrap();
+    let image_name =
+        ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:outside-run-parameters").unwrap();
+    let artifact =
+        LocalArtifact::from_parts(registry, image_name, sealed_artifact.digest().clone());
+
+    let err = SealedExperiment::from_artifact(artifact)
+        .expect_err("config must not reference run parameters outside artifact layers");
+    assert!(err.to_string().contains("run-parameter table descriptor"));
+    assert!(err.to_string().contains("not listed in artifact layers"));
 }
 
 #[test]
@@ -387,12 +734,11 @@ fn commit_returns_sealed_experiment() {
 
         let sealed = experiment.commit().unwrap();
         let artifact = sealed.artifact();
+        let config = artifact.get_manifest().unwrap().config();
+        let config_json: serde_json::Value =
+            serde_json::from_slice(&artifact.get_blob(config.digest()).unwrap()).unwrap();
         assert_eq!(
-            artifact
-                .annotations()
-                .unwrap()
-                .get(ANN_EXPERIMENT_STATUS)
-                .map(String::as_str),
+            config_json.get("status").and_then(|value| value.as_str()),
             Some(EXPERIMENT_STATUS_FINISHED)
         );
         Ok(())
@@ -532,4 +878,98 @@ fn log_record_accepts_caller_defined_media_type() {
         );
         Ok(())
     });
+}
+
+#[test]
+fn experiment_dyn_keeps_temp_registry_alive_for_derived_artifacts() {
+    let experiment = ExperimentDyn::with_temp_local_registry(Name::Anonymous).unwrap();
+    {
+        let mut run = experiment.run().unwrap();
+        run.log_parameter("solver", "scip").unwrap();
+        run.finish().unwrap();
+    }
+
+    let artifact = experiment.commit().unwrap();
+    drop(experiment);
+
+    let loaded = ExperimentDyn::from_artifact(artifact).unwrap();
+    let cells = loaded.run_parameter_cells().unwrap();
+    assert_eq!(cells.len(), 1);
+    assert_eq!(cells[0].run_id, 0);
+    assert_eq!(cells[0].name, "solver");
+    assert_eq!(cells[0].value, ParameterValue::String("scip".to_string()));
+}
+
+#[test]
+fn experiment_dyn_rejects_commit_while_run_is_open() {
+    let experiment = ExperimentDyn::with_temp_local_registry(Name::Anonymous).unwrap();
+    let run = experiment.run().unwrap();
+
+    let err = experiment
+        .commit()
+        .expect_err("open RunDyn must block commit");
+    assert!(err.to_string().contains("Run handle"));
+
+    run.abandon();
+    experiment.commit().unwrap();
+}
+
+#[test]
+fn experiment_dyn_rejects_second_commit_as_sealed() {
+    let experiment = ExperimentDyn::with_temp_local_registry(Name::Anonymous).unwrap();
+    experiment.log_json("dataset", json!("miplib2017")).unwrap();
+    experiment.commit().unwrap();
+
+    let err = experiment
+        .commit()
+        .expect_err("sealed Experiment must reject a second commit");
+    assert!(err.to_string().contains("read-only"));
+    assert_eq!(experiment.state_name(), "sealed");
+}
+
+#[test]
+fn experiment_dyn_drops_unfinished_run_as_abandoned() {
+    let experiment = ExperimentDyn::with_temp_local_registry(Name::Anonymous).unwrap();
+    {
+        let mut run = experiment.run().unwrap();
+        run.log_parameter("solver", "scip").unwrap();
+    }
+
+    experiment.commit().unwrap();
+    assert!(experiment.run_parameter_cells().unwrap().is_empty());
+}
+
+#[test]
+fn experiment_dyn_marks_commit_failure_explicitly() {
+    let registry_handle = LocalRegistryHandle::temp().unwrap();
+    let image_name = ImageRef::parse("example.com/ommx/conflict:latest").unwrap();
+
+    ExperimentDyn::with_registry_handle(registry_handle.clone(), image_name.clone())
+        .unwrap()
+        .commit()
+        .unwrap();
+
+    let experiment = ExperimentDyn::with_registry_handle(registry_handle, image_name).unwrap();
+    {
+        let mut run = experiment.run().unwrap();
+        run.log_parameter("solver", "scip").unwrap();
+        run.finish().unwrap();
+    }
+    let err = experiment
+        .commit()
+        .expect_err("publishing the same ref must conflict");
+    assert!(err.to_string().contains("already points"));
+    assert_eq!(experiment.state_name(), "failed");
+    assert_eq!(experiment.open_run_count(), 0);
+
+    let err = experiment
+        .commit()
+        .expect_err("failed Experiment must report the stored failure reason");
+    assert!(err.to_string().contains("commit has failed"));
+    assert!(err.to_string().contains("already points"));
+
+    let err = experiment
+        .run()
+        .expect_err("failed Experiment must reject new runs");
+    assert!(err.to_string().contains("commit has failed"));
 }

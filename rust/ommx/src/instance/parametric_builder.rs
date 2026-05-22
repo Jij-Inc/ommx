@@ -157,6 +157,8 @@ impl ParametricInstanceBuilder {
     /// - The objective function or constraints reference undefined variable IDs
     /// - The keys of `constraints` and `removed_constraints` are not disjoint
     /// - The keys of `decision_variable_dependency` are not in `decision_variables`
+    /// - The RHS expressions of `decision_variable_dependency` reference IDs
+    ///   outside `decision_variables` or `parameters`
     /// - `used`, `fixed`, and `dependent` are not pairwise disjoint (see [`DecisionVariableAnalysis`])
     pub fn build(self) -> crate::Result<ParametricInstance> {
         let sense = self
@@ -371,6 +373,14 @@ impl ParametricInstanceBuilder {
                 crate::bail!(
                     { ?id },
                     "Variable ID {id:?} in decision_variable_dependency is not in decision_variables",
+                );
+            }
+        }
+        for id in self.decision_variable_dependency.required_ids() {
+            if !all_variable_ids.contains(&id) {
+                crate::bail!(
+                    { ?id },
+                    "Undefined variable ID is used in decision_variable_dependency: {id:?}",
                 );
             }
         }
@@ -617,6 +627,68 @@ mod tests {
         assert!(instance
             .indicator_constraints()
             .contains_key(&crate::IndicatorConstraintID::from(7)));
+    }
+
+    #[test]
+    fn test_parametric_builder_dependency_rhs_allows_parameter() {
+        use crate::{linear, AcyclicAssignments};
+        use maplit::btreemap;
+
+        let dep = VariableID::from(1);
+        let x = VariableID::from(2);
+        let p = VariableID::from(100);
+        let dependency = AcyclicAssignments::new(btreemap! {
+            dep => Function::from(linear!(2) + linear!(100)),
+        })
+        .unwrap();
+
+        let instance = ParametricInstance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(btreemap! {
+                dep => DecisionVariable::binary(dep),
+                x => DecisionVariable::binary(x),
+            })
+            .parameters(btreemap! {
+                p => v1::Parameter { id: 100, ..Default::default() },
+            })
+            .constraints(BTreeMap::new())
+            .decision_variable_dependency(dependency)
+            .build();
+
+        assert!(instance.is_ok());
+    }
+
+    #[test]
+    fn test_parametric_builder_dependency_rhs_rejects_undefined_id() {
+        use crate::{linear, AcyclicAssignments};
+        use maplit::btreemap;
+
+        let dep = VariableID::from(1);
+        let undefined = VariableID::from(999);
+        let dependency = AcyclicAssignments::new(btreemap! {
+            dep => Function::from(linear!(999)),
+        })
+        .unwrap();
+
+        let err = ParametricInstance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(btreemap! {
+                dep => DecisionVariable::binary(dep),
+            })
+            .parameters(BTreeMap::new())
+            .constraints(BTreeMap::new())
+            .decision_variable_dependency(dependency)
+            .build()
+            .unwrap_err();
+
+        let msg = err.to_string();
+        assert!(
+            msg.contains("Undefined variable ID is used in decision_variable_dependency")
+                && msg.contains(&format!("{undefined:?}")),
+            "unexpected error: {msg}",
+        );
     }
 
     #[test]
