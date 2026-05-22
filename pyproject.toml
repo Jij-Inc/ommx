@@ -1,5 +1,6 @@
 [tool.uv.sources]
 ommx = { workspace = true }
+ommx_highs_adapter = { workspace = true }
 
 [tool.uv.workspace]
 members = ["python/ommx*"]

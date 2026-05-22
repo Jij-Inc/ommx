@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ommx-column-generation"
+version = "3.0.0a4"
+description = "Experimental column generation helpers for OMMX"
+authors = [{ name = "Jij Inc.", email = "info@j-ij.com" }]
+readme = "README.md"
+requires-python = ">=3.10, <3.14"
+classifiers = [
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "License :: OSI Approved :: Apache Software License",
+  "License :: OSI Approved :: MIT License",
+]
+
+dependencies = [
+  "ommx >= 3.0.0a4, < 4.0.0",
+  "ommx_highs_adapter >= 3.0.0a4, < 4.0.0",
+]
+
+[project.urls]
+Repository = "https://github.com/Jij-Inc/ommx"
+Issues = "https://github.com/Jij-Inc/ommx/issues"
