@@ -12,11 +12,15 @@ See the GitHub Releases above for full details. The following summarizes the mai
 
 This method rewrites an `Instance` by substituting decision variables with expressions. The substituted variables are recorded as dependent variables so their values can be reconstructed when evaluating a solution.
 
+See the [Instance user guide](../user_guide/instance.ipynb) for details and modeling caveats.
+
 ### `ParametricInstance.substitute` (2.6.1, [#898](https://github.com/Jij-Inc/ommx/pull/898))
 
 `ParametricInstance.substitute` is now exposed in the Python SDK.
 
 This method substitutes decision variables while keeping parameter references symbolic. Assignment targets must be decision variables; attempting to substitute a parameter ID raises an error.
+
+See the [ParametricInstance user guide](../user_guide/parametric_instance.ipynb) for the parameter-specific behavior.
 
 ## Bug Fixes
 

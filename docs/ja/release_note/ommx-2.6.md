@@ -12,11 +12,15 @@ Python SDK で `Instance.substitute` を公開しました。
 
 このメソッドは、決定変数を式で置換して `Instance` を書き換えます。置換された変数は従属変数として記録されるため、解を評価するときに値を復元できます。
 
+詳細とモデリング上の注意点は [`Instance` のユーザーガイド](../user_guide/instance.ipynb) を参照してください。
+
 ### `ParametricInstance.substitute` (2.6.1, [#898](https://github.com/Jij-Inc/ommx/pull/898))
 
 Python SDK で `ParametricInstance.substitute` を公開しました。
 
 このメソッドは、パラメータ参照を記号的に残したまま決定変数を置換します。置換対象は決定変数である必要があり、パラメータ ID を置換しようとするとエラーになります。
+
+パラメータ固有の挙動は [`ParametricInstance` のユーザーガイド](../user_guide/parametric_instance.ipynb) を参照してください。
 
 ## バグ修正
 
