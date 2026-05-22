@@ -11,6 +11,10 @@ impl Substitute for Instance {
         mut self,
         acyclic: &crate::AcyclicAssignments,
     ) -> Result<Self::Output, crate::SubstitutionError> {
+        if acyclic.is_empty() {
+            return Ok(self);
+        }
+
         // Get the set of variables being substituted
         let substituted_variables: std::collections::BTreeSet<VariableID> =
             acyclic.iter().map(|(var_id, _)| *var_id).collect();
@@ -115,6 +119,10 @@ impl Substitute for ParametricInstance {
         mut self,
         acyclic: &crate::AcyclicAssignments,
     ) -> Result<Self::Output, crate::SubstitutionError> {
+        if acyclic.is_empty() {
+            return Ok(self);
+        }
+
         let substituted_variables: std::collections::BTreeSet<VariableID> =
             acyclic.iter().map(|(var_id, _)| *var_id).collect();
 
