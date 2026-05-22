@@ -41,6 +41,10 @@ If no column with :math:`\bar{c}(x) < 0` exists, the current RMP solution is
 optimal for the LP relaxation represented by the pricing oracle.  Convexity
 constraints, block constraints, and other decomposition-specific terms can be
 represented as additional master rows or handled inside the pricing oracle.
+The current loop is an LP column generation loop: it solves continuous RMPs to
+obtain dual values.  If an integer solution is needed, the generated column
+pool can be solved once as a restricted integer master problem after the loop;
+this is not branch-and-price.
 
 API Roles
 =========

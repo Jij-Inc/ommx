@@ -23,6 +23,11 @@ The pricing side is abstracted behind
 :class:`~ommx_column_generation.core.PricingOracle`.  The oracle receives the
 current RMP duals :math:`\pi_i` and returns additional
 :class:`~ommx_column_generation.core.Column` objects.
+
+The loop currently targets root LP column generation.  It solves continuous
+RMPs during the iterations so that dual values are available for pricing.  A
+restricted integer master can be solved after the loop with the generated
+columns, but branch-and-price is outside the current scope.
 """
 
 from __future__ import annotations
@@ -415,7 +420,8 @@ def solve_column_generation(
     The loop stops when the oracle returns no accepted columns or when
     ``max_iterations`` is reached.  If ``final_solver`` is provided, the final
     generated column pool is rebuilt with binary :math:`\lambda_j` variables and
-    solved once more.
+    solved once more.  This optional final solve is a restricted integer master
+    solve over the generated columns; it is not a branch-and-price search.
 
     The input problem is mutated by appending accepted columns.
     """
