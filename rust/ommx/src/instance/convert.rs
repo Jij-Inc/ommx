@@ -116,6 +116,11 @@ impl ParametricInstance {
             named_function.partial_evaluate(&state, atol)?;
         }
 
+        // Dependency RHS expressions may reference parameter IDs. Substitute
+        // them before materializing an Instance, which has no parameter set.
+        let mut decision_variable_dependency = self.decision_variable_dependency;
+        decision_variable_dependency.partial_evaluate(&state, atol)?;
+
         Ok(Instance {
             sense: self.sense,
             objective,
@@ -123,10 +128,63 @@ impl ParametricInstance {
             constraints,
             named_functions,
             removed_constraints: self.removed_constraints,
-            decision_variable_dependency: self.decision_variable_dependency,
+            decision_variable_dependency,
             constraint_hints: self.constraint_hints,
             parameters: Some(parameters),
             description: self.description,
         })
+    }
+}
+
+#[cfg(test)]
+mod with_parameters_tests {
+    use super::*;
+    use crate::{linear, Function};
+    use maplit::btreemap;
+
+    #[test]
+    fn decision_variable_dependency_rhs_is_substituted() {
+        use crate::AcyclicAssignments;
+
+        let x = VariableID::from(1);
+        let dep = VariableID::from(2);
+        let p = VariableID::from(100);
+        let assignments =
+            AcyclicAssignments::new(vec![(dep, Function::from(linear!(1) + linear!(100)))])
+                .unwrap();
+
+        let parametric = ParametricInstance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(btreemap! {
+                x => DecisionVariable::binary(x),
+                dep => DecisionVariable::binary(dep),
+            })
+            .parameters(btreemap! {
+                p => crate::v1::Parameter { id: 100, ..Default::default() },
+            })
+            .constraints(BTreeMap::new())
+            .decision_variable_dependency(assignments)
+            .build()
+            .unwrap();
+
+        let params = crate::v1::Parameters {
+            entries: std::collections::HashMap::from([(100, 1.0)]),
+        };
+        let instance = parametric.with_parameters(params).unwrap();
+
+        let dep_rhs = instance
+            .decision_variable_dependency()
+            .get(&dep)
+            .expect("dependency entry survives materialization");
+        let rhs_required: VariableIDSet = dep_rhs.required_ids();
+        assert!(
+            !rhs_required.contains(&p),
+            "parameter id {p:?} survived in dependency RHS: {rhs_required:?}",
+        );
+        assert!(
+            rhs_required.contains(&x),
+            "decision variable id {x:?} should remain in dependency RHS: {rhs_required:?}",
+        );
     }
 }
