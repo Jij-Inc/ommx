@@ -546,7 +546,9 @@ def test_parametric_instance_substitute_undefined_rhs_id_raises():
     )
     objective_before = Function(parametric.objective)
 
-    with pytest.raises(ValueError, match="Undefined variable ID is used in substitution"):
+    with pytest.raises(
+        ValueError, match="Undefined variable ID is used in substitution"
+    ):
         parametric.substitute({0: DecisionVariable.binary(999)})
 
     assert parametric.objective.almost_equal(objective_before)
