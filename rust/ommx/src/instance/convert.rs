@@ -140,9 +140,7 @@ impl ParametricInstance {
         // Decision-variable dependency RHS expressions can also reference
         // parameter IDs. Without substitution, dependent-variable
         // expressions in the resulting `Instance` would carry dangling
-        // parameter references (the parametric builder doesn't restrict
-        // `decision_variable_dependency` RHS bodies to decision-variable
-        // IDs only).
+        // parameter references.
         let mut decision_variable_dependency = self.decision_variable_dependency;
         decision_variable_dependency.partial_evaluate(&state, atol)?;
 
@@ -185,9 +183,9 @@ mod with_parameters_tests {
 
     /// Parameter substitution must apply to the right-hand-side of
     /// `decision_variable_dependency` entries. The RHS is a `Function`
-    /// over arbitrary IDs; the parametric builder doesn't restrict it to
-    /// decision-variable IDs only, so a parameter reference there would
-    /// dangle in the resulting `Instance` without explicit substitution.
+    /// over defined decision-variable or parameter IDs, so a parameter
+    /// reference there would dangle in the resulting `Instance` without
+    /// explicit substitution.
     #[test]
     fn decision_variable_dependency_rhs_is_substituted() {
         use crate::AcyclicAssignments;
