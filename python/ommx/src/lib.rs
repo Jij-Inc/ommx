@@ -13,6 +13,7 @@ mod enums;
 mod evaluated_constraint;
 mod evaluated_decision_variable;
 mod evaluated_named_function;
+mod experiment;
 mod function;
 mod indicator_constraint;
 mod instance;
@@ -51,6 +52,7 @@ pub use enums::*;
 pub use evaluated_constraint::*;
 pub use evaluated_decision_variable::*;
 pub use evaluated_named_function::*;
+pub use experiment::*;
 pub use function::*;
 pub use indicator_constraint::*;
 pub use instance::*;
@@ -127,6 +129,9 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<PyArtifact>()?;
     m.add_class::<PyArchiveManifest>()?;
     m.add_class::<PyArtifactDraft>()?;
+    m.add_class::<PyExperiment>()?;
+    m.add_class::<PyRun>()?;
+    m.add_class::<PySealedRun>()?;
     m.add_function(wrap_pyfunction!(set_local_registry_root, m)?)?;
     m.add_function(wrap_pyfunction!(get_local_registry_root, m)?)?;
     m.add_function(wrap_pyfunction!(get_images, m)?)?;
@@ -268,6 +273,12 @@ pyo3_stub_gen::reexport_module_members!("ommx.artifact" from "ommx._ommx_rust";
     "get_local_registry_root",
     "set_local_registry_root",
     "get_images"
+);
+
+pyo3_stub_gen::reexport_module_members!("ommx.experiment" from "ommx._ommx_rust";
+    "Experiment",
+    "Run",
+    "SealedRun"
 );
 
 pyo3_stub_gen::define_stub_info_gatherer!(stub_info);

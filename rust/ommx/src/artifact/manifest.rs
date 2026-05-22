@@ -15,6 +15,7 @@ use prost::Message;
 use serde::Serialize;
 use std::{
     collections::HashMap,
+    path::Path,
     str::FromStr,
     sync::{Arc, OnceLock},
 };
@@ -39,6 +40,128 @@ pub struct LocalArtifact<'reg> {
     image_name: ImageRef,
     manifest_digest: Digest,
     manifest_cache: Arc<OnceLock<LocalManifest>>,
+}
+
+/// Runtime-owned Local Registry handle.
+///
+/// This is the dynamic-lifetime counterpart of `&LocalRegistry`.
+/// It exists for bindings and other dynamic runtimes that cannot
+/// express Rust lifetimes in their object model. Values that borrow a
+/// registry with an erased `'static` lifetime must carry the same
+/// handle so the registry owner outlives those values.
+#[derive(Debug, Clone)]
+pub struct LocalRegistryHandle {
+    inner: Arc<LocalRegistryHandleInner>,
+}
+
+#[derive(Debug)]
+enum LocalRegistryHandleInner {
+    Default(&'static LocalRegistry),
+    Temp(TempLocalRegistry),
+}
+
+impl LocalRegistryHandle {
+    pub fn shared_default() -> Result<Self> {
+        Ok(Self {
+            inner: Arc::new(LocalRegistryHandleInner::Default(
+                LocalRegistry::shared_default()?,
+            )),
+        })
+    }
+
+    pub fn temp() -> Result<Self> {
+        Ok(Self {
+            inner: Arc::new(LocalRegistryHandleInner::Temp(TempLocalRegistry::new()?)),
+        })
+    }
+
+    pub fn registry(&self) -> &LocalRegistry {
+        match self.inner.as_ref() {
+            LocalRegistryHandleInner::Default(registry) => registry,
+            LocalRegistryHandleInner::Temp(temp) => temp.registry(),
+        }
+    }
+}
+
+/// Runtime-owned artifact handle for dynamic runtimes.
+///
+/// This stores only owned artifact identity plus the registry owner.
+/// When an operation needs the lifetime-based [`LocalArtifact`] API, it
+/// reconstructs a short-lived `LocalArtifact<'_>` from the handle's
+/// current registry reference.
+#[derive(Debug, Clone)]
+pub struct LocalArtifactDyn {
+    registry_handle: LocalRegistryHandle,
+    image_name: ImageRef,
+    manifest_digest: Digest,
+    manifest_cache: Arc<OnceLock<LocalManifest>>,
+}
+
+impl LocalArtifactDyn {
+    pub fn open(image_name: ImageRef) -> Result<Self> {
+        let registry_handle = LocalRegistryHandle::shared_default()?;
+        Self::open_in_registry_handle(registry_handle, image_name)
+    }
+
+    pub fn open_in_registry_handle(
+        registry_handle: LocalRegistryHandle,
+        image_name: ImageRef,
+    ) -> Result<Self> {
+        let manifest_digest = registry_handle
+            .registry()
+            .resolve_image_name(&image_name)?
+            .with_context(|| {
+                format!(
+                    "Artifact not found in the SQLite-backed local registry: {image_name}. \
+                         If this artifact exists in the legacy OCI directory local registry, \
+                         run `ommx artifact import` once, then retry."
+                )
+            })?;
+        Ok(Self {
+            registry_handle,
+            image_name,
+            manifest_digest,
+            manifest_cache: Arc::new(OnceLock::new()),
+        })
+    }
+
+    pub(crate) fn as_local_artifact(&self) -> LocalArtifact<'_> {
+        LocalArtifact {
+            registry: self.registry_handle.registry(),
+            image_name: self.image_name.clone(),
+            manifest_digest: self.manifest_digest.clone(),
+            manifest_cache: Arc::clone(&self.manifest_cache),
+        }
+    }
+
+    pub fn registry_handle(&self) -> LocalRegistryHandle {
+        self.registry_handle.clone()
+    }
+
+    pub fn image_name(&self) -> &ImageRef {
+        &self.image_name
+    }
+
+    pub fn annotations(&self) -> Result<HashMap<String, String>> {
+        self.as_local_artifact().annotations()
+    }
+
+    pub fn layers(&self) -> Result<Vec<Descriptor>> {
+        self.as_local_artifact().layers()
+    }
+
+    pub fn get_blob(&self, digest: &Digest) -> Result<Vec<u8>> {
+        self.as_local_artifact().get_blob(digest)
+    }
+
+    pub fn save(&self, output: &Path) -> crate::Result<()> {
+        self.as_local_artifact().save(output)
+    }
+
+    #[cfg(feature = "remote-artifact")]
+    pub fn push(&self) -> crate::Result<()> {
+        self.as_local_artifact().push()
+    }
 }
 
 impl LocalArtifact<'static> {
@@ -97,6 +220,10 @@ impl<'reg> LocalArtifact<'reg> {
 
     pub fn manifest_digest(&self) -> &Digest {
         &self.manifest_digest
+    }
+
+    pub(crate) fn registry(&self) -> &'reg LocalRegistry {
+        self.registry
     }
 
     /// Read and cache the manifest associated with this artifact.

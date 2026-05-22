@@ -39,48 +39,50 @@
 //! let artifact = exp.commit()?.into_artifact();
 //! ```
 //!
-//! The module is split by data terms: `run` contains `Run` and
-//! `RunEntry`, `record` contains `RecordRef`, `parameter` contains
-//! run-parameter table data, `index` contains the experiment index
-//! layer data, and `artifact` maps the unsealed experiment state onto
-//! an OMMX Artifact.
+//! The module is split by data terms: `run` contains `Run` lifecycle
+//! operations, `record` contains Record descriptor helpers,
+//! `parameter` contains parameter values, run-local parameter sets,
+//! and the committed run-parameter table, `config` contains the
+//! serialized Experiment structure, `sealed` contains read-only sealed
+//! Experiment data reconstructed from committed artifacts, and
+//! `artifact` maps the unsealed experiment state onto an OMMX Artifact.
 
 mod artifact;
+pub mod config;
+mod dynamic;
 mod parameter;
 mod record;
 mod run;
+mod sealed;
 
 #[cfg(test)]
 mod tests;
 
-pub use parameter::ParameterValue;
+pub use dynamic::{ExperimentDyn, RunDyn, SealedRunDyn};
+pub use parameter::{ParameterValue, RunParameterCell};
+pub use sealed::SealedRun;
 
-use crate::artifact::local_registry::{LocalRegistry, TempLocalRegistry};
+use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor, TempLocalRegistry};
 use crate::artifact::{media_types, ImageRef, LocalArtifact};
 use crate::{Instance, SampleSet, Solution};
 use anyhow::Result;
 use oci_spec::image::MediaType;
-use record::{
-    encode_json, json_media_type, store_record_ref, upsert_record_ref, RecordRef, RecordSpace,
-};
+use parameter::ParameterSet;
+use record::{encode_json, json_media_type, store_record_descriptor, RecordSpace};
 use std::collections::BTreeMap;
 use std::sync::{Mutex, MutexGuard};
 
 // --- Artifact mapping constants ---------------------------------------------
 
-const ARTIFACT_KIND_EXPERIMENT: &str = "experiment";
-const EXPERIMENT_SCHEMA_V1: &str = "v1";
 const EXPERIMENT_STATUS_FINISHED: &str = "finished";
 
-const ANN_ARTIFACT_KIND: &str = "org.ommx.artifact.kind";
-const ANN_EXPERIMENT_SCHEMA: &str = "org.ommx.experiment.schema";
-const ANN_EXPERIMENT_STATUS: &str = "org.ommx.experiment.status";
 const ANN_SPACE: &str = "org.ommx.experiment.space";
 const ANN_RUN_ID: &str = "org.ommx.experiment.run_id";
 const ANN_LAYER: &str = "org.ommx.experiment.layer";
 const ANN_RECORD_NAME: &str = "org.ommx.record.name";
 
 const RUN_PARAMETERS_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment.run-parameters+json";
+const EXPERIMENT_CONFIG_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment.config+json";
 const LAYER_KIND_RUN_PARAMETERS: &str = "run-parameters";
 
 /// A mutable, unsealed experiment session. See the [module documentation](self).
@@ -95,6 +97,9 @@ pub struct Experiment<'reg> {
 #[derive(Debug, Clone)]
 pub struct SealedExperiment<'reg> {
     artifact: LocalArtifact<'reg>,
+    records: Vec<StoredDescriptor<'reg>>,
+    runs: BTreeMap<u64, sealed::SealedRun<'reg>>,
+    run_parameters: parameter::RunParameterTable,
 }
 
 /// User-facing name policy for a new Experiment.
@@ -140,8 +145,8 @@ impl From<ImageRef> for Name {
 pub struct Run<'exp, 'reg> {
     experiment: &'exp Experiment<'reg>,
     run_id: u64,
-    records: Vec<RecordRef<'reg>>,
-    parameters: BTreeMap<String, ParameterValue>,
+    records: Vec<StoredDescriptor<'reg>>,
+    parameters: ParameterSet,
 }
 
 /// A closed logical Run recorded in an unsealed Experiment.
@@ -154,8 +159,8 @@ pub struct Run<'exp, 'reg> {
 #[derive(Debug)]
 struct RunEntry<'reg> {
     run_id: u64,
-    records: Vec<RecordRef<'reg>>,
-    parameters: BTreeMap<String, ParameterValue>,
+    records: Vec<StoredDescriptor<'reg>>,
+    parameters: ParameterSet,
 }
 
 /// Mutable experiment state before the root manifest is sealed. A live
@@ -168,7 +173,7 @@ struct UnsealedExperimentState<'reg> {
     /// no separate experiment-name field in the artifact model.
     image_name: ImageRef,
     /// Experiment-space records.
-    records: Vec<RecordRef<'reg>>,
+    records: Vec<StoredDescriptor<'reg>>,
     runs: BTreeMap<u64, RunEntry<'reg>>,
     next_run_id: u64,
 }
@@ -215,6 +220,12 @@ impl<'reg> Experiment<'reg> {
         })
     }
 
+    /// Concrete Local Registry image name this Experiment will publish
+    /// to when committed.
+    pub fn image_name(&self) -> ImageRef {
+        self.lock_state().image_name.clone()
+    }
+
     /// Start a new [`Run`]. Each run gets a fresh 0-based `run_id`.
     pub fn run(&self) -> Result<Run<'_, 'reg>> {
         let mut state = self.lock_state();
@@ -224,7 +235,7 @@ impl<'reg> Experiment<'reg> {
             experiment: self,
             run_id,
             records: Vec::new(),
-            parameters: BTreeMap::new(),
+            parameters: ParameterSet::new(),
         })
     }
 
@@ -261,16 +272,15 @@ impl<'reg> Experiment<'reg> {
     }
 
     fn add_record(&self, name: &str, media_type: MediaType, bytes: &[u8]) -> Result<()> {
-        let record_ref = store_record_ref(
+        let descriptor = store_record_descriptor(
             self.registry,
             RecordSpace::Experiment,
-            None,
             name,
             media_type,
             bytes,
         )?;
         let mut state = self.lock_state();
-        upsert_record_ref(&mut state.records, record_ref);
+        state.records.push(descriptor);
         Ok(())
     }
 
@@ -307,7 +317,7 @@ impl<'reg> Experiment<'reg> {
             }
         };
         let artifact = state.commit(self.registry)?;
-        Ok(SealedExperiment { artifact })
+        SealedExperiment::from_artifact(artifact)
     }
 }
 

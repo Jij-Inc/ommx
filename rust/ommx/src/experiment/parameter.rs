@@ -2,7 +2,7 @@
 
 use super::RunEntry;
 use anyhow::Result;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{btree_map::Values, BTreeMap};
 
 /// A scalar cell value accepted by the run parameter table.
@@ -72,9 +72,41 @@ impl ParameterValue {
             Self::String(_) => "string",
         }
     }
+
+    fn validate_as_run_parameter(&self, name: &str) -> Result<()> {
+        match self {
+            Self::Float(value) if !value.is_finite() => {
+                crate::bail!("Run parameter `{name}` float value must be finite")
+            }
+            _ => Ok(()),
+        }
+    }
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Clone, Default)]
+pub struct ParameterSet {
+    values: BTreeMap<String, ParameterValue>,
+}
+
+impl ParameterSet {
+    pub fn new() -> Self {
+        Self {
+            values: BTreeMap::new(),
+        }
+    }
+
+    pub fn insert(&mut self, name: String, value: ParameterValue) -> Result<()> {
+        value.validate_as_run_parameter(&name)?;
+        self.values.insert(name, value);
+        Ok(())
+    }
+
+    fn iter(&self) -> impl Iterator<Item = (&String, &ParameterValue)> {
+        self.values.iter()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RunParameterTable {
     columns: BTreeMap<String, RunParameterColumn>,
 }
@@ -83,7 +115,7 @@ impl RunParameterTable {
     pub fn from_runs<'reg>(runs: Values<'_, u64, RunEntry<'reg>>) -> Result<Self> {
         let mut columns = BTreeMap::new();
         for run in runs {
-            for (name, value) in &run.parameters {
+            for (name, value) in run.parameters.iter() {
                 columns
                     .entry(name.clone())
                     .or_insert_with(|| RunParameterColumn::from_value(value))
@@ -92,9 +124,16 @@ impl RunParameterTable {
         }
         Ok(Self { columns })
     }
+
+    pub fn cells(&self) -> Vec<RunParameterCell> {
+        self.columns
+            .iter()
+            .flat_map(|(name, column)| column.cells(name))
+            .collect()
+    }
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "values")]
 enum RunParameterColumn {
     #[serde(rename = "bool")]
@@ -108,6 +147,43 @@ enum RunParameterColumn {
 }
 
 impl RunParameterColumn {
+    fn cells(&self, name: &str) -> Vec<RunParameterCell> {
+        match self {
+            Self::Bool(values) => values
+                .iter()
+                .map(|(run_id, value)| RunParameterCell {
+                    run_id: *run_id,
+                    name: name.to_string(),
+                    value: ParameterValue::Bool(*value),
+                })
+                .collect(),
+            Self::Int(values) => values
+                .iter()
+                .map(|(run_id, value)| RunParameterCell {
+                    run_id: *run_id,
+                    name: name.to_string(),
+                    value: ParameterValue::Int(*value),
+                })
+                .collect(),
+            Self::Float(values) => values
+                .iter()
+                .map(|(run_id, value)| RunParameterCell {
+                    run_id: *run_id,
+                    name: name.to_string(),
+                    value: ParameterValue::Float(*value),
+                })
+                .collect(),
+            Self::String(values) => values
+                .iter()
+                .map(|(run_id, value)| RunParameterCell {
+                    run_id: *run_id,
+                    name: name.to_string(),
+                    value: ParameterValue::String(value.clone()),
+                })
+                .collect(),
+        }
+    }
+
     fn from_value(value: &ParameterValue) -> Self {
         match value {
             ParameterValue::Bool(_) => Self::Bool(BTreeMap::new()),
@@ -169,4 +245,11 @@ impl RunParameterColumn {
             Self::String(_) => "string",
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RunParameterCell {
+    pub run_id: u64,
+    pub name: String,
+    pub value: ParameterValue,
 }
