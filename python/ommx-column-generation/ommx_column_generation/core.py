@@ -93,7 +93,9 @@ class ColumnGenerationProblem:
         _ensure_unique((row.id for row in self.rows), "row")
         _ensure_unique((column.id for column in self.columns), "column")
 
-    def add_columns(self, columns: Iterable[Column], *, skip_duplicates: bool = True) -> list[Column]:
+    def add_columns(
+        self, columns: Iterable[Column], *, skip_duplicates: bool = True
+    ) -> list[Column]:
         """Append columns and return the columns that were accepted."""
 
         known = {column.id for column in self.columns}
@@ -207,8 +209,7 @@ class PricingResult:
 
 
 class PricingOracle(Protocol):
-    def __call__(self, context: PricingContext) -> PricingResult:
-        ...
+    def __call__(self, context: PricingContext) -> PricingResult: ...
 
 
 MasterSolver = Callable[[Instance], Solution]
@@ -285,7 +286,9 @@ def solve_column_generation(
                 iteration=iteration,
                 master_objective=master_solution.objective,
                 duals=dict(duals),
-                generated_column_ids=tuple(column.id for column in pricing_result.columns),
+                generated_column_ids=tuple(
+                    column.id for column in pricing_result.columns
+                ),
                 accepted_column_ids=tuple(column.id for column in accepted),
                 proven_no_negative_reduced_cost=pricing_result.proven_no_negative_reduced_cost,
             )

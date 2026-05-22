@@ -30,12 +30,8 @@ def test_build_restricted_master_and_solve_with_highs():
     solution = highs_master_solver(rmp.instance)
 
     assert solution.objective == pytest.approx(2.0)
-    assert rmp.column_values(solution) == pytest.approx(
-        {"a": 1.0, "b": 1.0, "ab": 0.0}
-    )
-    assert rmp.raw_duals(solution) == pytest.approx(
-        {"cover_a": -1.0, "cover_b": -1.0}
-    )
+    assert rmp.column_values(solution) == pytest.approx({"a": 1.0, "b": 1.0, "ab": 0.0})
+    assert rmp.raw_duals(solution) == pytest.approx({"cover_a": -1.0, "cover_b": -1.0})
     assert rmp.duals(solution) == pytest.approx({"cover_a": 1.0, "cover_b": 1.0})
 
 
@@ -55,9 +51,7 @@ def test_solve_column_generation_accepts_columns_from_pricing_oracle():
     def pricing_oracle(context: PricingContext) -> PricingResult:
         seen_duals.append(set(context.duals))
         if context.iteration == 0:
-            return PricingResult(
-                [Column("ab", 3.0, {"cover_a": 1.0, "cover_b": 1.0})]
-            )
+            return PricingResult([Column("ab", 3.0, {"cover_a": 1.0, "cover_b": 1.0})])
         return PricingResult([], proven_no_negative_reduced_cost=True)
 
     result = solve_column_generation(
