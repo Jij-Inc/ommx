@@ -290,7 +290,9 @@ class Column:
     payload: Any = None
 ```
 
-`coefficients` は `MasterRow.id` を key とする。`payload` には、pricing 解、元変数の値、block ID、モデラー固有情報など、core loop が解釈しない情報を保持できる。
+`coefficients` は `MasterRow.id` を key とする。pricing 側の候補解を `x` と書くと、その候補が master row `i` に与える activity を `a_i(x)` とする。候補 `x^j` が column `j` として RMP に追加された後は、この値を固定した係数として `a_{ij} = a_i(x^j)` と保存する。同様に、column cost は `c_j = c(x^j)` である。つまり `a_i(x)` は pricing 中に評価する関数で、`a_{ij}` は RMP に入った後の固定済み係数である。
+
+`payload` には、pricing 解、元変数の値、block ID、モデラー固有情報など、core loop が解釈しない情報を保持できる。
 
 RMP は column ごとに lambda 変数を持つ。
 
@@ -321,7 +323,19 @@ min  c_b x_b - sum_i pi_i A_{i,b} x_b - sigma_b
 s.t. x_b in X_b
 ```
 
-ここで `pi_i` は linking/master constraint の双対値、`sigma_b` は block の convexity constraint の双対値である。
+ここで `pi_i` は linking/master constraint の双対値、`sigma_b` は block の convexity constraint の双対値である。上の式の `A_{i,b} x_b` が、抽象的な記法では `a_i(x)` に対応する。候補解 `x^j` を column として採用すると、RMP 側には `a_{ij} = A_{i,b} x_b^j = a_i(x^j)` として保存される。
+
+したがって reduced cost は、pricing 中の候補 `x` に対しては次の形になる。
+
+```text
+c_bar(x) = c(x) - sum_i pi_i a_i(x)
+```
+
+すでに RMP に入った column `j` については、同じ式を固定済み係数で書いて次の形になる。
+
+```text
+c_bar_j = c_j - sum_i pi_i a_ij
+```
 
 ただし、実際の pricing の目的関数、符号、固定項、列の生成方法、整数変数の扱いは問題によって異なる。そのため、MVP の `ommx-column-generation` は pricing model を自動生成せず、`PricingOracle` の境界で受け取る。
 

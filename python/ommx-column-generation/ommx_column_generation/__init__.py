@@ -29,6 +29,19 @@ Here :math:`i` is a master row, :math:`j` is a column,
 column, and :math:`\bowtie_i` is one of :math:`\le`, :math:`\ge`, or
 :math:`=`.
 
+A pricing candidate is written as :math:`x`.  Its cost is :math:`c(x)`, and
+its activity on master row :math:`i` is :math:`a_i(x)`.  When a candidate
+:math:`x^j` is accepted as column :math:`j`, these values are materialized in
+the RMP as
+
+.. math::
+
+   c_j = c(x^j), \qquad a_{ij} = a_i(x^j).
+
+Thus :math:`a_i(x)` and :math:`a_{ij}` refer to the same master-row activity:
+:math:`a_i(x)` is the pricing-side function evaluated on a candidate, while
+:math:`a_{ij}` is the fixed coefficient stored for an accepted column.
+
 After solving the RMP, the dual value :math:`\pi_i` of each master row is
 passed to a pricing oracle.  In a minimization problem, an exact pricing oracle
 typically searches for a column with negative reduced cost:
@@ -36,6 +49,13 @@ typically searches for a column with negative reduced cost:
 .. math::
 
    \bar{c}(x) = c(x) - \sum_{i \in I} \pi_i a_i(x).
+
+For an already generated column :math:`j`, this is the same expression with
+:math:`x = x^j`:
+
+.. math::
+
+   \bar{c}_j = c_j - \sum_{i \in I} \pi_i a_{ij}.
 
 If no column with :math:`\bar{c}(x) < 0` exists, the current RMP solution is
 optimal for the LP relaxation represented by the pricing oracle.  Convexity
@@ -113,7 +133,7 @@ API Roles
 
 :class:`~ommx_column_generation.Column`
     Defines one generated column :math:`j`: its cost :math:`c_j` and row
-    coefficients :math:`a_{ij}` keyed by
+    coefficients :math:`a_{ij} = a_i(x^j)` keyed by
     :attr:`~ommx_column_generation.MasterRow.id`.  The optional
     :attr:`~ommx_column_generation.Column.payload` stores problem-specific data
     such as the original subproblem solution.

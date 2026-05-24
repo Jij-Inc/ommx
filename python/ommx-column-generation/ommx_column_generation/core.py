@@ -5,6 +5,11 @@ They assume that each generated column :math:`j` is already summarized by its
 objective coefficient :math:`c_j` and its master-row coefficients
 :math:`a_{ij}`.  The module does not inspect how a column was produced.
 
+The notation separates pricing candidates from accepted RMP columns.  A
+pricing candidate :math:`x` has cost :math:`c(x)` and master-row activity
+:math:`a_i(x)`.  When that candidate is accepted as column :math:`j`, the RMP
+stores :math:`c_j = c(x^j)` and :math:`a_{ij} = a_i(x^j)`.
+
 For a current column set :math:`J'`,
 :class:`~ommx_column_generation.core.ColumnGenerationProblem` builds the RMP
 
@@ -75,9 +80,9 @@ class Column:
     r"""A generated column :math:`j` of the restricted master problem.
 
     :attr:`~ommx_column_generation.core.Column.cost` is the objective
-    coefficient :math:`c_j`.
+    coefficient :math:`c_j = c(x^j)`.
     :attr:`~ommx_column_generation.core.Column.coefficients` stores row
-    activities :math:`a_{ij}` keyed by
+    activities :math:`a_{ij} = a_i(x^j)` keyed by
     :attr:`~ommx_column_generation.core.MasterRow.id`.  Missing row keys are
     interpreted as zero coefficients.
 
@@ -343,6 +348,12 @@ class PricingOracle(Protocol):
     .. math::
 
        \bar{c}(x) = c(x) - \sum_i \pi_i a_i(x).
+
+    Here :math:`a_i(x)` is the activity of the pricing candidate :math:`x` on
+    master row :math:`i`.  If the candidate is accepted as column :math:`j`,
+    the same value is stored as
+    :attr:`~ommx_column_generation.core.Column.coefficients`, i.e.
+    :math:`a_{ij} = a_i(x^j)`.
 
     The core loop does not require the oracle to be built from OMMX objects.  It
     can solve a :class:`~ommx.v1.ParametricInstance`, call a specialized
