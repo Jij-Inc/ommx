@@ -10,6 +10,13 @@ pricing candidate :math:`x` has cost :math:`c(x)` and master-row activity
 :math:`a_i(x)`.  When that candidate is accepted as column :math:`j`, the RMP
 stores :math:`c_j = c(x^j)` and :math:`a_{ij} = a_i(x^j)`.
 
+Conceptually, the loop targets a full master problem over a large, often
+implicit, column set :math:`J`.  The full master is the LP relaxation obtained
+after a Dantzig-Wolfe-style reformulation or another modeling step that turns
+structured feasible objects into columns.  The RMP is the restriction of that
+full master to the current subset :math:`J' \subseteq J`; pricing searches the
+missing columns :math:`J \setminus J'` without requiring them to be enumerated.
+
 For a current column set :math:`J'`,
 :class:`~ommx_column_generation.core.ColumnGenerationProblem` builds the RMP
 

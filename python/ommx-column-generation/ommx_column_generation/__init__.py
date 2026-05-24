@@ -10,9 +10,30 @@ problem-specific method.
 Mathematical Form
 =================
 
-The current API works with a restricted master problem (RMP) written in column
-space.  Given a finite working set of columns :math:`J'`, the RMP has one
-variable :math:`\lambda_j` for each column:
+Column generation is useful when the target LP relaxation can be written as a
+master problem over a very large column set :math:`J`.  A column represents one
+candidate pattern, route, schedule, block solution, or other structured object.
+If every column were available, the full master problem would be
+
+.. math::
+
+   \begin{array}{ll}
+   \min & c_0 + \sum_{j \in J} c_j \lambda_j \\
+   \textrm{s.t.}
+        & \sum_{j \in J} a_{ij} \lambda_j \ \bowtie_i \ b_i,
+          \quad i \in I, \\
+        & \lambda_j \ge 0, \quad j \in J.
+   \end{array}
+
+In a Dantzig-Wolfe reformulation, the columns usually come from feasible
+solutions of block subproblems.  The master rows :math:`i \in I` include
+linking constraints, convexity constraints, and any other rows that connect
+columns.  Enumerating all columns in :math:`J` is usually impractical, so the
+algorithm solves a restricted master problem (RMP) over a finite working set
+:math:`J' \subseteq J`.
+
+Given :math:`J'`, the RMP has one variable :math:`\lambda_j` for each current
+column:
 
 .. math::
 
