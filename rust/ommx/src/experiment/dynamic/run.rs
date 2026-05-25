@@ -20,6 +20,13 @@ use std::sync::{Arc, Mutex};
 /// Dropping a live `RunDyn` abandons the run and releases the open-run
 /// guard. Call [`Self::finish`] to append the run to the parent
 /// experiment before dropping it.
+///
+/// Like the other dynamic experiment handles, `RunDyn` stores raw
+/// [`Descriptor`] values internally for registry-backed attachments and
+/// solve payloads. The parent `ExperimentDyn` owns the registry handle;
+/// when the run is finished, those descriptors are promoted back to
+/// [`StoredDescriptor`](crate::artifact::local_registry::StoredDescriptor)
+/// values before entering the lifetime-based experiment model.
 #[derive(Debug)]
 pub struct RunDyn {
     // Run-scoped registry-backed descriptors must be dropped before

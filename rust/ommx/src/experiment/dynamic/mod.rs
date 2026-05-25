@@ -6,6 +6,14 @@
 //! Dynamic runtimes such as Python cannot carry those lifetimes in
 //! their object model, so this module provides owned handles that keep
 //! the required registry / parent owners alive at runtime.
+//!
+//! Dynamic state stores plain OCI [`Descriptor`] values internally
+//! because it cannot store [`StoredDescriptor`] values whose lifetime is
+//! tied to the registry reference inside the same owned handle. This is
+//! an internal representation detail: public accessors that expose
+//! registry-backed descriptors promote those raw descriptors through
+//! `LocalRegistry::stored_descriptor` before returning them, restoring
+//! the Local Registry storage invariant at the API boundary.
 
 use super::attachment::{
     encode_json, json_media_type, store_attachment_descriptor, AttachmentSpace,
@@ -29,6 +37,11 @@ pub use run::RunDyn;
 /// It stores the registry owner, the unsealed / sealed state, and the
 /// count of still-open [`RunDyn`] handles in Rust SDK code so bindings
 /// do not need to duplicate these invariants.
+///
+/// The dynamic state may contain raw [`Descriptor`] values for
+/// registry-backed payloads. `ExperimentDyn` also keeps the
+/// [`LocalRegistryHandle`] needed to promote those descriptors back to
+/// [`StoredDescriptor`] values when accessors return them.
 #[derive(Debug, Clone)]
 pub struct ExperimentDyn {
     registry_handle: LocalRegistryHandle,
@@ -86,6 +99,12 @@ struct SealedExperimentDynState {
     run_parameters: super::parameter::RunParameterTable,
 }
 
+/// Runtime-owned sealed Run view.
+///
+/// `SealedRunDyn` stores raw attachment descriptors internally because
+/// it cannot borrow the registry through a Rust lifetime. Methods such
+/// as [`Self::attachments`] use the stored registry handle to verify and
+/// promote them to [`StoredDescriptor`] before exposing them.
 #[derive(Debug, Clone)]
 pub struct SealedRunDyn {
     registry_handle: LocalRegistryHandle,
@@ -94,6 +113,12 @@ pub struct SealedRunDyn {
     solves: Vec<SolveDyn>,
 }
 
+/// Runtime-owned Solve view.
+///
+/// The input and output are stored as raw descriptors in the dynamic
+/// state, but [`Self::input`] and [`Self::output`] never expose those raw
+/// values. They re-check the referenced blobs against the associated
+/// Local Registry and return [`StoredDescriptor`] values.
 #[derive(Debug, Clone)]
 pub struct SolveDyn {
     registry_handle: LocalRegistryHandle,
