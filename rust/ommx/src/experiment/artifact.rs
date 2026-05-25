@@ -97,7 +97,7 @@ impl<'reg> UnsealedExperimentState<'reg> {
                             solve_id: solve.solve_id,
                             input: layers.push(solve.input.clone()),
                             output: layers.push(solve.output.clone()),
-                            parameters: solve.parameters.to_map(),
+                            parameters: solve.parameters.clone(),
                         })
                         .collect(),
                 })

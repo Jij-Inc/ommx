@@ -2823,7 +2823,7 @@
               "name": "parameters",
               "doc": "",
               "type_": {
-                "display": "dict",
+                "display": "Any",
                 "link_target": null,
                 "children": []
               },

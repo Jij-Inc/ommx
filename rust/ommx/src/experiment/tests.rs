@@ -418,13 +418,12 @@ fn log_solve_materializes_solve_entry_with_layer_refs() {
                 .log_solve(
                     &instance,
                     &solution,
-                    [
-                        (
-                            "adapter".to_string(),
-                            ParameterValue::String("dummy.Adapter".to_string()),
-                        ),
-                        ("time_limit".to_string(), ParameterValue::Float(1.5)),
-                    ],
+                    json!({
+                        "adapter": "dummy.Adapter",
+                        "kwargs": {
+                            "time_limit": 1.5,
+                        },
+                    }),
                 )
                 .unwrap();
             assert_eq!(solve_id, 0);
@@ -450,7 +449,7 @@ fn log_solve_materializes_solve_entry_with_layer_refs() {
             json!("dummy.Adapter")
         );
         assert_eq!(
-            config_json["runs"][0]["solves"][0]["parameters"]["time_limit"],
+            config_json["runs"][0]["solves"][0]["parameters"]["kwargs"]["time_limit"],
             json!(1.5)
         );
 
@@ -471,11 +470,14 @@ fn log_solve_materializes_solve_entry_with_layer_refs() {
         );
         assert_eq!(
             solve.parameters().get("adapter"),
-            Some(&ParameterValue::String("dummy.Adapter".to_string()))
+            Some(&json!("dummy.Adapter"))
         );
         assert_eq!(
-            solve.parameters().get("time_limit"),
-            Some(&ParameterValue::Float(1.5))
+            solve
+                .parameters()
+                .get("kwargs")
+                .and_then(|kwargs| kwargs.get("time_limit")),
+            Some(&json!(1.5))
         );
         Ok(())
     });

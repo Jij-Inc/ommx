@@ -139,7 +139,7 @@ def test_log_parameter_rejects_python_int_outside_i64():
             run.log_parameter("too_large", 2**63)
 
 
-def test_log_solve_logs_input_solution_and_scalar_kwargs():
+def test_log_solve_logs_input_solution_and_json_kwargs():
     class DummyAdapter(SolverAdapter):
         seen_kwargs: ClassVar[list[dict[str, object]]] = []
 
@@ -203,13 +203,17 @@ def test_log_solve_logs_input_solution_and_scalar_kwargs():
     assert first_solve.input.media_type == "application/org.ommx.v1.instance"
     assert first_solve.output.media_type == "application/org.ommx.v1.solution"
     assert str(first_solve.parameters["adapter"]).endswith("DummyAdapter")
-    assert first_solve.parameters["time_limit"] == 1.5
-    assert bool(first_solve.parameters["verbose"]) is True
-    assert first_solve.parameters["label"] == "baseline"
+    assert first_solve.parameters["kwargs"] == {
+        "time_limit": 1.5,
+        "verbose": True,
+        "label": "baseline",
+    }
 
     second_solve = runs[0].solves[1]
-    assert second_solve.parameters["time_limit"] == 2.0
-    assert second_solve.parameters["label"] == "pricing"
+    assert second_solve.parameters["kwargs"] == {
+        "time_limit": 2.0,
+        "label": "pricing",
+    }
 
     # Solver kwargs are solve-scoped metadata, not Run parameters.
     df = loaded.run_parameters_df()
@@ -233,3 +237,35 @@ def test_log_solve_rejects_non_solver_adapter():
     with experiment.run() as run:
         with pytest.raises(TypeError, match="ommx.adapter.SolverAdapter"):
             run.log_solve(cast(Any, DummyAdapter), instance)
+
+
+def test_log_solve_rejects_non_json_kwargs_before_solving():
+    class DummyAdapter(SolverAdapter):
+        called: ClassVar[bool] = False
+
+        @classmethod
+        def solve(cls, ommx_instance: Instance, **kwargs: object) -> Solution:
+            cls.called = True
+            return ommx_instance.evaluate({})
+
+        @property
+        def solver_input(self) -> Any:
+            raise NotImplementedError
+
+        def decode(self, data: Any) -> Solution:
+            raise NotImplementedError
+
+    instance = Instance.from_components(
+        decision_variables=[],
+        objective=0,
+        constraints={},
+        sense=Instance.MINIMIZE,
+    )
+    experiment = Experiment.with_temp_local_registry()
+    DummyAdapter.called = False
+
+    with experiment.run() as run:
+        with pytest.raises(RuntimeError, match="JSON-serializable"):
+            run.log_solve(DummyAdapter, instance, callback=object())
+
+    assert not DummyAdapter.called

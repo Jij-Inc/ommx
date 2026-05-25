@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use oci_spec::image::MediaType;
 use pyo3::{
     prelude::*,
@@ -307,23 +307,10 @@ impl PyRun {
         kwargs: Option<&Bound<PyDict>>,
     ) -> Result<crate::Solution> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let adapter = adapter.0.bind(py);
-        let adapter_name = adapter_name(adapter)?;
-        let mut solve_parameters = vec![(
-            "adapter".to_string(),
-            ommx::experiment::ParameterValue::String(adapter_name),
-        )];
-        solve_parameters.extend(collect_scalar_kwargs(kwargs)?);
-
-        let adapter_instance = Py::new(py, instance.clone())?;
-        let solution_object =
-            adapter.call_method("solve", (adapter_instance.clone_ref(py),), kwargs)?;
-        let solution = solution_object
-            .extract::<crate::Solution>()
-            .map_err(|_| anyhow::anyhow!("adapter.solve(...) must return ommx.v1.Solution"))?;
+        let solve = adapter.solve(py, instance, kwargs)?;
         self.as_open_mut()?
-            .log_solve(&instance.inner, &solution.inner, solve_parameters)?;
-        Ok(solution)
+            .log_solve(&instance.inner, &solve.solution.inner, solve.parameters)?;
+        Ok(solve.solution)
     }
 
     /// Finish this run and append it to the parent Experiment.
@@ -355,32 +342,6 @@ impl PyRun {
             .as_mut()
             .ok_or_else(|| anyhow::anyhow!("Run has already been finished"))
     }
-}
-
-fn adapter_name(adapter: &Bound<PyType>) -> Result<String> {
-    let module: String = adapter.module()?.extract()?;
-    let qualname: String = adapter.qualname()?.extract()?;
-    Ok(format!("{module}.{qualname}"))
-}
-
-fn collect_scalar_kwargs(
-    kwargs: Option<&Bound<PyDict>>,
-) -> Result<Vec<(String, ommx::experiment::ParameterValue)>> {
-    let Some(kwargs) = kwargs else {
-        return Ok(Vec::new());
-    };
-
-    let mut parameters = Vec::new();
-    for (key, value) in kwargs.iter() {
-        let name: String = key.extract()?;
-        let value = value.extract::<ParameterValueInput>().map_err(|_| {
-            pyo3::exceptions::PyTypeError::new_err(format!(
-                "Solve parameter value for solver kwarg `{name}` must be bool, int, float, or str"
-            ))
-        })?;
-        parameters.push((name, value.0));
-    }
-    Ok(parameters)
 }
 
 fn parse_name(image_name: Option<&str>) -> Result<ommx::experiment::Name> {
@@ -425,6 +386,58 @@ impl<'py> FromPyObject<'_, 'py> for ParameterValueInput {
 }
 
 pub struct SolverAdapterInput(Py<PyType>);
+
+struct SolverAdapterSolve {
+    solution: crate::Solution,
+    parameters: serde_json::Value,
+}
+
+impl SolverAdapterInput {
+    fn solve(
+        &self,
+        py: Python<'_>,
+        instance: &crate::Instance,
+        kwargs: Option<&Bound<PyDict>>,
+    ) -> Result<SolverAdapterSolve> {
+        let parameters = serde_json::json!({
+            "adapter": self.name(py)?,
+            "kwargs": self.kwargs_json(py, kwargs)?,
+        });
+        let adapter = self.0.bind(py);
+        let adapter_instance = Py::new(py, instance.clone())?;
+        let solution_object = adapter.call_method("solve", (adapter_instance,), kwargs)?;
+        let solution = solution_object
+            .extract::<crate::Solution>()
+            .map_err(|_| anyhow::anyhow!("adapter.solve(...) must return ommx.v1.Solution"))?;
+        Ok(SolverAdapterSolve {
+            solution,
+            parameters,
+        })
+    }
+
+    fn name(&self, py: Python<'_>) -> Result<String> {
+        let adapter = self.0.bind(py);
+        let module: String = adapter.module()?.extract()?;
+        let qualname: String = adapter.qualname()?.extract()?;
+        Ok(format!("{module}.{qualname}"))
+    }
+
+    fn kwargs_json(
+        &self,
+        py: Python<'_>,
+        kwargs: Option<&Bound<PyDict>>,
+    ) -> Result<serde_json::Value> {
+        let Some(kwargs) = kwargs else {
+            return Ok(serde_json::json!({}));
+        };
+        let json = py.import("json")?;
+        let encoded: String = json
+            .call_method1("dumps", (kwargs,))
+            .context("SolverAdapter kwargs must be JSON-serializable")?
+            .extract()?;
+        serde_json::from_str(&encoded).context("Failed to decode serialized SolverAdapter kwargs")
+    }
+}
 
 impl<'py> FromPyObject<'_, 'py> for SolverAdapterInput {
     type Error = PyErr;
@@ -540,25 +553,8 @@ impl PySolve {
     }
 
     #[getter]
-    pub fn parameters<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDict>> {
-        let dict = PyDict::new(py);
-        for (name, value) in self.0.parameters() {
-            match value {
-                ommx::experiment::ParameterValue::Bool(value) => {
-                    dict.set_item(name, *value)?;
-                }
-                ommx::experiment::ParameterValue::Int(value) => {
-                    dict.set_item(name, *value)?;
-                }
-                ommx::experiment::ParameterValue::Float(value) => {
-                    dict.set_item(name, *value)?;
-                }
-                ommx::experiment::ParameterValue::String(value) => {
-                    dict.set_item(name, value)?;
-                }
-            }
-        }
-        Ok(dict)
+    pub fn parameters<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyAny>> {
+        Ok(serde_pyobject::to_pyobject(py, self.0.parameters())?)
     }
 
     pub fn __repr__(&self) -> String {

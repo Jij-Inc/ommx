@@ -74,7 +74,7 @@ pub(super) struct SolveEntryDyn {
     pub(super) solve_id: u64,
     pub(super) input: Descriptor,
     pub(super) output: Descriptor,
-    pub(super) parameters: super::parameter::ParameterSet,
+    pub(super) parameters: serde_json::Value,
 }
 
 #[derive(Debug, Clone)]
@@ -97,7 +97,7 @@ pub struct SolveDyn {
     solve_id: u64,
     input: Descriptor,
     output: Descriptor,
-    parameters: BTreeMap<String, super::ParameterValue>,
+    parameters: serde_json::Value,
 }
 
 impl SealedRunDyn {
@@ -127,7 +127,7 @@ impl SolveDyn {
         &self.output
     }
 
-    pub fn parameters(&self) -> &BTreeMap<String, super::ParameterValue> {
+    pub fn parameters(&self) -> &serde_json::Value {
         &self.parameters
     }
 }

@@ -102,24 +102,6 @@ impl ParameterSet {
         Ok(())
     }
 
-    pub(crate) fn from_entries(
-        entries: impl IntoIterator<Item = (String, ParameterValue)>,
-    ) -> Result<Self> {
-        let mut parameters = Self::new();
-        for (name, value) in entries {
-            parameters.insert(name, value)?;
-        }
-        Ok(parameters)
-    }
-
-    pub(crate) fn to_map(&self) -> BTreeMap<String, ParameterValue> {
-        self.values.clone()
-    }
-
-    pub(crate) fn from_map(values: BTreeMap<String, ParameterValue>) -> Result<Self> {
-        Self::from_entries(values)
-    }
-
     pub(crate) fn iter(&self) -> impl Iterator<Item = (&String, &ParameterValue)> {
         self.values.iter()
     }

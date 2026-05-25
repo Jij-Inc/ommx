@@ -1,8 +1,6 @@
 //! Serialized Experiment structure stored in the OCI config blob.
 
-use super::ParameterValue;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -32,6 +30,10 @@ pub struct ExperimentConfigSolve {
     pub solve_id: u64,
     pub input: LayerRef,
     pub output: LayerRef,
-    #[serde(default)]
-    pub parameters: BTreeMap<String, ParameterValue>,
+    #[serde(default = "default_solve_parameters")]
+    pub parameters: serde_json::Value,
+}
+
+fn default_solve_parameters() -> serde_json::Value {
+    serde_json::json!({})
 }

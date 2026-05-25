@@ -121,7 +121,7 @@ impl RunDyn {
         &mut self,
         input: &Instance,
         output: &Solution,
-        parameters: impl IntoIterator<Item = (String, ParameterValue)>,
+        parameters: serde_json::Value,
     ) -> Result<u64> {
         let solve_id = self.open()?.next_solve_id;
         let (input, output) = {
@@ -145,7 +145,7 @@ impl RunDyn {
             solve_id,
             input,
             output,
-            parameters: ParameterSet::from_entries(parameters)?,
+            parameters,
         });
         Ok(solve_id)
     }

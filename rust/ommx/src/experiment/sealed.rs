@@ -107,7 +107,7 @@ pub struct Solve<'reg> {
     solve_id: u64,
     input: StoredDescriptor<'reg>,
     output: StoredDescriptor<'reg>,
-    parameters: BTreeMap<String, super::ParameterValue>,
+    parameters: serde_json::Value,
 }
 
 impl<'reg> Solve<'reg> {
@@ -123,7 +123,7 @@ impl<'reg> Solve<'reg> {
         &self.output
     }
 
-    pub fn parameters(&self) -> &BTreeMap<String, super::ParameterValue> {
+    pub fn parameters(&self) -> &serde_json::Value {
         &self.parameters
     }
 }
@@ -210,7 +210,6 @@ fn decode_solves<'reg>(
             .clone();
         validate_layer_media_type(&output, &crate::artifact::media_types::v1_solution())
             .with_context(|| format!("Invalid Run {run_id} Solve {} output", solve.solve_id))?;
-        super::parameter::ParameterSet::from_map(solve.parameters.clone())?;
         decoded.push(Solve {
             solve_id: solve.solve_id,
             input: registry
