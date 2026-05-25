@@ -394,7 +394,7 @@ fn loaded_experiment_reads_attachments_and_run_parameters() {
 }
 
 #[test]
-fn log_solve_materializes_solve_entry_with_layer_refs() {
+fn log_finished_solve_result_materializes_solve_entry_with_layer_refs() {
     with_temp_experiment(|experiment| {
         let instance = Instance::new(
             Sense::Minimize,
@@ -415,7 +415,7 @@ fn log_solve_materializes_solve_entry_with_layer_refs() {
         {
             let mut run = experiment.run().unwrap();
             let solve_id = run
-                .log_solve(
+                .log_finished_solve_result(
                     &instance,
                     &solution,
                     BTreeMap::from([

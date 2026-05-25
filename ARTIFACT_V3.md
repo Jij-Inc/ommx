@@ -754,7 +754,7 @@ PR #886 時点で、Experiment / Artifact v3 提案のうち、Rust core と Pyt
 - `Experiment::new(Name)` / `Experiment::with_registry(&LocalRegistry, Name)` / `Experiment::with_temp_local_registry(...)`。
 - `Name::Named(ImageRef)` と `Name::Anonymous`。anonymous Experiment は `<registry-id8>.ommx.local/experiment:<timestamp>-<nonce>` に解決する。
 - `Experiment::log_attachment` / `log_json` / `log_instance` / `log_solution` / `log_sample_set`。
-- `Run::log_parameter` / `log_attachment` / `log_json` / `log_instance` / `log_solution` / `log_sample_set` / `log_solve`。
+- `Run::log_parameter` / `log_attachment` / `log_json` / `log_instance` / `log_solution` / `log_sample_set` / `log_finished_solve_result`。
 - `Run::finish(self)`。Rust 側では finish が `Run` を消費するため、終了済み Run に後から Attachment / parameter を追加する経路は型として存在しない。
 - `Experiment::commit(self) -> SealedExperiment<'reg>`。Rust 側では commit が `Experiment` を消費するため、commit 後 mutation は型として存在しない。
 - `SealedExperiment::from_artifact(LocalArtifact)` による config-based load。
@@ -832,7 +832,7 @@ Rust tests:
 - byte-identical Attachment が digest を共有しつつ、descriptor / Attachment としては別に保持されること。
 - scalar parameter の materialization、`int64 -> float64` 昇格、型混在 error、非有限 float rejection。
 - committed Artifact の config / `LayerRef` / Attachment layer annotation / aggregate layer。
-- `Run::log_solve` が Solve entry を作り、input / output を `LayerRef` で参照し、Solve parameters を Run parameter table から分離すること。
+- Rust core の `Run::log_finished_solve_result` が、solve 実行は行わず、渡された input / output から Solve entry を作り、`LayerRef` で参照し、Solve parameters を Run parameter table から分離すること。
 - config-based Experiment load、`status != finished` の rejection、Run parameter table が未知 run id を参照する場合の rejection。
 - dynamic Experiment が一時 Local Registry を保持し、open Run を持つ commit を拒否し、unfinished Run drop を abandon として扱うこと。
 

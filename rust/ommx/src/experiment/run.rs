@@ -61,13 +61,13 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
         self.log_attachment(name, media_types::v1_sample_set(), sample_set.to_bytes())
     }
 
-    /// Log one solver execution under this run.
+    /// Log one already-finished solver result under this run.
     ///
     /// The original input [`Instance`] and returned [`Solution`] are
     /// stored as solve-scoped payloads. Solver adapter metadata and
     /// kwargs belong to the solve parameters, not the Run parameter
     /// table.
-    pub fn log_solve(
+    pub fn log_finished_solve_result(
         &mut self,
         input: &Instance,
         output: &Solution,

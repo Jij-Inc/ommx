@@ -118,7 +118,7 @@ impl RunDyn {
         self.log_attachment(name, media_types::v1_sample_set(), sample_set.to_bytes())
     }
 
-    pub fn log_solve(
+    pub fn log_finished_solve_result(
         &mut self,
         input: &Instance,
         output: &Solution,

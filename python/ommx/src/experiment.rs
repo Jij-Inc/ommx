@@ -312,8 +312,11 @@ impl PyRun {
             ("kwargs".to_string(), dump_kwargs(py, kwargs)?),
         ]);
         let solution = adapter.solve(py, instance, kwargs)?;
-        self.as_open_mut()?
-            .log_solve(&instance.inner, &solution.inner, parameters)?;
+        self.as_open_mut()?.log_finished_solve_result(
+            &instance.inner,
+            &solution.inner,
+            parameters,
+        )?;
         Ok(solution)
     }
 
