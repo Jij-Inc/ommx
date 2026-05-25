@@ -51,7 +51,7 @@ prost-build = "0.12.0"
 quote = "1.0.40"
 pyo3 = { version = "0.27.2", features = ["anyhow", "multiple-pymethods"] }
 pyo3-stub-gen = "0.22.3"
-pyo3-tracing-opentelemetry = "0.2.0"
+pyo3-tracing-opentelemetry = "0.3.0"
 rusqlite = { version = "0.39.0", features = ["bundled"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde-pyobject = "0.8.0"
