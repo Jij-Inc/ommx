@@ -146,10 +146,6 @@ impl LocalArtifactDyn {
         self.as_local_artifact().annotations()
     }
 
-    pub fn layers(&self) -> Result<Vec<Descriptor>> {
-        self.as_local_artifact().layers()
-    }
-
     pub fn stored_layers(&self) -> Result<Vec<StoredDescriptor<'_>>> {
         self.as_local_artifact().stored_layers()
     }
@@ -251,10 +247,6 @@ impl<'reg> LocalArtifact<'reg> {
 
     pub fn annotations(&self) -> Result<HashMap<String, String>> {
         Ok(self.get_manifest()?.annotations())
-    }
-
-    pub fn layers(&self) -> Result<Vec<Descriptor>> {
-        Ok(self.get_manifest()?.layers())
     }
 
     pub fn stored_config(&self) -> Result<StoredDescriptor<'reg>> {

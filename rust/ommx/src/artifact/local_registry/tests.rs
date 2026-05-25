@@ -208,7 +208,7 @@ fn imports_oci_dir_into_sqlite_registry_preserving_image_manifest() -> Result<()
         artifact.get_manifest()?.media_type(),
         OCI_IMAGE_MANIFEST_MEDIA_TYPE
     );
-    assert_eq!(artifact.layers()?, vec![layer.clone()]);
+    assert_eq!(stored_layer_descriptors(&artifact)?, vec![layer.clone()]);
     let stored_layer = artifact.registry().stored_descriptor(layer)?;
     assert_eq!(artifact.get_blob(&stored_layer)?, b"instance");
     Ok(())
@@ -520,7 +520,10 @@ fn local_registry_builds_native_image_manifest_with_artifact_type() -> Result<()
         manifest.config().digest().to_string(),
         media_types::OCI_EMPTY_CONFIG_DIGEST
     );
-    assert_eq!(artifact.layers()?, manifest.layers().to_vec());
+    assert_eq!(
+        stored_layer_descriptors(&artifact)?,
+        manifest.layers().to_vec()
+    );
     assert_eq!(
         artifact.get_manifest()?.media_type(),
         OCI_IMAGE_MANIFEST_MEDIA_TYPE
@@ -847,7 +850,7 @@ fn imports_legacy_v2_oci_dir_with_ommx_config_blob() -> Result<()> {
         artifact.get_manifest()?.media_type(),
         OCI_IMAGE_MANIFEST_MEDIA_TYPE
     );
-    assert_eq!(artifact.layers()?, vec![layer_descriptor]);
+    assert_eq!(stored_layer_descriptors(&artifact)?, vec![layer_descriptor]);
     Ok(())
 }
 
@@ -1241,7 +1244,7 @@ fn local_artifact_save_round_trip_preserves_layers() -> Result<()> {
     let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:save-round-trip")?;
     let layer_bytes = b"step-c-save-round-trip-payload";
     let local_artifact = build_test_local_artifact(&registry, &image_name, layer_bytes)?;
-    let expected_layers = local_artifact.layers()?;
+    let expected_layers = local_artifact.stored_layers()?;
     let archive_path = dir.path().join("round-trip.ommx");
 
     local_artifact.save(&archive_path)?;
@@ -1356,6 +1359,14 @@ fn new_test_local_artifact_builder<'reg>(
         HashMap::from([("org.ommx.v1.instance.title".to_string(), "demo".to_string())]),
     )?;
     Ok((builder, descriptor.into()))
+}
+
+fn stored_layer_descriptors(artifact: &LocalArtifact<'_>) -> Result<Vec<Descriptor>> {
+    Ok(artifact
+        .stored_layers()?
+        .into_iter()
+        .map(Descriptor::from)
+        .collect())
 }
 
 fn put_test_manifest_ref(

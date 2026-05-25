@@ -17,23 +17,14 @@ impl<'reg> SealedExperiment<'reg> {
     /// Reconstruct a sealed Experiment from a committed Experiment Artifact.
     pub fn from_artifact(artifact: LocalArtifact<'reg>) -> Result<Self> {
         let config = load_experiment_config(&artifact)?;
-        let layers = artifact.layers()?;
+        let layers = artifact.stored_layers()?;
 
-        let attachments = decode_attachments(
-            artifact.registry(),
-            &layers,
-            config.attachments,
-            "experiment",
-        )?;
+        let attachments = decode_attachments(&layers, config.attachments, "experiment")?;
         let mut runs = BTreeMap::new();
         for run in config.runs {
-            let attachments = decode_attachments(
-                artifact.registry(),
-                &layers,
-                run.attachments,
-                &format!("run {}", run.run_id),
-            )?;
-            let solves = decode_solves(artifact.registry(), &layers, run.run_id, run.solves)?;
+            let attachments =
+                decode_attachments(&layers, run.attachments, &format!("run {}", run.run_id))?;
+            let solves = decode_solves(&layers, run.run_id, run.solves)?;
             if runs
                 .insert(
                     run.run_id,
@@ -151,8 +142,7 @@ fn load_experiment_config(artifact: &LocalArtifact<'_>) -> Result<ExperimentConf
 }
 
 fn decode_attachments<'reg>(
-    registry: &'reg crate::artifact::local_registry::LocalRegistry,
-    layers: &[Descriptor],
+    layers: &[StoredDescriptor<'reg>],
     attachments: Vec<LayerRef>,
     attachment_context: &str,
 ) -> Result<Vec<StoredDescriptor<'reg>>> {
@@ -169,18 +159,13 @@ fn decode_attachments<'reg>(
         if attachment_name(&descriptor).is_none() {
             crate::bail!("Attachment descriptor in {attachment_context} is missing `org.ommx.attachment.name`");
         }
-        decoded.push(
-            registry
-                .stored_descriptor(descriptor)
-                .with_context(|| format!("Failed to decode Attachment in {attachment_context}"))?,
-        );
+        decoded.push(descriptor);
     }
     Ok(decoded)
 }
 
 fn decode_solves<'reg>(
-    registry: &'reg crate::artifact::local_registry::LocalRegistry,
-    layers: &[Descriptor],
+    layers: &[StoredDescriptor<'reg>],
     run_id: u64,
     solves: Vec<ExperimentConfigSolve>,
 ) -> Result<Vec<Solve<'reg>>> {
@@ -212,12 +197,8 @@ fn decode_solves<'reg>(
             .with_context(|| format!("Invalid Run {run_id} Solve {} output", solve.solve_id))?;
         decoded.push(Solve {
             solve_id: solve.solve_id,
-            input: registry
-                .stored_descriptor(input)
-                .with_context(|| format!("Failed to decode Run {run_id} Solve input"))?,
-            output: registry
-                .stored_descriptor(output)
-                .with_context(|| format!("Failed to decode Run {run_id} Solve output"))?,
+            input,
+            output,
             parameters: solve.parameters,
         });
     }
@@ -226,7 +207,7 @@ fn decode_solves<'reg>(
 
 fn load_run_parameters(
     artifact: &LocalArtifact<'_>,
-    layers: &[Descriptor],
+    layers: &[StoredDescriptor<'_>],
     layer_ref: LayerRef,
 ) -> Result<RunParameterTable> {
     let descriptor = resolve_layer(layers, layer_ref).with_context(|| {
@@ -242,16 +223,15 @@ fn load_run_parameters(
             RUN_PARAMETERS_MEDIA_TYPE
         );
     }
-    let descriptor = artifact
-        .registry()
-        .stored_descriptor(descriptor.clone())
-        .context("Failed to decode run-parameter table descriptor")?;
-    let bytes = artifact.get_blob(&descriptor)?;
+    let bytes = artifact.get_blob(descriptor)?;
     serde_json::from_slice::<RunParameterTable>(&bytes)
         .context("Failed to decode run-parameter table JSON")
 }
 
-fn resolve_layer(layers: &[Descriptor], layer_ref: LayerRef) -> Result<&Descriptor> {
+fn resolve_layer<'a, 'reg>(
+    layers: &'a [StoredDescriptor<'reg>],
+    layer_ref: LayerRef,
+) -> Result<&'a StoredDescriptor<'reg>> {
     layers.get(layer_ref.0 as usize).ok_or_else(|| {
         anyhow::anyhow!(
             "LayerRef {} is out of bounds for {} manifest layer(s)",
