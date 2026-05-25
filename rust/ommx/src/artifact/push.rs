@@ -1,8 +1,8 @@
 //! Native `LocalArtifact::push` — SQLite + CAS → remote OCI registry.
 //!
 //! The push streams the SQLite-resident artifact directly to the remote
-//! registry: the empty config blob and every layer blob are read from
-//! the BlobStore by digest and pushed through the
+//! registry: the empty config blob and every layer blob are read via
+//! their descriptors and pushed through the
 //! [`super::remote_transport::RemoteTransport`] wrapper, then the
 //! verbatim manifest bytes (as digest-addressed in the BlobStore) are
 //! published with `application/vnd.oci.image.manifest.v1+json` as the
@@ -38,7 +38,7 @@ impl LocalArtifact<'_> {
 
         for descriptor in &blob_descriptors {
             let digest = descriptor.digest().to_string();
-            let bytes = self.get_blob(descriptor.digest())?;
+            let bytes = self.get_blob_by_descriptor(descriptor)?;
             tracing::debug!(
                 size = bytes.len(),
                 "Pushing blob {digest} of {}",
@@ -51,7 +51,7 @@ impl LocalArtifact<'_> {
             transport.push_blob(self.image_name(), &digest, bytes)?;
         }
 
-        let manifest_bytes = self.get_blob(self.manifest_digest())?;
+        let manifest_bytes = self.read_blob_by_digest(self.manifest_digest())?;
         let content_type = manifest.media_type();
         tracing::info!(
             "Publishing manifest {} ({}, {} bytes) to {}",

@@ -208,8 +208,9 @@ fn imports_oci_dir_into_sqlite_registry_preserving_image_manifest() -> Result<()
         artifact.get_manifest()?.media_type(),
         OCI_IMAGE_MANIFEST_MEDIA_TYPE
     );
-    assert_eq!(artifact.layers()?, vec![layer.clone()]);
-    assert_eq!(artifact.get_blob(layer.digest())?, b"instance");
+    assert_eq!(stored_layer_descriptors(&artifact)?, vec![layer.clone()]);
+    let stored_layer = artifact.registry().stored_descriptor(layer)?;
+    assert_eq!(artifact.get_blob(&stored_layer)?, b"instance");
     Ok(())
 }
 
@@ -519,7 +520,10 @@ fn local_registry_builds_native_image_manifest_with_artifact_type() -> Result<()
         manifest.config().digest().to_string(),
         media_types::OCI_EMPTY_CONFIG_DIGEST
     );
-    assert_eq!(artifact.layers()?, manifest.layers().to_vec());
+    assert_eq!(
+        stored_layer_descriptors(&artifact)?,
+        manifest.layers().to_vec()
+    );
     assert_eq!(
         artifact.get_manifest()?.media_type(),
         OCI_IMAGE_MANIFEST_MEDIA_TYPE
@@ -535,11 +539,17 @@ fn local_registry_builds_native_image_manifest_with_artifact_type() -> Result<()
         manifest.layers()[0].media_type(),
         &media_types::v1_instance()
     );
-    assert_eq!(artifact.get_blob(layer.digest())?, b"instance");
+    let stored_layer = artifact.registry().stored_descriptor(layer.clone())?;
+    assert_eq!(artifact.get_blob(&stored_layer)?, b"instance");
 
     // Empty config blob must be readable from the registry CAS.
+    let config = artifact.stored_config()?;
     assert_eq!(
-        artifact.get_blob(&Digest::from_str(media_types::OCI_EMPTY_CONFIG_DIGEST)?)?,
+        config.digest().as_ref(),
+        media_types::OCI_EMPTY_CONFIG_DIGEST
+    );
+    assert_eq!(
+        artifact.get_blob(&config)?,
         media_types::OCI_EMPTY_CONFIG_BYTES
     );
     assert!(registry
@@ -840,7 +850,7 @@ fn imports_legacy_v2_oci_dir_with_ommx_config_blob() -> Result<()> {
         artifact.get_manifest()?.media_type(),
         OCI_IMAGE_MANIFEST_MEDIA_TYPE
     );
-    assert_eq!(artifact.layers()?, vec![layer_descriptor]);
+    assert_eq!(stored_layer_descriptors(&artifact)?, vec![layer_descriptor]);
     Ok(())
 }
 
@@ -1349,6 +1359,14 @@ fn new_test_local_artifact_builder<'reg>(
         HashMap::from([("org.ommx.v1.instance.title".to_string(), "demo".to_string())]),
     )?;
     Ok((builder, descriptor.into()))
+}
+
+fn stored_layer_descriptors(artifact: &LocalArtifact<'_>) -> Result<Vec<Descriptor>> {
+    Ok(artifact
+        .layers()?
+        .into_iter()
+        .map(Descriptor::from)
+        .collect())
 }
 
 fn put_test_manifest_ref(
