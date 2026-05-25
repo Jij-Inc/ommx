@@ -418,12 +418,10 @@ fn log_solve_materializes_solve_entry_with_layer_refs() {
                 .log_solve(
                     &instance,
                     &solution,
-                    json!({
-                        "adapter": "dummy.Adapter",
-                        "kwargs": {
-                            "time_limit": 1.5,
-                        },
-                    }),
+                    BTreeMap::from([
+                        ("adapter".to_string(), "dummy.Adapter".to_string()),
+                        ("kwargs".to_string(), r#"{"time_limit":1.5}"#.to_string()),
+                    ]),
                 )
                 .unwrap();
             assert_eq!(solve_id, 0);
@@ -449,8 +447,8 @@ fn log_solve_materializes_solve_entry_with_layer_refs() {
             json!("dummy.Adapter")
         );
         assert_eq!(
-            config_json["runs"][0]["solves"][0]["parameters"]["kwargs"]["time_limit"],
-            json!(1.5)
+            config_json["runs"][0]["solves"][0]["parameters"]["kwargs"],
+            json!(r#"{"time_limit":1.5}"#)
         );
 
         let loaded = SealedExperiment::from_artifact(artifact.clone()).unwrap();
@@ -470,14 +468,11 @@ fn log_solve_materializes_solve_entry_with_layer_refs() {
         );
         assert_eq!(
             solve.parameters().get("adapter"),
-            Some(&json!("dummy.Adapter"))
+            Some(&"dummy.Adapter".to_string())
         );
         assert_eq!(
-            solve
-                .parameters()
-                .get("kwargs")
-                .and_then(|kwargs| kwargs.get("time_limit")),
-            Some(&json!(1.5))
+            solve.parameters().get("kwargs"),
+            Some(&r#"{"time_limit":1.5}"#.to_string())
         );
         Ok(())
     });

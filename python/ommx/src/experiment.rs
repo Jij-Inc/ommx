@@ -307,10 +307,14 @@ impl PyRun {
         kwargs: Option<&Bound<PyDict>>,
     ) -> Result<crate::Solution> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let solve = adapter.solve(py, instance, kwargs)?;
+        let parameters = BTreeMap::from([
+            ("adapter".to_string(), adapter.name(py)?),
+            ("kwargs".to_string(), dump_kwargs(py, kwargs)?),
+        ]);
+        let solution = adapter.solve(py, instance, kwargs)?;
         self.as_open_mut()?
-            .log_solve(&instance.inner, &solve.solution.inner, solve.parameters)?;
-        Ok(solve.solution)
+            .log_solve(&instance.inner, &solution.inner, parameters)?;
+        Ok(solution)
     }
 
     /// Finish this run and append it to the parent Experiment.
@@ -387,32 +391,19 @@ impl<'py> FromPyObject<'_, 'py> for ParameterValueInput {
 
 pub struct SolverAdapterInput(Py<PyType>);
 
-struct SolverAdapterSolve {
-    solution: crate::Solution,
-    parameters: serde_json::Value,
-}
-
 impl SolverAdapterInput {
     fn solve(
         &self,
         py: Python<'_>,
         instance: &crate::Instance,
         kwargs: Option<&Bound<PyDict>>,
-    ) -> Result<SolverAdapterSolve> {
-        let parameters = serde_json::json!({
-            "adapter": self.name(py)?,
-            "kwargs": self.kwargs_json(py, kwargs)?,
-        });
+    ) -> Result<crate::Solution> {
         let adapter = self.0.bind(py);
         let adapter_instance = Py::new(py, instance.clone())?;
         let solution_object = adapter.call_method("solve", (adapter_instance,), kwargs)?;
-        let solution = solution_object
+        solution_object
             .extract::<crate::Solution>()
-            .map_err(|_| anyhow::anyhow!("adapter.solve(...) must return ommx.v1.Solution"))?;
-        Ok(SolverAdapterSolve {
-            solution,
-            parameters,
-        })
+            .map_err(|_| anyhow::anyhow!("adapter.solve(...) must return ommx.v1.Solution"))
     }
 
     fn name(&self, py: Python<'_>) -> Result<String> {
@@ -421,22 +412,17 @@ impl SolverAdapterInput {
         let qualname: String = adapter.qualname()?.extract()?;
         Ok(format!("{module}.{qualname}"))
     }
+}
 
-    fn kwargs_json(
-        &self,
-        py: Python<'_>,
-        kwargs: Option<&Bound<PyDict>>,
-    ) -> Result<serde_json::Value> {
-        let Some(kwargs) = kwargs else {
-            return Ok(serde_json::json!({}));
-        };
-        let json = py.import("json")?;
-        let encoded: String = json
-            .call_method1("dumps", (kwargs,))
-            .context("SolverAdapter kwargs must be JSON-serializable")?
-            .extract()?;
-        serde_json::from_str(&encoded).context("Failed to decode serialized SolverAdapter kwargs")
+fn dump_kwargs(py: Python<'_>, kwargs: Option<&Bound<PyDict>>) -> Result<String> {
+    let json = py.import("json")?;
+    let encoded: String = match kwargs {
+        Some(kwargs) => json.call_method1("dumps", (kwargs,)),
+        None => json.call_method1("dumps", (PyDict::new(py),)),
     }
+    .context("SolverAdapter kwargs must be JSON-serializable")?
+    .extract()?;
+    Ok(encoded)
 }
 
 impl<'py> FromPyObject<'_, 'py> for SolverAdapterInput {
@@ -553,8 +539,8 @@ impl PySolve {
     }
 
     #[getter]
-    pub fn parameters<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyAny>> {
-        Ok(serde_pyobject::to_pyobject(py, self.0.parameters())?)
+    pub fn parameters(&self) -> BTreeMap<String, String> {
+        self.0.parameters().clone()
     }
 
     pub fn __repr__(&self) -> String {

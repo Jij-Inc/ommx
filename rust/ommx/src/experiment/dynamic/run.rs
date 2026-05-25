@@ -12,6 +12,7 @@ use crate::artifact::media_types;
 use crate::{Instance, SampleSet, Solution};
 use anyhow::Result;
 use oci_spec::image::{Descriptor, MediaType};
+use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 /// Runtime-owned Run handle.
@@ -121,7 +122,7 @@ impl RunDyn {
         &mut self,
         input: &Instance,
         output: &Solution,
-        parameters: serde_json::Value,
+        parameters: BTreeMap<String, String>,
     ) -> Result<u64> {
         let solve_id = self.open()?.next_solve_id;
         let (input, output) = {

@@ -107,7 +107,7 @@ pub struct Solve<'reg> {
     solve_id: u64,
     input: StoredDescriptor<'reg>,
     output: StoredDescriptor<'reg>,
-    parameters: serde_json::Value,
+    parameters: BTreeMap<String, String>,
 }
 
 impl<'reg> Solve<'reg> {
@@ -123,7 +123,7 @@ impl<'reg> Solve<'reg> {
         &self.output
     }
 
-    pub fn parameters(&self) -> &serde_json::Value {
+    pub fn parameters(&self) -> &BTreeMap<String, String> {
         &self.parameters
     }
 }

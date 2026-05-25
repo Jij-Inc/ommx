@@ -1,3 +1,4 @@
+import json
 from typing import Any, ClassVar, cast
 
 import pandas as pd
@@ -203,14 +204,16 @@ def test_log_solve_logs_input_solution_and_json_kwargs():
     assert first_solve.input.media_type == "application/org.ommx.v1.instance"
     assert first_solve.output.media_type == "application/org.ommx.v1.solution"
     assert str(first_solve.parameters["adapter"]).endswith("DummyAdapter")
-    assert first_solve.parameters["kwargs"] == {
+    assert isinstance(first_solve.parameters["kwargs"], str)
+    assert json.loads(first_solve.parameters["kwargs"]) == {
         "time_limit": 1.5,
         "verbose": True,
         "label": "baseline",
     }
 
     second_solve = runs[0].solves[1]
-    assert second_solve.parameters["kwargs"] == {
+    assert isinstance(second_solve.parameters["kwargs"], str)
+    assert json.loads(second_solve.parameters["kwargs"]) == {
         "time_limit": 2.0,
         "label": "pricing",
     }

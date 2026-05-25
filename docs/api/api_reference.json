@@ -2823,9 +2823,20 @@
               "name": "parameters",
               "doc": "",
               "type_": {
-                "display": "Any",
+                "display": "dict[str, str]",
                 "link_target": null,
-                "children": []
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
               },
               "is_property": true,
               "is_readonly": true

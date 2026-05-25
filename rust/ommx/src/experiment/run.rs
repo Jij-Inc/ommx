@@ -8,6 +8,7 @@ use crate::artifact::media_types;
 use crate::{Instance, SampleSet, Solution};
 use anyhow::Result;
 use oci_spec::image::MediaType;
+use std::collections::BTreeMap;
 
 impl<'exp, 'reg> Run<'exp, 'reg> {
     /// This run's 0-based id within the experiment.
@@ -70,7 +71,7 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
         &mut self,
         input: &Instance,
         output: &Solution,
-        parameters: serde_json::Value,
+        parameters: BTreeMap<String, String>,
     ) -> Result<u64> {
         let solve_id = self.next_solve_id;
         self.next_solve_id += 1;
