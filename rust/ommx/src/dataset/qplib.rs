@@ -295,7 +295,7 @@ pub fn load(tag: &str) -> Result<(Instance, InstanceAnnotations)> {
     let registry = LocalRegistry::shared_default()?;
     pull_image(registry, &image_name)?;
     let artifact = LocalArtifact::open_in_registry(registry, image_name)?;
-    let layers = artifact.stored_layers()?;
+    let layers = artifact.layers()?;
     let mut instance_layers = layers
         .into_iter()
         .filter(|d| d.media_type() == &media_types::v1_instance());

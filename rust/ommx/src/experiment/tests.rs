@@ -108,7 +108,7 @@ fn runs_can_be_open_concurrently_and_write_back_on_close() {
         });
 
         let artifact = experiment.commit().unwrap().into_artifact();
-        let layers = artifact.stored_layers().unwrap();
+        let layers = artifact.layers().unwrap();
         assert_eq!(
             layers
                 .iter()
@@ -244,7 +244,7 @@ fn commit_produces_experiment_artifact() {
         );
 
         // 3 attachments (1 experiment-space + 2 run-space) + run-parameters.
-        let layers = artifact.stored_layers().unwrap();
+        let layers = artifact.layers().unwrap();
         assert_eq!(layers.len(), 4);
 
         let dataset = find_layer(&layers, ANN_ATTACHMENT_NAME, "dataset");
@@ -303,7 +303,7 @@ fn log_parameter_materializes_run_parameter_table() {
         }
 
         let artifact = experiment.commit().unwrap().into_artifact();
-        let layers = artifact.stored_layers().unwrap();
+        let layers = artifact.layers().unwrap();
         let run_params = find_layer(&layers, ANN_LAYER, LAYER_KIND_RUN_PARAMETERS);
         assert!(layer_annotation(run_params, ANN_ATTACHMENT_NAME).is_none());
         let bytes = blob_bytes(&artifact, run_params);
@@ -435,7 +435,7 @@ fn log_finished_solve_result_materializes_solve_entry_with_layer_refs() {
 
         let sealed = experiment.commit().unwrap();
         let artifact = sealed.artifact();
-        let layers = artifact.stored_layers().unwrap();
+        let layers = artifact.layers().unwrap();
         assert_eq!(layers.len(), 3);
 
         let config = artifact.stored_config().unwrap();
@@ -765,7 +765,7 @@ fn log_parameter_promotes_int_column_to_float_at_commit() {
         }
 
         let artifact = experiment.commit().unwrap().into_artifact();
-        let layers = artifact.stored_layers().unwrap();
+        let layers = artifact.layers().unwrap();
         let run_params = find_layer(&layers, ANN_LAYER, LAYER_KIND_RUN_PARAMETERS);
         let bytes = blob_bytes(&artifact, run_params);
         let table: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
@@ -896,7 +896,7 @@ fn dropping_unclosed_run_does_not_write_back() {
             0
         );
         let artifact = experiment.commit().unwrap().into_artifact();
-        let layers = artifact.stored_layers().unwrap();
+        let layers = artifact.layers().unwrap();
         assert!(layers
             .iter()
             .all(|layer| layer_annotation(layer, ANN_ATTACHMENT_NAME).as_deref() != Some("seed")));
@@ -924,7 +924,7 @@ fn byte_identical_attachment_across_runs_shares_one_blob() {
         }
 
         let artifact = experiment.commit().unwrap().into_artifact();
-        let layers = artifact.stored_layers().unwrap();
+        let layers = artifact.layers().unwrap();
 
         let candidates: Vec<&StoredDescriptor<'_>> = layers
             .iter()
@@ -959,7 +959,7 @@ fn log_attachment_accepts_caller_defined_media_type() {
             .unwrap();
 
         let artifact = experiment.commit().unwrap().into_artifact();
-        let layers = artifact.stored_layers().unwrap();
+        let layers = artifact.layers().unwrap();
         let source_model = find_layer(&layers, ANN_ATTACHMENT_NAME, "source-model");
         assert_eq!(source_model.media_type(), &media_type);
         assert_eq!(blob_bytes(&artifact, source_model), br#"{"variables": []}"#);

@@ -1244,7 +1244,7 @@ fn local_artifact_save_round_trip_preserves_layers() -> Result<()> {
     let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:save-round-trip")?;
     let layer_bytes = b"step-c-save-round-trip-payload";
     let local_artifact = build_test_local_artifact(&registry, &image_name, layer_bytes)?;
-    let expected_layers = local_artifact.stored_layers()?;
+    let expected_layers = local_artifact.layers()?;
     let archive_path = dir.path().join("round-trip.ommx");
 
     local_artifact.save(&archive_path)?;
@@ -1363,7 +1363,7 @@ fn new_test_local_artifact_builder<'reg>(
 
 fn stored_layer_descriptors(artifact: &LocalArtifact<'_>) -> Result<Vec<Descriptor>> {
     Ok(artifact
-        .stored_layers()?
+        .layers()?
         .into_iter()
         .map(Descriptor::from)
         .collect())

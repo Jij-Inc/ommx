@@ -17,7 +17,7 @@ impl<'reg> SealedExperiment<'reg> {
     /// Reconstruct a sealed Experiment from a committed Experiment Artifact.
     pub fn from_artifact(artifact: LocalArtifact<'reg>) -> Result<Self> {
         let config = load_experiment_config(&artifact)?;
-        let layers = artifact.stored_layers()?;
+        let layers = artifact.layers()?;
 
         let attachments = decode_attachments(&layers, config.attachments, "experiment")?;
         let mut runs = BTreeMap::new();

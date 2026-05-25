@@ -256,7 +256,7 @@ impl PyArtifact {
     pub fn layers(&mut self) -> Result<Vec<PyDescriptor>> {
         Ok(self
             .inner
-            .stored_layers()?
+            .layers()?
             .into_iter()
             .map(PyDescriptor::from)
             .collect())
@@ -265,7 +265,7 @@ impl PyArtifact {
     /// Look up a layer descriptor by digest.
     pub fn get_layer_descriptor(&mut self, py: Python<'_>, digest: &str) -> Result<PyDescriptor> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let layers = self.inner.stored_layers()?;
+        let layers = self.inner.layers()?;
         for layer in layers {
             if layer.digest().as_ref() == digest {
                 return Ok(PyDescriptor::from(layer));
@@ -385,7 +385,7 @@ impl PyArtifact {
             None => {
                 let layers = self
                     .inner
-                    .stored_layers()
+                    .layers()
                     .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
                 for desc in layers {
                     let py_desc = PyDescriptor::from(desc);
@@ -422,7 +422,7 @@ impl PyArtifact {
             None => {
                 let layers = self
                     .inner
-                    .stored_layers()
+                    .layers()
                     .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
                 for desc in layers {
                     let py_desc = PyDescriptor::from(desc);
@@ -459,7 +459,7 @@ impl PyArtifact {
             None => {
                 let layers = self
                     .inner
-                    .stored_layers()
+                    .layers()
                     .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
                 for desc in layers {
                     let py_desc = PyDescriptor::from(desc);
@@ -496,7 +496,7 @@ impl PyArtifact {
             None => {
                 let layers = self
                     .inner
-                    .stored_layers()
+                    .layers()
                     .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
                 for desc in layers {
                     let py_desc = PyDescriptor::from(desc);
