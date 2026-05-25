@@ -7,15 +7,15 @@ from ommx.adapter import SolverAdapter
 from ommx.experiment import Experiment
 from ommx.v1 import Instance, Solution
 
-_RECORD_NAME = "org.ommx.record.name"
+_ATTACHMENT_NAME = "org.ommx.attachment.name"
 
 
 def _df_snap(df: pd.DataFrame) -> str:
     return df.to_string(na_rep="<NA>")
 
 
-def _record_names(records) -> set[str]:
-    return {record.annotations[_RECORD_NAME] for record in records}
+def _attachment_names(attachments) -> set[str]:
+    return {attachment.annotations[_ATTACHMENT_NAME] for attachment in attachments}
 
 
 def test_view_run_parameters_from_committed_artifact(snapshot):
@@ -36,42 +36,42 @@ def test_view_run_parameters_from_committed_artifact(snapshot):
 
     artifact = experiment.artifact
     loaded = Experiment.from_artifact(artifact)
-    assert _record_names(loaded.experiment_records) == {"dataset"}
+    assert _attachment_names(loaded.experiment_attachments) == {"dataset"}
     runs = {run.run_id: run for run in loaded.runs}
     assert set(runs) == {0, 1, 2}
-    assert _record_names(runs[0].records) == {"candidate"}
-    assert runs[1].records == []
-    assert runs[2].records == []
+    assert _attachment_names(runs[0].attachments) == {"candidate"}
+    assert runs[1].attachments == []
+    assert runs[2].attachments == []
     df = loaded.run_parameters_df()
 
     assert _df_snap(df) == snapshot
 
 
-def test_create_experiment_run_records_and_commit(snapshot):
+def test_create_experiment_run_attachments_and_commit(snapshot):
     experiment = Experiment.with_temp_local_registry()
     assert ".ommx.local/experiment:" in experiment.image_name
     assert "state='unsealed'" in repr(experiment)
     assert "open_runs=0" in repr(experiment)
 
     experiment.log_json("dataset", {"name": "miplib2017"})
-    experiment.log_record("raw-config", "application/octet-stream", b"abc")
+    experiment.log_attachment("raw-config", "application/octet-stream", b"abc")
 
     with experiment.run() as run:
         assert run.run_id == 0
         run.log_parameter("solver", "scip")
         run.log_parameter("time_limit", 20.0)
         run.log_json("candidate", {"formulation": "a"})
-        run.log_record("solver-log", "text/plain", b"solved")
+        run.log_attachment("solver-log", "text/plain", b"solved")
 
     artifact = experiment.commit()
     loaded = Experiment.from_artifact(artifact)
-    assert _record_names(loaded.experiment_records) == {
+    assert _attachment_names(loaded.experiment_attachments) == {
         "dataset",
         "raw-config",
     }
     runs = {run.run_id: run for run in loaded.runs}
     assert set(runs) == {0}
-    assert _record_names(runs[0].records) == {"candidate", "solver-log"}
+    assert _attachment_names(runs[0].attachments) == {"candidate", "solver-log"}
     df = loaded.run_parameters_df()
 
     assert _df_snap(df) == snapshot
@@ -139,7 +139,7 @@ def test_log_parameter_rejects_python_int_outside_i64():
             run.log_parameter("too_large", 2**63)
 
 
-def test_log_solve_records_input_solution_and_scalar_kwargs():
+def test_log_solve_logs_input_solution_and_scalar_kwargs():
     class DummyAdapter(SolverAdapter):
         seen_kwargs: ClassVar[list[dict[str, object]]] = []
 
@@ -196,7 +196,7 @@ def test_log_solve_records_input_solution_and_scalar_kwargs():
     artifact = experiment.commit()
     loaded = Experiment.from_artifact(artifact)
     runs = {run.run_id: run for run in loaded.runs}
-    assert runs[0].records == []
+    assert runs[0].attachments == []
     assert [solve.solve_id for solve in runs[0].solves] == [0, 1]
 
     first_solve = runs[0].solves[0]

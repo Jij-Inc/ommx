@@ -3,8 +3,8 @@
 use super::config::{ExperimentConfig, ExperimentConfigRun, LayerRef};
 use super::UnsealedExperimentState;
 use super::{
-    Experiment, ExperimentDyn, Name, ParameterValue, SealedExperiment, ANN_LAYER, ANN_RECORD_NAME,
-    ANN_RUN_ID, ANN_SPACE, EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_STATUS_FINISHED,
+    Experiment, ExperimentDyn, Name, ParameterValue, SealedExperiment, ANN_ATTACHMENT_NAME,
+    ANN_LAYER, ANN_RUN_ID, ANN_SPACE, EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_STATUS_FINISHED,
     LAYER_KIND_RUN_PARAMETERS, RUN_PARAMETERS_MEDIA_TYPE,
 };
 use crate::artifact::local_registry::UnsealedArtifact;
@@ -48,9 +48,9 @@ fn find_layer<'a>(layers: &'a [Descriptor], key: &str, value: &str) -> &'a Descr
 }
 
 /// `run()` hands out fresh 0-based ids; `finish()` consumes the run
-/// handle and records the closed run.
+/// handle and registers the closed run.
 #[test]
-fn run_lifecycle_assigns_ids_and_records_closed_runs() {
+fn run_lifecycle_assigns_ids_and_registers_closed_runs() {
     with_temp_experiment(|experiment| {
         {
             let run0 = experiment.run().unwrap();
@@ -105,7 +105,7 @@ fn runs_can_be_open_concurrently_and_write_back_on_close() {
             layers
                 .iter()
                 .filter(|layer| {
-                    layer_annotation(layer, ANN_RECORD_NAME).as_deref() == Some("candidate")
+                    layer_annotation(layer, ANN_ATTACHMENT_NAME).as_deref() == Some("candidate")
                 })
                 .map(|layer| layer_annotation(layer, ANN_RUN_ID).unwrap())
                 .collect::<Vec<_>>(),
@@ -128,19 +128,19 @@ fn log_writes_blob_to_blobstore_immediately() {
 
         let digest = with_unsealed_state(&experiment, |state| {
             let run = state.runs.get(&0).unwrap();
-            assert_eq!(run.records.len(), 1);
-            run.records[0].digest().clone()
+            assert_eq!(run.attachments.len(), 1);
+            run.attachments[0].digest().clone()
         });
         assert!(experiment.registry.blobs().exists(&digest).unwrap());
         Ok(())
     });
 }
 
-/// Record descriptors are append-only within the Experiment/Run state.
+/// Attachment descriptors are append-only within the Experiment/Run state.
 /// BlobStore still deduplicates byte-identical payloads by digest, but
 /// the Experiment model preserves each log call as a descriptor entry.
 #[test]
-fn log_preserves_record_descriptor_log_order() {
+fn log_preserves_attachment_descriptor_log_order() {
     with_temp_experiment(|experiment| {
         experiment.log_json("dataset", json!("miplib2017")).unwrap();
         experiment.log_json("dataset", json!("qplib")).unwrap();
@@ -150,12 +150,12 @@ fn log_preserves_record_descriptor_log_order() {
         experiment.log_instance("dataset", &instance).unwrap();
 
         let json_digests = with_unsealed_state(&experiment, |state| {
-            assert_eq!(state.records.len(), 3);
+            assert_eq!(state.attachments.len(), 3);
             assert_eq!(
                 state
-                    .records
+                    .attachments
                     .iter()
-                    .map(|record| layer_annotation(record, ANN_RECORD_NAME).unwrap())
+                    .map(|attachment| layer_annotation(attachment, ANN_ATTACHMENT_NAME).unwrap())
                     .collect::<Vec<_>>(),
                 vec![
                     "dataset".to_string(),
@@ -165,9 +165,9 @@ fn log_preserves_record_descriptor_log_order() {
             );
             assert_eq!(
                 state
-                    .records
+                    .attachments
                     .iter()
-                    .map(|record| record.media_type().clone())
+                    .map(|attachment| attachment.media_type().clone())
                     .collect::<Vec<_>>(),
                 vec![
                     MediaType::Other("application/json".into()),
@@ -176,10 +176,10 @@ fn log_preserves_record_descriptor_log_order() {
                 ]
             );
             state
-                .records
+                .attachments
                 .iter()
                 .take(2)
-                .map(|record| record.digest().clone())
+                .map(|attachment| attachment.digest().clone())
                 .collect::<Vec<_>>()
         });
         let first_bytes = experiment
@@ -202,7 +202,7 @@ fn log_preserves_record_descriptor_log_order() {
 }
 
 /// `commit()` seals the session into an OMMX Artifact whose manifest and
-/// layer annotations describe the experiment / run records.
+/// layer annotations describe the experiment / run attachments.
 #[test]
 fn commit_produces_experiment_artifact() {
     with_temp_experiment(|experiment| {
@@ -235,11 +235,11 @@ fn commit_produces_experiment_artifact() {
             Some(EXPERIMENT_STATUS_FINISHED)
         );
 
-        // 3 records (1 experiment-space + 2 run-space) + run-parameters.
+        // 3 attachments (1 experiment-space + 2 run-space) + run-parameters.
         let layers = artifact.layers().unwrap();
         assert_eq!(layers.len(), 4);
 
-        let dataset = find_layer(&layers, ANN_RECORD_NAME, "dataset");
+        let dataset = find_layer(&layers, ANN_ATTACHMENT_NAME, "dataset");
         assert_eq!(
             layer_annotation(dataset, ANN_SPACE).as_deref(),
             Some("experiment")
@@ -250,7 +250,7 @@ fn commit_produces_experiment_artifact() {
         );
         assert!(layer_annotation(dataset, ANN_RUN_ID).is_none());
 
-        let candidate = find_layer(&layers, ANN_RECORD_NAME, "candidate");
+        let candidate = find_layer(&layers, ANN_ATTACHMENT_NAME, "candidate");
         assert_eq!(
             layer_annotation(candidate, ANN_SPACE).as_deref(),
             Some("run")
@@ -265,7 +265,7 @@ fn commit_produces_experiment_artifact() {
             instance.to_bytes()
         );
 
-        // Aggregate layers are not tagged as records.
+        // Aggregate layers are not tagged as attachments.
         let run_params = find_layer(&layers, ANN_LAYER, LAYER_KIND_RUN_PARAMETERS);
         assert!(layer_annotation(run_params, ANN_SPACE).is_none());
 
@@ -278,7 +278,7 @@ fn commit_produces_experiment_artifact() {
     });
 }
 
-/// Run parameters are stored as table data, not as Records. Re-logging
+/// Run parameters are stored as table data, not as Attachments. Re-logging
 /// the same name updates the cell for that run.
 #[test]
 fn log_parameter_materializes_run_parameter_table() {
@@ -300,7 +300,7 @@ fn log_parameter_materializes_run_parameter_table() {
         let artifact = experiment.commit().unwrap().into_artifact();
         let layers = artifact.layers().unwrap();
         let run_params = find_layer(&layers, ANN_LAYER, LAYER_KIND_RUN_PARAMETERS);
-        assert!(layer_annotation(run_params, ANN_RECORD_NAME).is_none());
+        assert!(layer_annotation(run_params, ANN_ATTACHMENT_NAME).is_none());
         let bytes = artifact.get_blob(run_params.digest()).unwrap();
         let table: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
 
@@ -335,7 +335,7 @@ fn log_parameter_materializes_run_parameter_table() {
 }
 
 #[test]
-fn loaded_experiment_reads_records_and_run_parameters() {
+fn loaded_experiment_reads_attachments_and_run_parameters() {
     with_temp_experiment(|experiment| {
         experiment.log_json("dataset", json!("miplib2017")).unwrap();
 
@@ -357,21 +357,22 @@ fn loaded_experiment_reads_records_and_run_parameters() {
         let loaded = SealedExperiment::from_artifact(artifact.clone()).unwrap();
 
         assert!(loaded
-            .experiment_records()
+            .experiment_attachments()
             .iter()
             .any(
-                |record| layer_annotation(record, ANN_RECORD_NAME).as_deref() == Some("dataset")
-                    && record.media_type() == &MediaType::Other("application/json".into())
+                |attachment| layer_annotation(attachment, ANN_ATTACHMENT_NAME).as_deref()
+                    == Some("dataset")
+                    && attachment.media_type() == &MediaType::Other("application/json".into())
             ));
         let run0 = loaded.run(0).expect("run 0 must be reconstructed");
         assert_eq!(run0.run_id(), 0);
-        assert!(run0.records().iter().any(|record| {
-            layer_annotation(record, ANN_RECORD_NAME).as_deref() == Some("candidate")
-                && record.media_type() == &MediaType::Other("application/json".into())
+        assert!(run0.attachments().iter().any(|attachment| {
+            layer_annotation(attachment, ANN_ATTACHMENT_NAME).as_deref() == Some("candidate")
+                && attachment.media_type() == &MediaType::Other("application/json".into())
         }));
         let run1 = loaded.run(1).expect("run 1 must be reconstructed");
         assert_eq!(run1.run_id(), 1);
-        assert!(run1.records().is_empty());
+        assert!(run1.attachments().is_empty());
 
         let mut cells = loaded.run_parameter_cells();
         cells.sort_by(|left, right| (left.run_id, &left.name).cmp(&(right.run_id, &right.name)));
@@ -455,7 +456,7 @@ fn log_solve_materializes_solve_entry_with_layer_refs() {
 
         let loaded = SealedExperiment::from_artifact(artifact.clone()).unwrap();
         let run = loaded.run(0).unwrap();
-        assert!(run.records().is_empty());
+        assert!(run.attachments().is_empty());
         let solve = &run.solves()[0];
         assert_eq!(solve.solve_id(), 0);
         assert_eq!(solve.input().media_type(), &media_types::v1_instance());
@@ -522,13 +523,13 @@ fn loaded_experiment_rejects_non_finished_status() {
 }
 
 #[test]
-fn loaded_experiment_rejects_config_record_not_listed_in_layers() {
+fn loaded_experiment_rejects_config_attachment_not_listed_in_layers() {
     let temp = crate::artifact::local_registry::TempLocalRegistry::new().unwrap();
     let registry = temp.registry();
     let mut annotations = HashMap::new();
     annotations.insert(ANN_SPACE.to_string(), "experiment".to_string());
-    annotations.insert(ANN_RECORD_NAME.to_string(), "outside".to_string());
-    let _outside_record = registry
+    annotations.insert(ANN_ATTACHMENT_NAME.to_string(), "outside".to_string());
+    let _outside_attachment = registry
         .store_layer_blob(
             MediaType::Other("application/json".to_string()),
             br#""outside""#,
@@ -563,15 +564,15 @@ fn loaded_experiment_rejects_config_record_not_listed_in_layers() {
     );
     let sealed_artifact = registry.seal_artifact(unsealed).unwrap();
     let image_name =
-        ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:outside-record").unwrap();
+        ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:outside-attachment").unwrap();
     let artifact =
         LocalArtifact::from_parts(registry, image_name, sealed_artifact.digest().clone());
 
     let err = SealedExperiment::from_artifact(artifact)
-        .expect_err("config must not reference records outside artifact layers");
+        .expect_err("config must not reference attachments outside artifact layers");
     assert!(err
         .to_string()
-        .contains("Failed to resolve experiment record LayerRef 1"));
+        .contains("Failed to resolve experiment attachment LayerRef 1"));
 }
 
 #[test]
@@ -580,8 +581,8 @@ fn loaded_experiment_uses_manifest_layer_metadata_for_attachment_refs() {
     let registry = temp.registry();
     let mut manifest_annotations = HashMap::new();
     manifest_annotations.insert(ANN_SPACE.to_string(), "experiment".to_string());
-    manifest_annotations.insert(ANN_RECORD_NAME.to_string(), "listed".to_string());
-    let listed_record = registry
+    manifest_annotations.insert(ANN_ATTACHMENT_NAME.to_string(), "listed".to_string());
+    let listed_attachment = registry
         .store_layer_blob(
             MediaType::Other("application/json".to_string()),
             br#""same-blob""#,
@@ -611,21 +612,22 @@ fn loaded_experiment_uses_manifest_layer_metadata_for_attachment_refs() {
     let unsealed = UnsealedArtifact::new(
         MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
         config_descriptor,
-        vec![listed_record, run_parameters],
+        vec![listed_attachment, run_parameters],
         None,
         HashMap::new(),
     );
     let sealed_artifact = registry.seal_artifact(unsealed).unwrap();
     let image_name =
-        ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:unlisted-record-metadata").unwrap();
+        ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:unlisted-attachment-metadata")
+            .unwrap();
     let artifact =
         LocalArtifact::from_parts(registry, image_name, sealed_artifact.digest().clone());
 
     let sealed = SealedExperiment::from_artifact(artifact).unwrap();
     assert_eq!(
         layer_annotation(
-            &Descriptor::from(sealed.experiment_records()[0].clone()),
-            ANN_RECORD_NAME
+            &Descriptor::from(sealed.experiment_attachments()[0].clone()),
+            ANN_ATTACHMENT_NAME
         )
         .as_deref(),
         Some("listed")
@@ -633,14 +635,14 @@ fn loaded_experiment_uses_manifest_layer_metadata_for_attachment_refs() {
 }
 
 #[test]
-fn loaded_experiment_rejects_config_run_record_not_listed_in_layers() {
+fn loaded_experiment_rejects_config_run_attachment_not_listed_in_layers() {
     let temp = crate::artifact::local_registry::TempLocalRegistry::new().unwrap();
     let registry = temp.registry();
     let mut annotations = HashMap::new();
     annotations.insert(ANN_SPACE.to_string(), "run".to_string());
     annotations.insert(ANN_RUN_ID.to_string(), "0".to_string());
-    annotations.insert(ANN_RECORD_NAME.to_string(), "outside".to_string());
-    let _outside_record = registry
+    annotations.insert(ANN_ATTACHMENT_NAME.to_string(), "outside".to_string());
+    let _outside_attachment = registry
         .store_layer_blob(
             MediaType::Other("application/json".to_string()),
             br#""outside""#,
@@ -679,15 +681,15 @@ fn loaded_experiment_rejects_config_run_record_not_listed_in_layers() {
     );
     let sealed_artifact = registry.seal_artifact(unsealed).unwrap();
     let image_name =
-        ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:outside-run-record").unwrap();
+        ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:outside-run-attachment").unwrap();
     let artifact =
         LocalArtifact::from_parts(registry, image_name, sealed_artifact.digest().clone());
 
     let err = SealedExperiment::from_artifact(artifact)
-        .expect_err("config must not reference run records outside artifact layers");
+        .expect_err("config must not reference run attachments outside artifact layers");
     assert!(err
         .to_string()
-        .contains("Failed to resolve run 0 record LayerRef 1"));
+        .contains("Failed to resolve run 0 attachment LayerRef 1"));
 }
 
 #[test]
@@ -895,15 +897,15 @@ fn dropping_unclosed_run_does_not_write_back() {
         let layers = artifact.layers().unwrap();
         assert!(layers
             .iter()
-            .all(|layer| layer_annotation(layer, ANN_RECORD_NAME).as_deref() != Some("seed")));
+            .all(|layer| layer_annotation(layer, ANN_ATTACHMENT_NAME).as_deref() != Some("seed")));
         Ok(())
     });
 }
 
-/// A byte-identical record logged by two runs yields two annotation-
+/// A byte-identical attachment logged by two runs yields two annotation-
 /// distinct layer descriptors backed by one shared CAS blob.
 #[test]
-fn byte_identical_record_across_runs_shares_one_blob() {
+fn byte_identical_attachment_across_runs_shares_one_blob() {
     with_temp_experiment(|experiment| {
         let payload = json!({ "formulation": "relaxed" });
 
@@ -925,7 +927,7 @@ fn byte_identical_record_across_runs_shares_one_blob() {
         let candidates: Vec<&Descriptor> = layers
             .iter()
             .filter(|layer| {
-                layer_annotation(layer, ANN_RECORD_NAME).as_deref() == Some("candidate")
+                layer_annotation(layer, ANN_ATTACHMENT_NAME).as_deref() == Some("candidate")
             })
             .collect();
         assert_eq!(candidates.len(), 2);
@@ -945,18 +947,18 @@ fn byte_identical_record_across_runs_shares_one_blob() {
 }
 
 /// Caller-defined payload types are represented directly by OCI media
-/// type, without an additional OMMX record-kind axis.
+/// type, without an additional OMMX attachment-kind axis.
 #[test]
-fn log_record_accepts_caller_defined_media_type() {
+fn log_attachment_accepts_caller_defined_media_type() {
     with_temp_experiment(|experiment| {
         let media_type = MediaType::Other("application/vnd.jijmodeling.model+json".to_string());
         experiment
-            .log_record("source-model", media_type.clone(), br#"{"variables": []}"#)
+            .log_attachment("source-model", media_type.clone(), br#"{"variables": []}"#)
             .unwrap();
 
         let artifact = experiment.commit().unwrap().into_artifact();
         let layers = artifact.layers().unwrap();
-        let source_model = find_layer(&layers, ANN_RECORD_NAME, "source-model");
+        let source_model = find_layer(&layers, ANN_ATTACHMENT_NAME, "source-model");
         assert_eq!(source_model.media_type(), &media_type);
         assert_eq!(
             artifact.get_blob(source_model.digest()).unwrap(),

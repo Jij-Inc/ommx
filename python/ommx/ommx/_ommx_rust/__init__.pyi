@@ -1656,7 +1656,7 @@ class Experiment:
     @property
     def image_name(self) -> builtins.str: ...
     @property
-    def experiment_records(self) -> builtins.list[Descriptor]: ...
+    def experiment_attachments(self) -> builtins.list[Descriptor]: ...
     @property
     def runs(self) -> builtins.list[SealedRun]: ...
     @property
@@ -1699,28 +1699,28 @@ class Experiment:
         r"""
         Start a new Run in this unsealed Experiment.
         """
-    def log_record(
+    def log_attachment(
         self, name: builtins.str, media_type: builtins.str, bytes: bytes
     ) -> None:
         r"""
-        Record arbitrary bytes with an explicit OCI media type in the
+        Attach arbitrary bytes with an explicit OCI media type in the
         experiment space.
         """
     def log_json(self, name: builtins.str, value: typing.Any) -> None:
         r"""
-        Record a JSON-serialisable value in the experiment space.
+        Attach a JSON-serialisable value in the experiment space.
         """
     def log_instance(self, name: builtins.str, instance: Instance) -> None:
         r"""
-        Record an Instance in the experiment space.
+        Attach an Instance in the experiment space.
         """
     def log_solution(self, name: builtins.str, solution: Solution) -> None:
         r"""
-        Record a Solution in the experiment space.
+        Attach a Solution in the experiment space.
         """
     def log_sample_set(self, name: builtins.str, sample_set: SampleSet) -> None:
         r"""
-        Record a SampleSet in the experiment space.
+        Attach a SampleSet in the experiment space.
         """
     def commit(self) -> Artifact:
         r"""
@@ -4949,29 +4949,29 @@ class Run:
         self, name: builtins.str, value: bool | int | float | str
     ) -> None:
         r"""
-        Record a scalar parameter for this run.
+        Log a scalar parameter for this run.
         """
-    def log_record(
+    def log_attachment(
         self, name: builtins.str, media_type: builtins.str, bytes: bytes
     ) -> None:
         r"""
-        Record arbitrary bytes with an explicit OCI media type in this run.
+        Attach arbitrary bytes with an explicit OCI media type in this run.
         """
     def log_json(self, name: builtins.str, value: typing.Any) -> None:
         r"""
-        Record a JSON-serialisable value in this run.
+        Attach a JSON-serialisable value in this run.
         """
     def log_instance(self, name: builtins.str, instance: Instance) -> None:
         r"""
-        Record an Instance in this run.
+        Attach an Instance in this run.
         """
     def log_solution(self, name: builtins.str, solution: Solution) -> None:
         r"""
-        Record a Solution in this run.
+        Attach a Solution in this run.
         """
     def log_sample_set(self, name: builtins.str, sample_set: SampleSet) -> None:
         r"""
-        Record a SampleSet in this run.
+        Attach a SampleSet in this run.
         """
     def log_solve(
         self,
@@ -4980,11 +4980,11 @@ class Run:
         **kwargs: typing.Any,
     ) -> Solution:
         r"""
-        Solve an Instance with an OMMX SolverAdapter and record a Solve entry.
+        Solve an Instance with an OMMX SolverAdapter and log a Solve entry.
 
         The input Instance is cloned before calling the adapter, so adapter-side
         capability reductions do not mutate the caller's object. The original
-        input is always recorded as the Solve input.
+        input is always stored as the Solve input.
         """
     def finish(self) -> None:
         r"""
@@ -5542,7 +5542,7 @@ class SealedRun:
     @property
     def run_id(self) -> builtins.int: ...
     @property
-    def records(self) -> builtins.list[Descriptor]: ...
+    def attachments(self) -> builtins.list[Descriptor]: ...
     @property
     def solves(self) -> builtins.list[SealedSolve]: ...
     def __repr__(self) -> builtins.str: ...

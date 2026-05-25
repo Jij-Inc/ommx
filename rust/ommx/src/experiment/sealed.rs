@@ -1,8 +1,8 @@
 //! Read-only model reconstructed from a sealed Experiment Artifact.
 
+use super::attachment::attachment_name;
 use super::config::{ExperimentConfig, ExperimentConfigSolve, LayerRef};
 use super::parameter::{RunParameterCell, RunParameterTable};
-use super::record::record_name;
 use super::{
     SealedExperiment, EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_STATUS_FINISHED,
     RUN_PARAMETERS_MEDIA_TYPE,
@@ -19,7 +19,7 @@ impl<'reg> SealedExperiment<'reg> {
         let config = load_experiment_config(&artifact)?;
         let layers = artifact.layers()?;
 
-        let records = decode_records(
+        let attachments = decode_attachments(
             artifact.registry(),
             &layers,
             config.attachments,
@@ -27,7 +27,7 @@ impl<'reg> SealedExperiment<'reg> {
         )?;
         let mut runs = BTreeMap::new();
         for run in config.runs {
-            let records = decode_records(
+            let attachments = decode_attachments(
                 artifact.registry(),
                 &layers,
                 run.attachments,
@@ -39,7 +39,7 @@ impl<'reg> SealedExperiment<'reg> {
                     run.run_id,
                     SealedRun {
                         run_id: run.run_id,
-                        records,
+                        attachments,
                         solves,
                     },
                 )
@@ -53,7 +53,7 @@ impl<'reg> SealedExperiment<'reg> {
 
         Ok(Self {
             artifact,
-            records,
+            attachments,
             runs,
             run_parameters,
         })
@@ -63,8 +63,8 @@ impl<'reg> SealedExperiment<'reg> {
         self.artifact.image_name()
     }
 
-    pub fn experiment_records(&self) -> &[StoredDescriptor<'reg>] {
-        &self.records
+    pub fn experiment_attachments(&self) -> &[StoredDescriptor<'reg>] {
+        &self.attachments
     }
 
     pub fn runs(&self) -> impl Iterator<Item = &SealedRun<'reg>> {
@@ -84,7 +84,7 @@ impl<'reg> SealedExperiment<'reg> {
 #[derive(Debug, Clone)]
 pub struct SealedRun<'reg> {
     run_id: u64,
-    records: Vec<StoredDescriptor<'reg>>,
+    attachments: Vec<StoredDescriptor<'reg>>,
     solves: Vec<SealedSolve<'reg>>,
 }
 
@@ -93,8 +93,8 @@ impl<'reg> SealedRun<'reg> {
         self.run_id
     }
 
-    pub fn records(&self) -> &[StoredDescriptor<'reg>] {
-        &self.records
+    pub fn attachments(&self) -> &[StoredDescriptor<'reg>] {
+        &self.attachments
     }
 
     pub fn solves(&self) -> &[SealedSolve<'reg>] {
@@ -150,29 +150,29 @@ fn load_experiment_config(artifact: &LocalArtifact<'_>) -> Result<ExperimentConf
     Ok(config)
 }
 
-fn decode_records<'reg>(
+fn decode_attachments<'reg>(
     registry: &'reg crate::artifact::local_registry::LocalRegistry,
     layers: &[Descriptor],
-    records: Vec<LayerRef>,
-    record_context: &str,
+    attachments: Vec<LayerRef>,
+    attachment_context: &str,
 ) -> Result<Vec<StoredDescriptor<'reg>>> {
     let mut decoded = Vec::new();
-    for layer_ref in records {
+    for layer_ref in attachments {
         let descriptor = resolve_layer(layers, layer_ref)
             .with_context(|| {
                 format!(
-                    "Failed to resolve {record_context} record LayerRef {}",
+                    "Failed to resolve {attachment_context} attachment LayerRef {}",
                     layer_ref.0
                 )
             })?
             .clone();
-        if record_name(&descriptor).is_none() {
-            crate::bail!("Record descriptor in {record_context} is missing `org.ommx.record.name`");
+        if attachment_name(&descriptor).is_none() {
+            crate::bail!("Attachment descriptor in {attachment_context} is missing `org.ommx.attachment.name`");
         }
         decoded.push(
             registry
                 .stored_descriptor(descriptor)
-                .with_context(|| format!("Failed to decode Record in {record_context}"))?,
+                .with_context(|| format!("Failed to decode Attachment in {attachment_context}"))?,
         );
     }
     Ok(decoded)

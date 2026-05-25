@@ -74,7 +74,7 @@ impl<'reg> UnsealedExperimentState<'reg> {
         ExperimentConfig {
             status: super::EXPERIMENT_STATUS_FINISHED.to_string(),
             attachments: self
-                .records
+                .attachments
                 .iter()
                 .cloned()
                 .map(|descriptor| layers.push(descriptor))
@@ -85,7 +85,7 @@ impl<'reg> UnsealedExperimentState<'reg> {
                 .map(|run| ExperimentConfigRun {
                     run_id: run.run_id,
                     attachments: run
-                        .records
+                        .attachments
                         .iter()
                         .cloned()
                         .map(|descriptor| layers.push(descriptor))

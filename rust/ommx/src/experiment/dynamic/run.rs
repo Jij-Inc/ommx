@@ -1,10 +1,10 @@
 //! Dynamic-lifetime Run handle.
 
+use super::super::attachment::{encode_json, json_media_type};
 use super::super::parameter::ParameterSet;
-use super::super::record::{encode_json, json_media_type};
 use super::super::ParameterValue;
 use super::{
-    bail_non_unsealed, lock_experiment_state, store_run_record_descriptor,
+    bail_non_unsealed, lock_experiment_state, store_run_attachment_descriptor,
     store_solve_payload_descriptor, ExperimentDyn, ExperimentDynLifecycle, ExperimentDynState,
     RunEntryDyn, SolveEntryDyn,
 };
@@ -31,7 +31,7 @@ pub struct RunDyn {
 #[derive(Debug)]
 struct RunDynState {
     run_id: u64,
-    records: Vec<Descriptor>,
+    attachments: Vec<Descriptor>,
     solves: Vec<SolveEntryDyn>,
     next_solve_id: u64,
     parameters: ParameterSet,
@@ -62,7 +62,7 @@ impl RunDyn {
         Self {
             run_state: Some(RunDynState {
                 run_id,
-                records: Vec::new(),
+                attachments: Vec::new(),
                 solves: Vec::new(),
                 next_solve_id: 0,
                 parameters: ParameterSet::new(),
@@ -85,7 +85,7 @@ impl RunDyn {
         self.open_mut()?.parameters.insert(name, value)
     }
 
-    pub fn log_record(
+    pub fn log_attachment(
         &mut self,
         name: &str,
         media_type: MediaType,
@@ -94,27 +94,27 @@ impl RunDyn {
         let run_id = self.open()?.run_id;
         let descriptor = {
             let dyn_state = lock_experiment_state(&self.experiment_state);
-            store_run_record_descriptor(&dyn_state, run_id, name, media_type, bytes.as_ref())?
+            store_run_attachment_descriptor(&dyn_state, run_id, name, media_type, bytes.as_ref())?
         };
-        self.open_mut()?.records.push(descriptor);
+        self.open_mut()?.attachments.push(descriptor);
         Ok(())
     }
 
     pub fn log_json(&mut self, name: &str, value: impl serde::Serialize) -> Result<()> {
         let bytes = encode_json(name, value)?;
-        self.log_record(name, json_media_type(), bytes)
+        self.log_attachment(name, json_media_type(), bytes)
     }
 
     pub fn log_instance(&mut self, name: &str, instance: &Instance) -> Result<()> {
-        self.log_record(name, media_types::v1_instance(), instance.to_bytes())
+        self.log_attachment(name, media_types::v1_instance(), instance.to_bytes())
     }
 
     pub fn log_solution(&mut self, name: &str, solution: &Solution) -> Result<()> {
-        self.log_record(name, media_types::v1_solution(), solution.to_bytes())
+        self.log_attachment(name, media_types::v1_solution(), solution.to_bytes())
     }
 
     pub fn log_sample_set(&mut self, name: &str, sample_set: &SampleSet) -> Result<()> {
-        self.log_record(name, media_types::v1_sample_set(), sample_set.to_bytes())
+        self.log_attachment(name, media_types::v1_sample_set(), sample_set.to_bytes())
     }
 
     pub fn log_solve(
@@ -164,13 +164,13 @@ impl RunDyn {
             .ok_or_else(|| anyhow::anyhow!("Run has already been finished"))?;
         if state.runs.contains_key(&run.run_id) {
             decrement_open_runs(open_runs);
-            crate::bail!("Run {} has already been recorded", run.run_id);
+            crate::bail!("Run {} has already been registered", run.run_id);
         }
         state.runs.insert(
             run.run_id,
             RunEntryDyn {
                 run_id: run.run_id,
-                records: run.records,
+                attachments: run.attachments,
                 solves: run.solves,
                 parameters: run.parameters,
             },

@@ -1,15 +1,15 @@
 //! Experiment / Run session model.
 //!
 //! An [`Experiment`] is a mutable session that groups a set of named
-//! payloads (records) — instances, solutions, sample sets, JSON values,
+//! payloads (attachments) — instances, solutions, sample sets, JSON values,
 //! or caller-defined media types — together with one or more [`Run`]s.
-//! Records belong either
+//! Attachments belong either
 //! to the *experiment space* (shared by the whole experiment) or to a
 //! *run space* (owned by a single [`Run`]).
-//! Run parameters are separate table data: [`Run::log_parameter`] records
+//! Run parameters are separate table data: [`Run::log_parameter`] captures
 //! bool / int64 / float64 / string scalar values for comparison views,
 //! and commit materialises them as a typed column-oriented aggregate
-//! run-parameter layer instead of individual Records.
+//! run-parameter layer instead of individual Attachments.
 //!
 //! Each `log_*` call writes its payload to the Local Registry's
 //! content-addressed BlobStore immediately, keeping only
@@ -40,7 +40,7 @@
 //! ```
 //!
 //! The module is split by data terms: `run` contains `Run` lifecycle
-//! operations, `record` contains Record descriptor helpers,
+//! operations, `attachment` contains Attachment descriptor helpers,
 //! `parameter` contains parameter values, run-local parameter sets,
 //! and the committed run-parameter table, `config` contains the
 //! serialized Experiment structure, `sealed` contains read-only sealed
@@ -48,10 +48,10 @@
 //! `artifact` maps the unsealed experiment state onto an OMMX Artifact.
 
 mod artifact;
+mod attachment;
 pub mod config;
 mod dynamic;
 mod parameter;
-mod record;
 mod run;
 mod sealed;
 
@@ -66,9 +66,9 @@ use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor, TempLocal
 use crate::artifact::{media_types, ImageRef, LocalArtifact};
 use crate::{Instance, SampleSet, Solution};
 use anyhow::Result;
+use attachment::{encode_json, json_media_type, store_attachment_descriptor, AttachmentSpace};
 use oci_spec::image::MediaType;
 use parameter::ParameterSet;
-use record::{encode_json, json_media_type, store_record_descriptor, RecordSpace};
 use std::collections::BTreeMap;
 use std::sync::{Mutex, MutexGuard};
 
@@ -79,7 +79,7 @@ const EXPERIMENT_STATUS_FINISHED: &str = "finished";
 const ANN_SPACE: &str = "org.ommx.experiment.space";
 const ANN_RUN_ID: &str = "org.ommx.experiment.run_id";
 const ANN_LAYER: &str = "org.ommx.experiment.layer";
-const ANN_RECORD_NAME: &str = "org.ommx.record.name";
+const ANN_ATTACHMENT_NAME: &str = "org.ommx.attachment.name";
 
 const RUN_PARAMETERS_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment.run-parameters+json";
 const EXPERIMENT_CONFIG_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment.config+json";
@@ -97,7 +97,7 @@ pub struct Experiment<'reg> {
 #[derive(Debug, Clone)]
 pub struct SealedExperiment<'reg> {
     artifact: LocalArtifact<'reg>,
-    records: Vec<StoredDescriptor<'reg>>,
+    attachments: Vec<StoredDescriptor<'reg>>,
     runs: BTreeMap<u64, sealed::SealedRun<'reg>>,
     run_parameters: parameter::RunParameterTable,
 }
@@ -136,7 +136,7 @@ impl From<ImageRef> for Name {
 ///
 /// A `Run` borrows its parent experiment immutably for `'exp`. It
 /// writes payload bytes to the registry CAS immediately, keeps
-/// run-scoped records / parameters locally, and writes back to the
+/// run-scoped attachments / parameters locally, and writes back to the
 /// parent experiment only when [`Self::finish`] consumes the handle.
 /// This lets multiple runs be open at once while Rust prevents
 /// committing the parent experiment before live run handles are closed
@@ -145,7 +145,7 @@ impl From<ImageRef> for Name {
 pub struct Run<'exp, 'reg> {
     experiment: &'exp Experiment<'reg>,
     run_id: u64,
-    records: Vec<StoredDescriptor<'reg>>,
+    attachments: Vec<StoredDescriptor<'reg>>,
     solves: Vec<SolveEntry<'reg>>,
     next_solve_id: u64,
     parameters: ParameterSet,
@@ -154,14 +154,14 @@ pub struct Run<'exp, 'reg> {
 /// A closed logical Run recorded in an unsealed Experiment.
 ///
 /// `Run<'exp>` is the live handle: it borrows the parent Experiment and
-/// accepts run-scoped records and parameters. `RunEntry` is the row
+/// accepts run-scoped attachments and parameters. `RunEntry` is the row
 /// stored by the Experiment after `Run::finish` consumes that handle.
-/// Commit later projects it to aggregate parameter and record index
+/// Commit later projects it to aggregate parameter and attachment index
 /// layers.
 #[derive(Debug)]
 struct RunEntry<'reg> {
     run_id: u64,
-    records: Vec<StoredDescriptor<'reg>>,
+    attachments: Vec<StoredDescriptor<'reg>>,
     solves: Vec<SolveEntry<'reg>>,
     parameters: ParameterSet,
 }
@@ -176,15 +176,15 @@ struct SolveEntry<'reg> {
 
 /// Mutable experiment state before the root manifest is sealed. A live
 /// [`Run`] borrows the parent experiment while it adds run-scoped
-/// records. Closed runs are stored as [`RunEntry`] values.
+/// attachments. Closed runs are stored as [`RunEntry`] values.
 #[derive(Debug)]
 struct UnsealedExperimentState<'reg> {
     /// Image name the committed Experiment artifact is published
     /// under. Experiment identity is the Local Registry ref; there is
     /// no separate experiment-name field in the artifact model.
     image_name: ImageRef,
-    /// Experiment-space records.
-    records: Vec<StoredDescriptor<'reg>>,
+    /// Experiment-space attachments.
+    attachments: Vec<StoredDescriptor<'reg>>,
     runs: BTreeMap<u64, RunEntry<'reg>>,
     next_run_id: u64,
 }
@@ -224,7 +224,7 @@ impl<'reg> Experiment<'reg> {
             registry,
             state: Mutex::new(UnsealedExperimentState {
                 image_name,
-                records: Vec::new(),
+                attachments: Vec::new(),
                 runs: BTreeMap::new(),
                 next_run_id: 0,
             }),
@@ -245,62 +245,62 @@ impl<'reg> Experiment<'reg> {
         Ok(Run {
             experiment: self,
             run_id,
-            records: Vec::new(),
+            attachments: Vec::new(),
             solves: Vec::new(),
             next_solve_id: 0,
             parameters: ParameterSet::new(),
         })
     }
 
-    /// Record arbitrary bytes with an explicit OCI media type in the
+    /// Attach arbitrary bytes with an explicit OCI media type in the
     /// experiment space.
-    pub fn log_record(
+    pub fn log_attachment(
         &self,
         name: &str,
         media_type: MediaType,
         bytes: impl AsRef<[u8]>,
     ) -> Result<()> {
-        self.add_record(name, media_type, bytes.as_ref())
+        self.add_attachment(name, media_type, bytes.as_ref())
     }
 
-    /// Record a JSON-serialisable value in the experiment space.
+    /// Attach a JSON-serialisable value in the experiment space.
     pub fn log_json(&self, name: &str, value: impl serde::Serialize) -> Result<()> {
         let bytes = encode_json(name, &value)?;
-        self.log_record(name, json_media_type(), bytes)
+        self.log_attachment(name, json_media_type(), bytes)
     }
 
-    /// Record an [`Instance`] in the experiment space.
+    /// Attach an [`Instance`] in the experiment space.
     pub fn log_instance(&self, name: &str, instance: &Instance) -> Result<()> {
-        self.log_record(name, media_types::v1_instance(), instance.to_bytes())
+        self.log_attachment(name, media_types::v1_instance(), instance.to_bytes())
     }
 
-    /// Record a [`Solution`] in the experiment space.
+    /// Attach a [`Solution`] in the experiment space.
     pub fn log_solution(&self, name: &str, solution: &Solution) -> Result<()> {
-        self.log_record(name, media_types::v1_solution(), solution.to_bytes())
+        self.log_attachment(name, media_types::v1_solution(), solution.to_bytes())
     }
 
-    /// Record a [`SampleSet`] in the experiment space.
+    /// Attach a [`SampleSet`] in the experiment space.
     pub fn log_sample_set(&self, name: &str, sample_set: &SampleSet) -> Result<()> {
-        self.log_record(name, media_types::v1_sample_set(), sample_set.to_bytes())
+        self.log_attachment(name, media_types::v1_sample_set(), sample_set.to_bytes())
     }
 
-    fn add_record(&self, name: &str, media_type: MediaType, bytes: &[u8]) -> Result<()> {
-        let descriptor = store_record_descriptor(
+    fn add_attachment(&self, name: &str, media_type: MediaType, bytes: &[u8]) -> Result<()> {
+        let descriptor = store_attachment_descriptor(
             self.registry,
-            RecordSpace::Experiment,
+            AttachmentSpace::Experiment,
             name,
             media_type,
             bytes,
         )?;
         let mut state = self.lock_state();
-        state.records.push(descriptor);
+        state.attachments.push(descriptor);
         Ok(())
     }
 
     fn push_closed_run(&self, run: RunEntry<'reg>) -> Result<()> {
         let mut state = self.lock_state();
         if state.runs.contains_key(&run.run_id) {
-            crate::bail!("Run {} has already been recorded", run.run_id);
+            crate::bail!("Run {} has already been registered", run.run_id);
         }
         state.runs.insert(run.run_id, run);
         Ok(())

@@ -211,9 +211,7 @@ Experiment state は以下からなる。
 | Run parameter table | `run_id` と parameter name を key にした scalar table |
 | Solve list | Run 内で発生した solver 呼び出し。input / output / solve parameter を持つ |
 
-汎用保存抽象としての旧 `Record` は、domain object ではなく「payload を保存できる添付物」に近い。以後の設計ではこの低レベル概念を `Attachment` と呼ぶ。`Run` と `Solve` は domain object として扱い、Attachment はそれらに添付される payload descriptor への参照である。
-
-現行実装はまだ `Record` 名で公開しているが、設計上は次の構造へ寄せる。
+汎用保存抽象は domain object ではなく「payload を保存できる添付物」に近いため `Attachment` と呼ぶ。`Run` と `Solve` は domain object として扱い、Attachment はそれらに添付される payload descriptor への参照である。
 
 ```text
 Experiment
@@ -283,9 +281,9 @@ with exp.run() as run:
     run.log_solution("result", solution)       # run space
 ```
 
-### 4.2 Attachment（旧 Record）
+### 4.2 Attachment
 
-Attachment は API / loader から見える名前付き payload であり、実装上の blob 所有単位を意味しない。現行実装と互換 API では `Record` という名前を使っているが、設計上は domain object ではなく添付 payload であるため `Attachment` と呼ぶ。各 Attachment は概念的に owner（Experiment または Run）、name、content、media type、annotations を持つ。Attachment の分類軸は独立した enum ではなく OCI descriptor の `mediaType` に統一する。
+Attachment は API / loader から見える名前付き payload であり、実装上の blob 所有単位を意味しない。domain object ではなく添付 payload であるため `Attachment` と呼ぶ。各 Attachment は概念的に owner（Experiment または Run）、name、content、media type、annotations を持つ。Attachment の分類軸は独立した enum ではなく OCI descriptor の `mediaType` に統一する。
 
 | Field | 内容 |
 |---|---|
@@ -322,7 +320,7 @@ run.log_parameter("timelimit", 1.0)
 run.log_parameter("seed", 0)
 ```
 
-この 2 つは論理的には別 parameter cell である。ただし物理的には、run parameter aggregate JSON にまとめて保存してよい。実行中の `Run` は row-local な parameter map を持つが、column type の確定は commit 時の集計で行う。`int64` と `float64` が混在した column は `float64` に昇格し、それ以外の型混在は commit error にする。構造値や型混在を意図的に保存したい場合は、ユーザーが JSON を string 化して parameter に入れるか、Attachment として `log_json` / `log_record` する。
+この 2 つは論理的には別 parameter cell である。ただし物理的には、run parameter aggregate JSON にまとめて保存してよい。実行中の `Run` は row-local な parameter map を持つが、column type の確定は commit 時の集計で行う。`int64` と `float64` が混在した column は `float64` に昇格し、それ以外の型混在は commit error にする。構造値や型混在を意図的に保存したい場合は、ユーザーが JSON を string 化して parameter に入れるか、Attachment として `log_json` / `log_attachment` する。
 
 commit 時に materialize する Run parameter table JSON は column-oriented とする。
 
@@ -757,16 +755,16 @@ PR #886 時点で、Experiment / Artifact v3 提案のうち、Rust core と Pyt
 - `ommx::experiment::{Experiment, Run, SealedExperiment, SealedRun, SealedSolve}`。
 - `Experiment::new(Name)` / `Experiment::with_registry(&LocalRegistry, Name)` / `Experiment::with_temp_local_registry(...)`。
 - `Name::Named(ImageRef)` と `Name::Anonymous`。anonymous Experiment は `<registry-id8>.ommx.local/experiment:<timestamp>-<nonce>` に解決する。
-- `Experiment::log_record` / `log_json` / `log_instance` / `log_solution` / `log_sample_set`。
-- `Run::log_parameter` / `log_record` / `log_json` / `log_instance` / `log_solution` / `log_sample_set` / `log_solve`。
-- `Run::finish(self)`。Rust 側では finish が `Run` を消費するため、終了済み Run に後から Record / parameter を追加する経路は型として存在しない。
+- `Experiment::log_attachment` / `log_json` / `log_instance` / `log_solution` / `log_sample_set`。
+- `Run::log_parameter` / `log_attachment` / `log_json` / `log_instance` / `log_solution` / `log_sample_set` / `log_solve`。
+- `Run::finish(self)`。Rust 側では finish が `Run` を消費するため、終了済み Run に後から Attachment / parameter を追加する経路は型として存在しない。
 - `Experiment::commit(self) -> SealedExperiment<'reg>`。Rust 側では commit が `Experiment` を消費するため、commit 後 mutation は型として存在しない。
 - `SealedExperiment::from_artifact(LocalArtifact)` による config-based load。
-- `SealedExperiment::experiment_records()`、`runs()`、`run(id)`、`run_parameter_cells()`。`SealedRun::solves()` から Solve input / output / parameters を参照できる。
+- `SealedExperiment::experiment_attachments()`、`runs()`、`run(id)`、`run_parameter_cells()`。`SealedRun::solves()` から Solve input / output / parameters を参照できる。
 
 Rust core の `Experiment<'reg>` は `&'reg LocalRegistry` を持つ。`Run<'exp, 'reg>` は親 Experiment を immutable borrow し、Run local state を持つ。close 済み Run は `RunEntry` として `Experiment` state の `BTreeMap<run_id, RunEntry>` に保存され、commit 時に `run_id` 順で materialize される。
 
-`log_*` は payload を即 Local Registry の BlobStore に保存し、in-memory には `StoredDescriptor` を保持する。同じ bytes は CAS blob として物理的に共有されるが、Record descriptor list と Solve list はユーザーの log call 順と重複を保持する。
+`log_*` は payload を即 Local Registry の BlobStore に保存し、in-memory には `StoredDescriptor` を保持する。同じ bytes は CAS blob として物理的に共有されるが、Attachment descriptor list と Solve list はユーザーの log call 順と重複を保持する。
 
 ### 10.2 Artifact への写像
 
@@ -787,18 +785,18 @@ Load 時の検証:
 - config media type が `application/org.ommx.v1.experiment.config+json` である。
 - config `status` は `finished` である。`failed` / `crashed` などの recovery artifact は通常の `SealedExperiment` として読まない。
 - config に書かれた `LayerRef` は manifest `layers[]` の範囲内である。
-- Experiment / Run attachments として復元する layer は、現行互換のため `org.ommx.record.name` annotation を持つ。
+- Experiment / Run attachments として復元する layer は、`org.ommx.attachment.name` annotation を持つ。
 - Solve input は Instance media type、Solve output は Solution media type を持つ。
 - `LayerRef` が指す blob はその Local Registry に存在し、size が一致する。
 - Run parameter table が config に存在しない run id を参照する場合は error にする。
 
-Record layer annotations:
+Attachment layer annotations:
 
 | Annotation | 内容 |
 |---|---|
 | `org.ommx.experiment.space` | `experiment` / `run` |
 | `org.ommx.experiment.run_id` | run space のみ |
-| `org.ommx.record.name` | Record name |
+| `org.ommx.attachment.name` | Attachment name |
 
 Run parameter table は column-oriented JSON として aggregate layer に保存する。column type は commit 時に確定し、`int64 -> float64` の昇格だけを許す。それ以外の型混在は commit error とする。欠損 cell は JSON `null` ではなく、該当 `(run_id, parameter_name)` entry が存在しないことで表す。
 
@@ -815,9 +813,9 @@ Run parameter table は column-oriented JSON として aggregate layer に保存
 - `Experiment.artifact` は commit 後だけ available。commit 前アクセスは error。
 - `Experiment.load(image_name)` は default Local Registry の committed Experiment Artifact を読む。
 - `Experiment.from_artifact(artifact)` は既存 `Artifact` を committed Experiment として解釈する。
-- `Experiment.experiment_records` は Experiment-space Record descriptors を返す。
+- `Experiment.experiment_attachments` は Experiment-space Attachment descriptors を返す。
 - `Experiment.runs` は `SealedRun` list を返す。
-- `SealedRun.records` は Run-space Record descriptors を返す。
+- `SealedRun.attachments` は Run-space Attachment descriptors を返す。
 - `SealedRun.solves` は `SealedSolve` list を返し、Solve input / output descriptors と Solve parameters を参照できる。
 - `Run.log_solve(adapter, instance, **kwargs)` は adapter を呼び、caller が渡した Instance を Solve input、返された Solution を Solve output、adapter 名と kwargs を Solve parameters として記録する。kwargs は Run parameter table には入れない。
 - `Experiment.run_parameters_df()` は pandas DataFrame を返す。parameter を持たない完了済み Run も index row として残す。
@@ -832,17 +830,17 @@ Rust tests:
 
 - run id 採番、複数 Run の同時 open、finish による close 済み Run の記録。
 - log 時点で BlobStore に payload が保存されること。
-- Record descriptor list が保存順と重複を保持すること。
-- byte-identical Record が digest を共有しつつ、descriptor / Record としては別に保持されること。
+- Attachment descriptor list が保存順と重複を保持すること。
+- byte-identical Attachment が digest を共有しつつ、descriptor / Attachment としては別に保持されること。
 - scalar parameter の materialization、`int64 -> float64` 昇格、型混在 error、非有限 float rejection。
-- committed Artifact の config / `LayerRef` / Record layer annotation / aggregate layer。
+- committed Artifact の config / `LayerRef` / Attachment layer annotation / aggregate layer。
 - `Run::log_solve` が Solve entry を作り、input / output を `LayerRef` で参照し、Solve parameters を Run parameter table から分離すること。
 - config-based Experiment load、`status != finished` の rejection、Run parameter table が未知 run id を参照する場合の rejection。
 - dynamic Experiment が一時 Local Registry を保持し、open Run を持つ commit を拒否し、unfinished Run drop を abandon として扱うこと。
 
 Python tests:
 
-- `Experiment.with_temp_local_registry()` を使った Experiment / Run / Record / parameter / commit / load。
+- `Experiment.with_temp_local_registry()` を使った Experiment / Run / Attachment / parameter / commit / load。
 - Experiment context manager 正常終了時の auto commit。
 - Experiment context manager 例外終了時に commit しないこと。
 - Run context manager 例外終了時に finish しないこと。
@@ -940,16 +938,16 @@ Local Registry GC は未実装である。BlobStore に存在するが IndexStor
 | Experiment config JSON | 実装済み | `status`、Experiment attachments、Run list、Run-scoped attachments、Run ごとの Solve list、Run parameter table への `LayerRef` を保存する | schema evolution policy、unknown field / versioning の扱い |
 | Config status validation | 実装済み | `SealedExperiment::from_artifact` は `status=finished` だけを通常の sealed Experiment として読む | failed / crashed recovery artifact の別 loader |
 | Rust `Experiment<'reg>` / `Run<'exp, 'reg>` lifecycle | 実装済み | Rust lifetime で registry / Experiment / Run lifetime を表す。`Run::finish(self)` と `Experiment::commit(self)` は handle を消費する | 追加なし。API reference へ移す |
-| Rust `SealedExperiment` view | 実装済み | Config と manifest `layers[]` から Experiment-space Records、Run list、Run-scoped Records、Run-scoped Solves、Run parameter cells を復元する | Attachment API 名の整理、higher-level table / summary views |
+| Rust `SealedExperiment` view | 実装済み | Config と manifest `layers[]` から Experiment-space Attachments、Run list、Run-scoped Attachments、Run-scoped Solves、Run parameter cells を復元する | higher-level table / summary views |
 | Dynamic lifetime handles | 実装済み | `ExperimentDyn` / `RunDyn` / `LocalArtifactDyn` / `LocalRegistryHandle` で Python 向けに owner を保持する | 名前 / rustdoc の整理、必要なら public surface の最小化 |
 | Python `ommx.experiment` module | 実装済み | `Experiment` / `Run` / `SealedRun` を公開。context manager、commit、load、from_artifact、temp registry を提供する | user guide / examples |
 | Python temporary Local Registry | 実装済み | `Experiment.with_temp_local_registry()` が temp registry owner を保持し、derived Artifact / loaded Experiment に寿命を伝播する | なし。API docs へ移す |
-| Experiment / Run Record logging | 実装済み（現行） | `log_record` / `log_json` / `log_instance` / `log_solution` / `log_sample_set` を Experiment space / Run space に追加する。target model では Attachment に対応する | user-defined media type の docs、codec convention、Attachment API 名の整理 |
-| Record descriptor list semantics | 実装済み（現行） | Record descriptor list は保存順と重複を保持する。dedup は BlobStore の digest 単位に限定する | target model での Attachment list / Solve list 表示方針 |
+| Experiment / Run Attachment logging | 実装済み | `log_attachment` / `log_json` / `log_instance` / `log_solution` / `log_sample_set` を Experiment space / Run space に追加する | user-defined media type の docs、codec convention |
+| Attachment descriptor list semantics | 実装済み | Attachment descriptor list は保存順と重複を保持する。dedup は BlobStore の digest 単位に限定する | Attachment list / Solve list 表示方針 |
 | Run parameter table | 実装済み | `bool` / `int64` / `float64` / `string` の scalar cell を column-oriented JSON に materialize する。`int64 -> float64` だけ昇格する | Arrow / Parquet など別 physical format は必要が出るまで見送り |
 | Python `run_parameters_df()` | 実装済み | pandas DataFrame を返し、parameter を持たない完了済み Run も index row として保持する | column dtype の細部、summary / filtering API |
 | Open Run commit rejection | 実装済み | Python dynamic handle では open Run count を持ち、open Run が残る commit を拒否する | error message / docs |
-| Run exception handling in Python | 実装済み | `with run:` の例外終了では Run を abandon し、Experiment state へ書き戻さない | 例外時 diagnostics / partial records の recovery policy |
+| Run exception handling in Python | 実装済み | `with run:` の例外終了では Run を abandon し、Experiment state へ書き戻さない | 例外時 diagnostics / partial attachments の recovery policy |
 | Experiment context manager auto commit | 実装済み | Python `with Experiment(...)` は正常終了時に auto commit し、例外終了時は commit しない | failed recovery artifact と接続するか |
 | Failed recovery / autosave metadata | 未実装 | Blob 本体は log 時点で保存されるが、uncommitted state を復元する metadata はない | metadata format、reserved ref、recovery command、retention policy |
 | Recovery artifact | 未実装 | `status != finished` は通常 load から拒否するところまで実装済み | `crashed:<timestamp>-<nonce>` ref、`status=failed` config、明示 loader / inspector |

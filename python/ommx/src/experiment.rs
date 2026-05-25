@@ -87,10 +87,10 @@ impl PyExperiment {
     }
 
     #[getter]
-    pub fn experiment_records(&self) -> Result<Vec<PyDescriptor>> {
+    pub fn experiment_attachments(&self) -> Result<Vec<PyDescriptor>> {
         Ok(self
             .inner
-            .experiment_records()?
+            .experiment_attachments()?
             .into_iter()
             .map(PyDescriptor::from)
             .collect())
@@ -113,40 +113,40 @@ impl PyExperiment {
         })
     }
 
-    /// Record arbitrary bytes with an explicit OCI media type in the
+    /// Attach arbitrary bytes with an explicit OCI media type in the
     /// experiment space.
-    pub fn log_record(
+    pub fn log_attachment(
         &mut self,
         name: &str,
         media_type: &str,
         bytes: &Bound<pyo3::types::PyBytes>,
     ) -> Result<()> {
-        self.inner.log_record(
+        self.inner.log_attachment(
             name,
             MediaType::Other(media_type.to_string()),
             bytes.as_bytes(),
         )
     }
 
-    /// Record a JSON-serialisable value in the experiment space.
+    /// Attach a JSON-serialisable value in the experiment space.
     pub fn log_json(&mut self, py: Python<'_>, name: &str, value: &Bound<PyAny>) -> Result<()> {
         let json = py.import("json")?;
         let blob: String = json.call_method1("dumps", (value,))?.extract()?;
         self.inner
-            .log_record(name, MediaType::Other("application/json".to_string()), blob)
+            .log_attachment(name, MediaType::Other("application/json".to_string()), blob)
     }
 
-    /// Record an Instance in the experiment space.
+    /// Attach an Instance in the experiment space.
     pub fn log_instance(&mut self, name: &str, instance: &crate::Instance) -> Result<()> {
         self.inner.log_instance(name, &instance.inner)
     }
 
-    /// Record a Solution in the experiment space.
+    /// Attach a Solution in the experiment space.
     pub fn log_solution(&mut self, name: &str, solution: &crate::Solution) -> Result<()> {
         self.inner.log_solution(name, &solution.inner)
     }
 
-    /// Record a SampleSet in the experiment space.
+    /// Attach a SampleSet in the experiment space.
     pub fn log_sample_set(&mut self, name: &str, sample_set: &crate::SampleSet) -> Result<()> {
         self.inner.log_sample_set(name, &sample_set.inner)
     }
@@ -248,53 +248,56 @@ impl PyRun {
         self.as_open()?.run_id()
     }
 
-    /// Record a scalar parameter for this run.
+    /// Log a scalar parameter for this run.
     pub fn log_parameter(&mut self, name: &str, value: ParameterValueInput) -> Result<()> {
         self.as_open_mut()?.log_parameter(name, value.0)
     }
 
-    /// Record arbitrary bytes with an explicit OCI media type in this run.
-    pub fn log_record(
+    /// Attach arbitrary bytes with an explicit OCI media type in this run.
+    pub fn log_attachment(
         &mut self,
         name: &str,
         media_type: &str,
         bytes: &Bound<pyo3::types::PyBytes>,
     ) -> Result<()> {
-        self.as_open_mut()?.log_record(
+        self.as_open_mut()?.log_attachment(
             name,
             MediaType::Other(media_type.to_string()),
             bytes.as_bytes(),
         )
     }
 
-    /// Record a JSON-serialisable value in this run.
+    /// Attach a JSON-serialisable value in this run.
     pub fn log_json(&mut self, py: Python<'_>, name: &str, value: &Bound<PyAny>) -> Result<()> {
         let json = py.import("json")?;
         let blob: String = json.call_method1("dumps", (value,))?.extract()?;
-        self.as_open_mut()?
-            .log_record(name, MediaType::Other("application/json".to_string()), blob)
+        self.as_open_mut()?.log_attachment(
+            name,
+            MediaType::Other("application/json".to_string()),
+            blob,
+        )
     }
 
-    /// Record an Instance in this run.
+    /// Attach an Instance in this run.
     pub fn log_instance(&mut self, name: &str, instance: &crate::Instance) -> Result<()> {
         self.as_open_mut()?.log_instance(name, &instance.inner)
     }
 
-    /// Record a Solution in this run.
+    /// Attach a Solution in this run.
     pub fn log_solution(&mut self, name: &str, solution: &crate::Solution) -> Result<()> {
         self.as_open_mut()?.log_solution(name, &solution.inner)
     }
 
-    /// Record a SampleSet in this run.
+    /// Attach a SampleSet in this run.
     pub fn log_sample_set(&mut self, name: &str, sample_set: &crate::SampleSet) -> Result<()> {
         self.as_open_mut()?.log_sample_set(name, &sample_set.inner)
     }
 
-    /// Solve an Instance with an OMMX SolverAdapter and record a Solve entry.
+    /// Solve an Instance with an OMMX SolverAdapter and log a Solve entry.
     ///
     /// The input Instance is cloned before calling the adapter, so adapter-side
     /// capability reductions do not mutate the caller's object. The original
-    /// input is always recorded as the Solve input.
+    /// input is always stored as the Solve input.
     #[pyo3(signature = (adapter, instance, **kwargs))]
     pub fn log_solve(
         &mut self,
@@ -488,9 +491,9 @@ impl PySealedRun {
     }
 
     #[getter]
-    pub fn records(&self) -> Vec<PyDescriptor> {
+    pub fn attachments(&self) -> Vec<PyDescriptor> {
         self.0
-            .records()
+            .attachments()
             .iter()
             .cloned()
             .map(PyDescriptor::from)
@@ -504,9 +507,9 @@ impl PySealedRun {
 
     pub fn __repr__(&self) -> String {
         format!(
-            "SealedRun(run_id={}, records={}, solves={})",
+            "SealedRun(run_id={}, attachments={}, solves={})",
             self.run_id(),
-            self.0.records().len(),
+            self.0.attachments().len(),
             self.0.solves().len(),
         )
     }
