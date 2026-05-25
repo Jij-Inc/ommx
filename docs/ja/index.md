@@ -92,6 +92,7 @@ OMMXが実現する人間同士のデータ交換。
 tutorial/solve_with_ommx_adapter
 tutorial/tsp_sampling_with_openjij_adapter
 tutorial/switching_adapters
+tutorial/experiment_management
 tutorial/share_in_ommx_artifact
 tutorial/download_miplib_instance
 tutorial/download_qplib_instance
