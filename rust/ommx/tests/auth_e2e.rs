@@ -405,9 +405,9 @@ fn pull_image_round_trips_through_anonymous_registry() -> Result<()> {
 
     // Push from a sender-side SQLite registry.
     let expected_layer_bytes = with_test_artifact(image_name.clone(), |sender_local| {
-        let layers = sender_local.layers()?;
+        let layers = sender_local.stored_layers()?;
         assert_eq!(layers.len(), 1);
-        let expected_layer_bytes = sender_local.get_blob(layers[0].digest())?;
+        let expected_layer_bytes = sender_local.get_blob(&layers[0])?;
         sender_local.push()?;
         Ok(expected_layer_bytes)
     })?;
@@ -424,9 +424,9 @@ fn pull_image_round_trips_through_anonymous_registry() -> Result<()> {
     // through `RemoteTransport` + `publish_artifact_atomic`.
     let pulled = LocalArtifact::open_in_registry(receiver.as_ref(), image_name)?;
     assert_eq!(pulled.manifest_digest(), &outcome.manifest_digest);
-    let layers = pulled.layers()?;
+    let layers = pulled.stored_layers()?;
     assert_eq!(layers.len(), 1);
-    let pulled_bytes = pulled.get_blob(layers[0].digest())?;
+    let pulled_bytes = pulled.get_blob(&layers[0])?;
     assert_eq!(pulled_bytes, expected_layer_bytes);
     Ok(())
 }
