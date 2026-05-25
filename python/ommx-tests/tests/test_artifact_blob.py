@@ -1,3 +1,5 @@
+from typing import Any, cast
+
 import pytest
 
 from ommx.artifact import (
@@ -21,6 +23,7 @@ def test_get_blob_accepts_descriptor(isolated_local_registry):
 
 def test_get_blob_rejects_digest_string(isolated_local_registry):
     artifact = ArtifactDraft.new_anonymous().commit()
+    invalid_descriptor = cast(Any, "sha256:../../outside")
 
     with pytest.raises(TypeError):
-        artifact.get_blob("sha256:../../outside")
+        artifact.get_blob(invalid_descriptor)
