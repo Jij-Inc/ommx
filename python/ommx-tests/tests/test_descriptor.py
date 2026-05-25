@@ -1,10 +1,16 @@
-from ommx.artifact import Artifact, Descriptor
+import json
+
+from ommx.experiment import Experiment
 
 
 def test_serialize():
-    artifact = Artifact.load("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")
+    experiment = Experiment.with_temp_local_registry()
+    experiment.log_json("payload", {"value": 1})
+    artifact = experiment.commit()
     for layer in artifact.layers:
         d = layer.to_dict()
-        assert layer == Descriptor.from_dict(d)
-        json = layer.to_json()
-        assert layer == Descriptor.from_json(json)
+        assert d["digest"] == layer.digest
+        assert d["size"] == layer.size
+        assert d["mediaType"] == layer.media_type
+        payload = json.loads(layer.to_json())
+        assert payload == d

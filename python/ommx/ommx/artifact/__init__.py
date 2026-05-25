@@ -2,6 +2,7 @@
 # ruff: noqa: F401
 
 from ommx._ommx_rust import (
+    ArchiveDescriptor,
     ArchiveManifest,
     Artifact,
     ArtifactDraft,
@@ -12,6 +13,7 @@ from ommx._ommx_rust import (
 )
 
 __all__ = [
+    "ArchiveDescriptor",
     "ArchiveManifest",
     "Artifact",
     "ArtifactDraft",

@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use oci_spec::image::{Descriptor, MediaType};
+use oci_spec::image::MediaType;
 use pyo3::{
     prelude::*,
     types::{PyBool, PyDict, PyFloat, PyInt, PyString, PyType, PyTypeMethods},
@@ -92,7 +92,7 @@ impl PyExperiment {
             .inner
             .experiment_attachments()?
             .into_iter()
-            .map(|descriptor| PyDescriptor::from(Descriptor::from(descriptor)))
+            .map(PyDescriptor::from)
             .collect())
     }
 
@@ -498,7 +498,7 @@ impl PySealedRun {
             .0
             .attachments()?
             .into_iter()
-            .map(|descriptor| PyDescriptor::from(Descriptor::from(descriptor)))
+            .map(PyDescriptor::from)
             .collect())
     }
 
@@ -533,12 +533,12 @@ impl PySolve {
 
     #[getter]
     pub fn input(&self) -> Result<PyDescriptor> {
-        Ok(PyDescriptor::from(Descriptor::from(self.0.input()?)))
+        Ok(PyDescriptor::from(self.0.input()?))
     }
 
     #[getter]
     pub fn output(&self) -> Result<PyDescriptor> {
-        Ok(PyDescriptor::from(Descriptor::from(self.0.output()?)))
+        Ok(PyDescriptor::from(self.0.output()?))
     }
 
     #[getter]

@@ -15,6 +15,7 @@ from typing import TypeAlias
 
 __all__ = [
     "AdditionalCapability",
+    "ArchiveDescriptor",
     "ArchiveManifest",
     "Artifact",
     "ArtifactDraft",
@@ -110,6 +111,29 @@ ToState: TypeAlias = (
 )
 
 @typing.final
+class ArchiveDescriptor:
+    r"""
+    Descriptor value read from an OCI archive manifest without importing it.
+    """
+    @property
+    def digest(self) -> builtins.str: ...
+    @property
+    def size(self) -> builtins.int: ...
+    @property
+    def media_type(self) -> builtins.str: ...
+    @property
+    def annotations(self) -> builtins.dict[builtins.str, builtins.str]: ...
+    @property
+    def user_annotations(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Return annotations with key prefix "org.ommx.user."
+        """
+    def to_dict(self) -> dict: ...
+    def to_json(self) -> builtins.str: ...
+    def __str__(self) -> builtins.str: ...
+    def __eq__(self, rhs: typing.Any) -> builtins.bool: ...
+
+@typing.final
 class ArchiveManifest:
     r"""
     Read-only view of a `.ommx` archive's manifest produced by
@@ -130,7 +154,7 @@ class ArchiveManifest:
         SHA-256 digest of the manifest blob.
         """
     @property
-    def layers(self) -> builtins.list[Descriptor]:
+    def layers(self) -> builtins.list[ArchiveDescriptor]:
         r"""
         Layer descriptors in manifest order.
         """
@@ -141,7 +165,7 @@ class ArchiveManifest:
         `ImageManifest`, not per-layer annotations).
         """
     @property
-    def config(self) -> Descriptor:
+    def config(self) -> ArchiveDescriptor:
         r"""
         Descriptor of the `config` blob (the OCI 1.1 empty config in
         v3-built archives; v2 archives may carry an OMMX-specific
@@ -152,7 +176,7 @@ class ArchiveManifest:
         payload.
         """
     @property
-    def subject(self) -> typing.Optional[Descriptor]:
+    def subject(self) -> typing.Optional[ArchiveDescriptor]:
         r"""
         Optional `subject` descriptor on the OCI image manifest, used
         for the OCI referrers API (cosign / sigstore signatures,
@@ -1483,7 +1507,7 @@ class DecisionVariableAnalysis:
 @typing.final
 class Descriptor:
     r"""
-    Descriptor of blob in artifact
+    Descriptor of a blob stored in the local registry.
     """
     @property
     def digest(self) -> builtins.str: ...
@@ -1499,11 +1523,7 @@ class Descriptor:
         Return annotations with key prefix "org.ommx.user."
         """
     def to_dict(self) -> dict: ...
-    @staticmethod
-    def from_dict(dict: dict) -> Descriptor: ...
     def to_json(self) -> builtins.str: ...
-    @staticmethod
-    def from_json(json: builtins.str) -> Descriptor: ...
     def __str__(self) -> builtins.str: ...
     def __eq__(self, rhs: typing.Any) -> builtins.bool: ...
 

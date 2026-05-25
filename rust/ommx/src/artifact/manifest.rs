@@ -150,6 +150,10 @@ impl LocalArtifactDyn {
         self.as_local_artifact().layers()
     }
 
+    pub fn stored_layers(&self) -> Result<Vec<StoredDescriptor<'_>>> {
+        self.as_local_artifact().stored_layers()
+    }
+
     pub fn get_blob(&self, digest: &Digest) -> Result<Vec<u8>> {
         self.as_local_artifact().get_blob(digest)
     }
@@ -251,6 +255,14 @@ impl<'reg> LocalArtifact<'reg> {
 
     pub fn layers(&self) -> Result<Vec<Descriptor>> {
         Ok(self.get_manifest()?.layers())
+    }
+
+    pub fn stored_layers(&self) -> Result<Vec<StoredDescriptor<'reg>>> {
+        self.get_manifest()?
+            .layers()
+            .into_iter()
+            .map(|descriptor| self.registry.stored_descriptor(descriptor))
+            .collect()
     }
 
     pub fn subject(&self) -> Result<Option<Descriptor>> {

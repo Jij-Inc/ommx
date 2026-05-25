@@ -125,6 +125,7 @@ pub fn get_default_atol() -> f64 {
 #[pymodule(gil_used = false)]
 fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     // OMMX Artifact
+    m.add_class::<PyArchiveDescriptor>()?;
     m.add_class::<PyDescriptor>()?;
     m.add_class::<PyArtifact>()?;
     m.add_class::<PyArchiveManifest>()?;
@@ -268,6 +269,7 @@ pyo3_stub_gen::reexport_module_members!("ommx.v1" from "ommx._ommx_rust";
 
 pyo3_stub_gen::reexport_module_members!("ommx.artifact" from "ommx._ommx_rust";
     "Artifact",
+    "ArchiveDescriptor",
     "ArchiveManifest",
     "ArtifactDraft",
     "Descriptor",

@@ -7,6 +7,168 @@
       "items": [
         {
           "kind": "Class",
+          "name": "ArchiveDescriptor",
+          "doc": "Descriptor value read from an OCI archive manifest without importing it.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "rhs",
+                      "type_": {
+                        "display": "Any",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__str__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "to_dict",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "dict",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "to_json",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "annotations",
+              "doc": "",
+              "type_": {
+                "display": "dict[str, str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "digest",
+              "doc": "",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "media_type",
+              "doc": "",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "size",
+              "doc": "",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "user_annotations",
+              "doc": "Return annotations with key prefix \"org.ommx.user.\"",
+              "type_": {
+                "display": "dict[str, str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
           "name": "ArchiveManifest",
           "doc": "Read-only view of a `.ommx` archive's manifest produced by\n{meth}`Artifact.inspect_archive`. Surfaces the manifest descriptor\nfields without writing the archive into the SQLite Local Registry.",
           "bases": [],
@@ -38,9 +200,9 @@
               "name": "config",
               "doc": "Descriptor of the `config` blob (the OCI 1.1 empty config in\nv3-built archives; v2 archives may carry an OMMX-specific\nconfig blob). The descriptor exposes media type, digest, size,\nand annotations; the bytes themselves are not accessible from\n`ArchiveManifest` — import the archive via\n{meth}`Artifact.import_archive` if you need to read the config\npayload.",
               "type_": {
-                "display": "Descriptor",
+                "display": "ArchiveDescriptor",
                 "link_target": {
-                  "fqn": "ommx.artifact.Descriptor",
+                  "fqn": "ommx.artifact.ArchiveDescriptor",
                   "doc_module": "ommx.artifact",
                   "kind": "Class",
                   "attribute": null
@@ -71,13 +233,13 @@
               "name": "layers",
               "doc": "Layer descriptors in manifest order.",
               "type_": {
-                "display": "list[_ommx_rust.Descriptor]",
+                "display": "list[_ommx_rust.ArchiveDescriptor]",
                 "link_target": null,
                 "children": [
                   {
-                    "display": "Descriptor",
+                    "display": "ArchiveDescriptor",
                     "link_target": {
-                      "fqn": "ommx.artifact.Descriptor",
+                      "fqn": "ommx.artifact.ArchiveDescriptor",
                       "doc_module": "ommx.artifact",
                       "kind": "Class",
                       "attribute": null
@@ -104,13 +266,13 @@
               "name": "subject",
               "doc": "Optional `subject` descriptor on the OCI image manifest, used\nfor the OCI referrers API (cosign / sigstore signatures,\nSBOMs, …). `None` for ordinary OMMX artifacts; surfaced here\nso MINTO-style consumers that walk OCI referrer graphs do not\nhave to import each archive to discover whether it carries a\nsubject.",
               "type_": {
-                "display": "Optional[_ommx_rust.Descriptor]",
+                "display": "Optional[_ommx_rust.ArchiveDescriptor]",
                 "link_target": null,
                 "children": [
                   {
-                    "display": "Descriptor",
+                    "display": "ArchiveDescriptor",
                     "link_target": {
-                      "fqn": "ommx.artifact.Descriptor",
+                      "fqn": "ommx.artifact.ArchiveDescriptor",
                       "doc_module": "ommx.artifact",
                       "kind": "Class",
                       "attribute": null
@@ -1355,7 +1517,7 @@
         {
           "kind": "Class",
           "name": "Descriptor",
-          "doc": "Descriptor of blob in artifact",
+          "doc": "Descriptor of a blob stored in the local registry.",
           "bases": [],
           "methods": [
             {
@@ -1393,68 +1555,6 @@
                   "return_type": {
                     "display": "str",
                     "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "from_dict",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "dict",
-                      "type_": {
-                        "display": "dict",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "Descriptor",
-                    "link_target": {
-                      "fqn": "ommx.artifact.Descriptor",
-                      "doc_module": "ommx.artifact",
-                      "kind": "Class",
-                      "attribute": null
-                    },
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "from_json",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "json",
-                      "type_": {
-                        "display": "str",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "Descriptor",
-                    "link_target": {
-                      "fqn": "ommx.artifact.Descriptor",
-                      "doc_module": "ommx.artifact",
-                      "kind": "Class",
-                      "attribute": null
-                    },
                     "children": []
                   }
                 }
@@ -27038,6 +27138,7 @@
     }
   },
   "export_map": {
+    "ommx.artifact.ArchiveDescriptor": "ommx.artifact",
     "ommx.artifact.ArchiveManifest": "ommx.artifact",
     "ommx.artifact.Artifact": "ommx.artifact",
     "ommx.artifact.ArtifactDraft": "ommx.artifact",

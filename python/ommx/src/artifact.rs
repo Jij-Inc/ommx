@@ -3,7 +3,7 @@ use oci_spec::image::Digest;
 use pyo3::{prelude::*, types::PyBytes};
 use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
-use crate::PyDescriptor;
+use crate::{PyArchiveDescriptor, PyDescriptor};
 
 // ---------------------------------------------------------------------------
 // PyArtifact backing handle
@@ -257,7 +257,7 @@ impl PyArtifact {
     pub fn layers(&mut self) -> Result<Vec<PyDescriptor>> {
         Ok(self
             .inner
-            .layers()?
+            .stored_layers()?
             .into_iter()
             .map(PyDescriptor::from)
             .collect())
@@ -266,7 +266,7 @@ impl PyArtifact {
     /// Look up a layer descriptor by digest.
     pub fn get_layer_descriptor(&mut self, py: Python<'_>, digest: &str) -> Result<PyDescriptor> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let layers = self.inner.layers()?;
+        let layers = self.inner.stored_layers()?;
         for layer in layers {
             if layer.digest().as_ref() == digest {
                 return Ok(PyDescriptor::from(layer));
@@ -395,7 +395,7 @@ impl PyArtifact {
             None => {
                 let layers = self
                     .inner
-                    .layers()
+                    .stored_layers()
                     .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
                 for desc in layers {
                     let py_desc = PyDescriptor::from(desc);
@@ -432,7 +432,7 @@ impl PyArtifact {
             None => {
                 let layers = self
                     .inner
-                    .layers()
+                    .stored_layers()
                     .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
                 for desc in layers {
                     let py_desc = PyDescriptor::from(desc);
@@ -469,7 +469,7 @@ impl PyArtifact {
             None => {
                 let layers = self
                     .inner
-                    .layers()
+                    .stored_layers()
                     .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
                 for desc in layers {
                     let py_desc = PyDescriptor::from(desc);
@@ -506,7 +506,7 @@ impl PyArtifact {
             None => {
                 let layers = self
                     .inner
-                    .layers()
+                    .stored_layers()
                     .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
                 for desc in layers {
                     let py_desc = PyDescriptor::from(desc);
@@ -589,10 +589,10 @@ impl PyArtifact {
 pub struct PyArchiveManifest {
     image_name: Option<String>,
     manifest_digest: String,
-    layers: Vec<PyDescriptor>,
+    layers: Vec<PyArchiveDescriptor>,
     annotations: HashMap<String, String>,
-    config: PyDescriptor,
-    subject: Option<PyDescriptor>,
+    config: PyArchiveDescriptor,
+    subject: Option<PyArchiveDescriptor>,
 }
 
 impl From<ommx::artifact::local_registry::ArchiveInspectView> for PyArchiveManifest {
@@ -605,7 +605,7 @@ impl From<ommx::artifact::local_registry::ArchiveInspectView> for PyArchiveManif
                 .layers()
                 .iter()
                 .cloned()
-                .map(PyDescriptor::from)
+                .map(PyArchiveDescriptor::from)
                 .collect(),
             annotations: view
                 .manifest
@@ -613,8 +613,12 @@ impl From<ommx::artifact::local_registry::ArchiveInspectView> for PyArchiveManif
                 .as_ref()
                 .cloned()
                 .unwrap_or_default(),
-            config: PyDescriptor::from(view.manifest.config().clone()),
-            subject: view.manifest.subject().clone().map(PyDescriptor::from),
+            config: PyArchiveDescriptor::from(view.manifest.config().clone()),
+            subject: view
+                .manifest
+                .subject()
+                .clone()
+                .map(PyArchiveDescriptor::from),
         }
     }
 }
@@ -639,7 +643,7 @@ impl PyArchiveManifest {
 
     /// Layer descriptors in manifest order.
     #[getter]
-    pub fn layers(&self) -> Vec<PyDescriptor> {
+    pub fn layers(&self) -> Vec<PyArchiveDescriptor> {
         self.layers.clone()
     }
 
@@ -658,7 +662,7 @@ impl PyArchiveManifest {
     /// {meth}`Artifact.import_archive` if you need to read the config
     /// payload.
     #[getter]
-    pub fn config(&self) -> PyDescriptor {
+    pub fn config(&self) -> PyArchiveDescriptor {
         self.config.clone()
     }
 
@@ -669,7 +673,7 @@ impl PyArchiveManifest {
     /// have to import each archive to discover whether it carries a
     /// subject.
     #[getter]
-    pub fn subject(&self) -> Option<PyDescriptor> {
+    pub fn subject(&self) -> Option<PyArchiveDescriptor> {
         self.subject.clone()
     }
 }
@@ -785,7 +789,7 @@ impl DraftInner {
         let desc = self
             .as_mut()?
             .add_layer_bytes(media_type.into(), blob.to_vec(), annotations)?;
-        Ok(PyDescriptor::from(oci_spec::image::Descriptor::from(desc)))
+        Ok(PyDescriptor::from(desc))
     }
 
     fn add_annotation(&mut self, key: &str, value: &str) -> Result<()> {
