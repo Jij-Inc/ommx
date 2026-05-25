@@ -2617,7 +2617,7 @@
             },
             {
               "name": "log_solve",
-              "doc": "Solve an Instance with an OMMX SolverAdapter and record the input and Solution.\n\nThe input Instance is cloned before calling the adapter, so adapter-side\ncapability reductions do not mutate the caller's object. The original\ninput is always recorded as a run-scoped Instance Record.",
+              "doc": "Solve an Instance with an OMMX SolverAdapter and record a Solve entry.\n\nThe input Instance is cloned before calling the adapter, so adapter-side\ncapability reductions do not mutate the caller's object. The original\ninput is always recorded as the Solve input.",
               "signatures": [
                 {
                   "parameters": [
@@ -2644,30 +2644,6 @@
                         "children": []
                       },
                       "default": null
-                    },
-                    {
-                      "name": "input_name",
-                      "type_": {
-                        "display": "str",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": {
-                        "kind": "Simple",
-                        "value": "'input'"
-                      }
-                    },
-                    {
-                      "name": "solution_name",
-                      "type_": {
-                        "display": "str",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": {
-                        "kind": "Simple",
-                        "value": "'solution'"
-                      }
                     },
                     {
                       "name": "kwargs",
@@ -2753,6 +2729,109 @@
             },
             {
               "name": "run_id",
+              "doc": "",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "solves",
+              "doc": "",
+              "type_": {
+                "display": "list[_ommx_rust.SealedSolve]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "SealedSolve",
+                    "link_target": {
+                      "fqn": "ommx.experiment.SealedSolve",
+                      "doc_module": "ommx.experiment",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "SealedSolve",
+          "doc": "",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "input",
+              "doc": "",
+              "type_": {
+                "display": "Descriptor",
+                "link_target": {
+                  "fqn": "ommx.artifact.Descriptor",
+                  "doc_module": "ommx.artifact",
+                  "kind": "Class",
+                  "attribute": null
+                },
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "output",
+              "doc": "",
+              "type_": {
+                "display": "Descriptor",
+                "link_target": {
+                  "fqn": "ommx.artifact.Descriptor",
+                  "doc_module": "ommx.artifact",
+                  "kind": "Class",
+                  "attribute": null
+                },
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "parameters",
+              "doc": "",
+              "type_": {
+                "display": "dict",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "solve_id",
               "doc": "",
               "type_": {
                 "display": "int",
@@ -26958,6 +27037,7 @@
     "ommx.experiment.Experiment": "ommx.experiment",
     "ommx.experiment.Run": "ommx.experiment",
     "ommx.experiment.SealedRun": "ommx.experiment",
+    "ommx.experiment.SealedSolve": "ommx.experiment",
     "ommx.v1.AdditionalCapability": "ommx.v1",
     "ommx.v1.AttachedConstraint": "ommx.v1",
     "ommx.v1.AttachedDecisionVariable": "ommx.v1",

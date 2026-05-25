@@ -64,6 +64,7 @@ __all__ = [
     "Samples",
     "ScalarLike",
     "SealedRun",
+    "SealedSolve",
     "Sense",
     "Solution",
     "Sos1Constraint",
@@ -4976,17 +4977,14 @@ class Run:
         self,
         adapter: type[adapter.SolverAdapter],
         instance: Instance,
-        *,
-        input_name: builtins.str = "input",
-        solution_name: builtins.str = "solution",
         **kwargs: typing.Any,
     ) -> Solution:
         r"""
-        Solve an Instance with an OMMX SolverAdapter and record the input and Solution.
+        Solve an Instance with an OMMX SolverAdapter and record a Solve entry.
 
         The input Instance is cloned before calling the adapter, so adapter-side
         capability reductions do not mutate the caller's object. The original
-        input is always recorded as a run-scoped Instance Record.
+        input is always recorded as the Solve input.
         """
     def finish(self) -> None:
         r"""
@@ -5545,6 +5543,20 @@ class SealedRun:
     def run_id(self) -> builtins.int: ...
     @property
     def records(self) -> builtins.list[Descriptor]: ...
+    @property
+    def solves(self) -> builtins.list[SealedSolve]: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class SealedSolve:
+    @property
+    def solve_id(self) -> builtins.int: ...
+    @property
+    def input(self) -> Descriptor: ...
+    @property
+    def output(self) -> Descriptor: ...
+    @property
+    def parameters(self) -> dict: ...
     def __repr__(self) -> builtins.str: ...
 
 @typing.final

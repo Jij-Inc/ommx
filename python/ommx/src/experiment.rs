@@ -290,35 +290,27 @@ impl PyRun {
         self.as_open_mut()?.log_sample_set(name, &sample_set.inner)
     }
 
-    /// Solve an Instance with an OMMX SolverAdapter and record the input and Solution.
+    /// Solve an Instance with an OMMX SolverAdapter and record a Solve entry.
     ///
     /// The input Instance is cloned before calling the adapter, so adapter-side
     /// capability reductions do not mutate the caller's object. The original
-    /// input is always recorded as a run-scoped Instance Record.
-    #[pyo3(signature = (adapter, instance, *, input_name = "input", solution_name = "solution", **kwargs))]
+    /// input is always recorded as the Solve input.
+    #[pyo3(signature = (adapter, instance, **kwargs))]
     pub fn log_solve(
         &mut self,
         py: Python<'_>,
         adapter: SolverAdapterInput,
         instance: &crate::Instance,
-        input_name: &str,
-        solution_name: &str,
         kwargs: Option<&Bound<PyDict>>,
     ) -> Result<crate::Solution> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let adapter = adapter.0.bind(py);
         let adapter_name = adapter_name(adapter)?;
-        let kwarg_parameters = collect_scalar_kwargs(kwargs)?;
-
-        self.as_open_mut()?
-            .log_instance(input_name, &instance.inner)?;
-        self.as_open_mut()?.log_parameter(
-            "adapter",
+        let mut solve_parameters = vec![(
+            "adapter".to_string(),
             ommx::experiment::ParameterValue::String(adapter_name),
-        )?;
-        for (name, value) in kwarg_parameters {
-            self.as_open_mut()?.log_parameter(name, value)?;
-        }
+        )];
+        solve_parameters.extend(collect_scalar_kwargs(kwargs)?);
 
         let adapter_instance = Py::new(py, instance.clone())?;
         let solution_object =
@@ -327,7 +319,7 @@ impl PyRun {
             .extract::<crate::Solution>()
             .map_err(|_| anyhow::anyhow!("adapter.solve(...) must return ommx.v1.Solution"))?;
         self.as_open_mut()?
-            .log_solution(solution_name, &solution.inner)?;
+            .log_solve(&instance.inner, &solution.inner, solve_parameters)?;
         Ok(solution)
     }
 
@@ -380,7 +372,7 @@ fn collect_scalar_kwargs(
         let name: String = key.extract()?;
         let value = value.extract::<ParameterValueInput>().map_err(|_| {
             pyo3::exceptions::PyTypeError::new_err(format!(
-                "Run parameter value for solver kwarg `{name}` must be bool, int, float, or str"
+                "Solve parameter value for solver kwarg `{name}` must be bool, int, float, or str"
             ))
         })?;
         parameters.push((name, value.0));
@@ -505,11 +497,68 @@ impl PySealedRun {
             .collect()
     }
 
+    #[getter]
+    pub fn solves(&self) -> Vec<PySealedSolve> {
+        self.0.solves().iter().cloned().map(PySealedSolve).collect()
+    }
+
     pub fn __repr__(&self) -> String {
         format!(
-            "SealedRun(run_id={}, records={})",
+            "SealedRun(run_id={}, records={}, solves={})",
             self.run_id(),
             self.0.records().len(),
+            self.0.solves().len(),
         )
+    }
+}
+
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
+#[pyclass]
+#[pyo3(module = "ommx._ommx_rust", name = "SealedSolve")]
+#[derive(Clone)]
+pub struct PySealedSolve(ommx::experiment::SealedSolveDyn);
+
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
+#[pymethods]
+impl PySealedSolve {
+    #[getter]
+    pub fn solve_id(&self) -> u64 {
+        self.0.solve_id()
+    }
+
+    #[getter]
+    pub fn input(&self) -> PyDescriptor {
+        PyDescriptor::from(self.0.input().clone())
+    }
+
+    #[getter]
+    pub fn output(&self) -> PyDescriptor {
+        PyDescriptor::from(self.0.output().clone())
+    }
+
+    #[getter]
+    pub fn parameters<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDict>> {
+        let dict = PyDict::new(py);
+        for (name, value) in self.0.parameters() {
+            match value {
+                ommx::experiment::ParameterValue::Bool(value) => {
+                    dict.set_item(name, *value)?;
+                }
+                ommx::experiment::ParameterValue::Int(value) => {
+                    dict.set_item(name, *value)?;
+                }
+                ommx::experiment::ParameterValue::Float(value) => {
+                    dict.set_item(name, *value)?;
+                }
+                ommx::experiment::ParameterValue::String(value) => {
+                    dict.set_item(name, value)?;
+                }
+            }
+        }
+        Ok(dict)
+    }
+
+    pub fn __repr__(&self) -> String {
+        format!("SealedSolve(solve_id={})", self.solve_id())
     }
 }

@@ -141,11 +141,11 @@ def test_log_parameter_rejects_python_int_outside_i64():
 
 def test_log_solve_records_input_solution_and_scalar_kwargs():
     class DummyAdapter(SolverAdapter):
-        seen_kwargs: ClassVar[dict[str, object] | None] = None
+        seen_kwargs: ClassVar[list[dict[str, object]]] = []
 
         @classmethod
         def solve(cls, ommx_instance: Instance, **kwargs: object) -> Solution:
-            cls.seen_kwargs = kwargs
+            cls.seen_kwargs.append(kwargs)
             return ommx_instance.evaluate({})
 
         @property
@@ -162,6 +162,7 @@ def test_log_solve_records_input_solution_and_scalar_kwargs():
         sense=Instance.MINIMIZE,
     )
     experiment = Experiment.with_temp_local_registry()
+    DummyAdapter.seen_kwargs = []
 
     with experiment.run() as run:
         solution = run.log_solve(
@@ -172,23 +173,47 @@ def test_log_solve_records_input_solution_and_scalar_kwargs():
             label="baseline",
         )
         assert solution.feasible
+        solution = run.log_solve(
+            DummyAdapter,
+            instance,
+            time_limit=2.0,
+            label="pricing",
+        )
+        assert solution.feasible
 
-    assert DummyAdapter.seen_kwargs == {
-        "time_limit": 1.5,
-        "verbose": True,
-        "label": "baseline",
-    }
+    assert DummyAdapter.seen_kwargs == [
+        {
+            "time_limit": 1.5,
+            "verbose": True,
+            "label": "baseline",
+        },
+        {
+            "time_limit": 2.0,
+            "label": "pricing",
+        },
+    ]
 
     artifact = experiment.commit()
     loaded = Experiment.from_artifact(artifact)
     runs = {run.run_id: run for run in loaded.runs}
-    assert _record_names(runs[0].records) == {"input", "solution"}
+    assert runs[0].records == []
+    assert [solve.solve_id for solve in runs[0].solves] == [0, 1]
 
+    first_solve = runs[0].solves[0]
+    assert first_solve.input.media_type == "application/org.ommx.v1.instance"
+    assert first_solve.output.media_type == "application/org.ommx.v1.solution"
+    assert str(first_solve.parameters["adapter"]).endswith("DummyAdapter")
+    assert first_solve.parameters["time_limit"] == 1.5
+    assert bool(first_solve.parameters["verbose"]) is True
+    assert first_solve.parameters["label"] == "baseline"
+
+    second_solve = runs[0].solves[1]
+    assert second_solve.parameters["time_limit"] == 2.0
+    assert second_solve.parameters["label"] == "pricing"
+
+    # Solver kwargs are solve-scoped metadata, not Run parameters.
     df = loaded.run_parameters_df()
-    assert str(df.loc[0, "adapter"]).endswith("DummyAdapter")
-    assert df.loc[0, "time_limit"] == 1.5
-    assert bool(df.loc[0, "verbose"]) is True
-    assert df.loc[0, "label"] == "baseline"
+    assert df.shape == (1, 0)
 
 
 def test_log_solve_rejects_non_solver_adapter():

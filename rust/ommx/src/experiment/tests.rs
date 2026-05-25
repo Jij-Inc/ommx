@@ -1,6 +1,6 @@
 //! Tests for the experiment session model.
 
-use super::config::{ExperimentConfig, ExperimentConfigRun};
+use super::config::{ExperimentConfig, ExperimentConfigRun, LayerRef};
 use super::UnsealedExperimentState;
 use super::{
     Experiment, ExperimentDyn, Name, ParameterValue, SealedExperiment, ANN_LAYER, ANN_RECORD_NAME,
@@ -9,10 +9,10 @@ use super::{
 };
 use crate::artifact::local_registry::UnsealedArtifact;
 use crate::artifact::{media_types, ImageRef, LocalArtifact, LocalRegistryHandle};
-use crate::Instance;
+use crate::{Evaluate, Function, Instance, Sense};
 use oci_spec::image::{Descriptor, MediaType};
 use serde_json::json;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 fn with_temp_experiment<T>(f: impl FnOnce(Experiment<'_>) -> anyhow::Result<T>) -> T {
     Experiment::with_temp_local_registry(Name::Anonymous, f).unwrap()
@@ -354,7 +354,7 @@ fn loaded_experiment_reads_records_and_run_parameters() {
         }
 
         let artifact = experiment.commit().unwrap().into_artifact();
-        let loaded = SealedExperiment::from_artifact(artifact).unwrap();
+        let loaded = SealedExperiment::from_artifact(artifact.clone()).unwrap();
 
         assert!(loaded
             .experiment_records()
@@ -393,6 +393,94 @@ fn loaded_experiment_reads_records_and_run_parameters() {
 }
 
 #[test]
+fn log_solve_materializes_solve_entry_with_layer_refs() {
+    with_temp_experiment(|experiment| {
+        let instance = Instance::new(
+            Sense::Minimize,
+            Function::Zero,
+            BTreeMap::new(),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        let solution = instance
+            .evaluate(
+                &crate::v1::State {
+                    entries: HashMap::new(),
+                },
+                crate::ATol::default(),
+            )
+            .unwrap();
+
+        {
+            let mut run = experiment.run().unwrap();
+            let solve_id = run
+                .log_solve(
+                    &instance,
+                    &solution,
+                    [
+                        (
+                            "adapter".to_string(),
+                            ParameterValue::String("dummy.Adapter".to_string()),
+                        ),
+                        ("time_limit".to_string(), ParameterValue::Float(1.5)),
+                    ],
+                )
+                .unwrap();
+            assert_eq!(solve_id, 0);
+            run.finish().unwrap();
+        }
+
+        let sealed = experiment.commit().unwrap();
+        let artifact = sealed.artifact();
+        let layers = artifact.layers().unwrap();
+        assert_eq!(layers.len(), 3);
+
+        let config = artifact.get_manifest().unwrap().config();
+        let config_json: serde_json::Value =
+            serde_json::from_slice(&artifact.get_blob(config.digest()).unwrap()).unwrap();
+        assert_eq!(config_json["attachments"], json!([]));
+        assert_eq!(config_json["run_parameters"], json!(2));
+        assert_eq!(config_json["runs"][0]["attachments"], json!([]));
+        assert_eq!(config_json["runs"][0]["solves"][0]["solve_id"], json!(0));
+        assert_eq!(config_json["runs"][0]["solves"][0]["input"], json!(0));
+        assert_eq!(config_json["runs"][0]["solves"][0]["output"], json!(1));
+        assert_eq!(
+            config_json["runs"][0]["solves"][0]["parameters"]["adapter"],
+            json!("dummy.Adapter")
+        );
+        assert_eq!(
+            config_json["runs"][0]["solves"][0]["parameters"]["time_limit"],
+            json!(1.5)
+        );
+
+        let loaded = SealedExperiment::from_artifact(artifact.clone()).unwrap();
+        let run = loaded.run(0).unwrap();
+        assert!(run.records().is_empty());
+        let solve = &run.solves()[0];
+        assert_eq!(solve.solve_id(), 0);
+        assert_eq!(solve.input().media_type(), &media_types::v1_instance());
+        assert_eq!(solve.output().media_type(), &media_types::v1_solution());
+        assert_eq!(
+            artifact.get_blob(solve.input().digest()).unwrap(),
+            instance.to_bytes()
+        );
+        assert_eq!(
+            artifact.get_blob(solve.output().digest()).unwrap(),
+            solution.to_bytes()
+        );
+        assert_eq!(
+            solve.parameters().get("adapter"),
+            Some(&ParameterValue::String("dummy.Adapter".to_string()))
+        );
+        assert_eq!(
+            solve.parameters().get("time_limit"),
+            Some(&ParameterValue::Float(1.5))
+        );
+        Ok(())
+    });
+}
+
+#[test]
 fn loaded_experiment_rejects_non_finished_status() {
     let temp = crate::artifact::local_registry::TempLocalRegistry::new().unwrap();
     let registry = temp.registry();
@@ -405,9 +493,9 @@ fn loaded_experiment_rejects_non_finished_status() {
         .unwrap();
     let config = ExperimentConfig {
         status: "crashed".to_string(),
-        records: Vec::new(),
+        attachments: Vec::new(),
         runs: Vec::new(),
-        run_parameters: Descriptor::from(run_parameters.clone()),
+        run_parameters: LayerRef(0),
     };
     let config_descriptor = registry
         .store_json_blob(
@@ -440,7 +528,7 @@ fn loaded_experiment_rejects_config_record_not_listed_in_layers() {
     let mut annotations = HashMap::new();
     annotations.insert(ANN_SPACE.to_string(), "experiment".to_string());
     annotations.insert(ANN_RECORD_NAME.to_string(), "outside".to_string());
-    let outside_record = registry
+    let _outside_record = registry
         .store_layer_blob(
             MediaType::Other("application/json".to_string()),
             br#""outside""#,
@@ -456,9 +544,9 @@ fn loaded_experiment_rejects_config_record_not_listed_in_layers() {
         .unwrap();
     let config = ExperimentConfig {
         status: EXPERIMENT_STATUS_FINISHED.to_string(),
-        records: vec![Descriptor::from(outside_record)],
+        attachments: vec![LayerRef(1)],
         runs: Vec::new(),
-        run_parameters: Descriptor::from(run_parameters.clone()),
+        run_parameters: LayerRef(0),
     };
     let config_descriptor = registry
         .store_json_blob(
@@ -481,12 +569,12 @@ fn loaded_experiment_rejects_config_record_not_listed_in_layers() {
 
     let err = SealedExperiment::from_artifact(artifact)
         .expect_err("config must not reference records outside artifact layers");
-    assert!(err.to_string().contains("experiment record descriptor"));
-    assert!(err.to_string().contains("not listed in artifact layers"));
+    assert!(err.to_string().contains("experiment record layer 1"));
+    assert!(err.to_string().contains("artifact has only 1 layer"));
 }
 
 #[test]
-fn loaded_experiment_rejects_config_record_with_unlisted_descriptor_metadata() {
+fn loaded_experiment_uses_manifest_layer_metadata_for_attachment_refs() {
     let temp = crate::artifact::local_registry::TempLocalRegistry::new().unwrap();
     let registry = temp.registry();
     let mut manifest_annotations = HashMap::new();
@@ -499,17 +587,6 @@ fn loaded_experiment_rejects_config_record_with_unlisted_descriptor_metadata() {
             manifest_annotations,
         )
         .unwrap();
-    let mut config_annotations = HashMap::new();
-    config_annotations.insert(ANN_SPACE.to_string(), "experiment".to_string());
-    config_annotations.insert(ANN_RECORD_NAME.to_string(), "outside".to_string());
-    let outside_record = registry
-        .store_layer_blob(
-            MediaType::Other("application/json".to_string()),
-            br#""same-blob""#,
-            config_annotations,
-        )
-        .unwrap();
-    assert_eq!(listed_record.digest(), outside_record.digest());
 
     let run_parameters = registry
         .store_json_layer_blob(
@@ -520,9 +597,9 @@ fn loaded_experiment_rejects_config_record_with_unlisted_descriptor_metadata() {
         .unwrap();
     let config = ExperimentConfig {
         status: EXPERIMENT_STATUS_FINISHED.to_string(),
-        records: vec![Descriptor::from(outside_record)],
+        attachments: vec![LayerRef(0)],
         runs: Vec::new(),
-        run_parameters: Descriptor::from(run_parameters.clone()),
+        run_parameters: LayerRef(1),
     };
     let config_descriptor = registry
         .store_json_blob(
@@ -543,10 +620,15 @@ fn loaded_experiment_rejects_config_record_with_unlisted_descriptor_metadata() {
     let artifact =
         LocalArtifact::from_parts(registry, image_name, sealed_artifact.digest().clone());
 
-    let err = SealedExperiment::from_artifact(artifact)
-        .expect_err("config must reference a descriptor listed in artifact layers");
-    assert!(err.to_string().contains("experiment record descriptor"));
-    assert!(err.to_string().contains("not listed in artifact layers"));
+    let sealed = SealedExperiment::from_artifact(artifact).unwrap();
+    assert_eq!(
+        layer_annotation(
+            &Descriptor::from(sealed.experiment_records()[0].clone()),
+            ANN_RECORD_NAME
+        )
+        .as_deref(),
+        Some("listed")
+    );
 }
 
 #[test]
@@ -557,7 +639,7 @@ fn loaded_experiment_rejects_config_run_record_not_listed_in_layers() {
     annotations.insert(ANN_SPACE.to_string(), "run".to_string());
     annotations.insert(ANN_RUN_ID.to_string(), "0".to_string());
     annotations.insert(ANN_RECORD_NAME.to_string(), "outside".to_string());
-    let outside_record = registry
+    let _outside_record = registry
         .store_layer_blob(
             MediaType::Other("application/json".to_string()),
             br#""outside""#,
@@ -573,12 +655,13 @@ fn loaded_experiment_rejects_config_run_record_not_listed_in_layers() {
         .unwrap();
     let config = ExperimentConfig {
         status: EXPERIMENT_STATUS_FINISHED.to_string(),
-        records: Vec::new(),
+        attachments: Vec::new(),
         runs: vec![ExperimentConfigRun {
             run_id: 0,
-            records: vec![Descriptor::from(outside_record)],
+            attachments: vec![LayerRef(1)],
+            solves: Vec::new(),
         }],
-        run_parameters: Descriptor::from(run_parameters.clone()),
+        run_parameters: LayerRef(0),
     };
     let config_descriptor = registry
         .store_json_blob(
@@ -601,15 +684,15 @@ fn loaded_experiment_rejects_config_run_record_not_listed_in_layers() {
 
     let err = SealedExperiment::from_artifact(artifact)
         .expect_err("config must not reference run records outside artifact layers");
-    assert!(err.to_string().contains("run 0 record descriptor"));
-    assert!(err.to_string().contains("not listed in artifact layers"));
+    assert!(err.to_string().contains("run 0 record layer 1"));
+    assert!(err.to_string().contains("artifact has only 1 layer"));
 }
 
 #[test]
 fn loaded_experiment_rejects_run_parameters_not_listed_in_layers() {
     let temp = crate::artifact::local_registry::TempLocalRegistry::new().unwrap();
     let registry = temp.registry();
-    let run_parameters = registry
+    let _run_parameters = registry
         .store_json_layer_blob(
             MediaType::Other(RUN_PARAMETERS_MEDIA_TYPE.to_string()),
             &json!({ "columns": {} }),
@@ -618,9 +701,9 @@ fn loaded_experiment_rejects_run_parameters_not_listed_in_layers() {
         .unwrap();
     let config = ExperimentConfig {
         status: EXPERIMENT_STATUS_FINISHED.to_string(),
-        records: Vec::new(),
+        attachments: Vec::new(),
         runs: Vec::new(),
-        run_parameters: Descriptor::from(run_parameters),
+        run_parameters: LayerRef(0),
     };
     let config_descriptor = registry
         .store_json_blob(
@@ -643,8 +726,8 @@ fn loaded_experiment_rejects_run_parameters_not_listed_in_layers() {
 
     let err = SealedExperiment::from_artifact(artifact)
         .expect_err("config must not reference run parameters outside artifact layers");
-    assert!(err.to_string().contains("run-parameter table descriptor"));
-    assert!(err.to_string().contains("not listed in artifact layers"));
+    assert!(err.to_string().contains("run-parameter table layer 0"));
+    assert!(err.to_string().contains("artifact has only 0 layer"));
 }
 
 #[test]

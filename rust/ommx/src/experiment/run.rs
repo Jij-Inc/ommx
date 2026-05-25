@@ -1,7 +1,7 @@
 //! Experiment / Run handles and run lifecycle.
 
 use super::record::{encode_json, json_media_type, store_record_descriptor, RecordSpace};
-use super::{ParameterValue, Run, RunEntry};
+use super::{ParameterValue, Run, RunEntry, SolveEntry};
 use crate::artifact::media_types;
 use crate::{Instance, SampleSet, Solution};
 use anyhow::Result;
@@ -58,6 +58,39 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
         self.log_record(name, media_types::v1_sample_set(), sample_set.to_bytes())
     }
 
+    /// Record one solver execution under this run.
+    ///
+    /// The original input [`Instance`] and returned [`Solution`] are
+    /// stored as solve-scoped payloads. Solver adapter metadata and
+    /// kwargs belong to the solve parameters, not the Run parameter
+    /// table.
+    pub fn log_solve(
+        &mut self,
+        input: &Instance,
+        output: &Solution,
+        parameters: impl IntoIterator<Item = (String, ParameterValue)>,
+    ) -> Result<u64> {
+        let solve_id = self.next_solve_id;
+        self.next_solve_id += 1;
+        let input = self.experiment.registry.store_layer_blob(
+            media_types::v1_instance(),
+            &input.to_bytes(),
+            Default::default(),
+        )?;
+        let output = self.experiment.registry.store_layer_blob(
+            media_types::v1_solution(),
+            &output.to_bytes(),
+            Default::default(),
+        )?;
+        self.solves.push(SolveEntry {
+            solve_id,
+            input,
+            output,
+            parameters: super::parameter::ParameterSet::from_entries(parameters)?,
+        });
+        Ok(solve_id)
+    }
+
     /// Close the run and append the closed run state to the parent
     /// experiment. Consumes the handle so no further run-scoped data
     /// can be added.
@@ -82,11 +115,14 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
             experiment,
             run_id,
             records,
+            solves,
+            next_solve_id: _,
             parameters,
         } = self;
         let run = RunEntry {
             run_id,
             records,
+            solves,
             parameters,
         };
         experiment.push_closed_run(run)?;

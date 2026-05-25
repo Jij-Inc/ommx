@@ -58,9 +58,9 @@ mod sealed;
 #[cfg(test)]
 mod tests;
 
-pub use dynamic::{ExperimentDyn, RunDyn, SealedRunDyn};
+pub use dynamic::{ExperimentDyn, RunDyn, SealedRunDyn, SealedSolveDyn};
 pub use parameter::{ParameterValue, RunParameterCell};
-pub use sealed::SealedRun;
+pub use sealed::{SealedRun, SealedSolve};
 
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor, TempLocalRegistry};
 use crate::artifact::{media_types, ImageRef, LocalArtifact};
@@ -146,6 +146,8 @@ pub struct Run<'exp, 'reg> {
     experiment: &'exp Experiment<'reg>,
     run_id: u64,
     records: Vec<StoredDescriptor<'reg>>,
+    solves: Vec<SolveEntry<'reg>>,
+    next_solve_id: u64,
     parameters: ParameterSet,
 }
 
@@ -160,6 +162,15 @@ pub struct Run<'exp, 'reg> {
 struct RunEntry<'reg> {
     run_id: u64,
     records: Vec<StoredDescriptor<'reg>>,
+    solves: Vec<SolveEntry<'reg>>,
+    parameters: ParameterSet,
+}
+
+#[derive(Debug, Clone)]
+struct SolveEntry<'reg> {
+    solve_id: u64,
+    input: StoredDescriptor<'reg>,
+    output: StoredDescriptor<'reg>,
     parameters: ParameterSet,
 }
 
@@ -235,6 +246,8 @@ impl<'reg> Experiment<'reg> {
             experiment: self,
             run_id,
             records: Vec::new(),
+            solves: Vec::new(),
+            next_solve_id: 0,
             parameters: ParameterSet::new(),
         })
     }

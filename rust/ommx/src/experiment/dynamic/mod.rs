@@ -63,7 +63,16 @@ struct UnsealedExperimentDynState {
 struct RunEntryDyn {
     run_id: u64,
     records: Vec<Descriptor>,
+    solves: Vec<SolveEntryDyn>,
     parameters: super::parameter::ParameterSet,
+}
+
+#[derive(Debug)]
+pub(super) struct SolveEntryDyn {
+    pub(super) solve_id: u64,
+    pub(super) input: Descriptor,
+    pub(super) output: Descriptor,
+    pub(super) parameters: super::parameter::ParameterSet,
 }
 
 #[derive(Debug, Clone)]
@@ -78,6 +87,15 @@ struct SealedExperimentDynState {
 pub struct SealedRunDyn {
     run_id: u64,
     records: Vec<Descriptor>,
+    solves: Vec<SealedSolveDyn>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SealedSolveDyn {
+    solve_id: u64,
+    input: Descriptor,
+    output: Descriptor,
+    parameters: BTreeMap<String, super::ParameterValue>,
 }
 
 impl SealedRunDyn {
@@ -87,6 +105,28 @@ impl SealedRunDyn {
 
     pub fn records(&self) -> &[Descriptor] {
         &self.records
+    }
+
+    pub fn solves(&self) -> &[SealedSolveDyn] {
+        &self.solves
+    }
+}
+
+impl SealedSolveDyn {
+    pub fn solve_id(&self) -> u64 {
+        self.solve_id
+    }
+
+    pub fn input(&self) -> &Descriptor {
+        &self.input
+    }
+
+    pub fn output(&self) -> &Descriptor {
+        &self.output
+    }
+
+    pub fn parameters(&self) -> &BTreeMap<String, super::ParameterValue> {
+        &self.parameters
     }
 }
 
@@ -311,6 +351,18 @@ impl UnsealedExperimentDynState {
                         RunEntry {
                             run_id: run.run_id,
                             records: stored_descriptors(registry, run.records)?,
+                            solves: run
+                                .solves
+                                .into_iter()
+                                .map(|solve| {
+                                    Ok(super::SolveEntry {
+                                        solve_id: solve.solve_id,
+                                        input: registry.stored_descriptor(solve.input)?,
+                                        output: registry.stored_descriptor(solve.output)?,
+                                        parameters: solve.parameters,
+                                    })
+                                })
+                                .collect::<Result<Vec<_>>>()?,
                             parameters: run.parameters,
                         },
                     ))
@@ -334,6 +386,16 @@ impl SealedExperimentDynState {
                         SealedRunDyn {
                             run_id: run.run_id(),
                             records: descriptors(run.records()),
+                            solves: run
+                                .solves()
+                                .iter()
+                                .map(|solve| SealedSolveDyn {
+                                    solve_id: solve.solve_id(),
+                                    input: Descriptor::from(solve.input().clone()),
+                                    output: Descriptor::from(solve.output().clone()),
+                                    parameters: solve.parameters().clone(),
+                                })
+                                .collect(),
                         },
                     )
                 })
@@ -418,6 +480,20 @@ fn store_run_record_descriptor(
         media_type,
         bytes,
     )?;
+    Ok(Descriptor::from(descriptor))
+}
+
+fn store_solve_payload_descriptor(
+    state: &ExperimentDynState,
+    media_type: MediaType,
+    bytes: &[u8],
+) -> Result<Descriptor> {
+    ensure_unsealed_for_record_write(state)?;
+    let descriptor =
+        state
+            .registry_handle
+            .registry()
+            .store_layer_blob(media_type, bytes, Default::default())?;
     Ok(Descriptor::from(descriptor))
 }
 

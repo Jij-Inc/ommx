@@ -4,8 +4,9 @@ use super::super::parameter::ParameterSet;
 use super::super::record::{encode_json, json_media_type};
 use super::super::ParameterValue;
 use super::{
-    bail_non_unsealed, lock_experiment_state, store_run_record_descriptor, ExperimentDyn,
-    ExperimentDynLifecycle, ExperimentDynState, RunEntryDyn,
+    bail_non_unsealed, lock_experiment_state, store_run_record_descriptor,
+    store_solve_payload_descriptor, ExperimentDyn, ExperimentDynLifecycle, ExperimentDynState,
+    RunEntryDyn, SolveEntryDyn,
 };
 use crate::artifact::media_types;
 use crate::{Instance, SampleSet, Solution};
@@ -31,6 +32,8 @@ pub struct RunDyn {
 struct RunDynState {
     run_id: u64,
     records: Vec<Descriptor>,
+    solves: Vec<SolveEntryDyn>,
+    next_solve_id: u64,
     parameters: ParameterSet,
 }
 
@@ -60,6 +63,8 @@ impl RunDyn {
             run_state: Some(RunDynState {
                 run_id,
                 records: Vec::new(),
+                solves: Vec::new(),
+                next_solve_id: 0,
                 parameters: ParameterSet::new(),
             }),
             experiment_state,
@@ -112,6 +117,39 @@ impl RunDyn {
         self.log_record(name, media_types::v1_sample_set(), sample_set.to_bytes())
     }
 
+    pub fn log_solve(
+        &mut self,
+        input: &Instance,
+        output: &Solution,
+        parameters: impl IntoIterator<Item = (String, ParameterValue)>,
+    ) -> Result<u64> {
+        let solve_id = self.open()?.next_solve_id;
+        let (input, output) = {
+            let dyn_state = lock_experiment_state(&self.experiment_state);
+            (
+                store_solve_payload_descriptor(
+                    &dyn_state,
+                    media_types::v1_instance(),
+                    &input.to_bytes(),
+                )?,
+                store_solve_payload_descriptor(
+                    &dyn_state,
+                    media_types::v1_solution(),
+                    &output.to_bytes(),
+                )?,
+            )
+        };
+        let state = self.open_mut()?;
+        state.next_solve_id += 1;
+        state.solves.push(SolveEntryDyn {
+            solve_id,
+            input,
+            output,
+            parameters: ParameterSet::from_entries(parameters)?,
+        });
+        Ok(solve_id)
+    }
+
     pub fn finish(mut self) -> Result<()> {
         let mut dyn_state = lock_experiment_state(&self.experiment_state);
         let ExperimentDynLifecycle::Unsealed { state, open_runs } = &mut dyn_state.lifecycle else {
@@ -133,6 +171,7 @@ impl RunDyn {
             RunEntryDyn {
                 run_id: run.run_id,
                 records: run.records,
+                solves: run.solves,
                 parameters: run.parameters,
             },
         );
