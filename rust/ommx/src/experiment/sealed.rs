@@ -85,7 +85,7 @@ impl<'reg> SealedExperiment<'reg> {
 pub struct SealedRun<'reg> {
     run_id: u64,
     attachments: Vec<StoredDescriptor<'reg>>,
-    solves: Vec<SealedSolve<'reg>>,
+    solves: Vec<Solve<'reg>>,
 }
 
 impl<'reg> SealedRun<'reg> {
@@ -97,20 +97,20 @@ impl<'reg> SealedRun<'reg> {
         &self.attachments
     }
 
-    pub fn solves(&self) -> &[SealedSolve<'reg>] {
+    pub fn solves(&self) -> &[Solve<'reg>] {
         &self.solves
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct SealedSolve<'reg> {
+pub struct Solve<'reg> {
     solve_id: u64,
     input: StoredDescriptor<'reg>,
     output: StoredDescriptor<'reg>,
     parameters: BTreeMap<String, super::ParameterValue>,
 }
 
-impl<'reg> SealedSolve<'reg> {
+impl<'reg> Solve<'reg> {
     pub fn solve_id(&self) -> u64 {
         self.solve_id
     }
@@ -183,7 +183,7 @@ fn decode_solves<'reg>(
     layers: &[Descriptor],
     run_id: u64,
     solves: Vec<ExperimentConfigSolve>,
-) -> Result<Vec<SealedSolve<'reg>>> {
+) -> Result<Vec<Solve<'reg>>> {
     let mut decoded = Vec::new();
     let mut seen = std::collections::BTreeSet::new();
     for solve in solves {
@@ -211,7 +211,7 @@ fn decode_solves<'reg>(
         validate_layer_media_type(&output, &crate::artifact::media_types::v1_solution())
             .with_context(|| format!("Invalid Run {run_id} Solve {} output", solve.solve_id))?;
         super::parameter::ParameterSet::from_map(solve.parameters.clone())?;
-        decoded.push(SealedSolve {
+        decoded.push(Solve {
             solve_id: solve.solve_id,
             input: registry
                 .stored_descriptor(input)

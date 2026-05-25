@@ -501,8 +501,8 @@ impl PySealedRun {
     }
 
     #[getter]
-    pub fn solves(&self) -> Vec<PySealedSolve> {
-        self.0.solves().iter().cloned().map(PySealedSolve).collect()
+    pub fn solves(&self) -> Vec<PySolve> {
+        self.0.solves().iter().cloned().map(PySolve).collect()
     }
 
     pub fn __repr__(&self) -> String {
@@ -517,13 +517,13 @@ impl PySealedRun {
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
-#[pyo3(module = "ommx._ommx_rust", name = "SealedSolve")]
+#[pyo3(module = "ommx._ommx_rust", name = "Solve")]
 #[derive(Clone)]
-pub struct PySealedSolve(ommx::experiment::SealedSolveDyn);
+pub struct PySolve(ommx::experiment::SolveDyn);
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
-impl PySealedSolve {
+impl PySolve {
     #[getter]
     pub fn solve_id(&self) -> u64 {
         self.0.solve_id()
@@ -562,6 +562,6 @@ impl PySealedSolve {
     }
 
     pub fn __repr__(&self) -> String {
-        format!("SealedSolve(solve_id={})", self.solve_id())
+        format!("Solve(solve_id={})", self.solve_id())
     }
 }

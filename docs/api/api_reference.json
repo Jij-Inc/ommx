@@ -2742,13 +2742,13 @@
               "name": "solves",
               "doc": "",
               "type_": {
-                "display": "list[_ommx_rust.SealedSolve]",
+                "display": "list[_ommx_rust.Solve]",
                 "link_target": null,
                 "children": [
                   {
-                    "display": "SealedSolve",
+                    "display": "Solve",
                     "link_target": {
-                      "fqn": "ommx.experiment.SealedSolve",
+                      "fqn": "ommx.experiment.Solve",
                       "doc_module": "ommx.experiment",
                       "kind": "Class",
                       "attribute": null
@@ -2765,7 +2765,7 @@
         },
         {
           "kind": "Class",
-          "name": "SealedSolve",
+          "name": "Solve",
           "doc": "",
           "bases": [],
           "methods": [
@@ -27037,7 +27037,7 @@
     "ommx.experiment.Experiment": "ommx.experiment",
     "ommx.experiment.Run": "ommx.experiment",
     "ommx.experiment.SealedRun": "ommx.experiment",
-    "ommx.experiment.SealedSolve": "ommx.experiment",
+    "ommx.experiment.Solve": "ommx.experiment",
     "ommx.v1.AdditionalCapability": "ommx.v1",
     "ommx.v1.AttachedConstraint": "ommx.v1",
     "ommx.v1.AttachedDecisionVariable": "ommx.v1",

@@ -750,7 +750,7 @@ PR #886 時点で、Experiment / Artifact v3 提案のうち、Rust core と Pyt
 
 実装済み:
 
-- `ommx::experiment::{Experiment, Run, SealedExperiment, SealedRun, SealedSolve}`。
+- `ommx::experiment::{Experiment, Run, SealedExperiment, SealedRun, Solve}`。
 - `Experiment::new(Name)` / `Experiment::with_registry(&LocalRegistry, Name)` / `Experiment::with_temp_local_registry(...)`。
 - `Name::Named(ImageRef)` と `Name::Anonymous`。anonymous Experiment は `<registry-id8>.ommx.local/experiment:<timestamp>-<nonce>` に解決する。
 - `Experiment::log_attachment` / `log_json` / `log_instance` / `log_solution` / `log_sample_set`。
@@ -802,7 +802,7 @@ Run parameter table は column-oriented JSON として aggregate layer に保存
 
 実装済み:
 
-- `ommx.experiment.Experiment` / `Run` / `SealedRun` / `SealedSolve`。
+- `ommx.experiment.Experiment` / `Run` / `SealedRun` / `Solve`。
 - `Experiment()` は default Local Registry 上に anonymous Experiment を作る。名前を指定する場合は `Experiment(image_name)` とする。
 - `Experiment.with_temp_local_registry()` は Python test / example 用の一時 Local Registry を持つ Experiment を作る。一時 registry は、その Experiment から commit された `Artifact` や `Experiment.from_artifact(...)` でロードされた Experiment が生きている間保持される。
 - `with Experiment(...) as exp:` は正常終了時に自動 commit する。例外終了時は commit しない。
@@ -814,7 +814,7 @@ Run parameter table は column-oriented JSON として aggregate layer に保存
 - `Experiment.experiment_attachments` は Experiment-space Attachment descriptors を返す。
 - `Experiment.runs` は `SealedRun` list を返す。
 - `SealedRun.attachments` は Run-space Attachment descriptors を返す。
-- `SealedRun.solves` は `SealedSolve` list を返し、Solve input / output descriptors と Solve parameters を参照できる。
+- `SealedRun.solves` は `Solve` list を返し、Solve input / output descriptors と Solve parameters を参照できる。
 - `Run.log_solve(adapter, instance, **kwargs)` は adapter を呼び、caller が渡した Instance を Solve input、返された Solution を Solve output、adapter 名と kwargs を Solve parameters として記録する。kwargs は Run parameter table には入れない。
 - `Experiment.run_parameters_df()` は pandas DataFrame を返す。parameter を持たない完了済み Run も index row として残す。
 

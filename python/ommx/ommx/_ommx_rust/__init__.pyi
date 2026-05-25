@@ -64,9 +64,9 @@ __all__ = [
     "Samples",
     "ScalarLike",
     "SealedRun",
-    "SealedSolve",
     "Sense",
     "Solution",
+    "Solve",
     "Sos1Constraint",
     "State",
     "ToFunction",
@@ -5544,19 +5544,7 @@ class SealedRun:
     @property
     def attachments(self) -> builtins.list[Descriptor]: ...
     @property
-    def solves(self) -> builtins.list[SealedSolve]: ...
-    def __repr__(self) -> builtins.str: ...
-
-@typing.final
-class SealedSolve:
-    @property
-    def solve_id(self) -> builtins.int: ...
-    @property
-    def input(self) -> Descriptor: ...
-    @property
-    def output(self) -> Descriptor: ...
-    @property
-    def parameters(self) -> dict: ...
+    def solves(self) -> builtins.list[Solve]: ...
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -5962,6 +5950,18 @@ class Solution:
         - For equality constraints: $\sum (f(x))^2$
         - For inequality constraints: $\sum (\max(0, f(x)))^2$
         """
+
+@typing.final
+class Solve:
+    @property
+    def solve_id(self) -> builtins.int: ...
+    @property
+    def input(self) -> Descriptor: ...
+    @property
+    def output(self) -> Descriptor: ...
+    @property
+    def parameters(self) -> dict: ...
+    def __repr__(self) -> builtins.str: ...
 
 @typing.final
 class Sos1Constraint:

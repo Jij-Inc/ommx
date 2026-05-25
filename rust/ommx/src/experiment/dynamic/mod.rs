@@ -89,11 +89,11 @@ struct SealedExperimentDynState {
 pub struct SealedRunDyn {
     run_id: u64,
     attachments: Vec<Descriptor>,
-    solves: Vec<SealedSolveDyn>,
+    solves: Vec<SolveDyn>,
 }
 
 #[derive(Debug, Clone)]
-pub struct SealedSolveDyn {
+pub struct SolveDyn {
     solve_id: u64,
     input: Descriptor,
     output: Descriptor,
@@ -109,12 +109,12 @@ impl SealedRunDyn {
         &self.attachments
     }
 
-    pub fn solves(&self) -> &[SealedSolveDyn] {
+    pub fn solves(&self) -> &[SolveDyn] {
         &self.solves
     }
 }
 
-impl SealedSolveDyn {
+impl SolveDyn {
     pub fn solve_id(&self) -> u64 {
         self.solve_id
     }
@@ -391,7 +391,7 @@ impl SealedExperimentDynState {
                             solves: run
                                 .solves()
                                 .iter()
-                                .map(|solve| SealedSolveDyn {
+                                .map(|solve| SolveDyn {
                                     solve_id: solve.solve_id(),
                                     input: Descriptor::from(solve.input().clone()),
                                     output: Descriptor::from(solve.output().clone()),

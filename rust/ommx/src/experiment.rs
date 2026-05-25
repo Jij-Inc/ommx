@@ -58,9 +58,9 @@ mod sealed;
 #[cfg(test)]
 mod tests;
 
-pub use dynamic::{ExperimentDyn, RunDyn, SealedRunDyn, SealedSolveDyn};
+pub use dynamic::{ExperimentDyn, RunDyn, SealedRunDyn, SolveDyn};
 pub use parameter::{ParameterValue, RunParameterCell};
-pub use sealed::{SealedRun, SealedSolve};
+pub use sealed::{SealedRun, Solve};
 
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor, TempLocalRegistry};
 use crate::artifact::{media_types, ImageRef, LocalArtifact};
