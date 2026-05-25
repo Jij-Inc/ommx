@@ -2,7 +2,7 @@ use anyhow::Result;
 use oci_spec::image::MediaType;
 use pyo3::{
     prelude::*,
-    types::{PyBool, PyDict, PyFloat, PyInt, PyString},
+    types::{PyBool, PyDict, PyFloat, PyInt, PyString, PyType, PyTypeMethods},
 };
 use std::collections::{btree_map::Entry, BTreeMap};
 
@@ -290,6 +290,47 @@ impl PyRun {
         self.as_open_mut()?.log_sample_set(name, &sample_set.inner)
     }
 
+    /// Solve an Instance with an OMMX SolverAdapter and record the input and Solution.
+    ///
+    /// The input Instance is cloned before calling the adapter, so adapter-side
+    /// capability reductions do not mutate the caller's object. The original
+    /// input is always recorded as a run-scoped Instance Record.
+    #[pyo3(signature = (adapter, instance, *, input_name = "input", solution_name = "solution", **kwargs))]
+    pub fn log_solve(
+        &mut self,
+        py: Python<'_>,
+        adapter: SolverAdapterInput,
+        instance: &crate::Instance,
+        input_name: &str,
+        solution_name: &str,
+        kwargs: Option<&Bound<PyDict>>,
+    ) -> Result<crate::Solution> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let adapter = adapter.0.bind(py);
+        let adapter_name = adapter_name(adapter)?;
+        let kwarg_parameters = collect_scalar_kwargs(kwargs)?;
+
+        self.as_open_mut()?
+            .log_instance(input_name, &instance.inner)?;
+        self.as_open_mut()?.log_parameter(
+            "adapter",
+            ommx::experiment::ParameterValue::String(adapter_name),
+        )?;
+        for (name, value) in kwarg_parameters {
+            self.as_open_mut()?.log_parameter(name, value)?;
+        }
+
+        let adapter_instance = Py::new(py, instance.clone())?;
+        let solution_object =
+            adapter.call_method("solve", (adapter_instance.clone_ref(py),), kwargs)?;
+        let solution = solution_object
+            .extract::<crate::Solution>()
+            .map_err(|_| anyhow::anyhow!("adapter.solve(...) must return ommx.v1.Solution"))?;
+        self.as_open_mut()?
+            .log_solution(solution_name, &solution.inner)?;
+        Ok(solution)
+    }
+
     /// Finish this run and append it to the parent Experiment.
     pub fn finish(&mut self) -> Result<()> {
         let run = self
@@ -319,6 +360,32 @@ impl PyRun {
             .as_mut()
             .ok_or_else(|| anyhow::anyhow!("Run has already been finished"))
     }
+}
+
+fn adapter_name(adapter: &Bound<PyType>) -> Result<String> {
+    let module: String = adapter.module()?.extract()?;
+    let qualname: String = adapter.qualname()?.extract()?;
+    Ok(format!("{module}.{qualname}"))
+}
+
+fn collect_scalar_kwargs(
+    kwargs: Option<&Bound<PyDict>>,
+) -> Result<Vec<(String, ommx::experiment::ParameterValue)>> {
+    let Some(kwargs) = kwargs else {
+        return Ok(Vec::new());
+    };
+
+    let mut parameters = Vec::new();
+    for (key, value) in kwargs.iter() {
+        let name: String = key.extract()?;
+        let value = value.extract::<ParameterValueInput>().map_err(|_| {
+            pyo3::exceptions::PyTypeError::new_err(format!(
+                "Run parameter value for solver kwarg `{name}` must be bool, int, float, or str"
+            ))
+        })?;
+        parameters.push((name, value.0));
+    }
+    Ok(parameters)
 }
 
 fn parse_name(image_name: Option<&str>) -> Result<ommx::experiment::Name> {
@@ -359,6 +426,43 @@ impl<'py> FromPyObject<'_, 'py> for ParameterValueInput {
         Err(pyo3::exceptions::PyTypeError::new_err(
             "Run parameter value must be bool, int, float, or str",
         ))
+    }
+}
+
+pub struct SolverAdapterInput(Py<PyType>);
+
+impl<'py> FromPyObject<'_, 'py> for SolverAdapterInput {
+    type Error = PyErr;
+
+    fn extract(ob: pyo3::Borrowed<'_, 'py, PyAny>) -> PyResult<Self> {
+        let adapter = ob.extract::<Py<PyType>>().map_err(|_| {
+            pyo3::exceptions::PyTypeError::new_err(
+                "adapter must be a subclass of ommx.adapter.SolverAdapter",
+            )
+        })?;
+        let adapter_bound = adapter.bind(ob.py());
+        let solver_adapter = ob.py().import("ommx.adapter")?.getattr("SolverAdapter")?;
+        if !adapter_bound.is_subclass(&solver_adapter)? {
+            return Err(pyo3::exceptions::PyTypeError::new_err(
+                "adapter must be a subclass of ommx.adapter.SolverAdapter",
+            ));
+        }
+        Ok(Self(adapter))
+    }
+}
+
+impl pyo3_stub_gen::PyStubType for SolverAdapterInput {
+    fn type_input() -> pyo3_stub_gen::TypeInfo {
+        pyo3_stub_gen::TypeInfo {
+            name: "type[adapter.SolverAdapter]".to_string(),
+            source_module: None,
+            import: ["ommx.adapter".into()].into(),
+            type_refs: Default::default(),
+        }
+    }
+
+    fn type_output() -> pyo3_stub_gen::TypeInfo {
+        Self::type_input()
     }
 }
 

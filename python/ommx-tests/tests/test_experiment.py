@@ -1,7 +1,11 @@
+from typing import Any, ClassVar, cast
+
 import pandas as pd
 import pytest
 
+from ommx.adapter import SolverAdapter
 from ommx.experiment import Experiment
+from ommx.v1 import Instance, Solution
 
 _RECORD_NAME = "org.ommx.record.name"
 
@@ -133,3 +137,74 @@ def test_log_parameter_rejects_python_int_outside_i64():
     with experiment.run() as run:
         with pytest.raises(OverflowError, match="int64"):
             run.log_parameter("too_large", 2**63)
+
+
+def test_log_solve_records_input_solution_and_scalar_kwargs():
+    class DummyAdapter(SolverAdapter):
+        seen_kwargs: ClassVar[dict[str, object] | None] = None
+
+        @classmethod
+        def solve(cls, ommx_instance: Instance, **kwargs: object) -> Solution:
+            cls.seen_kwargs = kwargs
+            return ommx_instance.evaluate({})
+
+        @property
+        def solver_input(self) -> Any:
+            raise NotImplementedError
+
+        def decode(self, data: Any) -> Solution:
+            raise NotImplementedError
+
+    instance = Instance.from_components(
+        decision_variables=[],
+        objective=0,
+        constraints={},
+        sense=Instance.MINIMIZE,
+    )
+    experiment = Experiment.with_temp_local_registry()
+
+    with experiment.run() as run:
+        solution = run.log_solve(
+            DummyAdapter,
+            instance,
+            time_limit=1.5,
+            verbose=True,
+            label="baseline",
+        )
+        assert solution.feasible
+
+    assert DummyAdapter.seen_kwargs == {
+        "time_limit": 1.5,
+        "verbose": True,
+        "label": "baseline",
+    }
+
+    artifact = experiment.commit()
+    loaded = Experiment.from_artifact(artifact)
+    runs = {run.run_id: run for run in loaded.runs}
+    assert _record_names(runs[0].records) == {"input", "solution"}
+
+    df = loaded.run_parameters_df()
+    assert str(df.loc[0, "adapter"]).endswith("DummyAdapter")
+    assert df.loc[0, "time_limit"] == 1.5
+    assert bool(df.loc[0, "verbose"]) is True
+    assert df.loc[0, "label"] == "baseline"
+
+
+def test_log_solve_rejects_non_solver_adapter():
+    class DummyAdapter:
+        @classmethod
+        def solve(cls, ommx_instance: Instance) -> Solution:
+            return ommx_instance.evaluate({})
+
+    instance = Instance.from_components(
+        decision_variables=[],
+        objective=0,
+        constraints={},
+        sense=Instance.MINIMIZE,
+    )
+    experiment = Experiment.with_temp_local_registry()
+
+    with experiment.run() as run:
+        with pytest.raises(TypeError, match="ommx.adapter.SolverAdapter"):
+            run.log_solve(cast(Any, DummyAdapter), instance)

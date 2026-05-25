@@ -2614,6 +2614,80 @@
               ],
               "is_async": false,
               "deprecated": null
+            },
+            {
+              "name": "log_solve",
+              "doc": "Solve an Instance with an OMMX SolverAdapter and record the input and Solution.\n\nThe input Instance is cloned before calling the adapter, so adapter-side\ncapability reductions do not mutate the caller's object. The original\ninput is always recorded as a run-scoped Instance Record.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "adapter",
+                      "type_": {
+                        "display": "type[SolverAdapter]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "SolverAdapter",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "instance",
+                      "type_": {
+                        "display": "Instance",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "input_name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "'input'"
+                      }
+                    },
+                    {
+                      "name": "solution_name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "'solution'"
+                      }
+                    },
+                    {
+                      "name": "kwargs",
+                      "type_": {
+                        "display": "Any",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Solution",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
             }
           ],
           "attributes": [

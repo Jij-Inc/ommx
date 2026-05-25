@@ -6,6 +6,7 @@ import collections.abc
 import datetime
 import enum
 import numpy
+from ommx import adapter
 import os
 import pandas
 import pathlib
@@ -4970,6 +4971,22 @@ class Run:
     def log_sample_set(self, name: builtins.str, sample_set: SampleSet) -> None:
         r"""
         Record a SampleSet in this run.
+        """
+    def log_solve(
+        self,
+        adapter: type[adapter.SolverAdapter],
+        instance: Instance,
+        *,
+        input_name: builtins.str = "input",
+        solution_name: builtins.str = "solution",
+        **kwargs: typing.Any,
+    ) -> Solution:
+        r"""
+        Solve an Instance with an OMMX SolverAdapter and record the input and Solution.
+
+        The input Instance is cloned before calling the adapter, so adapter-side
+        capability reductions do not mutate the caller's object. The original
+        input is always recorded as a run-scoped Instance Record.
         """
     def finish(self) -> None:
         r"""
