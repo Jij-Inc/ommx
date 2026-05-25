@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use oci_spec::image::MediaType;
+use oci_spec::image::{Descriptor, MediaType};
 use pyo3::{
     prelude::*,
     types::{PyBool, PyDict, PyFloat, PyInt, PyString, PyType, PyTypeMethods},
@@ -92,7 +92,7 @@ impl PyExperiment {
             .inner
             .experiment_attachments()?
             .into_iter()
-            .map(PyDescriptor::from)
+            .map(|descriptor| PyDescriptor::from(Descriptor::from(descriptor)))
             .collect())
     }
 
@@ -493,13 +493,13 @@ impl PySealedRun {
     }
 
     #[getter]
-    pub fn attachments(&self) -> Vec<PyDescriptor> {
-        self.0
-            .attachments()
-            .iter()
-            .cloned()
-            .map(PyDescriptor::from)
-            .collect()
+    pub fn attachments(&self) -> Result<Vec<PyDescriptor>> {
+        Ok(self
+            .0
+            .attachments()?
+            .into_iter()
+            .map(|descriptor| PyDescriptor::from(Descriptor::from(descriptor)))
+            .collect())
     }
 
     #[getter]
@@ -511,7 +511,7 @@ impl PySealedRun {
         format!(
             "SealedRun(run_id={}, attachments={}, solves={})",
             self.run_id(),
-            self.0.attachments().len(),
+            self.0.attachment_count(),
             self.0.solves().len(),
         )
     }
@@ -532,13 +532,13 @@ impl PySolve {
     }
 
     #[getter]
-    pub fn input(&self) -> PyDescriptor {
-        PyDescriptor::from(self.0.input().clone())
+    pub fn input(&self) -> Result<PyDescriptor> {
+        Ok(PyDescriptor::from(Descriptor::from(self.0.input()?)))
     }
 
     #[getter]
-    pub fn output(&self) -> PyDescriptor {
-        PyDescriptor::from(self.0.output().clone())
+    pub fn output(&self) -> Result<PyDescriptor> {
+        Ok(PyDescriptor::from(Descriptor::from(self.0.output()?)))
     }
 
     #[getter]

@@ -31,6 +31,7 @@ pub use run::RunDyn;
 /// do not need to duplicate these invariants.
 #[derive(Debug, Clone)]
 pub struct ExperimentDyn {
+    registry_handle: LocalRegistryHandle,
     state: Arc<Mutex<ExperimentDynState>>,
 }
 
@@ -87,6 +88,7 @@ struct SealedExperimentDynState {
 
 #[derive(Debug, Clone)]
 pub struct SealedRunDyn {
+    registry_handle: LocalRegistryHandle,
     run_id: u64,
     attachments: Vec<Descriptor>,
     solves: Vec<SolveDyn>,
@@ -94,6 +96,7 @@ pub struct SealedRunDyn {
 
 #[derive(Debug, Clone)]
 pub struct SolveDyn {
+    registry_handle: LocalRegistryHandle,
     solve_id: u64,
     input: Descriptor,
     output: Descriptor,
@@ -105,8 +108,12 @@ impl SealedRunDyn {
         self.run_id
     }
 
-    pub fn attachments(&self) -> &[Descriptor] {
-        &self.attachments
+    pub fn attachments(&self) -> Result<Vec<StoredDescriptor<'_>>> {
+        stored_descriptors(self.registry_handle.registry(), self.attachments.clone())
+    }
+
+    pub fn attachment_count(&self) -> usize {
+        self.attachments.len()
     }
 
     pub fn solves(&self) -> &[SolveDyn] {
@@ -119,12 +126,16 @@ impl SolveDyn {
         self.solve_id
     }
 
-    pub fn input(&self) -> &Descriptor {
-        &self.input
+    pub fn input(&self) -> Result<StoredDescriptor<'_>> {
+        self.registry_handle
+            .registry()
+            .stored_descriptor(self.input.clone())
     }
 
-    pub fn output(&self) -> &Descriptor {
-        &self.output
+    pub fn output(&self) -> Result<StoredDescriptor<'_>> {
+        self.registry_handle
+            .registry()
+            .stored_descriptor(self.output.clone())
     }
 
     pub fn parameters(&self) -> &BTreeMap<String, String> {
@@ -147,6 +158,7 @@ impl ExperimentDyn {
     ) -> Result<Self> {
         let image_name = name.into().resolve(registry_handle.registry())?;
         Ok(Self {
+            registry_handle: registry_handle.clone(),
             state: Arc::new(Mutex::new(ExperimentDynState {
                 lifecycle: ExperimentDynLifecycle::Unsealed {
                     state: Some(UnsealedExperimentDynState {
@@ -170,6 +182,7 @@ impl ExperimentDyn {
         let sealed = SealedExperimentDynState::from_artifact(artifact)?;
         let registry_handle = sealed.registry_handle();
         Ok(Self {
+            registry_handle: registry_handle.clone(),
             state: Arc::new(Mutex::new(ExperimentDynState {
                 lifecycle: ExperimentDynLifecycle::Sealed(sealed),
                 registry_handle,
@@ -307,12 +320,15 @@ impl ExperimentDyn {
         Ok(sealed.artifact.clone())
     }
 
-    pub fn experiment_attachments(&self) -> Result<Vec<Descriptor>> {
-        let dyn_state = lock_experiment_state(&self.state);
-        let ExperimentDynLifecycle::Sealed(sealed) = &dyn_state.lifecycle else {
-            return bail_not_sealed(&dyn_state.lifecycle);
+    pub fn experiment_attachments(&self) -> Result<Vec<StoredDescriptor<'_>>> {
+        let attachments = {
+            let dyn_state = lock_experiment_state(&self.state);
+            let ExperimentDynLifecycle::Sealed(sealed) = &dyn_state.lifecycle else {
+                return bail_not_sealed(&dyn_state.lifecycle);
+            };
+            sealed.attachments.clone()
         };
-        Ok(sealed.attachments.clone())
+        stored_descriptors(self.registry_handle.registry(), attachments)
     }
 
     pub fn runs(&self) -> Result<Vec<SealedRunDyn>> {
@@ -377,6 +393,7 @@ impl UnsealedExperimentDynState {
 
 impl SealedExperimentDynState {
     fn from_artifact(artifact: LocalArtifactDyn) -> Result<Self> {
+        let registry_handle = artifact.registry_handle();
         let (attachments, runs, run_parameters) = {
             let sealed = SealedExperiment::from_artifact(artifact.as_local_artifact())?;
             let attachments = descriptors(sealed.experiment_attachments());
@@ -386,12 +403,14 @@ impl SealedExperimentDynState {
                     (
                         run.run_id(),
                         SealedRunDyn {
+                            registry_handle: registry_handle.clone(),
                             run_id: run.run_id(),
                             attachments: descriptors(run.attachments()),
                             solves: run
                                 .solves()
                                 .iter()
                                 .map(|solve| SolveDyn {
+                                    registry_handle: registry_handle.clone(),
                                     solve_id: solve.solve_id(),
                                     input: Descriptor::from(solve.input().clone()),
                                     output: Descriptor::from(solve.output().clone()),
