@@ -1,6 +1,6 @@
 //! Mapping an unsealed Experiment state to an immutable OMMX Artifact.
 
-use super::config::{ExperimentConfig, ExperimentConfigRun};
+use super::config::{ExperimentConfig, ExperimentConfigRun, ExperimentConfigSolve, LayerRef};
 use super::parameter::RunParameterTable;
 use super::UnsealedExperimentState;
 use super::{
@@ -20,15 +20,16 @@ impl<'reg> UnsealedExperimentState<'reg> {
     /// public `Experiment::commit(self)` lifecycle operation.
     pub fn commit(self, registry: &'reg LocalRegistry) -> Result<LocalArtifact<'reg>> {
         let run_parameters = self.run_parameter_descriptor(registry)?;
+        let mut layers = LayerTable::default();
+        let config = self.experiment_config(&mut layers, run_parameters)?;
         let config_descriptor = registry.store_json_blob(
             MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()),
-            &self.experiment_config(&run_parameters),
+            &config,
         )?;
-        let layers = self.artifact_layer_descriptors(run_parameters);
         let artifact = UnsealedArtifact::new(
             MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
             config_descriptor,
-            layers,
+            layers.into_layers(),
             None,
             HashMap::new(),
         );
@@ -53,28 +54,6 @@ impl<'reg> UnsealedExperimentState<'reg> {
         ))
     }
 
-    /// OCI layer descriptors that make up the Experiment artifact.
-    ///
-    /// Record descriptors are already stored when the corresponding
-    /// `log_*` call returns. Aggregate descriptors are produced during
-    /// commit from the in-memory run table data.
-    fn artifact_layer_descriptors(
-        &self,
-        run_parameters: StoredDescriptor<'reg>,
-    ) -> Vec<StoredDescriptor<'reg>> {
-        let mut descriptors = self.record_descriptors();
-        descriptors.push(run_parameters);
-        descriptors
-    }
-
-    /// Record layers: experiment space first, then each run's space.
-    /// The payload bytes were already written when each record was
-    /// logged.
-    fn record_descriptors(&self) -> Vec<StoredDescriptor<'reg>> {
-        let run_records = self.runs.values().flat_map(|run| run.records.iter());
-        self.records.iter().chain(run_records).cloned().collect()
-    }
-
     fn run_parameter_descriptor(
         &self,
         registry: &'reg LocalRegistry,
@@ -87,25 +66,72 @@ impl<'reg> UnsealedExperimentState<'reg> {
         )
     }
 
-    fn experiment_config(&self, run_parameters: &StoredDescriptor<'_>) -> ExperimentConfig {
-        ExperimentConfig {
-            status: super::EXPERIMENT_STATUS_FINISHED.to_string(),
-            records: self.records.iter().map(record_descriptor).collect(),
-            runs: self
-                .runs
-                .values()
-                .map(|run| ExperimentConfigRun {
-                    run_id: run.run_id,
-                    records: run.records.iter().map(record_descriptor).collect(),
-                })
-                .collect(),
-            run_parameters: oci_spec::image::Descriptor::from(run_parameters.clone()),
+    fn experiment_config(
+        &self,
+        layers: &mut LayerTable<'reg>,
+        run_parameters: StoredDescriptor<'reg>,
+    ) -> Result<ExperimentConfig> {
+        let attachments = self
+            .attachments
+            .iter()
+            .cloned()
+            .map(|descriptor| layers.push(descriptor))
+            .collect::<Result<Vec<_>>>()?;
+
+        let mut runs = Vec::new();
+        for run in self.runs.values() {
+            let attachments = run
+                .attachments
+                .iter()
+                .cloned()
+                .map(|descriptor| layers.push(descriptor))
+                .collect::<Result<Vec<_>>>()?;
+            let mut solves = Vec::new();
+            for solve in &run.solves {
+                solves.push(ExperimentConfigSolve {
+                    solve_id: solve.solve_id,
+                    input: layers.push(solve.input.clone())?,
+                    output: layers.push(solve.output.clone())?,
+                    parameters: solve.parameters.clone(),
+                });
+            }
+            runs.push(ExperimentConfigRun {
+                run_id: run.run_id,
+                attachments,
+                solves,
+            });
         }
+
+        Ok(ExperimentConfig {
+            status: super::EXPERIMENT_STATUS_FINISHED.to_string(),
+            attachments,
+            runs,
+            run_parameters: layers.push(run_parameters)?,
+        })
     }
 }
 
-fn record_descriptor(record: &StoredDescriptor<'_>) -> oci_spec::image::Descriptor {
-    oci_spec::image::Descriptor::from(record.clone())
+#[derive(Default)]
+struct LayerTable<'reg> {
+    layers: Vec<StoredDescriptor<'reg>>,
+}
+
+impl<'reg> LayerTable<'reg> {
+    fn push(&mut self, descriptor: StoredDescriptor<'reg>) -> Result<LayerRef> {
+        if self.layers.len() > u32::MAX as usize {
+            crate::bail!(
+                "Experiment Artifact layer count {} exceeds u32::MAX",
+                self.layers.len()
+            );
+        }
+        let index = self.layers.len() as u32;
+        self.layers.push(descriptor);
+        Ok(LayerRef(index))
+    }
+
+    fn into_layers(self) -> Vec<StoredDescriptor<'reg>> {
+        self.layers
+    }
 }
 
 fn store_aggregate_json_layer<'reg>(

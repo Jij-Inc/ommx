@@ -6,6 +6,7 @@ import collections.abc
 import datetime
 import enum
 import numpy
+from ommx import adapter
 import os
 import pandas
 import pathlib
@@ -14,6 +15,7 @@ from typing import TypeAlias
 
 __all__ = [
     "AdditionalCapability",
+    "ArchiveDescriptor",
     "ArchiveManifest",
     "Artifact",
     "ArtifactDraft",
@@ -65,6 +67,7 @@ __all__ = [
     "SealedRun",
     "Sense",
     "Solution",
+    "Solve",
     "Sos1Constraint",
     "State",
     "ToFunction",
@@ -108,6 +111,29 @@ ToState: TypeAlias = (
 )
 
 @typing.final
+class ArchiveDescriptor:
+    r"""
+    Descriptor value read from an OCI archive manifest without importing it.
+    """
+    @property
+    def digest(self) -> builtins.str: ...
+    @property
+    def size(self) -> builtins.int: ...
+    @property
+    def media_type(self) -> builtins.str: ...
+    @property
+    def annotations(self) -> builtins.dict[builtins.str, builtins.str]: ...
+    @property
+    def user_annotations(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Return annotations with key prefix "org.ommx.user."
+        """
+    def to_dict(self) -> dict: ...
+    def to_json(self) -> builtins.str: ...
+    def __str__(self) -> builtins.str: ...
+    def __eq__(self, rhs: typing.Any) -> builtins.bool: ...
+
+@typing.final
 class ArchiveManifest:
     r"""
     Read-only view of a `.ommx` archive's manifest produced by
@@ -128,7 +154,7 @@ class ArchiveManifest:
         SHA-256 digest of the manifest blob.
         """
     @property
-    def layers(self) -> builtins.list[Descriptor]:
+    def layers(self) -> builtins.list[ArchiveDescriptor]:
         r"""
         Layer descriptors in manifest order.
         """
@@ -139,7 +165,7 @@ class ArchiveManifest:
         `ImageManifest`, not per-layer annotations).
         """
     @property
-    def config(self) -> Descriptor:
+    def config(self) -> ArchiveDescriptor:
         r"""
         Descriptor of the `config` blob (the OCI 1.1 empty config in
         v3-built archives; v2 archives may carry an OMMX-specific
@@ -150,7 +176,7 @@ class ArchiveManifest:
         payload.
         """
     @property
-    def subject(self) -> typing.Optional[Descriptor]:
+    def subject(self) -> typing.Optional[ArchiveDescriptor]:
         r"""
         Optional `subject` descriptor on the OCI image manifest, used
         for the OCI referrers API (cosign / sigstore signatures,
@@ -326,9 +352,9 @@ class Artifact:
         r"""
         Look up a layer descriptor by digest.
         """
-    def get_blob(self, digest_or_descriptor: typing.Any) -> bytes:
+    def get_blob(self, descriptor: Descriptor) -> bytes:
         r"""
-        Get raw bytes of a blob by digest string or Descriptor.
+        Get raw bytes of a blob by Descriptor.
         """
     def get_layer(self, descriptor: Descriptor) -> typing.Any:
         r"""
@@ -1481,7 +1507,15 @@ class DecisionVariableAnalysis:
 @typing.final
 class Descriptor:
     r"""
-    Descriptor of blob in artifact
+    Descriptor of a blob stored in the local registry.
+
+    `PyDescriptor` intentionally does not carry a `LocalRegistryHandle`.
+    It is a lightweight descriptor view returned by registry-owning
+    objects such as `Artifact` / `Experiment`. The blob can only be read
+    by passing this value back to one of those owner objects, whose handle
+    keeps temporary registries alive. If a descriptor outlives every
+    owner of its temporary registry, it is just inert metadata and cannot
+    be used to access bytes.
     """
     @property
     def digest(self) -> builtins.str: ...
@@ -1497,11 +1531,7 @@ class Descriptor:
         Return annotations with key prefix "org.ommx.user."
         """
     def to_dict(self) -> dict: ...
-    @staticmethod
-    def from_dict(dict: dict) -> Descriptor: ...
     def to_json(self) -> builtins.str: ...
-    @staticmethod
-    def from_json(json: builtins.str) -> Descriptor: ...
     def __str__(self) -> builtins.str: ...
     def __eq__(self, rhs: typing.Any) -> builtins.bool: ...
 
@@ -1654,7 +1684,7 @@ class Experiment:
     @property
     def image_name(self) -> builtins.str: ...
     @property
-    def experiment_records(self) -> builtins.list[Descriptor]: ...
+    def experiment_attachments(self) -> builtins.list[Descriptor]: ...
     @property
     def runs(self) -> builtins.list[SealedRun]: ...
     @property
@@ -1697,28 +1727,28 @@ class Experiment:
         r"""
         Start a new Run in this unsealed Experiment.
         """
-    def log_record(
+    def log_attachment(
         self, name: builtins.str, media_type: builtins.str, bytes: bytes
     ) -> None:
         r"""
-        Record arbitrary bytes with an explicit OCI media type in the
+        Attach arbitrary bytes with an explicit OCI media type in the
         experiment space.
         """
     def log_json(self, name: builtins.str, value: typing.Any) -> None:
         r"""
-        Record a JSON-serialisable value in the experiment space.
+        Attach a JSON-serialisable value in the experiment space.
         """
     def log_instance(self, name: builtins.str, instance: Instance) -> None:
         r"""
-        Record an Instance in the experiment space.
+        Attach an Instance in the experiment space.
         """
     def log_solution(self, name: builtins.str, solution: Solution) -> None:
         r"""
-        Record a Solution in the experiment space.
+        Attach a Solution in the experiment space.
         """
     def log_sample_set(self, name: builtins.str, sample_set: SampleSet) -> None:
         r"""
-        Record a SampleSet in the experiment space.
+        Attach a SampleSet in the experiment space.
         """
     def commit(self) -> Artifact:
         r"""
@@ -4947,29 +4977,42 @@ class Run:
         self, name: builtins.str, value: bool | int | float | str
     ) -> None:
         r"""
-        Record a scalar parameter for this run.
+        Log a scalar parameter for this run.
         """
-    def log_record(
+    def log_attachment(
         self, name: builtins.str, media_type: builtins.str, bytes: bytes
     ) -> None:
         r"""
-        Record arbitrary bytes with an explicit OCI media type in this run.
+        Attach arbitrary bytes with an explicit OCI media type in this run.
         """
     def log_json(self, name: builtins.str, value: typing.Any) -> None:
         r"""
-        Record a JSON-serialisable value in this run.
+        Attach a JSON-serialisable value in this run.
         """
     def log_instance(self, name: builtins.str, instance: Instance) -> None:
         r"""
-        Record an Instance in this run.
+        Attach an Instance in this run.
         """
     def log_solution(self, name: builtins.str, solution: Solution) -> None:
         r"""
-        Record a Solution in this run.
+        Attach a Solution in this run.
         """
     def log_sample_set(self, name: builtins.str, sample_set: SampleSet) -> None:
         r"""
-        Record a SampleSet in this run.
+        Attach a SampleSet in this run.
+        """
+    def log_solve(
+        self,
+        adapter: type[adapter.SolverAdapter],
+        instance: Instance,
+        **kwargs: typing.Any,
+    ) -> Solution:
+        r"""
+        Solve an Instance with an OMMX SolverAdapter and log a Solve entry.
+
+        The input Instance is cloned before calling the adapter, so adapter-side
+        capability reductions do not mutate the caller's object. The original
+        input is always stored as the Solve input.
         """
     def finish(self) -> None:
         r"""
@@ -5527,7 +5570,9 @@ class SealedRun:
     @property
     def run_id(self) -> builtins.int: ...
     @property
-    def records(self) -> builtins.list[Descriptor]: ...
+    def attachments(self) -> builtins.list[Descriptor]: ...
+    @property
+    def solves(self) -> builtins.list[Solve]: ...
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -5933,6 +5978,18 @@ class Solution:
         - For equality constraints: $\sum (f(x))^2$
         - For inequality constraints: $\sum (\max(0, f(x)))^2$
         """
+
+@typing.final
+class Solve:
+    @property
+    def solve_id(self) -> builtins.int: ...
+    @property
+    def input(self) -> Descriptor: ...
+    @property
+    def output(self) -> Descriptor: ...
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
+    def __repr__(self) -> builtins.str: ...
 
 @typing.final
 class Sos1Constraint:

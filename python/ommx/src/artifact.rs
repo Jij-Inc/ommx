@@ -1,9 +1,8 @@
-use anyhow::{bail, Context, Result};
-use oci_spec::image::Digest;
+use anyhow::{bail, Result};
 use pyo3::{prelude::*, types::PyBytes};
-use std::{collections::HashMap, path::PathBuf, str::FromStr};
+use std::{collections::HashMap, path::PathBuf};
 
-use crate::PyDescriptor;
+use crate::{PyArchiveDescriptor, PyDescriptor};
 
 // ---------------------------------------------------------------------------
 // PyArtifact backing handle
@@ -275,25 +274,16 @@ impl PyArtifact {
         bail!("Layer {} not found", digest)
     }
 
-    /// Get raw bytes of a blob by digest string or Descriptor.
+    /// Get raw bytes of a blob by Descriptor.
     pub fn get_blob<'py>(
         &mut self,
         py: Python<'py>,
-        digest_or_descriptor: &Bound<'py, PyAny>,
+        descriptor: &PyDescriptor,
     ) -> PyResult<Bound<'py, PyBytes>> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let blob = if let Ok(desc) = digest_or_descriptor.extract::<PyRef<PyDescriptor>>() {
-            self.inner
-                .get_blob(desc.as_oci_descriptor().digest())
-                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?
-        } else {
-            let digest = digest_or_descriptor.extract::<String>()?;
-            let digest = parse_digest(&digest)
-                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-            self.inner
-                .get_blob(&digest)
-                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?
-        };
+        let blob = descriptor
+            .read_blob_from(&self.inner)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
         Ok(PyBytes::new(py, &blob))
     }
 
@@ -541,9 +531,8 @@ impl PyArtifact {
     ) -> PyResult<Bound<'py, PyAny>> {
         let _guard = crate::TRACING.attach_parent_context(py);
         assert_media_type(descriptor, "application/vnd.apache.parquet")?;
-        let blob = self
-            .inner
-            .get_blob(descriptor.as_oci_descriptor().digest())
+        let blob = descriptor
+            .read_blob_from(&self.inner)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
         let io = py.import("io")?;
         let pandas = py.import("pandas")?;
@@ -559,9 +548,8 @@ impl PyArtifact {
     ) -> PyResult<Bound<'py, PyAny>> {
         let _guard = crate::TRACING.attach_parent_context(py);
         assert_media_type(descriptor, "application/json")?;
-        let blob = self
-            .inner
-            .get_blob(descriptor.as_oci_descriptor().digest())
+        let blob = descriptor
+            .read_blob_from(&self.inner)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
         let json = py.import("json")?;
         json.call_method1("loads", (PyBytes::new(py, &blob),))
@@ -589,10 +577,10 @@ impl PyArtifact {
 pub struct PyArchiveManifest {
     image_name: Option<String>,
     manifest_digest: String,
-    layers: Vec<PyDescriptor>,
+    layers: Vec<PyArchiveDescriptor>,
     annotations: HashMap<String, String>,
-    config: PyDescriptor,
-    subject: Option<PyDescriptor>,
+    config: PyArchiveDescriptor,
+    subject: Option<PyArchiveDescriptor>,
 }
 
 impl From<ommx::artifact::local_registry::ArchiveInspectView> for PyArchiveManifest {
@@ -605,7 +593,7 @@ impl From<ommx::artifact::local_registry::ArchiveInspectView> for PyArchiveManif
                 .layers()
                 .iter()
                 .cloned()
-                .map(PyDescriptor::from)
+                .map(PyArchiveDescriptor::from)
                 .collect(),
             annotations: view
                 .manifest
@@ -613,8 +601,12 @@ impl From<ommx::artifact::local_registry::ArchiveInspectView> for PyArchiveManif
                 .as_ref()
                 .cloned()
                 .unwrap_or_default(),
-            config: PyDescriptor::from(view.manifest.config().clone()),
-            subject: view.manifest.subject().clone().map(PyDescriptor::from),
+            config: PyArchiveDescriptor::from(view.manifest.config().clone()),
+            subject: view
+                .manifest
+                .subject()
+                .clone()
+                .map(PyArchiveDescriptor::from),
         }
     }
 }
@@ -639,7 +631,7 @@ impl PyArchiveManifest {
 
     /// Layer descriptors in manifest order.
     #[getter]
-    pub fn layers(&self) -> Vec<PyDescriptor> {
+    pub fn layers(&self) -> Vec<PyArchiveDescriptor> {
         self.layers.clone()
     }
 
@@ -658,7 +650,7 @@ impl PyArchiveManifest {
     /// {meth}`Artifact.import_archive` if you need to read the config
     /// payload.
     #[getter]
-    pub fn config(&self) -> PyDescriptor {
+    pub fn config(&self) -> PyArchiveDescriptor {
         self.config.clone()
     }
 
@@ -669,7 +661,7 @@ impl PyArchiveManifest {
     /// have to import each archive to discover whether it carries a
     /// subject.
     #[getter]
-    pub fn subject(&self) -> Option<PyDescriptor> {
+    pub fn subject(&self) -> Option<PyArchiveDescriptor> {
         self.subject.clone()
     }
 }
@@ -677,9 +669,7 @@ impl PyArchiveManifest {
 impl PyArtifact {
     fn get_instance_inner(&mut self, descriptor: &PyDescriptor) -> Result<crate::Instance> {
         assert_media_type(descriptor, "application/org.ommx.v1.instance")?;
-        let blob = self
-            .inner
-            .get_blob(descriptor.as_oci_descriptor().digest())?;
+        let blob = descriptor.read_blob_from(&self.inner)?;
         Ok(crate::Instance {
             inner: ommx::Instance::from_bytes(&blob)?,
             annotations: descriptor.annotations(),
@@ -688,9 +678,7 @@ impl PyArtifact {
 
     fn get_solution_inner(&mut self, descriptor: &PyDescriptor) -> Result<crate::Solution> {
         assert_media_type(descriptor, "application/org.ommx.v1.solution")?;
-        let blob = self
-            .inner
-            .get_blob(descriptor.as_oci_descriptor().digest())?;
+        let blob = descriptor.read_blob_from(&self.inner)?;
         Ok(crate::Solution {
             inner: ommx::Solution::from_bytes(&blob)?,
             annotations: descriptor.annotations(),
@@ -702,9 +690,7 @@ impl PyArtifact {
         descriptor: &PyDescriptor,
     ) -> Result<crate::ParametricInstance> {
         assert_media_type(descriptor, "application/org.ommx.v1.parametric-instance")?;
-        let blob = self
-            .inner
-            .get_blob(descriptor.as_oci_descriptor().digest())?;
+        let blob = descriptor.read_blob_from(&self.inner)?;
         Ok(crate::ParametricInstance {
             inner: ommx::ParametricInstance::from_bytes(&blob)?,
             annotations: descriptor.annotations(),
@@ -713,9 +699,7 @@ impl PyArtifact {
 
     fn get_sample_set_inner(&mut self, descriptor: &PyDescriptor) -> Result<crate::SampleSet> {
         assert_media_type(descriptor, "application/org.ommx.v1.sample-set")?;
-        let blob = self
-            .inner
-            .get_blob(descriptor.as_oci_descriptor().digest())?;
+        let blob = descriptor.read_blob_from(&self.inner)?;
         Ok(crate::SampleSet {
             inner: ommx::SampleSet::from_bytes(&blob)?,
             annotations: descriptor.annotations(),
@@ -728,19 +712,14 @@ impl PyArtifact {
         descriptor: &PyDescriptor,
     ) -> PyResult<Bound<'py, PyAny>> {
         assert_media_type(descriptor, "application/vnd.numpy")?;
-        let blob = self
-            .inner
-            .get_blob(descriptor.as_oci_descriptor().digest())
+        let blob = descriptor
+            .read_blob_from(&self.inner)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
         let io = py.import("io")?;
         let numpy = py.import("numpy")?;
         let bytes_io = io.call_method1("BytesIO", (PyBytes::new(py, &blob),))?;
         numpy.call_method1("load", (bytes_io,))
     }
-}
-
-fn parse_digest(digest: &str) -> Result<Digest> {
-    Digest::from_str(digest).with_context(|| format!("Invalid digest: {digest}"))
 }
 
 fn assert_media_type(descriptor: &PyDescriptor, expected: &str) -> Result<()> {
@@ -785,7 +764,7 @@ impl DraftInner {
         let desc = self
             .as_mut()?
             .add_layer_bytes(media_type.into(), blob.to_vec(), annotations)?;
-        Ok(PyDescriptor::from(oci_spec::image::Descriptor::from(desc)))
+        Ok(PyDescriptor::from(desc))
     }
 
     fn add_annotation(&mut self, key: &str, value: &str) -> Result<()> {

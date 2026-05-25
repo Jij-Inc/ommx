@@ -1,38 +1,37 @@
 //! Read-only model reconstructed from a sealed Experiment Artifact.
 
-use super::config::ExperimentConfig;
+use super::attachment::attachment_name;
+use super::config::{ExperimentConfig, ExperimentConfigSolve, LayerRef};
 use super::parameter::{RunParameterCell, RunParameterTable};
-use super::record::record_name;
 use super::{
     SealedExperiment, EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_STATUS_FINISHED,
     RUN_PARAMETERS_MEDIA_TYPE,
 };
 use crate::artifact::local_registry::StoredDescriptor;
-use crate::artifact::{stable_json_bytes, ImageRef, LocalArtifact};
+use crate::artifact::{ImageRef, LocalArtifact};
 use anyhow::{Context, Result};
 use oci_spec::image::{Descriptor, MediaType};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 
 impl<'reg> SealedExperiment<'reg> {
     /// Reconstruct a sealed Experiment from a committed Experiment Artifact.
     pub fn from_artifact(artifact: LocalArtifact<'reg>) -> Result<Self> {
         let config = load_experiment_config(&artifact)?;
-        validate_config_descriptors_are_manifest_layers(&artifact, &config)?;
+        let layers = artifact.layers()?;
 
-        let records = decode_records(artifact.registry(), config.records, "experiment")?;
+        let attachments = decode_attachments(&layers, config.attachments, "experiment")?;
         let mut runs = BTreeMap::new();
         for run in config.runs {
-            let records = decode_records(
-                artifact.registry(),
-                run.records,
-                &format!("run {}", run.run_id),
-            )?;
+            let attachments =
+                decode_attachments(&layers, run.attachments, &format!("run {}", run.run_id))?;
+            let solves = decode_solves(&layers, run.run_id, run.solves)?;
             if runs
                 .insert(
                     run.run_id,
                     SealedRun {
                         run_id: run.run_id,
-                        records,
+                        attachments,
+                        solves,
                     },
                 )
                 .is_some()
@@ -40,12 +39,12 @@ impl<'reg> SealedExperiment<'reg> {
                 crate::bail!("Experiment config contains duplicate Run {}", run.run_id);
             }
         }
-        let run_parameters = load_run_parameters(&artifact, &config.run_parameters)?;
+        let run_parameters = load_run_parameters(&artifact, &layers, config.run_parameters)?;
         validate_run_parameters_reference_config_runs(&run_parameters, &runs)?;
 
         Ok(Self {
             artifact,
-            records,
+            attachments,
             runs,
             run_parameters,
         })
@@ -55,8 +54,8 @@ impl<'reg> SealedExperiment<'reg> {
         self.artifact.image_name()
     }
 
-    pub fn experiment_records(&self) -> &[StoredDescriptor<'reg>] {
-        &self.records
+    pub fn experiment_attachments(&self) -> &[StoredDescriptor<'reg>] {
+        &self.attachments
     }
 
     pub fn runs(&self) -> impl Iterator<Item = &SealedRun<'reg>> {
@@ -76,7 +75,8 @@ impl<'reg> SealedExperiment<'reg> {
 #[derive(Debug, Clone)]
 pub struct SealedRun<'reg> {
     run_id: u64,
-    records: Vec<StoredDescriptor<'reg>>,
+    attachments: Vec<StoredDescriptor<'reg>>,
+    solves: Vec<Solve<'reg>>,
 }
 
 impl<'reg> SealedRun<'reg> {
@@ -84,13 +84,43 @@ impl<'reg> SealedRun<'reg> {
         self.run_id
     }
 
-    pub fn records(&self) -> &[StoredDescriptor<'reg>] {
-        &self.records
+    pub fn attachments(&self) -> &[StoredDescriptor<'reg>] {
+        &self.attachments
+    }
+
+    pub fn solves(&self) -> &[Solve<'reg>] {
+        &self.solves
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Solve<'reg> {
+    solve_id: u64,
+    input: StoredDescriptor<'reg>,
+    output: StoredDescriptor<'reg>,
+    parameters: BTreeMap<String, String>,
+}
+
+impl<'reg> Solve<'reg> {
+    pub fn solve_id(&self) -> u64 {
+        self.solve_id
+    }
+
+    pub fn input(&self) -> &StoredDescriptor<'reg> {
+        &self.input
+    }
+
+    pub fn output(&self) -> &StoredDescriptor<'reg> {
+        &self.output
+    }
+
+    pub fn parameters(&self) -> &BTreeMap<String, String> {
+        &self.parameters
     }
 }
 
 fn load_experiment_config(artifact: &LocalArtifact<'_>) -> Result<ExperimentConfig> {
-    let config = artifact.get_manifest()?.config();
+    let config = artifact.stored_config()?;
     if config.media_type() != &MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()) {
         crate::bail!(
             "Experiment config media type is {}, expected {}",
@@ -98,7 +128,7 @@ fn load_experiment_config(artifact: &LocalArtifact<'_>) -> Result<ExperimentConf
             EXPERIMENT_CONFIG_MEDIA_TYPE
         );
     }
-    let bytes = artifact.get_blob(config.digest())?;
+    let bytes = artifact.get_blob(&config)?;
     let config = serde_json::from_slice::<ExperimentConfig>(&bytes)
         .context("Failed to decode Experiment config")?;
     if config.status != EXPERIMENT_STATUS_FINISHED {
@@ -111,76 +141,81 @@ fn load_experiment_config(artifact: &LocalArtifact<'_>) -> Result<ExperimentConf
     Ok(config)
 }
 
-fn validate_config_descriptors_are_manifest_layers(
-    artifact: &LocalArtifact<'_>,
-    config: &ExperimentConfig,
-) -> Result<()> {
-    let layer_keys = artifact
-        .layers()?
-        .iter()
-        .map(descriptor_json_key)
-        .collect::<Result<HashSet<_>>>()?;
-    validate_descriptor_is_manifest_layer(
-        &layer_keys,
-        &config.run_parameters,
-        "run-parameter table",
-    )?;
-    for descriptor in &config.records {
-        validate_descriptor_is_manifest_layer(&layer_keys, descriptor, "experiment record")?;
-    }
-    for run in &config.runs {
-        for descriptor in &run.records {
-            validate_descriptor_is_manifest_layer(
-                &layer_keys,
-                descriptor,
-                &format!("run {} record", run.run_id),
-            )?;
-        }
-    }
-    Ok(())
-}
-
-fn validate_descriptor_is_manifest_layer(
-    layer_keys: &HashSet<Vec<u8>>,
-    descriptor: &Descriptor,
-    owner: &str,
-) -> Result<()> {
-    if layer_keys.contains(&descriptor_json_key(descriptor)?) {
-        return Ok(());
-    }
-    crate::bail!(
-        "Experiment config references {owner} descriptor {}, but it is not listed in artifact layers",
-        descriptor.digest()
-    );
-}
-
-fn descriptor_json_key(descriptor: &Descriptor) -> Result<Vec<u8>> {
-    stable_json_bytes(descriptor).context("Failed to encode stable OCI Descriptor JSON key")
-}
-
-fn decode_records<'reg>(
-    registry: &'reg crate::artifact::local_registry::LocalRegistry,
-    records: Vec<Descriptor>,
-    owner: &str,
+fn decode_attachments<'reg>(
+    layers: &[StoredDescriptor<'reg>],
+    attachments: Vec<LayerRef>,
+    attachment_context: &str,
 ) -> Result<Vec<StoredDescriptor<'reg>>> {
     let mut decoded = Vec::new();
-    for descriptor in records {
-        if record_name(&descriptor).is_none() {
-            crate::bail!("Record descriptor in {owner} is missing `org.ommx.record.name`");
+    for layer_ref in attachments {
+        let descriptor = resolve_layer(layers, layer_ref)
+            .with_context(|| {
+                format!(
+                    "Failed to resolve {attachment_context} attachment LayerRef {}",
+                    layer_ref.0
+                )
+            })?
+            .clone();
+        if attachment_name(&descriptor).is_none() {
+            crate::bail!("Attachment descriptor in {attachment_context} is missing `org.ommx.attachment.name`");
         }
-        decoded.push(
-            registry
-                .stored_descriptor(descriptor)
-                .with_context(|| format!("Failed to decode Record in {owner}"))?,
-        );
+        decoded.push(descriptor);
+    }
+    Ok(decoded)
+}
+
+fn decode_solves<'reg>(
+    layers: &[StoredDescriptor<'reg>],
+    run_id: u64,
+    solves: Vec<ExperimentConfigSolve>,
+) -> Result<Vec<Solve<'reg>>> {
+    let mut decoded = Vec::new();
+    let mut seen = std::collections::BTreeSet::new();
+    for solve in solves {
+        if !seen.insert(solve.solve_id) {
+            crate::bail!("Run {run_id} contains duplicate Solve {}", solve.solve_id);
+        }
+        let input = resolve_layer(layers, solve.input)
+            .with_context(|| {
+                format!(
+                    "Failed to resolve Run {run_id} Solve {} input LayerRef {}",
+                    solve.solve_id, solve.input.0
+                )
+            })?
+            .clone();
+        validate_layer_media_type(&input, &crate::artifact::media_types::v1_instance())
+            .with_context(|| format!("Invalid Run {run_id} Solve {} input", solve.solve_id))?;
+        let output = resolve_layer(layers, solve.output)
+            .with_context(|| {
+                format!(
+                    "Failed to resolve Run {run_id} Solve {} output LayerRef {}",
+                    solve.solve_id, solve.output.0
+                )
+            })?
+            .clone();
+        validate_layer_media_type(&output, &crate::artifact::media_types::v1_solution())
+            .with_context(|| format!("Invalid Run {run_id} Solve {} output", solve.solve_id))?;
+        decoded.push(Solve {
+            solve_id: solve.solve_id,
+            input,
+            output,
+            parameters: solve.parameters,
+        });
     }
     Ok(decoded)
 }
 
 fn load_run_parameters(
     artifact: &LocalArtifact<'_>,
-    descriptor: &Descriptor,
+    layers: &[StoredDescriptor<'_>],
+    layer_ref: LayerRef,
 ) -> Result<RunParameterTable> {
+    let descriptor = resolve_layer(layers, layer_ref).with_context(|| {
+        format!(
+            "Failed to resolve run-parameter table LayerRef {}",
+            layer_ref.0
+        )
+    })?;
     if descriptor.media_type() != &MediaType::Other(RUN_PARAMETERS_MEDIA_TYPE.to_string()) {
         crate::bail!(
             "Run-parameter descriptor media type is {}, expected {}",
@@ -188,9 +223,33 @@ fn load_run_parameters(
             RUN_PARAMETERS_MEDIA_TYPE
         );
     }
-    let bytes = artifact.get_blob(descriptor.digest())?;
+    let bytes = artifact.get_blob(descriptor)?;
     serde_json::from_slice::<RunParameterTable>(&bytes)
         .context("Failed to decode run-parameter table JSON")
+}
+
+fn resolve_layer<'a, 'reg>(
+    layers: &'a [StoredDescriptor<'reg>],
+    layer_ref: LayerRef,
+) -> Result<&'a StoredDescriptor<'reg>> {
+    layers.get(layer_ref.0 as usize).ok_or_else(|| {
+        anyhow::anyhow!(
+            "LayerRef {} is out of bounds for {} manifest layer(s)",
+            layer_ref.0,
+            layers.len()
+        )
+    })
+}
+
+fn validate_layer_media_type(descriptor: &Descriptor, expected: &MediaType) -> Result<()> {
+    if descriptor.media_type() != expected {
+        crate::bail!(
+            "media type is {}, expected {}",
+            descriptor.media_type(),
+            expected
+        );
+    }
+    Ok(())
 }
 
 fn validate_run_parameters_reference_config_runs(

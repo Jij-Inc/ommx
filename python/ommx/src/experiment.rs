@@ -1,8 +1,8 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use oci_spec::image::MediaType;
 use pyo3::{
     prelude::*,
-    types::{PyBool, PyDict, PyFloat, PyInt, PyString},
+    types::{PyBool, PyDict, PyFloat, PyInt, PyString, PyType, PyTypeMethods},
 };
 use std::collections::{btree_map::Entry, BTreeMap};
 
@@ -87,10 +87,10 @@ impl PyExperiment {
     }
 
     #[getter]
-    pub fn experiment_records(&self) -> Result<Vec<PyDescriptor>> {
+    pub fn experiment_attachments(&self) -> Result<Vec<PyDescriptor>> {
         Ok(self
             .inner
-            .experiment_records()?
+            .experiment_attachments()?
             .into_iter()
             .map(PyDescriptor::from)
             .collect())
@@ -113,40 +113,40 @@ impl PyExperiment {
         })
     }
 
-    /// Record arbitrary bytes with an explicit OCI media type in the
+    /// Attach arbitrary bytes with an explicit OCI media type in the
     /// experiment space.
-    pub fn log_record(
+    pub fn log_attachment(
         &mut self,
         name: &str,
         media_type: &str,
         bytes: &Bound<pyo3::types::PyBytes>,
     ) -> Result<()> {
-        self.inner.log_record(
+        self.inner.log_attachment(
             name,
             MediaType::Other(media_type.to_string()),
             bytes.as_bytes(),
         )
     }
 
-    /// Record a JSON-serialisable value in the experiment space.
+    /// Attach a JSON-serialisable value in the experiment space.
     pub fn log_json(&mut self, py: Python<'_>, name: &str, value: &Bound<PyAny>) -> Result<()> {
         let json = py.import("json")?;
         let blob: String = json.call_method1("dumps", (value,))?.extract()?;
         self.inner
-            .log_record(name, MediaType::Other("application/json".to_string()), blob)
+            .log_attachment(name, MediaType::Other("application/json".to_string()), blob)
     }
 
-    /// Record an Instance in the experiment space.
+    /// Attach an Instance in the experiment space.
     pub fn log_instance(&mut self, name: &str, instance: &crate::Instance) -> Result<()> {
         self.inner.log_instance(name, &instance.inner)
     }
 
-    /// Record a Solution in the experiment space.
+    /// Attach a Solution in the experiment space.
     pub fn log_solution(&mut self, name: &str, solution: &crate::Solution) -> Result<()> {
         self.inner.log_solution(name, &solution.inner)
     }
 
-    /// Record a SampleSet in the experiment space.
+    /// Attach a SampleSet in the experiment space.
     pub fn log_sample_set(&mut self, name: &str, sample_set: &crate::SampleSet) -> Result<()> {
         self.inner.log_sample_set(name, &sample_set.inner)
     }
@@ -248,46 +248,76 @@ impl PyRun {
         self.as_open()?.run_id()
     }
 
-    /// Record a scalar parameter for this run.
+    /// Log a scalar parameter for this run.
     pub fn log_parameter(&mut self, name: &str, value: ParameterValueInput) -> Result<()> {
         self.as_open_mut()?.log_parameter(name, value.0)
     }
 
-    /// Record arbitrary bytes with an explicit OCI media type in this run.
-    pub fn log_record(
+    /// Attach arbitrary bytes with an explicit OCI media type in this run.
+    pub fn log_attachment(
         &mut self,
         name: &str,
         media_type: &str,
         bytes: &Bound<pyo3::types::PyBytes>,
     ) -> Result<()> {
-        self.as_open_mut()?.log_record(
+        self.as_open_mut()?.log_attachment(
             name,
             MediaType::Other(media_type.to_string()),
             bytes.as_bytes(),
         )
     }
 
-    /// Record a JSON-serialisable value in this run.
+    /// Attach a JSON-serialisable value in this run.
     pub fn log_json(&mut self, py: Python<'_>, name: &str, value: &Bound<PyAny>) -> Result<()> {
         let json = py.import("json")?;
         let blob: String = json.call_method1("dumps", (value,))?.extract()?;
-        self.as_open_mut()?
-            .log_record(name, MediaType::Other("application/json".to_string()), blob)
+        self.as_open_mut()?.log_attachment(
+            name,
+            MediaType::Other("application/json".to_string()),
+            blob,
+        )
     }
 
-    /// Record an Instance in this run.
+    /// Attach an Instance in this run.
     pub fn log_instance(&mut self, name: &str, instance: &crate::Instance) -> Result<()> {
         self.as_open_mut()?.log_instance(name, &instance.inner)
     }
 
-    /// Record a Solution in this run.
+    /// Attach a Solution in this run.
     pub fn log_solution(&mut self, name: &str, solution: &crate::Solution) -> Result<()> {
         self.as_open_mut()?.log_solution(name, &solution.inner)
     }
 
-    /// Record a SampleSet in this run.
+    /// Attach a SampleSet in this run.
     pub fn log_sample_set(&mut self, name: &str, sample_set: &crate::SampleSet) -> Result<()> {
         self.as_open_mut()?.log_sample_set(name, &sample_set.inner)
+    }
+
+    /// Solve an Instance with an OMMX SolverAdapter and log a Solve entry.
+    ///
+    /// The input Instance is cloned before calling the adapter, so adapter-side
+    /// capability reductions do not mutate the caller's object. The original
+    /// input is always stored as the Solve input.
+    #[pyo3(signature = (adapter, instance, **kwargs))]
+    pub fn log_solve(
+        &mut self,
+        py: Python<'_>,
+        adapter: SolverAdapterInput,
+        instance: &crate::Instance,
+        kwargs: Option<&Bound<PyDict>>,
+    ) -> Result<crate::Solution> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let parameters = BTreeMap::from([
+            ("adapter".to_string(), adapter.name(py)?),
+            ("kwargs".to_string(), dump_kwargs(py, kwargs)?),
+        ]);
+        let solution = adapter.solve(py, instance, kwargs)?;
+        self.as_open_mut()?.log_finished_solve_result(
+            &instance.inner,
+            &solution.inner,
+            parameters,
+        )?;
+        Ok(solution)
     }
 
     /// Finish this run and append it to the parent Experiment.
@@ -362,6 +392,77 @@ impl<'py> FromPyObject<'_, 'py> for ParameterValueInput {
     }
 }
 
+pub struct SolverAdapterInput(Py<PyType>);
+
+impl SolverAdapterInput {
+    fn solve(
+        &self,
+        py: Python<'_>,
+        instance: &crate::Instance,
+        kwargs: Option<&Bound<PyDict>>,
+    ) -> Result<crate::Solution> {
+        let adapter = self.0.bind(py);
+        let adapter_instance = Py::new(py, instance.clone())?;
+        let solution_object = adapter.call_method("solve", (adapter_instance,), kwargs)?;
+        solution_object
+            .extract::<crate::Solution>()
+            .map_err(|_| anyhow::anyhow!("adapter.solve(...) must return ommx.v1.Solution"))
+    }
+
+    fn name(&self, py: Python<'_>) -> Result<String> {
+        let adapter = self.0.bind(py);
+        let module: String = adapter.module()?.extract()?;
+        let qualname: String = adapter.qualname()?.extract()?;
+        Ok(format!("{module}.{qualname}"))
+    }
+}
+
+fn dump_kwargs(py: Python<'_>, kwargs: Option<&Bound<PyDict>>) -> Result<String> {
+    let json = py.import("json")?;
+    let encoded: String = match kwargs {
+        Some(kwargs) => json.call_method1("dumps", (kwargs,)),
+        None => json.call_method1("dumps", (PyDict::new(py),)),
+    }
+    .context("SolverAdapter kwargs must be JSON-serializable")?
+    .extract()?;
+    Ok(encoded)
+}
+
+impl<'py> FromPyObject<'_, 'py> for SolverAdapterInput {
+    type Error = PyErr;
+
+    fn extract(ob: pyo3::Borrowed<'_, 'py, PyAny>) -> PyResult<Self> {
+        let adapter = ob.extract::<Py<PyType>>().map_err(|_| {
+            pyo3::exceptions::PyTypeError::new_err(
+                "adapter must be a subclass of ommx.adapter.SolverAdapter",
+            )
+        })?;
+        let adapter_bound = adapter.bind(ob.py());
+        let solver_adapter = ob.py().import("ommx.adapter")?.getattr("SolverAdapter")?;
+        if !adapter_bound.is_subclass(&solver_adapter)? {
+            return Err(pyo3::exceptions::PyTypeError::new_err(
+                "adapter must be a subclass of ommx.adapter.SolverAdapter",
+            ));
+        }
+        Ok(Self(adapter))
+    }
+}
+
+impl pyo3_stub_gen::PyStubType for SolverAdapterInput {
+    fn type_input() -> pyo3_stub_gen::TypeInfo {
+        pyo3_stub_gen::TypeInfo {
+            name: "type[adapter.SolverAdapter]".to_string(),
+            source_module: None,
+            import: ["ommx.adapter".into()].into(),
+            type_refs: Default::default(),
+        }
+    }
+
+    fn type_output() -> pyo3_stub_gen::TypeInfo {
+        Self::type_input()
+    }
+}
+
 impl pyo3_stub_gen::PyStubType for ParameterValueInput {
     fn type_input() -> pyo3_stub_gen::TypeInfo {
         pyo3_stub_gen::TypeInfo {
@@ -392,20 +493,60 @@ impl PySealedRun {
     }
 
     #[getter]
-    pub fn records(&self) -> Vec<PyDescriptor> {
-        self.0
-            .records()
-            .iter()
-            .cloned()
+    pub fn attachments(&self) -> Result<Vec<PyDescriptor>> {
+        Ok(self
+            .0
+            .attachments()?
+            .into_iter()
             .map(PyDescriptor::from)
-            .collect()
+            .collect())
+    }
+
+    #[getter]
+    pub fn solves(&self) -> Vec<PySolve> {
+        self.0.solves().iter().cloned().map(PySolve).collect()
     }
 
     pub fn __repr__(&self) -> String {
         format!(
-            "SealedRun(run_id={}, records={})",
+            "SealedRun(run_id={}, attachments={}, solves={})",
             self.run_id(),
-            self.0.records().len(),
+            self.0.attachment_count(),
+            self.0.solves().len(),
         )
+    }
+}
+
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
+#[pyclass]
+#[pyo3(module = "ommx._ommx_rust", name = "Solve")]
+#[derive(Clone)]
+pub struct PySolve(ommx::experiment::SolveDyn);
+
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
+#[pymethods]
+impl PySolve {
+    #[getter]
+    pub fn solve_id(&self) -> u64 {
+        self.0.solve_id()
+    }
+
+    #[getter]
+    pub fn input(&self) -> Result<PyDescriptor> {
+        Ok(PyDescriptor::from(self.0.input()?))
+    }
+
+    #[getter]
+    pub fn output(&self) -> Result<PyDescriptor> {
+        Ok(PyDescriptor::from(self.0.output()?))
+    }
+
+    #[getter]
+    pub fn parameters(&self) -> BTreeMap<String, String> {
+        self.0.parameters().clone()
+    }
+
+    pub fn __repr__(&self) -> String {
+        format!("Solve(solve_id={})", self.solve_id())
     }
 }

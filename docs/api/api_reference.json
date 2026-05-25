@@ -7,6 +7,168 @@
       "items": [
         {
           "kind": "Class",
+          "name": "ArchiveDescriptor",
+          "doc": "Descriptor value read from an OCI archive manifest without importing it.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "rhs",
+                      "type_": {
+                        "display": "Any",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__str__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "to_dict",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "dict",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "to_json",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "annotations",
+              "doc": "",
+              "type_": {
+                "display": "dict[str, str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "digest",
+              "doc": "",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "media_type",
+              "doc": "",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "size",
+              "doc": "",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "user_annotations",
+              "doc": "Return annotations with key prefix \"org.ommx.user.\"",
+              "type_": {
+                "display": "dict[str, str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
           "name": "ArchiveManifest",
           "doc": "Read-only view of a `.ommx` archive's manifest produced by\n{meth}`Artifact.inspect_archive`. Surfaces the manifest descriptor\nfields without writing the archive into the SQLite Local Registry.",
           "bases": [],
@@ -38,9 +200,9 @@
               "name": "config",
               "doc": "Descriptor of the `config` blob (the OCI 1.1 empty config in\nv3-built archives; v2 archives may carry an OMMX-specific\nconfig blob). The descriptor exposes media type, digest, size,\nand annotations; the bytes themselves are not accessible from\n`ArchiveManifest` — import the archive via\n{meth}`Artifact.import_archive` if you need to read the config\npayload.",
               "type_": {
-                "display": "Descriptor",
+                "display": "ArchiveDescriptor",
                 "link_target": {
-                  "fqn": "ommx.artifact.Descriptor",
+                  "fqn": "ommx.artifact.ArchiveDescriptor",
                   "doc_module": "ommx.artifact",
                   "kind": "Class",
                   "attribute": null
@@ -71,13 +233,13 @@
               "name": "layers",
               "doc": "Layer descriptors in manifest order.",
               "type_": {
-                "display": "list[_ommx_rust.Descriptor]",
+                "display": "list[_ommx_rust.ArchiveDescriptor]",
                 "link_target": null,
                 "children": [
                   {
-                    "display": "Descriptor",
+                    "display": "ArchiveDescriptor",
                     "link_target": {
-                      "fqn": "ommx.artifact.Descriptor",
+                      "fqn": "ommx.artifact.ArchiveDescriptor",
                       "doc_module": "ommx.artifact",
                       "kind": "Class",
                       "attribute": null
@@ -104,13 +266,13 @@
               "name": "subject",
               "doc": "Optional `subject` descriptor on the OCI image manifest, used\nfor the OCI referrers API (cosign / sigstore signatures,\nSBOMs, …). `None` for ordinary OMMX artifacts; surfaced here\nso MINTO-style consumers that walk OCI referrer graphs do not\nhave to import each archive to discover whether it carries a\nsubject.",
               "type_": {
-                "display": "Optional[_ommx_rust.Descriptor]",
+                "display": "Optional[_ommx_rust.ArchiveDescriptor]",
                 "link_target": null,
                 "children": [
                   {
-                    "display": "Descriptor",
+                    "display": "ArchiveDescriptor",
                     "link_target": {
-                      "fqn": "ommx.artifact.Descriptor",
+                      "fqn": "ommx.artifact.ArchiveDescriptor",
                       "doc_module": "ommx.artifact",
                       "kind": "Class",
                       "attribute": null
@@ -133,15 +295,20 @@
           "methods": [
             {
               "name": "get_blob",
-              "doc": "Get raw bytes of a blob by digest string or Descriptor.",
+              "doc": "Get raw bytes of a blob by Descriptor.",
               "signatures": [
                 {
                   "parameters": [
                     {
-                      "name": "digest_or_descriptor",
+                      "name": "descriptor",
                       "type_": {
-                        "display": "Any",
-                        "link_target": null,
+                        "display": "Descriptor",
+                        "link_target": {
+                          "fqn": "ommx.artifact.Descriptor",
+                          "doc_module": "ommx.artifact",
+                          "kind": "Class",
+                          "attribute": null
+                        },
                         "children": []
                       },
                       "default": null
@@ -1355,7 +1522,7 @@
         {
           "kind": "Class",
           "name": "Descriptor",
-          "doc": "Descriptor of blob in artifact",
+          "doc": "Descriptor of a blob stored in the local registry.\n\n`PyDescriptor` intentionally does not carry a `LocalRegistryHandle`.\nIt is a lightweight descriptor view returned by registry-owning\nobjects such as `Artifact` / `Experiment`. The blob can only be read\nby passing this value back to one of those owner objects, whose handle\nkeeps temporary registries alive. If a descriptor outlives every\nowner of its temporary registry, it is just inert metadata and cannot\nbe used to access bytes.",
           "bases": [],
           "methods": [
             {
@@ -1393,68 +1560,6 @@
                   "return_type": {
                     "display": "str",
                     "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "from_dict",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "dict",
-                      "type_": {
-                        "display": "dict",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "Descriptor",
-                    "link_target": {
-                      "fqn": "ommx.artifact.Descriptor",
-                      "doc_module": "ommx.artifact",
-                      "kind": "Class",
-                      "attribute": null
-                    },
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "from_json",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "json",
-                      "type_": {
-                        "display": "str",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "Descriptor",
-                    "link_target": {
-                      "fqn": "ommx.artifact.Descriptor",
-                      "doc_module": "ommx.artifact",
-                      "kind": "Class",
-                      "attribute": null
-                    },
                     "children": []
                   }
                 }
@@ -1909,78 +2014,8 @@
               "deprecated": null
             },
             {
-              "name": "log_instance",
-              "doc": "Record an Instance in the experiment space.",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "name",
-                      "type_": {
-                        "display": "str",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    },
-                    {
-                      "name": "instance",
-                      "type_": {
-                        "display": "Instance",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "None",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "log_json",
-              "doc": "Record a JSON-serialisable value in the experiment space.",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "name",
-                      "type_": {
-                        "display": "str",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    },
-                    {
-                      "name": "value",
-                      "type_": {
-                        "display": "Any",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "None",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "log_record",
-              "doc": "Record arbitrary bytes with an explicit OCI media type in the\nexperiment space.",
+              "name": "log_attachment",
+              "doc": "Attach arbitrary bytes with an explicit OCI media type in the\nexperiment space.",
               "signatures": [
                 {
                   "parameters": [
@@ -2023,8 +2058,78 @@
               "deprecated": null
             },
             {
+              "name": "log_instance",
+              "doc": "Attach an Instance in the experiment space.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "instance",
+                      "type_": {
+                        "display": "Instance",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "log_json",
+              "doc": "Attach a JSON-serialisable value in the experiment space.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "value",
+                      "type_": {
+                        "display": "Any",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "log_sample_set",
-              "doc": "Record a SampleSet in the experiment space.",
+              "doc": "Attach a SampleSet in the experiment space.",
               "signatures": [
                 {
                   "parameters": [
@@ -2059,7 +2164,7 @@
             },
             {
               "name": "log_solution",
-              "doc": "Record a Solution in the experiment space.",
+              "doc": "Attach a Solution in the experiment space.",
               "signatures": [
                 {
                   "parameters": [
@@ -2188,7 +2293,7 @@
               "is_readonly": true
             },
             {
-              "name": "experiment_records",
+              "name": "experiment_attachments",
               "doc": "",
               "type_": {
                 "display": "list[_ommx_rust.Descriptor]",
@@ -2376,8 +2481,52 @@
               "deprecated": null
             },
             {
+              "name": "log_attachment",
+              "doc": "Attach arbitrary bytes with an explicit OCI media type in this run.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "media_type",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "bytes",
+                      "type_": {
+                        "display": "bytes",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "log_instance",
-              "doc": "Record an Instance in this run.",
+              "doc": "Attach an Instance in this run.",
               "signatures": [
                 {
                   "parameters": [
@@ -2412,7 +2561,7 @@
             },
             {
               "name": "log_json",
-              "doc": "Record a JSON-serialisable value in this run.",
+              "doc": "Attach a JSON-serialisable value in this run.",
               "signatures": [
                 {
                   "parameters": [
@@ -2447,7 +2596,7 @@
             },
             {
               "name": "log_parameter",
-              "doc": "Record a scalar parameter for this run.",
+              "doc": "Log a scalar parameter for this run.",
               "signatures": [
                 {
                   "parameters": [
@@ -2502,52 +2651,8 @@
               "deprecated": null
             },
             {
-              "name": "log_record",
-              "doc": "Record arbitrary bytes with an explicit OCI media type in this run.",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "name",
-                      "type_": {
-                        "display": "str",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    },
-                    {
-                      "name": "media_type",
-                      "type_": {
-                        "display": "str",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    },
-                    {
-                      "name": "bytes",
-                      "type_": {
-                        "display": "bytes",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "None",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
               "name": "log_sample_set",
-              "doc": "Record a SampleSet in this run.",
+              "doc": "Attach a SampleSet in this run.",
               "signatures": [
                 {
                   "parameters": [
@@ -2582,7 +2687,7 @@
             },
             {
               "name": "log_solution",
-              "doc": "Record a Solution in this run.",
+              "doc": "Attach a Solution in this run.",
               "signatures": [
                 {
                   "parameters": [
@@ -2607,6 +2712,56 @@
                   ],
                   "return_type": {
                     "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "log_solve",
+              "doc": "Solve an Instance with an OMMX SolverAdapter and log a Solve entry.\n\nThe input Instance is cloned before calling the adapter, so adapter-side\ncapability reductions do not mutate the caller's object. The original\ninput is always stored as the Solve input.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "adapter",
+                      "type_": {
+                        "display": "type[SolverAdapter]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "SolverAdapter",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "instance",
+                      "type_": {
+                        "display": "Instance",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "kwargs",
+                      "type_": {
+                        "display": "Any",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Solution",
                     "link_target": null,
                     "children": []
                   }
@@ -2656,7 +2811,7 @@
           ],
           "attributes": [
             {
-              "name": "records",
+              "name": "attachments",
               "doc": "",
               "type_": {
                 "display": "list[_ommx_rust.Descriptor]",
@@ -2679,6 +2834,120 @@
             },
             {
               "name": "run_id",
+              "doc": "",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "solves",
+              "doc": "",
+              "type_": {
+                "display": "list[_ommx_rust.Solve]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "Solve",
+                    "link_target": {
+                      "fqn": "ommx.experiment.Solve",
+                      "doc_module": "ommx.experiment",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "Solve",
+          "doc": "",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "input",
+              "doc": "",
+              "type_": {
+                "display": "Descriptor",
+                "link_target": {
+                  "fqn": "ommx.artifact.Descriptor",
+                  "doc_module": "ommx.artifact",
+                  "kind": "Class",
+                  "attribute": null
+                },
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "output",
+              "doc": "",
+              "type_": {
+                "display": "Descriptor",
+                "link_target": {
+                  "fqn": "ommx.artifact.Descriptor",
+                  "doc_module": "ommx.artifact",
+                  "kind": "Class",
+                  "attribute": null
+                },
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "parameters",
+              "doc": "",
+              "type_": {
+                "display": "dict[str, str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "solve_id",
               "doc": "",
               "type_": {
                 "display": "int",
@@ -26874,6 +27143,7 @@
     }
   },
   "export_map": {
+    "ommx.artifact.ArchiveDescriptor": "ommx.artifact",
     "ommx.artifact.ArchiveManifest": "ommx.artifact",
     "ommx.artifact.Artifact": "ommx.artifact",
     "ommx.artifact.ArtifactDraft": "ommx.artifact",
@@ -26884,6 +27154,7 @@
     "ommx.experiment.Experiment": "ommx.experiment",
     "ommx.experiment.Run": "ommx.experiment",
     "ommx.experiment.SealedRun": "ommx.experiment",
+    "ommx.experiment.Solve": "ommx.experiment",
     "ommx.v1.AdditionalCapability": "ommx.v1",
     "ommx.v1.AttachedConstraint": "ommx.v1",
     "ommx.v1.AttachedDecisionVariable": "ommx.v1",

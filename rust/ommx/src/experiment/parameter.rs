@@ -11,7 +11,8 @@ use std::collections::{btree_map::Values, BTreeMap};
 /// commit time, so this intentionally excludes nulls and structured
 /// JSON values. Missing cells are represented by the absence of a
 /// `(run_id, value)` entry in the committed column.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
 pub enum ParameterValue {
     Bool(bool),
     Int(i64),
@@ -101,7 +102,7 @@ impl ParameterSet {
         Ok(())
     }
 
-    fn iter(&self) -> impl Iterator<Item = (&String, &ParameterValue)> {
+    pub(crate) fn iter(&self) -> impl Iterator<Item = (&String, &ParameterValue)> {
         self.values.iter()
     }
 }

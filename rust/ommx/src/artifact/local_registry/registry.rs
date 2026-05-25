@@ -35,7 +35,7 @@ pub struct StoredDescriptor<'reg> {
 }
 
 impl StoredDescriptor<'_> {
-    fn is_stored_in(&self, registry: &LocalRegistry) -> bool {
+    pub(crate) fn is_stored_in(&self, registry: &LocalRegistry) -> bool {
         // This intentionally checks registry-instance identity. Two
         // LocalRegistry values may point at the same on-disk SQLite /
         // BlobStore root, but a StoredDescriptor is only proven stored

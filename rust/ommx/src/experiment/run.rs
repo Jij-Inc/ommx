@@ -1,11 +1,14 @@
 //! Experiment / Run handles and run lifecycle.
 
-use super::record::{encode_json, json_media_type, store_record_descriptor, RecordSpace};
-use super::{ParameterValue, Run, RunEntry};
+use super::attachment::{
+    encode_json, json_media_type, store_attachment_descriptor, AttachmentSpace,
+};
+use super::{ParameterValue, Run, RunEntry, SolveEntry};
 use crate::artifact::media_types;
 use crate::{Instance, SampleSet, Solution};
 use anyhow::Result;
 use oci_spec::image::MediaType;
+use std::collections::BTreeMap;
 
 impl<'exp, 'reg> Run<'exp, 'reg> {
     /// This run's 0-based id within the experiment.
@@ -13,8 +16,8 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
         self.run_id
     }
 
-    /// Record a scalar parameter for this run. Parameters are not
-    /// Records: they are materialised at experiment commit time as a
+    /// Log a scalar parameter for this run. Parameters are not
+    /// Attachments: they are materialised at experiment commit time as a
     /// run-parameter table payload used for comparison views.
     pub fn log_parameter(
         &mut self,
@@ -26,36 +29,69 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
         self.parameters.insert(name, value)
     }
 
-    /// Record arbitrary bytes with an explicit OCI media type in this
+    /// Attach arbitrary bytes with an explicit OCI media type in this
     /// run's space.
-    pub fn log_record(
+    pub fn log_attachment(
         &mut self,
         name: &str,
         media_type: MediaType,
         bytes: impl AsRef<[u8]>,
     ) -> Result<()> {
-        self.add_record(name, media_type, bytes.as_ref())
+        self.add_attachment(name, media_type, bytes.as_ref())
     }
 
-    /// Record a JSON-serialisable value in this run's space.
+    /// Attach a JSON-serialisable value in this run's space.
     pub fn log_json(&mut self, name: &str, value: impl serde::Serialize) -> Result<()> {
         let bytes = encode_json(name, &value)?;
-        self.log_record(name, json_media_type(), bytes)
+        self.log_attachment(name, json_media_type(), bytes)
     }
 
-    /// Record an [`Instance`] in this run's space.
+    /// Attach an [`Instance`] in this run's space.
     pub fn log_instance(&mut self, name: &str, instance: &Instance) -> Result<()> {
-        self.log_record(name, media_types::v1_instance(), instance.to_bytes())
+        self.log_attachment(name, media_types::v1_instance(), instance.to_bytes())
     }
 
-    /// Record a [`Solution`] in this run's space.
+    /// Attach a [`Solution`] in this run's space.
     pub fn log_solution(&mut self, name: &str, solution: &Solution) -> Result<()> {
-        self.log_record(name, media_types::v1_solution(), solution.to_bytes())
+        self.log_attachment(name, media_types::v1_solution(), solution.to_bytes())
     }
 
-    /// Record a [`SampleSet`] in this run's space.
+    /// Attach a [`SampleSet`] in this run's space.
     pub fn log_sample_set(&mut self, name: &str, sample_set: &SampleSet) -> Result<()> {
-        self.log_record(name, media_types::v1_sample_set(), sample_set.to_bytes())
+        self.log_attachment(name, media_types::v1_sample_set(), sample_set.to_bytes())
+    }
+
+    /// Log one already-finished solver result under this run.
+    ///
+    /// The original input [`Instance`] and returned [`Solution`] are
+    /// stored as solve-scoped payloads. Solver adapter metadata and
+    /// kwargs belong to the solve parameters, not the Run parameter
+    /// table.
+    pub fn log_finished_solve_result(
+        &mut self,
+        input: &Instance,
+        output: &Solution,
+        parameters: BTreeMap<String, String>,
+    ) -> Result<u64> {
+        let solve_id = self.next_solve_id;
+        self.next_solve_id += 1;
+        let input = self.experiment.registry.store_layer_blob(
+            media_types::v1_instance(),
+            &input.to_bytes(),
+            Default::default(),
+        )?;
+        let output = self.experiment.registry.store_layer_blob(
+            media_types::v1_solution(),
+            &output.to_bytes(),
+            Default::default(),
+        )?;
+        self.solves.push(SolveEntry {
+            solve_id,
+            input,
+            output,
+            parameters,
+        });
+        Ok(solve_id)
     }
 
     /// Close the run and append the closed run state to the parent
@@ -65,15 +101,15 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
         self.close()
     }
 
-    fn add_record(&mut self, name: &str, media_type: MediaType, bytes: &[u8]) -> Result<()> {
-        let descriptor = store_record_descriptor(
+    fn add_attachment(&mut self, name: &str, media_type: MediaType, bytes: &[u8]) -> Result<()> {
+        let descriptor = store_attachment_descriptor(
             self.experiment.registry,
-            RecordSpace::Run(self.run_id),
+            AttachmentSpace::Run(self.run_id),
             name,
             media_type,
             bytes,
         )?;
-        self.records.push(descriptor);
+        self.attachments.push(descriptor);
         Ok(())
     }
 
@@ -81,12 +117,15 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
         let Run {
             experiment,
             run_id,
-            records,
+            attachments,
+            solves,
+            next_solve_id: _,
             parameters,
         } = self;
         let run = RunEntry {
             run_id,
-            records,
+            attachments,
+            solves,
             parameters,
         };
         experiment.push_closed_run(run)?;
