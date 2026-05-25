@@ -13,6 +13,7 @@ initialization.
 
 from __future__ import annotations
 
+import os
 from typing import Sequence
 
 import pytest
@@ -65,6 +66,8 @@ def setup_test_tracing():
     """Install an OTel provider for the session so Rust spans are collected."""
     global _test_exporter, _test_provider
 
+    previous_rust_log = os.environ.get("RUST_LOG")
+    os.environ["RUST_LOG"] = "info"
     previous_provider = trace.get_tracer_provider()
 
     _test_exporter = InMemorySpanExporter()
@@ -79,5 +82,9 @@ def setup_test_tracing():
         if _test_provider is not None:
             _test_provider.shutdown()
         trace.set_tracer_provider(previous_provider)
+        if previous_rust_log is None:
+            os.environ.pop("RUST_LOG", None)
+        else:
+            os.environ["RUST_LOG"] = previous_rust_log
         _test_exporter = None
         _test_provider = None
