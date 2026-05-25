@@ -154,18 +154,25 @@ fn decode_records<'reg>(
     registry: &'reg crate::artifact::local_registry::LocalRegistry,
     layers: &[Descriptor],
     records: Vec<LayerRef>,
-    owner: &str,
+    record_context: &str,
 ) -> Result<Vec<StoredDescriptor<'reg>>> {
     let mut decoded = Vec::new();
     for layer_ref in records {
-        let descriptor = resolve_layer(layers, layer_ref, &format!("{owner} record"))?.clone();
+        let descriptor = resolve_layer(layers, layer_ref)
+            .with_context(|| {
+                format!(
+                    "Failed to resolve {record_context} record LayerRef {}",
+                    layer_ref.0
+                )
+            })?
+            .clone();
         if record_name(&descriptor).is_none() {
-            crate::bail!("Record descriptor in {owner} is missing `org.ommx.record.name`");
+            crate::bail!("Record descriptor in {record_context} is missing `org.ommx.record.name`");
         }
         decoded.push(
             registry
                 .stored_descriptor(descriptor)
-                .with_context(|| format!("Failed to decode Record in {owner}"))?,
+                .with_context(|| format!("Failed to decode Record in {record_context}"))?,
         );
     }
     Ok(decoded)
@@ -183,28 +190,26 @@ fn decode_solves<'reg>(
         if !seen.insert(solve.solve_id) {
             crate::bail!("Run {run_id} contains duplicate Solve {}", solve.solve_id);
         }
-        let input = resolve_layer(
-            layers,
-            solve.input,
-            &format!("run {run_id} solve {} input", solve.solve_id),
-        )?
-        .clone();
-        validate_layer_media_type(
-            &input,
-            &crate::artifact::media_types::v1_instance(),
-            &format!("Run {run_id} Solve {} input", solve.solve_id),
-        )?;
-        let output = resolve_layer(
-            layers,
-            solve.output,
-            &format!("run {run_id} solve {} output", solve.solve_id),
-        )?
-        .clone();
-        validate_layer_media_type(
-            &output,
-            &crate::artifact::media_types::v1_solution(),
-            &format!("Run {run_id} Solve {} output", solve.solve_id),
-        )?;
+        let input = resolve_layer(layers, solve.input)
+            .with_context(|| {
+                format!(
+                    "Failed to resolve Run {run_id} Solve {} input LayerRef {}",
+                    solve.solve_id, solve.input.0
+                )
+            })?
+            .clone();
+        validate_layer_media_type(&input, &crate::artifact::media_types::v1_instance())
+            .with_context(|| format!("Invalid Run {run_id} Solve {} input", solve.solve_id))?;
+        let output = resolve_layer(layers, solve.output)
+            .with_context(|| {
+                format!(
+                    "Failed to resolve Run {run_id} Solve {} output LayerRef {}",
+                    solve.solve_id, solve.output.0
+                )
+            })?
+            .clone();
+        validate_layer_media_type(&output, &crate::artifact::media_types::v1_solution())
+            .with_context(|| format!("Invalid Run {run_id} Solve {} output", solve.solve_id))?;
         super::parameter::ParameterSet::from_map(solve.parameters.clone())?;
         decoded.push(SealedSolve {
             solve_id: solve.solve_id,
@@ -225,7 +230,12 @@ fn load_run_parameters(
     layers: &[Descriptor],
     layer_ref: LayerRef,
 ) -> Result<RunParameterTable> {
-    let descriptor = resolve_layer(layers, layer_ref, "run-parameter table")?;
+    let descriptor = resolve_layer(layers, layer_ref).with_context(|| {
+        format!(
+            "Failed to resolve run-parameter table LayerRef {}",
+            layer_ref.0
+        )
+    })?;
     if descriptor.media_type() != &MediaType::Other(RUN_PARAMETERS_MEDIA_TYPE.to_string()) {
         crate::bail!(
             "Run-parameter descriptor media type is {}, expected {}",
@@ -238,28 +248,20 @@ fn load_run_parameters(
         .context("Failed to decode run-parameter table JSON")
 }
 
-fn resolve_layer<'a>(
-    layers: &'a [Descriptor],
-    layer_ref: LayerRef,
-    owner: &str,
-) -> Result<&'a Descriptor> {
+fn resolve_layer(layers: &[Descriptor], layer_ref: LayerRef) -> Result<&Descriptor> {
     layers.get(layer_ref.0 as usize).ok_or_else(|| {
         anyhow::anyhow!(
-            "Experiment config references {owner} layer {}, but artifact has only {} layer(s)",
+            "LayerRef {} is out of bounds for {} manifest layer(s)",
             layer_ref.0,
             layers.len()
         )
     })
 }
 
-fn validate_layer_media_type(
-    descriptor: &Descriptor,
-    expected: &MediaType,
-    owner: &str,
-) -> Result<()> {
+fn validate_layer_media_type(descriptor: &Descriptor, expected: &MediaType) -> Result<()> {
     if descriptor.media_type() != expected {
         crate::bail!(
-            "{owner} media type is {}, expected {}",
+            "media type is {}, expected {}",
             descriptor.media_type(),
             expected
         );

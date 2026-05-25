@@ -569,8 +569,9 @@ fn loaded_experiment_rejects_config_record_not_listed_in_layers() {
 
     let err = SealedExperiment::from_artifact(artifact)
         .expect_err("config must not reference records outside artifact layers");
-    assert!(err.to_string().contains("experiment record layer 1"));
-    assert!(err.to_string().contains("artifact has only 1 layer"));
+    assert!(err
+        .to_string()
+        .contains("Failed to resolve experiment record LayerRef 1"));
 }
 
 #[test]
@@ -684,8 +685,9 @@ fn loaded_experiment_rejects_config_run_record_not_listed_in_layers() {
 
     let err = SealedExperiment::from_artifact(artifact)
         .expect_err("config must not reference run records outside artifact layers");
-    assert!(err.to_string().contains("run 0 record layer 1"));
-    assert!(err.to_string().contains("artifact has only 1 layer"));
+    assert!(err
+        .to_string()
+        .contains("Failed to resolve run 0 record LayerRef 1"));
 }
 
 #[test]
@@ -726,8 +728,9 @@ fn loaded_experiment_rejects_run_parameters_not_listed_in_layers() {
 
     let err = SealedExperiment::from_artifact(artifact)
         .expect_err("config must not reference run parameters outside artifact layers");
-    assert!(err.to_string().contains("run-parameter table layer 0"));
-    assert!(err.to_string().contains("artifact has only 0 layer"));
+    assert!(err
+        .to_string()
+        .contains("Failed to resolve run-parameter table LayerRef 0"));
 }
 
 #[test]
