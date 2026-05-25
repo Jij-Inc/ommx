@@ -1774,7 +1774,7 @@
         {
           "kind": "Class",
           "name": "Experiment",
-          "doc": "",
+          "doc": "A collection of optimization experiment records stored as one OMMX Artifact.\n\nAn `Experiment` owns experiment-level attachments and a sequence of\nfinished `Run` objects. Each `Run` can store scalar run parameters,\nrun-level attachments, and zero or more `Solve` records.\n\nNewly created experiments are unsealed. Call `commit()` to write the\nexperiment into the local registry as an OMMX Artifact. After commit, the\nsame object can be used as a read-only view of the committed artifact.",
           "bases": [],
           "methods": [
             {
@@ -1871,7 +1871,7 @@
             },
             {
               "name": "__new__",
-              "doc": "Start a new Experiment in the local registry.\n\nIf `image_name` is omitted, OMMX generates an anonymous local\nExperiment name.",
+              "doc": "Start a new Experiment in the default local registry.\n\nIf `image_name` is omitted, OMMX generates an anonymous local\nExperiment name. Pass an OCI image reference such as\n`\"example.com/team/experiment:tag\"` when the experiment should be\nloaded later by name.",
               "signatures": [
                 {
                   "parameters": [
@@ -1927,7 +1927,7 @@
             },
             {
               "name": "commit",
-              "doc": "Commit this unsealed Experiment into the local registry.",
+              "doc": "Commit this unsealed Experiment into the local registry.\n\nAll open runs must be finished before committing. The returned\n`Artifact` can be saved as a `.ommx` archive or passed to\n`Experiment.from_artifact`.",
               "signatures": [
                 {
                   "parameters": [],
@@ -1948,7 +1948,7 @@
             },
             {
               "name": "from_artifact",
-              "doc": "Interpret an already-open Artifact as a committed Experiment.",
+              "doc": "Interpret an already-open Artifact as a committed Experiment.\n\nThis is the usual entry point after importing or receiving an OMMX\nArtifact handle. The artifact must contain an Experiment config.",
               "signatures": [
                 {
                   "parameters": [
@@ -1984,7 +1984,7 @@
             },
             {
               "name": "load",
-              "doc": "Load a committed Experiment Artifact from the local registry.",
+              "doc": "Load a committed Experiment Artifact from the default local registry.\n\n`image_name` must be the name used when creating the experiment. This\nmethod opens an already committed artifact; use `Experiment(...)` to\ncreate a new unsealed experiment.",
               "signatures": [
                 {
                   "parameters": [
@@ -2015,7 +2015,7 @@
             },
             {
               "name": "log_attachment",
-              "doc": "Attach arbitrary bytes with an explicit OCI media type in the\nexperiment space.",
+              "doc": "Attach arbitrary bytes with an explicit OCI media type in the experiment space.\n\nThe `name` is stored as attachment metadata and is intended for\nhumans. The bytes are stored as a layer in the committed artifact.",
               "signatures": [
                 {
                   "parameters": [
@@ -2094,7 +2094,7 @@
             },
             {
               "name": "log_json",
-              "doc": "Attach a JSON-serialisable value in the experiment space.",
+              "doc": "Attach a JSON-serializable value in the experiment space.\n\nThe value is encoded with Python's `json.dumps` and stored with media\ntype `application/json`.",
               "signatures": [
                 {
                   "parameters": [
@@ -2199,7 +2199,7 @@
             },
             {
               "name": "run",
-              "doc": "Start a new Run in this unsealed Experiment.",
+              "doc": "Start a new Run in this unsealed Experiment.\n\nThe returned `Run` must be finished before `commit()`. Use it as a\ncontext manager to finish it automatically on normal exit:\n\n```python\nwith experiment.run() as run:\n    run.log_parameter(\"capacity\", 47)\n```",
               "signatures": [
                 {
                   "parameters": [],
@@ -2220,7 +2220,7 @@
             },
             {
               "name": "run_parameters_df",
-              "doc": "Wide DataFrame of run parameters, indexed by `run_id`.",
+              "doc": "Wide DataFrame of run parameters, indexed by `run_id`.\n\nRun parameters are scalar values logged with `Run.log_parameter`.\nSolver kwargs recorded by `Run.log_solve` are solve parameters and do\nnot appear in this table.",
               "signatures": [
                 {
                   "parameters": [],
@@ -2236,7 +2236,7 @@
             },
             {
               "name": "with_temp_local_registry",
-              "doc": "Start a new Experiment backed by a temporary Local Registry.\n\nThe temporary registry is kept alive by the returned Experiment\nand by Artifacts / loaded Experiments derived from it.",
+              "doc": "Start a new Experiment backed by a temporary Local Registry.\n\nThe temporary registry is kept alive by the returned Experiment\nand by Artifacts / loaded Experiments derived from it. This is useful\nfor examples and tests because it does not write entries into the\nprocess-wide default local registry.",
               "signatures": [
                 {
                   "parameters": [
@@ -2278,7 +2278,7 @@
           "attributes": [
             {
               "name": "artifact",
-              "doc": "",
+              "doc": "Committed OMMX Artifact for this Experiment.\n\nRaises an error if the Experiment has not been committed yet.",
               "type_": {
                 "display": "Artifact",
                 "link_target": {
@@ -2294,7 +2294,7 @@
             },
             {
               "name": "experiment_attachments",
-              "doc": "",
+              "doc": "Experiment-level attachments.\n\nEach descriptor points to a layer in `artifact`. Use methods such as\n`Artifact.get_json`, `Artifact.get_instance`, or `Artifact.get_blob`\nwith these descriptors to read the payload.",
               "type_": {
                 "display": "list[_ommx_rust.Descriptor]",
                 "link_target": null,
@@ -2316,7 +2316,7 @@
             },
             {
               "name": "image_name",
-              "doc": "",
+              "doc": "OCI image reference used to store this Experiment in a local registry.",
               "type_": {
                 "display": "str",
                 "link_target": null,
@@ -2327,7 +2327,7 @@
             },
             {
               "name": "runs",
-              "doc": "",
+              "doc": "Finished runs in insertion order.",
               "type_": {
                 "display": "list[_ommx_rust.SealedRun]",
                 "link_target": null,
@@ -2353,7 +2353,7 @@
         {
           "kind": "Class",
           "name": "Run",
-          "doc": "",
+          "doc": "A mutable run being recorded inside an unsealed Experiment.\n\nA run represents one experimental condition or trial. Use\n`log_parameter` for scalar values that should appear in\n`Experiment.run_parameters_df`, and use attachment methods for payloads\nsuch as JSON, instances, solutions, sample sets, or raw bytes.\n\nRuns are usually created with `Experiment.run()` and used as context\nmanagers. A run becomes immutable once it is finished.",
           "bases": [],
           "methods": [
             {
@@ -2466,7 +2466,7 @@
             },
             {
               "name": "finish",
-              "doc": "Finish this run and append it to the parent Experiment.",
+              "doc": "Finish this run and append it to the parent Experiment.\n\nAfter this method returns, the run handle can no longer be used. The\ncontext manager calls this automatically on normal exit and abandons\nthe run on exception.",
               "signatures": [
                 {
                   "parameters": [],
@@ -2482,7 +2482,7 @@
             },
             {
               "name": "log_attachment",
-              "doc": "Attach arbitrary bytes with an explicit OCI media type in this run.",
+              "doc": "Attach arbitrary bytes with an explicit OCI media type in this run.\n\nUse this for payloads that belong to this run but are not scalar run\nparameters, for example solver logs or derived files.",
               "signatures": [
                 {
                   "parameters": [
@@ -2526,7 +2526,7 @@
             },
             {
               "name": "log_instance",
-              "doc": "Attach an Instance in this run.",
+              "doc": "Attach an Instance in this run.\n\nThis records an instance as a run-level attachment. Use `log_solve`\nwhen the instance is the input of a solver call and should be paired\nwith the returned solution.",
               "signatures": [
                 {
                   "parameters": [
@@ -2561,7 +2561,7 @@
             },
             {
               "name": "log_json",
-              "doc": "Attach a JSON-serialisable value in this run.",
+              "doc": "Attach a JSON-serializable value in this run.\n\nThe value is encoded with Python's `json.dumps` and stored with media\ntype `application/json`.",
               "signatures": [
                 {
                   "parameters": [
@@ -2596,7 +2596,7 @@
             },
             {
               "name": "log_parameter",
-              "doc": "Log a scalar parameter for this run.",
+              "doc": "Log a scalar parameter for this run.\n\nAccepted value types are `bool`, `int`, `float`, and `str`. These\nvalues are intended for comparing runs and are exposed as columns in\n`Experiment.run_parameters_df()`.",
               "signatures": [
                 {
                   "parameters": [
@@ -2687,7 +2687,7 @@
             },
             {
               "name": "log_solution",
-              "doc": "Attach a Solution in this run.",
+              "doc": "Attach a Solution in this run.\n\nThis records a solution as a run-level attachment. Use `log_solve`\nwhen the solution is produced by a solver call and should be paired\nwith the input instance.",
               "signatures": [
                 {
                   "parameters": [
@@ -2722,7 +2722,7 @@
             },
             {
               "name": "log_solve",
-              "doc": "Solve an Instance with an OMMX SolverAdapter and log a Solve entry.\n\nThe input Instance is cloned before calling the adapter, so adapter-side\ncapability reductions do not mutate the caller's object. The original\ninput is always stored as the Solve input.",
+              "doc": "Solve an Instance with an OMMX SolverAdapter and log a Solve entry.\n\nThe input Instance is cloned before calling the adapter, so adapter-side\ncapability reductions do not mutate the caller's object. The original\ninput is always stored as the Solve input.\n\n`adapter` must be a subclass of `ommx.adapter.SolverAdapter`. Keyword\narguments are passed to `adapter.solve(...)` and also stored in the\n`Solve.parameters[\"kwargs\"]` field as a JSON string. The adapter class\nname is stored in `Solve.parameters[\"adapter\"]`.\n\nSolver kwargs are solve-scoped metadata, not run parameters. They do\nnot appear in `Experiment.run_parameters_df()`.",
               "signatures": [
                 {
                   "parameters": [
@@ -2774,7 +2774,7 @@
           "attributes": [
             {
               "name": "run_id",
-              "doc": "",
+              "doc": "Integer identifier of this run within its Experiment.",
               "type_": {
                 "display": "int",
                 "link_target": null,
@@ -2789,7 +2789,7 @@
         {
           "kind": "Class",
           "name": "SealedRun",
-          "doc": "",
+          "doc": "Immutable view of a finished Run in a committed Experiment.\n\n`SealedRun` exposes descriptors for run-level attachments and the\nsequence of `Solve` records created by `Run.log_solve`.",
           "bases": [],
           "methods": [
             {
@@ -2812,7 +2812,7 @@
           "attributes": [
             {
               "name": "attachments",
-              "doc": "",
+              "doc": "Run-level attachments.\n\nEach descriptor points to a layer in the parent Experiment's artifact.\nUse the artifact reader methods to load the payload.",
               "type_": {
                 "display": "list[_ommx_rust.Descriptor]",
                 "link_target": null,
@@ -2834,7 +2834,7 @@
             },
             {
               "name": "run_id",
-              "doc": "",
+              "doc": "Integer identifier of this run within its Experiment.",
               "type_": {
                 "display": "int",
                 "link_target": null,
@@ -2845,7 +2845,7 @@
             },
             {
               "name": "solves",
-              "doc": "",
+              "doc": "Solve records logged in this run, ordered by `solve_id`.",
               "type_": {
                 "display": "list[_ommx_rust.Solve]",
                 "link_target": null,
@@ -2871,7 +2871,7 @@
         {
           "kind": "Class",
           "name": "Solve",
-          "doc": "",
+          "doc": "Immutable record of one solver call.\n\nA `Solve` stores descriptors for the input `Instance` and output\n`Solution`, plus string-valued solve parameters. `Run.log_solve` records\nthe adapter class name in `parameters[\"adapter\"]` and JSON-encoded solver\nkeyword arguments in `parameters[\"kwargs\"]`.",
           "bases": [],
           "methods": [
             {
@@ -2894,7 +2894,7 @@
           "attributes": [
             {
               "name": "input",
-              "doc": "",
+              "doc": "Descriptor of the input `Instance` layer.\n\nUse `Artifact.get_instance(solve.input)` to read the instance.",
               "type_": {
                 "display": "Descriptor",
                 "link_target": {
@@ -2910,7 +2910,7 @@
             },
             {
               "name": "output",
-              "doc": "",
+              "doc": "Descriptor of the output `Solution` layer.\n\nUse `Artifact.get_solution(solve.output)` to read the solution.",
               "type_": {
                 "display": "Descriptor",
                 "link_target": {
@@ -2926,7 +2926,7 @@
             },
             {
               "name": "parameters",
-              "doc": "",
+              "doc": "Solve-scoped parameters as strings.\n\nFor solves created by `Run.log_solve`, this contains at least\n`\"adapter\"` and `\"kwargs\"`. The `\"kwargs\"` value is the JSON string\nproduced by Python's `json.dumps`.",
               "type_": {
                 "display": "dict[str, str]",
                 "link_target": null,
@@ -2948,7 +2948,7 @@
             },
             {
               "name": "solve_id",
-              "doc": "",
+              "doc": "Integer identifier of this solve within its run.",
               "type_": {
                 "display": "int",
                 "link_target": null,
