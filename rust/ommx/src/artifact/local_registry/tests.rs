@@ -209,7 +209,8 @@ fn imports_oci_dir_into_sqlite_registry_preserving_image_manifest() -> Result<()
         OCI_IMAGE_MANIFEST_MEDIA_TYPE
     );
     assert_eq!(artifact.layers()?, vec![layer.clone()]);
-    assert_eq!(artifact.get_blob(layer.digest())?, b"instance");
+    let stored_layer = artifact.registry().stored_descriptor(layer)?;
+    assert_eq!(artifact.get_blob(&stored_layer)?, b"instance");
     Ok(())
 }
 
@@ -535,11 +536,17 @@ fn local_registry_builds_native_image_manifest_with_artifact_type() -> Result<()
         manifest.layers()[0].media_type(),
         &media_types::v1_instance()
     );
-    assert_eq!(artifact.get_blob(layer.digest())?, b"instance");
+    let stored_layer = artifact.registry().stored_descriptor(layer.clone())?;
+    assert_eq!(artifact.get_blob(&stored_layer)?, b"instance");
 
     // Empty config blob must be readable from the registry CAS.
+    let config = artifact.stored_config()?;
     assert_eq!(
-        artifact.get_blob(&Digest::from_str(media_types::OCI_EMPTY_CONFIG_DIGEST)?)?,
+        config.digest().as_ref(),
+        media_types::OCI_EMPTY_CONFIG_DIGEST
+    );
+    assert_eq!(
+        artifact.get_blob(&config)?,
         media_types::OCI_EMPTY_CONFIG_BYTES
     );
     assert!(registry

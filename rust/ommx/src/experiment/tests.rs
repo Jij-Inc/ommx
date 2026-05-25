@@ -47,6 +47,14 @@ fn find_layer<'a>(layers: &'a [Descriptor], key: &str, value: &str) -> &'a Descr
     matches[0]
 }
 
+fn blob_bytes(artifact: &LocalArtifact<'_>, descriptor: &Descriptor) -> Vec<u8> {
+    let descriptor = artifact
+        .registry()
+        .stored_descriptor(descriptor.clone())
+        .unwrap();
+    artifact.get_blob(&descriptor).unwrap()
+}
+
 /// `run()` hands out fresh 0-based ids; `finish()` consumes the run
 /// handle and registers the closed run.
 #[test]
@@ -229,7 +237,7 @@ fn commit_produces_experiment_artifact() {
             &MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string())
         );
         let config_json: serde_json::Value =
-            serde_json::from_slice(&artifact.get_blob(config.digest()).unwrap()).unwrap();
+            serde_json::from_slice(&blob_bytes(&artifact, &config)).unwrap();
         assert_eq!(
             config_json.get("status").and_then(|value| value.as_str()),
             Some(EXPERIMENT_STATUS_FINISHED)
@@ -260,10 +268,7 @@ fn commit_produces_experiment_artifact() {
             Some("0")
         );
         assert_eq!(candidate.media_type(), &media_types::v1_instance());
-        assert_eq!(
-            artifact.get_blob(candidate.digest()).unwrap(),
-            instance.to_bytes()
-        );
+        assert_eq!(blob_bytes(&artifact, candidate), instance.to_bytes());
 
         // Aggregate layers are not tagged as attachments.
         let run_params = find_layer(&layers, ANN_LAYER, LAYER_KIND_RUN_PARAMETERS);
@@ -301,7 +306,7 @@ fn log_parameter_materializes_run_parameter_table() {
         let layers = artifact.layers().unwrap();
         let run_params = find_layer(&layers, ANN_LAYER, LAYER_KIND_RUN_PARAMETERS);
         assert!(layer_annotation(run_params, ANN_ATTACHMENT_NAME).is_none());
-        let bytes = artifact.get_blob(run_params.digest()).unwrap();
+        let bytes = blob_bytes(&artifact, run_params);
         let table: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
 
         assert_eq!(
@@ -435,7 +440,7 @@ fn log_finished_solve_result_materializes_solve_entry_with_layer_refs() {
 
         let config = artifact.get_manifest().unwrap().config();
         let config_json: serde_json::Value =
-            serde_json::from_slice(&artifact.get_blob(config.digest()).unwrap()).unwrap();
+            serde_json::from_slice(&blob_bytes(&artifact, &config)).unwrap();
         assert_eq!(config_json["attachments"], json!([]));
         assert_eq!(config_json["run_parameters"], json!(2));
         assert_eq!(config_json["runs"][0]["attachments"], json!([]));
@@ -459,11 +464,11 @@ fn log_finished_solve_result_materializes_solve_entry_with_layer_refs() {
         assert_eq!(solve.input().media_type(), &media_types::v1_instance());
         assert_eq!(solve.output().media_type(), &media_types::v1_solution());
         assert_eq!(
-            artifact.get_blob(solve.input().digest()).unwrap(),
+            artifact.get_blob(solve.input()).unwrap(),
             instance.to_bytes()
         );
         assert_eq!(
-            artifact.get_blob(solve.output().digest()).unwrap(),
+            artifact.get_blob(solve.output()).unwrap(),
             solution.to_bytes()
         );
         assert_eq!(
@@ -762,7 +767,7 @@ fn log_parameter_promotes_int_column_to_float_at_commit() {
         let artifact = experiment.commit().unwrap().into_artifact();
         let layers = artifact.layers().unwrap();
         let run_params = find_layer(&layers, ANN_LAYER, LAYER_KIND_RUN_PARAMETERS);
-        let bytes = artifact.get_blob(run_params.digest()).unwrap();
+        let bytes = blob_bytes(&artifact, run_params);
         let table: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
 
         assert_eq!(
@@ -821,7 +826,7 @@ fn commit_returns_sealed_experiment() {
         let artifact = sealed.artifact();
         let config = artifact.get_manifest().unwrap().config();
         let config_json: serde_json::Value =
-            serde_json::from_slice(&artifact.get_blob(config.digest()).unwrap()).unwrap();
+            serde_json::from_slice(&blob_bytes(&artifact, &config)).unwrap();
         assert_eq!(
             config_json.get("status").and_then(|value| value.as_str()),
             Some(EXPERIMENT_STATUS_FINISHED)
@@ -957,10 +962,7 @@ fn log_attachment_accepts_caller_defined_media_type() {
         let layers = artifact.layers().unwrap();
         let source_model = find_layer(&layers, ANN_ATTACHMENT_NAME, "source-model");
         assert_eq!(source_model.media_type(), &media_type);
-        assert_eq!(
-            artifact.get_blob(source_model.digest()).unwrap(),
-            br#"{"variables": []}"#
-        );
+        assert_eq!(blob_bytes(&artifact, source_model), br#"{"variables": []}"#);
         Ok(())
     });
 }

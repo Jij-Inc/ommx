@@ -129,7 +129,7 @@ impl<'reg> Solve<'reg> {
 }
 
 fn load_experiment_config(artifact: &LocalArtifact<'_>) -> Result<ExperimentConfig> {
-    let config = artifact.get_manifest()?.config();
+    let config = artifact.stored_config()?;
     if config.media_type() != &MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()) {
         crate::bail!(
             "Experiment config media type is {}, expected {}",
@@ -137,7 +137,7 @@ fn load_experiment_config(artifact: &LocalArtifact<'_>) -> Result<ExperimentConf
             EXPERIMENT_CONFIG_MEDIA_TYPE
         );
     }
-    let bytes = artifact.get_blob(config.digest())?;
+    let bytes = artifact.get_blob(&config)?;
     let config = serde_json::from_slice::<ExperimentConfig>(&bytes)
         .context("Failed to decode Experiment config")?;
     if config.status != EXPERIMENT_STATUS_FINISHED {
@@ -242,7 +242,11 @@ fn load_run_parameters(
             RUN_PARAMETERS_MEDIA_TYPE
         );
     }
-    let bytes = artifact.get_blob(descriptor.digest())?;
+    let descriptor = artifact
+        .registry()
+        .stored_descriptor(descriptor.clone())
+        .context("Failed to decode run-parameter table descriptor")?;
+    let bytes = artifact.get_blob(&descriptor)?;
     serde_json::from_slice::<RunParameterTable>(&bytes)
         .context("Failed to decode run-parameter table JSON")
 }

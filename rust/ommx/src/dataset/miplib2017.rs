@@ -259,7 +259,7 @@ pub fn load(name: &str) -> Result<(Instance, InstanceAnnotations)> {
     let registry = LocalRegistry::shared_default()?;
     pull_image(registry, &image_name)?;
     let artifact = LocalArtifact::open_in_registry(registry, image_name)?;
-    let layers = artifact.layers()?;
+    let layers = artifact.stored_layers()?;
     let mut instance_layers = layers
         .into_iter()
         .filter(|d| d.media_type() == &media_types::v1_instance());
@@ -270,7 +270,7 @@ pub fn load(name: &str) -> Result<(Instance, InstanceAnnotations)> {
         instance_layers.next().is_none(),
         "MIPLIB2017 Artifact should contain exactly one instance"
     );
-    let bytes = artifact.get_blob(layer.digest())?;
+    let bytes = artifact.get_blob(&layer)?;
     let instance =
         Instance::decode(bytes.as_slice()).context("Failed to decode MIPLIB2017 instance layer")?;
     Ok((

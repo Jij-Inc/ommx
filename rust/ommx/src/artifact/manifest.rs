@@ -9,7 +9,7 @@ use super::{
     SolutionAnnotations,
 };
 use crate::v1;
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, ensure, Context, Result};
 use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, ImageManifest, MediaType};
 use prost::Message;
 use serde::Serialize;
@@ -154,8 +154,8 @@ impl LocalArtifactDyn {
         self.as_local_artifact().stored_layers()
     }
 
-    pub fn get_blob(&self, digest: &Digest) -> Result<Vec<u8>> {
-        self.as_local_artifact().get_blob(digest)
+    pub fn get_blob(&self, descriptor: &Descriptor) -> Result<Vec<u8>> {
+        self.as_local_artifact().get_blob_by_descriptor(descriptor)
     }
 
     pub fn save(&self, output: &Path) -> crate::Result<()> {
@@ -257,6 +257,11 @@ impl<'reg> LocalArtifact<'reg> {
         Ok(self.get_manifest()?.layers())
     }
 
+    pub fn stored_config(&self) -> Result<StoredDescriptor<'reg>> {
+        self.registry
+            .stored_descriptor(self.get_manifest()?.config())
+    }
+
     pub fn stored_layers(&self) -> Result<Vec<StoredDescriptor<'reg>>> {
         self.get_manifest()?
             .layers()
@@ -269,7 +274,29 @@ impl<'reg> LocalArtifact<'reg> {
         Ok(self.get_manifest()?.subject())
     }
 
-    pub fn get_blob(&self, digest: &Digest) -> Result<Vec<u8>> {
+    pub fn get_blob(&self, descriptor: &StoredDescriptor<'_>) -> Result<Vec<u8>> {
+        ensure!(
+            descriptor.is_stored_in(self.registry),
+            "Descriptor {} is not stored in this LocalArtifact's Local Registry",
+            descriptor.digest()
+        );
+        let bytes = self.registry.blobs().read_bytes(descriptor.digest())?;
+        ensure!(
+            bytes.len() as u64 == descriptor.size(),
+            "Descriptor size mismatch for {}: descriptor={}, actual={}",
+            descriptor.digest(),
+            descriptor.size(),
+            bytes.len()
+        );
+        Ok(bytes)
+    }
+
+    pub(crate) fn get_blob_by_descriptor(&self, descriptor: &Descriptor) -> Result<Vec<u8>> {
+        let descriptor = self.registry.stored_descriptor(descriptor.clone())?;
+        self.get_blob(&descriptor)
+    }
+
+    pub(crate) fn read_blob_by_digest(&self, digest: &Digest) -> Result<Vec<u8>> {
         self.registry.blobs().read_bytes(digest)
     }
 }

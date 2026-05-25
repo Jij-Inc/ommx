@@ -1,7 +1,6 @@
 use anyhow::Result;
-use derive_more::Deref;
 use oci_spec::image::Descriptor;
-use ommx::artifact::local_registry::StoredDescriptor;
+use ommx::artifact::{local_registry::StoredDescriptor, LocalArtifactDyn};
 use pyo3::{prelude::*, types::PyDict};
 use std::collections::HashMap;
 
@@ -17,12 +16,12 @@ use std::collections::HashMap;
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust", name = "Descriptor")]
-#[derive(Debug, Clone, PartialEq, Deref)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PyDescriptor(Descriptor);
 
 impl PyDescriptor {
-    pub(crate) fn as_oci_descriptor(&self) -> &Descriptor {
-        &self.0
+    pub(crate) fn read_blob_from(&self, artifact: &LocalArtifactDyn) -> Result<Vec<u8>> {
+        artifact.get_blob(&self.0)
     }
 }
 
@@ -36,7 +35,7 @@ impl From<StoredDescriptor<'_>> for PyDescriptor {
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust", name = "ArchiveDescriptor")]
-#[derive(Debug, Clone, PartialEq, Deref)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PyArchiveDescriptor(Descriptor);
 
 impl From<Descriptor> for PyArchiveDescriptor {

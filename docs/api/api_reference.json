@@ -295,15 +295,20 @@
           "methods": [
             {
               "name": "get_blob",
-              "doc": "Get raw bytes of a blob by digest string or Descriptor.",
+              "doc": "Get raw bytes of a blob by Descriptor.",
               "signatures": [
                 {
                   "parameters": [
                     {
-                      "name": "digest_or_descriptor",
+                      "name": "descriptor",
                       "type_": {
-                        "display": "Any",
-                        "link_target": null,
+                        "display": "Descriptor",
+                        "link_target": {
+                          "fqn": "ommx.artifact.Descriptor",
+                          "doc_module": "ommx.artifact",
+                          "kind": "Class",
+                          "attribute": null
+                        },
                         "children": []
                       },
                       "default": null

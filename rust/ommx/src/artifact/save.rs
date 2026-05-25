@@ -48,7 +48,7 @@ impl LocalArtifact<'_> {
     /// registry round-trips to the same digest.
     pub fn save(&self, output: &Path) -> crate::Result<()> {
         let manifest_digest = self.manifest_digest().clone();
-        let manifest_bytes = self.get_blob(&manifest_digest)?;
+        let manifest_bytes = self.read_blob_by_digest(&manifest_digest)?;
         let manifest: ImageManifest = serde_json::from_slice(&manifest_bytes)
             .context("Failed to parse manifest from SQLite Local Registry")?;
 
@@ -88,13 +88,16 @@ impl LocalArtifact<'_> {
         //    semantically significant — OCI Image Layout readers index
         //    by `blobs/<algorithm>/<encoded>` regardless of tar order.
         append_blob_entry(&mut tar, &manifest_digest, &manifest_bytes)?;
-        let config = manifest.config();
-        let config_bytes = self.get_blob(config.digest())?;
-        verify_blob(config, config_bytes.len(), "config")?;
+        let config = self
+            .registry()
+            .stored_descriptor(manifest.config().clone())?;
+        let config_bytes = self.get_blob(&config)?;
+        verify_blob(&config, config_bytes.len(), "config")?;
         append_blob_entry(&mut tar, config.digest(), &config_bytes)?;
         for layer in manifest.layers() {
-            let layer_bytes = self.get_blob(layer.digest())?;
-            verify_blob(layer, layer_bytes.len(), "layer")?;
+            let layer = self.registry().stored_descriptor(layer.clone())?;
+            let layer_bytes = self.get_blob(&layer)?;
+            verify_blob(&layer, layer_bytes.len(), "layer")?;
             append_blob_entry(&mut tar, layer.digest(), &layer_bytes)?;
         }
 
