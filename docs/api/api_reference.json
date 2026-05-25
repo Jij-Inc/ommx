@@ -1517,7 +1517,7 @@
         {
           "kind": "Class",
           "name": "Descriptor",
-          "doc": "Descriptor of a blob stored in the local registry.",
+          "doc": "Descriptor of a blob stored in the local registry.\n\n`PyDescriptor` intentionally does not carry a `LocalRegistryHandle`.\nIt is a lightweight descriptor view returned by registry-owning\nobjects such as `Artifact` / `Experiment`. The blob can only be read\nby passing this value back to one of those owner objects, whose handle\nkeeps temporary registries alive. If a descriptor outlives every\nowner of its temporary registry, it is just inert metadata and cannot\nbe used to access bytes.",
           "bases": [],
           "methods": [
             {
