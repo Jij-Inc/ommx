@@ -1691,6 +1691,22 @@ class Experiment:
     Newly created experiments are unsealed. Call `commit()` to write the
     experiment into the local registry as an OMMX Artifact. After commit, the
     same object can be used as a read-only view of the committed artifact.
+
+    Example:
+
+    >>> from ommx.experiment import Experiment
+    >>> exp = Experiment.with_temp_local_registry("example.com/team/demo:latest")
+    >>> exp.log_json("dataset", {"name": "demo"})
+    >>> with exp.run() as run:
+    ...     run.log_parameter("capacity", 10)
+    ...     run.log_json("scenario", {"capacity": 10})
+    >>> _artifact = exp.commit()
+    >>> len(exp.runs)
+    1
+    >>> len(exp.experiment_attachments)
+    1
+    >>> exp.run_parameters_df().to_dict()
+    {'capacity': {0: 10}}
     """
     @property
     def image_name(self) -> builtins.str:
