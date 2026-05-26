@@ -5,7 +5,7 @@ use super::attachment::{
 };
 use super::{ParameterValue, Run, RunEntry, SolveEntry};
 use crate::artifact::media_types;
-use crate::{Instance, SampleSet, Solution};
+use crate::{Instance, ParametricInstance, SampleSet, Solution};
 use anyhow::Result;
 use oci_spec::image::MediaType;
 use std::collections::BTreeMap;
@@ -49,6 +49,11 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
     /// Attach an [`Instance`] in this run's space.
     pub fn log_instance(&mut self, name: &str, instance: &Instance) -> Result<()> {
         self.log_attachment(name, media_types::v1_instance(), instance.to_bytes())
+    }
+
+    /// Attach an [`ParametricInstance`] in this run's space.
+    pub fn log_parametric_instance(&mut self, name: &str, pi: &ParametricInstance) -> Result<()> {
+        self.log_attachment(name, media_types::v1_parametric_instance(), pi.to_bytes())
     }
 
     /// Attach a [`Solution`] in this run's space.

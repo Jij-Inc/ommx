@@ -25,12 +25,11 @@ use crate::{PyArtifact, PyDescriptor};
 /// Example:
 ///
 /// >>> from ommx.experiment import Experiment
-/// >>> exp = Experiment.with_temp_local_registry("example.com/team/demo:latest")
-/// >>> exp.log_json("dataset", {"name": "demo"})
-/// >>> with exp.run() as run:
-/// ...     run.log_parameter("capacity", 10)
-/// ...     run.log_json("scenario", {"capacity": 10})
-/// >>> _artifact = exp.commit()
+/// >>> with Experiment.with_temp_local_registry() as exp:
+/// ...     exp.log_json("dataset", {"name": "demo"})
+/// ...     with exp.run() as run:
+/// ...         run.log_parameter("capacity", 10)
+/// ...         run.log_json("scenario", {"capacity": 10})
 /// >>> len(exp.runs)
 /// 1
 /// >>> len(exp.experiment_attachments)
@@ -205,6 +204,15 @@ impl PyExperiment {
     /// Attach an Instance in the experiment space.
     pub fn log_instance(&mut self, name: &str, instance: &crate::Instance) -> Result<()> {
         self.inner.log_instance(name, &instance.inner)
+    }
+
+    /// Attach an ParametricInstance in the experiment space.
+    pub fn log_parametric_instance(
+        &mut self,
+        name: &str,
+        pi: &crate::ParametricInstance,
+    ) -> Result<()> {
+        self.inner.log_parametric_instance(name, &pi.inner)
     }
 
     /// Attach a Solution in the experiment space.

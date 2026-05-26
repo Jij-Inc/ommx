@@ -21,7 +21,7 @@ use super::attachment::{
 use super::{Name, RunEntry, RunParameterCell, SealedExperiment, UnsealedExperimentState};
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
 use crate::artifact::{ImageRef, LocalArtifact, LocalArtifactDyn, LocalRegistryHandle};
-use crate::{Instance, SampleSet, Solution};
+use crate::{Instance, ParametricInstance, SampleSet, Solution};
 use anyhow::Result;
 use oci_spec::image::{Descriptor, MediaType};
 use std::collections::BTreeMap;
@@ -278,6 +278,14 @@ impl ExperimentDyn {
             name,
             crate::artifact::media_types::v1_instance(),
             instance.to_bytes(),
+        )
+    }
+
+    pub fn log_parametric_instance(&self, name: &str, pi: &ParametricInstance) -> Result<()> {
+        self.log_attachment(
+            name,
+            crate::artifact::media_types::v1_parametric_instance(),
+            pi.to_bytes(),
         )
     }
 

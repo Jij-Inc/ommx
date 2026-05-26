@@ -9,7 +9,7 @@ use super::{
     RunEntryDyn, SolveEntryDyn,
 };
 use crate::artifact::media_types;
-use crate::{Instance, SampleSet, Solution};
+use crate::{Instance, ParametricInstance, SampleSet, Solution};
 use anyhow::Result;
 use oci_spec::image::{Descriptor, MediaType};
 use std::collections::BTreeMap;
@@ -115,6 +115,10 @@ impl RunDyn {
 
     pub fn log_instance(&mut self, name: &str, instance: &Instance) -> Result<()> {
         self.log_attachment(name, media_types::v1_instance(), instance.to_bytes())
+    }
+
+    pub fn log_parametric_instance(&mut self, name: &str, pi: &ParametricInstance) -> Result<()> {
+        self.log_attachment(name, media_types::v1_parametric_instance(), pi.to_bytes())
     }
 
     pub fn log_solution(&mut self, name: &str, solution: &Solution) -> Result<()> {
