@@ -1707,6 +1707,13 @@ class Experiment:
     1
     >>> exp.run_parameters_df().to_dict()
     {'capacity': {0: 10}}
+
+    If the experiment has only one run, open the experiment and the run in
+    one `with` statement. On normal exit, the run is finished first and then
+    the experiment is committed:
+
+    >>> with Experiment() as exp, exp.run() as run:  # doctest: +SKIP
+    ...     solution = run.log_solve(adapter, instance, time_limit=10.0)
     """
     @property
     def image_name(self) -> builtins.str:
