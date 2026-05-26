@@ -413,22 +413,27 @@ fn classify_docker_credential(
             // raw bytes. The matching arm names are descriptive
             // enough for diagnosis (the user can re-run the helper
             // directly to see the leaked stderr if they need it).
-            let summary = match &e {
-                CredentialRetrievalError::HelperCommunicationError => {
-                    "HelperCommunicationError".to_string()
-                }
-                CredentialRetrievalError::MalformedHelperResponse => {
-                    "MalformedHelperResponse".to_string()
-                }
-                CredentialRetrievalError::HelperFailure { helper, .. } => {
-                    format!("HelperFailure({helper})")
-                }
-                CredentialRetrievalError::CredentialDecodingError => {
-                    "CredentialDecodingError".to_string()
-                }
-                CredentialRetrievalError::ConfigReadError => "ConfigReadError".to_string(),
+            // Do not exhaustively `match` this upstream enum:
+            // `docker_credential` can add variants without marking it
+            // `#[non_exhaustive]`.
+            let summary = if matches!(e, CredentialRetrievalError::HelperCommunicationError) {
+                "HelperCommunicationError".to_string()
+            } else if matches!(e, CredentialRetrievalError::MalformedHelperResponse) {
+                "MalformedHelperResponse".to_string()
+            } else if let CredentialRetrievalError::HelperFailure { helper, .. } = &e {
+                format!("HelperFailure({helper})")
+            } else if matches!(e, CredentialRetrievalError::CredentialDecodingError) {
+                "CredentialDecodingError".to_string()
+            } else if matches!(e, CredentialRetrievalError::ConfigReadError) {
+                "ConfigReadError".to_string()
+            } else if matches!(
+                e,
                 CredentialRetrievalError::ConfigNotFound
-                | CredentialRetrievalError::NoCredentialConfigured => unreachable!(),
+                    | CredentialRetrievalError::NoCredentialConfigured
+            ) {
+                unreachable!()
+            } else {
+                "UnexpectedCredentialRetrievalError".to_string()
             };
             tracing::warn!(
                 "Failed to read docker credential for {hostname}: {summary}; \
