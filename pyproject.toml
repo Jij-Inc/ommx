@@ -19,6 +19,7 @@ dev = [
   "ipython>=8.18.1",
   "jupyter>=1.1.1",
   "jupyterlab>=4.3.5",
+  "jupytext>=1.19.3",
   "markdown-code-runner>=2.1.0",
   "matplotlib>=3.10.7",
   "nbqa>=1.9.1",
