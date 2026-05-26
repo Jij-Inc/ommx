@@ -1695,12 +1695,11 @@ class Experiment:
     Example:
 
     >>> from ommx.experiment import Experiment
-    >>> exp = Experiment.with_temp_local_registry("example.com/team/demo:latest")
-    >>> exp.log_json("dataset", {"name": "demo"})
-    >>> with exp.run() as run:
-    ...     run.log_parameter("capacity", 10)
-    ...     run.log_json("scenario", {"capacity": 10})
-    >>> _artifact = exp.commit()
+    >>> with Experiment.with_temp_local_registry() as exp:
+    ...     exp.log_json("dataset", {"name": "demo"})
+    ...     with exp.run() as run:
+    ...         run.log_parameter("capacity", 10)
+    ...         run.log_json("scenario", {"capacity": 10})
     >>> len(exp.runs)
     1
     >>> len(exp.experiment_attachments)
@@ -1714,6 +1713,8 @@ class Experiment:
 
     >>> with Experiment() as exp, exp.run() as run:  # doctest: +SKIP
     ...     solution = run.log_solve(adapter, instance, time_limit=10.0)
+    >>> exp.rename("ghcr.io/container/name:latest")  # doctest: +SKIP
+    >>> exp.artifact.push()  # doctest: +SKIP
     """
     @property
     def image_name(self) -> builtins.str:
@@ -1786,6 +1787,15 @@ class Experiment:
         _exc_value: typing.Optional[typing.Any] = None,
         _traceback: typing.Optional[typing.Any] = None,
     ) -> builtins.bool: ...
+    def rename(self, image_name: builtins.str) -> None:
+        r"""
+        Rename this Experiment to another local registry image reference.
+
+        Before commit, this changes the image reference that `commit()` will
+        publish. After commit, it publishes the same Artifact manifest under
+        `image_name` and updates this handle to use the new name. The previous
+        name remains as an alias in the Local Registry.
+        """
     def run(self) -> Run:
         r"""
         Start a new Run in this unsealed Experiment.
@@ -1817,6 +1827,12 @@ class Experiment:
     def log_instance(self, name: builtins.str, instance: Instance) -> None:
         r"""
         Attach an Instance in the experiment space.
+        """
+    def log_parametric_instance(
+        self, name: builtins.str, pi: ParametricInstance
+    ) -> None:
+        r"""
+        Attach an ParametricInstance in the experiment space.
         """
     def log_solution(self, name: builtins.str, solution: Solution) -> None:
         r"""

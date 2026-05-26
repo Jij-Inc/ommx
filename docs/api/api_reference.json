@@ -1774,7 +1774,7 @@
         {
           "kind": "Class",
           "name": "Experiment",
-          "doc": "A collection of optimization experiment records stored as one OMMX Artifact.\n\nAn `Experiment` owns experiment-level attachments and a sequence of\nfinished `Run` objects. Each `Run` can store scalar run parameters,\nrun-level attachments, and zero or more `Solve` records.\n\nNewly created experiments are unsealed. Call `commit()` to write the\nexperiment into the local registry as an OMMX Artifact. After commit, the\nsame object can be used as a read-only view of the committed artifact.\n\nExample:\n\n>>> from ommx.experiment import Experiment\n>>> exp = Experiment.with_temp_local_registry(\"example.com/team/demo:latest\")\n>>> exp.log_json(\"dataset\", {\"name\": \"demo\"})\n>>> with exp.run() as run:\n...     run.log_parameter(\"capacity\", 10)\n...     run.log_json(\"scenario\", {\"capacity\": 10})\n>>> _artifact = exp.commit()\n>>> len(exp.runs)\n1\n>>> len(exp.experiment_attachments)\n1\n>>> exp.run_parameters_df().to_dict()\n{'capacity': {0: 10}}\n\nIf the experiment has only one run, open the experiment and the run in\none `with` statement. On normal exit, the run is finished first and then\nthe experiment is committed:\n\n>>> with Experiment() as exp, exp.run() as run:  # doctest: +SKIP\n...     solution = run.log_solve(adapter, instance, time_limit=10.0)",
+          "doc": "A collection of optimization experiment records stored as one OMMX Artifact.\n\nAn `Experiment` owns experiment-level attachments and a sequence of\nfinished `Run` objects. Each `Run` can store scalar run parameters,\nrun-level attachments, and zero or more `Solve` records.\n\nNewly created experiments are unsealed. Call `commit()` to write the\nexperiment into the local registry as an OMMX Artifact. After commit, the\nsame object can be used as a read-only view of the committed artifact.\n\nExample:\n\n>>> from ommx.experiment import Experiment\n>>> with Experiment.with_temp_local_registry() as exp:\n...     exp.log_json(\"dataset\", {\"name\": \"demo\"})\n...     with exp.run() as run:\n...         run.log_parameter(\"capacity\", 10)\n...         run.log_json(\"scenario\", {\"capacity\": 10})\n>>> len(exp.runs)\n1\n>>> len(exp.experiment_attachments)\n1\n>>> exp.run_parameters_df().to_dict()\n{'capacity': {0: 10}}\n\nIf the experiment has only one run, open the experiment and the run in\none `with` statement. On normal exit, the run is finished first and then\nthe experiment is committed:\n\n>>> with Experiment() as exp, exp.run() as run:  # doctest: +SKIP\n...     solution = run.log_solve(adapter, instance, time_limit=10.0)\n>>> exp.rename(\"ghcr.io/container/name:latest\")  # doctest: +SKIP\n>>> exp.artifact.push()  # doctest: +SKIP",
           "bases": [],
           "methods": [
             {
@@ -2128,6 +2128,41 @@
               "deprecated": null
             },
             {
+              "name": "log_parametric_instance",
+              "doc": "Attach an ParametricInstance in the experiment space.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "pi",
+                      "type_": {
+                        "display": "ParametricInstance",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "log_sample_set",
               "doc": "Attach a SampleSet in the experiment space.",
               "signatures": [
@@ -2181,6 +2216,32 @@
                       "name": "solution",
                       "type_": {
                         "display": "Solution",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "rename",
+              "doc": "Rename this Experiment to another local registry image reference.\n\nBefore commit, this changes the image reference that `commit()` will\npublish. After commit, it publishes the same Artifact manifest under\n`image_name` and updates this handle to use the new name. The previous\nname remains as an alias in the Local Registry.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "image_name",
+                      "type_": {
+                        "display": "str",
                         "link_target": null,
                         "children": []
                       },

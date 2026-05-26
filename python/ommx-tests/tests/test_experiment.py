@@ -118,6 +118,28 @@ def test_experiment_context_does_not_commit_on_exception():
         experiment.artifact
 
 
+def test_rename_after_context_commit_updates_artifact_name():
+    with Experiment.with_temp_local_registry() as experiment:
+        experiment.log_json("dataset", {"name": "miplib2017"})
+        with experiment.run() as run:
+            run.log_parameter("solver", "highs")
+
+    old_artifact = experiment.artifact
+    old_image_name = experiment.image_name
+    new_image_name = "ghcr.io/jij-inc/ommx/renamed-experiment:latest"
+
+    experiment.rename(new_image_name)
+
+    assert old_artifact.image_name == old_image_name
+    assert experiment.image_name == new_image_name
+    assert experiment.artifact.image_name == new_image_name
+    assert (
+        Experiment.from_artifact(experiment.artifact).run_parameters_df().loc[0, "solver"]
+        == "highs"
+    )
+    assert Experiment.from_artifact(old_artifact).run_parameters_df().loc[0, "solver"] == "highs"
+
+
 def test_run_context_does_not_finish_on_exception():
     experiment = Experiment.with_temp_local_registry()
     with pytest.raises(ValueError):

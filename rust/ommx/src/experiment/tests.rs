@@ -1060,3 +1060,61 @@ fn experiment_dyn_marks_commit_failure_explicitly() {
         .expect_err("failed Experiment must reject new runs");
     assert!(err.to_string().contains("commit has failed"));
 }
+
+#[test]
+fn experiment_dyn_rename_before_commit_changes_publish_ref() {
+    let registry_handle = LocalRegistryHandle::temp().unwrap();
+    let experiment =
+        ExperimentDyn::with_registry_handle(registry_handle.clone(), Name::Anonymous).unwrap();
+    let old_image_name = experiment.image_name().unwrap();
+    let new_image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/renamed-before:latest").unwrap();
+
+    experiment.rename(new_image_name.clone()).unwrap();
+    experiment.log_json("dataset", json!("miplib2017")).unwrap();
+    let artifact = experiment.commit().unwrap();
+
+    assert_eq!(artifact.image_name(), &new_image_name);
+    assert_eq!(experiment.image_name().unwrap(), new_image_name);
+    assert!(registry_handle
+        .registry()
+        .resolve_image_name(&old_image_name)
+        .unwrap()
+        .is_none());
+    assert!(registry_handle
+        .registry()
+        .resolve_image_name(artifact.image_name())
+        .unwrap()
+        .is_some());
+}
+
+#[test]
+fn experiment_dyn_rename_after_commit_publishes_alias() {
+    let registry_handle = LocalRegistryHandle::temp().unwrap();
+    let experiment =
+        ExperimentDyn::with_registry_handle(registry_handle.clone(), Name::Anonymous).unwrap();
+    experiment.log_json("dataset", json!("miplib2017")).unwrap();
+    let artifact = experiment.commit().unwrap();
+    let old_image_name = artifact.image_name().clone();
+    let old_digest = registry_handle
+        .registry()
+        .resolve_image_name(&old_image_name)
+        .unwrap()
+        .unwrap();
+    let new_image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/renamed-after:latest").unwrap();
+
+    experiment.rename(new_image_name.clone()).unwrap();
+    let new_digest = registry_handle
+        .registry()
+        .resolve_image_name(&new_image_name)
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(old_digest, new_digest);
+    assert_eq!(experiment.image_name().unwrap(), new_image_name);
+    assert_eq!(experiment.artifact().unwrap().image_name(), &new_image_name);
+    assert!(registry_handle
+        .registry()
+        .resolve_image_name(&old_image_name)
+        .unwrap()
+        .is_some());
+}

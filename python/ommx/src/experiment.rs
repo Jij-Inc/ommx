@@ -43,6 +43,8 @@ use crate::{PyArtifact, PyDescriptor};
 ///
 /// >>> with Experiment() as exp, exp.run() as run:  # doctest: +SKIP
 /// ...     solution = run.log_solve(adapter, instance, time_limit=10.0)
+/// >>> exp.rename("ghcr.io/container/name:latest")  # doctest: +SKIP
+/// >>> exp.artifact.push()  # doctest: +SKIP
 pub struct PyExperiment {
     inner: ommx::experiment::ExperimentDyn,
 }
@@ -127,6 +129,17 @@ impl PyExperiment {
     /// OCI image reference used to store this Experiment in a local registry.
     pub fn image_name(&self) -> Result<String> {
         Ok(self.inner.image_name()?.to_string())
+    }
+
+    /// Rename this Experiment to another local registry image reference.
+    ///
+    /// Before commit, this changes the image reference that `commit()` will
+    /// publish. After commit, it publishes the same Artifact manifest under
+    /// `image_name` and updates this handle to use the new name. The previous
+    /// name remains as an alias in the Local Registry.
+    pub fn rename(&mut self, image_name: &str) -> Result<()> {
+        let image_name = ommx::artifact::ImageRef::parse(image_name)?;
+        self.inner.rename(image_name)
     }
 
     #[getter]

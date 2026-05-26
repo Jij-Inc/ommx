@@ -162,6 +162,16 @@ impl LocalArtifactDyn {
     pub fn push(&self) -> crate::Result<()> {
         self.as_local_artifact().push()
     }
+
+    pub fn tag_as(&self, image_name: ImageRef) -> Result<Self> {
+        let artifact = self.as_local_artifact().tag_as(image_name)?;
+        Ok(Self {
+            registry_handle: self.registry_handle.clone(),
+            image_name: artifact.image_name().clone(),
+            manifest_digest: artifact.manifest_digest().clone(),
+            manifest_cache: Arc::new(OnceLock::new()),
+        })
+    }
 }
 
 impl LocalArtifact<'static> {
@@ -290,6 +300,35 @@ impl<'reg> LocalArtifact<'reg> {
 
     pub(crate) fn read_blob_by_digest(&self, digest: &Digest) -> Result<Vec<u8>> {
         self.registry.blobs().read_bytes(digest)
+    }
+
+    fn stored_manifest_descriptor(&self) -> Result<StoredDescriptor<'reg>> {
+        let size = self.registry.blobs().size(&self.manifest_digest)?;
+        let descriptor = DescriptorBuilder::default()
+            .media_type(MediaType::ImageManifest)
+            .digest(self.manifest_digest.clone())
+            .size(size)
+            .build()
+            .context("Failed to build manifest descriptor")?;
+        self.registry.stored_descriptor(descriptor)
+    }
+
+    /// Publish this artifact under another local image reference.
+    ///
+    /// This does not rewrite the manifest or payload blobs. It only adds a
+    /// new Local Registry ref to the same root manifest digest and returns a
+    /// handle whose `image_name` is the new reference.
+    pub fn tag_as(&self, image_name: ImageRef) -> Result<Self> {
+        let manifest = self.stored_manifest_descriptor()?;
+        let ref_update = self
+            .registry
+            .publish_stored_manifest_ref(&image_name, &manifest)?;
+        reject_conflicting_ref(&image_name, ref_update)?;
+        Ok(Self::from_parts(
+            self.registry,
+            image_name,
+            self.manifest_digest.clone(),
+        ))
     }
 }
 

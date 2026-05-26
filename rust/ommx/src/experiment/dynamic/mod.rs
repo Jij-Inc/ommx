@@ -234,6 +234,21 @@ impl ExperimentDyn {
         }
     }
 
+    pub fn rename(&self, image_name: crate::artifact::ImageRef) -> Result<()> {
+        let mut dyn_state = lock_experiment_state(&self.state);
+        match &mut dyn_state.lifecycle {
+            ExperimentDynLifecycle::Unsealed { state, .. } => {
+                let state = state
+                    .as_mut()
+                    .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
+                state.image_name = image_name;
+                Ok(())
+            }
+            ExperimentDynLifecycle::Sealed(sealed) => sealed.rename(image_name),
+            lifecycle @ ExperimentDynLifecycle::Failed { .. } => bail_non_unsealed(lifecycle),
+        }
+    }
+
     pub fn state_name(&self) -> &'static str {
         match &lock_experiment_state(&self.state).lifecycle {
             ExperimentDynLifecycle::Unsealed { .. } => "unsealed",
@@ -471,6 +486,11 @@ impl SealedExperimentDynState {
 
     fn image_name(&self) -> &ImageRef {
         self.artifact.image_name()
+    }
+
+    fn rename(&mut self, image_name: ImageRef) -> Result<()> {
+        self.artifact = self.artifact.tag_as(image_name)?;
+        Ok(())
     }
 }
 
