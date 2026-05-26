@@ -404,35 +404,12 @@ fn classify_docker_credential(
             CredentialRetrievalError::ConfigNotFound
             | CredentialRetrievalError::NoCredentialConfigured,
         ) => None,
-        Err(e) => {
-            // `CredentialRetrievalError::HelperFailure`'s Display
-            // includes the helper's stdout and stderr verbatim. A
-            // broken helper that succeeded the exec but returned
-            // malformed JSON could echo a partial token in stdout, so
-            // log only the structural shape of the failure, not the
-            // raw bytes. The matching arm names are descriptive
-            // enough for diagnosis (the user can re-run the helper
-            // directly to see the leaked stderr if they need it).
-            let summary = match &e {
-                CredentialRetrievalError::HelperCommunicationError => {
-                    "HelperCommunicationError".to_string()
-                }
-                CredentialRetrievalError::MalformedHelperResponse => {
-                    "MalformedHelperResponse".to_string()
-                }
-                CredentialRetrievalError::HelperFailure { helper, .. } => {
-                    format!("HelperFailure({helper})")
-                }
-                CredentialRetrievalError::CredentialDecodingError => {
-                    "CredentialDecodingError".to_string()
-                }
-                CredentialRetrievalError::ConfigReadError => "ConfigReadError".to_string(),
-                CredentialRetrievalError::ConfigNotFound
-                | CredentialRetrievalError::NoCredentialConfigured => unreachable!(),
-            };
+        Err(_) => {
+            // Do not log the upstream error directly. Some variants
+            // can carry helper stdout/stderr, which may include
+            // credentials or tokens.
             tracing::warn!(
-                "Failed to read docker credential for {hostname}: {summary}; \
-                 falling through to anonymous"
+                "Failed to read docker credential for {hostname}; falling through to anonymous"
             );
             None
         }
@@ -505,9 +482,8 @@ mod tests {
     /// Helper / decoding failures are also non-fatal: warn and fall
     /// through. The user sees the registry's own 401 rather than a
     /// crash from a broken `docker-credential-*` binary. The helper's
-    /// stdout / stderr is summarised by error variant only, never
-    /// logged verbatim — see the comment in `classify_docker_credential`
-    /// about token-leak risk from helpers that return malformed JSON.
+    /// stdout / stderr is never logged — see the comment in
+    /// `classify_docker_credential` about token-leak risk.
     #[test]
     fn classify_helper_failure_falls_through() {
         let auth = classify_docker_credential(
