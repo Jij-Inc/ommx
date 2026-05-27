@@ -1984,7 +1984,7 @@
             },
             {
               "name": "load",
-              "doc": "Load a committed Experiment Artifact from the default local registry.\n\n`image_name` must be the name used when creating the experiment. This\nmethod opens an already committed artifact; use `Experiment(...)` to\ncreate a new unsealed experiment.",
+              "doc": "Load a committed Experiment Artifact by image reference.\n\nIf the image is not found in the default Local Registry, OMMX tries to\npull it from the remote registry, matching {meth}`Artifact.load`.\nThe loaded artifact must contain an Experiment config. Use\n`Experiment(...)` to create a new unsealed experiment.",
               "signatures": [
                 {
                   "parameters": [

@@ -200,24 +200,9 @@ impl PyArtifact {
     #[staticmethod]
     pub fn load(py: Python<'_>, image_name: &str) -> Result<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let image_name_parsed = ommx::artifact::ImageRef::parse(image_name)?;
-
-        // Fast path: the image is already published in the v3 SQLite Local
-        // Registry. Subsequent calls for the same image always land here.
-        if let Some(artifact) = ommx::artifact::LocalArtifact::try_open(image_name_parsed.clone())?
-        {
-            return Ok(Self::new(ommx::artifact::LocalArtifactDyn::open(
-                artifact.image_name().clone(),
-            )?));
-        }
-
-        // SQLite miss — pull from the remote registry directly into
-        // SQLite via the v3 native `pull_image` (no on-disk OCI dir
-        // intermediate; blobs land straight in FileBlobStore).
-        let registry = ommx::artifact::local_registry::LocalRegistry::shared_default()?;
-        ommx::artifact::local_registry::pull_image(registry, &image_name_parsed)?;
-        Ok(Self::new(ommx::artifact::LocalArtifactDyn::open(
-            image_name_parsed,
+        let image_name = ommx::artifact::ImageRef::parse(image_name)?;
+        Ok(Self::new(ommx::artifact::LocalArtifactDyn::load(
+            image_name,
         )?))
     }
 

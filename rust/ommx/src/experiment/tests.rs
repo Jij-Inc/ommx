@@ -8,7 +8,7 @@ use super::{
     LAYER_KIND_RUN_PARAMETERS, RUN_PARAMETERS_MEDIA_TYPE,
 };
 use crate::artifact::local_registry::{StoredDescriptor, UnsealedArtifact};
-use crate::artifact::{media_types, ImageRef, LocalArtifact, LocalRegistryHandle};
+use crate::artifact::{media_types, AsArtifact, ImageRef, LocalArtifact, LocalRegistryHandle};
 use crate::{Evaluate, Function, Instance, Sense};
 use oci_spec::image::{Descriptor, MediaType};
 use serde_json::json;

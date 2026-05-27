@@ -11,6 +11,7 @@ use std::{
 
 use crate::pandas::{raw_entries_to_dataframe, PyDataFrame};
 use crate::{PyArtifact, PyDescriptor};
+use ommx::artifact::AsArtifact;
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
@@ -85,11 +86,12 @@ impl PyExperiment {
         })
     }
 
-    /// Load a committed Experiment Artifact from the default local registry.
+    /// Load a committed Experiment Artifact by image reference.
     ///
-    /// `image_name` must be the name used when creating the experiment. This
-    /// method opens an already committed artifact; use `Experiment(...)` to
-    /// create a new unsealed experiment.
+    /// If the image is not found in the default Local Registry, OMMX tries to
+    /// pull it from the remote registry, matching {meth}`Artifact.load`.
+    /// The loaded artifact must contain an Experiment config. Use
+    /// `Experiment(...)` to create a new unsealed experiment.
     #[staticmethod]
     pub fn load(py: Python<'_>, image_name: &str) -> Result<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);

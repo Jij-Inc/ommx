@@ -1766,11 +1766,12 @@ class Experiment:
     @staticmethod
     def load(image_name: builtins.str) -> Experiment:
         r"""
-        Load a committed Experiment Artifact from the default local registry.
+        Load a committed Experiment Artifact by image reference.
 
-        `image_name` must be the name used when creating the experiment. This
-        method opens an already committed artifact; use `Experiment(...)` to
-        create a new unsealed experiment.
+        If the image is not found in the default Local Registry, OMMX tries to
+        pull it from the remote registry, matching {meth}`Artifact.load`.
+        The loaded artifact must contain an Experiment config. Use
+        `Experiment(...)` to create a new unsealed experiment.
         """
     @staticmethod
     def from_artifact(artifact: Artifact) -> Experiment:

@@ -103,6 +103,27 @@ impl LocalArtifactDyn {
         Self::open_in_registry_handle(registry_handle, image_name)
     }
 
+    /// Load an artifact by image reference from the default Local Registry.
+    ///
+    /// With `remote-artifact` enabled, this mirrors Python
+    /// `Artifact.load`: if the default Local Registry does not already
+    /// contain a complete copy, pull the image from the remote registry
+    /// into the Local Registry before opening it.
+    #[cfg(feature = "remote-artifact")]
+    pub fn load(image_name: ImageRef) -> Result<Self> {
+        let registry_handle = LocalRegistryHandle::shared_default()?;
+        super::local_registry::pull_image(registry_handle.registry(), &image_name)?;
+        Self::open_in_registry_handle(registry_handle, image_name)
+    }
+
+    /// Load an artifact by image reference from the default Local Registry.
+    ///
+    /// Without `remote-artifact`, loading is local-only.
+    #[cfg(not(feature = "remote-artifact"))]
+    pub fn load(image_name: ImageRef) -> Result<Self> {
+        Self::open(image_name)
+    }
+
     pub fn open_in_registry_handle(
         registry_handle: LocalRegistryHandle,
         image_name: ImageRef,
@@ -142,6 +163,10 @@ impl LocalArtifactDyn {
         &self.image_name
     }
 
+    pub fn manifest_digest(&self) -> &Digest {
+        &self.manifest_digest
+    }
+
     pub fn annotations(&self) -> Result<HashMap<String, String>> {
         self.as_local_artifact().annotations()
     }
@@ -155,12 +180,12 @@ impl LocalArtifactDyn {
     }
 
     pub fn save(&self, output: &Path) -> crate::Result<()> {
-        self.as_local_artifact().save(output)
+        AsArtifact::save(self, output)
     }
 
     #[cfg(feature = "remote-artifact")]
     pub fn push(&self) -> crate::Result<()> {
-        self.as_local_artifact().push()
+        AsArtifact::push(self)
     }
 
     pub fn tag_as(&self, image_name: ImageRef) -> Result<Self> {
@@ -171,6 +196,34 @@ impl LocalArtifactDyn {
             manifest_digest: artifact.manifest_digest().clone(),
             manifest_cache: Arc::new(OnceLock::new()),
         })
+    }
+}
+
+/// Values that can be viewed as a committed OMMX Artifact.
+///
+/// Implementors may be domain objects such as Experiment handles, or the
+/// artifact handle itself. The returned [`LocalArtifact`] is a borrowed view
+/// tied to `self`, so implementors that own a [`LocalRegistryHandle`] can keep
+/// the underlying registry alive while exposing the lifetime-based artifact API.
+pub trait AsArtifact<'reg> {
+    /// Return the committed artifact view backing this value.
+    fn as_artifact(&'reg self) -> crate::Result<LocalArtifact<'reg>>;
+
+    /// Save the committed artifact as a `.ommx` OCI archive file.
+    fn save(&'reg self, output: &Path) -> crate::Result<()> {
+        self.as_artifact()?.save(output)
+    }
+
+    /// Push the committed artifact to its remote registry.
+    #[cfg(feature = "remote-artifact")]
+    fn push(&'reg self) -> crate::Result<()> {
+        self.as_artifact()?.push()
+    }
+}
+
+impl<'reg> AsArtifact<'reg> for LocalArtifactDyn {
+    fn as_artifact(&'reg self) -> crate::Result<LocalArtifact<'reg>> {
+        Ok(self.as_local_artifact())
     }
 }
 

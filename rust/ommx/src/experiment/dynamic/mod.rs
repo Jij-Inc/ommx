@@ -20,12 +20,11 @@ use super::attachment::{
 };
 use super::{Name, RunEntry, RunParameterCell, SealedExperiment, UnsealedExperimentState};
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
-use crate::artifact::{ImageRef, LocalArtifact, LocalArtifactDyn, LocalRegistryHandle};
+use crate::artifact::{AsArtifact, ImageRef, LocalArtifact, LocalArtifactDyn, LocalRegistryHandle};
 use crate::{Instance, ParametricInstance, SampleSet, Solution};
 use anyhow::Result;
 use oci_spec::image::{Descriptor, MediaType};
 use std::collections::BTreeMap;
-use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 mod run;
@@ -201,7 +200,7 @@ impl ExperimentDyn {
     }
 
     pub fn load(image_name: crate::artifact::ImageRef) -> Result<Self> {
-        Self::from_artifact(LocalArtifactDyn::open(image_name)?)
+        Self::from_artifact(LocalArtifactDyn::load(image_name)?)
     }
 
     pub fn from_artifact(artifact: LocalArtifactDyn) -> Result<Self> {
@@ -369,15 +368,6 @@ impl ExperimentDyn {
         Ok(sealed.artifact.clone())
     }
 
-    pub fn save(&self, output: &Path) -> Result<()> {
-        self.artifact()?.save(output)
-    }
-
-    #[cfg(feature = "remote-artifact")]
-    pub fn push(&self) -> Result<()> {
-        self.artifact()?.push()
-    }
-
     pub fn experiment_attachments(&self) -> Result<Vec<StoredDescriptor<'_>>> {
         let attachments = {
             let dyn_state = lock_experiment_state(&self.state);
@@ -403,6 +393,26 @@ impl ExperimentDyn {
             return bail_not_sealed(&dyn_state.lifecycle);
         };
         Ok(sealed.run_parameters.cells())
+    }
+}
+
+impl<'reg> AsArtifact<'reg> for ExperimentDyn {
+    fn as_artifact(&'reg self) -> Result<LocalArtifact<'reg>> {
+        let (image_name, manifest_digest) = {
+            let dyn_state = lock_experiment_state(&self.state);
+            let ExperimentDynLifecycle::Sealed(sealed) = &dyn_state.lifecycle else {
+                return bail_not_sealed(&dyn_state.lifecycle);
+            };
+            (
+                sealed.artifact.image_name().clone(),
+                sealed.artifact.manifest_digest().clone(),
+            )
+        };
+        Ok(LocalArtifact::from_parts(
+            self.registry_handle.registry(),
+            image_name,
+            manifest_digest,
+        ))
     }
 }
 
