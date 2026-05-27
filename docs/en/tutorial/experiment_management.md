@@ -263,4 +263,35 @@ for run in loaded_experiment.runs:
   assert "verbose" in options and options["verbose"] == False
 ```
 
-With this API, you can inspect which Runs were performed, which comparison parameters were recorded for each Run, which Solves were executed inside each Run, and which inputs and outputs were saved. The first step in experiment management is not to read every stored payload immediately, but to inspect the structure of the Experiment and identify the Runs or Solves you need to revisit.
+## Fork an Experiment
+
+Once an {py:class}`~ommx.experiment.Experiment` has been saved, it becomes immutable. You can still start a new Experiment from a saved Experiment. This operation is called a *Fork*. A forked Experiment inherits the same information as the original Experiment, but it starts again in an unfinalized running state, so you can add new Runs and Attachments. Use {py:meth}`~ommx.experiment.Experiment.fork` to fork an Experiment.
+
+```{code-cell} ipython3
+with loaded_experiment.fork() as forked_experiment:
+    # The forked Experiment inherits existing Runs, so the new Run ID starts from 2.
+    with forked_experiment.run() as run:
+        assert run.run_id == 2
+
+        c = 64
+        instance = pi.with_parameters({capacity.id: c})
+
+        run.log_parameter("capacity", c)
+        solution = run.log_solve(OMMXHighsAdapter, instance, verbose=False)
+        assert solution.feasible
+        run.log_parameter("objective", solution.objective)
+```
+
+The original Experiment is not modified. The forked Experiment contains the original Runs plus the newly added Run.
+
+```{code-cell} ipython3
+assert list(loaded_experiment.run_parameters_df().index) == [0, 1]
+assert list(forked_experiment.run_parameters_df().index) == [0, 1, 2]
+
+forked_df = forked_experiment.run_parameters_df()
+assert forked_df.loc[2, "capacity"] == 64
+```
+
+A forked Experiment inherits Solve and Attachment data, but the data itself is stored in the Local Registry based on its content. Forking does not duplicate that data. Only the Artifact Manifest, which lists the stored data, is duplicated, and the forked Experiment points to the same data as the original Experiment.
+
+When you share a forked Experiment with {py:meth}`~ommx.experiment.Experiment.save` or {py:meth}`~ommx.experiment.Experiment.push`, what you share is the entire forked Experiment. Attachments, Runs, and Solves inherited from the original Experiment are also included in the forked Artifact's `layers`, so reading the forked Experiment does not require the original Experiment.
