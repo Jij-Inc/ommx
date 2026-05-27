@@ -116,6 +116,11 @@ with Experiment() as experiment:
   # experimentのwithブロックを抜けるとExperimentの終了処理が行われる。
 ```
 
+実験の途中で保存されたデータはすべてOMMXの *Local Registry* に保存されます。
+
+- OMMXのLocal RegistryはOMMX Artifactの構成要素を効率よく保存するためのストレージです。`OMMX_LOCAL_REGISTRY_ROOT` 環境変数で場所を変更できます。 {py:meth}`~ommx.experiment.Experiment.with_temp_local_registry` などの一時的なLocal Registryを生成して使うAPIもあります。
+- `log_json` や `log_solve` ではデータは随時Local Registryに保存されていきます。メモリ上に置いておいてExperimentの最後にまとめて保存するわけではありません。これはデータの内容（SHA256ハッシュ値）をもとに保存パスが決められるので、同じデータはLocal Registry単位で一度だけ保存されます。
+- Experimentの終了処理ではそのExperiment中に保存されたデータの一覧をまとめたJSON（Artifact Manifest）をLocal Registryに保存して、起動時に指定あるいは自動的に決めたExperimentの名前でこのArtifact Manifestを指すタグをLocal Registryに保存します。
 
 ## 保存したExperimentを読み出す
 
