@@ -124,3 +124,23 @@ with Experiment() as experiment:
 
 ## 実験を共有する
 
+実験はOMMX Artifactとして保存されるので、OMMXのArtifact管理機能を使って共有できます。例えば、実験の名前をコンテナイメージのタグの形式で付けておけば、GitHub Container RegistryなどのコンテナレジストリにPushして共有することができます。
+
+```{code-cell} ipython3
+# <コンテナレジストリ>/<ユーザ名>/<リポジトリ名>:<タグ> の形式で名前を付ける
+# （Tutorialの読者はOMMXのリポジトリにPushする権限はないと思うので、適宜読み替えてください）
+experiment.rename("ghcr.io/jij-inc/ommx/tutorial/experiment:knapsack")
+
+# コンテナレジストリにPushする
+experiment.push()
+```
+
+OMMXはDockerに認証を移譲するので、事前に `docker login` でコンテナレジストリにログインしておく必要があります。
+
+### GitHub Container Registryの場合
+
+To be written.
+
+### Google Cloud Artifact Registryの場合
+
+To be written.
