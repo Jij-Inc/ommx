@@ -103,6 +103,48 @@ impl LocalArtifactDyn {
         Self::open_in_registry_handle(registry_handle, image_name)
     }
 
+    /// Import an OCI archive file or OCI Image Layout directory into the
+    /// default Local Registry and return the imported artifact.
+    pub fn import_archive(path: &Path) -> Result<Self> {
+        let registry_handle = LocalRegistryHandle::shared_default()?;
+        let registry = registry_handle.registry();
+
+        let image_name = if path.is_file() {
+            let outcome = super::local_registry::import_oci_archive(registry, path)?;
+            outcome.image_name.ok_or_else(|| {
+                anyhow::anyhow!(
+                    "import_oci_archive returned no image_name despite synthesizing on \
+                     unnamed input; this is a bug in the OMMX SDK; please report it."
+                )
+            })?
+        } else if path.is_dir() {
+            let image_name = match super::local_registry::oci_dir_image_name(path)? {
+                Some(name) => name,
+                None => {
+                    let synthesized = registry.synthesize_anonymous_image_name()?;
+                    tracing::info!(
+                        "OCI dir at {} has no `org.opencontainers.image.ref.name` \
+                         annotation; importing under synthesized anonymous name \
+                         {synthesized}",
+                        path.display(),
+                    );
+                    synthesized
+                }
+            };
+            super::local_registry::import_oci_dir_as_ref(
+                registry.index(),
+                registry.blobs(),
+                path,
+                &image_name,
+            )?;
+            image_name
+        } else {
+            bail!("Path must be a file or a directory")
+        };
+
+        Self::open_in_registry_handle(registry_handle, image_name)
+    }
+
     /// Load an artifact by image reference from the default Local Registry.
     ///
     /// With `remote-artifact` enabled, this mirrors Python

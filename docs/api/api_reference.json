@@ -1983,6 +1983,53 @@
               "deprecated": null
             },
             {
+              "name": "import_archive",
+              "doc": "Import an Experiment Artifact from a `.ommx` OCI archive file (or an OCI\nImage Layout directory).\n\nThe archive is imported into the default Local Registry, matching\n{meth}`Artifact.import_archive`, and then interpreted as an\nExperiment. The imported artifact must contain an Experiment config.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "path",
+                      "type_": {
+                        "display": "str | PathLike | Path",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "PathLike",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Path",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Experiment",
+                    "link_target": {
+                      "fqn": "ommx.experiment.Experiment",
+                      "doc_module": "ommx.experiment",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "load",
               "doc": "Load a committed Experiment Artifact by image reference.\n\nIf the image is not found in the default Local Registry, OMMX tries to\npull it from the remote registry, matching {meth}`Artifact.load`.\nThe loaded artifact must contain an Experiment config. Use\n`Experiment(...)` to create a new unsealed experiment.",
               "signatures": [
@@ -2313,7 +2360,7 @@
             },
             {
               "name": "save",
-              "doc": "Save this committed Experiment Artifact as a `.ommx` OCI archive file at `path`.\n\nThe archive is an exchange-format export of the registry-resident\nExperiment Artifact. Loading the archive back via\n{meth}`ommx.artifact.Artifact.import_archive` reimports it into the\nSQLite Local Registry under the same image name.\n\nRaises an error if the Experiment has not been committed yet.",
+              "doc": "Save this committed Experiment Artifact as a `.ommx` OCI archive file at `path`.\n\nThe archive is an exchange-format export of the registry-resident\nExperiment Artifact. Loading the archive back via\n{meth}`Experiment.import_archive` reimports it into the SQLite Local\nRegistry under the same image name.\n\nRaises an error if the Experiment has not been committed yet.",
               "signatures": [
                 {
                   "parameters": [

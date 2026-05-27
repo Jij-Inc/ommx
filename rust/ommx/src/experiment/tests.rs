@@ -1135,6 +1135,9 @@ fn experiment_dyn_save_writes_committed_archive() {
         experiment.artifact().unwrap().image_name(),
         artifact.image_name()
     );
+
+    let loaded = ExperimentDyn::import_archive(&archive_path).unwrap();
+    assert_eq!(loaded.experiment_attachments().unwrap().len(), 1);
 }
 
 #[cfg(feature = "remote-artifact")]

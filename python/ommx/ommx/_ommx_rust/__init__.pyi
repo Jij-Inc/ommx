@@ -1774,6 +1774,16 @@ class Experiment:
         `Experiment(...)` to create a new unsealed experiment.
         """
     @staticmethod
+    def import_archive(path: builtins.str | os.PathLike | pathlib.Path) -> Experiment:
+        r"""
+        Import an Experiment Artifact from a `.ommx` OCI archive file (or an OCI
+        Image Layout directory).
+
+        The archive is imported into the default Local Registry, matching
+        {meth}`Artifact.import_archive`, and then interpreted as an
+        Experiment. The imported artifact must contain an Experiment config.
+        """
+    @staticmethod
     def from_artifact(artifact: Artifact) -> Experiment:
         r"""
         Interpret an already-open Artifact as a committed Experiment.
@@ -1803,8 +1813,8 @@ class Experiment:
 
         The archive is an exchange-format export of the registry-resident
         Experiment Artifact. Loading the archive back via
-        {meth}`ommx.artifact.Artifact.import_archive` reimports it into the
-        SQLite Local Registry under the same image name.
+        {meth}`Experiment.import_archive` reimports it into the SQLite Local
+        Registry under the same image name.
 
         Raises an error if the Experiment has not been committed yet.
         """

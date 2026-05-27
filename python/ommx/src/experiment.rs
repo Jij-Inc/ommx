@@ -101,6 +101,20 @@ impl PyExperiment {
         })
     }
 
+    /// Import an Experiment Artifact from a `.ommx` OCI archive file (or an OCI
+    /// Image Layout directory).
+    ///
+    /// The archive is imported into the default Local Registry, matching
+    /// {meth}`Artifact.import_archive`, and then interpreted as an
+    /// Experiment. The imported artifact must contain an Experiment config.
+    #[staticmethod]
+    pub fn import_archive(py: Python<'_>, path: PathBuf) -> Result<Self> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        Ok(Self {
+            inner: ommx::experiment::ExperimentDyn::import_archive(&path)?,
+        })
+    }
+
     /// Interpret an already-open Artifact as a committed Experiment.
     ///
     /// This is the usual entry point after importing or receiving an OMMX
@@ -151,8 +165,8 @@ impl PyExperiment {
     ///
     /// The archive is an exchange-format export of the registry-resident
     /// Experiment Artifact. Loading the archive back via
-    /// {meth}`ommx.artifact.Artifact.import_archive` reimports it into the
-    /// SQLite Local Registry under the same image name.
+    /// {meth}`Experiment.import_archive` reimports it into the SQLite Local
+    /// Registry under the same image name.
     ///
     /// Raises an error if the Experiment has not been committed yet.
     pub fn save(&mut self, py: Python<'_>, path: PathBuf) -> Result<()> {

@@ -79,53 +79,8 @@ impl PyArtifact {
     #[staticmethod]
     pub fn import_archive(py: Python<'_>, path: PathBuf) -> Result<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let registry = ommx::artifact::local_registry::LocalRegistry::shared_default()?;
-
-        let image_name = if path.is_file() {
-            // `import_oci_archive` synthesizes an anonymous ref name
-            // when the archive's `index.json` lacks the
-            // `org.opencontainers.image.ref.name` annotation (v2-era
-            // unnamed `.ommx` files), so the returned `image_name`
-            // is always `Some(...)`.
-            let outcome = ommx::artifact::local_registry::import_oci_archive(registry, &path)?;
-            outcome.image_name.ok_or_else(|| {
-                anyhow::anyhow!(
-                    "import_oci_archive returned no image_name despite synthesizing on \
-                     unnamed input — this is a bug in the OMMX SDK; please report it."
-                )
-            })?
-        } else if path.is_dir() {
-            // OCI Image Layout directories can also lack the
-            // `org.opencontainers.image.ref.name` annotation. Mirror
-            // the archive path's v2-compat behaviour: when the
-            // annotation is missing, synthesize an anonymous ref name
-            // and import under it via `import_oci_dir_as_ref`.
-            let image_name = match ommx::artifact::local_registry::oci_dir_image_name(&path)? {
-                Some(name) => name,
-                None => {
-                    let synthesized = registry.synthesize_anonymous_image_name()?;
-                    tracing::info!(
-                        "OCI dir at {} has no `org.opencontainers.image.ref.name` \
-                         annotation; importing under synthesized anonymous name \
-                         {synthesized}",
-                        path.display(),
-                    );
-                    synthesized
-                }
-            };
-            ommx::artifact::local_registry::import_oci_dir_as_ref(
-                registry.index(),
-                registry.blobs(),
-                &path,
-                &image_name,
-            )?;
-            image_name
-        } else {
-            bail!("Path must be a file or a directory")
-        };
-
-        Ok(Self::new(ommx::artifact::LocalArtifactDyn::open(
-            image_name,
+        Ok(Self::new(ommx::artifact::LocalArtifactDyn::import_archive(
+            &path,
         )?))
     }
 

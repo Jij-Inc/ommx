@@ -25,6 +25,7 @@ use crate::{Instance, ParametricInstance, SampleSet, Solution};
 use anyhow::Result;
 use oci_spec::image::{Descriptor, MediaType};
 use std::collections::BTreeMap;
+use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 mod run;
@@ -201,6 +202,10 @@ impl ExperimentDyn {
 
     pub fn load(image_name: crate::artifact::ImageRef) -> Result<Self> {
         Self::from_artifact(LocalArtifactDyn::load(image_name)?)
+    }
+
+    pub fn import_archive(path: &Path) -> Result<Self> {
+        Self::from_artifact(LocalArtifactDyn::import_archive(path)?)
     }
 
     pub fn from_artifact(artifact: LocalArtifactDyn) -> Result<Self> {

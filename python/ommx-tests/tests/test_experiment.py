@@ -5,7 +5,6 @@ import pandas as pd
 import pytest
 
 from ommx.adapter import SolverAdapter
-from ommx.artifact import Artifact
 from ommx.experiment import Experiment
 from ommx.v1 import Instance, Solution
 
@@ -159,8 +158,7 @@ def test_save_exports_committed_experiment_archive(tmp_path):
 
     assert archive_path.is_file()
     assert archive_path.stat().st_size > 0
-    artifact = Artifact.import_archive(archive_path)
-    loaded = Experiment.from_artifact(artifact)
+    loaded = Experiment.import_archive(archive_path)
     assert loaded.run_parameters_df().loc[0, "solver"] == "highs"
 
 
