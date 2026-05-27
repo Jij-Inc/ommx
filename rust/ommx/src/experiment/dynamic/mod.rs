@@ -20,9 +20,11 @@ use super::attachment::{
 };
 use super::{Name, RunEntry, RunParameterCell, SealedExperiment, UnsealedExperimentState};
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
-use crate::artifact::{AsArtifact, ImageRef, LocalArtifact, LocalArtifactDyn, LocalRegistryHandle};
+use crate::artifact::{
+    media_types, AsArtifact, ImageRef, LocalArtifact, LocalArtifactDyn, LocalRegistryHandle,
+};
 use crate::{Instance, ParametricInstance, SampleSet, Solution};
-use anyhow::Result;
+use anyhow::{ensure, Result};
 use oci_spec::image::{Descriptor, MediaType};
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -158,10 +160,58 @@ impl SolveDyn {
             .stored_descriptor(self.input.clone())
     }
 
+    pub fn input_instance(&self) -> Result<Instance> {
+        let descriptor = self.input()?;
+        ensure!(
+            descriptor.media_type().to_string() == media_types::V1_INSTANCE_MEDIA_TYPE,
+            "Solve {} input has media type '{}', expected '{}'",
+            self.solve_id,
+            descriptor.media_type(),
+            media_types::V1_INSTANCE_MEDIA_TYPE
+        );
+        let bytes = self
+            .registry_handle
+            .registry()
+            .blobs()
+            .read_bytes(descriptor.digest())?;
+        ensure!(
+            bytes.len() as u64 == descriptor.size(),
+            "Descriptor size mismatch for {}: descriptor={}, actual={}",
+            descriptor.digest(),
+            descriptor.size(),
+            bytes.len()
+        );
+        Instance::from_bytes(&bytes)
+    }
+
     pub fn output(&self) -> Result<StoredDescriptor<'_>> {
         self.registry_handle
             .registry()
             .stored_descriptor(self.output.clone())
+    }
+
+    pub fn output_solution(&self) -> Result<Solution> {
+        let descriptor = self.output()?;
+        ensure!(
+            descriptor.media_type().to_string() == media_types::V1_SOLUTION_MEDIA_TYPE,
+            "Solve {} output has media type '{}', expected '{}'",
+            self.solve_id,
+            descriptor.media_type(),
+            media_types::V1_SOLUTION_MEDIA_TYPE
+        );
+        let bytes = self
+            .registry_handle
+            .registry()
+            .blobs()
+            .read_bytes(descriptor.digest())?;
+        ensure!(
+            bytes.len() as u64 == descriptor.size(),
+            "Descriptor size mismatch for {}: descriptor={}, actual={}",
+            descriptor.digest(),
+            descriptor.size(),
+            bytes.len()
+        );
+        Solution::from_bytes(&bytes)
     }
 
     pub fn parameters(&self) -> &BTreeMap<String, String> {

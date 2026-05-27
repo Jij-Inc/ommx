@@ -1724,11 +1724,16 @@ class Experiment:
     @property
     def experiment_attachments(self) -> builtins.list[Descriptor]:
         r"""
-        Experiment-level attachments.
+        Low-level descriptors for experiment-level attachments.
 
-        Each descriptor points to a layer in `artifact`. Use methods such as
-        `Artifact.get_json`, `Artifact.get_instance`, or `Artifact.get_blob`
-        with these descriptors to read the payload.
+        Prefer `attachment_names`, `get_attachment`, or typed methods such as
+        `get_json` and `get_instance` when working from Python. This descriptor
+        view is kept for low-level Artifact inspection.
+        """
+    @property
+    def attachment_names(self) -> builtins.list[builtins.str]:
+        r"""
+        Names of experiment-level attachments.
         """
     @property
     def runs(self) -> builtins.list[SealedRun]:
@@ -1826,6 +1831,42 @@ class Experiment:
         should be published under a remote container image reference.
 
         Raises an error if the Experiment has not been committed yet.
+        """
+    def get_attachment(self, name: builtins.str) -> typing.Any:
+        r"""
+        Read an experiment-level attachment by name.
+
+        The returned Python object is decoded from the attachment media type:
+        JSON attachments become normal Python objects, OMMX instance-like
+        attachments become the corresponding `ommx.v1` objects, and unknown
+        media types are returned as raw `bytes`.
+        """
+    def get_json(self, name: builtins.str) -> typing.Any:
+        r"""
+        Read a JSON experiment-level attachment by name.
+
+        Raises an error if the attachment exists but its media type is not
+        `application/json`.
+        """
+    def get_instance(self, name: builtins.str) -> Instance:
+        r"""
+        Read an Instance experiment-level attachment by name.
+        """
+    def get_parametric_instance(self, name: builtins.str) -> ParametricInstance:
+        r"""
+        Read a ParametricInstance experiment-level attachment by name.
+        """
+    def get_solution(self, name: builtins.str) -> Solution:
+        r"""
+        Read a Solution experiment-level attachment by name.
+        """
+    def get_sample_set(self, name: builtins.str) -> SampleSet:
+        r"""
+        Read a SampleSet experiment-level attachment by name.
+        """
+    def get_blob(self, name: builtins.str) -> bytes:
+        r"""
+        Read raw bytes of an experiment-level attachment by name.
         """
     def run(self) -> Run:
         r"""
@@ -5152,6 +5193,12 @@ class Run:
         when the instance is the input of a solver call and should be paired
         with the returned solution.
         """
+    def log_parametric_instance(
+        self, name: builtins.str, pi: ParametricInstance
+    ) -> None:
+        r"""
+        Attach a ParametricInstance in this run.
+        """
     def log_solution(self, name: builtins.str, solution: Solution) -> None:
         r"""
         Attach a Solution in this run.
@@ -5745,8 +5792,8 @@ class SealedRun:
     r"""
     Immutable view of a finished Run in a committed Experiment.
 
-    `SealedRun` exposes descriptors for run-level attachments and the
-    sequence of `Solve` records created by `Run.log_solve`.
+    `SealedRun` exposes run-level attachments by name and the sequence of
+    `Solve` records created by `Run.log_solve`.
     """
     @property
     def run_id(self) -> builtins.int:
@@ -5756,15 +5803,51 @@ class SealedRun:
     @property
     def attachments(self) -> builtins.list[Descriptor]:
         r"""
-        Run-level attachments.
+        Low-level descriptors for run-level attachments.
 
-        Each descriptor points to a layer in the parent Experiment's artifact.
-        Use the artifact reader methods to load the payload.
+        Prefer `attachment_names`, `get_attachment`, or typed methods such as
+        `get_json` and `get_instance` when working from Python. This descriptor
+        view is kept for low-level Artifact inspection.
+        """
+    @property
+    def attachment_names(self) -> builtins.list[builtins.str]:
+        r"""
+        Names of run-level attachments.
         """
     @property
     def solves(self) -> builtins.list[Solve]:
         r"""
         Solve records logged in this run, ordered by `solve_id`.
+        """
+    def get_attachment(self, name: builtins.str) -> typing.Any:
+        r"""
+        Read a run-level attachment by name.
+
+        The returned Python object is decoded from the attachment media type.
+        """
+    def get_json(self, name: builtins.str) -> typing.Any:
+        r"""
+        Read a JSON run-level attachment by name.
+        """
+    def get_instance(self, name: builtins.str) -> Instance:
+        r"""
+        Read an Instance run-level attachment by name.
+        """
+    def get_parametric_instance(self, name: builtins.str) -> ParametricInstance:
+        r"""
+        Read a ParametricInstance run-level attachment by name.
+        """
+    def get_solution(self, name: builtins.str) -> Solution:
+        r"""
+        Read a Solution run-level attachment by name.
+        """
+    def get_sample_set(self, name: builtins.str) -> SampleSet:
+        r"""
+        Read a SampleSet run-level attachment by name.
+        """
+    def get_blob(self, name: builtins.str) -> bytes:
+        r"""
+        Read raw bytes of a run-level attachment by name.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -6177,10 +6260,10 @@ class Solve:
     r"""
     Immutable record of one solver call.
 
-    A `Solve` stores descriptors for the input `Instance` and output
-    `Solution`, plus string-valued solve parameters. `Run.log_solve` records
-    the adapter class name in `parameters["adapter"]` and JSON-encoded solver
-    keyword arguments in `parameters["kwargs"]`.
+    A `Solve` stores the input `Instance` and output `Solution`, plus
+    string-valued solve parameters. `Run.log_solve` records the adapter class
+    name in `parameters["adapter"]` and JSON-encoded solver keyword arguments
+    in `parameters["kwargs"]`.
     """
     @property
     def solve_id(self) -> builtins.int:
@@ -6188,18 +6271,14 @@ class Solve:
         Integer identifier of this solve within its run.
         """
     @property
-    def input(self) -> Descriptor:
+    def input(self) -> Instance:
         r"""
-        Descriptor of the input `Instance` layer.
-
-        Use `Artifact.get_instance(solve.input)` to read the instance.
+        Input `Instance` passed to the solver.
         """
     @property
-    def output(self) -> Descriptor:
+    def output(self) -> Solution:
         r"""
-        Descriptor of the output `Solution` layer.
-
-        Use `Artifact.get_solution(solve.output)` to read the solution.
+        Output `Solution` returned by the solver.
         """
     @property
     def parameters(self) -> builtins.dict[builtins.str, builtins.str]:

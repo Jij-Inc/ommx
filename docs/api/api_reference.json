@@ -1983,6 +1983,188 @@
               "deprecated": null
             },
             {
+              "name": "get_attachment",
+              "doc": "Read an experiment-level attachment by name.\n\nThe returned Python object is decoded from the attachment media type:\nJSON attachments become normal Python objects, OMMX instance-like\nattachments become the corresponding `ommx.v1` objects, and unknown\nmedia types are returned as raw `bytes`.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Any",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "get_blob",
+              "doc": "Read raw bytes of an experiment-level attachment by name.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bytes",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "get_instance",
+              "doc": "Read an Instance experiment-level attachment by name.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Instance",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "get_json",
+              "doc": "Read a JSON experiment-level attachment by name.\n\nRaises an error if the attachment exists but its media type is not\n`application/json`.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Any",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "get_parametric_instance",
+              "doc": "Read a ParametricInstance experiment-level attachment by name.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ParametricInstance",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "get_sample_set",
+              "doc": "Read a SampleSet experiment-level attachment by name.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "SampleSet",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "get_solution",
+              "doc": "Read a Solution experiment-level attachment by name.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Solution",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "import_archive",
               "doc": "Import an Experiment Artifact from a `.ommx` OCI archive file (or an OCI\nImage Layout directory).\n\nThe archive is imported into the default Local Registry, matching\n{meth}`Artifact.import_archive`, and then interpreted as an\nExperiment. The imported artifact must contain an Experiment config.",
               "signatures": [
@@ -2459,8 +2641,25 @@
               "is_readonly": true
             },
             {
+              "name": "attachment_names",
+              "doc": "Names of experiment-level attachments.",
+              "type_": {
+                "display": "list[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "experiment_attachments",
-              "doc": "Experiment-level attachments.\n\nEach descriptor points to a layer in `artifact`. Use methods such as\n`Artifact.get_json`, `Artifact.get_instance`, or `Artifact.get_blob`\nwith these descriptors to read the payload.",
+              "doc": "Low-level descriptors for experiment-level attachments.\n\nPrefer `attachment_names`, `get_attachment`, or typed methods such as\n`get_json` and `get_instance` when working from Python. This descriptor\nview is kept for low-level Artifact inspection.",
               "type_": {
                 "display": "list[_ommx_rust.Descriptor]",
                 "link_target": null,
@@ -2817,6 +3016,41 @@
               "deprecated": null
             },
             {
+              "name": "log_parametric_instance",
+              "doc": "Attach a ParametricInstance in this run.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "pi",
+                      "type_": {
+                        "display": "ParametricInstance",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "log_sample_set",
               "doc": "Attach a SampleSet in this run.",
               "signatures": [
@@ -2955,7 +3189,7 @@
         {
           "kind": "Class",
           "name": "SealedRun",
-          "doc": "Immutable view of a finished Run in a committed Experiment.\n\n`SealedRun` exposes descriptors for run-level attachments and the\nsequence of `Solve` records created by `Run.log_solve`.",
+          "doc": "Immutable view of a finished Run in a committed Experiment.\n\n`SealedRun` exposes run-level attachments by name and the sequence of\n`Solve` records created by `Run.log_solve`.",
           "bases": [],
           "methods": [
             {
@@ -2973,12 +3207,211 @@
               ],
               "is_async": false,
               "deprecated": null
+            },
+            {
+              "name": "get_attachment",
+              "doc": "Read a run-level attachment by name.\n\nThe returned Python object is decoded from the attachment media type.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Any",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "get_blob",
+              "doc": "Read raw bytes of a run-level attachment by name.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bytes",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "get_instance",
+              "doc": "Read an Instance run-level attachment by name.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Instance",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "get_json",
+              "doc": "Read a JSON run-level attachment by name.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Any",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "get_parametric_instance",
+              "doc": "Read a ParametricInstance run-level attachment by name.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ParametricInstance",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "get_sample_set",
+              "doc": "Read a SampleSet run-level attachment by name.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "SampleSet",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "get_solution",
+              "doc": "Read a Solution run-level attachment by name.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Solution",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
             }
           ],
           "attributes": [
             {
+              "name": "attachment_names",
+              "doc": "Names of run-level attachments.",
+              "type_": {
+                "display": "list[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "attachments",
-              "doc": "Run-level attachments.\n\nEach descriptor points to a layer in the parent Experiment's artifact.\nUse the artifact reader methods to load the payload.",
+              "doc": "Low-level descriptors for run-level attachments.\n\nPrefer `attachment_names`, `get_attachment`, or typed methods such as\n`get_json` and `get_instance` when working from Python. This descriptor\nview is kept for low-level Artifact inspection.",
               "type_": {
                 "display": "list[_ommx_rust.Descriptor]",
                 "link_target": null,
@@ -3037,7 +3470,7 @@
         {
           "kind": "Class",
           "name": "Solve",
-          "doc": "Immutable record of one solver call.\n\nA `Solve` stores descriptors for the input `Instance` and output\n`Solution`, plus string-valued solve parameters. `Run.log_solve` records\nthe adapter class name in `parameters[\"adapter\"]` and JSON-encoded solver\nkeyword arguments in `parameters[\"kwargs\"]`.",
+          "doc": "Immutable record of one solver call.\n\nA `Solve` stores the input `Instance` and output `Solution`, plus\nstring-valued solve parameters. `Run.log_solve` records the adapter class\nname in `parameters[\"adapter\"]` and JSON-encoded solver keyword arguments\nin `parameters[\"kwargs\"]`.",
           "bases": [],
           "methods": [
             {
@@ -3060,15 +3493,10 @@
           "attributes": [
             {
               "name": "input",
-              "doc": "Descriptor of the input `Instance` layer.\n\nUse `Artifact.get_instance(solve.input)` to read the instance.",
+              "doc": "Input `Instance` passed to the solver.",
               "type_": {
-                "display": "Descriptor",
-                "link_target": {
-                  "fqn": "ommx.artifact.Descriptor",
-                  "doc_module": "ommx.artifact",
-                  "kind": "Class",
-                  "attribute": null
-                },
+                "display": "Instance",
+                "link_target": null,
                 "children": []
               },
               "is_property": true,
@@ -3076,15 +3504,10 @@
             },
             {
               "name": "output",
-              "doc": "Descriptor of the output `Solution` layer.\n\nUse `Artifact.get_solution(solve.output)` to read the solution.",
+              "doc": "Output `Solution` returned by the solver.",
               "type_": {
-                "display": "Descriptor",
-                "link_target": {
-                  "fqn": "ommx.artifact.Descriptor",
-                  "doc_module": "ommx.artifact",
-                  "kind": "Class",
-                  "attribute": null
-                },
+                "display": "Solution",
+                "link_target": null,
                 "children": []
               },
               "is_property": true,
