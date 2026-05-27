@@ -457,18 +457,20 @@ Experiment v3 は、記録データ、実行 telemetry、表示、Artifact versi
 
 ### 6.1 Span 階層
 
-OMMX は global `TracerProvider` を暗黙に設定しない。Experiment / Run / builder は active provider がある場合にそれを使い、ない場合は trace capture mode に従う。
+OMMX は global `TracerProvider` を暗黙に設定しない。Experiment / Run / builder は active provider がある場合にそれを使い、ない場合は通常の OTel no-op として扱う。
+
+`ommx.experiment` span は `with Experiment(...)` の scope に対応する。context manager を使わない手動 `commit()` workflow では、人間の思考時間や notebook cell 間の待ち時間が Experiment object の lifetime に混ざるため、Experiment scope の trace は作らない。
 
 Span の基本構造:
 
 | 操作 | Span 名 | 親 |
 |---|---|---|
-| Experiment 開始 | `ommx.experiment` | active span があれば child、なければ root |
+| Experiment context 開始 | `ommx.experiment` | active span があれば child、なければ root |
 | Run 開始 | `ommx.run` | `ommx.experiment` |
 | Adapter solve 実行 | `ommx.solver.solve` | `ommx.run` |
 | Adapter sample 実行 | `ommx.solver.sample` | `ommx.run` |
 | Attachment / Solve 追加 / Run parameter 更新 | span event | current run / experiment span |
-| Artifact commit/build | `ommx.artifact.build` | active span |
+| Artifact commit/build | `ommx.artifact.build` | active span。ただし同じ Artifact に保存する trace layer の生成 / final publish は自己参照を避けるため保存対象 trace の外に置く |
 | Artifact load | `ommx.artifact.load` | active span |
 | Artifact push | `ommx.artifact.push` | active span |
 
@@ -505,27 +507,27 @@ Run parameter event attributes:
 
 Event は Attachment、Solve entry、または Run parameter cell への reference であり、payload 本体を OTel event attribute に入れない。parameter の small scalar を display 用に入れるかは renderer policy として扱い、正本にはしない。
 
-### 6.3 Trace capture mode
+### 6.3 Trace storage mode
 
-Trace capture mode の候補:
+Trace storage は OTel を有効化する機能ではなく、`with Experiment(...)` scope の trace を Artifact layer として保存する機能である。default は保存しない。
 
-| mode | 動作 |
+| API | 動作 |
 |---|---|
-| `trace="auto"` | デフォルト。provider / collector が設定済みなら trace layer を埋め込む。未設定なら trace layer を省略し、status annotation を残す |
-| `trace="required"` | provider / collector が未設定なら setup error |
-| `trace=False` | trace layer を生成しない |
-| `with_trace()` | low-level builder の明示要求。未設定なら setup error |
+| `with Experiment(...) as exp:` | `ommx.experiment` span を作る。trace layer は保存しない |
+| `with Experiment(..., store_trace=True) as exp:` | `ommx.experiment` span を作り、同じ trace_id の span / event を収集し、正常終了時に Artifact の trace layer として保存する |
+| `Experiment(...); ...; exp.commit()` | 手動 workflow。Experiment scope の trace は作らず、trace layer も保存しない |
 
-`trace="auto"` で trace layer を省略した場合の manifest annotations:
+`store_trace=True` は context manager 専用 option とする。`Experiment(..., store_trace=True)` を `with` なしで使った場合は、`__enter__` 前の mutating API または `commit()` で error にする。これにより、trace 保存を要求した Experiment が notebook の試行錯誤や待ち時間を含む不自然な trace を後から作ることを防ぐ。
 
-- `org.ommx.trace.status=not_recorded`
-- `org.ommx.trace.reason=no_tracer_provider`
+`trace="auto"` / `trace="required"` / `with_trace()` は Experiment API には導入しない。trace layer を保存しない場合でも、active provider があれば通常の OTel span / event は外部 exporter に流れる。
 
 既存の notebook / script tracing helper が UX のために provider を install する可能性は別途検討する。ただし Experiment / Artifact build の core path は global provider を勝手に install しない。
 
 ### 6.4 Trace layer
 
-Artifact は build-time trace body を専用 layer として持てる。これは batch job や CI のように Artifact 入出力だけで完結する環境で重要である。
+Artifact は `with Experiment(..., store_trace=True)` で収集した Experiment trace body を専用 layer として持てる。これは batch job や CI のように Artifact 入出力だけで完結する環境で重要である。
+
+保存対象は Experiment context body の lifecycle、Run / Solve、Attachment / parameter event である。trace layer payload の生成と、それを含む final manifest publish は保存対象 trace の外に置く。trace が自分自身の保存処理を参照する再帰構造を作らないためである。
 
 Phase 1:
 
@@ -740,13 +742,14 @@ Run status、elapsed time、実行環境 OS / package versions / backend solver 
 
 ### 10.5 OTel trace / renderer
 
-Experiment / Run / Artifact operation の trace schema、trace layer、post-hoc renderer は未設計である。
+Experiment / Run / Artifact operation の trace schema、`store_trace=True` による trace layer 保存、post-hoc renderer は未設計である。
 
 残作業:
 
 - Experiment / Run / solver / artifact build / load / push span schema。
 - `ommx.attachment.added` / `ommx.solve.recorded` / `ommx.run.parameter.recorded` events。
 - global `TracerProvider` を暗黙に install しないことの tests。
+- `with Experiment(..., store_trace=True)` の context-manager-only contract。
 - trace layer media type と `artifact.get_trace()`。
 - text tree / Chrome trace export renderer。
 
@@ -778,7 +781,7 @@ Local Registry GC の reachability model、dry-run report、削除 policy は未
 | Diagnostics sink protocol | `DiagnosticsSink` / `DiagnosticCollector` / `DiagnosticEntry`、media type、truncation / compression policy |
 | Run attributes / environment | status、elapsed time、OS / package / solver version の schema |
 | OTel span / event integration | Experiment / Run / solver / artifact operation spans、attachment / solve / parameter events |
-| Trace layer | media type、capture mode、`artifact.get_trace()` |
+| Trace layer | media type、`store_trace=True` storage mode、`artifact.get_trace()` |
 | Trace renderer | text tree、Chrome trace export、streaming renderer |
 | GC | Local Registry dry-run / report / delete、orphan blob retention、archive / remote registry handling |
 | Legacy MINTO import | compatibility loader を core に持つか migration tool にするか |
