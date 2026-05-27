@@ -1119,6 +1119,24 @@ fn experiment_dyn_rename_after_commit_publishes_alias() {
         .is_some());
 }
 
+#[test]
+fn experiment_dyn_save_writes_committed_archive() {
+    let experiment = ExperimentDyn::with_temp_local_registry(Name::Anonymous).unwrap();
+    experiment.log_json("dataset", json!("miplib2017")).unwrap();
+    let artifact = experiment.commit().unwrap();
+    let tmp = tempfile::tempdir().unwrap();
+    let archive_path = tmp.path().join("experiment.ommx");
+
+    experiment.save(&archive_path).unwrap();
+
+    assert!(archive_path.exists());
+    assert!(archive_path.metadata().unwrap().len() > 0);
+    assert_eq!(
+        experiment.artifact().unwrap().image_name(),
+        artifact.image_name()
+    );
+}
+
 #[cfg(feature = "remote-artifact")]
 #[test]
 fn experiment_dyn_push_rejects_uncommitted_experiment() {

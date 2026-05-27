@@ -25,6 +25,7 @@ use crate::{Instance, ParametricInstance, SampleSet, Solution};
 use anyhow::Result;
 use oci_spec::image::{Descriptor, MediaType};
 use std::collections::BTreeMap;
+use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 mod run;
@@ -366,6 +367,10 @@ impl ExperimentDyn {
             return bail_not_sealed(&dyn_state.lifecycle);
         };
         Ok(sealed.artifact.clone())
+    }
+
+    pub fn save(&self, output: &Path) -> Result<()> {
+        self.artifact()?.save(output)
     }
 
     #[cfg(feature = "remote-artifact")]

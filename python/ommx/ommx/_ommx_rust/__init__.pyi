@@ -1796,6 +1796,17 @@ class Experiment:
         `image_name` and updates this handle to use the new name. The previous
         name remains as an alias in the Local Registry.
         """
+    def save(self, path: builtins.str | os.PathLike | pathlib.Path) -> None:
+        r"""
+        Save this committed Experiment Artifact as a `.ommx` OCI archive file at `path`.
+
+        The archive is an exchange-format export of the registry-resident
+        Experiment Artifact. Loading the archive back via
+        {meth}`ommx.artifact.Artifact.import_archive` reimports it into the
+        SQLite Local Registry under the same image name.
+
+        Raises an error if the Experiment has not been committed yet.
+        """
     def push(self) -> None:
         r"""
         Push this committed Experiment Artifact to its remote registry.

@@ -4,7 +4,10 @@ use pyo3::{
     prelude::*,
     types::{PyBool, PyDict, PyFloat, PyInt, PyString, PyType, PyTypeMethods},
 };
-use std::collections::{btree_map::Entry, BTreeMap};
+use std::{
+    collections::{btree_map::Entry, BTreeMap},
+    path::PathBuf,
+};
 
 use crate::pandas::{raw_entries_to_dataframe, PyDataFrame};
 use crate::{PyArtifact, PyDescriptor};
@@ -140,6 +143,19 @@ impl PyExperiment {
     pub fn rename(&mut self, image_name: &str) -> Result<()> {
         let image_name = ommx::artifact::ImageRef::parse(image_name)?;
         self.inner.rename(image_name)
+    }
+
+    /// Save this committed Experiment Artifact as a `.ommx` OCI archive file at `path`.
+    ///
+    /// The archive is an exchange-format export of the registry-resident
+    /// Experiment Artifact. Loading the archive back via
+    /// {meth}`ommx.artifact.Artifact.import_archive` reimports it into the
+    /// SQLite Local Registry under the same image name.
+    ///
+    /// Raises an error if the Experiment has not been committed yet.
+    pub fn save(&mut self, py: Python<'_>, path: PathBuf) -> Result<()> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        self.inner.save(&path)
     }
 
     /// Push this committed Experiment Artifact to its remote registry.

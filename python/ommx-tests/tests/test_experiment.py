@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 
 from ommx.adapter import SolverAdapter
+from ommx.artifact import Artifact
 from ommx.experiment import Experiment
 from ommx.v1 import Instance, Solution
 
@@ -145,6 +146,22 @@ def test_push_rejects_uncommitted_experiment():
 
     with pytest.raises(RuntimeError, match="must be committed"):
         experiment.push()
+
+
+def test_save_exports_committed_experiment_archive(tmp_path):
+    archive_path = tmp_path / "experiment.ommx"
+    with Experiment.with_temp_local_registry() as experiment:
+        experiment.log_json("dataset", {"name": "miplib2017"})
+        with experiment.run() as run:
+            run.log_parameter("solver", "highs")
+
+    experiment.save(archive_path)
+
+    assert archive_path.is_file()
+    assert archive_path.stat().st_size > 0
+    artifact = Artifact.import_archive(archive_path)
+    loaded = Experiment.from_artifact(artifact)
+    assert loaded.run_parameters_df().loc[0, "solver"] == "highs"
 
 
 def test_run_context_does_not_finish_on_exception():

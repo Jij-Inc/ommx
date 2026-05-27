@@ -2312,6 +2312,48 @@
               "deprecated": null
             },
             {
+              "name": "save",
+              "doc": "Save this committed Experiment Artifact as a `.ommx` OCI archive file at `path`.\n\nThe archive is an exchange-format export of the registry-resident\nExperiment Artifact. Loading the archive back via\n{meth}`ommx.artifact.Artifact.import_archive` reimports it into the\nSQLite Local Registry under the same image name.\n\nRaises an error if the Experiment has not been committed yet.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "path",
+                      "type_": {
+                        "display": "str | PathLike | Path",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "PathLike",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Path",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "with_temp_local_registry",
               "doc": "Start a new Experiment backed by a temporary Local Registry.\n\nThe temporary registry is kept alive by the returned Experiment\nand by Artifacts / loaded Experiments derived from it. This is useful\nfor examples and tests because it does not write entries into the\nprocess-wide default local registry.",
               "signatures": [
