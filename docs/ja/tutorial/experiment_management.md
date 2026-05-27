@@ -111,6 +111,9 @@ with Experiment() as experiment:
       # 解けていることを確認
       assert solution.feasible
 
+      # Runの比較パラメータとして目的関数値も記録する。
+      run.log_parameter("objective", solution.objective)
+
       # withブロックを抜けるとRunの終了処理が行われる
 
   # experimentのwithブロックを抜けるとExperimentの終了処理が行われる。
@@ -133,9 +136,9 @@ bb040f6d.ommx.local/experiment:20260527T132713-e3c041e71f4b
 ^^^^^^^^ Local Registry自体の識別子
 ```
 
-このデフォルト名は `*.ommx.local` とあるようコンテナレジストリにはPushできないようになっており、主に一時的な管理を目的としています。一部のコマンドでこれらのデフォルト名を持つExperimentをClean upするので、永続的に保存したいExperimentには適切な名前を付けることが推奨されます。
+このデフォルト名は `*.ommx.local` とあるように、外部のコンテナレジストリにはPushできないようになっており、主に一時的な管理を目的としています。一部のコマンドでこれらのデフォルト名を持つExperimentをClean upするので、永続的に保存したいExperimentには適切な名前を付けることが推奨されます。
 
-例えば、実験をGitHub Container RegistryにPushして共有したい場合は、次のようにします。
+例えば、実験をGitHub Container Registry (ghcr.io) にPushして共有したい場合は、次のようにします。
 
 ```python
 # <コンテナレジストリ>/<ユーザ名>/<リポジトリ名>:<タグ> の形式で名前を付ける
@@ -145,7 +148,7 @@ experiment.rename("ghcr.io/jij-inc/ommx/tutorial/experiment:knapsack")
 experiment.push()
 ```
 
-Tutorialの読者はOMMXのリポジトリにPushする権限はないと思うので、適宜読み替えてください。OMMXはコンテナレジストリへの認証はDockerに移譲するので、事前に `docker login` でコンテナレジストリにログインしておく必要があります。
+Tutorialの読者はOMMXのリポジトリにPushする権限はないはずなので適宜読み替えてください。OMMXはコンテナレジストリへの認証はDockerに移譲するので、事前に `docker login` でコンテナレジストリにログインしておく必要があります。
 
 ### GitHub Container Registryの場合
 
@@ -157,7 +160,7 @@ To be written.
 
 ### ファイルとしてExport/Importする
 
-コンテナレジストリを使わずに、`.ommx` ファイルとしてExportすることもできます。これはメールやファイルストレージなどで一時的に受け渡すための補助的な方法です。
+コンテナレジストリを使わずに、`.ommx` ファイルとしてExportすることもできます。これはAWS S3などのファイルストレージなどで一時的に受け渡すための補助的な方法です。
 
 ```python
 experiment.save("tutorial_experiment.ommx")
@@ -179,19 +182,30 @@ loaded_experiment = Experiment.load("ghcr.io/jij-inc/ommx/tutorial/experiment:kn
 
 これはLocal Registry上で名前を探して、見つからなければコンテナレジストリからPullしてきてLocal Registryに保存してから読み込む、という動きをします。
 
-`load` や `import_archive` は終了処理が終わった {py:class}`~ommx.experiment.Experiment` と同じ状態としてロードされるので、今回は上で作ったExperimentをそのまま使います。
+{py:meth}`~ommx.experiment.Experiment.load` や {py:meth}`~ommx.experiment.Experiment.import_archive` は終了処理が終わった {py:class}`~ommx.experiment.Experiment` と同じ状態としてロードされるので、今回は上で作ったExperimentをそのまま使います。
 
 ```{code-cell} ipython3
 loaded_experiment = experiment
 ```
 
-読み込んだExperimentからは、まずRunごとに記録したパラメータを表として確認できます。
+### Run Parameters
+
+読み込んだExperimentからは実験の情報を読み出すことができます。まず {py:meth}`~ommx.experiment.Experiment.run_parameters_df` はRunごとに {py:meth}`~ommx.experiment.Run.log_parameter` で記録したパラメータを `pandas.DataFrame` として一覧する機能を提供します。
 
 ```{code-cell} ipython3
 loaded_experiment.run_parameters_df()
 ```
 
-{py:meth}`~ommx.experiment.Experiment.run_parameters_df` はRunを比較するための表です。ここには {py:meth}`~ommx.experiment.Run.log_parameter` で記録したRun単位のパラメータだけが現れます。SolverAdapterに渡したオプションはRunの比較軸ではなく、後で見るSolve単位の情報として保存されます。
+これは例えば次のようになっているはずです。
+
+```text
+        capacity  objective
+run_id 
+     0        47         41
+     1        56         49
+```
+
+### Attachments
 
 Experiment単位で保存したAttachmentは名前で確認し、必要なものを名前で取り出します。{py:meth}`~ommx.experiment.Experiment.get_attachment` は保存時のMedia Typeを見て、JSONならPythonの値、{py:class}`~ommx.v1.ParametricInstance` ならそのオブジェクト、というように変換して返します。期待する型が分かっている場合は {py:meth}`~ommx.experiment.Experiment.get_json` や {py:meth}`~ommx.experiment.Experiment.get_parametric_instance` のような型ごとのメソッドを使うと、Media Typeが違っていた場合にエラーになります。
 
@@ -212,6 +226,8 @@ pi = loaded_experiment.get_attachment("instance")
 assert isinstance(pi, ParametricInstance)
 ```
 
+### RunsとSolves
+
 Runの一覧は {py:attr}`~ommx.experiment.Experiment.runs` から確認できます。終了済みのRunが作成順に並び、それぞれのRunに紐づくAttachmentとSolveを確認できます。
 
 ```{code-cell} ipython3
@@ -220,38 +236,29 @@ from ommx.v1 import Solution
 
 for run in loaded_experiment.runs:
   # Runには実行順にIDが振られる
-  print(f"- Run ID:{run.run_id}")
+  assert run.run_id in [0, 1]
 
   # 今回はRun単位のAttachmentは保存していないので、Attachmentの数は0のはず
   assert len(run.attachment_names) == 0
 
-  for solve in run.solves:
-    # Solveにも実行順にIDが振られる
-    print(f"  - Solve ID:{solve.solve_id}")
+  # 1回しかSolveしていないので、Solveの数は1のはず
+  assert len(run.solves) == 1
+  solve = run.solves[0]
 
-    # 実行したAdapterの名前
-    assert solve.adapter.endswith("OMMXHighsAdapter")
+  # Solveにも実行順にIDが振られるが、今回はRunごとに1回しかSolveしていないので、Solve IDは0のはず
+  assert solve.solve_id == 0
 
-    # 入力と出力をロードする
-    input: Instance = solve.input
-    output: Solution = solve.output
+  # 実行したAdapterの名前
+  assert solve.adapter.endswith("OMMXHighsAdapter")
 
-    # ナップザック問題は解けているはず
-    assert output.feasible
-    print(f"    value: {output.objective}")
+  # 入力と出力をロードする
+  input: Instance = solve.input
+  output: Solution = solve.output
 
-    # Adapterに渡したオプションもロードする
-    options: dict[str, Any] = solve.adapter_options
-    assert "verbose" in options and options["verbose"] == False
-```
+  # ナップザック問題は解けているはず
+  assert output.feasible
 
-出力は次のようになるはずです。
-
-```text
-- Run ID:0
-  - Solve ID:0
-    value: 41.0
-- Run ID:1
-  - Solve ID:0
-    value: 49.0
+  # Adapterに渡したオプションもロードする
+  options: dict[str, Any] = solve.adapter_options
+  assert "verbose" in options and options["verbose"] == False
 ```
