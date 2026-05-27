@@ -3,9 +3,9 @@
 use super::config::{ExperimentConfig, ExperimentConfigRun, LayerRef};
 use super::UnsealedExperimentState;
 use super::{
-    Experiment, ExperimentDyn, Name, ParameterValue, SealedExperiment, ANN_ATTACHMENT_NAME,
-    ANN_LAYER, ANN_RUN_ID, ANN_SPACE, EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_STATUS_FINISHED,
-    LAYER_KIND_RUN_PARAMETERS, RUN_PARAMETERS_MEDIA_TYPE,
+    AttachmentLogger, Experiment, ExperimentDyn, Name, ParameterValue, SealedExperiment,
+    ANN_ATTACHMENT_NAME, ANN_LAYER, ANN_RUN_ID, ANN_SPACE, EXPERIMENT_CONFIG_MEDIA_TYPE,
+    EXPERIMENT_STATUS_FINISHED, LAYER_KIND_RUN_PARAMETERS, RUN_PARAMETERS_MEDIA_TYPE,
 };
 use crate::artifact::local_registry::{StoredDescriptor, UnsealedArtifact};
 use crate::artifact::{media_types, AsArtifact, ImageRef, LocalArtifact, LocalRegistryHandle};
@@ -221,6 +221,27 @@ fn log_preserves_attachment_descriptor_log_order() {
             serde_json::to_vec(&json!("miplib2017")).unwrap()
         );
         assert_eq!(second_bytes, serde_json::to_vec(&json!("qplib")).unwrap());
+        Ok(())
+    });
+}
+
+#[test]
+fn attachment_logger_trait_logs_static_handles() {
+    with_temp_experiment(|experiment| {
+        let instance: Instance =
+            crate::random::random_deterministic(crate::InstanceParameters::default_lp());
+
+        super::AttachmentLogger::log_json(&experiment, "dataset", json!("miplib2017")).unwrap();
+        {
+            let mut run = experiment.run().unwrap();
+            super::AttachmentLogger::log_instance(&mut run, "candidate", &instance).unwrap();
+            run.finish().unwrap();
+        }
+
+        with_unsealed_state(&experiment, |state| {
+            assert_eq!(state.attachments.len(), 1);
+            assert_eq!(state.runs.get(&0).unwrap().attachments.len(), 1);
+        });
         Ok(())
     });
 }

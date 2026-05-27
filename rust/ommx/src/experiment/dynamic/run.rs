@@ -1,6 +1,5 @@
 //! Dynamic-lifetime Run handle.
 
-use super::super::attachment::{encode_json, json_media_type};
 use super::super::parameter::ParameterSet;
 use super::super::ParameterValue;
 use super::{
@@ -9,7 +8,7 @@ use super::{
     RunEntryDyn, SolveEntryDyn,
 };
 use crate::artifact::media_types;
-use crate::{Instance, ParametricInstance, SampleSet, Solution};
+use crate::{Instance, Solution};
 use anyhow::Result;
 use oci_spec::image::{Descriptor, MediaType};
 use std::sync::{Arc, Mutex};
@@ -91,40 +90,19 @@ impl RunDyn {
         self.open_mut()?.parameters.insert(name, value)
     }
 
-    pub fn log_attachment(
+    pub(in crate::experiment) fn add_attachment(
         &mut self,
         name: &str,
         media_type: MediaType,
-        bytes: impl AsRef<[u8]>,
+        bytes: &[u8],
     ) -> Result<()> {
         let run_id = self.open()?.run_id;
         let descriptor = {
             let dyn_state = lock_experiment_state(&self.experiment_state);
-            store_run_attachment_descriptor(&dyn_state, run_id, name, media_type, bytes.as_ref())?
+            store_run_attachment_descriptor(&dyn_state, run_id, name, media_type, bytes)?
         };
         self.open_mut()?.attachments.push(descriptor);
         Ok(())
-    }
-
-    pub fn log_json(&mut self, name: &str, value: impl serde::Serialize) -> Result<()> {
-        let bytes = encode_json(name, value)?;
-        self.log_attachment(name, json_media_type(), bytes)
-    }
-
-    pub fn log_instance(&mut self, name: &str, instance: &Instance) -> Result<()> {
-        self.log_attachment(name, media_types::v1_instance(), instance.to_bytes())
-    }
-
-    pub fn log_parametric_instance(&mut self, name: &str, pi: &ParametricInstance) -> Result<()> {
-        self.log_attachment(name, media_types::v1_parametric_instance(), pi.to_bytes())
-    }
-
-    pub fn log_solution(&mut self, name: &str, solution: &Solution) -> Result<()> {
-        self.log_attachment(name, media_types::v1_solution(), solution.to_bytes())
-    }
-
-    pub fn log_sample_set(&mut self, name: &str, sample_set: &SampleSet) -> Result<()> {
-        self.log_attachment(name, media_types::v1_sample_set(), sample_set.to_bytes())
     }
 
     pub fn log_finished_solve_result(

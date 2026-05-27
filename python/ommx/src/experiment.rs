@@ -12,6 +12,7 @@ use std::{
 use crate::pandas::{raw_entries_to_dataframe, PyDataFrame};
 use crate::{PyArtifact, PyDescriptor};
 use ommx::artifact::AsArtifact;
+use ommx::experiment::AttachmentLogger;
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
@@ -346,7 +347,8 @@ impl PyExperiment {
         media_type: &str,
         bytes: &Bound<pyo3::types::PyBytes>,
     ) -> Result<()> {
-        self.inner.log_attachment(
+        AttachmentLogger::log_attachment(
+            &self.inner,
             name,
             MediaType::Other(media_type.to_string()),
             bytes.as_bytes(),
@@ -360,13 +362,17 @@ impl PyExperiment {
     pub fn log_json(&mut self, py: Python<'_>, name: &str, value: &Bound<PyAny>) -> Result<()> {
         let json = py.import("json")?;
         let blob: String = json.call_method1("dumps", (value,))?.extract()?;
-        self.inner
-            .log_attachment(name, MediaType::Other("application/json".to_string()), blob)
+        AttachmentLogger::log_attachment(
+            &self.inner,
+            name,
+            MediaType::Other("application/json".to_string()),
+            blob,
+        )
     }
 
     /// Attach an Instance in the experiment space.
     pub fn log_instance(&mut self, name: &str, instance: &crate::Instance) -> Result<()> {
-        self.inner.log_instance(name, &instance.inner)
+        AttachmentLogger::log_instance(&self.inner, name, &instance.inner)
     }
 
     /// Attach an ParametricInstance in the experiment space.
@@ -375,17 +381,17 @@ impl PyExperiment {
         name: &str,
         pi: &crate::ParametricInstance,
     ) -> Result<()> {
-        self.inner.log_parametric_instance(name, &pi.inner)
+        AttachmentLogger::log_parametric_instance(&self.inner, name, &pi.inner)
     }
 
     /// Attach a Solution in the experiment space.
     pub fn log_solution(&mut self, name: &str, solution: &crate::Solution) -> Result<()> {
-        self.inner.log_solution(name, &solution.inner)
+        AttachmentLogger::log_solution(&self.inner, name, &solution.inner)
     }
 
     /// Attach a SampleSet in the experiment space.
     pub fn log_sample_set(&mut self, name: &str, sample_set: &crate::SampleSet) -> Result<()> {
-        self.inner.log_sample_set(name, &sample_set.inner)
+        AttachmentLogger::log_sample_set(&self.inner, name, &sample_set.inner)
     }
 
     /// Commit this unsealed Experiment into the local registry.
@@ -682,7 +688,8 @@ impl PyRun {
         media_type: &str,
         bytes: &Bound<pyo3::types::PyBytes>,
     ) -> Result<()> {
-        self.as_open_mut()?.log_attachment(
+        AttachmentLogger::log_attachment(
+            self.as_open_mut()?,
             name,
             MediaType::Other(media_type.to_string()),
             bytes.as_bytes(),
@@ -696,7 +703,8 @@ impl PyRun {
     pub fn log_json(&mut self, py: Python<'_>, name: &str, value: &Bound<PyAny>) -> Result<()> {
         let json = py.import("json")?;
         let blob: String = json.call_method1("dumps", (value,))?.extract()?;
-        self.as_open_mut()?.log_attachment(
+        AttachmentLogger::log_attachment(
+            self.as_open_mut()?,
             name,
             MediaType::Other("application/json".to_string()),
             blob,
@@ -709,7 +717,7 @@ impl PyRun {
     /// when the instance is the input of a solver call and should be paired
     /// with the returned solution.
     pub fn log_instance(&mut self, name: &str, instance: &crate::Instance) -> Result<()> {
-        self.as_open_mut()?.log_instance(name, &instance.inner)
+        AttachmentLogger::log_instance(self.as_open_mut()?, name, &instance.inner)
     }
 
     /// Attach a ParametricInstance in this run.
@@ -718,7 +726,7 @@ impl PyRun {
         name: &str,
         pi: &crate::ParametricInstance,
     ) -> Result<()> {
-        self.as_open_mut()?.log_parametric_instance(name, &pi.inner)
+        AttachmentLogger::log_parametric_instance(self.as_open_mut()?, name, &pi.inner)
     }
 
     /// Attach a Solution in this run.
@@ -727,12 +735,12 @@ impl PyRun {
     /// when the solution is produced by a solver call and should be paired
     /// with the input instance.
     pub fn log_solution(&mut self, name: &str, solution: &crate::Solution) -> Result<()> {
-        self.as_open_mut()?.log_solution(name, &solution.inner)
+        AttachmentLogger::log_solution(self.as_open_mut()?, name, &solution.inner)
     }
 
     /// Attach a SampleSet in this run.
     pub fn log_sample_set(&mut self, name: &str, sample_set: &crate::SampleSet) -> Result<()> {
-        self.as_open_mut()?.log_sample_set(name, &sample_set.inner)
+        AttachmentLogger::log_sample_set(self.as_open_mut()?, name, &sample_set.inner)
     }
 
     /// Solve an Instance with an OMMX SolverAdapter and log a Solve entry.

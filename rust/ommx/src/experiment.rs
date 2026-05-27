@@ -24,7 +24,7 @@
 //!
 //! ```ignore
 //! use ommx::artifact::ImageRef;
-//! use ommx::experiment::{Experiment, Name};
+//! use ommx::experiment::{AttachmentLogger, Experiment, Name};
 //!
 //! let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/scip_reblock115:latest")?;
 //! let exp = Experiment::new(image_name)?;
@@ -51,6 +51,7 @@ mod artifact;
 mod attachment;
 pub mod config;
 mod dynamic;
+mod logging;
 mod parameter;
 mod run;
 mod sealed;
@@ -59,15 +60,14 @@ mod sealed;
 mod tests;
 
 pub use dynamic::{ExperimentDyn, RunDyn, SealedRunDyn, SolveDyn};
+pub use logging::AttachmentLogger;
 pub use parameter::{ParameterValue, RunParameterCell};
 pub use sealed::{SealedRun, Solve};
 
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor, TempLocalRegistry};
-use crate::artifact::{media_types, ImageRef, LocalArtifact};
-use crate::{Instance, SampleSet, Solution};
+use crate::artifact::{ImageRef, LocalArtifact};
 use anyhow::Result;
-use attachment::{encode_json, json_media_type, store_attachment_descriptor, AttachmentSpace};
-use oci_spec::image::MediaType;
+use attachment::{store_attachment_descriptor, AttachmentSpace};
 use parameter::ParameterSet;
 use std::collections::BTreeMap;
 use std::sync::{Mutex, MutexGuard};
@@ -256,39 +256,12 @@ impl<'reg> Experiment<'reg> {
         })
     }
 
-    /// Attach arbitrary bytes with an explicit OCI media type in the
-    /// experiment space.
-    pub fn log_attachment(
+    fn add_attachment(
         &self,
         name: &str,
-        media_type: MediaType,
-        bytes: impl AsRef<[u8]>,
+        media_type: oci_spec::image::MediaType,
+        bytes: &[u8],
     ) -> Result<()> {
-        self.add_attachment(name, media_type, bytes.as_ref())
-    }
-
-    /// Attach a JSON-serialisable value in the experiment space.
-    pub fn log_json(&self, name: &str, value: impl serde::Serialize) -> Result<()> {
-        let bytes = encode_json(name, &value)?;
-        self.log_attachment(name, json_media_type(), bytes)
-    }
-
-    /// Attach an [`Instance`] in the experiment space.
-    pub fn log_instance(&self, name: &str, instance: &Instance) -> Result<()> {
-        self.log_attachment(name, media_types::v1_instance(), instance.to_bytes())
-    }
-
-    /// Attach a [`Solution`] in the experiment space.
-    pub fn log_solution(&self, name: &str, solution: &Solution) -> Result<()> {
-        self.log_attachment(name, media_types::v1_solution(), solution.to_bytes())
-    }
-
-    /// Attach a [`SampleSet`] in the experiment space.
-    pub fn log_sample_set(&self, name: &str, sample_set: &SampleSet) -> Result<()> {
-        self.log_attachment(name, media_types::v1_sample_set(), sample_set.to_bytes())
-    }
-
-    fn add_attachment(&self, name: &str, media_type: MediaType, bytes: &[u8]) -> Result<()> {
         let descriptor = store_attachment_descriptor(
             self.registry,
             AttachmentSpace::Experiment,
