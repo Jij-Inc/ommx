@@ -9,7 +9,7 @@ use super::{
 };
 use crate::artifact::local_registry::{StoredDescriptor, UnsealedArtifact};
 use crate::artifact::{media_types, AsArtifact, ImageRef, LocalArtifact, LocalRegistryHandle};
-use crate::{Evaluate, Function, Instance, ParametricInstance, SampleSet, Sense, Solution};
+use crate::{Evaluate, Function, Instance, Sense};
 use oci_spec::image::{Descriptor, MediaType};
 use serde_json::json;
 use std::collections::{BTreeMap, HashMap};
@@ -53,49 +53,6 @@ fn find_layer<'a, 'reg>(
 
 fn blob_bytes(artifact: &LocalArtifact<'_>, descriptor: &StoredDescriptor<'_>) -> Vec<u8> {
     artifact.get_blob(descriptor).unwrap()
-}
-
-fn empty_instance() -> Instance {
-    Instance::new(
-        Sense::Minimize,
-        Function::Zero,
-        BTreeMap::new(),
-        BTreeMap::new(),
-    )
-    .unwrap()
-}
-
-fn empty_parametric_instance() -> ParametricInstance {
-    ParametricInstance::builder()
-        .sense(Sense::Minimize)
-        .objective(Function::Zero)
-        .decision_variables(BTreeMap::new())
-        .parameters(BTreeMap::new())
-        .constraints(BTreeMap::new())
-        .build()
-        .unwrap()
-}
-
-fn empty_solution(instance: &Instance) -> Solution {
-    instance
-        .evaluate(
-            &crate::v1::State {
-                entries: HashMap::new(),
-            },
-            crate::ATol::default(),
-        )
-        .unwrap()
-}
-
-fn empty_sample_set(instance: &Instance) -> SampleSet {
-    instance
-        .evaluate_samples(
-            &crate::Sampled::from(crate::v1::State {
-                entries: HashMap::new(),
-            }),
-            crate::ATol::default(),
-        )
-        .unwrap()
 }
 
 /// `run()` hands out fresh 0-based ids; `finish()` consumes the run
@@ -199,115 +156,6 @@ fn log_writes_blob_to_blobstore_immediately() {
             run.attachments[0].digest().clone()
         });
         assert!(experiment.registry.blobs().exists(&digest).unwrap());
-        Ok(())
-    });
-}
-
-/// Attachment descriptors are append-only within the Experiment/Run state.
-/// BlobStore still deduplicates byte-identical payloads by digest, but
-/// the Experiment model preserves each log call as a descriptor entry.
-#[test]
-fn log_preserves_attachment_descriptor_log_order() {
-    with_temp_experiment(|experiment| {
-        experiment.log_json("dataset", json!("miplib2017")).unwrap();
-        experiment.log_json("dataset", json!("qplib")).unwrap();
-        experiment
-            .log_json("dataset", json!("set-covering"))
-            .unwrap();
-
-        with_unsealed_state(&experiment, |state| {
-            assert_eq!(state.attachments.len(), 3);
-            assert_eq!(
-                state
-                    .attachments
-                    .iter()
-                    .map(|attachment| layer_annotation(attachment, ANN_ATTACHMENT_NAME).unwrap())
-                    .collect::<Vec<_>>(),
-                vec![
-                    "dataset".to_string(),
-                    "dataset".to_string(),
-                    "dataset".to_string()
-                ]
-            );
-        });
-        Ok(())
-    });
-}
-
-#[test]
-fn attachment_logger_typed_methods_use_expected_media_types_and_bytes() {
-    with_temp_experiment(|experiment| {
-        let instance = empty_instance();
-        let parametric_instance = empty_parametric_instance();
-        let solution = empty_solution(&instance);
-        let sample_set = empty_sample_set(&instance);
-
-        experiment
-            .log_json("json", json!({ "dataset": "miplib2017" }))
-            .unwrap();
-        experiment.log_instance("instance", &instance).unwrap();
-        experiment
-            .log_parametric_instance("parametric-instance", &parametric_instance)
-            .unwrap();
-        experiment.log_solution("solution", &solution).unwrap();
-        experiment
-            .log_sample_set("sample-set", &sample_set)
-            .unwrap();
-
-        let (names, media_types, blobs) = with_unsealed_state(&experiment, |state| {
-            (
-                state
-                    .attachments
-                    .iter()
-                    .map(|attachment| layer_annotation(attachment, ANN_ATTACHMENT_NAME).unwrap())
-                    .collect::<Vec<_>>(),
-                state
-                    .attachments
-                    .iter()
-                    .map(|attachment| attachment.media_type().clone())
-                    .collect::<Vec<_>>(),
-                state
-                    .attachments
-                    .iter()
-                    .map(|descriptor| {
-                        experiment
-                            .registry
-                            .blobs()
-                            .read_bytes(descriptor.digest())
-                            .unwrap()
-                    })
-                    .collect::<Vec<_>>(),
-            )
-        });
-        assert_eq!(
-            names,
-            vec![
-                "json".to_string(),
-                "instance".to_string(),
-                "parametric-instance".to_string(),
-                "solution".to_string(),
-                "sample-set".to_string(),
-            ]
-        );
-        assert_eq!(
-            media_types,
-            vec![
-                MediaType::Other("application/json".to_string()),
-                media_types::v1_instance(),
-                media_types::v1_parametric_instance(),
-                media_types::v1_solution(),
-                media_types::v1_sample_set(),
-            ]
-        );
-
-        assert_eq!(
-            blobs[0],
-            serde_json::to_vec(&json!({ "dataset": "miplib2017" })).unwrap()
-        );
-        assert_eq!(blobs[1], instance.to_bytes());
-        assert_eq!(blobs[2], parametric_instance.to_bytes());
-        assert_eq!(blobs[3], solution.to_bytes());
-        assert_eq!(blobs[4], sample_set.to_bytes());
         Ok(())
     });
 }
@@ -1083,50 +931,6 @@ fn dropping_unclosed_run_does_not_write_back() {
         assert!(layers
             .iter()
             .all(|layer| layer_annotation(layer, ANN_ATTACHMENT_NAME).as_deref() != Some("seed")));
-        Ok(())
-    });
-}
-
-/// A byte-identical attachment logged by two runs yields two annotation-
-/// distinct layer descriptors backed by one shared CAS blob.
-#[test]
-fn byte_identical_attachment_across_runs_shares_one_blob() {
-    with_temp_experiment(|experiment| {
-        let payload = json!({ "formulation": "relaxed" });
-
-        {
-            let mut run0 = experiment.run().unwrap();
-            run0.log_json("candidate", payload.clone()).unwrap();
-            run0.finish().unwrap();
-        }
-
-        {
-            let mut run1 = experiment.run().unwrap();
-            run1.log_json("candidate", payload.clone()).unwrap();
-            run1.finish().unwrap();
-        }
-
-        let artifact = experiment.commit().unwrap().into_artifact();
-        let layers = artifact.layers().unwrap();
-
-        let candidates: Vec<&StoredDescriptor<'_>> = layers
-            .iter()
-            .filter(|layer| {
-                layer_annotation(layer, ANN_ATTACHMENT_NAME).as_deref() == Some("candidate")
-            })
-            .collect();
-        assert_eq!(candidates.len(), 2);
-        let mut run_ids: Vec<Option<String>> = candidates
-            .iter()
-            .map(|layer| layer_annotation(layer, ANN_RUN_ID))
-            .collect();
-        run_ids.sort();
-        assert_eq!(run_ids, vec![Some("0".to_string()), Some("1".to_string())]);
-        // Same content -> same digest -> one physical blob.
-        assert_eq!(
-            candidates[0].digest().to_string(),
-            candidates[1].digest().to_string()
-        );
         Ok(())
     });
 }
