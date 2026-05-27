@@ -18,7 +18,9 @@
 use super::attachment::{
     encode_json, json_media_type, store_attachment_descriptor, AttachmentSpace,
 };
-use super::{Name, RunEntry, RunParameterCell, SealedExperiment, UnsealedExperimentState};
+use super::{
+    next_run_id, Name, RunEntry, RunParameterCell, SealedExperiment, UnsealedExperimentState,
+};
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
 use crate::artifact::{
     media_types, AsArtifact, ImageRef, LocalArtifact, LocalArtifactDyn, LocalRegistryHandle,
@@ -73,6 +75,7 @@ enum ExperimentDynLifecycle {
 #[derive(Debug)]
 struct UnsealedExperimentDynState {
     image_name: ImageRef,
+    subject: Option<Descriptor>,
     attachments: Vec<Descriptor>,
     runs: BTreeMap<u64, RunEntryDyn>,
     next_run_id: u64,
@@ -245,6 +248,7 @@ impl ExperimentDyn {
                 lifecycle: ExperimentDynLifecycle::Unsealed {
                     state: Some(UnsealedExperimentDynState {
                         image_name,
+                        subject: None,
                         attachments: Vec::new(),
                         runs: BTreeMap::new(),
                         next_run_id: 0,
@@ -271,6 +275,28 @@ impl ExperimentDyn {
             registry_handle: registry_handle.clone(),
             state: Arc::new(Mutex::new(ExperimentDynState {
                 lifecycle: ExperimentDynLifecycle::Sealed(sealed),
+                registry_handle,
+            })),
+        })
+    }
+
+    pub fn fork(&self, name: impl Into<Name>) -> Result<Self> {
+        let (sealed, registry_handle) = {
+            let dyn_state = lock_experiment_state(&self.state);
+            let ExperimentDynLifecycle::Sealed(sealed) = &dyn_state.lifecycle else {
+                return bail_not_sealed(&dyn_state.lifecycle);
+            };
+            (sealed.clone(), dyn_state.registry_handle.clone())
+        };
+        let image_name = name.into().resolve(registry_handle.registry())?;
+        let state = sealed.fork_unsealed_state(image_name)?;
+        Ok(Self {
+            registry_handle: registry_handle.clone(),
+            state: Arc::new(Mutex::new(ExperimentDynState {
+                lifecycle: ExperimentDynLifecycle::Unsealed {
+                    state: Some(state),
+                    open_runs: 0,
+                },
                 registry_handle,
             })),
         })
@@ -488,6 +514,7 @@ impl UnsealedExperimentDynState {
     ) -> Result<UnsealedExperimentState<'reg>> {
         Ok(UnsealedExperimentState {
             image_name: self.image_name,
+            subject: self.subject,
             attachments: stored_descriptors(registry, self.attachments)?,
             runs: self
                 .runs
@@ -565,6 +592,51 @@ impl SealedExperimentDynState {
 
     fn registry_handle(&self) -> LocalRegistryHandle {
         self.artifact.registry_handle()
+    }
+
+    fn fork_unsealed_state(&self, image_name: ImageRef) -> Result<UnsealedExperimentDynState> {
+        let subject = Some(
+            self.artifact
+                .as_local_artifact()
+                .stored_manifest_descriptor()?
+                .into(),
+        );
+        let mut parameters_by_run = self.run_parameters.parameter_sets()?;
+        let mut runs = BTreeMap::new();
+
+        for run in self.runs.values() {
+            let parameters = parameters_by_run
+                .remove(&run.run_id)
+                .unwrap_or_else(super::parameter::ParameterSet::new);
+            let solves = run
+                .solves
+                .iter()
+                .map(|solve| SolveEntryDyn {
+                    solve_id: solve.solve_id,
+                    input: solve.input.clone(),
+                    output: solve.output.clone(),
+                    adapter: solve.adapter.clone(),
+                    adapter_options: solve.adapter_options.clone(),
+                })
+                .collect();
+            runs.insert(
+                run.run_id,
+                RunEntryDyn {
+                    run_id: run.run_id,
+                    attachments: run.attachments.clone(),
+                    solves,
+                    parameters,
+                },
+            );
+        }
+
+        Ok(UnsealedExperimentDynState {
+            image_name,
+            subject,
+            attachments: self.attachments.clone(),
+            next_run_id: next_run_id(runs.keys().copied())?,
+            runs,
+        })
     }
 
     fn image_name(&self) -> &ImageRef {

@@ -132,6 +132,16 @@ impl RunParameterTable {
             .flat_map(|(name, column)| column.cells(name))
             .collect()
     }
+
+    pub(crate) fn parameter_sets(&self) -> Result<BTreeMap<u64, ParameterSet>> {
+        let mut sets: BTreeMap<u64, ParameterSet> = BTreeMap::new();
+        for cell in self.cells() {
+            sets.entry(cell.run_id)
+                .or_default()
+                .insert(cell.name, cell.value)?;
+        }
+        Ok(sets)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

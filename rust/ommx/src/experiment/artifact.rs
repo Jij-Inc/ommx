@@ -30,7 +30,7 @@ impl<'reg> UnsealedExperimentState<'reg> {
             MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
             config_descriptor,
             layers.into_layers(),
-            None,
+            self.subject,
             HashMap::new(),
         );
         let sealed_artifact = registry.seal_artifact(artifact)?;

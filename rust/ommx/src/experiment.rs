@@ -184,6 +184,9 @@ struct UnsealedExperimentState<'reg> {
     /// under. Experiment identity is the Local Registry ref; there is
     /// no separate experiment-name field in the artifact model.
     image_name: ImageRef,
+    /// Parent Experiment manifest descriptor for lineage. `None` for
+    /// a root Experiment and `Some` for a forked child Experiment.
+    subject: Option<oci_spec::image::Descriptor>,
     /// Experiment-space attachments.
     attachments: Vec<StoredDescriptor<'reg>>,
     runs: BTreeMap<u64, RunEntry<'reg>>,
@@ -225,6 +228,7 @@ impl<'reg> Experiment<'reg> {
             registry,
             state: Mutex::new(UnsealedExperimentState {
                 image_name,
+                subject: None,
                 attachments: Vec::new(),
                 runs: BTreeMap::new(),
                 next_run_id: 0,
@@ -344,5 +348,65 @@ impl<'reg> SealedExperiment<'reg> {
     /// Consume the sealed experiment and return its artifact handle.
     pub fn into_artifact(self) -> LocalArtifact<'reg> {
         self.artifact
+    }
+
+    /// Fork this sealed Experiment into a new unsealed child Experiment.
+    ///
+    /// The parent Experiment is not modified. Existing experiment
+    /// attachments, runs, solves, and run parameters are carried into
+    /// the child state, while the committed child Artifact records the
+    /// parent manifest descriptor as its OCI `subject`.
+    pub fn fork(&self, name: impl Into<Name>) -> Result<Experiment<'reg>> {
+        let registry = self.artifact.registry();
+        let image_name = name.into().resolve(registry)?;
+        let subject = Some(self.artifact.stored_manifest_descriptor()?.into());
+        let mut runs = BTreeMap::new();
+        let mut parameters_by_run = self.run_parameters.parameter_sets()?;
+
+        for run in self.runs.values() {
+            let parameters = parameters_by_run
+                .remove(&run.run_id())
+                .unwrap_or_else(ParameterSet::new);
+            let solves = run
+                .solves()
+                .iter()
+                .map(|solve| SolveEntry {
+                    solve_id: solve.solve_id(),
+                    input: solve.input().clone(),
+                    output: solve.output().clone(),
+                    adapter: solve.adapter().to_string(),
+                    adapter_options: solve.adapter_options().to_string(),
+                })
+                .collect();
+            runs.insert(
+                run.run_id(),
+                RunEntry {
+                    run_id: run.run_id(),
+                    attachments: run.attachments().to_vec(),
+                    solves,
+                    parameters,
+                },
+            );
+        }
+
+        Ok(Experiment {
+            registry,
+            state: Mutex::new(UnsealedExperimentState {
+                image_name,
+                subject,
+                attachments: self.attachments.clone(),
+                next_run_id: next_run_id(runs.keys().copied())?,
+                runs,
+            }),
+        })
+    }
+}
+
+fn next_run_id(run_ids: impl Iterator<Item = u64>) -> Result<u64> {
+    match run_ids.max() {
+        Some(max) => max
+            .checked_add(1)
+            .ok_or_else(|| anyhow::anyhow!("Run ID space is exhausted")),
+        None => Ok(0),
     }
 }

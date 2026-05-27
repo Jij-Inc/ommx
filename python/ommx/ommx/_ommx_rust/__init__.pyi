@@ -1796,6 +1796,27 @@ class Experiment:
         This is the usual entry point after importing or receiving an OMMX
         Artifact handle. The artifact must contain an Experiment config.
         """
+    def fork(self, image_name: typing.Optional[builtins.str] = None) -> Experiment:
+        r"""
+        Fork this committed Experiment into a new unsealed child Experiment.
+
+        The parent Experiment is not modified. Existing Attachments, Runs,
+        Solves, and Run parameters are carried into the child Experiment.
+        When the child is committed, its Artifact manifest records the parent
+        manifest descriptor as OCI `subject`.
+
+        If `image_name` is omitted, OMMX generates an anonymous local
+        Experiment name for the child. The returned Experiment can be used as
+        a context manager:
+
+        ```python
+        with parent.fork() as child:
+            with child.run() as run:
+                run.log_parameter("capacity", 56)
+        ```
+
+        Raises an error if this Experiment has not been committed yet.
+        """
     def __enter__(self) -> Experiment: ...
     def __exit__(
         self,

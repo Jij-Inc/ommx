@@ -397,7 +397,7 @@ impl<'reg> LocalArtifact<'reg> {
         self.registry.blobs().read_bytes(digest)
     }
 
-    fn stored_manifest_descriptor(&self) -> Result<StoredDescriptor<'reg>> {
+    pub(crate) fn stored_manifest_descriptor(&self) -> Result<StoredDescriptor<'reg>> {
         let size = self.registry.blobs().size(&self.manifest_digest)?;
         let descriptor = DescriptorBuilder::default()
             .media_type(MediaType::ImageManifest)
