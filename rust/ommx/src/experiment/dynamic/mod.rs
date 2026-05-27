@@ -289,7 +289,7 @@ impl ExperimentDyn {
             (sealed.clone(), dyn_state.registry_handle.clone())
         };
         let image_name = name.into().resolve(registry_handle.registry())?;
-        let state = sealed.fork_unsealed_state(image_name)?;
+        let state = sealed.create_forked_child_state(image_name)?;
         Ok(Self {
             registry_handle: registry_handle.clone(),
             state: Arc::new(Mutex::new(ExperimentDynState {
@@ -594,7 +594,10 @@ impl SealedExperimentDynState {
         self.artifact.registry_handle()
     }
 
-    fn fork_unsealed_state(&self, image_name: ImageRef) -> Result<UnsealedExperimentDynState> {
+    fn create_forked_child_state(
+        &self,
+        image_name: ImageRef,
+    ) -> Result<UnsealedExperimentDynState> {
         let subject = Some(
             self.artifact
                 .as_local_artifact()
