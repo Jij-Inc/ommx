@@ -58,7 +58,7 @@ pub fn json_media_type() -> MediaType {
 }
 
 pub fn encode_json(name: &str, value: impl serde::Serialize) -> Result<Vec<u8>> {
-    serde_json::to_vec(&value)
+    crate::artifact::stable_json_bytes(&value)
         .map_err(|e| crate::error!("Failed to encode JSON attachment `{name}`: {e}"))
 }
 

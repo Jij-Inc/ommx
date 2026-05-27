@@ -160,6 +160,48 @@ fn log_writes_blob_to_blobstore_immediately() {
     });
 }
 
+#[test]
+fn log_json_encodes_hash_maps_stably() {
+    fn map(entries: impl IntoIterator<Item = (&'static str, i32)>) -> HashMap<&'static str, i32> {
+        entries.into_iter().collect()
+    }
+
+    let first = HashMap::from([
+        ("outer_b", map([("d", 4), ("c", 3)])),
+        ("outer_a", map([("b", 2), ("a", 1)])),
+    ]);
+    let second = HashMap::from([
+        ("outer_a", map([("a", 1), ("b", 2)])),
+        ("outer_b", map([("c", 3), ("d", 4)])),
+    ]);
+
+    with_temp_experiment(|experiment| {
+        experiment.log_json("first", first).unwrap();
+        experiment.log_json("second", second).unwrap();
+
+        let bytes = with_unsealed_state(&experiment, |state| {
+            state
+                .attachments
+                .iter()
+                .map(|descriptor| {
+                    experiment
+                        .registry
+                        .blobs()
+                        .read_bytes(descriptor.digest())
+                        .unwrap()
+                })
+                .collect::<Vec<_>>()
+        });
+        assert_eq!(bytes.len(), 2);
+        assert_eq!(bytes[0], bytes[1]);
+        assert_eq!(
+            bytes[0],
+            br#"{"outer_a":{"a":1,"b":2},"outer_b":{"c":3,"d":4}}"#
+        );
+        Ok(())
+    });
+}
+
 /// `commit()` seals the session into an OMMX Artifact whose manifest and
 /// layer annotations describe the experiment / run attachments.
 #[test]
