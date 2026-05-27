@@ -19,7 +19,8 @@ use super::attachment::{
     encode_json, json_media_type, store_attachment_descriptor, AttachmentSpace,
 };
 use super::{
-    next_run_id, Name, RunEntry, RunParameterCell, SealedExperiment, UnsealedExperimentState,
+    allocate_next_run_id, next_run_id, Name, RunEntry, RunParameterCell, SealedExperiment,
+    UnsealedExperimentState,
 };
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
 use crate::artifact::{

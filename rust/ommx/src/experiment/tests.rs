@@ -79,6 +79,22 @@ fn run_lifecycle_assigns_ids_and_registers_closed_runs() {
     });
 }
 
+#[test]
+fn run_rejects_exhausted_run_id_space() {
+    with_temp_experiment(|experiment| {
+        {
+            let mut state = experiment.state.lock().expect("experiment state lock");
+            state.next_run_id = u64::MAX;
+        }
+
+        let err = experiment
+            .run()
+            .expect_err("u64::MAX cannot be allocated as a run_id");
+        assert!(err.to_string().contains("Run ID space is exhausted"));
+        Ok(())
+    });
+}
+
 /// Runs borrow the parent experiment immutably, so several runs can be
 /// built before any of them writes back at close.
 #[test]

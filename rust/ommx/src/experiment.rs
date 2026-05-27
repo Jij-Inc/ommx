@@ -245,8 +245,7 @@ impl<'reg> Experiment<'reg> {
     /// Start a new [`Run`]. Each run gets a fresh 0-based `run_id`.
     pub fn run(&self) -> Result<Run<'_, 'reg>> {
         let mut state = self.lock_state();
-        let run_id = state.next_run_id;
-        state.next_run_id += 1;
+        let run_id = allocate_next_run_id(&mut state.next_run_id)?;
         Ok(Run {
             experiment: self,
             run_id,
@@ -409,4 +408,12 @@ fn next_run_id(run_ids: impl Iterator<Item = u64>) -> Result<u64> {
             .ok_or_else(|| anyhow::anyhow!("Run ID space is exhausted")),
         None => Ok(0),
     }
+}
+
+fn allocate_next_run_id(next_run_id: &mut u64) -> Result<u64> {
+    let run_id = *next_run_id;
+    *next_run_id = next_run_id
+        .checked_add(1)
+        .ok_or_else(|| anyhow::anyhow!("Run ID space is exhausted"))?;
+    Ok(run_id)
 }
