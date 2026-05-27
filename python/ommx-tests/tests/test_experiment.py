@@ -147,10 +147,15 @@ def test_rename_after_context_commit_updates_artifact_name():
     assert experiment.image_name == new_image_name
     assert experiment.artifact.image_name == new_image_name
     assert (
-        Experiment.from_artifact(experiment.artifact).run_parameters_df().loc[0, "solver"]
+        Experiment.from_artifact(experiment.artifact)
+        .run_parameters_df()
+        .loc[0, "solver"]
         == "highs"
     )
-    assert Experiment.from_artifact(old_artifact).run_parameters_df().loc[0, "solver"] == "highs"
+    assert (
+        Experiment.from_artifact(old_artifact).run_parameters_df().loc[0, "solver"]
+        == "highs"
+    )
 
 
 def test_push_rejects_uncommitted_experiment():
