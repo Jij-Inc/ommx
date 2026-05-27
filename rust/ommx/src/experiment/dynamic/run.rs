@@ -55,8 +55,7 @@ impl ExperimentDyn {
             let state = state
                 .as_mut()
                 .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
-            let run_id = state.next_run_id;
-            state.next_run_id += 1;
+            let run_id = super::allocate_next_run_id(&mut state.next_run_id)?;
             *open_runs += 1;
             run_id
         };

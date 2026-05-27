@@ -262,3 +262,36 @@ for run in loaded_experiment.runs:
   options: dict[str, Any] = solve.adapter_options
   assert "verbose" in options and options["verbose"] == False
 ```
+
+## 実験をForkする
+
+{py:class}`~ommx.experiment.Experiment` は一度保存すると変更できなくなりますが、保存されたExperimentを元にして新しいExperimentを開始することができます。この操作を *Fork* と呼びます。ForkされたExperimentは元のExperimentと同じ情報を引き継いでいますが再び終了処理前の実行中の状態から始まるので、新たなRunやAttachmentを追加することができます。Forkは {py:meth}`~ommx.experiment.Experiment.fork` で行います。
+
+```{code-cell} ipython3
+with loaded_experiment.fork() as forked_experiment:
+    # Fork先のExperimentは既存のRunを引き継いでいるので、新しいRun IDは2から始まる
+    with forked_experiment.run() as run:
+        assert run.run_id == 2
+
+        c = 64
+        instance = pi.with_parameters({capacity.id: c})
+
+        run.log_parameter("capacity", c)
+        solution = run.log_solve(OMMXHighsAdapter, instance, verbose=False)
+        assert solution.feasible
+        run.log_parameter("objective", solution.objective)
+```
+
+Fork元のExperimentは変更されません。一方、Fork先のExperimentには元のRunに加えて新しく追加したRunが含まれます。
+
+```{code-cell} ipython3
+assert list(loaded_experiment.run_parameters_df().index) == [0, 1]
+assert list(forked_experiment.run_parameters_df().index) == [0, 1, 2]
+
+forked_df = forked_experiment.run_parameters_df()
+assert forked_df.loc[2, "capacity"] == 64
+```
+
+ForkされたExperimentはSolveやAttachmentのデータを引き継ぎますが、データはLocal Registryにデータの内容に基づいて保存されているので、Forkしてもデータが複製されるわけではありません。複製されるのはデータの一覧をまとめたArtifact Manifestだけで、Fork先のExperimentはFork元のExperimentと同じデータを指すようになります。
+
+ForkされたExperimentを {py:meth}`~ommx.experiment.Experiment.save` や {py:meth}`~ommx.experiment.Experiment.push` で共有すると、共有されるのはFork後のExperiment全体です。元のExperiment由来のAttachment、Run、SolveもFork先のArtifactの `layers` に含まれるため、Fork後のExperimentを読み出すだけであれば元のExperimentは必要ありません。

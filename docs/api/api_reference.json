@@ -1947,6 +1947,46 @@
               "deprecated": null
             },
             {
+              "name": "fork",
+              "doc": "Fork this committed Experiment into a new unsealed child Experiment.\n\nThe parent Experiment is not modified. Existing Attachments, Runs,\nSolves, and Run parameters are carried into the child Experiment.\nWhen the child is committed, its Artifact manifest records the parent\nmanifest descriptor as OCI `subject`.\n\nIf `image_name` is omitted, OMMX generates an anonymous local\nExperiment name for the child. The returned Experiment can be used as\na context manager:\n\n```python\nwith parent.fork() as child:\n    with child.run() as run:\n        run.log_parameter(\"capacity\", 56)\n```\n\nRaises an error if this Experiment has not been committed yet.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "image_name",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Experiment",
+                    "link_target": {
+                      "fqn": "ommx.experiment.Experiment",
+                      "doc_module": "ommx.experiment",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "from_artifact",
               "doc": "Interpret an already-open Artifact as a committed Experiment.\n\nThis is the usual entry point after importing or receiving an OMMX\nArtifact handle. The artifact must contain an Experiment config.",
               "signatures": [

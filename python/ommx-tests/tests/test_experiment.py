@@ -158,6 +158,39 @@ def test_rename_after_context_commit_updates_artifact_name():
     )
 
 
+def test_fork_committed_experiment_creates_unsealed_child():
+    with Experiment.with_temp_local_registry() as parent:
+        parent.log_json("dataset", {"name": "miplib2017"})
+        with parent.run() as run:
+            run.log_parameter("solver", "base")
+
+    with parent.fork("ghcr.io/jij-inc/ommx/forked-experiment:latest") as child:
+        assert child.image_name == "ghcr.io/jij-inc/ommx/forked-experiment:latest"
+        assert "state='unsealed'" in repr(child)
+        with child.run() as run:
+            assert run.run_id == 1
+            run.log_parameter("solver", "child")
+
+    parent_df = parent.run_parameters_df()
+    assert list(parent_df.index) == [0]
+    assert parent_df.loc[0, "solver"] == "base"
+
+    child_df = child.run_parameters_df()
+    assert list(child_df.index) == [0, 1]
+    assert child_df.loc[0, "solver"] == "base"
+    assert child_df.loc[1, "solver"] == "child"
+    assert child.get_json("dataset") == {"name": "miplib2017"}
+    assert [run.run_id for run in parent.runs] == [0]
+    assert [run.run_id for run in child.runs] == [0, 1]
+
+
+def test_fork_rejects_uncommitted_experiment():
+    experiment = Experiment.with_temp_local_registry()
+
+    with pytest.raises(RuntimeError, match="must be committed"):
+        experiment.fork()
+
+
 def test_push_rejects_uncommitted_experiment():
     experiment = Experiment.with_temp_local_registry()
 

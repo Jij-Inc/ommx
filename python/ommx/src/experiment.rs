@@ -126,6 +126,31 @@ impl PyExperiment {
         })
     }
 
+    /// Fork this committed Experiment into a new unsealed child Experiment.
+    ///
+    /// The parent Experiment is not modified. Existing Attachments, Runs,
+    /// Solves, and Run parameters are carried into the child Experiment.
+    /// When the child is committed, its Artifact manifest records the parent
+    /// manifest descriptor as OCI `subject`.
+    ///
+    /// If `image_name` is omitted, OMMX generates an anonymous local
+    /// Experiment name for the child. The returned Experiment can be used as
+    /// a context manager:
+    ///
+    /// ```python
+    /// with parent.fork() as child:
+    ///     with child.run() as run:
+    ///         run.log_parameter("capacity", 56)
+    /// ```
+    ///
+    /// Raises an error if this Experiment has not been committed yet.
+    #[pyo3(signature = (image_name = None))]
+    pub fn fork(&self, image_name: Option<&str>) -> Result<Self> {
+        Ok(Self {
+            inner: self.inner.fork(parse_name(image_name)?)?,
+        })
+    }
+
     pub fn __enter__(slf: Bound<'_, Self>) -> PyResult<Py<PyExperiment>> {
         Ok(slf.unbind())
     }

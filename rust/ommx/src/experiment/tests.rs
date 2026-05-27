@@ -79,6 +79,22 @@ fn run_lifecycle_assigns_ids_and_registers_closed_runs() {
     });
 }
 
+#[test]
+fn run_rejects_exhausted_run_id_space() {
+    with_temp_experiment(|experiment| {
+        {
+            let mut state = experiment.state.lock().expect("experiment state lock");
+            state.next_run_id = u64::MAX;
+        }
+
+        let err = experiment
+            .run()
+            .expect_err("u64::MAX cannot be allocated as a run_id");
+        assert!(err.to_string().contains("Run ID space is exhausted"));
+        Ok(())
+    });
+}
+
 /// Runs borrow the parent experiment immutably, so several runs can be
 /// built before any of them writes back at close.
 #[test]
@@ -394,6 +410,94 @@ fn loaded_experiment_reads_attachments_and_run_parameters() {
         assert_eq!(cells[3].run_id, 1);
         assert_eq!(cells[3].name, "solver");
         assert_eq!(cells[3].value, ParameterValue::String("highs".to_string()));
+        Ok(())
+    });
+}
+
+#[test]
+fn sealed_experiment_fork_creates_child_with_parent_subject_and_next_run_id() {
+    with_temp_experiment(|experiment| {
+        experiment.log_json("dataset", json!("miplib2017")).unwrap();
+        let instance = Instance::new(
+            Sense::Minimize,
+            Function::Zero,
+            BTreeMap::new(),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        let solution = instance
+            .evaluate(
+                &crate::v1::State {
+                    entries: HashMap::new(),
+                },
+                crate::ATol::default(),
+            )
+            .unwrap();
+
+        {
+            let mut run = experiment.run().unwrap();
+            run.log_parameter("solver", "base").unwrap();
+            run.log_finished_solve_result(
+                &instance,
+                &solution,
+                "dummy.Adapter".to_string(),
+                "{}".to_string(),
+            )
+            .unwrap();
+            run.finish().unwrap();
+        }
+
+        let parent = experiment.commit().unwrap();
+        let parent_artifact = parent.artifact();
+        let child_name =
+            ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:fork-child").unwrap();
+        let child = parent.fork(Name::Named(child_name.clone())).unwrap();
+        {
+            let mut run = child.run().unwrap();
+            assert_eq!(run.run_id(), 1);
+            run.log_parameter("solver", "child").unwrap();
+            run.finish().unwrap();
+        }
+
+        let child = child.commit().unwrap();
+        let child_artifact = child.artifact();
+        assert_eq!(child_artifact.image_name(), &child_name);
+        let subject = child_artifact
+            .subject()
+            .unwrap()
+            .expect("forked child manifest must record parent subject");
+        assert_eq!(subject.media_type(), &MediaType::ImageManifest);
+        assert_eq!(subject.digest(), parent_artifact.manifest_digest());
+
+        assert!(parent.run(1).is_none());
+        let parent_cells = parent.run_parameter_cells();
+        assert_eq!(parent_cells.len(), 1);
+        assert_eq!(parent_cells[0].run_id, 0);
+        assert_eq!(parent_cells[0].name, "solver");
+        assert_eq!(
+            parent_cells[0].value,
+            ParameterValue::String("base".to_string())
+        );
+
+        let loaded = SealedExperiment::from_artifact(child_artifact).unwrap();
+        assert!(loaded
+            .experiment_attachments()
+            .iter()
+            .any(
+                |attachment| layer_annotation(attachment, ANN_ATTACHMENT_NAME).as_deref()
+                    == Some("dataset")
+            ));
+        let run0 = loaded.run(0).unwrap();
+        assert_eq!(run0.solves().len(), 1);
+        let run1 = loaded.run(1).unwrap();
+        assert!(run1.solves().is_empty());
+        let mut cells = loaded.run_parameter_cells();
+        cells.sort_by_key(|left| left.run_id);
+        assert_eq!(cells.len(), 2);
+        assert_eq!(cells[0].run_id, 0);
+        assert_eq!(cells[0].value, ParameterValue::String("base".to_string()));
+        assert_eq!(cells[1].run_id, 1);
+        assert_eq!(cells[1].value, ParameterValue::String("child".to_string()));
         Ok(())
     });
 }
