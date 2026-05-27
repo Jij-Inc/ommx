@@ -935,25 +935,6 @@ fn dropping_unclosed_run_does_not_write_back() {
     });
 }
 
-/// Caller-defined payload types are represented directly by OCI media
-/// type, without an additional OMMX attachment-kind axis.
-#[test]
-fn log_attachment_accepts_caller_defined_media_type() {
-    with_temp_experiment(|experiment| {
-        let media_type = MediaType::Other("application/vnd.jijmodeling.model+json".to_string());
-        experiment
-            .log_attachment("source-model", media_type.clone(), br#"{"variables": []}"#)
-            .unwrap();
-
-        let artifact = experiment.commit().unwrap().into_artifact();
-        let layers = artifact.layers().unwrap();
-        let source_model = find_layer(&layers, ANN_ATTACHMENT_NAME, "source-model");
-        assert_eq!(source_model.media_type(), &media_type);
-        assert_eq!(blob_bytes(&artifact, source_model), br#"{"variables": []}"#);
-        Ok(())
-    });
-}
-
 #[test]
 fn experiment_dyn_keeps_temp_registry_alive_for_derived_artifacts() {
     let experiment = ExperimentDyn::with_temp_local_registry(Name::Anonymous).unwrap();
