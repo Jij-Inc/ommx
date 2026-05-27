@@ -6284,7 +6284,7 @@ class Solve:
         SolverAdapter class name used for this solve.
         """
     @property
-    def adapter_options(self) -> typing.Any:
+    def adapter_options(self) -> builtins.dict[builtins.str, typing.Any]:
         r"""
         Keyword arguments passed to the SolverAdapter.
 

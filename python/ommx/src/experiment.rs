@@ -1089,14 +1089,22 @@ impl PySolve {
     }
 
     #[getter]
+    #[gen_stub(override_return_type(
+        type_repr = "builtins.dict[builtins.str, typing.Any]",
+        imports = ("builtins", "typing")
+    ))]
     /// Keyword arguments passed to the SolverAdapter.
     ///
     /// The artifact stores this value as a JSON string produced by Python's
     /// `json.dumps`; the Python SDK decodes it with `json.loads` before
     /// returning it.
-    pub fn adapter_options<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyAny>> {
+    pub fn adapter_options<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDict>> {
         let json = py.import("json")?;
-        Ok(json.call_method1("loads", (self.0.adapter_options(),))?)
+        Ok(json
+            .call_method1("loads", (self.0.adapter_options(),))?
+            .cast::<PyDict>()
+            .map_err(|_| anyhow::anyhow!("Solve.adapter_options must decode to a JSON object"))?
+            .clone())
     }
 
     pub fn __repr__(&self) -> String {

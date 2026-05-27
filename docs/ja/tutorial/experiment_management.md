@@ -196,20 +196,28 @@ loaded_experiment.run_parameters_df()
 Experiment単位で保存したAttachmentは名前で確認し、必要なものを名前で取り出します。{py:meth}`~ommx.experiment.Experiment.get_attachment` は保存時のMedia Typeを見て、JSONならPythonの値、{py:class}`~ommx.v1.ParametricInstance` ならそのオブジェクト、というように変換して返します。期待する型が分かっている場合は {py:meth}`~ommx.experiment.Experiment.get_json` や {py:meth}`~ommx.experiment.Experiment.get_parametric_instance` のような型ごとのメソッドを使うと、Media Typeが違っていた場合にエラーになります。
 
 ```{code-cell} ipython3
-loaded_experiment.attachment_names
+# 保存したAttachmentの名前を確認する
+assert loaded_experiment.attachment_names == ["instance", "source-data"]
+
+# JSONとして保存したデータを取り出す
+source_data = loaded_experiment.get_json("source-data")
+assert source_data == {
+  "description": "knapsack demo",
+  "values": v,
+  "weights": w,
+}
+
+# get_attachmentはMedia Typeを見て適切に変換してくれる
+pi = loaded_experiment.get_attachment("instance")
+assert isinstance(pi, ParametricInstance)
 ```
 
-```{code-cell} ipython3
-loaded_experiment.get_json("source-data")
-```
+Runの一覧は {py:attr}`~ommx.experiment.Experiment.runs` から確認できます。終了済みのRunが作成順に並び、それぞれのRunに紐づくAttachmentとSolveを確認できます。
 
 ```{code-cell} ipython3
-loaded_experiment.get_parametric_instance("instance")
-```
+from typing import Any
+from ommx.v1 import Solution
 
-Runの一覧は {py:attr}`~ommx.experiment.Experiment.runs` から確認できます。終了済みのRunが作成順に並び、それぞれのRunに紐づくAttachmentとSolveの数を確認できます。
-
-```{code-cell} ipython3
 for run in loaded_experiment.runs:
   # Runには実行順にIDが振られる
   print(f"- Run ID:{run.run_id}")
@@ -230,24 +238,20 @@ for run in loaded_experiment.runs:
 
     # ナップザック問題は解けているはず
     assert output.feasible
+    print(f"    value: {output.objective}")
+
+    # Adapterに渡したオプションもロードする
+    options: dict[str, Any] = solve.adapter_options
+    assert "verbose" in options and options["verbose"] == False
 ```
 
-各Runの中で実行されたソルバー呼び出しは {py:attr}`~ommx.experiment.SealedRun.solves` に入っています。{py:class}`~ommx.experiment.Solve` は一回の `log_solve` 呼び出しに対応し、入力Instance、出力Solution、利用したAdapter、Adapterへ渡したオプションを記録しています。
+出力は次のようになるはずです。
 
-```{code-cell} ipython3
-for run in loaded_experiment.runs:
-    for solve in run.solves:
-        print(
-            {
-                "run_id": run.run_id,
-                "solve_id": solve.solve_id,
-                "adapter": solve.adapter,
-                "adapter_options": solve.adapter_options,
-                "input": type(solve.input).__name__,
-                "objective": solve.output.objective,
-                "feasible": solve.output.feasible,
-            }
-        )
+```text
+- Run ID:0
+  - Solve ID:0
+    value: 41.0
+- Run ID:1
+  - Solve ID:0
+    value: 49.0
 ```
-
-このように、ExperimentのAPIでは「どのRunを行い、Runごとにどの比較パラメータを記録し、それぞれのRunの中でどのSolveが実行され、どの入力と出力が保存されたか」を一覧できます。実験管理の第一歩は、保存された個々のデータ本体を読むことではなく、このExperimentの構造を確認して、後から参照すべきRunやSolveを特定することです。

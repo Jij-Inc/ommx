@@ -262,6 +262,7 @@ def test_log_solve_logs_input_solution_and_adapter_options():
     assert isinstance(first_solve.output, Solution)
     assert first_solve.output.feasible
     assert str(first_solve.adapter).endswith("DummyAdapter")
+    assert isinstance(first_solve.adapter_options, dict)
     assert first_solve.adapter_options == {
         "time_limit": 1.5,
         "verbose": True,
@@ -269,6 +270,7 @@ def test_log_solve_logs_input_solution_and_adapter_options():
     }
 
     second_solve = runs[0].solves[1]
+    assert isinstance(second_solve.adapter_options, dict)
     assert second_solve.adapter_options == {
         "time_limit": 2.0,
         "label": "pricing",

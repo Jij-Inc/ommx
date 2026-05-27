@@ -3506,9 +3506,20 @@
               "name": "adapter_options",
               "doc": "Keyword arguments passed to the SolverAdapter.\n\nThe artifact stores this value as a JSON string produced by Python's\n`json.dumps`; the Python SDK decodes it with `json.loads` before\nreturning it.",
               "type_": {
-                "display": "Any",
+                "display": "dict[str, Any]",
                 "link_target": null,
-                "children": []
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "Any",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
               },
               "is_property": true,
               "is_readonly": true
