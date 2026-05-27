@@ -106,11 +106,7 @@ impl Quadratic {
         }
 
         let mut out = ommx::Quadratic::default();
-        for ((col_id, row_id), value) in columns
-            .into_iter()
-            .zip(rows.into_iter())
-            .zip(values.into_iter())
-        {
+        for ((col_id, row_id), value) in columns.into_iter().zip(rows).zip(values) {
             match TryInto::<Coefficient>::try_into(value) {
                 Ok(coeff) => {
                     out.add_term(

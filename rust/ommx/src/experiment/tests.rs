@@ -476,7 +476,7 @@ fn sealed_experiment_fork_creates_child_with_parent_subject_and_next_run_id() {
         let run1 = loaded.run(1).unwrap();
         assert!(run1.solves().is_empty());
         let mut cells = loaded.run_parameter_cells();
-        cells.sort_by(|left, right| left.run_id.cmp(&right.run_id));
+        cells.sort_by_key(|left| left.run_id);
         assert_eq!(cells.len(), 2);
         assert_eq!(cells[0].run_id, 0);
         assert_eq!(cells[0].value, ParameterValue::String("base".to_string()));
