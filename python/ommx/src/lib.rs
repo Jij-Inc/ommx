@@ -288,7 +288,7 @@ solver settings, and you want the resulting Artifact to answer:
 - which shared dataset or baseline configuration was used,
 - which run-level parameters should be compared as a table,
 - which input `ommx.v1.Instance` was actually solved, and
-- which output `ommx.v1.Solution` and solver kwargs came from each solver call.
+- which output `ommx.v1.Solution` and adapter options came from each solver call.
 "#
 );
 

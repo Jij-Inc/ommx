@@ -423,10 +423,8 @@ fn log_finished_solve_result_materializes_solve_entry_with_layer_refs() {
                 .log_finished_solve_result(
                     &instance,
                     &solution,
-                    BTreeMap::from([
-                        ("adapter".to_string(), "dummy.Adapter".to_string()),
-                        ("kwargs".to_string(), r#"{"time_limit":1.5}"#.to_string()),
-                    ]),
+                    "dummy.Adapter".to_string(),
+                    r#"{"time_limit":1.5}"#.to_string(),
                 )
                 .unwrap();
             assert_eq!(solve_id, 0);
@@ -448,11 +446,11 @@ fn log_finished_solve_result_materializes_solve_entry_with_layer_refs() {
         assert_eq!(config_json["runs"][0]["solves"][0]["input"], json!(0));
         assert_eq!(config_json["runs"][0]["solves"][0]["output"], json!(1));
         assert_eq!(
-            config_json["runs"][0]["solves"][0]["parameters"]["adapter"],
+            config_json["runs"][0]["solves"][0]["adapter"],
             json!("dummy.Adapter")
         );
         assert_eq!(
-            config_json["runs"][0]["solves"][0]["parameters"]["kwargs"],
+            config_json["runs"][0]["solves"][0]["adapter_options"],
             json!(r#"{"time_limit":1.5}"#)
         );
 
@@ -471,14 +469,8 @@ fn log_finished_solve_result_materializes_solve_entry_with_layer_refs() {
             artifact.get_blob(solve.output()).unwrap(),
             solution.to_bytes()
         );
-        assert_eq!(
-            solve.parameters().get("adapter"),
-            Some(&"dummy.Adapter".to_string())
-        );
-        assert_eq!(
-            solve.parameters().get("kwargs"),
-            Some(&r#"{"time_limit":1.5}"#.to_string())
-        );
+        assert_eq!(solve.adapter(), "dummy.Adapter");
+        assert_eq!(solve.adapter_options(), r#"{"time_limit":1.5}"#);
         Ok(())
     });
 }

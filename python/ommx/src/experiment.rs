@@ -376,7 +376,7 @@ impl PyExperiment {
     /// Wide DataFrame of run parameters, indexed by `run_id`.
     ///
     /// Run parameters are scalar values logged with `Run.log_parameter`.
-    /// Solver kwargs recorded by `Run.log_solve` are solve parameters and do
+    /// Adapter options recorded by `Run.log_solve` are solve metadata and do
     /// not appear in this table.
     pub fn run_parameters_df<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDataFrame>> {
         let mut rows = BTreeMap::new();
@@ -717,11 +717,11 @@ impl PyRun {
     /// input is always stored as the Solve input.
     ///
     /// `adapter` must be a subclass of `ommx.adapter.SolverAdapter`. Keyword
-    /// arguments are passed to `adapter.solve(...)` and also stored in the
-    /// `Solve.parameters["kwargs"]` field as a JSON string. The adapter class
-    /// name is stored in `Solve.parameters["adapter"]`.
+    /// arguments are passed to `adapter.solve(...)` and recorded as
+    /// `Solve.adapter_options`. The adapter class name is stored in
+    /// `Solve.adapter`.
     ///
-    /// Solver kwargs are solve-scoped metadata, not run parameters. They do
+    /// Adapter options are solve-scoped metadata, not run parameters. They do
     /// not appear in `Experiment.run_parameters_df()`.
     #[pyo3(signature = (adapter, instance, **kwargs))]
     pub fn log_solve(
@@ -732,15 +732,14 @@ impl PyRun {
         kwargs: Option<&Bound<PyDict>>,
     ) -> Result<crate::Solution> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let parameters = BTreeMap::from([
-            ("adapter".to_string(), adapter.name(py)?),
-            ("kwargs".to_string(), dump_kwargs(py, kwargs)?),
-        ]);
+        let adapter_name = adapter.name(py)?;
+        let adapter_options = dump_kwargs(py, kwargs)?;
         let solution = adapter.solve(py, instance, kwargs)?;
         self.as_open_mut()?.log_finished_solve_result(
             &instance.inner,
             &solution.inner,
-            parameters,
+            adapter_name,
+            adapter_options,
         )?;
         Ok(solution)
     }
@@ -1042,10 +1041,8 @@ impl PySealedRun {
 #[derive(Clone)]
 /// Immutable record of one solver call.
 ///
-/// A `Solve` stores the input `Instance` and output `Solution`, plus
-/// string-valued solve parameters. `Run.log_solve` records the adapter class
-/// name in `parameters["adapter"]` and JSON-encoded solver keyword arguments
-/// in `parameters["kwargs"]`.
+/// A `Solve` stores the input `Instance`, output `Solution`, adapter class
+/// name, and JSON-encoded adapter options for one `Run.log_solve` call.
 pub struct PySolve(ommx::experiment::SolveDyn);
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
@@ -1086,13 +1083,20 @@ impl PySolve {
     }
 
     #[getter]
-    /// Solve-scoped parameters as strings.
+    /// SolverAdapter class name used for this solve.
+    pub fn adapter(&self) -> String {
+        self.0.adapter().to_string()
+    }
+
+    #[getter]
+    /// Keyword arguments passed to the SolverAdapter.
     ///
-    /// For solves created by `Run.log_solve`, this contains at least
-    /// `"adapter"` and `"kwargs"`. The `"kwargs"` value is the JSON string
-    /// produced by Python's `json.dumps`.
-    pub fn parameters(&self) -> BTreeMap<String, String> {
-        self.0.parameters().clone()
+    /// The artifact stores this value as a JSON string produced by Python's
+    /// `json.dumps`; the Python SDK decodes it with `json.loads` before
+    /// returning it.
+    pub fn adapter_options<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyAny>> {
+        let json = py.import("json")?;
+        Ok(json.call_method1("loads", (self.0.adapter_options(),))?)
     }
 
     pub fn __repr__(&self) -> String {

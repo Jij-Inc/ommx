@@ -1927,7 +1927,7 @@ class Experiment:
         Wide DataFrame of run parameters, indexed by `run_id`.
 
         Run parameters are scalar values logged with `Run.log_parameter`.
-        Solver kwargs recorded by `Run.log_solve` are solve parameters and do
+        Adapter options recorded by `Run.log_solve` are solve metadata and do
         not appear in this table.
         """
     def __repr__(self) -> builtins.str: ...
@@ -5225,11 +5225,11 @@ class Run:
         input is always stored as the Solve input.
 
         `adapter` must be a subclass of `ommx.adapter.SolverAdapter`. Keyword
-        arguments are passed to `adapter.solve(...)` and also stored in the
-        `Solve.parameters["kwargs"]` field as a JSON string. The adapter class
-        name is stored in `Solve.parameters["adapter"]`.
+        arguments are passed to `adapter.solve(...)` and recorded as
+        `Solve.adapter_options`. The adapter class name is stored in
+        `Solve.adapter`.
 
-        Solver kwargs are solve-scoped metadata, not run parameters. They do
+        Adapter options are solve-scoped metadata, not run parameters. They do
         not appear in `Experiment.run_parameters_df()`.
         """
     def finish(self) -> None:
@@ -6260,10 +6260,8 @@ class Solve:
     r"""
     Immutable record of one solver call.
 
-    A `Solve` stores the input `Instance` and output `Solution`, plus
-    string-valued solve parameters. `Run.log_solve` records the adapter class
-    name in `parameters["adapter"]` and JSON-encoded solver keyword arguments
-    in `parameters["kwargs"]`.
+    A `Solve` stores the input `Instance`, output `Solution`, adapter class
+    name, and JSON-encoded adapter options for one `Run.log_solve` call.
     """
     @property
     def solve_id(self) -> builtins.int:
@@ -6281,13 +6279,18 @@ class Solve:
         Output `Solution` returned by the solver.
         """
     @property
-    def parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+    def adapter(self) -> builtins.str:
         r"""
-        Solve-scoped parameters as strings.
+        SolverAdapter class name used for this solve.
+        """
+    @property
+    def adapter_options(self) -> typing.Any:
+        r"""
+        Keyword arguments passed to the SolverAdapter.
 
-        For solves created by `Run.log_solve`, this contains at least
-        `"adapter"` and `"kwargs"`. The `"kwargs"` value is the JSON string
-        produced by Python's `json.dumps`.
+        The artifact stores this value as a JSON string produced by Python's
+        `json.dumps`; the Python SDK decodes it with `json.loads` before
+        returning it.
         """
     def __repr__(self) -> builtins.str: ...
 

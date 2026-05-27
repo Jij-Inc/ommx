@@ -171,7 +171,8 @@ struct SolveEntry<'reg> {
     solve_id: u64,
     input: StoredDescriptor<'reg>,
     output: StoredDescriptor<'reg>,
-    parameters: BTreeMap<String, String>,
+    adapter: String,
+    adapter_options: String,
 }
 
 /// Mutable experiment state before the root manifest is sealed. A live

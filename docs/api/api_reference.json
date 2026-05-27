@@ -1769,7 +1769,7 @@
     },
     "ommx.experiment": {
       "name": "ommx.experiment",
-      "doc": "`ommx.experiment` records an optimization experiment as one OMMX Artifact.\nUse it when a single source problem produces several runs, for example\ndifferent formulations, decomposition strategies, disabled constraints, or\nsolver settings, and you want the resulting Artifact to answer:\n\n- which shared dataset or baseline configuration was used,\n- which run-level parameters should be compared as a table,\n- which input `ommx.v1.Instance` was actually solved, and\n- which output `ommx.v1.Solution` and solver kwargs came from each solver call.",
+      "doc": "`ommx.experiment` records an optimization experiment as one OMMX Artifact.\nUse it when a single source problem produces several runs, for example\ndifferent formulations, decomposition strategies, disabled constraints, or\nsolver settings, and you want the resulting Artifact to answer:\n\n- which shared dataset or baseline configuration was used,\n- which run-level parameters should be compared as a table,\n- which input `ommx.v1.Instance` was actually solved, and\n- which output `ommx.v1.Solution` and adapter options came from each solver call.",
       "items": [
         {
           "kind": "Class",
@@ -2526,7 +2526,7 @@
             },
             {
               "name": "run_parameters_df",
-              "doc": "Wide DataFrame of run parameters, indexed by `run_id`.\n\nRun parameters are scalar values logged with `Run.log_parameter`.\nSolver kwargs recorded by `Run.log_solve` are solve parameters and do\nnot appear in this table.",
+              "doc": "Wide DataFrame of run parameters, indexed by `run_id`.\n\nRun parameters are scalar values logged with `Run.log_parameter`.\nAdapter options recorded by `Run.log_solve` are solve metadata and do\nnot appear in this table.",
               "signatures": [
                 {
                   "parameters": [],
@@ -3122,7 +3122,7 @@
             },
             {
               "name": "log_solve",
-              "doc": "Solve an Instance with an OMMX SolverAdapter and log a Solve entry.\n\nThe input Instance is cloned before calling the adapter, so adapter-side\ncapability reductions do not mutate the caller's object. The original\ninput is always stored as the Solve input.\n\n`adapter` must be a subclass of `ommx.adapter.SolverAdapter`. Keyword\narguments are passed to `adapter.solve(...)` and also stored in the\n`Solve.parameters[\"kwargs\"]` field as a JSON string. The adapter class\nname is stored in `Solve.parameters[\"adapter\"]`.\n\nSolver kwargs are solve-scoped metadata, not run parameters. They do\nnot appear in `Experiment.run_parameters_df()`.",
+              "doc": "Solve an Instance with an OMMX SolverAdapter and log a Solve entry.\n\nThe input Instance is cloned before calling the adapter, so adapter-side\ncapability reductions do not mutate the caller's object. The original\ninput is always stored as the Solve input.\n\n`adapter` must be a subclass of `ommx.adapter.SolverAdapter`. Keyword\narguments are passed to `adapter.solve(...)` and recorded as\n`Solve.adapter_options`. The adapter class name is stored in\n`Solve.adapter`.\n\nAdapter options are solve-scoped metadata, not run parameters. They do\nnot appear in `Experiment.run_parameters_df()`.",
               "signatures": [
                 {
                   "parameters": [
@@ -3470,7 +3470,7 @@
         {
           "kind": "Class",
           "name": "Solve",
-          "doc": "Immutable record of one solver call.\n\nA `Solve` stores the input `Instance` and output `Solution`, plus\nstring-valued solve parameters. `Run.log_solve` records the adapter class\nname in `parameters[\"adapter\"]` and JSON-encoded solver keyword arguments\nin `parameters[\"kwargs\"]`.",
+          "doc": "Immutable record of one solver call.\n\nA `Solve` stores the input `Instance`, output `Solution`, adapter class\nname, and JSON-encoded adapter options for one `Run.log_solve` call.",
           "bases": [],
           "methods": [
             {
@@ -3492,6 +3492,28 @@
           ],
           "attributes": [
             {
+              "name": "adapter",
+              "doc": "SolverAdapter class name used for this solve.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "adapter_options",
+              "doc": "Keyword arguments passed to the SolverAdapter.\n\nThe artifact stores this value as a JSON string produced by Python's\n`json.dumps`; the Python SDK decodes it with `json.loads` before\nreturning it.",
+              "type_": {
+                "display": "Any",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "input",
               "doc": "Input `Instance` passed to the solver.",
               "type_": {
@@ -3509,28 +3531,6 @@
                 "display": "Solution",
                 "link_target": null,
                 "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "parameters",
-              "doc": "Solve-scoped parameters as strings.\n\nFor solves created by `Run.log_solve`, this contains at least\n`\"adapter\"` and `\"kwargs\"`. The `\"kwargs\"` value is the JSON string\nproduced by Python's `json.dumps`.",
-              "type_": {
-                "display": "dict[str, str]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "str",
-                    "link_target": null,
-                    "children": []
-                  },
-                  {
-                    "display": "str",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
               },
               "is_property": true,
               "is_readonly": true

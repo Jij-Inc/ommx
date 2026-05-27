@@ -210,34 +210,44 @@ loaded_experiment.get_parametric_instance("instance")
 Runの一覧は {py:attr}`~ommx.experiment.Experiment.runs` から確認できます。終了済みのRunが作成順に並び、それぞれのRunに紐づくAttachmentとSolveの数を確認できます。
 
 ```{code-cell} ipython3
-[
-    {
-        "run_id": run.run_id,
-        "attachments": len(run.attachment_names),
-        "solves": len(run.solves),
-    }
-    for run in loaded_experiment.runs
-]
+for run in loaded_experiment.runs:
+  # Runには実行順にIDが振られる
+  print(f"- Run ID:{run.run_id}")
+
+  # 今回はRun単位のAttachmentは保存していないので、Attachmentの数は0のはず
+  assert len(run.attachment_names) == 0
+
+  for solve in run.solves:
+    # Solveにも実行順にIDが振られる
+    print(f"  - Solve ID:{solve.solve_id}")
+
+    # 実行したAdapterの名前
+    assert solve.adapter.endswith("OMMXHighsAdapter")
+
+    # 入力と出力をロードする
+    input: Instance = solve.input
+    output: Solution = solve.output
+
+    # ナップザック問題は解けているはず
+    assert output.feasible
 ```
 
-各Runの中で実行されたソルバー呼び出しは {py:attr}`~ommx.experiment.SealedRun.solves` に入っています。{py:class}`~ommx.experiment.Solve` は一回の `log_solve` 呼び出しに対応し、入力Instance、出力Solution、利用したAdapter、Adapterへ渡したキーワード引数を記録しています。
+各Runの中で実行されたソルバー呼び出しは {py:attr}`~ommx.experiment.SealedRun.solves` に入っています。{py:class}`~ommx.experiment.Solve` は一回の `log_solve` 呼び出しに対応し、入力Instance、出力Solution、利用したAdapter、Adapterへ渡したオプションを記録しています。
 
 ```{code-cell} ipython3
-import json
-
-[
-    {
-        "run_id": run.run_id,
-        "solve_id": solve.solve_id,
-        "adapter": solve.parameters["adapter"],
-        "kwargs": json.loads(solve.parameters["kwargs"]),
-        "input": type(solve.input).__name__,
-        "objective": solve.output.objective,
-        "feasible": solve.output.feasible,
-    }
-    for run in loaded_experiment.runs
-    for solve in run.solves
-]
+for run in loaded_experiment.runs:
+    for solve in run.solves:
+        print(
+            {
+                "run_id": run.run_id,
+                "solve_id": solve.solve_id,
+                "adapter": solve.adapter,
+                "adapter_options": solve.adapter_options,
+                "input": type(solve.input).__name__,
+                "objective": solve.output.objective,
+                "feasible": solve.output.feasible,
+            }
+        )
 ```
 
 このように、ExperimentのAPIでは「どのRunを行い、Runごとにどの比較パラメータを記録し、それぞれのRunの中でどのSolveが実行され、どの入力と出力が保存されたか」を一覧できます。実験管理の第一歩は、保存された個々のデータ本体を読むことではなく、このExperimentの構造を確認して、後から参照すべきRunやSolveを特定することです。

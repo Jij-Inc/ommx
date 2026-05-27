@@ -91,7 +91,8 @@ pub(super) struct SolveEntryDyn {
     pub(super) solve_id: u64,
     pub(super) input: Descriptor,
     pub(super) output: Descriptor,
-    pub(super) parameters: BTreeMap<String, String>,
+    pub(super) adapter: String,
+    pub(super) adapter_options: String,
 }
 
 #[derive(Debug, Clone)]
@@ -128,7 +129,8 @@ pub struct SolveDyn {
     solve_id: u64,
     input: Descriptor,
     output: Descriptor,
-    parameters: BTreeMap<String, String>,
+    adapter: String,
+    adapter_options: String,
 }
 
 impl SealedRunDyn {
@@ -214,8 +216,12 @@ impl SolveDyn {
         Solution::from_bytes(&bytes)
     }
 
-    pub fn parameters(&self) -> &BTreeMap<String, String> {
-        &self.parameters
+    pub fn adapter(&self) -> &str {
+        &self.adapter
+    }
+
+    pub fn adapter_options(&self) -> &str {
+        &self.adapter_options
     }
 }
 
@@ -500,7 +506,8 @@ impl UnsealedExperimentDynState {
                                         solve_id: solve.solve_id,
                                         input: registry.stored_descriptor(solve.input)?,
                                         output: registry.stored_descriptor(solve.output)?,
-                                        parameters: solve.parameters,
+                                        adapter: solve.adapter,
+                                        adapter_options: solve.adapter_options,
                                     })
                                 })
                                 .collect::<Result<Vec<_>>>()?,
@@ -537,7 +544,8 @@ impl SealedExperimentDynState {
                                     solve_id: solve.solve_id(),
                                     input: Descriptor::from(solve.input().clone()),
                                     output: Descriptor::from(solve.output().clone()),
-                                    parameters: solve.parameters().clone(),
+                                    adapter: solve.adapter().to_string(),
+                                    adapter_options: solve.adapter_options().to_string(),
                                 })
                                 .collect(),
                         },

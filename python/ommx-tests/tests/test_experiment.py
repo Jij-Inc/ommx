@@ -1,4 +1,3 @@
-import json
 from typing import Any, ClassVar, cast
 
 import pandas as pd
@@ -198,7 +197,7 @@ def test_log_parameter_rejects_python_int_outside_i64():
             run.log_parameter("too_large", 2**63)
 
 
-def test_log_solve_logs_input_solution_and_json_kwargs():
+def test_log_solve_logs_input_solution_and_adapter_options():
     class DummyAdapter(SolverAdapter):
         seen_kwargs: ClassVar[list[dict[str, object]]] = []
 
@@ -262,22 +261,20 @@ def test_log_solve_logs_input_solution_and_json_kwargs():
     assert isinstance(first_solve.input, Instance)
     assert isinstance(first_solve.output, Solution)
     assert first_solve.output.feasible
-    assert str(first_solve.parameters["adapter"]).endswith("DummyAdapter")
-    assert isinstance(first_solve.parameters["kwargs"], str)
-    assert json.loads(first_solve.parameters["kwargs"]) == {
+    assert str(first_solve.adapter).endswith("DummyAdapter")
+    assert first_solve.adapter_options == {
         "time_limit": 1.5,
         "verbose": True,
         "label": "baseline",
     }
 
     second_solve = runs[0].solves[1]
-    assert isinstance(second_solve.parameters["kwargs"], str)
-    assert json.loads(second_solve.parameters["kwargs"]) == {
+    assert second_solve.adapter_options == {
         "time_limit": 2.0,
         "label": "pricing",
     }
 
-    # Solver kwargs are solve-scoped metadata, not Run parameters.
+    # Adapter options are solve-scoped metadata, not Run parameters.
     df = loaded.run_parameters_df()
     assert df.shape == (1, 0)
 

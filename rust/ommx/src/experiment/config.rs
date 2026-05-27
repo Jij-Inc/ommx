@@ -1,7 +1,6 @@
 //! Serialized Experiment structure stored in the OCI config blob.
 
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -31,6 +30,11 @@ pub struct ExperimentConfigSolve {
     pub solve_id: u64,
     pub input: LayerRef,
     pub output: LayerRef,
-    #[serde(default)]
-    pub parameters: BTreeMap<String, String>,
+    pub adapter: String,
+    #[serde(default = "default_adapter_options")]
+    pub adapter_options: String,
+}
+
+fn default_adapter_options() -> String {
+    "{}".to_string()
 }

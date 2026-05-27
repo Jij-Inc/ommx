@@ -8,7 +8,6 @@ use crate::artifact::media_types;
 use crate::{Instance, ParametricInstance, SampleSet, Solution};
 use anyhow::Result;
 use oci_spec::image::MediaType;
-use std::collections::BTreeMap;
 
 impl<'exp, 'reg> Run<'exp, 'reg> {
     /// This run's 0-based id within the experiment.
@@ -69,14 +68,15 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
     /// Log one already-finished solver result under this run.
     ///
     /// The original input [`Instance`] and returned [`Solution`] are
-    /// stored as solve-scoped payloads. Solver adapter metadata and
-    /// kwargs belong to the solve parameters, not the Run parameter
-    /// table.
+    /// stored as solve-scoped payloads. Solver adapter identity and
+    /// adapter options are stored on the Solve entry, not in the Run
+    /// parameter table.
     pub fn log_finished_solve_result(
         &mut self,
         input: &Instance,
         output: &Solution,
-        parameters: BTreeMap<String, String>,
+        adapter: String,
+        adapter_options: String,
     ) -> Result<u64> {
         let solve_id = self.next_solve_id;
         self.next_solve_id += 1;
@@ -94,7 +94,8 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
             solve_id,
             input,
             output,
-            parameters,
+            adapter,
+            adapter_options,
         });
         Ok(solve_id)
     }

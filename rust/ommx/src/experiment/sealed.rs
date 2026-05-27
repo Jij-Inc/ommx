@@ -98,7 +98,8 @@ pub struct Solve<'reg> {
     solve_id: u64,
     input: StoredDescriptor<'reg>,
     output: StoredDescriptor<'reg>,
-    parameters: BTreeMap<String, String>,
+    adapter: String,
+    adapter_options: String,
 }
 
 impl<'reg> Solve<'reg> {
@@ -114,8 +115,12 @@ impl<'reg> Solve<'reg> {
         &self.output
     }
 
-    pub fn parameters(&self) -> &BTreeMap<String, String> {
-        &self.parameters
+    pub fn adapter(&self) -> &str {
+        &self.adapter
+    }
+
+    pub fn adapter_options(&self) -> &str {
+        &self.adapter_options
     }
 }
 
@@ -199,7 +204,8 @@ fn decode_solves<'reg>(
             solve_id: solve.solve_id,
             input,
             output,
-            parameters: solve.parameters,
+            adapter: solve.adapter,
+            adapter_options: solve.adapter_options,
         });
     }
     Ok(decoded)
