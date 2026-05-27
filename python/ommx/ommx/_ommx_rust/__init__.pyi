@@ -1681,20 +1681,80 @@ class EvaluatedNamedFunction:
 
 @typing.final
 class Experiment:
+    r"""
+    A collection of optimization experiment records stored as one OMMX Artifact.
+
+    An `Experiment` owns experiment-level attachments and a sequence of
+    finished `Run` objects. Each `Run` can store scalar run parameters,
+    run-level attachments, and zero or more `Solve` records.
+
+    Newly created experiments are unsealed. Call `commit()` to write the
+    experiment into the local registry as an OMMX Artifact. After commit, the
+    same object can be used as a read-only view of the committed artifact.
+
+    Example:
+
+    >>> from ommx.experiment import Experiment
+    >>> with Experiment.with_temp_local_registry() as exp:
+    ...     exp.log_json("dataset", {"name": "demo"})
+    ...     with exp.run() as run:
+    ...         run.log_parameter("capacity", 10)
+    ...         run.log_json("scenario", {"capacity": 10})
+    >>> len(exp.runs)
+    1
+    >>> len(exp.experiment_attachments)
+    1
+    >>> exp.run_parameters_df().to_dict()
+    {'capacity': {0: 10}}
+
+    If the experiment has only one run, open the experiment and the run in
+    one `with` statement. On normal exit, the run is finished first and then
+    the experiment is committed:
+
+    >>> with Experiment() as exp, exp.run() as run:  # doctest: +SKIP
+    ...     solution = run.log_solve(adapter, instance, time_limit=10.0)
+    >>> exp.rename("ghcr.io/container/name:latest")  # doctest: +SKIP
+    >>> exp.push()  # doctest: +SKIP
+    """
     @property
-    def image_name(self) -> builtins.str: ...
+    def image_name(self) -> builtins.str:
+        r"""
+        OCI image reference used to store this Experiment in a local registry.
+        """
     @property
-    def experiment_attachments(self) -> builtins.list[Descriptor]: ...
+    def experiment_attachments(self) -> builtins.list[Descriptor]:
+        r"""
+        Low-level descriptors for experiment-level attachments.
+
+        Prefer `attachment_names`, `get_attachment`, or typed methods such as
+        `get_json` and `get_instance` when working from Python. This descriptor
+        view is kept for low-level Artifact inspection.
+        """
     @property
-    def runs(self) -> builtins.list[SealedRun]: ...
+    def attachment_names(self) -> builtins.list[builtins.str]:
+        r"""
+        Names of experiment-level attachments.
+        """
     @property
-    def artifact(self) -> Artifact: ...
+    def runs(self) -> builtins.list[SealedRun]:
+        r"""
+        Finished runs in insertion order.
+        """
+    @property
+    def artifact(self) -> Artifact:
+        r"""
+        Committed OMMX Artifact for this Experiment.
+
+        Raises an error if the Experiment has not been committed yet.
+        """
     def __new__(cls, image_name: typing.Optional[builtins.str] = None) -> Experiment:
         r"""
-        Start a new Experiment in the local registry.
+        Start a new Experiment in the default local registry.
 
         If `image_name` is omitted, OMMX generates an anonymous local
-        Experiment name.
+        Experiment name. Pass an OCI image reference such as
+        `"example.com/team/experiment:tag"` when the experiment should be
+        loaded later by name.
         """
     @staticmethod
     def with_temp_local_registry(
@@ -1704,17 +1764,37 @@ class Experiment:
         Start a new Experiment backed by a temporary Local Registry.
 
         The temporary registry is kept alive by the returned Experiment
-        and by Artifacts / loaded Experiments derived from it.
+        and by Artifacts / loaded Experiments derived from it. This is useful
+        for examples and tests because it does not write entries into the
+        process-wide default local registry.
         """
     @staticmethod
     def load(image_name: builtins.str) -> Experiment:
         r"""
-        Load a committed Experiment Artifact from the local registry.
+        Load a committed Experiment Artifact by image reference.
+
+        If the image is not found in the default Local Registry, OMMX tries to
+        pull it from the remote registry, matching {meth}`Artifact.load`.
+        The loaded artifact must contain an Experiment config. Use
+        `Experiment(...)` to create a new unsealed experiment.
+        """
+    @staticmethod
+    def import_archive(path: builtins.str | os.PathLike | pathlib.Path) -> Experiment:
+        r"""
+        Import an Experiment Artifact from a `.ommx` OCI archive file (or an OCI
+        Image Layout directory).
+
+        The archive is imported into the default Local Registry, matching
+        {meth}`Artifact.import_archive`, and then interpreted as an
+        Experiment. The imported artifact must contain an Experiment config.
         """
     @staticmethod
     def from_artifact(artifact: Artifact) -> Experiment:
         r"""
         Interpret an already-open Artifact as a committed Experiment.
+
+        This is the usual entry point after importing or receiving an OMMX
+        Artifact handle. The artifact must contain an Experiment config.
         """
     def __enter__(self) -> Experiment: ...
     def __exit__(
@@ -1723,24 +1803,108 @@ class Experiment:
         _exc_value: typing.Optional[typing.Any] = None,
         _traceback: typing.Optional[typing.Any] = None,
     ) -> builtins.bool: ...
+    def rename(self, image_name: builtins.str) -> None:
+        r"""
+        Rename this Experiment to another local registry image reference.
+
+        Before commit, this changes the image reference that `commit()` will
+        publish. After commit, it publishes the same Artifact manifest under
+        `image_name` and updates this handle to use the new name. The previous
+        name remains as an alias in the Local Registry.
+        """
+    def save(self, path: builtins.str | os.PathLike | pathlib.Path) -> None:
+        r"""
+        Save this committed Experiment Artifact as a `.ommx` OCI archive file at `path`.
+
+        The archive is an exchange-format export of the registry-resident
+        Experiment Artifact. Loading the archive back via
+        {meth}`Experiment.import_archive` reimports it into the SQLite Local
+        Registry under the same image name.
+
+        Raises an error if the Experiment has not been committed yet.
+        """
+    def push(self) -> None:
+        r"""
+        Push this committed Experiment Artifact to its remote registry.
+
+        Use `rename(...)` first when an anonymous or local-only experiment
+        should be published under a remote container image reference.
+
+        Raises an error if the Experiment has not been committed yet.
+        """
+    def get_attachment(self, name: builtins.str) -> typing.Any:
+        r"""
+        Read an experiment-level attachment by name.
+
+        The returned Python object is decoded from the attachment media type:
+        JSON attachments become normal Python objects, OMMX instance-like
+        attachments become the corresponding `ommx.v1` objects, and unknown
+        media types are returned as raw `bytes`.
+        """
+    def get_json(self, name: builtins.str) -> typing.Any:
+        r"""
+        Read a JSON experiment-level attachment by name.
+
+        Raises an error if the attachment exists but its media type is not
+        `application/json`.
+        """
+    def get_instance(self, name: builtins.str) -> Instance:
+        r"""
+        Read an Instance experiment-level attachment by name.
+        """
+    def get_parametric_instance(self, name: builtins.str) -> ParametricInstance:
+        r"""
+        Read a ParametricInstance experiment-level attachment by name.
+        """
+    def get_solution(self, name: builtins.str) -> Solution:
+        r"""
+        Read a Solution experiment-level attachment by name.
+        """
+    def get_sample_set(self, name: builtins.str) -> SampleSet:
+        r"""
+        Read a SampleSet experiment-level attachment by name.
+        """
+    def get_blob(self, name: builtins.str) -> bytes:
+        r"""
+        Read raw bytes of an experiment-level attachment by name.
+        """
     def run(self) -> Run:
         r"""
         Start a new Run in this unsealed Experiment.
+
+        The returned `Run` must be finished before `commit()`. Use it as a
+        context manager to finish it automatically on normal exit:
+
+        ```python
+        with experiment.run() as run:
+            run.log_parameter("capacity", 47)
+        ```
         """
     def log_attachment(
         self, name: builtins.str, media_type: builtins.str, bytes: bytes
     ) -> None:
         r"""
-        Attach arbitrary bytes with an explicit OCI media type in the
-        experiment space.
+        Attach arbitrary bytes with an explicit OCI media type in the experiment space.
+
+        The `name` is stored as attachment metadata and is intended for
+        humans. The bytes are stored as a layer in the committed artifact.
         """
     def log_json(self, name: builtins.str, value: typing.Any) -> None:
         r"""
-        Attach a JSON-serialisable value in the experiment space.
+        Attach a JSON-serializable value in the experiment space.
+
+        The value is encoded with Python's `json.dumps` and stored with media
+        type `application/json`.
         """
     def log_instance(self, name: builtins.str, instance: Instance) -> None:
         r"""
         Attach an Instance in the experiment space.
+        """
+    def log_parametric_instance(
+        self, name: builtins.str, pi: ParametricInstance
+    ) -> None:
+        r"""
+        Attach an ParametricInstance in the experiment space.
         """
     def log_solution(self, name: builtins.str, solution: Solution) -> None:
         r"""
@@ -1753,10 +1917,18 @@ class Experiment:
     def commit(self) -> Artifact:
         r"""
         Commit this unsealed Experiment into the local registry.
+
+        All open runs must be finished before committing. The returned
+        `Artifact` can be saved as a `.ommx` archive or passed to
+        `Experiment.from_artifact`.
         """
     def run_parameters_df(self) -> pandas.DataFrame:
         r"""
         Wide DataFrame of run parameters, indexed by `run_id`.
+
+        Run parameters are scalar values logged with `Run.log_parameter`.
+        Adapter options recorded by `Run.log_solve` are solve metadata and do
+        not appear in this table.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -4964,8 +5136,22 @@ class Rng:
 
 @typing.final
 class Run:
+    r"""
+    A mutable run being recorded inside an unsealed Experiment.
+
+    A run represents one experimental condition or trial. Use
+    `log_parameter` for scalar values that should appear in
+    `Experiment.run_parameters_df`, and use attachment methods for payloads
+    such as JSON, instances, solutions, sample sets, or raw bytes.
+
+    Runs are usually created with `Experiment.run()` and used as context
+    managers. A run becomes immutable once it is finished.
+    """
     @property
-    def run_id(self) -> builtins.int: ...
+    def run_id(self) -> builtins.int:
+        r"""
+        Integer identifier of this run within its Experiment.
+        """
     def __enter__(self) -> Run: ...
     def __exit__(
         self,
@@ -4978,24 +5164,48 @@ class Run:
     ) -> None:
         r"""
         Log a scalar parameter for this run.
+
+        Accepted value types are `bool`, `int`, `float`, and `str`. These
+        values are intended for comparing runs and are exposed as columns in
+        `Experiment.run_parameters_df()`.
         """
     def log_attachment(
         self, name: builtins.str, media_type: builtins.str, bytes: bytes
     ) -> None:
         r"""
         Attach arbitrary bytes with an explicit OCI media type in this run.
+
+        Use this for payloads that belong to this run but are not scalar run
+        parameters, for example solver logs or derived files.
         """
     def log_json(self, name: builtins.str, value: typing.Any) -> None:
         r"""
-        Attach a JSON-serialisable value in this run.
+        Attach a JSON-serializable value in this run.
+
+        The value is encoded with Python's `json.dumps` and stored with media
+        type `application/json`.
         """
     def log_instance(self, name: builtins.str, instance: Instance) -> None:
         r"""
         Attach an Instance in this run.
+
+        This records an instance as a run-level attachment. Use `log_solve`
+        when the instance is the input of a solver call and should be paired
+        with the returned solution.
+        """
+    def log_parametric_instance(
+        self, name: builtins.str, pi: ParametricInstance
+    ) -> None:
+        r"""
+        Attach a ParametricInstance in this run.
         """
     def log_solution(self, name: builtins.str, solution: Solution) -> None:
         r"""
         Attach a Solution in this run.
+
+        This records a solution as a run-level attachment. Use `log_solve`
+        when the solution is produced by a solver call and should be paired
+        with the input instance.
         """
     def log_sample_set(self, name: builtins.str, sample_set: SampleSet) -> None:
         r"""
@@ -5013,10 +5223,22 @@ class Run:
         The input Instance is cloned before calling the adapter, so adapter-side
         capability reductions do not mutate the caller's object. The original
         input is always stored as the Solve input.
+
+        `adapter` must be a subclass of `ommx.adapter.SolverAdapter`. Keyword
+        arguments are passed to `adapter.solve(...)` and recorded as
+        `Solve.adapter_options`. The adapter class name is stored in
+        `Solve.adapter`.
+
+        Adapter options are solve-scoped metadata, not run parameters. They do
+        not appear in `Experiment.run_parameters_df()`.
         """
     def finish(self) -> None:
         r"""
         Finish this run and append it to the parent Experiment.
+
+        After this method returns, the run handle can no longer be used. The
+        context manager calls this automatically on normal exit and abandons
+        the run on exception.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -5567,12 +5789,66 @@ class Samples:
 
 @typing.final
 class SealedRun:
+    r"""
+    Immutable view of a finished Run in a committed Experiment.
+
+    `SealedRun` exposes run-level attachments by name and the sequence of
+    `Solve` records created by `Run.log_solve`.
+    """
     @property
-    def run_id(self) -> builtins.int: ...
+    def run_id(self) -> builtins.int:
+        r"""
+        Integer identifier of this run within its Experiment.
+        """
     @property
-    def attachments(self) -> builtins.list[Descriptor]: ...
+    def attachments(self) -> builtins.list[Descriptor]:
+        r"""
+        Low-level descriptors for run-level attachments.
+
+        Prefer `attachment_names`, `get_attachment`, or typed methods such as
+        `get_json` and `get_instance` when working from Python. This descriptor
+        view is kept for low-level Artifact inspection.
+        """
     @property
-    def solves(self) -> builtins.list[Solve]: ...
+    def attachment_names(self) -> builtins.list[builtins.str]:
+        r"""
+        Names of run-level attachments.
+        """
+    @property
+    def solves(self) -> builtins.list[Solve]:
+        r"""
+        Solve records logged in this run, ordered by `solve_id`.
+        """
+    def get_attachment(self, name: builtins.str) -> typing.Any:
+        r"""
+        Read a run-level attachment by name.
+
+        The returned Python object is decoded from the attachment media type.
+        """
+    def get_json(self, name: builtins.str) -> typing.Any:
+        r"""
+        Read a JSON run-level attachment by name.
+        """
+    def get_instance(self, name: builtins.str) -> Instance:
+        r"""
+        Read an Instance run-level attachment by name.
+        """
+    def get_parametric_instance(self, name: builtins.str) -> ParametricInstance:
+        r"""
+        Read a ParametricInstance run-level attachment by name.
+        """
+    def get_solution(self, name: builtins.str) -> Solution:
+        r"""
+        Read a Solution run-level attachment by name.
+        """
+    def get_sample_set(self, name: builtins.str) -> SampleSet:
+        r"""
+        Read a SampleSet run-level attachment by name.
+        """
+    def get_blob(self, name: builtins.str) -> bytes:
+        r"""
+        Read raw bytes of a run-level attachment by name.
+        """
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -5981,14 +6257,41 @@ class Solution:
 
 @typing.final
 class Solve:
+    r"""
+    Immutable record of one solver call.
+
+    A `Solve` stores the input `Instance`, output `Solution`, adapter class
+    name, and JSON-encoded adapter options for one `Run.log_solve` call.
+    """
     @property
-    def solve_id(self) -> builtins.int: ...
+    def solve_id(self) -> builtins.int:
+        r"""
+        Integer identifier of this solve within its run.
+        """
     @property
-    def input(self) -> Descriptor: ...
+    def input(self) -> Instance:
+        r"""
+        Input `Instance` passed to the solver.
+        """
     @property
-    def output(self) -> Descriptor: ...
+    def output(self) -> Solution:
+        r"""
+        Output `Solution` returned by the solver.
+        """
     @property
-    def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
+    def adapter(self) -> builtins.str:
+        r"""
+        SolverAdapter class name used for this solve.
+        """
+    @property
+    def adapter_options(self) -> builtins.dict[builtins.str, typing.Any]:
+        r"""
+        Keyword arguments passed to the SolverAdapter.
+
+        The artifact stores this value as a JSON string produced by Python's
+        `json.dumps`; the Python SDK decodes it with `json.loads` before
+        returning it.
+        """
     def __repr__(self) -> builtins.str: ...
 
 @typing.final

@@ -1769,12 +1769,12 @@
     },
     "ommx.experiment": {
       "name": "ommx.experiment",
-      "doc": "",
+      "doc": "`ommx.experiment` records an optimization experiment as one OMMX Artifact.\nUse it when a single source problem produces several runs, for example\ndifferent formulations, decomposition strategies, disabled constraints, or\nsolver settings, and you want the resulting Artifact to answer:\n\n- which shared dataset or baseline configuration was used,\n- which run-level parameters should be compared as a table,\n- which input `ommx.v1.Instance` was actually solved, and\n- which output `ommx.v1.Solution` and adapter options came from each solver call.",
       "items": [
         {
           "kind": "Class",
           "name": "Experiment",
-          "doc": "",
+          "doc": "A collection of optimization experiment records stored as one OMMX Artifact.\n\nAn `Experiment` owns experiment-level attachments and a sequence of\nfinished `Run` objects. Each `Run` can store scalar run parameters,\nrun-level attachments, and zero or more `Solve` records.\n\nNewly created experiments are unsealed. Call `commit()` to write the\nexperiment into the local registry as an OMMX Artifact. After commit, the\nsame object can be used as a read-only view of the committed artifact.\n\nExample:\n\n>>> from ommx.experiment import Experiment\n>>> with Experiment.with_temp_local_registry() as exp:\n...     exp.log_json(\"dataset\", {\"name\": \"demo\"})\n...     with exp.run() as run:\n...         run.log_parameter(\"capacity\", 10)\n...         run.log_json(\"scenario\", {\"capacity\": 10})\n>>> len(exp.runs)\n1\n>>> len(exp.experiment_attachments)\n1\n>>> exp.run_parameters_df().to_dict()\n{'capacity': {0: 10}}\n\nIf the experiment has only one run, open the experiment and the run in\none `with` statement. On normal exit, the run is finished first and then\nthe experiment is committed:\n\n>>> with Experiment() as exp, exp.run() as run:  # doctest: +SKIP\n...     solution = run.log_solve(adapter, instance, time_limit=10.0)\n>>> exp.rename(\"ghcr.io/container/name:latest\")  # doctest: +SKIP\n>>> exp.push()  # doctest: +SKIP",
           "bases": [],
           "methods": [
             {
@@ -1871,7 +1871,7 @@
             },
             {
               "name": "__new__",
-              "doc": "Start a new Experiment in the local registry.\n\nIf `image_name` is omitted, OMMX generates an anonymous local\nExperiment name.",
+              "doc": "Start a new Experiment in the default local registry.\n\nIf `image_name` is omitted, OMMX generates an anonymous local\nExperiment name. Pass an OCI image reference such as\n`\"example.com/team/experiment:tag\"` when the experiment should be\nloaded later by name.",
               "signatures": [
                 {
                   "parameters": [
@@ -1927,7 +1927,7 @@
             },
             {
               "name": "commit",
-              "doc": "Commit this unsealed Experiment into the local registry.",
+              "doc": "Commit this unsealed Experiment into the local registry.\n\nAll open runs must be finished before committing. The returned\n`Artifact` can be saved as a `.ommx` archive or passed to\n`Experiment.from_artifact`.",
               "signatures": [
                 {
                   "parameters": [],
@@ -1948,7 +1948,7 @@
             },
             {
               "name": "from_artifact",
-              "doc": "Interpret an already-open Artifact as a committed Experiment.",
+              "doc": "Interpret an already-open Artifact as a committed Experiment.\n\nThis is the usual entry point after importing or receiving an OMMX\nArtifact handle. The artifact must contain an Experiment config.",
               "signatures": [
                 {
                   "parameters": [
@@ -1983,8 +1983,237 @@
               "deprecated": null
             },
             {
+              "name": "get_attachment",
+              "doc": "Read an experiment-level attachment by name.\n\nThe returned Python object is decoded from the attachment media type:\nJSON attachments become normal Python objects, OMMX instance-like\nattachments become the corresponding `ommx.v1` objects, and unknown\nmedia types are returned as raw `bytes`.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Any",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "get_blob",
+              "doc": "Read raw bytes of an experiment-level attachment by name.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bytes",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "get_instance",
+              "doc": "Read an Instance experiment-level attachment by name.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Instance",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "get_json",
+              "doc": "Read a JSON experiment-level attachment by name.\n\nRaises an error if the attachment exists but its media type is not\n`application/json`.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Any",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "get_parametric_instance",
+              "doc": "Read a ParametricInstance experiment-level attachment by name.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ParametricInstance",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "get_sample_set",
+              "doc": "Read a SampleSet experiment-level attachment by name.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "SampleSet",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "get_solution",
+              "doc": "Read a Solution experiment-level attachment by name.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Solution",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "import_archive",
+              "doc": "Import an Experiment Artifact from a `.ommx` OCI archive file (or an OCI\nImage Layout directory).\n\nThe archive is imported into the default Local Registry, matching\n{meth}`Artifact.import_archive`, and then interpreted as an\nExperiment. The imported artifact must contain an Experiment config.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "path",
+                      "type_": {
+                        "display": "str | PathLike | Path",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "PathLike",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Path",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Experiment",
+                    "link_target": {
+                      "fqn": "ommx.experiment.Experiment",
+                      "doc_module": "ommx.experiment",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "load",
-              "doc": "Load a committed Experiment Artifact from the local registry.",
+              "doc": "Load a committed Experiment Artifact by image reference.\n\nIf the image is not found in the default Local Registry, OMMX tries to\npull it from the remote registry, matching {meth}`Artifact.load`.\nThe loaded artifact must contain an Experiment config. Use\n`Experiment(...)` to create a new unsealed experiment.",
               "signatures": [
                 {
                   "parameters": [
@@ -2015,7 +2244,7 @@
             },
             {
               "name": "log_attachment",
-              "doc": "Attach arbitrary bytes with an explicit OCI media type in the\nexperiment space.",
+              "doc": "Attach arbitrary bytes with an explicit OCI media type in the experiment space.\n\nThe `name` is stored as attachment metadata and is intended for\nhumans. The bytes are stored as a layer in the committed artifact.",
               "signatures": [
                 {
                   "parameters": [
@@ -2094,7 +2323,7 @@
             },
             {
               "name": "log_json",
-              "doc": "Attach a JSON-serialisable value in the experiment space.",
+              "doc": "Attach a JSON-serializable value in the experiment space.\n\nThe value is encoded with Python's `json.dumps` and stored with media\ntype `application/json`.",
               "signatures": [
                 {
                   "parameters": [
@@ -2111,6 +2340,41 @@
                       "name": "value",
                       "type_": {
                         "display": "Any",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "log_parametric_instance",
+              "doc": "Attach an ParametricInstance in the experiment space.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "pi",
+                      "type_": {
+                        "display": "ParametricInstance",
                         "link_target": null,
                         "children": []
                       },
@@ -2198,8 +2462,50 @@
               "deprecated": null
             },
             {
+              "name": "push",
+              "doc": "Push this committed Experiment Artifact to its remote registry.\n\nUse `rename(...)` first when an anonymous or local-only experiment\nshould be published under a remote container image reference.\n\nRaises an error if the Experiment has not been committed yet.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "rename",
+              "doc": "Rename this Experiment to another local registry image reference.\n\nBefore commit, this changes the image reference that `commit()` will\npublish. After commit, it publishes the same Artifact manifest under\n`image_name` and updates this handle to use the new name. The previous\nname remains as an alias in the Local Registry.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "image_name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "run",
-              "doc": "Start a new Run in this unsealed Experiment.",
+              "doc": "Start a new Run in this unsealed Experiment.\n\nThe returned `Run` must be finished before `commit()`. Use it as a\ncontext manager to finish it automatically on normal exit:\n\n```python\nwith experiment.run() as run:\n    run.log_parameter(\"capacity\", 47)\n```",
               "signatures": [
                 {
                   "parameters": [],
@@ -2220,7 +2526,7 @@
             },
             {
               "name": "run_parameters_df",
-              "doc": "Wide DataFrame of run parameters, indexed by `run_id`.",
+              "doc": "Wide DataFrame of run parameters, indexed by `run_id`.\n\nRun parameters are scalar values logged with `Run.log_parameter`.\nAdapter options recorded by `Run.log_solve` are solve metadata and do\nnot appear in this table.",
               "signatures": [
                 {
                   "parameters": [],
@@ -2235,8 +2541,50 @@
               "deprecated": null
             },
             {
+              "name": "save",
+              "doc": "Save this committed Experiment Artifact as a `.ommx` OCI archive file at `path`.\n\nThe archive is an exchange-format export of the registry-resident\nExperiment Artifact. Loading the archive back via\n{meth}`Experiment.import_archive` reimports it into the SQLite Local\nRegistry under the same image name.\n\nRaises an error if the Experiment has not been committed yet.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "path",
+                      "type_": {
+                        "display": "str | PathLike | Path",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "PathLike",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Path",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "with_temp_local_registry",
-              "doc": "Start a new Experiment backed by a temporary Local Registry.\n\nThe temporary registry is kept alive by the returned Experiment\nand by Artifacts / loaded Experiments derived from it.",
+              "doc": "Start a new Experiment backed by a temporary Local Registry.\n\nThe temporary registry is kept alive by the returned Experiment\nand by Artifacts / loaded Experiments derived from it. This is useful\nfor examples and tests because it does not write entries into the\nprocess-wide default local registry.",
               "signatures": [
                 {
                   "parameters": [
@@ -2278,7 +2626,7 @@
           "attributes": [
             {
               "name": "artifact",
-              "doc": "",
+              "doc": "Committed OMMX Artifact for this Experiment.\n\nRaises an error if the Experiment has not been committed yet.",
               "type_": {
                 "display": "Artifact",
                 "link_target": {
@@ -2293,8 +2641,25 @@
               "is_readonly": true
             },
             {
+              "name": "attachment_names",
+              "doc": "Names of experiment-level attachments.",
+              "type_": {
+                "display": "list[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "experiment_attachments",
-              "doc": "",
+              "doc": "Low-level descriptors for experiment-level attachments.\n\nPrefer `attachment_names`, `get_attachment`, or typed methods such as\n`get_json` and `get_instance` when working from Python. This descriptor\nview is kept for low-level Artifact inspection.",
               "type_": {
                 "display": "list[_ommx_rust.Descriptor]",
                 "link_target": null,
@@ -2316,7 +2681,7 @@
             },
             {
               "name": "image_name",
-              "doc": "",
+              "doc": "OCI image reference used to store this Experiment in a local registry.",
               "type_": {
                 "display": "str",
                 "link_target": null,
@@ -2327,7 +2692,7 @@
             },
             {
               "name": "runs",
-              "doc": "",
+              "doc": "Finished runs in insertion order.",
               "type_": {
                 "display": "list[_ommx_rust.SealedRun]",
                 "link_target": null,
@@ -2353,7 +2718,7 @@
         {
           "kind": "Class",
           "name": "Run",
-          "doc": "",
+          "doc": "A mutable run being recorded inside an unsealed Experiment.\n\nA run represents one experimental condition or trial. Use\n`log_parameter` for scalar values that should appear in\n`Experiment.run_parameters_df`, and use attachment methods for payloads\nsuch as JSON, instances, solutions, sample sets, or raw bytes.\n\nRuns are usually created with `Experiment.run()` and used as context\nmanagers. A run becomes immutable once it is finished.",
           "bases": [],
           "methods": [
             {
@@ -2466,7 +2831,7 @@
             },
             {
               "name": "finish",
-              "doc": "Finish this run and append it to the parent Experiment.",
+              "doc": "Finish this run and append it to the parent Experiment.\n\nAfter this method returns, the run handle can no longer be used. The\ncontext manager calls this automatically on normal exit and abandons\nthe run on exception.",
               "signatures": [
                 {
                   "parameters": [],
@@ -2482,7 +2847,7 @@
             },
             {
               "name": "log_attachment",
-              "doc": "Attach arbitrary bytes with an explicit OCI media type in this run.",
+              "doc": "Attach arbitrary bytes with an explicit OCI media type in this run.\n\nUse this for payloads that belong to this run but are not scalar run\nparameters, for example solver logs or derived files.",
               "signatures": [
                 {
                   "parameters": [
@@ -2526,7 +2891,7 @@
             },
             {
               "name": "log_instance",
-              "doc": "Attach an Instance in this run.",
+              "doc": "Attach an Instance in this run.\n\nThis records an instance as a run-level attachment. Use `log_solve`\nwhen the instance is the input of a solver call and should be paired\nwith the returned solution.",
               "signatures": [
                 {
                   "parameters": [
@@ -2561,7 +2926,7 @@
             },
             {
               "name": "log_json",
-              "doc": "Attach a JSON-serialisable value in this run.",
+              "doc": "Attach a JSON-serializable value in this run.\n\nThe value is encoded with Python's `json.dumps` and stored with media\ntype `application/json`.",
               "signatures": [
                 {
                   "parameters": [
@@ -2596,7 +2961,7 @@
             },
             {
               "name": "log_parameter",
-              "doc": "Log a scalar parameter for this run.",
+              "doc": "Log a scalar parameter for this run.\n\nAccepted value types are `bool`, `int`, `float`, and `str`. These\nvalues are intended for comparing runs and are exposed as columns in\n`Experiment.run_parameters_df()`.",
               "signatures": [
                 {
                   "parameters": [
@@ -2651,6 +3016,41 @@
               "deprecated": null
             },
             {
+              "name": "log_parametric_instance",
+              "doc": "Attach a ParametricInstance in this run.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "pi",
+                      "type_": {
+                        "display": "ParametricInstance",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "log_sample_set",
               "doc": "Attach a SampleSet in this run.",
               "signatures": [
@@ -2687,7 +3087,7 @@
             },
             {
               "name": "log_solution",
-              "doc": "Attach a Solution in this run.",
+              "doc": "Attach a Solution in this run.\n\nThis records a solution as a run-level attachment. Use `log_solve`\nwhen the solution is produced by a solver call and should be paired\nwith the input instance.",
               "signatures": [
                 {
                   "parameters": [
@@ -2722,7 +3122,7 @@
             },
             {
               "name": "log_solve",
-              "doc": "Solve an Instance with an OMMX SolverAdapter and log a Solve entry.\n\nThe input Instance is cloned before calling the adapter, so adapter-side\ncapability reductions do not mutate the caller's object. The original\ninput is always stored as the Solve input.",
+              "doc": "Solve an Instance with an OMMX SolverAdapter and log a Solve entry.\n\nThe input Instance is cloned before calling the adapter, so adapter-side\ncapability reductions do not mutate the caller's object. The original\ninput is always stored as the Solve input.\n\n`adapter` must be a subclass of `ommx.adapter.SolverAdapter`. Keyword\narguments are passed to `adapter.solve(...)` and recorded as\n`Solve.adapter_options`. The adapter class name is stored in\n`Solve.adapter`.\n\nAdapter options are solve-scoped metadata, not run parameters. They do\nnot appear in `Experiment.run_parameters_df()`.",
               "signatures": [
                 {
                   "parameters": [
@@ -2774,7 +3174,7 @@
           "attributes": [
             {
               "name": "run_id",
-              "doc": "",
+              "doc": "Integer identifier of this run within its Experiment.",
               "type_": {
                 "display": "int",
                 "link_target": null,
@@ -2789,7 +3189,7 @@
         {
           "kind": "Class",
           "name": "SealedRun",
-          "doc": "",
+          "doc": "Immutable view of a finished Run in a committed Experiment.\n\n`SealedRun` exposes run-level attachments by name and the sequence of\n`Solve` records created by `Run.log_solve`.",
           "bases": [],
           "methods": [
             {
@@ -2807,12 +3207,211 @@
               ],
               "is_async": false,
               "deprecated": null
+            },
+            {
+              "name": "get_attachment",
+              "doc": "Read a run-level attachment by name.\n\nThe returned Python object is decoded from the attachment media type.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Any",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "get_blob",
+              "doc": "Read raw bytes of a run-level attachment by name.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bytes",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "get_instance",
+              "doc": "Read an Instance run-level attachment by name.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Instance",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "get_json",
+              "doc": "Read a JSON run-level attachment by name.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Any",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "get_parametric_instance",
+              "doc": "Read a ParametricInstance run-level attachment by name.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ParametricInstance",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "get_sample_set",
+              "doc": "Read a SampleSet run-level attachment by name.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "SampleSet",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "get_solution",
+              "doc": "Read a Solution run-level attachment by name.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Solution",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
             }
           ],
           "attributes": [
             {
+              "name": "attachment_names",
+              "doc": "Names of run-level attachments.",
+              "type_": {
+                "display": "list[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "attachments",
-              "doc": "",
+              "doc": "Low-level descriptors for run-level attachments.\n\nPrefer `attachment_names`, `get_attachment`, or typed methods such as\n`get_json` and `get_instance` when working from Python. This descriptor\nview is kept for low-level Artifact inspection.",
               "type_": {
                 "display": "list[_ommx_rust.Descriptor]",
                 "link_target": null,
@@ -2834,7 +3433,7 @@
             },
             {
               "name": "run_id",
-              "doc": "",
+              "doc": "Integer identifier of this run within its Experiment.",
               "type_": {
                 "display": "int",
                 "link_target": null,
@@ -2845,7 +3444,7 @@
             },
             {
               "name": "solves",
-              "doc": "",
+              "doc": "Solve records logged in this run, ordered by `solve_id`.",
               "type_": {
                 "display": "list[_ommx_rust.Solve]",
                 "link_target": null,
@@ -2871,7 +3470,7 @@
         {
           "kind": "Class",
           "name": "Solve",
-          "doc": "",
+          "doc": "Immutable record of one solver call.\n\nA `Solve` stores the input `Instance`, output `Solution`, adapter class\nname, and JSON-encoded adapter options for one `Run.log_solve` call.",
           "bases": [],
           "methods": [
             {
@@ -2893,42 +3492,21 @@
           ],
           "attributes": [
             {
-              "name": "input",
-              "doc": "",
+              "name": "adapter",
+              "doc": "SolverAdapter class name used for this solve.",
               "type_": {
-                "display": "Descriptor",
-                "link_target": {
-                  "fqn": "ommx.artifact.Descriptor",
-                  "doc_module": "ommx.artifact",
-                  "kind": "Class",
-                  "attribute": null
-                },
+                "display": "str",
+                "link_target": null,
                 "children": []
               },
               "is_property": true,
               "is_readonly": true
             },
             {
-              "name": "output",
-              "doc": "",
+              "name": "adapter_options",
+              "doc": "Keyword arguments passed to the SolverAdapter.\n\nThe artifact stores this value as a JSON string produced by Python's\n`json.dumps`; the Python SDK decodes it with `json.loads` before\nreturning it.",
               "type_": {
-                "display": "Descriptor",
-                "link_target": {
-                  "fqn": "ommx.artifact.Descriptor",
-                  "doc_module": "ommx.artifact",
-                  "kind": "Class",
-                  "attribute": null
-                },
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "parameters",
-              "doc": "",
-              "type_": {
-                "display": "dict[str, str]",
+                "display": "dict[str, Any]",
                 "link_target": null,
                 "children": [
                   {
@@ -2937,7 +3515,7 @@
                     "children": []
                   },
                   {
-                    "display": "str",
+                    "display": "Any",
                     "link_target": null,
                     "children": []
                   }
@@ -2947,8 +3525,30 @@
               "is_readonly": true
             },
             {
+              "name": "input",
+              "doc": "Input `Instance` passed to the solver.",
+              "type_": {
+                "display": "Instance",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "output",
+              "doc": "Output `Solution` returned by the solver.",
+              "type_": {
+                "display": "Solution",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "solve_id",
-              "doc": "",
+              "doc": "Integer identifier of this solve within its run.",
               "type_": {
                 "display": "int",
                 "link_target": null,

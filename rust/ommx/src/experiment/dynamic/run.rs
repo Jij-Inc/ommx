@@ -9,10 +9,9 @@ use super::{
     RunEntryDyn, SolveEntryDyn,
 };
 use crate::artifact::media_types;
-use crate::{Instance, SampleSet, Solution};
+use crate::{Instance, ParametricInstance, SampleSet, Solution};
 use anyhow::Result;
 use oci_spec::image::{Descriptor, MediaType};
-use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 /// Runtime-owned Run handle.
@@ -117,6 +116,10 @@ impl RunDyn {
         self.log_attachment(name, media_types::v1_instance(), instance.to_bytes())
     }
 
+    pub fn log_parametric_instance(&mut self, name: &str, pi: &ParametricInstance) -> Result<()> {
+        self.log_attachment(name, media_types::v1_parametric_instance(), pi.to_bytes())
+    }
+
     pub fn log_solution(&mut self, name: &str, solution: &Solution) -> Result<()> {
         self.log_attachment(name, media_types::v1_solution(), solution.to_bytes())
     }
@@ -129,7 +132,8 @@ impl RunDyn {
         &mut self,
         input: &Instance,
         output: &Solution,
-        parameters: BTreeMap<String, String>,
+        adapter: String,
+        adapter_options: String,
     ) -> Result<u64> {
         let solve_id = self.open()?.next_solve_id;
         let (input, output) = {
@@ -153,7 +157,8 @@ impl RunDyn {
             solve_id,
             input,
             output,
-            parameters,
+            adapter,
+            adapter_options,
         });
         Ok(solve_id)
     }

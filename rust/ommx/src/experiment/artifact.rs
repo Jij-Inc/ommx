@@ -92,7 +92,8 @@ impl<'reg> UnsealedExperimentState<'reg> {
                     solve_id: solve.solve_id,
                     input: layers.push(solve.input.clone())?,
                     output: layers.push(solve.output.clone())?,
-                    parameters: solve.parameters.clone(),
+                    adapter: solve.adapter.clone(),
+                    adapter_options: solve.adapter_options.clone(),
                 });
             }
             runs.push(ExperimentConfigRun {

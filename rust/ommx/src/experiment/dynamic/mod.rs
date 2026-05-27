@@ -20,11 +20,14 @@ use super::attachment::{
 };
 use super::{Name, RunEntry, RunParameterCell, SealedExperiment, UnsealedExperimentState};
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
-use crate::artifact::{ImageRef, LocalArtifact, LocalArtifactDyn, LocalRegistryHandle};
-use crate::{Instance, SampleSet, Solution};
-use anyhow::Result;
+use crate::artifact::{
+    media_types, AsArtifact, ImageRef, LocalArtifact, LocalArtifactDyn, LocalRegistryHandle,
+};
+use crate::{Instance, ParametricInstance, SampleSet, Solution};
+use anyhow::{ensure, Result};
 use oci_spec::image::{Descriptor, MediaType};
 use std::collections::BTreeMap;
+use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 mod run;
@@ -88,7 +91,8 @@ pub(super) struct SolveEntryDyn {
     pub(super) solve_id: u64,
     pub(super) input: Descriptor,
     pub(super) output: Descriptor,
-    pub(super) parameters: BTreeMap<String, String>,
+    pub(super) adapter: String,
+    pub(super) adapter_options: String,
 }
 
 #[derive(Debug, Clone)]
@@ -125,7 +129,8 @@ pub struct SolveDyn {
     solve_id: u64,
     input: Descriptor,
     output: Descriptor,
-    parameters: BTreeMap<String, String>,
+    adapter: String,
+    adapter_options: String,
 }
 
 impl SealedRunDyn {
@@ -157,14 +162,66 @@ impl SolveDyn {
             .stored_descriptor(self.input.clone())
     }
 
+    pub fn input_instance(&self) -> Result<Instance> {
+        let descriptor = self.input()?;
+        ensure!(
+            descriptor.media_type().to_string() == media_types::V1_INSTANCE_MEDIA_TYPE,
+            "Solve {} input has media type '{}', expected '{}'",
+            self.solve_id,
+            descriptor.media_type(),
+            media_types::V1_INSTANCE_MEDIA_TYPE
+        );
+        let bytes = self
+            .registry_handle
+            .registry()
+            .blobs()
+            .read_bytes(descriptor.digest())?;
+        ensure!(
+            bytes.len() as u64 == descriptor.size(),
+            "Descriptor size mismatch for {}: descriptor={}, actual={}",
+            descriptor.digest(),
+            descriptor.size(),
+            bytes.len()
+        );
+        Instance::from_bytes(&bytes)
+    }
+
     pub fn output(&self) -> Result<StoredDescriptor<'_>> {
         self.registry_handle
             .registry()
             .stored_descriptor(self.output.clone())
     }
 
-    pub fn parameters(&self) -> &BTreeMap<String, String> {
-        &self.parameters
+    pub fn output_solution(&self) -> Result<Solution> {
+        let descriptor = self.output()?;
+        ensure!(
+            descriptor.media_type().to_string() == media_types::V1_SOLUTION_MEDIA_TYPE,
+            "Solve {} output has media type '{}', expected '{}'",
+            self.solve_id,
+            descriptor.media_type(),
+            media_types::V1_SOLUTION_MEDIA_TYPE
+        );
+        let bytes = self
+            .registry_handle
+            .registry()
+            .blobs()
+            .read_bytes(descriptor.digest())?;
+        ensure!(
+            bytes.len() as u64 == descriptor.size(),
+            "Descriptor size mismatch for {}: descriptor={}, actual={}",
+            descriptor.digest(),
+            descriptor.size(),
+            bytes.len()
+        );
+        Solution::from_bytes(&bytes)
+    }
+
+    pub fn adapter(&self) -> &str {
+        &self.adapter
+    }
+
+    pub fn adapter_options(&self) -> &str {
+        &self.adapter_options
     }
 }
 
@@ -200,7 +257,11 @@ impl ExperimentDyn {
     }
 
     pub fn load(image_name: crate::artifact::ImageRef) -> Result<Self> {
-        Self::from_artifact(LocalArtifactDyn::open(image_name)?)
+        Self::from_artifact(LocalArtifactDyn::load(image_name)?)
+    }
+
+    pub fn import_archive(path: &Path) -> Result<Self> {
+        Self::from_artifact(LocalArtifactDyn::import_archive(path)?)
     }
 
     pub fn from_artifact(artifact: LocalArtifactDyn) -> Result<Self> {
@@ -231,6 +292,21 @@ impl ExperimentDyn {
                 .clone()),
             ExperimentDynLifecycle::Sealed(sealed) => Ok(sealed.image_name().clone()),
             ExperimentDynLifecycle::Failed { image_name, .. } => Ok(image_name.clone()),
+        }
+    }
+
+    pub fn rename(&self, image_name: crate::artifact::ImageRef) -> Result<()> {
+        let mut dyn_state = lock_experiment_state(&self.state);
+        match &mut dyn_state.lifecycle {
+            ExperimentDynLifecycle::Unsealed { state, .. } => {
+                let state = state
+                    .as_mut()
+                    .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
+                state.image_name = image_name;
+                Ok(())
+            }
+            ExperimentDynLifecycle::Sealed(sealed) => sealed.rename(image_name),
+            lifecycle @ ExperimentDynLifecycle::Failed { .. } => bail_non_unsealed(lifecycle),
         }
     }
 
@@ -278,6 +354,14 @@ impl ExperimentDyn {
             name,
             crate::artifact::media_types::v1_instance(),
             instance.to_bytes(),
+        )
+    }
+
+    pub fn log_parametric_instance(&self, name: &str, pi: &ParametricInstance) -> Result<()> {
+        self.log_attachment(
+            name,
+            crate::artifact::media_types::v1_parametric_instance(),
+            pi.to_bytes(),
         )
     }
 
@@ -373,6 +457,26 @@ impl ExperimentDyn {
     }
 }
 
+impl<'reg> AsArtifact<'reg> for ExperimentDyn {
+    fn as_artifact(&'reg self) -> Result<LocalArtifact<'reg>> {
+        let (image_name, manifest_digest) = {
+            let dyn_state = lock_experiment_state(&self.state);
+            let ExperimentDynLifecycle::Sealed(sealed) = &dyn_state.lifecycle else {
+                return bail_not_sealed(&dyn_state.lifecycle);
+            };
+            (
+                sealed.artifact.image_name().clone(),
+                sealed.artifact.manifest_digest().clone(),
+            )
+        };
+        Ok(LocalArtifact::from_parts(
+            self.registry_handle.registry(),
+            image_name,
+            manifest_digest,
+        ))
+    }
+}
+
 impl UnsealedExperimentDynState {
     fn commit<'reg>(self, registry: &'reg LocalRegistry) -> Result<LocalArtifact<'reg>> {
         self.into_unsealed_state(registry)?.commit(registry)
@@ -402,7 +506,8 @@ impl UnsealedExperimentDynState {
                                         solve_id: solve.solve_id,
                                         input: registry.stored_descriptor(solve.input)?,
                                         output: registry.stored_descriptor(solve.output)?,
-                                        parameters: solve.parameters,
+                                        adapter: solve.adapter,
+                                        adapter_options: solve.adapter_options,
                                     })
                                 })
                                 .collect::<Result<Vec<_>>>()?,
@@ -439,7 +544,8 @@ impl SealedExperimentDynState {
                                     solve_id: solve.solve_id(),
                                     input: Descriptor::from(solve.input().clone()),
                                     output: Descriptor::from(solve.output().clone()),
-                                    parameters: solve.parameters().clone(),
+                                    adapter: solve.adapter().to_string(),
+                                    adapter_options: solve.adapter_options().to_string(),
                                 })
                                 .collect(),
                         },
@@ -463,6 +569,11 @@ impl SealedExperimentDynState {
 
     fn image_name(&self) -> &ImageRef {
         self.artifact.image_name()
+    }
+
+    fn rename(&mut self, image_name: ImageRef) -> Result<()> {
+        self.artifact = self.artifact.tag_as(image_name)?;
+        Ok(())
     }
 }
 

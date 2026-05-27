@@ -103,6 +103,69 @@ impl LocalArtifactDyn {
         Self::open_in_registry_handle(registry_handle, image_name)
     }
 
+    /// Import an OCI archive file or OCI Image Layout directory into the
+    /// default Local Registry and return the imported artifact.
+    pub fn import_archive(path: &Path) -> Result<Self> {
+        let registry_handle = LocalRegistryHandle::shared_default()?;
+        let registry = registry_handle.registry();
+
+        let image_name = if path.is_file() {
+            let outcome = super::local_registry::import_oci_archive(registry, path)?;
+            outcome.image_name.ok_or_else(|| {
+                anyhow::anyhow!(
+                    "import_oci_archive returned no image_name despite synthesizing on \
+                     unnamed input; this is a bug in the OMMX SDK; please report it."
+                )
+            })?
+        } else if path.is_dir() {
+            let image_name = match super::local_registry::oci_dir_image_name(path)? {
+                Some(name) => name,
+                None => {
+                    let synthesized = registry.synthesize_anonymous_image_name()?;
+                    tracing::info!(
+                        "OCI dir at {} has no `org.opencontainers.image.ref.name` \
+                         annotation; importing under synthesized anonymous name \
+                         {synthesized}",
+                        path.display(),
+                    );
+                    synthesized
+                }
+            };
+            super::local_registry::import_oci_dir_as_ref(
+                registry.index(),
+                registry.blobs(),
+                path,
+                &image_name,
+            )?;
+            image_name
+        } else {
+            bail!("Path must be a file or a directory")
+        };
+
+        Self::open_in_registry_handle(registry_handle, image_name)
+    }
+
+    /// Load an artifact by image reference from the default Local Registry.
+    ///
+    /// With `remote-artifact` enabled, this mirrors Python
+    /// `Artifact.load`: if the default Local Registry does not already
+    /// contain a complete copy, pull the image from the remote registry
+    /// into the Local Registry before opening it.
+    #[cfg(feature = "remote-artifact")]
+    pub fn load(image_name: ImageRef) -> Result<Self> {
+        let registry_handle = LocalRegistryHandle::shared_default()?;
+        super::local_registry::pull_image(registry_handle.registry(), &image_name)?;
+        Self::open_in_registry_handle(registry_handle, image_name)
+    }
+
+    /// Load an artifact by image reference from the default Local Registry.
+    ///
+    /// Without `remote-artifact`, loading is local-only.
+    #[cfg(not(feature = "remote-artifact"))]
+    pub fn load(image_name: ImageRef) -> Result<Self> {
+        Self::open(image_name)
+    }
+
     pub fn open_in_registry_handle(
         registry_handle: LocalRegistryHandle,
         image_name: ImageRef,
@@ -142,6 +205,10 @@ impl LocalArtifactDyn {
         &self.image_name
     }
 
+    pub fn manifest_digest(&self) -> &Digest {
+        &self.manifest_digest
+    }
+
     pub fn annotations(&self) -> Result<HashMap<String, String>> {
         self.as_local_artifact().annotations()
     }
@@ -155,12 +222,50 @@ impl LocalArtifactDyn {
     }
 
     pub fn save(&self, output: &Path) -> crate::Result<()> {
-        self.as_local_artifact().save(output)
+        AsArtifact::save(self, output)
     }
 
     #[cfg(feature = "remote-artifact")]
     pub fn push(&self) -> crate::Result<()> {
-        self.as_local_artifact().push()
+        AsArtifact::push(self)
+    }
+
+    pub fn tag_as(&self, image_name: ImageRef) -> Result<Self> {
+        let artifact = self.as_local_artifact().tag_as(image_name)?;
+        Ok(Self {
+            registry_handle: self.registry_handle.clone(),
+            image_name: artifact.image_name().clone(),
+            manifest_digest: artifact.manifest_digest().clone(),
+            manifest_cache: Arc::new(OnceLock::new()),
+        })
+    }
+}
+
+/// Values that can be viewed as a committed OMMX Artifact.
+///
+/// Implementors may be domain objects such as Experiment handles, or the
+/// artifact handle itself. The returned [`LocalArtifact`] is a borrowed view
+/// tied to `self`, so implementors that own a [`LocalRegistryHandle`] can keep
+/// the underlying registry alive while exposing the lifetime-based artifact API.
+pub trait AsArtifact<'reg> {
+    /// Return the committed artifact view backing this value.
+    fn as_artifact(&'reg self) -> crate::Result<LocalArtifact<'reg>>;
+
+    /// Save the committed artifact as a `.ommx` OCI archive file.
+    fn save(&'reg self, output: &Path) -> crate::Result<()> {
+        self.as_artifact()?.save(output)
+    }
+
+    /// Push the committed artifact to its remote registry.
+    #[cfg(feature = "remote-artifact")]
+    fn push(&'reg self) -> crate::Result<()> {
+        self.as_artifact()?.push()
+    }
+}
+
+impl<'reg> AsArtifact<'reg> for LocalArtifactDyn {
+    fn as_artifact(&'reg self) -> crate::Result<LocalArtifact<'reg>> {
+        Ok(self.as_local_artifact())
     }
 }
 
@@ -290,6 +395,35 @@ impl<'reg> LocalArtifact<'reg> {
 
     pub(crate) fn read_blob_by_digest(&self, digest: &Digest) -> Result<Vec<u8>> {
         self.registry.blobs().read_bytes(digest)
+    }
+
+    fn stored_manifest_descriptor(&self) -> Result<StoredDescriptor<'reg>> {
+        let size = self.registry.blobs().size(&self.manifest_digest)?;
+        let descriptor = DescriptorBuilder::default()
+            .media_type(MediaType::ImageManifest)
+            .digest(self.manifest_digest.clone())
+            .size(size)
+            .build()
+            .context("Failed to build manifest descriptor")?;
+        self.registry.stored_descriptor(descriptor)
+    }
+
+    /// Publish this artifact under another local image reference.
+    ///
+    /// This does not rewrite the manifest or payload blobs. It only adds a
+    /// new Local Registry ref to the same root manifest digest and returns a
+    /// handle whose `image_name` is the new reference.
+    pub fn tag_as(&self, image_name: ImageRef) -> Result<Self> {
+        let manifest = self.stored_manifest_descriptor()?;
+        let ref_update = self
+            .registry
+            .publish_stored_manifest_ref(&image_name, &manifest)?;
+        reject_conflicting_ref(&image_name, ref_update)?;
+        Ok(Self::from_parts(
+            self.registry,
+            image_name,
+            self.manifest_digest.clone(),
+        ))
     }
 }
 

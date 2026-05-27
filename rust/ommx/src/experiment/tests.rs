@@ -8,7 +8,7 @@ use super::{
     LAYER_KIND_RUN_PARAMETERS, RUN_PARAMETERS_MEDIA_TYPE,
 };
 use crate::artifact::local_registry::{StoredDescriptor, UnsealedArtifact};
-use crate::artifact::{media_types, ImageRef, LocalArtifact, LocalRegistryHandle};
+use crate::artifact::{media_types, AsArtifact, ImageRef, LocalArtifact, LocalRegistryHandle};
 use crate::{Evaluate, Function, Instance, Sense};
 use oci_spec::image::{Descriptor, MediaType};
 use serde_json::json;
@@ -423,10 +423,8 @@ fn log_finished_solve_result_materializes_solve_entry_with_layer_refs() {
                 .log_finished_solve_result(
                     &instance,
                     &solution,
-                    BTreeMap::from([
-                        ("adapter".to_string(), "dummy.Adapter".to_string()),
-                        ("kwargs".to_string(), r#"{"time_limit":1.5}"#.to_string()),
-                    ]),
+                    "dummy.Adapter".to_string(),
+                    r#"{"time_limit":1.5}"#.to_string(),
                 )
                 .unwrap();
             assert_eq!(solve_id, 0);
@@ -448,11 +446,11 @@ fn log_finished_solve_result_materializes_solve_entry_with_layer_refs() {
         assert_eq!(config_json["runs"][0]["solves"][0]["input"], json!(0));
         assert_eq!(config_json["runs"][0]["solves"][0]["output"], json!(1));
         assert_eq!(
-            config_json["runs"][0]["solves"][0]["parameters"]["adapter"],
+            config_json["runs"][0]["solves"][0]["adapter"],
             json!("dummy.Adapter")
         );
         assert_eq!(
-            config_json["runs"][0]["solves"][0]["parameters"]["kwargs"],
+            config_json["runs"][0]["solves"][0]["adapter_options"],
             json!(r#"{"time_limit":1.5}"#)
         );
 
@@ -471,14 +469,8 @@ fn log_finished_solve_result_materializes_solve_entry_with_layer_refs() {
             artifact.get_blob(solve.output()).unwrap(),
             solution.to_bytes()
         );
-        assert_eq!(
-            solve.parameters().get("adapter"),
-            Some(&"dummy.Adapter".to_string())
-        );
-        assert_eq!(
-            solve.parameters().get("kwargs"),
-            Some(&r#"{"time_limit":1.5}"#.to_string())
-        );
+        assert_eq!(solve.adapter(), "dummy.Adapter");
+        assert_eq!(solve.adapter_options(), r#"{"time_limit":1.5}"#);
         Ok(())
     });
 }
@@ -1059,4 +1051,95 @@ fn experiment_dyn_marks_commit_failure_explicitly() {
         .run()
         .expect_err("failed Experiment must reject new runs");
     assert!(err.to_string().contains("commit has failed"));
+}
+
+#[test]
+fn experiment_dyn_rename_before_commit_changes_publish_ref() {
+    let registry_handle = LocalRegistryHandle::temp().unwrap();
+    let experiment =
+        ExperimentDyn::with_registry_handle(registry_handle.clone(), Name::Anonymous).unwrap();
+    let old_image_name = experiment.image_name().unwrap();
+    let new_image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/renamed-before:latest").unwrap();
+
+    experiment.rename(new_image_name.clone()).unwrap();
+    experiment.log_json("dataset", json!("miplib2017")).unwrap();
+    let artifact = experiment.commit().unwrap();
+
+    assert_eq!(artifact.image_name(), &new_image_name);
+    assert_eq!(experiment.image_name().unwrap(), new_image_name);
+    assert!(registry_handle
+        .registry()
+        .resolve_image_name(&old_image_name)
+        .unwrap()
+        .is_none());
+    assert!(registry_handle
+        .registry()
+        .resolve_image_name(artifact.image_name())
+        .unwrap()
+        .is_some());
+}
+
+#[test]
+fn experiment_dyn_rename_after_commit_publishes_alias() {
+    let registry_handle = LocalRegistryHandle::temp().unwrap();
+    let experiment =
+        ExperimentDyn::with_registry_handle(registry_handle.clone(), Name::Anonymous).unwrap();
+    experiment.log_json("dataset", json!("miplib2017")).unwrap();
+    let artifact = experiment.commit().unwrap();
+    let old_image_name = artifact.image_name().clone();
+    let old_digest = registry_handle
+        .registry()
+        .resolve_image_name(&old_image_name)
+        .unwrap()
+        .unwrap();
+    let new_image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/renamed-after:latest").unwrap();
+
+    experiment.rename(new_image_name.clone()).unwrap();
+    let new_digest = registry_handle
+        .registry()
+        .resolve_image_name(&new_image_name)
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(old_digest, new_digest);
+    assert_eq!(experiment.image_name().unwrap(), new_image_name);
+    assert_eq!(experiment.artifact().unwrap().image_name(), &new_image_name);
+    assert!(registry_handle
+        .registry()
+        .resolve_image_name(&old_image_name)
+        .unwrap()
+        .is_some());
+}
+
+#[test]
+fn experiment_dyn_save_writes_committed_archive() {
+    let experiment = ExperimentDyn::with_temp_local_registry(Name::Anonymous).unwrap();
+    experiment.log_json("dataset", json!("miplib2017")).unwrap();
+    let artifact = experiment.commit().unwrap();
+    let tmp = tempfile::tempdir().unwrap();
+    let archive_path = tmp.path().join("experiment.ommx");
+
+    experiment.save(&archive_path).unwrap();
+
+    assert!(archive_path.exists());
+    assert!(archive_path.metadata().unwrap().len() > 0);
+    assert_eq!(
+        experiment.artifact().unwrap().image_name(),
+        artifact.image_name()
+    );
+
+    let loaded = ExperimentDyn::import_archive(&archive_path).unwrap();
+    assert_eq!(loaded.experiment_attachments().unwrap().len(), 1);
+}
+
+#[cfg(feature = "remote-artifact")]
+#[test]
+fn experiment_dyn_push_rejects_uncommitted_experiment() {
+    let experiment = ExperimentDyn::with_temp_local_registry(Name::Anonymous).unwrap();
+
+    let err = experiment
+        .push()
+        .expect_err("uncommitted Experiment must reject push");
+
+    assert!(err.to_string().contains("must be committed"));
 }

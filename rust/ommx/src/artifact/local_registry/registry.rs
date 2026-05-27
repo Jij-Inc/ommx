@@ -349,6 +349,23 @@ impl LocalRegistry {
         self.index.publish_image_ref(image_name, &sealed_artifact.0)
     }
 
+    /// Publish an already-stored root manifest descriptor under an image ref.
+    ///
+    /// This is used when adding another local name for an existing artifact.
+    /// It is an IndexStore operation only: no payload blobs or manifest bytes
+    /// are rewritten.
+    pub(crate) fn publish_stored_manifest_ref(
+        &self,
+        image_name: &ImageRef,
+        manifest: &StoredDescriptor<'_>,
+    ) -> Result<RefUpdate> {
+        ensure!(
+            manifest.is_stored_in(self),
+            "Manifest descriptor belongs to a different Local Registry"
+        );
+        self.index.publish_image_ref(image_name, manifest)
+    }
+
     /// Replace the ref target with a sealed root manifest descriptor.
     ///
     /// This is an IndexStore operation only. It does not write payload

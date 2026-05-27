@@ -1,17 +1,54 @@
 use anyhow::{Context, Result};
-use oci_spec::image::MediaType;
+use oci_spec::image::{Descriptor, MediaType};
 use pyo3::{
     prelude::*,
-    types::{PyBool, PyDict, PyFloat, PyInt, PyString, PyType, PyTypeMethods},
+    types::{PyBool, PyBytes, PyDict, PyFloat, PyInt, PyString, PyType, PyTypeMethods},
 };
-use std::collections::{btree_map::Entry, BTreeMap};
+use std::{
+    collections::{btree_map::Entry, BTreeMap},
+    path::PathBuf,
+};
 
 use crate::pandas::{raw_entries_to_dataframe, PyDataFrame};
 use crate::{PyArtifact, PyDescriptor};
+use ommx::artifact::AsArtifact;
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust", name = "Experiment")]
+/// A collection of optimization experiment records stored as one OMMX Artifact.
+///
+/// An `Experiment` owns experiment-level attachments and a sequence of
+/// finished `Run` objects. Each `Run` can store scalar run parameters,
+/// run-level attachments, and zero or more `Solve` records.
+///
+/// Newly created experiments are unsealed. Call `commit()` to write the
+/// experiment into the local registry as an OMMX Artifact. After commit, the
+/// same object can be used as a read-only view of the committed artifact.
+///
+/// Example:
+///
+/// >>> from ommx.experiment import Experiment
+/// >>> with Experiment.with_temp_local_registry() as exp:
+/// ...     exp.log_json("dataset", {"name": "demo"})
+/// ...     with exp.run() as run:
+/// ...         run.log_parameter("capacity", 10)
+/// ...         run.log_json("scenario", {"capacity": 10})
+/// >>> len(exp.runs)
+/// 1
+/// >>> len(exp.experiment_attachments)
+/// 1
+/// >>> exp.run_parameters_df().to_dict()
+/// {'capacity': {0: 10}}
+///
+/// If the experiment has only one run, open the experiment and the run in
+/// one `with` statement. On normal exit, the run is finished first and then
+/// the experiment is committed:
+///
+/// >>> with Experiment() as exp, exp.run() as run:  # doctest: +SKIP
+/// ...     solution = run.log_solve(adapter, instance, time_limit=10.0)
+/// >>> exp.rename("ghcr.io/container/name:latest")  # doctest: +SKIP
+/// >>> exp.push()  # doctest: +SKIP
 pub struct PyExperiment {
     inner: ommx::experiment::ExperimentDyn,
 }
@@ -19,10 +56,12 @@ pub struct PyExperiment {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl PyExperiment {
-    /// Start a new Experiment in the local registry.
+    /// Start a new Experiment in the default local registry.
     ///
     /// If `image_name` is omitted, OMMX generates an anonymous local
-    /// Experiment name.
+    /// Experiment name. Pass an OCI image reference such as
+    /// `"example.com/team/experiment:tag"` when the experiment should be
+    /// loaded later by name.
     #[new]
     #[pyo3(signature = (image_name = None))]
     pub fn new(image_name: Option<&str>) -> Result<Self> {
@@ -34,7 +73,9 @@ impl PyExperiment {
     /// Start a new Experiment backed by a temporary Local Registry.
     ///
     /// The temporary registry is kept alive by the returned Experiment
-    /// and by Artifacts / loaded Experiments derived from it.
+    /// and by Artifacts / loaded Experiments derived from it. This is useful
+    /// for examples and tests because it does not write entries into the
+    /// process-wide default local registry.
     #[staticmethod]
     #[pyo3(signature = (image_name = None))]
     pub fn with_temp_local_registry(image_name: Option<&str>) -> Result<Self> {
@@ -45,7 +86,12 @@ impl PyExperiment {
         })
     }
 
-    /// Load a committed Experiment Artifact from the local registry.
+    /// Load a committed Experiment Artifact by image reference.
+    ///
+    /// If the image is not found in the default Local Registry, OMMX tries to
+    /// pull it from the remote registry, matching {meth}`Artifact.load`.
+    /// The loaded artifact must contain an Experiment config. Use
+    /// `Experiment(...)` to create a new unsealed experiment.
     #[staticmethod]
     pub fn load(py: Python<'_>, image_name: &str) -> Result<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
@@ -55,7 +101,24 @@ impl PyExperiment {
         })
     }
 
+    /// Import an Experiment Artifact from a `.ommx` OCI archive file (or an OCI
+    /// Image Layout directory).
+    ///
+    /// The archive is imported into the default Local Registry, matching
+    /// {meth}`Artifact.import_archive`, and then interpreted as an
+    /// Experiment. The imported artifact must contain an Experiment config.
+    #[staticmethod]
+    pub fn import_archive(py: Python<'_>, path: PathBuf) -> Result<Self> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        Ok(Self {
+            inner: ommx::experiment::ExperimentDyn::import_archive(&path)?,
+        })
+    }
+
     /// Interpret an already-open Artifact as a committed Experiment.
+    ///
+    /// This is the usual entry point after importing or receiving an OMMX
+    /// Artifact handle. The artifact must contain an Experiment config.
     #[staticmethod]
     pub fn from_artifact(artifact: &PyArtifact) -> Result<Self> {
         Ok(Self {
@@ -82,11 +145,53 @@ impl PyExperiment {
     }
 
     #[getter]
+    /// OCI image reference used to store this Experiment in a local registry.
     pub fn image_name(&self) -> Result<String> {
         Ok(self.inner.image_name()?.to_string())
     }
 
+    /// Rename this Experiment to another local registry image reference.
+    ///
+    /// Before commit, this changes the image reference that `commit()` will
+    /// publish. After commit, it publishes the same Artifact manifest under
+    /// `image_name` and updates this handle to use the new name. The previous
+    /// name remains as an alias in the Local Registry.
+    pub fn rename(&mut self, image_name: &str) -> Result<()> {
+        let image_name = ommx::artifact::ImageRef::parse(image_name)?;
+        self.inner.rename(image_name)
+    }
+
+    /// Save this committed Experiment Artifact as a `.ommx` OCI archive file at `path`.
+    ///
+    /// The archive is an exchange-format export of the registry-resident
+    /// Experiment Artifact. Loading the archive back via
+    /// {meth}`Experiment.import_archive` reimports it into the SQLite Local
+    /// Registry under the same image name.
+    ///
+    /// Raises an error if the Experiment has not been committed yet.
+    pub fn save(&mut self, py: Python<'_>, path: PathBuf) -> Result<()> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        self.inner.save(&path)
+    }
+
+    /// Push this committed Experiment Artifact to its remote registry.
+    ///
+    /// Use `rename(...)` first when an anonymous or local-only experiment
+    /// should be published under a remote container image reference.
+    ///
+    /// Raises an error if the Experiment has not been committed yet.
+    #[cfg(feature = "remote-artifact")]
+    pub fn push(&mut self, py: Python<'_>) -> Result<()> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        self.inner.push()
+    }
+
     #[getter]
+    /// Low-level descriptors for experiment-level attachments.
+    ///
+    /// Prefer `attachment_names`, `get_attachment`, or typed methods such as
+    /// `get_json` and `get_instance` when working from Python. This descriptor
+    /// view is kept for low-level Artifact inspection.
     pub fn experiment_attachments(&self) -> Result<Vec<PyDescriptor>> {
         Ok(self
             .inner
@@ -97,24 +202,119 @@ impl PyExperiment {
     }
 
     #[getter]
-    pub fn runs(&self) -> Result<Vec<PySealedRun>> {
-        Ok(self.inner.runs()?.into_iter().map(PySealedRun).collect())
+    /// Names of experiment-level attachments.
+    pub fn attachment_names(&self) -> Result<Vec<String>> {
+        Ok(self
+            .inner
+            .experiment_attachments()?
+            .into_iter()
+            .filter_map(|descriptor| attachment_name(&descriptor).map(ToOwned::to_owned))
+            .collect())
+    }
+
+    /// Read an experiment-level attachment by name.
+    ///
+    /// The returned Python object is decoded from the attachment media type:
+    /// JSON attachments become normal Python objects, OMMX instance-like
+    /// attachments become the corresponding `ommx.v1` objects, and unknown
+    /// media types are returned as raw `bytes`.
+    pub fn get_attachment<'py>(&self, py: Python<'py>, name: &str) -> Result<Bound<'py, PyAny>> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let (artifact, descriptor) = self.find_attachment(name)?;
+        decode_attachment(py, &artifact, &descriptor)
+    }
+
+    /// Read a JSON experiment-level attachment by name.
+    ///
+    /// Raises an error if the attachment exists but its media type is not
+    /// `application/json`.
+    pub fn get_json<'py>(&self, py: Python<'py>, name: &str) -> Result<Bound<'py, PyAny>> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let (artifact, descriptor) = self.find_attachment(name)?;
+        decode_json_attachment(py, &artifact, &descriptor)
+    }
+
+    /// Read an Instance experiment-level attachment by name.
+    pub fn get_instance(&self, py: Python<'_>, name: &str) -> Result<crate::Instance> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let (artifact, descriptor) = self.find_attachment(name)?;
+        decode_instance_attachment(&artifact, &descriptor)
+    }
+
+    /// Read a ParametricInstance experiment-level attachment by name.
+    pub fn get_parametric_instance(
+        &self,
+        py: Python<'_>,
+        name: &str,
+    ) -> Result<crate::ParametricInstance> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let (artifact, descriptor) = self.find_attachment(name)?;
+        decode_parametric_instance_attachment(&artifact, &descriptor)
+    }
+
+    /// Read a Solution experiment-level attachment by name.
+    pub fn get_solution(&self, py: Python<'_>, name: &str) -> Result<crate::Solution> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let (artifact, descriptor) = self.find_attachment(name)?;
+        decode_solution_attachment(&artifact, &descriptor)
+    }
+
+    /// Read a SampleSet experiment-level attachment by name.
+    pub fn get_sample_set(&self, py: Python<'_>, name: &str) -> Result<crate::SampleSet> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let (artifact, descriptor) = self.find_attachment(name)?;
+        decode_sample_set_attachment(&artifact, &descriptor)
+    }
+
+    /// Read raw bytes of an experiment-level attachment by name.
+    pub fn get_blob<'py>(&self, py: Python<'py>, name: &str) -> Result<Bound<'py, PyBytes>> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let (artifact, descriptor) = self.find_attachment(name)?;
+        Ok(PyBytes::new(py, &artifact.get_blob(&descriptor)?))
     }
 
     #[getter]
+    /// Finished runs in insertion order.
+    pub fn runs(&self) -> Result<Vec<PySealedRun>> {
+        let artifact = self.inner.artifact()?;
+        Ok(self
+            .inner
+            .runs()?
+            .into_iter()
+            .map(|run| PySealedRun {
+                run,
+                artifact: artifact.clone(),
+            })
+            .collect())
+    }
+
+    #[getter]
+    /// Committed OMMX Artifact for this Experiment.
+    ///
+    /// Raises an error if the Experiment has not been committed yet.
     pub fn artifact(&self) -> Result<PyArtifact> {
         Ok(PyArtifact::new(self.inner.artifact()?))
     }
 
     /// Start a new Run in this unsealed Experiment.
+    ///
+    /// The returned `Run` must be finished before `commit()`. Use it as a
+    /// context manager to finish it automatically on normal exit:
+    ///
+    /// ```python
+    /// with experiment.run() as run:
+    ///     run.log_parameter("capacity", 47)
+    /// ```
     pub fn run(&self) -> Result<PyRun> {
         Ok(PyRun {
             run: Some(self.inner.run()?),
         })
     }
 
-    /// Attach arbitrary bytes with an explicit OCI media type in the
-    /// experiment space.
+    /// Attach arbitrary bytes with an explicit OCI media type in the experiment space.
+    ///
+    /// The `name` is stored as attachment metadata and is intended for
+    /// humans. The bytes are stored as a layer in the committed artifact.
     pub fn log_attachment(
         &mut self,
         name: &str,
@@ -128,7 +328,10 @@ impl PyExperiment {
         )
     }
 
-    /// Attach a JSON-serialisable value in the experiment space.
+    /// Attach a JSON-serializable value in the experiment space.
+    ///
+    /// The value is encoded with Python's `json.dumps` and stored with media
+    /// type `application/json`.
     pub fn log_json(&mut self, py: Python<'_>, name: &str, value: &Bound<PyAny>) -> Result<()> {
         let json = py.import("json")?;
         let blob: String = json.call_method1("dumps", (value,))?.extract()?;
@@ -139,6 +342,15 @@ impl PyExperiment {
     /// Attach an Instance in the experiment space.
     pub fn log_instance(&mut self, name: &str, instance: &crate::Instance) -> Result<()> {
         self.inner.log_instance(name, &instance.inner)
+    }
+
+    /// Attach an ParametricInstance in the experiment space.
+    pub fn log_parametric_instance(
+        &mut self,
+        name: &str,
+        pi: &crate::ParametricInstance,
+    ) -> Result<()> {
+        self.inner.log_parametric_instance(name, &pi.inner)
     }
 
     /// Attach a Solution in the experiment space.
@@ -152,12 +364,20 @@ impl PyExperiment {
     }
 
     /// Commit this unsealed Experiment into the local registry.
+    ///
+    /// All open runs must be finished before committing. The returned
+    /// `Artifact` can be saved as a `.ommx` archive or passed to
+    /// `Experiment.from_artifact`.
     pub fn commit(&mut self, py: Python<'_>) -> Result<PyArtifact> {
         let _guard = crate::TRACING.attach_parent_context(py);
         Ok(PyArtifact::new(self.inner.commit()?))
     }
 
     /// Wide DataFrame of run parameters, indexed by `run_id`.
+    ///
+    /// Run parameters are scalar values logged with `Run.log_parameter`.
+    /// Adapter options recorded by `Run.log_solve` are solve metadata and do
+    /// not appear in this table.
     pub fn run_parameters_df<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDataFrame>> {
         let mut rows = BTreeMap::new();
         for run in self.inner.runs()? {
@@ -208,9 +428,178 @@ impl PyExperiment {
     }
 }
 
+impl PyExperiment {
+    fn find_attachment(
+        &self,
+        name: &str,
+    ) -> Result<(ommx::artifact::LocalArtifactDyn, Descriptor)> {
+        let artifact = self.inner.artifact()?;
+        for descriptor in self.inner.experiment_attachments()? {
+            if attachment_name(&descriptor) == Some(name) {
+                return Ok((artifact, Descriptor::from(descriptor)));
+            }
+        }
+        anyhow::bail!("Experiment attachment `{name}` not found")
+    }
+}
+
+const ANN_ATTACHMENT_NAME: &str = "org.ommx.attachment.name";
+
+fn attachment_name(descriptor: &Descriptor) -> Option<&str> {
+    descriptor
+        .annotations()
+        .as_ref()
+        .and_then(|annotations| annotations.get(ANN_ATTACHMENT_NAME))
+        .map(String::as_str)
+}
+
+fn attachment_annotations(descriptor: &Descriptor) -> std::collections::HashMap<String, String> {
+    descriptor
+        .annotations()
+        .as_ref()
+        .cloned()
+        .unwrap_or_default()
+}
+
+fn attachment_blob(
+    artifact: &ommx::artifact::LocalArtifactDyn,
+    descriptor: &Descriptor,
+    expected_media_type: Option<&str>,
+) -> Result<Vec<u8>> {
+    if let Some(expected) = expected_media_type {
+        let actual = descriptor.media_type().to_string();
+        if actual != expected {
+            anyhow::bail!("Expected media type '{expected}', got '{actual}'");
+        }
+    }
+    artifact.get_blob(descriptor)
+}
+
+fn decode_attachment<'py>(
+    py: Python<'py>,
+    artifact: &ommx::artifact::LocalArtifactDyn,
+    descriptor: &Descriptor,
+) -> Result<Bound<'py, PyAny>> {
+    match descriptor.media_type().as_ref() {
+        "application/json" => decode_json_attachment(py, artifact, descriptor),
+        ommx::artifact::media_types::V1_INSTANCE_MEDIA_TYPE => {
+            let instance = decode_instance_attachment(artifact, descriptor)?;
+            Ok(instance
+                .into_pyobject(py)?
+                .into_any()
+                .unbind()
+                .into_bound(py))
+        }
+        ommx::artifact::media_types::V1_PARAMETRIC_INSTANCE_MEDIA_TYPE => {
+            let instance = decode_parametric_instance_attachment(artifact, descriptor)?;
+            Ok(instance
+                .into_pyobject(py)?
+                .into_any()
+                .unbind()
+                .into_bound(py))
+        }
+        ommx::artifact::media_types::V1_SOLUTION_MEDIA_TYPE => {
+            let solution = decode_solution_attachment(artifact, descriptor)?;
+            Ok(solution
+                .into_pyobject(py)?
+                .into_any()
+                .unbind()
+                .into_bound(py))
+        }
+        ommx::artifact::media_types::V1_SAMPLE_SET_MEDIA_TYPE => {
+            let sample_set = decode_sample_set_attachment(artifact, descriptor)?;
+            Ok(sample_set
+                .into_pyobject(py)?
+                .into_any()
+                .unbind()
+                .into_bound(py))
+        }
+        _ => Ok(PyBytes::new(py, &attachment_blob(artifact, descriptor, None)?).into_any()),
+    }
+}
+
+fn decode_json_attachment<'py>(
+    py: Python<'py>,
+    artifact: &ommx::artifact::LocalArtifactDyn,
+    descriptor: &Descriptor,
+) -> Result<Bound<'py, PyAny>> {
+    let blob = attachment_blob(artifact, descriptor, Some("application/json"))?;
+    let json = py.import("json")?;
+    Ok(json.call_method1("loads", (PyBytes::new(py, &blob),))?)
+}
+
+fn decode_instance_attachment(
+    artifact: &ommx::artifact::LocalArtifactDyn,
+    descriptor: &Descriptor,
+) -> Result<crate::Instance> {
+    let blob = attachment_blob(
+        artifact,
+        descriptor,
+        Some(ommx::artifact::media_types::V1_INSTANCE_MEDIA_TYPE),
+    )?;
+    Ok(crate::Instance {
+        inner: ommx::Instance::from_bytes(&blob)?,
+        annotations: attachment_annotations(descriptor),
+    })
+}
+
+fn decode_parametric_instance_attachment(
+    artifact: &ommx::artifact::LocalArtifactDyn,
+    descriptor: &Descriptor,
+) -> Result<crate::ParametricInstance> {
+    let blob = attachment_blob(
+        artifact,
+        descriptor,
+        Some(ommx::artifact::media_types::V1_PARAMETRIC_INSTANCE_MEDIA_TYPE),
+    )?;
+    Ok(crate::ParametricInstance {
+        inner: ommx::ParametricInstance::from_bytes(&blob)?,
+        annotations: attachment_annotations(descriptor),
+    })
+}
+
+fn decode_solution_attachment(
+    artifact: &ommx::artifact::LocalArtifactDyn,
+    descriptor: &Descriptor,
+) -> Result<crate::Solution> {
+    let blob = attachment_blob(
+        artifact,
+        descriptor,
+        Some(ommx::artifact::media_types::V1_SOLUTION_MEDIA_TYPE),
+    )?;
+    Ok(crate::Solution {
+        inner: ommx::Solution::from_bytes(&blob)?,
+        annotations: attachment_annotations(descriptor),
+    })
+}
+
+fn decode_sample_set_attachment(
+    artifact: &ommx::artifact::LocalArtifactDyn,
+    descriptor: &Descriptor,
+) -> Result<crate::SampleSet> {
+    let blob = attachment_blob(
+        artifact,
+        descriptor,
+        Some(ommx::artifact::media_types::V1_SAMPLE_SET_MEDIA_TYPE),
+    )?;
+    Ok(crate::SampleSet {
+        inner: ommx::SampleSet::from_bytes(&blob)?,
+        annotations: attachment_annotations(descriptor),
+    })
+}
+
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust", name = "Run")]
+/// A mutable run being recorded inside an unsealed Experiment.
+///
+/// A run represents one experimental condition or trial. Use
+/// `log_parameter` for scalar values that should appear in
+/// `Experiment.run_parameters_df`, and use attachment methods for payloads
+/// such as JSON, instances, solutions, sample sets, or raw bytes.
+///
+/// Runs are usually created with `Experiment.run()` and used as context
+/// managers. A run becomes immutable once it is finished.
 pub struct PyRun {
     run: Option<ommx::experiment::RunDyn>,
 }
@@ -244,16 +633,24 @@ impl PyRun {
     }
 
     #[getter]
+    /// Integer identifier of this run within its Experiment.
     pub fn run_id(&self) -> Result<u64> {
         self.as_open()?.run_id()
     }
 
     /// Log a scalar parameter for this run.
+    ///
+    /// Accepted value types are `bool`, `int`, `float`, and `str`. These
+    /// values are intended for comparing runs and are exposed as columns in
+    /// `Experiment.run_parameters_df()`.
     pub fn log_parameter(&mut self, name: &str, value: ParameterValueInput) -> Result<()> {
         self.as_open_mut()?.log_parameter(name, value.0)
     }
 
     /// Attach arbitrary bytes with an explicit OCI media type in this run.
+    ///
+    /// Use this for payloads that belong to this run but are not scalar run
+    /// parameters, for example solver logs or derived files.
     pub fn log_attachment(
         &mut self,
         name: &str,
@@ -267,7 +664,10 @@ impl PyRun {
         )
     }
 
-    /// Attach a JSON-serialisable value in this run.
+    /// Attach a JSON-serializable value in this run.
+    ///
+    /// The value is encoded with Python's `json.dumps` and stored with media
+    /// type `application/json`.
     pub fn log_json(&mut self, py: Python<'_>, name: &str, value: &Bound<PyAny>) -> Result<()> {
         let json = py.import("json")?;
         let blob: String = json.call_method1("dumps", (value,))?.extract()?;
@@ -279,11 +679,28 @@ impl PyRun {
     }
 
     /// Attach an Instance in this run.
+    ///
+    /// This records an instance as a run-level attachment. Use `log_solve`
+    /// when the instance is the input of a solver call and should be paired
+    /// with the returned solution.
     pub fn log_instance(&mut self, name: &str, instance: &crate::Instance) -> Result<()> {
         self.as_open_mut()?.log_instance(name, &instance.inner)
     }
 
+    /// Attach a ParametricInstance in this run.
+    pub fn log_parametric_instance(
+        &mut self,
+        name: &str,
+        pi: &crate::ParametricInstance,
+    ) -> Result<()> {
+        self.as_open_mut()?.log_parametric_instance(name, &pi.inner)
+    }
+
     /// Attach a Solution in this run.
+    ///
+    /// This records a solution as a run-level attachment. Use `log_solve`
+    /// when the solution is produced by a solver call and should be paired
+    /// with the input instance.
     pub fn log_solution(&mut self, name: &str, solution: &crate::Solution) -> Result<()> {
         self.as_open_mut()?.log_solution(name, &solution.inner)
     }
@@ -298,6 +715,14 @@ impl PyRun {
     /// The input Instance is cloned before calling the adapter, so adapter-side
     /// capability reductions do not mutate the caller's object. The original
     /// input is always stored as the Solve input.
+    ///
+    /// `adapter` must be a subclass of `ommx.adapter.SolverAdapter`. Keyword
+    /// arguments are passed to `adapter.solve(...)` and recorded as
+    /// `Solve.adapter_options`. The adapter class name is stored in
+    /// `Solve.adapter`.
+    ///
+    /// Adapter options are solve-scoped metadata, not run parameters. They do
+    /// not appear in `Experiment.run_parameters_df()`.
     #[pyo3(signature = (adapter, instance, **kwargs))]
     pub fn log_solve(
         &mut self,
@@ -307,20 +732,23 @@ impl PyRun {
         kwargs: Option<&Bound<PyDict>>,
     ) -> Result<crate::Solution> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let parameters = BTreeMap::from([
-            ("adapter".to_string(), adapter.name(py)?),
-            ("kwargs".to_string(), dump_kwargs(py, kwargs)?),
-        ]);
+        let adapter_name = adapter.name(py)?;
+        let adapter_options = dump_kwargs(py, kwargs)?;
         let solution = adapter.solve(py, instance, kwargs)?;
         self.as_open_mut()?.log_finished_solve_result(
             &instance.inner,
             &solution.inner,
-            parameters,
+            adapter_name,
+            adapter_options,
         )?;
         Ok(solution)
     }
 
     /// Finish this run and append it to the parent Experiment.
+    ///
+    /// After this method returns, the run handle can no longer be used. The
+    /// context manager calls this automatically on normal exit and abandons
+    /// the run on exception.
     pub fn finish(&mut self) -> Result<()> {
         let run = self
             .run
@@ -481,21 +909,33 @@ impl pyo3_stub_gen::PyStubType for ParameterValueInput {
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust", name = "SealedRun")]
-#[derive(Clone)]
-pub struct PySealedRun(ommx::experiment::SealedRunDyn);
+/// Immutable view of a finished Run in a committed Experiment.
+///
+/// `SealedRun` exposes run-level attachments by name and the sequence of
+/// `Solve` records created by `Run.log_solve`.
+pub struct PySealedRun {
+    run: ommx::experiment::SealedRunDyn,
+    artifact: ommx::artifact::LocalArtifactDyn,
+}
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl PySealedRun {
     #[getter]
+    /// Integer identifier of this run within its Experiment.
     pub fn run_id(&self) -> u64 {
-        self.0.run_id()
+        self.run.run_id()
     }
 
     #[getter]
+    /// Low-level descriptors for run-level attachments.
+    ///
+    /// Prefer `attachment_names`, `get_attachment`, or typed methods such as
+    /// `get_json` and `get_instance` when working from Python. This descriptor
+    /// view is kept for low-level Artifact inspection.
     pub fn attachments(&self) -> Result<Vec<PyDescriptor>> {
         Ok(self
-            .0
+            .run
             .attachments()?
             .into_iter()
             .map(PyDescriptor::from)
@@ -503,17 +943,95 @@ impl PySealedRun {
     }
 
     #[getter]
+    /// Names of run-level attachments.
+    pub fn attachment_names(&self) -> Result<Vec<String>> {
+        Ok(self
+            .run
+            .attachments()?
+            .into_iter()
+            .filter_map(|descriptor| attachment_name(&descriptor).map(ToOwned::to_owned))
+            .collect())
+    }
+
+    /// Read a run-level attachment by name.
+    ///
+    /// The returned Python object is decoded from the attachment media type.
+    pub fn get_attachment<'py>(&self, py: Python<'py>, name: &str) -> Result<Bound<'py, PyAny>> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let descriptor = self.find_attachment(name)?;
+        decode_attachment(py, &self.artifact, &descriptor)
+    }
+
+    /// Read a JSON run-level attachment by name.
+    pub fn get_json<'py>(&self, py: Python<'py>, name: &str) -> Result<Bound<'py, PyAny>> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let descriptor = self.find_attachment(name)?;
+        decode_json_attachment(py, &self.artifact, &descriptor)
+    }
+
+    /// Read an Instance run-level attachment by name.
+    pub fn get_instance(&self, py: Python<'_>, name: &str) -> Result<crate::Instance> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let descriptor = self.find_attachment(name)?;
+        decode_instance_attachment(&self.artifact, &descriptor)
+    }
+
+    /// Read a ParametricInstance run-level attachment by name.
+    pub fn get_parametric_instance(
+        &self,
+        py: Python<'_>,
+        name: &str,
+    ) -> Result<crate::ParametricInstance> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let descriptor = self.find_attachment(name)?;
+        decode_parametric_instance_attachment(&self.artifact, &descriptor)
+    }
+
+    /// Read a Solution run-level attachment by name.
+    pub fn get_solution(&self, py: Python<'_>, name: &str) -> Result<crate::Solution> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let descriptor = self.find_attachment(name)?;
+        decode_solution_attachment(&self.artifact, &descriptor)
+    }
+
+    /// Read a SampleSet run-level attachment by name.
+    pub fn get_sample_set(&self, py: Python<'_>, name: &str) -> Result<crate::SampleSet> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let descriptor = self.find_attachment(name)?;
+        decode_sample_set_attachment(&self.artifact, &descriptor)
+    }
+
+    /// Read raw bytes of a run-level attachment by name.
+    pub fn get_blob<'py>(&self, py: Python<'py>, name: &str) -> Result<Bound<'py, PyBytes>> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let descriptor = self.find_attachment(name)?;
+        Ok(PyBytes::new(py, &self.artifact.get_blob(&descriptor)?))
+    }
+
+    #[getter]
+    /// Solve records logged in this run, ordered by `solve_id`.
     pub fn solves(&self) -> Vec<PySolve> {
-        self.0.solves().iter().cloned().map(PySolve).collect()
+        self.run.solves().iter().cloned().map(PySolve).collect()
     }
 
     pub fn __repr__(&self) -> String {
         format!(
             "SealedRun(run_id={}, attachments={}, solves={})",
             self.run_id(),
-            self.0.attachment_count(),
-            self.0.solves().len(),
+            self.run.attachment_count(),
+            self.run.solves().len(),
         )
+    }
+}
+
+impl PySealedRun {
+    fn find_attachment(&self, name: &str) -> Result<Descriptor> {
+        for descriptor in self.run.attachments()? {
+            if attachment_name(&descriptor) == Some(name) {
+                return Ok(Descriptor::from(descriptor));
+            }
+        }
+        anyhow::bail!("Run {} attachment `{name}` not found", self.run.run_id())
     }
 }
 
@@ -521,29 +1039,72 @@ impl PySealedRun {
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust", name = "Solve")]
 #[derive(Clone)]
+/// Immutable record of one solver call.
+///
+/// A `Solve` stores the input `Instance`, output `Solution`, adapter class
+/// name, and JSON-encoded adapter options for one `Run.log_solve` call.
 pub struct PySolve(ommx::experiment::SolveDyn);
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl PySolve {
     #[getter]
+    /// Integer identifier of this solve within its run.
     pub fn solve_id(&self) -> u64 {
         self.0.solve_id()
     }
 
     #[getter]
-    pub fn input(&self) -> Result<PyDescriptor> {
-        Ok(PyDescriptor::from(self.0.input()?))
+    /// Input `Instance` passed to the solver.
+    pub fn input(&self) -> Result<crate::Instance> {
+        let descriptor = self.0.input()?;
+        Ok(crate::Instance {
+            inner: self.0.input_instance()?,
+            annotations: descriptor
+                .annotations()
+                .as_ref()
+                .cloned()
+                .unwrap_or_default(),
+        })
     }
 
     #[getter]
-    pub fn output(&self) -> Result<PyDescriptor> {
-        Ok(PyDescriptor::from(self.0.output()?))
+    /// Output `Solution` returned by the solver.
+    pub fn output(&self) -> Result<crate::Solution> {
+        let descriptor = self.0.output()?;
+        Ok(crate::Solution {
+            inner: self.0.output_solution()?,
+            annotations: descriptor
+                .annotations()
+                .as_ref()
+                .cloned()
+                .unwrap_or_default(),
+        })
     }
 
     #[getter]
-    pub fn parameters(&self) -> BTreeMap<String, String> {
-        self.0.parameters().clone()
+    /// SolverAdapter class name used for this solve.
+    pub fn adapter(&self) -> String {
+        self.0.adapter().to_string()
+    }
+
+    #[getter]
+    #[gen_stub(override_return_type(
+        type_repr = "builtins.dict[builtins.str, typing.Any]",
+        imports = ("builtins", "typing")
+    ))]
+    /// Keyword arguments passed to the SolverAdapter.
+    ///
+    /// The artifact stores this value as a JSON string produced by Python's
+    /// `json.dumps`; the Python SDK decodes it with `json.loads` before
+    /// returning it.
+    pub fn adapter_options<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDict>> {
+        let json = py.import("json")?;
+        Ok(json
+            .call_method1("loads", (self.0.adapter_options(),))?
+            .cast::<PyDict>()
+            .map_err(|_| anyhow::anyhow!("Solve.adapter_options must decode to a JSON object"))?
+            .clone())
     }
 
     pub fn __repr__(&self) -> String {

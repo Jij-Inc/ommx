@@ -278,6 +278,20 @@ pyo3_stub_gen::reexport_module_members!("ommx.artifact" from "ommx._ommx_rust";
     "get_images"
 );
 
+pyo3_stub_gen::module_doc!(
+    "ommx.experiment",
+    r#"`ommx.experiment` records an optimization experiment as one OMMX Artifact.
+Use it when a single source problem produces several runs, for example
+different formulations, decomposition strategies, disabled constraints, or
+solver settings, and you want the resulting Artifact to answer:
+
+- which shared dataset or baseline configuration was used,
+- which run-level parameters should be compared as a table,
+- which input `ommx.v1.Instance` was actually solved, and
+- which output `ommx.v1.Solution` and adapter options came from each solver call.
+"#
+);
+
 pyo3_stub_gen::reexport_module_members!("ommx.experiment" from "ommx._ommx_rust";
     "Experiment",
     "Run",

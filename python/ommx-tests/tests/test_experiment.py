@@ -1,4 +1,3 @@
-import json
 from typing import Any, ClassVar, cast
 
 import pandas as pd
@@ -38,9 +37,15 @@ def test_view_run_parameters_from_committed_artifact(snapshot):
     artifact = experiment.artifact
     loaded = Experiment.from_artifact(artifact)
     assert _attachment_names(loaded.experiment_attachments) == {"dataset"}
+    assert loaded.attachment_names == ["dataset"]
+    assert loaded.get_json("dataset") == {"name": "miplib2017"}
+    assert loaded.get_attachment("dataset") == {"name": "miplib2017"}
     runs = {run.run_id: run for run in loaded.runs}
     assert set(runs) == {0, 1, 2}
     assert _attachment_names(runs[0].attachments) == {"candidate"}
+    assert runs[0].attachment_names == ["candidate"]
+    assert runs[0].get_json("candidate") == {"formulation": "a"}
+    assert runs[0].get_attachment("candidate") == {"formulation": "a"}
     assert runs[1].attachments == []
     assert runs[2].attachments == []
     df = loaded.run_parameters_df()
@@ -70,9 +75,17 @@ def test_create_experiment_run_attachments_and_commit(snapshot):
         "dataset",
         "raw-config",
     }
+    assert loaded.get_attachment("raw-config") == b"abc"
+    assert loaded.get_blob("raw-config") == b"abc"
+    with pytest.raises(RuntimeError, match="Expected media type"):
+        loaded.get_json("raw-config")
     runs = {run.run_id: run for run in loaded.runs}
     assert set(runs) == {0}
     assert _attachment_names(runs[0].attachments) == {"candidate", "solver-log"}
+    assert runs[0].get_attachment("solver-log") == b"solved"
+    assert runs[0].get_blob("solver-log") == b"solved"
+    with pytest.raises(RuntimeError, match="Expected media type"):
+        runs[0].get_instance("candidate")
     df = loaded.run_parameters_df()
 
     assert _df_snap(df) == snapshot
@@ -118,6 +131,55 @@ def test_experiment_context_does_not_commit_on_exception():
         experiment.artifact
 
 
+def test_rename_after_context_commit_updates_artifact_name():
+    with Experiment.with_temp_local_registry() as experiment:
+        experiment.log_json("dataset", {"name": "miplib2017"})
+        with experiment.run() as run:
+            run.log_parameter("solver", "highs")
+
+    old_artifact = experiment.artifact
+    old_image_name = experiment.image_name
+    new_image_name = "ghcr.io/jij-inc/ommx/renamed-experiment:latest"
+
+    experiment.rename(new_image_name)
+
+    assert old_artifact.image_name == old_image_name
+    assert experiment.image_name == new_image_name
+    assert experiment.artifact.image_name == new_image_name
+    assert (
+        Experiment.from_artifact(experiment.artifact)
+        .run_parameters_df()
+        .loc[0, "solver"]
+        == "highs"
+    )
+    assert (
+        Experiment.from_artifact(old_artifact).run_parameters_df().loc[0, "solver"]
+        == "highs"
+    )
+
+
+def test_push_rejects_uncommitted_experiment():
+    experiment = Experiment.with_temp_local_registry()
+
+    with pytest.raises(RuntimeError, match="must be committed"):
+        experiment.push()
+
+
+def test_save_exports_committed_experiment_archive(tmp_path):
+    archive_path = tmp_path / "experiment.ommx"
+    with Experiment.with_temp_local_registry() as experiment:
+        experiment.log_json("dataset", {"name": "miplib2017"})
+        with experiment.run() as run:
+            run.log_parameter("solver", "highs")
+
+    experiment.save(archive_path)
+
+    assert archive_path.is_file()
+    assert archive_path.stat().st_size > 0
+    loaded = Experiment.import_archive(archive_path)
+    assert loaded.run_parameters_df().loc[0, "solver"] == "highs"
+
+
 def test_run_context_does_not_finish_on_exception():
     experiment = Experiment.with_temp_local_registry()
     with pytest.raises(ValueError):
@@ -140,7 +202,7 @@ def test_log_parameter_rejects_python_int_outside_i64():
             run.log_parameter("too_large", 2**63)
 
 
-def test_log_solve_logs_input_solution_and_json_kwargs():
+def test_log_solve_logs_input_solution_and_adapter_options():
     class DummyAdapter(SolverAdapter):
         seen_kwargs: ClassVar[list[dict[str, object]]] = []
 
@@ -201,24 +263,25 @@ def test_log_solve_logs_input_solution_and_json_kwargs():
     assert [solve.solve_id for solve in runs[0].solves] == [0, 1]
 
     first_solve = runs[0].solves[0]
-    assert first_solve.input.media_type == "application/org.ommx.v1.instance"
-    assert first_solve.output.media_type == "application/org.ommx.v1.solution"
-    assert str(first_solve.parameters["adapter"]).endswith("DummyAdapter")
-    assert isinstance(first_solve.parameters["kwargs"], str)
-    assert json.loads(first_solve.parameters["kwargs"]) == {
+    assert isinstance(first_solve.input, Instance)
+    assert isinstance(first_solve.output, Solution)
+    assert first_solve.output.feasible
+    assert str(first_solve.adapter).endswith("DummyAdapter")
+    assert isinstance(first_solve.adapter_options, dict)
+    assert first_solve.adapter_options == {
         "time_limit": 1.5,
         "verbose": True,
         "label": "baseline",
     }
 
     second_solve = runs[0].solves[1]
-    assert isinstance(second_solve.parameters["kwargs"], str)
-    assert json.loads(second_solve.parameters["kwargs"]) == {
+    assert isinstance(second_solve.adapter_options, dict)
+    assert second_solve.adapter_options == {
         "time_limit": 2.0,
         "label": "pricing",
     }
 
-    # Solver kwargs are solve-scoped metadata, not Run parameters.
+    # Adapter options are solve-scoped metadata, not Run parameters.
     df = loaded.run_parameters_df()
     assert df.shape == (1, 0)
 
