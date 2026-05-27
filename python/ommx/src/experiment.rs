@@ -44,7 +44,7 @@ use crate::{PyArtifact, PyDescriptor};
 /// >>> with Experiment() as exp, exp.run() as run:  # doctest: +SKIP
 /// ...     solution = run.log_solve(adapter, instance, time_limit=10.0)
 /// >>> exp.rename("ghcr.io/container/name:latest")  # doctest: +SKIP
-/// >>> exp.artifact.push()  # doctest: +SKIP
+/// >>> exp.push()  # doctest: +SKIP
 pub struct PyExperiment {
     inner: ommx::experiment::ExperimentDyn,
 }
@@ -140,6 +140,18 @@ impl PyExperiment {
     pub fn rename(&mut self, image_name: &str) -> Result<()> {
         let image_name = ommx::artifact::ImageRef::parse(image_name)?;
         self.inner.rename(image_name)
+    }
+
+    /// Push this committed Experiment Artifact to its remote registry.
+    ///
+    /// Use `rename(...)` first when an anonymous or local-only experiment
+    /// should be published under a remote container image reference.
+    ///
+    /// Raises an error if the Experiment has not been committed yet.
+    #[cfg(feature = "remote-artifact")]
+    pub fn push(&mut self, py: Python<'_>) -> Result<()> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        self.inner.push()
     }
 
     #[getter]

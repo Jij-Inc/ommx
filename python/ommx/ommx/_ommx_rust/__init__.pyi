@@ -1714,7 +1714,7 @@ class Experiment:
     >>> with Experiment() as exp, exp.run() as run:  # doctest: +SKIP
     ...     solution = run.log_solve(adapter, instance, time_limit=10.0)
     >>> exp.rename("ghcr.io/container/name:latest")  # doctest: +SKIP
-    >>> exp.artifact.push()  # doctest: +SKIP
+    >>> exp.push()  # doctest: +SKIP
     """
     @property
     def image_name(self) -> builtins.str:
@@ -1795,6 +1795,15 @@ class Experiment:
         publish. After commit, it publishes the same Artifact manifest under
         `image_name` and updates this handle to use the new name. The previous
         name remains as an alias in the Local Registry.
+        """
+    def push(self) -> None:
+        r"""
+        Push this committed Experiment Artifact to its remote registry.
+
+        Use `rename(...)` first when an anonymous or local-only experiment
+        should be published under a remote container image reference.
+
+        Raises an error if the Experiment has not been committed yet.
         """
     def run(self) -> Run:
         r"""

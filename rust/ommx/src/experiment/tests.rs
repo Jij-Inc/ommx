@@ -1118,3 +1118,15 @@ fn experiment_dyn_rename_after_commit_publishes_alias() {
         .unwrap()
         .is_some());
 }
+
+#[cfg(feature = "remote-artifact")]
+#[test]
+fn experiment_dyn_push_rejects_uncommitted_experiment() {
+    let experiment = ExperimentDyn::with_temp_local_registry(Name::Anonymous).unwrap();
+
+    let err = experiment
+        .push()
+        .expect_err("uncommitted Experiment must reject push");
+
+    assert!(err.to_string().contains("must be committed"));
+}

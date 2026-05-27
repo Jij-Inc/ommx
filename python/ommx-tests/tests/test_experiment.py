@@ -140,6 +140,13 @@ def test_rename_after_context_commit_updates_artifact_name():
     assert Experiment.from_artifact(old_artifact).run_parameters_df().loc[0, "solver"] == "highs"
 
 
+def test_push_rejects_uncommitted_experiment():
+    experiment = Experiment.with_temp_local_registry()
+
+    with pytest.raises(RuntimeError, match="must be committed"):
+        experiment.push()
+
+
 def test_run_context_does_not_finish_on_exception():
     experiment = Experiment.with_temp_local_registry()
     with pytest.raises(ValueError):

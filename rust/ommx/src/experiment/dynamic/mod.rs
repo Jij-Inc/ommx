@@ -368,6 +368,11 @@ impl ExperimentDyn {
         Ok(sealed.artifact.clone())
     }
 
+    #[cfg(feature = "remote-artifact")]
+    pub fn push(&self) -> Result<()> {
+        self.artifact()?.push()
+    }
+
     pub fn experiment_attachments(&self) -> Result<Vec<StoredDescriptor<'_>>> {
         let attachments = {
             let dyn_state = lock_experiment_state(&self.state);
