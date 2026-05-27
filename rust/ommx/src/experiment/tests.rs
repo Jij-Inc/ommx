@@ -9,7 +9,7 @@ use super::{
 };
 use crate::artifact::local_registry::{StoredDescriptor, UnsealedArtifact};
 use crate::artifact::{media_types, AsArtifact, ImageRef, LocalArtifact, LocalRegistryHandle};
-use crate::{Evaluate, Function, Instance, Sense};
+use crate::{Evaluate, Function, Instance, ParametricInstance, SampleSet, Sense, Solution};
 use oci_spec::image::{Descriptor, MediaType};
 use serde_json::json;
 use std::collections::{BTreeMap, HashMap};
@@ -53,6 +53,49 @@ fn find_layer<'a, 'reg>(
 
 fn blob_bytes(artifact: &LocalArtifact<'_>, descriptor: &StoredDescriptor<'_>) -> Vec<u8> {
     artifact.get_blob(descriptor).unwrap()
+}
+
+fn empty_instance() -> Instance {
+    Instance::new(
+        Sense::Minimize,
+        Function::Zero,
+        BTreeMap::new(),
+        BTreeMap::new(),
+    )
+    .unwrap()
+}
+
+fn empty_parametric_instance() -> ParametricInstance {
+    ParametricInstance::builder()
+        .sense(Sense::Minimize)
+        .objective(Function::Zero)
+        .decision_variables(BTreeMap::new())
+        .parameters(BTreeMap::new())
+        .constraints(BTreeMap::new())
+        .build()
+        .unwrap()
+}
+
+fn empty_solution(instance: &Instance) -> Solution {
+    instance
+        .evaluate(
+            &crate::v1::State {
+                entries: HashMap::new(),
+            },
+            crate::ATol::default(),
+        )
+        .unwrap()
+}
+
+fn empty_sample_set(instance: &Instance) -> SampleSet {
+    instance
+        .evaluate_samples(
+            &crate::Sampled::from(crate::v1::State {
+                entries: HashMap::new(),
+            }),
+            crate::ATol::default(),
+        )
+        .unwrap()
 }
 
 /// `run()` hands out fresh 0-based ids; `finish()` consumes the run
@@ -168,12 +211,11 @@ fn log_preserves_attachment_descriptor_log_order() {
     with_temp_experiment(|experiment| {
         experiment.log_json("dataset", json!("miplib2017")).unwrap();
         experiment.log_json("dataset", json!("qplib")).unwrap();
+        experiment
+            .log_json("dataset", json!("set-covering"))
+            .unwrap();
 
-        let instance: Instance =
-            crate::random::random_deterministic(crate::InstanceParameters::default_lp());
-        experiment.log_instance("dataset", &instance).unwrap();
-
-        let json_digests = with_unsealed_state(&experiment, |state| {
+        with_unsealed_state(&experiment, |state| {
             assert_eq!(state.attachments.len(), 3);
             assert_eq!(
                 state
@@ -187,61 +229,85 @@ fn log_preserves_attachment_descriptor_log_order() {
                     "dataset".to_string()
                 ]
             );
-            assert_eq!(
-                state
-                    .attachments
-                    .iter()
-                    .map(|attachment| attachment.media_type().clone())
-                    .collect::<Vec<_>>(),
-                vec![
-                    MediaType::Other("application/json".into()),
-                    MediaType::Other("application/json".into()),
-                    media_types::v1_instance(),
-                ]
-            );
-            state
-                .attachments
-                .iter()
-                .take(2)
-                .map(|attachment| attachment.digest().clone())
-                .collect::<Vec<_>>()
         });
-        let first_bytes = experiment
-            .registry
-            .blobs()
-            .read_bytes(&json_digests[0])
-            .unwrap();
-        let second_bytes = experiment
-            .registry
-            .blobs()
-            .read_bytes(&json_digests[1])
-            .unwrap();
-        assert_eq!(
-            first_bytes,
-            serde_json::to_vec(&json!("miplib2017")).unwrap()
-        );
-        assert_eq!(second_bytes, serde_json::to_vec(&json!("qplib")).unwrap());
         Ok(())
     });
 }
 
 #[test]
-fn attachment_logger_trait_logs_static_handles() {
+fn attachment_logger_typed_methods_use_expected_media_types_and_bytes() {
     with_temp_experiment(|experiment| {
-        let instance: Instance =
-            crate::random::random_deterministic(crate::InstanceParameters::default_lp());
+        let instance = empty_instance();
+        let parametric_instance = empty_parametric_instance();
+        let solution = empty_solution(&instance);
+        let sample_set = empty_sample_set(&instance);
 
-        super::AttachmentLogger::log_json(&experiment, "dataset", json!("miplib2017")).unwrap();
-        {
-            let mut run = experiment.run().unwrap();
-            super::AttachmentLogger::log_instance(&mut run, "candidate", &instance).unwrap();
-            run.finish().unwrap();
-        }
+        experiment
+            .log_json("json", json!({ "dataset": "miplib2017" }))
+            .unwrap();
+        experiment.log_instance("instance", &instance).unwrap();
+        experiment
+            .log_parametric_instance("parametric-instance", &parametric_instance)
+            .unwrap();
+        experiment.log_solution("solution", &solution).unwrap();
+        experiment
+            .log_sample_set("sample-set", &sample_set)
+            .unwrap();
 
-        with_unsealed_state(&experiment, |state| {
-            assert_eq!(state.attachments.len(), 1);
-            assert_eq!(state.runs.get(&0).unwrap().attachments.len(), 1);
+        let (names, media_types, blobs) = with_unsealed_state(&experiment, |state| {
+            (
+                state
+                    .attachments
+                    .iter()
+                    .map(|attachment| layer_annotation(attachment, ANN_ATTACHMENT_NAME).unwrap())
+                    .collect::<Vec<_>>(),
+                state
+                    .attachments
+                    .iter()
+                    .map(|attachment| attachment.media_type().clone())
+                    .collect::<Vec<_>>(),
+                state
+                    .attachments
+                    .iter()
+                    .map(|descriptor| {
+                        experiment
+                            .registry
+                            .blobs()
+                            .read_bytes(descriptor.digest())
+                            .unwrap()
+                    })
+                    .collect::<Vec<_>>(),
+            )
         });
+        assert_eq!(
+            names,
+            vec![
+                "json".to_string(),
+                "instance".to_string(),
+                "parametric-instance".to_string(),
+                "solution".to_string(),
+                "sample-set".to_string(),
+            ]
+        );
+        assert_eq!(
+            media_types,
+            vec![
+                MediaType::Other("application/json".to_string()),
+                media_types::v1_instance(),
+                media_types::v1_parametric_instance(),
+                media_types::v1_solution(),
+                media_types::v1_sample_set(),
+            ]
+        );
+
+        assert_eq!(
+            blobs[0],
+            serde_json::to_vec(&json!({ "dataset": "miplib2017" })).unwrap()
+        );
+        assert_eq!(blobs[1], instance.to_bytes());
+        assert_eq!(blobs[2], parametric_instance.to_bytes());
+        assert_eq!(blobs[3], solution.to_bytes());
+        assert_eq!(blobs[4], sample_set.to_bytes());
         Ok(())
     });
 }
