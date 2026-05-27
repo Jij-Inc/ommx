@@ -1769,12 +1769,12 @@
     },
     "ommx.experiment": {
       "name": "ommx.experiment",
-      "doc": "`ommx.experiment` records an optimization experiment as one OMMX Artifact.\nUse it when a single source problem produces several runs, for example\ndifferent formulations, decomposition strategies, disabled constraints, or\nsolver settings, and you want the resulting Artifact to answer:\n\n- which shared dataset or baseline configuration was used,\n- which run-level parameters should be compared as a table,\n- which input `ommx.v1.Instance` was actually solved, and\n- which output `ommx.v1.Solution` and adapter options came from each solver call.",
+      "doc": "`ommx.experiment` records an optimization experiment as one OMMX Artifact.\nUse it when a single source problem produces several runs, for example\ndifferent formulations, decomposition strategies, disabled constraints, or\nsolver settings, and you want the resulting Artifact to answer:\n\n- which shared dataset or baseline configuration was used,\n- which run-level parameters should be compared as a table,\n- which input `ommx.v1.Instance` was actually solved, and\n- which output `ommx.v1.Solution` and adapter options came from each solver call.\n\nAn `Experiment` is a mutable session until it is committed. Experiment-level\nattachments store shared context, while each `Run` stores scalar parameters,\nrun-level attachments, and zero or more `Solve` records. Use\n`Run.log_parameter(...)` for values that should become columns in\n`Experiment.run_parameters_df()`, and use attachment methods for payloads such\nas JSON, instances, solutions, sample sets, logs, or caller-defined media\ntypes. `Run.log_solve(...)` calls an `ommx.adapter.SolverAdapter`, stores the\noriginal input instance and returned solution, and records adapter keyword\narguments as solve metadata rather than run parameters.\n\n`Experiment` and `Run` are context managers. On normal exit a run is finished\nand the experiment is committed; on exception the run is abandoned or the\nexperiment is left uncommitted. A committed experiment is read-only. To add\nruns to a committed experiment, create a child session with\n`Experiment.fork(...)`. Use `Experiment.rename(...)` to choose or update the\nlocal registry image reference before saving or pushing.",
       "items": [
         {
           "kind": "Class",
           "name": "Experiment",
-          "doc": "A collection of optimization experiment records stored as one OMMX Artifact.\n\nAn `Experiment` owns experiment-level attachments and a sequence of\nfinished `Run` objects. Each `Run` can store scalar run parameters,\nrun-level attachments, and zero or more `Solve` records.\n\nNewly created experiments are unsealed. Call `commit()` to write the\nexperiment into the local registry as an OMMX Artifact. After commit, the\nsame object can be used as a read-only view of the committed artifact.\n\nExample:\n\n>>> from ommx.experiment import Experiment\n>>> with Experiment.with_temp_local_registry() as exp:\n...     exp.log_json(\"dataset\", {\"name\": \"demo\"})\n...     with exp.run() as run:\n...         run.log_parameter(\"capacity\", 10)\n...         run.log_json(\"scenario\", {\"capacity\": 10})\n>>> len(exp.runs)\n1\n>>> len(exp.experiment_attachments)\n1\n>>> exp.run_parameters_df().to_dict()\n{'capacity': {0: 10}}\n\nIf the experiment has only one run, open the experiment and the run in\none `with` statement. On normal exit, the run is finished first and then\nthe experiment is committed:\n\n>>> with Experiment() as exp, exp.run() as run:  # doctest: +SKIP\n...     solution = run.log_solve(adapter, instance, time_limit=10.0)\n>>> exp.rename(\"ghcr.io/container/name:latest\")  # doctest: +SKIP\n>>> exp.push()  # doctest: +SKIP",
+          "doc": "A collection of optimization experiment records stored as one OMMX Artifact.\n\nAn `Experiment` owns experiment-level attachments and a sequence of\nfinished `Run` objects. Each `Run` can store scalar run parameters,\nrun-level attachments, and zero or more `Solve` records.\n\nNewly created experiments are unsealed. Call `commit()` to write the\nexperiment into the local registry as an OMMX Artifact. After commit, the\nsame object can be used as a read-only view of the committed artifact.\n`with Experiment(...)` commits on normal exit and leaves the experiment\nuncommitted on exception.\n\nUse experiment-level attachments for shared context such as dataset or\nsource-problem metadata. Use `Run.log_parameter(...)` for scalar values\nthat should appear in `run_parameters_df()`, and use run attachments or\n`Run.log_solve(...)` for payloads that belong to a specific run.\n\nExample:\n\n>>> from ommx.experiment import Experiment\n>>> with Experiment.with_temp_local_registry() as exp:\n...     exp.log_json(\"dataset\", {\"name\": \"demo\"})\n...     with exp.run() as run:\n...         run.log_parameter(\"capacity\", 10)\n...         run.log_json(\"scenario\", {\"capacity\": 10})\n>>> len(exp.runs)\n1\n>>> len(exp.experiment_attachments)\n1\n>>> exp.run_parameters_df().to_dict()\n{'capacity': {0: 10}}\n\nIf the experiment has only one run, open the experiment and the run in\none `with` statement. On normal exit, the run is finished first and then\nthe experiment is committed:\n\n>>> with Experiment() as exp, exp.run() as run:  # doctest: +SKIP\n...     solution = run.log_solve(adapter, instance, time_limit=10.0)\n>>> exp.rename(\"ghcr.io/container/name:latest\")  # doctest: +SKIP\n>>> exp.push()  # doctest: +SKIP",
           "bases": [],
           "methods": [
             {
@@ -1871,7 +1871,7 @@
             },
             {
               "name": "__new__",
-              "doc": "Start a new Experiment in the default local registry.\n\nIf `image_name` is omitted, OMMX generates an anonymous local\nExperiment name. Pass an OCI image reference such as\n`\"example.com/team/experiment:tag\"` when the experiment should be\nloaded later by name.",
+              "doc": "Start a new Experiment in the default local registry.\n\nIf `image_name` is omitted, OMMX generates an anonymous local\nExperiment name. Pass an OCI image reference such as\n`\"example.com/team/experiment:tag\"` when the experiment should be\nloaded later by name. The image reference is a mutable local registry\nalias for the committed Artifact; the Artifact manifest digest remains\nthe immutable identity of the committed contents.",
               "signatures": [
                 {
                   "parameters": [
@@ -1927,7 +1927,7 @@
             },
             {
               "name": "commit",
-              "doc": "Commit this unsealed Experiment into the local registry.\n\nAll open runs must be finished before committing. The returned\n`Artifact` can be saved as a `.ommx` archive or passed to\n`Experiment.from_artifact`.",
+              "doc": "Commit this unsealed Experiment into the local registry.\n\nAll open runs must be finished before committing. The returned\n`Artifact` can be saved as a `.ommx` archive or passed to\n`Experiment.from_artifact`. After commit, this object becomes a\nread-only view of the committed Experiment.",
               "signatures": [
                 {
                   "parameters": [],
@@ -2566,7 +2566,7 @@
             },
             {
               "name": "run_parameters_df",
-              "doc": "Wide DataFrame of run parameters, indexed by `run_id`.\n\nRun parameters are scalar values logged with `Run.log_parameter`.\nAdapter options recorded by `Run.log_solve` are solve metadata and do\nnot appear in this table.",
+              "doc": "Wide DataFrame of run parameters, indexed by `run_id`.\n\nRun parameters are scalar values logged with `Run.log_parameter`.\nCompleted runs with no parameters are still present as index rows.\nAdapter options recorded by `Run.log_solve` are solve metadata and do\nnot appear in this table.",
               "signatures": [
                 {
                   "parameters": [],
@@ -2758,7 +2758,7 @@
         {
           "kind": "Class",
           "name": "Run",
-          "doc": "A mutable run being recorded inside an unsealed Experiment.\n\nA run represents one experimental condition or trial. Use\n`log_parameter` for scalar values that should appear in\n`Experiment.run_parameters_df`, and use attachment methods for payloads\nsuch as JSON, instances, solutions, sample sets, or raw bytes.\n\nRuns are usually created with `Experiment.run()` and used as context\nmanagers. A run becomes immutable once it is finished.",
+          "doc": "A mutable run being recorded inside an unsealed Experiment.\n\nA run represents one experimental condition or trial. Use\n`log_parameter` for scalar values that should appear in\n`Experiment.run_parameters_df`, and use attachment methods for payloads\nsuch as JSON, instances, solutions, sample sets, or raw bytes.\n\nRuns are usually created with `Experiment.run()` and used as context\nmanagers. On normal context-manager exit the run is finished and added\nto the parent experiment. On exception the run is abandoned. A run\nbecomes immutable once it is finished.",
           "bases": [],
           "methods": [
             {
