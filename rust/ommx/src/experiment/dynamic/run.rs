@@ -1,7 +1,7 @@
 //! Dynamic-lifetime Run handle.
 
 use super::super::parameter::ParameterSet;
-use super::super::ParameterValue;
+use super::super::{AttachmentLogger, ParameterValue};
 use super::{
     bail_non_unsealed, lock_experiment_state, store_run_attachment_descriptor,
     store_solve_payload_descriptor, ExperimentDyn, ExperimentDynLifecycle, ExperimentDynState,
@@ -90,21 +90,6 @@ impl RunDyn {
         self.open_mut()?.parameters.insert(name, value)
     }
 
-    pub(in crate::experiment) fn add_attachment(
-        &mut self,
-        name: &str,
-        media_type: MediaType,
-        bytes: &[u8],
-    ) -> Result<()> {
-        let run_id = self.open()?.run_id;
-        let descriptor = {
-            let dyn_state = lock_experiment_state(&self.experiment_state);
-            store_run_attachment_descriptor(&dyn_state, run_id, name, media_type, bytes)?
-        };
-        self.open_mut()?.attachments.push(descriptor);
-        Ok(())
-    }
-
     pub fn log_finished_solve_result(
         &mut self,
         input: &Instance,
@@ -185,6 +170,23 @@ impl RunDyn {
         self.run_state
             .as_mut()
             .ok_or_else(|| anyhow::anyhow!("Run has already been finished"))
+    }
+}
+
+impl AttachmentLogger for &mut RunDyn {
+    fn log_attachment(
+        self,
+        name: &str,
+        media_type: MediaType,
+        bytes: impl AsRef<[u8]>,
+    ) -> Result<()> {
+        let run_id = self.open()?.run_id;
+        let descriptor = {
+            let dyn_state = lock_experiment_state(&self.experiment_state);
+            store_run_attachment_descriptor(&dyn_state, run_id, name, media_type, bytes.as_ref())?
+        };
+        self.open_mut()?.attachments.push(descriptor);
+        Ok(())
     }
 }
 

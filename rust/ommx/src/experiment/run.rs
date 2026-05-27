@@ -1,7 +1,7 @@
 //! Experiment / Run handles and run lifecycle.
 
 use super::attachment::{store_attachment_descriptor, AttachmentSpace};
-use super::{ParameterValue, Run, RunEntry, SolveEntry};
+use super::{AttachmentLogger, ParameterValue, Run, RunEntry, SolveEntry};
 use crate::artifact::media_types;
 use crate::{Instance, Solution};
 use anyhow::Result;
@@ -68,23 +68,6 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
         self.close()
     }
 
-    pub(super) fn add_attachment(
-        &mut self,
-        name: &str,
-        media_type: MediaType,
-        bytes: &[u8],
-    ) -> Result<()> {
-        let descriptor = store_attachment_descriptor(
-            self.experiment.registry,
-            AttachmentSpace::Run(self.run_id),
-            name,
-            media_type,
-            bytes,
-        )?;
-        self.attachments.push(descriptor);
-        Ok(())
-    }
-
     fn close(self) -> Result<()> {
         let Run {
             experiment,
@@ -101,6 +84,25 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
             parameters,
         };
         experiment.push_closed_run(run)?;
+        Ok(())
+    }
+}
+
+impl<'exp, 'reg> AttachmentLogger for &mut Run<'exp, 'reg> {
+    fn log_attachment(
+        self,
+        name: &str,
+        media_type: MediaType,
+        bytes: impl AsRef<[u8]>,
+    ) -> Result<()> {
+        let descriptor = store_attachment_descriptor(
+            self.experiment.registry,
+            AttachmentSpace::Run(self.run_id),
+            name,
+            media_type,
+            bytes.as_ref(),
+        )?;
+        self.attachments.push(descriptor);
         Ok(())
     }
 }

@@ -1,6 +1,5 @@
 //! Shared attachment logging APIs for experiment and run handles.
 
-use super::{Experiment, ExperimentDyn, Run, RunDyn};
 use crate::artifact::media_types;
 use crate::{Instance, ParametricInstance, SampleSet, Solution};
 use anyhow::Result;
@@ -62,49 +61,5 @@ pub trait AttachmentLogger {
         Self: Sized,
     {
         self.log_attachment(name, media_types::v1_sample_set(), sample_set.to_bytes())
-    }
-}
-
-impl<'a, 'reg> AttachmentLogger for &'a Experiment<'reg> {
-    fn log_attachment(
-        self,
-        name: &str,
-        media_type: MediaType,
-        bytes: impl AsRef<[u8]>,
-    ) -> Result<()> {
-        self.add_attachment(name, media_type, bytes.as_ref())
-    }
-}
-
-impl<'a, 'exp, 'reg> AttachmentLogger for &'a mut Run<'exp, 'reg> {
-    fn log_attachment(
-        self,
-        name: &str,
-        media_type: MediaType,
-        bytes: impl AsRef<[u8]>,
-    ) -> Result<()> {
-        self.add_attachment(name, media_type, bytes.as_ref())
-    }
-}
-
-impl<'a> AttachmentLogger for &'a ExperimentDyn {
-    fn log_attachment(
-        self,
-        name: &str,
-        media_type: MediaType,
-        bytes: impl AsRef<[u8]>,
-    ) -> Result<()> {
-        self.add_attachment(name, media_type, bytes.as_ref())
-    }
-}
-
-impl<'a> AttachmentLogger for &'a mut RunDyn {
-    fn log_attachment(
-        self,
-        name: &str,
-        media_type: MediaType,
-        bytes: impl AsRef<[u8]>,
-    ) -> Result<()> {
-        self.add_attachment(name, media_type, bytes.as_ref())
     }
 }

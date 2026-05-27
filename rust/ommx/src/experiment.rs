@@ -68,6 +68,7 @@ use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor, TempLocal
 use crate::artifact::{ImageRef, LocalArtifact};
 use anyhow::Result;
 use attachment::{store_attachment_descriptor, AttachmentSpace};
+use oci_spec::image::MediaType;
 use parameter::ParameterSet;
 use std::collections::BTreeMap;
 use std::sync::{Mutex, MutexGuard};
@@ -256,24 +257,6 @@ impl<'reg> Experiment<'reg> {
         })
     }
 
-    fn add_attachment(
-        &self,
-        name: &str,
-        media_type: oci_spec::image::MediaType,
-        bytes: &[u8],
-    ) -> Result<()> {
-        let descriptor = store_attachment_descriptor(
-            self.registry,
-            AttachmentSpace::Experiment,
-            name,
-            media_type,
-            bytes,
-        )?;
-        let mut state = self.lock_state();
-        state.attachments.push(descriptor);
-        Ok(())
-    }
-
     fn push_closed_run(&self, run: RunEntry<'reg>) -> Result<()> {
         let mut state = self.lock_state();
         if state.runs.contains_key(&run.run_id) {
@@ -308,6 +291,26 @@ impl<'reg> Experiment<'reg> {
         };
         let artifact = state.commit(self.registry)?;
         SealedExperiment::from_artifact(artifact)
+    }
+}
+
+impl<'reg> AttachmentLogger for &Experiment<'reg> {
+    fn log_attachment(
+        self,
+        name: &str,
+        media_type: MediaType,
+        bytes: impl AsRef<[u8]>,
+    ) -> Result<()> {
+        let descriptor = store_attachment_descriptor(
+            self.registry,
+            AttachmentSpace::Experiment,
+            name,
+            media_type,
+            bytes.as_ref(),
+        )?;
+        let mut state = self.lock_state();
+        state.attachments.push(descriptor);
+        Ok(())
     }
 }
 

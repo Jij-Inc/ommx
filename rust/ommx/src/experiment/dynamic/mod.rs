@@ -17,8 +17,8 @@
 
 use super::attachment::{store_attachment_descriptor, AttachmentSpace};
 use super::{
-    allocate_next_run_id, next_run_id, Name, RunEntry, RunParameterCell, SealedExperiment,
-    UnsealedExperimentState,
+    allocate_next_run_id, next_run_id, AttachmentLogger, Name, RunEntry, RunParameterCell,
+    SealedExperiment, UnsealedExperimentState,
 };
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
 use crate::artifact::{
@@ -349,16 +349,18 @@ impl ExperimentDyn {
             ExperimentDynLifecycle::Sealed(_) | ExperimentDynLifecycle::Failed { .. } => 0,
         }
     }
+}
 
-    pub(super) fn add_attachment(
-        &self,
+impl AttachmentLogger for &ExperimentDyn {
+    fn log_attachment(
+        self,
         name: &str,
         media_type: MediaType,
-        bytes: &[u8],
+        bytes: impl AsRef<[u8]>,
     ) -> Result<()> {
         let mut dyn_state = lock_experiment_state(&self.state);
         let descriptor =
-            store_experiment_attachment_descriptor(&dyn_state, name, media_type, bytes)?;
+            store_experiment_attachment_descriptor(&dyn_state, name, media_type, bytes.as_ref())?;
         let ExperimentDynLifecycle::Unsealed { state, .. } = &mut dyn_state.lifecycle else {
             return bail_non_unsealed(&dyn_state.lifecycle);
         };
@@ -368,7 +370,9 @@ impl ExperimentDyn {
         state.attachments.push(descriptor);
         Ok(())
     }
+}
 
+impl ExperimentDyn {
     pub fn commit(&self) -> Result<LocalArtifactDyn> {
         let mut dyn_state = lock_experiment_state(&self.state);
         let (state, open_runs) = match &mut dyn_state.lifecycle {
