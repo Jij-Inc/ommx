@@ -41,7 +41,7 @@ kernelspec:
 まず、ナップサック問題の元データと、容量をパラメータとして持つ {py:class}`~ommx.v1.ParametricInstance` を作ります。OMMXの {py:class}`~ommx.v1.ParametricInstance` は、{py:class}`~ommx.v1.Instance` と同様に、目的関数や制約条件を定義できますが、定数項の代わりにパラメータを置くことができます。定数だけ異なるモデルを複数用意する必要がある場合に便利です。
 
 ```{code-cell} ipython3
-from ommx.v1 import DecisionVariable, ParametricInstance, Parameter
+from ommx.v1 import DecisionVariable, Parameter, Instance, ParametricInstance
 
 v = [10, 13, 18, 31, 7, 15]  # 各アイテムの価値
 w = [11, 25, 20, 35, 10, 33]  # 各アイテムの重さ
@@ -147,22 +147,6 @@ experiment.push()
 
 Tutorialの読者はOMMXのリポジトリにPushする権限はないと思うので、適宜読み替えてください。OMMXはコンテナレジストリへの認証はDockerに移譲するので、事前に `docker login` でコンテナレジストリにログインしておく必要があります。
 
-### ファイルとしてExportする
-
-コンテナとしてPush/Pullする以外にファイルとして保存することもできます。
-
-```{code-cell} ipython3
-from pathlib import Path
-
-archive_path = Path("tutorial_experiment.ommx")
-
-# `Experiment.save` は安全のため自動では上書きしないので、すでに同名のファイルがある場合は削除します
-archive_path.unlink(missing_ok=True)
-experiment.save(archive_path)
-```
-
-この場合Experimentの名前に気をつけてください。ファイルへの出力はあくまでLocal Registryの一部を切り出すという操作で、これをロードするには逆にこの切り出した一部をLocal Registryに取り込むという形をとります。Local Registry上ではExperimentは名前で管理されているので、同名のExperimentがすでにLocal Registry上にあると、ロードしたときにエラーになります。
-
 ### GitHub Container Registryの場合
 
 To be written.
@@ -171,6 +155,38 @@ To be written.
 
 To be written.
 
-## 共有された実験を読み込む
+### ファイルとしてExport/Importする
 
+コンテナレジストリを使わずに、`.ommx` ファイルとしてExportすることもできます。これはメールやファイルストレージなどで一時的に受け渡すための補助的な方法です。
 
+```python
+experiment.save("tutorial_experiment.ommx")
+```
+
+受け取った `.ommx` ファイルは {py:meth}`~ommx.experiment.Experiment.import_archive` でLocal Registryに取り込んでから開きます。
+
+```python
+loaded_experiment = Experiment.import_archive(archive_path)
+```
+
+## 共有された実験を確認する
+
+Experimentは名前で識別されているので、共有されたExperimentは名前で {py:meth}`~ommx.experiment.Experiment.load` することで読み込むことができます。
+
+```python
+loaded_experiment = Experiment.load("ghcr.io/jij-inc/ommx/tutorial/experiment:knapsack")
+```
+
+これはLocal Registry上で名前を探して、見つからなければコンテナレジストリからPullしてきてLocal Registryに保存してから読み込む、という動きをします。
+
+`load` や `import_archive` は終了処理が終わった {py:class}`~ommx.experiment.Experiment` と同じ状態としてロードされるので、今回は上で作ったExperimentをそのまま使います。
+
+```{code-cell} ipython3
+loaded_experiment = experiment
+```
+
+読み込んだExperimentからは、まずRunごとに記録したパラメータを表として確認できます。
+
+```{code-cell} ipython3
+loaded_experiment.run_parameters_df()
+```
