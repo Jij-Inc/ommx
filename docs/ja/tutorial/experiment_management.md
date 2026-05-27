@@ -38,10 +38,10 @@ kernelspec:
 
 ## 数理モデルを用意する
 
-まず、ナップサック問題の元データと、容量をパラメータとして持つ {py:class}`~ommx.v1.ParametricInstance` を作ります。OMMXの {py:class}`~ommx.v1.ParametricInstance` は、{py:class}`~ommx.v1.Instance` と同様に、目的関数や制約条件を定義できますが、定数項の代わりにパラメータを置くことができます。後からRun parameterやRun Attachmentで比較したい条件を記録するのではなく、あらかじめParametricInstanceのパラメータとして置いておくと、実験全体で一貫した表現になります。
+まず、ナップサック問題の元データと、容量をパラメータとして持つ {py:class}`~ommx.v1.ParametricInstance` を作ります。OMMXの {py:class}`~ommx.v1.ParametricInstance` は、{py:class}`~ommx.v1.Instance` と同様に、目的関数や制約条件を定義できますが、定数項の代わりにパラメータを置くことができます。定数だけ異なるモデルを複数用意する必要がある場合に便利です。
 
 ```{code-cell} ipython3
-from ommx.v1 import Instance, DecisionVariable, ParametricInstance, Parameter
+from ommx.v1 import DecisionVariable, ParametricInstance, Parameter
 
 v = [10, 13, 18, 31, 7, 15]  # 各アイテムの価値
 w = [11, 25, 20, 35, 10, 33]  # 各アイテムの重さ
@@ -161,7 +161,7 @@ archive_path.unlink(missing_ok=True)
 experiment.save(archive_path)
 ```
 
-この場合Experimentの名前に気をつけてください。ファイルへの出力はあくまでLocal Registryの一部を切り出すという操作で、これをロードするには逆にこの切り出した一部をLocal Registryに取り込むという形をとります。Local Registry上ではExperimentは名前で管理されているので、例えば同名のExperimentがすでにLocal Registry上にあると、ロードしたときにエラーになります。
+この場合Experimentの名前に気をつけてください。ファイルへの出力はあくまでLocal Registryの一部を切り出すという操作で、これをロードするには逆にこの切り出した一部をLocal Registryに取り込むという形をとります。Local Registry上ではExperimentは名前で管理されているので、同名のExperimentがすでにLocal Registry上にあると、ロードしたときにエラーになります。
 
 ### GitHub Container Registryの場合
 
@@ -170,3 +170,7 @@ To be written.
 ### Google Cloud Artifact Registryの場合
 
 To be written.
+
+## 共有された実験を読み込む
+
+
