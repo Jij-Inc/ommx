@@ -26,6 +26,13 @@ use ommx::experiment::AttachmentLogger;
 /// Newly created experiments are unsealed. Call `commit()` to write the
 /// experiment into the local registry as an OMMX Artifact. After commit, the
 /// same object can be used as a read-only view of the committed artifact.
+/// `with Experiment(...)` commits on normal exit if the experiment is still
+/// unsealed, and does not auto-commit on exception.
+///
+/// Use experiment-level attachments for shared context such as dataset or
+/// source-problem metadata. Use `Run.log_parameter(...)` for scalar values
+/// that should appear in `run_parameters_df()`, and use run attachments or
+/// `Run.log_solve(...)` for payloads that belong to a specific run.
 ///
 /// Example:
 ///
@@ -62,7 +69,9 @@ impl PyExperiment {
     /// If `image_name` is omitted, OMMX generates an anonymous local
     /// Experiment name. Pass an OCI image reference such as
     /// `"example.com/team/experiment:tag"` when the experiment should be
-    /// loaded later by name.
+    /// loaded later by name. The image reference is a mutable local registry
+    /// alias for the committed Artifact; the Artifact manifest digest remains
+    /// the immutable identity of the committed contents.
     #[new]
     #[pyo3(signature = (image_name = None))]
     pub fn new(image_name: Option<&str>) -> Result<Self> {
@@ -398,7 +407,8 @@ impl PyExperiment {
     ///
     /// All open runs must be finished before committing. The returned
     /// `Artifact` can be saved as a `.ommx` archive or passed to
-    /// `Experiment.from_artifact`.
+    /// `Experiment.from_artifact`. After commit, this object becomes a
+    /// read-only view of the committed Experiment.
     pub fn commit(&mut self, py: Python<'_>) -> Result<PyArtifact> {
         let _guard = crate::TRACING.attach_parent_context(py);
         Ok(PyArtifact::new(self.inner.commit()?))
@@ -407,6 +417,7 @@ impl PyExperiment {
     /// Wide DataFrame of run parameters, indexed by `run_id`.
     ///
     /// Run parameters are scalar values logged with `Run.log_parameter`.
+    /// Completed runs with no parameters are still present as index rows.
     /// Adapter options recorded by `Run.log_solve` are solve metadata and do
     /// not appear in this table.
     pub fn run_parameters_df<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDataFrame>> {
@@ -630,7 +641,9 @@ fn decode_sample_set_attachment(
 /// such as JSON, instances, solutions, sample sets, or raw bytes.
 ///
 /// Runs are usually created with `Experiment.run()` and used as context
-/// managers. A run becomes immutable once it is finished.
+/// managers. On normal context-manager exit the run is finished and added
+/// to the parent experiment. On exception the run is abandoned. A run
+/// becomes immutable once it is finished.
 pub struct PyRun {
     run: Option<ommx::experiment::RunDyn>,
 }
