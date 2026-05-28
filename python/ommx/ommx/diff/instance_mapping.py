@@ -61,16 +61,16 @@ def match_instance_ids(
     all active factors and the objective match after applying the inferred
     decision-variable mapping.
 
-    Args:
-        source: Instance whose IDs are mapped from.
-        target: Instance whose IDs are mapped to.
-        atol: Absolute tolerance used when grouping coefficients and bounds.
-        color_atol: Coarser absolute tolerance used only for color/fingerprint
-            bucketing. The final verification still uses ``atol``.
-        max_refinement_iterations: Maximum color-refinement rounds.
-        max_backtracking_steps: Search budget for ambiguous color classes.
-        include_metadata: Include names, subscripts, and parameters in
-            fingerprints. The default ignores metadata and matches math shape.
+    :param source: Instance whose IDs are mapped from.
+    :param target: Instance whose IDs are mapped to.
+    :param atol: Absolute tolerance used when grouping coefficients and bounds.
+    :param color_atol: Coarser absolute tolerance used only for
+        color/fingerprint bucketing. The final verification still uses
+        ``atol``.
+    :param max_refinement_iterations: Maximum color-refinement rounds.
+    :param max_backtracking_steps: Search budget for ambiguous color classes.
+    :param include_metadata: Include names, subscripts, and parameters in
+        fingerprints. The default ignores metadata and matches math shape.
     """
 
     effective_color_atol = resolve_color_atol(atol, color_atol)
