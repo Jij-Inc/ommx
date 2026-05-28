@@ -301,11 +301,11 @@ original input instance and returned solution, and records adapter keyword
 arguments as solve metadata rather than run parameters.
 
 `Experiment` and `Run` are context managers. On normal exit a run is finished
-and the experiment is committed; on exception the run is abandoned or the
-experiment is left uncommitted. A committed experiment is read-only. To add
-runs to a committed experiment, create a child session with
-`Experiment.fork(...)`. Use `Experiment.rename(...)` to choose or update the
-local registry image reference before saving or pushing.
+and the experiment is committed if it is still unsealed; on exception an open
+run is abandoned and the experiment does not auto-commit. A committed
+experiment is read-only. To add runs to a committed experiment, create a child
+session with `Experiment.fork(...)`. Use `Experiment.rename(...)` to choose or
+update the local registry image reference before saving or pushing.
 "#
 );
 

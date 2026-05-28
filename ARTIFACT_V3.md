@@ -696,6 +696,7 @@ GC は data model を変えない。完全な descriptor list を持つ manifest
 ### 10.1 Failed recovery / autosave metadata
 
 process crash や Python context manager 例外時に、どの Attachment / Run / Solve / parameter がどの blob に対応していたかを復元する metadata は未設計である。
+現行の例外終了 path は成功 Artifact への自動 commit を行わないが、次の設計ではこの path を `status=failed` の recovery artifact として materialize する。
 
 残作業:
 
@@ -742,15 +743,13 @@ Run status、elapsed time、実行環境 OS / package versions / backend solver 
 
 ### 10.5 OTel trace / renderer
 
-Experiment / Run / Artifact operation の trace schema、`store_trace=True` による trace layer 保存、post-hoc renderer は未設計である。
+Experiment / Run / Artifact operation の詳細な trace schema と post-hoc renderer は未設計である。`with Experiment(..., store_trace=True)` による trace layer 保存と `artifact.get_trace()` は実装済み API Reference を正本にする。
 
 残作業:
 
 - Experiment / Run / solver / artifact build / load / push span schema。
 - `ommx.attachment.added` / `ommx.solve.recorded` / `ommx.run.parameter.recorded` events。
 - global `TracerProvider` を暗黙に install しないことの tests。
-- `with Experiment(..., store_trace=True)` の context-manager-only contract。
-- trace layer media type と `artifact.get_trace()`。
 - text tree / Chrome trace export renderer。
 
 ### 10.6 GC
@@ -781,7 +780,6 @@ Local Registry GC の reachability model、dry-run report、削除 policy は未
 | Diagnostics sink protocol | `DiagnosticsSink` / `DiagnosticCollector` / `DiagnosticEntry`、media type、truncation / compression policy |
 | Run attributes / environment | status、elapsed time、OS / package / solver version の schema |
 | OTel span / event integration | Experiment / Run / solver / artifact operation spans、attachment / solve / parameter events |
-| Trace layer | media type、`store_trace=True` storage mode、`artifact.get_trace()` |
 | Trace renderer | text tree、Chrome trace export、streaming renderer |
 | GC | Local Registry dry-run / report / delete、orphan blob retention、archive / remote registry handling |
 | Legacy MINTO import | compatibility loader を core に持つか migration tool にするか |
