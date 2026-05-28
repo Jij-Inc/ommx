@@ -417,6 +417,12 @@ class Artifact:
         r"""
         Get a JSON object from an artifact layer stored by {meth}`~ommx.artifact.ArtifactDraft.add_json`.
         """
+    def get_trace(self) -> typing.Any:
+        r"""
+        Read the Experiment trace layer as an ``ommx.tracing.TraceResult``.
+
+        Raises `ValueError` if this artifact has no stored trace layer.
+        """
 
 @typing.final
 class ArtifactDraft:
@@ -1754,7 +1760,12 @@ class Experiment:
 
         Raises an error if the Experiment has not been committed yet.
         """
-    def __new__(cls, image_name: typing.Optional[builtins.str] = None) -> Experiment:
+    def __new__(
+        cls,
+        image_name: typing.Optional[builtins.str] = None,
+        *,
+        store_trace: builtins.bool = False,
+    ) -> Experiment:
         r"""
         Start a new Experiment in the default local registry.
 
@@ -1764,10 +1775,17 @@ class Experiment:
         loaded later by name. The image reference is a mutable local registry
         alias for the committed Artifact; the Artifact manifest digest remains
         the immutable identity of the committed contents.
+
+        Set `store_trace=True` only when the Experiment will be used as a
+        context manager. On normal `with` exit, OMMX stores that context's
+        trace as an Artifact layer. Manual `commit()` is rejected when
+        `store_trace=True`.
         """
     @staticmethod
     def with_temp_local_registry(
         image_name: typing.Optional[builtins.str] = None,
+        *,
+        store_trace: builtins.bool = False,
     ) -> Experiment:
         r"""
         Start a new Experiment backed by a temporary Local Registry.
@@ -1776,6 +1794,11 @@ class Experiment:
         and by Artifacts / loaded Experiments derived from it. This is useful
         for examples and tests because it does not write entries into the
         process-wide default local registry.
+
+        Set `store_trace=True` only when the Experiment will be used as a
+        context manager. On normal `with` exit, OMMX stores that context's
+        trace as an Artifact layer. Manual `commit()` is rejected when
+        `store_trace=True`.
         """
     @staticmethod
     def load(image_name: builtins.str) -> Experiment:
@@ -1805,7 +1828,12 @@ class Experiment:
         This is the usual entry point after importing or receiving an OMMX
         Artifact handle. The artifact must contain an Experiment config.
         """
-    def fork(self, image_name: typing.Optional[builtins.str] = None) -> Experiment:
+    def fork(
+        self,
+        image_name: typing.Optional[builtins.str] = None,
+        *,
+        store_trace: builtins.bool = False,
+    ) -> Experiment:
         r"""
         Fork this committed Experiment into a new unsealed child Experiment.
 
@@ -1825,13 +1853,18 @@ class Experiment:
         ```
 
         Raises an error if this Experiment has not been committed yet.
+
+        Set `store_trace=True` on the returned child only when it will be used
+        as a context manager. On normal `with` exit, OMMX stores that context's
+        trace as an Artifact layer. Manual `commit()` is rejected when
+        `store_trace=True`.
         """
     def __enter__(self) -> Experiment: ...
     def __exit__(
         self,
         exc_type: typing.Optional[typing.Any] = None,
-        _exc_value: typing.Optional[typing.Any] = None,
-        _traceback: typing.Optional[typing.Any] = None,
+        exc_value: typing.Optional[typing.Any] = None,
+        traceback: typing.Optional[typing.Any] = None,
     ) -> builtins.bool: ...
     def rename(self, image_name: builtins.str) -> None:
         r"""
@@ -5190,8 +5223,8 @@ class Run:
     def __exit__(
         self,
         exc_type: typing.Optional[typing.Any] = None,
-        _exc_value: typing.Optional[typing.Any] = None,
-        _traceback: typing.Optional[typing.Any] = None,
+        exc_value: typing.Optional[typing.Any] = None,
+        traceback: typing.Optional[typing.Any] = None,
     ) -> builtins.bool: ...
     def log_parameter(
         self, name: builtins.str, value: bool | int | float | str

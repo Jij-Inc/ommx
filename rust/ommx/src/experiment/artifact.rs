@@ -22,6 +22,9 @@ impl<'reg> UnsealedExperimentState<'reg> {
         let run_parameters = self.run_parameter_descriptor(registry)?;
         let mut layers = LayerTable::default();
         let config = self.experiment_config(&mut layers, run_parameters)?;
+        for trace_layer in self.trace_layers.iter().cloned() {
+            layers.push(trace_layer)?;
+        }
         let config_descriptor = registry.store_json_blob(
             MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()),
             &config,

@@ -494,6 +494,30 @@ impl PyArtifact {
         let json = py.import("json")?;
         json.call_method1("loads", (PyBytes::new(py, &blob),))
     }
+
+    /// Read the Experiment trace layer as an ``ommx.tracing.TraceResult``.
+    ///
+    /// Raises `ValueError` if this artifact has no stored trace layer.
+    pub fn get_trace<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let layers = self
+            .inner
+            .layers()
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        let descriptor = layers
+            .into_iter()
+            .find(|layer| {
+                layer.media_type().as_ref()
+                    == ommx::artifact::media_types::TRACE_OTLP_JSON_MEDIA_TYPE
+            })
+            .ok_or_else(|| pyo3::exceptions::PyValueError::new_err("Trace layer not found"))?;
+        let blob = self
+            .inner
+            .get_blob(&descriptor)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        let trace_result = py.import("ommx.tracing")?.getattr("TraceResult")?;
+        trace_result.call_method1("from_otlp_json", (PyBytes::new(py, &blob),))
+    }
 }
 
 // ---------------------------------------------------------------------------

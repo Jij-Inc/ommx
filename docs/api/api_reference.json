@@ -640,6 +640,22 @@
               "deprecated": null
             },
             {
+              "name": "get_trace",
+              "doc": "Read the Experiment trace layer as an ``ommx.tracing.TraceResult``.\n\nRaises `ValueError` if this artifact has no stored trace layer.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "Any",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "import_archive",
               "doc": "Import an artifact from a `.ommx` OCI archive file (or an OCI\nImage Layout directory) into the user's v3 SQLite Local Registry,\nand return a handle to the imported registry entry.\n\n**Side effect (intentional)**: archive / directory contents are\npermanently written into the SQLite Local Registry under the\ndefault root (`$XDG_DATA_HOME/ommx/` on Linux,\n`$HOME/Library/Application Support/org.ommx.ommx/` on macOS, or\n`$OMMX_LOCAL_REGISTRY_ROOT` when set). Subsequent\n`Artifact.load(image_name)` calls resolve from SQLite without\nre-importing.\n\nFor a side-effect-free read that just surfaces the manifest /\nlayer descriptors without writing into the registry, use\n{meth}`Artifact.inspect_archive` instead.\n\nIf the input lacks an `org.opencontainers.image.ref.name`\nannotation, v3 synthesizes an anonymous Local Registry ref and\nimports the content under that name. This keeps v2 unnamed\narchives importable while still making the imported artifact\naddressable in SQLite.\n\n```python\n>>> artifact = Artifact.import_archive(\"data/random_lp_instance.ommx\")\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/random_lp_instance:...\n\n```",
               "signatures": [
@@ -1823,7 +1839,7 @@
                       }
                     },
                     {
-                      "name": "_exc_value",
+                      "name": "exc_value",
                       "type_": {
                         "display": "Optional[Any]",
                         "link_target": null,
@@ -1841,7 +1857,7 @@
                       }
                     },
                     {
-                      "name": "_traceback",
+                      "name": "traceback",
                       "type_": {
                         "display": "Optional[Any]",
                         "link_target": null,
@@ -1871,7 +1887,7 @@
             },
             {
               "name": "__new__",
-              "doc": "Start a new Experiment in the default local registry.\n\nIf `image_name` is omitted, OMMX generates an anonymous local\nExperiment name. Pass an OCI image reference such as\n`\"example.com/team/experiment:tag\"` when the experiment should be\nloaded later by name. The image reference is a mutable local registry\nalias for the committed Artifact; the Artifact manifest digest remains\nthe immutable identity of the committed contents.",
+              "doc": "Start a new Experiment in the default local registry.\n\nIf `image_name` is omitted, OMMX generates an anonymous local\nExperiment name. Pass an OCI image reference such as\n`\"example.com/team/experiment:tag\"` when the experiment should be\nloaded later by name. The image reference is a mutable local registry\nalias for the committed Artifact; the Artifact manifest digest remains\nthe immutable identity of the committed contents.\n\nSet `store_trace=True` only when the Experiment will be used as a\ncontext manager. On normal `with` exit, OMMX stores that context's\ntrace as an Artifact layer. Manual `commit()` is rejected when\n`store_trace=True`.",
               "signatures": [
                 {
                   "parameters": [
@@ -1891,6 +1907,18 @@
                       "default": {
                         "kind": "Simple",
                         "value": "None"
+                      }
+                    },
+                    {
+                      "name": "store_trace",
+                      "type_": {
+                        "display": "bool",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "False"
                       }
                     }
                   ],
@@ -1948,7 +1976,7 @@
             },
             {
               "name": "fork",
-              "doc": "Fork this committed Experiment into a new unsealed child Experiment.\n\nThe parent Experiment is not modified. Existing Attachments, Runs,\nSolves, and Run parameters are carried into the child Experiment.\nWhen the child is committed, its Artifact manifest records the parent\nmanifest descriptor as OCI `subject`.\n\nIf `image_name` is omitted, OMMX generates an anonymous local\nExperiment name for the child. The returned Experiment can be used as\na context manager:\n\n```python\nwith parent.fork() as child:\n    with child.run() as run:\n        run.log_parameter(\"capacity\", 56)\n```\n\nRaises an error if this Experiment has not been committed yet.",
+              "doc": "Fork this committed Experiment into a new unsealed child Experiment.\n\nThe parent Experiment is not modified. Existing Attachments, Runs,\nSolves, and Run parameters are carried into the child Experiment.\nWhen the child is committed, its Artifact manifest records the parent\nmanifest descriptor as OCI `subject`.\n\nIf `image_name` is omitted, OMMX generates an anonymous local\nExperiment name for the child. The returned Experiment can be used as\na context manager:\n\n```python\nwith parent.fork() as child:\n    with child.run() as run:\n        run.log_parameter(\"capacity\", 56)\n```\n\nRaises an error if this Experiment has not been committed yet.\n\nSet `store_trace=True` on the returned child only when it will be used\nas a context manager. On normal `with` exit, OMMX stores that context's\ntrace as an Artifact layer. Manual `commit()` is rejected when\n`store_trace=True`.",
               "signatures": [
                 {
                   "parameters": [
@@ -1968,6 +1996,18 @@
                       "default": {
                         "kind": "Simple",
                         "value": "None"
+                      }
+                    },
+                    {
+                      "name": "store_trace",
+                      "type_": {
+                        "display": "bool",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "False"
                       }
                     }
                   ],
@@ -2624,7 +2664,7 @@
             },
             {
               "name": "with_temp_local_registry",
-              "doc": "Start a new Experiment backed by a temporary Local Registry.\n\nThe temporary registry is kept alive by the returned Experiment\nand by Artifacts / loaded Experiments derived from it. This is useful\nfor examples and tests because it does not write entries into the\nprocess-wide default local registry.",
+              "doc": "Start a new Experiment backed by a temporary Local Registry.\n\nThe temporary registry is kept alive by the returned Experiment\nand by Artifacts / loaded Experiments derived from it. This is useful\nfor examples and tests because it does not write entries into the\nprocess-wide default local registry.\n\nSet `store_trace=True` only when the Experiment will be used as a\ncontext manager. On normal `with` exit, OMMX stores that context's\ntrace as an Artifact layer. Manual `commit()` is rejected when\n`store_trace=True`.",
               "signatures": [
                 {
                   "parameters": [
@@ -2644,6 +2684,18 @@
                       "default": {
                         "kind": "Simple",
                         "value": "None"
+                      }
+                    },
+                    {
+                      "name": "store_trace",
+                      "type_": {
+                        "display": "bool",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "False"
                       }
                     }
                   ],
@@ -2807,7 +2859,7 @@
                       }
                     },
                     {
-                      "name": "_exc_value",
+                      "name": "exc_value",
                       "type_": {
                         "display": "Optional[Any]",
                         "link_target": null,
@@ -2825,7 +2877,7 @@
                       }
                     },
                     {
-                      "name": "_traceback",
+                      "name": "traceback",
                       "type_": {
                         "display": "Optional[Any]",
                         "link_target": null,

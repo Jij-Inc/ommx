@@ -78,6 +78,7 @@ struct UnsealedExperimentDynState {
     image_name: ImageRef,
     subject: Option<Descriptor>,
     attachments: Vec<Descriptor>,
+    trace_layers: Vec<Descriptor>,
     runs: BTreeMap<u64, RunEntryDyn>,
     next_run_id: u64,
 }
@@ -251,6 +252,7 @@ impl ExperimentDyn {
                         image_name,
                         subject: None,
                         attachments: Vec::new(),
+                        trace_layers: Vec::new(),
                         runs: BTreeMap::new(),
                         next_run_id: 0,
                     }),
@@ -408,6 +410,20 @@ impl ExperimentDyn {
         )
     }
 
+    pub fn store_trace_layer(&self, bytes: impl AsRef<[u8]>) -> Result<()> {
+        let mut dyn_state = lock_experiment_state(&self.state);
+        ensure_unsealed_for_attachment_write(&dyn_state)?;
+        let descriptor = store_trace_layer_descriptor(&dyn_state, bytes.as_ref())?;
+        let ExperimentDynLifecycle::Unsealed { state, .. } = &mut dyn_state.lifecycle else {
+            return bail_non_unsealed(&dyn_state.lifecycle);
+        };
+        let state = state
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
+        state.trace_layers.push(descriptor);
+        Ok(())
+    }
+
     pub fn commit(&self) -> Result<LocalArtifactDyn> {
         let mut dyn_state = lock_experiment_state(&self.state);
         let (state, open_runs) = match &mut dyn_state.lifecycle {
@@ -517,6 +533,7 @@ impl UnsealedExperimentDynState {
             image_name: self.image_name,
             subject: self.subject,
             attachments: stored_descriptors(registry, self.attachments)?,
+            trace_layers: stored_descriptors(registry, self.trace_layers)?,
             runs: self
                 .runs
                 .into_iter()
@@ -638,6 +655,7 @@ impl SealedExperimentDynState {
             image_name,
             subject,
             attachments: self.attachments.clone(),
+            trace_layers: Vec::new(),
             next_run_id: next_run_id(runs.keys().copied())?,
             runs,
         })
@@ -727,6 +745,20 @@ fn store_solve_payload_descriptor(
             .registry_handle
             .registry()
             .store_layer_blob(media_type, bytes, Default::default())?;
+    Ok(Descriptor::from(descriptor))
+}
+
+fn store_trace_layer_descriptor(state: &ExperimentDynState, bytes: &[u8]) -> Result<Descriptor> {
+    let mut annotations = std::collections::HashMap::new();
+    annotations.insert(
+        super::ANN_LAYER.to_string(),
+        super::LAYER_KIND_TRACE.to_string(),
+    );
+    let descriptor = state.registry_handle.registry().store_layer_blob(
+        media_types::trace_otlp_json(),
+        bytes,
+        annotations,
+    )?;
     Ok(Descriptor::from(descriptor))
 }
 

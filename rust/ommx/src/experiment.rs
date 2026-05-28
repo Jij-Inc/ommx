@@ -84,6 +84,7 @@ const ANN_ATTACHMENT_NAME: &str = "org.ommx.attachment.name";
 const RUN_PARAMETERS_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment.run-parameters+json";
 const EXPERIMENT_CONFIG_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment.config+json";
 const LAYER_KIND_RUN_PARAMETERS: &str = "run-parameters";
+const LAYER_KIND_TRACE: &str = "trace";
 
 /// A mutable, unsealed experiment session. See the [module documentation](self).
 #[derive(Debug)]
@@ -189,6 +190,9 @@ struct UnsealedExperimentState<'reg> {
     subject: Option<oci_spec::image::Descriptor>,
     /// Experiment-space attachments.
     attachments: Vec<StoredDescriptor<'reg>>,
+    /// Experiment-level trace layers. These are manifest layers, but not
+    /// Attachments and not part of the Experiment config payload.
+    trace_layers: Vec<StoredDescriptor<'reg>>,
     runs: BTreeMap<u64, RunEntry<'reg>>,
     next_run_id: u64,
 }
@@ -230,6 +234,7 @@ impl<'reg> Experiment<'reg> {
                 image_name,
                 subject: None,
                 attachments: Vec::new(),
+                trace_layers: Vec::new(),
                 runs: BTreeMap::new(),
                 next_run_id: 0,
             }),
@@ -286,6 +291,22 @@ impl<'reg> Experiment<'reg> {
     /// Attach a [`SampleSet`] in the experiment space.
     pub fn log_sample_set(&self, name: &str, sample_set: &SampleSet) -> Result<()> {
         self.log_attachment(name, media_types::v1_sample_set(), sample_set.to_bytes())
+    }
+
+    /// Store an Experiment trace layer. The layer is intentionally not an
+    /// Attachment: it records execution telemetry for the committed artifact
+    /// and is discovered by media type / layer annotation.
+    pub fn store_trace_layer(&self, bytes: impl AsRef<[u8]>) -> Result<()> {
+        let mut annotations = std::collections::HashMap::new();
+        annotations.insert(ANN_LAYER.to_string(), LAYER_KIND_TRACE.to_string());
+        let descriptor = self.registry.store_layer_blob(
+            media_types::trace_otlp_json(),
+            bytes.as_ref(),
+            annotations,
+        )?;
+        let mut state = self.lock_state();
+        state.trace_layers.push(descriptor);
+        Ok(())
     }
 
     fn add_attachment(&self, name: &str, media_type: MediaType, bytes: &[u8]) -> Result<()> {
@@ -394,6 +415,7 @@ impl<'reg> SealedExperiment<'reg> {
                 image_name,
                 subject,
                 attachments: self.attachments.clone(),
+                trace_layers: Vec::new(),
                 next_run_id: next_run_id(runs.keys().copied())?,
                 runs,
             }),

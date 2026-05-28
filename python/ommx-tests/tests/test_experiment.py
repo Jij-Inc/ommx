@@ -8,6 +8,8 @@ from ommx.experiment import Experiment
 from ommx.v1 import Instance, Solution
 
 _ATTACHMENT_NAME = "org.ommx.attachment.name"
+_TRACE_MEDIA_TYPE = "application/vnd.ommx.trace.otlp+json"
+_LAYER_KIND = "org.ommx.experiment.layer"
 
 
 def _df_snap(df: pd.DataFrame) -> str:
@@ -129,6 +131,66 @@ def test_experiment_context_does_not_commit_on_exception():
     experiment = experiments[0]
     with pytest.raises(RuntimeError, match="must be committed"):
         experiment.artifact
+
+
+def test_store_trace_records_context_scope_in_artifact():
+    with Experiment.with_temp_local_registry(store_trace=True) as experiment:
+        experiment.log_json("dataset", {"name": "miplib2017"})
+        with experiment.run() as run:
+            run.log_parameter("solver", "highs")
+
+    artifact = experiment.artifact
+    trace_layers = [
+        layer for layer in artifact.layers if layer.media_type == _TRACE_MEDIA_TYPE
+    ]
+    assert len(trace_layers) == 1
+    assert trace_layers[0].annotations[_LAYER_KIND] == "trace"
+    assert _ATTACHMENT_NAME not in trace_layers[0].annotations
+
+    loaded = Experiment.from_artifact(artifact)
+    assert _attachment_names(loaded.experiment_attachments) == {"dataset"}
+
+    trace = artifact.get_trace()
+    names = {span.name for span in trace.spans}
+    assert "ommx.experiment" in names
+    assert "ommx.run" in names
+    assert "ommx.experiment" in trace.text_tree()
+
+
+def test_default_experiment_context_does_not_store_trace():
+    with Experiment.with_temp_local_registry() as experiment:
+        with experiment.run() as run:
+            run.log_parameter("solver", "highs")
+
+    assert [
+        layer
+        for layer in experiment.artifact.layers
+        if layer.media_type == _TRACE_MEDIA_TYPE
+    ] == []
+    with pytest.raises(ValueError, match="Trace layer not found"):
+        experiment.artifact.get_trace()
+
+
+def test_store_trace_requires_context_manager_before_mutation():
+    experiment = Experiment.with_temp_local_registry(store_trace=True)
+
+    with pytest.raises(
+        RuntimeError, match="store_trace=True requires using Experiment"
+    ):
+        experiment.log_json("dataset", {"name": "miplib2017"})
+
+    with pytest.raises(
+        RuntimeError, match="store_trace=True requires using Experiment"
+    ):
+        experiment.commit()
+
+
+def test_store_trace_rejects_manual_commit_inside_context():
+    with Experiment.with_temp_local_registry(store_trace=True) as experiment:
+        with pytest.raises(
+            RuntimeError, match="commit\\(\\) is performed automatically"
+        ):
+            experiment.commit()
 
 
 def test_rename_after_context_commit_updates_artifact_name():

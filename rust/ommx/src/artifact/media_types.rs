@@ -19,6 +19,7 @@ pub const V1_INSTANCE_MEDIA_TYPE: &str = "application/org.ommx.v1.instance";
 pub const V1_PARAMETRIC_INSTANCE_MEDIA_TYPE: &str = "application/org.ommx.v1.parametric-instance";
 pub const V1_SOLUTION_MEDIA_TYPE: &str = "application/org.ommx.v1.solution";
 pub const V1_SAMPLE_SET_MEDIA_TYPE: &str = "application/org.ommx.v1.sample-set";
+pub const TRACE_OTLP_JSON_MEDIA_TYPE: &str = "application/vnd.ommx.trace.otlp+json";
 
 /// Media type of [crate::artifact::LocalArtifact], `application/org.ommx.v1.artifact`
 pub fn v1_artifact() -> MediaType {
@@ -48,4 +49,9 @@ pub fn v1_solution() -> MediaType {
 /// Media type of the layer storing [crate::v1::SampleSet] with [crate::artifact::SolutionAnnotations], `application/org.ommx.v1.sample-set`
 pub fn v1_sample_set() -> MediaType {
     MediaType::Other(V1_SAMPLE_SET_MEDIA_TYPE.to_string())
+}
+
+/// Media type of an Experiment trace layer encoded as OTLP JSON.
+pub fn trace_otlp_json() -> MediaType {
+    MediaType::Other(TRACE_OTLP_JSON_MEDIA_TYPE.to_string())
 }

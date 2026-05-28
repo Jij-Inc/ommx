@@ -470,7 +470,7 @@ Span の基本構造:
 | Adapter solve 実行 | `ommx.solver.solve` | `ommx.run` |
 | Adapter sample 実行 | `ommx.solver.sample` | `ommx.run` |
 | Attachment / Solve 追加 / Run parameter 更新 | span event | current run / experiment span |
-| Artifact commit/build | `ommx.artifact.build` | active span。ただし同じ Artifact に保存する trace layer の生成 / final publish は自己参照を避けるため保存対象 trace の外に置く |
+| Artifact commit/build | `ommx.artifact.build` | 明示 commit / build 操作の active span。`store_trace=True` で同じ Artifact に trace layer を保存する場合、trace layer の生成と final publish は自己参照を避けるため保存対象 trace の外に置く |
 | Artifact load | `ommx.artifact.load` | active span |
 | Artifact push | `ommx.artifact.push` | active span |
 
@@ -521,13 +521,13 @@ Trace storage は OTel を有効化する機能ではなく、`with Experiment(.
 
 `trace="auto"` / `trace="required"` / `with_trace()` は Experiment API には導入しない。trace layer を保存しない場合でも、active provider があれば通常の OTel span / event は外部 exporter に流れる。
 
-既存の notebook / script tracing helper が UX のために provider を install する可能性は別途検討する。ただし Experiment / Artifact build の core path は global provider を勝手に install しない。
+既存の notebook / script tracing helper は UX のために provider を install することがある。`store_trace=True` は trace 保存の明示要求なので同じ scoped collector を使えるが、default の Experiment / Artifact build path は global provider を勝手に install しない。
 
 ### 6.4 Trace layer
 
 Artifact は `with Experiment(..., store_trace=True)` で収集した Experiment trace body を専用 layer として持てる。これは batch job や CI のように Artifact 入出力だけで完結する環境で重要である。
 
-保存対象は Experiment context body の lifecycle、Run / Solve、Attachment / parameter event である。trace layer payload の生成と、それを含む final manifest publish は保存対象 trace の外に置く。trace が自分自身の保存処理を参照する再帰構造を作らないためである。
+保存対象は Experiment context body の lifecycle、Run / Solve、Attachment / parameter event である。trace layer payload の生成と、それを含む final manifest publish は保存対象 trace の外に置く。trace が自分自身の保存処理を参照する再帰構造を作らないためである。このため、`store_trace=True` で保存される trace は user block 内の Experiment / Run / Solve lifecycle を中心にし、保存対象 Artifact 自身の final publish は含めない。
 
 Phase 1:
 
