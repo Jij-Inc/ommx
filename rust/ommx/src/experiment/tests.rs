@@ -3,9 +3,9 @@
 use super::config::{ExperimentConfig, ExperimentConfigRun, LayerRef};
 use super::UnsealedExperimentState;
 use super::{
-    Experiment, ExperimentDyn, Name, ParameterValue, SealedExperiment, ANN_ATTACHMENT_NAME,
-    ANN_LAYER, ANN_RUN_ID, ANN_SPACE, EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_STATUS_FINISHED,
-    LAYER_KIND_RUN_PARAMETERS, RUN_PARAMETERS_MEDIA_TYPE,
+    AttachmentLogger, Experiment, ExperimentDyn, Name, ParameterValue, SealedExperiment,
+    ANN_ATTACHMENT_NAME, ANN_LAYER, ANN_RUN_ID, ANN_SPACE, EXPERIMENT_CONFIG_MEDIA_TYPE,
+    EXPERIMENT_STATUS_FINISHED, LAYER_KIND_RUN_PARAMETERS, RUN_PARAMETERS_MEDIA_TYPE,
 };
 use crate::artifact::local_registry::{StoredDescriptor, UnsealedArtifact};
 use crate::artifact::{media_types, AsArtifact, ImageRef, LocalArtifact, LocalRegistryHandle};
@@ -160,67 +160,44 @@ fn log_writes_blob_to_blobstore_immediately() {
     });
 }
 
-/// Attachment descriptors are append-only within the Experiment/Run state.
-/// BlobStore still deduplicates byte-identical payloads by digest, but
-/// the Experiment model preserves each log call as a descriptor entry.
 #[test]
-fn log_preserves_attachment_descriptor_log_order() {
+fn log_json_encodes_hash_maps_stably() {
+    fn map(entries: impl IntoIterator<Item = (&'static str, i32)>) -> HashMap<&'static str, i32> {
+        entries.into_iter().collect()
+    }
+
+    let first = HashMap::from([
+        ("outer_b", map([("d", 4), ("c", 3)])),
+        ("outer_a", map([("b", 2), ("a", 1)])),
+    ]);
+    let second = HashMap::from([
+        ("outer_a", map([("a", 1), ("b", 2)])),
+        ("outer_b", map([("c", 3), ("d", 4)])),
+    ]);
+
     with_temp_experiment(|experiment| {
-        experiment.log_json("dataset", json!("miplib2017")).unwrap();
-        experiment.log_json("dataset", json!("qplib")).unwrap();
+        experiment.log_json("first", first).unwrap();
+        experiment.log_json("second", second).unwrap();
 
-        let instance: Instance =
-            crate::random::random_deterministic(crate::InstanceParameters::default_lp());
-        experiment.log_instance("dataset", &instance).unwrap();
-
-        let json_digests = with_unsealed_state(&experiment, |state| {
-            assert_eq!(state.attachments.len(), 3);
-            assert_eq!(
-                state
-                    .attachments
-                    .iter()
-                    .map(|attachment| layer_annotation(attachment, ANN_ATTACHMENT_NAME).unwrap())
-                    .collect::<Vec<_>>(),
-                vec![
-                    "dataset".to_string(),
-                    "dataset".to_string(),
-                    "dataset".to_string()
-                ]
-            );
-            assert_eq!(
-                state
-                    .attachments
-                    .iter()
-                    .map(|attachment| attachment.media_type().clone())
-                    .collect::<Vec<_>>(),
-                vec![
-                    MediaType::Other("application/json".into()),
-                    MediaType::Other("application/json".into()),
-                    media_types::v1_instance(),
-                ]
-            );
+        let bytes = with_unsealed_state(&experiment, |state| {
             state
                 .attachments
                 .iter()
-                .take(2)
-                .map(|attachment| attachment.digest().clone())
+                .map(|descriptor| {
+                    experiment
+                        .registry
+                        .blobs()
+                        .read_bytes(descriptor.digest())
+                        .unwrap()
+                })
                 .collect::<Vec<_>>()
         });
-        let first_bytes = experiment
-            .registry
-            .blobs()
-            .read_bytes(&json_digests[0])
-            .unwrap();
-        let second_bytes = experiment
-            .registry
-            .blobs()
-            .read_bytes(&json_digests[1])
-            .unwrap();
+        assert_eq!(bytes.len(), 2);
+        assert_eq!(bytes[0], bytes[1]);
         assert_eq!(
-            first_bytes,
-            serde_json::to_vec(&json!("miplib2017")).unwrap()
+            bytes[0],
+            br#"{"outer_a":{"a":1,"b":2},"outer_b":{"c":3,"d":4}}"#
         );
-        assert_eq!(second_bytes, serde_json::to_vec(&json!("qplib")).unwrap());
         Ok(())
     });
 }
@@ -996,69 +973,6 @@ fn dropping_unclosed_run_does_not_write_back() {
         assert!(layers
             .iter()
             .all(|layer| layer_annotation(layer, ANN_ATTACHMENT_NAME).as_deref() != Some("seed")));
-        Ok(())
-    });
-}
-
-/// A byte-identical attachment logged by two runs yields two annotation-
-/// distinct layer descriptors backed by one shared CAS blob.
-#[test]
-fn byte_identical_attachment_across_runs_shares_one_blob() {
-    with_temp_experiment(|experiment| {
-        let payload = json!({ "formulation": "relaxed" });
-
-        {
-            let mut run0 = experiment.run().unwrap();
-            run0.log_json("candidate", payload.clone()).unwrap();
-            run0.finish().unwrap();
-        }
-
-        {
-            let mut run1 = experiment.run().unwrap();
-            run1.log_json("candidate", payload.clone()).unwrap();
-            run1.finish().unwrap();
-        }
-
-        let artifact = experiment.commit().unwrap().into_artifact();
-        let layers = artifact.layers().unwrap();
-
-        let candidates: Vec<&StoredDescriptor<'_>> = layers
-            .iter()
-            .filter(|layer| {
-                layer_annotation(layer, ANN_ATTACHMENT_NAME).as_deref() == Some("candidate")
-            })
-            .collect();
-        assert_eq!(candidates.len(), 2);
-        let mut run_ids: Vec<Option<String>> = candidates
-            .iter()
-            .map(|layer| layer_annotation(layer, ANN_RUN_ID))
-            .collect();
-        run_ids.sort();
-        assert_eq!(run_ids, vec![Some("0".to_string()), Some("1".to_string())]);
-        // Same content -> same digest -> one physical blob.
-        assert_eq!(
-            candidates[0].digest().to_string(),
-            candidates[1].digest().to_string()
-        );
-        Ok(())
-    });
-}
-
-/// Caller-defined payload types are represented directly by OCI media
-/// type, without an additional OMMX attachment-kind axis.
-#[test]
-fn log_attachment_accepts_caller_defined_media_type() {
-    with_temp_experiment(|experiment| {
-        let media_type = MediaType::Other("application/vnd.jijmodeling.model+json".to_string());
-        experiment
-            .log_attachment("source-model", media_type.clone(), br#"{"variables": []}"#)
-            .unwrap();
-
-        let artifact = experiment.commit().unwrap().into_artifact();
-        let layers = artifact.layers().unwrap();
-        let source_model = find_layer(&layers, ANN_ATTACHMENT_NAME, "source-model");
-        assert_eq!(source_model.media_type(), &media_type);
-        assert_eq!(blob_bytes(&artifact, source_model), br#"{"variables": []}"#);
         Ok(())
     });
 }

@@ -1,11 +1,9 @@
 //! Experiment / Run handles and run lifecycle.
 
-use super::attachment::{
-    encode_json, json_media_type, store_attachment_descriptor, AttachmentSpace,
-};
-use super::{ParameterValue, Run, RunEntry, SolveEntry};
+use super::attachment::{store_attachment_descriptor, AttachmentSpace};
+use super::{AttachmentLogger, ParameterValue, Run, RunEntry, SolveEntry};
 use crate::artifact::media_types;
-use crate::{Instance, ParametricInstance, SampleSet, Solution};
+use crate::{Instance, Solution};
 use anyhow::Result;
 use oci_spec::image::MediaType;
 
@@ -26,43 +24,6 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
         let name = name.into();
         let value = value.into();
         self.parameters.insert(name, value)
-    }
-
-    /// Attach arbitrary bytes with an explicit OCI media type in this
-    /// run's space.
-    pub fn log_attachment(
-        &mut self,
-        name: &str,
-        media_type: MediaType,
-        bytes: impl AsRef<[u8]>,
-    ) -> Result<()> {
-        self.add_attachment(name, media_type, bytes.as_ref())
-    }
-
-    /// Attach a JSON-serialisable value in this run's space.
-    pub fn log_json(&mut self, name: &str, value: impl serde::Serialize) -> Result<()> {
-        let bytes = encode_json(name, &value)?;
-        self.log_attachment(name, json_media_type(), bytes)
-    }
-
-    /// Attach an [`Instance`] in this run's space.
-    pub fn log_instance(&mut self, name: &str, instance: &Instance) -> Result<()> {
-        self.log_attachment(name, media_types::v1_instance(), instance.to_bytes())
-    }
-
-    /// Attach an [`ParametricInstance`] in this run's space.
-    pub fn log_parametric_instance(&mut self, name: &str, pi: &ParametricInstance) -> Result<()> {
-        self.log_attachment(name, media_types::v1_parametric_instance(), pi.to_bytes())
-    }
-
-    /// Attach a [`Solution`] in this run's space.
-    pub fn log_solution(&mut self, name: &str, solution: &Solution) -> Result<()> {
-        self.log_attachment(name, media_types::v1_solution(), solution.to_bytes())
-    }
-
-    /// Attach a [`SampleSet`] in this run's space.
-    pub fn log_sample_set(&mut self, name: &str, sample_set: &SampleSet) -> Result<()> {
-        self.log_attachment(name, media_types::v1_sample_set(), sample_set.to_bytes())
     }
 
     /// Log one already-finished solver result under this run.
@@ -107,18 +68,6 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
         self.close()
     }
 
-    fn add_attachment(&mut self, name: &str, media_type: MediaType, bytes: &[u8]) -> Result<()> {
-        let descriptor = store_attachment_descriptor(
-            self.experiment.registry,
-            AttachmentSpace::Run(self.run_id),
-            name,
-            media_type,
-            bytes,
-        )?;
-        self.attachments.push(descriptor);
-        Ok(())
-    }
-
     fn close(self) -> Result<()> {
         let Run {
             experiment,
@@ -135,6 +84,25 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
             parameters,
         };
         experiment.push_closed_run(run)?;
+        Ok(())
+    }
+}
+
+impl<'exp, 'reg> AttachmentLogger for &mut Run<'exp, 'reg> {
+    fn log_attachment(
+        self,
+        name: &str,
+        media_type: MediaType,
+        bytes: impl AsRef<[u8]>,
+    ) -> Result<()> {
+        let descriptor = store_attachment_descriptor(
+            self.experiment.registry,
+            AttachmentSpace::Run(self.run_id),
+            name,
+            media_type,
+            bytes.as_ref(),
+        )?;
+        self.attachments.push(descriptor);
         Ok(())
     }
 }
