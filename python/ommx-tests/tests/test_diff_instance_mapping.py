@@ -7,6 +7,7 @@ from ommx.v1 import (
     OneHotConstraint,
     Sos1Constraint,
 )
+import pytest
 
 
 def test_match_instance_ids_recovers_relabelled_regular_constraints():
@@ -117,3 +118,40 @@ def test_match_instance_ids_reports_unverified_for_nonmatching_objective():
     assert not mapping.verified
     assert not mapping.objective_matches
     assert mapping.score < 1.0 or mapping.diagnostics
+
+
+def test_match_instance_ids_uses_coarser_buckets_than_final_verification():
+    x = [DecisionVariable.binary(i) for i in range(2)]
+    source = Instance.from_components(
+        decision_variables=x,
+        objective=1.004 * x[0] + 2 * x[1],
+        constraints={1: x[0] + 3 * x[1] <= 1},
+        sense=Instance.MINIMIZE,
+    )
+
+    y = [DecisionVariable.binary(10), DecisionVariable.binary(11)]
+    target = Instance.from_components(
+        decision_variables=y,
+        objective=1.006 * y[0] + 2 * y[1],
+        constraints={100: y[0] + 3 * y[1] <= 1},
+        sense=Instance.MINIMIZE,
+    )
+
+    mapping = match_instance_ids(source, target, atol=1e-2)
+
+    assert mapping.verified
+    assert mapping.decision_variables == {0: 10, 1: 11}
+
+
+def test_match_instance_ids_rejects_color_atol_stricter_than_atol():
+    x = [DecisionVariable.binary(0)]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=x[0],
+        constraints={},
+        sense=Instance.MINIMIZE,
+    )
+
+    with pytest.raises(ValueError) as e:
+        match_instance_ids(instance, instance, atol=1e-2, color_atol=1e-3)
+    assert str(e.value) == "color_atol must be greater than or equal to atol"

@@ -86,6 +86,7 @@ def match_instance_ids(
     target: Instance,
     *,
     atol: float = 1e-12,
+    color_atol: float | None = None,
     max_refinement_iterations: int = 12,
     max_backtracking_steps: int = 100_000,
     include_metadata: bool = False,
@@ -103,18 +104,31 @@ def match_instance_ids(
         source: Instance whose IDs are mapped from.
         target: Instance whose IDs are mapped to.
         atol: Absolute tolerance used when grouping coefficients and bounds.
+        color_atol: Coarser absolute tolerance used only for color/fingerprint
+            bucketing. The final verification still uses ``atol``.
         max_refinement_iterations: Maximum color-refinement rounds.
         max_backtracking_steps: Search budget for ambiguous color classes.
         include_metadata: Include names, subscripts, and parameters in
             fingerprints. The default ignores metadata and matches math shape.
     """
 
-    source_graph = _build_graph(source, atol=atol, include_metadata=include_metadata)
-    target_graph = _build_graph(target, atol=atol, include_metadata=include_metadata)
+    effective_color_atol = _resolve_color_atol(atol, color_atol)
+    source_graph = _build_graph(
+        source,
+        atol=atol,
+        color_atol=effective_color_atol,
+        include_metadata=include_metadata,
+    )
+    target_graph = _build_graph(
+        target,
+        atol=atol,
+        color_atol=effective_color_atol,
+        include_metadata=include_metadata,
+    )
     colors = _refine_colors(
         source_graph,
         target_graph,
-        atol=atol,
+        atol=effective_color_atol,
         max_iterations=max_refinement_iterations,
     )
     result, steps = _search_mapping(
@@ -150,12 +164,14 @@ def match_instance_ids(
     )
 
 
-def _build_graph(instance: Instance, *, atol: float, include_metadata: bool) -> _Graph:
+def _build_graph(
+    instance: Instance, *, atol: float, color_atol: float, include_metadata: bool
+) -> _Graph:
     variables: dict[int, tuple[Any, ...]] = {}
     for attached in instance.decision_variables:
         var = attached.detach()
         variables[var.id] = _variable_attrs(
-            var, atol=atol, include_metadata=include_metadata
+            var, atol=color_atol, include_metadata=include_metadata
         )
 
     factors: dict[_FactorKey, _FactorNode] = {}
@@ -166,7 +182,7 @@ def _build_graph(instance: Instance, *, atol: float, include_metadata: bool) -> 
         function_terms=objective_terms,
         equality=None,
         metadata=(),
-        atol=atol,
+        atol=color_atol,
         sense=str(instance.sense),
     )
 
@@ -178,13 +194,13 @@ def _build_graph(instance: Instance, *, atol: float, include_metadata: bool) -> 
             function_terms=_function_terms(attached.function, atol=atol),
             equality=str(attached.equality),
             metadata=metadata,
-            atol=atol,
+            atol=color_atol,
         )
 
     for constraint_id, attached in instance.indicator_constraints.items():
         metadata = _constraint_metadata(attached, include_metadata)
         terms = _function_terms(attached.function, atol=atol)
-        neighbors = dict(_function_neighbors(terms, atol=atol))
+        neighbors = dict(_function_neighbors(terms, atol=color_atol))
         indicator_id = int(attached.indicator_variable_id)
         labels = list(neighbors.get(indicator_id, ()))
         labels.append(("indicator",))
@@ -192,7 +208,7 @@ def _build_graph(instance: Instance, *, atol: float, include_metadata: bool) -> 
         attrs = (
             "indicator",
             str(attached.equality),
-            _function_shape_signature(terms, atol),
+            _function_shape_signature(terms, color_atol),
             metadata,
         )
         factors[("indicator", int(constraint_id))] = _FactorNode(
@@ -232,6 +248,18 @@ def _build_graph(instance: Instance, *, atol: float, include_metadata: bool) -> 
         var_to_factors=var_to_factors,
         sense=str(instance.sense),
     )
+
+
+def _resolve_color_atol(atol: float, color_atol: float | None) -> float:
+    if atol < 0:
+        raise ValueError("atol must be non-negative")
+    if color_atol is None:
+        return 10 * atol
+    if color_atol < 0:
+        raise ValueError("color_atol must be non-negative")
+    if color_atol < atol:
+        raise ValueError("color_atol must be greater than or equal to atol")
+    return color_atol
 
 
 def _variable_attrs(
