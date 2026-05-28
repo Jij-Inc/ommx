@@ -1691,8 +1691,8 @@ class Experiment:
     Newly created experiments are unsealed. Call `commit()` to write the
     experiment into the local registry as an OMMX Artifact. After commit, the
     same object can be used as a read-only view of the committed artifact.
-    `with Experiment(...)` commits on normal exit and leaves the experiment
-    uncommitted on exception.
+    `with Experiment(...)` commits on normal exit if the experiment is still
+    unsealed, and does not auto-commit on exception.
 
     Use experiment-level attachments for shared context such as dataset or
     source-problem metadata. Use `Run.log_parameter(...)` for scalar values

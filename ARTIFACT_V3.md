@@ -694,6 +694,7 @@ GC は data model を変えない。完全な descriptor list を持つ manifest
 ### 10.1 Failed recovery / autosave metadata
 
 process crash や Python context manager 例外時に、どの Attachment / Run / Solve / parameter がどの blob に対応していたかを復元する metadata は未設計である。
+現行の例外終了 path は成功 Artifact への自動 commit を行わないが、次の設計ではこの path を `status=failed` の recovery artifact として materialize する。
 
 残作業:
 
