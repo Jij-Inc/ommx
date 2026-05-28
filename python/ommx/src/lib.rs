@@ -289,6 +289,23 @@ solver settings, and you want the resulting Artifact to answer:
 - which run-level parameters should be compared as a table,
 - which input `ommx.v1.Instance` was actually solved, and
 - which output `ommx.v1.Solution` and adapter options came from each solver call.
+
+An `Experiment` is a mutable session until it is committed. Experiment-level
+attachments store shared context, while each `Run` stores scalar parameters,
+run-level attachments, and zero or more `Solve` records. Use
+`Run.log_parameter(...)` for values that should become columns in
+`Experiment.run_parameters_df()`, and use attachment methods for payloads such
+as JSON, instances, solutions, sample sets, logs, or caller-defined media
+types. `Run.log_solve(...)` calls an `ommx.adapter.SolverAdapter`, stores the
+original input instance and returned solution, and records adapter keyword
+arguments as solve metadata rather than run parameters.
+
+`Experiment` and `Run` are context managers. On normal exit a run is finished
+and the experiment is committed if it is still unsealed; on exception an open
+run is abandoned and the experiment does not auto-commit. A committed
+experiment is read-only. To add runs to a committed experiment, create a child
+session with `Experiment.fork(...)`. Use `Experiment.rename(...)` to choose or
+update the local registry image reference before saving or pushing.
 "#
 );
 
