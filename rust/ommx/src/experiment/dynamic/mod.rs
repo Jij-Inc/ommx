@@ -15,18 +15,16 @@
 //! `LocalRegistry::stored_descriptor` before returning them, restoring
 //! the Local Registry storage invariant at the API boundary.
 
-use super::attachment::{
-    encode_json, json_media_type, store_attachment_descriptor, AttachmentSpace,
-};
+use super::attachment::{store_attachment_descriptor, AttachmentSpace};
 use super::{
-    allocate_next_run_id, next_run_id, Name, RunEntry, RunParameterCell, SealedExperiment,
-    UnsealedExperimentState,
+    allocate_next_run_id, next_run_id, AttachmentLogger, Name, RunEntry, RunParameterCell,
+    SealedExperiment, UnsealedExperimentState,
 };
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
 use crate::artifact::{
     media_types, AsArtifact, ImageRef, LocalArtifact, LocalArtifactDyn, LocalRegistryHandle,
 };
-use crate::{Instance, ParametricInstance, SampleSet, Solution};
+use crate::{Instance, Solution};
 use anyhow::{ensure, Result};
 use oci_spec::image::{Descriptor, MediaType};
 use std::collections::BTreeMap;
@@ -351,9 +349,11 @@ impl ExperimentDyn {
             ExperimentDynLifecycle::Sealed(_) | ExperimentDynLifecycle::Failed { .. } => 0,
         }
     }
+}
 
-    pub fn log_attachment(
-        &self,
+impl AttachmentLogger for &ExperimentDyn {
+    fn log_attachment(
+        self,
         name: &str,
         media_type: MediaType,
         bytes: impl AsRef<[u8]>,
@@ -370,44 +370,9 @@ impl ExperimentDyn {
         state.attachments.push(descriptor);
         Ok(())
     }
+}
 
-    pub fn log_json(&self, name: &str, value: impl serde::Serialize) -> Result<()> {
-        let bytes = encode_json(name, value)?;
-        self.log_attachment(name, json_media_type(), bytes)
-    }
-
-    pub fn log_instance(&self, name: &str, instance: &Instance) -> Result<()> {
-        self.log_attachment(
-            name,
-            crate::artifact::media_types::v1_instance(),
-            instance.to_bytes(),
-        )
-    }
-
-    pub fn log_parametric_instance(&self, name: &str, pi: &ParametricInstance) -> Result<()> {
-        self.log_attachment(
-            name,
-            crate::artifact::media_types::v1_parametric_instance(),
-            pi.to_bytes(),
-        )
-    }
-
-    pub fn log_solution(&self, name: &str, solution: &Solution) -> Result<()> {
-        self.log_attachment(
-            name,
-            crate::artifact::media_types::v1_solution(),
-            solution.to_bytes(),
-        )
-    }
-
-    pub fn log_sample_set(&self, name: &str, sample_set: &SampleSet) -> Result<()> {
-        self.log_attachment(
-            name,
-            crate::artifact::media_types::v1_sample_set(),
-            sample_set.to_bytes(),
-        )
-    }
-
+impl ExperimentDyn {
     pub fn commit(&self) -> Result<LocalArtifactDyn> {
         let mut dyn_state = lock_experiment_state(&self.state);
         let (state, open_runs) = match &mut dyn_state.lifecycle {
