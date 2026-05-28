@@ -1,6 +1,21 @@
 [tool.uv.sources]
 ommx = { workspace = true }
 
+# JijModeling 2.4.1 is used in the Experiment tutorial only for its
+# Problem protobuf codec. Its published metadata still caps OMMX at <3,
+# so relax that transitive bound for this workspace's dev lock.
+[[tool.uv.dependency-metadata]]
+name = "jijmodeling"
+version = "2.4.1"
+requires-python = ">=3.11,<4"
+requires-dist = [
+  "numpy",
+  "ommx>=2.0.0,<4.0.0",
+  "orjson>=3.8.0,<4.0.0",
+  "pandas",
+  "typing-extensions",
+]
+
 [tool.uv.workspace]
 members = ["python/ommx*"]
 
@@ -17,6 +32,7 @@ docs = [
 dev = [
   { include-group = "docs" },
   "ipython>=8.18.1",
+  "jijmodeling>=2.4.1,<3.0.0; python_version >= '3.11'",
   "jupyter>=1.1.1",
   "jupyterlab>=4.3.5",
   "jupytext>=1.19.3",
