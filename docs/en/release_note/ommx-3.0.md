@@ -8,18 +8,96 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
-### ⚠ Artifact API: archive becomes an exchange format ([#872](https://github.com/Jij-Inc/ommx/pull/872))
+## 3.0.0 Alpha 4
 
-v3 redraws the artifact API around the SQLite Local Registry as the single canonical store; `.ommx` archives become a pure exchange format. Breaking changes on {class}`~ommx.artifact.ArtifactDraft` and {class}`~ommx.artifact.Artifact` need migration:
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0a4-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0a4)
+
+See the GitHub Release above for full details. The following summarizes the main changes. This is a pre-release version. APIs may change before the final release.
+
+### ⚠ SQLite-based Local Registry ([#871](https://github.com/Jij-Inc/ommx/pull/871), [#872](https://github.com/Jij-Inc/ommx/pull/872))
+
+In v3, local Artifact storage is organized around the SQLite-based Local Registry. Artifact blobs are stored in content-addressed storage, while image-name references and registry metadata are managed in SQLite. APIs that depended on the old disk OCI directory cache are removed; the user-facing flow is now to commit an Artifact into the Local Registry, then `save` / `push` / `load` that committed Artifact.
+
+Alongside this storage model and the new `Experiment` API, the old `ArtifactBuilder` is reshaped as {class}`~ommx.artifact.ArtifactDraft`. An `ArtifactDraft` represents an uncommitted Artifact draft; after it is committed to the Local Registry, the resulting {class}`~ommx.artifact.Artifact` can be saved or pushed. `.ommx` archives are import/export exchange formats for the Local Registry. The main breaking changes are:
 
 - `ArtifactBuilder.new_archive` → {func}`ArtifactDraft.new <ommx.artifact.ArtifactDraft.new>` + {func}`Artifact.save <ommx.artifact.Artifact.save>` (new method).
-- `ArtifactBuilder.new_archive_unnamed` → {func}`ArtifactDraft.new_anonymous <ommx.artifact.ArtifactDraft.new_anonymous>` + `Artifact.save(path)`. Anonymous artifacts now carry a synthesized `<registry-id8>.ommx.local/anonymous:<timestamp>-<nonce>` image name instead of `None`.
+- `ArtifactBuilder.new_archive_unnamed` → {func}`ArtifactDraft.new_anonymous <ommx.artifact.ArtifactDraft.new_anonymous>` + `Artifact.save(path)`. In v2, an unnamed archive literally had no image name and was read back as `None`. In v3, an anonymous Artifact gets an automatically generated `<registry-id8>.ommx.local/anonymous:<timestamp>-<nonce>` image name from the Local Registry, so it can still be saved, loaded again, and cleaned up.
 - {func}`Artifact.load_archive <ommx.artifact.Artifact.load_archive>` raises a migration error pointing at the two replacement methods: {func}`Artifact.import_archive <ommx.artifact.Artifact.import_archive>` (imports the archive into the user's persistent SQLite Local Registry — the v3 successor with registry-write semantics) and {func}`Artifact.inspect_archive <ommx.artifact.Artifact.inspect_archive>` (side-effect-free read of the manifest + layer descriptors, returns a new {class}`ArchiveManifest <ommx.artifact.ArchiveManifest>` view). v2's `load_archive` opened archives in place with no registry side effect, so the rename makes the semantic shift explicit instead of silently writing into the registry on upgrade. `import_archive` accepts v2 archives produced by `ArtifactBuilder.new_archive_unnamed` (no `org.opencontainers.image.ref.name` annotation) by synthesizing an anonymous name on the fly; `inspect_archive` reads such archives back with `ArchiveManifest.image_name = None` (no registry context for synthesis).
 - CLI `ommx push <archive>` and `ommx push <oci-dir>` removed — load into the registry first, then push by image name.
 - New CLI `ommx artifact prune-anonymous [--dry-run]` bulk-cleans accumulated anonymous-commit entries.
 - `ommx.get_image_dir(...)` and the CLI `ommx image-dir <name>` subcommand are removed. The return value was a v2 disk-cache path (`<root>/<image_name>/<tag>/`) that no longer corresponds to any v3 storage location — the SQLite Local Registry stores blobs content-addressed and refs in SQLite — so pointing users at it was actively misleading. Existing v2 caches still migrate via `ommx artifact import`.
 
 See the [Python SDK v2→v3 Migration Guide §13](https://github.com/Jij-Inc/ommx/blob/main/PYTHON_SDK_MIGRATION_GUIDE.md#13-artifact-api-archive-becomes-an-exchange-format) for the full before/after code and migration checklist.
+
+### 🆕 Artifact-backed experiment management API: `ommx.experiment` ([#882](https://github.com/Jij-Inc/ommx/pull/882), [#885](https://github.com/Jij-Inc/ommx/pull/885), [#886](https://github.com/Jij-Inc/ommx/pull/886), [#903](https://github.com/Jij-Inc/ommx/pull/903))
+
+The new `ommx.experiment` module records experiment inputs, run conditions, and Solver/Sampler results as one OMMX Artifact. Use {class}`~ommx.experiment.Experiment`, {class}`~ommx.experiment.Run`, and {class}`~ommx.experiment.Solve` to store per-run comparison parameters, attachments, and solve input/output data in the Local Registry.
+
+See the [Experiment management tutorial](../tutorial/experiment_management.md) for the basic workflow, sharing an Experiment, loading a committed Experiment, and creating derived experiments with fork.
+
+### 🆕 `Run.log_solve` records solve input/output and adapter options ([#902](https://github.com/Jij-Inc/ommx/pull/902))
+
+{meth}`~ommx.experiment.Run.log_solve` is now available. Pass a subclass of `ommx.adapter.SolverAdapter` and an {class}`~ommx.v1.Instance`; OMMX calls the adapter's `solve`, then stores the input Instance, output Solution, adapter class name, and JSON-serializable keyword arguments as a {class}`~ommx.experiment.Solve`.
+
+```python
+from ommx.experiment import Experiment
+from ommx_highs_adapter import OMMXHighsAdapter
+from ommx.v1 import Instance, Solution
+
+with Experiment() as experiment:
+    with experiment.run() as run:
+        solution = run.log_solve(OMMXHighsAdapter, instance, verbose=False)
+        run.log_parameter("objective", solution.objective)
+
+solve = experiment.runs[0].solves[0]
+assert solve.adapter.endswith("OMMXHighsAdapter")
+assert isinstance(solve.input, Instance)
+assert isinstance(solve.output, Solution)
+assert solve.output.feasible
+assert solve.adapter_options == {"verbose": False}
+```
+
+Adapter options are solve-scoped metadata, so they do not appear in {meth}`~ommx.experiment.Experiment.run_parameters_df`, which is the table for comparing runs. Record values explicitly with {meth}`~ommx.experiment.Run.log_parameter` when you want them in that DataFrame.
+
+### 🆕 Experiment fork and lineage ([#905](https://github.com/Jij-Inc/ommx/pull/905))
+
+{meth}`~ommx.experiment.Experiment.fork` starts a new uncommitted Experiment from a committed one. The child inherits the parent's attachments, Runs, Solves, and Run parameters, while the parent remains unchanged. When the child is committed after adding new Runs or attachments, the parent manifest descriptor is recorded as the OCI `subject`.
+
+```python
+from ommx.experiment import Experiment
+from ommx_highs_adapter import OMMXHighsAdapter
+
+loaded = Experiment.load("ghcr.io/jij-inc/ommx/tutorial/experiment:baseline")
+
+with loaded.fork("ghcr.io/jij-inc/ommx/tutorial/experiment:capacity-64") as child:
+    with child.run() as run:
+        run.log_parameter("capacity", 64)
+        run.log_solve(OMMXHighsAdapter, instance, verbose=False)
+```
+
+Forking creates a new Artifact Manifest, but Instance / Solution / attachment payloads continue to reference content-addressed blobs in the Local Registry, so the data bodies are not duplicated. Saving or pushing the fork shares the complete forked Experiment, including Runs and Solves inherited from the parent.
+
+### 🆕 `Instance.substitute` / `ParametricInstance.substitute` ([#891](https://github.com/Jij-Inc/ommx/pull/891), [#897](https://github.com/Jij-Inc/ommx/pull/897))
+
+{meth}`~ommx.v1.Instance.substitute` and {meth}`~ommx.v1.ParametricInstance.substitute` are now available from Python. Pass a dictionary from decision-variable IDs to replacement {class}`~ommx.v1.Function` expressions; OMMX rewrites those variables in the objective and active constraints in-place. This exposes the general substitution mechanism behind `log_encode`, so users can implement custom variable transformations such as unary or one-hot encodings.
+
+```python
+from ommx.v1 import DecisionVariable, Instance
+
+x = DecisionVariable.integer(0, lower=0, upper=3)
+b = [DecisionVariable.binary(i) for i in (1, 2)]
+instance = Instance.from_components(
+    decision_variables=[x, *b],
+    objective=x,
+    constraints={},
+    sense=Instance.MAXIMIZE,
+)
+
+instance.substitute({0: b[0] + 2 * b[1]})
+assert str(instance.objective) == "Function(x1 + 2*x2)"
+```
+
+This API is an algebraic rewrite. It does not translate the substituted variable's `kind` / `lower` / `upper` into constraints on the replacement expression. To preserve the optimization problem, use a domain-preserving encoding or add the required linking / bound constraints yourself. `ParametricInstance.substitute` may leave parameters in replacement expressions, so symbolic variable transformations can be applied before concrete values are supplied with `with_parameters`.
 
 ## 3.0.0 Alpha 3
 
