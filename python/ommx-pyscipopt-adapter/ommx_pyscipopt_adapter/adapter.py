@@ -7,6 +7,8 @@ import math
 from opentelemetry import trace
 
 from ommx.adapter import (
+    DiagnosticEntry,
+    DiagnosticsSink,
     SolverAdapter,
     InfeasibleDetected,
     UnboundedDetected,
@@ -27,8 +29,56 @@ from .exception import OMMXPySCIPOptAdapterError
 
 _tracer = trace.get_tracer("ommx.adapter.pyscipopt")
 
+_SCIP_TERMINATION_REPORT_SCHEMA = "org.ommx.solver.scip.termination-report.v1"
+_SCIP_TERMINATION_REPORT_NAME = "solver/scip/termination-report"
+
+
+def _finite_float_or_none(value: float) -> float | None:
+    value = float(value)
+    if math.isfinite(value):
+        return value
+    return None
+
+
+def _record_scip_termination_report(
+    model: pyscipopt.Model,
+    diagnostics: DiagnosticsSink,
+) -> None:
+    solution_count = int(model.getNSols())
+    report: dict[str, object] = {
+        "adapter": "ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter",
+        "dual_bound": _finite_float_or_none(model.getDualbound()),
+        "gap": _finite_float_or_none(model.getGap()),
+        "node_count": int(model.getNNodes()),
+        "primal_bound": _finite_float_or_none(model.getPrimalbound()),
+        "pyscipopt_version": getattr(pyscipopt, "__version__", None),
+        "schema": _SCIP_TERMINATION_REPORT_SCHEMA,
+        "scip_version": (
+            f"{model.getMajorVersion()}.{model.getMinorVersion()}.{model.getTechVersion()}"
+        ),
+        "solution_count": solution_count,
+        "solver": "scip",
+        "solving_time_sec": _finite_float_or_none(model.getSolvingTime()),
+        "status": str(model.getStatus()),
+    }
+    if solution_count > 0:
+        report["objective_value"] = _finite_float_or_none(model.getObjVal())
+
+    diagnostics.record(
+        DiagnosticEntry.from_json(
+            _SCIP_TERMINATION_REPORT_NAME,
+            report,
+            annotations={
+                "org.ommx.solver.name": "scip",
+                "org.ommx.solver.diagnostic.kind": "termination_report",
+                "org.ommx.solver.diagnostic.schema": _SCIP_TERMINATION_REPORT_SCHEMA,
+            },
+        )
+    )
+
 
 class OMMXPySCIPOptAdapter(SolverAdapter):
+    SUPPORTS_DIAGNOSTICS = True
     ADDITIONAL_CAPABILITIES = frozenset(
         {
             AdditionalCapability.Indicator,
@@ -66,6 +116,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         ommx_instance: Instance,
         *,
         initial_state: Optional[ToState] = None,
+        diagnostics: DiagnosticsSink | None = None,
     ) -> Solution:
         """
         Solve the given ommx.v1.Instance using PySCIPopt, returning an ommx.v1.Solution.
@@ -158,7 +209,10 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         model = adapter.solver_input
         with _tracer.start_as_current_span("solve"):
             model.optimize()
-        return adapter.decode(model)
+        solution = adapter.decode(model)
+        if diagnostics is not None:
+            _record_scip_termination_report(model, diagnostics)
+        return solution
 
     @property
     def solver_input(self) -> pyscipopt.Model:

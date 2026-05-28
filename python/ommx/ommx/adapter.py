@@ -1,5 +1,10 @@
+from __future__ import annotations
+
+import json
 from abc import ABC, abstractmethod
-from typing import Any
+from dataclasses import dataclass, field
+from typing import Any, ClassVar, Mapping, Protocol
+
 from ommx.v1 import Instance, Solution, SampleSet, AdditionalCapability
 
 
@@ -7,6 +12,89 @@ SolverInput = Any
 SolverOutput = Any
 SamplerInput = Any
 SamplerOutput = Any
+
+
+@dataclass(slots=True)
+class DiagnosticEntry:
+    """One solver diagnostic payload emitted by an adapter.
+
+    Diagnostics are adapter-owned evidence such as native solver reports,
+    termination summaries, or timelines. OMMX core treats the payload as
+    bytes plus media type and annotations; adapters define the solver-specific
+    schema carried by ``data``.
+    """
+
+    name: str
+    media_type: str
+    data: bytes
+    annotations: Mapping[str, str] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not self.name:
+            msg = "DiagnosticEntry.name must not be empty"
+            raise ValueError(msg)
+        if not self.media_type:
+            msg = "DiagnosticEntry.media_type must not be empty"
+            raise ValueError(msg)
+        base_media_type = self.media_type.split(";", 1)[0].strip()
+        if "/" not in base_media_type or any(
+            not part for part in base_media_type.split("/", 1)
+        ):
+            msg = "DiagnosticEntry.media_type must be a valid media type"
+            raise ValueError(msg)
+        if not isinstance(self.data, bytes):
+            msg = "DiagnosticEntry.data must be bytes"
+            raise TypeError(msg)
+
+        annotations = dict(self.annotations)
+        for key, value in annotations.items():
+            if not isinstance(key, str) or not isinstance(value, str):
+                msg = "DiagnosticEntry.annotations must map str keys to str values"
+                raise TypeError(msg)
+        self.annotations = annotations
+
+    @classmethod
+    def from_json(
+        cls,
+        name: str,
+        value: Any,
+        *,
+        annotations: Mapping[str, str] | None = None,
+        media_type: str = "application/json",
+    ) -> DiagnosticEntry:
+        """Create a diagnostic entry from a JSON-serializable value."""
+
+        data = json.dumps(
+            value,
+            allow_nan=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode()
+        return cls(name, media_type, data, annotations or {})
+
+
+class DiagnosticsSink(Protocol):
+    """Protocol consumed by adapters that can emit diagnostics."""
+
+    def record(self, entry: DiagnosticEntry) -> None:
+        """Record one diagnostic entry."""
+
+
+class DiagnosticCollector:
+    """In-memory diagnostics sink for direct adapter calls."""
+
+    def __init__(self) -> None:
+        self._entries: list[DiagnosticEntry] = []
+
+    @property
+    def entries(self) -> tuple[DiagnosticEntry, ...]:
+        return tuple(self._entries)
+
+    def record(self, entry: DiagnosticEntry) -> None:
+        if not isinstance(entry, DiagnosticEntry):
+            msg = "DiagnosticCollector.record expects a DiagnosticEntry"
+            raise TypeError(msg)
+        self._entries.append(entry)
 
 
 class SolverAdapter(ABC):
@@ -35,6 +123,7 @@ class SolverAdapter(ABC):
     """
 
     ADDITIONAL_CAPABILITIES: frozenset[AdditionalCapability] = frozenset()
+    SUPPORTS_DIAGNOSTICS: ClassVar[bool] = False
 
     def __init__(self, ommx_instance: Instance):
         """Reduce the instance to the adapter's supported capabilities.
