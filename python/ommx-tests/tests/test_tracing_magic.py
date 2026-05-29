@@ -7,9 +7,9 @@ The magic is supposed to:
    ``pyo3-tracing-opentelemetry``).
 3. Render a text tree and attach a Chrome Trace JSON download link.
 
-These tests exercise the collector and renderers directly for focused
-unit coverage, then drive the full magic through an ``IPython`` shell
-to verify the integration end-to-end.
+These tests exercise the collector and magic-specific HTML wrapper for
+focused unit coverage, then drive the full magic through an
+``IPython`` shell to verify the integration end-to-end.
 
 The session-scoped ``TracerProvider`` installed by :mod:`conftest` is
 reused throughout: OTel refuses to swap providers once set, so tests
@@ -30,12 +30,6 @@ from opentelemetry import trace
 from ommx.tracing import TraceResult, _setup
 from ommx.tracing._collector import _TraceSpanCollector
 from ommx.tracing._magic import _render_cell_output_html, run_cell_with_trace
-from ommx.tracing._otlp import spans_to_otlp_request
-from ommx.tracing._render import (
-    chrome_trace_json,
-    render_text_tree,
-    to_chrome_trace,
-)
 
 from conftest import get_test_provider
 
@@ -85,15 +79,6 @@ def _run_and_collect(collector: _TraceSpanCollector, cell_fn):
         collector.begin_capture(trace_id)
         cell_fn(tracer)
     return collector.end_capture(trace_id)
-
-
-def _run_and_collect_result(
-    collector: _TraceSpanCollector,
-    cell_fn,
-) -> TraceResult:
-    return TraceResult(
-        request=spans_to_otlp_request(_run_and_collect(collector, cell_fn))
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -165,77 +150,23 @@ def test_collector_is_threadsafe(cell_collector):
 
 
 # ---------------------------------------------------------------------------
-# Renderers
+# Cell HTML
 # ---------------------------------------------------------------------------
 
 
-def test_render_text_tree_reflects_nesting(cell_collector):
-    """Children appear indented under their parent, not as siblings."""
-
-    def cell(tracer):
-        with tracer.start_as_current_span("outer"):
-            with tracer.start_as_current_span("inner"):
-                pass
-
-    result = _run_and_collect_result(cell_collector, cell)
-    tree = render_text_tree(result)
-
-    outer_line = next(line for line in tree.splitlines() if "outer" in line)
-    inner_line = next(line for line in tree.splitlines() if "inner" in line)
-    outer_indent = len(outer_line) - len(outer_line.lstrip())
-    inner_indent = len(inner_line) - len(inner_line.lstrip())
-    assert inner_indent > outer_indent
-
-
-def test_render_text_tree_handles_empty():
-    assert render_text_tree(TraceResult()) == "(no spans)"
-
-
-def test_chrome_trace_is_valid_json_with_X_events(cell_collector):
-    """Chrome-trace JSON must parse, every event has ``ph: 'X'``, and
-    durations are in microseconds (positive integers)."""
-
-    def cell(tracer):
-        with tracer.start_as_current_span("work") as span:
-            span.set_attribute("batch_size", 42)
-
-    result = _run_and_collect_result(cell_collector, cell)
-    payload = chrome_trace_json(result)
-    parsed = json.loads(payload)
-
-    assert parsed["displayTimeUnit"] == "ms"
-    events = parsed["traceEvents"]
-    # Two events: the synthetic ``root`` and the inner ``work`` span.
-    assert {e["name"] for e in events} == {"root", "work"}
-    for ev in events:
-        assert ev["ph"] == "X"
-        assert isinstance(ev["ts"], int) and ev["ts"] > 0
-        assert isinstance(ev["dur"], int) and ev["dur"] >= 1
-
-    work = next(e for e in events if e["name"] == "work")
-    assert work["args"]["batch_size"] == 42
-
-
-def test_chrome_trace_skips_open_spans():
-    """Spans without an ``end_time`` must be omitted — they would emit a
-    zero-duration event and confuse Perfetto."""
+def _trace_result_with_span(name: str = "work") -> TraceResult:
     result = TraceResult()
     span = result.request.resource_spans.add().scope_spans.add().spans.add()
-    span.name = "still_running"
+    span.name = name
+    span.span_id = (1).to_bytes(8, byteorder="big")
     span.start_time_unix_nano = 1_000_000_000
+    span.end_time_unix_nano = 1_001_000_000
+    return result
 
-    payload = to_chrome_trace(result)
-    assert payload["traceEvents"] == []
 
-
-def test_cell_html_contains_download_link(cell_collector):
+def test_cell_html_contains_download_link():
     """The HTML blob must carry a base64 data URL the browser can download."""
-
-    def cell(tracer):
-        with tracer.start_as_current_span("work"):
-            pass
-
-    result = _run_and_collect_result(cell_collector, cell)
+    result = _trace_result_with_span()
     html = _render_cell_output_html(result, download_filename="cell.json")
 
     assert "<pre>" in html

@@ -1,17 +1,15 @@
 """Tests for the script-side tracing API (``capture_trace`` + ``@traced``).
 
 Complementary to :mod:`test_tracing_magic`, which exercises the
-IPython cell magic. Both APIs share the underlying ``_collector`` and
-``_render`` modules, so these tests focus on:
+IPython cell magic, and :mod:`test_tracing_render`, which exercises
+rendering completed trace results. These tests focus on:
 
 * The context manager populates :class:`TraceResult.request` and doesn't
   swallow exceptions.
-* ``save_chrome_trace`` writes valid JSON, with parent dirs created.
 * ``@traced`` writes the trace on both the success and the exception
   paths so users who rely on the file never see it silently missing.
 * Failure information survives: OTel records an ``ERROR`` status on
-  the root span, the renderer flags it, and the traced exception
-  still propagates to the caller.
+  the root span, and the traced exception still propagates to the caller.
 
 The session-scoped ``TracerProvider`` from :mod:`conftest` is reused,
 and a single module-level ``_TraceSpanCollector`` is attached to it
@@ -35,9 +33,6 @@ from opentelemetry.proto.trace.v1.trace_pb2 import Status as ProtoStatus
 from ommx.tracing import (
     TraceResult,
     capture_trace,
-    chrome_trace_json,
-    render_text_tree,
-    save_chrome_trace,
     traced,
 )
 from ommx.tracing import _setup
@@ -103,9 +98,6 @@ def test_capture_trace_populates_result_on_success(capture_collector):
 
     # Root + inner span land in the collected list.
     assert sorted(span.name for span in result.spans) == ["example_op", "inner"]
-    # Text tree is useful to print from scripts.
-    tree = render_text_tree(result)
-    assert "example_op" in tree and "inner" in tree
 
 
 def test_capture_trace_custom_span_name(capture_collector):
@@ -131,7 +123,6 @@ def test_trace_result_otlp_protobuf_roundtrip(capture_collector):
 
     restored = TraceResult.from_otlp_protobuf(result.otlp_protobuf())
     assert {span.name for span in restored.spans} == names
-    assert "protobuf_child" in render_text_tree(restored)
 
 
 # ---------------------------------------------------------------------------
@@ -165,11 +156,6 @@ def test_capture_trace_populates_result_on_exception(capture_collector):
     # record_exception + set_status(ERROR).
     root = next(s for s in result.spans if s.name == "failing_op")
     assert root.status.code == ProtoStatus.STATUS_CODE_ERROR
-    # And the renderer surfaces the error status so the user can find
-    # the failing span at a glance.
-    tree = render_text_tree(result)
-    assert "[ERROR]" in tree
-    assert "failing_op" in tree
 
 
 def test_capture_trace_uses_fresh_trace_id(capture_collector):
@@ -191,36 +177,6 @@ def test_capture_trace_uses_fresh_trace_id(capture_collector):
     spans = result.spans
     assert [s.name for s in spans] == ["isolated"]
     assert _trace_id(spans[0]) != ambient_trace_id
-
-
-# ---------------------------------------------------------------------------
-# Chrome Trace output + save_chrome_trace
-# ---------------------------------------------------------------------------
-
-
-def test_save_chrome_trace_writes_valid_json(capture_collector, tmp_path):
-    """``save_chrome_trace`` writes the JSON the other tools consume."""
-    with capture_trace() as result:
-        pass
-
-    out = tmp_path / "nested" / "trace.json"
-    save_chrome_trace(result, out)
-
-    assert out.exists(), "save_chrome_trace should create parent dirs"
-    parsed = json.loads(out.read_text(encoding="utf-8"))
-    assert parsed["displayTimeUnit"] == "ms"
-    assert parsed["traceEvents"], "Trace must include at least the root span event"
-
-
-def test_trace_result_chrome_trace_json_string(capture_collector):
-    """``chrome_trace_json`` is the same JSON that ``save_chrome_trace``
-    would write — handy for tests and for piping into another tool
-    without touching the filesystem."""
-    with capture_trace() as result:
-        pass
-    payload = chrome_trace_json(result)
-    parsed = json.loads(payload)
-    assert parsed["traceEvents"]
 
 
 # ---------------------------------------------------------------------------
@@ -392,44 +348,6 @@ def test_traced_decorator_preserves_metadata(capture_collector):
 
     assert process.__name__ == "process"
     assert process.__doc__ == "Do a thing."
-
-
-# ---------------------------------------------------------------------------
-# Renderer: the new [ERROR] marker
-# ---------------------------------------------------------------------------
-
-
-def test_text_tree_marks_error_spans(capture_collector):
-    """Spans with ``Status(ERROR)`` must be flagged in the tree output
-    so the failing leaf is obvious when reading a trace post-mortem."""
-    from opentelemetry import trace
-
-    result: TraceResult | None = None
-    try:
-        with capture_trace("outer") as r:
-            result = r
-            tracer = trace.get_tracer("ommx-capture-test")
-            with tracer.start_as_current_span("inner"):
-                raise RuntimeError("kaboom")
-    except RuntimeError:
-        pass
-
-    assert result is not None
-    tree = render_text_tree(result)
-    # Both the inner span (active when the exception fired) and the
-    # root block inherit the ERROR status.
-    outer_line = next(line for line in tree.splitlines() if "outer" in line)
-    inner_line = next(line for line in tree.splitlines() if "inner" in line)
-    assert "[ERROR]" in outer_line
-    assert "[ERROR]" in inner_line
-
-
-def test_text_tree_does_not_mark_successful_spans(capture_collector):
-    """Spans that completed without an exception must stay unmarked."""
-    with capture_trace("clean") as result:
-        pass
-    tree = render_text_tree(result)
-    assert "[ERROR]" not in tree
 
 
 def test_trace_result_request_is_export_trace_service_request(capture_collector):
