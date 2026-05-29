@@ -32,7 +32,14 @@ from opentelemetry.proto.collector.trace.v1.trace_service_pb2 import (
 )
 from opentelemetry.proto.trace.v1.trace_pb2 import Status as ProtoStatus
 
-from ommx.tracing import TraceResult, capture_trace, traced
+from ommx.tracing import (
+    TraceResult,
+    capture_trace,
+    chrome_trace_json,
+    render_text_tree,
+    save_chrome_trace,
+    traced,
+)
 from ommx.tracing import _setup
 from ommx.tracing._collector import _TraceSpanCollector
 
@@ -97,7 +104,7 @@ def test_capture_trace_populates_result_on_success(capture_collector):
     # Root + inner span land in the collected list.
     assert sorted(span.name for span in result.spans) == ["example_op", "inner"]
     # Text tree is useful to print from scripts.
-    tree = result.text_tree()
+    tree = render_text_tree(result)
     assert "example_op" in tree and "inner" in tree
 
 
@@ -124,7 +131,7 @@ def test_trace_result_otlp_protobuf_roundtrip(capture_collector):
 
     restored = TraceResult.from_otlp_protobuf(result.otlp_protobuf())
     assert {span.name for span in restored.spans} == names
-    assert "protobuf_child" in restored.text_tree()
+    assert "protobuf_child" in render_text_tree(restored)
 
 
 # ---------------------------------------------------------------------------
@@ -160,7 +167,7 @@ def test_capture_trace_populates_result_on_exception(capture_collector):
     assert root.status.code == ProtoStatus.STATUS_CODE_ERROR
     # And the renderer surfaces the error status so the user can find
     # the failing span at a glance.
-    tree = result.text_tree()
+    tree = render_text_tree(result)
     assert "[ERROR]" in tree
     assert "failing_op" in tree
 
@@ -197,7 +204,7 @@ def test_save_chrome_trace_writes_valid_json(capture_collector, tmp_path):
         pass
 
     out = tmp_path / "nested" / "trace.json"
-    result.save_chrome_trace(out)
+    save_chrome_trace(result, out)
 
     assert out.exists(), "save_chrome_trace should create parent dirs"
     parsed = json.loads(out.read_text(encoding="utf-8"))
@@ -211,7 +218,7 @@ def test_trace_result_chrome_trace_json_string(capture_collector):
     without touching the filesystem."""
     with capture_trace() as result:
         pass
-    payload = result.chrome_trace_json()
+    payload = chrome_trace_json(result)
     parsed = json.loads(payload)
     assert parsed["traceEvents"]
 
@@ -408,7 +415,7 @@ def test_text_tree_marks_error_spans(capture_collector):
         pass
 
     assert result is not None
-    tree = result.text_tree()
+    tree = render_text_tree(result)
     # Both the inner span (active when the exception fired) and the
     # root block inherit the ERROR status.
     outer_line = next(line for line in tree.splitlines() if "outer" in line)
@@ -421,7 +428,7 @@ def test_text_tree_does_not_mark_successful_spans(capture_collector):
     """Spans that completed without an exception must stay unmarked."""
     with capture_trace("clean") as result:
         pass
-    tree = result.text_tree()
+    tree = render_text_tree(result)
     assert "[ERROR]" not in tree
 
 

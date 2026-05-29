@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import json
 from collections.abc import Sequence
-from typing import Any
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Union
 
 from opentelemetry.proto.common.v1.common_pb2 import AnyValue
 from opentelemetry.proto.trace.v1.trace_pb2 import Span as ProtoSpan
 from opentelemetry.proto.trace.v1.trace_pb2 import Status as ProtoStatus
 
-from ._result import TraceResult
+if TYPE_CHECKING:  # pragma: no cover - type hints only
+    from ._result import TraceResult
 
 
 # ---------------------------------------------------------------------------
@@ -238,3 +240,14 @@ def to_chrome_trace(result: TraceResult) -> dict:
 
 def chrome_trace_json(result: TraceResult) -> str:
     return json.dumps(to_chrome_trace(result))
+
+
+def save_chrome_trace(result: TraceResult, path: Union[str, Path]) -> None:
+    """Write ``result`` as Chrome Trace JSON to ``path``.
+
+    Overwrites any existing file. The UTF-8 encoding matches the JSON
+    spec and is what Perfetto / speedscope / ``chrome://tracing`` all accept.
+    """
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(chrome_trace_json(result), encoding="utf-8")

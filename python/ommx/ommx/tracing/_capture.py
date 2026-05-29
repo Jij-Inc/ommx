@@ -7,14 +7,14 @@ a :class:`TraceResult`.
 
 Usage::
 
-    from ommx.tracing import capture_trace
+    from ommx.tracing import capture_trace, render_text_tree, save_chrome_trace
 
     with capture_trace() as trace:
         instance = Instance.from_bytes(blob)
         solution = instance.evaluate(state)
 
-    print(trace.text_tree())
-    trace.save_chrome_trace("out.json")
+    print(render_text_tree(trace))
+    save_chrome_trace(trace, "out.json")
 
 **Exception handling.** Everything inside the managed block still
 raises normally — we never swallow. Before the exception propagates:

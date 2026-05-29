@@ -63,7 +63,7 @@ When the cell raises, the trace HTML is still rendered (with `[ERROR]` marking t
 The same machinery is available from plain Python:
 
 ```{code-cell} ipython3
-from ommx.tracing import capture_trace
+from ommx.tracing import capture_trace, render_text_tree, save_chrome_trace
 from ommx.v1 import Instance, DecisionVariable
 
 x = DecisionVariable.binary(0, name="x")
@@ -79,7 +79,7 @@ instance = Instance.from_components(
 with capture_trace() as trace:
     solution = instance.evaluate({0: 1.0, 1: 1.0})
 
-print(trace.text_tree())
+print(render_text_tree(trace))
 ```
 
 `trace` is a {class}`~ommx.tracing.TraceResult` populated when the block exits:
@@ -87,9 +87,12 @@ print(trace.text_tree())
 - {attr}`~ommx.tracing.TraceResult.request` — the exported OTLP {class}`~opentelemetry.proto.collector.trace.v1.trace_service_pb2.ExportTraceServiceRequest` held by the result.
 - {attr}`~ommx.tracing.TraceResult.spans` — flattened exported OTLP protobuf spans from `request`.
 - {meth}`~ommx.tracing.TraceResult.otlp_protobuf` — returns the same OTLP export request as protobuf bytes, which is the payload stored by Experiment trace layers.
-- {meth}`~ommx.tracing.TraceResult.text_tree` — the same nested renderer the cell magic uses.
-- {meth}`~ommx.tracing.TraceResult.chrome_trace_json` — returns the trace as a JSON string.
-- {meth}`~ommx.tracing.TraceResult.save_chrome_trace` — writes the JSON to disk (creates parent directories as needed).
+
+Rendering is separate from the data object:
+
+- {func}`~ommx.tracing.render_text_tree` — the same nested renderer the cell magic uses.
+- {func}`~ommx.tracing.chrome_trace_json` — returns the trace as a JSON string.
+- {func}`~ommx.tracing.save_chrome_trace` — writes the JSON to disk (creates parent directories as needed).
 
 If the block raises, `trace.request` is still populated (with the failing span flagged as `[ERROR]` by the renderer), so you can inspect or save it from an outer `except` or `finally`. The original exception propagates unchanged — OMMX never swallows.
 
@@ -98,7 +101,7 @@ import tempfile
 from pathlib import Path
 
 output_path = Path(tempfile.gettempdir()) / "ommx_trace.json"
-trace.save_chrome_trace(output_path)
+save_chrome_trace(trace, output_path)
 print(f"Wrote {output_path.stat().st_size} bytes to {output_path}")
 ```
 

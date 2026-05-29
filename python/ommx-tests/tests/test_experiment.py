@@ -6,6 +6,7 @@ import pytest
 from ommx.adapter import SolverAdapter
 from ommx.artifact import Artifact
 from ommx.experiment import Experiment
+from ommx.tracing import render_text_tree
 from ommx.v1 import Instance, Solution
 
 _ATTACHMENT_NAME = "org.ommx.attachment.name"
@@ -168,7 +169,7 @@ def test_store_trace_records_run_scope_in_artifact():
     assert trace is not None
     names = _trace_span_names(trace)
     assert "ommx.run" in names
-    assert "ommx.run" in trace.text_tree()
+    assert "ommx.run" in render_text_tree(trace)
 
 
 def test_fork_store_trace_carries_parent_trace_layers():

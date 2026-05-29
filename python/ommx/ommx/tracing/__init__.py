@@ -16,12 +16,12 @@ plus a download link for the full trace in Chrome Trace Event Format.
 
 **Context manager / decorator** (best for scripts, tests, CI)::
 
-    from ommx.tracing import capture_trace, traced
+    from ommx.tracing import capture_trace, render_text_tree, save_chrome_trace, traced
 
     with capture_trace() as trace:
         solution = instance.evaluate(state)
-    print(trace.text_tree())
-    trace.save_chrome_trace("trace.json")
+    print(render_text_tree(trace))
+    save_chrome_trace(trace, "trace.json")
 
     @traced(output="process.json")
     def process():
@@ -32,8 +32,10 @@ The public surface is intentionally small:
 * :class:`capture_trace` — context manager; ``__enter__`` returns a
   :class:`TraceResult` placeholder that ``__exit__`` fills in (for
   success *and* for exceptions — information is never dropped).
-* :class:`TraceResult` — ``request``, ``spans``, ``text_tree()``,
-  ``otlp_protobuf()``, ``chrome_trace_json()``, ``save_chrome_trace(path)``.
+* :class:`TraceResult` — completed trace data: ``request``, ``spans``,
+  ``otlp_protobuf()``.
+* :func:`render_text_tree`, :func:`chrome_trace_json`,
+  :func:`save_chrome_trace` — render or save a :class:`TraceResult`.
 * :func:`traced` — decorator sugar on top of :class:`capture_trace`,
   optionally writing the Chrome Trace JSON to disk.
 * :func:`load_ipython_extension` — wired by ``%load_ext ommx.tracing``;
@@ -59,6 +61,7 @@ from typing import TYPE_CHECKING
 
 from ._capture import capture_trace
 from ._decorator import traced
+from ._render import chrome_trace_json, render_text_tree, save_chrome_trace
 from ._result import TraceResult
 
 
@@ -68,8 +71,11 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 
 __all__ = [
     "TraceResult",
+    "chrome_trace_json",
     "capture_trace",
     "load_ipython_extension",
+    "render_text_tree",
+    "save_chrome_trace",
     "traced",
     "unload_ipython_extension",
 ]

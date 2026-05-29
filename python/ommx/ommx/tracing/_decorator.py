@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Callable, Optional, Union, overload
 
 from ._capture import capture_trace
+from ._render import save_chrome_trace
 from ._result import TraceResult
 
 
@@ -57,7 +58,7 @@ def traced(
 
     def _save_if_configured(result: Optional[TraceResult]) -> None:
         if output is not None and result is not None:
-            result.save_chrome_trace(output)
+            save_chrome_trace(result, output)
 
     def _save_best_effort(result: Optional[TraceResult]) -> None:
         """Like ``_save_if_configured`` but swallows any I/O failure.
@@ -69,7 +70,7 @@ def traced(
         if output is None or result is None:
             return
         try:
-            result.save_chrome_trace(output)
+            save_chrome_trace(result, output)
         except Exception:  # noqa: BLE001 - intentional swallow
             pass
 

@@ -63,7 +63,7 @@ solution = instance.evaluate({0: 1.0, 1: 1.0})
 通常のPythonスクリプトからも同じ仕組みを利用できます。
 
 ```{code-cell} ipython3
-from ommx.tracing import capture_trace
+from ommx.tracing import capture_trace, render_text_tree, save_chrome_trace
 from ommx.v1 import Instance, DecisionVariable
 
 x = DecisionVariable.binary(0, name="x")
@@ -79,7 +79,7 @@ instance = Instance.from_components(
 with capture_trace() as trace:
     solution = instance.evaluate({0: 1.0, 1: 1.0})
 
-print(trace.text_tree())
+print(render_text_tree(trace))
 ```
 
 `trace` はブロック終了時に値が埋められる {class}`~ommx.tracing.TraceResult` です。
@@ -87,9 +87,12 @@ print(trace.text_tree())
 - {attr}`~ommx.tracing.TraceResult.request` — 結果としてexportされたOTLP {class}`~opentelemetry.proto.collector.trace.v1.trace_service_pb2.ExportTraceServiceRequest`
 - {attr}`~ommx.tracing.TraceResult.spans` — `request` 内のexport済みOTLP protobuf spanを平坦化したリスト
 - {meth}`~ommx.tracing.TraceResult.otlp_protobuf` — Experimentのtrace layerに保存されるOTLP export requestのprotobuf bytes
-- {meth}`~ommx.tracing.TraceResult.text_tree` — セルマジックと同じネストしたテキストツリー
-- {meth}`~ommx.tracing.TraceResult.chrome_trace_json` — トレースをJSON文字列として返す
-- {meth}`~ommx.tracing.TraceResult.save_chrome_trace` — JSONをディスクに書き出す（必要な親ディレクトリは自動的に作成）
+
+表示や保存はデータオブジェクトとは別の関数で行います。
+
+- {func}`~ommx.tracing.render_text_tree` — セルマジックと同じネストしたテキストツリー
+- {func}`~ommx.tracing.chrome_trace_json` — トレースをJSON文字列として返す
+- {func}`~ommx.tracing.save_chrome_trace` — JSONをディスクに書き出す（必要な親ディレクトリは自動的に作成）
 
 ブロック内で例外が発生した場合でも `trace.request` は埋められており（rendererでは失敗したスパンに `[ERROR]` マーカーが付く）、外側の `except` や `finally` から内容を調査・保存できます。元の例外はそのまま伝播します。OMMXが例外を握り潰すことはありません。
 
@@ -98,7 +101,7 @@ import tempfile
 from pathlib import Path
 
 output_path = Path(tempfile.gettempdir()) / "ommx_trace.json"
-trace.save_chrome_trace(output_path)
+save_chrome_trace(trace, output_path)
 print(f"{output_path} に {output_path.stat().st_size} bytes 書き出しました")
 ```
 
