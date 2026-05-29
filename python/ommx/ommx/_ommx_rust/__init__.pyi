@@ -202,9 +202,9 @@ class Artifact:
     ```
     """
 
-    TRACE_OTLP_JSON_MEDIA_TYPE: builtins.str
+    TRACE_OTLP_PROTOBUF_MEDIA_TYPE: builtins.str
     r"""
-    Media type of an Experiment Run trace layer encoded as OTLP JSON.
+    Media type of an Experiment Run trace layer encoded as OTLP protobuf.
     """
     @property
     def image_name(self) -> typing.Optional[builtins.str]: ...

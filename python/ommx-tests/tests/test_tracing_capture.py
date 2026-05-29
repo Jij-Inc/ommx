@@ -27,6 +27,9 @@ from __future__ import annotations
 import json
 
 import pytest
+from opentelemetry.proto.collector.trace.v1.trace_service_pb2 import (
+    ExportTraceServiceRequest,
+)
 from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.trace.status import StatusCode
 
@@ -101,6 +104,30 @@ def test_capture_trace_custom_span_name(capture_collector):
     with capture_trace("build_qubo") as result:
         pass
     assert [s.name for s in result.spans] == ["build_qubo"]
+
+
+def test_trace_result_otlp_protobuf_roundtrip(capture_collector):
+    """Trace layers use OpenTelemetry's protobuf representation."""
+    from opentelemetry import trace
+
+    with capture_trace("protobuf_root") as result:
+        tracer = trace.get_tracer("ommx-capture-test")
+        with tracer.start_as_current_span("protobuf_child"):
+            pass
+
+    request = ExportTraceServiceRequest()
+    request.ParseFromString(result.otlp_protobuf())
+    names = {
+        span.name
+        for resource_span in request.resource_spans
+        for scope_span in resource_span.scope_spans
+        for span in scope_span.spans
+    }
+    assert names == {"protobuf_root", "protobuf_child"}
+
+    restored = TraceResult.from_otlp_protobuf(result.otlp_protobuf())
+    assert {span.name for span in restored.spans} == names
+    assert "protobuf_child" in restored.text_tree()
 
 
 # ---------------------------------------------------------------------------

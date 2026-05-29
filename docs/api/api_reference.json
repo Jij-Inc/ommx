@@ -872,8 +872,8 @@
           ],
           "attributes": [
             {
-              "name": "TRACE_OTLP_JSON_MEDIA_TYPE",
-              "doc": "Media type of an Experiment Run trace layer encoded as OTLP JSON.",
+              "name": "TRACE_OTLP_PROTOBUF_MEDIA_TYPE",
+              "doc": "Media type of an Experiment Run trace layer encoded as OTLP protobuf.",
               "type_": {
                 "display": "str",
                 "link_target": null,

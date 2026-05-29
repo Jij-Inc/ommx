@@ -24,7 +24,7 @@ def _trace_layers(artifact: Artifact):
     return [
         layer
         for layer in artifact.layers
-        if layer.media_type == Artifact.TRACE_OTLP_JSON_MEDIA_TYPE
+        if layer.media_type == Artifact.TRACE_OTLP_PROTOBUF_MEDIA_TYPE
     ]
 
 

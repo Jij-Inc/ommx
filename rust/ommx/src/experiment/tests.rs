@@ -165,10 +165,8 @@ fn log_writes_blob_to_blobstore_immediately() {
 fn trace_layer_is_config_referenced_manifest_layer() {
     with_temp_experiment(|experiment| {
         let mut run = experiment.run().unwrap();
-        run.store_trace_layer(Trace::from_otlp_json(
-            br#"{"resourceSpans":[{"scopeSpans":[]}]}"#.to_vec(),
-        ))
-        .unwrap();
+        run.store_trace_layer(Trace::from_bytes(b"trace".to_vec()))
+            .unwrap();
         run.finish().unwrap();
 
         let artifact = experiment.commit().unwrap().into_artifact();
@@ -180,7 +178,7 @@ fn trace_layer_is_config_referenced_manifest_layer() {
 
         let trace_layers = layers
             .iter()
-            .filter(|layer| layer.media_type() == &media_types::trace_otlp_json())
+            .filter(|layer| layer.media_type() == &media_types::trace_otlp_protobuf())
             .collect::<Vec<_>>();
         assert_eq!(trace_layers.len(), 1);
         assert_eq!(
@@ -455,10 +453,8 @@ fn sealed_experiment_fork_creates_child_with_parent_subject_and_next_run_id() {
                 "{}".to_string(),
             )
             .unwrap();
-            run.store_trace_layer(Trace::from_otlp_json(
-                br#"{"resourceSpans":[{"scopeSpans":[{"spans":[{"name":"parent"}]}]}]}"#.to_vec(),
-            ))
-            .unwrap();
+            run.store_trace_layer(Trace::from_bytes(b"parent trace".to_vec()))
+                .unwrap();
             run.finish().unwrap();
         }
 
@@ -478,10 +474,8 @@ fn sealed_experiment_fork_creates_child_with_parent_subject_and_next_run_id() {
             let mut run = child.run().unwrap();
             assert_eq!(run.run_id(), 1);
             run.log_parameter("solver", "child").unwrap();
-            run.store_trace_layer(Trace::from_otlp_json(
-                br#"{"resourceSpans":[{"scopeSpans":[{"spans":[{"name":"child"}]}]}]}"#.to_vec(),
-            ))
-            .unwrap();
+            run.store_trace_layer(Trace::from_bytes(b"child trace".to_vec()))
+                .unwrap();
             run.finish().unwrap();
         }
 

@@ -723,9 +723,9 @@ fn store_trace_layer_descriptor(
         super::ANN_LAYER.to_string(),
         super::LAYER_KIND_TRACE.to_string(),
     );
-    let super::Trace { otlp_json: bytes } = trace;
+    let super::Trace { bytes } = trace;
     let descriptor = state.registry_handle.registry().store_layer_blob(
-        media_types::trace_otlp_json(),
+        media_types::trace_otlp_protobuf(),
         &bytes,
         annotations,
     )?;

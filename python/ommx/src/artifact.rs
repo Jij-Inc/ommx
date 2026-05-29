@@ -48,11 +48,11 @@ impl PyArtifact {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl PyArtifact {
-    /// Media type of an Experiment Run trace layer encoded as OTLP JSON.
+    /// Media type of an Experiment Run trace layer encoded as OTLP protobuf.
     #[classattr]
-    #[pyo3(name = "TRACE_OTLP_JSON_MEDIA_TYPE")]
-    fn trace_otlp_json_media_type() -> &'static str {
-        ommx::artifact::media_types::TRACE_OTLP_JSON_MEDIA_TYPE
+    #[pyo3(name = "TRACE_OTLP_PROTOBUF_MEDIA_TYPE")]
+    fn trace_otlp_protobuf_media_type() -> &'static str {
+        ommx::artifact::media_types::TRACE_OTLP_PROTOBUF_MEDIA_TYPE
     }
 
     /// Import an artifact from a `.ommx` OCI archive file (or an OCI

@@ -995,11 +995,9 @@ impl PyRun {
             .trace_result
             .take()
             .context("store_trace=True lost its TraceResult before Run exit")?;
-        let payload: String = result.bind(py).call_method0("otlp_json")?.extract()?;
+        let payload: Vec<u8> = result.bind(py).call_method0("otlp_protobuf")?.extract()?;
         self.as_open_mut()?
-            .store_trace_layer(ommx::experiment::Trace::from_otlp_json(
-                payload.into_bytes(),
-            ))?;
+            .store_trace_layer(ommx::experiment::Trace::from_bytes(payload))?;
         Ok(())
     }
 
@@ -1263,7 +1261,7 @@ impl PySealedRun {
         let blob = self.artifact.get_blob(&descriptor)?;
         let trace_result = py.import("ommx.tracing")?.getattr("TraceResult")?;
         Ok(Some(trace_result.call_method1(
-            "from_otlp_json",
+            "from_otlp_protobuf",
             (PyBytes::new(py, &blob),),
         )?))
     }

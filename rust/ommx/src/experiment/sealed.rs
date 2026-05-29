@@ -192,7 +192,7 @@ fn decode_trace_layer<'reg>(
             )
         })?
         .clone();
-    validate_layer_media_type(&descriptor, &media_types::trace_otlp_json())
+    validate_layer_media_type(&descriptor, &media_types::trace_otlp_protobuf())
         .with_context(|| format!("Invalid Run {run_id} trace layer"))?;
     Ok(Some(descriptor))
 }

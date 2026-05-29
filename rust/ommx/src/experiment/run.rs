@@ -68,13 +68,13 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
     /// Trace layers are intentionally not Attachments: they record
     /// execution telemetry for the Run and are referenced from this Run's
     /// Experiment config entry. Rust stores the [`Trace`] payload as
-    /// opaque bytes and does not inspect the OTLP JSON contents.
+    /// opaque bytes and does not inspect the OpenTelemetry contents.
     pub fn store_trace_layer(&mut self, trace: Trace) -> Result<()> {
         let mut annotations = std::collections::HashMap::new();
         annotations.insert(ANN_LAYER.to_string(), LAYER_KIND_TRACE.to_string());
-        let Trace { otlp_json: bytes } = trace;
+        let Trace { bytes } = trace;
         let descriptor = self.experiment.registry.store_layer_blob(
-            media_types::trace_otlp_json(),
+            media_types::trace_otlp_protobuf(),
             &bytes,
             annotations,
         )?;

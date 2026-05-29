@@ -104,22 +104,22 @@ pub struct SealedExperiment<'reg> {
     run_parameters: parameter::RunParameterTable,
 }
 
-/// Opaque Run trace payload encoded as OTLP JSON.
+/// Opaque Run trace payload.
 ///
 /// The Rust SDK does not decode, validate, or interpret OpenTelemetry
 /// spans. `Trace` is a storage boundary type: it marks a byte payload as
-/// a Run trace layer payload, while producers and
-/// renderers such as the Python SDK own OTLP JSON encoding and decoding.
+/// a Run trace layer payload, while producers and renderers such as the
+/// Python SDK own the concrete OpenTelemetry encoding.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Trace {
-    otlp_json: Vec<u8>,
+    bytes: Vec<u8>,
 }
 
 impl Trace {
-    /// Build a trace payload from OTLP JSON bytes.
-    pub fn from_otlp_json(bytes: impl Into<Vec<u8>>) -> Self {
+    /// Build a trace payload from encoded trace bytes.
+    pub fn from_bytes(bytes: impl Into<Vec<u8>>) -> Self {
         Self {
-            otlp_json: bytes.into(),
+            bytes: bytes.into(),
         }
     }
 }

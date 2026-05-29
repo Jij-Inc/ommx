@@ -55,7 +55,7 @@ from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.trace import Span
 
 from ._collector import _CellSpanCollector
-from ._otlp import spans_from_otlp_json, spans_to_otlp_json
+from ._otlp import spans_from_otlp_protobuf, spans_to_otlp_protobuf
 from ._render import chrome_trace_json, render_text_tree
 from ._setup import ensure_collector_installed
 
@@ -81,17 +81,17 @@ class TraceResult:
     spans: List[ReadableSpan] = field(default_factory=list)
 
     @classmethod
-    def from_otlp_json(cls, payload: Union[str, bytes]) -> "TraceResult":
+    def from_otlp_protobuf(cls, payload: bytes) -> "TraceResult":
         """Build a trace result from an OMMX trace layer payload."""
-        return cls(spans=spans_from_otlp_json(payload))
+        return cls(spans=spans_from_otlp_protobuf(payload))
 
     def text_tree(self) -> str:
         """Return the nested text tree — same renderer the cell magic uses."""
         return render_text_tree(self.spans)
 
-    def otlp_json(self) -> str:
-        """Return the OTLP JSON mapping stored in Experiment trace layers."""
-        return spans_to_otlp_json(self.spans)
+    def otlp_protobuf(self) -> bytes:
+        """Return OTLP protobuf bytes stored in Experiment trace layers."""
+        return spans_to_otlp_protobuf(self.spans)
 
     def chrome_trace_json(self) -> str:
         """Return a Chrome Trace Event Format JSON string."""

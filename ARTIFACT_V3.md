@@ -538,9 +538,9 @@ Phase 1:
 
 | 項目 | 方針 |
 |---|---|
-| encoding | OTLP JSON |
-| media type | `application/org.ommx.trace.otlp+json` |
-| payload | OTLP JSON mapping の `ExportTraceServiceRequest` 互換 (`resourceSpans`) |
+| encoding | OTLP protobuf |
+| media type | `application/org.ommx.trace.otlp+protobuf` |
+| payload | `opentelemetry-proto` の `ExportTraceServiceRequest` protobuf bytes |
 | 対象 signal | span / span event |
 | API | `run.trace -> TraceResult | None` |
 
