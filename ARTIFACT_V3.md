@@ -457,7 +457,9 @@ Experiment v3 は、記録データ、実行 telemetry、表示、Artifact versi
 
 ### 6.1 Span 階層
 
-OMMX は global `TracerProvider` を暗黙に設定しない。Experiment / Run / builder は active provider がある場合にそれを使い、ない場合は通常の OTel no-op として扱う。
+通常の Experiment / Run / builder は global `TracerProvider` を暗黙に設定しない。active provider がある場合にそれを使い、ない場合は通常の OTel no-op として扱う。
+
+一方で `store_trace=True` と `ommx.tracing.capture_trace(...)` は trace 保存の明示要求であるため、保存用 collector を構成する目的で、未設定時に in-process SDK `TracerProvider` を設定してよい。この provider は外部 exporter や network 送信を設定しない。独自 provider を使いたい場合は capture 開始前に設定する。
 
 `ommx.experiment` span は `with Experiment(...)` の scope に対応する。context manager を使わない手動 `commit()` workflow では、人間の思考時間や notebook cell 間の待ち時間が Experiment object の lifetime に混ざるため、Experiment scope の trace は作らない。
 
@@ -749,7 +751,7 @@ Experiment / Run / Artifact operation の詳細な trace schema と post-hoc ren
 
 - Experiment / Run / solver / artifact build / load / push span schema。
 - `ommx.attachment.added` / `ommx.solve.recorded` / `ommx.run.parameter.recorded` events。
-- global `TracerProvider` を暗黙に install しないことの tests。
+- default の Experiment / Artifact build path が global `TracerProvider` を暗黙に install しないこと、および `store_trace=True` / `capture_trace(...)` では保存用 collector のための provider 初期化に限定されることの tests。
 - text tree / Chrome trace export renderer。
 
 ### 10.6 GC
