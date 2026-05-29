@@ -10,7 +10,6 @@ from ommx.tracing import render_text_tree
 from ommx.v1 import Instance, Solution
 
 _ATTACHMENT_NAME = "org.ommx.attachment.name"
-_LAYER_KIND = "org.ommx.experiment.layer"
 
 
 def _df_snap(df: pd.DataFrame) -> str:
@@ -159,7 +158,6 @@ def test_store_trace_records_run_scope_in_artifact():
 
     trace_layers = _trace_layers(artifact)
     assert len(trace_layers) == 1
-    assert trace_layers[0].annotations[_LAYER_KIND] == "trace"
     assert _ATTACHMENT_NAME not in trace_layers[0].annotations
 
     loaded = Experiment.from_artifact(artifact)

@@ -4,9 +4,8 @@ use super::config::{ExperimentConfig, ExperimentConfigRun, LayerRef};
 use super::UnsealedExperimentState;
 use super::{
     AttachmentLogger, Experiment, ExperimentDyn, Name, ParameterValue, SealedExperiment, Trace,
-    ANN_ATTACHMENT_NAME, ANN_LAYER, ANN_RUN_ID, ANN_SPACE, EXPERIMENT_CONFIG_MEDIA_TYPE,
-    EXPERIMENT_STATUS_FINISHED, LAYER_KIND_RUN_PARAMETERS, LAYER_KIND_TRACE,
-    RUN_PARAMETERS_MEDIA_TYPE,
+    ANN_ATTACHMENT_NAME, ANN_RUN_ID, ANN_SPACE, EXPERIMENT_CONFIG_MEDIA_TYPE,
+    EXPERIMENT_STATUS_FINISHED, RUN_PARAMETERS_MEDIA_TYPE,
 };
 use crate::artifact::local_registry::{StoredDescriptor, UnsealedArtifact};
 use crate::artifact::{media_types, AsArtifact, ImageRef, LocalArtifact, LocalRegistryHandle};
@@ -50,6 +49,20 @@ fn find_layer<'a, 'reg>(
         "expected exactly one layer with {key}={value}"
     );
     matches[0]
+}
+
+fn layer_from_ref<'a, 'reg>(
+    layers: &'a [StoredDescriptor<'reg>],
+    layer_ref: LayerRef,
+) -> &'a StoredDescriptor<'reg> {
+    layers
+        .get(layer_ref.0 as usize)
+        .unwrap_or_else(|| panic!("LayerRef {} is out of bounds", layer_ref.0))
+}
+
+fn experiment_config(artifact: &LocalArtifact<'_>) -> ExperimentConfig {
+    let config = artifact.stored_config().unwrap();
+    serde_json::from_slice(&blob_bytes(artifact, &config)).unwrap()
 }
 
 fn blob_bytes(artifact: &LocalArtifact<'_>, descriptor: &StoredDescriptor<'_>) -> Vec<u8> {
@@ -181,10 +194,6 @@ fn trace_layer_is_config_referenced_manifest_layer() {
             .filter(|layer| layer.media_type() == &media_types::trace_otlp_protobuf())
             .collect::<Vec<_>>();
         assert_eq!(trace_layers.len(), 1);
-        assert_eq!(
-            layer_annotation(trace_layers[0], ANN_LAYER).as_deref(),
-            Some(LAYER_KIND_TRACE)
-        );
         assert_eq!(layer_annotation(trace_layers[0], ANN_ATTACHMENT_NAME), None);
         let loaded = SealedExperiment::from_artifact(artifact).unwrap();
         assert!(loaded.run(0).unwrap().trace_layer().is_some());
@@ -261,8 +270,9 @@ fn commit_produces_experiment_artifact() {
             config.media_type(),
             &MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string())
         );
-        let config_json: serde_json::Value =
+        let config: ExperimentConfig =
             serde_json::from_slice(&blob_bytes(&artifact, &config)).unwrap();
+        let config_json = serde_json::to_value(&config).unwrap();
         assert_eq!(
             config_json.get("status").and_then(|value| value.as_str()),
             Some(EXPERIMENT_STATUS_FINISHED)
@@ -296,7 +306,11 @@ fn commit_produces_experiment_artifact() {
         assert_eq!(blob_bytes(&artifact, candidate), instance.to_bytes());
 
         // Aggregate layers are not tagged as attachments.
-        let run_params = find_layer(&layers, ANN_LAYER, LAYER_KIND_RUN_PARAMETERS);
+        let run_params = layer_from_ref(&layers, config.run_parameters);
+        assert_eq!(
+            run_params.media_type(),
+            &MediaType::Other(RUN_PARAMETERS_MEDIA_TYPE.to_string())
+        );
         assert!(layer_annotation(run_params, ANN_SPACE).is_none());
 
         // Config stores the Experiment structure; layers are payloads referenced from it.
@@ -328,8 +342,13 @@ fn log_parameter_materializes_run_parameter_table() {
         }
 
         let artifact = experiment.commit().unwrap().into_artifact();
+        let config = experiment_config(&artifact);
         let layers = artifact.layers().unwrap();
-        let run_params = find_layer(&layers, ANN_LAYER, LAYER_KIND_RUN_PARAMETERS);
+        let run_params = layer_from_ref(&layers, config.run_parameters);
+        assert_eq!(
+            run_params.media_type(),
+            &MediaType::Other(RUN_PARAMETERS_MEDIA_TYPE.to_string())
+        );
         assert!(layer_annotation(run_params, ANN_ATTACHMENT_NAME).is_none());
         let bytes = blob_bytes(&artifact, run_params);
         let table: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
@@ -887,8 +906,13 @@ fn log_parameter_promotes_int_column_to_float_at_commit() {
         }
 
         let artifact = experiment.commit().unwrap().into_artifact();
+        let config = experiment_config(&artifact);
         let layers = artifact.layers().unwrap();
-        let run_params = find_layer(&layers, ANN_LAYER, LAYER_KIND_RUN_PARAMETERS);
+        let run_params = layer_from_ref(&layers, config.run_parameters);
+        assert_eq!(
+            run_params.media_type(),
+            &MediaType::Other(RUN_PARAMETERS_MEDIA_TYPE.to_string())
+        );
         let bytes = blob_bytes(&artifact, run_params);
         let table: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
 

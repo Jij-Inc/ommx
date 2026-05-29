@@ -79,13 +79,10 @@ const EXPERIMENT_STATUS_FINISHED: &str = "finished";
 
 const ANN_SPACE: &str = "org.ommx.experiment.space";
 const ANN_RUN_ID: &str = "org.ommx.experiment.run_id";
-const ANN_LAYER: &str = "org.ommx.experiment.layer";
 const ANN_ATTACHMENT_NAME: &str = "org.ommx.attachment.name";
 
 const RUN_PARAMETERS_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment.run-parameters+json";
 const EXPERIMENT_CONFIG_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment.config+json";
-const LAYER_KIND_RUN_PARAMETERS: &str = "run-parameters";
-const LAYER_KIND_TRACE: &str = "trace";
 
 /// A mutable, unsealed experiment session. See the [module documentation](self).
 #[derive(Debug)]

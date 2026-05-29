@@ -1,9 +1,7 @@
 //! Experiment / Run handles and run lifecycle.
 
 use super::attachment::{store_attachment_descriptor, AttachmentSpace};
-use super::{
-    AttachmentLogger, ParameterValue, Run, RunEntry, SolveEntry, Trace, ANN_LAYER, LAYER_KIND_TRACE,
-};
+use super::{AttachmentLogger, ParameterValue, Run, RunEntry, SolveEntry, Trace};
 use crate::artifact::media_types;
 use crate::{Instance, Solution};
 use anyhow::Result;
@@ -70,13 +68,11 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
     /// Experiment config entry. Rust stores the [`Trace`] payload as
     /// opaque bytes and does not inspect the OpenTelemetry contents.
     pub fn store_trace_layer(&mut self, trace: Trace) -> Result<()> {
-        let mut annotations = std::collections::HashMap::new();
-        annotations.insert(ANN_LAYER.to_string(), LAYER_KIND_TRACE.to_string());
         let Trace { bytes } = trace;
         let descriptor = self.experiment.registry.store_layer_blob(
             media_types::trace_otlp_protobuf(),
             &bytes,
-            annotations,
+            Default::default(),
         )?;
         self.trace_layer = Some(descriptor);
         Ok(())

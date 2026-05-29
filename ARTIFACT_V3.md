@@ -595,6 +595,8 @@ Attachment layer は Artifact layer descriptor annotations に以下を持てる
 
 Attachment の media type は descriptor の `mediaType` field にあるため、annotation として重複保持しない。`run_id` / `solve_id` / `solve role` は config の位置と field 名で分かるため、annotation として重複保持しない。
 
+Trace layer、Run parameter table layer、Instance / Solution layer など、layer payload の種別は descriptor の `mediaType` で判定する。`org.ommx.experiment.layer=trace` / `run-parameters` のような layer kind annotation は持たせない。
+
 Run parameter table は、必ずしも 1 cell = 1 layer descriptor にならない。run parameter の key-level metadata は aggregate payload の内部 schema に持たせてよい。Experiment metadata を Attachment として復元するときは media type + name に写像する。
 
 user-defined media type の Attachment は caller / external package が指定した `mediaType` をそのまま使う。OMMX core は unknown media type を拒否せず、必要なら `org.ommx.attachment.name` / `org.ommx.codec` を保持して opaque bytes として扱う。

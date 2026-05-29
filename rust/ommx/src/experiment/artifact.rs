@@ -3,9 +3,7 @@
 use super::config::{ExperimentConfig, ExperimentConfigRun, ExperimentConfigSolve, LayerRef};
 use super::parameter::RunParameterTable;
 use super::UnsealedExperimentState;
-use super::{
-    ANN_LAYER, EXPERIMENT_CONFIG_MEDIA_TYPE, LAYER_KIND_RUN_PARAMETERS, RUN_PARAMETERS_MEDIA_TYPE,
-};
+use super::{EXPERIMENT_CONFIG_MEDIA_TYPE, RUN_PARAMETERS_MEDIA_TYPE};
 use crate::artifact::local_registry::{
     LocalRegistry, RefUpdate, StoredDescriptor, UnsealedArtifact,
 };
@@ -61,7 +59,6 @@ impl<'reg> UnsealedExperimentState<'reg> {
         store_aggregate_json_layer(
             registry,
             RUN_PARAMETERS_MEDIA_TYPE,
-            LAYER_KIND_RUN_PARAMETERS,
             &RunParameterTable::from_runs(self.runs.values())?,
         )
     }
@@ -144,10 +141,11 @@ impl<'reg> LayerTable<'reg> {
 fn store_aggregate_json_layer<'reg>(
     registry: &'reg LocalRegistry,
     media_type: &str,
-    layer_kind: &str,
     value: &impl serde::Serialize,
 ) -> Result<StoredDescriptor<'reg>> {
-    let mut annotations = HashMap::new();
-    annotations.insert(ANN_LAYER.to_string(), layer_kind.to_string());
-    registry.store_json_layer_blob(MediaType::Other(media_type.to_string()), value, annotations)
+    registry.store_json_layer_blob(
+        MediaType::Other(media_type.to_string()),
+        value,
+        Default::default(),
+    )
 }
