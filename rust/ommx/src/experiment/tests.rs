@@ -184,17 +184,14 @@ fn trace_layer_is_config_referenced_manifest_layer() {
 
         let artifact = experiment.commit().unwrap().into_artifact();
         let layers = artifact.layers().unwrap();
-        let config = artifact.stored_config().unwrap();
-        let config_json: serde_json::Value =
-            serde_json::from_slice(&blob_bytes(&artifact, &config)).unwrap();
-        assert_eq!(config_json["runs"][0]["trace"], json!(0));
-
-        let trace_layers = layers
-            .iter()
-            .filter(|layer| layer.media_type() == &media_types::trace_otlp_protobuf())
-            .collect::<Vec<_>>();
-        assert_eq!(trace_layers.len(), 1);
-        assert_eq!(layer_annotation(trace_layers[0], ANN_ATTACHMENT_NAME), None);
+        let config = experiment_config(&artifact);
+        let trace_ref = config.runs[0].trace.expect("run has a trace LayerRef");
+        let trace_layer = layer_from_ref(&layers, trace_ref);
+        assert_eq!(
+            trace_layer.media_type(),
+            &media_types::trace_otlp_protobuf()
+        );
+        assert_eq!(layer_annotation(trace_layer, ANN_ATTACHMENT_NAME), None);
         let loaded = SealedExperiment::from_artifact(artifact).unwrap();
         assert!(loaded.run(0).unwrap().trace_layer().is_some());
         Ok(())

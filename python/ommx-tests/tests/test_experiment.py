@@ -4,7 +4,6 @@ import pandas as pd
 import pytest
 
 from ommx.adapter import SolverAdapter
-from ommx.artifact import Artifact
 from ommx.experiment import Experiment
 from ommx.tracing import render_text_tree
 from ommx.v1 import Instance, Solution
@@ -18,14 +17,6 @@ def _df_snap(df: pd.DataFrame) -> str:
 
 def _attachment_names(attachments) -> set[str]:
     return {attachment.annotations[_ATTACHMENT_NAME] for attachment in attachments}
-
-
-def _trace_layers(artifact: Artifact):
-    return [
-        layer
-        for layer in artifact.layers
-        if layer.media_type == Artifact.TRACE_OTLP_PROTOBUF_MEDIA_TYPE
-    ]
 
 
 def _trace_span_names(trace) -> set[str]:
@@ -156,10 +147,6 @@ def test_store_trace_records_run_scope_in_artifact():
         run.log_parameter("solver", "highs")
     artifact = experiment.commit()
 
-    trace_layers = _trace_layers(artifact)
-    assert len(trace_layers) == 1
-    assert _ATTACHMENT_NAME not in trace_layers[0].annotations
-
     loaded = Experiment.from_artifact(artifact)
     assert _attachment_names(loaded.experiment_attachments) == {"dataset"}
 
@@ -170,13 +157,13 @@ def test_store_trace_records_run_scope_in_artifact():
     assert "ommx.run" in render_text_tree(trace)
 
 
-def test_fork_store_trace_carries_parent_trace_layers():
+def test_fork_store_trace_carries_parent_run_trace():
     with Experiment.with_temp_local_registry(store_trace=True) as parent:
         with parent.run() as run:
             run.log_parameter("solver", "base")
 
-    parent_trace_layers = _trace_layers(parent.artifact)
-    assert len(parent_trace_layers) == 1
+    parent_trace = parent.runs[0].trace
+    assert parent_trace is not None
 
     with parent.fork(
         "ghcr.io/jij-inc/ommx/forked-trace-experiment:latest",
@@ -186,12 +173,9 @@ def test_fork_store_trace_carries_parent_trace_layers():
             assert run.run_id == 1
             run.log_parameter("solver", "child")
 
-    child_trace_layers = _trace_layers(child.artifact)
-    assert len(child_trace_layers) == 2
-    assert child_trace_layers[0].digest == parent_trace_layers[0].digest
-
     traces = [run.trace for run in child.runs]
     assert all(trace is not None for trace in traces)
+    assert traces[0].otlp_protobuf() == parent_trace.otlp_protobuf()
     assert sum(_trace_span_count(trace, "ommx.run") for trace in traces) == 2
 
 
@@ -200,7 +184,7 @@ def test_fork_store_trace_can_add_trace_to_new_run_only():
         with parent.run() as run:
             run.log_parameter("solver", "base")
 
-    assert _trace_layers(parent.artifact) == []
+    assert parent.runs[0].trace is None
 
     child = parent.fork(
         "ghcr.io/jij-inc/ommx/forked-trace-new-run:latest",
@@ -210,9 +194,6 @@ def test_fork_store_trace_can_add_trace_to_new_run_only():
         assert run.run_id == 1
         run.log_parameter("solver", "child")
     child.commit()
-
-    child_trace_layers = _trace_layers(child.artifact)
-    assert len(child_trace_layers) == 1
 
     traces = [run.trace for run in child.runs]
     assert traces[0] is None
@@ -226,7 +207,6 @@ def test_default_experiment_context_does_not_store_trace():
         with experiment.run() as run:
             run.log_parameter("solver", "highs")
 
-    assert _trace_layers(experiment.artifact) == []
     assert Experiment.from_artifact(experiment.artifact).runs[0].trace is None
 
 
