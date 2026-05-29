@@ -7,6 +7,7 @@ import datetime
 import enum
 import numpy
 from ommx import adapter
+from ommx import tracing
 import os
 import pandas
 import pathlib
@@ -204,7 +205,7 @@ class Artifact:
 
     TRACE_OTLP_PROTOBUF_MEDIA_TYPE: builtins.str
     r"""
-    Media type of an Experiment Run trace layer encoded as OTLP protobuf.
+    Media type of an Experiment Run trace encoded as OTLP protobuf.
     """
     @property
     def image_name(self) -> typing.Optional[builtins.str]: ...
@@ -5878,7 +5879,7 @@ class SealedRun:
         Names of run-level attachments.
         """
     @property
-    def trace(self) -> typing.Optional[typing.Any]:
+    def trace(self) -> typing.Optional[tracing.TraceResult]:
         r"""
         Stored trace for this run, or `None` when this run was recorded without trace storage.
         """

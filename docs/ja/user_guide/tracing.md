@@ -86,7 +86,7 @@ print(render_text_tree(trace))
 
 - {attr}`~ommx.tracing.TraceResult.request` — 結果としてexportされたOTLP {class}`~opentelemetry.proto.collector.trace.v1.trace_service_pb2.ExportTraceServiceRequest`
 - {attr}`~ommx.tracing.TraceResult.spans` — `request` 内のexport済みOTLP protobuf spanを平坦化したリスト
-- {meth}`~ommx.tracing.TraceResult.otlp_protobuf` — Experimentのtrace layerに保存されるOTLP export requestのprotobuf bytes
+- {meth}`~ommx.tracing.TraceResult.otlp_protobuf` — Experimentのtraceに保存されるOTLP export requestのprotobuf bytes
 
 表示や保存はデータオブジェクトとは別の関数で行います。
 
@@ -153,7 +153,7 @@ OMMXは `tracing` のデフォルトのスパン名（`evaluate`、`reduce_capab
 (own-tracer-provider)=
 ## 独自のTracerProviderを使う
 
-`ommx.tracing` は {class}`~opentelemetry.sdk.trace.TracerProvider` が登録されていない場合のみインプロセスの `TracerProvider` をインストールします。OTLP、Jaeger、Honeycombなどの外部バックエンドに送信したい場合は、**OMMX拡張への最初の呼び出し前に**独自のプロバイダを設定してください。
+`ommx.tracing` はプロセスがOpenTelemetryのデフォルトproxy providerのままの場合のみ、インプロセスの {class}`~opentelemetry.sdk.trace.TracerProvider` をインストールします。OTLP、Jaeger、Honeycombなどの外部バックエンドに送信したい場合は、**OMMX拡張への最初の呼び出し前に**独自のSDK providerを設定してください。
 
 ```python
 from opentelemetry import trace
@@ -174,9 +174,9 @@ from ommx.v1 import Instance
 注意点が2つあります。
 
 1. **providerの設定は `ommx.tracing` の初回利用前、かつRust拡張の最初の呼び出し前に行ってください。** Python OTel APIでは最初の {func}`~opentelemetry.trace.set_tracer_provider` 呼び出しのみが有効で、かつ `ommx.tracing` は初回利用時にproviderが未設定であればデフォルトの {class}`~opentelemetry.sdk.trace.TracerProvider` を自らインストールします。このため、そのあとでユーザーが `set_tracer_provider(your_provider)` を呼んでも無視されます。また、Rust→Pythonブリッジは最初の計測対象Rust呼び出し時に初期化されるため、OTel設定はスクリプトやノートブックの最上部で行うようにしてください。
-2. **`ommx.tracing` はアクティブなproviderにコレクタを追加するだけで、置き換えは行いません。** スパンはOMMXのレンダラと指定したOTLPエクスポータの両方に到達します。
+2. **`ommx.tracing` はアクティブなSDK providerにコレクタを追加するだけで、置き換えは行いません。** スパンはOMMXのレンダラと指定したOTLPエクスポータの両方に到達します。
 
-{meth}`~opentelemetry.sdk.trace.TracerProvider.add_span_processor` をサポートしない非SDKのproviderがアクティブな場合（稀ですが一部のベンダーSDKはこの挙動です）、{class}`~ommx.tracing.capture_trace` は `__enter__` 時点で `RuntimeError` を送出します。エラーメッセージに記載されているとおり、{class}`opentelemetry.sdk.trace.TracerProvider` を自前でインストールし、エクスポータをもう一つの `SpanProcessor` として同じproviderに追加してください。
+非SDKのproviderがすでにグローバルに登録されている場合、{class}`~ommx.tracing.capture_trace` は `__enter__` 時点で `RuntimeError` を送出します。エラーメッセージに記載されているとおり、OMMX tracing の開始前に {class}`opentelemetry.sdk.trace.TracerProvider` を自前でインストールし、エクスポータをもう一つの `SpanProcessor` として同じproviderに追加してください。
 
 ## トラブルシューティング
 
@@ -184,7 +184,7 @@ from ommx.v1 import Instance
 
 最も多い原因は、トレース対象のブロック内で計測対象のOMMXコールサイトに到達していないことです。コレクタは {class}`~ommx.tracing.capture_trace` ウィンドウ内で発生した `trace_id` のスパンのみをキャプチャしますが、スパンは計測されたコールサイトからのみ生成されます（素のPythonの制御フローからは生成されません）。OMMXのすべてのメソッドが計測対象というわけではなく、コンストラクタや単純なアクセサは通常計測されません。ブロックが計測対象呼び出し（`Instance.evaluate`、`Instance.evaluate_samples`、`Instance.reduce_capabilities`、`Artifact` の `push` / `pull` / `load` / `save` 等のエントリポイント、アダプタの `solve` など）に到達しているか確認してください。
 
-もう1つの可能性は、非SDKの {class}`~opentelemetry.sdk.trace.TracerProvider` がアクティブで `ommx.tracing` がコレクタを取り付けられなかったケースです。この場合は {class}`~ommx.tracing.capture_trace` が `RuntimeError` を投げるので、そのメッセージに従って修正してください。
+もう1つの可能性は、非SDKの `TracerProvider` がアクティブで `ommx.tracing` がコレクタを取り付けられなかったケースです。この場合は {class}`~ommx.tracing.capture_trace` が `RuntimeError` を投げるので、そのメッセージに従って修正してください。
 
 ### OTLPバックエンドにはトレースが出ているのにセルマジックは `(no spans)` と表示される
 

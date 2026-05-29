@@ -997,7 +997,7 @@ impl PyRun {
             .context("store_trace=True lost its TraceResult before Run exit")?;
         let payload: Vec<u8> = result.bind(py).call_method0("otlp_protobuf")?.extract()?;
         self.as_open_mut()?
-            .store_trace_layer(ommx::experiment::Trace::from_bytes(payload))?;
+            .store_trace(ommx::experiment::Trace::from_bytes(payload))?;
         Ok(())
     }
 
@@ -1252,10 +1252,14 @@ impl PySealedRun {
     }
 
     #[getter]
+    #[gen_stub(override_return_type(
+        type_repr = "typing.Optional[tracing.TraceResult]",
+        imports = ("typing", "ommx.tracing")
+    ))]
     /// Stored trace for this run, or `None` when this run was recorded without trace storage.
     pub fn trace<'py>(&self, py: Python<'py>) -> Result<Option<Bound<'py, PyAny>>> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let Some(descriptor) = self.run.trace_layer()? else {
+        let Some(descriptor) = self.run.trace()? else {
             return Ok(None);
         };
         let blob = self.artifact.get_blob(&descriptor)?;

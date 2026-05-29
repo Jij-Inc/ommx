@@ -5,7 +5,7 @@ import pytest
 
 from ommx.adapter import SolverAdapter
 from ommx.experiment import Experiment
-from ommx.tracing import render_text_tree
+from ommx.tracing import TraceResult, render_text_tree
 from ommx.v1 import Instance, Solution
 
 _ATTACHMENT_NAME = "org.ommx.attachment.name"
@@ -19,11 +19,16 @@ def _attachment_names(attachments) -> set[str]:
     return {attachment.annotations[_ATTACHMENT_NAME] for attachment in attachments}
 
 
-def _trace_span_names(trace) -> set[str]:
+def _require_trace(trace: TraceResult | None) -> TraceResult:
+    assert trace is not None
+    return trace
+
+
+def _trace_span_names(trace: TraceResult) -> set[str]:
     return {span.name for span in trace.spans}
 
 
-def _trace_span_count(trace, name: str) -> int:
+def _trace_span_count(trace: TraceResult, name: str) -> int:
     return sum(span.name == name for span in trace.spans)
 
 
@@ -150,8 +155,7 @@ def test_store_trace_records_run_scope_in_artifact():
     loaded = Experiment.from_artifact(artifact)
     assert _attachment_names(loaded.experiment_attachments) == {"dataset"}
 
-    trace = loaded.runs[0].trace
-    assert trace is not None
+    trace = _require_trace(loaded.runs[0].trace)
     names = _trace_span_names(trace)
     assert "ommx.run" in names
     assert "ommx.run" in render_text_tree(trace)
@@ -162,8 +166,7 @@ def test_fork_store_trace_carries_parent_run_trace():
         with parent.run() as run:
             run.log_parameter("solver", "base")
 
-    parent_trace = parent.runs[0].trace
-    assert parent_trace is not None
+    parent_trace = _require_trace(parent.runs[0].trace)
 
     with parent.fork(
         "ghcr.io/jij-inc/ommx/forked-trace-experiment:latest",
@@ -173,8 +176,7 @@ def test_fork_store_trace_carries_parent_run_trace():
             assert run.run_id == 1
             run.log_parameter("solver", "child")
 
-    traces = [run.trace for run in child.runs]
-    assert all(trace is not None for trace in traces)
+    traces = [_require_trace(run.trace) for run in child.runs]
     assert traces[0].otlp_protobuf() == parent_trace.otlp_protobuf()
     assert sum(_trace_span_count(trace, "ommx.run") for trace in traces) == 2
 

@@ -84,7 +84,7 @@ struct UnsealedExperimentDynState {
 struct RunEntryDyn {
     run_id: u64,
     attachments: Vec<Descriptor>,
-    trace_layer: Option<Descriptor>,
+    trace: Option<Descriptor>,
     solves: Vec<SolveEntryDyn>,
     parameters: super::parameter::ParameterSet,
 }
@@ -117,7 +117,7 @@ pub struct SealedRunDyn {
     registry_handle: LocalRegistryHandle,
     run_id: u64,
     attachments: Vec<Descriptor>,
-    trace_layer: Option<Descriptor>,
+    trace: Option<Descriptor>,
     solves: Vec<SolveDyn>,
 }
 
@@ -146,8 +146,8 @@ impl SealedRunDyn {
         stored_descriptors(self.registry_handle.registry(), self.attachments.clone())
     }
 
-    pub fn trace_layer(&self) -> Result<Option<StoredDescriptor<'_>>> {
-        self.trace_layer
+    pub fn trace(&self) -> Result<Option<StoredDescriptor<'_>>> {
+        self.trace
             .clone()
             .map(|descriptor| {
                 self.registry_handle
@@ -504,8 +504,8 @@ impl UnsealedExperimentDynState {
                         RunEntry {
                             run_id: run.run_id,
                             attachments: stored_descriptors(registry, run.attachments)?,
-                            trace_layer: run
-                                .trace_layer
+                            trace: run
+                                .trace
                                 .map(|descriptor| registry.stored_descriptor(descriptor))
                                 .transpose()?,
                             solves: run
@@ -546,7 +546,7 @@ impl SealedExperimentDynState {
                             registry_handle: registry_handle.clone(),
                             run_id: run.run_id(),
                             attachments: descriptors(run.attachments()),
-                            trace_layer: run.trace_layer().cloned().map(Descriptor::from),
+                            trace: run.trace().cloned().map(Descriptor::from),
                             solves: run
                                 .solves()
                                 .iter()
@@ -611,7 +611,7 @@ impl SealedExperimentDynState {
                 RunEntryDyn {
                     run_id: run.run_id,
                     attachments: run.attachments.clone(),
-                    trace_layer: run.trace_layer.clone(),
+                    trace: run.trace.clone(),
                     solves,
                     parameters,
                 },
@@ -714,10 +714,7 @@ fn store_solve_payload_descriptor(
     Ok(Descriptor::from(descriptor))
 }
 
-fn store_trace_layer_descriptor(
-    state: &ExperimentDynState,
-    trace: super::Trace,
-) -> Result<Descriptor> {
+fn store_trace_descriptor(state: &ExperimentDynState, trace: super::Trace) -> Result<Descriptor> {
     let super::Trace { bytes } = trace;
     let descriptor = state.registry_handle.registry().store_layer_blob(
         media_types::trace_otlp_protobuf(),

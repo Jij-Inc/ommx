@@ -108,7 +108,7 @@ def test_capture_trace_custom_span_name(capture_collector):
 
 
 def test_trace_result_otlp_protobuf_roundtrip(capture_collector):
-    """Trace layers use OpenTelemetry's protobuf representation."""
+    """Experiment traces use OpenTelemetry's protobuf representation."""
     from opentelemetry import trace
 
     with capture_trace("protobuf_root") as result:

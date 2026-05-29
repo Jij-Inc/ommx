@@ -98,7 +98,7 @@ Experiment / Artifact の変更可能性は 3 相に分ける。
 
 `1 Experiment commit = 1 Artifact manifest` をデフォルトとする。`Run` 終了ごとに manifest を切る挙動は初期設計では提供しない。必要になった場合も opt-in とし、通常の比較 UX を複雑にしない。
 
-Run は Artifact sub manifest ではなく、Experiment config 内の `run_id` で束ねられる logical entity とする。Run の保存実体は、Run parameter table の row、Run-scoped Attachment への `LayerRef`、Run 内の Solve list、Run trace layer への `LayerRef` である。
+Run は Artifact sub manifest ではなく、Experiment config 内の `run_id` で束ねられる logical entity とする。Run の保存実体は、Run parameter table の row、Run-scoped Attachment への `LayerRef`、Run 内の Solve list、Run trace への `LayerRef` である。
 
 ### 3.3 Run context manager
 
@@ -472,7 +472,7 @@ Span の基本構造:
 | Adapter solve 実行 | `ommx.solver.solve` | `ommx.run` |
 | Adapter sample 実行 | `ommx.solver.sample` | `ommx.run` |
 | Attachment / Solve 追加 / Run parameter 更新 | span event | current run / experiment span |
-| Artifact commit/build | `ommx.artifact.build` | 明示 commit / build 操作の active span。`store_trace=True` で同じ Artifact に trace layer を保存する場合、trace layer の生成と final publish は自己参照を避けるため保存対象 trace の外に置く |
+| Artifact commit/build | `ommx.artifact.build` | 明示 commit / build 操作の active span。`store_trace=True` で同じ Artifact に trace を保存する場合、trace の生成と final publish は自己参照を避けるため保存対象 trace の外に置く |
 | Artifact load | `ommx.artifact.load` | active span |
 | Artifact push | `ommx.artifact.push` | active span |
 
@@ -517,15 +517,15 @@ Trace storage の具体的な API 仕様は実装済みであり、API Reference
 - 保存境界は Run context manager である。Experiment object の lifetime、手動 `commit()` workflow、notebook cell 間の思考時間を保存対象 trace に混ぜない。
 - Trace は Run に紐づく概念であり、Artifact aggregate accessor ではなく sealed Run view から読む。
 - `trace="auto"` / `trace="required"` / `with_trace()` のような別 API は導入しない。
-- trace layer を保存しない場合でも、active provider があれば通常の OTel span / event は外部 exporter に流れる。
+- trace を保存しない場合でも、active provider があれば通常の OTel span / event は外部 exporter に流れる。
 
-### 6.4 Run trace layer
+### 6.4 Run trace
 
-Run trace layer は Artifact / Experiment data model 上では、Run config が `LayerRef` で参照する optional payload である。1 Run に対する trace は 0 または 1 個とする。Fork は Run を logical entity としてコピーするため、Run parameter、Attachment、Solve と同じく、その Run に紐づく trace layer ref も子 Experiment に引き継ぐ。子で追加された Run には、その Run の trace layer が追加される。
+Run trace は Artifact / Experiment data model 上では、Run config が `LayerRef` で参照する optional payload である。1 Run に対する trace は 0 または 1 個とする。Fork は Run を logical entity としてコピーするため、Run parameter、Attachment、Solve と同じく、その Run に紐づく trace ref も子 Experiment に引き継ぐ。子で追加された Run には、その Run の trace が追加される。
 
 Rust SDK は Trace payload の中身を知らない。`Trace` は media type 付きの opaque bytes として扱い、OTLP の decode / encode / validation は行わない。Python SDK が OTel SDK から export 済み payload を作り、読み出し時に `TraceResult` として解釈する。
 
-Trace layer は Attachment / Run parameter table / Solve entry の代替ではない。parameter / solution / sample set などの本体は Experiment state の物理化戦略に従って保存し、trace layer は実行時系列と logical entry reference を保存する。
+Trace は Attachment / Run parameter table / Solve entry の代替ではない。parameter / solution / sample set などの本体は Experiment state の物理化戦略に従って保存し、trace は実行時系列と logical entry reference を保存する。
 
 ### 6.5 Renderer
 
@@ -595,7 +595,7 @@ Attachment layer は Artifact layer descriptor annotations に以下を持てる
 
 Attachment の media type は descriptor の `mediaType` field にあるため、annotation として重複保持しない。`run_id` / `solve_id` / `solve role` は config の位置と field 名で分かるため、annotation として重複保持しない。
 
-Trace layer、Run parameter table layer、Instance / Solution layer など、layer payload の種別は descriptor の `mediaType` で判定する。`org.ommx.experiment.layer=trace` / `run-parameters` のような layer kind annotation は持たせない。
+Trace、Run parameter table layer、Instance / Solution layer など、layer payload の種別は descriptor の `mediaType` で判定する。`org.ommx.experiment.layer=trace` / `run-parameters` のような layer kind annotation は持たせない。
 
 Run parameter table は、必ずしも 1 cell = 1 layer descriptor にならない。run parameter の key-level metadata は aggregate payload の内部 schema に持たせてよい。Experiment metadata を Attachment として復元するときは media type + name に写像する。
 
@@ -727,7 +727,7 @@ Run status、elapsed time、実行環境 OS / package versions / backend solver 
 
 ### 10.5 OTel trace / renderer
 
-Experiment / Run / Artifact operation の詳細な trace schema は未設計である。Run trace layer 保存、Run からの trace 読み出し、基本的な text tree / Chrome trace export renderer は実装済み API Reference / tracing user guide を正本にする。
+Experiment / Run / Artifact operation の詳細な trace schema は未設計である。Run trace 保存、Run からの trace 読み出し、基本的な text tree / Chrome trace export renderer は実装済み API Reference / tracing user guide を正本にする。
 
 残作業:
 

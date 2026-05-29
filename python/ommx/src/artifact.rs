@@ -48,7 +48,7 @@ impl PyArtifact {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl PyArtifact {
-    /// Media type of an Experiment Run trace layer encoded as OTLP protobuf.
+    /// Media type of an Experiment Run trace encoded as OTLP protobuf.
     #[classattr]
     #[pyo3(name = "TRACE_OTLP_PROTOBUF_MEDIA_TYPE")]
     fn trace_otlp_protobuf_media_type() -> &'static str {

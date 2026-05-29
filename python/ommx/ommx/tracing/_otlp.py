@@ -24,7 +24,7 @@ def request_to_otlp_protobuf(request: ExportTraceServiceRequest) -> bytes:
 
 
 def request_from_otlp_protobuf(payload: bytes) -> ExportTraceServiceRequest:
-    """Parse OTLP protobuf bytes stored in an OMMX trace layer."""
+    """Parse OTLP protobuf bytes stored in an OMMX trace."""
 
     request = ExportTraceServiceRequest()
     request.ParseFromString(payload)

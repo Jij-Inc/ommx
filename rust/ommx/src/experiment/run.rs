@@ -61,20 +61,23 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
         Ok(solve_id)
     }
 
-    /// Store a trace layer for this Run.
+    /// Store a trace for this Run.
     ///
-    /// Trace layers are intentionally not Attachments: they record
+    /// Traces are intentionally not Attachments: they record
     /// execution telemetry for the Run and are referenced from this Run's
     /// Experiment config entry. Rust stores the [`Trace`] payload as
     /// opaque bytes and does not inspect the OpenTelemetry contents.
-    pub fn store_trace_layer(&mut self, trace: Trace) -> Result<()> {
+    pub fn store_trace(&mut self, trace: Trace) -> Result<()> {
+        if self.trace.is_some() {
+            crate::bail!("Run {} already has a trace", self.run_id);
+        }
         let Trace { bytes } = trace;
         let descriptor = self.experiment.registry.store_layer_blob(
             media_types::trace_otlp_protobuf(),
             &bytes,
             Default::default(),
         )?;
-        self.trace_layer = Some(descriptor);
+        self.trace = Some(descriptor);
         Ok(())
     }
 
@@ -90,7 +93,7 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
             experiment,
             run_id,
             attachments,
-            trace_layer,
+            trace,
             solves,
             next_solve_id: _,
             parameters,
@@ -98,7 +101,7 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
         let run = RunEntry {
             run_id,
             attachments,
-            trace_layer,
+            trace,
             solves,
             parameters,
         };

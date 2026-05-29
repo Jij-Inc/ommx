@@ -4,8 +4,8 @@ use super::super::parameter::ParameterSet;
 use super::super::{AttachmentLogger, ParameterValue};
 use super::{
     bail_non_unsealed, lock_experiment_state, store_run_attachment_descriptor,
-    store_solve_payload_descriptor, store_trace_layer_descriptor, ExperimentDyn,
-    ExperimentDynLifecycle, ExperimentDynState, RunEntryDyn, SolveEntryDyn,
+    store_solve_payload_descriptor, store_trace_descriptor, ExperimentDyn, ExperimentDynLifecycle,
+    ExperimentDynState, RunEntryDyn, SolveEntryDyn,
 };
 use crate::artifact::media_types;
 use crate::{Instance, Solution};
@@ -38,7 +38,7 @@ pub struct RunDyn {
 struct RunDynState {
     run_id: u64,
     attachments: Vec<Descriptor>,
-    trace_layer: Option<Descriptor>,
+    trace: Option<Descriptor>,
     solves: Vec<SolveEntryDyn>,
     next_solve_id: u64,
     parameters: ParameterSet,
@@ -69,7 +69,7 @@ impl RunDyn {
             run_state: Some(RunDynState {
                 run_id,
                 attachments: Vec::new(),
-                trace_layer: None,
+                trace: None,
                 solves: Vec::new(),
                 next_solve_id: 0,
                 parameters: ParameterSet::new(),
@@ -127,13 +127,16 @@ impl RunDyn {
         Ok(solve_id)
     }
 
-    pub fn store_trace_layer(&mut self, trace: super::super::Trace) -> Result<()> {
-        self.open()?;
+    pub fn store_trace(&mut self, trace: super::super::Trace) -> Result<()> {
+        let state = self.open()?;
+        if state.trace.is_some() {
+            crate::bail!("Run {} already has a trace", state.run_id);
+        }
         let descriptor = {
             let dyn_state = lock_experiment_state(&self.experiment_state);
-            store_trace_layer_descriptor(&dyn_state, trace)?
+            store_trace_descriptor(&dyn_state, trace)?
         };
-        self.open_mut()?.trace_layer = Some(descriptor);
+        self.open_mut()?.trace = Some(descriptor);
         Ok(())
     }
 
@@ -158,7 +161,7 @@ impl RunDyn {
             RunEntryDyn {
                 run_id: run.run_id,
                 attachments: run.attachments,
-                trace_layer: run.trace_layer,
+                trace: run.trace,
                 solves: run.solves,
                 parameters: run.parameters,
             },

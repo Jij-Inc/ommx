@@ -51,7 +51,7 @@ pub fn v1_sample_set() -> MediaType {
     MediaType::Other(V1_SAMPLE_SET_MEDIA_TYPE.to_string())
 }
 
-/// Media type of an Experiment trace layer encoded as OTLP protobuf.
+/// Media type of an Experiment Run trace encoded as OTLP protobuf.
 pub fn trace_otlp_protobuf() -> MediaType {
     MediaType::Other(TRACE_OTLP_PROTOBUF_MEDIA_TYPE.to_string())
 }

@@ -84,7 +84,7 @@ impl<'reg> UnsealedExperimentState<'reg> {
                 .map(|descriptor| layers.push(descriptor))
                 .collect::<Result<Vec<_>>>()?;
             let trace = run
-                .trace_layer
+                .trace
                 .clone()
                 .map(|descriptor| layers.push(descriptor))
                 .transpose()?;

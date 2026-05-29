@@ -105,7 +105,7 @@ pub struct SealedExperiment<'reg> {
 ///
 /// The Rust SDK does not decode, validate, or interpret OpenTelemetry
 /// spans. `Trace` is a storage boundary type: it marks a byte payload as
-/// a Run trace layer payload, while producers and renderers such as the
+/// a Run trace payload, while producers and renderers such as the
 /// Python SDK own the concrete OpenTelemetry encoding.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Trace {
@@ -165,7 +165,7 @@ pub struct Run<'exp, 'reg> {
     experiment: &'exp Experiment<'reg>,
     run_id: u64,
     attachments: Vec<StoredDescriptor<'reg>>,
-    trace_layer: Option<StoredDescriptor<'reg>>,
+    trace: Option<StoredDescriptor<'reg>>,
     solves: Vec<SolveEntry<'reg>>,
     next_solve_id: u64,
     parameters: ParameterSet,
@@ -182,7 +182,7 @@ pub struct Run<'exp, 'reg> {
 struct RunEntry<'reg> {
     run_id: u64,
     attachments: Vec<StoredDescriptor<'reg>>,
-    trace_layer: Option<StoredDescriptor<'reg>>,
+    trace: Option<StoredDescriptor<'reg>>,
     solves: Vec<SolveEntry<'reg>>,
     parameters: ParameterSet,
 }
@@ -271,7 +271,7 @@ impl<'reg> Experiment<'reg> {
             experiment: self,
             run_id,
             attachments: Vec::new(),
-            trace_layer: None,
+            trace: None,
             solves: Vec::new(),
             next_solve_id: 0,
             parameters: ParameterSet::new(),
@@ -379,7 +379,7 @@ impl<'reg> SealedExperiment<'reg> {
                 RunEntry {
                     run_id: run.run_id(),
                     attachments: run.attachments().to_vec(),
-                    trace_layer: run.trace_layer().cloned(),
+                    trace: run.trace().cloned(),
                     solves,
                     parameters,
                 },

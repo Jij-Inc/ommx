@@ -26,15 +26,13 @@ def ensure_collector_installed() -> _TraceSpanCollector:
 
     Behavior:
 
-    * If the global provider already supports ``add_span_processor``
-      (i.e. it's an SDK provider, or something compatible), attach a
+    * If the global provider is an SDK ``TracerProvider``, attach a
       collector to it. Existing processors are undisturbed.
-    * If the global provider does not support ``add_span_processor``
-      (e.g. the default ``ProxyTracerProvider`` from a fresh notebook),
-      install an SDK provider. OpenTelemetry only honours the *first*
-      ``set_tracer_provider`` call, so after the attempt we re-read the
-      global and fail with a helpful message if we still don't have
-      something we can attach to.
+    * If the global provider is the default ``ProxyTracerProvider`` from a
+      fresh notebook, install an SDK provider. OpenTelemetry only honours
+      the *first* ``set_tracer_provider`` call, so after the attempt we
+      re-read the global and fail with a helpful message if an incompatible
+      non-SDK provider was already active.
 
     The collector instance is cached so repeated captures in the same
     session reuse a single collector (no processor accumulation on the

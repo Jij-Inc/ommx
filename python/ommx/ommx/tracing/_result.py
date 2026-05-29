@@ -37,9 +37,9 @@ class TraceResult:
 
     @classmethod
     def from_otlp_protobuf(cls, payload: bytes) -> "TraceResult":
-        """Build a trace result from an OMMX trace layer payload."""
+        """Build a trace result from an OMMX trace payload."""
         return cls(request=request_from_otlp_protobuf(payload))
 
     def otlp_protobuf(self) -> bytes:
-        """Return OTLP protobuf bytes stored in Experiment trace layers."""
+        """Return OTLP protobuf bytes stored in Experiment traces."""
         return request_to_otlp_protobuf(self.request)

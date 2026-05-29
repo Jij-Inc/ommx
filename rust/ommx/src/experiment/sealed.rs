@@ -24,7 +24,7 @@ impl<'reg> SealedExperiment<'reg> {
         for run in config.runs {
             let attachments =
                 decode_attachments(&layers, run.attachments, &format!("run {}", run.run_id))?;
-            let trace_layer = decode_trace_layer(&layers, run.trace, run.run_id)?;
+            let trace = decode_trace(&layers, run.trace, run.run_id)?;
             let solves = decode_solves(&layers, run.run_id, run.solves)?;
             if runs
                 .insert(
@@ -32,7 +32,7 @@ impl<'reg> SealedExperiment<'reg> {
                     SealedRun {
                         run_id: run.run_id,
                         attachments,
-                        trace_layer,
+                        trace,
                         solves,
                     },
                 )
@@ -78,7 +78,7 @@ impl<'reg> SealedExperiment<'reg> {
 pub struct SealedRun<'reg> {
     run_id: u64,
     attachments: Vec<StoredDescriptor<'reg>>,
-    trace_layer: Option<StoredDescriptor<'reg>>,
+    trace: Option<StoredDescriptor<'reg>>,
     solves: Vec<Solve<'reg>>,
 }
 
@@ -91,8 +91,8 @@ impl<'reg> SealedRun<'reg> {
         &self.attachments
     }
 
-    pub fn trace_layer(&self) -> Option<&StoredDescriptor<'reg>> {
-        self.trace_layer.as_ref()
+    pub fn trace(&self) -> Option<&StoredDescriptor<'reg>> {
+        self.trace.as_ref()
     }
 
     pub fn solves(&self) -> &[Solve<'reg>] {
@@ -176,7 +176,7 @@ fn decode_attachments<'reg>(
     Ok(decoded)
 }
 
-fn decode_trace_layer<'reg>(
+fn decode_trace<'reg>(
     layers: &[StoredDescriptor<'reg>],
     trace: Option<LayerRef>,
     run_id: u64,
@@ -185,15 +185,10 @@ fn decode_trace_layer<'reg>(
         return Ok(None);
     };
     let descriptor = resolve_layer(layers, layer_ref)
-        .with_context(|| {
-            format!(
-                "Failed to resolve Run {run_id} trace LayerRef {}",
-                layer_ref.0
-            )
-        })?
+        .with_context(|| format!("Failed to resolve Run {run_id} trace ref {}", layer_ref.0))?
         .clone();
     validate_layer_media_type(&descriptor, &media_types::trace_otlp_protobuf())
-        .with_context(|| format!("Invalid Run {run_id} trace layer"))?;
+        .with_context(|| format!("Invalid Run {run_id} trace"))?;
     Ok(Some(descriptor))
 }
 

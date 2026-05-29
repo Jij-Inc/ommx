@@ -873,7 +873,7 @@
           "attributes": [
             {
               "name": "TRACE_OTLP_PROTOBUF_MEDIA_TYPE",
-              "doc": "Media type of an Experiment Run trace layer encoded as OTLP protobuf.",
+              "doc": "Media type of an Experiment Run trace encoded as OTLP protobuf.",
               "type_": {
                 "display": "str",
                 "link_target": null,
@@ -3553,11 +3553,11 @@
               "name": "trace",
               "doc": "Stored trace for this run, or `None` when this run was recorded without trace storage.",
               "type_": {
-                "display": "Optional[Any]",
+                "display": "Optional[TraceResult]",
                 "link_target": null,
                 "children": [
                   {
-                    "display": "Any",
+                    "display": "TraceResult",
                     "link_target": null,
                     "children": []
                   }

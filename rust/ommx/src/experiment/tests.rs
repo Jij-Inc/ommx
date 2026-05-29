@@ -175,25 +175,38 @@ fn log_writes_blob_to_blobstore_immediately() {
 }
 
 #[test]
-fn trace_layer_is_config_referenced_manifest_layer() {
+fn trace_is_config_referenced_manifest_layer() {
     with_temp_experiment(|experiment| {
         let mut run = experiment.run().unwrap();
-        run.store_trace_layer(Trace::from_bytes(b"trace".to_vec()))
+        run.store_trace(Trace::from_bytes(b"trace".to_vec()))
             .unwrap();
         run.finish().unwrap();
 
         let artifact = experiment.commit().unwrap().into_artifact();
         let layers = artifact.layers().unwrap();
         let config = experiment_config(&artifact);
-        let trace_ref = config.runs[0].trace.expect("run has a trace LayerRef");
-        let trace_layer = layer_from_ref(&layers, trace_ref);
-        assert_eq!(
-            trace_layer.media_type(),
-            &media_types::trace_otlp_protobuf()
-        );
-        assert_eq!(layer_annotation(trace_layer, ANN_ATTACHMENT_NAME), None);
+        let trace_ref = config.runs[0].trace.expect("run has a trace ref");
+        let trace = layer_from_ref(&layers, trace_ref);
+        assert_eq!(trace.media_type(), &media_types::trace_otlp_protobuf());
+        assert_eq!(layer_annotation(trace, ANN_ATTACHMENT_NAME), None);
         let loaded = SealedExperiment::from_artifact(artifact).unwrap();
-        assert!(loaded.run(0).unwrap().trace_layer().is_some());
+        assert!(loaded.run(0).unwrap().trace().is_some());
+        Ok(())
+    });
+}
+
+#[test]
+fn run_rejects_second_trace() {
+    with_temp_experiment(|experiment| {
+        let mut run = experiment.run().unwrap();
+        run.store_trace(Trace::from_bytes(b"trace-1".to_vec()))
+            .unwrap();
+
+        let err = run
+            .store_trace(Trace::from_bytes(b"trace-2".to_vec()))
+            .expect_err("a Run can store at most one trace");
+
+        assert!(err.to_string().contains("already has a trace"));
         Ok(())
     });
 }
@@ -469,7 +482,7 @@ fn sealed_experiment_fork_creates_child_with_parent_subject_and_next_run_id() {
                 "{}".to_string(),
             )
             .unwrap();
-            run.store_trace_layer(Trace::from_bytes(b"parent trace".to_vec()))
+            run.store_trace(Trace::from_bytes(b"parent trace".to_vec()))
                 .unwrap();
             run.finish().unwrap();
         }
@@ -479,7 +492,7 @@ fn sealed_experiment_fork_creates_child_with_parent_subject_and_next_run_id() {
         let parent_trace_digest = parent
             .run(0)
             .unwrap()
-            .trace_layer()
+            .trace()
             .expect("parent run has trace")
             .digest()
             .clone();
@@ -490,7 +503,7 @@ fn sealed_experiment_fork_creates_child_with_parent_subject_and_next_run_id() {
             let mut run = child.run().unwrap();
             assert_eq!(run.run_id(), 1);
             run.log_parameter("solver", "child").unwrap();
-            run.store_trace_layer(Trace::from_bytes(b"child trace".to_vec()))
+            run.store_trace(Trace::from_bytes(b"child trace".to_vec()))
                 .unwrap();
             run.finish().unwrap();
         }
@@ -517,10 +530,10 @@ fn sealed_experiment_fork_creates_child_with_parent_subject_and_next_run_id() {
 
         let loaded = SealedExperiment::from_artifact(child_artifact).unwrap();
         assert_eq!(
-            loaded.run(0).unwrap().trace_layer().unwrap().digest(),
+            loaded.run(0).unwrap().trace().unwrap().digest(),
             &parent_trace_digest
         );
-        assert!(loaded.run(1).unwrap().trace_layer().is_some());
+        assert!(loaded.run(1).unwrap().trace().is_some());
         assert!(loaded
             .experiment_attachments()
             .iter()
@@ -1065,6 +1078,22 @@ fn experiment_dyn_keeps_temp_registry_alive_for_derived_artifacts() {
     assert_eq!(cells[0].run_id, 0);
     assert_eq!(cells[0].name, "solver");
     assert_eq!(cells[0].value, ParameterValue::String("scip".to_string()));
+}
+
+#[test]
+fn experiment_dyn_run_rejects_second_trace() {
+    let experiment = ExperimentDyn::with_temp_local_registry(Name::Anonymous).unwrap();
+    let mut run = experiment.run().unwrap();
+    run.store_trace(Trace::from_bytes(b"trace-1".to_vec()))
+        .unwrap();
+
+    let err = run
+        .store_trace(Trace::from_bytes(b"trace-2".to_vec()))
+        .expect_err("a RunDyn can store at most one trace");
+
+    assert!(err.to_string().contains("already has a trace"));
+    run.abandon();
+    experiment.commit().unwrap();
 }
 
 #[test]
