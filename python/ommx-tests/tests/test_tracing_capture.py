@@ -14,7 +14,7 @@ IPython cell magic. Both APIs share the underlying ``_collector`` and
   still propagates to the caller.
 
 The session-scoped ``TracerProvider`` from :mod:`conftest` is reused,
-and a single module-level ``_CellSpanCollector`` is attached to it
+and a single module-level ``_TraceSpanCollector`` is attached to it
 once and re-used across every test. The :func:`capture_collector`
 fixture swaps ``_setup._COLLECTOR`` to that shared instance for the
 duration of each test (so ``ensure_collector_installed`` returns it
@@ -34,7 +34,7 @@ from opentelemetry.proto.trace.v1.trace_pb2 import Status as ProtoStatus
 
 from ommx.tracing import TraceResult, capture_trace, traced
 from ommx.tracing import _setup
-from ommx.tracing._collector import _CellSpanCollector
+from ommx.tracing._collector import _TraceSpanCollector
 
 from conftest import get_test_provider
 
@@ -44,7 +44,7 @@ from conftest import get_test_provider
 # ---------------------------------------------------------------------------
 
 
-_SESSION_COLLECTOR: _CellSpanCollector | None = None
+_SESSION_COLLECTOR: _TraceSpanCollector | None = None
 
 
 def _trace_id(span) -> int:
@@ -58,13 +58,13 @@ def capture_collector():
 
     Points ``_setup._COLLECTOR`` at the shared instance so
     ``ensure_collector_installed()`` returns it unchanged rather than
-    creating a fresh ``_CellSpanCollector`` + attaching a new
+    creating a fresh ``_TraceSpanCollector`` + attaching a new
     ``SpanProcessor`` to the provider each test. Without that,
     processors would pile up across the suite.
     """
     global _SESSION_COLLECTOR
     if _SESSION_COLLECTOR is None:
-        _SESSION_COLLECTOR = _CellSpanCollector()
+        _SESSION_COLLECTOR = _TraceSpanCollector()
         get_test_provider().add_span_processor(_SESSION_COLLECTOR)
     # Reuse the shared collector for any ``capture_trace`` /
     # ``run_cell_with_trace`` call made during the test.

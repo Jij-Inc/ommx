@@ -48,16 +48,18 @@ The public surface is intentionally small:
   nothing.
 
 Everything else (``_collector``, ``_render``, ``_setup``, ``_magic``,
-``_capture``) is internal and may change without notice. Reach for
-them only if you are building on top of this module and can tolerate
-breakage.
+``_capture``, ``_decorator``, ``_result``) is internal and may change
+without notice. Reach for them only if you are building on top of this
+module and can tolerate breakage.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ._capture import TraceResult, capture_trace, traced
+from ._capture import capture_trace
+from ._decorator import traced
+from ._result import TraceResult
 
 
 if TYPE_CHECKING:  # pragma: no cover - typing only

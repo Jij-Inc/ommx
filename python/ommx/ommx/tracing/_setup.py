@@ -1,4 +1,4 @@
-"""Lazy setup of the OTel pipeline for the cell magic.
+"""Lazy setup of the OTel pipeline for OMMX trace capture.
 
 ``opentelemetry-sdk`` is a hard runtime dependency of ``ommx``, so we
 can import the SDK at the top level. The function below is still called
@@ -14,15 +14,15 @@ from typing import Optional
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider as SdkTracerProvider
 
-from ._collector import _CellSpanCollector
+from ._collector import _TraceSpanCollector
 
 
-_COLLECTOR: Optional[_CellSpanCollector] = None
+_COLLECTOR: Optional[_TraceSpanCollector] = None
 _LOCK = threading.Lock()
 
 
-def ensure_collector_installed() -> _CellSpanCollector:
-    """Install the cell-trace collector onto the active ``TracerProvider``.
+def ensure_collector_installed() -> _TraceSpanCollector:
+    """Install the OMMX trace collector onto the active ``TracerProvider``.
 
     Behavior:
 
@@ -36,9 +36,9 @@ def ensure_collector_installed() -> _CellSpanCollector:
       global and fail with a helpful message if we still don't have
       something we can attach to.
 
-    The collector instance is cached so repeated magic invocations in the
-    same session reuse a single collector (no per-cell processor
-    accumulation on the provider).
+    The collector instance is cached so repeated captures in the same
+    session reuse a single collector (no processor accumulation on the
+    provider).
     """
     global _COLLECTOR
     with _LOCK:
@@ -64,7 +64,7 @@ def ensure_collector_installed() -> _CellSpanCollector:
                     "provider."
                 )
 
-        collector = _CellSpanCollector()
+        collector = _TraceSpanCollector()
         provider.add_span_processor(collector)
         _COLLECTOR = collector
         return collector

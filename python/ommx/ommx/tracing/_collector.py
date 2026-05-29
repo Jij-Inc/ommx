@@ -1,16 +1,12 @@
 """Collect finished OTel spans for explicitly captured traces.
 
-Both the ``%%ommx_trace`` cell magic and the ``capture_trace`` /
-``@traced`` script API bracket their tracked work with
-:meth:`_CellSpanCollector.begin_capture` / :meth:`end_capture` on this
+The ``%%ommx_trace`` cell magic, ``capture_trace`` / ``@traced`` script
+API, and Experiment trace storage bracket their tracked work with
+:meth:`_TraceSpanCollector.begin_capture` / :meth:`end_capture` on this
 collector. Spans whose ``trace_id`` falls outside any active
 begin/end pair are dropped immediately — without that gate, a
 long-lived notebook or daemon with other instrumentation would leak
 memory as unrelated traces accumulated in :attr:`_spans_by_trace`.
-
-The ``_Cell`` prefix is a historical holdover from when the collector
-only backed the cell magic; it is shared by every entry point in
-``ommx.tracing`` now.
 """
 
 from __future__ import annotations
@@ -21,7 +17,7 @@ from typing import Dict, List, Set
 from opentelemetry.sdk.trace import ReadableSpan, SpanProcessor
 
 
-class _CellSpanCollector(SpanProcessor):
+class _TraceSpanCollector(SpanProcessor):
     """``SpanProcessor`` that stashes spans for explicitly captured traces."""
 
     def __init__(self) -> None:
@@ -54,7 +50,7 @@ class _CellSpanCollector(SpanProcessor):
     def force_flush(self, timeout_millis: int = 30_000) -> bool:  # type: ignore[override]
         return True
 
-    # ---- Cell-magic facing ------------------------------------------------
+    # ---- Capture API ------------------------------------------------------
 
     def begin_capture(self, trace_id: int) -> None:
         """Start collecting spans tagged with ``trace_id``.

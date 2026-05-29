@@ -1,9 +1,7 @@
-"""Render a collected or stored trace as a text tree and Chrome Trace JSON."""
+"""Render an exported OTLP trace as a text tree or Chrome Trace JSON."""
 
 from __future__ import annotations
 
-import base64
-import html
 import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -263,40 +261,3 @@ def to_chrome_trace(request: ExportTraceServiceRequest) -> dict:
 
 def chrome_trace_json(request: ExportTraceServiceRequest) -> str:
     return json.dumps(to_chrome_trace(request))
-
-
-# ---------------------------------------------------------------------------
-# HTML glue for the cell magic
-# ---------------------------------------------------------------------------
-
-
-def render_cell_output_html(
-    request: ExportTraceServiceRequest,
-    *,
-    download_filename: str = "ommx_trace.json",
-) -> str:
-    """HTML blob for ``display(HTML(...))`` from :mod:`_magic`.
-
-    Renders the text tree inside a ``<pre>`` and attaches a download link
-    pointing at a base64 data URL of the Chrome Trace JSON. This keeps
-    the magic dependency-free — no ipywidgets, no assets.
-    """
-    tree = html.escape(render_text_tree(request))
-    payload = chrome_trace_json(request)
-    b64 = base64.b64encode(payload.encode("utf-8")).decode("ascii")
-    data_url = f"data:application/json;base64,{b64}"
-    size_kb = len(payload) / 1024
-    # ``quote=True`` escapes both ``"`` and ``'`` — essential when the
-    # value lands inside an HTML attribute where an un-escaped quote
-    # would terminate the attribute and allow injection. Cell magic
-    # callers currently pass a literal default, but the parameter is
-    # public, so harden it anyway.
-    safe_filename = html.escape(download_filename, quote=True)
-    return (
-        '<div class="ommx-trace">'
-        f"<pre>{tree}</pre>"
-        f'<p><a href="{data_url}" download="{safe_filename}">'
-        f"Download Chrome Trace JSON ({size_kb:.1f} KB)"
-        "</a> — open in Perfetto, speedscope, or <code>chrome://tracing</code>.</p>"
-        "</div>"
-    )

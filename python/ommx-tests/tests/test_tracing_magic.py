@@ -31,12 +31,11 @@ from opentelemetry.proto.collector.trace.v1.trace_service_pb2 import (
 )
 
 from ommx.tracing import _setup
-from ommx.tracing._collector import _CellSpanCollector
-from ommx.tracing._magic import run_cell_with_trace
+from ommx.tracing._collector import _TraceSpanCollector
+from ommx.tracing._magic import _render_cell_output_html, run_cell_with_trace
 from ommx.tracing._otlp import spans_to_otlp_request
 from ommx.tracing._render import (
     chrome_trace_json,
-    render_cell_output_html,
     render_text_tree,
     to_chrome_trace,
 )
@@ -54,7 +53,7 @@ from conftest import get_test_provider
 # The collector only retains spans for traces opened via ``begin_capture``,
 # so between-test state only lives inside ``_active_traces`` /
 # ``_spans_by_trace`` — both cleared in the fixture below.
-_SESSION_COLLECTOR: _CellSpanCollector | None = None
+_SESSION_COLLECTOR: _TraceSpanCollector | None = None
 
 
 @pytest.fixture
@@ -64,13 +63,13 @@ def cell_collector():
     Points ``_setup._COLLECTOR`` at the shared instance so
     ``ensure_collector_installed()`` (called indirectly by
     ``capture_trace`` / ``run_cell_with_trace``) returns it unchanged
-    rather than creating a fresh ``_CellSpanCollector`` + attaching a
+    rather than creating a fresh ``_TraceSpanCollector`` + attaching a
     new ``SpanProcessor`` every test. Without that, processors would
     pile up across the suite.
     """
     global _SESSION_COLLECTOR
     if _SESSION_COLLECTOR is None:
-        _SESSION_COLLECTOR = _CellSpanCollector()
+        _SESSION_COLLECTOR = _TraceSpanCollector()
         get_test_provider().add_span_processor(_SESSION_COLLECTOR)
     _setup._COLLECTOR = _SESSION_COLLECTOR
     _SESSION_COLLECTOR.shutdown()  # drop state from previous test
@@ -81,7 +80,7 @@ def cell_collector():
         _setup._COLLECTOR = None
 
 
-def _run_and_collect(collector: _CellSpanCollector, cell_fn):
+def _run_and_collect(collector: _TraceSpanCollector, cell_fn):
     """Run ``cell_fn`` under a root span, using ``begin/end_capture``."""
     tracer = trace.get_tracer("ommx-tracing-magic-test")
     with tracer.start_as_current_span("root") as root:
@@ -92,7 +91,7 @@ def _run_and_collect(collector: _CellSpanCollector, cell_fn):
 
 
 def _run_and_collect_request(
-    collector: _CellSpanCollector,
+    collector: _TraceSpanCollector,
     cell_fn,
 ) -> ExportTraceServiceRequest:
     return spans_to_otlp_request(_run_and_collect(collector, cell_fn))
@@ -238,7 +237,7 @@ def test_cell_html_contains_download_link(cell_collector):
             pass
 
     request = _run_and_collect_request(cell_collector, cell)
-    html = render_cell_output_html(request, download_filename="cell.json")
+    html = _render_cell_output_html(request, download_filename="cell.json")
 
     assert "<pre>" in html
     assert 'download="cell.json"' in html
@@ -255,7 +254,7 @@ def test_cell_html_contains_download_link(cell_collector):
 def test_cell_html_escapes_download_filename_for_attribute():
     """A filename containing a quote must not break out of the
     ``download`` attribute — otherwise arbitrary HTML could be injected."""
-    html = render_cell_output_html(
+    html = _render_cell_output_html(
         ExportTraceServiceRequest(),
         download_filename='"><script>alert(1)</script>',
     )
@@ -299,7 +298,7 @@ def test_ensure_collector_does_not_replace_existing_processors():
         get_test_provider().force_flush()
         assert any(s.name == "verify" for s in exporter.spans), (
             "The pre-existing session exporter stopped receiving spans "
-            "after the cell collector was attached."
+            "after the trace collector was attached."
         )
     finally:
         _setup.reset_for_testing()
