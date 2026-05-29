@@ -26,10 +26,14 @@ import urllib.parse
 
 import pytest
 from opentelemetry import trace
+from opentelemetry.proto.collector.trace.v1.trace_service_pb2 import (
+    ExportTraceServiceRequest,
+)
 
 from ommx.tracing import _setup
 from ommx.tracing._collector import _CellSpanCollector
 from ommx.tracing._magic import run_cell_with_trace
+from ommx.tracing._otlp import spans_to_otlp_request
 from ommx.tracing._render import (
     chrome_trace_json,
     render_cell_output_html,
@@ -85,6 +89,13 @@ def _run_and_collect(collector: _CellSpanCollector, cell_fn):
         collector.begin_capture(trace_id)
         cell_fn(tracer)
     return collector.end_capture(trace_id)
+
+
+def _run_and_collect_request(
+    collector: _CellSpanCollector,
+    cell_fn,
+) -> ExportTraceServiceRequest:
+    return spans_to_otlp_request(_run_and_collect(collector, cell_fn))
 
 
 # ---------------------------------------------------------------------------
@@ -168,8 +179,8 @@ def test_render_text_tree_reflects_nesting(cell_collector):
             with tracer.start_as_current_span("inner"):
                 pass
 
-    spans = _run_and_collect(cell_collector, cell)
-    tree = render_text_tree(spans)
+    request = _run_and_collect_request(cell_collector, cell)
+    tree = render_text_tree(request)
 
     outer_line = next(line for line in tree.splitlines() if "outer" in line)
     inner_line = next(line for line in tree.splitlines() if "inner" in line)
@@ -179,7 +190,7 @@ def test_render_text_tree_reflects_nesting(cell_collector):
 
 
 def test_render_text_tree_handles_empty():
-    assert render_text_tree([]) == "(no spans)"
+    assert render_text_tree(ExportTraceServiceRequest()) == "(no spans)"
 
 
 def test_chrome_trace_is_valid_json_with_X_events(cell_collector):
@@ -190,8 +201,8 @@ def test_chrome_trace_is_valid_json_with_X_events(cell_collector):
         with tracer.start_as_current_span("work") as span:
             span.set_attribute("batch_size", 42)
 
-    spans = _run_and_collect(cell_collector, cell)
-    payload = chrome_trace_json(spans)
+    request = _run_and_collect_request(cell_collector, cell)
+    payload = chrome_trace_json(request)
     parsed = json.loads(payload)
 
     assert parsed["displayTimeUnit"] == "ms"
@@ -210,20 +221,12 @@ def test_chrome_trace_is_valid_json_with_X_events(cell_collector):
 def test_chrome_trace_skips_open_spans():
     """Spans without an ``end_time`` must be omitted — they would emit a
     zero-duration event and confuse Perfetto."""
-    from typing import cast
+    request = ExportTraceServiceRequest()
+    span = request.resource_spans.add().scope_spans.add().spans.add()
+    span.name = "still_running"
+    span.start_time_unix_nano = 1_000_000_000
 
-    from opentelemetry.sdk.trace import ReadableSpan
-
-    class _Fake:
-        name = "still_running"
-        start_time = 1_000_000_000
-        end_time = None
-        attributes: dict = {}
-
-    # The renderer only touches ``start_time``/``end_time``/``attributes``/
-    # ``name``; a duck-typed stand-in is enough. Cast through ``ReadableSpan``
-    # to keep pyright quiet without materializing a full span.
-    result = to_chrome_trace([cast(ReadableSpan, _Fake())])
+    result = to_chrome_trace(request)
     assert result["traceEvents"] == []
 
 
@@ -234,8 +237,8 @@ def test_cell_html_contains_download_link(cell_collector):
         with tracer.start_as_current_span("work"):
             pass
 
-    spans = _run_and_collect(cell_collector, cell)
-    html = render_cell_output_html(spans, download_filename="cell.json")
+    request = _run_and_collect_request(cell_collector, cell)
+    html = render_cell_output_html(request, download_filename="cell.json")
 
     assert "<pre>" in html
     assert 'download="cell.json"' in html
@@ -252,7 +255,10 @@ def test_cell_html_contains_download_link(cell_collector):
 def test_cell_html_escapes_download_filename_for_attribute():
     """A filename containing a quote must not break out of the
     ``download`` attribute — otherwise arbitrary HTML could be injected."""
-    html = render_cell_output_html([], download_filename='"><script>alert(1)</script>')
+    html = render_cell_output_html(
+        ExportTraceServiceRequest(),
+        download_filename='"><script>alert(1)</script>',
+    )
     assert "<script>" not in html
     # Raw quote must not terminate the attribute prematurely.
     assert 'download=""><script>' not in html

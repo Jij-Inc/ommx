@@ -29,21 +29,11 @@ def _trace_layers(artifact: Artifact):
 
 
 def _trace_span_names(trace) -> set[str]:
-    return {
-        span.name
-        for resource_span in trace.request.resource_spans
-        for scope_span in resource_span.scope_spans
-        for span in scope_span.spans
-    }
+    return {span.name for span in trace.spans}
 
 
 def _trace_span_count(trace, name: str) -> int:
-    return sum(
-        span.name == name
-        for resource_span in trace.request.resource_spans
-        for scope_span in resource_span.scope_spans
-        for span in scope_span.spans
-    )
+    return sum(span.name == name for span in trace.spans)
 
 
 def test_view_run_parameters_from_committed_artifact(snapshot):

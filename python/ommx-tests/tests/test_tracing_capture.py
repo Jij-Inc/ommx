@@ -30,7 +30,6 @@ import pytest
 from opentelemetry.proto.collector.trace.v1.trace_service_pb2 import (
     ExportTraceServiceRequest,
 )
-from opentelemetry.proto.trace.v1.trace_pb2 import Span as ProtoSpan
 from opentelemetry.proto.trace.v1.trace_pb2 import Status as ProtoStatus
 
 from ommx.tracing import TraceResult, capture_trace, traced
@@ -48,20 +47,7 @@ from conftest import get_test_provider
 _SESSION_COLLECTOR: _CellSpanCollector | None = None
 
 
-def _proto_spans(request: ExportTraceServiceRequest) -> list[ProtoSpan]:
-    return [
-        span
-        for resource_span in request.resource_spans
-        for scope_span in resource_span.scope_spans
-        for span in scope_span.spans
-    ]
-
-
-def _span_names(request: ExportTraceServiceRequest) -> list[str]:
-    return sorted(span.name for span in _proto_spans(request))
-
-
-def _trace_id(span: ProtoSpan) -> int:
+def _trace_id(span) -> int:
     return int.from_bytes(span.trace_id, byteorder="big")
 
 
@@ -109,7 +95,7 @@ def test_capture_trace_populates_result_on_success(capture_collector):
             pass
 
     # Root + inner span land in the collected list.
-    assert _span_names(result.request) == ["example_op", "inner"]
+    assert sorted(span.name for span in result.spans) == ["example_op", "inner"]
     # Text tree is useful to print from scripts.
     tree = result.text_tree()
     assert "example_op" in tree and "inner" in tree
@@ -119,7 +105,7 @@ def test_capture_trace_custom_span_name(capture_collector):
     """The caller can pick a descriptive root span name."""
     with capture_trace("build_qubo") as result:
         pass
-    assert _span_names(result.request) == ["build_qubo"]
+    assert [span.name for span in result.spans] == ["build_qubo"]
 
 
 def test_trace_result_otlp_protobuf_roundtrip(capture_collector):
@@ -133,11 +119,11 @@ def test_trace_result_otlp_protobuf_roundtrip(capture_collector):
 
     request = ExportTraceServiceRequest()
     request.ParseFromString(result.otlp_protobuf())
-    names = {span.name for span in _proto_spans(request)}
+    names = {span.name for span in TraceResult(request=request).spans}
     assert names == {"protobuf_root", "protobuf_child"}
 
     restored = TraceResult.from_otlp_protobuf(result.otlp_protobuf())
-    assert {span.name for span in _proto_spans(restored.request)} == names
+    assert {span.name for span in restored.spans} == names
     assert "protobuf_child" in restored.text_tree()
 
 
@@ -167,12 +153,10 @@ def test_capture_trace_populates_result_on_exception(capture_collector):
         pass
 
     assert result is not None
-    assert _proto_spans(result.request), (
-        "TraceResult.request must be populated on the exception path"
-    )
+    assert result.spans, "TraceResult.spans must be populated on the exception path"
     # The root span sees the exception via OTel's default
     # record_exception + set_status(ERROR).
-    root = next(s for s in _proto_spans(result.request) if s.name == "failing_op")
+    root = next(s for s in result.spans if s.name == "failing_op")
     assert root.status.code == ProtoStatus.STATUS_CODE_ERROR
     # And the renderer surfaces the error status so the user can find
     # the failing span at a glance.
@@ -197,7 +181,7 @@ def test_capture_trace_uses_fresh_trace_id(capture_collector):
         ambient_trace_id = ambient.get_span_context().trace_id
 
     # Captured spans only contain the isolated root.
-    spans = _proto_spans(result.request)
+    spans = result.spans
     assert [s.name for s in spans] == ["isolated"]
     assert _trace_id(spans[0]) != ambient_trace_id
 
@@ -445,4 +429,4 @@ def test_trace_result_request_is_export_trace_service_request(capture_collector)
     with capture_trace() as result:
         pass
     assert isinstance(result.request, ExportTraceServiceRequest)
-    assert _proto_spans(result.request)
+    assert result.spans

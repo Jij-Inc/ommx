@@ -54,6 +54,7 @@ from opentelemetry import trace
 from opentelemetry.proto.collector.trace.v1.trace_service_pb2 import (
     ExportTraceServiceRequest,
 )
+from opentelemetry.proto.trace.v1.trace_pb2 import Span as ProtoSpan
 from opentelemetry.trace import Span
 
 from ._collector import _CellSpanCollector
@@ -87,6 +88,16 @@ class TraceResult:
     request: ExportTraceServiceRequest = field(
         default_factory=ExportTraceServiceRequest
     )
+
+    @property
+    def spans(self) -> list[ProtoSpan]:
+        """Flattened OTLP protobuf spans exported in this trace result."""
+        return [
+            span
+            for resource_span in self.request.resource_spans
+            for scope_span in resource_span.scope_spans
+            for span in scope_span.spans
+        ]
 
     @classmethod
     def from_otlp_protobuf(cls, payload: bytes) -> "TraceResult":

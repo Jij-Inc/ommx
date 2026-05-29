@@ -85,6 +85,7 @@ print(trace.text_tree())
 `trace` is a {class}`~ommx.tracing.TraceResult` populated when the block exits:
 
 - {attr}`~ommx.tracing.TraceResult.request` — the exported OTLP {class}`~opentelemetry.proto.collector.trace.v1.trace_service_pb2.ExportTraceServiceRequest` held by the result.
+- {attr}`~ommx.tracing.TraceResult.spans` — flattened exported OTLP protobuf spans from `request`.
 - {meth}`~ommx.tracing.TraceResult.otlp_protobuf` — returns the same OTLP export request as protobuf bytes, which is the payload stored by Experiment trace layers.
 - {meth}`~ommx.tracing.TraceResult.text_tree` — the same nested renderer the cell magic uses.
 - {meth}`~ommx.tracing.TraceResult.chrome_trace_json` — returns the trace as a JSON string.

@@ -85,6 +85,7 @@ print(trace.text_tree())
 `trace` はブロック終了時に値が埋められる {class}`~ommx.tracing.TraceResult` です。
 
 - {attr}`~ommx.tracing.TraceResult.request` — 結果としてexportされたOTLP {class}`~opentelemetry.proto.collector.trace.v1.trace_service_pb2.ExportTraceServiceRequest`
+- {attr}`~ommx.tracing.TraceResult.spans` — `request` 内のexport済みOTLP protobuf spanを平坦化したリスト
 - {meth}`~ommx.tracing.TraceResult.otlp_protobuf` — Experimentのtrace layerに保存されるOTLP export requestのprotobuf bytes
 - {meth}`~ommx.tracing.TraceResult.text_tree` — セルマジックと同じネストしたテキストツリー
 - {meth}`~ommx.tracing.TraceResult.chrome_trace_json` — トレースをJSON文字列として返す
