@@ -1,57 +1,21 @@
-"""Render an exported OTLP trace as a text tree or Chrome Trace JSON."""
+"""Render a completed :class:`TraceResult` as text or Chrome Trace JSON."""
 
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Set
+from collections.abc import Sequence
+from typing import Any
 
-from opentelemetry.proto.collector.trace.v1.trace_service_pb2 import (
-    ExportTraceServiceRequest,
-)
 from opentelemetry.proto.common.v1.common_pb2 import AnyValue
+from opentelemetry.proto.trace.v1.trace_pb2 import Span as ProtoSpan
 from opentelemetry.proto.trace.v1.trace_pb2 import Status as ProtoStatus
-from opentelemetry.trace.status import StatusCode
 
-
-@dataclass(frozen=True)
-class _SpanView:
-    name: str
-    span_id: int
-    parent_span_id: int | None
-    start_time: int | None
-    end_time: int | None
-    status_code: StatusCode
-    attributes: Mapping[str, Any] = field(default_factory=dict)
+from ._result import TraceResult
 
 
 # ---------------------------------------------------------------------------
-# Trace view
+# OTLP protobuf helpers
 # ---------------------------------------------------------------------------
-
-
-def _span_views(request: ExportTraceServiceRequest) -> list[_SpanView]:
-    views: list[_SpanView] = []
-    for resource_span in request.resource_spans:
-        for scope_span in resource_span.scope_spans:
-            for span in scope_span.spans:
-                views.append(
-                    _SpanView(
-                        name=span.name,
-                        span_id=_id_from_bytes(span.span_id),
-                        parent_span_id=(
-                            _id_from_bytes(span.parent_span_id)
-                            if span.parent_span_id
-                            else None
-                        ),
-                        start_time=_optional_int(span.start_time_unix_nano),
-                        end_time=_optional_int(span.end_time_unix_nano),
-                        status_code=_status_code_from_proto(span.status),
-                        attributes=_attributes_from_proto(span.attributes),
-                    )
-                )
-    return views
 
 
 def _attributes_from_proto(attributes: Sequence[Any]) -> dict[str, Any]:
@@ -80,20 +44,28 @@ def _attribute_value_from_proto(value: AnyValue) -> Any:
     return None
 
 
-def _status_code_from_proto(status: ProtoStatus) -> StatusCode:
-    if status.code == ProtoStatus.STATUS_CODE_ERROR:
-        return StatusCode.ERROR
-    if status.code == ProtoStatus.STATUS_CODE_OK:
-        return StatusCode.OK
-    return StatusCode.UNSET
-
-
 def _id_from_bytes(value: bytes) -> int:
     return int.from_bytes(value, byteorder="big") if value else 0
 
 
+def _span_id(span: ProtoSpan) -> int:
+    return _id_from_bytes(span.span_id)
+
+
+def _parent_span_id(span: ProtoSpan) -> int | None:
+    return _id_from_bytes(span.parent_span_id) if span.parent_span_id else None
+
+
 def _optional_int(value: int) -> int | None:
     return value or None
+
+
+def _start_time(span: ProtoSpan) -> int | None:
+    return _optional_int(span.start_time_unix_nano)
+
+
+def _end_time(span: ProtoSpan) -> int | None:
+    return _optional_int(span.end_time_unix_nano)
 
 
 # ---------------------------------------------------------------------------
@@ -101,16 +73,18 @@ def _optional_int(value: int) -> int | None:
 # ---------------------------------------------------------------------------
 
 
-def _duration_ms(span: _SpanView) -> float:
+def _duration_ms(span: ProtoSpan) -> float:
     """Return the span's duration in milliseconds.
 
     Open spans (which should not reach the renderer, but we still want
     to survive them) have ``end_time is None`` — report ``0.0`` instead
     of crashing.
     """
-    if span.start_time is None or span.end_time is None:
+    start_time = _start_time(span)
+    end_time = _end_time(span)
+    if start_time is None or end_time is None:
         return 0.0
-    return (span.end_time - span.start_time) / 1_000_000.0
+    return (end_time - start_time) / 1_000_000.0
 
 
 def _format_duration(ms: float) -> str:
@@ -121,7 +95,7 @@ def _format_duration(ms: float) -> str:
     return f"{ms * 1000:.1f} µs"
 
 
-def _status_marker(span: _SpanView) -> str:
+def _status_marker(span: ProtoSpan) -> str:
     """Return ``" [ERROR]"`` when the span recorded a failure, else ``""``.
 
     OTel sets ``Status(ERROR)`` on spans whose context manager saw an
@@ -130,24 +104,25 @@ def _status_marker(span: _SpanView) -> str:
     obvious which leaf failed when the user re-reads a trace for a
     crashed block.
     """
-    if span.status_code == StatusCode.ERROR:
+    if span.status.code == ProtoStatus.STATUS_CODE_ERROR:
         return " [ERROR]"
     return ""
 
 
-def _interesting_attributes(span: _SpanView) -> str:
+def _interesting_attributes(span: ProtoSpan) -> str:
     """Subset of attributes worth showing inline in the tree node.
 
     Filters out the ``tracing`` crate's bookkeeping keys (``busy_ns``,
     ``idle_ns``, ``thread.id``, ``code.*``) that are noise for human
     consumers. Everything else is fair game.
     """
-    if not span.attributes:
+    attributes = _attributes_from_proto(span.attributes)
+    if not attributes:
         return ""
     skip = {"busy_ns", "idle_ns", "thread.id"}
     pairs = [
         f"{k}={v!r}"
-        for k, v in span.attributes.items()
+        for k, v in attributes.items()
         if k not in skip and not k.startswith("code.")
     ]
     if not pairs:
@@ -160,35 +135,35 @@ def _interesting_attributes(span: _SpanView) -> str:
 # ---------------------------------------------------------------------------
 
 
-def render_text_tree(request: ExportTraceServiceRequest) -> str:
-    """Render ``request`` as a nested ASCII tree, one root per top-level span.
+def render_text_tree(result: TraceResult) -> str:
+    """Render ``result`` as a nested ASCII tree, one root per top-level span.
 
     The tree preserves parent→child relationships as recorded by OTel.
     Siblings are sorted by start time so the output reflects execution
     order.
     """
-    spans = _span_views(request)
+    spans = result.spans
     if not spans:
         return "(no spans)"
 
-    span_ids: Set[int] = set()
-    children: Dict[Optional[int], List[_SpanView]] = {}
+    span_ids: set[int] = set()
+    children: dict[int | None, list[ProtoSpan]] = {}
     for span in spans:
-        span_ids.add(span.span_id)
-        children.setdefault(span.parent_span_id, []).append(span)
+        span_ids.add(_span_id(span))
+        children.setdefault(_parent_span_id(span), []).append(span)
 
     # A span's parent may not be in `spans` (e.g. the cell root was created
     # outside the collected set). Treat those as roots too so we never drop
     # branches on the floor.
-    roots: List[_SpanView] = []
+    roots: list[ProtoSpan] = []
     for parent_id, kids in children.items():
         if parent_id is None or parent_id not in span_ids:
             roots.extend(kids)
-    roots.sort(key=lambda s: s.start_time or 0)
+    roots.sort(key=lambda s: _start_time(s) or 0)
 
-    lines: List[str] = []
+    lines: list[str] = []
 
-    def walk(span: _SpanView, prefix: str, is_last: bool) -> None:
+    def walk(span: ProtoSpan, prefix: str, is_last: bool) -> None:
         marker = "└── " if is_last else "├── "
         lines.append(
             f"{prefix}{marker}{span.name} "
@@ -196,8 +171,8 @@ def render_text_tree(request: ExportTraceServiceRequest) -> str:
             f"{_status_marker(span)}"
             f"{_interesting_attributes(span)}"
         )
-        kids = children.get(span.span_id, [])
-        kids.sort(key=lambda s: s.start_time or 0)
+        kids = children.get(_span_id(span), [])
+        kids.sort(key=lambda s: _start_time(s) or 0)
         next_prefix = prefix + ("    " if is_last else "│   ")
         for i, kid in enumerate(kids):
             walk(kid, next_prefix, i == len(kids) - 1)
@@ -222,22 +197,24 @@ def _attribute_to_json(value) -> object:
     return str(value)
 
 
-def to_chrome_trace(request: ExportTraceServiceRequest) -> dict:
-    """Convert an exported OTLP trace request to Chrome Trace Event Format.
+def to_chrome_trace(result: TraceResult) -> dict:
+    """Convert ``result`` to Chrome Trace Event Format.
 
     Uses complete-duration events (``ph: "X"``) with ``ts``/``dur`` in
     microseconds, which is what Perfetto, speedscope, and
     ``chrome://tracing`` all consume. The per-span ``args`` dict carries
     OTel attributes so they show up in tool tooltips.
     """
-    events: List[dict] = []
-    for span in _span_views(request):
-        if span.start_time is None or span.end_time is None:
+    events: list[dict] = []
+    for span in result.spans:
+        start_time = _start_time(span)
+        end_time = _end_time(span)
+        if start_time is None or end_time is None:
             continue
-        ts_us = span.start_time // 1_000
-        dur_us = max((span.end_time - span.start_time) // 1_000, 1)
-        attrs = span.attributes or {}
-        args = {k: _attribute_to_json(v) for k, v in attrs.items()}
+        ts_us = start_time // 1_000
+        dur_us = max((end_time - start_time) // 1_000, 1)
+        attributes = _attributes_from_proto(span.attributes)
+        args = {k: _attribute_to_json(v) for k, v in attributes.items()}
         # All events are placed on a single logical thread for the MVP
         # renderer. ``tracing``-crate spans carry a ``thread.id``
         # attribute; surfacing it as ``tid`` would let Perfetto /
@@ -259,5 +236,5 @@ def to_chrome_trace(request: ExportTraceServiceRequest) -> dict:
     return {"traceEvents": events, "displayTimeUnit": "ms"}
 
 
-def chrome_trace_json(request: ExportTraceServiceRequest) -> str:
-    return json.dumps(to_chrome_trace(request))
+def chrome_trace_json(result: TraceResult) -> str:
+    return json.dumps(to_chrome_trace(result))

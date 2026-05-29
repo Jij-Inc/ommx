@@ -27,12 +27,9 @@ import base64
 import html
 from typing import TYPE_CHECKING, Optional, Tuple
 
-from opentelemetry.proto.collector.trace.v1.trace_service_pb2 import (
-    ExportTraceServiceRequest,
-)
-
 from ._capture import capture_trace
 from ._render import chrome_trace_json, render_text_tree
+from ._result import TraceResult
 
 
 if TYPE_CHECKING:  # pragma: no cover - type hints only
@@ -43,13 +40,13 @@ _CELL_ROOT_SPAN_NAME = "ommx_trace_cell"
 
 
 def _render_cell_output_html(
-    request: ExportTraceServiceRequest,
+    result: TraceResult,
     *,
     download_filename: str = "ommx_trace.json",
 ) -> str:
     """HTML blob for ``display(HTML(...))`` from the cell magic."""
-    tree = html.escape(render_text_tree(request))
-    payload = chrome_trace_json(request)
+    tree = html.escape(render_text_tree(result))
+    payload = chrome_trace_json(result)
     b64 = base64.b64encode(payload.encode("utf-8")).decode("ascii")
     data_url = f"data:application/json;base64,{b64}"
     size_kb = len(payload) / 1024
@@ -122,7 +119,7 @@ def run_cell_with_trace(
             # spec's intent for this flag.
             root.record_exception(cell_exc, escaped=True)
 
-    return _render_cell_output_html(trace_result.request), cell_exc
+    return _render_cell_output_html(trace_result), cell_exc
 
 
 def register_magic(shell: "InteractiveShell") -> None:
