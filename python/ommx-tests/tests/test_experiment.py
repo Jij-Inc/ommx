@@ -134,12 +134,12 @@ def test_experiment_context_does_not_commit_on_exception():
 
 
 def test_store_trace_records_run_scope_in_artifact():
-    with Experiment.with_temp_local_registry(store_trace=True) as experiment:
-        experiment.log_json("dataset", {"name": "miplib2017"})
-        with experiment.run() as run:
-            run.log_parameter("solver", "highs")
+    experiment = Experiment.with_temp_local_registry(store_trace=True)
+    experiment.log_json("dataset", {"name": "miplib2017"})
+    with experiment.run() as run:
+        run.log_parameter("solver", "highs")
+    artifact = experiment.commit()
 
-    artifact = experiment.artifact
     trace_layers = [
         layer for layer in artifact.layers if layer.media_type == _TRACE_MEDIA_TYPE
     ]
@@ -193,13 +193,14 @@ def test_fork_store_trace_can_add_trace_to_new_run_only():
         layer for layer in parent.artifact.layers if layer.media_type == _TRACE_MEDIA_TYPE
     ] == []
 
-    with parent.fork(
+    child = parent.fork(
         "ghcr.io/jij-inc/ommx/forked-trace-new-run:latest",
         store_trace=True,
-    ) as child:
-        with child.run() as run:
-            assert run.run_id == 1
-            run.log_parameter("solver", "child")
+    )
+    with child.run() as run:
+        assert run.run_id == 1
+        run.log_parameter("solver", "child")
+    child.commit()
 
     child_trace_layers = [
         layer for layer in child.artifact.layers if layer.media_type == _TRACE_MEDIA_TYPE
@@ -224,26 +225,20 @@ def test_default_experiment_context_does_not_store_trace():
         experiment.artifact.get_trace()
 
 
-def test_store_trace_requires_context_manager_before_mutation():
+def test_store_trace_requires_run_context_manager_before_run_mutation():
     experiment = Experiment.with_temp_local_registry(store_trace=True)
+    experiment.log_json("dataset", {"name": "miplib2017"})
+    run = experiment.run()
 
     with pytest.raises(
-        RuntimeError, match="store_trace=True requires using Experiment"
+        RuntimeError, match="store_trace=True requires using Run"
     ):
-        experiment.log_json("dataset", {"name": "miplib2017"})
+        run.log_parameter("solver", "highs")
 
     with pytest.raises(
-        RuntimeError, match="store_trace=True requires using Experiment"
+        RuntimeError, match="store_trace=True requires using Run"
     ):
-        experiment.commit()
-
-
-def test_store_trace_rejects_manual_commit_inside_context():
-    with Experiment.with_temp_local_registry(store_trace=True) as experiment:
-        with pytest.raises(
-            RuntimeError, match="commit\\(\\) is performed automatically"
-        ):
-            experiment.commit()
+        run.finish()
 
 
 def test_rename_after_context_commit_updates_artifact_name():

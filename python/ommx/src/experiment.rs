@@ -61,7 +61,6 @@ pub struct PyExperiment {
     inner: ommx::experiment::ExperimentDyn,
     store_trace: bool,
     context_entered: bool,
-    context_active: bool,
     trace_context_manager: Option<Py<PyAny>>,
 }
 
@@ -77,10 +76,9 @@ impl PyExperiment {
     /// alias for the committed Artifact; the Artifact manifest digest remains
     /// the immutable identity of the committed contents.
     ///
-    /// Set `store_trace=True` only when the Experiment will be used as a
-    /// context manager. OMMX stores traces for `Run` context managers used
-    /// inside that Experiment. Manual `commit()` is rejected when
-    /// `store_trace=True`.
+    /// Set `store_trace=True` to store traces for `Run` context managers
+    /// created from this Experiment. The Experiment itself does not need to
+    /// be used as a context manager.
     #[new]
     #[pyo3(signature = (image_name = None, *, store_trace = false))]
     pub fn new(image_name: Option<&str>, store_trace: bool) -> Result<Self> {
@@ -88,7 +86,6 @@ impl PyExperiment {
             inner: ommx::experiment::ExperimentDyn::new(parse_name(image_name)?)?,
             store_trace,
             context_entered: false,
-            context_active: false,
             trace_context_manager: None,
         })
     }
@@ -100,10 +97,9 @@ impl PyExperiment {
     /// for examples and tests because it does not write entries into the
     /// process-wide default local registry.
     ///
-    /// Set `store_trace=True` only when the Experiment will be used as a
-    /// context manager. OMMX stores traces for `Run` context managers used
-    /// inside that Experiment. Manual `commit()` is rejected when
-    /// `store_trace=True`.
+    /// Set `store_trace=True` to store traces for `Run` context managers
+    /// created from this Experiment. The Experiment itself does not need to
+    /// be used as a context manager.
     #[staticmethod]
     #[pyo3(signature = (image_name = None, *, store_trace = false))]
     pub fn with_temp_local_registry(image_name: Option<&str>, store_trace: bool) -> Result<Self> {
@@ -113,7 +109,6 @@ impl PyExperiment {
             )?)?,
             store_trace,
             context_entered: false,
-            context_active: false,
             trace_context_manager: None,
         })
     }
@@ -132,7 +127,6 @@ impl PyExperiment {
             inner: ommx::experiment::ExperimentDyn::load(image_name)?,
             store_trace: false,
             context_entered: false,
-            context_active: false,
             trace_context_manager: None,
         })
     }
@@ -150,7 +144,6 @@ impl PyExperiment {
             inner: ommx::experiment::ExperimentDyn::import_archive(&path)?,
             store_trace: false,
             context_entered: false,
-            context_active: false,
             trace_context_manager: None,
         })
     }
@@ -165,7 +158,6 @@ impl PyExperiment {
             inner: ommx::experiment::ExperimentDyn::from_artifact(artifact.inner().clone())?,
             store_trace: false,
             context_entered: false,
-            context_active: false,
             trace_context_manager: None,
         })
     }
@@ -189,17 +181,15 @@ impl PyExperiment {
     ///
     /// Raises an error if this Experiment has not been committed yet.
     ///
-    /// Set `store_trace=True` on the returned child only when it will be used
-    /// as a context manager. OMMX stores traces for `Run` context managers used
-    /// inside that Experiment. Manual `commit()` is rejected when
-    /// `store_trace=True`.
+    /// Set `store_trace=True` on the returned child to store traces for
+    /// `Run` context managers created from it. The child Experiment itself
+    /// does not need to be used as a context manager.
     #[pyo3(signature = (image_name = None, *, store_trace = false))]
     pub fn fork(&self, image_name: Option<&str>, store_trace: bool) -> Result<Self> {
         Ok(Self {
             inner: self.inner.fork(parse_name(image_name)?)?,
             store_trace,
             context_entered: false,
-            context_active: false,
             trace_context_manager: None,
         })
     }
@@ -241,7 +231,6 @@ impl PyExperiment {
     /// `image_name` and updates this handle to use the new name. The previous
     /// name remains as an alias in the Local Registry.
     pub fn rename(&mut self, image_name: &str) -> Result<()> {
-        self.ensure_store_trace_context_started()?;
         let image_name = ommx::artifact::ImageRef::parse(image_name)?;
         self.inner.rename(image_name)
     }
@@ -391,10 +380,11 @@ impl PyExperiment {
     ///     run.log_parameter("capacity", 47)
     /// ```
     pub fn run(&self) -> Result<PyRun> {
-        self.ensure_store_trace_context_started()?;
         Ok(PyRun {
             run: Some(self.inner.run()?),
             store_trace: self.store_trace,
+            context_entered: false,
+            context_active: false,
             span_context_manager: None,
             trace_result: None,
         })
@@ -410,7 +400,6 @@ impl PyExperiment {
         media_type: &str,
         bytes: &Bound<pyo3::types::PyBytes>,
     ) -> Result<()> {
-        self.ensure_store_trace_context_started()?;
         AttachmentLogger::log_attachment(
             &self.inner,
             name,
@@ -424,7 +413,6 @@ impl PyExperiment {
     /// The value is encoded with Python's `json.dumps` and stored with media
     /// type `application/json`.
     pub fn log_json(&mut self, py: Python<'_>, name: &str, value: &Bound<PyAny>) -> Result<()> {
-        self.ensure_store_trace_context_started()?;
         let json = py.import("json")?;
         let blob: String = json.call_method1("dumps", (value,))?.extract()?;
         AttachmentLogger::log_attachment(
@@ -437,7 +425,6 @@ impl PyExperiment {
 
     /// Attach an Instance in the experiment space.
     pub fn log_instance(&mut self, name: &str, instance: &crate::Instance) -> Result<()> {
-        self.ensure_store_trace_context_started()?;
         AttachmentLogger::log_instance(&self.inner, name, &instance.inner)
     }
 
@@ -447,19 +434,16 @@ impl PyExperiment {
         name: &str,
         pi: &crate::ParametricInstance,
     ) -> Result<()> {
-        self.ensure_store_trace_context_started()?;
         AttachmentLogger::log_parametric_instance(&self.inner, name, &pi.inner)
     }
 
     /// Attach a Solution in the experiment space.
     pub fn log_solution(&mut self, name: &str, solution: &crate::Solution) -> Result<()> {
-        self.ensure_store_trace_context_started()?;
         AttachmentLogger::log_solution(&self.inner, name, &solution.inner)
     }
 
     /// Attach a SampleSet in the experiment space.
     pub fn log_sample_set(&mut self, name: &str, sample_set: &crate::SampleSet) -> Result<()> {
-        self.ensure_store_trace_context_started()?;
         AttachmentLogger::log_sample_set(&self.inner, name, &sample_set.inner)
     }
 
@@ -470,12 +454,6 @@ impl PyExperiment {
     /// `Experiment.from_artifact`. After commit, this object becomes a
     /// read-only view of the committed Experiment.
     pub fn commit(&mut self, py: Python<'_>) -> Result<PyArtifact> {
-        if self.store_trace {
-            anyhow::bail!(
-                "store_trace=True requires using Experiment as a context manager; \
-                 commit() is performed automatically on normal context-manager exit"
-            );
-        }
         self.commit_inner(py)
     }
 
@@ -541,7 +519,6 @@ impl PyExperiment {
             anyhow::bail!("Experiment context has already been entered");
         }
         self.context_entered = true;
-        self.context_active = true;
         self.trace_context_manager = Some(start_python_span(py, "ommx.experiment")?);
         Ok(())
     }
@@ -560,15 +537,7 @@ impl PyExperiment {
             exc_value,
             traceback,
         );
-        self.context_active = false;
         close_result
-    }
-
-    fn ensure_store_trace_context_started(&self) -> Result<()> {
-        if self.store_trace && self.inner.is_unsealed() && !self.context_active {
-            anyhow::bail!("store_trace=True requires using Experiment as a context manager");
-        }
-        Ok(())
     }
 
     fn commit_inner(&mut self, py: Python<'_>) -> Result<PyArtifact> {
@@ -781,6 +750,8 @@ fn decode_sample_set_attachment(
 pub struct PyRun {
     run: Option<ommx::experiment::RunDyn>,
     store_trace: bool,
+    context_entered: bool,
+    context_active: bool,
     span_context_manager: Option<Py<PyAny>>,
     trace_result: Option<Py<PyAny>>,
 }
@@ -792,6 +763,9 @@ impl PyRun {
         {
             let py = slf.py();
             let mut this = slf.borrow_mut();
+            if this.context_entered {
+                return Err(anyhow::anyhow!("Run context has already been entered").into());
+            }
             let run_id = this.as_open()?.run_id()?;
             if this.store_trace {
                 let tracing = py.import("ommx.tracing")?;
@@ -805,6 +779,8 @@ impl PyRun {
                 set_current_span_run_id(py, run_id)?;
                 this.span_context_manager = Some(cm);
             }
+            this.context_entered = true;
+            this.context_active = true;
         }
         Ok(slf.unbind())
     }
@@ -824,6 +800,7 @@ impl PyRun {
             exc_value,
             traceback,
         );
+        self.context_active = false;
 
         if self.run.is_none() {
             self.trace_result = None;
@@ -842,7 +819,7 @@ impl PyRun {
 
         close_result?;
         self.store_trace_result(py)?;
-        self.finish()?;
+        self.finish_inner()?;
         Ok(false)
     }
 
@@ -864,6 +841,7 @@ impl PyRun {
         value: ParameterValueInput,
     ) -> Result<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
+        self.ensure_store_trace_context_started()?;
         self.as_open_mut()?.log_parameter(name, value.0)?;
         tracing::info!(parameter_name = %name, "ommx.run.parameter.recorded");
         Ok(())
@@ -879,6 +857,7 @@ impl PyRun {
         media_type: &str,
         bytes: &Bound<pyo3::types::PyBytes>,
     ) -> Result<()> {
+        self.ensure_store_trace_context_started()?;
         AttachmentLogger::log_attachment(
             self.as_open_mut()?,
             name,
@@ -892,6 +871,7 @@ impl PyRun {
     /// The value is encoded with Python's `json.dumps` and stored with media
     /// type `application/json`.
     pub fn log_json(&mut self, py: Python<'_>, name: &str, value: &Bound<PyAny>) -> Result<()> {
+        self.ensure_store_trace_context_started()?;
         let json = py.import("json")?;
         let blob: String = json.call_method1("dumps", (value,))?.extract()?;
         AttachmentLogger::log_attachment(
@@ -908,6 +888,7 @@ impl PyRun {
     /// when the instance is the input of a solver call and should be paired
     /// with the returned solution.
     pub fn log_instance(&mut self, name: &str, instance: &crate::Instance) -> Result<()> {
+        self.ensure_store_trace_context_started()?;
         AttachmentLogger::log_instance(self.as_open_mut()?, name, &instance.inner)
     }
 
@@ -917,6 +898,7 @@ impl PyRun {
         name: &str,
         pi: &crate::ParametricInstance,
     ) -> Result<()> {
+        self.ensure_store_trace_context_started()?;
         AttachmentLogger::log_parametric_instance(self.as_open_mut()?, name, &pi.inner)
     }
 
@@ -926,11 +908,13 @@ impl PyRun {
     /// when the solution is produced by a solver call and should be paired
     /// with the input instance.
     pub fn log_solution(&mut self, name: &str, solution: &crate::Solution) -> Result<()> {
+        self.ensure_store_trace_context_started()?;
         AttachmentLogger::log_solution(self.as_open_mut()?, name, &solution.inner)
     }
 
     /// Attach a SampleSet in this run.
     pub fn log_sample_set(&mut self, name: &str, sample_set: &crate::SampleSet) -> Result<()> {
+        self.ensure_store_trace_context_started()?;
         AttachmentLogger::log_sample_set(self.as_open_mut()?, name, &sample_set.inner)
     }
 
@@ -956,6 +940,7 @@ impl PyRun {
         kwargs: Option<&Bound<PyDict>>,
     ) -> Result<crate::Solution> {
         let _guard = crate::TRACING.attach_parent_context(py);
+        self.ensure_store_trace_context_started()?;
         let adapter_name = adapter.name(py)?;
         let span = tracing::info_span!("ommx.solver.solve", adapter = %adapter_name);
         let _span_guard = span.enter();
@@ -977,11 +962,13 @@ impl PyRun {
     /// context manager calls this automatically on normal exit and abandons
     /// the run on exception.
     pub fn finish(&mut self) -> Result<()> {
-        let run = self
-            .run
-            .take()
-            .ok_or_else(|| anyhow::anyhow!("Run has already been finished"))?;
-        run.finish()
+        if self.store_trace {
+            anyhow::bail!(
+                "store_trace=True requires using Run as a context manager; \
+                 finish() is performed automatically on normal Run context-manager exit"
+            );
+        }
+        self.finish_inner()
     }
 
     pub fn __repr__(&self) -> Result<String> {
@@ -993,6 +980,13 @@ impl PyRun {
 }
 
 impl PyRun {
+    fn ensure_store_trace_context_started(&self) -> Result<()> {
+        if self.store_trace && self.run.is_some() && !self.context_active {
+            anyhow::bail!("store_trace=True requires using Run as a context manager");
+        }
+        Ok(())
+    }
+
     fn store_trace_result(&mut self, py: Python<'_>) -> Result<()> {
         if !self.store_trace {
             return Ok(());
@@ -1007,6 +1001,14 @@ impl PyRun {
                 payload.into_bytes(),
             ))?;
         Ok(())
+    }
+
+    fn finish_inner(&mut self) -> Result<()> {
+        let run = self
+            .run
+            .take()
+            .ok_or_else(|| anyhow::anyhow!("Run has already been finished"))?;
+        run.finish()
     }
 
     fn as_open(&self) -> Result<&ommx::experiment::RunDyn> {
