@@ -69,6 +69,31 @@ pi = ParametricInstance.from_components(
 )
 ```
 
+If the original model was written in a modeling package, keep that source model as an Attachment as well. OMMX does not decode external modeler-specific payloads; it stores their bytes with the Media Type you provide. For a JijModeling `Problem`, serialize the problem with JijModeling and attach the protobuf bytes.
+
+```{code-cell} ipython3
+import jijmodeling as jm
+
+@jm.Problem.define("Knapsack Problem", sense=jm.ProblemSense.MAXIMIZE)
+def jij_problem(problem: jm.DecoratedProblem):
+  N = problem.Length(description="Number of items")
+  W = problem.Float(description="Capacity")
+  w = problem.Float(shape=N, description="Weight of each item")
+  v = problem.Float(shape=N, description="Value of each item")
+  x = problem.BinaryVar(
+    shape=N,
+    description="Set x_i=1 iff item i is in the knapsack",
+  )
+
+  problem += jm.sum(v[i] * x[i] for i in N)
+  problem += problem.Constraint(
+    "weight limit",
+    jm.sum(w[i] * x[i] for i in N) <= W,
+  )
+
+JIJMODELING_PROBLEM_MEDIA_TYPE = "application/vnd.jijmodeling.problem+protobuf"
+```
+
 ## Run the Experiment
 
 This time, solve the knapsack problem above with two different capacities.
@@ -82,6 +107,13 @@ with Experiment() as experiment:
 
   # Store the model as experiment-level information.
   experiment.log_parametric_instance("instance", pi)
+
+  # Store the original JijModeling Problem as an opaque attachment.
+  experiment.log_attachment(
+    "jijmodeling-problem",
+    JIJMODELING_PROBLEM_MEDIA_TYPE,
+    jij_problem.to_protobuf(),
+  )
 
   # This example does not need it, but model metadata can also be stored as JSON.
   experiment.log_json(
@@ -211,7 +243,7 @@ Experiment-level Attachments can be checked by name and retrieved by name. {py:m
 
 ```{code-cell} ipython3
 # Check the names of saved Attachments.
-assert loaded_experiment.attachment_names == ["instance", "source-data"]
+assert loaded_experiment.attachment_names == ["instance", "jijmodeling-problem", "source-data"]
 
 # Retrieve data saved as JSON.
 source_data = loaded_experiment.get_json("source-data")
@@ -224,6 +256,11 @@ assert source_data == {
 # get_attachment uses the Media Type to decode the payload.
 pi = loaded_experiment.get_attachment("instance")
 assert isinstance(pi, ParametricInstance)
+
+# Unknown Media Types are returned as bytes, so decode them with the owner package.
+payload = loaded_experiment.get_attachment("jijmodeling-problem")
+restored_jij_problem = jm.Problem.from_protobuf(payload)
+assert restored_jij_problem.name == jij_problem.name
 ```
 
 ### Runs and Solves

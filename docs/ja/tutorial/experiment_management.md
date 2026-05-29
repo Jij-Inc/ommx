@@ -69,6 +69,31 @@ pi = ParametricInstance.from_components(
 )
 ```
 
+元のモデルをモデリング用パッケージで記述している場合は、そのソースモデルもAttachmentとして保存しておくと後から参照できます。OMMXは外部モデラー固有のペイロードを解釈せず、渡されたbytesとMedia Typeをそのまま保存します。JijModelingの `Problem` の場合は、JijModelingでProblemをシリアライズして、そのprotobuf bytesを添付します。
+
+```{code-cell} ipython3
+import jijmodeling as jm
+
+@jm.Problem.define("Knapsack Problem", sense=jm.ProblemSense.MAXIMIZE)
+def jij_problem(problem: jm.DecoratedProblem):
+  N = problem.Length(description="アイテム数")
+  W = problem.Float(description="耐荷重")
+  w = problem.Float(shape=N, description="各アイテムの重さ")
+  v = problem.Float(shape=N, description="各アイテムの価値")
+  x = problem.BinaryVar(
+    shape=N,
+    description="アイテム i をナップサックに入れるときのみ x_i=1",
+  )
+
+  problem += jm.sum(v[i] * x[i] for i in N)
+  problem += problem.Constraint(
+    "重量制限",
+    jm.sum(w[i] * x[i] for i in N) <= W,
+  )
+
+JIJMODELING_PROBLEM_MEDIA_TYPE = "application/vnd.jijmodeling.problem+protobuf"
+```
+
 ## 実験する
 
 今回は上で作ったナップサック問題に対して２つの異なる容量で解いてみます。
@@ -82,6 +107,13 @@ with Experiment() as experiment:
 
   # 上で作ったモデルをExperimentの情報として保存する。
   experiment.log_parametric_instance("instance", pi)
+
+  # 元のJijModeling ProblemをopaqueなAttachmentとして保存する。
+  experiment.log_attachment(
+    "jijmodeling-problem",
+    JIJMODELING_PROBLEM_MEDIA_TYPE,
+    jij_problem.to_protobuf(),
+  )
 
   # 今回は必要ないが、モデルの情報をJSONで保存することもできる。
   experiment.log_json(
@@ -211,7 +243,7 @@ Experiment単位で保存したAttachmentは名前で確認し、必要なもの
 
 ```{code-cell} ipython3
 # 保存したAttachmentの名前を確認する
-assert loaded_experiment.attachment_names == ["instance", "source-data"]
+assert loaded_experiment.attachment_names == ["instance", "jijmodeling-problem", "source-data"]
 
 # JSONとして保存したデータを取り出す
 source_data = loaded_experiment.get_json("source-data")
@@ -224,6 +256,11 @@ assert source_data == {
 # get_attachmentはMedia Typeを見て適切に変換してくれる
 pi = loaded_experiment.get_attachment("instance")
 assert isinstance(pi, ParametricInstance)
+
+# OMMXが知らないMedia Typeはbytesとして返るので、所有元のパッケージでdecodeする
+payload = loaded_experiment.get_attachment("jijmodeling-problem")
+restored_jij_problem = jm.Problem.from_protobuf(payload)
+assert restored_jij_problem.name == jij_problem.name
 ```
 
 ### RunsとSolves
