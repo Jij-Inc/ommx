@@ -104,6 +104,26 @@ pub struct SealedExperiment<'reg> {
     run_parameters: parameter::RunParameterTable,
 }
 
+/// Opaque Experiment trace payload encoded as OTLP JSON.
+///
+/// The Rust SDK does not decode, validate, or interpret OpenTelemetry
+/// spans. `Trace` is a storage boundary type: it marks a byte payload as
+/// the single Experiment trace layer payload, while producers and
+/// renderers such as the Python SDK own OTLP JSON encoding and decoding.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Trace {
+    otlp_json: Vec<u8>,
+}
+
+impl Trace {
+    /// Build a trace payload from OTLP JSON bytes.
+    pub fn from_otlp_json(bytes: impl Into<Vec<u8>>) -> Self {
+        Self {
+            otlp_json: bytes.into(),
+        }
+    }
+}
+
 /// User-facing name policy for a new Experiment.
 ///
 /// `Name` is resolved to a concrete [`ImageRef`] when the Experiment
@@ -191,9 +211,9 @@ struct UnsealedExperimentState<'reg> {
     subject: Option<oci_spec::image::Descriptor>,
     /// Experiment-space attachments.
     attachments: Vec<StoredDescriptor<'reg>>,
-    /// Experiment-level trace layers. These are manifest layers, but not
-    /// Attachments and not part of the Experiment config payload.
-    trace_layers: Vec<StoredDescriptor<'reg>>,
+    /// Experiment-level trace layer. This is a manifest layer, but not an
+    /// Attachment and not part of the Experiment config payload.
+    trace_layer: Option<StoredDescriptor<'reg>>,
     runs: BTreeMap<u64, RunEntry<'reg>>,
     next_run_id: u64,
 }
@@ -235,7 +255,7 @@ impl<'reg> Experiment<'reg> {
                 image_name,
                 subject: None,
                 attachments: Vec::new(),
-                trace_layers: Vec::new(),
+                trace_layer: None,
                 runs: BTreeMap::new(),
                 next_run_id: 0,
             }),
@@ -262,19 +282,24 @@ impl<'reg> Experiment<'reg> {
         })
     }
 
-    /// Store an Experiment trace layer. The layer is intentionally not an
-    /// Attachment: it records execution telemetry for the committed artifact
-    /// and is discovered by media type / layer annotation.
-    pub fn store_trace_layer(&self, bytes: impl AsRef<[u8]>) -> Result<()> {
+    /// Store the Experiment trace layer.
+    ///
+    /// The layer is intentionally not an Attachment: it records execution
+    /// telemetry for the committed artifact and is discovered by media type
+    /// / layer annotation. Rust stores the [`Trace`] payload as opaque bytes
+    /// and does not inspect the OTLP JSON contents.
+    pub fn store_trace_layer(&self, trace: Trace) -> Result<()> {
+        let mut state = self.lock_state();
+        if state.trace_layer.is_some() {
+            crate::bail!("Experiment trace layer has already been stored");
+        }
         let mut annotations = std::collections::HashMap::new();
         annotations.insert(ANN_LAYER.to_string(), LAYER_KIND_TRACE.to_string());
-        let descriptor = self.registry.store_layer_blob(
-            media_types::trace_otlp_json(),
-            bytes.as_ref(),
-            annotations,
-        )?;
-        let mut state = self.lock_state();
-        state.trace_layers.push(descriptor);
+        let Trace { otlp_json: bytes } = trace;
+        let descriptor =
+            self.registry
+                .store_layer_blob(media_types::trace_otlp_json(), &bytes, annotations)?;
+        state.trace_layer = Some(descriptor);
         Ok(())
     }
 
@@ -391,7 +416,7 @@ impl<'reg> SealedExperiment<'reg> {
                 image_name,
                 subject,
                 attachments: self.attachments.clone(),
-                trace_layers: Vec::new(),
+                trace_layer: None,
                 next_run_id: next_run_id(runs.keys().copied())?,
                 runs,
             }),

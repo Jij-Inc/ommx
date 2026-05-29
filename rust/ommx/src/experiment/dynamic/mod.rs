@@ -76,7 +76,7 @@ struct UnsealedExperimentDynState {
     image_name: ImageRef,
     subject: Option<Descriptor>,
     attachments: Vec<Descriptor>,
-    trace_layers: Vec<Descriptor>,
+    trace_layer: Option<Descriptor>,
     runs: BTreeMap<u64, RunEntryDyn>,
     next_run_id: u64,
 }
@@ -250,7 +250,7 @@ impl ExperimentDyn {
                         image_name,
                         subject: None,
                         attachments: Vec::new(),
-                        trace_layers: Vec::new(),
+                        trace_layer: None,
                         runs: BTreeMap::new(),
                         next_run_id: 0,
                     }),
@@ -375,17 +375,27 @@ impl AttachmentLogger for &ExperimentDyn {
 }
 
 impl ExperimentDyn {
-    pub fn store_trace_layer(&self, bytes: impl AsRef<[u8]>) -> Result<()> {
+    pub fn store_trace_layer(&self, trace: super::Trace) -> Result<()> {
         let mut dyn_state = lock_experiment_state(&self.state);
         ensure_unsealed_for_attachment_write(&dyn_state)?;
-        let descriptor = store_trace_layer_descriptor(&dyn_state, bytes.as_ref())?;
+        let ExperimentDynLifecycle::Unsealed { state, .. } = &dyn_state.lifecycle else {
+            return bail_non_unsealed(&dyn_state.lifecycle);
+        };
+        let state = state
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
+        if state.trace_layer.is_some() {
+            crate::bail!("Experiment trace layer has already been stored");
+        }
+
+        let descriptor = store_trace_layer_descriptor(&dyn_state, trace)?;
         let ExperimentDynLifecycle::Unsealed { state, .. } = &mut dyn_state.lifecycle else {
             return bail_non_unsealed(&dyn_state.lifecycle);
         };
         let state = state
             .as_mut()
             .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
-        state.trace_layers.push(descriptor);
+        state.trace_layer = Some(descriptor);
         Ok(())
     }
 
@@ -498,7 +508,10 @@ impl UnsealedExperimentDynState {
             image_name: self.image_name,
             subject: self.subject,
             attachments: stored_descriptors(registry, self.attachments)?,
-            trace_layers: stored_descriptors(registry, self.trace_layers)?,
+            trace_layer: self
+                .trace_layer
+                .map(|descriptor| registry.stored_descriptor(descriptor))
+                .transpose()?,
             runs: self
                 .runs
                 .into_iter()
@@ -620,7 +633,7 @@ impl SealedExperimentDynState {
             image_name,
             subject,
             attachments: self.attachments.clone(),
-            trace_layers: Vec::new(),
+            trace_layer: None,
             next_run_id: next_run_id(runs.keys().copied())?,
             runs,
         })
@@ -713,15 +726,19 @@ fn store_solve_payload_descriptor(
     Ok(Descriptor::from(descriptor))
 }
 
-fn store_trace_layer_descriptor(state: &ExperimentDynState, bytes: &[u8]) -> Result<Descriptor> {
+fn store_trace_layer_descriptor(
+    state: &ExperimentDynState,
+    trace: super::Trace,
+) -> Result<Descriptor> {
     let mut annotations = std::collections::HashMap::new();
     annotations.insert(
         super::ANN_LAYER.to_string(),
         super::LAYER_KIND_TRACE.to_string(),
     );
+    let super::Trace { otlp_json: bytes } = trace;
     let descriptor = state.registry_handle.registry().store_layer_blob(
         media_types::trace_otlp_json(),
-        bytes,
+        &bytes,
         annotations,
     )?;
     Ok(Descriptor::from(descriptor))

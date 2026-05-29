@@ -231,7 +231,8 @@ impl PyExperiment {
         let trace_payload = self.exit_experiment_context(py, exc_type, exc_value, traceback)?;
         if exc_type.is_none() && self.inner.is_unsealed() {
             if let Some(trace_payload) = trace_payload {
-                self.inner.store_trace_layer(trace_payload)?;
+                self.inner
+                    .store_trace_layer(ommx::experiment::Trace::from_otlp_json(trace_payload))?;
             }
             self.commit_inner(py)?;
         }

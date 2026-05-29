@@ -3,9 +3,10 @@
 use super::config::{ExperimentConfig, ExperimentConfigRun, LayerRef};
 use super::UnsealedExperimentState;
 use super::{
-    AttachmentLogger, Experiment, ExperimentDyn, Name, ParameterValue, SealedExperiment,
+    AttachmentLogger, Experiment, ExperimentDyn, Name, ParameterValue, SealedExperiment, Trace,
     ANN_ATTACHMENT_NAME, ANN_LAYER, ANN_RUN_ID, ANN_SPACE, EXPERIMENT_CONFIG_MEDIA_TYPE,
-    EXPERIMENT_STATUS_FINISHED, LAYER_KIND_RUN_PARAMETERS, RUN_PARAMETERS_MEDIA_TYPE,
+    EXPERIMENT_STATUS_FINISHED, LAYER_KIND_RUN_PARAMETERS, LAYER_KIND_TRACE,
+    RUN_PARAMETERS_MEDIA_TYPE,
 };
 use crate::artifact::local_registry::{StoredDescriptor, UnsealedArtifact};
 use crate::artifact::{media_types, AsArtifact, ImageRef, LocalArtifact, LocalRegistryHandle};
@@ -156,6 +157,35 @@ fn log_writes_blob_to_blobstore_immediately() {
             run.attachments[0].digest().clone()
         });
         assert!(experiment.registry.blobs().exists(&digest).unwrap());
+        Ok(())
+    });
+}
+
+#[test]
+fn trace_layer_is_singleton_manifest_layer() {
+    with_temp_experiment(|experiment| {
+        experiment
+            .store_trace_layer(Trace::from_otlp_json(br#"{"resourceSpans":[]}"#.to_vec()))
+            .unwrap();
+        let err = experiment
+            .store_trace_layer(Trace::from_otlp_json(br#"{"resourceSpans":[]}"#.to_vec()))
+            .expect_err("an experiment stores at most one trace layer");
+        assert!(err
+            .to_string()
+            .contains("Experiment trace layer has already been stored"));
+
+        let artifact = experiment.commit().unwrap().into_artifact();
+        let layers = artifact.layers().unwrap();
+        let trace_layers = layers
+            .iter()
+            .filter(|layer| layer.media_type() == &media_types::trace_otlp_json())
+            .collect::<Vec<_>>();
+        assert_eq!(trace_layers.len(), 1);
+        assert_eq!(
+            layer_annotation(trace_layers[0], ANN_LAYER).as_deref(),
+            Some(LAYER_KIND_TRACE)
+        );
+        assert_eq!(layer_annotation(trace_layers[0], ANN_ATTACHMENT_NAME), None);
         Ok(())
     });
 }
