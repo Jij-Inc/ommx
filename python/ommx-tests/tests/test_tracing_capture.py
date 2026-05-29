@@ -4,7 +4,7 @@ Complementary to :mod:`test_tracing_magic`, which exercises the
 IPython cell magic. Both APIs share the underlying ``_collector`` and
 ``_render`` modules, so these tests focus on:
 
-* The context manager populates :class:`TraceResult.spans` and doesn't
+* The context manager populates :class:`TraceResult.request` and doesn't
   swallow exceptions.
 * ``save_chrome_trace`` writes valid JSON, with parent dirs created.
 * ``@traced`` writes the trace on both the success and the exception
@@ -30,8 +30,8 @@ import pytest
 from opentelemetry.proto.collector.trace.v1.trace_service_pb2 import (
     ExportTraceServiceRequest,
 )
-from opentelemetry.sdk.trace import ReadableSpan
-from opentelemetry.trace.status import StatusCode
+from opentelemetry.proto.trace.v1.trace_pb2 import Span as ProtoSpan
+from opentelemetry.proto.trace.v1.trace_pb2 import Status as ProtoStatus
 
 from ommx.tracing import TraceResult, capture_trace, traced
 from ommx.tracing import _setup
@@ -46,6 +46,23 @@ from conftest import get_test_provider
 
 
 _SESSION_COLLECTOR: _CellSpanCollector | None = None
+
+
+def _proto_spans(request: ExportTraceServiceRequest) -> list[ProtoSpan]:
+    return [
+        span
+        for resource_span in request.resource_spans
+        for scope_span in resource_span.scope_spans
+        for span in scope_span.spans
+    ]
+
+
+def _span_names(request: ExportTraceServiceRequest) -> list[str]:
+    return sorted(span.name for span in _proto_spans(request))
+
+
+def _trace_id(span: ProtoSpan) -> int:
+    return int.from_bytes(span.trace_id, byteorder="big")
 
 
 @pytest.fixture
@@ -83,7 +100,7 @@ def capture_collector():
 
 
 def test_capture_trace_populates_result_on_success(capture_collector):
-    """``__exit__`` must fill in ``TraceResult.spans`` before returning."""
+    """``__exit__`` must fill in ``TraceResult.request`` before returning."""
     from opentelemetry import trace
 
     with capture_trace("example_op") as result:
@@ -92,8 +109,7 @@ def test_capture_trace_populates_result_on_success(capture_collector):
             pass
 
     # Root + inner span land in the collected list.
-    names = sorted(s.name for s in result.spans)
-    assert names == ["example_op", "inner"]
+    assert _span_names(result.request) == ["example_op", "inner"]
     # Text tree is useful to print from scripts.
     tree = result.text_tree()
     assert "example_op" in tree and "inner" in tree
@@ -103,7 +119,7 @@ def test_capture_trace_custom_span_name(capture_collector):
     """The caller can pick a descriptive root span name."""
     with capture_trace("build_qubo") as result:
         pass
-    assert [s.name for s in result.spans] == ["build_qubo"]
+    assert _span_names(result.request) == ["build_qubo"]
 
 
 def test_trace_result_otlp_protobuf_roundtrip(capture_collector):
@@ -117,16 +133,11 @@ def test_trace_result_otlp_protobuf_roundtrip(capture_collector):
 
     request = ExportTraceServiceRequest()
     request.ParseFromString(result.otlp_protobuf())
-    names = {
-        span.name
-        for resource_span in request.resource_spans
-        for scope_span in resource_span.scope_spans
-        for span in scope_span.spans
-    }
+    names = {span.name for span in _proto_spans(request)}
     assert names == {"protobuf_root", "protobuf_child"}
 
     restored = TraceResult.from_otlp_protobuf(result.otlp_protobuf())
-    assert {span.name for span in restored.spans} == names
+    assert {span.name for span in _proto_spans(restored.request)} == names
     assert "protobuf_child" in restored.text_tree()
 
 
@@ -144,7 +155,7 @@ def test_capture_trace_propagates_exception(capture_collector):
 
 
 def test_capture_trace_populates_result_on_exception(capture_collector):
-    """Even when the block raised, ``result.spans`` must be usable
+    """Even when the block raised, ``result.request`` must be usable
     from an outer ``try``/``except`` so the caller can still inspect
     or save the trace — information is never dropped."""
     result: TraceResult | None = None
@@ -156,12 +167,13 @@ def test_capture_trace_populates_result_on_exception(capture_collector):
         pass
 
     assert result is not None
-    assert result.spans, "TraceResult.spans must be populated on the exception path"
+    assert _proto_spans(result.request), (
+        "TraceResult.request must be populated on the exception path"
+    )
     # The root span sees the exception via OTel's default
     # record_exception + set_status(ERROR).
-    root = next(s for s in result.spans if s.name == "failing_op")
-    assert root.status is not None
-    assert root.status.status_code == StatusCode.ERROR
+    root = next(s for s in _proto_spans(result.request) if s.name == "failing_op")
+    assert root.status.code == ProtoStatus.STATUS_CODE_ERROR
     # And the renderer surfaces the error status so the user can find
     # the failing span at a glance.
     tree = result.text_tree()
@@ -185,13 +197,9 @@ def test_capture_trace_uses_fresh_trace_id(capture_collector):
         ambient_trace_id = ambient.get_span_context().trace_id
 
     # Captured spans only contain the isolated root.
-    assert [s.name for s in result.spans] == ["isolated"]
-    # Their trace_ids differ. ``context`` is Optional[SpanContext];
-    # for a finished ``ReadableSpan`` it's always populated, but
-    # assert it for the type checker.
-    isolated_ctx = result.spans[0].context
-    assert isolated_ctx is not None
-    assert isolated_ctx.trace_id != ambient_trace_id
+    spans = _proto_spans(result.request)
+    assert [s.name for s in spans] == ["isolated"]
+    assert _trace_id(spans[0]) != ambient_trace_id
 
 
 # ---------------------------------------------------------------------------
@@ -433,12 +441,8 @@ def test_text_tree_does_not_mark_successful_spans(capture_collector):
     assert "[ERROR]" not in tree
 
 
-# ---------------------------------------------------------------------------
-# Sanity check: ReadableSpan type is the real one (regression for Any stubs)
-# ---------------------------------------------------------------------------
-
-
-def test_trace_result_spans_are_readable_spans(capture_collector):
+def test_trace_result_request_is_export_trace_service_request(capture_collector):
     with capture_trace() as result:
         pass
-    assert all(isinstance(s, ReadableSpan) for s in result.spans)
+    assert isinstance(result.request, ExportTraceServiceRequest)
+    assert _proto_spans(result.request)

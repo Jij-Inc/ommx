@@ -93,7 +93,7 @@ def run_cell_with_trace(
             # spec's intent for this flag.
             root.record_exception(cell_exc, escaped=True)
 
-    return render_cell_output_html(trace_result.spans), cell_exc
+    return render_cell_output_html(trace_result.request), cell_exc
 
 
 def register_magic(shell: "InteractiveShell") -> None:

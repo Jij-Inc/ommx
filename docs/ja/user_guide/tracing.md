@@ -84,12 +84,13 @@ print(trace.text_tree())
 
 `trace` はブロック終了時に値が埋められる {class}`~ommx.tracing.TraceResult` です。
 
-- {attr}`~ommx.tracing.TraceResult.spans` — カスタム処理用の生の {class}`~opentelemetry.sdk.trace.ReadableSpan` のリスト
+- {attr}`~ommx.tracing.TraceResult.request` — 結果としてexportされたOTLP {class}`~opentelemetry.proto.collector.trace.v1.trace_service_pb2.ExportTraceServiceRequest`
+- {meth}`~ommx.tracing.TraceResult.otlp_protobuf` — Experimentのtrace layerに保存されるOTLP export requestのprotobuf bytes
 - {meth}`~ommx.tracing.TraceResult.text_tree` — セルマジックと同じネストしたテキストツリー
 - {meth}`~ommx.tracing.TraceResult.chrome_trace_json` — トレースをJSON文字列として返す
 - {meth}`~ommx.tracing.TraceResult.save_chrome_trace` — JSONをディスクに書き出す（必要な親ディレクトリは自動的に作成）
 
-ブロック内で例外が発生した場合でも `trace.spans` は埋められており（失敗したスパンには `[ERROR]` マーカーが付く）、外側の `except` や `finally` から内容を調査・保存できます。元の例外はそのまま伝播します。OMMXが例外を握り潰すことはありません。
+ブロック内で例外が発生した場合でも `trace.request` は埋められており（rendererでは失敗したスパンに `[ERROR]` マーカーが付く）、外側の `except` や `finally` から内容を調査・保存できます。元の例外はそのまま伝播します。OMMXが例外を握り潰すことはありません。
 
 ```{code-cell} ipython3
 import tempfile

@@ -28,6 +28,24 @@ def _trace_layers(artifact: Artifact):
     ]
 
 
+def _trace_span_names(trace) -> set[str]:
+    return {
+        span.name
+        for resource_span in trace.request.resource_spans
+        for scope_span in resource_span.scope_spans
+        for span in scope_span.spans
+    }
+
+
+def _trace_span_count(trace, name: str) -> int:
+    return sum(
+        span.name == name
+        for resource_span in trace.request.resource_spans
+        for scope_span in resource_span.scope_spans
+        for span in scope_span.spans
+    )
+
+
 def test_view_run_parameters_from_committed_artifact(snapshot):
     with Experiment.with_temp_local_registry() as experiment:
         experiment.log_json("dataset", {"name": "miplib2017"})
@@ -158,7 +176,7 @@ def test_store_trace_records_run_scope_in_artifact():
 
     trace = loaded.runs[0].trace
     assert trace is not None
-    names = {span.name for span in trace.spans}
+    names = _trace_span_names(trace)
     assert "ommx.run" in names
     assert "ommx.run" in trace.text_tree()
 
@@ -185,7 +203,7 @@ def test_fork_store_trace_carries_parent_trace_layers():
 
     traces = [run.trace for run in child.runs]
     assert all(trace is not None for trace in traces)
-    assert sum(span.name == "ommx.run" for trace in traces for span in trace.spans) == 2
+    assert sum(_trace_span_count(trace, "ommx.run") for trace in traces) == 2
 
 
 def test_fork_store_trace_can_add_trace_to_new_run_only():
@@ -211,7 +229,7 @@ def test_fork_store_trace_can_add_trace_to_new_run_only():
     assert traces[0] is None
     trace = traces[1]
     assert trace is not None
-    assert sum(span.name == "ommx.run" for span in trace.spans) == 1
+    assert _trace_span_count(trace, "ommx.run") == 1
 
 
 def test_default_experiment_context_does_not_store_trace():
@@ -228,14 +246,10 @@ def test_store_trace_requires_run_context_manager_before_run_mutation():
     experiment.log_json("dataset", {"name": "miplib2017"})
     run = experiment.run()
 
-    with pytest.raises(
-        RuntimeError, match="store_trace=True requires using Run"
-    ):
+    with pytest.raises(RuntimeError, match="store_trace=True requires using Run"):
         run.log_parameter("solver", "highs")
 
-    with pytest.raises(
-        RuntimeError, match="store_trace=True requires using Run"
-    ):
+    with pytest.raises(RuntimeError, match="store_trace=True requires using Run"):
         run.finish()
 
 

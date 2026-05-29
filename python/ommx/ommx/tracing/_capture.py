@@ -33,9 +33,9 @@ raises normally — we never swallow. Before the exception propagates:
    span (``record_exception=True`` + ``set_status(ERROR)``), so any
    exporter downstream (Chrome Trace consumers, OTLP backends) sees
    the failure.
-2. ``TraceResult.spans`` is populated from the collector, so the
-   caller can still inspect or save the trace from an outer ``try``
-   block's ``except`` / ``finally`` arm.
+2. ``TraceResult.request`` is populated from the collector, so the
+   caller can still inspect or save the exported trace from an outer
+   ``try`` block's ``except`` / ``finally`` arm.
 3. :func:`._render.render_text_tree` flags spans with ``[ERROR]`` so
    the failure location is obvious in the rendered tree.
 """
@@ -47,15 +47,21 @@ import inspect
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, List, Optional, Union, overload
+from typing import Any, Callable, Optional, Union, overload
 
 from opentelemetry import context as otel_context
 from opentelemetry import trace
-from opentelemetry.sdk.trace import ReadableSpan
+from opentelemetry.proto.collector.trace.v1.trace_service_pb2 import (
+    ExportTraceServiceRequest,
+)
 from opentelemetry.trace import Span
 
 from ._collector import _CellSpanCollector
-from ._otlp import spans_from_otlp_protobuf, spans_to_otlp_protobuf
+from ._otlp import (
+    request_from_otlp_protobuf,
+    request_to_otlp_protobuf,
+    spans_to_otlp_request,
+)
 from ._render import chrome_trace_json, render_text_tree
 from ._setup import ensure_collector_installed
 
@@ -78,24 +84,26 @@ class TraceResult:
     when the block raised).
     """
 
-    spans: List[ReadableSpan] = field(default_factory=list)
+    request: ExportTraceServiceRequest = field(
+        default_factory=ExportTraceServiceRequest
+    )
 
     @classmethod
     def from_otlp_protobuf(cls, payload: bytes) -> "TraceResult":
         """Build a trace result from an OMMX trace layer payload."""
-        return cls(spans=spans_from_otlp_protobuf(payload))
+        return cls(request=request_from_otlp_protobuf(payload))
 
     def text_tree(self) -> str:
         """Return the nested text tree — same renderer the cell magic uses."""
-        return render_text_tree(self.spans)
+        return render_text_tree(self.request)
 
     def otlp_protobuf(self) -> bytes:
         """Return OTLP protobuf bytes stored in Experiment trace layers."""
-        return spans_to_otlp_protobuf(self.spans)
+        return request_to_otlp_protobuf(self.request)
 
     def chrome_trace_json(self) -> str:
         """Return a Chrome Trace Event Format JSON string."""
-        return chrome_trace_json(self.spans)
+        return chrome_trace_json(self.request)
 
     def save_chrome_trace(self, path: Union[str, Path]) -> None:
         """Write the Chrome Trace JSON to ``path`` (creating parents as needed).
@@ -154,7 +162,8 @@ class capture_trace:  # noqa: N801 - context-manager factory, lowercase on purpo
             # so callers can inspect/save the trace from an outer
             # ``except`` or ``finally``.
             if self._collector is not None and self._trace_id is not None:
-                self._result.spans = self._collector.end_capture(self._trace_id)
+                spans = self._collector.end_capture(self._trace_id)
+                self._result.request = spans_to_otlp_request(spans)
         # Never swallow the exception.
         return False
 

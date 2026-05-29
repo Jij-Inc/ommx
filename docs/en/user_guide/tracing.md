@@ -84,12 +84,13 @@ print(trace.text_tree())
 
 `trace` is a {class}`~ommx.tracing.TraceResult` populated when the block exits:
 
-- {attr}`~ommx.tracing.TraceResult.spans` — the raw list of {class}`~opentelemetry.sdk.trace.ReadableSpan` for custom processing.
+- {attr}`~ommx.tracing.TraceResult.request` — the exported OTLP {class}`~opentelemetry.proto.collector.trace.v1.trace_service_pb2.ExportTraceServiceRequest` held by the result.
+- {meth}`~ommx.tracing.TraceResult.otlp_protobuf` — returns the same OTLP export request as protobuf bytes, which is the payload stored by Experiment trace layers.
 - {meth}`~ommx.tracing.TraceResult.text_tree` — the same nested renderer the cell magic uses.
 - {meth}`~ommx.tracing.TraceResult.chrome_trace_json` — returns the trace as a JSON string.
 - {meth}`~ommx.tracing.TraceResult.save_chrome_trace` — writes the JSON to disk (creates parent directories as needed).
 
-If the block raises, `trace.spans` is still populated (with the failing span flagged as `[ERROR]`), so you can inspect or save it from an outer `except` or `finally`. The original exception propagates unchanged — OMMX never swallows.
+If the block raises, `trace.request` is still populated (with the failing span flagged as `[ERROR]` by the renderer), so you can inspect or save it from an outer `except` or `finally`. The original exception propagates unchanged — OMMX never swallows.
 
 ```{code-cell} ipython3
 import tempfile

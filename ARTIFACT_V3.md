@@ -748,14 +748,13 @@ Run status、elapsed time、実行環境 OS / package versions / backend solver 
 
 ### 10.5 OTel trace / renderer
 
-Experiment / Run / Artifact operation の詳細な trace schema と post-hoc renderer は未設計である。`store_trace=True` と `with exp.run()` による Run trace layer 保存、および `run.trace` は実装済み API Reference を正本にする。
+Experiment / Run / Artifact operation の詳細な trace schema は未設計である。`store_trace=True` と `with exp.run()` による Run trace layer 保存、`run.trace`、基本的な text tree / Chrome trace export renderer は実装済み API Reference を正本にする。
 
 残作業:
 
 - Experiment / Run / solver / artifact build / load / push span schema。
 - `ommx.attachment.added` / `ommx.solve.recorded` / `ommx.run.parameter.recorded` events。
 - default の Experiment / Artifact build path が global `TracerProvider` を暗黙に install しないこと、および `store_trace=True` / `capture_trace(...)` では保存用 collector のための provider 初期化に限定されることの tests。
-- text tree / Chrome trace export renderer。
 
 ### 10.6 GC
 
@@ -785,7 +784,6 @@ Local Registry GC の reachability model、dry-run report、削除 policy は未
 | Diagnostics sink protocol | `DiagnosticsSink` / `DiagnosticCollector` / `DiagnosticEntry`、media type、truncation / compression policy |
 | Run attributes / environment | status、elapsed time、OS / package / solver version の schema |
 | OTel span / event integration | Experiment / Run / solver / artifact operation spans、attachment / solve / parameter events |
-| Trace renderer | text tree、Chrome trace export、streaming renderer |
 | GC | Local Registry dry-run / report / delete、orphan blob retention、archive / remote registry handling |
 | Legacy MINTO import | compatibility loader を core に持つか migration tool にするか |
 | Documentation integration | 既存の `docs/ja/tutorial/experiment_management.md` は保持しつつ、必要に応じて Sphinx guide、Rust API docs、wire format docs へ分割し、本ファイルを削除する |

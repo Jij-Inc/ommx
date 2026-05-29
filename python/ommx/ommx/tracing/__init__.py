@@ -32,7 +32,7 @@ The public surface is intentionally small:
 * :class:`capture_trace` — context manager; ``__enter__`` returns a
   :class:`TraceResult` placeholder that ``__exit__`` fills in (for
   success *and* for exceptions — information is never dropped).
-* :class:`TraceResult` — ``spans``, ``text_tree()``, ``otlp_protobuf()``,
+* :class:`TraceResult` — ``request``, ``text_tree()``, ``otlp_protobuf()``,
   ``chrome_trace_json()``, ``save_chrome_trace(path)``.
 * :func:`traced` — decorator sugar on top of :class:`capture_trace`,
   optionally writing the Chrome Trace JSON to disk.
