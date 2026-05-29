@@ -133,7 +133,7 @@ def test_experiment_context_does_not_commit_on_exception():
         experiment.artifact
 
 
-def test_store_trace_records_context_scope_in_artifact():
+def test_store_trace_records_run_scope_in_artifact():
     with Experiment.with_temp_local_registry(store_trace=True) as experiment:
         experiment.log_json("dataset", {"name": "miplib2017"})
         with experiment.run() as run:
@@ -152,9 +152,36 @@ def test_store_trace_records_context_scope_in_artifact():
 
     trace = artifact.get_trace()
     names = {span.name for span in trace.spans}
-    assert "ommx.experiment" in names
     assert "ommx.run" in names
-    assert "ommx.experiment" in trace.text_tree()
+    assert "ommx.run" in trace.text_tree()
+
+
+def test_fork_store_trace_carries_parent_trace_layers():
+    with Experiment.with_temp_local_registry(store_trace=True) as parent:
+        with parent.run() as run:
+            run.log_parameter("solver", "base")
+
+    parent_trace_layers = [
+        layer for layer in parent.artifact.layers if layer.media_type == _TRACE_MEDIA_TYPE
+    ]
+    assert len(parent_trace_layers) == 1
+
+    with parent.fork(
+        "ghcr.io/jij-inc/ommx/forked-trace-experiment:latest",
+        store_trace=True,
+    ) as child:
+        with child.run() as run:
+            assert run.run_id == 1
+            run.log_parameter("solver", "child")
+
+    child_trace_layers = [
+        layer for layer in child.artifact.layers if layer.media_type == _TRACE_MEDIA_TYPE
+    ]
+    assert len(child_trace_layers) == 2
+    assert child_trace_layers[0].digest == parent_trace_layers[0].digest
+
+    trace = child.artifact.get_trace()
+    assert sum(span.name == "ommx.run" for span in trace.spans) == 2
 
 
 def test_default_experiment_context_does_not_store_trace():

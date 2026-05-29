@@ -76,7 +76,6 @@ struct UnsealedExperimentDynState {
     image_name: ImageRef,
     subject: Option<Descriptor>,
     attachments: Vec<Descriptor>,
-    trace_layer: Option<Descriptor>,
     runs: BTreeMap<u64, RunEntryDyn>,
     next_run_id: u64,
 }
@@ -85,6 +84,7 @@ struct UnsealedExperimentDynState {
 struct RunEntryDyn {
     run_id: u64,
     attachments: Vec<Descriptor>,
+    trace_layers: Vec<Descriptor>,
     solves: Vec<SolveEntryDyn>,
     parameters: super::parameter::ParameterSet,
 }
@@ -117,6 +117,7 @@ pub struct SealedRunDyn {
     registry_handle: LocalRegistryHandle,
     run_id: u64,
     attachments: Vec<Descriptor>,
+    trace_layers: Vec<Descriptor>,
     solves: Vec<SolveDyn>,
 }
 
@@ -143,6 +144,10 @@ impl SealedRunDyn {
 
     pub fn attachments(&self) -> Result<Vec<StoredDescriptor<'_>>> {
         stored_descriptors(self.registry_handle.registry(), self.attachments.clone())
+    }
+
+    pub fn trace_layers(&self) -> Result<Vec<StoredDescriptor<'_>>> {
+        stored_descriptors(self.registry_handle.registry(), self.trace_layers.clone())
     }
 
     pub fn attachment_count(&self) -> usize {
@@ -250,7 +255,6 @@ impl ExperimentDyn {
                         image_name,
                         subject: None,
                         attachments: Vec::new(),
-                        trace_layer: None,
                         runs: BTreeMap::new(),
                         next_run_id: 0,
                     }),
@@ -375,30 +379,6 @@ impl AttachmentLogger for &ExperimentDyn {
 }
 
 impl ExperimentDyn {
-    pub fn store_trace_layer(&self, trace: super::Trace) -> Result<()> {
-        let mut dyn_state = lock_experiment_state(&self.state);
-        ensure_unsealed_for_attachment_write(&dyn_state)?;
-        let ExperimentDynLifecycle::Unsealed { state, .. } = &dyn_state.lifecycle else {
-            return bail_non_unsealed(&dyn_state.lifecycle);
-        };
-        let state = state
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
-        if state.trace_layer.is_some() {
-            crate::bail!("Experiment trace layer has already been stored");
-        }
-
-        let descriptor = store_trace_layer_descriptor(&dyn_state, trace)?;
-        let ExperimentDynLifecycle::Unsealed { state, .. } = &mut dyn_state.lifecycle else {
-            return bail_non_unsealed(&dyn_state.lifecycle);
-        };
-        let state = state
-            .as_mut()
-            .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
-        state.trace_layer = Some(descriptor);
-        Ok(())
-    }
-
     pub fn commit(&self) -> Result<LocalArtifactDyn> {
         let mut dyn_state = lock_experiment_state(&self.state);
         let (state, open_runs) = match &mut dyn_state.lifecycle {
@@ -458,6 +438,21 @@ impl ExperimentDyn {
         stored_descriptors(self.registry_handle.registry(), attachments)
     }
 
+    pub fn trace_layers(&self) -> Result<Vec<StoredDescriptor<'_>>> {
+        let trace_layers = {
+            let dyn_state = lock_experiment_state(&self.state);
+            let ExperimentDynLifecycle::Sealed(sealed) = &dyn_state.lifecycle else {
+                return bail_not_sealed(&dyn_state.lifecycle);
+            };
+            sealed
+                .runs
+                .values()
+                .flat_map(|run| run.trace_layers.clone())
+                .collect()
+        };
+        stored_descriptors(self.registry_handle.registry(), trace_layers)
+    }
+
     pub fn runs(&self) -> Result<Vec<SealedRunDyn>> {
         let dyn_state = lock_experiment_state(&self.state);
         let ExperimentDynLifecycle::Sealed(sealed) = &dyn_state.lifecycle else {
@@ -508,10 +503,6 @@ impl UnsealedExperimentDynState {
             image_name: self.image_name,
             subject: self.subject,
             attachments: stored_descriptors(registry, self.attachments)?,
-            trace_layer: self
-                .trace_layer
-                .map(|descriptor| registry.stored_descriptor(descriptor))
-                .transpose()?,
             runs: self
                 .runs
                 .into_iter()
@@ -521,6 +512,7 @@ impl UnsealedExperimentDynState {
                         RunEntry {
                             run_id: run.run_id,
                             attachments: stored_descriptors(registry, run.attachments)?,
+                            trace_layers: stored_descriptors(registry, run.trace_layers)?,
                             solves: run
                                 .solves
                                 .into_iter()
@@ -559,6 +551,7 @@ impl SealedExperimentDynState {
                             registry_handle: registry_handle.clone(),
                             run_id: run.run_id(),
                             attachments: descriptors(run.attachments()),
+                            trace_layers: descriptors(run.trace_layers()),
                             solves: run
                                 .solves()
                                 .iter()
@@ -623,6 +616,7 @@ impl SealedExperimentDynState {
                 RunEntryDyn {
                     run_id: run.run_id,
                     attachments: run.attachments.clone(),
+                    trace_layers: run.trace_layers.clone(),
                     solves,
                     parameters,
                 },
@@ -633,7 +627,6 @@ impl SealedExperimentDynState {
             image_name,
             subject,
             attachments: self.attachments.clone(),
-            trace_layer: None,
             next_run_id: next_run_id(runs.keys().copied())?,
             runs,
         })

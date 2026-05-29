@@ -63,7 +63,6 @@ pub struct PyExperiment {
     context_entered: bool,
     context_active: bool,
     trace_context_manager: Option<Py<PyAny>>,
-    trace_result: Option<Py<PyAny>>,
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
@@ -79,8 +78,8 @@ impl PyExperiment {
     /// the immutable identity of the committed contents.
     ///
     /// Set `store_trace=True` only when the Experiment will be used as a
-    /// context manager. On normal `with` exit, OMMX stores that context's
-    /// trace as an Artifact layer. Manual `commit()` is rejected when
+    /// context manager. OMMX stores traces for `Run` context managers used
+    /// inside that Experiment. Manual `commit()` is rejected when
     /// `store_trace=True`.
     #[new]
     #[pyo3(signature = (image_name = None, *, store_trace = false))]
@@ -91,7 +90,6 @@ impl PyExperiment {
             context_entered: false,
             context_active: false,
             trace_context_manager: None,
-            trace_result: None,
         })
     }
 
@@ -103,8 +101,8 @@ impl PyExperiment {
     /// process-wide default local registry.
     ///
     /// Set `store_trace=True` only when the Experiment will be used as a
-    /// context manager. On normal `with` exit, OMMX stores that context's
-    /// trace as an Artifact layer. Manual `commit()` is rejected when
+    /// context manager. OMMX stores traces for `Run` context managers used
+    /// inside that Experiment. Manual `commit()` is rejected when
     /// `store_trace=True`.
     #[staticmethod]
     #[pyo3(signature = (image_name = None, *, store_trace = false))]
@@ -117,7 +115,6 @@ impl PyExperiment {
             context_entered: false,
             context_active: false,
             trace_context_manager: None,
-            trace_result: None,
         })
     }
 
@@ -137,7 +134,6 @@ impl PyExperiment {
             context_entered: false,
             context_active: false,
             trace_context_manager: None,
-            trace_result: None,
         })
     }
 
@@ -156,7 +152,6 @@ impl PyExperiment {
             context_entered: false,
             context_active: false,
             trace_context_manager: None,
-            trace_result: None,
         })
     }
 
@@ -172,7 +167,6 @@ impl PyExperiment {
             context_entered: false,
             context_active: false,
             trace_context_manager: None,
-            trace_result: None,
         })
     }
 
@@ -196,8 +190,8 @@ impl PyExperiment {
     /// Raises an error if this Experiment has not been committed yet.
     ///
     /// Set `store_trace=True` on the returned child only when it will be used
-    /// as a context manager. On normal `with` exit, OMMX stores that context's
-    /// trace as an Artifact layer. Manual `commit()` is rejected when
+    /// as a context manager. OMMX stores traces for `Run` context managers used
+    /// inside that Experiment. Manual `commit()` is rejected when
     /// `store_trace=True`.
     #[pyo3(signature = (image_name = None, *, store_trace = false))]
     pub fn fork(&self, image_name: Option<&str>, store_trace: bool) -> Result<Self> {
@@ -207,7 +201,6 @@ impl PyExperiment {
             context_entered: false,
             context_active: false,
             trace_context_manager: None,
-            trace_result: None,
         })
     }
 
@@ -228,12 +221,8 @@ impl PyExperiment {
         exc_value: Option<&Bound<'_, PyAny>>,
         traceback: Option<&Bound<'_, PyAny>>,
     ) -> Result<bool> {
-        let trace_payload = self.exit_experiment_context(py, exc_type, exc_value, traceback)?;
+        self.exit_experiment_context(py, exc_type, exc_value, traceback)?;
         if exc_type.is_none() && self.inner.is_unsealed() {
-            if let Some(trace_payload) = trace_payload {
-                self.inner
-                    .store_trace_layer(ommx::experiment::Trace::from_otlp_json(trace_payload))?;
-            }
             self.commit_inner(py)?;
         }
         Ok(false)
@@ -405,7 +394,9 @@ impl PyExperiment {
         self.ensure_store_trace_context_started()?;
         Ok(PyRun {
             run: Some(self.inner.run()?),
+            store_trace: self.store_trace,
             span_context_manager: None,
+            trace_result: None,
         })
     }
 
@@ -551,17 +542,7 @@ impl PyExperiment {
         }
         self.context_entered = true;
         self.context_active = true;
-        if self.store_trace {
-            let tracing = py.import("ommx.tracing")?;
-            let cm = tracing
-                .getattr("capture_trace")?
-                .call1(("ommx.experiment",))?;
-            let result = cm.call_method0("__enter__")?;
-            self.trace_result = Some(result.unbind());
-            self.trace_context_manager = Some(cm.unbind());
-        } else {
-            self.trace_context_manager = Some(start_python_span(py, "ommx.experiment")?);
-        }
+        self.trace_context_manager = Some(start_python_span(py, "ommx.experiment")?);
         Ok(())
     }
 
@@ -571,7 +552,7 @@ impl PyExperiment {
         exc_type: Option<&Bound<'_, PyAny>>,
         exc_value: Option<&Bound<'_, PyAny>>,
         traceback: Option<&Bound<'_, PyAny>>,
-    ) -> Result<Option<Vec<u8>>> {
+    ) -> Result<()> {
         let close_result = close_python_context_manager(
             py,
             self.trace_context_manager.take(),
@@ -580,17 +561,7 @@ impl PyExperiment {
             traceback,
         );
         self.context_active = false;
-        close_result?;
-        if !self.store_trace || exc_type.is_some() {
-            self.trace_result = None;
-            return Ok(None);
-        }
-        let result = self
-            .trace_result
-            .take()
-            .context("store_trace=True lost its TraceResult before Experiment exit")?;
-        let payload: String = result.bind(py).call_method0("otlp_json")?.extract()?;
-        Ok(Some(payload.into_bytes()))
+        close_result
     }
 
     fn ensure_store_trace_context_started(&self) -> Result<()> {
@@ -625,6 +596,13 @@ fn start_python_span(py: Python<'_>, name: &str) -> Result<Py<PyAny>> {
     let cm = tracer.call_method1("start_as_current_span", (name,))?;
     cm.call_method0("__enter__")?;
     Ok(cm.unbind())
+}
+
+fn set_current_span_run_id(py: Python<'_>, run_id: u64) -> Result<()> {
+    let trace = py.import("opentelemetry.trace")?;
+    let span = trace.call_method0("get_current_span")?;
+    span.call_method1("set_attribute", ("ommx.run.id", run_id))?;
+    Ok(())
 }
 
 fn close_python_context_manager(
@@ -802,7 +780,9 @@ fn decode_sample_set_attachment(
 /// becomes immutable once it is finished.
 pub struct PyRun {
     run: Option<ommx::experiment::RunDyn>,
+    store_trace: bool,
     span_context_manager: Option<Py<PyAny>>,
+    trace_result: Option<Py<PyAny>>,
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
@@ -812,9 +792,19 @@ impl PyRun {
         {
             let py = slf.py();
             let mut this = slf.borrow_mut();
-            this.as_open()?;
-            let cm = start_python_span(py, "ommx.run")?;
-            this.span_context_manager = Some(cm);
+            let run_id = this.as_open()?.run_id()?;
+            if this.store_trace {
+                let tracing = py.import("ommx.tracing")?;
+                let cm = tracing.getattr("capture_trace")?.call1(("ommx.run",))?;
+                let result = cm.call_method0("__enter__")?;
+                set_current_span_run_id(py, run_id)?;
+                this.trace_result = Some(result.unbind());
+                this.span_context_manager = Some(cm.unbind());
+            } else {
+                let cm = start_python_span(py, "ommx.run")?;
+                set_current_span_run_id(py, run_id)?;
+                this.span_context_manager = Some(cm);
+            }
         }
         Ok(slf.unbind())
     }
@@ -827,16 +817,6 @@ impl PyRun {
         exc_value: Option<&Bound<'_, PyAny>>,
         traceback: Option<&Bound<'_, PyAny>>,
     ) -> Result<bool> {
-        let result = if self.run.is_none() {
-            Ok(())
-        } else if exc_type.is_none() {
-            self.finish()
-        } else {
-            if let Some(run) = self.run.take() {
-                run.abandon();
-            }
-            Ok(())
-        };
         let close_result = close_python_context_manager(
             py,
             self.span_context_manager.take(),
@@ -844,8 +824,25 @@ impl PyRun {
             exc_value,
             traceback,
         );
-        result?;
+
+        if self.run.is_none() {
+            self.trace_result = None;
+            close_result?;
+            return Ok(false);
+        }
+
+        if exc_type.is_some() {
+            if let Some(run) = self.run.take() {
+                run.abandon();
+            }
+            self.trace_result = None;
+            close_result?;
+            return Ok(false);
+        }
+
         close_result?;
+        self.store_trace_result(py)?;
+        self.finish()?;
         Ok(false)
     }
 
@@ -996,6 +993,22 @@ impl PyRun {
 }
 
 impl PyRun {
+    fn store_trace_result(&mut self, py: Python<'_>) -> Result<()> {
+        if !self.store_trace {
+            return Ok(());
+        }
+        let result = self
+            .trace_result
+            .take()
+            .context("store_trace=True lost its TraceResult before Run exit")?;
+        let payload: String = result.bind(py).call_method0("otlp_json")?.extract()?;
+        self.as_open_mut()?
+            .store_trace_layer(ommx::experiment::Trace::from_otlp_json(
+                payload.into_bytes(),
+            ))?;
+        Ok(())
+    }
+
     fn as_open(&self) -> Result<&ommx::experiment::RunDyn> {
         self.run
             .as_ref()

@@ -8,7 +8,7 @@ use super::{
     RUN_PARAMETERS_MEDIA_TYPE,
 };
 use crate::artifact::local_registry::StoredDescriptor;
-use crate::artifact::{ImageRef, LocalArtifact};
+use crate::artifact::{media_types, ImageRef, LocalArtifact};
 use anyhow::{Context, Result};
 use oci_spec::image::{Descriptor, MediaType};
 use std::collections::BTreeMap;
@@ -24,6 +24,7 @@ impl<'reg> SealedExperiment<'reg> {
         for run in config.runs {
             let attachments =
                 decode_attachments(&layers, run.attachments, &format!("run {}", run.run_id))?;
+            let trace_layers = decode_trace_layers(&layers, run.traces, run.run_id)?;
             let solves = decode_solves(&layers, run.run_id, run.solves)?;
             if runs
                 .insert(
@@ -31,6 +32,7 @@ impl<'reg> SealedExperiment<'reg> {
                     SealedRun {
                         run_id: run.run_id,
                         attachments,
+                        trace_layers,
                         solves,
                     },
                 )
@@ -76,6 +78,7 @@ impl<'reg> SealedExperiment<'reg> {
 pub struct SealedRun<'reg> {
     run_id: u64,
     attachments: Vec<StoredDescriptor<'reg>>,
+    trace_layers: Vec<StoredDescriptor<'reg>>,
     solves: Vec<Solve<'reg>>,
 }
 
@@ -86,6 +89,10 @@ impl<'reg> SealedRun<'reg> {
 
     pub fn attachments(&self) -> &[StoredDescriptor<'reg>] {
         &self.attachments
+    }
+
+    pub fn trace_layers(&self) -> &[StoredDescriptor<'reg>] {
+        &self.trace_layers
     }
 
     pub fn solves(&self) -> &[Solve<'reg>] {
@@ -164,6 +171,28 @@ fn decode_attachments<'reg>(
         if attachment_name(&descriptor).is_none() {
             crate::bail!("Attachment descriptor in {attachment_context} is missing `org.ommx.attachment.name`");
         }
+        decoded.push(descriptor);
+    }
+    Ok(decoded)
+}
+
+fn decode_trace_layers<'reg>(
+    layers: &[StoredDescriptor<'reg>],
+    traces: Vec<LayerRef>,
+    run_id: u64,
+) -> Result<Vec<StoredDescriptor<'reg>>> {
+    let mut decoded = Vec::new();
+    for layer_ref in traces {
+        let descriptor = resolve_layer(layers, layer_ref)
+            .with_context(|| {
+                format!(
+                    "Failed to resolve Run {run_id} trace LayerRef {}",
+                    layer_ref.0
+                )
+            })?
+            .clone();
+        validate_layer_media_type(&descriptor, &media_types::trace_otlp_json())
+            .with_context(|| format!("Invalid Run {run_id} trace layer"))?;
         decoded.push(descriptor);
     }
     Ok(decoded)

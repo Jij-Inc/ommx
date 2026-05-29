@@ -21,6 +21,8 @@ pub struct ExperimentConfigRun {
     pub run_id: u64,
     pub attachments: Vec<LayerRef>,
     #[serde(default)]
+    pub traces: Vec<LayerRef>,
+    #[serde(default)]
     pub solves: Vec<ExperimentConfigSolve>,
 }
 

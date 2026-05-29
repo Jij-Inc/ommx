@@ -1,7 +1,9 @@
 //! Experiment / Run handles and run lifecycle.
 
 use super::attachment::{store_attachment_descriptor, AttachmentSpace};
-use super::{AttachmentLogger, ParameterValue, Run, RunEntry, SolveEntry};
+use super::{
+    AttachmentLogger, ParameterValue, Run, RunEntry, SolveEntry, Trace, ANN_LAYER, LAYER_KIND_TRACE,
+};
 use crate::artifact::media_types;
 use crate::{Instance, Solution};
 use anyhow::Result;
@@ -61,6 +63,25 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
         Ok(solve_id)
     }
 
+    /// Store a trace layer for this Run.
+    ///
+    /// Trace layers are intentionally not Attachments: they record
+    /// execution telemetry for the Run and are referenced from this Run's
+    /// Experiment config entry. Rust stores the [`Trace`] payload as
+    /// opaque bytes and does not inspect the OTLP JSON contents.
+    pub fn store_trace_layer(&mut self, trace: Trace) -> Result<()> {
+        let mut annotations = std::collections::HashMap::new();
+        annotations.insert(ANN_LAYER.to_string(), LAYER_KIND_TRACE.to_string());
+        let Trace { otlp_json: bytes } = trace;
+        let descriptor = self.experiment.registry.store_layer_blob(
+            media_types::trace_otlp_json(),
+            &bytes,
+            annotations,
+        )?;
+        self.trace_layers.push(descriptor);
+        Ok(())
+    }
+
     /// Close the run and append the closed run state to the parent
     /// experiment. Consumes the handle so no further run-scoped data
     /// can be added.
@@ -73,6 +94,7 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
             experiment,
             run_id,
             attachments,
+            trace_layers,
             solves,
             next_solve_id: _,
             parameters,
@@ -80,6 +102,7 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
         let run = RunEntry {
             run_id,
             attachments,
+            trace_layers,
             solves,
             parameters,
         };

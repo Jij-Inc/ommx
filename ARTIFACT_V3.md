@@ -98,7 +98,7 @@ Experiment / Artifact の変更可能性は 3 相に分ける。
 
 `1 Experiment commit = 1 Artifact manifest` をデフォルトとする。`Run` 終了ごとに manifest を切る挙動は初期設計では提供しない。必要になった場合も opt-in とし、通常の比較 UX を複雑にしない。
 
-Run は Artifact sub manifest ではなく、Experiment config 内の `run_id` で束ねられる logical entity とする。Run の保存実体は、Run parameter table の row、Run-scoped Attachment への `LayerRef`、Run 内の Solve list である。trace layer 内の `ommx.run` span は未実装の diagnostics / trace 設計事項である。
+Run は Artifact sub manifest ではなく、Experiment config 内の `run_id` で束ねられる logical entity とする。Run の保存実体は、Run parameter table の row、Run-scoped Attachment への `LayerRef`、Run 内の Solve list、Run trace layer への `LayerRef` である。
 
 ### 3.3 Run context manager
 
@@ -468,7 +468,7 @@ Span の基本構造:
 | 操作 | Span 名 | 親 |
 |---|---|---|
 | Experiment context 開始 | `ommx.experiment` | active span があれば child、なければ root |
-| Run 開始 | `ommx.run` | `ommx.experiment` |
+| Run 開始 | `ommx.run` | 通常 tracing では `ommx.experiment`。`store_trace=True` で保存する Run trace では保存単位の root |
 | Adapter solve 実行 | `ommx.solver.solve` | `ommx.run` |
 | Adapter sample 実行 | `ommx.solver.sample` | `ommx.run` |
 | Attachment / Solve 追加 / Run parameter 更新 | span event | current run / experiment span |
@@ -511,25 +511,27 @@ Event は Attachment、Solve entry、または Run parameter cell への referen
 
 ### 6.3 Trace storage mode
 
-Trace storage は OTel を有効化する機能ではなく、`with Experiment(...)` scope の trace を Artifact layer として保存する機能である。default は保存しない。
+Trace storage は OTel を有効化する機能ではなく、`with Experiment(..., store_trace=True)` の中で実行された `with exp.run()` scope の trace を Artifact layer として保存する機能である。default は保存しない。
 
 | API | 動作 |
 |---|---|
 | `with Experiment(...) as exp:` | `ommx.experiment` span を作る。trace layer は保存しない |
-| `with Experiment(..., store_trace=True) as exp:` | `ommx.experiment` span を作り、同じ trace_id の span / event を収集し、正常終了時に Artifact の trace layer として保存する |
-| `Experiment(...); ...; exp.commit()` | 手動 workflow。Experiment scope の trace は作らず、trace layer も保存しない |
+| `with Experiment(..., store_trace=True) as exp:` | `ommx.experiment` span を作る。内部の各 `with exp.run()` で `ommx.run` trace を収集し、Run の trace layer として保存する |
+| `Experiment(...); ...; exp.commit()` | 手動 workflow。Experiment scope / Run scope の保存用 trace は作らず、trace layer も保存しない |
 
-`store_trace=True` は context manager 専用 option とする。`Experiment(..., store_trace=True)` を `with` なしで使った場合は、`__enter__` 前の mutating API または `commit()` で error にする。これにより、trace 保存を要求した Experiment が notebook の試行錯誤や待ち時間を含む不自然な trace を後から作ることを防ぐ。
+`store_trace=True` は context manager 専用 option とする。`Experiment(..., store_trace=True)` を `with` なしで使った場合は、`__enter__` 前の mutating API または `commit()` で error にする。これにより、trace 保存を要求した Experiment が notebook の試行錯誤や待ち時間を含む不自然な trace を後から作ることを防ぐ。保存対象は Run context に限定し、Experiment context は trace 保存の lifecycle guard として扱う。
 
 `trace="auto"` / `trace="required"` / `with_trace()` は Experiment API には導入しない。trace layer を保存しない場合でも、active provider があれば通常の OTel span / event は外部 exporter に流れる。
 
 既存の notebook / script tracing helper は UX のために provider を install することがある。`store_trace=True` は trace 保存の明示要求なので同じ scoped collector を使えるが、default の Experiment / Artifact build path は global provider を勝手に install しない。
 
-### 6.4 Trace layer
+### 6.4 Run trace layer
 
-Artifact は `with Experiment(..., store_trace=True)` で収集した Experiment trace body を専用 layer として持てる。これは batch job や CI のように Artifact 入出力だけで完結する環境で重要である。
+Artifact は `with Experiment(..., store_trace=True)` の中で `with exp.run()` ごとに収集した Run trace body を専用 layer として持てる。これは batch job や CI のように Artifact 入出力だけで完結する環境で重要である。
 
-保存対象は Experiment context body の lifecycle、Run / Solve、Attachment / parameter event である。trace layer payload の生成と、それを含む final manifest publish は保存対象 trace の外に置く。trace が自分自身の保存処理を参照する再帰構造を作らないためである。このため、`store_trace=True` で保存される trace は user block 内の Experiment / Run / Solve lifecycle を中心にし、保存対象 Artifact 自身の final publish は含めない。
+保存対象は Run context body の lifecycle、Solve、Run-scoped Attachment / parameter event である。trace layer payload の生成、Run への trace layer 登録、final manifest publish は保存対象 trace の外に置く。trace が自分自身の保存処理を参照する再帰構造を作らないためである。
+
+Trace layer は Experiment config の top-level ではなく、各 `ExperimentConfigRun` の `traces: Vec<LayerRef>` に保存する。Fork は Run を logical entity としてコピーするため、Run parameter、Attachment、Solve と同じく、その Run に紐づく trace layer refs も子 Experiment に引き継ぐ。子で追加された Run には、その Run の trace layer が追加される。
 
 Phase 1:
 
@@ -541,7 +543,7 @@ Phase 1:
 | 対象 signal | span / span event |
 | API | `artifact.get_trace() -> TraceResult` |
 
-Trace layer は Attachment / Run parameter table / Solve entry の代替ではない。parameter / solution / sample set などの本体は Experiment state の物理化戦略に従って保存し、trace layer は実行時系列と logical entry reference を保存する。
+`artifact.get_trace()` は Artifact 内の Run trace layers を Run order で読み、1 つの `TraceResult` に結合して返す。Trace layer は Attachment / Run parameter table / Solve entry の代替ではない。parameter / solution / sample set などの本体は Experiment state の物理化戦略に従って保存し、trace layer は実行時系列と logical entry reference を保存する。
 
 ### 6.5 Renderer
 
@@ -745,7 +747,7 @@ Run status、elapsed time、実行環境 OS / package versions / backend solver 
 
 ### 10.5 OTel trace / renderer
 
-Experiment / Run / Artifact operation の詳細な trace schema と post-hoc renderer は未設計である。`with Experiment(..., store_trace=True)` による trace layer 保存と `artifact.get_trace()` は実装済み API Reference を正本にする。
+Experiment / Run / Artifact operation の詳細な trace schema と post-hoc renderer は未設計である。`with Experiment(..., store_trace=True)` による Run trace layer 保存と `artifact.get_trace()` は実装済み API Reference を正本にする。
 
 残作業:
 

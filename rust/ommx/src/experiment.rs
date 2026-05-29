@@ -65,7 +65,7 @@ pub use parameter::{ParameterValue, RunParameterCell};
 pub use sealed::{SealedRun, Solve};
 
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor, TempLocalRegistry};
-use crate::artifact::{media_types, ImageRef, LocalArtifact};
+use crate::artifact::{ImageRef, LocalArtifact};
 use anyhow::Result;
 use attachment::{store_attachment_descriptor, AttachmentSpace};
 use oci_spec::image::MediaType;
@@ -104,11 +104,11 @@ pub struct SealedExperiment<'reg> {
     run_parameters: parameter::RunParameterTable,
 }
 
-/// Opaque Experiment trace payload encoded as OTLP JSON.
+/// Opaque Run trace payload encoded as OTLP JSON.
 ///
 /// The Rust SDK does not decode, validate, or interpret OpenTelemetry
 /// spans. `Trace` is a storage boundary type: it marks a byte payload as
-/// the single Experiment trace layer payload, while producers and
+/// a Run trace layer payload, while producers and
 /// renderers such as the Python SDK own OTLP JSON encoding and decoding.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Trace {
@@ -168,6 +168,7 @@ pub struct Run<'exp, 'reg> {
     experiment: &'exp Experiment<'reg>,
     run_id: u64,
     attachments: Vec<StoredDescriptor<'reg>>,
+    trace_layers: Vec<StoredDescriptor<'reg>>,
     solves: Vec<SolveEntry<'reg>>,
     next_solve_id: u64,
     parameters: ParameterSet,
@@ -184,6 +185,7 @@ pub struct Run<'exp, 'reg> {
 struct RunEntry<'reg> {
     run_id: u64,
     attachments: Vec<StoredDescriptor<'reg>>,
+    trace_layers: Vec<StoredDescriptor<'reg>>,
     solves: Vec<SolveEntry<'reg>>,
     parameters: ParameterSet,
 }
@@ -211,9 +213,6 @@ struct UnsealedExperimentState<'reg> {
     subject: Option<oci_spec::image::Descriptor>,
     /// Experiment-space attachments.
     attachments: Vec<StoredDescriptor<'reg>>,
-    /// Experiment-level trace layer. This is a manifest layer, but not an
-    /// Attachment and not part of the Experiment config payload.
-    trace_layer: Option<StoredDescriptor<'reg>>,
     runs: BTreeMap<u64, RunEntry<'reg>>,
     next_run_id: u64,
 }
@@ -255,7 +254,6 @@ impl<'reg> Experiment<'reg> {
                 image_name,
                 subject: None,
                 attachments: Vec::new(),
-                trace_layer: None,
                 runs: BTreeMap::new(),
                 next_run_id: 0,
             }),
@@ -276,31 +274,11 @@ impl<'reg> Experiment<'reg> {
             experiment: self,
             run_id,
             attachments: Vec::new(),
+            trace_layers: Vec::new(),
             solves: Vec::new(),
             next_solve_id: 0,
             parameters: ParameterSet::new(),
         })
-    }
-
-    /// Store the Experiment trace layer.
-    ///
-    /// The layer is intentionally not an Attachment: it records execution
-    /// telemetry for the committed artifact and is discovered by media type
-    /// / layer annotation. Rust stores the [`Trace`] payload as opaque bytes
-    /// and does not inspect the OTLP JSON contents.
-    pub fn store_trace_layer(&self, trace: Trace) -> Result<()> {
-        let mut state = self.lock_state();
-        if state.trace_layer.is_some() {
-            crate::bail!("Experiment trace layer has already been stored");
-        }
-        let mut annotations = std::collections::HashMap::new();
-        annotations.insert(ANN_LAYER.to_string(), LAYER_KIND_TRACE.to_string());
-        let Trace { otlp_json: bytes } = trace;
-        let descriptor =
-            self.registry
-                .store_layer_blob(media_types::trace_otlp_json(), &bytes, annotations)?;
-        state.trace_layer = Some(descriptor);
-        Ok(())
     }
 
     fn push_closed_run(&self, run: RunEntry<'reg>) -> Result<()> {
@@ -404,6 +382,7 @@ impl<'reg> SealedExperiment<'reg> {
                 RunEntry {
                     run_id: run.run_id(),
                     attachments: run.attachments().to_vec(),
+                    trace_layers: run.trace_layers().to_vec(),
                     solves,
                     parameters,
                 },
@@ -416,7 +395,6 @@ impl<'reg> SealedExperiment<'reg> {
                 image_name,
                 subject,
                 attachments: self.attachments.clone(),
-                trace_layer: None,
                 next_run_id: next_run_id(runs.keys().copied())?,
                 runs,
             }),

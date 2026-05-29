@@ -22,9 +22,6 @@ impl<'reg> UnsealedExperimentState<'reg> {
         let run_parameters = self.run_parameter_descriptor(registry)?;
         let mut layers = LayerTable::default();
         let config = self.experiment_config(&mut layers, run_parameters)?;
-        if let Some(trace_layer) = self.trace_layer {
-            layers.push(trace_layer)?;
-        }
         let config_descriptor = registry.store_json_blob(
             MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()),
             &config,
@@ -89,6 +86,12 @@ impl<'reg> UnsealedExperimentState<'reg> {
                 .cloned()
                 .map(|descriptor| layers.push(descriptor))
                 .collect::<Result<Vec<_>>>()?;
+            let traces = run
+                .trace_layers
+                .iter()
+                .cloned()
+                .map(|descriptor| layers.push(descriptor))
+                .collect::<Result<Vec<_>>>()?;
             let mut solves = Vec::new();
             for solve in &run.solves {
                 solves.push(ExperimentConfigSolve {
@@ -102,6 +105,7 @@ impl<'reg> UnsealedExperimentState<'reg> {
             runs.push(ExperimentConfigRun {
                 run_id: run.run_id,
                 attachments,
+                traces,
                 solves,
             });
         }
