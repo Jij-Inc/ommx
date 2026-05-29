@@ -4,11 +4,11 @@ import pandas as pd
 import pytest
 
 from ommx.adapter import SolverAdapter
+from ommx.artifact import Artifact
 from ommx.experiment import Experiment
 from ommx.v1 import Instance, Solution
 
 _ATTACHMENT_NAME = "org.ommx.attachment.name"
-_TRACE_MEDIA_TYPE = "application/vnd.ommx.trace.otlp+json"
 _LAYER_KIND = "org.ommx.experiment.layer"
 
 
@@ -18,6 +18,14 @@ def _df_snap(df: pd.DataFrame) -> str:
 
 def _attachment_names(attachments) -> set[str]:
     return {attachment.annotations[_ATTACHMENT_NAME] for attachment in attachments}
+
+
+def _trace_layers(artifact: Artifact):
+    return [
+        layer
+        for layer in artifact.layers
+        if layer.media_type == Artifact.TRACE_OTLP_JSON_MEDIA_TYPE
+    ]
 
 
 def test_view_run_parameters_from_committed_artifact(snapshot):
@@ -140,9 +148,7 @@ def test_store_trace_records_run_scope_in_artifact():
         run.log_parameter("solver", "highs")
     artifact = experiment.commit()
 
-    trace_layers = [
-        layer for layer in artifact.layers if layer.media_type == _TRACE_MEDIA_TYPE
-    ]
+    trace_layers = _trace_layers(artifact)
     assert len(trace_layers) == 1
     assert trace_layers[0].annotations[_LAYER_KIND] == "trace"
     assert _ATTACHMENT_NAME not in trace_layers[0].annotations
@@ -150,7 +156,8 @@ def test_store_trace_records_run_scope_in_artifact():
     loaded = Experiment.from_artifact(artifact)
     assert _attachment_names(loaded.experiment_attachments) == {"dataset"}
 
-    trace = artifact.get_trace()
+    trace = loaded.runs[0].trace
+    assert trace is not None
     names = {span.name for span in trace.spans}
     assert "ommx.run" in names
     assert "ommx.run" in trace.text_tree()
@@ -161,9 +168,7 @@ def test_fork_store_trace_carries_parent_trace_layers():
         with parent.run() as run:
             run.log_parameter("solver", "base")
 
-    parent_trace_layers = [
-        layer for layer in parent.artifact.layers if layer.media_type == _TRACE_MEDIA_TYPE
-    ]
+    parent_trace_layers = _trace_layers(parent.artifact)
     assert len(parent_trace_layers) == 1
 
     with parent.fork(
@@ -174,14 +179,13 @@ def test_fork_store_trace_carries_parent_trace_layers():
             assert run.run_id == 1
             run.log_parameter("solver", "child")
 
-    child_trace_layers = [
-        layer for layer in child.artifact.layers if layer.media_type == _TRACE_MEDIA_TYPE
-    ]
+    child_trace_layers = _trace_layers(child.artifact)
     assert len(child_trace_layers) == 2
     assert child_trace_layers[0].digest == parent_trace_layers[0].digest
 
-    trace = child.artifact.get_trace()
-    assert sum(span.name == "ommx.run" for span in trace.spans) == 2
+    traces = [run.trace for run in child.runs]
+    assert all(trace is not None for trace in traces)
+    assert sum(span.name == "ommx.run" for trace in traces for span in trace.spans) == 2
 
 
 def test_fork_store_trace_can_add_trace_to_new_run_only():
@@ -189,9 +193,7 @@ def test_fork_store_trace_can_add_trace_to_new_run_only():
         with parent.run() as run:
             run.log_parameter("solver", "base")
 
-    assert [
-        layer for layer in parent.artifact.layers if layer.media_type == _TRACE_MEDIA_TYPE
-    ] == []
+    assert _trace_layers(parent.artifact) == []
 
     child = parent.fork(
         "ghcr.io/jij-inc/ommx/forked-trace-new-run:latest",
@@ -202,12 +204,13 @@ def test_fork_store_trace_can_add_trace_to_new_run_only():
         run.log_parameter("solver", "child")
     child.commit()
 
-    child_trace_layers = [
-        layer for layer in child.artifact.layers if layer.media_type == _TRACE_MEDIA_TYPE
-    ]
+    child_trace_layers = _trace_layers(child.artifact)
     assert len(child_trace_layers) == 1
 
-    trace = child.artifact.get_trace()
+    traces = [run.trace for run in child.runs]
+    assert traces[0] is None
+    trace = traces[1]
+    assert trace is not None
     assert sum(span.name == "ommx.run" for span in trace.spans) == 1
 
 
@@ -216,13 +219,8 @@ def test_default_experiment_context_does_not_store_trace():
         with experiment.run() as run:
             run.log_parameter("solver", "highs")
 
-    assert [
-        layer
-        for layer in experiment.artifact.layers
-        if layer.media_type == _TRACE_MEDIA_TYPE
-    ] == []
-    with pytest.raises(ValueError, match="Trace layer not found"):
-        experiment.artifact.get_trace()
+    assert _trace_layers(experiment.artifact) == []
+    assert Experiment.from_artifact(experiment.artifact).runs[0].trace is None
 
 
 def test_store_trace_requires_run_context_manager_before_run_mutation():

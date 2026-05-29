@@ -539,12 +539,12 @@ Phase 1:
 | 項目 | 方針 |
 |---|---|
 | encoding | OTLP JSON |
-| media type | `application/vnd.ommx.trace.otlp+json` |
+| media type | `application/org.ommx.trace.otlp+json` |
 | payload | OTLP JSON mapping の `ExportTraceServiceRequest` 互換 (`resourceSpans`) |
 | 対象 signal | span / span event |
-| API | `artifact.get_trace() -> TraceResult` |
+| API | `run.trace -> TraceResult | None` |
 
-`artifact.get_trace()` は Artifact 内の Run trace layers を Run order で読み、1 つの `TraceResult` に結合して返す。Trace layer は Attachment / Run parameter table / Solve entry の代替ではない。parameter / solution / sample set などの本体は Experiment state の物理化戦略に従って保存し、trace layer は実行時系列と logical entry reference を保存する。
+Trace は Run に紐づく概念なので、Artifact aggregate accessor は持たない。読み出しは sealed Run の `trace` accessor から行う。Trace layer は Attachment / Run parameter table / Solve entry の代替ではない。parameter / solution / sample set などの本体は Experiment state の物理化戦略に従って保存し、trace layer は実行時系列と logical entry reference を保存する。
 
 ### 6.5 Renderer
 
@@ -748,7 +748,7 @@ Run status、elapsed time、実行環境 OS / package versions / backend solver 
 
 ### 10.5 OTel trace / renderer
 
-Experiment / Run / Artifact operation の詳細な trace schema と post-hoc renderer は未設計である。`store_trace=True` と `with exp.run()` による Run trace layer 保存、および `artifact.get_trace()` は実装済み API Reference を正本にする。
+Experiment / Run / Artifact operation の詳細な trace schema と post-hoc renderer は未設計である。`store_trace=True` と `with exp.run()` による Run trace layer 保存、および `run.trace` は実装済み API Reference を正本にする。
 
 残作業:
 

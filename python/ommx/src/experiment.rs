@@ -1254,6 +1254,21 @@ impl PySealedRun {
     }
 
     #[getter]
+    /// Stored trace for this run, or `None` when this run was recorded without trace storage.
+    pub fn trace<'py>(&self, py: Python<'py>) -> Result<Option<Bound<'py, PyAny>>> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let Some(descriptor) = self.run.trace_layer()? else {
+            return Ok(None);
+        };
+        let blob = self.artifact.get_blob(&descriptor)?;
+        let trace_result = py.import("ommx.tracing")?.getattr("TraceResult")?;
+        Ok(Some(trace_result.call_method1(
+            "from_otlp_json",
+            (PyBytes::new(py, &blob),),
+        )?))
+    }
+
+    #[getter]
     /// Solve records logged in this run, ordered by `solve_id`.
     pub fn solves(&self) -> Vec<PySolve> {
         self.run.solves().iter().cloned().map(PySolve).collect()

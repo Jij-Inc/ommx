@@ -201,6 +201,11 @@ class Artifact:
 
     ```
     """
+
+    TRACE_OTLP_JSON_MEDIA_TYPE: builtins.str
+    r"""
+    Media type of an Experiment Run trace layer encoded as OTLP JSON.
+    """
     @property
     def image_name(self) -> typing.Optional[builtins.str]: ...
     @property
@@ -416,12 +421,6 @@ class Artifact:
     def get_json(self, descriptor: Descriptor) -> typing.Any:
         r"""
         Get a JSON object from an artifact layer stored by {meth}`~ommx.artifact.ArtifactDraft.add_json`.
-        """
-    def get_trace(self) -> typing.Any:
-        r"""
-        Read the Experiment trace layer as an ``ommx.tracing.TraceResult``.
-
-        Raises `ValueError` if this artifact has no stored trace layer.
         """
 
 @typing.final
@@ -1776,10 +1775,9 @@ class Experiment:
         alias for the committed Artifact; the Artifact manifest digest remains
         the immutable identity of the committed contents.
 
-        Set `store_trace=True` only when the Experiment will be used as a
-        context manager. On normal `with` exit, OMMX stores that context's
-        trace as an Artifact layer. Manual `commit()` is rejected when
-        `store_trace=True`.
+        Set `store_trace=True` to store traces for `Run` context managers
+        created from this Experiment. The Experiment itself does not need to
+        be used as a context manager.
         """
     @staticmethod
     def with_temp_local_registry(
@@ -1795,10 +1793,9 @@ class Experiment:
         for examples and tests because it does not write entries into the
         process-wide default local registry.
 
-        Set `store_trace=True` only when the Experiment will be used as a
-        context manager. On normal `with` exit, OMMX stores that context's
-        trace as an Artifact layer. Manual `commit()` is rejected when
-        `store_trace=True`.
+        Set `store_trace=True` to store traces for `Run` context managers
+        created from this Experiment. The Experiment itself does not need to
+        be used as a context manager.
         """
     @staticmethod
     def load(image_name: builtins.str) -> Experiment:
@@ -1854,10 +1851,9 @@ class Experiment:
 
         Raises an error if this Experiment has not been committed yet.
 
-        Set `store_trace=True` on the returned child only when it will be used
-        as a context manager. On normal `with` exit, OMMX stores that context's
-        trace as an Artifact layer. Manual `commit()` is rejected when
-        `store_trace=True`.
+        Set `store_trace=True` on the returned child to store traces for
+        `Run` context managers created from it. The child Experiment itself
+        does not need to be used as a context manager.
         """
     def __enter__(self) -> Experiment: ...
     def __exit__(
@@ -5880,6 +5876,11 @@ class SealedRun:
     def attachment_names(self) -> builtins.list[builtins.str]:
         r"""
         Names of run-level attachments.
+        """
+    @property
+    def trace(self) -> typing.Optional[typing.Any]:
+        r"""
+        Stored trace for this run, or `None` when this run was recorded without trace storage.
         """
     @property
     def solves(self) -> builtins.list[Solve]:

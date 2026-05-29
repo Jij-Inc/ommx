@@ -445,21 +445,6 @@ impl ExperimentDyn {
         stored_descriptors(self.registry_handle.registry(), attachments)
     }
 
-    pub fn trace_layers(&self) -> Result<Vec<StoredDescriptor<'_>>> {
-        let trace_layers = {
-            let dyn_state = lock_experiment_state(&self.state);
-            let ExperimentDynLifecycle::Sealed(sealed) = &dyn_state.lifecycle else {
-                return bail_not_sealed(&dyn_state.lifecycle);
-            };
-            sealed
-                .runs
-                .values()
-                .filter_map(|run| run.trace_layer.clone())
-                .collect()
-        };
-        stored_descriptors(self.registry_handle.registry(), trace_layers)
-    }
-
     pub fn runs(&self) -> Result<Vec<SealedRunDyn>> {
         let dyn_state = lock_experiment_state(&self.state);
         let ExperimentDynLifecycle::Sealed(sealed) = &dyn_state.lifecycle else {
