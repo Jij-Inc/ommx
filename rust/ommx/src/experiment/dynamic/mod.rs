@@ -84,7 +84,7 @@ struct UnsealedExperimentDynState {
 struct RunEntryDyn {
     run_id: u64,
     attachments: Vec<Descriptor>,
-    trace_layers: Vec<Descriptor>,
+    trace_layer: Option<Descriptor>,
     solves: Vec<SolveEntryDyn>,
     parameters: super::parameter::ParameterSet,
 }
@@ -117,7 +117,7 @@ pub struct SealedRunDyn {
     registry_handle: LocalRegistryHandle,
     run_id: u64,
     attachments: Vec<Descriptor>,
-    trace_layers: Vec<Descriptor>,
+    trace_layer: Option<Descriptor>,
     solves: Vec<SolveDyn>,
 }
 
@@ -146,8 +146,15 @@ impl SealedRunDyn {
         stored_descriptors(self.registry_handle.registry(), self.attachments.clone())
     }
 
-    pub fn trace_layers(&self) -> Result<Vec<StoredDescriptor<'_>>> {
-        stored_descriptors(self.registry_handle.registry(), self.trace_layers.clone())
+    pub fn trace_layer(&self) -> Result<Option<StoredDescriptor<'_>>> {
+        self.trace_layer
+            .clone()
+            .map(|descriptor| {
+                self.registry_handle
+                    .registry()
+                    .stored_descriptor(descriptor)
+            })
+            .transpose()
     }
 
     pub fn attachment_count(&self) -> usize {
@@ -447,7 +454,7 @@ impl ExperimentDyn {
             sealed
                 .runs
                 .values()
-                .flat_map(|run| run.trace_layers.clone())
+                .filter_map(|run| run.trace_layer.clone())
                 .collect()
         };
         stored_descriptors(self.registry_handle.registry(), trace_layers)
@@ -512,7 +519,10 @@ impl UnsealedExperimentDynState {
                         RunEntry {
                             run_id: run.run_id,
                             attachments: stored_descriptors(registry, run.attachments)?,
-                            trace_layers: stored_descriptors(registry, run.trace_layers)?,
+                            trace_layer: run
+                                .trace_layer
+                                .map(|descriptor| registry.stored_descriptor(descriptor))
+                                .transpose()?,
                             solves: run
                                 .solves
                                 .into_iter()
@@ -551,7 +561,7 @@ impl SealedExperimentDynState {
                             registry_handle: registry_handle.clone(),
                             run_id: run.run_id(),
                             attachments: descriptors(run.attachments()),
-                            trace_layers: descriptors(run.trace_layers()),
+                            trace_layer: run.trace_layer().cloned().map(Descriptor::from),
                             solves: run
                                 .solves()
                                 .iter()
@@ -616,7 +626,7 @@ impl SealedExperimentDynState {
                 RunEntryDyn {
                     run_id: run.run_id,
                     attachments: run.attachments.clone(),
-                    trace_layers: run.trace_layers.clone(),
+                    trace_layer: run.trace_layer.clone(),
                     solves,
                     parameters,
                 },

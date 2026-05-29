@@ -184,6 +184,32 @@ def test_fork_store_trace_carries_parent_trace_layers():
     assert sum(span.name == "ommx.run" for span in trace.spans) == 2
 
 
+def test_fork_store_trace_can_add_trace_to_new_run_only():
+    with Experiment.with_temp_local_registry() as parent:
+        with parent.run() as run:
+            run.log_parameter("solver", "base")
+
+    assert [
+        layer for layer in parent.artifact.layers if layer.media_type == _TRACE_MEDIA_TYPE
+    ] == []
+
+    with parent.fork(
+        "ghcr.io/jij-inc/ommx/forked-trace-new-run:latest",
+        store_trace=True,
+    ) as child:
+        with child.run() as run:
+            assert run.run_id == 1
+            run.log_parameter("solver", "child")
+
+    child_trace_layers = [
+        layer for layer in child.artifact.layers if layer.media_type == _TRACE_MEDIA_TYPE
+    ]
+    assert len(child_trace_layers) == 1
+
+    trace = child.artifact.get_trace()
+    assert sum(span.name == "ommx.run" for span in trace.spans) == 1
+
+
 def test_default_experiment_context_does_not_store_trace():
     with Experiment.with_temp_local_registry() as experiment:
         with experiment.run() as run:

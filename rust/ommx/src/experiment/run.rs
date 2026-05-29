@@ -78,7 +78,7 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
             &bytes,
             annotations,
         )?;
-        self.trace_layers.push(descriptor);
+        self.trace_layer = Some(descriptor);
         Ok(())
     }
 
@@ -94,7 +94,7 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
             experiment,
             run_id,
             attachments,
-            trace_layers,
+            trace_layer,
             solves,
             next_solve_id: _,
             parameters,
@@ -102,7 +102,7 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
         let run = RunEntry {
             run_id,
             attachments,
-            trace_layers,
+            trace_layer,
             solves,
             parameters,
         };

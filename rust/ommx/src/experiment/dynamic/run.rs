@@ -38,7 +38,7 @@ pub struct RunDyn {
 struct RunDynState {
     run_id: u64,
     attachments: Vec<Descriptor>,
-    trace_layers: Vec<Descriptor>,
+    trace_layer: Option<Descriptor>,
     solves: Vec<SolveEntryDyn>,
     next_solve_id: u64,
     parameters: ParameterSet,
@@ -69,7 +69,7 @@ impl RunDyn {
             run_state: Some(RunDynState {
                 run_id,
                 attachments: Vec::new(),
-                trace_layers: Vec::new(),
+                trace_layer: None,
                 solves: Vec::new(),
                 next_solve_id: 0,
                 parameters: ParameterSet::new(),
@@ -133,7 +133,7 @@ impl RunDyn {
             let dyn_state = lock_experiment_state(&self.experiment_state);
             store_trace_layer_descriptor(&dyn_state, trace)?
         };
-        self.open_mut()?.trace_layers.push(descriptor);
+        self.open_mut()?.trace_layer = Some(descriptor);
         Ok(())
     }
 
@@ -158,7 +158,7 @@ impl RunDyn {
             RunEntryDyn {
                 run_id: run.run_id,
                 attachments: run.attachments,
-                trace_layers: run.trace_layers,
+                trace_layer: run.trace_layer,
                 solves: run.solves,
                 parameters: run.parameters,
             },

@@ -86,12 +86,11 @@ impl<'reg> UnsealedExperimentState<'reg> {
                 .cloned()
                 .map(|descriptor| layers.push(descriptor))
                 .collect::<Result<Vec<_>>>()?;
-            let traces = run
-                .trace_layers
-                .iter()
-                .cloned()
+            let trace = run
+                .trace_layer
+                .clone()
                 .map(|descriptor| layers.push(descriptor))
-                .collect::<Result<Vec<_>>>()?;
+                .transpose()?;
             let mut solves = Vec::new();
             for solve in &run.solves {
                 solves.push(ExperimentConfigSolve {
@@ -105,7 +104,7 @@ impl<'reg> UnsealedExperimentState<'reg> {
             runs.push(ExperimentConfigRun {
                 run_id: run.run_id,
                 attachments,
-                traces,
+                trace,
                 solves,
             });
         }

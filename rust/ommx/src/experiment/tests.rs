@@ -162,15 +162,11 @@ fn log_writes_blob_to_blobstore_immediately() {
 }
 
 #[test]
-fn trace_layers_are_config_referenced_manifest_layers() {
+fn trace_layer_is_config_referenced_manifest_layer() {
     with_temp_experiment(|experiment| {
         let mut run = experiment.run().unwrap();
         run.store_trace_layer(Trace::from_otlp_json(
             br#"{"resourceSpans":[{"scopeSpans":[]}]}"#.to_vec(),
-        ))
-        .unwrap();
-        run.store_trace_layer(Trace::from_otlp_json(
-            br#"{"resourceSpans":[{"resource":{"attributes":[]}}]}"#.to_vec(),
         ))
         .unwrap();
         run.finish().unwrap();
@@ -180,20 +176,20 @@ fn trace_layers_are_config_referenced_manifest_layers() {
         let config = artifact.stored_config().unwrap();
         let config_json: serde_json::Value =
             serde_json::from_slice(&blob_bytes(&artifact, &config)).unwrap();
-        assert_eq!(config_json["runs"][0]["traces"], json!([0, 1]));
+        assert_eq!(config_json["runs"][0]["trace"], json!(0));
 
         let trace_layers = layers
             .iter()
             .filter(|layer| layer.media_type() == &media_types::trace_otlp_json())
             .collect::<Vec<_>>();
-        assert_eq!(trace_layers.len(), 2);
+        assert_eq!(trace_layers.len(), 1);
         assert_eq!(
             layer_annotation(trace_layers[0], ANN_LAYER).as_deref(),
             Some(LAYER_KIND_TRACE)
         );
         assert_eq!(layer_annotation(trace_layers[0], ANN_ATTACHMENT_NAME), None);
         let loaded = SealedExperiment::from_artifact(artifact).unwrap();
-        assert_eq!(loaded.run(0).unwrap().trace_layers().len(), 2);
+        assert!(loaded.run(0).unwrap().trace_layer().is_some());
         Ok(())
     });
 }
@@ -468,9 +464,13 @@ fn sealed_experiment_fork_creates_child_with_parent_subject_and_next_run_id() {
 
         let parent = experiment.commit().unwrap();
         let parent_artifact = parent.artifact();
-        let parent_trace_layers = parent.run(0).unwrap().trace_layers();
-        assert_eq!(parent_trace_layers.len(), 1);
-        let parent_trace_digest = parent_trace_layers[0].digest().clone();
+        let parent_trace_digest = parent
+            .run(0)
+            .unwrap()
+            .trace_layer()
+            .expect("parent run has trace")
+            .digest()
+            .clone();
         let child_name =
             ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:fork-child").unwrap();
         let child = parent.fork(Name::Named(child_name.clone())).unwrap();
@@ -506,12 +506,11 @@ fn sealed_experiment_fork_creates_child_with_parent_subject_and_next_run_id() {
         );
 
         let loaded = SealedExperiment::from_artifact(child_artifact).unwrap();
-        assert_eq!(loaded.run(0).unwrap().trace_layers().len(), 1);
         assert_eq!(
-            loaded.run(0).unwrap().trace_layers()[0].digest(),
+            loaded.run(0).unwrap().trace_layer().unwrap().digest(),
             &parent_trace_digest
         );
-        assert_eq!(loaded.run(1).unwrap().trace_layers().len(), 1);
+        assert!(loaded.run(1).unwrap().trace_layer().is_some());
         assert!(loaded
             .experiment_attachments()
             .iter()
@@ -792,7 +791,7 @@ fn loaded_experiment_rejects_config_run_attachment_not_listed_in_layers() {
         runs: vec![ExperimentConfigRun {
             run_id: 0,
             attachments: vec![LayerRef(1)],
-            traces: Vec::new(),
+            trace: None,
             solves: Vec::new(),
         }],
         run_parameters: LayerRef(0),

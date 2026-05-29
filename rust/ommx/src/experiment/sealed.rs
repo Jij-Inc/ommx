@@ -24,7 +24,7 @@ impl<'reg> SealedExperiment<'reg> {
         for run in config.runs {
             let attachments =
                 decode_attachments(&layers, run.attachments, &format!("run {}", run.run_id))?;
-            let trace_layers = decode_trace_layers(&layers, run.traces, run.run_id)?;
+            let trace_layer = decode_trace_layer(&layers, run.trace, run.run_id)?;
             let solves = decode_solves(&layers, run.run_id, run.solves)?;
             if runs
                 .insert(
@@ -32,7 +32,7 @@ impl<'reg> SealedExperiment<'reg> {
                     SealedRun {
                         run_id: run.run_id,
                         attachments,
-                        trace_layers,
+                        trace_layer,
                         solves,
                     },
                 )
@@ -78,7 +78,7 @@ impl<'reg> SealedExperiment<'reg> {
 pub struct SealedRun<'reg> {
     run_id: u64,
     attachments: Vec<StoredDescriptor<'reg>>,
-    trace_layers: Vec<StoredDescriptor<'reg>>,
+    trace_layer: Option<StoredDescriptor<'reg>>,
     solves: Vec<Solve<'reg>>,
 }
 
@@ -91,8 +91,8 @@ impl<'reg> SealedRun<'reg> {
         &self.attachments
     }
 
-    pub fn trace_layers(&self) -> &[StoredDescriptor<'reg>] {
-        &self.trace_layers
+    pub fn trace_layer(&self) -> Option<&StoredDescriptor<'reg>> {
+        self.trace_layer.as_ref()
     }
 
     pub fn solves(&self) -> &[Solve<'reg>] {
@@ -176,26 +176,25 @@ fn decode_attachments<'reg>(
     Ok(decoded)
 }
 
-fn decode_trace_layers<'reg>(
+fn decode_trace_layer<'reg>(
     layers: &[StoredDescriptor<'reg>],
-    traces: Vec<LayerRef>,
+    trace: Option<LayerRef>,
     run_id: u64,
-) -> Result<Vec<StoredDescriptor<'reg>>> {
-    let mut decoded = Vec::new();
-    for layer_ref in traces {
-        let descriptor = resolve_layer(layers, layer_ref)
-            .with_context(|| {
-                format!(
-                    "Failed to resolve Run {run_id} trace LayerRef {}",
-                    layer_ref.0
-                )
-            })?
-            .clone();
-        validate_layer_media_type(&descriptor, &media_types::trace_otlp_json())
-            .with_context(|| format!("Invalid Run {run_id} trace layer"))?;
-        decoded.push(descriptor);
-    }
-    Ok(decoded)
+) -> Result<Option<StoredDescriptor<'reg>>> {
+    let Some(layer_ref) = trace else {
+        return Ok(None);
+    };
+    let descriptor = resolve_layer(layers, layer_ref)
+        .with_context(|| {
+            format!(
+                "Failed to resolve Run {run_id} trace LayerRef {}",
+                layer_ref.0
+            )
+        })?
+        .clone();
+    validate_layer_media_type(&descriptor, &media_types::trace_otlp_json())
+        .with_context(|| format!("Invalid Run {run_id} trace layer"))?;
+    Ok(Some(descriptor))
 }
 
 fn decode_solves<'reg>(

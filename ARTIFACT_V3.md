@@ -531,7 +531,7 @@ Artifact は `with Experiment(..., store_trace=True)` の中で `with exp.run()`
 
 保存対象は Run context body の lifecycle、Solve、Run-scoped Attachment / parameter event である。trace layer payload の生成、Run への trace layer 登録、final manifest publish は保存対象 trace の外に置く。trace が自分自身の保存処理を参照する再帰構造を作らないためである。
 
-Trace layer は Experiment config の top-level ではなく、各 `ExperimentConfigRun` の `traces: Vec<LayerRef>` に保存する。Fork は Run を logical entity としてコピーするため、Run parameter、Attachment、Solve と同じく、その Run に紐づく trace layer refs も子 Experiment に引き継ぐ。子で追加された Run には、その Run の trace layer が追加される。
+Trace layer は Experiment config の top-level ではなく、各 `ExperimentConfigRun` の `trace: Option<LayerRef>` に保存する。1 回の Run context から保存される trace は常に 0 または 1 個であり、Fork は Run を logical entity としてコピーするため、Run parameter、Attachment、Solve と同じく、その Run に紐づく trace layer ref も子 Experiment に引き継ぐ。子で追加された Run には、その Run の trace layer が追加される。
 
 Phase 1:
 
