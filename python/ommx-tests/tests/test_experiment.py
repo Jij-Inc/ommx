@@ -254,6 +254,34 @@ def test_run_context_enter_failure_closes_partial_span(monkeypatch):
     experiment.commit()
 
 
+def test_run_context_exit_failure_keeps_entered_state(monkeypatch):
+    from opentelemetry import trace as otel_trace
+
+    experiment = Experiment.with_temp_local_registry()
+    run = experiment.run()
+
+    class BrokenContextManager:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_value, traceback):
+            raise RuntimeError("run span close failed")
+
+    class FakeTracer:
+        def start_as_current_span(self, name):
+            return BrokenContextManager()
+
+    with monkeypatch.context() as patch:
+        patch.setattr(otel_trace, "get_tracer", lambda *args, **kwargs: FakeTracer())
+        run.__enter__()
+        with pytest.raises(RuntimeError, match="run span close failed"):
+            run.__exit__()
+        with pytest.raises(RuntimeError, match="already been entered"):
+            run.__enter__()
+        with pytest.raises(RuntimeError, match="Run handle"):
+            experiment.commit()
+
+
 def test_store_trace_requires_run_context_manager_before_run_mutation():
     experiment = Experiment.with_temp_local_registry(store_trace=True)
     experiment.log_json("dataset", {"name": "miplib2017"})

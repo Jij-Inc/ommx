@@ -530,7 +530,7 @@ fn set_current_span_run_id(py: Python<'_>, run_id: u64) -> Result<()> {
 
 fn close_python_context_manager(
     py: Python<'_>,
-    cm: Option<Py<PyAny>>,
+    cm: Option<&Py<PyAny>>,
     exc_type: Option<&Bound<'_, PyAny>>,
     exc_value: Option<&Bound<'_, PyAny>>,
     traceback: Option<&Bound<'_, PyAny>>,
@@ -793,23 +793,26 @@ impl PyRun {
             } => {
                 let close_result = close_python_context_manager(
                     py,
-                    Some(span_context_manager),
+                    Some(&span_context_manager),
                     exc_type,
                     exc_value,
                     traceback,
                 );
+                if let Err(error) = close_result {
+                    self.state = PyRunState::Entered {
+                        run,
+                        span_context_manager,
+                        trace_result,
+                    };
+                    return Err(error);
+                }
                 if exc_type.is_some() {
                     run.abandon();
-                    close_result?;
                     return Ok(false);
-                }
-                if let Err(error) = close_result {
-                    self.state = PyRunState::Open { run };
-                    return Err(error);
                 }
                 if self.store_trace {
                     if let Err(error) = store_trace_result(py, &mut run, trace_result) {
-                        self.state = PyRunState::Open { run };
+                        run.abandon();
                         return Err(error);
                     }
                 }
@@ -1042,7 +1045,7 @@ fn close_run_context_after_failed_enter(
     original_error: &anyhow::Error,
 ) -> Result<()> {
     let original_message = original_error.to_string();
-    close_python_context_manager(py, Some(span_context_manager), None, None, None)
+    close_python_context_manager(py, Some(&span_context_manager), None, None, None)
         .with_context(|| {
             format!(
                 "Run context setup failed with `{original_message}`, then closing the partial context failed"
