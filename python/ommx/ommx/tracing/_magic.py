@@ -23,12 +23,10 @@ HTML rendering with the ``[ERROR]`` marker) comes from
 
 from __future__ import annotations
 
-import base64
-import html
 from typing import TYPE_CHECKING, Optional, Tuple
 
 from ._capture import capture_trace
-from ._render import chrome_trace_json, render_text_tree
+from ._render import render_html
 from ._result import TraceResult
 
 
@@ -45,21 +43,7 @@ def _render_cell_output_html(
     download_filename: str = "ommx_trace.json",
 ) -> str:
     """HTML blob for ``display(HTML(...))`` from the cell magic."""
-    tree = html.escape(render_text_tree(result))
-    payload = chrome_trace_json(result)
-    b64 = base64.b64encode(payload.encode("utf-8")).decode("ascii")
-    data_url = f"data:application/json;base64,{b64}"
-    size_kb = len(payload) / 1024
-    # ``quote=True`` escapes both ``"`` and ``'`` for HTML attributes.
-    safe_filename = html.escape(download_filename, quote=True)
-    return (
-        '<div class="ommx-trace">'
-        f"<pre>{tree}</pre>"
-        f'<p><a href="{data_url}" download="{safe_filename}">'
-        f"Download Chrome Trace JSON ({size_kb:.1f} KB)"
-        "</a> — open in Perfetto, speedscope, or <code>chrome://tracing</code>.</p>"
-        "</div>"
-    )
+    return render_html(result, download_filename=download_filename)
 
 
 def run_cell_with_trace(

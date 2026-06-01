@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import html
 import json
 from collections.abc import Sequence
 from pathlib import Path
@@ -70,6 +72,14 @@ def _end_time(span: ProtoSpan) -> int | None:
     return _optional_int(span.end_time_unix_nano)
 
 
+def _span_records(result: TraceResult):
+    for resource_span in result.request.resource_spans:
+        for scope_span in resource_span.scope_spans:
+            scope_name = scope_span.scope.name or None
+            for span in scope_span.spans:
+                yield span, scope_name
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -121,7 +131,7 @@ def _interesting_attributes(span: ProtoSpan) -> str:
     attributes = _attributes_from_proto(span.attributes)
     if not attributes:
         return ""
-    skip = {"busy_ns", "idle_ns", "thread.id"}
+    skip = {"busy_ns", "idle_ns", "target", "thread.id"}
     pairs = [
         f"{k}={v!r}"
         for k, v in attributes.items()
@@ -130,6 +140,12 @@ def _interesting_attributes(span: ProtoSpan) -> str:
     if not pairs:
         return ""
     return " [" + ", ".join(pairs) + "]"
+
+
+def _scope_label(scope_name: str | None) -> str:
+    if not scope_name:
+        return ""
+    return f" {{scope={scope_name}}}"
 
 
 # ---------------------------------------------------------------------------
@@ -144,9 +160,15 @@ def render_text_tree(result: TraceResult) -> str:
     Siblings are sorted by start time so the output reflects execution
     order.
     """
-    spans = result.spans
-    if not spans:
+    records = list(_span_records(result))
+    if not records:
         return "(no spans)"
+    spans = [span for span, _scope_name in records]
+    scope_names = {
+        _span_id(span): scope_name
+        for span, scope_name in records
+        if scope_name is not None
+    }
 
     span_ids: set[int] = set()
     children: dict[int | None, list[ProtoSpan]] = {}
@@ -170,6 +192,7 @@ def render_text_tree(result: TraceResult) -> str:
         lines.append(
             f"{prefix}{marker}{span.name} "
             f"({_format_duration(_duration_ms(span))})"
+            f"{_scope_label(scope_names.get(_span_id(span)))}"
             f"{_status_marker(span)}"
             f"{_interesting_attributes(span)}"
         )
@@ -183,6 +206,29 @@ def render_text_tree(result: TraceResult) -> str:
         walk(root, "", i == len(roots) - 1)
 
     return "\n".join(lines)
+
+
+def render_html(
+    result: TraceResult,
+    *,
+    download_filename: str = "ommx_trace.json",
+) -> str:
+    """Render ``result`` as notebook HTML with a Chrome Trace download link."""
+    tree = html.escape(render_text_tree(result))
+    payload = chrome_trace_json(result)
+    b64 = base64.b64encode(payload.encode("utf-8")).decode("ascii")
+    data_url = f"data:application/json;base64,{b64}"
+    size_kb = len(payload) / 1024
+    # ``quote=True`` escapes both ``"`` and ``'`` for HTML attributes.
+    safe_filename = html.escape(download_filename, quote=True)
+    return (
+        '<div class="ommx-trace">'
+        f"<pre>{tree}</pre>"
+        f'<p><a href="{data_url}" download="{safe_filename}">'
+        f"Download Chrome Trace JSON ({size_kb:.1f} KB)"
+        "</a> — open in Perfetto, speedscope, or <code>chrome://tracing</code>.</p>"
+        "</div>"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -208,7 +254,7 @@ def to_chrome_trace(result: TraceResult) -> dict:
     OTel attributes so they show up in tool tooltips.
     """
     events: list[dict] = []
-    for span in result.spans:
+    for span, scope_name in _span_records(result):
         start_time = _start_time(span)
         end_time = _end_time(span)
         if start_time is None or end_time is None:
@@ -217,6 +263,8 @@ def to_chrome_trace(result: TraceResult) -> dict:
         dur_us = max((end_time - start_time) // 1_000, 1)
         attributes = _attributes_from_proto(span.attributes)
         args = {k: _attribute_to_json(v) for k, v in attributes.items()}
+        if scope_name is not None:
+            args["otel.scope.name"] = scope_name
         # All events are placed on a single logical thread for the MVP
         # renderer. ``tracing``-crate spans carry a ``thread.id``
         # attribute; surfacing it as ``tid`` would let Perfetto /
@@ -225,7 +273,7 @@ def to_chrome_trace(result: TraceResult) -> dict:
         events.append(
             {
                 "name": span.name,
-                "cat": "ommx",
+                "cat": scope_name or "ommx",
                 "ph": "X",
                 "ts": ts_us,
                 "dur": dur_us,

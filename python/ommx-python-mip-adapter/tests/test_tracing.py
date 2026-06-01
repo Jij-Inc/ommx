@@ -17,8 +17,9 @@ def test_solve_emits_convert_solve_decode_spans():
         OMMXPythonMIPAdapter.solve(instance)
 
     names = [span.name for span in result.spans]
-    assert "convert" in names
     assert "solve" in names
+    assert "convert" in names
+    assert "call" in names
     assert "decode" in names
 
 

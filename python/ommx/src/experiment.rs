@@ -941,8 +941,6 @@ impl PyRun {
         let _guard = crate::TRACING.attach_parent_context(py);
         self.ensure_store_trace_context_started()?;
         let adapter_name = adapter.name(py)?;
-        let span = tracing::info_span!("ommx.solver.solve", adapter = %adapter_name);
-        let _span_guard = span.enter();
         let adapter_options = dump_kwargs(py, kwargs)?;
         let solution = adapter.solve(py, instance, kwargs)?;
         let solve_id = self.as_open_mut()?.log_finished_solve_result(
@@ -1019,13 +1017,15 @@ impl PyRun {
 
 fn start_run_trace_capture(py: Python<'_>) -> Result<(Py<PyAny>, Option<Py<PyAny>>)> {
     let tracing = py.import("ommx.tracing")?;
-    let cm = tracing.getattr("capture_trace")?.call1(("ommx.run",))?;
+    let cm = tracing
+        .getattr("capture_trace")?
+        .call1(("Run", "ommx.experiment"))?;
     let result = cm.call_method0("__enter__")?;
     Ok((cm.unbind(), Some(result.unbind())))
 }
 
 fn start_run_span(py: Python<'_>) -> Result<(Py<PyAny>, Option<Py<PyAny>>)> {
-    Ok((start_python_span(py, "ommx.run")?, None))
+    Ok((start_python_span(py, "Run")?, None))
 }
 
 fn store_trace_result(

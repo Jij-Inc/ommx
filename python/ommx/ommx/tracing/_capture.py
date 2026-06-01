@@ -64,8 +64,13 @@ class capture_trace:  # noqa: N801 - context-manager factory, lowercase on purpo
     would bleed into the result.
     """
 
-    def __init__(self, name: str = _DEFAULT_ROOT_SPAN_NAME) -> None:
+    def __init__(
+        self,
+        name: str = _DEFAULT_ROOT_SPAN_NAME,
+        tracer_name: str = _TRACER_NAME,
+    ) -> None:
         self._name = name
+        self._tracer_name = tracer_name
         self._result = TraceResult()
         self._entered = False
         self._trace_id: Optional[int] = None
@@ -76,7 +81,7 @@ class capture_trace:  # noqa: N801 - context-manager factory, lowercase on purpo
         if self._entered:
             raise RuntimeError("capture_trace context has already been entered")
         self._collector = ensure_collector_installed()
-        tracer = trace.get_tracer(_TRACER_NAME)
+        tracer = trace.get_tracer(self._tracer_name)
         # ``context=Context()`` detaches from the ambient context so
         # the block's trace_id is always fresh — keeps the capture
         # window from pulling in unrelated sibling spans.

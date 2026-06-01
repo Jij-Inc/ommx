@@ -187,7 +187,7 @@ assert instance.constraints[c.constraint_id].name == "budget"
 - **`%%ommx_trace`** — Jupyterセル単位でスパンツリーとChrome Trace JSONダウンロードリンクを表示するセルマジック
 - **`capture_trace` / `@traced`** — 通常のPythonスクリプト／テスト／CIから同じ機能を使うためのコンテキストマネージャとデコレータ
 
-詳しい使い方、独自 `TracerProvider` の設定方法、トラブルシューティングは [トレースとプロファイリング](../user_guide/tracing.md) を参照してください。
+詳しい使い方、独自 `TracerProvider` の設定方法、トラブルシューティングは [トレースとプロファイリング](../user_guide/tracing.ipynb) を参照してください。
 
 ### 🆕 Solver / Sampler Adapter のトレーシング対応 ([#833](https://github.com/Jij-Inc/ommx/pull/833))
 

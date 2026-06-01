@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import base64
 import json
+import urllib.parse
 
 from opentelemetry.proto.trace.v1.trace_pb2 import Status as ProtoStatus
 
@@ -24,10 +26,14 @@ def _add_span(
     span_id: int,
     *,
     parent_id: int | None = None,
+    scope: str | None = None,
     start: int = 1_000_000_000,
     end: int | None = 1_001_000_000,
 ):
-    span = result.request.resource_spans.add().scope_spans.add().spans.add()
+    scope_spans = result.request.resource_spans.add().scope_spans.add()
+    if scope is not None:
+        scope_spans.scope.name = scope
+    span = scope_spans.spans.add()
     span.trace_id = (1).to_bytes(16, byteorder="big")
     span.span_id = _id(span_id)
     if parent_id is not None:
@@ -65,6 +71,62 @@ def test_render_text_tree_handles_empty():
     assert render_text_tree(TraceResult()) == "(no spans)"
 
 
+def test_trace_result_repr_matches_text_tree():
+    result = TraceResult()
+    _add_span(result, "outer", 1, start=1_000_000_000, end=1_010_000_000)
+    _add_span(result, "inner", 2, parent_id=1)
+
+    assert repr(result) == render_text_tree(result)
+
+
+def test_trace_result_repr_html_contains_download_link():
+    result = TraceResult()
+    _add_span(result, "outer", 1, start=1_000_000_000, end=1_010_000_000)
+    _add_span(result, "inner", 2, parent_id=1)
+
+    html = result._repr_html_()
+
+    assert "<pre>" in html
+    assert "outer" in html
+    assert "inner" in html
+    assert 'download="ommx_trace.json"' in html
+
+    marker = 'href="data:application/json;base64,'
+    start = html.index(marker) + len(marker)
+    end = html.index('"', start)
+    b64 = html[start:end]
+    decoded = base64.b64decode(urllib.parse.unquote(b64)).decode("utf-8")
+    parsed = json.loads(decoded)
+    assert {event["name"] for event in parsed["traceEvents"]} == {"outer", "inner"}
+
+
+def test_render_text_tree_hides_debug_source_attributes():
+    result = TraceResult()
+    span = _add_span(result, "work", 1, scope="ommx._rust")
+    target = span.attributes.add()
+    target.key = "target"
+    target.value.string_value = "ommx::instance::evaluate"
+    adapter = span.attributes.add()
+    adapter.key = "adapter"
+    adapter.value.string_value = "ommx_highs_adapter.adapter.OMMXHighsAdapter"
+
+    tree = render_text_tree(result)
+
+    assert "{scope=ommx._rust}" in tree
+    assert "target=" not in tree
+    assert "adapter='ommx_highs_adapter.adapter.OMMXHighsAdapter'" in tree
+
+
+def test_render_text_tree_displays_instrumentation_scope():
+    result = TraceResult()
+    _add_span(result, "solve", 1, scope="ommx.adapter.highs")
+
+    tree = render_text_tree(result)
+
+    assert "solve" in tree
+    assert "{scope=ommx.adapter.highs}" in tree
+
+
 def test_render_text_tree_marks_error_spans():
     """Spans with ``Status(ERROR)`` are flagged in the text tree."""
     result = TraceResult()
@@ -88,7 +150,7 @@ def test_render_text_tree_does_not_mark_successful_spans():
 
 def test_chrome_trace_json_is_valid_json_with_X_events():
     result = TraceResult()
-    work = _add_span(result, "work", 1)
+    work = _add_span(result, "work", 1, scope="ommx.adapter.highs")
     attribute = work.attributes.add()
     attribute.key = "batch_size"
     attribute.value.int_value = 42
@@ -102,7 +164,9 @@ def test_chrome_trace_json_is_valid_json_with_X_events():
         assert event["ph"] == "X"
         assert isinstance(event["ts"], int) and event["ts"] > 0
         assert isinstance(event["dur"], int) and event["dur"] >= 1
+        assert event["cat"] == "ommx.adapter.highs"
     assert events[0]["args"]["batch_size"] == 42
+    assert events[0]["args"]["otel.scope.name"] == "ommx.adapter.highs"
 
 
 def test_chrome_trace_json_skips_open_spans():
