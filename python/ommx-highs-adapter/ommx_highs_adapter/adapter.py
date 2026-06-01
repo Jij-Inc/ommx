@@ -184,7 +184,7 @@ class OMMXHighsAdapter(SolverAdapter):
         verbose : bool, default=False
             If True, enable HiGHS's console logging
         """
-        with _tracer.start_as_current_span("adapter.convert"):
+        with _tracer.start_as_current_span("convert"):
             super().__init__(ommx_instance)
             self.instance = ommx_instance
             self.model = highspy.Highs()
@@ -305,11 +305,14 @@ class OMMXHighsAdapter(SolverAdapter):
         #     ...
         # ommx.adapter.UnboundedDetected: Model was unbounded
         # ````
-        adapter = cls(ommx_instance, verbose=verbose)
-        model = adapter.solver_input
-        with _tracer.start_as_current_span("adapter.solve"):
-            model.run()
-        return adapter.decode(model)
+        with _tracer.start_as_current_span("solve") as span:
+            span.set_attribute("adapter", f"{cls.__module__}.{cls.__qualname__}")
+            span.set_attribute("solver", "highs")
+            adapter = cls(ommx_instance, verbose=verbose)
+            model = adapter.solver_input
+            with _tracer.start_as_current_span("call"):
+                model.run()
+            return adapter.decode(model)
 
     @property
     def solver_input(self) -> highspy.Highs:
@@ -389,7 +392,7 @@ class OMMXHighsAdapter(SolverAdapter):
         1.0
         """
         # TODO check if model is optimized
-        with _tracer.start_as_current_span("adapter.decode"):
+        with _tracer.start_as_current_span("decode"):
             state = self.decode_to_state(data)
             solution = self.instance.evaluate(state)
 

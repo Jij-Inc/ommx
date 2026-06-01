@@ -17,9 +17,10 @@ def test_solve_emits_convert_solve_decode_spans():
         OMMXHighsAdapter.solve(instance)
 
     names = [span.name for span in result.spans]
-    assert "adapter.convert" in names
-    assert "adapter.solve" in names
-    assert "adapter.decode" in names
+    assert "solve" in names
+    assert "convert" in names
+    assert "call" in names
+    assert "decode" in names
 
 
 def test_manual_flow_emits_convert_and_decode_spans():
@@ -38,5 +39,5 @@ def test_manual_flow_emits_convert_and_decode_spans():
         adapter.decode(model)
 
     names = [span.name for span in result.spans]
-    assert "adapter.convert" in names
-    assert "adapter.decode" in names
+    assert "convert" in names
+    assert "decode" in names

@@ -121,24 +121,27 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         penalty_weights: dict[int, float] = {},
         inequality_integer_slack_max_range: int = 32,
     ) -> SampleSet:
-        sampler = cls(
-            ommx_instance,
-            beta_min=beta_min,
-            beta_max=beta_max,
-            num_sweeps=num_sweeps,
-            num_reads=num_reads,
-            schedule=schedule,
-            initial_state=initial_state,
-            updater=updater,
-            sparse=sparse,
-            reinitialize_state=reinitialize_state,
-            seed=seed,
-            uniform_penalty_weight=uniform_penalty_weight,
-            penalty_weights=penalty_weights,
-            inequality_integer_slack_max_range=inequality_integer_slack_max_range,
-        )
-        response = sampler._sample()
-        return sampler.decode_to_sampleset(response)
+        with _tracer.start_as_current_span("sample") as span:
+            span.set_attribute("adapter", f"{cls.__module__}.{cls.__qualname__}")
+            span.set_attribute("solver", "openjij")
+            sampler = cls(
+                ommx_instance,
+                beta_min=beta_min,
+                beta_max=beta_max,
+                num_sweeps=num_sweeps,
+                num_reads=num_reads,
+                schedule=schedule,
+                initial_state=initial_state,
+                updater=updater,
+                sparse=sparse,
+                reinitialize_state=reinitialize_state,
+                seed=seed,
+                uniform_penalty_weight=uniform_penalty_weight,
+                penalty_weights=penalty_weights,
+                inequality_integer_slack_max_range=inequality_integer_slack_max_range,
+            )
+            response = sampler._sample()
+            return sampler.decode_to_sampleset(response)
 
     @classmethod
     def solve(
@@ -178,7 +181,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         return sample_set.best_feasible
 
     def decode_to_sampleset(self, data: oj.Response) -> SampleSet:
-        with _tracer.start_as_current_span("adapter.decode"):
+        with _tracer.start_as_current_span("decode"):
             samples = decode_to_samples(data)
             return self.ommx_instance.evaluate_samples(samples)
 
@@ -209,7 +212,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     def _sample(self) -> oj.Response:
         sampler = oj.SASampler()
         input = self.sampler_input
-        with _tracer.start_as_current_span("adapter.sample"):
+        with _tracer.start_as_current_span("call"):
             if self._is_hubo:
                 return sampler.sample_hubo(
                     input,  # type: ignore
@@ -254,7 +257,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         if self._instance_prepared:
             return
 
-        with _tracer.start_as_current_span("adapter.convert"):
+        with _tracer.start_as_current_span("convert"):
             is_converted = self.ommx_instance.as_minimization_problem()
 
             continuous_variables = [

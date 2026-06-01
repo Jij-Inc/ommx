@@ -2,6 +2,7 @@ from typing import Any, ClassVar, cast
 
 import pandas as pd
 import pytest
+from opentelemetry import trace as otel_trace
 
 from ommx.adapter import SolverAdapter
 from ommx.experiment import Experiment
@@ -173,15 +174,20 @@ def test_store_trace_records_run_scope_in_artifact():
 
     trace = _require_trace(loaded.runs[0].trace)
     names = _trace_span_names(trace)
-    assert "experiment.run" in names
-    assert "experiment.run" in render_text_tree(trace)
+    assert "Run" in names
+    tree = render_text_tree(trace)
+    assert "Run" in tree
+    assert "{scope=ommx.experiment}" in tree
 
 
 def test_store_trace_records_log_solve_scope_in_artifact():
     class DummyAdapter(SolverAdapter):
         @classmethod
         def solve(cls, ommx_instance: Instance, **kwargs: object) -> Solution:
-            return ommx_instance.evaluate({})
+            tracer = otel_trace.get_tracer("dummy_adapter")
+            with tracer.start_as_current_span("solve") as span:
+                span.set_attribute("adapter", f"{cls.__module__}.{cls.__qualname__}")
+                return ommx_instance.evaluate({})
 
         @property
         def solver_input(self) -> Any:
@@ -202,13 +208,14 @@ def test_store_trace_records_log_solve_scope_in_artifact():
             run.log_solve(DummyAdapter, instance)
 
     trace = _require_trace(experiment.runs[0].trace)
-    run_span = _single_trace_span(trace, "experiment.run")
-    solve_span = _single_trace_span(trace, "solver.solve")
+    run_span = _single_trace_span(trace, "Run")
+    solve_span = _single_trace_span(trace, "solve")
     assert solve_span.parent_span_id == run_span.span_id
     assert _span_string_attributes(solve_span)["adapter"].endswith("DummyAdapter")
 
     tree = render_text_tree(trace)
-    assert "solver.solve" in tree
+    assert "solve" in tree
+    assert "{scope=dummy_adapter}" in tree
     assert "adapter='" in tree
 
 
@@ -229,7 +236,7 @@ def test_fork_store_trace_carries_parent_run_trace():
 
     traces = [_require_trace(run.trace) for run in child.runs]
     assert traces[0].otlp_protobuf() == parent_trace.otlp_protobuf()
-    assert sum(_trace_span_count(trace, "experiment.run") for trace in traces) == 2
+    assert sum(_trace_span_count(trace, "Run") for trace in traces) == 2
 
 
 def test_fork_store_trace_can_add_trace_to_new_run_only():
@@ -252,7 +259,7 @@ def test_fork_store_trace_can_add_trace_to_new_run_only():
     assert traces[0] is None
     trace = traces[1]
     assert trace is not None
-    assert _trace_span_count(trace, "experiment.run") == 1
+    assert _trace_span_count(trace, "Run") == 1
 
 
 def test_default_experiment_context_does_not_store_trace():

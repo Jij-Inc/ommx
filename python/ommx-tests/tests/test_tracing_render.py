@@ -24,10 +24,14 @@ def _add_span(
     span_id: int,
     *,
     parent_id: int | None = None,
+    scope: str | None = None,
     start: int = 1_000_000_000,
     end: int | None = 1_001_000_000,
 ):
-    span = result.request.resource_spans.add().scope_spans.add().spans.add()
+    scope_spans = result.request.resource_spans.add().scope_spans.add()
+    if scope is not None:
+        scope_spans.scope.name = scope
+    span = scope_spans.spans.add()
     span.trace_id = (1).to_bytes(16, byteorder="big")
     span.span_id = _id(span_id)
     if parent_id is not None:
@@ -75,7 +79,7 @@ def test_trace_result_repr_matches_text_tree():
 
 def test_render_text_tree_hides_debug_source_attributes():
     result = TraceResult()
-    span = _add_span(result, "work", 1)
+    span = _add_span(result, "work", 1, scope="ommx._rust")
     target = span.attributes.add()
     target.key = "target"
     target.value.string_value = "ommx::instance::evaluate"
@@ -85,8 +89,19 @@ def test_render_text_tree_hides_debug_source_attributes():
 
     tree = render_text_tree(result)
 
+    assert "{scope=ommx._rust}" in tree
     assert "target=" not in tree
     assert "adapter='ommx_highs_adapter.adapter.OMMXHighsAdapter'" in tree
+
+
+def test_render_text_tree_displays_instrumentation_scope():
+    result = TraceResult()
+    _add_span(result, "solve", 1, scope="ommx.adapter.highs")
+
+    tree = render_text_tree(result)
+
+    assert "solve" in tree
+    assert "{scope=ommx.adapter.highs}" in tree
 
 
 def test_render_text_tree_marks_error_spans():
@@ -112,7 +127,7 @@ def test_render_text_tree_does_not_mark_successful_spans():
 
 def test_chrome_trace_json_is_valid_json_with_X_events():
     result = TraceResult()
-    work = _add_span(result, "work", 1)
+    work = _add_span(result, "work", 1, scope="ommx.adapter.highs")
     attribute = work.attributes.add()
     attribute.key = "batch_size"
     attribute.value.int_value = 42
@@ -126,7 +141,9 @@ def test_chrome_trace_json_is_valid_json_with_X_events():
         assert event["ph"] == "X"
         assert isinstance(event["ts"], int) and event["ts"] > 0
         assert isinstance(event["dur"], int) and event["dur"] >= 1
+        assert event["cat"] == "ommx.adapter.highs"
     assert events[0]["args"]["batch_size"] == 42
+    assert events[0]["args"]["otel.scope.name"] == "ommx.adapter.highs"
 
 
 def test_chrome_trace_json_skips_open_spans():
