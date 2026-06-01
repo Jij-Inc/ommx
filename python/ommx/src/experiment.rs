@@ -542,19 +542,6 @@ fn close_python_context_manager(
     Ok(())
 }
 
-fn close_python_context_manager_after_result<T>(
-    py: Python<'_>,
-    cm: Py<PyAny>,
-    result: Result<T>,
-) -> Result<T> {
-    let close_result = close_python_context_manager(py, Some(&cm), None, None, None);
-    match (result, close_result) {
-        (Ok(value), Ok(())) => Ok(value),
-        (Err(error), _) => Err(error),
-        (Ok(_), Err(error)) => Err(error),
-    }
-}
-
 const ANN_ATTACHMENT_NAME: &str = "org.ommx.attachment.name";
 
 fn attachment_name(descriptor: &Descriptor) -> Option<&str> {
@@ -959,7 +946,7 @@ impl PyRun {
         let solve_id = self.as_open_mut()?.log_finished_solve_result(
             &instance.inner,
             &solution.inner,
-            adapter_name.clone(),
+            adapter_name,
             adapter_options,
         )?;
         tracing::info!(solve_id, "ommx.solve.recorded");
