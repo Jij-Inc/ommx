@@ -6,6 +6,7 @@ use pyo3::{
 };
 use std::{
     collections::{btree_map::Entry, BTreeMap},
+    mem,
     path::PathBuf,
 };
 
@@ -362,12 +363,10 @@ impl PyExperiment {
     /// ```
     pub fn run(&self) -> Result<PyRun> {
         Ok(PyRun {
-            run: Some(self.inner.run()?),
+            state: PyRunState::Open {
+                run: self.inner.run()?,
+            },
             store_trace: self.store_trace,
-            context_entered: false,
-            context_active: false,
-            span_context_manager: None,
-            trace_result: None,
         })
     }
 
@@ -703,12 +702,22 @@ fn decode_sample_set_attachment(
 /// to the parent experiment. On exception the run is abandoned. A run
 /// becomes immutable once it is finished.
 pub struct PyRun {
-    run: Option<ommx::experiment::RunDyn>,
+    state: PyRunState,
     store_trace: bool,
-    context_entered: bool,
-    context_active: bool,
-    span_context_manager: Option<Py<PyAny>>,
-    trace_result: Option<Py<PyAny>>,
+}
+
+enum PyRunState {
+    /// Created by `Experiment.run()` and not yet entered as a context manager.
+    Open { run: ommx::experiment::RunDyn },
+    /// Inside `with run:`. The Python context manager must be closed before
+    /// the Rust run can be finished or abandoned.
+    Entered {
+        run: ommx::experiment::RunDyn,
+        span_context_manager: Py<PyAny>,
+        trace_result: Option<Py<PyAny>>,
+    },
+    /// Finished or abandoned; no further mutation is allowed.
+    Closed,
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
@@ -718,28 +727,47 @@ impl PyRun {
         {
             let py = slf.py();
             let mut this = slf.borrow_mut();
-            if this.context_entered {
-                return Err(anyhow::anyhow!("Run context has already been entered").into());
-            }
-            let run_id = this.as_open()?.run_id()?;
-            if this.store_trace {
-                let tracing = py.import("ommx.tracing")?;
-                let cm = tracing.getattr("capture_trace")?.call1(("ommx.run",))?;
-                let result = cm.call_method0("__enter__")?;
-                this.trace_result = Some(result.unbind());
-                this.span_context_manager = Some(cm.unbind());
-                if let Err(error) = set_current_span_run_id(py, run_id) {
-                    this.close_run_context_after_failed_enter(py, error)?;
+            let run = match mem::replace(&mut this.state, PyRunState::Closed) {
+                PyRunState::Open { run } => run,
+                state @ PyRunState::Entered { .. } => {
+                    this.state = state;
+                    return Err(anyhow::anyhow!("Run context has already been entered").into());
                 }
+                PyRunState::Closed => {
+                    return Err(anyhow::anyhow!("Run has already been finished").into());
+                }
+            };
+            let run_id = match run.run_id() {
+                Ok(run_id) => run_id,
+                Err(error) => {
+                    this.state = PyRunState::Open { run };
+                    return Err(error.into());
+                }
+            };
+            let enter_result = if this.store_trace {
+                start_run_trace_capture(py)
             } else {
-                let cm = start_python_span(py, "ommx.run")?;
-                this.span_context_manager = Some(cm);
-                if let Err(error) = set_current_span_run_id(py, run_id) {
-                    this.close_run_context_after_failed_enter(py, error)?;
+                start_run_span(py)
+            };
+            let (span_context_manager, trace_result) = match enter_result {
+                Ok(context) => context,
+                Err(error) => {
+                    this.state = PyRunState::Open { run };
+                    return Err(error.into());
                 }
+            };
+            if let Err(error) = set_current_span_run_id(py, run_id) {
+                let close_result =
+                    close_run_context_after_failed_enter(py, span_context_manager, &error);
+                this.state = PyRunState::Open { run };
+                close_result?;
+                return Err(error.into());
             }
-            this.context_entered = true;
-            this.context_active = true;
+            this.state = PyRunState::Entered {
+                run,
+                span_context_manager,
+                trace_result,
+            };
         }
         Ok(slf.unbind())
     }
@@ -752,34 +780,43 @@ impl PyRun {
         exc_value: Option<&Bound<'_, PyAny>>,
         traceback: Option<&Bound<'_, PyAny>>,
     ) -> Result<bool> {
-        let close_result = close_python_context_manager(
-            py,
-            self.span_context_manager.take(),
-            exc_type,
-            exc_value,
-            traceback,
-        );
-        self.context_active = false;
-
-        if self.run.is_none() {
-            self.trace_result = None;
-            close_result?;
-            return Ok(false);
-        }
-
-        if exc_type.is_some() {
-            if let Some(run) = self.run.take() {
-                run.abandon();
+        match mem::replace(&mut self.state, PyRunState::Closed) {
+            PyRunState::Closed => Ok(false),
+            state @ PyRunState::Open { .. } => {
+                self.state = state;
+                anyhow::bail!("Run context has not been entered")
             }
-            self.trace_result = None;
-            close_result?;
-            return Ok(false);
+            PyRunState::Entered {
+                mut run,
+                span_context_manager,
+                trace_result,
+            } => {
+                let close_result = close_python_context_manager(
+                    py,
+                    Some(span_context_manager),
+                    exc_type,
+                    exc_value,
+                    traceback,
+                );
+                if exc_type.is_some() {
+                    run.abandon();
+                    close_result?;
+                    return Ok(false);
+                }
+                if let Err(error) = close_result {
+                    self.state = PyRunState::Open { run };
+                    return Err(error);
+                }
+                if self.store_trace {
+                    if let Err(error) = store_trace_result(py, &mut run, trace_result) {
+                        self.state = PyRunState::Open { run };
+                        return Err(error);
+                    }
+                }
+                run.finish()?;
+                Ok(false)
+            }
         }
-
-        close_result?;
-        self.store_trace_result(py)?;
-        self.finish_inner()?;
-        Ok(false)
     }
 
     #[getter]
@@ -931,71 +968,86 @@ impl PyRun {
     }
 
     pub fn __repr__(&self) -> Result<String> {
-        Ok(match &self.run {
-            Some(run) => format!("Run(run_id={})", run.run_id()?),
-            None => "Run(finished=True)".to_string(),
+        Ok(match &self.state {
+            PyRunState::Open { run } | PyRunState::Entered { run, .. } => {
+                format!("Run(run_id={})", run.run_id()?)
+            }
+            PyRunState::Closed => "Run(finished=True)".to_string(),
         })
     }
 }
 
 impl PyRun {
     fn ensure_store_trace_context_started(&self) -> Result<()> {
-        if self.store_trace && self.run.is_some() && !self.context_active {
+        if self.store_trace && matches!(self.state, PyRunState::Open { .. }) {
             anyhow::bail!("store_trace=True requires using Run as a context manager");
         }
         Ok(())
     }
 
-    fn store_trace_result(&mut self, py: Python<'_>) -> Result<()> {
-        if !self.store_trace {
-            return Ok(());
-        }
-        let result = self
-            .trace_result
-            .take()
-            .context("store_trace=True lost its TraceResult before Run exit")?;
-        let payload: Vec<u8> = result.bind(py).call_method0("otlp_protobuf")?.extract()?;
-        self.as_open_mut()?
-            .store_trace(ommx::experiment::Trace::from_bytes(payload))?;
-        Ok(())
-    }
-
-    fn close_run_context_after_failed_enter(
-        &mut self,
-        py: Python<'_>,
-        original_error: anyhow::Error,
-    ) -> Result<()> {
-        let original_message = original_error.to_string();
-        self.trace_result = None;
-        let close_result =
-            close_python_context_manager(py, self.span_context_manager.take(), None, None, None);
-        close_result.with_context(|| {
-            format!(
-                "Run context setup failed with `{original_message}`, then closing the partial context failed"
-            )
-        })?;
-        Err(original_error)
-    }
-
     fn finish_inner(&mut self) -> Result<()> {
-        let run = self
-            .run
-            .take()
-            .ok_or_else(|| anyhow::anyhow!("Run has already been finished"))?;
-        run.finish()
+        let state = mem::replace(&mut self.state, PyRunState::Closed);
+        match state {
+            PyRunState::Open { run } => run.finish(),
+            state @ PyRunState::Entered { .. } => {
+                self.state = state;
+                anyhow::bail!(
+                    "Run context is active; finish() is performed automatically on normal Run context-manager exit"
+                )
+            }
+            PyRunState::Closed => anyhow::bail!("Run has already been finished"),
+        }
     }
 
     fn as_open(&self) -> Result<&ommx::experiment::RunDyn> {
-        self.run
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Run has already been finished"))
+        match &self.state {
+            PyRunState::Open { run } | PyRunState::Entered { run, .. } => Ok(run),
+            PyRunState::Closed => anyhow::bail!("Run has already been finished"),
+        }
     }
 
     fn as_open_mut(&mut self) -> Result<&mut ommx::experiment::RunDyn> {
-        self.run
-            .as_mut()
-            .ok_or_else(|| anyhow::anyhow!("Run has already been finished"))
+        match &mut self.state {
+            PyRunState::Open { run } | PyRunState::Entered { run, .. } => Ok(run),
+            PyRunState::Closed => anyhow::bail!("Run has already been finished"),
+        }
     }
+}
+
+fn start_run_trace_capture(py: Python<'_>) -> Result<(Py<PyAny>, Option<Py<PyAny>>)> {
+    let tracing = py.import("ommx.tracing")?;
+    let cm = tracing.getattr("capture_trace")?.call1(("ommx.run",))?;
+    let result = cm.call_method0("__enter__")?;
+    Ok((cm.unbind(), Some(result.unbind())))
+}
+
+fn start_run_span(py: Python<'_>) -> Result<(Py<PyAny>, Option<Py<PyAny>>)> {
+    Ok((start_python_span(py, "ommx.run")?, None))
+}
+
+fn store_trace_result(
+    py: Python<'_>,
+    run: &mut ommx::experiment::RunDyn,
+    trace_result: Option<Py<PyAny>>,
+) -> Result<()> {
+    let result = trace_result.context("store_trace=True lost its TraceResult before Run exit")?;
+    let payload: Vec<u8> = result.bind(py).call_method0("otlp_protobuf")?.extract()?;
+    run.store_trace(ommx::experiment::Trace::from_bytes(payload))?;
+    Ok(())
+}
+
+fn close_run_context_after_failed_enter(
+    py: Python<'_>,
+    span_context_manager: Py<PyAny>,
+    original_error: &anyhow::Error,
+) -> Result<()> {
+    let original_message = original_error.to_string();
+    close_python_context_manager(py, Some(span_context_manager), None, None, None)
+        .with_context(|| {
+            format!(
+                "Run context setup failed with `{original_message}`, then closing the partial context failed"
+            )
+        })
 }
 
 fn parse_name(image_name: Option<&str>) -> Result<ommx::experiment::Name> {

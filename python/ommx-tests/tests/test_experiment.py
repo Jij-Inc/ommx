@@ -266,6 +266,17 @@ def test_store_trace_requires_run_context_manager_before_run_mutation():
         run.finish()
 
 
+def test_run_finish_rejects_active_context_manager():
+    experiment = Experiment.with_temp_local_registry()
+
+    with pytest.raises(RuntimeError, match="Run context is active"):
+        with experiment.run() as run:
+            run.finish()
+
+    artifact = experiment.commit()
+    assert Experiment.from_artifact(artifact).runs == []
+
+
 def test_rename_after_context_commit_updates_artifact_name():
     with Experiment.with_temp_local_registry() as experiment:
         experiment.log_json("dataset", {"name": "miplib2017"})
