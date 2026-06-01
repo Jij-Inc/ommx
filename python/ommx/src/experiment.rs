@@ -528,6 +528,13 @@ fn set_current_span_run_id(py: Python<'_>, run_id: u64) -> Result<()> {
     Ok(())
 }
 
+fn set_current_span_string_attribute(py: Python<'_>, key: &str, value: &str) -> Result<()> {
+    let trace = py.import("opentelemetry.trace")?;
+    let span = trace.call_method0("get_current_span")?;
+    span.call_method1("set_attribute", (key, value))?;
+    Ok(())
+}
+
 fn close_python_context_manager(
     py: Python<'_>,
     cm: Option<&Py<PyAny>>,
@@ -540,6 +547,19 @@ fn close_python_context_manager(
             .call_method1("__exit__", (exc_type, exc_value, traceback))?;
     }
     Ok(())
+}
+
+fn close_python_context_manager_after_result<T>(
+    py: Python<'_>,
+    cm: Py<PyAny>,
+    result: Result<T>,
+) -> Result<T> {
+    let close_result = close_python_context_manager(py, Some(&cm), None, None, None);
+    match (result, close_result) {
+        (Ok(value), Ok(())) => Ok(value),
+        (Err(error), _) => Err(error),
+        (Ok(_), Err(error)) => Err(error),
+    }
 }
 
 const ANN_ATTACHMENT_NAME: &str = "org.ommx.attachment.name";
@@ -941,18 +961,21 @@ impl PyRun {
         let _guard = crate::TRACING.attach_parent_context(py);
         self.ensure_store_trace_context_started()?;
         let adapter_name = adapter.name(py)?;
-        let span = tracing::info_span!("ommx.solver.solve", adapter = %adapter_name);
-        let _span_guard = span.enter();
-        let adapter_options = dump_kwargs(py, kwargs)?;
-        let solution = adapter.solve(py, instance, kwargs)?;
-        let solve_id = self.as_open_mut()?.log_finished_solve_result(
-            &instance.inner,
-            &solution.inner,
-            adapter_name,
-            adapter_options,
-        )?;
-        tracing::info!(solve_id, "ommx.solve.recorded");
-        Ok(solution)
+        let span_context_manager = start_python_span(py, "solver.solve")?;
+        set_current_span_string_attribute(py, "adapter", &adapter_name)?;
+        let solve_result = (|| {
+            let adapter_options = dump_kwargs(py, kwargs)?;
+            let solution = adapter.solve(py, instance, kwargs)?;
+            let solve_id = self.as_open_mut()?.log_finished_solve_result(
+                &instance.inner,
+                &solution.inner,
+                adapter_name.clone(),
+                adapter_options,
+            )?;
+            tracing::info!(solve_id, "ommx.solve.recorded");
+            Ok(solution)
+        })();
+        close_python_context_manager_after_result(py, span_context_manager, solve_result)
     }
 
     /// Finish this run and append it to the parent Experiment.
@@ -1019,13 +1042,15 @@ impl PyRun {
 
 fn start_run_trace_capture(py: Python<'_>) -> Result<(Py<PyAny>, Option<Py<PyAny>>)> {
     let tracing = py.import("ommx.tracing")?;
-    let cm = tracing.getattr("capture_trace")?.call1(("ommx.run",))?;
+    let cm = tracing
+        .getattr("capture_trace")?
+        .call1(("experiment.run",))?;
     let result = cm.call_method0("__enter__")?;
     Ok((cm.unbind(), Some(result.unbind())))
 }
 
 fn start_run_span(py: Python<'_>) -> Result<(Py<PyAny>, Option<Py<PyAny>>)> {
-    Ok((start_python_span(py, "ommx.run")?, None))
+    Ok((start_python_span(py, "experiment.run")?, None))
 }
 
 fn store_trace_result(

@@ -17,9 +17,9 @@ def test_solve_emits_convert_solve_decode_spans():
         OMMXPySCIPOptAdapter.solve(instance)
 
     names = [span.name for span in result.spans]
-    assert "convert" in names
-    assert "solve" in names
-    assert "decode" in names
+    assert "adapter.convert" in names
+    assert "adapter.solve" in names
+    assert "adapter.decode" in names
 
 
 def test_manual_flow_emits_convert_and_decode_spans():
@@ -38,5 +38,5 @@ def test_manual_flow_emits_convert_and_decode_spans():
         adapter.decode(model)
 
     names = [span.name for span in result.spans]
-    assert "convert" in names
-    assert "decode" in names
+    assert "adapter.convert" in names
+    assert "adapter.decode" in names

@@ -35,7 +35,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         :param solver: Passes a specific solver to the Python-MIP model.
         :param verbose: If True, enable Python-MIP's verbose mode
         """
-        with _tracer.start_as_current_span("convert"):
+        with _tracer.start_as_current_span("adapter.convert"):
             super().__init__(ommx_instance)
             if ommx_instance.sense == Instance.MAXIMIZE:
                 sense = mip.MAXIMIZE
@@ -183,7 +183,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         """
         adapter = cls(ommx_instance, relax=relax, verbose=verbose)
         model = adapter.solver_input
-        with _tracer.start_as_current_span("solve"):
+        with _tracer.start_as_current_span("adapter.solve"):
             model.optimize(relax=relax)
         return adapter.decode(model)
 
@@ -241,7 +241,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             42.0
 
         """
-        with _tracer.start_as_current_span("decode"):
+        with _tracer.start_as_current_span("adapter.decode"):
             state = self.decode_to_state(data)
             solution = self.instance.evaluate(state)
 

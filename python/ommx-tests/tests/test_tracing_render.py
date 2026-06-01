@@ -73,6 +73,22 @@ def test_trace_result_repr_matches_text_tree():
     assert repr(result) == render_text_tree(result)
 
 
+def test_render_text_tree_hides_debug_source_attributes():
+    result = TraceResult()
+    span = _add_span(result, "work", 1)
+    target = span.attributes.add()
+    target.key = "target"
+    target.value.string_value = "ommx::instance::evaluate"
+    adapter = span.attributes.add()
+    adapter.key = "adapter"
+    adapter.value.string_value = "ommx_highs_adapter.adapter.OMMXHighsAdapter"
+
+    tree = render_text_tree(result)
+
+    assert "target=" not in tree
+    assert "adapter='ommx_highs_adapter.adapter.OMMXHighsAdapter'" in tree
+
+
 def test_render_text_tree_marks_error_spans():
     """Spans with ``Status(ERROR)`` are flagged in the text tree."""
     result = TraceResult()

@@ -121,7 +121,7 @@ def _interesting_attributes(span: ProtoSpan) -> str:
     attributes = _attributes_from_proto(span.attributes)
     if not attributes:
         return ""
-    skip = {"busy_ns", "idle_ns", "thread.id"}
+    skip = {"busy_ns", "idle_ns", "target", "thread.id"}
     pairs = [
         f"{k}={v!r}"
         for k, v in attributes.items()

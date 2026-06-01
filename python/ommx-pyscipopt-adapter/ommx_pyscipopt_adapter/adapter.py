@@ -46,7 +46,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         :param ommx_instance: The ommx.v1.Instance to solve.
         :param initial_state: Optional initial solution state.
         """
-        with _tracer.start_as_current_span("convert"):
+        with _tracer.start_as_current_span("adapter.convert"):
             super().__init__(ommx_instance)
             self.instance = ommx_instance
             self.model = pyscipopt.Model()
@@ -156,7 +156,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         """
         adapter = cls(ommx_instance, initial_state=initial_state)
         model = adapter.solver_input
-        with _tracer.start_as_current_span("solve"):
+        with _tracer.start_as_current_span("adapter.solve"):
             model.optimize()
         return adapter.decode(model)
 
@@ -208,7 +208,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
         # TODO: Add the feature to store dual variables in `solution`.
 
-        with _tracer.start_as_current_span("decode"):
+        with _tracer.start_as_current_span("adapter.decode"):
             state = self.decode_to_state(data)
             solution = self.instance.evaluate(state)
 
