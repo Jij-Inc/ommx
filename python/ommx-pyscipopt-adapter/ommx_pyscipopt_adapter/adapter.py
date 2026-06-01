@@ -156,7 +156,6 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         """
         with _tracer.start_as_current_span("solve") as span:
             span.set_attribute("adapter", f"{cls.__module__}.{cls.__qualname__}")
-            span.set_attribute("solver", "scip")
             adapter = cls(ommx_instance, initial_state=initial_state)
             model = adapter.solver_input
             with _tracer.start_as_current_span("call"):

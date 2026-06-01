@@ -123,7 +123,6 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     ) -> SampleSet:
         with _tracer.start_as_current_span("sample") as span:
             span.set_attribute("adapter", f"{cls.__module__}.{cls.__qualname__}")
-            span.set_attribute("solver", "openjij")
             sampler = cls(
                 ommx_instance,
                 beta_min=beta_min,

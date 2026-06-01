@@ -183,7 +183,6 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         """
         with _tracer.start_as_current_span("solve") as span:
             span.set_attribute("adapter", f"{cls.__module__}.{cls.__qualname__}")
-            span.set_attribute("solver", "python-mip")
             adapter = cls(ommx_instance, relax=relax, verbose=verbose)
             model = adapter.solver_input
             with _tracer.start_as_current_span("call"):
