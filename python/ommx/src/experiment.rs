@@ -515,7 +515,7 @@ impl PyExperiment {
 
 impl PyExperiment {
     fn enter_experiment_context(&mut self, py: Python<'_>) -> Result<()> {
-        if self.store_trace && self.context_entered {
+        if self.context_entered {
             anyhow::bail!("Experiment context has already been entered");
         }
         self.context_entered = true;

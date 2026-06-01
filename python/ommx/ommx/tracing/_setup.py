@@ -58,8 +58,8 @@ def ensure_collector_installed() -> _TraceSpanCollector:
                     "OpenTelemetry refuses to replace the global "
                     "TracerProvider once set. Install "
                     "``opentelemetry.sdk.trace.TracerProvider`` yourself "
-                    "before loading this extension, or clear the existing "
-                    "provider."
+                    "before loading this extension, or restart the process "
+                    "or notebook kernel."
                 )
 
         collector = _TraceSpanCollector()

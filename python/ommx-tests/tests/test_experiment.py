@@ -212,6 +212,14 @@ def test_default_experiment_context_does_not_store_trace():
     assert Experiment.from_artifact(experiment.artifact).runs[0].trace is None
 
 
+def test_experiment_context_rejects_reenter_without_store_trace():
+    with Experiment.with_temp_local_registry() as experiment:
+        with pytest.raises(
+            RuntimeError, match="Experiment context has already been entered"
+        ):
+            experiment.__enter__()
+
+
 def test_store_trace_requires_run_context_manager_before_run_mutation():
     experiment = Experiment.with_temp_local_registry(store_trace=True)
     experiment.log_json("dataset", {"name": "miplib2017"})
