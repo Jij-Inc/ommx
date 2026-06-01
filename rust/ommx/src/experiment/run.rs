@@ -85,7 +85,7 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
     /// experiment. Consumes the handle so no further run-scoped data
     /// can be added.
     pub fn finish(self) -> Result<()> {
-        self.close(RunStatus::Finished, None)
+        self.close(RunStatus::Finished)
     }
 
     /// Close the run as failed and append the partial run state to the
@@ -93,11 +93,11 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
     ///
     /// This preserves run-scoped payloads and completed solves that were
     /// logged before the failure.
-    pub fn finish_failed(self, reason: impl Into<String>) -> Result<()> {
-        self.close(RunStatus::Failed, Some(reason.into()))
+    pub fn finish_failed(self) -> Result<()> {
+        self.close(RunStatus::Failed)
     }
 
-    fn close(self, status: RunStatus, failure_reason: Option<String>) -> Result<()> {
+    fn close(self, status: RunStatus) -> Result<()> {
         let Run {
             experiment,
             run_id,
@@ -110,7 +110,6 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
         let run = RunEntry {
             run_id,
             status,
-            failure_reason,
             attachments,
             trace,
             solves,

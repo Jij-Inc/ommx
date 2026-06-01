@@ -125,10 +125,11 @@ impl PyExperiment {
         })
     }
 
-    /// Load a failed recovery Experiment Artifact by image reference.
+    /// Load a failed recovery Artifact and resume from it.
     ///
-    /// The loaded object is a read-only Experiment view that can be forked to
-    /// resume from the partial state recorded in the recovery artifact.
+    /// This returns a new unsealed Experiment whose parent is the failed
+    /// recovery Artifact and whose image name is the original requested
+    /// Experiment image name recorded in the recovery metadata.
     #[staticmethod]
     pub fn load_recovery(py: Python<'_>, image_name: &str) -> Result<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
@@ -166,11 +167,12 @@ impl PyExperiment {
         })
     }
 
-    /// Interpret an already-open failed recovery Artifact as an Experiment.
+    /// Resume from an already-open failed recovery Artifact.
     ///
-    /// This explicit recovery entry point accepts Experiment configs with
-    /// `status=failed`. The returned view is immutable but can be forked to
-    /// continue with new runs.
+    /// This accepts Experiment configs with `status=failed` and returns a new
+    /// unsealed Experiment whose parent is the recovery Artifact and whose
+    /// image name is the original requested Experiment image name recorded in
+    /// the recovery metadata.
     #[staticmethod]
     pub fn from_recovery_artifact(artifact: &PyArtifact) -> Result<Self> {
         Ok(Self {
@@ -893,7 +895,6 @@ impl PyRun {
                     return Err(error);
                 }
                 if exc_type.is_some() {
-                    let reason = python_exception_reason(exc_type, exc_value);
                     if self.store_trace {
                         if let Err(error) = store_trace_result(py, &mut run, trace_result) {
                             tracing::warn!(
@@ -902,7 +903,7 @@ impl PyRun {
                             );
                         }
                     }
-                    if let Err(error) = run.finish_failed(reason) {
+                    if let Err(error) = run.finish_failed() {
                         tracing::warn!(
                             error = %error,
                             "Failed to close Run as failed during exception exit"
@@ -1308,12 +1309,6 @@ impl PySealedRun {
             ommx::experiment::RunStatus::Finished => "finished",
             ommx::experiment::RunStatus::Failed => "failed",
         }
-    }
-
-    #[getter]
-    /// Exception summary captured when this run failed, if any.
-    pub fn failure_reason(&self) -> Option<String> {
-        self.run.failure_reason().map(ToOwned::to_owned)
     }
 
     #[getter]

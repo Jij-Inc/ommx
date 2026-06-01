@@ -817,7 +817,6 @@ fn loaded_experiment_rejects_config_run_attachment_not_listed_in_layers() {
         runs: vec![ExperimentConfigRun {
             run_id: 0,
             status: RUN_STATUS_FINISHED.to_string(),
-            failure_reason: None,
             attachments: vec![LayerRef(1)],
             trace: None,
             solves: Vec::new(),
@@ -1233,44 +1232,33 @@ fn experiment_dyn_publishes_failed_recovery_artifact() {
 }
 
 #[test]
-fn experiment_dyn_loads_failed_recovery_and_forks_from_it() {
+fn experiment_dyn_recovers_failed_artifact_with_requested_image_name() {
     let registry_handle = LocalRegistryHandle::temp().unwrap();
     let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:failed-run").unwrap();
     let experiment =
-        ExperimentDyn::with_registry_handle(registry_handle.clone(), image_name).unwrap();
+        ExperimentDyn::with_registry_handle(registry_handle.clone(), image_name.clone()).unwrap();
     {
         let mut run = experiment.run().unwrap();
         run.log_parameter("solver", "scip").unwrap();
-        run.finish_failed("RuntimeError: solve failed").unwrap();
+        run.finish_failed().unwrap();
     }
     let recovery = experiment
         .commit_failed_recovery("RuntimeError: solve failed")
         .unwrap();
 
     let recovered = ExperimentDyn::from_recovery_artifact(recovery).unwrap();
-    assert_eq!(
-        recovered.experiment_status().as_deref(),
-        Some(EXPERIMENT_STATUS_FAILED)
-    );
-    let recovered_runs = recovered.runs().unwrap();
-    assert_eq!(recovered_runs.len(), 1);
-    assert_eq!(recovered_runs[0].status().as_str(), RUN_STATUS_FAILED);
-    assert_eq!(
-        recovered_runs[0].failure_reason(),
-        Some("RuntimeError: solve failed")
-    );
-
-    let child_image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:resumed").unwrap();
-    let child = recovered.fork(Name::Named(child_image_name)).unwrap();
+    assert!(recovered.is_unsealed());
+    assert_eq!(recovered.image_name().unwrap(), image_name);
     {
-        let mut run = child.run().unwrap();
+        let mut run = recovered.run().unwrap();
         assert_eq!(run.run_id().unwrap(), 1);
         run.log_parameter("solver", "highs").unwrap();
         run.finish().unwrap();
     }
-    child.commit().unwrap();
+    let artifact = recovered.commit().unwrap();
+    assert_eq!(artifact.image_name(), &image_name);
 
-    let child_runs = child.runs().unwrap();
+    let child_runs = recovered.runs().unwrap();
     assert_eq!(child_runs.len(), 2);
     assert_eq!(child_runs[0].status().as_str(), RUN_STATUS_FAILED);
     assert_eq!(child_runs[1].status().as_str(), RUN_STATUS_FINISHED);

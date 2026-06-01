@@ -175,9 +175,10 @@ def test_experiment_context_publishes_recovery_artifact_on_exception():
     with pytest.raises(RuntimeError, match="status is failed"):
         Experiment.from_artifact(recovery_artifact)
 
-    recovery = Experiment.from_recovery_artifact(recovery_artifact)
-    assert recovery.status == "failed"
-    with recovery.fork() as resumed:
+    resumed = Experiment.from_recovery_artifact(recovery_artifact)
+    assert resumed.status is None
+    assert resumed.image_name == experiment.image_name
+    with resumed:
         with resumed.run() as run:
             assert run.run_id == 1
             run.log_parameter("solver", "highs")
@@ -197,21 +198,18 @@ def test_recovery_artifact_keeps_failed_run_and_can_be_forked():
 
     recovery_artifact = experiments[0].recovery_artifact
     assert recovery_artifact is not None
-    recovery = Experiment.from_recovery_artifact(recovery_artifact)
-    assert recovery.status == "failed"
-    assert len(recovery.runs) == 1
-    assert recovery.runs[0].status == "failed"
-    assert recovery.runs[0].failure_reason == "RuntimeError: solve failed"
-    assert recovery.runs[0].get_json("before-failure") == {"step": 1}
-    assert recovery.run_parameters_df().loc[0, "solver"] == "scip"
-
-    with recovery.fork() as resumed:
+    resumed = Experiment.from_recovery_artifact(recovery_artifact)
+    assert resumed.status is None
+    assert resumed.image_name == experiments[0].image_name
+    with resumed:
         with resumed.run() as run:
             assert run.run_id == 1
             run.log_parameter("solver", "highs")
 
     assert resumed.status == "finished"
     assert [run.status for run in resumed.runs] == ["failed", "finished"]
+    assert resumed.runs[0].get_json("before-failure") == {"step": 1}
+    assert resumed.run_parameters_df().loc[0, "solver"] == "scip"
     assert list(resumed.run_parameters_df().index) == [0, 1]
 
 
@@ -414,8 +412,6 @@ def test_run_finish_rejects_active_context_manager():
     runs = Experiment.from_artifact(artifact).runs
     assert len(runs) == 1
     assert runs[0].status == "failed"
-    assert runs[0].failure_reason is not None
-    assert "Run context is active" in runs[0].failure_reason
 
 
 def test_rename_after_context_commit_updates_artifact_name():
@@ -513,7 +509,6 @@ def test_run_context_records_failed_run_on_exception():
 
     assert len(loaded.runs) == 1
     assert loaded.runs[0].status == "failed"
-    assert loaded.runs[0].failure_reason == "ValueError: failed"
     assert df.loc[0, "solver"] == "scip"
 
 
@@ -644,7 +639,6 @@ def test_failed_run_preserves_completed_solves_after_adapter_exception():
     loaded = Experiment.from_artifact(experiment.commit())
     run = loaded.runs[0]
     assert run.status == "failed"
-    assert run.failure_reason == "RuntimeError: backend crashed"
     assert [solve.solve_id for solve in run.solves] == [0, 1]
     assert [solve.adapter_options["label"] for solve in run.solves] == [
         "first",

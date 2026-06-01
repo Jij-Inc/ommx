@@ -18,14 +18,14 @@
 use super::attachment::{store_attachment_descriptor, AttachmentSpace};
 use super::{
     allocate_next_run_id, next_run_id, AttachmentLogger, Name, RunEntry, RunParameterCell,
-    RunStatus, SealedExperiment, UnsealedExperimentState,
+    RunStatus, SealedExperiment, UnsealedExperimentState, ANN_EXPERIMENT_REQUESTED_IMAGE,
 };
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
 use crate::artifact::{
     media_types, AsArtifact, ImageRef, LocalArtifact, LocalArtifactDyn, LocalRegistryHandle,
 };
 use crate::{Instance, Solution};
-use anyhow::{ensure, Result};
+use anyhow::{ensure, Context, Result};
 use oci_spec::image::{Descriptor, MediaType};
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -85,7 +85,6 @@ struct UnsealedExperimentDynState {
 struct RunEntryDyn {
     run_id: u64,
     status: RunStatus,
-    failure_reason: Option<String>,
     attachments: Vec<Descriptor>,
     trace: Option<Descriptor>,
     solves: Vec<SolveEntryDyn>,
@@ -121,7 +120,6 @@ pub struct SealedRunDyn {
     registry_handle: LocalRegistryHandle,
     run_id: u64,
     status: RunStatus,
-    failure_reason: Option<String>,
     attachments: Vec<Descriptor>,
     trace: Option<Descriptor>,
     solves: Vec<SolveDyn>,
@@ -150,10 +148,6 @@ impl SealedRunDyn {
 
     pub fn status(&self) -> &RunStatus {
         &self.status
-    }
-
-    pub fn failure_reason(&self) -> Option<&str> {
-        self.failure_reason.as_deref()
     }
 
     pub fn attachments(&self) -> Result<Vec<StoredDescriptor<'_>>> {
@@ -304,8 +298,9 @@ impl ExperimentDyn {
     }
 
     pub fn from_recovery_artifact(artifact: LocalArtifactDyn) -> Result<Self> {
-        let sealed = SealedExperimentDynState::from_recovery_artifact(artifact)?;
-        Self::from_sealed_state(sealed)
+        let sealed = SealedExperimentDynState::from_recovery_artifact(artifact.clone())?;
+        let requested_image_name = recovery_requested_image_name(&artifact)?;
+        Self::from_recovery_sealed_state(sealed, requested_image_name)
     }
 
     fn from_sealed_state(sealed: SealedExperimentDynState) -> Result<Self> {
@@ -314,6 +309,24 @@ impl ExperimentDyn {
             registry_handle: registry_handle.clone(),
             state: Arc::new(Mutex::new(ExperimentDynState {
                 lifecycle: ExperimentDynLifecycle::Sealed(sealed),
+                registry_handle,
+            })),
+        })
+    }
+
+    fn from_recovery_sealed_state(
+        sealed: SealedExperimentDynState,
+        image_name: ImageRef,
+    ) -> Result<Self> {
+        let registry_handle = sealed.registry_handle();
+        let state = sealed.create_forked_child_state(image_name)?;
+        Ok(Self {
+            registry_handle: registry_handle.clone(),
+            state: Arc::new(Mutex::new(ExperimentDynState {
+                lifecycle: ExperimentDynLifecycle::Unsealed {
+                    state: Some(state),
+                    open_runs: 0,
+                },
                 registry_handle,
             })),
         })
@@ -615,7 +628,6 @@ impl UnsealedExperimentDynState {
                         RunEntry {
                             run_id: run.run_id,
                             status: run.status,
-                            failure_reason: run.failure_reason,
                             attachments: stored_descriptors(registry, run.attachments)?,
                             trace: run
                                 .trace
@@ -676,7 +688,6 @@ impl SealedExperimentDynState {
                             registry_handle: registry_handle.clone(),
                             run_id: run.run_id(),
                             status: run.status().clone(),
-                            failure_reason: run.failure_reason().map(ToOwned::to_owned),
                             attachments: descriptors(run.attachments()),
                             trace: run.trace().cloned().map(Descriptor::from),
                             solves: run
@@ -744,7 +755,6 @@ impl SealedExperimentDynState {
                 RunEntryDyn {
                     run_id: run.run_id,
                     status: run.status.clone(),
-                    failure_reason: run.failure_reason.clone(),
                     attachments: run.attachments.clone(),
                     trace: run.trace.clone(),
                     solves,
@@ -778,6 +788,20 @@ fn descriptors(attachments: &[StoredDescriptor<'_>]) -> Vec<Descriptor> {
         .cloned()
         .map(Descriptor::from)
         .collect::<Vec<_>>()
+}
+
+fn recovery_requested_image_name(artifact: &LocalArtifactDyn) -> Result<ImageRef> {
+    let annotations = artifact.annotations()?;
+    let requested = annotations
+        .get(ANN_EXPERIMENT_REQUESTED_IMAGE)
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "Recovery Artifact is missing {ANN_EXPERIMENT_REQUESTED_IMAGE} annotation"
+            )
+        })?;
+    ImageRef::parse(requested).with_context(|| {
+        format!("Invalid {ANN_EXPERIMENT_REQUESTED_IMAGE} annotation on recovery Artifact")
+    })
 }
 
 fn stored_descriptors<'reg>(

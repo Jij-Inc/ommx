@@ -2057,7 +2057,7 @@
             },
             {
               "name": "from_recovery_artifact",
-              "doc": "Interpret an already-open failed recovery Artifact as an Experiment.\n\nThis explicit recovery entry point accepts Experiment configs with\n`status=failed`. The returned view is immutable but can be forked to\ncontinue with new runs.",
+              "doc": "Resume from an already-open failed recovery Artifact.\n\nThis accepts Experiment configs with `status=failed` and returns a new\nunsealed Experiment whose parent is the recovery Artifact and whose\nimage name is the original requested Experiment image name recorded in\nthe recovery metadata.",
               "signatures": [
                 {
                   "parameters": [
@@ -2353,7 +2353,7 @@
             },
             {
               "name": "load_recovery",
-              "doc": "Load a failed recovery Experiment Artifact by image reference.\n\nThe loaded object is a read-only Experiment view that can be forked to\nresume from the partial state recorded in the recovery artifact.",
+              "doc": "Load a failed recovery Artifact and resume from it.\n\nThis returns a new unsealed Experiment whose parent is the failed\nrecovery Artifact and whose image name is the original requested\nExperiment image name recorded in the recovery metadata.",
               "signatures": [
                 {
                   "parameters": [
@@ -3632,23 +3632,6 @@
                       "kind": "Class",
                       "attribute": null
                     },
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "failure_reason",
-              "doc": "Exception summary captured when this run failed, if any.",
-              "type_": {
-                "display": "Optional[str]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "str",
-                    "link_target": null,
                     "children": []
                   }
                 ]

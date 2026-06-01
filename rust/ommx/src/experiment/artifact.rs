@@ -148,7 +148,6 @@ impl<'reg> UnsealedExperimentState<'reg> {
             runs.push(ExperimentConfigRun {
                 run_id: run.run_id,
                 status: run.status.as_str().to_string(),
-                failure_reason: run.failure_reason.clone(),
                 attachments,
                 trace,
                 solves,

@@ -21,8 +21,6 @@ pub struct ExperimentConfigRun {
     pub run_id: u64,
     #[serde(default = "default_run_status")]
     pub status: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub failure_reason: Option<String>,
     pub attachments: Vec<LayerRef>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub trace: Option<LayerRef>,

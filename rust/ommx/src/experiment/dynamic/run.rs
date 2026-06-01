@@ -161,7 +161,6 @@ impl RunDyn {
             RunEntryDyn {
                 run_id: run.run_id,
                 status: RunStatus::Finished,
-                failure_reason: None,
                 attachments: run.attachments,
                 trace: run.trace,
                 solves: run.solves,
@@ -172,7 +171,7 @@ impl RunDyn {
         Ok(())
     }
 
-    pub fn finish_failed(mut self, reason: impl Into<String>) -> Result<()> {
+    pub fn finish_failed(mut self) -> Result<()> {
         let mut dyn_state = lock_experiment_state(&self.experiment_state);
         let ExperimentDynLifecycle::Unsealed { state, open_runs } = &mut dyn_state.lifecycle else {
             return bail_non_unsealed(&dyn_state.lifecycle);
@@ -193,7 +192,6 @@ impl RunDyn {
             RunEntryDyn {
                 run_id: run.run_id,
                 status: RunStatus::Failed,
-                failure_reason: Some(reason.into()),
                 attachments: run.attachments,
                 trace: run.trace,
                 solves: run.solves,

@@ -220,7 +220,6 @@ pub struct Run<'exp, 'reg> {
 struct RunEntry<'reg> {
     run_id: u64,
     status: RunStatus,
-    failure_reason: Option<String>,
     attachments: Vec<StoredDescriptor<'reg>>,
     trace: Option<StoredDescriptor<'reg>>,
     solves: Vec<SolveEntry<'reg>>,
@@ -419,7 +418,6 @@ impl<'reg> SealedExperiment<'reg> {
                 RunEntry {
                     run_id: run.run_id(),
                     status: run.status().clone(),
-                    failure_reason: run.failure_reason().map(ToOwned::to_owned),
                     attachments: run.attachments().to_vec(),
                     trace: run.trace().cloned(),
                     solves,

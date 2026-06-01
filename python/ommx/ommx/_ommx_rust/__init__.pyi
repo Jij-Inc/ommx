@@ -1834,10 +1834,11 @@ class Experiment:
     @staticmethod
     def load_recovery(image_name: builtins.str) -> Experiment:
         r"""
-        Load a failed recovery Experiment Artifact by image reference.
+        Load a failed recovery Artifact and resume from it.
 
-        The loaded object is a read-only Experiment view that can be forked to
-        resume from the partial state recorded in the recovery artifact.
+        This returns a new unsealed Experiment whose parent is the failed
+        recovery Artifact and whose image name is the original requested
+        Experiment image name recorded in the recovery metadata.
         """
     @staticmethod
     def import_archive(path: builtins.str | os.PathLike | pathlib.Path) -> Experiment:
@@ -1860,11 +1861,12 @@ class Experiment:
     @staticmethod
     def from_recovery_artifact(artifact: Artifact) -> Experiment:
         r"""
-        Interpret an already-open failed recovery Artifact as an Experiment.
+        Resume from an already-open failed recovery Artifact.
 
-        This explicit recovery entry point accepts Experiment configs with
-        `status=failed`. The returned view is immutable but can be forked to
-        continue with new runs.
+        This accepts Experiment configs with `status=failed` and returns a new
+        unsealed Experiment whose parent is the recovery Artifact and whose
+        image name is the original requested Experiment image name recorded in
+        the recovery metadata.
         """
     def fork(
         self,
@@ -5908,11 +5910,6 @@ class SealedRun:
     def status(self) -> builtins.str:
         r"""
         Run lifecycle status: `"finished"` or `"failed"`.
-        """
-    @property
-    def failure_reason(self) -> typing.Optional[builtins.str]:
-        r"""
-        Exception summary captured when this run failed, if any.
         """
     @property
     def attachments(self) -> builtins.list[Descriptor]:

@@ -47,7 +47,6 @@ impl<'reg> SealedExperiment<'reg> {
                     SealedRun {
                         run_id: run.run_id,
                         status,
-                        failure_reason: run.failure_reason,
                         attachments,
                         trace,
                         solves,
@@ -100,7 +99,6 @@ impl<'reg> SealedExperiment<'reg> {
 pub struct SealedRun<'reg> {
     run_id: u64,
     status: RunStatus,
-    failure_reason: Option<String>,
     attachments: Vec<StoredDescriptor<'reg>>,
     trace: Option<StoredDescriptor<'reg>>,
     solves: Vec<Solve<'reg>>,
@@ -113,10 +111,6 @@ impl<'reg> SealedRun<'reg> {
 
     pub fn status(&self) -> &RunStatus {
         &self.status
-    }
-
-    pub fn failure_reason(&self) -> Option<&str> {
-        self.failure_reason.as_deref()
     }
 
     pub fn attachments(&self) -> &[StoredDescriptor<'reg>] {
