@@ -79,12 +79,10 @@ const EXPERIMENT_STATUS_FINISHED: &str = "finished";
 
 const ANN_SPACE: &str = "org.ommx.experiment.space";
 const ANN_RUN_ID: &str = "org.ommx.experiment.run_id";
-const ANN_LAYER: &str = "org.ommx.experiment.layer";
 const ANN_ATTACHMENT_NAME: &str = "org.ommx.attachment.name";
 
 const RUN_PARAMETERS_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment.run-parameters+json";
 const EXPERIMENT_CONFIG_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment.config+json";
-const LAYER_KIND_RUN_PARAMETERS: &str = "run-parameters";
 
 /// A mutable, unsealed experiment session. See the [module documentation](self).
 #[derive(Debug)]
@@ -101,6 +99,26 @@ pub struct SealedExperiment<'reg> {
     attachments: Vec<StoredDescriptor<'reg>>,
     runs: BTreeMap<u64, sealed::SealedRun<'reg>>,
     run_parameters: parameter::RunParameterTable,
+}
+
+/// Opaque Run trace payload.
+///
+/// The Rust SDK does not decode, validate, or interpret OpenTelemetry
+/// spans. `Trace` is a storage boundary type: it marks a byte payload as
+/// a Run trace payload, while producers and renderers such as the
+/// Python SDK own the concrete OpenTelemetry encoding.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Trace {
+    bytes: Vec<u8>,
+}
+
+impl Trace {
+    /// Build a trace payload from encoded trace bytes.
+    pub fn from_bytes(bytes: impl Into<Vec<u8>>) -> Self {
+        Self {
+            bytes: bytes.into(),
+        }
+    }
 }
 
 /// User-facing name policy for a new Experiment.
@@ -147,6 +165,7 @@ pub struct Run<'exp, 'reg> {
     experiment: &'exp Experiment<'reg>,
     run_id: u64,
     attachments: Vec<StoredDescriptor<'reg>>,
+    trace: Option<StoredDescriptor<'reg>>,
     solves: Vec<SolveEntry<'reg>>,
     next_solve_id: u64,
     parameters: ParameterSet,
@@ -163,6 +182,7 @@ pub struct Run<'exp, 'reg> {
 struct RunEntry<'reg> {
     run_id: u64,
     attachments: Vec<StoredDescriptor<'reg>>,
+    trace: Option<StoredDescriptor<'reg>>,
     solves: Vec<SolveEntry<'reg>>,
     parameters: ParameterSet,
 }
@@ -251,6 +271,7 @@ impl<'reg> Experiment<'reg> {
             experiment: self,
             run_id,
             attachments: Vec::new(),
+            trace: None,
             solves: Vec::new(),
             next_solve_id: 0,
             parameters: ParameterSet::new(),
@@ -358,6 +379,7 @@ impl<'reg> SealedExperiment<'reg> {
                 RunEntry {
                     run_id: run.run_id(),
                     attachments: run.attachments().to_vec(),
+                    trace: run.trace().cloned(),
                     solves,
                     parameters,
                 },

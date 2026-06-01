@@ -6,6 +6,7 @@ use pyo3::{
 };
 use std::{
     collections::{btree_map::Entry, BTreeMap},
+    mem,
     path::PathBuf,
 };
 
@@ -59,6 +60,7 @@ use ommx::experiment::AttachmentLogger;
 /// >>> exp.push()  # doctest: +SKIP
 pub struct PyExperiment {
     inner: ommx::experiment::ExperimentDyn,
+    store_trace: bool,
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
@@ -72,11 +74,16 @@ impl PyExperiment {
     /// loaded later by name. The image reference is a mutable local registry
     /// alias for the committed Artifact; the Artifact manifest digest remains
     /// the immutable identity of the committed contents.
+    ///
+    /// Set `store_trace=True` to store traces for `Run` context managers
+    /// created from this Experiment. The Experiment itself does not need to
+    /// be used as a context manager.
     #[new]
-    #[pyo3(signature = (image_name = None))]
-    pub fn new(image_name: Option<&str>) -> Result<Self> {
+    #[pyo3(signature = (image_name = None, *, store_trace = false))]
+    pub fn new(image_name: Option<&str>, store_trace: bool) -> Result<Self> {
         Ok(Self {
             inner: ommx::experiment::ExperimentDyn::new(parse_name(image_name)?)?,
+            store_trace,
         })
     }
 
@@ -86,13 +93,18 @@ impl PyExperiment {
     /// and by Artifacts / loaded Experiments derived from it. This is useful
     /// for examples and tests because it does not write entries into the
     /// process-wide default local registry.
+    ///
+    /// Set `store_trace=True` to store traces for `Run` context managers
+    /// created from this Experiment. The Experiment itself does not need to
+    /// be used as a context manager.
     #[staticmethod]
-    #[pyo3(signature = (image_name = None))]
-    pub fn with_temp_local_registry(image_name: Option<&str>) -> Result<Self> {
+    #[pyo3(signature = (image_name = None, *, store_trace = false))]
+    pub fn with_temp_local_registry(image_name: Option<&str>, store_trace: bool) -> Result<Self> {
         Ok(Self {
             inner: ommx::experiment::ExperimentDyn::with_temp_local_registry(parse_name(
                 image_name,
             )?)?,
+            store_trace,
         })
     }
 
@@ -108,6 +120,7 @@ impl PyExperiment {
         let image_name = ommx::artifact::ImageRef::parse(image_name)?;
         Ok(Self {
             inner: ommx::experiment::ExperimentDyn::load(image_name)?,
+            store_trace: false,
         })
     }
 
@@ -122,6 +135,7 @@ impl PyExperiment {
         let _guard = crate::TRACING.attach_parent_context(py);
         Ok(Self {
             inner: ommx::experiment::ExperimentDyn::import_archive(&path)?,
+            store_trace: false,
         })
     }
 
@@ -133,6 +147,7 @@ impl PyExperiment {
     pub fn from_artifact(artifact: &PyArtifact) -> Result<Self> {
         Ok(Self {
             inner: ommx::experiment::ExperimentDyn::from_artifact(artifact.inner().clone())?,
+            store_trace: false,
         })
     }
 
@@ -154,10 +169,15 @@ impl PyExperiment {
     /// ```
     ///
     /// Raises an error if this Experiment has not been committed yet.
-    #[pyo3(signature = (image_name = None))]
-    pub fn fork(&self, image_name: Option<&str>) -> Result<Self> {
+    ///
+    /// Set `store_trace=True` on the returned child to store traces for
+    /// `Run` context managers created from it. The child Experiment itself
+    /// does not need to be used as a context manager.
+    #[pyo3(signature = (image_name = None, *, store_trace = false))]
+    pub fn fork(&self, image_name: Option<&str>, store_trace: bool) -> Result<Self> {
         Ok(Self {
             inner: self.inner.fork(parse_name(image_name)?)?,
+            store_trace,
         })
     }
 
@@ -165,16 +185,17 @@ impl PyExperiment {
         Ok(slf.unbind())
     }
 
-    #[pyo3(signature = (exc_type = None, _exc_value = None, _traceback = None))]
+    #[pyo3(signature = (exc_type = None, exc_value = None, traceback = None))]
     pub fn __exit__(
         &mut self,
         py: Python<'_>,
         exc_type: Option<&Bound<'_, PyAny>>,
-        _exc_value: Option<&Bound<'_, PyAny>>,
-        _traceback: Option<&Bound<'_, PyAny>>,
+        exc_value: Option<&Bound<'_, PyAny>>,
+        traceback: Option<&Bound<'_, PyAny>>,
     ) -> Result<bool> {
+        let _ = (exc_value, traceback);
         if exc_type.is_none() && self.inner.is_unsealed() {
-            self.commit(py)?;
+            self.commit_inner(py)?;
         }
         Ok(false)
     }
@@ -342,7 +363,10 @@ impl PyExperiment {
     /// ```
     pub fn run(&self) -> Result<PyRun> {
         Ok(PyRun {
-            run: Some(self.inner.run()?),
+            state: PyRunState::Open {
+                run: self.inner.run()?,
+            },
+            store_trace: self.store_trace,
         })
     }
 
@@ -410,8 +434,7 @@ impl PyExperiment {
     /// `Experiment.from_artifact`. After commit, this object becomes a
     /// read-only view of the committed Experiment.
     pub fn commit(&mut self, py: Python<'_>) -> Result<PyArtifact> {
-        let _guard = crate::TRACING.attach_parent_context(py);
-        Ok(PyArtifact::new(self.inner.commit()?))
+        self.commit_inner(py)
     }
 
     /// Wide DataFrame of run parameters, indexed by `run_id`.
@@ -471,6 +494,11 @@ impl PyExperiment {
 }
 
 impl PyExperiment {
+    fn commit_inner(&mut self, py: Python<'_>) -> Result<PyArtifact> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        Ok(PyArtifact::new(self.inner.commit()?))
+    }
+
     fn find_attachment(
         &self,
         name: &str,
@@ -483,6 +511,35 @@ impl PyExperiment {
         }
         anyhow::bail!("Experiment attachment `{name}` not found")
     }
+}
+
+fn start_python_span(py: Python<'_>, name: &str) -> Result<Py<PyAny>> {
+    let trace = py.import("opentelemetry.trace")?;
+    let tracer = trace.call_method1("get_tracer", ("ommx.experiment",))?;
+    let cm = tracer.call_method1("start_as_current_span", (name,))?;
+    cm.call_method0("__enter__")?;
+    Ok(cm.unbind())
+}
+
+fn set_current_span_run_id(py: Python<'_>, run_id: u64) -> Result<()> {
+    let trace = py.import("opentelemetry.trace")?;
+    let span = trace.call_method0("get_current_span")?;
+    span.call_method1("set_attribute", ("ommx.run.id", run_id))?;
+    Ok(())
+}
+
+fn close_python_context_manager(
+    py: Python<'_>,
+    cm: Option<&Py<PyAny>>,
+    exc_type: Option<&Bound<'_, PyAny>>,
+    exc_value: Option<&Bound<'_, PyAny>>,
+    traceback: Option<&Bound<'_, PyAny>>,
+) -> Result<()> {
+    if let Some(cm) = cm {
+        cm.bind(py)
+            .call_method1("__exit__", (exc_type, exc_value, traceback))?;
+    }
+    Ok(())
 }
 
 const ANN_ATTACHMENT_NAME: &str = "org.ommx.attachment.name";
@@ -645,35 +702,124 @@ fn decode_sample_set_attachment(
 /// to the parent experiment. On exception the run is abandoned. A run
 /// becomes immutable once it is finished.
 pub struct PyRun {
-    run: Option<ommx::experiment::RunDyn>,
+    state: PyRunState,
+    store_trace: bool,
+}
+
+enum PyRunState {
+    /// Created by `Experiment.run()` and not yet entered as a context manager.
+    Open { run: ommx::experiment::RunDyn },
+    /// Inside `with run:`. The Python context manager must be closed before
+    /// the Rust run can be finished or abandoned.
+    Entered {
+        run: ommx::experiment::RunDyn,
+        span_context_manager: Py<PyAny>,
+        trace_result: Option<Py<PyAny>>,
+    },
+    /// Finished or abandoned; no further mutation is allowed.
+    Closed,
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl PyRun {
     pub fn __enter__(slf: Bound<'_, Self>) -> PyResult<Py<PyRun>> {
+        {
+            let py = slf.py();
+            let mut this = slf.borrow_mut();
+            let run = match mem::replace(&mut this.state, PyRunState::Closed) {
+                PyRunState::Open { run } => run,
+                state @ PyRunState::Entered { .. } => {
+                    this.state = state;
+                    return Err(anyhow::anyhow!("Run context has already been entered").into());
+                }
+                PyRunState::Closed => {
+                    return Err(anyhow::anyhow!("Run has already been finished").into());
+                }
+            };
+            let run_id = match run.run_id() {
+                Ok(run_id) => run_id,
+                Err(error) => {
+                    this.state = PyRunState::Open { run };
+                    return Err(error.into());
+                }
+            };
+            let enter_result = if this.store_trace {
+                start_run_trace_capture(py)
+            } else {
+                start_run_span(py)
+            };
+            let (span_context_manager, trace_result) = match enter_result {
+                Ok(context) => context,
+                Err(error) => {
+                    this.state = PyRunState::Open { run };
+                    return Err(error.into());
+                }
+            };
+            if let Err(error) = set_current_span_run_id(py, run_id) {
+                let close_result =
+                    close_run_context_after_failed_enter(py, span_context_manager, &error);
+                this.state = PyRunState::Open { run };
+                close_result?;
+                return Err(error.into());
+            }
+            this.state = PyRunState::Entered {
+                run,
+                span_context_manager,
+                trace_result,
+            };
+        }
         Ok(slf.unbind())
     }
 
-    #[pyo3(signature = (exc_type = None, _exc_value = None, _traceback = None))]
+    #[pyo3(signature = (exc_type = None, exc_value = None, traceback = None))]
     pub fn __exit__(
         &mut self,
-        _py: Python<'_>,
+        py: Python<'_>,
         exc_type: Option<&Bound<'_, PyAny>>,
-        _exc_value: Option<&Bound<'_, PyAny>>,
-        _traceback: Option<&Bound<'_, PyAny>>,
+        exc_value: Option<&Bound<'_, PyAny>>,
+        traceback: Option<&Bound<'_, PyAny>>,
     ) -> Result<bool> {
-        if self.run.is_none() {
-            return Ok(false);
-        }
-        if exc_type.is_none() {
-            self.finish()?;
-        } else {
-            if let Some(run) = self.run.take() {
-                run.abandon();
+        match mem::replace(&mut self.state, PyRunState::Closed) {
+            PyRunState::Closed => Ok(false),
+            state @ PyRunState::Open { .. } => {
+                self.state = state;
+                anyhow::bail!("Run context has not been entered")
+            }
+            PyRunState::Entered {
+                mut run,
+                span_context_manager,
+                trace_result,
+            } => {
+                let close_result = close_python_context_manager(
+                    py,
+                    Some(&span_context_manager),
+                    exc_type,
+                    exc_value,
+                    traceback,
+                );
+                if let Err(error) = close_result {
+                    self.state = PyRunState::Entered {
+                        run,
+                        span_context_manager,
+                        trace_result,
+                    };
+                    return Err(error);
+                }
+                if exc_type.is_some() {
+                    run.abandon();
+                    return Ok(false);
+                }
+                if self.store_trace {
+                    if let Err(error) = store_trace_result(py, &mut run, trace_result) {
+                        run.abandon();
+                        return Err(error);
+                    }
+                }
+                run.finish()?;
+                Ok(false)
             }
         }
-        Ok(false)
     }
 
     #[getter]
@@ -687,8 +833,17 @@ impl PyRun {
     /// Accepted value types are `bool`, `int`, `float`, and `str`. These
     /// values are intended for comparing runs and are exposed as columns in
     /// `Experiment.run_parameters_df()`.
-    pub fn log_parameter(&mut self, name: &str, value: ParameterValueInput) -> Result<()> {
-        self.as_open_mut()?.log_parameter(name, value.0)
+    pub fn log_parameter(
+        &mut self,
+        py: Python<'_>,
+        name: &str,
+        value: ParameterValueInput,
+    ) -> Result<()> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        self.ensure_store_trace_context_started()?;
+        self.as_open_mut()?.log_parameter(name, value.0)?;
+        tracing::info!(parameter_name = %name, "ommx.run.parameter.recorded");
+        Ok(())
     }
 
     /// Attach arbitrary bytes with an explicit OCI media type in this run.
@@ -701,6 +856,7 @@ impl PyRun {
         media_type: &str,
         bytes: &Bound<pyo3::types::PyBytes>,
     ) -> Result<()> {
+        self.ensure_store_trace_context_started()?;
         AttachmentLogger::log_attachment(
             self.as_open_mut()?,
             name,
@@ -714,6 +870,7 @@ impl PyRun {
     /// The value is encoded with Python's `json.dumps` and stored with media
     /// type `application/json`.
     pub fn log_json(&mut self, py: Python<'_>, name: &str, value: &Bound<PyAny>) -> Result<()> {
+        self.ensure_store_trace_context_started()?;
         let json = py.import("json")?;
         let blob: String = json.call_method1("dumps", (value,))?.extract()?;
         AttachmentLogger::log_attachment(
@@ -730,6 +887,7 @@ impl PyRun {
     /// when the instance is the input of a solver call and should be paired
     /// with the returned solution.
     pub fn log_instance(&mut self, name: &str, instance: &crate::Instance) -> Result<()> {
+        self.ensure_store_trace_context_started()?;
         AttachmentLogger::log_instance(self.as_open_mut()?, name, &instance.inner)
     }
 
@@ -739,6 +897,7 @@ impl PyRun {
         name: &str,
         pi: &crate::ParametricInstance,
     ) -> Result<()> {
+        self.ensure_store_trace_context_started()?;
         AttachmentLogger::log_parametric_instance(self.as_open_mut()?, name, &pi.inner)
     }
 
@@ -748,11 +907,13 @@ impl PyRun {
     /// when the solution is produced by a solver call and should be paired
     /// with the input instance.
     pub fn log_solution(&mut self, name: &str, solution: &crate::Solution) -> Result<()> {
+        self.ensure_store_trace_context_started()?;
         AttachmentLogger::log_solution(self.as_open_mut()?, name, &solution.inner)
     }
 
     /// Attach a SampleSet in this run.
     pub fn log_sample_set(&mut self, name: &str, sample_set: &crate::SampleSet) -> Result<()> {
+        self.ensure_store_trace_context_started()?;
         AttachmentLogger::log_sample_set(self.as_open_mut()?, name, &sample_set.inner)
     }
 
@@ -778,15 +939,19 @@ impl PyRun {
         kwargs: Option<&Bound<PyDict>>,
     ) -> Result<crate::Solution> {
         let _guard = crate::TRACING.attach_parent_context(py);
+        self.ensure_store_trace_context_started()?;
         let adapter_name = adapter.name(py)?;
+        let span = tracing::info_span!("ommx.solver.solve", adapter = %adapter_name);
+        let _span_guard = span.enter();
         let adapter_options = dump_kwargs(py, kwargs)?;
         let solution = adapter.solve(py, instance, kwargs)?;
-        self.as_open_mut()?.log_finished_solve_result(
+        let solve_id = self.as_open_mut()?.log_finished_solve_result(
             &instance.inner,
             &solution.inner,
             adapter_name,
             adapter_options,
         )?;
+        tracing::info!(solve_id, "ommx.solve.recorded");
         Ok(solution)
     }
 
@@ -796,33 +961,96 @@ impl PyRun {
     /// context manager calls this automatically on normal exit and abandons
     /// the run on exception.
     pub fn finish(&mut self) -> Result<()> {
-        let run = self
-            .run
-            .take()
-            .ok_or_else(|| anyhow::anyhow!("Run has already been finished"))?;
-        run.finish()
+        if self.store_trace {
+            anyhow::bail!(
+                "store_trace=True requires using Run as a context manager; \
+                 finish() is performed automatically on normal Run context-manager exit"
+            );
+        }
+        self.finish_inner()
     }
 
     pub fn __repr__(&self) -> Result<String> {
-        Ok(match &self.run {
-            Some(run) => format!("Run(run_id={})", run.run_id()?),
-            None => "Run(finished=True)".to_string(),
+        Ok(match &self.state {
+            PyRunState::Open { run } | PyRunState::Entered { run, .. } => {
+                format!("Run(run_id={})", run.run_id()?)
+            }
+            PyRunState::Closed => "Run(finished=True)".to_string(),
         })
     }
 }
 
 impl PyRun {
+    fn ensure_store_trace_context_started(&self) -> Result<()> {
+        if self.store_trace && matches!(self.state, PyRunState::Open { .. }) {
+            anyhow::bail!("store_trace=True requires using Run as a context manager");
+        }
+        Ok(())
+    }
+
+    fn finish_inner(&mut self) -> Result<()> {
+        let state = mem::replace(&mut self.state, PyRunState::Closed);
+        match state {
+            PyRunState::Open { run } => run.finish(),
+            state @ PyRunState::Entered { .. } => {
+                self.state = state;
+                anyhow::bail!(
+                    "Run context is active; finish() is performed automatically on normal Run context-manager exit"
+                )
+            }
+            PyRunState::Closed => anyhow::bail!("Run has already been finished"),
+        }
+    }
+
     fn as_open(&self) -> Result<&ommx::experiment::RunDyn> {
-        self.run
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Run has already been finished"))
+        match &self.state {
+            PyRunState::Open { run } | PyRunState::Entered { run, .. } => Ok(run),
+            PyRunState::Closed => anyhow::bail!("Run has already been finished"),
+        }
     }
 
     fn as_open_mut(&mut self) -> Result<&mut ommx::experiment::RunDyn> {
-        self.run
-            .as_mut()
-            .ok_or_else(|| anyhow::anyhow!("Run has already been finished"))
+        match &mut self.state {
+            PyRunState::Open { run } | PyRunState::Entered { run, .. } => Ok(run),
+            PyRunState::Closed => anyhow::bail!("Run has already been finished"),
+        }
     }
+}
+
+fn start_run_trace_capture(py: Python<'_>) -> Result<(Py<PyAny>, Option<Py<PyAny>>)> {
+    let tracing = py.import("ommx.tracing")?;
+    let cm = tracing.getattr("capture_trace")?.call1(("ommx.run",))?;
+    let result = cm.call_method0("__enter__")?;
+    Ok((cm.unbind(), Some(result.unbind())))
+}
+
+fn start_run_span(py: Python<'_>) -> Result<(Py<PyAny>, Option<Py<PyAny>>)> {
+    Ok((start_python_span(py, "ommx.run")?, None))
+}
+
+fn store_trace_result(
+    py: Python<'_>,
+    run: &mut ommx::experiment::RunDyn,
+    trace_result: Option<Py<PyAny>>,
+) -> Result<()> {
+    let result = trace_result.context("store_trace=True lost its TraceResult before Run exit")?;
+    let payload: Vec<u8> = result.bind(py).call_method0("otlp_protobuf")?.extract()?;
+    run.store_trace(ommx::experiment::Trace::from_bytes(payload))?;
+    Ok(())
+}
+
+fn close_run_context_after_failed_enter(
+    py: Python<'_>,
+    span_context_manager: Py<PyAny>,
+    original_error: &anyhow::Error,
+) -> Result<()> {
+    let original_message = original_error.to_string();
+    close_python_context_manager(py, Some(&span_context_manager), None, None, None)
+        .with_context(|| {
+            format!(
+                "Run context setup failed with `{original_message}`, then closing the partial context failed"
+            )
+        })
 }
 
 fn parse_name(image_name: Option<&str>) -> Result<ommx::experiment::Name> {
@@ -1052,6 +1280,25 @@ impl PySealedRun {
         let _guard = crate::TRACING.attach_parent_context(py);
         let descriptor = self.find_attachment(name)?;
         Ok(PyBytes::new(py, &self.artifact.get_blob(&descriptor)?))
+    }
+
+    #[getter]
+    #[gen_stub(override_return_type(
+        type_repr = "typing.Optional[tracing.TraceResult]",
+        imports = ("typing", "ommx.tracing")
+    ))]
+    /// Stored trace for this run, or `None` when this run was recorded without trace storage.
+    pub fn trace<'py>(&self, py: Python<'py>) -> Result<Option<Bound<'py, PyAny>>> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let Some(descriptor) = self.run.trace()? else {
+            return Ok(None);
+        };
+        let blob = self.artifact.get_blob(&descriptor)?;
+        let trace_result = py.import("ommx.tracing")?.getattr("TraceResult")?;
+        Ok(Some(trace_result.call_method1(
+            "from_otlp_protobuf",
+            (PyBytes::new(py, &blob),),
+        )?))
     }
 
     #[getter]

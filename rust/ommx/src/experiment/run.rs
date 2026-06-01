@@ -1,7 +1,7 @@
 //! Experiment / Run handles and run lifecycle.
 
 use super::attachment::{store_attachment_descriptor, AttachmentSpace};
-use super::{AttachmentLogger, ParameterValue, Run, RunEntry, SolveEntry};
+use super::{AttachmentLogger, ParameterValue, Run, RunEntry, SolveEntry, Trace};
 use crate::artifact::media_types;
 use crate::{Instance, Solution};
 use anyhow::Result;
@@ -61,6 +61,26 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
         Ok(solve_id)
     }
 
+    /// Store a trace for this Run.
+    ///
+    /// Traces are intentionally not Attachments: they record
+    /// execution telemetry for the Run and are referenced from this Run's
+    /// Experiment config entry. Rust stores the [`Trace`] payload as
+    /// opaque bytes and does not inspect the OpenTelemetry contents.
+    pub fn store_trace(&mut self, trace: Trace) -> Result<()> {
+        if self.trace.is_some() {
+            crate::bail!("Run {} already has a trace", self.run_id);
+        }
+        let Trace { bytes } = trace;
+        let descriptor = self.experiment.registry.store_layer_blob(
+            media_types::trace_otlp_protobuf(),
+            &bytes,
+            Default::default(),
+        )?;
+        self.trace = Some(descriptor);
+        Ok(())
+    }
+
     /// Close the run and append the closed run state to the parent
     /// experiment. Consumes the handle so no further run-scoped data
     /// can be added.
@@ -73,6 +93,7 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
             experiment,
             run_id,
             attachments,
+            trace,
             solves,
             next_solve_id: _,
             parameters,
@@ -80,6 +101,7 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
         let run = RunEntry {
             run_id,
             attachments,
+            trace,
             solves,
             parameters,
         };

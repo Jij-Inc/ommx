@@ -20,6 +20,8 @@ pub struct ExperimentConfig {
 pub struct ExperimentConfigRun {
     pub run_id: u64,
     pub attachments: Vec<LayerRef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trace: Option<LayerRef>,
     #[serde(default)]
     pub solves: Vec<ExperimentConfigSolve>,
 }

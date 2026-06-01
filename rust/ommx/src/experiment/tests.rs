@@ -3,9 +3,9 @@
 use super::config::{ExperimentConfig, ExperimentConfigRun, LayerRef};
 use super::UnsealedExperimentState;
 use super::{
-    AttachmentLogger, Experiment, ExperimentDyn, Name, ParameterValue, SealedExperiment,
-    ANN_ATTACHMENT_NAME, ANN_LAYER, ANN_RUN_ID, ANN_SPACE, EXPERIMENT_CONFIG_MEDIA_TYPE,
-    EXPERIMENT_STATUS_FINISHED, LAYER_KIND_RUN_PARAMETERS, RUN_PARAMETERS_MEDIA_TYPE,
+    AttachmentLogger, Experiment, ExperimentDyn, Name, ParameterValue, SealedExperiment, Trace,
+    ANN_ATTACHMENT_NAME, ANN_RUN_ID, ANN_SPACE, EXPERIMENT_CONFIG_MEDIA_TYPE,
+    EXPERIMENT_STATUS_FINISHED, RUN_PARAMETERS_MEDIA_TYPE,
 };
 use crate::artifact::local_registry::{StoredDescriptor, UnsealedArtifact};
 use crate::artifact::{media_types, AsArtifact, ImageRef, LocalArtifact, LocalRegistryHandle};
@@ -49,6 +49,20 @@ fn find_layer<'a, 'reg>(
         "expected exactly one layer with {key}={value}"
     );
     matches[0]
+}
+
+fn layer_from_ref<'a, 'reg>(
+    layers: &'a [StoredDescriptor<'reg>],
+    layer_ref: LayerRef,
+) -> &'a StoredDescriptor<'reg> {
+    layers
+        .get(layer_ref.0 as usize)
+        .unwrap_or_else(|| panic!("LayerRef {} is out of bounds", layer_ref.0))
+}
+
+fn experiment_config(artifact: &LocalArtifact<'_>) -> ExperimentConfig {
+    let config = artifact.stored_config().unwrap();
+    serde_json::from_slice(&blob_bytes(artifact, &config)).unwrap()
 }
 
 fn blob_bytes(artifact: &LocalArtifact<'_>, descriptor: &StoredDescriptor<'_>) -> Vec<u8> {
@@ -161,6 +175,43 @@ fn log_writes_blob_to_blobstore_immediately() {
 }
 
 #[test]
+fn trace_is_config_referenced_manifest_layer() {
+    with_temp_experiment(|experiment| {
+        let mut run = experiment.run().unwrap();
+        run.store_trace(Trace::from_bytes(b"trace".to_vec()))
+            .unwrap();
+        run.finish().unwrap();
+
+        let artifact = experiment.commit().unwrap().into_artifact();
+        let layers = artifact.layers().unwrap();
+        let config = experiment_config(&artifact);
+        let trace_ref = config.runs[0].trace.expect("run has a trace ref");
+        let trace = layer_from_ref(&layers, trace_ref);
+        assert_eq!(trace.media_type(), &media_types::trace_otlp_protobuf());
+        assert_eq!(layer_annotation(trace, ANN_ATTACHMENT_NAME), None);
+        let loaded = SealedExperiment::from_artifact(artifact).unwrap();
+        assert!(loaded.run(0).unwrap().trace().is_some());
+        Ok(())
+    });
+}
+
+#[test]
+fn run_rejects_second_trace() {
+    with_temp_experiment(|experiment| {
+        let mut run = experiment.run().unwrap();
+        run.store_trace(Trace::from_bytes(b"trace-1".to_vec()))
+            .unwrap();
+
+        let err = run
+            .store_trace(Trace::from_bytes(b"trace-2".to_vec()))
+            .expect_err("a Run can store at most one trace");
+
+        assert!(err.to_string().contains("already has a trace"));
+        Ok(())
+    });
+}
+
+#[test]
 fn log_json_encodes_hash_maps_stably() {
     fn map(entries: impl IntoIterator<Item = (&'static str, i32)>) -> HashMap<&'static str, i32> {
         entries.into_iter().collect()
@@ -229,8 +280,9 @@ fn commit_produces_experiment_artifact() {
             config.media_type(),
             &MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string())
         );
-        let config_json: serde_json::Value =
+        let config: ExperimentConfig =
             serde_json::from_slice(&blob_bytes(&artifact, &config)).unwrap();
+        let config_json = serde_json::to_value(&config).unwrap();
         assert_eq!(
             config_json.get("status").and_then(|value| value.as_str()),
             Some(EXPERIMENT_STATUS_FINISHED)
@@ -264,7 +316,11 @@ fn commit_produces_experiment_artifact() {
         assert_eq!(blob_bytes(&artifact, candidate), instance.to_bytes());
 
         // Aggregate layers are not tagged as attachments.
-        let run_params = find_layer(&layers, ANN_LAYER, LAYER_KIND_RUN_PARAMETERS);
+        let run_params = layer_from_ref(&layers, config.run_parameters);
+        assert_eq!(
+            run_params.media_type(),
+            &MediaType::Other(RUN_PARAMETERS_MEDIA_TYPE.to_string())
+        );
         assert!(layer_annotation(run_params, ANN_SPACE).is_none());
 
         // Config stores the Experiment structure; layers are payloads referenced from it.
@@ -296,8 +352,13 @@ fn log_parameter_materializes_run_parameter_table() {
         }
 
         let artifact = experiment.commit().unwrap().into_artifact();
+        let config = experiment_config(&artifact);
         let layers = artifact.layers().unwrap();
-        let run_params = find_layer(&layers, ANN_LAYER, LAYER_KIND_RUN_PARAMETERS);
+        let run_params = layer_from_ref(&layers, config.run_parameters);
+        assert_eq!(
+            run_params.media_type(),
+            &MediaType::Other(RUN_PARAMETERS_MEDIA_TYPE.to_string())
+        );
         assert!(layer_annotation(run_params, ANN_ATTACHMENT_NAME).is_none());
         let bytes = blob_bytes(&artifact, run_params);
         let table: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
@@ -421,11 +482,20 @@ fn sealed_experiment_fork_creates_child_with_parent_subject_and_next_run_id() {
                 "{}".to_string(),
             )
             .unwrap();
+            run.store_trace(Trace::from_bytes(b"parent trace".to_vec()))
+                .unwrap();
             run.finish().unwrap();
         }
 
         let parent = experiment.commit().unwrap();
         let parent_artifact = parent.artifact();
+        let parent_trace_digest = parent
+            .run(0)
+            .unwrap()
+            .trace()
+            .expect("parent run has trace")
+            .digest()
+            .clone();
         let child_name =
             ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:fork-child").unwrap();
         let child = parent.fork(Name::Named(child_name.clone())).unwrap();
@@ -433,6 +503,8 @@ fn sealed_experiment_fork_creates_child_with_parent_subject_and_next_run_id() {
             let mut run = child.run().unwrap();
             assert_eq!(run.run_id(), 1);
             run.log_parameter("solver", "child").unwrap();
+            run.store_trace(Trace::from_bytes(b"child trace".to_vec()))
+                .unwrap();
             run.finish().unwrap();
         }
 
@@ -457,6 +529,11 @@ fn sealed_experiment_fork_creates_child_with_parent_subject_and_next_run_id() {
         );
 
         let loaded = SealedExperiment::from_artifact(child_artifact).unwrap();
+        assert_eq!(
+            loaded.run(0).unwrap().trace().unwrap().digest(),
+            &parent_trace_digest
+        );
+        assert!(loaded.run(1).unwrap().trace().is_some());
         assert!(loaded
             .experiment_attachments()
             .iter()
@@ -737,6 +814,7 @@ fn loaded_experiment_rejects_config_run_attachment_not_listed_in_layers() {
         runs: vec![ExperimentConfigRun {
             run_id: 0,
             attachments: vec![LayerRef(1)],
+            trace: None,
             solves: Vec::new(),
         }],
         run_parameters: LayerRef(0),
@@ -838,8 +916,13 @@ fn log_parameter_promotes_int_column_to_float_at_commit() {
         }
 
         let artifact = experiment.commit().unwrap().into_artifact();
+        let config = experiment_config(&artifact);
         let layers = artifact.layers().unwrap();
-        let run_params = find_layer(&layers, ANN_LAYER, LAYER_KIND_RUN_PARAMETERS);
+        let run_params = layer_from_ref(&layers, config.run_parameters);
+        assert_eq!(
+            run_params.media_type(),
+            &MediaType::Other(RUN_PARAMETERS_MEDIA_TYPE.to_string())
+        );
         let bytes = blob_bytes(&artifact, run_params);
         let table: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
 
@@ -995,6 +1078,22 @@ fn experiment_dyn_keeps_temp_registry_alive_for_derived_artifacts() {
     assert_eq!(cells[0].run_id, 0);
     assert_eq!(cells[0].name, "solver");
     assert_eq!(cells[0].value, ParameterValue::String("scip".to_string()));
+}
+
+#[test]
+fn experiment_dyn_run_rejects_second_trace() {
+    let experiment = ExperimentDyn::with_temp_local_registry(Name::Anonymous).unwrap();
+    let mut run = experiment.run().unwrap();
+    run.store_trace(Trace::from_bytes(b"trace-1".to_vec()))
+        .unwrap();
+
+    let err = run
+        .store_trace(Trace::from_bytes(b"trace-2".to_vec()))
+        .expect_err("a RunDyn can store at most one trace");
+
+    assert!(err.to_string().contains("already has a trace"));
+    run.abandon();
+    experiment.commit().unwrap();
 }
 
 #[test]

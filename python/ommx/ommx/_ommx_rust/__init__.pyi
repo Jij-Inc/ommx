@@ -7,6 +7,7 @@ import datetime
 import enum
 import numpy
 from ommx import adapter
+from ommx import tracing
 import os
 import pandas
 import pathlib
@@ -200,6 +201,11 @@ class Artifact:
     ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f
 
     ```
+    """
+
+    TRACE_OTLP_PROTOBUF_MEDIA_TYPE: builtins.str
+    r"""
+    Media type of an Experiment Run trace encoded as OTLP protobuf.
     """
     @property
     def image_name(self) -> typing.Optional[builtins.str]: ...
@@ -1754,7 +1760,12 @@ class Experiment:
 
         Raises an error if the Experiment has not been committed yet.
         """
-    def __new__(cls, image_name: typing.Optional[builtins.str] = None) -> Experiment:
+    def __new__(
+        cls,
+        image_name: typing.Optional[builtins.str] = None,
+        *,
+        store_trace: builtins.bool = False,
+    ) -> Experiment:
         r"""
         Start a new Experiment in the default local registry.
 
@@ -1764,10 +1775,16 @@ class Experiment:
         loaded later by name. The image reference is a mutable local registry
         alias for the committed Artifact; the Artifact manifest digest remains
         the immutable identity of the committed contents.
+
+        Set `store_trace=True` to store traces for `Run` context managers
+        created from this Experiment. The Experiment itself does not need to
+        be used as a context manager.
         """
     @staticmethod
     def with_temp_local_registry(
         image_name: typing.Optional[builtins.str] = None,
+        *,
+        store_trace: builtins.bool = False,
     ) -> Experiment:
         r"""
         Start a new Experiment backed by a temporary Local Registry.
@@ -1776,6 +1793,10 @@ class Experiment:
         and by Artifacts / loaded Experiments derived from it. This is useful
         for examples and tests because it does not write entries into the
         process-wide default local registry.
+
+        Set `store_trace=True` to store traces for `Run` context managers
+        created from this Experiment. The Experiment itself does not need to
+        be used as a context manager.
         """
     @staticmethod
     def load(image_name: builtins.str) -> Experiment:
@@ -1805,7 +1826,12 @@ class Experiment:
         This is the usual entry point after importing or receiving an OMMX
         Artifact handle. The artifact must contain an Experiment config.
         """
-    def fork(self, image_name: typing.Optional[builtins.str] = None) -> Experiment:
+    def fork(
+        self,
+        image_name: typing.Optional[builtins.str] = None,
+        *,
+        store_trace: builtins.bool = False,
+    ) -> Experiment:
         r"""
         Fork this committed Experiment into a new unsealed child Experiment.
 
@@ -1825,13 +1851,17 @@ class Experiment:
         ```
 
         Raises an error if this Experiment has not been committed yet.
+
+        Set `store_trace=True` on the returned child to store traces for
+        `Run` context managers created from it. The child Experiment itself
+        does not need to be used as a context manager.
         """
     def __enter__(self) -> Experiment: ...
     def __exit__(
         self,
         exc_type: typing.Optional[typing.Any] = None,
-        _exc_value: typing.Optional[typing.Any] = None,
-        _traceback: typing.Optional[typing.Any] = None,
+        exc_value: typing.Optional[typing.Any] = None,
+        traceback: typing.Optional[typing.Any] = None,
     ) -> builtins.bool: ...
     def rename(self, image_name: builtins.str) -> None:
         r"""
@@ -5190,8 +5220,8 @@ class Run:
     def __exit__(
         self,
         exc_type: typing.Optional[typing.Any] = None,
-        _exc_value: typing.Optional[typing.Any] = None,
-        _traceback: typing.Optional[typing.Any] = None,
+        exc_value: typing.Optional[typing.Any] = None,
+        traceback: typing.Optional[typing.Any] = None,
     ) -> builtins.bool: ...
     def log_parameter(
         self, name: builtins.str, value: bool | int | float | str
@@ -5847,6 +5877,11 @@ class SealedRun:
     def attachment_names(self) -> builtins.list[builtins.str]:
         r"""
         Names of run-level attachments.
+        """
+    @property
+    def trace(self) -> typing.Optional[tracing.TraceResult]:
+        r"""
+        Stored trace for this run, or `None` when this run was recorded without trace storage.
         """
     @property
     def solves(self) -> builtins.list[Solve]:

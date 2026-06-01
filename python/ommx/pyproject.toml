@@ -34,6 +34,8 @@ dependencies = [
   # error out at ``%load_ext`` time.
   "ipython>=7.0.0",
   "numpy>=1.23.0, <3.0.0",
+  "opentelemetry-exporter-otlp-proto-common>=1.20.0",
+  "opentelemetry-proto>=1.20.0",
   "opentelemetry-sdk>=1.20.0",
   "pandas>=2.0.0, <3.0.0",
   "pyarrow>=16.0.0, <23.0.0",

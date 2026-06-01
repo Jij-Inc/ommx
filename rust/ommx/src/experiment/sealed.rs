@@ -8,7 +8,7 @@ use super::{
     RUN_PARAMETERS_MEDIA_TYPE,
 };
 use crate::artifact::local_registry::StoredDescriptor;
-use crate::artifact::{ImageRef, LocalArtifact};
+use crate::artifact::{media_types, ImageRef, LocalArtifact};
 use anyhow::{Context, Result};
 use oci_spec::image::{Descriptor, MediaType};
 use std::collections::BTreeMap;
@@ -24,6 +24,7 @@ impl<'reg> SealedExperiment<'reg> {
         for run in config.runs {
             let attachments =
                 decode_attachments(&layers, run.attachments, &format!("run {}", run.run_id))?;
+            let trace = decode_trace(&layers, run.trace, run.run_id)?;
             let solves = decode_solves(&layers, run.run_id, run.solves)?;
             if runs
                 .insert(
@@ -31,6 +32,7 @@ impl<'reg> SealedExperiment<'reg> {
                     SealedRun {
                         run_id: run.run_id,
                         attachments,
+                        trace,
                         solves,
                     },
                 )
@@ -76,6 +78,7 @@ impl<'reg> SealedExperiment<'reg> {
 pub struct SealedRun<'reg> {
     run_id: u64,
     attachments: Vec<StoredDescriptor<'reg>>,
+    trace: Option<StoredDescriptor<'reg>>,
     solves: Vec<Solve<'reg>>,
 }
 
@@ -86,6 +89,10 @@ impl<'reg> SealedRun<'reg> {
 
     pub fn attachments(&self) -> &[StoredDescriptor<'reg>] {
         &self.attachments
+    }
+
+    pub fn trace(&self) -> Option<&StoredDescriptor<'reg>> {
+        self.trace.as_ref()
     }
 
     pub fn solves(&self) -> &[Solve<'reg>] {
@@ -167,6 +174,22 @@ fn decode_attachments<'reg>(
         decoded.push(descriptor);
     }
     Ok(decoded)
+}
+
+fn decode_trace<'reg>(
+    layers: &[StoredDescriptor<'reg>],
+    trace: Option<LayerRef>,
+    run_id: u64,
+) -> Result<Option<StoredDescriptor<'reg>>> {
+    let Some(layer_ref) = trace else {
+        return Ok(None);
+    };
+    let descriptor = resolve_layer(layers, layer_ref)
+        .with_context(|| format!("Failed to resolve Run {run_id} trace ref {}", layer_ref.0))?
+        .clone();
+    validate_layer_media_type(&descriptor, &media_types::trace_otlp_protobuf())
+        .with_context(|| format!("Invalid Run {run_id} trace"))?;
+    Ok(Some(descriptor))
 }
 
 fn decode_solves<'reg>(

@@ -207,13 +207,13 @@ Each adapter uses its own tracer name, so runs from different solvers are easy t
 | `ommx-openjij-adapter` | `ommx.adapter.openjij` | `convert` / `sample` / `decode` |
 
 ```python
-from ommx.tracing import capture_trace
+from ommx.tracing import capture_trace, render_text_tree
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
 with capture_trace() as trace:
     solution = OMMXPySCIPOptAdapter.solve(instance)
 
-print(trace.text_tree())  # shows convert / solve / decode with durations
+print(render_text_tree(trace))  # shows convert / solve / decode with durations
 ```
 
 Spans are emitted through the standard OpenTelemetry API, so they are a no-op when no `TracerProvider` is installed — there is no runtime cost for users who do not opt in.

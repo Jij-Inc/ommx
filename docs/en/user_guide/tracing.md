@@ -63,7 +63,7 @@ When the cell raises, the trace HTML is still rendered (with `[ERROR]` marking t
 The same machinery is available from plain Python:
 
 ```{code-cell} ipython3
-from ommx.tracing import capture_trace
+from ommx.tracing import capture_trace, render_text_tree, save_chrome_trace
 from ommx.v1 import Instance, DecisionVariable
 
 x = DecisionVariable.binary(0, name="x")
@@ -79,24 +79,29 @@ instance = Instance.from_components(
 with capture_trace() as trace:
     solution = instance.evaluate({0: 1.0, 1: 1.0})
 
-print(trace.text_tree())
+print(render_text_tree(trace))
 ```
 
 `trace` is a {class}`~ommx.tracing.TraceResult` populated when the block exits:
 
-- {attr}`~ommx.tracing.TraceResult.spans` — the raw list of {class}`~opentelemetry.sdk.trace.ReadableSpan` for custom processing.
-- {meth}`~ommx.tracing.TraceResult.text_tree` — the same nested renderer the cell magic uses.
-- {meth}`~ommx.tracing.TraceResult.chrome_trace_json` — returns the trace as a JSON string.
-- {meth}`~ommx.tracing.TraceResult.save_chrome_trace` — writes the JSON to disk (creates parent directories as needed).
+- {attr}`~ommx.tracing.TraceResult.request` — the exported OTLP {class}`~opentelemetry.proto.collector.trace.v1.trace_service_pb2.ExportTraceServiceRequest` held by the result.
+- {attr}`~ommx.tracing.TraceResult.spans` — flattened exported OTLP protobuf spans from `request`.
+- {meth}`~ommx.tracing.TraceResult.otlp_protobuf` — returns the same OTLP export request as protobuf bytes, which is the payload stored by Experiment traces.
 
-If the block raises, `trace.spans` is still populated (with the failing span flagged as `[ERROR]`), so you can inspect or save it from an outer `except` or `finally`. The original exception propagates unchanged — OMMX never swallows.
+Rendering is separate from the data object:
+
+- {func}`~ommx.tracing.render_text_tree` — the same nested renderer the cell magic uses.
+- {func}`~ommx.tracing.chrome_trace_json` — returns the trace as a JSON string.
+- {func}`~ommx.tracing.save_chrome_trace` — writes the JSON to disk (creates parent directories as needed).
+
+If the block raises, `trace.request` is still populated (with the failing span flagged as `[ERROR]` by the renderer), so you can inspect or save it from an outer `except` or `finally`. The original exception propagates unchanged — OMMX never swallows.
 
 ```{code-cell} ipython3
 import tempfile
 from pathlib import Path
 
 output_path = Path(tempfile.gettempdir()) / "ommx_trace.json"
-trace.save_chrome_trace(output_path)
+save_chrome_trace(trace, output_path)
 print(f"Wrote {output_path.stat().st_size} bytes to {output_path}")
 ```
 
@@ -148,7 +153,7 @@ When the same method exists on multiple types (for example `Artifact::push` on `
 (own-tracer-provider)=
 ## Using Your Own TracerProvider
 
-`ommx.tracing` installs an in-process {class}`~opentelemetry.sdk.trace.TracerProvider` only if none is already registered. If you need spans to flow to an external backend (OTLP, Jaeger, Honeycomb, …), configure your provider **before the first call into the OMMX extension**:
+`ommx.tracing` installs an in-process {class}`~opentelemetry.sdk.trace.TracerProvider` only when the process is still using OpenTelemetry's default proxy provider. If you need spans to flow to an external backend (OTLP, Jaeger, Honeycomb, …), configure your SDK provider **before the first call into the OMMX extension**:
 
 ```python
 from opentelemetry import trace
@@ -168,9 +173,9 @@ from ommx.v1 import Instance
 Two things to keep in mind:
 
 1. **Configure your provider before the first call to `ommx.tracing` and before the first call into the Rust extension.** OpenTelemetry's Python API only honours the first {func}`~opentelemetry.trace.set_tracer_provider` call, and on first use `ommx.tracing` installs a default {class}`~opentelemetry.sdk.trace.TracerProvider` itself if nothing is set — after that point, a later `set_tracer_provider(your_provider)` is silently ignored. The Rust → Python tracing bridge is also initialized on the first instrumented Rust call, so configure OTel at the very top of your script / notebook.
-2. **`ommx.tracing` attaches its collector to whichever provider is active** — it does not replace yours. Spans reach both the OMMX renderer and your OTLP exporter.
+2. **`ommx.tracing` attaches its collector to whichever SDK provider is active** — it does not replace yours. Spans reach both the OMMX renderer and your OTLP exporter.
 
-If you run with a non-SDK provider that does not support {meth}`~opentelemetry.sdk.trace.TracerProvider.add_span_processor` (rare, but some vendor SDKs do this), {class}`~ommx.tracing.capture_trace` raises a `RuntimeError` at `__enter__` with a pointer to the fix. Install an {class}`opentelemetry.sdk.trace.TracerProvider` yourself, and add your exporter as another `SpanProcessor` on the same provider.
+If you run with a non-SDK provider already registered globally, {class}`~ommx.tracing.capture_trace` raises a `RuntimeError` at `__enter__` with a pointer to the fix. Install an {class}`opentelemetry.sdk.trace.TracerProvider` yourself before OMMX tracing starts, and add your exporter as another `SpanProcessor` on the same provider.
 
 ## Troubleshooting
 
@@ -178,7 +183,7 @@ If you run with a non-SDK provider that does not support {meth}`~opentelemetry.s
 
 Most commonly: the traced block didn't actually call into any instrumented OMMX code path. The collector captures spans whose `trace_id` falls inside the {class}`~ommx.tracing.capture_trace` window, and only instrumented call sites produce spans — raw Python control flow does not. Not every OMMX method is instrumented; constructors and simple accessors typically are not. Double-check that the block reaches an instrumented call (`Instance.evaluate`, `Instance.evaluate_samples`, `Instance.reduce_capabilities`, the `Artifact` `push` / `pull` / `load` / `save` entry points, adapter `solve`, etc.).
 
-A second possibility: a non-SDK {class}`~opentelemetry.sdk.trace.TracerProvider` is active and `ommx.tracing` couldn't attach its collector. If that were the case, the first {class}`~ommx.tracing.capture_trace` call would have raised `RuntimeError` — see the message for the remediation.
+A second possibility: a non-SDK `TracerProvider` is active and `ommx.tracing` couldn't attach its collector. If that were the case, the first {class}`~ommx.tracing.capture_trace` call would have raised `RuntimeError` — see the message for the remediation.
 
 ### My OTLP backend shows the trace but the cell magic shows `(no spans)`
 

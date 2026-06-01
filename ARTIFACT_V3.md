@@ -1,6 +1,6 @@
 # OMMX Experiment / Artifact v3 提案
 
-OMMX v3 における Experiment / Run / Solve / Attachment / Trace / Lineage / GC の未実装領域をまとめる提案。
+OMMX v3 における Experiment / Run / Solve / Attachment / OTel span/event schema / Lineage / GC の未実装領域をまとめる提案。
 
 本ファイルは開発中の一時文書である。実装済みの API 仕様は通常の Sphinx documentation / API reference / module rustdoc を正本にし、本書には残さない。既に実装済みの Artifact manifest format、Local Registry、archive / remote transport の移行ログは本書では扱わない。必要な前提は `rust/ommx/doc/artifact_design.md` と `ommx::artifact::local_registry` の rustdoc を参照する。
 
@@ -41,7 +41,7 @@ OMMX v3 における Experiment / Run / Solve / Attachment / Trace / Lineage / G
 
 ## 1. 実装済み API の正本
 
-実装済みの Experiment / Run / Solve API、context manager の挙動、`log_solve`、`fork`、`rename`、archive / push 連携は本書では列挙しない。Python API は `ommx.experiment` の API Reference、Rust core は `ommx::experiment` の module rustdoc を正本にする。
+実装済みの Experiment / Run / Solve API、context manager の挙動、`log_solve`、`fork`、`rename`、archive / push 連携、trace storage / renderer API は本書では列挙しない。Python API は `ommx.experiment` / `ommx.tracing` の API Reference、Rust core は `ommx::experiment` の module rustdoc を正本にする。Tracing のユーザー向け説明は `docs/en/user_guide/tracing.md` / `docs/ja/user_guide/tracing.md` を参照する。
 
 ユーザー向けの既存チュートリアルとして `docs/ja/tutorial/experiment_management.md` がある。これは別途改稿方針を決めるまで本書の整理では書き換えない。
 
@@ -98,7 +98,7 @@ Experiment / Artifact の変更可能性は 3 相に分ける。
 
 `1 Experiment commit = 1 Artifact manifest` をデフォルトとする。`Run` 終了ごとに manifest を切る挙動は初期設計では提供しない。必要になった場合も opt-in とし、通常の比較 UX を複雑にしない。
 
-Run は Artifact sub manifest ではなく、Experiment config 内の `run_id` で束ねられる logical entity とする。Run の保存実体は、Run parameter table の row、Run-scoped Attachment への `LayerRef`、Run 内の Solve list である。trace layer 内の `ommx.run` span は未実装の diagnostics / trace 設計事項である。
+Run は Artifact sub manifest ではなく、Experiment config 内の `run_id` で束ねられる logical entity とする。Run の保存実体は、Run parameter table の row、Run-scoped Attachment への `LayerRef`、Run 内の Solve list、Run trace への `LayerRef` である。
 
 ### 3.3 Run context manager
 
@@ -457,18 +457,22 @@ Experiment v3 は、記録データ、実行 telemetry、表示、Artifact versi
 
 ### 6.1 Span 階層
 
-OMMX は global `TracerProvider` を暗黙に設定しない。Experiment / Run / builder は active provider がある場合にそれを使い、ない場合は trace capture mode に従う。
+通常の Experiment / Run / builder は global `TracerProvider` を暗黙に設定しない。active provider がある場合にそれを使い、ない場合は通常の OTel no-op として扱う。
+
+一方で `store_trace=True` と `ommx.tracing.capture_trace(...)` は trace 保存の明示要求であるため、保存用 collector を構成する目的で、未設定時に in-process SDK `TracerProvider` を設定してよい。この provider は外部 exporter や network 送信を設定しない。独自 provider を使いたい場合は capture 開始前に設定する。
+
+`ommx.experiment` span は `with Experiment(...)` の scope に対応する。context manager を使わない手動 `commit()` workflow では、人間の思考時間や notebook cell 間の待ち時間が Experiment object の lifetime に混ざるため、Experiment scope の trace は作らない。
 
 Span の基本構造:
 
 | 操作 | Span 名 | 親 |
 |---|---|---|
-| Experiment 開始 | `ommx.experiment` | active span があれば child、なければ root |
-| Run 開始 | `ommx.run` | `ommx.experiment` |
+| Experiment context 開始 | `ommx.experiment` | active span があれば child、なければ root |
+| Run 開始 | `ommx.run` | 通常 tracing では `ommx.experiment`。`store_trace=True` で保存する Run trace では保存単位の root |
 | Adapter solve 実行 | `ommx.solver.solve` | `ommx.run` |
 | Adapter sample 実行 | `ommx.solver.sample` | `ommx.run` |
 | Attachment / Solve 追加 / Run parameter 更新 | span event | current run / experiment span |
-| Artifact commit/build | `ommx.artifact.build` | active span |
+| Artifact commit/build | `ommx.artifact.build` | 明示 commit / build 操作の active span。`store_trace=True` で同じ Artifact に trace を保存する場合、trace の生成と final publish は自己参照を避けるため保存対象 trace の外に置く |
 | Artifact load | `ommx.artifact.load` | active span |
 | Artifact push | `ommx.artifact.push` | active span |
 
@@ -505,49 +509,29 @@ Run parameter event attributes:
 
 Event は Attachment、Solve entry、または Run parameter cell への reference であり、payload 本体を OTel event attribute に入れない。parameter の small scalar を display 用に入れるかは renderer policy として扱い、正本にはしない。
 
-### 6.3 Trace capture mode
+### 6.3 Trace storage mode
 
-Trace capture mode の候補:
+Trace storage の具体的な API 仕様は実装済みであり、API Reference / tracing user guide を正本にする。本書には、今後の span/event schema 設計に影響する境界だけを残す。
 
-| mode | 動作 |
-|---|---|
-| `trace="auto"` | デフォルト。provider / collector が設定済みなら trace layer を埋め込む。未設定なら trace layer を省略し、status annotation を残す |
-| `trace="required"` | provider / collector が未設定なら setup error |
-| `trace=False` | trace layer を生成しない |
-| `with_trace()` | low-level builder の明示要求。未設定なら setup error |
+- Trace storage は OTel を有効化する機能ではなく、明示的に保存を要求した Run scope の trace を Artifact layer として保存する機能である。default は保存しない。
+- 保存境界は Run context manager である。Experiment object の lifetime、手動 `commit()` workflow、notebook cell 間の思考時間を保存対象 trace に混ぜない。
+- Trace は Run に紐づく概念であり、Artifact aggregate accessor ではなく sealed Run view から読む。
+- `trace="auto"` / `trace="required"` / `with_trace()` のような別 API は導入しない。
+- trace を保存しない場合でも、active provider があれば通常の OTel span / event は外部 exporter に流れる。
 
-`trace="auto"` で trace layer を省略した場合の manifest annotations:
+### 6.4 Run trace
 
-- `org.ommx.trace.status=not_recorded`
-- `org.ommx.trace.reason=no_tracer_provider`
+Run trace は Artifact / Experiment data model 上では、Run config が `LayerRef` で参照する optional payload である。1 Run に対する trace は 0 または 1 個とする。Fork は Run を logical entity としてコピーするため、Run parameter、Attachment、Solve と同じく、その Run に紐づく trace ref も子 Experiment に引き継ぐ。子で追加された Run には、その Run の trace が追加される。
 
-既存の notebook / script tracing helper が UX のために provider を install する可能性は別途検討する。ただし Experiment / Artifact build の core path は global provider を勝手に install しない。
+Rust SDK は Trace payload の中身を知らない。`Trace` は media type 付きの opaque bytes として扱い、OTLP の decode / encode / validation は行わない。Python SDK が OTel SDK から export 済み payload を作り、読み出し時に `TraceResult` として解釈する。
 
-### 6.4 Trace layer
-
-Artifact は build-time trace body を専用 layer として持てる。これは batch job や CI のように Artifact 入出力だけで完結する環境で重要である。
-
-Phase 1:
-
-| 項目 | 方針 |
-|---|---|
-| encoding | OTLP JSON |
-| media type | `application/vnd.ommx.trace.otlp+json` |
-| payload | OTLP JSON mapping の `ExportTraceServiceRequest` 互換 (`resourceSpans`) |
-| 対象 signal | span / span event |
-| API | `artifact.get_trace() -> TraceResult` |
-
-Trace layer は Attachment / Run parameter table / Solve entry の代替ではない。parameter / solution / sample set などの本体は Experiment state の物理化戦略に従って保存し、trace layer は実行時系列と logical entry reference を保存する。
+Trace は Attachment / Run parameter table / Solve entry の代替ではない。parameter / solution / sample set などの本体は Experiment state の物理化戦略に従って保存し、trace は実行時系列と logical entry reference を保存する。
 
 ### 6.5 Renderer
 
 `MintoLogger` 相当の独立 logger class は作らない。console output は OTel span / event の renderer として実装する。
 
-Phase 1:
-
-- 後から trace を読む renderer のみ。
-- `TraceResult.text_tree(style="experiment")` 相当で階層表示する。
-- Chrome Trace Event Format は読み出し時に derived format として生成する。
+実装済みの基本 renderer は API Reference / tracing user guide を正本にする。設計上の境界は、`TraceResult` を完了後の trace data / serialization 型に限定し、表示や保存は renderer 関数が `TraceResult` を受け取る形にすることである。`TraceResult` は live `ReadableSpan` を持たず、renderer は export 済み OTLP protobuf span を読む。
 
 Phase 2:
 
@@ -610,6 +594,8 @@ Attachment layer は Artifact layer descriptor annotations に以下を持てる
 | `org.ommx.codec` | optional | external codec identifier, 必要な場合 |
 
 Attachment の media type は descriptor の `mediaType` field にあるため、annotation として重複保持しない。`run_id` / `solve_id` / `solve role` は config の位置と field 名で分かるため、annotation として重複保持しない。
+
+Trace、Run parameter table layer、Instance / Solution layer など、layer payload の種別は descriptor の `mediaType` で判定する。`org.ommx.experiment.layer=trace` / `run-parameters` のような layer kind annotation は持たせない。
 
 Run parameter table は、必ずしも 1 cell = 1 layer descriptor にならない。run parameter の key-level metadata は aggregate payload の内部 schema に持たせてよい。Experiment metadata を Attachment として復元するときは media type + name に写像する。
 
@@ -741,15 +727,14 @@ Run status、elapsed time、実行環境 OS / package versions / backend solver 
 
 ### 10.5 OTel trace / renderer
 
-Experiment / Run / Artifact operation の trace schema、trace layer、post-hoc renderer は未設計である。
+Experiment / Run / Artifact operation の詳細な trace schema は未設計である。Run trace 保存、Run からの trace 読み出し、基本的な text tree / Chrome trace export renderer は実装済み API Reference / tracing user guide を正本にする。
 
 残作業:
 
 - Experiment / Run / solver / artifact build / load / push span schema。
 - `ommx.attachment.added` / `ommx.solve.recorded` / `ommx.run.parameter.recorded` events。
-- global `TracerProvider` を暗黙に install しないことの tests。
-- trace layer media type と `artifact.get_trace()`。
-- text tree / Chrome trace export renderer。
+- default の Experiment / Artifact build path が global `TracerProvider` を暗黙に install しないこと、および `store_trace=True` / `capture_trace(...)` では保存用 collector のための provider 初期化に限定されることの tests。
+- live / streaming renderer を追加する場合の scoped collector と表示更新 policy。
 
 ### 10.6 GC
 
@@ -778,9 +763,7 @@ Local Registry GC の reachability model、dry-run report、削除 policy は未
 | Solve scoped metadata | backend solver 名、solver status、elapsed time などの schema |
 | Diagnostics sink protocol | `DiagnosticsSink` / `DiagnosticCollector` / `DiagnosticEntry`、media type、truncation / compression policy |
 | Run attributes / environment | status、elapsed time、OS / package / solver version の schema |
-| OTel span / event integration | Experiment / Run / solver / artifact operation spans、attachment / solve / parameter events |
-| Trace layer | media type、capture mode、`artifact.get_trace()` |
-| Trace renderer | text tree、Chrome trace export、streaming renderer |
+| OTel span / event integration | Experiment / Run / solver / artifact operation spans、attachment / solve / parameter events、live renderer policy |
 | GC | Local Registry dry-run / report / delete、orphan blob retention、archive / remote registry handling |
 | Legacy MINTO import | compatibility loader を core に持つか migration tool にするか |
 | Documentation integration | 既存の `docs/ja/tutorial/experiment_management.md` は保持しつつ、必要に応じて Sphinx guide、Rust API docs、wire format docs へ分割し、本ファイルを削除する |

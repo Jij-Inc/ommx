@@ -5,7 +5,10 @@ import pytest
 
 from ommx.adapter import SolverAdapter
 from ommx.experiment import Experiment
+from ommx.tracing import TraceResult, render_text_tree
 from ommx.v1 import Instance, Solution
+
+from conftest import get_test_exporter
 
 _ATTACHMENT_NAME = "org.ommx.attachment.name"
 
@@ -16,6 +19,19 @@ def _df_snap(df: pd.DataFrame) -> str:
 
 def _attachment_names(attachments) -> set[str]:
     return {attachment.annotations[_ATTACHMENT_NAME] for attachment in attachments}
+
+
+def _require_trace(trace: TraceResult | None) -> TraceResult:
+    assert trace is not None
+    return trace
+
+
+def _trace_span_names(trace: TraceResult) -> set[str]:
+    return {span.name for span in trace.spans}
+
+
+def _trace_span_count(trace: TraceResult, name: str) -> int:
+    return sum(span.name == name for span in trace.spans)
 
 
 def test_view_run_parameters_from_committed_artifact(snapshot):
@@ -129,6 +145,164 @@ def test_experiment_context_does_not_commit_on_exception():
     experiment = experiments[0]
     with pytest.raises(RuntimeError, match="must be committed"):
         experiment.artifact
+
+
+def test_store_trace_records_run_scope_in_artifact():
+    experiment = Experiment.with_temp_local_registry(store_trace=True)
+    experiment.log_json("dataset", {"name": "miplib2017"})
+    with experiment.run() as run:
+        run.log_parameter("solver", "highs")
+    artifact = experiment.commit()
+
+    loaded = Experiment.from_artifact(artifact)
+    assert _attachment_names(loaded.experiment_attachments) == {"dataset"}
+
+    trace = _require_trace(loaded.runs[0].trace)
+    names = _trace_span_names(trace)
+    assert "ommx.run" in names
+    assert "ommx.run" in render_text_tree(trace)
+
+
+def test_fork_store_trace_carries_parent_run_trace():
+    with Experiment.with_temp_local_registry(store_trace=True) as parent:
+        with parent.run() as run:
+            run.log_parameter("solver", "base")
+
+    parent_trace = _require_trace(parent.runs[0].trace)
+
+    with parent.fork(
+        "ghcr.io/jij-inc/ommx/forked-trace-experiment:latest",
+        store_trace=True,
+    ) as child:
+        with child.run() as run:
+            assert run.run_id == 1
+            run.log_parameter("solver", "child")
+
+    traces = [_require_trace(run.trace) for run in child.runs]
+    assert traces[0].otlp_protobuf() == parent_trace.otlp_protobuf()
+    assert sum(_trace_span_count(trace, "ommx.run") for trace in traces) == 2
+
+
+def test_fork_store_trace_can_add_trace_to_new_run_only():
+    with Experiment.with_temp_local_registry() as parent:
+        with parent.run() as run:
+            run.log_parameter("solver", "base")
+
+    assert parent.runs[0].trace is None
+
+    child = parent.fork(
+        "ghcr.io/jij-inc/ommx/forked-trace-new-run:latest",
+        store_trace=True,
+    )
+    with child.run() as run:
+        assert run.run_id == 1
+        run.log_parameter("solver", "child")
+    child.commit()
+
+    traces = [run.trace for run in child.runs]
+    assert traces[0] is None
+    trace = traces[1]
+    assert trace is not None
+    assert _trace_span_count(trace, "ommx.run") == 1
+
+
+def test_default_experiment_context_does_not_store_trace():
+    with Experiment.with_temp_local_registry() as experiment:
+        with experiment.run() as run:
+            run.log_parameter("solver", "highs")
+
+    assert Experiment.from_artifact(experiment.artifact).runs[0].trace is None
+
+
+def test_experiment_context_does_not_emit_experiment_span():
+    exporter = get_test_exporter()
+    exporter.clear()
+
+    with Experiment.with_temp_local_registry() as experiment:
+        with experiment.run() as run:
+            run.log_parameter("solver", "highs")
+
+    assert "ommx.experiment" not in {span.name for span in exporter.spans}
+
+
+def test_run_context_enter_failure_closes_partial_span(monkeypatch):
+    from opentelemetry import trace as otel_trace
+
+    experiment = Experiment.with_temp_local_registry()
+    run = experiment.run()
+
+    class BrokenSpan:
+        def set_attribute(self, name, value):
+            raise RuntimeError("run attribute unavailable")
+
+    real_get_current_span = otel_trace.get_current_span
+
+    def get_current_span(*args, **kwargs):
+        if args or kwargs:
+            return real_get_current_span(*args, **kwargs)
+        return BrokenSpan()
+
+    with monkeypatch.context() as patch:
+        patch.setattr(otel_trace, "get_current_span", get_current_span)
+        with pytest.raises(RuntimeError, match="run attribute unavailable"):
+            run.__enter__()
+
+    assert not otel_trace.get_current_span().get_span_context().is_valid
+
+    with run:
+        run.log_parameter("solver", "highs")
+    experiment.commit()
+
+
+def test_run_context_exit_failure_keeps_entered_state(monkeypatch):
+    from opentelemetry import trace as otel_trace
+
+    experiment = Experiment.with_temp_local_registry()
+    run = experiment.run()
+
+    class BrokenContextManager:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_value, traceback):
+            raise RuntimeError("run span close failed")
+
+    class FakeTracer:
+        def start_as_current_span(self, name):
+            return BrokenContextManager()
+
+    with monkeypatch.context() as patch:
+        patch.setattr(otel_trace, "get_tracer", lambda *args, **kwargs: FakeTracer())
+        run.__enter__()
+        with pytest.raises(RuntimeError, match="run span close failed"):
+            run.__exit__()
+        with pytest.raises(RuntimeError, match="already been entered"):
+            run.__enter__()
+        with pytest.raises(RuntimeError, match="Run handle"):
+            experiment.commit()
+
+
+def test_store_trace_requires_run_context_manager_before_run_mutation():
+    experiment = Experiment.with_temp_local_registry(store_trace=True)
+    experiment.log_json("dataset", {"name": "miplib2017"})
+    run = experiment.run()
+
+    with pytest.raises(RuntimeError, match="store_trace=True requires using Run"):
+        run.log_parameter("solver", "highs")
+
+    with pytest.raises(RuntimeError, match="store_trace=True requires using Run"):
+        run.finish()
+
+
+def test_run_finish_rejects_active_context_manager():
+    experiment = Experiment.with_temp_local_registry()
+
+    with pytest.raises(RuntimeError, match="Run context is active"):
+        with experiment.run() as run:
+            run.finish()
+
+    artifact = experiment.commit()
+    assert Experiment.from_artifact(artifact).runs == []
 
 
 def test_rename_after_context_commit_updates_artifact_name():
