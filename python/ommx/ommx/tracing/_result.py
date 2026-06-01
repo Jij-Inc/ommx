@@ -36,10 +36,16 @@ class TraceResult:
         ]
 
     def __repr__(self) -> str:
-        """Render this trace as the same text tree used in notebooks."""
+        """Render this trace as a plain text tree."""
         from ._render import render_text_tree
 
         return render_text_tree(self)
+
+    def _repr_html_(self) -> str:
+        """Render this trace as notebook HTML with a download link."""
+        from ._render import render_html
+
+        return render_html(self)
 
     @classmethod
     def from_otlp_protobuf(cls, payload: bytes) -> "TraceResult":

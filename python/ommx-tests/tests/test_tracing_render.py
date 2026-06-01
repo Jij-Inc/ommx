@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import base64
 import json
+import urllib.parse
 
 from opentelemetry.proto.trace.v1.trace_pb2 import Status as ProtoStatus
 
@@ -75,6 +77,27 @@ def test_trace_result_repr_matches_text_tree():
     _add_span(result, "inner", 2, parent_id=1)
 
     assert repr(result) == render_text_tree(result)
+
+
+def test_trace_result_repr_html_contains_download_link():
+    result = TraceResult()
+    _add_span(result, "outer", 1, start=1_000_000_000, end=1_010_000_000)
+    _add_span(result, "inner", 2, parent_id=1)
+
+    html = result._repr_html_()
+
+    assert "<pre>" in html
+    assert "outer" in html
+    assert "inner" in html
+    assert 'download="ommx_trace.json"' in html
+
+    marker = 'href="data:application/json;base64,'
+    start = html.index(marker) + len(marker)
+    end = html.index('"', start)
+    b64 = html[start:end]
+    decoded = base64.b64decode(urllib.parse.unquote(b64)).decode("utf-8")
+    parsed = json.loads(decoded)
+    assert {event["name"] for event in parsed["traceEvents"]} == {"outer", "inner"}
 
 
 def test_render_text_tree_hides_debug_source_attributes():
