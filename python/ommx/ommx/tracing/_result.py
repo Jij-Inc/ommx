@@ -35,6 +35,12 @@ class TraceResult:
             for span in scope_span.spans
         ]
 
+    def __repr__(self) -> str:
+        """Render this trace as the same text tree used in notebooks."""
+        from ._render import render_text_tree
+
+        return render_text_tree(self)
+
     @classmethod
     def from_otlp_protobuf(cls, payload: bytes) -> "TraceResult":
         """Build a trace result from an OMMX trace payload."""

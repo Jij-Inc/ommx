@@ -267,6 +267,8 @@ assert restored_jij_problem.name == jij_problem.name
 
 Runの一覧は {py:attr}`~ommx.experiment.Experiment.runs` から確認できます。終了済みのRunが作成順に並び、それぞれのRunに紐づくAttachmentとSolveを確認できます。
 
+trace storageを有効にして記録したRunでは、{py:attr}`~ommx.experiment.SealedRun.trace` から保存済みのRunトレースを取得できます。これは発展的な機能なので、詳細は {ref}`experiment-run-trace-storage` を参照してください。
+
 ```{code-cell} ipython3
 from typing import Any
 from ommx.v1 import Solution

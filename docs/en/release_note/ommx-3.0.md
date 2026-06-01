@@ -187,7 +187,7 @@ Two entry points ship under `ommx.tracing`:
 - **`%%ommx_trace`** — a Jupyter cell magic that renders a per-cell span tree and a Chrome Trace JSON download link
 - **`capture_trace` / `@traced`** — a context manager and decorator for the same workflow from regular Python scripts, tests, and CI
 
-See [Tracing and Profiling](../user_guide/tracing.md) for the full walkthrough, configuring your own `TracerProvider`, and troubleshooting.
+See [Tracing and Profiling](../user_guide/tracing.ipynb) for the full walkthrough, configuring your own `TracerProvider`, and troubleshooting.
 
 ### 🆕 Tracing spans in solver/sampler adapters ([#833](https://github.com/Jij-Inc/ommx/pull/833))
 

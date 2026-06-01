@@ -65,6 +65,14 @@ def test_render_text_tree_handles_empty():
     assert render_text_tree(TraceResult()) == "(no spans)"
 
 
+def test_trace_result_repr_matches_text_tree():
+    result = TraceResult()
+    _add_span(result, "outer", 1, start=1_000_000_000, end=1_010_000_000)
+    _add_span(result, "inner", 2, parent_id=1)
+
+    assert repr(result) == render_text_tree(result)
+
+
 def test_render_text_tree_marks_error_spans():
     """Spans with ``Status(ERROR)`` are flagged in the text tree."""
     result = TraceResult()

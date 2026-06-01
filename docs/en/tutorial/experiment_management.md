@@ -267,6 +267,8 @@ assert restored_jij_problem.name == jij_problem.name
 
 The list of Runs is available from {py:attr}`~ommx.experiment.Experiment.runs`. Finished Runs are ordered by creation time, and each Run exposes its Attachments and Solves.
 
+If a Run was recorded with trace storage enabled, {py:attr}`~ommx.experiment.SealedRun.trace` returns the stored Run trace. Trace storage is an advanced feature; see {ref}`experiment-run-trace-storage` for details.
+
 ```{code-cell} ipython3
 from typing import Any
 from ommx.v1 import Solution
