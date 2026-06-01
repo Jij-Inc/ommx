@@ -125,6 +125,28 @@ def test_trace_result_otlp_protobuf_roundtrip(capture_collector):
     assert {span.name for span in restored.spans} == names
 
 
+def test_capture_trace_rejects_reenter(capture_collector):
+    capture = capture_trace("outer")
+    with capture:
+        with pytest.raises(
+            RuntimeError, match="capture_trace context has already been entered"
+        ):
+            capture.__enter__()
+
+
+def test_capture_trace_enter_failure_closes_root_span(capture_collector, monkeypatch):
+    from opentelemetry import trace
+
+    def fail_begin_capture(trace_id):
+        raise RuntimeError("collector unavailable")
+
+    monkeypatch.setattr(capture_collector, "begin_capture", fail_begin_capture)
+    with pytest.raises(RuntimeError, match="collector unavailable"):
+        capture_trace("partial").__enter__()
+
+    assert not trace.get_current_span().get_span_context().is_valid
+
+
 # ---------------------------------------------------------------------------
 # capture_trace: exception path — must preserve info
 # ---------------------------------------------------------------------------

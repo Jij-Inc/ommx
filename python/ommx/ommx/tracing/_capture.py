@@ -67,11 +67,14 @@ class capture_trace:  # noqa: N801 - context-manager factory, lowercase on purpo
     def __init__(self, name: str = _DEFAULT_ROOT_SPAN_NAME) -> None:
         self._name = name
         self._result = TraceResult()
+        self._entered = False
         self._trace_id: Optional[int] = None
         self._collector: Optional[_TraceSpanCollector] = None
         self._span_cm: Optional[AbstractContextManager[Span]] = None
 
     def __enter__(self) -> TraceResult:
+        if self._entered:
+            raise RuntimeError("capture_trace context has already been entered")
         self._collector = ensure_collector_installed()
         tracer = trace.get_tracer(_TRACER_NAME)
         # ``context=Context()`` detaches from the ambient context so
@@ -82,8 +85,15 @@ class capture_trace:  # noqa: N801 - context-manager factory, lowercase on purpo
             context=otel_context.Context(),
         )
         root = self._span_cm.__enter__()
-        self._trace_id = root.get_span_context().trace_id
-        self._collector.begin_capture(self._trace_id)
+        try:
+            self._trace_id = root.get_span_context().trace_id
+            self._collector.begin_capture(self._trace_id)
+        except BaseException as exc:
+            self._span_cm.__exit__(type(exc), exc, exc.__traceback__)
+            self._span_cm = None
+            self._trace_id = None
+            raise
+        self._entered = True
         return self._result
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
@@ -101,5 +111,6 @@ class capture_trace:  # noqa: N801 - context-manager factory, lowercase on purpo
             if self._collector is not None and self._trace_id is not None:
                 spans = self._collector.end_capture(self._trace_id)
                 self._result.request = spans_to_otlp_request(spans)
+            self._span_cm = None
         # Never swallow the exception.
         return False

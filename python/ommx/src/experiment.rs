@@ -518,8 +518,9 @@ impl PyExperiment {
         if self.context_entered {
             anyhow::bail!("Experiment context has already been entered");
         }
+        let context_manager = start_python_span(py, "ommx.experiment")?;
+        self.trace_context_manager = Some(context_manager);
         self.context_entered = true;
-        self.trace_context_manager = Some(start_python_span(py, "ommx.experiment")?);
         Ok(())
     }
 
@@ -771,13 +772,17 @@ impl PyRun {
                 let tracing = py.import("ommx.tracing")?;
                 let cm = tracing.getattr("capture_trace")?.call1(("ommx.run",))?;
                 let result = cm.call_method0("__enter__")?;
-                set_current_span_run_id(py, run_id)?;
                 this.trace_result = Some(result.unbind());
                 this.span_context_manager = Some(cm.unbind());
+                if let Err(error) = set_current_span_run_id(py, run_id) {
+                    this.close_run_context_after_failed_enter(py, error)?;
+                }
             } else {
                 let cm = start_python_span(py, "ommx.run")?;
-                set_current_span_run_id(py, run_id)?;
                 this.span_context_manager = Some(cm);
+                if let Err(error) = set_current_span_run_id(py, run_id) {
+                    this.close_run_context_after_failed_enter(py, error)?;
+                }
             }
             this.context_entered = true;
             this.context_active = true;
@@ -999,6 +1004,23 @@ impl PyRun {
         self.as_open_mut()?
             .store_trace(ommx::experiment::Trace::from_bytes(payload))?;
         Ok(())
+    }
+
+    fn close_run_context_after_failed_enter(
+        &mut self,
+        py: Python<'_>,
+        original_error: anyhow::Error,
+    ) -> Result<()> {
+        let original_message = original_error.to_string();
+        self.trace_result = None;
+        let close_result =
+            close_python_context_manager(py, self.span_context_manager.take(), None, None, None);
+        close_result.with_context(|| {
+            format!(
+                "Run context setup failed with `{original_message}`, then closing the partial context failed"
+            )
+        })?;
+        Err(original_error)
     }
 
     fn finish_inner(&mut self) -> Result<()> {

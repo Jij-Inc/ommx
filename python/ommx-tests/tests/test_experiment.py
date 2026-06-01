@@ -220,6 +220,52 @@ def test_experiment_context_rejects_reenter_without_store_trace():
             experiment.__enter__()
 
 
+def test_experiment_context_enter_failure_can_retry(monkeypatch):
+    from opentelemetry import trace as otel_trace
+
+    experiment = Experiment.with_temp_local_registry()
+
+    def fail_get_tracer(*args, **kwargs):
+        raise RuntimeError("tracer unavailable")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(otel_trace, "get_tracer", fail_get_tracer)
+        with pytest.raises(RuntimeError, match="tracer unavailable"):
+            experiment.__enter__()
+
+    with experiment:
+        pass
+
+
+def test_run_context_enter_failure_closes_partial_span(monkeypatch):
+    from opentelemetry import trace as otel_trace
+
+    experiment = Experiment.with_temp_local_registry()
+    run = experiment.run()
+
+    class BrokenSpan:
+        def set_attribute(self, name, value):
+            raise RuntimeError("run attribute unavailable")
+
+    real_get_current_span = otel_trace.get_current_span
+
+    def get_current_span(*args, **kwargs):
+        if args or kwargs:
+            return real_get_current_span(*args, **kwargs)
+        return BrokenSpan()
+
+    with monkeypatch.context() as patch:
+        patch.setattr(otel_trace, "get_current_span", get_current_span)
+        with pytest.raises(RuntimeError, match="run attribute unavailable"):
+            run.__enter__()
+
+    assert not otel_trace.get_current_span().get_span_context().is_valid
+
+    with run:
+        run.log_parameter("solver", "highs")
+    experiment.commit()
+
+
 def test_store_trace_requires_run_context_manager_before_run_mutation():
     experiment = Experiment.with_temp_local_registry(store_trace=True)
     experiment.log_json("dataset", {"name": "miplib2017"})
