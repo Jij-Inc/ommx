@@ -8,6 +8,8 @@ from ommx.experiment import Experiment
 from ommx.tracing import TraceResult, render_text_tree
 from ommx.v1 import Instance, Solution
 
+from conftest import get_test_exporter
+
 _ATTACHMENT_NAME = "org.ommx.attachment.name"
 
 
@@ -212,29 +214,15 @@ def test_default_experiment_context_does_not_store_trace():
     assert Experiment.from_artifact(experiment.artifact).runs[0].trace is None
 
 
-def test_experiment_context_rejects_reenter_without_store_trace():
+def test_experiment_context_does_not_emit_experiment_span():
+    exporter = get_test_exporter()
+    exporter.clear()
+
     with Experiment.with_temp_local_registry() as experiment:
-        with pytest.raises(
-            RuntimeError, match="Experiment context has already been entered"
-        ):
-            experiment.__enter__()
+        with experiment.run() as run:
+            run.log_parameter("solver", "highs")
 
-
-def test_experiment_context_enter_failure_can_retry(monkeypatch):
-    from opentelemetry import trace as otel_trace
-
-    experiment = Experiment.with_temp_local_registry()
-
-    def fail_get_tracer(*args, **kwargs):
-        raise RuntimeError("tracer unavailable")
-
-    with monkeypatch.context() as patch:
-        patch.setattr(otel_trace, "get_tracer", fail_get_tracer)
-        with pytest.raises(RuntimeError, match="tracer unavailable"):
-            experiment.__enter__()
-
-    with experiment:
-        pass
+    assert "ommx.experiment" not in {span.name for span in exporter.spans}
 
 
 def test_run_context_enter_failure_closes_partial_span(monkeypatch):

@@ -60,8 +60,6 @@ use ommx::experiment::AttachmentLogger;
 pub struct PyExperiment {
     inner: ommx::experiment::ExperimentDyn,
     store_trace: bool,
-    context_entered: bool,
-    trace_context_manager: Option<Py<PyAny>>,
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
@@ -85,8 +83,6 @@ impl PyExperiment {
         Ok(Self {
             inner: ommx::experiment::ExperimentDyn::new(parse_name(image_name)?)?,
             store_trace,
-            context_entered: false,
-            trace_context_manager: None,
         })
     }
 
@@ -108,8 +104,6 @@ impl PyExperiment {
                 image_name,
             )?)?,
             store_trace,
-            context_entered: false,
-            trace_context_manager: None,
         })
     }
 
@@ -126,8 +120,6 @@ impl PyExperiment {
         Ok(Self {
             inner: ommx::experiment::ExperimentDyn::load(image_name)?,
             store_trace: false,
-            context_entered: false,
-            trace_context_manager: None,
         })
     }
 
@@ -143,8 +135,6 @@ impl PyExperiment {
         Ok(Self {
             inner: ommx::experiment::ExperimentDyn::import_archive(&path)?,
             store_trace: false,
-            context_entered: false,
-            trace_context_manager: None,
         })
     }
 
@@ -157,8 +147,6 @@ impl PyExperiment {
         Ok(Self {
             inner: ommx::experiment::ExperimentDyn::from_artifact(artifact.inner().clone())?,
             store_trace: false,
-            context_entered: false,
-            trace_context_manager: None,
         })
     }
 
@@ -189,17 +177,10 @@ impl PyExperiment {
         Ok(Self {
             inner: self.inner.fork(parse_name(image_name)?)?,
             store_trace,
-            context_entered: false,
-            trace_context_manager: None,
         })
     }
 
     pub fn __enter__(slf: Bound<'_, Self>) -> PyResult<Py<PyExperiment>> {
-        {
-            let py = slf.py();
-            let mut this = slf.borrow_mut();
-            this.enter_experiment_context(py)?;
-        }
         Ok(slf.unbind())
     }
 
@@ -211,7 +192,7 @@ impl PyExperiment {
         exc_value: Option<&Bound<'_, PyAny>>,
         traceback: Option<&Bound<'_, PyAny>>,
     ) -> Result<bool> {
-        self.exit_experiment_context(py, exc_type, exc_value, traceback)?;
+        let _ = (exc_value, traceback);
         if exc_type.is_none() && self.inner.is_unsealed() {
             self.commit_inner(py)?;
         }
@@ -514,33 +495,6 @@ impl PyExperiment {
 }
 
 impl PyExperiment {
-    fn enter_experiment_context(&mut self, py: Python<'_>) -> Result<()> {
-        if self.context_entered {
-            anyhow::bail!("Experiment context has already been entered");
-        }
-        let context_manager = start_python_span(py, "ommx.experiment")?;
-        self.trace_context_manager = Some(context_manager);
-        self.context_entered = true;
-        Ok(())
-    }
-
-    fn exit_experiment_context(
-        &mut self,
-        py: Python<'_>,
-        exc_type: Option<&Bound<'_, PyAny>>,
-        exc_value: Option<&Bound<'_, PyAny>>,
-        traceback: Option<&Bound<'_, PyAny>>,
-    ) -> Result<()> {
-        let close_result = close_python_context_manager(
-            py,
-            self.trace_context_manager.take(),
-            exc_type,
-            exc_value,
-            traceback,
-        );
-        close_result
-    }
-
     fn commit_inner(&mut self, py: Python<'_>) -> Result<PyArtifact> {
         let _guard = crate::TRACING.attach_parent_context(py);
         Ok(PyArtifact::new(self.inner.commit()?))
