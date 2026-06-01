@@ -76,13 +76,50 @@ use std::sync::{Mutex, MutexGuard};
 // --- Artifact mapping constants ---------------------------------------------
 
 const EXPERIMENT_STATUS_FINISHED: &str = "finished";
+const EXPERIMENT_STATUS_FAILED: &str = "failed";
 
 const ANN_SPACE: &str = "org.ommx.experiment.space";
 const ANN_RUN_ID: &str = "org.ommx.experiment.run_id";
 const ANN_ATTACHMENT_NAME: &str = "org.ommx.attachment.name";
+const ANN_EXPERIMENT_STATUS: &str = "org.ommx.experiment.status";
+const ANN_EXPERIMENT_RECOVERY: &str = "org.ommx.experiment.recovery";
+const ANN_EXPERIMENT_REQUESTED_IMAGE: &str = "org.ommx.experiment.requested_image";
 
 const RUN_PARAMETERS_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment.run-parameters+json";
 const EXPERIMENT_CONFIG_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment.config+json";
+
+const RUN_STATUS_FINISHED: &str = "finished";
+const RUN_STATUS_FAILED: &str = "failed";
+
+/// Lifecycle status of a closed Run recorded in an Experiment.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RunStatus {
+    /// The Run context exited normally or was explicitly finished.
+    Finished,
+    /// The Run context exited with an exception and retained partial state.
+    Failed,
+}
+
+impl RunStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Finished => RUN_STATUS_FINISHED,
+            Self::Failed => RUN_STATUS_FAILED,
+        }
+    }
+
+    fn from_config(status: &str) -> Result<Self> {
+        match status {
+            RUN_STATUS_FINISHED => Ok(Self::Finished),
+            RUN_STATUS_FAILED => Ok(Self::Failed),
+            _ => {
+                crate::bail!(
+                    "Run status is {status}, expected {RUN_STATUS_FINISHED} or {RUN_STATUS_FAILED}"
+                )
+            }
+        }
+    }
+}
 
 /// A mutable, unsealed experiment session. See the [module documentation](self).
 #[derive(Debug)]
@@ -95,6 +132,7 @@ pub struct Experiment<'reg> {
 /// written and published.
 #[derive(Debug, Clone)]
 pub struct SealedExperiment<'reg> {
+    status: String,
     artifact: LocalArtifact<'reg>,
     attachments: Vec<StoredDescriptor<'reg>>,
     runs: BTreeMap<u64, sealed::SealedRun<'reg>>,
@@ -181,6 +219,8 @@ pub struct Run<'exp, 'reg> {
 #[derive(Debug)]
 struct RunEntry<'reg> {
     run_id: u64,
+    status: RunStatus,
+    failure_reason: Option<String>,
     attachments: Vec<StoredDescriptor<'reg>>,
     trace: Option<StoredDescriptor<'reg>>,
     solves: Vec<SolveEntry<'reg>>,
@@ -378,6 +418,8 @@ impl<'reg> SealedExperiment<'reg> {
                 run.run_id(),
                 RunEntry {
                     run_id: run.run_id(),
+                    status: run.status().clone(),
+                    failure_reason: run.failure_reason().map(ToOwned::to_owned),
                     attachments: run.attachments().to_vec(),
                     trace: run.trace().cloned(),
                     solves,

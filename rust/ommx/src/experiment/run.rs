@@ -1,7 +1,7 @@
 //! Experiment / Run handles and run lifecycle.
 
 use super::attachment::{store_attachment_descriptor, AttachmentSpace};
-use super::{AttachmentLogger, ParameterValue, Run, RunEntry, SolveEntry, Trace};
+use super::{AttachmentLogger, ParameterValue, Run, RunEntry, RunStatus, SolveEntry, Trace};
 use crate::artifact::media_types;
 use crate::{Instance, Solution};
 use anyhow::Result;
@@ -85,10 +85,19 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
     /// experiment. Consumes the handle so no further run-scoped data
     /// can be added.
     pub fn finish(self) -> Result<()> {
-        self.close()
+        self.close(RunStatus::Finished, None)
     }
 
-    fn close(self) -> Result<()> {
+    /// Close the run as failed and append the partial run state to the
+    /// parent experiment.
+    ///
+    /// This preserves run-scoped payloads and completed solves that were
+    /// logged before the failure.
+    pub fn finish_failed(self, reason: impl Into<String>) -> Result<()> {
+        self.close(RunStatus::Failed, Some(reason.into()))
+    }
+
+    fn close(self, status: RunStatus, failure_reason: Option<String>) -> Result<()> {
         let Run {
             experiment,
             run_id,
@@ -100,6 +109,8 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
         } = self;
         let run = RunEntry {
             run_id,
+            status,
+            failure_reason,
             attachments,
             trace,
             solves,

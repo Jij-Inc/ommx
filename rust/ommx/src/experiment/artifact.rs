@@ -7,7 +7,7 @@ use super::{EXPERIMENT_CONFIG_MEDIA_TYPE, RUN_PARAMETERS_MEDIA_TYPE};
 use crate::artifact::local_registry::{
     LocalRegistry, RefUpdate, StoredDescriptor, UnsealedArtifact,
 };
-use crate::artifact::{media_types, LocalArtifact};
+use crate::artifact::{media_types, ImageRef, LocalArtifact};
 use anyhow::Result;
 use oci_spec::image::MediaType;
 use std::collections::HashMap;
@@ -17,9 +17,55 @@ impl<'reg> UnsealedExperimentState<'reg> {
     /// immutable artifact. This is the state-level counterpart of the
     /// public `Experiment::commit(self)` lifecycle operation.
     pub fn commit(self, registry: &'reg LocalRegistry) -> Result<LocalArtifact<'reg>> {
+        let image_name = self.image_name.clone();
+        self.commit_as(
+            registry,
+            image_name,
+            super::EXPERIMENT_STATUS_FINISHED,
+            HashMap::new(),
+        )
+    }
+
+    /// Consume the unsealed experiment state and publish a failed
+    /// recovery artifact under a reserved local ref.
+    pub(super) fn commit_failed_recovery(
+        self,
+        registry: &'reg LocalRegistry,
+    ) -> Result<LocalArtifact<'reg>> {
+        let requested_image_name = self.image_name.clone();
+        let recovery_image_name = registry.synthesize_crashed_experiment_image_name()?;
+        let mut annotations = HashMap::new();
+        annotations.insert(
+            super::ANN_EXPERIMENT_STATUS.to_string(),
+            super::EXPERIMENT_STATUS_FAILED.to_string(),
+        );
+        annotations.insert(
+            super::ANN_EXPERIMENT_RECOVERY.to_string(),
+            "true".to_string(),
+        );
+        annotations.insert(
+            super::ANN_EXPERIMENT_REQUESTED_IMAGE.to_string(),
+            requested_image_name.to_string(),
+        );
+
+        self.commit_as(
+            registry,
+            recovery_image_name,
+            super::EXPERIMENT_STATUS_FAILED,
+            annotations,
+        )
+    }
+
+    fn commit_as(
+        self,
+        registry: &'reg LocalRegistry,
+        image_name: ImageRef,
+        status: &str,
+        annotations: HashMap<String, String>,
+    ) -> Result<LocalArtifact<'reg>> {
         let run_parameters = self.run_parameter_descriptor(registry)?;
         let mut layers = LayerTable::default();
-        let config = self.experiment_config(&mut layers, run_parameters)?;
+        let config = self.experiment_config(&mut layers, run_parameters, status)?;
         let config_descriptor = registry.store_json_blob(
             MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()),
             &config,
@@ -29,10 +75,10 @@ impl<'reg> UnsealedExperimentState<'reg> {
             config_descriptor,
             layers.into_layers(),
             self.subject,
-            HashMap::new(),
+            annotations,
         );
         let sealed_artifact = registry.seal_artifact(artifact)?;
-        let ref_update = registry.publish_manifest_ref(&self.image_name, &sealed_artifact)?;
+        let ref_update = registry.publish_manifest_ref(&image_name, &sealed_artifact)?;
         if let RefUpdate::Conflicted {
             existing_manifest_digest,
             incoming_manifest_digest,
@@ -41,13 +87,13 @@ impl<'reg> UnsealedExperimentState<'reg> {
             crate::bail!(
                 "Local registry ref {} already points to {existing_manifest_digest}; \
                  experiment manifest {incoming_manifest_digest} was not published",
-                self.image_name
+                image_name
             );
         }
 
         Ok(LocalArtifact::from_parts(
             registry,
-            self.image_name,
+            image_name,
             sealed_artifact.digest().clone(),
         ))
     }
@@ -67,6 +113,7 @@ impl<'reg> UnsealedExperimentState<'reg> {
         &self,
         layers: &mut LayerTable<'reg>,
         run_parameters: StoredDescriptor<'reg>,
+        status: &str,
     ) -> Result<ExperimentConfig> {
         let attachments = self
             .attachments
@@ -100,6 +147,8 @@ impl<'reg> UnsealedExperimentState<'reg> {
             }
             runs.push(ExperimentConfigRun {
                 run_id: run.run_id,
+                status: run.status.as_str().to_string(),
+                failure_reason: run.failure_reason.clone(),
                 attachments,
                 trace,
                 solves,
@@ -107,7 +156,7 @@ impl<'reg> UnsealedExperimentState<'reg> {
         }
 
         Ok(ExperimentConfig {
-            status: super::EXPERIMENT_STATUS_FINISHED.to_string(),
+            status: status.to_string(),
             attachments,
             runs,
             run_parameters: layers.push(run_parameters)?,

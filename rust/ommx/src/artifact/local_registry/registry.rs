@@ -271,6 +271,18 @@ impl LocalRegistry {
             .with_context(|| "Failed to synthesise anonymous experiment image name")
     }
 
+    /// Synthesize a fresh local ref for an Experiment recovery artifact.
+    ///
+    /// Format:
+    /// `<registry-id8>.ommx.local/crashed:<timestamp>-<nonce>`.
+    /// Recovery artifacts are separate from the requested Experiment ref so
+    /// a failed context-manager exit never advances the success tag.
+    pub fn synthesize_crashed_experiment_image_name(&self) -> Result<ImageRef> {
+        let registry_id = self.index.registry_id()?;
+        crate::artifact::anonymous_local_image_name(&registry_id, "crashed")
+            .with_context(|| "Failed to synthesise crashed experiment image name")
+    }
+
     /// List every SQLite ref whose `(name, reference)` matches the
     /// shape an anonymous artifact's image name would take:
     /// `<registry-id8>.ommx.local/anonymous` (8 lowercase hex chars

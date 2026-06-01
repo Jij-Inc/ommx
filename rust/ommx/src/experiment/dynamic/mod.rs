@@ -18,7 +18,7 @@
 use super::attachment::{store_attachment_descriptor, AttachmentSpace};
 use super::{
     allocate_next_run_id, next_run_id, AttachmentLogger, Name, RunEntry, RunParameterCell,
-    SealedExperiment, UnsealedExperimentState,
+    RunStatus, SealedExperiment, UnsealedExperimentState,
 };
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
 use crate::artifact::{
@@ -68,6 +68,7 @@ enum ExperimentDynLifecycle {
     Failed {
         image_name: ImageRef,
         reason: String,
+        recovery_artifact: Option<LocalArtifactDyn>,
     },
 }
 
@@ -83,6 +84,8 @@ struct UnsealedExperimentDynState {
 #[derive(Debug)]
 struct RunEntryDyn {
     run_id: u64,
+    status: RunStatus,
+    failure_reason: Option<String>,
     attachments: Vec<Descriptor>,
     trace: Option<Descriptor>,
     solves: Vec<SolveEntryDyn>,
@@ -100,6 +103,7 @@ pub(super) struct SolveEntryDyn {
 
 #[derive(Debug, Clone)]
 struct SealedExperimentDynState {
+    status: String,
     artifact: LocalArtifactDyn,
     attachments: Vec<Descriptor>,
     runs: BTreeMap<u64, SealedRunDyn>,
@@ -116,6 +120,8 @@ struct SealedExperimentDynState {
 pub struct SealedRunDyn {
     registry_handle: LocalRegistryHandle,
     run_id: u64,
+    status: RunStatus,
+    failure_reason: Option<String>,
     attachments: Vec<Descriptor>,
     trace: Option<Descriptor>,
     solves: Vec<SolveDyn>,
@@ -140,6 +146,14 @@ pub struct SolveDyn {
 impl SealedRunDyn {
     pub fn run_id(&self) -> u64 {
         self.run_id
+    }
+
+    pub fn status(&self) -> &RunStatus {
+        &self.status
+    }
+
+    pub fn failure_reason(&self) -> Option<&str> {
+        self.failure_reason.as_deref()
     }
 
     pub fn attachments(&self) -> Result<Vec<StoredDescriptor<'_>>> {
@@ -276,12 +290,25 @@ impl ExperimentDyn {
         Self::from_artifact(LocalArtifactDyn::load(image_name)?)
     }
 
+    pub fn load_recovery(image_name: crate::artifact::ImageRef) -> Result<Self> {
+        Self::from_recovery_artifact(LocalArtifactDyn::load(image_name)?)
+    }
+
     pub fn import_archive(path: &Path) -> Result<Self> {
         Self::from_artifact(LocalArtifactDyn::import_archive(path)?)
     }
 
     pub fn from_artifact(artifact: LocalArtifactDyn) -> Result<Self> {
         let sealed = SealedExperimentDynState::from_artifact(artifact)?;
+        Self::from_sealed_state(sealed)
+    }
+
+    pub fn from_recovery_artifact(artifact: LocalArtifactDyn) -> Result<Self> {
+        let sealed = SealedExperimentDynState::from_recovery_artifact(artifact)?;
+        Self::from_sealed_state(sealed)
+    }
+
+    fn from_sealed_state(sealed: SealedExperimentDynState) -> Result<Self> {
         let registry_handle = sealed.registry_handle();
         Ok(Self {
             registry_handle: registry_handle.clone(),
@@ -356,6 +383,13 @@ impl ExperimentDyn {
         }
     }
 
+    pub fn experiment_status(&self) -> Option<String> {
+        match &lock_experiment_state(&self.state).lifecycle {
+            ExperimentDynLifecycle::Sealed(sealed) => Some(sealed.status.clone()),
+            ExperimentDynLifecycle::Unsealed { .. } | ExperimentDynLifecycle::Failed { .. } => None,
+        }
+    }
+
     pub fn open_run_count(&self) -> usize {
         match &lock_experiment_state(&self.state).lifecycle {
             ExperimentDynLifecycle::Unsealed { open_runs, .. } => *open_runs,
@@ -410,7 +444,11 @@ impl ExperimentDyn {
             Ok(artifact) => artifact,
             Err(error) => {
                 let reason = error.to_string();
-                dyn_state.lifecycle = ExperimentDynLifecycle::Failed { image_name, reason };
+                dyn_state.lifecycle = ExperimentDynLifecycle::Failed {
+                    image_name,
+                    reason,
+                    recovery_artifact: None,
+                };
                 return Err(error);
             }
         };
@@ -418,12 +456,77 @@ impl ExperimentDyn {
             Ok(sealed) => sealed,
             Err(error) => {
                 let reason = error.to_string();
-                dyn_state.lifecycle = ExperimentDynLifecycle::Failed { image_name, reason };
+                dyn_state.lifecycle = ExperimentDynLifecycle::Failed {
+                    image_name,
+                    reason,
+                    recovery_artifact: None,
+                };
                 return Err(error);
             }
         };
         dyn_state.lifecycle = ExperimentDynLifecycle::Sealed(sealed);
         Ok(artifact)
+    }
+
+    pub fn commit_failed_recovery(&self, reason: impl Into<String>) -> Result<LocalArtifactDyn> {
+        let reason = reason.into();
+        let mut dyn_state = lock_experiment_state(&self.state);
+        let registry_handle = dyn_state.registry_handle.clone();
+        let (state, open_runs) = match &mut dyn_state.lifecycle {
+            ExperimentDynLifecycle::Unsealed { state, open_runs } => (state, open_runs),
+            lifecycle => return bail_non_unsealed(lifecycle),
+        };
+        if *open_runs != 0 {
+            tracing::warn!(
+                open_runs = *open_runs,
+                "Publishing Experiment recovery artifact while Run handle(s) are still open; open-run local state is not included"
+            );
+        }
+        let state = state
+            .take()
+            .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
+        let image_name = state.image_name.clone();
+        let artifact = match state
+            .commit_failed_recovery(registry_handle.registry())
+            .and_then(|artifact| {
+                LocalArtifactDyn::open_in_registry_handle(
+                    registry_handle.clone(),
+                    artifact.image_name().clone(),
+                )
+            }) {
+            Ok(artifact) => artifact,
+            Err(error) => {
+                let recovery_error = error.to_string();
+                dyn_state.lifecycle = ExperimentDynLifecycle::Failed {
+                    image_name,
+                    reason: format!(
+                        "{reason}; failed to publish recovery artifact: {recovery_error}"
+                    ),
+                    recovery_artifact: None,
+                };
+                return Err(error);
+            }
+        };
+        dyn_state.lifecycle = ExperimentDynLifecycle::Failed {
+            image_name,
+            reason,
+            recovery_artifact: Some(artifact.clone()),
+        };
+        Ok(artifact)
+    }
+
+    pub fn recovery_artifact(&self) -> Option<LocalArtifactDyn> {
+        match &lock_experiment_state(&self.state).lifecycle {
+            ExperimentDynLifecycle::Failed {
+                recovery_artifact, ..
+            } => recovery_artifact.clone(),
+            ExperimentDynLifecycle::Unsealed { .. } | ExperimentDynLifecycle::Sealed(_) => None,
+        }
+    }
+
+    pub fn recovery_image_name(&self) -> Option<ImageRef> {
+        self.recovery_artifact()
+            .map(|artifact| artifact.image_name().clone())
     }
 
     pub fn artifact(&self) -> Result<LocalArtifactDyn> {
@@ -487,6 +590,14 @@ impl UnsealedExperimentDynState {
         self.into_unsealed_state(registry)?.commit(registry)
     }
 
+    fn commit_failed_recovery<'reg>(
+        self,
+        registry: &'reg LocalRegistry,
+    ) -> Result<LocalArtifact<'reg>> {
+        self.into_unsealed_state(registry)?
+            .commit_failed_recovery(registry)
+    }
+
     fn into_unsealed_state<'reg>(
         self,
         registry: &'reg LocalRegistry,
@@ -503,6 +614,8 @@ impl UnsealedExperimentDynState {
                         run_id,
                         RunEntry {
                             run_id: run.run_id,
+                            status: run.status,
+                            failure_reason: run.failure_reason,
                             attachments: stored_descriptors(registry, run.attachments)?,
                             trace: run
                                 .trace
@@ -533,9 +646,26 @@ impl UnsealedExperimentDynState {
 
 impl SealedExperimentDynState {
     fn from_artifact(artifact: LocalArtifactDyn) -> Result<Self> {
+        Self::from_sealed_experiment(
+            SealedExperiment::from_artifact(artifact.clone().as_local_artifact())?,
+            artifact,
+        )
+    }
+
+    fn from_recovery_artifact(artifact: LocalArtifactDyn) -> Result<Self> {
+        Self::from_sealed_experiment(
+            SealedExperiment::from_recovery_artifact(artifact.clone().as_local_artifact())?,
+            artifact,
+        )
+    }
+
+    fn from_sealed_experiment(
+        sealed: SealedExperiment<'_>,
+        artifact: LocalArtifactDyn,
+    ) -> Result<Self> {
         let registry_handle = artifact.registry_handle();
+        let status = sealed.status().to_string();
         let (attachments, runs, run_parameters) = {
-            let sealed = SealedExperiment::from_artifact(artifact.as_local_artifact())?;
             let attachments = descriptors(sealed.experiment_attachments());
             let runs = sealed
                 .runs()
@@ -545,6 +675,8 @@ impl SealedExperimentDynState {
                         SealedRunDyn {
                             registry_handle: registry_handle.clone(),
                             run_id: run.run_id(),
+                            status: run.status().clone(),
+                            failure_reason: run.failure_reason().map(ToOwned::to_owned),
                             attachments: descriptors(run.attachments()),
                             trace: run.trace().cloned().map(Descriptor::from),
                             solves: run
@@ -567,6 +699,7 @@ impl SealedExperimentDynState {
             (attachments, runs, run_parameters)
         };
         Ok(Self {
+            status,
             artifact,
             attachments,
             runs,
@@ -610,6 +743,8 @@ impl SealedExperimentDynState {
                 run.run_id,
                 RunEntryDyn {
                     run_id: run.run_id,
+                    status: run.status.clone(),
+                    failure_reason: run.failure_reason.clone(),
                     attachments: run.attachments.clone(),
                     trace: run.trace.clone(),
                     solves,

@@ -4,8 +4,10 @@ use super::config::{ExperimentConfig, ExperimentConfigRun, LayerRef};
 use super::UnsealedExperimentState;
 use super::{
     AttachmentLogger, Experiment, ExperimentDyn, Name, ParameterValue, SealedExperiment, Trace,
-    ANN_ATTACHMENT_NAME, ANN_RUN_ID, ANN_SPACE, EXPERIMENT_CONFIG_MEDIA_TYPE,
-    EXPERIMENT_STATUS_FINISHED, RUN_PARAMETERS_MEDIA_TYPE,
+    ANN_ATTACHMENT_NAME, ANN_EXPERIMENT_RECOVERY, ANN_EXPERIMENT_REQUESTED_IMAGE,
+    ANN_EXPERIMENT_STATUS, ANN_RUN_ID, ANN_SPACE, EXPERIMENT_CONFIG_MEDIA_TYPE,
+    EXPERIMENT_STATUS_FAILED, EXPERIMENT_STATUS_FINISHED, RUN_PARAMETERS_MEDIA_TYPE,
+    RUN_STATUS_FAILED, RUN_STATUS_FINISHED,
 };
 use crate::artifact::local_registry::{StoredDescriptor, UnsealedArtifact};
 use crate::artifact::{media_types, AsArtifact, ImageRef, LocalArtifact, LocalRegistryHandle};
@@ -599,6 +601,7 @@ fn log_finished_solve_result_materializes_solve_entry_with_layer_refs() {
             serde_json::from_slice(&blob_bytes(&artifact, &config)).unwrap();
         assert_eq!(config_json["attachments"], json!([]));
         assert_eq!(config_json["run_parameters"], json!(2));
+        assert_eq!(config_json["runs"][0]["status"], json!(RUN_STATUS_FINISHED));
         assert_eq!(config_json["runs"][0]["attachments"], json!([]));
         assert_eq!(config_json["runs"][0]["solves"][0]["solve_id"], json!(0));
         assert_eq!(config_json["runs"][0]["solves"][0]["input"], json!(0));
@@ -813,6 +816,8 @@ fn loaded_experiment_rejects_config_run_attachment_not_listed_in_layers() {
         attachments: Vec::new(),
         runs: vec![ExperimentConfigRun {
             run_id: 0,
+            status: RUN_STATUS_FINISHED.to_string(),
+            failure_reason: None,
             attachments: vec![LayerRef(1)],
             trace: None,
             solves: Vec::new(),
@@ -1168,6 +1173,107 @@ fn experiment_dyn_marks_commit_failure_explicitly() {
         .run()
         .expect_err("failed Experiment must reject new runs");
     assert!(err.to_string().contains("commit has failed"));
+}
+
+#[test]
+fn experiment_dyn_publishes_failed_recovery_artifact() {
+    let registry_handle = LocalRegistryHandle::temp().unwrap();
+    let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:will-fail").unwrap();
+    let experiment =
+        ExperimentDyn::with_registry_handle(registry_handle.clone(), image_name.clone()).unwrap();
+    experiment.log_json("dataset", json!("miplib2017")).unwrap();
+    {
+        let mut run = experiment.run().unwrap();
+        run.log_parameter("solver", "scip").unwrap();
+        run.finish().unwrap();
+    }
+
+    let recovery = experiment
+        .commit_failed_recovery("ValueError: failed")
+        .unwrap();
+
+    assert_eq!(experiment.state_name(), "failed");
+    assert_eq!(experiment.image_name().unwrap(), image_name);
+    assert!(registry_handle
+        .registry()
+        .resolve_image_name(&image_name)
+        .unwrap()
+        .is_none());
+    assert!(recovery
+        .image_name()
+        .to_string()
+        .contains(".ommx.local/crashed:"));
+    assert_eq!(
+        experiment.recovery_image_name().unwrap(),
+        recovery.image_name().clone()
+    );
+    assert!(experiment.recovery_artifact().is_some());
+
+    let annotations = recovery.annotations().unwrap();
+    assert_eq!(
+        annotations.get(ANN_EXPERIMENT_STATUS).map(String::as_str),
+        Some(EXPERIMENT_STATUS_FAILED)
+    );
+    assert_eq!(
+        annotations.get(ANN_EXPERIMENT_RECOVERY).map(String::as_str),
+        Some("true")
+    );
+    let requested_image_name = image_name.to_string();
+    assert_eq!(
+        annotations.get(ANN_EXPERIMENT_REQUESTED_IMAGE),
+        Some(&requested_image_name)
+    );
+
+    let recovery_artifact = recovery.as_local_artifact();
+    let config = experiment_config(&recovery_artifact);
+    assert_eq!(config.status, EXPERIMENT_STATUS_FAILED);
+    let err = SealedExperiment::from_artifact(recovery_artifact)
+        .expect_err("failed recovery artifacts must not load as finished experiments");
+    assert!(err.to_string().contains("status is failed"));
+}
+
+#[test]
+fn experiment_dyn_loads_failed_recovery_and_forks_from_it() {
+    let registry_handle = LocalRegistryHandle::temp().unwrap();
+    let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:failed-run").unwrap();
+    let experiment =
+        ExperimentDyn::with_registry_handle(registry_handle.clone(), image_name).unwrap();
+    {
+        let mut run = experiment.run().unwrap();
+        run.log_parameter("solver", "scip").unwrap();
+        run.finish_failed("RuntimeError: solve failed").unwrap();
+    }
+    let recovery = experiment
+        .commit_failed_recovery("RuntimeError: solve failed")
+        .unwrap();
+
+    let recovered = ExperimentDyn::from_recovery_artifact(recovery).unwrap();
+    assert_eq!(
+        recovered.experiment_status().as_deref(),
+        Some(EXPERIMENT_STATUS_FAILED)
+    );
+    let recovered_runs = recovered.runs().unwrap();
+    assert_eq!(recovered_runs.len(), 1);
+    assert_eq!(recovered_runs[0].status().as_str(), RUN_STATUS_FAILED);
+    assert_eq!(
+        recovered_runs[0].failure_reason(),
+        Some("RuntimeError: solve failed")
+    );
+
+    let child_image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:resumed").unwrap();
+    let child = recovered.fork(Name::Named(child_image_name)).unwrap();
+    {
+        let mut run = child.run().unwrap();
+        assert_eq!(run.run_id().unwrap(), 1);
+        run.log_parameter("solver", "highs").unwrap();
+        run.finish().unwrap();
+    }
+    child.commit().unwrap();
+
+    let child_runs = child.runs().unwrap();
+    assert_eq!(child_runs.len(), 2);
+    assert_eq!(child_runs[0].status().as_str(), RUN_STATUS_FAILED);
+    assert_eq!(child_runs[1].status().as_str(), RUN_STATUS_FINISHED);
 }
 
 #[test]

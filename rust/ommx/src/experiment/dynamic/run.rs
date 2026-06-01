@@ -1,7 +1,7 @@
 //! Dynamic-lifetime Run handle.
 
 use super::super::parameter::ParameterSet;
-use super::super::{AttachmentLogger, ParameterValue};
+use super::super::{AttachmentLogger, ParameterValue, RunStatus};
 use super::{
     bail_non_unsealed, lock_experiment_state, store_run_attachment_descriptor,
     store_solve_payload_descriptor, store_trace_descriptor, ExperimentDyn, ExperimentDynLifecycle,
@@ -160,6 +160,40 @@ impl RunDyn {
             run.run_id,
             RunEntryDyn {
                 run_id: run.run_id,
+                status: RunStatus::Finished,
+                failure_reason: None,
+                attachments: run.attachments,
+                trace: run.trace,
+                solves: run.solves,
+                parameters: run.parameters,
+            },
+        );
+        decrement_open_runs(open_runs);
+        Ok(())
+    }
+
+    pub fn finish_failed(mut self, reason: impl Into<String>) -> Result<()> {
+        let mut dyn_state = lock_experiment_state(&self.experiment_state);
+        let ExperimentDynLifecycle::Unsealed { state, open_runs } = &mut dyn_state.lifecycle else {
+            return bail_non_unsealed(&dyn_state.lifecycle);
+        };
+        let state = state
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("Parent Experiment has already been committed"))?;
+        let run = self
+            .run_state
+            .take()
+            .ok_or_else(|| anyhow::anyhow!("Run has already been finished"))?;
+        if state.runs.contains_key(&run.run_id) {
+            decrement_open_runs(open_runs);
+            crate::bail!("Run {} has already been registered", run.run_id);
+        }
+        state.runs.insert(
+            run.run_id,
+            RunEntryDyn {
+                run_id: run.run_id,
+                status: RunStatus::Failed,
+                failure_reason: Some(reason.into()),
                 attachments: run.attachments,
                 trace: run.trace,
                 solves: run.solves,

@@ -148,7 +148,7 @@ def test_temp_registry_lives_with_artifact_after_experiment_drop():
     assert df.loc[0, "solver"] == "scip"
 
 
-def test_experiment_context_does_not_commit_on_exception():
+def test_experiment_context_publishes_recovery_artifact_on_exception():
     experiments: list[Experiment] = []
     with pytest.raises(ValueError):
         with Experiment.with_temp_local_registry() as experiment:
@@ -158,8 +158,61 @@ def test_experiment_context_does_not_commit_on_exception():
             raise ValueError("failed")
 
     experiment = experiments[0]
-    with pytest.raises(RuntimeError, match="must be committed"):
+    with pytest.raises(RuntimeError, match="commit has failed"):
         experiment.artifact
+    assert experiment.recovery_image_name is not None
+    assert ".ommx.local/crashed:" in experiment.recovery_image_name
+
+    recovery_artifact = experiment.recovery_artifact
+    assert recovery_artifact is not None
+    assert recovery_artifact.image_name == experiment.recovery_image_name
+    assert recovery_artifact.annotations["org.ommx.experiment.status"] == "failed"
+    assert recovery_artifact.annotations["org.ommx.experiment.recovery"] == "true"
+    assert (
+        recovery_artifact.annotations["org.ommx.experiment.requested_image"]
+        == experiment.image_name
+    )
+    with pytest.raises(RuntimeError, match="status is failed"):
+        Experiment.from_artifact(recovery_artifact)
+
+    recovery = Experiment.from_recovery_artifact(recovery_artifact)
+    assert recovery.status == "failed"
+    with recovery.fork() as resumed:
+        with resumed.run() as run:
+            assert run.run_id == 1
+            run.log_parameter("solver", "highs")
+    assert [run.status for run in resumed.runs] == ["finished", "finished"]
+    assert list(resumed.run_parameters_df().index) == [0, 1]
+
+
+def test_recovery_artifact_keeps_failed_run_and_can_be_forked():
+    experiments: list[Experiment] = []
+    with pytest.raises(RuntimeError, match="solve failed"):
+        with Experiment.with_temp_local_registry() as experiment:
+            experiments.append(experiment)
+            with experiment.run() as run:
+                run.log_parameter("solver", "scip")
+                run.log_json("before-failure", {"step": 1})
+                raise RuntimeError("solve failed")
+
+    recovery_artifact = experiments[0].recovery_artifact
+    assert recovery_artifact is not None
+    recovery = Experiment.from_recovery_artifact(recovery_artifact)
+    assert recovery.status == "failed"
+    assert len(recovery.runs) == 1
+    assert recovery.runs[0].status == "failed"
+    assert recovery.runs[0].failure_reason == "RuntimeError: solve failed"
+    assert recovery.runs[0].get_json("before-failure") == {"step": 1}
+    assert recovery.run_parameters_df().loc[0, "solver"] == "scip"
+
+    with recovery.fork() as resumed:
+        with resumed.run() as run:
+            assert run.run_id == 1
+            run.log_parameter("solver", "highs")
+
+    assert resumed.status == "finished"
+    assert [run.status for run in resumed.runs] == ["failed", "finished"]
+    assert list(resumed.run_parameters_df().index) == [0, 1]
 
 
 def test_store_trace_records_run_scope_in_artifact():
@@ -358,7 +411,11 @@ def test_run_finish_rejects_active_context_manager():
             run.finish()
 
     artifact = experiment.commit()
-    assert Experiment.from_artifact(artifact).runs == []
+    runs = Experiment.from_artifact(artifact).runs
+    assert len(runs) == 1
+    assert runs[0].status == "failed"
+    assert runs[0].failure_reason is not None
+    assert "Run context is active" in runs[0].failure_reason
 
 
 def test_rename_after_context_commit_updates_artifact_name():
@@ -443,7 +500,7 @@ def test_save_exports_committed_experiment_archive(tmp_path):
     assert loaded.run_parameters_df().loc[0, "solver"] == "highs"
 
 
-def test_run_context_does_not_finish_on_exception():
+def test_run_context_records_failed_run_on_exception():
     experiment = Experiment.with_temp_local_registry()
     with pytest.raises(ValueError):
         with experiment.run() as run:
@@ -454,8 +511,10 @@ def test_run_context_does_not_finish_on_exception():
     loaded = Experiment.from_artifact(artifact)
     df = loaded.run_parameters_df()
 
-    assert df is not None
-    assert df.empty
+    assert len(loaded.runs) == 1
+    assert loaded.runs[0].status == "failed"
+    assert loaded.runs[0].failure_reason == "ValueError: failed"
+    assert df.loc[0, "solver"] == "scip"
 
 
 def test_log_parameter_rejects_python_int_outside_i64():
@@ -547,6 +606,51 @@ def test_log_solve_logs_input_solution_and_adapter_options():
     # Adapter options are solve-scoped metadata, not Run parameters.
     df = loaded.run_parameters_df()
     assert df.shape == (1, 0)
+
+
+def test_failed_run_preserves_completed_solves_after_adapter_exception():
+    class FailingThirdAdapter(SolverAdapter):
+        calls: ClassVar[int] = 0
+
+        @classmethod
+        def solve(cls, ommx_instance: Instance, **kwargs: object) -> Solution:
+            cls.calls += 1
+            if cls.calls == 3:
+                raise RuntimeError("backend crashed")
+            return ommx_instance.evaluate({})
+
+        @property
+        def solver_input(self) -> Any:
+            raise NotImplementedError
+
+        def decode(self, data: Any) -> Solution:
+            raise NotImplementedError
+
+    instance = Instance.from_components(
+        decision_variables=[],
+        objective=0,
+        constraints={},
+        sense=Instance.MINIMIZE,
+    )
+    experiment = Experiment.with_temp_local_registry()
+    FailingThirdAdapter.calls = 0
+
+    with pytest.raises(RuntimeError, match="backend crashed"):
+        with experiment.run() as run:
+            run.log_solve(FailingThirdAdapter, instance, label="first")
+            run.log_solve(FailingThirdAdapter, instance, label="second")
+            run.log_solve(FailingThirdAdapter, instance, label="third")
+
+    loaded = Experiment.from_artifact(experiment.commit())
+    run = loaded.runs[0]
+    assert run.status == "failed"
+    assert run.failure_reason == "RuntimeError: backend crashed"
+    assert [solve.solve_id for solve in run.solves] == [0, 1]
+    assert [solve.adapter_options["label"] for solve in run.solves] == [
+        "first",
+        "second",
+    ]
+    assert all(solve.output.feasible for solve in run.solves)
 
 
 def test_log_solve_rejects_non_solver_adapter():

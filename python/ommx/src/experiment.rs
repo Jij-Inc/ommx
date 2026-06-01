@@ -21,14 +21,15 @@ use ommx::experiment::AttachmentLogger;
 /// A collection of optimization experiment records stored as one OMMX Artifact.
 ///
 /// An `Experiment` owns experiment-level attachments and a sequence of
-/// finished `Run` objects. Each `Run` can store scalar run parameters,
+/// closed `Run` records. Each `Run` can store scalar run parameters,
 /// run-level attachments, and zero or more `Solve` records.
 ///
 /// Newly created experiments are unsealed. Call `commit()` to write the
 /// experiment into the local registry as an OMMX Artifact. After commit, the
 /// same object can be used as a read-only view of the committed artifact.
 /// `with Experiment(...)` commits on normal exit if the experiment is still
-/// unsealed, and does not auto-commit on exception.
+/// unsealed. On exception it does not advance the success ref; instead it
+/// tries to publish a failed recovery artifact under a local `crashed:` ref.
 ///
 /// Use experiment-level attachments for shared context such as dataset or
 /// source-problem metadata. Use `Run.log_parameter(...)` for scalar values
@@ -124,6 +125,20 @@ impl PyExperiment {
         })
     }
 
+    /// Load a failed recovery Experiment Artifact by image reference.
+    ///
+    /// The loaded object is a read-only Experiment view that can be forked to
+    /// resume from the partial state recorded in the recovery artifact.
+    #[staticmethod]
+    pub fn load_recovery(py: Python<'_>, image_name: &str) -> Result<Self> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let image_name = ommx::artifact::ImageRef::parse(image_name)?;
+        Ok(Self {
+            inner: ommx::experiment::ExperimentDyn::load_recovery(image_name)?,
+            store_trace: false,
+        })
+    }
+
     /// Import an Experiment Artifact from a `.ommx` OCI archive file (or an OCI
     /// Image Layout directory).
     ///
@@ -147,6 +162,21 @@ impl PyExperiment {
     pub fn from_artifact(artifact: &PyArtifact) -> Result<Self> {
         Ok(Self {
             inner: ommx::experiment::ExperimentDyn::from_artifact(artifact.inner().clone())?,
+            store_trace: false,
+        })
+    }
+
+    /// Interpret an already-open failed recovery Artifact as an Experiment.
+    ///
+    /// This explicit recovery entry point accepts Experiment configs with
+    /// `status=failed`. The returned view is immutable but can be forked to
+    /// continue with new runs.
+    #[staticmethod]
+    pub fn from_recovery_artifact(artifact: &PyArtifact) -> Result<Self> {
+        Ok(Self {
+            inner: ommx::experiment::ExperimentDyn::from_recovery_artifact(
+                artifact.inner().clone(),
+            )?,
             store_trace: false,
         })
     }
@@ -193,10 +223,18 @@ impl PyExperiment {
         exc_value: Option<&Bound<'_, PyAny>>,
         traceback: Option<&Bound<'_, PyAny>>,
     ) -> Result<bool> {
-        let _ = (exc_value, traceback);
-        if exc_type.is_none() && self.inner.is_unsealed() {
+        if exc_type.is_some() && self.inner.is_unsealed() {
+            let reason = python_exception_reason(exc_type, exc_value);
+            if let Err(error) = self.inner.commit_failed_recovery(reason) {
+                tracing::warn!(
+                    error = %error,
+                    "Failed to publish Experiment recovery artifact during exception exit"
+                );
+            }
+        } else if self.inner.is_unsealed() {
             self.commit_inner(py)?;
         }
+        let _ = traceback;
         Ok(false)
     }
 
@@ -330,7 +368,7 @@ impl PyExperiment {
     }
 
     #[getter]
-    /// Finished runs in insertion order.
+    /// Closed runs in insertion order.
     pub fn runs(&self) -> Result<Vec<PySealedRun>> {
         let artifact = self.inner.artifact()?;
         Ok(self
@@ -345,6 +383,14 @@ impl PyExperiment {
     }
 
     #[getter]
+    /// Experiment config status for a committed or recovery Experiment.
+    ///
+    /// Returns `None` for an unsealed Experiment.
+    pub fn status(&self) -> Option<String> {
+        self.inner.experiment_status()
+    }
+
+    #[getter]
     /// Committed OMMX Artifact for this Experiment.
     ///
     /// Raises an error if the Experiment has not been committed yet.
@@ -352,10 +398,29 @@ impl PyExperiment {
         Ok(PyArtifact::new(self.inner.artifact()?))
     }
 
+    #[getter]
+    /// Failed recovery Artifact written after an exceptional context-manager exit.
+    ///
+    /// Returns `None` unless the Experiment context exited with an exception
+    /// and OMMX successfully published the partial state under a local
+    /// `crashed:` recovery ref. The recovery artifact is intentionally not a
+    /// finished Experiment and is rejected by `Experiment.from_artifact`.
+    pub fn recovery_artifact(&self) -> Option<PyArtifact> {
+        self.inner.recovery_artifact().map(PyArtifact::new)
+    }
+
+    #[getter]
+    /// Local image reference of the failed recovery Artifact, if any.
+    pub fn recovery_image_name(&self) -> Option<String> {
+        self.inner
+            .recovery_image_name()
+            .map(|image_name| image_name.to_string())
+    }
+
     /// Start a new Run in this unsealed Experiment.
     ///
-    /// The returned `Run` must be finished before `commit()`. Use it as a
-    /// context manager to finish it automatically on normal exit:
+    /// The returned `Run` must be closed before `commit()`. Use it as a
+    /// context manager to close it automatically on normal or exceptional exit:
     ///
     /// ```python
     /// with experiment.run() as run:
@@ -429,7 +494,7 @@ impl PyExperiment {
 
     /// Commit this unsealed Experiment into the local registry.
     ///
-    /// All open runs must be finished before committing. The returned
+    /// All open runs must be closed before committing. The returned
     /// `Artifact` can be saved as a `.ommx` archive or passed to
     /// `Experiment.from_artifact`. After commit, this object becomes a
     /// read-only view of the committed Experiment.
@@ -440,7 +505,7 @@ impl PyExperiment {
     /// Wide DataFrame of run parameters, indexed by `run_id`.
     ///
     /// Run parameters are scalar values logged with `Run.log_parameter`.
-    /// Completed runs with no parameters are still present as index rows.
+    /// Closed runs with no parameters are still present as index rows.
     /// Adapter options recorded by `Run.log_solve` are solve metadata and do
     /// not appear in this table.
     pub fn run_parameters_df<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDataFrame>> {
@@ -526,6 +591,27 @@ fn set_current_span_run_id(py: Python<'_>, run_id: u64) -> Result<()> {
     let span = trace.call_method0("get_current_span")?;
     span.call_method1("set_attribute", ("ommx.run.id", run_id))?;
     Ok(())
+}
+
+fn python_exception_reason(
+    exc_type: Option<&Bound<'_, PyAny>>,
+    exc_value: Option<&Bound<'_, PyAny>>,
+) -> String {
+    let type_name = exc_type
+        .and_then(|value| value.getattr("__name__").ok())
+        .and_then(|value| value.extract::<String>().ok())
+        .unwrap_or_else(|| "exception".to_string());
+    match exc_value.and_then(|value| value.str().ok()) {
+        Some(value) => {
+            let message = value.to_string_lossy();
+            if message.is_empty() {
+                type_name
+            } else {
+                format!("{type_name}: {message}")
+            }
+        }
+        None => type_name,
+    }
 }
 
 fn close_python_context_manager(
@@ -699,8 +785,8 @@ fn decode_sample_set_attachment(
 ///
 /// Runs are usually created with `Experiment.run()` and used as context
 /// managers. On normal context-manager exit the run is finished and added
-/// to the parent experiment. On exception the run is abandoned. A run
-/// becomes immutable once it is finished.
+/// to the parent experiment. On exception the run is closed as failed and
+/// added with its partial state. A run becomes immutable once it is closed.
 pub struct PyRun {
     state: PyRunState,
     store_trace: bool,
@@ -807,7 +893,21 @@ impl PyRun {
                     return Err(error);
                 }
                 if exc_type.is_some() {
-                    run.abandon();
+                    let reason = python_exception_reason(exc_type, exc_value);
+                    if self.store_trace {
+                        if let Err(error) = store_trace_result(py, &mut run, trace_result) {
+                            tracing::warn!(
+                                error = %error,
+                                "Failed to store Run trace during exception exit"
+                            );
+                        }
+                    }
+                    if let Err(error) = run.finish_failed(reason) {
+                        tracing::warn!(
+                            error = %error,
+                            "Failed to close Run as failed during exception exit"
+                        );
+                    }
                     return Ok(false);
                 }
                 if self.store_trace {
@@ -1183,7 +1283,7 @@ impl pyo3_stub_gen::PyStubType for ParameterValueInput {
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust", name = "SealedRun")]
-/// Immutable view of a finished Run in a committed Experiment.
+/// Immutable view of a closed Run in a committed or recovery Experiment.
 ///
 /// `SealedRun` exposes run-level attachments by name and the sequence of
 /// `Solve` records created by `Run.log_solve`.
@@ -1199,6 +1299,21 @@ impl PySealedRun {
     /// Integer identifier of this run within its Experiment.
     pub fn run_id(&self) -> u64 {
         self.run.run_id()
+    }
+
+    #[getter]
+    /// Run lifecycle status: `"finished"` or `"failed"`.
+    pub fn status(&self) -> &'static str {
+        match self.run.status() {
+            ommx::experiment::RunStatus::Finished => "finished",
+            ommx::experiment::RunStatus::Failed => "failed",
+        }
+    }
+
+    #[getter]
+    /// Exception summary captured when this run failed, if any.
+    pub fn failure_reason(&self) -> Option<String> {
+        self.run.failure_reason().map(ToOwned::to_owned)
     }
 
     #[getter]
@@ -1309,8 +1424,9 @@ impl PySealedRun {
 
     pub fn __repr__(&self) -> String {
         format!(
-            "SealedRun(run_id={}, attachments={}, solves={})",
+            "SealedRun(run_id={}, status='{}', attachments={}, solves={})",
             self.run_id(),
+            self.status(),
             self.run.attachment_count(),
             self.run.solves().len(),
         )

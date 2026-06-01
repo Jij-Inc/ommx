@@ -1691,14 +1691,15 @@ class Experiment:
     A collection of optimization experiment records stored as one OMMX Artifact.
 
     An `Experiment` owns experiment-level attachments and a sequence of
-    finished `Run` objects. Each `Run` can store scalar run parameters,
+    closed `Run` records. Each `Run` can store scalar run parameters,
     run-level attachments, and zero or more `Solve` records.
 
     Newly created experiments are unsealed. Call `commit()` to write the
     experiment into the local registry as an OMMX Artifact. After commit, the
     same object can be used as a read-only view of the committed artifact.
     `with Experiment(...)` commits on normal exit if the experiment is still
-    unsealed, and does not auto-commit on exception.
+    unsealed. On exception it does not advance the success ref; instead it
+    tries to publish a failed recovery artifact under a local `crashed:` ref.
 
     Use experiment-level attachments for shared context such as dataset or
     source-problem metadata. Use `Run.log_parameter(...)` for scalar values
@@ -1751,7 +1752,14 @@ class Experiment:
     @property
     def runs(self) -> builtins.list[SealedRun]:
         r"""
-        Finished runs in insertion order.
+        Closed runs in insertion order.
+        """
+    @property
+    def status(self) -> typing.Optional[builtins.str]:
+        r"""
+        Experiment config status for a committed or recovery Experiment.
+
+        Returns `None` for an unsealed Experiment.
         """
     @property
     def artifact(self) -> Artifact:
@@ -1759,6 +1767,21 @@ class Experiment:
         Committed OMMX Artifact for this Experiment.
 
         Raises an error if the Experiment has not been committed yet.
+        """
+    @property
+    def recovery_artifact(self) -> typing.Optional[Artifact]:
+        r"""
+        Failed recovery Artifact written after an exceptional context-manager exit.
+
+        Returns `None` unless the Experiment context exited with an exception
+        and OMMX successfully published the partial state under a local
+        `crashed:` recovery ref. The recovery artifact is intentionally not a
+        finished Experiment and is rejected by `Experiment.from_artifact`.
+        """
+    @property
+    def recovery_image_name(self) -> typing.Optional[builtins.str]:
+        r"""
+        Local image reference of the failed recovery Artifact, if any.
         """
     def __new__(
         cls,
@@ -1809,6 +1832,14 @@ class Experiment:
         `Experiment(...)` to create a new unsealed experiment.
         """
     @staticmethod
+    def load_recovery(image_name: builtins.str) -> Experiment:
+        r"""
+        Load a failed recovery Experiment Artifact by image reference.
+
+        The loaded object is a read-only Experiment view that can be forked to
+        resume from the partial state recorded in the recovery artifact.
+        """
+    @staticmethod
     def import_archive(path: builtins.str | os.PathLike | pathlib.Path) -> Experiment:
         r"""
         Import an Experiment Artifact from a `.ommx` OCI archive file (or an OCI
@@ -1825,6 +1856,15 @@ class Experiment:
 
         This is the usual entry point after importing or receiving an OMMX
         Artifact handle. The artifact must contain an Experiment config.
+        """
+    @staticmethod
+    def from_recovery_artifact(artifact: Artifact) -> Experiment:
+        r"""
+        Interpret an already-open failed recovery Artifact as an Experiment.
+
+        This explicit recovery entry point accepts Experiment configs with
+        `status=failed`. The returned view is immutable but can be forked to
+        continue with new runs.
         """
     def fork(
         self,
@@ -1932,8 +1972,8 @@ class Experiment:
         r"""
         Start a new Run in this unsealed Experiment.
 
-        The returned `Run` must be finished before `commit()`. Use it as a
-        context manager to finish it automatically on normal exit:
+        The returned `Run` must be closed before `commit()`. Use it as a
+        context manager to close it automatically on normal or exceptional exit:
 
         ```python
         with experiment.run() as run:
@@ -1978,7 +2018,7 @@ class Experiment:
         r"""
         Commit this unsealed Experiment into the local registry.
 
-        All open runs must be finished before committing. The returned
+        All open runs must be closed before committing. The returned
         `Artifact` can be saved as a `.ommx` archive or passed to
         `Experiment.from_artifact`. After commit, this object becomes a
         read-only view of the committed Experiment.
@@ -1988,7 +2028,7 @@ class Experiment:
         Wide DataFrame of run parameters, indexed by `run_id`.
 
         Run parameters are scalar values logged with `Run.log_parameter`.
-        Completed runs with no parameters are still present as index rows.
+        Closed runs with no parameters are still present as index rows.
         Adapter options recorded by `Run.log_solve` are solve metadata and do
         not appear in this table.
         """
@@ -5208,8 +5248,8 @@ class Run:
 
     Runs are usually created with `Experiment.run()` and used as context
     managers. On normal context-manager exit the run is finished and added
-    to the parent experiment. On exception the run is abandoned. A run
-    becomes immutable once it is finished.
+    to the parent experiment. On exception the run is closed as failed and
+    added with its partial state. A run becomes immutable once it is closed.
     """
     @property
     def run_id(self) -> builtins.int:
@@ -5854,7 +5894,7 @@ class Samples:
 @typing.final
 class SealedRun:
     r"""
-    Immutable view of a finished Run in a committed Experiment.
+    Immutable view of a closed Run in a committed or recovery Experiment.
 
     `SealedRun` exposes run-level attachments by name and the sequence of
     `Solve` records created by `Run.log_solve`.
@@ -5863,6 +5903,16 @@ class SealedRun:
     def run_id(self) -> builtins.int:
         r"""
         Integer identifier of this run within its Experiment.
+        """
+    @property
+    def status(self) -> builtins.str:
+        r"""
+        Run lifecycle status: `"finished"` or `"failed"`.
+        """
+    @property
+    def failure_reason(self) -> typing.Optional[builtins.str]:
+        r"""
+        Exception summary captured when this run failed, if any.
         """
     @property
     def attachments(self) -> builtins.list[Descriptor]:
