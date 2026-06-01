@@ -142,6 +142,7 @@ impl RunDyn {
 
     pub fn finish(mut self) -> Result<()> {
         let mut dyn_state = lock_experiment_state(&self.experiment_state);
+        let registry_handle = dyn_state.registry_handle.clone();
         let ExperimentDynLifecycle::Unsealed { state, open_runs } = &mut dyn_state.lifecycle else {
             return bail_non_unsealed(&dyn_state.lifecycle);
         };
@@ -168,11 +169,26 @@ impl RunDyn {
             },
         );
         decrement_open_runs(open_runs);
+        if let Err(error) = state.autosave_checkpoint(registry_handle.registry()) {
+            tracing::warn!(
+                error = %error,
+                "Failed to publish Experiment autosave checkpoint after Run close"
+            );
+        }
         Ok(())
     }
 
-    pub fn finish_failed(mut self) -> Result<()> {
+    pub fn finish_failed(self) -> Result<()> {
+        self.finish_with_status(RunStatus::Failed)
+    }
+
+    pub fn finish_interrupted(self) -> Result<()> {
+        self.finish_with_status(RunStatus::Interrupted)
+    }
+
+    fn finish_with_status(mut self, status: RunStatus) -> Result<()> {
         let mut dyn_state = lock_experiment_state(&self.experiment_state);
+        let registry_handle = dyn_state.registry_handle.clone();
         let ExperimentDynLifecycle::Unsealed { state, open_runs } = &mut dyn_state.lifecycle else {
             return bail_non_unsealed(&dyn_state.lifecycle);
         };
@@ -191,7 +207,7 @@ impl RunDyn {
             run.run_id,
             RunEntryDyn {
                 run_id: run.run_id,
-                status: RunStatus::Failed,
+                status,
                 attachments: run.attachments,
                 trace: run.trace,
                 solves: run.solves,
@@ -199,6 +215,12 @@ impl RunDyn {
             },
         );
         decrement_open_runs(open_runs);
+        if let Err(error) = state.autosave_checkpoint(registry_handle.registry()) {
+            tracing::warn!(
+                error = %error,
+                "Failed to publish Experiment autosave checkpoint after Run close"
+            );
+        }
         Ok(())
     }
 

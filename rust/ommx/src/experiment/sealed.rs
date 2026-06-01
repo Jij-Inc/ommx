@@ -4,8 +4,9 @@ use super::attachment::attachment_name;
 use super::config::{ExperimentConfig, ExperimentConfigSolve, LayerRef};
 use super::parameter::{RunParameterCell, RunParameterTable};
 use super::{
-    RunStatus, SealedExperiment, EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_STATUS_FAILED,
-    EXPERIMENT_STATUS_FINISHED, RUN_PARAMETERS_MEDIA_TYPE,
+    RunStatus, SealedExperiment, EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_STATUS_DRAFT,
+    EXPERIMENT_STATUS_FAILED, EXPERIMENT_STATUS_FINISHED, EXPERIMENT_STATUS_INTERRUPTED,
+    RUN_PARAMETERS_MEDIA_TYPE,
 };
 use crate::artifact::local_registry::StoredDescriptor;
 use crate::artifact::{media_types, ImageRef, LocalArtifact};
@@ -19,9 +20,16 @@ impl<'reg> SealedExperiment<'reg> {
         Self::from_artifact_with_allowed_statuses(artifact, &[EXPERIMENT_STATUS_FINISHED])
     }
 
-    /// Reconstruct a failed recovery Experiment from a committed recovery Artifact.
+    /// Reconstruct a recovery/checkpoint Experiment from a committed Artifact.
     pub fn from_recovery_artifact(artifact: LocalArtifact<'reg>) -> Result<Self> {
-        Self::from_artifact_with_allowed_statuses(artifact, &[EXPERIMENT_STATUS_FAILED])
+        Self::from_artifact_with_allowed_statuses(
+            artifact,
+            &[
+                EXPERIMENT_STATUS_DRAFT,
+                EXPERIMENT_STATUS_FAILED,
+                EXPERIMENT_STATUS_INTERRUPTED,
+            ],
+        )
     }
 
     fn from_artifact_with_allowed_statuses(

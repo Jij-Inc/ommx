@@ -75,6 +75,9 @@ enum ExperimentDynLifecycle {
 #[derive(Debug)]
 struct UnsealedExperimentDynState {
     image_name: ImageRef,
+    autosave_image_name: ImageRef,
+    autosave_published: bool,
+    base_artifact: Option<LocalArtifactDyn>,
     subject: Option<Descriptor>,
     attachments: Vec<Descriptor>,
     runs: BTreeMap<u64, RunEntryDyn>,
@@ -262,12 +265,18 @@ impl ExperimentDyn {
         name: impl Into<Name>,
     ) -> Result<Self> {
         let image_name = name.into().resolve(registry_handle.registry())?;
+        let autosave_image_name = registry_handle
+            .registry()
+            .synthesize_autosave_experiment_image_name()?;
         Ok(Self {
             registry_handle: registry_handle.clone(),
             state: Arc::new(Mutex::new(ExperimentDynState {
                 lifecycle: ExperimentDynLifecycle::Unsealed {
                     state: Some(UnsealedExperimentDynState {
                         image_name,
+                        autosave_image_name,
+                        autosave_published: false,
+                        base_artifact: None,
                         subject: None,
                         attachments: Vec::new(),
                         runs: BTreeMap::new(),
@@ -288,6 +297,10 @@ impl ExperimentDyn {
         Self::from_recovery_artifact(LocalArtifactDyn::load(image_name)?)
     }
 
+    pub fn load_autosave(image_name: crate::artifact::ImageRef) -> Result<Self> {
+        Self::load_recovery(image_name)
+    }
+
     pub fn import_archive(path: &Path) -> Result<Self> {
         Self::from_artifact(LocalArtifactDyn::import_archive(path)?)
     }
@@ -301,6 +314,10 @@ impl ExperimentDyn {
         let sealed = SealedExperimentDynState::from_recovery_artifact(artifact.clone())?;
         let requested_image_name = recovery_requested_image_name(&artifact)?;
         Self::from_recovery_sealed_state(sealed, requested_image_name)
+    }
+
+    pub fn from_autosave_artifact(artifact: LocalArtifactDyn) -> Result<Self> {
+        Self::from_recovery_artifact(artifact)
     }
 
     fn from_sealed_state(sealed: SealedExperimentDynState) -> Result<Self> {
@@ -370,6 +387,15 @@ impl ExperimentDyn {
                 .clone()),
             ExperimentDynLifecycle::Sealed(sealed) => Ok(sealed.image_name().clone()),
             ExperimentDynLifecycle::Failed { image_name, .. } => Ok(image_name.clone()),
+        }
+    }
+
+    pub fn autosave_image_name(&self) -> Option<ImageRef> {
+        match &lock_experiment_state(&self.state).lifecycle {
+            ExperimentDynLifecycle::Unsealed { state, .. } => state
+                .as_ref()
+                .map(|state| state.autosave_image_name.clone()),
+            ExperimentDynLifecycle::Sealed(_) | ExperimentDynLifecycle::Failed { .. } => None,
         }
     }
 
@@ -482,6 +508,21 @@ impl ExperimentDyn {
     }
 
     pub fn commit_failed_recovery(&self, reason: impl Into<String>) -> Result<LocalArtifactDyn> {
+        self.commit_recovery(reason, super::EXPERIMENT_STATUS_FAILED)
+    }
+
+    pub fn commit_interrupted_recovery(
+        &self,
+        reason: impl Into<String>,
+    ) -> Result<LocalArtifactDyn> {
+        self.commit_recovery(reason, super::EXPERIMENT_STATUS_INTERRUPTED)
+    }
+
+    fn commit_recovery(
+        &self,
+        reason: impl Into<String>,
+        status: &'static str,
+    ) -> Result<LocalArtifactDyn> {
         let reason = reason.into();
         let mut dyn_state = lock_experiment_state(&self.state);
         let registry_handle = dyn_state.registry_handle.clone();
@@ -500,7 +541,7 @@ impl ExperimentDyn {
             .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
         let image_name = state.image_name.clone();
         let artifact = match state
-            .commit_failed_recovery(registry_handle.registry())
+            .commit_recovery(registry_handle.registry(), status)
             .and_then(|artifact| {
                 LocalArtifactDyn::open_in_registry_handle(
                     registry_handle.clone(),
@@ -528,6 +569,22 @@ impl ExperimentDyn {
         Ok(artifact)
     }
 
+    pub fn autosave_artifact(&self) -> Option<LocalArtifactDyn> {
+        let dyn_state = lock_experiment_state(&self.state);
+        let ExperimentDynLifecycle::Unsealed { state, .. } = &dyn_state.lifecycle else {
+            return None;
+        };
+        let state = state.as_ref()?;
+        if !state.autosave_published {
+            return None;
+        }
+        LocalArtifactDyn::open_in_registry_handle(
+            dyn_state.registry_handle.clone(),
+            state.autosave_image_name.clone(),
+        )
+        .ok()
+    }
+
     pub fn recovery_artifact(&self) -> Option<LocalArtifactDyn> {
         match &lock_experiment_state(&self.state).lifecycle {
             ExperimentDynLifecycle::Failed {
@@ -550,31 +607,106 @@ impl ExperimentDyn {
         Ok(sealed.artifact.clone())
     }
 
+    pub fn view_artifact(&self) -> Result<LocalArtifactDyn> {
+        let dyn_state = lock_experiment_state(&self.state);
+        match &dyn_state.lifecycle {
+            ExperimentDynLifecycle::Sealed(sealed) => Ok(sealed.artifact.clone()),
+            ExperimentDynLifecycle::Unsealed { state, .. } => {
+                let state = state
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
+                if state.autosave_published {
+                    return LocalArtifactDyn::open_in_registry_handle(
+                        dyn_state.registry_handle.clone(),
+                        state.autosave_image_name.clone(),
+                    );
+                }
+                state.base_artifact.clone().ok_or_else(|| {
+                    anyhow::anyhow!("Experiment has not been committed or autosaved yet")
+                })
+            }
+            ExperimentDynLifecycle::Failed {
+                recovery_artifact: Some(artifact),
+                ..
+            } => Ok(artifact.clone()),
+            ExperimentDynLifecycle::Failed { reason, .. } => {
+                crate::bail!("Experiment commit has failed: {reason}")
+            }
+        }
+    }
+
     pub fn experiment_attachments(&self) -> Result<Vec<StoredDescriptor<'_>>> {
         let attachments = {
             let dyn_state = lock_experiment_state(&self.state);
-            let ExperimentDynLifecycle::Sealed(sealed) = &dyn_state.lifecycle else {
-                return bail_not_sealed(&dyn_state.lifecycle);
-            };
-            sealed.attachments.clone()
+            match &dyn_state.lifecycle {
+                ExperimentDynLifecycle::Sealed(sealed) => sealed.attachments.clone(),
+                ExperimentDynLifecycle::Unsealed { state, .. } => {
+                    let state = state
+                        .as_ref()
+                        .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
+                    state.attachments.clone()
+                }
+                ExperimentDynLifecycle::Failed {
+                    recovery_artifact: Some(artifact),
+                    ..
+                } => {
+                    let sealed =
+                        SealedExperimentDynState::from_recovery_artifact(artifact.clone())?;
+                    sealed.attachments.clone()
+                }
+                lifecycle => return bail_not_sealed(lifecycle),
+            }
         };
         stored_descriptors(self.registry_handle.registry(), attachments)
     }
 
     pub fn runs(&self) -> Result<Vec<SealedRunDyn>> {
         let dyn_state = lock_experiment_state(&self.state);
-        let ExperimentDynLifecycle::Sealed(sealed) = &dyn_state.lifecycle else {
-            return bail_not_sealed(&dyn_state.lifecycle);
-        };
-        Ok(sealed.runs.values().cloned().collect())
+        match &dyn_state.lifecycle {
+            ExperimentDynLifecycle::Sealed(sealed) => Ok(sealed.runs.values().cloned().collect()),
+            ExperimentDynLifecycle::Unsealed { state, .. } => {
+                let state = state
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
+                Ok(unsealed_run_views(
+                    &dyn_state.registry_handle,
+                    state.runs.values(),
+                ))
+            }
+            ExperimentDynLifecycle::Failed {
+                recovery_artifact: Some(artifact),
+                ..
+            } => Ok(
+                SealedExperimentDynState::from_recovery_artifact(artifact.clone())?
+                    .runs
+                    .values()
+                    .cloned()
+                    .collect(),
+            ),
+            lifecycle => bail_not_sealed(lifecycle),
+        }
     }
 
     pub fn run_parameter_cells(&self) -> Result<Vec<RunParameterCell>> {
         let dyn_state = lock_experiment_state(&self.state);
-        let ExperimentDynLifecycle::Sealed(sealed) = &dyn_state.lifecycle else {
-            return bail_not_sealed(&dyn_state.lifecycle);
-        };
-        Ok(sealed.run_parameters.cells())
+        match &dyn_state.lifecycle {
+            ExperimentDynLifecycle::Sealed(sealed) => Ok(sealed.run_parameters.cells()),
+            ExperimentDynLifecycle::Unsealed { state, .. } => {
+                let state = state
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
+                Ok(unsealed_run_parameter_cells(state.runs.values()))
+            }
+            ExperimentDynLifecycle::Failed {
+                recovery_artifact: Some(artifact),
+                ..
+            } => Ok(
+                SealedExperimentDynState::from_recovery_artifact(artifact.clone())?
+                    .run_parameters
+                    .cells(),
+            ),
+            lifecycle => bail_not_sealed(lifecycle),
+        }
     }
 }
 
@@ -603,12 +735,70 @@ impl UnsealedExperimentDynState {
         self.into_unsealed_state(registry)?.commit(registry)
     }
 
-    fn commit_failed_recovery<'reg>(
+    fn commit_recovery<'reg>(
         self,
         registry: &'reg LocalRegistry,
+        status: &'static str,
     ) -> Result<LocalArtifact<'reg>> {
         self.into_unsealed_state(registry)?
-            .commit_failed_recovery(registry)
+            .commit_recovery(registry, status)
+    }
+
+    fn autosave_checkpoint<'reg>(
+        &mut self,
+        registry: &'reg LocalRegistry,
+    ) -> Result<LocalArtifact<'reg>> {
+        let mut state = self.as_unsealed_state(registry)?;
+        let artifact = state.autosave_checkpoint(registry)?;
+        self.autosave_published = state.autosave_published;
+        Ok(artifact)
+    }
+
+    fn as_unsealed_state<'reg>(
+        &self,
+        registry: &'reg LocalRegistry,
+    ) -> Result<UnsealedExperimentState<'reg>> {
+        Ok(UnsealedExperimentState {
+            image_name: self.image_name.clone(),
+            autosave_image_name: self.autosave_image_name.clone(),
+            autosave_published: self.autosave_published,
+            subject: self.subject.clone(),
+            attachments: stored_descriptors(registry, self.attachments.clone())?,
+            runs: self
+                .runs
+                .iter()
+                .map(|(run_id, run)| {
+                    Ok((
+                        *run_id,
+                        RunEntry {
+                            run_id: run.run_id,
+                            status: run.status.clone(),
+                            attachments: stored_descriptors(registry, run.attachments.clone())?,
+                            trace: run
+                                .trace
+                                .clone()
+                                .map(|descriptor| registry.stored_descriptor(descriptor))
+                                .transpose()?,
+                            solves: run
+                                .solves
+                                .iter()
+                                .map(|solve| {
+                                    Ok(super::SolveEntry {
+                                        solve_id: solve.solve_id,
+                                        input: registry.stored_descriptor(solve.input.clone())?,
+                                        output: registry.stored_descriptor(solve.output.clone())?,
+                                        adapter: solve.adapter.clone(),
+                                        adapter_options: solve.adapter_options.clone(),
+                                    })
+                                })
+                                .collect::<Result<Vec<_>>>()?,
+                            parameters: run.parameters.clone(),
+                        },
+                    ))
+                })
+                .collect::<Result<BTreeMap<_, _>>>()?,
+            next_run_id: self.next_run_id,
+        })
     }
 
     fn into_unsealed_state<'reg>(
@@ -617,6 +807,8 @@ impl UnsealedExperimentDynState {
     ) -> Result<UnsealedExperimentState<'reg>> {
         Ok(UnsealedExperimentState {
             image_name: self.image_name,
+            autosave_image_name: self.autosave_image_name,
+            autosave_published: self.autosave_published,
             subject: self.subject,
             attachments: stored_descriptors(registry, self.attachments)?,
             runs: self
@@ -765,6 +957,13 @@ impl SealedExperimentDynState {
 
         Ok(UnsealedExperimentDynState {
             image_name,
+            autosave_image_name: self
+                .artifact
+                .registry_handle()
+                .registry()
+                .synthesize_autosave_experiment_image_name()?,
+            autosave_published: false,
+            base_artifact: Some(self.artifact.clone()),
             subject,
             attachments: self.attachments.clone(),
             next_run_id: next_run_id(runs.keys().copied())?,
@@ -788,6 +987,48 @@ fn descriptors(attachments: &[StoredDescriptor<'_>]) -> Vec<Descriptor> {
         .cloned()
         .map(Descriptor::from)
         .collect::<Vec<_>>()
+}
+
+fn unsealed_run_views<'a>(
+    registry_handle: &LocalRegistryHandle,
+    runs: impl Iterator<Item = &'a RunEntryDyn>,
+) -> Vec<SealedRunDyn> {
+    runs.map(|run| SealedRunDyn {
+        registry_handle: registry_handle.clone(),
+        run_id: run.run_id,
+        status: run.status.clone(),
+        attachments: run.attachments.clone(),
+        trace: run.trace.clone(),
+        solves: run
+            .solves
+            .iter()
+            .map(|solve| SolveDyn {
+                registry_handle: registry_handle.clone(),
+                solve_id: solve.solve_id,
+                input: solve.input.clone(),
+                output: solve.output.clone(),
+                adapter: solve.adapter.clone(),
+                adapter_options: solve.adapter_options.clone(),
+            })
+            .collect(),
+    })
+    .collect()
+}
+
+fn unsealed_run_parameter_cells<'a>(
+    runs: impl Iterator<Item = &'a RunEntryDyn>,
+) -> Vec<RunParameterCell> {
+    runs.flat_map(|run| {
+        run.parameters
+            .iter()
+            .map(|(name, value)| RunParameterCell {
+                run_id: run.run_id,
+                name: name.clone(),
+                value: value.clone(),
+            })
+            .collect::<Vec<_>>()
+    })
+    .collect()
 }
 
 fn recovery_requested_image_name(artifact: &LocalArtifactDyn) -> Result<ImageRef> {

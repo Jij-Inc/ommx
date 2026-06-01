@@ -76,7 +76,9 @@ use std::sync::{Mutex, MutexGuard};
 // --- Artifact mapping constants ---------------------------------------------
 
 const EXPERIMENT_STATUS_FINISHED: &str = "finished";
+const EXPERIMENT_STATUS_DRAFT: &str = "draft";
 const EXPERIMENT_STATUS_FAILED: &str = "failed";
+const EXPERIMENT_STATUS_INTERRUPTED: &str = "interrupted";
 
 const ANN_SPACE: &str = "org.ommx.experiment.space";
 const ANN_RUN_ID: &str = "org.ommx.experiment.run_id";
@@ -90,6 +92,7 @@ const EXPERIMENT_CONFIG_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment.c
 
 const RUN_STATUS_FINISHED: &str = "finished";
 const RUN_STATUS_FAILED: &str = "failed";
+const RUN_STATUS_INTERRUPTED: &str = "interrupted";
 
 /// Lifecycle status of a closed Run recorded in an Experiment.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -98,6 +101,8 @@ pub enum RunStatus {
     Finished,
     /// The Run context exited with an exception and retained partial state.
     Failed,
+    /// The Run context was interrupted by the user and retained partial state.
+    Interrupted,
 }
 
 impl RunStatus {
@@ -105,6 +110,7 @@ impl RunStatus {
         match self {
             Self::Finished => RUN_STATUS_FINISHED,
             Self::Failed => RUN_STATUS_FAILED,
+            Self::Interrupted => RUN_STATUS_INTERRUPTED,
         }
     }
 
@@ -112,9 +118,11 @@ impl RunStatus {
         match status {
             RUN_STATUS_FINISHED => Ok(Self::Finished),
             RUN_STATUS_FAILED => Ok(Self::Failed),
+            RUN_STATUS_INTERRUPTED => Ok(Self::Interrupted),
             _ => {
                 crate::bail!(
-                    "Run status is {status}, expected {RUN_STATUS_FINISHED} or {RUN_STATUS_FAILED}"
+                    "Run status is {status}, expected {RUN_STATUS_FINISHED}, \
+                     {RUN_STATUS_FAILED}, or {RUN_STATUS_INTERRUPTED}"
                 )
             }
         }
@@ -244,6 +252,10 @@ struct UnsealedExperimentState<'reg> {
     /// under. Experiment identity is the Local Registry ref; there is
     /// no separate experiment-name field in the artifact model.
     image_name: ImageRef,
+    /// Rolling checkpoint ref used by Run-close autosave.
+    autosave_image_name: ImageRef,
+    /// Whether `autosave_image_name` has been published at least once.
+    autosave_published: bool,
     /// Parent Experiment manifest descriptor for lineage. `None` for
     /// a root Experiment and `Some` for a forked child Experiment.
     subject: Option<oci_spec::image::Descriptor>,
@@ -284,10 +296,13 @@ impl<'reg> Experiment<'reg> {
     /// resolved `name`.
     pub fn with_registry(registry: &'reg LocalRegistry, name: impl Into<Name>) -> Result<Self> {
         let image_name = name.into().resolve(registry)?;
+        let autosave_image_name = registry.synthesize_autosave_experiment_image_name()?;
         Ok(Experiment {
             registry,
             state: Mutex::new(UnsealedExperimentState {
                 image_name,
+                autosave_image_name,
+                autosave_published: false,
                 subject: None,
                 attachments: Vec::new(),
                 runs: BTreeMap::new(),
@@ -300,6 +315,11 @@ impl<'reg> Experiment<'reg> {
     /// to when committed.
     pub fn image_name(&self) -> ImageRef {
         self.lock_state().image_name.clone()
+    }
+
+    /// Rolling local checkpoint ref used by Run-close autosave.
+    pub fn autosave_image_name(&self) -> ImageRef {
+        self.lock_state().autosave_image_name.clone()
     }
 
     /// Start a new [`Run`]. Each run gets a fresh 0-based `run_id`.
@@ -323,6 +343,12 @@ impl<'reg> Experiment<'reg> {
             crate::bail!("Run {} has already been registered", run.run_id);
         }
         state.runs.insert(run.run_id, run);
+        if let Err(error) = state.autosave_checkpoint(self.registry) {
+            tracing::warn!(
+                error = %error,
+                "Failed to publish Experiment autosave checkpoint after Run close"
+            );
+        }
         Ok(())
     }
 
@@ -394,6 +420,7 @@ impl<'reg> SealedExperiment<'reg> {
     pub fn fork(&self, name: impl Into<Name>) -> Result<Experiment<'reg>> {
         let registry = self.artifact.registry();
         let image_name = name.into().resolve(registry)?;
+        let autosave_image_name = registry.synthesize_autosave_experiment_image_name()?;
         let subject = Some(self.artifact.stored_manifest_descriptor()?.into());
         let mut runs = BTreeMap::new();
         let mut parameters_by_run = self.run_parameters.parameter_sets()?;
@@ -430,6 +457,8 @@ impl<'reg> SealedExperiment<'reg> {
             registry,
             state: Mutex::new(UnsealedExperimentState {
                 image_name,
+                autosave_image_name,
+                autosave_published: false,
                 subject,
                 attachments: self.attachments.clone(),
                 next_run_id: next_run_id(runs.keys().copied())?,

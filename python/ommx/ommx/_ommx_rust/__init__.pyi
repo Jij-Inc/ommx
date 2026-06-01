@@ -1783,6 +1783,19 @@ class Experiment:
         r"""
         Local image reference of the failed recovery Artifact, if any.
         """
+    @property
+    def autosave_artifact(self) -> typing.Optional[Artifact]:
+        r"""
+        Run-close autosave Artifact for this unsealed Experiment, if any.
+
+        A new autosave checkpoint is written after each closed Run. It is a
+        rolling local ref and is not the final committed Experiment Artifact.
+        """
+    @property
+    def autosave_image_name(self) -> typing.Optional[builtins.str]:
+        r"""
+        Local image reference of the rolling Run-close autosave Artifact.
+        """
     def __new__(
         cls,
         image_name: typing.Optional[builtins.str] = None,
@@ -1834,11 +1847,20 @@ class Experiment:
     @staticmethod
     def load_recovery(image_name: builtins.str) -> Experiment:
         r"""
-        Load a failed recovery Artifact and resume from it.
+        Load a recovery/checkpoint Artifact and resume from it.
 
-        This returns a new unsealed Experiment whose parent is the failed
-        recovery Artifact and whose image name is the original requested
-        Experiment image name recorded in the recovery metadata.
+        This returns a new unsealed Experiment whose parent is the recovery
+        Artifact and whose image name is the original requested Experiment
+        image name recorded in the recovery metadata.
+        """
+    @staticmethod
+    def load_autosave(image_name: builtins.str) -> Experiment:
+        r"""
+        Load a Run-close autosave Artifact and resume from it.
+
+        Autosave Artifacts use the same checkpoint format as failed recovery
+        Artifacts. This is an alias for `load_recovery` with wording for the
+        notebook autosave workflow.
         """
     @staticmethod
     def import_archive(path: builtins.str | os.PathLike | pathlib.Path) -> Experiment:
@@ -1861,12 +1883,18 @@ class Experiment:
     @staticmethod
     def from_recovery_artifact(artifact: Artifact) -> Experiment:
         r"""
-        Resume from an already-open failed recovery Artifact.
+        Resume from an already-open recovery/checkpoint Artifact.
 
-        This accepts Experiment configs with `status=failed` and returns a new
-        unsealed Experiment whose parent is the recovery Artifact and whose
-        image name is the original requested Experiment image name recorded in
-        the recovery metadata.
+        This accepts Experiment configs with checkpoint statuses such as
+        `draft`, `failed`, or `interrupted`, and returns a new unsealed
+        Experiment whose parent is the checkpoint Artifact and whose image name
+        is the original requested Experiment image name recorded in the
+        recovery metadata.
+        """
+    @staticmethod
+    def from_autosave_artifact(artifact: Artifact) -> Experiment:
+        r"""
+        Resume from an already-open Run-close autosave Artifact.
         """
     def fork(
         self,
@@ -5909,7 +5937,7 @@ class SealedRun:
     @property
     def status(self) -> builtins.str:
         r"""
-        Run lifecycle status: `"finished"` or `"failed"`.
+        Run lifecycle status: `"finished"`, `"failed"`, or `"interrupted"`.
         """
     @property
     def attachments(self) -> builtins.list[Descriptor]:

@@ -283,6 +283,18 @@ impl LocalRegistry {
             .with_context(|| "Failed to synthesise crashed experiment image name")
     }
 
+    /// Synthesize a fresh local ref for a rolling Experiment autosave artifact.
+    ///
+    /// Format:
+    /// `<registry-id8>.ommx.local/autosave:<timestamp>-<nonce>`.
+    /// The ref is generated once per Experiment session and moved forward as
+    /// closed Runs update the latest checkpoint.
+    pub fn synthesize_autosave_experiment_image_name(&self) -> Result<ImageRef> {
+        let registry_id = self.index.registry_id()?;
+        crate::artifact::anonymous_local_image_name(&registry_id, "autosave")
+            .with_context(|| "Failed to synthesise autosave experiment image name")
+    }
+
     /// List every SQLite ref whose `(name, reference)` matches the
     /// shape an anonymous artifact's image name would take:
     /// `<registry-id8>.ommx.local/anonymous` (8 lowercase hex chars
@@ -392,6 +404,12 @@ impl LocalRegistry {
             "Sealed artifact descriptor belongs to a different Local Registry"
         );
         self.index.replace_image_ref(image_name, &sealed_artifact.0)
+    }
+
+    /// Delete a local manifest ref. Content-addressed blobs are not removed.
+    pub(crate) fn delete_manifest_ref(&self, image_name: &ImageRef) -> Result<bool> {
+        self.index
+            .delete_ref(&image_name.repository_key(), image_name.reference())
     }
 
     /// Validate that the manifest carries the OMMX `artifactType`.

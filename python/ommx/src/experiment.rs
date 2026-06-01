@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use oci_spec::image::{Descriptor, MediaType};
 use pyo3::{
+    exceptions::PyKeyboardInterrupt,
     prelude::*,
     types::{PyBool, PyBytes, PyDict, PyFloat, PyInt, PyString, PyType, PyTypeMethods},
 };
@@ -125,17 +126,32 @@ impl PyExperiment {
         })
     }
 
-    /// Load a failed recovery Artifact and resume from it.
+    /// Load a recovery/checkpoint Artifact and resume from it.
     ///
-    /// This returns a new unsealed Experiment whose parent is the failed
-    /// recovery Artifact and whose image name is the original requested
-    /// Experiment image name recorded in the recovery metadata.
+    /// This returns a new unsealed Experiment whose parent is the recovery
+    /// Artifact and whose image name is the original requested Experiment
+    /// image name recorded in the recovery metadata.
     #[staticmethod]
     pub fn load_recovery(py: Python<'_>, image_name: &str) -> Result<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let image_name = ommx::artifact::ImageRef::parse(image_name)?;
         Ok(Self {
             inner: ommx::experiment::ExperimentDyn::load_recovery(image_name)?,
+            store_trace: false,
+        })
+    }
+
+    /// Load a Run-close autosave Artifact and resume from it.
+    ///
+    /// Autosave Artifacts use the same checkpoint format as failed recovery
+    /// Artifacts. This is an alias for `load_recovery` with wording for the
+    /// notebook autosave workflow.
+    #[staticmethod]
+    pub fn load_autosave(py: Python<'_>, image_name: &str) -> Result<Self> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let image_name = ommx::artifact::ImageRef::parse(image_name)?;
+        Ok(Self {
+            inner: ommx::experiment::ExperimentDyn::load_autosave(image_name)?,
             store_trace: false,
         })
     }
@@ -167,16 +183,28 @@ impl PyExperiment {
         })
     }
 
-    /// Resume from an already-open failed recovery Artifact.
+    /// Resume from an already-open recovery/checkpoint Artifact.
     ///
-    /// This accepts Experiment configs with `status=failed` and returns a new
-    /// unsealed Experiment whose parent is the recovery Artifact and whose
-    /// image name is the original requested Experiment image name recorded in
-    /// the recovery metadata.
+    /// This accepts Experiment configs with checkpoint statuses such as
+    /// `draft`, `failed`, or `interrupted`, and returns a new unsealed
+    /// Experiment whose parent is the checkpoint Artifact and whose image name
+    /// is the original requested Experiment image name recorded in the
+    /// recovery metadata.
     #[staticmethod]
     pub fn from_recovery_artifact(artifact: &PyArtifact) -> Result<Self> {
         Ok(Self {
             inner: ommx::experiment::ExperimentDyn::from_recovery_artifact(
+                artifact.inner().clone(),
+            )?,
+            store_trace: false,
+        })
+    }
+
+    /// Resume from an already-open Run-close autosave Artifact.
+    #[staticmethod]
+    pub fn from_autosave_artifact(artifact: &PyArtifact) -> Result<Self> {
+        Ok(Self {
+            inner: ommx::experiment::ExperimentDyn::from_autosave_artifact(
                 artifact.inner().clone(),
             )?,
             store_trace: false,
@@ -227,7 +255,12 @@ impl PyExperiment {
     ) -> Result<bool> {
         if exc_type.is_some() && self.inner.is_unsealed() {
             let reason = python_exception_reason(exc_type, exc_value);
-            if let Err(error) = self.inner.commit_failed_recovery(reason) {
+            let recovery = if is_keyboard_interrupt(py, exc_type)? {
+                self.inner.commit_interrupted_recovery(reason)
+            } else {
+                self.inner.commit_failed_recovery(reason)
+            };
+            if let Err(error) = recovery {
                 tracing::warn!(
                     error = %error,
                     "Failed to publish Experiment recovery artifact during exception exit"
@@ -372,10 +405,12 @@ impl PyExperiment {
     #[getter]
     /// Closed runs in insertion order.
     pub fn runs(&self) -> Result<Vec<PySealedRun>> {
-        let artifact = self.inner.artifact()?;
-        Ok(self
-            .inner
-            .runs()?
+        let runs = self.inner.runs()?;
+        if runs.is_empty() {
+            return Ok(Vec::new());
+        }
+        let artifact = self.view_artifact()?;
+        Ok(runs
             .into_iter()
             .map(|run| PySealedRun {
                 run,
@@ -416,6 +451,23 @@ impl PyExperiment {
     pub fn recovery_image_name(&self) -> Option<String> {
         self.inner
             .recovery_image_name()
+            .map(|image_name| image_name.to_string())
+    }
+
+    #[getter]
+    /// Run-close autosave Artifact for this unsealed Experiment, if any.
+    ///
+    /// A new autosave checkpoint is written after each closed Run. It is a
+    /// rolling local ref and is not the final committed Experiment Artifact.
+    pub fn autosave_artifact(&self) -> Option<PyArtifact> {
+        self.inner.autosave_artifact().map(PyArtifact::new)
+    }
+
+    #[getter]
+    /// Local image reference of the rolling Run-close autosave Artifact.
+    pub fn autosave_image_name(&self) -> Option<String> {
+        self.inner
+            .autosave_image_name()
             .map(|image_name| image_name.to_string())
     }
 
@@ -570,13 +622,17 @@ impl PyExperiment {
         &self,
         name: &str,
     ) -> Result<(ommx::artifact::LocalArtifactDyn, Descriptor)> {
-        let artifact = self.inner.artifact()?;
+        let artifact = self.view_artifact()?;
         for descriptor in self.inner.experiment_attachments()? {
             if attachment_name(&descriptor) == Some(name) {
                 return Ok((artifact, Descriptor::from(descriptor)));
             }
         }
         anyhow::bail!("Experiment attachment `{name}` not found")
+    }
+
+    fn view_artifact(&self) -> Result<ommx::artifact::LocalArtifactDyn> {
+        self.inner.view_artifact()
     }
 }
 
@@ -614,6 +670,18 @@ fn python_exception_reason(
         }
         None => type_name,
     }
+}
+
+fn is_keyboard_interrupt(py: Python<'_>, exc_type: Option<&Bound<'_, PyAny>>) -> Result<bool> {
+    let Some(exc_type) = exc_type else {
+        return Ok(false);
+    };
+    let Ok(exc_type) = exc_type.extract::<Py<PyType>>() else {
+        return Ok(false);
+    };
+    Ok(exc_type
+        .bind(py)
+        .is_subclass(&py.get_type::<PyKeyboardInterrupt>())?)
 }
 
 fn close_python_context_manager(
@@ -903,10 +971,15 @@ impl PyRun {
                             );
                         }
                     }
-                    if let Err(error) = run.finish_failed() {
+                    let finish_result = if is_keyboard_interrupt(py, exc_type)? {
+                        run.finish_interrupted()
+                    } else {
+                        run.finish_failed()
+                    };
+                    if let Err(error) = finish_result {
                         tracing::warn!(
                             error = %error,
-                            "Failed to close Run as failed during exception exit"
+                            "Failed to close Run during exception exit"
                         );
                     }
                     return Ok(false);
@@ -1303,11 +1376,12 @@ impl PySealedRun {
     }
 
     #[getter]
-    /// Run lifecycle status: `"finished"` or `"failed"`.
+    /// Run lifecycle status: `"finished"`, `"failed"`, or `"interrupted"`.
     pub fn status(&self) -> &'static str {
         match self.run.status() {
             ommx::experiment::RunStatus::Finished => "finished",
             ommx::experiment::RunStatus::Failed => "failed",
+            ommx::experiment::RunStatus::Interrupted => "interrupted",
         }
     }
 

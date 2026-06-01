@@ -2056,8 +2056,44 @@
               "deprecated": null
             },
             {
+              "name": "from_autosave_artifact",
+              "doc": "Resume from an already-open Run-close autosave Artifact.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "artifact",
+                      "type_": {
+                        "display": "Artifact",
+                        "link_target": {
+                          "fqn": "ommx.artifact.Artifact",
+                          "doc_module": "ommx.artifact",
+                          "kind": "Class",
+                          "attribute": null
+                        },
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Experiment",
+                    "link_target": {
+                      "fqn": "ommx.experiment.Experiment",
+                      "doc_module": "ommx.experiment",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "from_recovery_artifact",
-              "doc": "Resume from an already-open failed recovery Artifact.\n\nThis accepts Experiment configs with `status=failed` and returns a new\nunsealed Experiment whose parent is the recovery Artifact and whose\nimage name is the original requested Experiment image name recorded in\nthe recovery metadata.",
+              "doc": "Resume from an already-open recovery/checkpoint Artifact.\n\nThis accepts Experiment configs with checkpoint statuses such as\n`draft`, `failed`, or `interrupted`, and returns a new unsealed\nExperiment whose parent is the checkpoint Artifact and whose image name\nis the original requested Experiment image name recorded in the\nrecovery metadata.",
               "signatures": [
                 {
                   "parameters": [
@@ -2352,8 +2388,39 @@
               "deprecated": null
             },
             {
+              "name": "load_autosave",
+              "doc": "Load a Run-close autosave Artifact and resume from it.\n\nAutosave Artifacts use the same checkpoint format as failed recovery\nArtifacts. This is an alias for `load_recovery` with wording for the\nnotebook autosave workflow.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "image_name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Experiment",
+                    "link_target": {
+                      "fqn": "ommx.experiment.Experiment",
+                      "doc_module": "ommx.experiment",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "load_recovery",
-              "doc": "Load a failed recovery Artifact and resume from it.\n\nThis returns a new unsealed Experiment whose parent is the failed\nrecovery Artifact and whose image name is the original requested\nExperiment image name recorded in the recovery metadata.",
+              "doc": "Load a recovery/checkpoint Artifact and resume from it.\n\nThis returns a new unsealed Experiment whose parent is the recovery\nArtifact and whose image name is the original requested Experiment\nimage name recorded in the recovery metadata.",
               "signatures": [
                 {
                   "parameters": [
@@ -2797,6 +2864,45 @@
               "doc": "Names of experiment-level attachments.",
               "type_": {
                 "display": "list[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "autosave_artifact",
+              "doc": "Run-close autosave Artifact for this unsealed Experiment, if any.\n\nA new autosave checkpoint is written after each closed Run. It is a\nrolling local ref and is not the final committed Experiment Artifact.",
+              "type_": {
+                "display": "Optional[_ommx_rust.Artifact]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "Artifact",
+                    "link_target": {
+                      "fqn": "ommx.artifact.Artifact",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "autosave_image_name",
+              "doc": "Local image reference of the rolling Run-close autosave Artifact.",
+              "type_": {
+                "display": "Optional[str]",
                 "link_target": null,
                 "children": [
                   {
@@ -3674,7 +3780,7 @@
             },
             {
               "name": "status",
-              "doc": "Run lifecycle status: `\"finished\"` or `\"failed\"`.",
+              "doc": "Run lifecycle status: `\"finished\"`, `\"failed\"`, or `\"interrupted\"`.",
               "type_": {
                 "display": "str",
                 "link_target": null,

@@ -201,6 +201,8 @@ def test_recovery_artifact_keeps_failed_run_and_can_be_forked():
     resumed = Experiment.from_recovery_artifact(recovery_artifact)
     assert resumed.status is None
     assert resumed.image_name == experiments[0].image_name
+    assert resumed.runs[0].get_json("before-failure") == {"step": 1}
+    assert resumed.run_parameters_df().loc[0, "solver"] == "scip"
     with resumed:
         with resumed.run() as run:
             assert run.run_id == 1
@@ -211,6 +213,73 @@ def test_recovery_artifact_keeps_failed_run_and_can_be_forked():
     assert resumed.runs[0].get_json("before-failure") == {"step": 1}
     assert resumed.run_parameters_df().loc[0, "solver"] == "scip"
     assert list(resumed.run_parameters_df().index) == [0, 1]
+
+
+def test_run_close_publishes_autosave_and_load_autosave_resumes():
+    experiment = Experiment.with_temp_local_registry()
+    autosave_image_name = experiment.autosave_image_name
+    assert autosave_image_name is not None
+    assert ".ommx.local/autosave:" in autosave_image_name
+    assert experiment.autosave_artifact is None
+
+    with experiment.run() as run:
+        run.log_parameter("solver", "scip")
+        run.log_json("before-commit", {"step": 1})
+
+    autosave_artifact = experiment.autosave_artifact
+    assert autosave_artifact is not None
+    assert autosave_artifact.image_name == autosave_image_name
+    assert autosave_artifact.annotations["org.ommx.experiment.status"] == "draft"
+    assert autosave_artifact.annotations["org.ommx.experiment.recovery"] == "true"
+    assert (
+        autosave_artifact.annotations["org.ommx.experiment.requested_image"]
+        == experiment.image_name
+    )
+    with pytest.raises(RuntimeError, match="status is draft"):
+        Experiment.from_artifact(autosave_artifact)
+
+    assert [run.status for run in experiment.runs] == ["finished"]
+    assert experiment.runs[0].get_json("before-commit") == {"step": 1}
+    assert experiment.run_parameters_df().loc[0, "solver"] == "scip"
+
+    resumed = Experiment.from_autosave_artifact(autosave_artifact)
+    assert resumed.status is None
+    assert resumed.image_name == experiment.image_name
+    assert resumed.runs[0].get_json("before-commit") == {"step": 1}
+    assert resumed.run_parameters_df().loc[0, "solver"] == "scip"
+    with resumed:
+        with resumed.run() as run:
+            assert run.run_id == 1
+            run.log_parameter("solver", "highs")
+
+    assert [run.status for run in resumed.runs] == ["finished", "finished"]
+    assert list(resumed.run_parameters_df().index) == [0, 1]
+
+
+def test_keyboard_interrupt_records_interrupted_run_and_recovery():
+    experiments: list[Experiment] = []
+    with pytest.raises(KeyboardInterrupt):
+        with Experiment.with_temp_local_registry() as experiment:
+            experiments.append(experiment)
+            with experiment.run() as run:
+                run.log_parameter("solver", "scip")
+                raise KeyboardInterrupt
+
+    experiment = experiments[0]
+    autosave_artifact = experiment.autosave_artifact
+    assert autosave_artifact is None
+
+    recovery_artifact = experiment.recovery_artifact
+    assert recovery_artifact is not None
+    assert recovery_artifact.annotations["org.ommx.experiment.status"] == "interrupted"
+    with pytest.raises(RuntimeError, match="status is interrupted"):
+        Experiment.from_artifact(recovery_artifact)
+
+    resumed = Experiment.from_recovery_artifact(recovery_artifact)
+    with resumed:
+        pass
+    assert [run.status for run in resumed.runs] == ["interrupted"]
+    assert resumed.run_parameters_df().loc[0, "solver"] == "scip"
 
 
 def test_store_trace_records_run_scope_in_artifact():

@@ -18,50 +18,73 @@ impl<'reg> UnsealedExperimentState<'reg> {
     /// public `Experiment::commit(self)` lifecycle operation.
     pub fn commit(self, registry: &'reg LocalRegistry) -> Result<LocalArtifact<'reg>> {
         let image_name = self.image_name.clone();
-        self.commit_as(
+        let autosave_image_name = self.autosave_image_name.clone();
+        let autosave_published = self.autosave_published;
+        let artifact = self.publish_as(
             registry,
             image_name,
             super::EXPERIMENT_STATUS_FINISHED,
             HashMap::new(),
-        )
+            RefPublishMode::Publish,
+        )?;
+        if autosave_published {
+            if let Err(error) = registry.delete_manifest_ref(&autosave_image_name) {
+                tracing::warn!(
+                    error = %error,
+                    autosave_image_name = %autosave_image_name,
+                    "Failed to remove Experiment autosave ref after commit"
+                );
+            }
+        }
+        Ok(artifact)
     }
 
-    /// Consume the unsealed experiment state and publish a failed
-    /// recovery artifact under a reserved local ref.
-    pub(super) fn commit_failed_recovery(
+    /// Consume the unsealed experiment state and publish a recovery
+    /// artifact under a reserved local ref.
+    pub(super) fn commit_recovery(
         self,
         registry: &'reg LocalRegistry,
+        status: &'static str,
     ) -> Result<LocalArtifact<'reg>> {
         let requested_image_name = self.image_name.clone();
         let recovery_image_name = registry.synthesize_crashed_experiment_image_name()?;
-        let mut annotations = HashMap::new();
-        annotations.insert(
-            super::ANN_EXPERIMENT_STATUS.to_string(),
-            super::EXPERIMENT_STATUS_FAILED.to_string(),
-        );
-        annotations.insert(
-            super::ANN_EXPERIMENT_RECOVERY.to_string(),
-            "true".to_string(),
-        );
-        annotations.insert(
-            super::ANN_EXPERIMENT_REQUESTED_IMAGE.to_string(),
-            requested_image_name.to_string(),
-        );
+        let annotations = checkpoint_annotations(status, &requested_image_name);
 
-        self.commit_as(
+        self.publish_as(
             registry,
             recovery_image_name,
-            super::EXPERIMENT_STATUS_FAILED,
+            status,
             annotations,
+            RefPublishMode::Publish,
         )
     }
 
-    fn commit_as(
-        self,
+    /// Publish or update the rolling autosave checkpoint for this
+    /// unsealed Experiment state.
+    pub(super) fn autosave_checkpoint(
+        &mut self,
+        registry: &'reg LocalRegistry,
+    ) -> Result<LocalArtifact<'reg>> {
+        let image_name = self.autosave_image_name.clone();
+        let annotations = checkpoint_annotations(super::EXPERIMENT_STATUS_DRAFT, &self.image_name);
+        let artifact = self.publish_as(
+            registry,
+            image_name,
+            super::EXPERIMENT_STATUS_DRAFT,
+            annotations,
+            RefPublishMode::Replace,
+        )?;
+        self.autosave_published = true;
+        Ok(artifact)
+    }
+
+    fn publish_as(
+        &self,
         registry: &'reg LocalRegistry,
         image_name: ImageRef,
         status: &str,
         annotations: HashMap<String, String>,
+        publish_mode: RefPublishMode,
     ) -> Result<LocalArtifact<'reg>> {
         let run_parameters = self.run_parameter_descriptor(registry)?;
         let mut layers = LayerTable::default();
@@ -74,11 +97,14 @@ impl<'reg> UnsealedExperimentState<'reg> {
             MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
             config_descriptor,
             layers.into_layers(),
-            self.subject,
+            self.subject.clone(),
             annotations,
         );
         let sealed_artifact = registry.seal_artifact(artifact)?;
-        let ref_update = registry.publish_manifest_ref(&image_name, &sealed_artifact)?;
+        let ref_update = match publish_mode {
+            RefPublishMode::Publish => registry.publish_manifest_ref(&image_name, &sealed_artifact),
+            RefPublishMode::Replace => registry.replace_manifest_ref(&image_name, &sealed_artifact),
+        }?;
         if let RefUpdate::Conflicted {
             existing_manifest_digest,
             incoming_manifest_digest,
@@ -161,6 +187,29 @@ impl<'reg> UnsealedExperimentState<'reg> {
             run_parameters: layers.push(run_parameters)?,
         })
     }
+}
+
+#[derive(Clone, Copy)]
+enum RefPublishMode {
+    Publish,
+    Replace,
+}
+
+fn checkpoint_annotations(
+    status: &str,
+    requested_image_name: &ImageRef,
+) -> HashMap<String, String> {
+    HashMap::from([
+        (super::ANN_EXPERIMENT_STATUS.to_string(), status.to_string()),
+        (
+            super::ANN_EXPERIMENT_RECOVERY.to_string(),
+            "true".to_string(),
+        ),
+        (
+            super::ANN_EXPERIMENT_REQUESTED_IMAGE.to_string(),
+            requested_image_name.to_string(),
+        ),
+    ])
 }
 
 #[derive(Default)]

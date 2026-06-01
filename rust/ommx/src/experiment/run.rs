@@ -97,6 +97,15 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
         self.close(RunStatus::Failed)
     }
 
+    /// Close the run as interrupted and append the partial run state to
+    /// the parent experiment.
+    ///
+    /// This is used for user cancellation such as Python
+    /// `KeyboardInterrupt`.
+    pub fn finish_interrupted(self) -> Result<()> {
+        self.close(RunStatus::Interrupted)
+    }
+
     fn close(self, status: RunStatus) -> Result<()> {
         let Run {
             experiment,

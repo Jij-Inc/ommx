@@ -6,8 +6,9 @@ use super::{
     AttachmentLogger, Experiment, ExperimentDyn, Name, ParameterValue, SealedExperiment, Trace,
     ANN_ATTACHMENT_NAME, ANN_EXPERIMENT_RECOVERY, ANN_EXPERIMENT_REQUESTED_IMAGE,
     ANN_EXPERIMENT_STATUS, ANN_RUN_ID, ANN_SPACE, EXPERIMENT_CONFIG_MEDIA_TYPE,
-    EXPERIMENT_STATUS_FAILED, EXPERIMENT_STATUS_FINISHED, RUN_PARAMETERS_MEDIA_TYPE,
-    RUN_STATUS_FAILED, RUN_STATUS_FINISHED,
+    EXPERIMENT_STATUS_DRAFT, EXPERIMENT_STATUS_FAILED, EXPERIMENT_STATUS_FINISHED,
+    EXPERIMENT_STATUS_INTERRUPTED, RUN_PARAMETERS_MEDIA_TYPE, RUN_STATUS_FAILED,
+    RUN_STATUS_FINISHED, RUN_STATUS_INTERRUPTED,
 };
 use crate::artifact::local_registry::{StoredDescriptor, UnsealedArtifact};
 use crate::artifact::{media_types, AsArtifact, ImageRef, LocalArtifact, LocalRegistryHandle};
@@ -1262,6 +1263,100 @@ fn experiment_dyn_recovers_failed_artifact_with_requested_image_name() {
     assert_eq!(child_runs.len(), 2);
     assert_eq!(child_runs[0].status().as_str(), RUN_STATUS_FAILED);
     assert_eq!(child_runs[1].status().as_str(), RUN_STATUS_FINISHED);
+}
+
+#[test]
+fn experiment_dyn_autosaves_on_run_close_and_recovers_with_requested_image_name() {
+    let registry_handle = LocalRegistryHandle::temp().unwrap();
+    let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:notebook").unwrap();
+    let experiment =
+        ExperimentDyn::with_registry_handle(registry_handle.clone(), image_name.clone()).unwrap();
+    let autosave_image_name = experiment.autosave_image_name().unwrap();
+    assert!(autosave_image_name
+        .to_string()
+        .contains(".ommx.local/autosave:"));
+    assert!(experiment.autosave_artifact().is_none());
+
+    {
+        let mut run = experiment.run().unwrap();
+        run.log_parameter("solver", "scip").unwrap();
+        run.finish().unwrap();
+    }
+
+    let autosave = experiment
+        .autosave_artifact()
+        .expect("Run close should publish an autosave checkpoint");
+    assert_eq!(autosave.image_name(), &autosave_image_name);
+    let annotations = autosave.annotations().unwrap();
+    assert_eq!(
+        annotations.get(ANN_EXPERIMENT_STATUS).map(String::as_str),
+        Some(EXPERIMENT_STATUS_DRAFT)
+    );
+    assert_eq!(
+        annotations.get(ANN_EXPERIMENT_RECOVERY).map(String::as_str),
+        Some("true")
+    );
+    assert_eq!(
+        annotations.get(ANN_EXPERIMENT_REQUESTED_IMAGE),
+        Some(&image_name.to_string())
+    );
+
+    let config = experiment_config(&autosave.as_local_artifact());
+    assert_eq!(config.status, EXPERIMENT_STATUS_DRAFT);
+    assert_eq!(config.runs.len(), 1);
+    assert_eq!(config.runs[0].status, RUN_STATUS_FINISHED);
+    assert_eq!(experiment.runs().unwrap().len(), 1);
+    assert_eq!(experiment.run_parameter_cells().unwrap().len(), 1);
+    let err = SealedExperiment::from_artifact(autosave.as_local_artifact())
+        .expect_err("autosave checkpoint must not load as a finished experiment");
+    assert!(err.to_string().contains("status is draft"));
+
+    let recovered = ExperimentDyn::from_autosave_artifact(autosave).unwrap();
+    assert!(recovered.is_unsealed());
+    assert_eq!(recovered.image_name().unwrap(), image_name);
+    {
+        let mut run = recovered.run().unwrap();
+        assert_eq!(run.run_id().unwrap(), 1);
+        run.log_parameter("solver", "highs").unwrap();
+        run.finish().unwrap();
+    }
+
+    let artifact = recovered.commit().unwrap();
+    assert_eq!(artifact.image_name(), &image_name);
+    let child_runs = recovered.runs().unwrap();
+    assert_eq!(child_runs.len(), 2);
+    assert_eq!(child_runs[0].status().as_str(), RUN_STATUS_FINISHED);
+    assert_eq!(child_runs[1].status().as_str(), RUN_STATUS_FINISHED);
+}
+
+#[test]
+fn experiment_dyn_marks_keyboard_interrupt_recovery_separately() {
+    let registry_handle = LocalRegistryHandle::temp().unwrap();
+    let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:interrupt").unwrap();
+    let experiment =
+        ExperimentDyn::with_registry_handle(registry_handle.clone(), image_name.clone()).unwrap();
+    {
+        let mut run = experiment.run().unwrap();
+        run.log_parameter("solver", "scip").unwrap();
+        run.finish_interrupted().unwrap();
+    }
+
+    let autosave = experiment.autosave_artifact().unwrap();
+    let autosave_config = experiment_config(&autosave.as_local_artifact());
+    assert_eq!(autosave_config.status, EXPERIMENT_STATUS_DRAFT);
+    assert_eq!(autosave_config.runs[0].status, RUN_STATUS_INTERRUPTED);
+
+    let recovery = experiment
+        .commit_interrupted_recovery("KeyboardInterrupt")
+        .unwrap();
+    let annotations = recovery.annotations().unwrap();
+    assert_eq!(
+        annotations.get(ANN_EXPERIMENT_STATUS).map(String::as_str),
+        Some(EXPERIMENT_STATUS_INTERRUPTED)
+    );
+    let config = experiment_config(&recovery.as_local_artifact());
+    assert_eq!(config.status, EXPERIMENT_STATUS_INTERRUPTED);
+    assert_eq!(config.runs[0].status, RUN_STATUS_INTERRUPTED);
 }
 
 #[test]
