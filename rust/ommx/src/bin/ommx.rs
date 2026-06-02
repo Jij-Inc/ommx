@@ -1,7 +1,6 @@
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 use colored::Colorize;
-use oci_spec::image::Digest;
 use oci_spec::image::ImageManifest;
 use ommx::artifact::{
     fetch_remote_manifest, get_local_registry_root,
@@ -13,7 +12,6 @@ use ommx::artifact::{
 };
 use std::{
     path::{Path, PathBuf},
-    str::FromStr,
     time::Duration,
 };
 
@@ -125,10 +123,6 @@ enum ArtifactCommand {
         /// Keep unreachable blobs newer than this duration. Accepts s, m, h, d suffixes.
         #[clap(long, default_value = "24h", value_parser = parse_gc_duration)]
         grace_period: Duration,
-
-        /// Extra digest to protect as a GC root. May be passed more than once.
-        #[clap(long = "protect")]
-        protected_digest: Vec<String>,
     },
 }
 
@@ -414,7 +408,6 @@ fn main() -> Result<()> {
                 dry_run,
                 delete,
                 grace_period,
-                protected_digest,
             } => {
                 if *dry_run && *delete {
                     bail!("--dry-run and --delete cannot be used together");
@@ -424,16 +417,9 @@ fn main() -> Result<()> {
                 } else {
                     LocalRegistry::open_default()?
                 };
-                let protected_digests = protected_digest
-                    .iter()
-                    .map(|digest| {
-                        Digest::from_str(digest)
-                            .with_context(|| format!("Invalid protected digest: {digest}"))
-                    })
-                    .collect::<Result<Vec<_>>>()?;
                 let options = GcOptions {
-                    protected_digests,
                     grace_period: *grace_period,
+                    ..GcOptions::default()
                 };
                 if *delete {
                     let result = registry.gc(&options)?;
