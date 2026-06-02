@@ -94,6 +94,52 @@ const RUN_STATUS_FINISHED: &str = "finished";
 const RUN_STATUS_FAILED: &str = "failed";
 const RUN_STATUS_INTERRUPTED: &str = "interrupted";
 
+/// Lifecycle status of a sealed Experiment Artifact.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExperimentStatus {
+    /// The Experiment was committed successfully.
+    Finished,
+    /// The Experiment is an uncommitted checkpoint with closed Run state.
+    Draft,
+    /// The Experiment exited with an exception and retained partial state.
+    Failed,
+    /// The Experiment was interrupted by the user and retained partial state.
+    Interrupted,
+}
+
+impl ExperimentStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Finished => EXPERIMENT_STATUS_FINISHED,
+            Self::Draft => EXPERIMENT_STATUS_DRAFT,
+            Self::Failed => EXPERIMENT_STATUS_FAILED,
+            Self::Interrupted => EXPERIMENT_STATUS_INTERRUPTED,
+        }
+    }
+
+    fn from_config(status: &str) -> Result<Self> {
+        match status {
+            EXPERIMENT_STATUS_FINISHED => Ok(Self::Finished),
+            EXPERIMENT_STATUS_DRAFT => Ok(Self::Draft),
+            EXPERIMENT_STATUS_FAILED => Ok(Self::Failed),
+            EXPERIMENT_STATUS_INTERRUPTED => Ok(Self::Interrupted),
+            _ => {
+                crate::bail!(
+                    "Experiment status is {status}, expected {EXPERIMENT_STATUS_FINISHED}, \
+                     {EXPERIMENT_STATUS_DRAFT}, {EXPERIMENT_STATUS_FAILED}, or \
+                     {EXPERIMENT_STATUS_INTERRUPTED}"
+                )
+            }
+        }
+    }
+}
+
+impl std::fmt::Display for ExperimentStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 /// Lifecycle status of a closed Run recorded in an Experiment.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RunStatus {
@@ -146,7 +192,7 @@ pub struct Experiment<'reg> {
 /// written and published.
 #[derive(Debug, Clone)]
 pub struct SealedExperiment<'reg> {
-    status: String,
+    status: ExperimentStatus,
     artifact: LocalArtifact<'reg>,
     attachments: Vec<StoredDescriptor<'reg>>,
     runs: BTreeMap<u64, sealed::SealedRun<'reg>>,

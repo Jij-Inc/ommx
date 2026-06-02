@@ -385,7 +385,9 @@ impl PyExperiment {
     ///
     /// Returns `None` for an unsealed Experiment.
     pub fn status(&self) -> Option<String> {
-        self.inner.experiment_status()
+        self.inner
+            .experiment_status()
+            .map(|status| status.to_string())
     }
 
     #[getter]

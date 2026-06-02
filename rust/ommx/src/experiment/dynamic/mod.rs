@@ -17,8 +17,9 @@
 
 use super::attachment::{store_attachment_descriptor, AttachmentSpace};
 use super::{
-    allocate_next_run_id, next_run_id, AttachmentLogger, Name, RunEntry, RunParameterCell,
-    RunStatus, SealedExperiment, UnsealedExperimentState, ANN_EXPERIMENT_REQUESTED_IMAGE,
+    allocate_next_run_id, next_run_id, AttachmentLogger, ExperimentStatus, Name, RunEntry,
+    RunParameterCell, RunStatus, SealedExperiment, UnsealedExperimentState,
+    ANN_EXPERIMENT_REQUESTED_IMAGE,
 };
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
 use crate::artifact::{
@@ -102,7 +103,7 @@ pub(super) struct SolveEntryDyn {
 
 #[derive(Debug, Clone)]
 struct SealedExperimentDynState {
-    status: String,
+    status: ExperimentStatus,
     artifact: LocalArtifactDyn,
     attachments: Vec<Descriptor>,
     runs: BTreeMap<u64, SealedRunDyn>,
@@ -447,9 +448,9 @@ impl ExperimentDyn {
         }
     }
 
-    pub fn experiment_status(&self) -> Option<String> {
+    pub fn experiment_status(&self) -> Option<ExperimentStatus> {
         match &lock_experiment_state(&self.state).lifecycle {
-            ExperimentDynLifecycle::Sealed(sealed) => Some(sealed.status.clone()),
+            ExperimentDynLifecycle::Sealed(sealed) => Some(sealed.status),
             ExperimentDynLifecycle::Unsealed { .. } | ExperimentDynLifecycle::Failed { .. } => None,
         }
     }
@@ -820,7 +821,7 @@ impl SealedExperimentDynState {
         artifact: LocalArtifactDyn,
     ) -> Result<Self> {
         let registry_handle = artifact.registry_handle();
-        let status = sealed.status().to_string();
+        let status = *sealed.status();
         let (attachments, runs, run_parameters) = {
             let attachments = descriptors(sealed.experiment_attachments());
             let runs = sealed

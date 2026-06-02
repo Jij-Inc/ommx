@@ -3,12 +3,12 @@
 use super::config::{ExperimentConfig, ExperimentConfigRun, LayerRef};
 use super::UnsealedExperimentState;
 use super::{
-    AttachmentLogger, Experiment, ExperimentDyn, Name, ParameterValue, SealedExperiment, Trace,
-    ANN_ATTACHMENT_NAME, ANN_EXPERIMENT_RECOVERY, ANN_EXPERIMENT_REQUESTED_IMAGE,
-    ANN_EXPERIMENT_STATUS, ANN_RUN_ID, ANN_SPACE, EXPERIMENT_CONFIG_MEDIA_TYPE,
-    EXPERIMENT_STATUS_DRAFT, EXPERIMENT_STATUS_FAILED, EXPERIMENT_STATUS_FINISHED,
-    EXPERIMENT_STATUS_INTERRUPTED, RUN_PARAMETERS_MEDIA_TYPE, RUN_STATUS_FAILED,
-    RUN_STATUS_FINISHED, RUN_STATUS_INTERRUPTED,
+    AttachmentLogger, Experiment, ExperimentDyn, ExperimentStatus, Name, ParameterValue,
+    SealedExperiment, Trace, ANN_ATTACHMENT_NAME, ANN_EXPERIMENT_RECOVERY,
+    ANN_EXPERIMENT_REQUESTED_IMAGE, ANN_EXPERIMENT_STATUS, ANN_RUN_ID, ANN_SPACE,
+    EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_STATUS_DRAFT, EXPERIMENT_STATUS_FAILED,
+    EXPERIMENT_STATUS_FINISHED, EXPERIMENT_STATUS_INTERRUPTED, RUN_PARAMETERS_MEDIA_TYPE,
+    RUN_STATUS_FAILED, RUN_STATUS_FINISHED, RUN_STATUS_INTERRUPTED,
 };
 use crate::artifact::local_registry::{StoredDescriptor, UnsealedArtifact};
 use crate::artifact::{
@@ -195,6 +195,7 @@ fn trace_is_config_referenced_manifest_layer() {
         assert_eq!(trace.media_type(), &media_types::trace_otlp_protobuf());
         assert_eq!(layer_annotation(trace, ANN_ATTACHMENT_NAME), None);
         let loaded = SealedExperiment::from_artifact(artifact).unwrap();
+        assert_eq!(loaded.status(), &ExperimentStatus::Finished);
         assert!(loaded.run(0).unwrap().trace().is_some());
         Ok(())
     });
@@ -986,6 +987,7 @@ fn commit_returns_sealed_experiment() {
         }
 
         let sealed = experiment.commit().unwrap();
+        assert_eq!(sealed.status(), &ExperimentStatus::Finished);
         let artifact = sealed.artifact();
         let config = artifact.stored_config().unwrap();
         let config_json: serde_json::Value =
@@ -1080,6 +1082,7 @@ fn experiment_dyn_keeps_temp_registry_alive_for_derived_artifacts() {
     drop(experiment);
 
     let loaded = ExperimentDyn::from_artifact(artifact).unwrap();
+    assert_eq!(loaded.experiment_status(), Some(ExperimentStatus::Finished));
     let cells = loaded.run_parameter_cells().unwrap();
     assert_eq!(cells.len(), 1);
     assert_eq!(cells[0].run_id, 0);
