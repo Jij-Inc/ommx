@@ -1,5 +1,6 @@
-use super::{sha256_digest, FILE_BLOB_STORE_DIR_NAME};
+use super::{sha256_digest, validate_digest, FILE_BLOB_STORE_DIR_NAME};
 use anyhow::{ensure, Context, Result};
+use filetime::FileTime;
 use oci_spec::image::Digest;
 use std::{
     fs,
@@ -7,8 +8,16 @@ use std::{
     io::{ErrorKind, Write},
     path::{Path, PathBuf},
     str::FromStr,
+    time::SystemTime,
 };
 use uuid::Uuid;
+
+#[derive(Debug, Clone)]
+pub struct BlobRecord {
+    pub digest: Digest,
+    pub size: u64,
+    pub modified: Option<SystemTime>,
+}
 
 #[derive(Debug, Clone)]
 pub struct FileBlobStore {
@@ -40,6 +49,7 @@ impl FileBlobStore {
         }
         if path.exists() {
             verify_existing_blob(&path, bytes, digest.as_ref())?;
+            touch_existing_blob(&path, digest.as_ref())?;
         } else {
             self.write_blob_atomically(bytes, &digest, &path)?;
         }
@@ -66,6 +76,87 @@ impl FileBlobStore {
         Ok(fs::metadata(&path)
             .with_context(|| format!("Failed to read blob metadata {}", path.display()))?
             .len())
+    }
+
+    pub fn blob_record(&self, digest: &Digest) -> Result<Option<BlobRecord>> {
+        let path = self.path_for_digest(digest)?;
+        let metadata = match fs::metadata(&path) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
+            Err(error) => {
+                return Err(error)
+                    .with_context(|| format!("Failed to read blob metadata {}", path.display()));
+            }
+        };
+        Ok(Some(BlobRecord {
+            digest: digest.clone(),
+            size: metadata.len(),
+            modified: metadata.modified().ok(),
+        }))
+    }
+
+    pub fn list_blobs(&self) -> Result<Vec<BlobRecord>> {
+        let mut out = Vec::new();
+        if !self.root.exists() {
+            return Ok(out);
+        }
+        for algorithm_entry in fs::read_dir(&self.root)
+            .with_context(|| format!("Failed to list blob store {}", self.root.display()))?
+        {
+            let algorithm_entry = algorithm_entry?;
+            let algorithm_path = algorithm_entry.path();
+            if !algorithm_path.is_dir() {
+                continue;
+            }
+            let Some(algorithm) = algorithm_path.file_name().and_then(|name| name.to_str()) else {
+                continue;
+            };
+            for blob_entry in fs::read_dir(&algorithm_path).with_context(|| {
+                format!("Failed to list blob directory {}", algorithm_path.display())
+            })? {
+                let blob_entry = blob_entry?;
+                let blob_path = blob_entry.path();
+                let metadata = match blob_entry.metadata() {
+                    Ok(metadata) => metadata,
+                    Err(error) if error.kind() == ErrorKind::NotFound => continue,
+                    Err(error) => {
+                        return Err(error).with_context(|| {
+                            format!("Failed to read blob metadata {}", blob_path.display())
+                        });
+                    }
+                };
+                if !metadata.is_file() {
+                    continue;
+                }
+                let Some(encoded) = blob_path.file_name().and_then(|name| name.to_str()) else {
+                    continue;
+                };
+                let digest_string = format!("{algorithm}:{encoded}");
+                if validate_digest(&digest_string).is_err() {
+                    continue;
+                }
+                let digest = Digest::from_str(&digest_string)
+                    .context("Failed to parse listed blob digest")?;
+                out.push(BlobRecord {
+                    digest,
+                    size: metadata.len(),
+                    modified: metadata.modified().ok(),
+                });
+            }
+        }
+        out.sort_by(|left, right| left.digest.as_ref().cmp(right.digest.as_ref()));
+        Ok(out)
+    }
+
+    pub fn delete_blob(&self, digest: &Digest) -> Result<bool> {
+        let path = self.path_for_digest(digest)?;
+        match fs::remove_file(&path) {
+            Ok(()) => Ok(true),
+            Err(error) if error.kind() == ErrorKind::NotFound => Ok(false),
+            Err(error) => {
+                Err(error).with_context(|| format!("Failed to delete blob {}", path.display()))
+            }
+        }
     }
 
     pub fn path_for_digest(&self, digest: &Digest) -> Result<PathBuf> {
@@ -131,4 +222,9 @@ fn verify_existing_blob(path: &Path, bytes: &[u8], digest: &str) -> Result<()> {
         "Existing blob has different bytes for digest {digest}"
     );
     Ok(())
+}
+
+fn touch_existing_blob(path: &Path, digest: &str) -> Result<()> {
+    filetime::set_file_mtime(path, FileTime::now())
+        .with_context(|| format!("Failed to touch existing blob {digest}"))
 }

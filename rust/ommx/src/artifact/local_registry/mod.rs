@@ -69,6 +69,7 @@
 //!   unsealed state for a future commit, it is already stored.
 
 mod blob;
+mod gc;
 mod import;
 mod index;
 mod registry;
@@ -81,7 +82,11 @@ use chrono::Utc;
 
 pub use crate::artifact::digest::sha256_digest;
 pub(crate) use crate::artifact::digest::{validate_digest, ValidatedDigest};
-pub use blob::FileBlobStore;
+pub use blob::{BlobRecord, FileBlobStore};
+pub use gc::{
+    GcBlob, GcDeleteReport, GcInvalidManifest, GcMissingBlob, GcOptions, GcReferenceKind, GcReport,
+    GcRoot,
+};
 pub use import::archive::{import_oci_archive, inspect_archive, ArchiveInspectView};
 pub use import::legacy::{
     import_legacy_local_registry, import_legacy_local_registry_ref, legacy_local_registry_path,

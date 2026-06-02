@@ -28,6 +28,7 @@ derive_more = { version = "2.1.1", features = ["full"] }
 directories = "6.0.0"
 docker_credential = "1.4.0"
 flate2 = "1.1.8"
+filetime = "0.2.27"
 fnv = "1.0.7"
 futures-util = { version = "0.3.32", default-features = false, features = ["std"] }
 getset = "0.1.6"

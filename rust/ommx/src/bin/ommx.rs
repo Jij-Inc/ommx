@@ -1,16 +1,21 @@
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 use colored::Colorize;
+use oci_spec::image::Digest;
 use oci_spec::image::ImageManifest;
 use ommx::artifact::{
     fetch_remote_manifest, get_local_registry_root,
     local_registry::{
         import_oci_archive, import_oci_dir, inspect_archive, legacy_local_registry_path,
-        oci_dir_ref, pull_image, LocalRegistry,
+        oci_dir_ref, pull_image, GcBlob, GcDeleteReport, GcOptions, GcReport, LocalRegistry,
     },
     ImageRef, LocalArtifact,
 };
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    str::FromStr,
+    time::Duration,
+};
 
 mod built_info {
     include!(concat!(env!("OUT_DIR"), "/built.rs"));
@@ -97,6 +102,33 @@ enum ArtifactCommand {
         /// List refs that would be removed without modifying the registry.
         #[clap(long)]
         dry_run: bool,
+    },
+
+    /// Report or delete Local Registry blobs unreachable from refs.
+    ///
+    /// All SQLite refs are GC roots, including Experiment checkpoint refs.
+    /// Unreachable blobs newer than the grace period are deferred so active
+    /// Run writes after the latest checkpoint are not removed.
+    Gc {
+        /// Local registry root. Defaults to OMMX_LOCAL_REGISTRY_ROOT or the OS default data dir.
+        #[clap(long)]
+        root: Option<PathBuf>,
+
+        /// Explicit dry-run mode. This is the default unless --delete is passed.
+        #[clap(long)]
+        dry_run: bool,
+
+        /// Delete orphan candidates instead of only reporting them.
+        #[clap(long)]
+        delete: bool,
+
+        /// Keep unreachable blobs newer than this duration. Accepts s, m, h, d suffixes.
+        #[clap(long, default_value = "24h", value_parser = parse_gc_duration)]
+        grace_period: Duration,
+
+        /// Extra digest to protect as a GC root. May be passed more than once.
+        #[clap(long = "protect")]
+        protected_digest: Vec<String>,
     },
 }
 
@@ -377,7 +409,147 @@ fn main() -> Result<()> {
                     }
                 }
             }
+            ArtifactCommand::Gc {
+                root,
+                dry_run,
+                delete,
+                grace_period,
+                protected_digest,
+            } => {
+                if *dry_run && *delete {
+                    bail!("--dry-run and --delete cannot be used together");
+                }
+                let registry = if let Some(root) = root {
+                    LocalRegistry::open(root)?
+                } else {
+                    LocalRegistry::open_default()?
+                };
+                let protected_digests = protected_digest
+                    .iter()
+                    .map(|digest| {
+                        Digest::from_str(digest)
+                            .with_context(|| format!("Invalid protected digest: {digest}"))
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                let options = GcOptions {
+                    protected_digests,
+                    grace_period: *grace_period,
+                };
+                if *delete {
+                    let result = registry.gc(&options)?;
+                    print_gc_delete_report(&registry, &result);
+                } else {
+                    let report = registry.gc_report(&options)?;
+                    print_gc_report(&registry, &report);
+                    println!("(--dry-run: registry unchanged)");
+                }
+            }
         },
     }
     Ok(())
+}
+
+fn parse_gc_duration(input: &str) -> std::result::Result<Duration, String> {
+    if input.is_empty() {
+        return Err("duration must not be empty".to_string());
+    }
+    let (number, unit) = match input.as_bytes().last().copied() {
+        Some(b's' | b'm' | b'h' | b'd') => (&input[..input.len() - 1], input.as_bytes().last()),
+        Some(b'0'..=b'9') => (input, None),
+        _ => {
+            return Err(format!(
+                "invalid duration suffix in {input:?}; use s, m, h, or d"
+            ))
+        }
+    };
+    let value = number
+        .parse::<u64>()
+        .map_err(|_| format!("invalid duration value in {input:?}"))?;
+    let seconds = match unit.copied() {
+        Some(b's') | None => value,
+        Some(b'm') => value
+            .checked_mul(60)
+            .ok_or_else(|| format!("duration is too large: {input}"))?,
+        Some(b'h') => value
+            .checked_mul(60 * 60)
+            .ok_or_else(|| format!("duration is too large: {input}"))?,
+        Some(b'd') => value
+            .checked_mul(24 * 60 * 60)
+            .ok_or_else(|| format!("duration is too large: {input}"))?,
+        _ => unreachable!("duration unit was filtered above"),
+    };
+    Ok(Duration::from_secs(seconds))
+}
+
+fn print_gc_delete_report(registry: &LocalRegistry, result: &GcDeleteReport) {
+    print_gc_report(registry, &result.report);
+    println!(
+        "Deleted {} orphan blob(s), {}",
+        result.deleted_blobs.len(),
+        format_bytes(result.deleted_size())
+    );
+    if !result.skipped_blobs.is_empty() {
+        println!(
+            "Skipped {} blob(s) that changed before deletion:",
+            result.skipped_blobs.len()
+        );
+        print_blob_list(&result.skipped_blobs);
+    }
+}
+
+fn print_gc_report(registry: &LocalRegistry, report: &GcReport) {
+    println!("Local Registry: {}", registry.root().display());
+    println!("Roots: {} ref/protected digest(s)", report.roots.len());
+    println!(
+        "Reachable blobs: {}, {}",
+        report.reachable_blobs.len(),
+        format_bytes(report.reachable_size())
+    );
+    println!(
+        "Orphan candidates: {}, {}",
+        report.orphan_candidates.len(),
+        format_bytes(report.orphan_candidate_size())
+    );
+    print_blob_list(&report.orphan_candidates);
+    println!(
+        "Deferred blobs: {}, {}",
+        report.deferred_blobs.len(),
+        format_bytes(report.deferred_size())
+    );
+    if !report.missing_blobs.is_empty() {
+        println!("Missing referenced blobs: {}", report.missing_blobs.len());
+        for missing in &report.missing_blobs {
+            println!("  {} ({:?})", missing.digest, missing.kind);
+        }
+    }
+    if !report.invalid_manifests.is_empty() {
+        println!("Invalid manifest blobs: {}", report.invalid_manifests.len());
+        for invalid in &report.invalid_manifests {
+            println!(
+                "  {} ({:?}): {}",
+                invalid.digest, invalid.kind, invalid.error
+            );
+        }
+    }
+}
+
+fn print_blob_list(blobs: &[GcBlob]) {
+    for blob in blobs {
+        println!("  {}  {}", blob.digest, format_bytes(blob.size));
+    }
+}
+
+fn format_bytes(bytes: u64) -> String {
+    const UNITS: [&str; 5] = ["B", "KiB", "MiB", "GiB", "TiB"];
+    let mut value = bytes as f64;
+    let mut unit = 0;
+    while value >= 1024.0 && unit + 1 < UNITS.len() {
+        value /= 1024.0;
+        unit += 1;
+    }
+    if unit == 0 {
+        format!("{bytes} {}", UNITS[unit])
+    } else {
+        format!("{value:.1} {}", UNITS[unit])
+    }
 }

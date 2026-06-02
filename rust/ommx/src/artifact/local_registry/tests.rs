@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use std::time::{Duration, UNIX_EPOCH};
 
 /// Build a tiny single-layer artifact in a fresh temp SQLite registry,
 /// save it to `archive_path` via the v3 native save writer, and drop
@@ -45,6 +46,153 @@ fn file_blob_store_round_trip() -> Result<()> {
     assert!(store.exists(&digest)?);
     assert_eq!(store.read_bytes(&digest)?, b"hello");
     assert!(Digest::from_str("sha256:../../outside").is_err());
+    Ok(())
+}
+
+#[test]
+fn file_blob_store_touches_existing_blob_on_put() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let store = FileBlobStore::open(dir.path().join("blobs"))?;
+    let digest = store.put_bytes(b"hello")?;
+    let path = store.path_for_digest(&digest)?;
+    filetime::set_file_mtime(&path, filetime::FileTime::from_unix_time(1, 0))?;
+
+    store.put_bytes(b"hello")?;
+
+    let modified = std::fs::metadata(path)?.modified()?;
+    assert!(
+        modified > UNIX_EPOCH + Duration::from_secs(1),
+        "existing blob mtime should be refreshed when the digest is claimed again"
+    );
+    Ok(())
+}
+
+#[test]
+fn gc_report_marks_unreachable_old_blobs_as_orphan_candidates() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:gc-root")?;
+    let artifact = build_test_local_artifact(&registry, &image_name, b"reachable-layer")?;
+    let reachable_layer = artifact.layers()?[0].digest().clone();
+    let orphan = registry.store_layer_blob(
+        MediaType::Other("application/octet-stream".to_string()),
+        b"orphan-layer",
+        HashMap::new(),
+    )?;
+
+    let report = registry.gc_report(&GcOptions {
+        grace_period: Duration::ZERO,
+        ..GcOptions::default()
+    })?;
+
+    assert!(blob_list_contains(
+        &report.reachable_blobs,
+        &reachable_layer
+    ));
+    assert!(blob_list_contains(
+        &report.orphan_candidates,
+        orphan.digest()
+    ));
+    assert!(!blob_list_contains(
+        &report.reachable_blobs,
+        orphan.digest()
+    ));
+    assert!(report.deferred_blobs.is_empty());
+    assert!(report.missing_blobs.is_empty());
+    assert!(report.invalid_manifests.is_empty());
+    Ok(())
+}
+
+#[test]
+fn gc_report_defers_recent_unreachable_blobs_within_grace_period() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let orphan = registry.store_layer_blob(
+        MediaType::Other("application/octet-stream".to_string()),
+        b"active-run-layer",
+        HashMap::new(),
+    )?;
+
+    let report = registry.gc_report(&GcOptions {
+        grace_period: Duration::from_secs(24 * 60 * 60),
+        ..GcOptions::default()
+    })?;
+
+    assert!(blob_list_contains(&report.deferred_blobs, orphan.digest()));
+    assert!(!blob_list_contains(
+        &report.orphan_candidates,
+        orphan.digest()
+    ));
+    Ok(())
+}
+
+#[test]
+fn gc_report_walks_subject_chain_from_live_ref() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let parent_image = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:parent")?;
+    let parent = build_test_local_artifact(&registry, &parent_image, b"parent-layer")?;
+    let parent_manifest = parent.stored_manifest_descriptor()?;
+    let parent_manifest_digest = parent.manifest_digest().clone();
+    let parent_layer_digest = parent.layers()?[0].digest().clone();
+    registry.delete_manifest_ref(&parent_image)?;
+
+    let child_image = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:child")?;
+    let mut child = ArtifactDraft::with_registry(&registry, child_image);
+    child.add_layer_bytes(
+        MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
+        b"child-layer".to_vec(),
+        HashMap::new(),
+    )?;
+    child.set_subject(parent_manifest.into());
+    child.commit()?;
+
+    let report = registry.gc_report(&GcOptions {
+        grace_period: Duration::ZERO,
+        ..GcOptions::default()
+    })?;
+
+    assert!(blob_list_contains(
+        &report.reachable_blobs,
+        &parent_manifest_digest
+    ));
+    assert!(blob_list_contains(
+        &report.reachable_blobs,
+        &parent_layer_digest
+    ));
+    assert!(!blob_list_contains(
+        &report.orphan_candidates,
+        &parent_manifest_digest
+    ));
+    assert!(!blob_list_contains(
+        &report.orphan_candidates,
+        &parent_layer_digest
+    ));
+    Ok(())
+}
+
+#[test]
+fn gc_deletes_only_orphan_candidates() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:gc-delete")?;
+    let artifact = build_test_local_artifact(&registry, &image_name, b"reachable-layer")?;
+    let reachable_layer = artifact.layers()?[0].digest().clone();
+    let orphan = registry.store_layer_blob(
+        MediaType::Other("application/octet-stream".to_string()),
+        b"delete-me",
+        HashMap::new(),
+    )?;
+    let orphan_digest = orphan.digest().clone();
+
+    let result = registry.gc(&GcOptions {
+        grace_period: Duration::ZERO,
+        ..GcOptions::default()
+    })?;
+
+    assert!(blob_list_contains(&result.deleted_blobs, &orphan_digest));
+    assert!(!registry.blobs().exists(&orphan_digest)?);
+    assert!(registry.blobs().exists(&reachable_layer)?);
     Ok(())
 }
 
@@ -1367,6 +1515,10 @@ fn stored_layer_descriptors(artifact: &LocalArtifact<'_>) -> Result<Vec<Descript
         .into_iter()
         .map(Descriptor::from)
         .collect())
+}
+
+fn blob_list_contains(blobs: &[GcBlob], digest: &Digest) -> bool {
+    blobs.iter().any(|blob| blob.digest == *digest)
 }
 
 fn put_test_manifest_ref(
