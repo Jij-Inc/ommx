@@ -1783,7 +1783,7 @@
         {
           "kind": "Class",
           "name": "Experiment",
-          "doc": "A collection of optimization experiment records stored as one OMMX Artifact.\n\nAn `Experiment` owns experiment-level attachments and a sequence of\nclosed `Run` records. Each `Run` can store scalar run parameters,\nrun-level attachments, and zero or more `Solve` records.\n\nNewly created experiments are unsealed. Call `commit()` to write the\nexperiment into the local registry as an OMMX Artifact. After commit, the\nsame object can be used as a read-only view of the committed artifact.\n`with Experiment(...)` commits on normal exit if the experiment is still\nunsealed. On exception it does not advance the success ref; instead it\ntries to publish a failed recovery artifact under a local `crashed:` ref.\n\nUse experiment-level attachments for shared context such as dataset or\nsource-problem metadata. Use `Run.log_parameter(...)` for scalar values\nthat should appear in `run_parameters_df()`, and use run attachments or\n`Run.log_solve(...)` for payloads that belong to a specific run.\n\nExample:\n\n>>> from ommx.experiment import Experiment\n>>> with Experiment.with_temp_local_registry() as exp:\n...     exp.log_json(\"dataset\", {\"name\": \"demo\"})\n...     with exp.run() as run:\n...         run.log_parameter(\"capacity\", 10)\n...         run.log_json(\"scenario\", {\"capacity\": 10})\n>>> len(exp.runs)\n1\n>>> len(exp.experiment_attachments)\n1\n>>> exp.run_parameters_df().to_dict()\n{'capacity': {0: 10}}\n\nIf the experiment has only one run, open the experiment and the run in\none `with` statement. On normal exit, the run is finished first and then\nthe experiment is committed:\n\n>>> with Experiment() as exp, exp.run() as run:  # doctest: +SKIP\n...     solution = run.log_solve(adapter, instance, time_limit=10.0)\n>>> exp.rename(\"ghcr.io/container/name:latest\")  # doctest: +SKIP\n>>> exp.push()  # doctest: +SKIP",
+          "doc": "A collection of optimization experiment records stored as one OMMX Artifact.\n\nAn `Experiment` owns experiment-level attachments and a sequence of\nclosed `Run` records. Each `Run` can store scalar run parameters,\nrun-level attachments, and zero or more `Solve` records.\n\nNewly created experiments are unsealed. Call `commit()` to write the\nexperiment into the local registry as an OMMX Artifact. After commit, the\nsame object can be used as a read-only view of the committed artifact.\n`with Experiment(...)` commits on normal exit if the experiment is still\nunsealed. On exception it does not advance the success ref; instead it\ntries to publish a failed checkpoint under a local `checkpoint:`\nref.\n\nUse experiment-level attachments for shared context such as dataset or\nsource-problem metadata. Use `Run.log_parameter(...)` for scalar values\nthat should appear in `run_parameters_df()`, and use run attachments or\n`Run.log_solve(...)` for payloads that belong to a specific run.\n\nExample:\n\n>>> from ommx.experiment import Experiment\n>>> with Experiment.with_temp_local_registry() as exp:\n...     exp.log_json(\"dataset\", {\"name\": \"demo\"})\n...     with exp.run() as run:\n...         run.log_parameter(\"capacity\", 10)\n...         run.log_json(\"scenario\", {\"capacity\": 10})\n>>> len(exp.runs)\n1\n>>> len(exp.experiment_attachments)\n1\n>>> exp.run_parameters_df().to_dict()\n{'capacity': {0: 10}}\n\nIf the experiment has only one run, open the experiment and the run in\none `with` statement. On normal exit, the run is finished first and then\nthe experiment is committed:\n\n>>> with Experiment() as exp, exp.run() as run:  # doctest: +SKIP\n...     solution = run.log_solve(adapter, instance, time_limit=10.0)\n>>> exp.rename(\"ghcr.io/container/name:latest\")  # doctest: +SKIP\n>>> exp.push()  # doctest: +SKIP",
           "bases": [],
           "methods": [
             {
@@ -2022,78 +2022,6 @@
             {
               "name": "from_artifact",
               "doc": "Interpret an already-open Artifact as a committed Experiment.\n\nThis is the usual entry point after importing or receiving an OMMX\nArtifact handle. The artifact must contain an Experiment config.",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "artifact",
-                      "type_": {
-                        "display": "Artifact",
-                        "link_target": {
-                          "fqn": "ommx.artifact.Artifact",
-                          "doc_module": "ommx.artifact",
-                          "kind": "Class",
-                          "attribute": null
-                        },
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "Experiment",
-                    "link_target": {
-                      "fqn": "ommx.experiment.Experiment",
-                      "doc_module": "ommx.experiment",
-                      "kind": "Class",
-                      "attribute": null
-                    },
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "from_autosave_artifact",
-              "doc": "Resume from an already-open Run-close autosave Artifact.",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "artifact",
-                      "type_": {
-                        "display": "Artifact",
-                        "link_target": {
-                          "fqn": "ommx.artifact.Artifact",
-                          "doc_module": "ommx.artifact",
-                          "kind": "Class",
-                          "attribute": null
-                        },
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "Experiment",
-                    "link_target": {
-                      "fqn": "ommx.experiment.Experiment",
-                      "doc_module": "ommx.experiment",
-                      "kind": "Class",
-                      "attribute": null
-                    },
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "from_recovery_artifact",
-              "doc": "Resume from an already-open recovery/checkpoint Artifact.\n\nThis accepts Experiment configs with checkpoint statuses such as\n`draft`, `failed`, or `interrupted`, and returns a new unsealed\nExperiment whose parent is the checkpoint Artifact and whose image name\nis the original requested Experiment image name recorded in the\nrecovery metadata.",
               "signatures": [
                 {
                   "parameters": [
@@ -2388,68 +2316,6 @@
               "deprecated": null
             },
             {
-              "name": "load_autosave",
-              "doc": "Load a Run-close autosave Artifact and resume from it.\n\nAutosave Artifacts use the same checkpoint format as failed recovery\nArtifacts. This is an alias for `load_recovery` with wording for the\nnotebook autosave workflow.",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "image_name",
-                      "type_": {
-                        "display": "str",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "Experiment",
-                    "link_target": {
-                      "fqn": "ommx.experiment.Experiment",
-                      "doc_module": "ommx.experiment",
-                      "kind": "Class",
-                      "attribute": null
-                    },
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "load_recovery",
-              "doc": "Load a recovery/checkpoint Artifact and resume from it.\n\nThis returns a new unsealed Experiment whose parent is the recovery\nArtifact and whose image name is the original requested Experiment\nimage name recorded in the recovery metadata.",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "image_name",
-                      "type_": {
-                        "display": "str",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "Experiment",
-                    "link_target": {
-                      "fqn": "ommx.experiment.Experiment",
-                      "doc_module": "ommx.experiment",
-                      "kind": "Class",
-                      "attribute": null
-                    },
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
               "name": "log_attachment",
               "doc": "Attach arbitrary bytes with an explicit OCI media type in the experiment space.\n\nThe `name` is stored as attachment metadata and is intended for\nhumans. The bytes are stored as a layer in the committed artifact.",
               "signatures": [
@@ -2711,6 +2577,37 @@
               "deprecated": null
             },
             {
+              "name": "restore_from_checkpoint",
+              "doc": "Restore an unsealed Experiment from its checkpoint.\n\nPass the original requested Experiment image name, not the generated\ncheckpoint ref. This accepts checkpoint statuses such as `draft`,\n`failed`, or `interrupted`, and returns a new unsealed Experiment whose\nimage name is the original requested Experiment image name recorded in\nthe checkpoint metadata.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "image_name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Experiment",
+                    "link_target": {
+                      "fqn": "ommx.experiment.Experiment",
+                      "doc_module": "ommx.experiment",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "run",
               "doc": "Start a new Run in this unsealed Experiment.\n\nThe returned `Run` must be closed before `commit()`. Use it as a\ncontext manager to close it automatically on normal or exceptional exit:\n\n```python\nwith experiment.run() as run:\n    run.log_parameter(\"capacity\", 47)\n```",
               "signatures": [
@@ -2877,45 +2774,6 @@
               "is_readonly": true
             },
             {
-              "name": "autosave_artifact",
-              "doc": "Run-close autosave Artifact for this unsealed Experiment, if any.\n\nA new autosave checkpoint is written after each closed Run. It is a\nrolling local ref and is not the final committed Experiment Artifact.",
-              "type_": {
-                "display": "Optional[_ommx_rust.Artifact]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "Artifact",
-                    "link_target": {
-                      "fqn": "ommx.artifact.Artifact",
-                      "doc_module": "ommx.artifact",
-                      "kind": "Class",
-                      "attribute": null
-                    },
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "autosave_image_name",
-              "doc": "Local image reference of the rolling Run-close autosave Artifact.",
-              "type_": {
-                "display": "Optional[str]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "str",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
               "name": "experiment_attachments",
               "doc": "Low-level descriptors for experiment-level attachments.\n\nPrefer `attachment_names`, `get_attachment`, or typed methods such as\n`get_json` and `get_instance` when working from Python. This descriptor\nview is kept for low-level Artifact inspection.",
               "type_": {
@@ -2949,45 +2807,6 @@
               "is_readonly": true
             },
             {
-              "name": "recovery_artifact",
-              "doc": "Failed recovery Artifact written after an exceptional context-manager exit.\n\nReturns `None` unless the Experiment context exited with an exception\nand OMMX successfully published the partial state under a local\n`crashed:` recovery ref. The recovery artifact is intentionally not a\nfinished Experiment and is rejected by `Experiment.from_artifact`.",
-              "type_": {
-                "display": "Optional[_ommx_rust.Artifact]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "Artifact",
-                    "link_target": {
-                      "fqn": "ommx.artifact.Artifact",
-                      "doc_module": "ommx.artifact",
-                      "kind": "Class",
-                      "attribute": null
-                    },
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "recovery_image_name",
-              "doc": "Local image reference of the failed recovery Artifact, if any.",
-              "type_": {
-                "display": "Optional[str]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "str",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
               "name": "runs",
               "doc": "Closed runs in insertion order.",
               "type_": {
@@ -3011,7 +2830,7 @@
             },
             {
               "name": "status",
-              "doc": "Experiment config status for a committed or recovery Experiment.\n\nReturns `None` for an unsealed Experiment.",
+              "doc": "Experiment config status for a committed Experiment.\n\nReturns `None` for an unsealed Experiment.",
               "type_": {
                 "display": "Optional[str]",
                 "link_target": null,
@@ -3503,7 +3322,7 @@
         {
           "kind": "Class",
           "name": "SealedRun",
-          "doc": "Immutable view of a closed Run in a committed or recovery Experiment.\n\n`SealedRun` exposes run-level attachments by name and the sequence of\n`Solve` records created by `Run.log_solve`.",
+          "doc": "Immutable view of a closed Run in an Experiment.\n\n`SealedRun` exposes run-level attachments by name and the sequence of\n`Solve` records created by `Run.log_solve`.",
           "bases": [],
           "methods": [
             {

@@ -1699,7 +1699,8 @@ class Experiment:
     same object can be used as a read-only view of the committed artifact.
     `with Experiment(...)` commits on normal exit if the experiment is still
     unsealed. On exception it does not advance the success ref; instead it
-    tries to publish a failed recovery artifact under a local `crashed:` ref.
+    tries to publish a failed checkpoint under a local `checkpoint:`
+    ref.
 
     Use experiment-level attachments for shared context such as dataset or
     source-problem metadata. Use `Run.log_parameter(...)` for scalar values
@@ -1757,7 +1758,7 @@ class Experiment:
     @property
     def status(self) -> typing.Optional[builtins.str]:
         r"""
-        Experiment config status for a committed or recovery Experiment.
+        Experiment config status for a committed Experiment.
 
         Returns `None` for an unsealed Experiment.
         """
@@ -1767,34 +1768,6 @@ class Experiment:
         Committed OMMX Artifact for this Experiment.
 
         Raises an error if the Experiment has not been committed yet.
-        """
-    @property
-    def recovery_artifact(self) -> typing.Optional[Artifact]:
-        r"""
-        Failed recovery Artifact written after an exceptional context-manager exit.
-
-        Returns `None` unless the Experiment context exited with an exception
-        and OMMX successfully published the partial state under a local
-        `crashed:` recovery ref. The recovery artifact is intentionally not a
-        finished Experiment and is rejected by `Experiment.from_artifact`.
-        """
-    @property
-    def recovery_image_name(self) -> typing.Optional[builtins.str]:
-        r"""
-        Local image reference of the failed recovery Artifact, if any.
-        """
-    @property
-    def autosave_artifact(self) -> typing.Optional[Artifact]:
-        r"""
-        Run-close autosave Artifact for this unsealed Experiment, if any.
-
-        A new autosave checkpoint is written after each closed Run. It is a
-        rolling local ref and is not the final committed Experiment Artifact.
-        """
-    @property
-    def autosave_image_name(self) -> typing.Optional[builtins.str]:
-        r"""
-        Local image reference of the rolling Run-close autosave Artifact.
         """
     def __new__(
         cls,
@@ -1845,22 +1818,15 @@ class Experiment:
         `Experiment(...)` to create a new unsealed experiment.
         """
     @staticmethod
-    def load_recovery(image_name: builtins.str) -> Experiment:
+    def restore_from_checkpoint(image_name: builtins.str) -> Experiment:
         r"""
-        Load a recovery/checkpoint Artifact and resume from it.
+        Restore an unsealed Experiment from its checkpoint.
 
-        This returns a new unsealed Experiment whose parent is the recovery
-        Artifact and whose image name is the original requested Experiment
-        image name recorded in the recovery metadata.
-        """
-    @staticmethod
-    def load_autosave(image_name: builtins.str) -> Experiment:
-        r"""
-        Load a Run-close autosave Artifact and resume from it.
-
-        Autosave Artifacts use the same checkpoint format as failed recovery
-        Artifacts. This is an alias for `load_recovery` with wording for the
-        notebook autosave workflow.
+        Pass the original requested Experiment image name, not the generated
+        checkpoint ref. This accepts checkpoint statuses such as `draft`,
+        `failed`, or `interrupted`, and returns a new unsealed Experiment whose
+        image name is the original requested Experiment image name recorded in
+        the checkpoint metadata.
         """
     @staticmethod
     def import_archive(path: builtins.str | os.PathLike | pathlib.Path) -> Experiment:
@@ -1879,22 +1845,6 @@ class Experiment:
 
         This is the usual entry point after importing or receiving an OMMX
         Artifact handle. The artifact must contain an Experiment config.
-        """
-    @staticmethod
-    def from_recovery_artifact(artifact: Artifact) -> Experiment:
-        r"""
-        Resume from an already-open recovery/checkpoint Artifact.
-
-        This accepts Experiment configs with checkpoint statuses such as
-        `draft`, `failed`, or `interrupted`, and returns a new unsealed
-        Experiment whose parent is the checkpoint Artifact and whose image name
-        is the original requested Experiment image name recorded in the
-        recovery metadata.
-        """
-    @staticmethod
-    def from_autosave_artifact(artifact: Artifact) -> Experiment:
-        r"""
-        Resume from an already-open Run-close autosave Artifact.
         """
     def fork(
         self,
@@ -5924,7 +5874,7 @@ class Samples:
 @typing.final
 class SealedRun:
     r"""
-    Immutable view of a closed Run in a committed or recovery Experiment.
+    Immutable view of a closed Run in an Experiment.
 
     `SealedRun` exposes run-level attachments by name and the sequence of
     `Solve` records created by `Run.log_solve`.
