@@ -851,7 +851,10 @@ pub(crate) fn anonymous_artifact_image_name(registry_id: &str) -> Result<ImageRe
         .with_context(|| "Failed to synthesise anonymous artifact image name")
 }
 
-pub(crate) fn anonymous_local_image_name(registry_id: &str, repository: &str) -> Result<ImageRef> {
+pub(crate) fn anonymous_local_repository_key(
+    registry_id: &str,
+    repository: &str,
+) -> Result<String> {
     anyhow::ensure!(
         !repository.is_empty()
             && repository
@@ -871,6 +874,11 @@ pub(crate) fn anonymous_local_image_name(registry_id: &str, repository: &str) ->
         "Anonymous artifact registry id must be at least {} lowercase hex chars; got {prefix:?}",
         ANONYMOUS_REGISTRY_ID_HOST_LEN,
     );
+    Ok(format!("{prefix}.ommx.local/{repository}"))
+}
+
+pub(crate) fn anonymous_local_image_name(registry_id: &str, repository: &str) -> Result<ImageRef> {
+    let repository_key = anonymous_local_repository_key(registry_id, repository)?;
     let stamp = chrono::Local::now().format("%Y%m%dT%H%M%S");
     let nonce: String = uuid::Uuid::new_v4()
         .simple()
@@ -878,8 +886,9 @@ pub(crate) fn anonymous_local_image_name(registry_id: &str, repository: &str) ->
         .chars()
         .take(ANONYMOUS_TAG_NONCE_HEX_LEN)
         .collect();
-    ImageRef::parse(&format!("{prefix}.ommx.local/{repository}:{stamp}-{nonce}"))
-        .with_context(|| format!("Invalid anonymous local image name for registry {prefix}"))
+    ImageRef::parse(&format!("{repository_key}:{stamp}-{nonce}")).with_context(|| {
+        format!("Invalid anonymous local image name for registry {repository_key}")
+    })
 }
 
 /// True iff `name` (the `host/path` portion of an OCI ref) matches the

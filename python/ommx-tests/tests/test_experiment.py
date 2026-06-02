@@ -161,7 +161,7 @@ def test_experiment_context_publishes_recovery_artifact_on_exception():
     with pytest.raises(RuntimeError, match="commit has failed"):
         experiment.artifact
     assert experiment.recovery_image_name is not None
-    assert ".ommx.local/crashed:" in experiment.recovery_image_name
+    assert ".ommx.local/checkpoint:" in experiment.recovery_image_name
 
     recovery_artifact = experiment.recovery_artifact
     assert recovery_artifact is not None
@@ -219,7 +219,7 @@ def test_run_close_publishes_autosave_and_load_autosave_resumes():
     experiment = Experiment.with_temp_local_registry()
     autosave_image_name = experiment.autosave_image_name
     assert autosave_image_name is not None
-    assert ".ommx.local/autosave:" in autosave_image_name
+    assert ".ommx.local/checkpoint:" in autosave_image_name
     assert experiment.autosave_artifact is None
 
     with experiment.run() as run:

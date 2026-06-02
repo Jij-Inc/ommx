@@ -31,7 +31,8 @@ use ommx::experiment::AttachmentLogger;
 /// same object can be used as a read-only view of the committed artifact.
 /// `with Experiment(...)` commits on normal exit if the experiment is still
 /// unsealed. On exception it does not advance the success ref; instead it
-/// tries to publish a failed recovery artifact under a local `crashed:` ref.
+/// tries to publish a failed recovery checkpoint under a local `checkpoint:`
+/// ref.
 ///
 /// Use experiment-level attachments for shared context such as dataset or
 /// source-problem metadata. Use `Run.log_parameter(...)` for scalar values
@@ -127,11 +128,12 @@ impl PyExperiment {
         })
     }
 
-    /// Load a recovery/checkpoint Artifact and resume from it.
+    /// Find the latest failed/interrupted checkpoint for an Experiment image and resume from it.
     ///
-    /// This returns a new unsealed Experiment whose parent is the recovery
-    /// Artifact and whose image name is the original requested Experiment
-    /// image name recorded in the recovery metadata.
+    /// Pass the original requested Experiment image name, not the generated
+    /// checkpoint ref. This returns a new unsealed Experiment whose parent is
+    /// the checkpoint Artifact and whose image name is the original requested
+    /// Experiment image name recorded in the checkpoint metadata.
     #[staticmethod]
     pub fn load_recovery(py: Python<'_>, image_name: &str) -> Result<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
@@ -142,11 +144,11 @@ impl PyExperiment {
         })
     }
 
-    /// Load a Run-close autosave Artifact and resume from it.
+    /// Find the latest Run-close autosave checkpoint for an Experiment image and resume from it.
     ///
-    /// Autosave Artifacts use the same checkpoint format as failed recovery
-    /// Artifacts. This is an alias for `load_recovery` with wording for the
-    /// notebook autosave workflow.
+    /// Pass the original requested Experiment image name, not the generated
+    /// checkpoint ref. Autosave checkpoints use the same manifest format as
+    /// failed recovery checkpoints, but are selected by `status=draft`.
     #[staticmethod]
     pub fn load_autosave(py: Python<'_>, image_name: &str) -> Result<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
@@ -437,11 +439,11 @@ impl PyExperiment {
     }
 
     #[getter]
-    /// Failed recovery Artifact written after an exceptional context-manager exit.
+    /// Failed recovery checkpoint written after an exceptional context-manager exit.
     ///
     /// Returns `None` unless the Experiment context exited with an exception
     /// and OMMX successfully published the partial state under a local
-    /// `crashed:` recovery ref. The recovery artifact is intentionally not a
+    /// `checkpoint:` ref. The recovery artifact is intentionally not a
     /// finished Experiment and is rejected by `Experiment.from_artifact`.
     pub fn recovery_artifact(&self) -> Option<PyArtifact> {
         self.inner.recovery_artifact().map(PyArtifact::new)

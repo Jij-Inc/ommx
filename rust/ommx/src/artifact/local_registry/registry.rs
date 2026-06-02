@@ -1,7 +1,7 @@
 use super::{
     import_legacy_local_registry, import_legacy_local_registry_ref, replace_legacy_local_registry,
-    replace_legacy_local_registry_ref, FileBlobStore, LegacyImportReport, OciDirImport, RefUpdate,
-    SqliteIndexStore,
+    replace_legacy_local_registry_ref, FileBlobStore, LegacyImportReport, OciDirImport, RefRecord,
+    RefUpdate, SqliteIndexStore,
 };
 use crate::artifact::{media_types, sha256_digest, stable_json_bytes, ImageRef};
 use anyhow::{ensure, Context, Result};
@@ -13,6 +13,7 @@ use std::str::FromStr;
 use std::sync::OnceLock;
 
 static DEFAULT_LOCAL_REGISTRY: OnceLock<LocalRegistry> = OnceLock::new();
+const EXPERIMENT_CHECKPOINT_REPOSITORY: &str = "checkpoint";
 
 /// OCI descriptor whose referenced bytes are known to exist in the
 /// referenced Local Registry's BlobStore.
@@ -288,28 +289,31 @@ impl LocalRegistry {
             .with_context(|| "Failed to synthesise anonymous experiment image name")
     }
 
-    /// Synthesize a fresh local ref for an Experiment recovery artifact.
+    /// Synthesize a fresh local ref for an Experiment checkpoint artifact.
     ///
     /// Format:
-    /// `<registry-id8>.ommx.local/crashed:<timestamp>-<nonce>`.
-    /// Recovery artifacts are separate from the requested Experiment ref so
-    /// a failed context-manager exit never advances the success tag.
-    pub fn synthesize_crashed_experiment_image_name(&self) -> Result<ImageRef> {
+    /// `<registry-id8>.ommx.local/checkpoint:<timestamp>-<nonce>`.
+    /// Checkpoint artifacts are separate from the requested Experiment ref so
+    /// autosave and recovery materialization never advance the success tag.
+    pub fn synthesize_experiment_checkpoint_image_name(&self) -> Result<ImageRef> {
         let registry_id = self.index.registry_id()?;
-        crate::artifact::anonymous_local_image_name(&registry_id, "crashed")
-            .with_context(|| "Failed to synthesise crashed experiment image name")
+        crate::artifact::anonymous_local_image_name(&registry_id, EXPERIMENT_CHECKPOINT_REPOSITORY)
+            .with_context(|| "Failed to synthesise experiment checkpoint image name")
     }
 
-    /// Synthesize a fresh local ref for a rolling Experiment autosave artifact.
-    ///
-    /// Format:
-    /// `<registry-id8>.ommx.local/autosave:<timestamp>-<nonce>`.
-    /// The ref is generated once per Experiment session and moved forward as
-    /// closed Runs update the latest checkpoint.
-    pub fn synthesize_autosave_experiment_image_name(&self) -> Result<ImageRef> {
+    /// List refs in this registry's local Experiment checkpoint repository.
+    pub fn list_experiment_checkpoint_refs(&self) -> Result<Vec<RefRecord>> {
         let registry_id = self.index.registry_id()?;
-        crate::artifact::anonymous_local_image_name(&registry_id, "autosave")
-            .with_context(|| "Failed to synthesise autosave experiment image name")
+        let prefix = crate::artifact::anonymous_local_repository_key(
+            &registry_id,
+            EXPERIMENT_CHECKPOINT_REPOSITORY,
+        )?;
+        Ok(self
+            .index
+            .list_refs(Some(&prefix))?
+            .into_iter()
+            .filter(|record| record.name == prefix)
+            .collect())
     }
 
     /// List every SQLite ref whose `(name, reference)` matches the

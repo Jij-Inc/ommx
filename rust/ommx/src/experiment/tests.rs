@@ -1202,7 +1202,7 @@ fn experiment_dyn_publishes_failed_recovery_artifact() {
     assert!(recovery
         .image_name()
         .to_string()
-        .contains(".ommx.local/crashed:"));
+        .contains(".ommx.local/checkpoint:"));
     assert_eq!(
         experiment.recovery_image_name().unwrap(),
         recovery.image_name().clone()
@@ -1246,8 +1246,14 @@ fn experiment_dyn_recovers_failed_artifact_with_requested_image_name() {
     let recovery = experiment
         .commit_failed_recovery("RuntimeError: solve failed")
         .unwrap();
+    assert!(recovery
+        .image_name()
+        .to_string()
+        .contains(".ommx.local/checkpoint:"));
 
-    let recovered = ExperimentDyn::from_recovery_artifact(recovery).unwrap();
+    let recovered =
+        ExperimentDyn::load_recovery_in_registry_handle(registry_handle, image_name.clone())
+            .unwrap();
     assert!(recovered.is_unsealed());
     assert_eq!(recovered.image_name().unwrap(), image_name);
     {
@@ -1274,7 +1280,7 @@ fn experiment_dyn_autosaves_on_run_close_and_recovers_with_requested_image_name(
     let autosave_image_name = experiment.autosave_image_name().unwrap();
     assert!(autosave_image_name
         .to_string()
-        .contains(".ommx.local/autosave:"));
+        .contains(".ommx.local/checkpoint:"));
     assert!(experiment.autosave_artifact().is_none());
 
     {
@@ -1311,7 +1317,9 @@ fn experiment_dyn_autosaves_on_run_close_and_recovers_with_requested_image_name(
         .expect_err("autosave checkpoint must not load as a finished experiment");
     assert!(err.to_string().contains("status is draft"));
 
-    let recovered = ExperimentDyn::from_autosave_artifact(autosave).unwrap();
+    let recovered =
+        ExperimentDyn::load_autosave_in_registry_handle(registry_handle, image_name.clone())
+            .unwrap();
     assert!(recovered.is_unsealed());
     assert_eq!(recovered.image_name().unwrap(), image_name);
     {

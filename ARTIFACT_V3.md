@@ -125,18 +125,18 @@ Run close は成功 Artifact commit ではない。Run close は Experiment stat
 - Run close autosave checkpoint が残っている場合は、記録済み entries を best-effort に復元できる。
 - final commit までは public tag / digest を進めない。
 - 大きな payload は `log_*` 時点で Local Registry の BlobStore に CAS blob として逐次保存する。
-- final commit までは requested public success manifest / ref を publish しない。Run close autosave checkpoint と例外終了時の recovery manifest は reserved ref として別扱いにする。
+- final commit までは requested public success manifest / ref を publish しない。Run close autosave checkpoint と例外終了時の recovery manifest は reserved checkpoint ref として別扱いにする。
 - commit 時に作る manifest は、復元に必要な descriptor を完全に列挙する。
 
 `log_*` 時点で BlobStore に書かれた Instance / solver log / diagnostics payload は、成功 commit 前にはどの public success manifest からも到達できない。Run が close されると、それまでの closed Run state は `status=draft` の autosave checkpoint manifest から到達できる。active Run の途中で process kill などが起き、Run close autosave まで進めなかった場合、BlobStore には blob だけが残り、対応する manifest / ref は存在しない。この状態は corruption ではなく orphan blob として扱い、GC の対象にする。
 
 orphan blob だけでは、どの Experiment / Run / Solve / Attachment に属していたかを復元できない。Experiment session として復元するには、`run_id`、`solve_id`、Attachment name、media type、blob digest、Run parameter table などを結ぶ checkpoint manifest が必要である。この checkpoint が残っている範囲では recovery API が session を再構成できる。checkpoint がない blob は単なる orphan blob として扱い、grace period 後に GC 対象にする。
 
-Run close 時は、成功 Artifact と同じ tag には publish せず、`status=draft` / `recovery=true` 相当の annotation を持つ autosave checkpoint manifest を作る。この manifest はその時点で分かっている Experiment config draft、Run parameter table、descriptor list を含み、`<registry-id8>.ommx.local/autosave:<local-timestamp>-<nonce>` のような reserved ref に replace-publish する。例外終了を検知できた場合は同じ checkpoint 形式で `status=failed` または `status=interrupted` の recovery manifest を作り、`<registry-id8>.ommx.local/crashed:<local-timestamp>-<nonce>` のような reserved ref に publish する。これにより、通常の共有 ref は進めずに、途中成果だけを recovery API から辿れる。
+Run close 時は、成功 Artifact と同じ tag には publish せず、`status=draft` / `recovery=true` 相当の annotation を持つ autosave checkpoint manifest を作る。この manifest はその時点で分かっている Experiment config draft、Run parameter table、descriptor list を含み、`<registry-id8>.ommx.local/checkpoint:<local-timestamp>-<nonce>` のような reserved ref に replace-publish する。例外終了を検知できた場合は同じ checkpoint 形式で `status=failed` または `status=interrupted` の recovery manifest を作り、同じ checkpoint namespace の reserved ref に publish する。これにより、通常の共有 ref は進めずに、途中成果だけを recovery API から辿れる。
 
 autosave / recovery manifest の publish 自体に失敗した場合は、BlobStore には orphan blob だけが残り得る。この場合は自動的な Experiment 復元はできず、GC の grace period 内に low-level inspection する程度に留まる。
 
-autosave checkpoint の ref naming / retention policy は user-facing compatibility surface にしない。directory layout compatibility より、復元可能性と final Artifact semantics を優先する。commit されずに残った autosave checkpoint や、どの manifest からも到達しない blob は GC の対象になる。
+checkpoint の ref naming / retention policy は user-facing compatibility surface にしない。directory layout compatibility より、復元可能性と final Artifact semantics を優先する。commit されずに残った autosave checkpoint や、どの manifest からも到達しない blob は GC の対象になる。
 
 ### 3.5 Fork session
 
@@ -144,7 +144,7 @@ autosave checkpoint の ref naming / retention policy は user-facing compatibil
 
 forked session では parent に含まれる既存 Attachment、Run、Solve、Run parameter table は読み取り可能な初期 state として見える。ただし parent Experiment / Artifact 自体は immutable であり、変更は child Artifact の manifest にだけ反映される。
 
-新しい Run は既存 `run_id` と衝突しない id を割り当てる。正常終了時の自動 commit では parent を `subject` に持つ child manifest を作る。Run close 時は child の成功 Artifact を commit せず、復元可能な範囲を draft checkpoint として reserved autosave ref に publish する。例外終了時も同じ checkpoint 形式で recovery Artifact を reserved crashed ref に publish する。checkpoint による recovery は forked session を復元するためのものであり、parent Artifact を変更するものではない。
+新しい Run は既存 `run_id` と衝突しない id を割り当てる。正常終了時の自動 commit では parent を `subject` に持つ child manifest を作る。Run close 時は child の成功 Artifact を commit せず、復元可能な範囲を draft checkpoint として reserved checkpoint ref に publish する。例外終了時も同じ checkpoint 形式で recovery Artifact を reserved checkpoint ref に publish する。checkpoint による recovery は forked session を復元するためのものであり、parent Artifact を変更するものではない。
 
 ## 4. Experiment state model
 
@@ -558,7 +558,7 @@ Experiment であることは、OMMX Artifact の profile / kind として表す
 | Experiment config JSON | `status=finished|draft|failed|interrupted`, Run / Solve structure, Attachment `LayerRef` |
 `Artifact.load()` は従来通り OMMX Artifact として読み、`Experiment.load()` は OCI config descriptor の media type で Experiment profile を確認した上で、config blob の Experiment config JSON から immutable Experiment view を復元する。`config.mediaType` が `application/vnd.oci.empty.v1+json` なら v1 互換の通常 Artifact、`application/org.ommx.v1.experiment.config+json` なら Experiment と判定する。Layer annotations は inspector / compatibility 用の補助情報であり、loader が全 layer を scan して意味を推測する設計にはしない。これにより、Experiment は OMMX Artifact family の一種として扱え、既存の Local Registry / archive / remote transport / generic Artifact inspector と互換にできる。
 
-通常の成功 commit は config JSON に `status=finished` を持つ Experiment Artifact として requested tag / ref に publish する。Run close autosave checkpoint は config JSON に `status=draft` を持ち、manifest annotation に recovery marker と original requested image name を持つ。例外終了時に作る recovery Artifact は同じ checkpoint 形式で `status=failed` または `status=interrupted` を持つ。publish 先は autosave が `<registry-id8>.ommx.local/autosave:<local-timestamp>-<nonce>`、例外 recovery が `<registry-id8>.ommx.local/crashed:<local-timestamp>-<nonce>` のような reserved ref とする。`Experiment.load(tag)` の通常 UX は requested tag / ref の成功 Artifact を読む。`Experiment.load_recovery(...)` / `Experiment.load_autosave(...)` / `Experiment.from_recovery_artifact(...)` / `Experiment.from_autosave_artifact(...)` は checkpoint Artifact を parent にし、original requested image name で fork した unsealed Experiment を返す。
+通常の成功 commit は config JSON に `status=finished` を持つ Experiment Artifact として requested tag / ref に publish する。Run close autosave checkpoint は config JSON に `status=draft` を持ち、manifest annotation に recovery marker と original requested image name を持つ。例外終了時に作る recovery Artifact は同じ checkpoint 形式で `status=failed` または `status=interrupted` を持つ。publish 先はどちらも `<registry-id8>.ommx.local/checkpoint:<local-timestamp>-<nonce>` のような reserved checkpoint ref とし、意味は config / annotation の status で区別する。`Experiment.load(tag)` の通常 UX は requested tag / ref の成功 Artifact を読む。`Experiment.load_recovery(original_image_name)` / `Experiment.load_autosave(original_image_name)` は original requested image name から最新 checkpoint を探し、`Experiment.from_recovery_artifact(...)` / `Experiment.from_autosave_artifact(...)` は明示された checkpoint Artifact を parent にし、original requested image name で fork した unsealed Experiment を返す。
 
 `OMMX Artifact v3` という media type は導入しない。v3 は SDK / 設計フェーズの名前であり、wire format の互換性境界とは分ける。将来、registry の referrers API などで Experiment だけを `artifactType` で filter したい要求が強くなった場合は、`application/org.ommx.v1.experiment` を追加で許容する余地を残す。ただし初期設計では、top-level は `application/org.ommx.v1.artifact` に統一する。
 

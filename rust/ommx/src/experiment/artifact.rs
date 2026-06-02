@@ -32,7 +32,7 @@ impl<'reg> UnsealedExperimentState<'reg> {
                 tracing::warn!(
                     error = %error,
                     autosave_image_name = %autosave_image_name,
-                    "Failed to remove Experiment autosave ref after commit"
+                    "Failed to remove Experiment autosave checkpoint ref after commit"
                 );
             }
         }
@@ -47,7 +47,7 @@ impl<'reg> UnsealedExperimentState<'reg> {
         status: &'static str,
     ) -> Result<LocalArtifact<'reg>> {
         let requested_image_name = self.image_name.clone();
-        let recovery_image_name = registry.synthesize_crashed_experiment_image_name()?;
+        let recovery_image_name = registry.synthesize_experiment_checkpoint_image_name()?;
         let annotations = checkpoint_annotations(status, &requested_image_name);
 
         self.publish_as(

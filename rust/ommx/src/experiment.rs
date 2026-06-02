@@ -296,7 +296,7 @@ impl<'reg> Experiment<'reg> {
     /// resolved `name`.
     pub fn with_registry(registry: &'reg LocalRegistry, name: impl Into<Name>) -> Result<Self> {
         let image_name = name.into().resolve(registry)?;
-        let autosave_image_name = registry.synthesize_autosave_experiment_image_name()?;
+        let autosave_image_name = registry.synthesize_experiment_checkpoint_image_name()?;
         Ok(Experiment {
             registry,
             state: Mutex::new(UnsealedExperimentState {
@@ -420,7 +420,7 @@ impl<'reg> SealedExperiment<'reg> {
     pub fn fork(&self, name: impl Into<Name>) -> Result<Experiment<'reg>> {
         let registry = self.artifact.registry();
         let image_name = name.into().resolve(registry)?;
-        let autosave_image_name = registry.synthesize_autosave_experiment_image_name()?;
+        let autosave_image_name = registry.synthesize_experiment_checkpoint_image_name()?;
         let subject = Some(self.artifact.stored_manifest_descriptor()?.into());
         let mut runs = BTreeMap::new();
         let mut parameters_by_run = self.run_parameters.parameter_sets()?;

@@ -270,7 +270,7 @@ impl ExperimentDyn {
         let image_name = name.into().resolve(registry_handle.registry())?;
         let autosave_image_name = registry_handle
             .registry()
-            .synthesize_autosave_experiment_image_name()?;
+            .synthesize_experiment_checkpoint_image_name()?;
         Ok(Self {
             registry_handle: registry_handle.clone(),
             state: Arc::new(Mutex::new(ExperimentDynState {
@@ -300,11 +300,42 @@ impl ExperimentDyn {
     }
 
     pub fn load_recovery(image_name: crate::artifact::ImageRef) -> Result<Self> {
-        Self::from_recovery_artifact(LocalArtifactDyn::load(image_name)?)
+        let registry_handle = LocalRegistryHandle::shared_default()?;
+        Self::load_recovery_in_registry_handle(registry_handle, image_name)
+    }
+
+    pub fn load_recovery_in_registry_handle(
+        registry_handle: LocalRegistryHandle,
+        image_name: crate::artifact::ImageRef,
+    ) -> Result<Self> {
+        let artifact = latest_checkpoint_artifact(
+            registry_handle,
+            &image_name,
+            &[
+                super::EXPERIMENT_STATUS_FAILED,
+                super::EXPERIMENT_STATUS_INTERRUPTED,
+            ],
+            "recovery",
+        )?;
+        Self::from_recovery_artifact(artifact)
     }
 
     pub fn load_autosave(image_name: crate::artifact::ImageRef) -> Result<Self> {
-        Self::load_recovery(image_name)
+        let registry_handle = LocalRegistryHandle::shared_default()?;
+        Self::load_autosave_in_registry_handle(registry_handle, image_name)
+    }
+
+    pub fn load_autosave_in_registry_handle(
+        registry_handle: LocalRegistryHandle,
+        image_name: crate::artifact::ImageRef,
+    ) -> Result<Self> {
+        let artifact = latest_checkpoint_artifact(
+            registry_handle,
+            &image_name,
+            &[super::EXPERIMENT_STATUS_DRAFT],
+            "autosave",
+        )?;
+        Self::from_autosave_artifact(artifact)
     }
 
     pub fn import_archive(path: &Path) -> Result<Self> {
@@ -939,7 +970,7 @@ impl SealedExperimentDynState {
                 .artifact
                 .registry_handle()
                 .registry()
-                .synthesize_autosave_experiment_image_name()?,
+                .synthesize_experiment_checkpoint_image_name()?,
             autosave_published: false,
             subject,
             attachments: self.attachments.clone(),
@@ -1014,12 +1045,106 @@ fn recovery_requested_image_name(artifact: &LocalArtifactDyn) -> Result<ImageRef
         .get(ANN_EXPERIMENT_REQUESTED_IMAGE)
         .ok_or_else(|| {
             anyhow::anyhow!(
-                "Recovery Artifact is missing {ANN_EXPERIMENT_REQUESTED_IMAGE} annotation"
+                "Experiment checkpoint Artifact is missing {ANN_EXPERIMENT_REQUESTED_IMAGE} annotation"
             )
         })?;
     ImageRef::parse(requested).with_context(|| {
-        format!("Invalid {ANN_EXPERIMENT_REQUESTED_IMAGE} annotation on recovery Artifact")
+        format!(
+            "Invalid {ANN_EXPERIMENT_REQUESTED_IMAGE} annotation on Experiment checkpoint Artifact"
+        )
     })
+}
+
+fn latest_checkpoint_artifact(
+    registry_handle: LocalRegistryHandle,
+    requested_image_name: &ImageRef,
+    accepted_statuses: &[&str],
+    checkpoint_kind: &str,
+) -> Result<LocalArtifactDyn> {
+    let requested_image_name = requested_image_name.to_string();
+    let mut candidates = Vec::new();
+    for record in registry_handle
+        .registry()
+        .list_experiment_checkpoint_refs()?
+    {
+        let checkpoint_image_name =
+            match ImageRef::from_repository_and_reference(&record.name, &record.reference) {
+                Ok(image_name) => image_name,
+                Err(error) => {
+                    tracing::warn!(
+                        error = %error,
+                        name = %record.name,
+                        reference = %record.reference,
+                        "Ignoring invalid Experiment checkpoint ref"
+                    );
+                    continue;
+                }
+            };
+        let artifact = match LocalArtifactDyn::open_in_registry_handle(
+            registry_handle.clone(),
+            checkpoint_image_name.clone(),
+        ) {
+            Ok(artifact) => artifact,
+            Err(error) => {
+                tracing::warn!(
+                    error = %error,
+                    image_name = %checkpoint_image_name,
+                    "Ignoring unreadable Experiment checkpoint artifact"
+                );
+                continue;
+            }
+        };
+        let annotations = match artifact.annotations() {
+            Ok(annotations) => annotations,
+            Err(error) => {
+                tracing::warn!(
+                    error = %error,
+                    image_name = %checkpoint_image_name,
+                    "Ignoring Experiment checkpoint with unreadable annotations"
+                );
+                continue;
+            }
+        };
+        if annotations
+            .get(super::ANN_EXPERIMENT_RECOVERY)
+            .map(String::as_str)
+            != Some("true")
+        {
+            continue;
+        }
+        if annotations
+            .get(ANN_EXPERIMENT_REQUESTED_IMAGE)
+            .map(String::as_str)
+            != Some(requested_image_name.as_str())
+        {
+            continue;
+        }
+        let Some(status) = annotations
+            .get(super::ANN_EXPERIMENT_STATUS)
+            .map(String::as_str)
+        else {
+            continue;
+        };
+        if !accepted_statuses.contains(&status) {
+            continue;
+        }
+        candidates.push((record.updated_at, record.name, record.reference, artifact));
+    }
+
+    candidates.sort_by(|left, right| {
+        left.0
+            .cmp(&right.0)
+            .then_with(|| left.1.cmp(&right.1))
+            .then_with(|| left.2.cmp(&right.2))
+    });
+    candidates
+        .pop()
+        .map(|(_, _, _, artifact)| artifact)
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "No Experiment {checkpoint_kind} checkpoint found for requested image {requested_image_name}"
+            )
+        })
 }
 
 fn stored_descriptors<'reg>(
