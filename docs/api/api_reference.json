@@ -1783,7 +1783,7 @@
         {
           "kind": "Class",
           "name": "Experiment",
-          "doc": "A collection of optimization experiment records stored as one OMMX Artifact.\n\nAn `Experiment` owns experiment-level attachments and a sequence of\nclosed `Run` records. Each `Run` can store scalar run parameters,\nrun-level attachments, and zero or more `Solve` records.\n\nNewly created experiments are unsealed. Call `commit()` to write the\nexperiment into the local registry as an OMMX Artifact. After commit, the\nsame object can be used as a read-only view of the committed artifact.\n`with Experiment(...)` commits on normal exit if the experiment is still\nunsealed. On exception it does not advance the success ref; instead it\ntries to publish a failed checkpoint under a local `checkpoint:`\nref.\n\nUse experiment-level attachments for shared context such as dataset or\nsource-problem metadata. Use `Run.log_parameter(...)` for scalar values\nthat should appear in `run_parameters_df()`, and use run attachments or\n`Run.log_solve(...)` for payloads that belong to a specific run.\n\nExample:\n\n>>> from ommx.experiment import Experiment\n>>> with Experiment.with_temp_local_registry() as exp:\n...     exp.log_json(\"dataset\", {\"name\": \"demo\"})\n...     with exp.run() as run:\n...         run.log_parameter(\"capacity\", 10)\n...         run.log_json(\"scenario\", {\"capacity\": 10})\n>>> len(exp.runs)\n1\n>>> len(exp.experiment_attachments)\n1\n>>> exp.run_parameters_df().to_dict()\n{'capacity': {0: 10}}\n\nIf the experiment has only one run, open the experiment and the run in\none `with` statement. On normal exit, the run is finished first and then\nthe experiment is committed:\n\n>>> with Experiment() as exp, exp.run() as run:  # doctest: +SKIP\n...     solution = run.log_solve(adapter, instance, time_limit=10.0)\n>>> exp.rename(\"ghcr.io/container/name:latest\")  # doctest: +SKIP\n>>> exp.push()  # doctest: +SKIP",
+          "doc": "A collection of optimization experiment records stored as one OMMX Artifact.\n\nAn `Experiment` owns experiment-level attachments and a sequence of\nclosed `Run` records. Each `Run` can store scalar run parameters,\nrun-level attachments, and zero or more `Solve` records.\n\nNewly created experiments are unsealed. Call `commit()` to write the\nexperiment into the local registry as an OMMX Artifact. After commit, the\nsame object can be used as a read-only view of the committed artifact.\n`with Experiment(...)` commits on normal exit if the experiment is still\nunsealed. On exception it does not advance the successful Experiment image\nreference; instead it tries to publish a local checkpoint with status\n`\"failed\"` or `\"interrupted\"`.\n\nLogging APIs store payload bytes in the Local Registry immediately. The\nfinal commit writes an Experiment config and manifest that make those\npayloads reachable as one immutable Artifact. A closed `Run` also publishes\na best-effort `\"draft\"` checkpoint so a later process can resume from the\nlatest closed Run with `Experiment.restore_from_checkpoint(...)`.\n\nUse experiment-level attachments for shared context such as dataset or\nsource-problem metadata. Use `Run.log_parameter(...)` for scalar values\nthat should appear in `run_parameters_df()`, and use run attachments or\n`Run.log_solve(...)` for payloads that belong to a specific run.\n\nExample:\n\n>>> from ommx.experiment import Experiment\n>>> with Experiment.with_temp_local_registry() as exp:\n...     exp.log_json(\"dataset\", {\"name\": \"demo\"})\n...     with exp.run() as run:\n...         run.log_parameter(\"capacity\", 10)\n...         run.log_json(\"scenario\", {\"capacity\": 10})\n>>> len(exp.runs)\n1\n>>> len(exp.experiment_attachments)\n1\n>>> exp.run_parameters_df().to_dict()\n{'capacity': {0: 10}}\n\nIf the experiment has only one run, open the experiment and the run in\none `with` statement. On normal exit, the run is finished first and then\nthe experiment is committed:\n\n>>> with Experiment() as exp, exp.run() as run:  # doctest: +SKIP\n...     solution = run.log_solve(adapter, instance, time_limit=10.0)\n>>> exp.rename(\"ghcr.io/container/name:latest\")  # doctest: +SKIP\n>>> exp.push()  # doctest: +SKIP",
           "bases": [],
           "methods": [
             {
@@ -1948,7 +1948,7 @@
             },
             {
               "name": "commit",
-              "doc": "Commit this unsealed Experiment into the local registry.\n\nAll open runs must be closed before committing. The returned\n`Artifact` can be saved as a `.ommx` archive or passed to\n`Experiment.from_artifact`. After commit, this object becomes a\nread-only view of the committed Experiment.",
+              "doc": "Commit this unsealed Experiment into the local registry.\n\nAll open runs must be closed before committing. The returned\n`Artifact` can be saved as a `.ommx` archive or passed to\n`Experiment.from_artifact`. After commit, this object becomes a\nread-only view of the committed Experiment. A successful commit\npublishes the requested image reference and removes any local checkpoint\nfor that Experiment when present.",
               "signatures": [
                 {
                   "parameters": [],
@@ -1969,7 +1969,7 @@
             },
             {
               "name": "fork",
-              "doc": "Fork this committed Experiment into a new unsealed child Experiment.\n\nThe parent Experiment is not modified. Existing Attachments, Runs,\nSolves, and Run parameters are carried into the child Experiment.\nWhen the child is committed, its Artifact manifest records the parent\nmanifest descriptor as OCI `subject`.\n\nIf `image_name` is omitted, OMMX generates an anonymous local\nExperiment name for the child. The returned Experiment can be used as\na context manager:\n\n```python\nwith parent.fork() as child:\n    with child.run() as run:\n        run.log_parameter(\"capacity\", 56)\n```\n\nRaises an error if this Experiment has not been committed yet.\n\nSet `store_trace=True` on the returned child to store traces for\n`Run` context managers created from it. The child Experiment itself\ndoes not need to be used as a context manager.",
+              "doc": "Fork this committed Experiment into a new unsealed child Experiment.\n\nThe parent Experiment is not modified. Existing Attachments, Runs,\nSolves, and Run parameters are carried into the child Experiment.\nWhen the child is committed, its Artifact manifest records the parent\nmanifest descriptor as OCI `subject`. The child reuses payload blobs\nalready present in the Local Registry; forking creates a new manifest\nbut does not duplicate unchanged Instance, Solution, or Attachment\nbytes.\n\nIf `image_name` is omitted, OMMX generates an anonymous local\nExperiment name for the child. The returned Experiment can be used as\na context manager:\n\n```python\nwith parent.fork() as child:\n    with child.run() as run:\n        run.log_parameter(\"capacity\", 56)\n```\n\nRaises an error if this Experiment has not been committed yet.\n\nSet `store_trace=True` on the returned child to store traces for\n`Run` context managers created from it. The child Experiment itself\ndoes not need to be used as a context manager.",
               "signatures": [
                 {
                   "parameters": [
@@ -2578,7 +2578,7 @@
             },
             {
               "name": "restore_from_checkpoint",
-              "doc": "Restore an unsealed Experiment from its checkpoint.\n\nPass the original requested Experiment image name, not the generated\ncheckpoint ref. This accepts checkpoint statuses such as `draft`,\n`failed`, or `interrupted`, and returns a new unsealed Experiment whose\nimage name is the original requested Experiment image name recorded in\nthe checkpoint metadata.",
+              "doc": "Restore an unsealed Experiment from its checkpoint.\n\nPass the original requested Experiment image name, not the generated\ncheckpoint ref. This accepts checkpoint statuses such as `draft`,\n`failed`, or `interrupted`, and returns a new unsealed Experiment whose\nimage name is the original requested Experiment image name recorded in\nthe checkpoint metadata. Checkpoint Artifact handles and checkpoint\nimage names are not part of the public API.",
               "signatures": [
                 {
                   "parameters": [
@@ -2609,7 +2609,7 @@
             },
             {
               "name": "run",
-              "doc": "Start a new Run in this unsealed Experiment.\n\nThe returned `Run` must be closed before `commit()`. Use it as a\ncontext manager to close it automatically on normal or exceptional exit:\n\n```python\nwith experiment.run() as run:\n    run.log_parameter(\"capacity\", 47)\n```",
+              "doc": "Start a new Run in this unsealed Experiment.\n\nThe returned `Run` must be closed before `commit()`. Use it as a\ncontext manager to close it automatically on normal or exceptional exit:\n\n```python\nwith experiment.run() as run:\n    run.log_parameter(\"capacity\", 47)\n```\n\nClosing a Run records its status as `\"finished\"`, `\"failed\"`, or\n`\"interrupted\"` and publishes a best-effort draft checkpoint for the\nparent Experiment. Payloads written by an open Run before it is closed\nare stored in the Local Registry but are not recoverable through a\ncheckpoint until the Run is closed.",
               "signatures": [
                 {
                   "parameters": [],
@@ -2851,7 +2851,7 @@
         {
           "kind": "Class",
           "name": "Run",
-          "doc": "A mutable run being recorded inside an unsealed Experiment.\n\nA run represents one experimental condition or trial. Use\n`log_parameter` for scalar values that should appear in\n`Experiment.run_parameters_df`, and use attachment methods for payloads\nsuch as JSON, instances, solutions, sample sets, or raw bytes.\n\nRuns are usually created with `Experiment.run()` and used as context\nmanagers. On normal context-manager exit the run is finished and added\nto the parent experiment. On exception the run is closed as failed and\nadded with its partial state. A run becomes immutable once it is closed.",
+          "doc": "A mutable run being recorded inside an unsealed Experiment.\n\nA run represents one experimental condition or trial. Use\n`log_parameter` for scalar values that should appear in\n`Experiment.run_parameters_df`, and use attachment methods for payloads\nsuch as JSON, instances, solutions, sample sets, or raw bytes.\n\nRuns are usually created with `Experiment.run()` and used as context\nmanagers. On normal context-manager exit the run is finished and added\nto the parent experiment. On exception the run is closed as failed and\nadded with its partial state. `KeyboardInterrupt` is recorded separately as\n`\"interrupted\"`. A run becomes immutable once it is closed.",
           "bases": [],
           "methods": [
             {
@@ -3322,7 +3322,7 @@
         {
           "kind": "Class",
           "name": "SealedRun",
-          "doc": "Immutable view of a closed Run in an Experiment.\n\n`SealedRun` exposes run-level attachments by name and the sequence of\n`Solve` records created by `Run.log_solve`.",
+          "doc": "Immutable view of a closed Run in an Experiment.\n\n`SealedRun` exposes run-level attachments by name and the sequence of\n`Solve` records created by `Run.log_solve`. The `status` property is\n`\"finished\"`, `\"failed\"`, or `\"interrupted\"` depending on how the Run was\nclosed.",
           "bases": [],
           "methods": [
             {

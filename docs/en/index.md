@@ -102,6 +102,7 @@ user_guide/solution
 user_guide/sample_set
 user_guide/special_constraints
 user_guide/capability_model
+user_guide/experiment
 user_guide/tracing
 ```
 

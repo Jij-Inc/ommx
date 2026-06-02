@@ -33,6 +33,21 @@ assert experiment.image_name == image_name
 
 Successful `commit()` still publishes only the requested image reference and removes the local checkpoint when present. Checkpoint Artifact handles and checkpoint image names are intentionally not exposed in the Python API; users restore by remembering the original Experiment image name.
 
+### 🆕 Local Registry cleanup CLI ([#919](https://github.com/Jij-Inc/ommx/pull/919))
+
+The `ommx` CLI now provides Local Registry maintenance commands for the SQLite-backed Artifact registry. Use `ommx gc` to report blobs that are unreachable from SQLite refs, including Experiment checkpoint refs. The command protects recently written unreachable blobs with a grace period so active Experiment writes are not deleted accidentally.
+
+Destructive cleanup commands report by default and mutate the registry only when `--delete` is passed:
+
+```bash
+ommx prune-anonymous
+ommx gc
+ommx prune-anonymous --delete
+ommx gc --delete
+```
+
+Normal reports show counts and sizes rather than raw digests. Pass `--show-digests` when low-level diagnostics are needed.
+
 ## 3.0.0 Alpha 4
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0a4-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0a4)

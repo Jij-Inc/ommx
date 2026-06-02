@@ -22,6 +22,21 @@
 //! that updates the image ref is publish; the Experiment-level
 //! operation remains commit.
 //!
+//! Closing a [`Run`] publishes a best-effort draft checkpoint for the
+//! parent Experiment. A successful [`Experiment::commit`] publishes the
+//! requested Experiment image reference and removes the local checkpoint
+//! when present. Failed or interrupted Python context-manager exits are
+//! represented as checkpoint Experiments with `failed` or `interrupted`
+//! status; callers resume through the original requested image name
+//! rather than through a checkpoint Artifact handle.
+//!
+//! Forking a sealed Experiment creates a new unsealed child Experiment.
+//! The child manifest records the parent manifest as its OCI `subject`,
+//! while existing payload blobs remain shared through the Local
+//! Registry's content-addressed storage. Local Registry GC treats live
+//! refs, checkpoint refs, and traversed subject manifests as roots, so
+//! payloads reachable from kept parent Experiments are retained.
+//!
 //! ```ignore
 //! use ommx::artifact::ImageRef;
 //! use ommx::experiment::{AttachmentLogger, Experiment, Name};

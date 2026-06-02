@@ -1698,9 +1698,15 @@ class Experiment:
     experiment into the local registry as an OMMX Artifact. After commit, the
     same object can be used as a read-only view of the committed artifact.
     `with Experiment(...)` commits on normal exit if the experiment is still
-    unsealed. On exception it does not advance the success ref; instead it
-    tries to publish a failed checkpoint under a local `checkpoint:`
-    ref.
+    unsealed. On exception it does not advance the successful Experiment image
+    reference; instead it tries to publish a local checkpoint with status
+    `"failed"` or `"interrupted"`.
+
+    Logging APIs store payload bytes in the Local Registry immediately. The
+    final commit writes an Experiment config and manifest that make those
+    payloads reachable as one immutable Artifact. A closed `Run` also publishes
+    a best-effort `"draft"` checkpoint so a later process can resume from the
+    latest closed Run with `Experiment.restore_from_checkpoint(...)`.
 
     Use experiment-level attachments for shared context such as dataset or
     source-problem metadata. Use `Run.log_parameter(...)` for scalar values
@@ -1826,7 +1832,8 @@ class Experiment:
         checkpoint ref. This accepts checkpoint statuses such as `draft`,
         `failed`, or `interrupted`, and returns a new unsealed Experiment whose
         image name is the original requested Experiment image name recorded in
-        the checkpoint metadata.
+        the checkpoint metadata. Checkpoint Artifact handles and checkpoint
+        image names are not part of the public API.
         """
     @staticmethod
     def import_archive(path: builtins.str | os.PathLike | pathlib.Path) -> Experiment:
@@ -1858,7 +1865,10 @@ class Experiment:
         The parent Experiment is not modified. Existing Attachments, Runs,
         Solves, and Run parameters are carried into the child Experiment.
         When the child is committed, its Artifact manifest records the parent
-        manifest descriptor as OCI `subject`.
+        manifest descriptor as OCI `subject`. The child reuses payload blobs
+        already present in the Local Registry; forking creates a new manifest
+        but does not duplicate unchanged Instance, Solution, or Attachment
+        bytes.
 
         If `image_name` is omitted, OMMX generates an anonymous local
         Experiment name for the child. The returned Experiment can be used as
@@ -1959,6 +1969,12 @@ class Experiment:
         with experiment.run() as run:
             run.log_parameter("capacity", 47)
         ```
+
+        Closing a Run records its status as `"finished"`, `"failed"`, or
+        `"interrupted"` and publishes a best-effort draft checkpoint for the
+        parent Experiment. Payloads written by an open Run before it is closed
+        are stored in the Local Registry but are not recoverable through a
+        checkpoint until the Run is closed.
         """
     def log_attachment(
         self, name: builtins.str, media_type: builtins.str, bytes: bytes
@@ -2001,7 +2017,9 @@ class Experiment:
         All open runs must be closed before committing. The returned
         `Artifact` can be saved as a `.ommx` archive or passed to
         `Experiment.from_artifact`. After commit, this object becomes a
-        read-only view of the committed Experiment.
+        read-only view of the committed Experiment. A successful commit
+        publishes the requested image reference and removes any local checkpoint
+        for that Experiment when present.
         """
     def run_parameters_df(self) -> pandas.DataFrame:
         r"""
@@ -5229,7 +5247,8 @@ class Run:
     Runs are usually created with `Experiment.run()` and used as context
     managers. On normal context-manager exit the run is finished and added
     to the parent experiment. On exception the run is closed as failed and
-    added with its partial state. A run becomes immutable once it is closed.
+    added with its partial state. `KeyboardInterrupt` is recorded separately as
+    `"interrupted"`. A run becomes immutable once it is closed.
     """
     @property
     def run_id(self) -> builtins.int:
@@ -5878,7 +5897,9 @@ class SealedRun:
     Immutable view of a closed Run in an Experiment.
 
     `SealedRun` exposes run-level attachments by name and the sequence of
-    `Solve` records created by `Run.log_solve`.
+    `Solve` records created by `Run.log_solve`. The `status` property is
+    `"finished"`, `"failed"`, or `"interrupted"` depending on how the Run was
+    closed.
     """
     @property
     def run_id(self) -> builtins.int:
