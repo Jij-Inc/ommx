@@ -5321,8 +5321,9 @@ class Run:
         Finish this run and append it to the parent Experiment.
 
         After this method returns, the run handle can no longer be used. The
-        context manager calls this automatically on normal exit and abandons
-        the run on exception.
+        context manager calls this automatically on normal exit. On exception,
+        the context manager closes the run as failed or interrupted with its
+        partial state.
         """
     def __repr__(self) -> builtins.str: ...
 

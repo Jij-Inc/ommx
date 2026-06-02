@@ -14,6 +14,7 @@ initialization.
 from __future__ import annotations
 
 import os
+import tempfile
 from typing import Sequence
 
 import pytest
@@ -25,6 +26,11 @@ from opentelemetry.sdk.trace.export import (
     SpanExporter,
     SpanExportResult,
 )
+
+if "OMMX_LOCAL_REGISTRY_ROOT" not in os.environ:
+    os.environ["OMMX_LOCAL_REGISTRY_ROOT"] = tempfile.mkdtemp(
+        prefix="ommx-tests-registry-"
+    )
 
 
 class InMemorySpanExporter(SpanExporter):
