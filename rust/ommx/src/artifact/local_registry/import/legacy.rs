@@ -201,7 +201,7 @@ pub fn legacy_local_registry_path(
 /// `{hostname}__{port}/{name}/__{reference}` when a port is set).
 /// This is the layout SDK v2 wrote to disk per `(image, tag)`; v3
 /// no longer produces this layout but still needs to read it during
-/// `ommx artifact import`.
+/// `ommx import-legacy`.
 ///
 /// The encoding maps `:` to `__`, inherited byte-for-byte from
 /// SDK v2. Tags that legitimately contain `__` (which the OCI

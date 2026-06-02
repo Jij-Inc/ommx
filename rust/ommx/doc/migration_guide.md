@@ -613,7 +613,7 @@ The local-registry path now writes an OCI Image Manifest (per OCI 1.1
 spec, with `artifactType`) into a SQLite-backed registry instead of an
 on-disk OCI Image Layout directory. Existing legacy
 `<root>/<image>/<tag>/` directories are identity-preserved on import
-via `ommx artifact import` or the `import_legacy_local_registry*` SDK
+via `ommx import-legacy` or the `import_legacy_local_registry*` SDK
 functions — pulled bytes (manifest digest and JSON) round-trip verbatim.
 
 ## Breaking Changes
@@ -670,7 +670,7 @@ exports a `.ommx` file. Constructors:
   keeps concurrent / scripted anonymous commits collision-free
   regardless of the host's clock resolution. The `.local` mDNS TLD
   prevents an accidental push from leaking to a real remote registry.
-  `ommx artifact prune-anonymous` bulk-cleans every registry-id
+  `ommx prune-anonymous` bulk-cleans every registry-id
   prefix's anonymous refs.
 - `ArtifactDraft::temp()` — random `ttl.sh/<uuid>:1h` name;
   insecure, tests only.
@@ -734,7 +734,7 @@ exports a `.ommx` file. Constructors:
       migration check that previously read this path moves to
       `ommx::artifact::local_registry::legacy_local_registry_path`,
       which is the only `pub` entry point that still computes the
-      v2-shaped path (used internally by `ommx artifact import`).
+      v2-shaped path (used internally by `ommx import-legacy`).
       The `ommx image-dir <name>` CLI subcommand and the Python
       `ommx.get_image_dir` function are removed for the same
       reason — pointing users at a path that is unrelated to v3

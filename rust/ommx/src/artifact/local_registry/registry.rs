@@ -269,7 +269,7 @@ impl LocalRegistry {
     /// predicates [`crate::artifact::is_anonymous_artifact_ref_name`]
     /// and [`crate::artifact::is_anonymous_artifact_tag`] match every
     /// name produced this way, so
-    /// `ommx artifact prune-anonymous` cleans them uniformly.
+    /// `ommx prune-anonymous` cleans them uniformly.
     pub fn synthesize_anonymous_image_name(&self) -> Result<ImageRef> {
         let registry_id = self.index.registry_id()?;
         crate::artifact::anonymous_artifact_image_name(&registry_id)
@@ -339,7 +339,7 @@ impl LocalRegistry {
     /// Bulk-delete every SQLite ref produced by
     /// [`crate::artifact::ArtifactDraft::new_anonymous`].
     /// Returns the deleted records so callers (e.g. CLI
-    /// `ommx artifact prune-anonymous`) can report what changed. The
+    /// `ommx prune-anonymous`) can report what changed. The
     /// manifest / config / layer / blob CAS records the deleted refs
     /// pointed at are **not** touched; they become unreferenced rows
     /// reclaimable by a future GC sweep. This is intentional — the

@@ -343,7 +343,7 @@ The path-shape helpers have moved off `ImageRef` and into
 `local_registry::import::legacy` as `pub(crate)` functions; only the
 higher-level
 [`legacy_local_registry_path`](crate::artifact::local_registry::legacy_local_registry_path)
-remains `pub`, used by `ommx artifact import` and the CLI's
+remains `pub`, used by `ommx import-legacy` and the CLI's
 v2-only migration hint. The previously public `get_image_dir` /
 `image_dir` functions and the `ommx image-dir` CLI subcommand are
 removed — their return value no longer corresponded to any v3

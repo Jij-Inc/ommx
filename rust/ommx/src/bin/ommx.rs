@@ -43,13 +43,82 @@ enum Command {
         image_name: String,
     },
 
-    /// Load OCI archive into the local registry
+    /// List the images in the local registry
+    List,
+
+    /// Import an OCI archive or OCI Image Layout directory into the local registry
+    Import {
+        /// Path of OCI archive or OCI directory
+        path: PathBuf,
+    },
+
+    /// Export an image in the local registry to an OCI archive
+    Export {
+        /// Container image name
+        image_name: String,
+        /// Output file name of OCI archive
+        output: PathBuf,
+    },
+
+    /// Import legacy path/tag OCI directories into the v3 local registry.
+    ///
+    /// Reformatting an Image Manifest as an Artifact Manifest is a separate explicit operation
+    /// (`convert`, not yet exposed) that produces a new artifact under a new digest / new ref.
+    ImportLegacy {
+        /// Local registry root. Defaults to OMMX_LOCAL_REGISTRY_ROOT or the OS default data dir.
+        #[clap(long)]
+        root: Option<PathBuf>,
+
+        /// Replace existing v3 refs when a legacy entry has the same name but a different manifest.
+        #[clap(long)]
+        replace: bool,
+    },
+
+    /// Delete every SQLite ref produced by `ArtifactBuilder.new_anonymous`.
+    ///
+    /// Manifest / blob CAS records are left in place; `gc` reclaims them.
+    PruneAnonymous {
+        /// Local registry root. Defaults to OMMX_LOCAL_REGISTRY_ROOT or the OS default data dir.
+        #[clap(long)]
+        root: Option<PathBuf>,
+
+        /// List refs that would be removed without modifying the registry.
+        #[clap(long)]
+        dry_run: bool,
+    },
+
+    /// Report or delete Local Registry blobs unreachable from refs.
+    ///
+    /// All SQLite refs are GC roots, including Experiment checkpoint refs.
+    /// Unreachable blobs newer than the grace period are deferred so active
+    /// Run writes after the latest checkpoint are not removed.
+    Gc {
+        /// Local registry root. Defaults to OMMX_LOCAL_REGISTRY_ROOT or the OS default data dir.
+        #[clap(long)]
+        root: Option<PathBuf>,
+
+        /// Explicit dry-run mode. This is the default unless --delete is passed.
+        #[clap(long)]
+        dry_run: bool,
+
+        /// Delete orphan candidates instead of only reporting them.
+        #[clap(long)]
+        delete: bool,
+
+        /// Keep unreachable blobs newer than this duration. Accepts s, m, h, d suffixes.
+        #[clap(long, default_value = "24h", value_parser = parse_gc_duration)]
+        grace_period: Duration,
+    },
+
+    /// Deprecated alias for `import`.
+    #[command(hide = true)]
     Load {
         /// Path of OCI archive or OCI directory
         path: PathBuf,
     },
 
-    /// Save the image in the local registry to an OCI archive
+    /// Deprecated alias for `export`.
+    #[command(hide = true)]
     Save {
         /// Container image name
         image_name: String,
@@ -57,10 +126,8 @@ enum Command {
         output: PathBuf,
     },
 
-    /// List the images in the local registry
-    List,
-
     /// Manage Artifact v3 local registry
+    #[command(hide = true)]
     Artifact {
         #[command(subcommand)]
         command: ArtifactCommand,
@@ -147,7 +214,7 @@ impl ImageRefOrPath {
             // artifacts in v3. The pre-v3 path-tree layout under
             // `registry.root().join(image_name.as_path())` is no longer
             // auto-detected as "local"; users migrate it explicitly
-            // via `ommx artifact import`. After that, the ref resolves
+            // via `ommx import-legacy`. After that, the ref resolves
             // through SQLite like any other v3 artifact.
             //
             // The SQLite probe is best-effort: an unopenable registry
@@ -235,7 +302,7 @@ fn migration_hint_if_legacy_only(name: &ImageRef) -> Result<()> {
     if legacy_local_registry_path(get_local_registry_root(), name).exists() {
         bail!(
             "{name} exists only in the legacy local registry directory. \
-             Run `ommx artifact import` once to migrate it into the v3 \
+             Run `ommx import-legacy` once to migrate it into the v3 \
              SQLite-backed registry, then retry."
         );
     }
@@ -277,72 +344,13 @@ fn main() -> Result<()> {
             println!("{}", serde_json::to_string_pretty(&manifest)?);
         }
 
-        Command::Push { image_name_or_path } => match ImageRefOrPath::parse(image_name_or_path)? {
-            // v3 treats archive / OCI Image Layout dirs as exchange
-            // formats; push always goes from the SQLite Local Registry.
-            // Both paths bail with the same migration hint: load into
-            // the registry first, then push by image name.
-            ImageRefOrPath::OciDir(path) => bail!(
-                "Cannot push OCI Image Layout directory `{}` directly. Run \
-                 `ommx load <dir>` to import it into the SQLite Local Registry, \
-                 then `ommx push <image_name>`.",
-                path.display(),
-            ),
-            ImageRefOrPath::OciArchive(path) => bail!(
-                "Cannot push OCI archive `{}` directly. Run `ommx load <file>` \
-                 to import it into the SQLite Local Registry, then \
-                 `ommx push <image_name>`. (Archive is an exchange format; v3 \
-                 pushes always source from the registry.)",
-                path.display(),
-            ),
-            // CLI and Python `Artifact.push()` share the same native
-            // code path: `LocalArtifact::push()`. `parse` only routes
-            // SQLite-resident refs to `Local`, so `open` is the right
-            // call (it returns the migration message on miss).
-            ImageRefOrPath::Local(name) => {
-                LocalArtifact::open(name)?.push()?;
-            }
-            ImageRefOrPath::Remote(name) => bail_not_found_locally(&name)?,
-        },
+        Command::Push { image_name_or_path } => handle_push(image_name_or_path)?,
 
-        Command::Pull { image_name } => {
-            // Route remote pull through `local_registry::pull_image` so the
-            // freshly pulled artifact lands in the v3 SQLite registry.
-            let name = ImageRef::parse(image_name)?;
-            let registry = std::sync::Arc::new(LocalRegistry::open_default()?);
-            pull_image(&registry, &name)?;
-        }
+        Command::Pull { image_name } => handle_pull(image_name)?,
 
-        Command::Save { image_name, output } => {
-            let name = ImageRef::parse(image_name)?;
-            LocalArtifact::open(name)?.save(output)?;
-        }
+        Command::Import { path } => handle_import(path)?,
 
-        Command::Load { path } => {
-            // The CLI flag advertises "OCI archive or OCI directory", so
-            // dispatch on what the path actually is. Archives go through
-            // the native `import::archive` reader; directories use
-            // `import::oci_dir`, which dispatches on Image / Artifact
-            // Manifest. Using `fs::metadata` (rather than
-            // `Path::exists()` / `Path::is_dir()`) surfaces permission
-            // and IO errors with the path attached, and rejects special
-            // files (FIFO, socket, device) explicitly instead of sending
-            // them to the archive branch where they would fail with an
-            // opaque tar error.
-            let metadata = std::fs::metadata(path)
-                .with_context(|| format!("Failed to stat {}", path.display()))?;
-            let registry = std::sync::Arc::new(LocalRegistry::open_default()?);
-            if metadata.is_dir() {
-                import_oci_dir(registry.index(), registry.blobs(), path)?;
-            } else if metadata.is_file() {
-                import_oci_archive(&registry, path)?;
-            } else {
-                bail!(
-                    "Path is neither a directory nor a regular file: {}",
-                    path.display()
-                );
-            }
-        }
+        Command::Export { image_name, output } => handle_export(image_name, output)?,
 
         Command::List => {
             for image_name in ommx::artifact::get_images()? {
@@ -350,58 +358,43 @@ fn main() -> Result<()> {
             }
         }
 
+        Command::ImportLegacy { root, replace } => handle_import_legacy(root.as_ref(), *replace)?,
+
+        Command::PruneAnonymous { root, dry_run } => {
+            handle_prune_anonymous(root.as_ref(), *dry_run)?
+        }
+
+        Command::Gc {
+            root,
+            dry_run,
+            delete,
+            grace_period,
+        } => handle_gc(root.as_ref(), *dry_run, *delete, *grace_period)?,
+
+        Command::Load { path } => {
+            eprintln!("warning: `ommx load` is deprecated; use `ommx import` instead");
+            handle_import(path)?;
+        }
+
+        Command::Save { image_name, output } => {
+            eprintln!("warning: `ommx save` is deprecated; use `ommx export` instead");
+            handle_export(image_name, output)?;
+        }
+
         Command::Artifact { command } => match command {
             ArtifactCommand::Import { root, replace } => {
-                let registry = if let Some(root) = root {
-                    LocalRegistry::open(root)?
-                } else {
-                    LocalRegistry::open_default()?
-                };
-                let report = if *replace {
-                    registry.replace_legacy_layout()?
-                } else {
-                    registry.import_legacy_layout()?
-                };
-                println!(
-                    "Imported {} legacy OCI dir(s) into {}",
-                    report.imported_dirs,
-                    registry.root().display()
+                eprintln!(
+                    "warning: `ommx artifact import` is deprecated; \
+                     use `ommx import-legacy` instead"
                 );
-                println!("Scanned {} legacy OCI dir(s)", report.scanned_dirs);
-                println!("Verified {} existing ref(s)", report.verified_dirs);
-                println!("Replaced {} existing ref(s)", report.replaced_refs);
-                if report.conflicted_dirs > 0 {
-                    println!(
-                        "Skipped {} conflicting ref(s); rerun with --replace to overwrite them",
-                        report.conflicted_dirs
-                    );
-                }
+                handle_import_legacy(root.as_ref(), *replace)?;
             }
             ArtifactCommand::PruneAnonymous { root, dry_run } => {
-                let registry = if let Some(root) = root {
-                    LocalRegistry::open(root)?
-                } else {
-                    LocalRegistry::open_default()?
-                };
-                let to_remove = registry.list_anonymous_artifact_refs()?;
-                if to_remove.is_empty() {
-                    println!("No anonymous artifact refs found.");
-                } else if *dry_run {
-                    println!(
-                        "Would remove {} anonymous artifact ref(s):",
-                        to_remove.len()
-                    );
-                    for r in &to_remove {
-                        println!("  {}:{}  →  {}", r.name, r.reference, r.descriptor.digest());
-                    }
-                    println!("(--dry-run: registry unchanged)");
-                } else {
-                    let removed = registry.prune_anonymous_artifact_refs()?;
-                    println!("Removed {} anonymous artifact ref(s):", removed.len());
-                    for r in &removed {
-                        println!("  {}:{}", r.name, r.reference);
-                    }
-                }
+                eprintln!(
+                    "warning: `ommx artifact prune-anonymous` is deprecated; \
+                     use `ommx prune-anonymous` instead"
+                );
+                handle_prune_anonymous(root.as_ref(), *dry_run)?;
             }
             ArtifactCommand::Gc {
                 root,
@@ -409,28 +402,159 @@ fn main() -> Result<()> {
                 delete,
                 grace_period,
             } => {
-                if *dry_run && *delete {
-                    bail!("--dry-run and --delete cannot be used together");
-                }
-                let registry = if let Some(root) = root {
-                    LocalRegistry::open(root)?
-                } else {
-                    LocalRegistry::open_default()?
-                };
-                let options = GcOptions {
-                    grace_period: *grace_period,
-                    ..GcOptions::default()
-                };
-                if *delete {
-                    let result = registry.gc(&options)?;
-                    print_gc_delete_report(&registry, &result);
-                } else {
-                    let report = registry.gc_report(&options)?;
-                    print_gc_report(&registry, &report);
-                    println!("(--dry-run: registry unchanged)");
-                }
+                eprintln!("warning: `ommx artifact gc` is deprecated; use `ommx gc` instead");
+                handle_gc(root.as_ref(), *dry_run, *delete, *grace_period)?;
             }
         },
+    }
+    Ok(())
+}
+
+fn handle_push(image_name_or_path: &str) -> Result<()> {
+    match ImageRefOrPath::parse(image_name_or_path)? {
+        // v3 treats archive / OCI Image Layout dirs as exchange
+        // formats; push always goes from the SQLite Local Registry.
+        // Both paths bail with the same migration hint: import into
+        // the registry first, then push by image name.
+        ImageRefOrPath::OciDir(path) => bail!(
+            "Cannot push OCI Image Layout directory `{}` directly. Run \
+             `ommx import <dir>` to import it into the SQLite Local Registry, \
+             then `ommx push <image_name>`.",
+            path.display(),
+        ),
+        ImageRefOrPath::OciArchive(path) => bail!(
+            "Cannot push OCI archive `{}` directly. Run `ommx import <file>` \
+             to import it into the SQLite Local Registry, then \
+             `ommx push <image_name>`. (Archive is an exchange format; v3 \
+             pushes always source from the registry.)",
+            path.display(),
+        ),
+        // CLI and Python `Artifact.push()` share the same native
+        // code path: `LocalArtifact::push()`. `parse` only routes
+        // SQLite-resident refs to `Local`, so `open` is the right
+        // call (it returns the migration message on miss).
+        ImageRefOrPath::Local(name) => {
+            LocalArtifact::open(name)?.push()?;
+        }
+        ImageRefOrPath::Remote(name) => bail_not_found_locally(&name)?,
+    }
+    Ok(())
+}
+
+fn handle_pull(image_name: &str) -> Result<()> {
+    // Route remote pull through `local_registry::pull_image` so the
+    // freshly pulled artifact lands in the v3 SQLite registry.
+    let name = ImageRef::parse(image_name)?;
+    let registry = std::sync::Arc::new(LocalRegistry::open_default()?);
+    pull_image(&registry, &name)?;
+    Ok(())
+}
+
+fn handle_import(path: &Path) -> Result<()> {
+    // Archives go through the native `import::archive` reader;
+    // directories use `import::oci_dir`, which dispatches on Image /
+    // Artifact Manifest. Using `fs::metadata` surfaces permission and
+    // IO errors with the path attached, and rejects special files
+    // before they reach the archive reader.
+    let metadata =
+        std::fs::metadata(path).with_context(|| format!("Failed to stat {}", path.display()))?;
+    let registry = std::sync::Arc::new(LocalRegistry::open_default()?);
+    if metadata.is_dir() {
+        import_oci_dir(registry.index(), registry.blobs(), path)?;
+    } else if metadata.is_file() {
+        import_oci_archive(&registry, path)?;
+    } else {
+        bail!(
+            "Path is neither a directory nor a regular file: {}",
+            path.display()
+        );
+    }
+    Ok(())
+}
+
+fn handle_export(image_name: &str, output: &Path) -> Result<()> {
+    let name = ImageRef::parse(image_name)?;
+    LocalArtifact::open(name)?.save(output)?;
+    Ok(())
+}
+
+fn open_registry(root: Option<&PathBuf>) -> Result<LocalRegistry> {
+    if let Some(root) = root {
+        LocalRegistry::open(root)
+    } else {
+        LocalRegistry::open_default()
+    }
+}
+
+fn handle_import_legacy(root: Option<&PathBuf>, replace: bool) -> Result<()> {
+    let registry = open_registry(root)?;
+    let report = if replace {
+        registry.replace_legacy_layout()?
+    } else {
+        registry.import_legacy_layout()?
+    };
+    println!(
+        "Imported {} legacy OCI dir(s) into {}",
+        report.imported_dirs,
+        registry.root().display()
+    );
+    println!("Scanned {} legacy OCI dir(s)", report.scanned_dirs);
+    println!("Verified {} existing ref(s)", report.verified_dirs);
+    println!("Replaced {} existing ref(s)", report.replaced_refs);
+    if report.conflicted_dirs > 0 {
+        println!(
+            "Skipped {} conflicting ref(s); rerun with --replace to overwrite them",
+            report.conflicted_dirs
+        );
+    }
+    Ok(())
+}
+
+fn handle_prune_anonymous(root: Option<&PathBuf>, dry_run: bool) -> Result<()> {
+    let registry = open_registry(root)?;
+    let to_remove = registry.list_anonymous_artifact_refs()?;
+    if to_remove.is_empty() {
+        println!("No anonymous artifact refs found.");
+    } else if dry_run {
+        println!(
+            "Would remove {} anonymous artifact ref(s):",
+            to_remove.len()
+        );
+        for r in &to_remove {
+            println!("  {}:{}  →  {}", r.name, r.reference, r.descriptor.digest());
+        }
+        println!("(--dry-run: registry unchanged)");
+    } else {
+        let removed = registry.prune_anonymous_artifact_refs()?;
+        println!("Removed {} anonymous artifact ref(s):", removed.len());
+        for r in &removed {
+            println!("  {}:{}", r.name, r.reference);
+        }
+    }
+    Ok(())
+}
+
+fn handle_gc(
+    root: Option<&PathBuf>,
+    dry_run: bool,
+    delete: bool,
+    grace_period: Duration,
+) -> Result<()> {
+    if dry_run && delete {
+        bail!("--dry-run and --delete cannot be used together");
+    }
+    let registry = open_registry(root)?;
+    let options = GcOptions {
+        grace_period,
+        ..GcOptions::default()
+    };
+    if delete {
+        let result = registry.gc(&options)?;
+        print_gc_delete_report(&registry, &result);
+    } else {
+        let report = registry.gc_report(&options)?;
+        print_gc_report(&registry, &report);
+        println!("(--dry-run: registry unchanged)");
     }
     Ok(())
 }

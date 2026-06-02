@@ -186,7 +186,7 @@ fn read_archive_blob(path: &Path, digest: &Digest) -> Result<Vec<u8>> {
 /// the imported artifact. Each `import_oci_archive` call on the same
 /// unnamed archive synthesizes a fresh name (the nonce differs), so
 /// repeated imports accumulate distinct refs pointing at the same
-/// manifest digest (CAS-deduped). Use `ommx artifact prune-anonymous`
+/// manifest digest (CAS-deduped). Use `ommx prune-anonymous`
 /// to clean accumulated synthesized refs.
 ///
 /// Returns the [`OciDirImport`] outcome reported by the underlying
@@ -244,7 +244,7 @@ pub fn import_oci_archive(registry: &LocalRegistry, path: &Path) -> Result<OciDi
     // Registry has a key to address the imported artifact under.
     // The synthesized name follows the same shape
     // `ArtifactDraft::new_anonymous` produces, so
-    // `ommx artifact prune-anonymous` cleans them by the same
+    // `ommx prune-anonymous` cleans them by the same
     // structural match.
     let image_name = match image_name_from_index_descriptor(index_descriptor)? {
         Some(name) => name,

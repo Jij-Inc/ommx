@@ -792,7 +792,7 @@ impl PyArtifactDraft {
     /// collision-free regardless of clock resolution. Use
     /// `Artifact.image_name` to read the synthesized name back. The
     /// `.local` mDNS TLD prevents an accidental push from leaking to
-    /// a real remote registry. Use `ommx artifact prune-anonymous`
+    /// a real remote registry. Use `ommx prune-anonymous`
     /// to clean accumulated entries.
     ///
     /// The timestamp is the **caller's local time** with no timezone

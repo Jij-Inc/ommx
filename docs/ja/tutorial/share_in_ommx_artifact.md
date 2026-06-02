@@ -143,7 +143,7 @@ draft = ArtifactDraft.new_anonymous()
 | [`ArtifactDraft.new_anonymous`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactDraft.new_anonymous) | `<レジストリ ID8>.ommx.local/anonymous:<ローカルタイムスタンプ>-<nonce>` 形式で名前を自動生成 |
 | [`ArtifactDraft.for_github`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactDraft.for_github) | GitHub Container Registry に合わせてコンテナの名前を決める |
 
-`new_anonymous` のホスト名は `<レジストリ ID8>.ommx.local` 形式で、`.local` (mDNS) link-local TLD を使っているので誤って push しても実際のリモートレジストリには到達しません。先頭のレジストリ ID は各 `LocalRegistry` の初回作成時に一度だけ生成されてメタデータに保存される UUID で、同じレジストリで作られた anonymous artifact は同じ prefix を共有します。アーカイブを共有した際にも「どのレジストリで作られたか」が判別できます。蓄積した anonymous エントリは `ommx artifact prune-anonymous` で一括削除できます (異なるレジストリ ID の prefix も含めて削除されます)。
+`new_anonymous` のホスト名は `<レジストリ ID8>.ommx.local` 形式で、`.local` (mDNS) link-local TLD を使っているので誤って push しても実際のリモートレジストリには到達しません。先頭のレジストリ ID は各 `LocalRegistry` の初回作成時に一度だけ生成されてメタデータに保存される UUID で、同じレジストリで作られた anonymous artifact は同じ prefix を共有します。アーカイブを共有した際にも「どのレジストリで作られたか」が判別できます。蓄積した anonymous エントリは `ommx prune-anonymous` で一括削除できます (異なるレジストリ ID の prefix も含めて削除されます)。
 
 **タイムスタンプの注意**: 自動生成タグはdraft の**ローカルタイム** (TZ マーカー無し) です。異なるタイムゾーンの相手にアーカイブを共有すると、受信者は同じ数字を自分のローカルタイムとして読むため、絶対時刻としての意味はマシン間で失われます。タイムゾーンに関係なく安定したタグが必要なら `ArtifactDraft.new(...)` で明示的に名前を指定してください。
 

@@ -188,7 +188,7 @@ impl LocalArtifactDyn {
                 format!(
                     "Artifact not found in the SQLite-backed local registry: {image_name}. \
                          If this artifact exists in the legacy OCI directory local registry, \
-                         run `ommx artifact import` once, then retry."
+                         run `ommx import-legacy` once, then retry."
                 )
             })?;
         Ok(Self {
@@ -311,7 +311,7 @@ impl<'reg> LocalArtifact<'reg> {
             format!(
                 "Artifact not found in the SQLite-backed local registry: {image_name}. \
                  If this artifact exists in the legacy OCI directory local registry, \
-                 run `ommx artifact import` once, then retry."
+                 run `ommx import-legacy` once, then retry."
             )
         })
     }
@@ -577,7 +577,7 @@ impl<'reg> ArtifactDraft<'reg> {
     /// [`LocalRegistry`] is first created and persisted in its SQLite
     /// metadata, so anonymous artifacts from the same registry share
     /// a prefix and can be told apart from artifacts imported from
-    /// another registry. Use `ommx artifact prune-anonymous` to clean
+    /// another registry. Use `ommx prune-anonymous` to clean
     /// accumulated entries.
     ///
     /// Anonymous artifacts are designed to be transient and unique by
@@ -787,7 +787,7 @@ fn ensure_ommx_image_manifest(manifest: &ImageManifest) -> Result<()> {
 /// registry-id prefix is randomised per registry, so filtering
 /// anonymous artifacts uses
 /// `name.ends_with(ANONYMOUS_ARTIFACT_REF_NAME_SUFFIX)`.
-/// `ommx artifact prune-anonymous` cleans entries from every prefix
+/// `ommx prune-anonymous` cleans entries from every prefix
 /// in the registry, not just the host's own.
 ///
 /// The hostname segment `.ommx.local` deliberately uses the `.local`
@@ -1005,7 +1005,7 @@ mod tests {
     /// must together accept only ref / tag pairs that
     /// [`anonymous_artifact_image_name`] would generate, and reject
     /// substring-match false positives a naive `ends_with` would let
-    /// through (the failure mode `ommx artifact prune-anonymous`
+    /// through (the failure mode `ommx prune-anonymous`
     /// would otherwise have on a human-pushed
     /// `myhost.ommx.local/anonymous:v1`).
     #[test]
