@@ -101,7 +101,7 @@ pub fn set_local_registry_root(path: impl Into<PathBuf>) -> Result<()> {
             path.display()
         )
     })?;
-    tracing::info!("Local registry root set via API: {}", path.display());
+    tracing::debug!("Local registry root configured via API: {}", path.display());
     Ok(())
 }
 
@@ -119,8 +119,8 @@ pub fn get_local_registry_root() -> &'static Path {
         // Try environment variable first
         let path = if let Ok(custom_dir) = env::var("OMMX_LOCAL_REGISTRY_ROOT") {
             let path = PathBuf::from(custom_dir);
-            tracing::info!(
-                "Local registry root initialized from OMMX_LOCAL_REGISTRY_ROOT: {}",
+            tracing::debug!(
+                "Local registry root resolved from OMMX_LOCAL_REGISTRY_ROOT: {}",
                 path.display()
             );
             path
@@ -129,8 +129,8 @@ pub fn get_local_registry_root() -> &'static Path {
                 .expect("Failed to get project directories")
                 .data_dir()
                 .to_path_buf();
-            tracing::info!(
-                "Local registry root initialized to default: {}",
+            tracing::debug!(
+                "Local registry root resolved to default: {}",
                 path.display()
             );
             path

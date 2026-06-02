@@ -1,6 +1,6 @@
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
-use colored::Colorize;
+use colored::{ColoredString, Colorize};
 use oci_spec::image::ImageManifest;
 use ommx::artifact::{
     fetch_remote_manifest, get_local_registry_root,
@@ -89,6 +89,10 @@ enum Command {
         /// Delete anonymous refs instead of only reporting them.
         #[clap(long)]
         delete: bool,
+
+        /// Show manifest digest for each anonymous ref.
+        #[clap(long)]
+        show_digests: bool,
     },
 
     /// Report or delete Local Registry blobs unreachable from refs.
@@ -112,6 +116,10 @@ enum Command {
         /// Keep unreachable blobs newer than this duration. Accepts s, m, h, d suffixes.
         #[clap(long, default_value = "24h", value_parser = parse_gc_duration)]
         grace_period: Duration,
+
+        /// Show blob digests in GC detail output.
+        #[clap(long)]
+        show_digests: bool,
     },
 
     /// Deprecated alias for `import`.
@@ -175,6 +183,10 @@ enum ArtifactCommand {
         /// Delete anonymous refs instead of only reporting them.
         #[clap(long)]
         delete: bool,
+
+        /// Show manifest digest for each anonymous ref.
+        #[clap(long)]
+        show_digests: bool,
     },
 
     /// Report or delete Local Registry blobs unreachable from refs.
@@ -198,6 +210,10 @@ enum ArtifactCommand {
         /// Keep unreachable blobs newer than this duration. Accepts s, m, h, d suffixes.
         #[clap(long, default_value = "24h", value_parser = parse_gc_duration)]
         grace_period: Duration,
+
+        /// Show blob digests in GC detail output.
+        #[clap(long)]
+        show_digests: bool,
     },
 }
 
@@ -337,14 +353,10 @@ fn main() -> Result<()> {
     let command = Command::parse();
     match &command {
         Command::Version => {
-            println!(
-                "{:>12} {}",
-                "Version".blue().bold(),
-                built_info::PKG_VERSION,
-            );
-            println!("{:>12} {}", "Target".blue().bold(), built_info::TARGET,);
+            print_status("Version".blue().bold(), built_info::PKG_VERSION);
+            print_status("Target".blue().bold(), built_info::TARGET);
             if let Some(hash) = built_info::GIT_COMMIT_HASH {
-                println!("{:>12} {}", "Git Commit".blue().bold(), hash);
+                print_status("Git Commit".blue().bold(), hash);
             }
         }
         Command::Inspect { image_name_or_path } => {
@@ -372,14 +384,22 @@ fn main() -> Result<()> {
             root,
             dry_run,
             delete,
-        } => handle_prune_anonymous(root.as_ref(), *dry_run, *delete)?,
+            show_digests,
+        } => handle_prune_anonymous(root.as_ref(), *dry_run, *delete, *show_digests)?,
 
         Command::Gc {
             root,
             dry_run,
             delete,
             grace_period,
-        } => handle_gc(root.as_ref(), *dry_run, *delete, *grace_period)?,
+            show_digests,
+        } => handle_gc(
+            root.as_ref(),
+            *dry_run,
+            *delete,
+            *grace_period,
+            *show_digests,
+        )?,
 
         Command::Load { path } => {
             eprintln!("warning: `ommx load` is deprecated; use `ommx import` instead");
@@ -403,21 +423,29 @@ fn main() -> Result<()> {
                 root,
                 dry_run,
                 delete,
+                show_digests,
             } => {
                 eprintln!(
                     "warning: `ommx artifact prune-anonymous` is deprecated; \
                      use `ommx prune-anonymous` instead"
                 );
-                handle_prune_anonymous(root.as_ref(), *dry_run, *delete)?;
+                handle_prune_anonymous(root.as_ref(), *dry_run, *delete, *show_digests)?;
             }
             ArtifactCommand::Gc {
                 root,
                 dry_run,
                 delete,
                 grace_period,
+                show_digests,
             } => {
                 eprintln!("warning: `ommx artifact gc` is deprecated; use `ommx gc` instead");
-                handle_gc(root.as_ref(), *dry_run, *delete, *grace_period)?;
+                handle_gc(
+                    root.as_ref(),
+                    *dry_run,
+                    *delete,
+                    *grace_period,
+                    *show_digests,
+                )?;
             }
         },
     }
@@ -507,46 +535,72 @@ fn handle_import_legacy(root: Option<&PathBuf>, replace: bool) -> Result<()> {
     } else {
         registry.import_legacy_layout()?
     };
-    println!(
-        "Imported {} legacy OCI dir(s) into {}",
-        report.imported_dirs,
-        registry.root().display()
+    print_status(
+        "Imported".green().bold(),
+        format_args!(
+            "{} legacy OCI dir(s) into {}",
+            report.imported_dirs,
+            registry.root().display()
+        ),
     );
-    println!("Scanned {} legacy OCI dir(s)", report.scanned_dirs);
-    println!("Verified {} existing ref(s)", report.verified_dirs);
-    println!("Replaced {} existing ref(s)", report.replaced_refs);
+    print_status(
+        "Scanned".blue().bold(),
+        format_args!("{} legacy OCI dir(s)", report.scanned_dirs),
+    );
+    print_status(
+        "Verified".blue().bold(),
+        format_args!("{} existing ref(s)", report.verified_dirs),
+    );
+    print_status(
+        "Replaced".yellow().bold(),
+        format_args!("{} existing ref(s)", report.replaced_refs),
+    );
     if report.conflicted_dirs > 0 {
-        println!(
-            "Skipped {} conflicting ref(s); rerun with --replace to overwrite them",
-            report.conflicted_dirs
+        print_status(
+            "Skipped".yellow().bold(),
+            format_args!(
+                "{} conflicting ref(s); rerun with --replace to overwrite them",
+                report.conflicted_dirs
+            ),
         );
     }
     Ok(())
 }
 
-fn handle_prune_anonymous(root: Option<&PathBuf>, dry_run: bool, delete: bool) -> Result<()> {
+fn handle_prune_anonymous(
+    root: Option<&PathBuf>,
+    dry_run: bool,
+    delete: bool,
+    show_digests: bool,
+) -> Result<()> {
     if dry_run && delete {
         bail!("--dry-run and --delete cannot be used together");
     }
     let registry = open_registry(root)?;
     let to_remove = registry.list_anonymous_artifact_refs()?;
     if to_remove.is_empty() {
-        println!("No anonymous artifact refs found.");
+        print_status("Clean".green().bold(), "no anonymous artifact refs found");
     } else if delete {
         let removed = registry.prune_anonymous_artifact_refs()?;
-        println!("Removed {} anonymous artifact ref(s):", removed.len());
+        print_status(
+            "Removed".red().bold(),
+            format_args!("{} anonymous artifact ref(s)", removed.len()),
+        );
         for r in &removed {
-            println!("  {}:{}", r.name, r.reference);
+            print_anonymous_ref(&r.name, &r.reference, r.descriptor.digest(), show_digests);
         }
     } else {
-        println!(
-            "Would remove {} anonymous artifact ref(s):",
-            to_remove.len()
+        print_status(
+            "Candidates".yellow().bold(),
+            format_args!("{} anonymous artifact ref(s)", to_remove.len()),
         );
         for r in &to_remove {
-            println!("  {}:{}  →  {}", r.name, r.reference, r.descriptor.digest());
+            print_anonymous_ref(&r.name, &r.reference, r.descriptor.digest(), show_digests);
         }
-        println!("(--dry-run: registry unchanged)");
+        print_status(
+            "Dry Run".yellow().bold(),
+            "registry unchanged; pass --delete to apply",
+        );
     }
     Ok(())
 }
@@ -556,6 +610,7 @@ fn handle_gc(
     dry_run: bool,
     delete: bool,
     grace_period: Duration,
+    show_digests: bool,
 ) -> Result<()> {
     if dry_run && delete {
         bail!("--dry-run and --delete cannot be used together");
@@ -567,11 +622,14 @@ fn handle_gc(
     };
     if delete {
         let result = registry.gc(&options)?;
-        print_gc_delete_report(&registry, &result);
+        print_gc_delete_report(&registry, &result, show_digests);
     } else {
         let report = registry.gc_report(&options)?;
-        print_gc_report(&registry, &report);
-        println!("(--dry-run: registry unchanged)");
+        print_gc_report(&registry, &report, show_digests);
+        print_status(
+            "Dry Run".yellow().bold(),
+            "registry unchanged; pass --delete to apply",
+        );
     }
     Ok(())
 }
@@ -608,61 +666,132 @@ fn parse_gc_duration(input: &str) -> std::result::Result<Duration, String> {
     Ok(Duration::from_secs(seconds))
 }
 
-fn print_gc_delete_report(registry: &LocalRegistry, result: &GcDeleteReport) {
-    print_gc_report(registry, &result.report);
-    println!(
-        "Deleted {} orphan blob(s), {}",
-        result.deleted_blobs.len(),
-        format_bytes(result.deleted_size())
+fn print_gc_delete_report(registry: &LocalRegistry, result: &GcDeleteReport, show_digests: bool) {
+    print_gc_report(registry, &result.report, show_digests);
+    print_status(
+        "Deleted".red().bold(),
+        format_args!(
+            "{} orphan blob(s), {}",
+            result.deleted_blobs.len(),
+            format_bytes(result.deleted_size())
+        ),
     );
+    if show_digests {
+        print_blob_list(&result.deleted_blobs);
+    }
     if !result.skipped_blobs.is_empty() {
-        println!(
-            "Skipped {} blob(s) that changed before deletion:",
-            result.skipped_blobs.len()
+        print_status(
+            "Skipped".yellow().bold(),
+            format_args!(
+                "{} blob(s) changed before deletion",
+                result.skipped_blobs.len()
+            ),
         );
-        print_blob_list(&result.skipped_blobs);
+        if show_digests {
+            print_blob_list(&result.skipped_blobs);
+        }
     }
 }
 
-fn print_gc_report(registry: &LocalRegistry, report: &GcReport) {
-    println!("Local Registry: {}", registry.root().display());
-    println!("Roots: {} ref/protected digest(s)", report.roots.len());
-    println!(
-        "Reachable blobs: {}, {}",
-        report.reachable_blobs.len(),
-        format_bytes(report.reachable_size())
+fn print_gc_report(registry: &LocalRegistry, report: &GcReport, show_digests: bool) {
+    print_status("Registry".blue().bold(), registry.root().display());
+    print_status(
+        "Roots".blue().bold(),
+        format_args!("{} ref/protected digest(s)", report.roots.len()),
     );
-    println!(
-        "Orphan candidates: {}, {}",
-        report.orphan_candidates.len(),
-        format_bytes(report.orphan_candidate_size())
+    print_status(
+        "Reachable".green().bold(),
+        format_args!(
+            "{} blob(s), {}",
+            report.reachable_blobs.len(),
+            format_bytes(report.reachable_size())
+        ),
     );
-    print_blob_list(&report.orphan_candidates);
-    println!(
-        "Deferred blobs: {}, {}",
-        report.deferred_blobs.len(),
-        format_bytes(report.deferred_size())
+    print_status(
+        "Orphans".yellow().bold(),
+        format_args!(
+            "{} candidate blob(s), {}",
+            report.orphan_candidates.len(),
+            format_bytes(report.orphan_candidate_size())
+        ),
     );
+    if show_digests {
+        print_blob_list(&report.orphan_candidates);
+    }
+    print_status(
+        "Deferred".yellow().bold(),
+        format_args!(
+            "{} blob(s), {}",
+            report.deferred_blobs.len(),
+            format_bytes(report.deferred_size())
+        ),
+    );
+    if show_digests {
+        print_blob_list(&report.deferred_blobs);
+    }
     if !report.missing_blobs.is_empty() {
-        println!("Missing referenced blobs: {}", report.missing_blobs.len());
-        for missing in &report.missing_blobs {
-            println!("  {} ({:?})", missing.digest, missing.kind);
+        print_status(
+            "Missing".red().bold(),
+            format_args!("{} referenced blob(s)", report.missing_blobs.len()),
+        );
+        if show_digests {
+            for missing in &report.missing_blobs {
+                println!(
+                    "  {}  {:?}",
+                    missing.digest.to_string().dimmed(),
+                    missing.kind
+                );
+            }
         }
     }
     if !report.invalid_manifests.is_empty() {
-        println!("Invalid manifest blobs: {}", report.invalid_manifests.len());
-        for invalid in &report.invalid_manifests {
-            println!(
-                "  {} ({:?}): {}",
-                invalid.digest, invalid.kind, invalid.error
-            );
+        print_status(
+            "Invalid".red().bold(),
+            format_args!("{} manifest blob(s)", report.invalid_manifests.len()),
+        );
+        if show_digests {
+            for invalid in &report.invalid_manifests {
+                println!(
+                    "  {}  {:?}: {}",
+                    invalid.digest.to_string().dimmed(),
+                    invalid.kind,
+                    invalid.error
+                );
+            }
         }
+    }
+}
+
+fn print_status(label: ColoredString, message: impl std::fmt::Display) {
+    println!("{label:>12} {message}");
+}
+
+fn print_anonymous_ref(
+    name: &str,
+    reference: &str,
+    digest: impl std::fmt::Display,
+    show_digests: bool,
+) {
+    if show_digests {
+        println!(
+            "  {}:{}  {}  {}",
+            name.dimmed(),
+            reference,
+            "->".dimmed(),
+            digest
+        );
+    } else {
+        println!("  {}:{}", name.dimmed(), reference);
     }
 }
 
 fn print_blob_list(blobs: &[GcBlob]) {
     for blob in blobs {
-        println!("  {}  {}", blob.digest, format_bytes(blob.size));
+        println!(
+            "  {}  {}",
+            blob.digest.to_string().dimmed(),
+            format_bytes(blob.size)
+        );
     }
 }
 
