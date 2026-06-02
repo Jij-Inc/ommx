@@ -1014,7 +1014,7 @@ fn checkpoint_artifact(
             .get(super::ANN_EXPERIMENT_RECOVERY)
             .map(String::as_str)
             == Some("true"),
-        "Experiment checkpoint {checkpoint_image_name} is missing recovery marker"
+        "Experiment checkpoint {checkpoint_image_name} is missing checkpoint marker"
     );
     ensure!(
         annotations

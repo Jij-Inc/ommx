@@ -89,8 +89,8 @@ Experiment / Artifact の変更可能性は 3 相に分ける。
 `with Experiment(...)` は mutable session の lifetime を表す。
 
 - 正常終了時は自動 commit する。
-- 例外終了時は成功 commit を行わず、その時点で closed Run として Experiment state に反映済みの情報を `status=failed` / `status=interrupted` の recovery Artifact として reserved ref に publish する。
-- recovery Artifact は成功 ref を進めない。process kill など Python context manager が走らない場合でも、最後に close 済みの Run までの autosave checkpoint から再開できる。active Run の途中状態は当面保証しない。
+- 例外終了時は成功 commit を行わず、その時点で closed Run として Experiment state に反映済みの情報を `status=failed` / `status=interrupted` の checkpoint manifest として reserved ref に publish する。
+- checkpoint manifest は成功 ref を進めない。process kill など Python context manager が走らない場合でも、最後に close 済みの Run までの checkpoint から再開できる。active Run の途中状態は当面保証しない。
 - block 内で明示 `commit()` 済みの場合、`__exit__` の commit は no-op にする。
 - commit 後の `log_*` / `run()` は禁止する。
 - `exp.artifact` は commit 後に available とし、commit 前アクセスは error にする。
@@ -125,16 +125,16 @@ Run close は成功 Artifact commit ではない。Run close は Experiment stat
 - Run close autosave checkpoint が残っている場合は、記録済み entries を best-effort に復元できる。
 - final commit までは public tag / digest を進めない。
 - 大きな payload は `log_*` 時点で Local Registry の BlobStore に CAS blob として逐次保存する。
-- final commit までは requested public success manifest / ref を publish しない。Run close autosave checkpoint と例外終了時の recovery manifest は reserved checkpoint ref として別扱いにする。
+- final commit までは requested public success manifest / ref を publish しない。Run close autosave と例外終了時の checkpoint manifest は reserved checkpoint ref として別扱いにする。
 - commit 時に作る manifest は、復元に必要な descriptor を完全に列挙する。
 
 `log_*` 時点で BlobStore に書かれた Instance / solver log / diagnostics payload は、成功 commit 前にはどの public success manifest からも到達できない。Run が close されると、それまでの closed Run state は `status=draft` の autosave checkpoint manifest から到達できる。active Run の途中で process kill などが起き、Run close autosave まで進めなかった場合、BlobStore には blob だけが残り、対応する manifest / ref は存在しない。この状態は corruption ではなく orphan blob として扱い、GC の対象にする。
 
-orphan blob だけでは、どの Experiment / Run / Solve / Attachment に属していたかを復元できない。Experiment session として復元するには、`run_id`、`solve_id`、Attachment name、media type、blob digest、Run parameter table などを結ぶ checkpoint manifest が必要である。この checkpoint が残っている範囲では recovery API が session を再構成できる。checkpoint がない blob は単なる orphan blob として扱い、grace period 後に GC 対象にする。
+orphan blob だけでは、どの Experiment / Run / Solve / Attachment に属していたかを復元できない。Experiment session として復元するには、`run_id`、`solve_id`、Attachment name、media type、blob digest、Run parameter table などを結ぶ checkpoint manifest が必要である。この checkpoint が残っている範囲では restore API が session を再構成できる。checkpoint がない blob は単なる orphan blob として扱い、grace period 後に GC 対象にする。
 
-Run close 時は、成功 Artifact と同じ tag には publish せず、`status=draft` / `recovery=true` 相当の annotation を持つ autosave checkpoint manifest を作る。この manifest はその時点で分かっている Experiment config draft、Run parameter table、descriptor list を含み、`<registry-id8>.ommx.local/checkpoint:<sha256(original-requested-image-name)>` の deterministic reserved ref に replace-publish する。例外終了を検知できた場合は同じ checkpoint 形式で `status=failed` または `status=interrupted` の recovery manifest を作り、同じ checkpoint ref に replace-publish する。これにより、通常の共有 ref は進めずに、途中成果だけを recovery API から辿れる。
+Run close 時は、成功 Artifact と同じ tag には publish せず、`status=draft` / `recovery=true` 相当の checkpoint marker annotation を持つ checkpoint manifest を作る。この manifest はその時点で分かっている Experiment config draft、Run parameter table、descriptor list を含み、`<registry-id8>.ommx.local/checkpoint:<sha256(original-requested-image-name)>` の deterministic reserved ref に replace-publish する。例外終了を検知できた場合は同じ checkpoint 形式で `status=failed` または `status=interrupted` の checkpoint manifest を作り、同じ checkpoint ref に replace-publish する。これにより、通常の共有 ref は進めずに、途中成果だけを restore API から辿れる。
 
-autosave / recovery manifest の publish 自体に失敗した場合は、BlobStore には orphan blob だけが残り得る。この場合は自動的な Experiment 復元はできず、GC の grace period 内に low-level inspection する程度に留まる。
+checkpoint manifest の publish 自体に失敗した場合は、BlobStore には orphan blob だけが残り得る。この場合は自動的な Experiment 復元はできず、GC の grace period 内に low-level inspection する程度に留まる。
 
 checkpoint の ref naming / retention policy は user-facing compatibility surface にしない。directory layout compatibility より、復元可能性と final Artifact semantics を優先する。commit されずに残った autosave checkpoint や、どの manifest からも到達しない blob は GC の対象になる。
 
@@ -144,7 +144,7 @@ checkpoint の ref naming / retention policy は user-facing compatibility surfa
 
 forked session では parent に含まれる既存 Attachment、Run、Solve、Run parameter table は読み取り可能な初期 state として見える。ただし parent Experiment / Artifact 自体は immutable であり、変更は child Artifact の manifest にだけ反映される。
 
-新しい Run は既存 `run_id` と衝突しない id を割り当てる。正常終了時の自動 commit では parent を `subject` に持つ child manifest を作る。Run close 時は child の成功 Artifact を commit せず、復元可能な範囲を draft checkpoint として reserved checkpoint ref に publish する。例外終了時も同じ checkpoint 形式で recovery Artifact を reserved checkpoint ref に publish する。checkpoint による recovery は forked session を復元するためのものであり、parent Artifact を変更するものではない。
+新しい Run は既存 `run_id` と衝突しない id を割り当てる。正常終了時の自動 commit では parent を `subject` に持つ child manifest を作る。Run close 時は child の成功 Artifact を commit せず、復元可能な範囲を draft checkpoint として reserved checkpoint ref に publish する。例外終了時も同じ checkpoint 形式で reserved checkpoint ref に publish する。checkpoint による restore は forked session を復元するためのものであり、parent Artifact を変更するものではない。
 
 ## 4. Experiment state model
 
@@ -558,7 +558,7 @@ Experiment であることは、OMMX Artifact の profile / kind として表す
 | Experiment config JSON | `status=finished|draft|failed|interrupted`, Run / Solve structure, Attachment `LayerRef` |
 `Artifact.load()` は従来通り OMMX Artifact として読み、`Experiment.load()` は OCI config descriptor の media type で Experiment profile を確認した上で、config blob の Experiment config JSON から immutable Experiment view を復元する。`config.mediaType` が `application/vnd.oci.empty.v1+json` なら v1 互換の通常 Artifact、`application/org.ommx.v1.experiment.config+json` なら Experiment と判定する。Layer annotations は inspector / compatibility 用の補助情報であり、loader が全 layer を scan して意味を推測する設計にはしない。これにより、Experiment は OMMX Artifact family の一種として扱え、既存の Local Registry / archive / remote transport / generic Artifact inspector と互換にできる。
 
-通常の成功 commit は config JSON に `status=finished` を持つ Experiment Artifact として requested tag / ref に publish する。Run close autosave checkpoint は config JSON に `status=draft` を持ち、manifest annotation に recovery marker と original requested image name を持つ。例外終了時に作る checkpoint manifest は同じ checkpoint 形式で `status=failed` または `status=interrupted` を持つ。publish 先はどちらも `<registry-id8>.ommx.local/checkpoint:<sha256(original-requested-image-name)>` の deterministic reserved checkpoint ref とし、意味は config / annotation の status で区別する。`Experiment.load(tag)` の通常 UX は requested tag / ref の成功 Artifact を読む。復帰 API は `Experiment.restore_from_checkpoint(original_image_name)` に統一し、original requested image name から checkpoint ref を再計算して読み、元の requested image name で fork した unsealed Experiment を返す。checkpoint Artifact handle は user-facing API には出さない。
+通常の成功 commit は config JSON に `status=finished` を持つ Experiment Artifact として requested tag / ref に publish する。Run close autosave checkpoint は config JSON に `status=draft` を持ち、manifest annotation に checkpoint marker と original requested image name を持つ。例外終了時に作る checkpoint manifest は同じ checkpoint 形式で `status=failed` または `status=interrupted` を持つ。publish 先はどちらも `<registry-id8>.ommx.local/checkpoint:<sha256(original-requested-image-name)>` の deterministic reserved checkpoint ref とし、意味は config / annotation の status で区別する。`Experiment.load(tag)` の通常 UX は requested tag / ref の成功 Artifact を読む。復帰 API は `Experiment.restore_from_checkpoint(original_image_name)` に統一し、original requested image name から checkpoint ref を再計算して読み、元の requested image name で fork した unsealed Experiment を返す。checkpoint Artifact handle は user-facing API には出さない。
 
 `OMMX Artifact v3` という media type は導入しない。v3 は SDK / 設計フェーズの名前であり、wire format の互換性境界とは分ける。将来、registry の referrers API などで Experiment だけを `artifactType` で filter したい要求が強くなった場合は、`application/org.ommx.v1.experiment` を追加で許容する余地を残す。ただし初期設計では、top-level は `application/org.ommx.v1.artifact` に統一する。
 
@@ -648,7 +648,7 @@ Referrers API を使った child listing は初期必須 API にしない。remo
 GC roots:
 
 - Local Registry refs
-- autosave / recovery checkpoint manifest refs
+- checkpoint manifest refs
 - user-specified protected digests
 - publish 中の in-flight manifest / ref update
 - protected root から辿れる `subject` chain
@@ -657,8 +657,8 @@ Local Registry GC:
 
 - IndexStore の manifest / blob records から到達可能性を解析する。
 - BlobStore に存在するが IndexStore から参照されない blob は orphan blob として扱う。
-- `log_*` 時点で BlobStore に書かれたが、成功 commit または autosave / recovery checkpoint manifest に到達しなかった orphan blob を削除候補にする。
-- autosave / recovery checkpoint manifest は retention policy が許す間 GC root として扱い、期限後に削除候補にする。
+- `log_*` 時点で BlobStore に書かれたが、成功 commit または checkpoint manifest に到達しなかった orphan blob を削除候補にする。
+- checkpoint manifest は retention policy が許す間 GC root として扱い、期限後に削除候補にする。
 - 派生 Experiment version で run が削除されても、parent Artifact が root または protected subject chain から到達可能なら、その run の blob は保持される。storage reclaim は parent lineage の retention / pruning policy と組み合わせて行う。
 - publish 途中の blob を誤削除しないよう grace period を置く。
 - IndexStore record があるが BlobStore に bytes がない場合は corruption として report する。
@@ -677,7 +677,7 @@ GC は data model を変えない。完全な descriptor list を持つ manifest
 
 ## 10. 残り設計事項
 
-### 10.1 Checkpoint recovery / autosave retention
+### 10.1 Checkpoint restore / retention
 
 Run close 時は、成功 Artifact への commit を行わず、その時点で Experiment state に反映済みの Attachment / Run / Solve / parameter を `status=draft` の checkpoint manifest として materialize する。Python context manager 例外時は、成功 Artifact への自動 commit を行わず、同じ checkpoint 形式で `status=failed` または `status=interrupted` の checkpoint manifest を materialize する。通常の `Experiment.load(...)` / `Experiment.from_artifact(...)` は成功 Artifact だけを扱う。checkpoint からの復帰は `Experiment.restore_from_checkpoint(original_image_name)` が担当し、checkpoint Artifact handle そのものは user-facing API に出さず、元の requested image name で fork 済みの unsealed Experiment を返す。
 
@@ -685,7 +685,7 @@ process crash など Python context manager が走らない場合でも、最後
 
 残作業:
 
-- autosave / recovery checkpoint の discovery command / inspector API。
+- checkpoint の discovery command / inspector API。
 - active Run 途中状態を復元する journal metadata format。
 - orphan blob と checkpoint manifest の retention policy。
 
@@ -740,7 +740,7 @@ Local Registry GC の reachability model、dry-run report、削除 policy は未
 
 残作業:
 
-- Local Registry refs、autosave / recovery checkpoint refs、protected digests、subject chain からの到達可能性解析。
+- Local Registry refs、checkpoint refs、protected digests、subject chain からの到達可能性解析。
 - orphan blob / unreferenced manifest / stale checkpoint refs の dry-run report。
 - retention / grace period。
 - archive / OCI directory の到達可能性解析。
@@ -754,7 +754,7 @@ Local Registry GC の reachability model、dry-run report、削除 policy は未
 
 | 項目 | 残作業 |
 |---|---|
-| Checkpoint recovery / autosave retention | discovery command、inspector、retention policy |
+| Checkpoint restore / retention | discovery command、inspector、retention policy |
 | Active Run journal | active Run 途中状態を復元する metadata format |
 | Lineage / run deletion | `parent()`、`history()`、`diff(other)`、run deletion、lineage retention / GC |
 | Adapter sample execution | `log_sample` の SampleSet-oriented Solve / Sample entry |
