@@ -18,23 +18,20 @@ impl<'reg> UnsealedExperimentState<'reg> {
     /// public `Experiment::commit(self)` lifecycle operation.
     pub fn commit(self, registry: &'reg LocalRegistry) -> Result<LocalArtifact<'reg>> {
         let image_name = self.image_name.clone();
-        let autosave_image_name = self.autosave_image_name.clone();
-        let autosave_published = self.autosave_published;
         let artifact = self.publish_as(
             registry,
-            image_name,
+            image_name.clone(),
             super::EXPERIMENT_STATUS_FINISHED,
             HashMap::new(),
             RefPublishMode::Publish,
         )?;
-        if autosave_published {
-            if let Err(error) = registry.delete_manifest_ref(&autosave_image_name) {
-                tracing::warn!(
-                    error = %error,
-                    autosave_image_name = %autosave_image_name,
-                    "Failed to remove Experiment autosave checkpoint ref after commit"
-                );
-            }
+        let checkpoint_image_name = registry.experiment_checkpoint_image_name(&image_name)?;
+        if let Err(error) = registry.delete_manifest_ref(&checkpoint_image_name) {
+            tracing::warn!(
+                error = %error,
+                checkpoint_image_name = %checkpoint_image_name,
+                "Failed to remove Experiment checkpoint ref after commit"
+            );
         }
         Ok(artifact)
     }
@@ -47,7 +44,8 @@ impl<'reg> UnsealedExperimentState<'reg> {
         status: &'static str,
     ) -> Result<LocalArtifact<'reg>> {
         let requested_image_name = self.image_name.clone();
-        let recovery_image_name = registry.synthesize_experiment_checkpoint_image_name()?;
+        let recovery_image_name =
+            registry.experiment_checkpoint_image_name(&requested_image_name)?;
         let annotations = checkpoint_annotations(status, &requested_image_name);
 
         self.publish_as(
@@ -55,7 +53,7 @@ impl<'reg> UnsealedExperimentState<'reg> {
             recovery_image_name,
             status,
             annotations,
-            RefPublishMode::Publish,
+            RefPublishMode::Replace,
         )
     }
 
@@ -65,7 +63,7 @@ impl<'reg> UnsealedExperimentState<'reg> {
         &mut self,
         registry: &'reg LocalRegistry,
     ) -> Result<LocalArtifact<'reg>> {
-        let image_name = self.autosave_image_name.clone();
+        let image_name = registry.experiment_checkpoint_image_name(&self.image_name)?;
         let annotations = checkpoint_annotations(super::EXPERIMENT_STATUS_DRAFT, &self.image_name);
         let artifact = self.publish_as(
             registry,
@@ -74,7 +72,6 @@ impl<'reg> UnsealedExperimentState<'reg> {
             annotations,
             RefPublishMode::Replace,
         )?;
-        self.autosave_published = true;
         Ok(artifact)
     }
 

@@ -252,10 +252,6 @@ struct UnsealedExperimentState<'reg> {
     /// under. Experiment identity is the Local Registry ref; there is
     /// no separate experiment-name field in the artifact model.
     image_name: ImageRef,
-    /// Rolling checkpoint ref used by Run-close autosave.
-    autosave_image_name: ImageRef,
-    /// Whether `autosave_image_name` has been published at least once.
-    autosave_published: bool,
     /// Parent Experiment manifest descriptor for lineage. `None` for
     /// a root Experiment and `Some` for a forked child Experiment.
     subject: Option<oci_spec::image::Descriptor>,
@@ -296,13 +292,10 @@ impl<'reg> Experiment<'reg> {
     /// resolved `name`.
     pub fn with_registry(registry: &'reg LocalRegistry, name: impl Into<Name>) -> Result<Self> {
         let image_name = name.into().resolve(registry)?;
-        let autosave_image_name = registry.synthesize_experiment_checkpoint_image_name()?;
         Ok(Experiment {
             registry,
             state: Mutex::new(UnsealedExperimentState {
                 image_name,
-                autosave_image_name,
-                autosave_published: false,
                 subject: None,
                 attachments: Vec::new(),
                 runs: BTreeMap::new(),
@@ -318,8 +311,9 @@ impl<'reg> Experiment<'reg> {
     }
 
     /// Rolling local checkpoint ref used by Run-close autosave.
-    pub fn autosave_image_name(&self) -> ImageRef {
-        self.lock_state().autosave_image_name.clone()
+    pub fn autosave_image_name(&self) -> Result<ImageRef> {
+        let image_name = self.lock_state().image_name.clone();
+        self.registry.experiment_checkpoint_image_name(&image_name)
     }
 
     /// Start a new [`Run`]. Each run gets a fresh 0-based `run_id`.
@@ -420,7 +414,6 @@ impl<'reg> SealedExperiment<'reg> {
     pub fn fork(&self, name: impl Into<Name>) -> Result<Experiment<'reg>> {
         let registry = self.artifact.registry();
         let image_name = name.into().resolve(registry)?;
-        let autosave_image_name = registry.synthesize_experiment_checkpoint_image_name()?;
         let subject = Some(self.artifact.stored_manifest_descriptor()?.into());
         let mut runs = BTreeMap::new();
         let mut parameters_by_run = self.run_parameters.parameter_sets()?;
@@ -457,8 +450,6 @@ impl<'reg> SealedExperiment<'reg> {
             registry,
             state: Mutex::new(UnsealedExperimentState {
                 image_name,
-                autosave_image_name,
-                autosave_published: false,
                 subject,
                 attachments: self.attachments.clone(),
                 next_run_id: next_run_id(runs.keys().copied())?,

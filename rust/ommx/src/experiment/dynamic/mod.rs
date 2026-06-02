@@ -75,8 +75,6 @@ enum ExperimentDynLifecycle {
 #[derive(Debug)]
 struct UnsealedExperimentDynState {
     image_name: ImageRef,
-    autosave_image_name: ImageRef,
-    autosave_published: bool,
     subject: Option<Descriptor>,
     attachments: Vec<Descriptor>,
     runs: BTreeMap<u64, RunEntryDyn>,
@@ -268,17 +266,12 @@ impl ExperimentDyn {
         name: impl Into<Name>,
     ) -> Result<Self> {
         let image_name = name.into().resolve(registry_handle.registry())?;
-        let autosave_image_name = registry_handle
-            .registry()
-            .synthesize_experiment_checkpoint_image_name()?;
         Ok(Self {
             registry_handle: registry_handle.clone(),
             state: Arc::new(Mutex::new(ExperimentDynState {
                 lifecycle: ExperimentDynLifecycle::Unsealed {
                     state: Some(UnsealedExperimentDynState {
                         image_name,
-                        autosave_image_name,
-                        autosave_published: false,
                         subject: None,
                         attachments: Vec::new(),
                         runs: BTreeMap::new(),
@@ -308,7 +301,7 @@ impl ExperimentDyn {
         registry_handle: LocalRegistryHandle,
         image_name: crate::artifact::ImageRef,
     ) -> Result<Self> {
-        let artifact = latest_checkpoint_artifact(
+        let artifact = checkpoint_artifact(
             registry_handle,
             &image_name,
             &[
@@ -329,7 +322,7 @@ impl ExperimentDyn {
         registry_handle: LocalRegistryHandle,
         image_name: crate::artifact::ImageRef,
     ) -> Result<Self> {
-        let artifact = latest_checkpoint_artifact(
+        let artifact = checkpoint_artifact(
             registry_handle,
             &image_name,
             &[super::EXPERIMENT_STATUS_DRAFT],
@@ -428,22 +421,53 @@ impl ExperimentDyn {
     }
 
     pub fn autosave_image_name(&self) -> Option<ImageRef> {
-        match &lock_experiment_state(&self.state).lifecycle {
-            ExperimentDynLifecycle::Unsealed { state, .. } => state
-                .as_ref()
-                .map(|state| state.autosave_image_name.clone()),
+        let dyn_state = lock_experiment_state(&self.state);
+        match &dyn_state.lifecycle {
+            ExperimentDynLifecycle::Unsealed { state, .. } => state.as_ref().and_then(|state| {
+                dyn_state
+                    .registry_handle
+                    .registry()
+                    .experiment_checkpoint_image_name(&state.image_name)
+                    .ok()
+            }),
             ExperimentDynLifecycle::Sealed(_) | ExperimentDynLifecycle::Failed { .. } => None,
         }
     }
 
     pub fn rename(&self, image_name: crate::artifact::ImageRef) -> Result<()> {
         let mut dyn_state = lock_experiment_state(&self.state);
+        let registry_handle = dyn_state.registry_handle.clone();
         match &mut dyn_state.lifecycle {
             ExperimentDynLifecycle::Unsealed { state, .. } => {
                 let state = state
                     .as_mut()
                     .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
+                let old_image_name = state.image_name.clone();
+                let old_checkpoint_image_name = registry_handle
+                    .registry()
+                    .experiment_checkpoint_image_name(&old_image_name)?;
                 state.image_name = image_name;
+                match registry_handle
+                    .registry()
+                    .delete_manifest_ref(&old_checkpoint_image_name)
+                {
+                    Ok(true) => {
+                        if let Err(error) = state.autosave_checkpoint(registry_handle.registry()) {
+                            tracing::warn!(
+                                error = %error,
+                                "Failed to publish Experiment autosave checkpoint after rename"
+                            );
+                        }
+                    }
+                    Ok(false) => {}
+                    Err(error) => {
+                        tracing::warn!(
+                            error = %error,
+                            checkpoint_image_name = %old_checkpoint_image_name,
+                            "Failed to remove Experiment checkpoint ref after rename"
+                        );
+                    }
+                }
                 Ok(())
             }
             ExperimentDynLifecycle::Sealed(sealed) => sealed.rename(image_name),
@@ -606,22 +630,6 @@ impl ExperimentDyn {
         Ok(artifact)
     }
 
-    pub fn autosave_artifact(&self) -> Option<LocalArtifactDyn> {
-        let dyn_state = lock_experiment_state(&self.state);
-        let ExperimentDynLifecycle::Unsealed { state, .. } = &dyn_state.lifecycle else {
-            return None;
-        };
-        let state = state.as_ref()?;
-        if !state.autosave_published {
-            return None;
-        }
-        LocalArtifactDyn::open_in_registry_handle(
-            dyn_state.registry_handle.clone(),
-            state.autosave_image_name.clone(),
-        )
-        .ok()
-    }
-
     pub fn recovery_artifact(&self) -> Option<LocalArtifactDyn> {
         match &lock_experiment_state(&self.state).lifecycle {
             ExperimentDynLifecycle::Failed {
@@ -758,9 +766,7 @@ impl UnsealedExperimentDynState {
         registry: &'reg LocalRegistry,
     ) -> Result<LocalArtifact<'reg>> {
         let mut state = self.as_unsealed_state(registry)?;
-        let artifact = state.autosave_checkpoint(registry)?;
-        self.autosave_published = state.autosave_published;
-        Ok(artifact)
+        state.autosave_checkpoint(registry)
     }
 
     fn as_unsealed_state<'reg>(
@@ -769,8 +775,6 @@ impl UnsealedExperimentDynState {
     ) -> Result<UnsealedExperimentState<'reg>> {
         Ok(UnsealedExperimentState {
             image_name: self.image_name.clone(),
-            autosave_image_name: self.autosave_image_name.clone(),
-            autosave_published: self.autosave_published,
             subject: self.subject.clone(),
             attachments: stored_descriptors(registry, self.attachments.clone())?,
             runs: self
@@ -816,8 +820,6 @@ impl UnsealedExperimentDynState {
     ) -> Result<UnsealedExperimentState<'reg>> {
         Ok(UnsealedExperimentState {
             image_name: self.image_name,
-            autosave_image_name: self.autosave_image_name,
-            autosave_published: self.autosave_published,
             subject: self.subject,
             attachments: stored_descriptors(registry, self.attachments)?,
             runs: self
@@ -966,12 +968,6 @@ impl SealedExperimentDynState {
 
         Ok(UnsealedExperimentDynState {
             image_name,
-            autosave_image_name: self
-                .artifact
-                .registry_handle()
-                .registry()
-                .synthesize_experiment_checkpoint_image_name()?,
-            autosave_published: false,
             subject,
             attachments: self.attachments.clone(),
             next_run_id: next_run_id(runs.keys().copied())?,
@@ -1055,96 +1051,51 @@ fn recovery_requested_image_name(artifact: &LocalArtifactDyn) -> Result<ImageRef
     })
 }
 
-fn latest_checkpoint_artifact(
+fn checkpoint_artifact(
     registry_handle: LocalRegistryHandle,
     requested_image_name: &ImageRef,
     accepted_statuses: &[&str],
     checkpoint_kind: &str,
 ) -> Result<LocalArtifactDyn> {
-    let requested_image_name = requested_image_name.to_string();
-    let mut candidates = Vec::new();
-    for record in registry_handle
+    let checkpoint_image_name = registry_handle
         .registry()
-        .list_experiment_checkpoint_refs()?
-    {
-        let checkpoint_image_name =
-            match ImageRef::from_repository_and_reference(&record.name, &record.reference) {
-                Ok(image_name) => image_name,
-                Err(error) => {
-                    tracing::warn!(
-                        error = %error,
-                        name = %record.name,
-                        reference = %record.reference,
-                        "Ignoring invalid Experiment checkpoint ref"
-                    );
-                    continue;
-                }
-            };
-        let artifact = match LocalArtifactDyn::open_in_registry_handle(
-            registry_handle.clone(),
-            checkpoint_image_name.clone(),
-        ) {
-            Ok(artifact) => artifact,
-            Err(error) => {
-                tracing::warn!(
-                    error = %error,
-                    image_name = %checkpoint_image_name,
-                    "Ignoring unreadable Experiment checkpoint artifact"
-                );
-                continue;
-            }
-        };
-        let annotations = match artifact.annotations() {
-            Ok(annotations) => annotations,
-            Err(error) => {
-                tracing::warn!(
-                    error = %error,
-                    image_name = %checkpoint_image_name,
-                    "Ignoring Experiment checkpoint with unreadable annotations"
-                );
-                continue;
-            }
-        };
-        if annotations
+        .experiment_checkpoint_image_name(requested_image_name)?;
+    let requested_image_name = requested_image_name.to_string();
+    let missing_checkpoint_message = format!(
+        "No Experiment {checkpoint_kind} checkpoint found for requested image \
+         {requested_image_name} at {checkpoint_image_name}"
+    );
+    let artifact =
+        LocalArtifactDyn::open_in_registry_handle(registry_handle, checkpoint_image_name.clone())
+            .with_context(|| missing_checkpoint_message)?;
+    let annotations = artifact.annotations()?;
+    ensure!(
+        annotations
             .get(super::ANN_EXPERIMENT_RECOVERY)
             .map(String::as_str)
-            != Some("true")
-        {
-            continue;
-        }
-        if annotations
+            == Some("true"),
+        "Experiment {checkpoint_kind} checkpoint {checkpoint_image_name} is missing recovery marker"
+    );
+    ensure!(
+        annotations
             .get(ANN_EXPERIMENT_REQUESTED_IMAGE)
             .map(String::as_str)
-            != Some(requested_image_name.as_str())
-        {
-            continue;
-        }
-        let Some(status) = annotations
-            .get(super::ANN_EXPERIMENT_STATUS)
-            .map(String::as_str)
-        else {
-            continue;
-        };
-        if !accepted_statuses.contains(&status) {
-            continue;
-        }
-        candidates.push((record.updated_at, record.name, record.reference, artifact));
-    }
-
-    candidates.sort_by(|left, right| {
-        left.0
-            .cmp(&right.0)
-            .then_with(|| left.1.cmp(&right.1))
-            .then_with(|| left.2.cmp(&right.2))
-    });
-    candidates
-        .pop()
-        .map(|(_, _, _, artifact)| artifact)
+            == Some(requested_image_name.as_str()),
+        "Experiment {checkpoint_kind} checkpoint {checkpoint_image_name} does not belong to requested image {requested_image_name}"
+    );
+    let status = annotations
+        .get(super::ANN_EXPERIMENT_STATUS)
+        .map(String::as_str)
         .ok_or_else(|| {
             anyhow::anyhow!(
-                "No Experiment {checkpoint_kind} checkpoint found for requested image {requested_image_name}"
+                "Experiment {checkpoint_kind} checkpoint {checkpoint_image_name} is missing status"
             )
-        })
+        })?;
+    ensure!(
+        accepted_statuses.contains(&status),
+        "Experiment {checkpoint_kind} checkpoint {checkpoint_image_name} has status {status}"
+    );
+    Ok(artifact)
 }
 
 fn stored_descriptors<'reg>(

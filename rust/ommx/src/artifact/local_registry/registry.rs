@@ -1,7 +1,7 @@
 use super::{
     import_legacy_local_registry, import_legacy_local_registry_ref, replace_legacy_local_registry,
-    replace_legacy_local_registry_ref, FileBlobStore, LegacyImportReport, OciDirImport, RefRecord,
-    RefUpdate, SqliteIndexStore,
+    replace_legacy_local_registry_ref, FileBlobStore, LegacyImportReport, OciDirImport, RefUpdate,
+    SqliteIndexStore,
 };
 use crate::artifact::{media_types, sha256_digest, stable_json_bytes, ImageRef};
 use anyhow::{ensure, Context, Result};
@@ -289,31 +289,28 @@ impl LocalRegistry {
             .with_context(|| "Failed to synthesise anonymous experiment image name")
     }
 
-    /// Synthesize a fresh local ref for an Experiment checkpoint artifact.
+    /// Deterministic local ref for an Experiment checkpoint artifact.
     ///
     /// Format:
-    /// `<registry-id8>.ommx.local/checkpoint:<timestamp>-<nonce>`.
+    /// `<registry-id8>.ommx.local/checkpoint:<sha256-requested-image-name>`.
     /// Checkpoint artifacts are separate from the requested Experiment ref so
     /// autosave and recovery materialization never advance the success tag.
-    pub fn synthesize_experiment_checkpoint_image_name(&self) -> Result<ImageRef> {
+    pub fn experiment_checkpoint_image_name(
+        &self,
+        requested_image_name: &ImageRef,
+    ) -> Result<ImageRef> {
         let registry_id = self.index.registry_id()?;
-        crate::artifact::anonymous_local_image_name(&registry_id, EXPERIMENT_CHECKPOINT_REPOSITORY)
-            .with_context(|| "Failed to synthesise experiment checkpoint image name")
-    }
-
-    /// List refs in this registry's local Experiment checkpoint repository.
-    pub fn list_experiment_checkpoint_refs(&self) -> Result<Vec<RefRecord>> {
-        let registry_id = self.index.registry_id()?;
-        let prefix = crate::artifact::anonymous_local_repository_key(
+        let repository_key = crate::artifact::anonymous_local_repository_key(
             &registry_id,
             EXPERIMENT_CHECKPOINT_REPOSITORY,
         )?;
-        Ok(self
-            .index
-            .list_refs(Some(&prefix))?
-            .into_iter()
-            .filter(|record| record.name == prefix)
-            .collect())
+        let digest = sha256_digest(requested_image_name.to_string().as_bytes());
+        let tag = digest
+            .strip_prefix("sha256:")
+            .expect("sha256_digest returns a sha256-prefixed digest");
+        ImageRef::parse(&format!("{repository_key}:{tag}")).with_context(|| {
+            format!("Failed to derive experiment checkpoint image name for {requested_image_name}")
+        })
     }
 
     /// List every SQLite ref whose `(name, reference)` matches the

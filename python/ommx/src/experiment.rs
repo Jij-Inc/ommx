@@ -128,7 +128,7 @@ impl PyExperiment {
         })
     }
 
-    /// Find the latest failed/interrupted checkpoint for an Experiment image and resume from it.
+    /// Find the failed/interrupted checkpoint for an Experiment image and resume from it.
     ///
     /// Pass the original requested Experiment image name, not the generated
     /// checkpoint ref. This returns a new unsealed Experiment whose parent is
@@ -144,7 +144,7 @@ impl PyExperiment {
         })
     }
 
-    /// Find the latest Run-close autosave checkpoint for an Experiment image and resume from it.
+    /// Find the Run-close autosave checkpoint for an Experiment image and resume from it.
     ///
     /// Pass the original requested Experiment image name, not the generated
     /// checkpoint ref. Autosave checkpoints use the same manifest format as
@@ -455,15 +455,6 @@ impl PyExperiment {
         self.inner
             .recovery_image_name()
             .map(|image_name| image_name.to_string())
-    }
-
-    #[getter]
-    /// Run-close autosave Artifact for this unsealed Experiment, if any.
-    ///
-    /// A new autosave checkpoint is written after each closed Run. It is a
-    /// rolling local ref and is not the final committed Experiment Artifact.
-    pub fn autosave_artifact(&self) -> Option<PyArtifact> {
-        self.inner.autosave_artifact().map(PyArtifact::new)
     }
 
     #[getter]

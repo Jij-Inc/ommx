@@ -11,7 +11,9 @@ use super::{
     RUN_STATUS_FINISHED, RUN_STATUS_INTERRUPTED,
 };
 use crate::artifact::local_registry::{StoredDescriptor, UnsealedArtifact};
-use crate::artifact::{media_types, AsArtifact, ImageRef, LocalArtifact, LocalRegistryHandle};
+use crate::artifact::{
+    media_types, AsArtifact, ImageRef, LocalArtifact, LocalArtifactDyn, LocalRegistryHandle,
+};
 use crate::{Evaluate, Function, Instance, Sense};
 use oci_spec::image::{Descriptor, MediaType};
 use serde_json::json;
@@ -1199,10 +1201,11 @@ fn experiment_dyn_publishes_failed_recovery_artifact() {
         .resolve_image_name(&image_name)
         .unwrap()
         .is_none());
-    assert!(recovery
-        .image_name()
-        .to_string()
-        .contains(".ommx.local/checkpoint:"));
+    let checkpoint_image_name = registry_handle
+        .registry()
+        .experiment_checkpoint_image_name(&image_name)
+        .unwrap();
+    assert_eq!(recovery.image_name(), &checkpoint_image_name);
     assert_eq!(
         experiment.recovery_image_name().unwrap(),
         recovery.image_name().clone()
@@ -1246,10 +1249,11 @@ fn experiment_dyn_recovers_failed_artifact_with_requested_image_name() {
     let recovery = experiment
         .commit_failed_recovery("RuntimeError: solve failed")
         .unwrap();
-    assert!(recovery
-        .image_name()
-        .to_string()
-        .contains(".ommx.local/checkpoint:"));
+    let checkpoint_image_name = registry_handle
+        .registry()
+        .experiment_checkpoint_image_name(&image_name)
+        .unwrap();
+    assert_eq!(recovery.image_name(), &checkpoint_image_name);
 
     let recovered =
         ExperimentDyn::load_recovery_in_registry_handle(registry_handle, image_name.clone())
@@ -1277,11 +1281,17 @@ fn experiment_dyn_autosaves_on_run_close_and_recovers_with_requested_image_name(
     let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:notebook").unwrap();
     let experiment =
         ExperimentDyn::with_registry_handle(registry_handle.clone(), image_name.clone()).unwrap();
+    let checkpoint_image_name = registry_handle
+        .registry()
+        .experiment_checkpoint_image_name(&image_name)
+        .unwrap();
     let autosave_image_name = experiment.autosave_image_name().unwrap();
-    assert!(autosave_image_name
-        .to_string()
-        .contains(".ommx.local/checkpoint:"));
-    assert!(experiment.autosave_artifact().is_none());
+    assert_eq!(autosave_image_name, checkpoint_image_name);
+    assert!(registry_handle
+        .registry()
+        .resolve_image_name(&autosave_image_name)
+        .unwrap()
+        .is_none());
 
     {
         let mut run = experiment.run().unwrap();
@@ -1289,9 +1299,11 @@ fn experiment_dyn_autosaves_on_run_close_and_recovers_with_requested_image_name(
         run.finish().unwrap();
     }
 
-    let autosave = experiment
-        .autosave_artifact()
-        .expect("Run close should publish an autosave checkpoint");
+    let autosave = LocalArtifactDyn::open_in_registry_handle(
+        registry_handle.clone(),
+        autosave_image_name.clone(),
+    )
+    .expect("Run close should publish an autosave checkpoint");
     assert_eq!(autosave.image_name(), &autosave_image_name);
     let annotations = autosave.annotations().unwrap();
     assert_eq!(
@@ -1349,7 +1361,13 @@ fn experiment_dyn_marks_keyboard_interrupt_recovery_separately() {
         run.finish_interrupted().unwrap();
     }
 
-    let autosave = experiment.autosave_artifact().unwrap();
+    let autosave_image_name = registry_handle
+        .registry()
+        .experiment_checkpoint_image_name(&image_name)
+        .unwrap();
+    let autosave =
+        LocalArtifactDyn::open_in_registry_handle(registry_handle.clone(), autosave_image_name)
+            .unwrap();
     let autosave_config = experiment_config(&autosave.as_local_artifact());
     assert_eq!(autosave_config.status, EXPERIMENT_STATUS_DRAFT);
     assert_eq!(autosave_config.runs[0].status, RUN_STATUS_INTERRUPTED);
@@ -1391,6 +1409,62 @@ fn experiment_dyn_rename_before_commit_changes_publish_ref() {
         .resolve_image_name(artifact.image_name())
         .unwrap()
         .is_some());
+}
+
+#[test]
+fn experiment_dyn_rename_moves_autosave_checkpoint_ref() {
+    let registry_handle = LocalRegistryHandle::temp().unwrap();
+    let old_image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/rename-autosave:old").unwrap();
+    let new_image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/rename-autosave:new").unwrap();
+    let experiment =
+        ExperimentDyn::with_registry_handle(registry_handle.clone(), old_image_name.clone())
+            .unwrap();
+    {
+        let mut run = experiment.run().unwrap();
+        run.log_parameter("solver", "scip").unwrap();
+        run.finish().unwrap();
+    }
+
+    let old_checkpoint_image_name = registry_handle
+        .registry()
+        .experiment_checkpoint_image_name(&old_image_name)
+        .unwrap();
+    assert_eq!(
+        experiment.autosave_image_name().unwrap(),
+        old_checkpoint_image_name
+    );
+    assert!(registry_handle
+        .registry()
+        .resolve_image_name(&old_checkpoint_image_name)
+        .unwrap()
+        .is_some());
+
+    experiment.rename(new_image_name.clone()).unwrap();
+
+    let new_checkpoint_image_name = registry_handle
+        .registry()
+        .experiment_checkpoint_image_name(&new_image_name)
+        .unwrap();
+    assert_eq!(
+        experiment.autosave_image_name().unwrap(),
+        new_checkpoint_image_name
+    );
+    assert!(registry_handle
+        .registry()
+        .resolve_image_name(&old_checkpoint_image_name)
+        .unwrap()
+        .is_none());
+    assert!(registry_handle
+        .registry()
+        .resolve_image_name(&new_checkpoint_image_name)
+        .unwrap()
+        .is_some());
+
+    let recovered =
+        ExperimentDyn::load_autosave_in_registry_handle(registry_handle, new_image_name.clone())
+            .unwrap();
+    assert_eq!(recovered.image_name().unwrap(), new_image_name);
+    assert_eq!(recovered.run_parameter_cells().unwrap().len(), 1);
 }
 
 #[test]

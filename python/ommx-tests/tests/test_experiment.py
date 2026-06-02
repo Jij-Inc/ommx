@@ -1,3 +1,4 @@
+import hashlib
 from typing import Any, ClassVar, cast
 
 import pandas as pd
@@ -33,6 +34,10 @@ def _trace_span_names(trace: TraceResult) -> set[str]:
 
 def _trace_span_count(trace: TraceResult, name: str) -> int:
     return sum(span.name == name for span in trace.spans)
+
+
+def _checkpoint_suffix(image_name: str) -> str:
+    return "/checkpoint:" + hashlib.sha256(image_name.encode()).hexdigest()
 
 
 def _single_trace_span(trace: TraceResult, name: str):
@@ -161,7 +166,7 @@ def test_experiment_context_publishes_recovery_artifact_on_exception():
     with pytest.raises(RuntimeError, match="commit has failed"):
         experiment.artifact
     assert experiment.recovery_image_name is not None
-    assert ".ommx.local/checkpoint:" in experiment.recovery_image_name
+    assert experiment.recovery_image_name.endswith(_checkpoint_suffix(experiment.image_name))
 
     recovery_artifact = experiment.recovery_artifact
     assert recovery_artifact is not None
@@ -215,45 +220,19 @@ def test_recovery_artifact_keeps_failed_run_and_can_be_forked():
     assert list(resumed.run_parameters_df().index) == [0, 1]
 
 
-def test_run_close_publishes_autosave_and_load_autosave_resumes():
+def test_run_close_updates_live_state_and_autosave_image_name():
     experiment = Experiment.with_temp_local_registry()
     autosave_image_name = experiment.autosave_image_name
     assert autosave_image_name is not None
-    assert ".ommx.local/checkpoint:" in autosave_image_name
-    assert experiment.autosave_artifact is None
+    assert autosave_image_name.endswith(_checkpoint_suffix(experiment.image_name))
 
     with experiment.run() as run:
         run.log_parameter("solver", "scip")
         run.log_json("before-commit", {"step": 1})
 
-    autosave_artifact = experiment.autosave_artifact
-    assert autosave_artifact is not None
-    assert autosave_artifact.image_name == autosave_image_name
-    assert autosave_artifact.annotations["org.ommx.experiment.status"] == "draft"
-    assert autosave_artifact.annotations["org.ommx.experiment.recovery"] == "true"
-    assert (
-        autosave_artifact.annotations["org.ommx.experiment.requested_image"]
-        == experiment.image_name
-    )
-    with pytest.raises(RuntimeError, match="status is draft"):
-        Experiment.from_artifact(autosave_artifact)
-
     assert [run.status for run in experiment.runs] == ["finished"]
     assert experiment.runs[0].get_json("before-commit") == {"step": 1}
     assert experiment.run_parameters_df().loc[0, "solver"] == "scip"
-
-    resumed = Experiment.from_autosave_artifact(autosave_artifact)
-    assert resumed.status is None
-    assert resumed.image_name == experiment.image_name
-    assert resumed.runs[0].get_json("before-commit") == {"step": 1}
-    assert resumed.run_parameters_df().loc[0, "solver"] == "scip"
-    with resumed:
-        with resumed.run() as run:
-            assert run.run_id == 1
-            run.log_parameter("solver", "highs")
-
-    assert [run.status for run in resumed.runs] == ["finished", "finished"]
-    assert list(resumed.run_parameters_df().index) == [0, 1]
 
 
 def test_keyboard_interrupt_records_interrupted_run_and_recovery():
@@ -266,9 +245,6 @@ def test_keyboard_interrupt_records_interrupted_run_and_recovery():
                 raise KeyboardInterrupt
 
     experiment = experiments[0]
-    autosave_artifact = experiment.autosave_artifact
-    assert autosave_artifact is None
-
     recovery_artifact = experiment.recovery_artifact
     assert recovery_artifact is not None
     assert recovery_artifact.annotations["org.ommx.experiment.status"] == "interrupted"
