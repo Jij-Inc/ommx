@@ -1,103 +1,124 @@
-# Experiment Management
+# Experiment Recovery and Cleanup
 
-{mod}`ommx.experiment` records optimization work as one OMMX Artifact. Use it when you need to compare multiple solver runs, keep model inputs and solver outputs together, or share the complete history with another environment.
+{mod}`ommx.experiment` records optimization work as one OMMX Artifact. For the Experiment data model, a runnable logging example, sharing, inspection, and forked Experiments, see [Record and Share Experiments](../tutorial/experiment_management.md).
 
-For a runnable walkthrough, see [Record and Share Experiments](../tutorial/experiment_management.md). This page describes the API model and lifecycle.
+This guide focuses on the failure-time behavior: what OMMX writes before an Experiment is committed, how checkpoints are restored, and how Local Registry cleanup decides which blobs can be removed.
 
-## Data Model
+## Storage Boundaries
 
-An Experiment has two storage spaces.
+Experiment data is written in three layers.
 
-| Space | API | Use for |
+| Layer | Stored as | Role |
 |---|---|---|
-| Experiment space | {class}`~ommx.experiment.Experiment` logging methods | Shared context such as the source model, dataset metadata, or analysis notes |
-| Run space | {class}`~ommx.experiment.Run` logging methods | One trial's parameters, solver input/output, traces, and run-specific files |
+| Blob | Content-addressed files in the Local Registry BlobStore | Payload bytes for attachments, Instances, Solutions, run parameters, configs, and manifests |
+| Manifest | An OCI Image Manifest blob | The list of blobs that make one immutable OMMX Artifact |
+| Ref | SQLite rows in the Local Registry index | The name or checkpoint pointer that makes a manifest reachable |
 
-Use {meth}`~ommx.experiment.Run.log_parameter` for scalar values you want to compare across runs. These values appear in {meth}`~ommx.experiment.Experiment.run_parameters_df`.
+Logging methods such as {py:meth}`~ommx.experiment.Experiment.log_json` and {py:meth}`~ommx.experiment.Run.log_solve` write payload bytes to the BlobStore immediately. OMMX does not wait until the final commit to write all bytes. If the same content is already present, the existing CAS blob is reused and its modification time is touched so recent active writes remain protected by GC grace periods.
 
-Use attachments for payloads. JSON, {class}`~ommx.v1.Instance`, {class}`~ommx.v1.ParametricInstance`, {class}`~ommx.v1.Solution`, and {class}`~ommx.v1.SampleSet` have typed helpers. Unknown media types are stored and loaded as bytes so external packages can own their own codecs.
+A successful {py:meth}`~ommx.experiment.Experiment.commit` writes the Experiment config and root manifest, then publishes the requested image reference in SQLite. Publishing a ref does not rewrite payload blobs. This ordering means a process can leave behind blob files that are not reachable from any manifest or ref; Local Registry GC handles that case.
 
-Use {meth}`~ommx.experiment.Run.log_solve` when a solver call should be recorded as one {class}`~ommx.experiment.Solve`. It stores the input Instance, output Solution, adapter class name, and JSON-serializable adapter options.
+## Context Managers Are Recovery Boundaries
 
-## Lifecycle
-
-A new {class}`~ommx.experiment.Experiment` is an uncommitted session. Logging methods store payload bytes in the Local Registry immediately, but the Experiment is not shareable until it is committed. A successful {meth}`~ommx.experiment.Experiment.commit` writes the Experiment config and manifest, publishes the requested image reference, and turns the object into a read-only view.
-
-Using `with Experiment(...)` calls `commit()` on normal exit:
+Use both Experiment and Run objects as context managers.
 
 ```python
 from ommx.experiment import Experiment
 
-with Experiment("ghcr.io/example/team/experiment:baseline") as experiment:
+image_name = "ghcr.io/example/team/experiment:baseline"
+
+with Experiment(image_name) as experiment:
     experiment.log_json("dataset", {"name": "demo"})
     with experiment.run() as run:
         run.log_parameter("capacity", 47)
 ```
 
-Runs also have lifecycle. Use `with experiment.run()` so a run is closed even when user code raises. Closed runs have status `"finished"`, `"failed"`, or `"interrupted"`. `KeyboardInterrupt` is recorded as `"interrupted"`.
+The context-manager exits define what is recoverable.
 
-## Checkpoints
+| Event | Stored state |
+|---|---|
+| `Run` exits normally | The Run is recorded with status `"finished"` and a best-effort draft checkpoint is published. |
+| `Run` exits with an exception | The Run is recorded with status `"failed"` or `"interrupted"` and a best-effort draft checkpoint is published. The exception still propagates. |
+| `Experiment` exits normally | The final Experiment is committed, the requested image reference is published, and any local checkpoint for that Experiment is removed. |
+| `Experiment` exits with an exception | The requested successful image reference is not advanced. A checkpoint Experiment is published with status `"failed"` or `"interrupted"`. |
+| The process is killed before an open `Run` exits | Payload blobs written by that open Run may exist, but they are not part of recoverable Run state. Recovery starts from the latest checkpoint produced by a closed Run or by Experiment exception handling. |
 
-OMMX writes local checkpoints for partial Experiment state.
+`KeyboardInterrupt` is recorded as `"interrupted"` for both Run and Experiment status. Other exceptions are recorded as `"failed"`.
 
-- Closing a Run publishes a best-effort draft checkpoint.
-- Exiting an Experiment with an exception publishes a failed or interrupted checkpoint instead of advancing the successful Experiment image reference.
-- A successful commit removes the local checkpoint when one exists.
+## Restoring a Checkpoint
 
-Restore from a checkpoint with the original Experiment image name:
-
-```python
-experiment = Experiment.restore_from_checkpoint(
-    "ghcr.io/example/team/experiment:baseline",
-)
-```
-
-Checkpoint names and checkpoint Artifact handles are intentionally not exposed as normal public handles. Keep the original Experiment image name if you want to resume.
-
-Payloads written by an open Run are stored in the Local Registry, but they become recoverable through a checkpoint only after the Run is closed. If a process is killed in the middle of an open Run, recovery starts from the latest closed Run checkpoint.
-
-## Sharing
-
-Committed Experiments can be shared like other OMMX Artifacts.
+Restore with the original Experiment image name.
 
 ```python
-experiment.rename("ghcr.io/example/team/experiment:baseline")
-experiment.push()
-experiment.save("experiment.ommx")
-```
+from ommx.experiment import Experiment
 
-Use {meth}`~ommx.experiment.Experiment.load` for a named Experiment. Use {meth}`~ommx.experiment.Experiment.import_archive` for a received `.ommx` archive.
+image_name = "ghcr.io/example/team/experiment:baseline"
 
-## Forking
-
-A committed Experiment is immutable. To add more Runs, use {meth}`~ommx.experiment.Experiment.fork`.
-
-```python
-loaded = Experiment.load("ghcr.io/example/team/experiment:baseline")
-
-with loaded.fork("ghcr.io/example/team/experiment:capacity-64") as child:
-    with child.run() as run:
+with Experiment.restore_from_checkpoint(image_name) as experiment:
+    with experiment.run() as run:
         run.log_parameter("capacity", 64)
 ```
 
-The child inherits the parent's attachments, Runs, Solves, and run parameters. When committed, the child manifest records the parent manifest as OCI `subject`. Payload blobs are content-addressed and reused, so unchanged Instance, Solution, and attachment bytes are not duplicated.
+Checkpoint refs are internal Local Registry refs derived from the original image name. They are intentionally not exposed as normal Artifact handles, so keep the original image name if you want to resume.
 
-## Local Registry Cleanup
+Restoration returns an uncommitted Experiment. On normal exit, it commits to the original requested image reference and removes the checkpoint. If the restored Experiment fails again, OMMX publishes a new failed or interrupted checkpoint instead of advancing the successful image reference.
 
-The Local Registry stores blobs by digest and refs in SQLite. This makes repeated logging efficient, but it can leave orphan blobs when a process writes payloads that never become reachable from a committed Experiment or checkpoint.
+## Reachability After Failure
 
-Use the cleanup commands in dry-run mode first:
+Local Registry cleanup is based on reachability from SQLite refs.
+
+| Data | Reachable? | Cleanup behavior |
+|---|---|---|
+| A committed Experiment image ref | Yes | `ommx gc` keeps its manifest, config, layers, and subject chain. |
+| An Experiment checkpoint ref | Yes | `ommx gc` keeps the checkpoint so it can be restored. A successful commit removes the checkpoint. |
+| A forked Experiment's parent manifest through OCI `subject` | Yes, if the child ref is kept | `ommx gc` walks the subject chain and keeps parent payloads reachable from kept children. |
+| Anonymous artifact refs | Yes while the ref exists | `ommx prune-anonymous` removes these refs; a later `ommx gc` can reclaim their now-unreachable blobs. |
+| Blobs written by a process that died before manifest/ref publication | No | `ommx gc` reports them as orphan candidates after the grace period. |
+| Blobs written by a currently active process | Usually no until a checkpoint or commit exists | `ommx gc` defers them while they are newer than the grace period. |
+
+OMMX does not store an orphan table in SQLite. Orphans are computed during each GC report by walking refs and manifests, then comparing that reachable set with the files in the BlobStore.
+
+## Cleanup Workflow
+
+Run cleanup commands in report mode first.
 
 ```bash
 ommx prune-anonymous
 ommx gc
 ```
 
-Both commands report by default and only mutate the registry with `--delete`.
+Both commands are dry-run by default and mutate the registry only with `--delete`.
 
 ```bash
 ommx prune-anonymous --delete
 ommx gc --delete
 ```
 
-`ommx gc` treats SQLite refs, including Experiment checkpoints, as roots. Unreachable blobs newer than the grace period are deferred to avoid deleting data from active writes. Pass `--show-digests` only when you need low-level diagnostic output.
+Use {command}`ommx prune-anonymous` first when you have anonymous Artifact refs from temporary Artifact builds or unnamed archive imports. This command only removes matching SQLite refs; it does not unlink blobs. Those blobs become reclaimable by {command}`ommx gc` if no other ref reaches them.
+
+{command}`ommx gc` performs a mark-sweep pass:
+
+- Roots are all SQLite refs, including Experiment checkpoint refs.
+- For each reachable manifest, GC marks the manifest blob, config blob, layer blobs, and OCI `subject` manifest chain.
+- Blob files outside the marked set are unreachable.
+- Unreachable blobs older than `--grace-period` are reported as orphan candidates.
+- Unreachable blobs newer than `--grace-period` are reported as deferred.
+- With `--delete`, only orphan candidates are unlinked, and each candidate is checked again immediately before deletion.
+
+The default grace period is `24h`. The option accepts `s`, `m`, `h`, and `d` suffixes.
+
+```bash
+ommx gc --grace-period 2h
+ommx gc --grace-period 0s
+```
+
+Use `0s` only when you know no OMMX process is writing to that registry. For a shared or default Local Registry, keep a nonzero grace period so open Runs and interrupted imports are not deleted while they are still being written.
+
+Normal reports show counts and byte sizes rather than raw digests. Add `--show-digests` when investigating a specific missing, invalid, orphan, or deferred blob.
+
+```bash
+ommx gc --show-digests
+ommx gc --delete --show-digests
+```
+
+Use `--root <path>` to inspect or clean a non-default Local Registry.
