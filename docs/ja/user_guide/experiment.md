@@ -14,6 +14,11 @@ Experiment のデータは 3 つの層に分かれて保存されます。
 | Manifest | OCI Image Manifest blob | 1 つの immutable な OMMX Artifact を構成する blob 一覧 |
 | Ref | Local Registry index の SQLite rows | manifest を到達可能にする名前または checkpoint pointer |
 
+このページで **publish** と呼ぶのは、Local Registry の ref を更新して、
+すでに書き込まれた manifest を指すようにする操作です。これは local SQLite
+上の操作であり、Artifact を remote container registry に push することでは
+ありません。
+
 {py:meth}`~ommx.experiment.Experiment.log_json` や {py:meth}`~ommx.experiment.Run.log_solve` のような logging method は、payload bytes をすぐ BlobStore に書き込みます。Experiment の最後まで全データをメモリに保持してから一括保存するわけではありません。同じ内容が既に存在する場合は既存の CAS blob を再利用し、その modification time を更新します。これにより、最近の active write は GC の grace period で保護されます。
 
 正常に {py:meth}`~ommx.experiment.Experiment.commit` すると、Experiment config と root manifest が書かれ、requested image reference が SQLite に publish されます。ref の publish は payload blob を書き直しません。この順序のため、process が途中で終了すると、どの manifest や ref からも到達できない blob file が残ることがあります。そのような blob は Local Registry GC の対象になります。
@@ -21,8 +26,9 @@ Experiment のデータは 3 つの層に分かれて保存されます。
 ## Run context と Experiment commit
 
 `Run` は context manager として使ってください。Run は 1 つの試行であり、
-Run を close することが、その試行の status を記録し draft checkpoint を
-publish する復帰境界になります。
+Run を close することが、その close 済み Run を親 Experiment の未 commit 状態へ
+追加する復帰境界になります。Run が close された後、OMMX はその親 Experiment の
+draft checkpoint を書き込み、checkpoint ref を publish します。
 
 一方、Experiment は必ずしも context manager として使う必要はありません。
 notebook では、1 つの Experiment を複数 cell にまたがって開いたままにするのが
@@ -56,19 +62,19 @@ checkpoint を publish します。
 
 | 操作または event | 保存される状態 |
 |---|---|
-| `Run` が正常終了する | Run は status `"finished"` として記録され、best-effort に draft checkpoint が publish されます。 |
-| `Run` が例外で終了する | Run は status `"failed"` または `"interrupted"` として記録され、best-effort に draft checkpoint が publish されます。例外はそのまま伝播します。 |
+| `Run` が正常終了する | close 済み Run が status `"finished"` として親 Experiment に追加され、その Experiment の best-effort draft checkpoint が publish されます。 |
+| `Run` が例外で終了する | close 済み Run が status `"failed"` または `"interrupted"` として親 Experiment に追加され、その Experiment の best-effort draft checkpoint が publish されます。例外はそのまま伝播します。 |
 | `experiment.commit()` が成功する | final Experiment が commit され、requested image reference が publish されます。その Experiment の local checkpoint があれば削除されます。 |
 | `with Experiment(...)` が正常終了する | block 末尾で `commit()` を呼ぶのと同じです。 |
 | `with Experiment(...)` が例外で終了する | 成功用の requested image reference は進みません。status `"failed"` または `"interrupted"` の checkpoint Experiment が publish されます。 |
-| Run close 後、`commit()` 前に notebook kernel または process が終了する | close 済み Run が作った最新 draft checkpoint から復帰します。 |
+| Run close 後、`commit()` 前に notebook kernel または process が終了する | Run close 後に作られた最新の Experiment draft checkpoint から復帰します。 |
 | open `Run` の exit 前に notebook kernel または process が終了する | その open Run が書いた payload blob は存在する可能性がありますが、復帰可能な Run state には含まれません。復帰地点は、その Run より前の最新 checkpoint です。 |
 
 `KeyboardInterrupt` は Run / Experiment ともに `"interrupted"` として記録されます。それ以外の例外は `"failed"` として記録されます。
 
 Experiment を context manager として使わない場合、Run の外側で起きた例外は
 failed Experiment checkpoint を自動 publish しません。通常の interactive workflow
-では、探索中は close 済み Run が作る draft checkpoint によって復帰可能性を確保し、
+では、探索中は Run close 後に作られる Experiment draft checkpoint によって復帰可能性を確保し、
 Experiment を公開できる状態になった時点で明示的に
 {py:meth}`~ommx.experiment.Experiment.commit` します。
 

@@ -14,6 +14,10 @@ Experiment data is written in three layers.
 | Manifest | An OCI Image Manifest blob | The list of blobs that make one immutable OMMX Artifact |
 | Ref | SQLite rows in the Local Registry index | The name or checkpoint pointer that makes a manifest reachable |
 
+In this page, **publish** means updating a Local Registry ref so it points to
+an already-written manifest. This is a local SQLite operation. It does not mean
+pushing an Artifact to a remote container registry.
+
 Logging methods such as {py:meth}`~ommx.experiment.Experiment.log_json` and {py:meth}`~ommx.experiment.Run.log_solve` write payload bytes to the BlobStore immediately. OMMX does not wait until the final commit to write all bytes. If the same content is already present, the existing CAS blob is reused and its modification time is touched so recent active writes remain protected by GC grace periods.
 
 A successful {py:meth}`~ommx.experiment.Experiment.commit` writes the Experiment config and root manifest, then publishes the requested image reference in SQLite. Publishing a ref does not rewrite payload blobs. This ordering means a process can leave behind blob files that are not reachable from any manifest or ref; Local Registry GC handles that case.
@@ -21,8 +25,9 @@ A successful {py:meth}`~ommx.experiment.Experiment.commit` writes the Experiment
 ## Run Contexts and Experiment Commit
 
 Use `Run` objects as context managers. A Run is one trial, and closing it is
-the recovery boundary that records the trial status and publishes a draft
-checkpoint.
+the recovery boundary that adds the closed Run to the parent Experiment's
+uncommitted state. After the Run is closed, OMMX writes a draft checkpoint for
+that parent Experiment and publishes the checkpoint ref.
 
 An Experiment does not have to be a context manager. In notebooks, a typical
 workflow keeps one Experiment open across multiple cells: run one trial,
@@ -55,19 +60,19 @@ reference.
 
 | Operation or event | Stored state |
 |---|---|
-| `Run` exits normally | The Run is recorded with status `"finished"` and a best-effort draft checkpoint is published. |
-| `Run` exits with an exception | The Run is recorded with status `"failed"` or `"interrupted"` and a best-effort draft checkpoint is published. The exception still propagates. |
+| `Run` exits normally | The closed Run is added to the parent Experiment with status `"finished"`, and a best-effort draft checkpoint for that Experiment is published. |
+| `Run` exits with an exception | The closed Run is added to the parent Experiment with status `"failed"` or `"interrupted"`, and a best-effort draft checkpoint for that Experiment is published. The exception still propagates. |
 | `experiment.commit()` succeeds | The final Experiment is committed, the requested image reference is published, and any local checkpoint for that Experiment is removed. |
 | `with Experiment(...)` exits normally | Equivalent to calling `commit()` at the end of the block. |
 | `with Experiment(...)` exits with an exception | The requested successful image reference is not advanced. A checkpoint Experiment is published with status `"failed"` or `"interrupted"`. |
-| A notebook kernel or process dies after a Run has closed but before `commit()` | Recovery starts from the latest draft checkpoint produced by a closed Run. |
+| A notebook kernel or process dies after a Run has closed but before `commit()` | Recovery starts from the latest Experiment draft checkpoint produced after a Run close. |
 | A notebook kernel or process dies before an open `Run` exits | Payload blobs written by that open Run may exist, but they are not part of recoverable Run state. Recovery starts from the latest checkpoint before that Run. |
 
 `KeyboardInterrupt` is recorded as `"interrupted"` for both Run and Experiment status. Other exceptions are recorded as `"failed"`.
 
 If you do not use Experiment as a context manager, exceptions outside a Run do
 not automatically publish a failed Experiment checkpoint. The usual interactive
-workflow relies on closed-Run draft checkpoints during exploration and an
+workflow relies on Experiment draft checkpoints produced after Run closes and an
 explicit {py:meth}`~ommx.experiment.Experiment.commit` when the Experiment is
 ready to publish.
 
