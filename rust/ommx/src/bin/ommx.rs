@@ -74,7 +74,7 @@ enum Command {
         replace: bool,
     },
 
-    /// Delete every SQLite ref produced by `ArtifactBuilder.new_anonymous`.
+    /// Report or delete SQLite refs produced by `ArtifactBuilder.new_anonymous`.
     ///
     /// Manifest / blob CAS records are left in place; `gc` reclaims them.
     PruneAnonymous {
@@ -82,9 +82,13 @@ enum Command {
         #[clap(long)]
         root: Option<PathBuf>,
 
-        /// List refs that would be removed without modifying the registry.
+        /// Explicit dry-run mode. This is the default unless --delete is passed.
         #[clap(long)]
         dry_run: bool,
+
+        /// Delete anonymous refs instead of only reporting them.
+        #[clap(long)]
+        delete: bool,
     },
 
     /// Report or delete Local Registry blobs unreachable from refs.
@@ -150,12 +154,12 @@ enum ArtifactCommand {
         replace: bool,
     },
 
-    /// Delete every SQLite ref produced by `ArtifactBuilder.new_anonymous`.
+    /// Report or delete SQLite refs produced by `ArtifactBuilder.new_anonymous`.
     ///
     /// `new_anonymous` writes artifacts under the synthetic ref
     /// `<registry-id8>.ommx.local/anonymous:<local-timestamp>-<nonce>`
     /// so the SQLite Local Registry has a key to address the artifact
-    /// under. This command deletes every ref whose name + tag match
+    /// under. This command reports or deletes every ref whose name + tag match
     /// that structure, including entries imported from registries with
     /// different `registry_id` prefixes. Manifest / blob CAS records
     /// are left in place; a future GC sweep will reclaim them.
@@ -164,9 +168,13 @@ enum ArtifactCommand {
         #[clap(long)]
         root: Option<PathBuf>,
 
-        /// List refs that would be removed without modifying the registry.
+        /// Explicit dry-run mode. This is the default unless --delete is passed.
         #[clap(long)]
         dry_run: bool,
+
+        /// Delete anonymous refs instead of only reporting them.
+        #[clap(long)]
+        delete: bool,
     },
 
     /// Report or delete Local Registry blobs unreachable from refs.
@@ -360,9 +368,11 @@ fn main() -> Result<()> {
 
         Command::ImportLegacy { root, replace } => handle_import_legacy(root.as_ref(), *replace)?,
 
-        Command::PruneAnonymous { root, dry_run } => {
-            handle_prune_anonymous(root.as_ref(), *dry_run)?
-        }
+        Command::PruneAnonymous {
+            root,
+            dry_run,
+            delete,
+        } => handle_prune_anonymous(root.as_ref(), *dry_run, *delete)?,
 
         Command::Gc {
             root,
@@ -389,12 +399,16 @@ fn main() -> Result<()> {
                 );
                 handle_import_legacy(root.as_ref(), *replace)?;
             }
-            ArtifactCommand::PruneAnonymous { root, dry_run } => {
+            ArtifactCommand::PruneAnonymous {
+                root,
+                dry_run,
+                delete,
+            } => {
                 eprintln!(
                     "warning: `ommx artifact prune-anonymous` is deprecated; \
                      use `ommx prune-anonymous` instead"
                 );
-                handle_prune_anonymous(root.as_ref(), *dry_run)?;
+                handle_prune_anonymous(root.as_ref(), *dry_run, *delete)?;
             }
             ArtifactCommand::Gc {
                 root,
@@ -510,12 +524,21 @@ fn handle_import_legacy(root: Option<&PathBuf>, replace: bool) -> Result<()> {
     Ok(())
 }
 
-fn handle_prune_anonymous(root: Option<&PathBuf>, dry_run: bool) -> Result<()> {
+fn handle_prune_anonymous(root: Option<&PathBuf>, dry_run: bool, delete: bool) -> Result<()> {
+    if dry_run && delete {
+        bail!("--dry-run and --delete cannot be used together");
+    }
     let registry = open_registry(root)?;
     let to_remove = registry.list_anonymous_artifact_refs()?;
     if to_remove.is_empty() {
         println!("No anonymous artifact refs found.");
-    } else if dry_run {
+    } else if delete {
+        let removed = registry.prune_anonymous_artifact_refs()?;
+        println!("Removed {} anonymous artifact ref(s):", removed.len());
+        for r in &removed {
+            println!("  {}:{}", r.name, r.reference);
+        }
+    } else {
         println!(
             "Would remove {} anonymous artifact ref(s):",
             to_remove.len()
@@ -524,12 +547,6 @@ fn handle_prune_anonymous(root: Option<&PathBuf>, dry_run: bool) -> Result<()> {
             println!("  {}:{}  →  {}", r.name, r.reference, r.descriptor.digest());
         }
         println!("(--dry-run: registry unchanged)");
-    } else {
-        let removed = registry.prune_anonymous_artifact_refs()?;
-        println!("Removed {} anonymous artifact ref(s):", removed.len());
-        for r in &removed {
-            println!("  {}:{}", r.name, r.reference);
-        }
     }
     Ok(())
 }
