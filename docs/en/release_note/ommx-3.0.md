@@ -8,6 +8,31 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🆕 Experiment checkpoints and restore from interrupted sessions ([#917](https://github.com/Jij-Inc/ommx/pull/917))
+
+{class}`~ommx.experiment.Experiment` now publishes local checkpoints for partial experiment state. Closing a {class}`~ommx.experiment.Run` writes a best-effort draft checkpoint, and exiting an Experiment with an exception writes a failed or interrupted checkpoint instead of advancing the successful Experiment image reference. Closed Runs keep their attachments, solves, traces, and run parameters, including Runs closed as `"failed"` or `"interrupted"` after exceptions such as `KeyboardInterrupt`.
+
+Use {meth}`~ommx.experiment.Experiment.restore_from_checkpoint` with the original Experiment image name to resume from the latest checkpoint:
+
+```python
+from ommx.experiment import Experiment
+
+image_name = "ghcr.io/example/team/experiment:notebook"
+
+try:
+    with Experiment(image_name) as experiment:
+        with experiment.run() as run:
+            run.log_parameter("solver", "highs")
+            raise KeyboardInterrupt
+except KeyboardInterrupt:
+    pass
+
+experiment = Experiment.restore_from_checkpoint(image_name)
+assert experiment.image_name == image_name
+```
+
+Successful `commit()` still publishes only the requested image reference and removes the local checkpoint when present. Checkpoint Artifact handles and checkpoint image names are intentionally not exposed in the Python API; users restore by remembering the original Experiment image name.
+
 ## 3.0.0 Alpha 4
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0a4-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0a4)

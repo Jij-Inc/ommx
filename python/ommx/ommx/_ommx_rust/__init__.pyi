@@ -1691,14 +1691,16 @@ class Experiment:
     A collection of optimization experiment records stored as one OMMX Artifact.
 
     An `Experiment` owns experiment-level attachments and a sequence of
-    finished `Run` objects. Each `Run` can store scalar run parameters,
+    closed `Run` records. Each `Run` can store scalar run parameters,
     run-level attachments, and zero or more `Solve` records.
 
     Newly created experiments are unsealed. Call `commit()` to write the
     experiment into the local registry as an OMMX Artifact. After commit, the
     same object can be used as a read-only view of the committed artifact.
     `with Experiment(...)` commits on normal exit if the experiment is still
-    unsealed, and does not auto-commit on exception.
+    unsealed. On exception it does not advance the success ref; instead it
+    tries to publish a failed checkpoint under a local `checkpoint:`
+    ref.
 
     Use experiment-level attachments for shared context such as dataset or
     source-problem metadata. Use `Run.log_parameter(...)` for scalar values
@@ -1751,7 +1753,14 @@ class Experiment:
     @property
     def runs(self) -> builtins.list[SealedRun]:
         r"""
-        Finished runs in insertion order.
+        Closed runs in insertion order.
+        """
+    @property
+    def status(self) -> typing.Optional[builtins.str]:
+        r"""
+        Experiment config status for a committed Experiment.
+
+        Returns `None` for an unsealed Experiment.
         """
     @property
     def artifact(self) -> Artifact:
@@ -1807,6 +1816,17 @@ class Experiment:
         pull it from the remote registry, matching {meth}`Artifact.load`.
         The loaded artifact must contain an Experiment config. Use
         `Experiment(...)` to create a new unsealed experiment.
+        """
+    @staticmethod
+    def restore_from_checkpoint(image_name: builtins.str) -> Experiment:
+        r"""
+        Restore an unsealed Experiment from its checkpoint.
+
+        Pass the original requested Experiment image name, not the generated
+        checkpoint ref. This accepts checkpoint statuses such as `draft`,
+        `failed`, or `interrupted`, and returns a new unsealed Experiment whose
+        image name is the original requested Experiment image name recorded in
+        the checkpoint metadata.
         """
     @staticmethod
     def import_archive(path: builtins.str | os.PathLike | pathlib.Path) -> Experiment:
@@ -1932,8 +1952,8 @@ class Experiment:
         r"""
         Start a new Run in this unsealed Experiment.
 
-        The returned `Run` must be finished before `commit()`. Use it as a
-        context manager to finish it automatically on normal exit:
+        The returned `Run` must be closed before `commit()`. Use it as a
+        context manager to close it automatically on normal or exceptional exit:
 
         ```python
         with experiment.run() as run:
@@ -1978,7 +1998,7 @@ class Experiment:
         r"""
         Commit this unsealed Experiment into the local registry.
 
-        All open runs must be finished before committing. The returned
+        All open runs must be closed before committing. The returned
         `Artifact` can be saved as a `.ommx` archive or passed to
         `Experiment.from_artifact`. After commit, this object becomes a
         read-only view of the committed Experiment.
@@ -1988,7 +2008,7 @@ class Experiment:
         Wide DataFrame of run parameters, indexed by `run_id`.
 
         Run parameters are scalar values logged with `Run.log_parameter`.
-        Completed runs with no parameters are still present as index rows.
+        Closed runs with no parameters are still present as index rows.
         Adapter options recorded by `Run.log_solve` are solve metadata and do
         not appear in this table.
         """
@@ -5208,8 +5228,8 @@ class Run:
 
     Runs are usually created with `Experiment.run()` and used as context
     managers. On normal context-manager exit the run is finished and added
-    to the parent experiment. On exception the run is abandoned. A run
-    becomes immutable once it is finished.
+    to the parent experiment. On exception the run is closed as failed and
+    added with its partial state. A run becomes immutable once it is closed.
     """
     @property
     def run_id(self) -> builtins.int:
@@ -5301,8 +5321,9 @@ class Run:
         Finish this run and append it to the parent Experiment.
 
         After this method returns, the run handle can no longer be used. The
-        context manager calls this automatically on normal exit and abandons
-        the run on exception.
+        context manager calls this automatically on normal exit. On exception,
+        the context manager closes the run as failed or interrupted with its
+        partial state.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -5854,7 +5875,7 @@ class Samples:
 @typing.final
 class SealedRun:
     r"""
-    Immutable view of a finished Run in a committed Experiment.
+    Immutable view of a closed Run in an Experiment.
 
     `SealedRun` exposes run-level attachments by name and the sequence of
     `Solve` records created by `Run.log_solve`.
@@ -5863,6 +5884,11 @@ class SealedRun:
     def run_id(self) -> builtins.int:
         r"""
         Integer identifier of this run within its Experiment.
+        """
+    @property
+    def status(self) -> builtins.str:
+        r"""
+        Run lifecycle status: `"finished"`, `"failed"`, or `"interrupted"`.
         """
     @property
     def attachments(self) -> builtins.list[Descriptor]:

@@ -17,15 +17,16 @@
 
 use super::attachment::{store_attachment_descriptor, AttachmentSpace};
 use super::{
-    allocate_next_run_id, next_run_id, AttachmentLogger, Name, RunEntry, RunParameterCell,
-    SealedExperiment, UnsealedExperimentState,
+    allocate_next_run_id, next_run_id, AttachmentLogger, ExperimentStatus, Name, RunEntry,
+    RunParameterCell, RunStatus, SealedExperiment, UnsealedExperimentState,
+    ANN_EXPERIMENT_REQUESTED_IMAGE,
 };
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
 use crate::artifact::{
     media_types, AsArtifact, ImageRef, LocalArtifact, LocalArtifactDyn, LocalRegistryHandle,
 };
 use crate::{Instance, Solution};
-use anyhow::{ensure, Result};
+use anyhow::{ensure, Context, Result};
 use oci_spec::image::{Descriptor, MediaType};
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -68,6 +69,7 @@ enum ExperimentDynLifecycle {
     Failed {
         image_name: ImageRef,
         reason: String,
+        checkpoint_artifact: Option<LocalArtifactDyn>,
     },
 }
 
@@ -83,6 +85,7 @@ struct UnsealedExperimentDynState {
 #[derive(Debug)]
 struct RunEntryDyn {
     run_id: u64,
+    status: RunStatus,
     attachments: Vec<Descriptor>,
     trace: Option<Descriptor>,
     solves: Vec<SolveEntryDyn>,
@@ -100,6 +103,7 @@ pub(super) struct SolveEntryDyn {
 
 #[derive(Debug, Clone)]
 struct SealedExperimentDynState {
+    status: ExperimentStatus,
     artifact: LocalArtifactDyn,
     attachments: Vec<Descriptor>,
     runs: BTreeMap<u64, SealedRunDyn>,
@@ -116,6 +120,7 @@ struct SealedExperimentDynState {
 pub struct SealedRunDyn {
     registry_handle: LocalRegistryHandle,
     run_id: u64,
+    status: RunStatus,
     attachments: Vec<Descriptor>,
     trace: Option<Descriptor>,
     solves: Vec<SolveDyn>,
@@ -140,6 +145,14 @@ pub struct SolveDyn {
 impl SealedRunDyn {
     pub fn run_id(&self) -> u64 {
         self.run_id
+    }
+
+    pub fn status(&self) -> &RunStatus {
+        &self.status
+    }
+
+    pub fn registry_handle(&self) -> LocalRegistryHandle {
+        self.registry_handle.clone()
     }
 
     pub fn attachments(&self) -> Result<Vec<StoredDescriptor<'_>>> {
@@ -272,8 +285,33 @@ impl ExperimentDyn {
         })
     }
 
+    pub fn registry_handle(&self) -> LocalRegistryHandle {
+        self.registry_handle.clone()
+    }
+
     pub fn load(image_name: crate::artifact::ImageRef) -> Result<Self> {
         Self::from_artifact(LocalArtifactDyn::load(image_name)?)
+    }
+
+    pub fn restore_from_checkpoint(image_name: crate::artifact::ImageRef) -> Result<Self> {
+        let registry_handle = LocalRegistryHandle::shared_default()?;
+        Self::restore_from_checkpoint_in_registry_handle(registry_handle, image_name)
+    }
+
+    pub fn restore_from_checkpoint_in_registry_handle(
+        registry_handle: LocalRegistryHandle,
+        image_name: crate::artifact::ImageRef,
+    ) -> Result<Self> {
+        let artifact = checkpoint_artifact(
+            registry_handle,
+            &image_name,
+            &[
+                super::EXPERIMENT_STATUS_DRAFT,
+                super::EXPERIMENT_STATUS_FAILED,
+                super::EXPERIMENT_STATUS_INTERRUPTED,
+            ],
+        )?;
+        Self::restore_from_checkpoint_artifact(artifact)
     }
 
     pub fn import_archive(path: &Path) -> Result<Self> {
@@ -282,11 +320,39 @@ impl ExperimentDyn {
 
     pub fn from_artifact(artifact: LocalArtifactDyn) -> Result<Self> {
         let sealed = SealedExperimentDynState::from_artifact(artifact)?;
+        Self::from_sealed_state(sealed)
+    }
+
+    fn restore_from_checkpoint_artifact(artifact: LocalArtifactDyn) -> Result<Self> {
+        let sealed = SealedExperimentDynState::from_checkpoint_artifact(artifact.clone())?;
+        let requested_image_name = checkpoint_requested_image_name(&artifact)?;
+        Self::from_checkpoint_sealed_state(sealed, requested_image_name)
+    }
+
+    fn from_sealed_state(sealed: SealedExperimentDynState) -> Result<Self> {
         let registry_handle = sealed.registry_handle();
         Ok(Self {
             registry_handle: registry_handle.clone(),
             state: Arc::new(Mutex::new(ExperimentDynState {
                 lifecycle: ExperimentDynLifecycle::Sealed(sealed),
+                registry_handle,
+            })),
+        })
+    }
+
+    fn from_checkpoint_sealed_state(
+        sealed: SealedExperimentDynState,
+        image_name: ImageRef,
+    ) -> Result<Self> {
+        let registry_handle = sealed.registry_handle();
+        let state = sealed.create_forked_child_state(image_name)?;
+        Ok(Self {
+            registry_handle: registry_handle.clone(),
+            state: Arc::new(Mutex::new(ExperimentDynState {
+                lifecycle: ExperimentDynLifecycle::Unsealed {
+                    state: Some(state),
+                    open_runs: 0,
+                },
                 registry_handle,
             })),
         })
@@ -335,12 +401,38 @@ impl ExperimentDyn {
 
     pub fn rename(&self, image_name: crate::artifact::ImageRef) -> Result<()> {
         let mut dyn_state = lock_experiment_state(&self.state);
+        let registry_handle = dyn_state.registry_handle.clone();
         match &mut dyn_state.lifecycle {
             ExperimentDynLifecycle::Unsealed { state, .. } => {
                 let state = state
                     .as_mut()
                     .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
+                let old_image_name = state.image_name.clone();
+                let old_checkpoint_image_name = registry_handle
+                    .registry()
+                    .experiment_checkpoint_image_name(&old_image_name)?;
                 state.image_name = image_name;
+                match registry_handle
+                    .registry()
+                    .delete_manifest_ref(&old_checkpoint_image_name)
+                {
+                    Ok(true) => {
+                        if let Err(error) = state.autosave_checkpoint(registry_handle.registry()) {
+                            tracing::warn!(
+                                error = %error,
+                                "Failed to publish Experiment autosave checkpoint after rename"
+                            );
+                        }
+                    }
+                    Ok(false) => {}
+                    Err(error) => {
+                        tracing::warn!(
+                            error = %error,
+                            checkpoint_image_name = %old_checkpoint_image_name,
+                            "Failed to remove Experiment checkpoint ref after rename"
+                        );
+                    }
+                }
                 Ok(())
             }
             ExperimentDynLifecycle::Sealed(sealed) => sealed.rename(image_name),
@@ -353,6 +445,13 @@ impl ExperimentDyn {
             ExperimentDynLifecycle::Unsealed { .. } => "unsealed",
             ExperimentDynLifecycle::Sealed(_) => "sealed",
             ExperimentDynLifecycle::Failed { .. } => "failed",
+        }
+    }
+
+    pub fn experiment_status(&self) -> Option<ExperimentStatus> {
+        match &lock_experiment_state(&self.state).lifecycle {
+            ExperimentDynLifecycle::Sealed(sealed) => Some(sealed.status),
+            ExperimentDynLifecycle::Unsealed { .. } | ExperimentDynLifecycle::Failed { .. } => None,
         }
     }
 
@@ -410,7 +509,11 @@ impl ExperimentDyn {
             Ok(artifact) => artifact,
             Err(error) => {
                 let reason = error.to_string();
-                dyn_state.lifecycle = ExperimentDynLifecycle::Failed { image_name, reason };
+                dyn_state.lifecycle = ExperimentDynLifecycle::Failed {
+                    image_name,
+                    reason,
+                    checkpoint_artifact: None,
+                };
                 return Err(error);
             }
         };
@@ -418,12 +521,69 @@ impl ExperimentDyn {
             Ok(sealed) => sealed,
             Err(error) => {
                 let reason = error.to_string();
-                dyn_state.lifecycle = ExperimentDynLifecycle::Failed { image_name, reason };
+                dyn_state.lifecycle = ExperimentDynLifecycle::Failed {
+                    image_name,
+                    reason,
+                    checkpoint_artifact: None,
+                };
                 return Err(error);
             }
         };
         dyn_state.lifecycle = ExperimentDynLifecycle::Sealed(sealed);
         Ok(artifact)
+    }
+
+    pub fn commit_failed_checkpoint(&self, reason: impl Into<String>) -> Result<()> {
+        self.commit_checkpoint(reason, super::EXPERIMENT_STATUS_FAILED)
+    }
+
+    pub fn commit_interrupted_checkpoint(&self, reason: impl Into<String>) -> Result<()> {
+        self.commit_checkpoint(reason, super::EXPERIMENT_STATUS_INTERRUPTED)
+    }
+
+    fn commit_checkpoint(&self, reason: impl Into<String>, status: &'static str) -> Result<()> {
+        let reason = reason.into();
+        let mut dyn_state = lock_experiment_state(&self.state);
+        let registry_handle = dyn_state.registry_handle.clone();
+        let (state, open_runs) = match &mut dyn_state.lifecycle {
+            ExperimentDynLifecycle::Unsealed { state, open_runs } => (state, open_runs),
+            lifecycle => return bail_non_unsealed(lifecycle),
+        };
+        if *open_runs != 0 {
+            tracing::warn!(
+                open_runs = *open_runs,
+                "Publishing Experiment checkpoint while Run handle(s) are still open; open-run local state is not included"
+            );
+        }
+        let state = state
+            .take()
+            .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
+        let image_name = state.image_name.clone();
+        let artifact = match state
+            .commit_checkpoint(registry_handle.registry(), status)
+            .and_then(|artifact| {
+                LocalArtifactDyn::open_in_registry_handle(
+                    registry_handle.clone(),
+                    artifact.image_name().clone(),
+                )
+            }) {
+            Ok(artifact) => artifact,
+            Err(error) => {
+                let checkpoint_error = error.to_string();
+                dyn_state.lifecycle = ExperimentDynLifecycle::Failed {
+                    image_name,
+                    reason: format!("{reason}; failed to publish checkpoint: {checkpoint_error}"),
+                    checkpoint_artifact: None,
+                };
+                return Err(error);
+            }
+        };
+        dyn_state.lifecycle = ExperimentDynLifecycle::Failed {
+            image_name,
+            reason,
+            checkpoint_artifact: Some(artifact),
+        };
+        Ok(())
     }
 
     pub fn artifact(&self) -> Result<LocalArtifactDyn> {
@@ -437,28 +597,75 @@ impl ExperimentDyn {
     pub fn experiment_attachments(&self) -> Result<Vec<StoredDescriptor<'_>>> {
         let attachments = {
             let dyn_state = lock_experiment_state(&self.state);
-            let ExperimentDynLifecycle::Sealed(sealed) = &dyn_state.lifecycle else {
-                return bail_not_sealed(&dyn_state.lifecycle);
-            };
-            sealed.attachments.clone()
+            match &dyn_state.lifecycle {
+                ExperimentDynLifecycle::Sealed(sealed) => sealed.attachments.clone(),
+                ExperimentDynLifecycle::Unsealed { state, .. } => {
+                    let state = state
+                        .as_ref()
+                        .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
+                    state.attachments.clone()
+                }
+                ExperimentDynLifecycle::Failed {
+                    checkpoint_artifact: Some(artifact),
+                    ..
+                } => {
+                    let sealed =
+                        SealedExperimentDynState::from_checkpoint_artifact(artifact.clone())?;
+                    sealed.attachments.clone()
+                }
+                lifecycle => return bail_not_sealed(lifecycle),
+            }
         };
         stored_descriptors(self.registry_handle.registry(), attachments)
     }
 
     pub fn runs(&self) -> Result<Vec<SealedRunDyn>> {
         let dyn_state = lock_experiment_state(&self.state);
-        let ExperimentDynLifecycle::Sealed(sealed) = &dyn_state.lifecycle else {
-            return bail_not_sealed(&dyn_state.lifecycle);
-        };
-        Ok(sealed.runs.values().cloned().collect())
+        match &dyn_state.lifecycle {
+            ExperimentDynLifecycle::Sealed(sealed) => Ok(sealed.runs.values().cloned().collect()),
+            ExperimentDynLifecycle::Unsealed { state, .. } => {
+                let state = state
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
+                Ok(unsealed_run_views(
+                    &dyn_state.registry_handle,
+                    state.runs.values(),
+                ))
+            }
+            ExperimentDynLifecycle::Failed {
+                checkpoint_artifact: Some(artifact),
+                ..
+            } => Ok(
+                SealedExperimentDynState::from_checkpoint_artifact(artifact.clone())?
+                    .runs
+                    .values()
+                    .cloned()
+                    .collect(),
+            ),
+            lifecycle => bail_not_sealed(lifecycle),
+        }
     }
 
     pub fn run_parameter_cells(&self) -> Result<Vec<RunParameterCell>> {
         let dyn_state = lock_experiment_state(&self.state);
-        let ExperimentDynLifecycle::Sealed(sealed) = &dyn_state.lifecycle else {
-            return bail_not_sealed(&dyn_state.lifecycle);
-        };
-        Ok(sealed.run_parameters.cells())
+        match &dyn_state.lifecycle {
+            ExperimentDynLifecycle::Sealed(sealed) => Ok(sealed.run_parameters.cells()),
+            ExperimentDynLifecycle::Unsealed { state, .. } => {
+                let state = state
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
+                Ok(unsealed_run_parameter_cells(state.runs.values()))
+            }
+            ExperimentDynLifecycle::Failed {
+                checkpoint_artifact: Some(artifact),
+                ..
+            } => Ok(
+                SealedExperimentDynState::from_checkpoint_artifact(artifact.clone())?
+                    .run_parameters
+                    .cells(),
+            ),
+            lifecycle => bail_not_sealed(lifecycle),
+        }
     }
 }
 
@@ -487,6 +694,68 @@ impl UnsealedExperimentDynState {
         self.into_unsealed_state(registry)?.commit(registry)
     }
 
+    fn commit_checkpoint<'reg>(
+        self,
+        registry: &'reg LocalRegistry,
+        status: &'static str,
+    ) -> Result<LocalArtifact<'reg>> {
+        self.into_unsealed_state(registry)?
+            .commit_checkpoint(registry, status)
+    }
+
+    fn autosave_checkpoint<'reg>(
+        &mut self,
+        registry: &'reg LocalRegistry,
+    ) -> Result<LocalArtifact<'reg>> {
+        let mut state = self.as_unsealed_state(registry)?;
+        state.autosave_checkpoint(registry)
+    }
+
+    fn as_unsealed_state<'reg>(
+        &self,
+        registry: &'reg LocalRegistry,
+    ) -> Result<UnsealedExperimentState<'reg>> {
+        Ok(UnsealedExperimentState {
+            image_name: self.image_name.clone(),
+            subject: self.subject.clone(),
+            attachments: stored_descriptors(registry, self.attachments.clone())?,
+            runs: self
+                .runs
+                .iter()
+                .map(|(run_id, run)| {
+                    Ok((
+                        *run_id,
+                        RunEntry {
+                            run_id: run.run_id,
+                            status: run.status.clone(),
+                            attachments: stored_descriptors(registry, run.attachments.clone())?,
+                            trace: run
+                                .trace
+                                .clone()
+                                .map(|descriptor| registry.stored_descriptor(descriptor))
+                                .transpose()?,
+                            solves: run
+                                .solves
+                                .iter()
+                                .map(|solve| {
+                                    Ok(super::SolveEntry {
+                                        solve_id: solve.solve_id,
+                                        input: registry.stored_descriptor(solve.input.clone())?,
+                                        output: registry.stored_descriptor(solve.output.clone())?,
+                                        adapter: solve.adapter.clone(),
+                                        adapter_options: solve.adapter_options.clone(),
+                                    })
+                                })
+                                .collect::<Result<Vec<_>>>()?,
+                            parameters: run.parameters.clone(),
+                        },
+                    ))
+                })
+                .collect::<Result<BTreeMap<_, _>>>()?,
+            next_run_id: self.next_run_id,
+        })
+    }
+
     fn into_unsealed_state<'reg>(
         self,
         registry: &'reg LocalRegistry,
@@ -503,6 +772,7 @@ impl UnsealedExperimentDynState {
                         run_id,
                         RunEntry {
                             run_id: run.run_id,
+                            status: run.status,
                             attachments: stored_descriptors(registry, run.attachments)?,
                             trace: run
                                 .trace
@@ -533,9 +803,26 @@ impl UnsealedExperimentDynState {
 
 impl SealedExperimentDynState {
     fn from_artifact(artifact: LocalArtifactDyn) -> Result<Self> {
+        Self::from_sealed_experiment(
+            SealedExperiment::from_artifact(artifact.clone().as_local_artifact())?,
+            artifact,
+        )
+    }
+
+    fn from_checkpoint_artifact(artifact: LocalArtifactDyn) -> Result<Self> {
+        Self::from_sealed_experiment(
+            SealedExperiment::from_checkpoint_artifact(artifact.clone().as_local_artifact())?,
+            artifact,
+        )
+    }
+
+    fn from_sealed_experiment(
+        sealed: SealedExperiment<'_>,
+        artifact: LocalArtifactDyn,
+    ) -> Result<Self> {
         let registry_handle = artifact.registry_handle();
+        let status = *sealed.status();
         let (attachments, runs, run_parameters) = {
-            let sealed = SealedExperiment::from_artifact(artifact.as_local_artifact())?;
             let attachments = descriptors(sealed.experiment_attachments());
             let runs = sealed
                 .runs()
@@ -545,6 +832,7 @@ impl SealedExperimentDynState {
                         SealedRunDyn {
                             registry_handle: registry_handle.clone(),
                             run_id: run.run_id(),
+                            status: run.status().clone(),
                             attachments: descriptors(run.attachments()),
                             trace: run.trace().cloned().map(Descriptor::from),
                             solves: run
@@ -567,6 +855,7 @@ impl SealedExperimentDynState {
             (attachments, runs, run_parameters)
         };
         Ok(Self {
+            status,
             artifact,
             attachments,
             runs,
@@ -610,6 +899,7 @@ impl SealedExperimentDynState {
                 run.run_id,
                 RunEntryDyn {
                     run_id: run.run_id,
+                    status: run.status.clone(),
                     attachments: run.attachments.clone(),
                     trace: run.trace.clone(),
                     solves,
@@ -643,6 +933,108 @@ fn descriptors(attachments: &[StoredDescriptor<'_>]) -> Vec<Descriptor> {
         .cloned()
         .map(Descriptor::from)
         .collect::<Vec<_>>()
+}
+
+fn unsealed_run_views<'a>(
+    registry_handle: &LocalRegistryHandle,
+    runs: impl Iterator<Item = &'a RunEntryDyn>,
+) -> Vec<SealedRunDyn> {
+    runs.map(|run| SealedRunDyn {
+        registry_handle: registry_handle.clone(),
+        run_id: run.run_id,
+        status: run.status.clone(),
+        attachments: run.attachments.clone(),
+        trace: run.trace.clone(),
+        solves: run
+            .solves
+            .iter()
+            .map(|solve| SolveDyn {
+                registry_handle: registry_handle.clone(),
+                solve_id: solve.solve_id,
+                input: solve.input.clone(),
+                output: solve.output.clone(),
+                adapter: solve.adapter.clone(),
+                adapter_options: solve.adapter_options.clone(),
+            })
+            .collect(),
+    })
+    .collect()
+}
+
+fn unsealed_run_parameter_cells<'a>(
+    runs: impl Iterator<Item = &'a RunEntryDyn>,
+) -> Vec<RunParameterCell> {
+    runs.flat_map(|run| {
+        run.parameters
+            .iter()
+            .map(|(name, value)| RunParameterCell {
+                run_id: run.run_id,
+                name: name.clone(),
+                value: value.clone(),
+            })
+            .collect::<Vec<_>>()
+    })
+    .collect()
+}
+
+fn checkpoint_requested_image_name(artifact: &LocalArtifactDyn) -> Result<ImageRef> {
+    let annotations = artifact.annotations()?;
+    let requested = annotations
+        .get(ANN_EXPERIMENT_REQUESTED_IMAGE)
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "Experiment checkpoint Artifact is missing {ANN_EXPERIMENT_REQUESTED_IMAGE} annotation"
+            )
+        })?;
+    ImageRef::parse(requested).with_context(|| {
+        format!(
+            "Invalid {ANN_EXPERIMENT_REQUESTED_IMAGE} annotation on Experiment checkpoint Artifact"
+        )
+    })
+}
+
+fn checkpoint_artifact(
+    registry_handle: LocalRegistryHandle,
+    requested_image_name: &ImageRef,
+    accepted_statuses: &[&str],
+) -> Result<LocalArtifactDyn> {
+    let checkpoint_image_name = registry_handle
+        .registry()
+        .experiment_checkpoint_image_name(requested_image_name)?;
+    let requested_image_name = requested_image_name.to_string();
+    let missing_checkpoint_message = format!(
+        "No Experiment checkpoint found for requested image \
+         {requested_image_name} at {checkpoint_image_name}"
+    );
+    let artifact =
+        LocalArtifactDyn::open_in_registry_handle(registry_handle, checkpoint_image_name.clone())
+            .with_context(|| missing_checkpoint_message)?;
+    let annotations = artifact.annotations()?;
+    ensure!(
+        annotations
+            .get(super::ANN_EXPERIMENT_RECOVERY)
+            .map(String::as_str)
+            == Some("true"),
+        "Experiment checkpoint {checkpoint_image_name} is missing checkpoint marker"
+    );
+    ensure!(
+        annotations
+            .get(ANN_EXPERIMENT_REQUESTED_IMAGE)
+            .map(String::as_str)
+            == Some(requested_image_name.as_str()),
+        "Experiment checkpoint {checkpoint_image_name} does not belong to requested image {requested_image_name}"
+    );
+    let status = annotations
+        .get(super::ANN_EXPERIMENT_STATUS)
+        .map(String::as_str)
+        .ok_or_else(|| {
+            anyhow::anyhow!("Experiment checkpoint {checkpoint_image_name} is missing status")
+        })?;
+    ensure!(
+        accepted_statuses.contains(&status),
+        "Experiment checkpoint {checkpoint_image_name} has status {status}"
+    );
+    Ok(artifact)
 }
 
 fn stored_descriptors<'reg>(

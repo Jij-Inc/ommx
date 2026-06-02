@@ -76,13 +76,110 @@ use std::sync::{Mutex, MutexGuard};
 // --- Artifact mapping constants ---------------------------------------------
 
 const EXPERIMENT_STATUS_FINISHED: &str = "finished";
+const EXPERIMENT_STATUS_DRAFT: &str = "draft";
+const EXPERIMENT_STATUS_FAILED: &str = "failed";
+const EXPERIMENT_STATUS_INTERRUPTED: &str = "interrupted";
 
 const ANN_SPACE: &str = "org.ommx.experiment.space";
 const ANN_RUN_ID: &str = "org.ommx.experiment.run_id";
 const ANN_ATTACHMENT_NAME: &str = "org.ommx.attachment.name";
+const ANN_EXPERIMENT_STATUS: &str = "org.ommx.experiment.status";
+const ANN_EXPERIMENT_RECOVERY: &str = "org.ommx.experiment.recovery";
+const ANN_EXPERIMENT_REQUESTED_IMAGE: &str = "org.ommx.experiment.requested_image";
 
 const RUN_PARAMETERS_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment.run-parameters+json";
 const EXPERIMENT_CONFIG_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment.config+json";
+
+const RUN_STATUS_FINISHED: &str = "finished";
+const RUN_STATUS_FAILED: &str = "failed";
+const RUN_STATUS_INTERRUPTED: &str = "interrupted";
+
+/// Lifecycle status of a sealed Experiment Artifact.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExperimentStatus {
+    /// The Experiment was committed successfully.
+    Finished,
+    /// The Experiment is an uncommitted checkpoint with closed Run state.
+    Draft,
+    /// The Experiment exited with an exception and retained partial state.
+    Failed,
+    /// The Experiment was interrupted by the user and retained partial state.
+    Interrupted,
+}
+
+impl ExperimentStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Finished => EXPERIMENT_STATUS_FINISHED,
+            Self::Draft => EXPERIMENT_STATUS_DRAFT,
+            Self::Failed => EXPERIMENT_STATUS_FAILED,
+            Self::Interrupted => EXPERIMENT_STATUS_INTERRUPTED,
+        }
+    }
+
+    fn from_config(status: &str) -> Result<Self> {
+        match status {
+            EXPERIMENT_STATUS_FINISHED => Ok(Self::Finished),
+            EXPERIMENT_STATUS_DRAFT => Ok(Self::Draft),
+            EXPERIMENT_STATUS_FAILED => Ok(Self::Failed),
+            EXPERIMENT_STATUS_INTERRUPTED => Ok(Self::Interrupted),
+            _ => {
+                crate::bail!(
+                    "Experiment status is {status}, expected {EXPERIMENT_STATUS_FINISHED}, \
+                     {EXPERIMENT_STATUS_DRAFT}, {EXPERIMENT_STATUS_FAILED}, or \
+                     {EXPERIMENT_STATUS_INTERRUPTED}"
+                )
+            }
+        }
+    }
+}
+
+impl std::fmt::Display for ExperimentStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Lifecycle status of a closed Run recorded in an Experiment.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RunStatus {
+    /// The Run context exited normally or was explicitly finished.
+    Finished,
+    /// The Run context exited with an exception and retained partial state.
+    Failed,
+    /// The Run context was interrupted by the user and retained partial state.
+    Interrupted,
+}
+
+impl RunStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Finished => RUN_STATUS_FINISHED,
+            Self::Failed => RUN_STATUS_FAILED,
+            Self::Interrupted => RUN_STATUS_INTERRUPTED,
+        }
+    }
+
+    fn from_config(status: &str) -> Result<Self> {
+        match status {
+            RUN_STATUS_FINISHED => Ok(Self::Finished),
+            RUN_STATUS_FAILED => Ok(Self::Failed),
+            RUN_STATUS_INTERRUPTED => Ok(Self::Interrupted),
+            _ => {
+                crate::bail!(
+                    "Run status is {status}, expected {RUN_STATUS_FINISHED}, \
+                     {RUN_STATUS_FAILED}, or {RUN_STATUS_INTERRUPTED}"
+                )
+            }
+        }
+    }
+}
+
+impl std::fmt::Display for RunStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
 
 /// A mutable, unsealed experiment session. See the [module documentation](self).
 #[derive(Debug)]
@@ -95,6 +192,7 @@ pub struct Experiment<'reg> {
 /// written and published.
 #[derive(Debug, Clone)]
 pub struct SealedExperiment<'reg> {
+    status: ExperimentStatus,
     artifact: LocalArtifact<'reg>,
     attachments: Vec<StoredDescriptor<'reg>>,
     runs: BTreeMap<u64, sealed::SealedRun<'reg>>,
@@ -181,6 +279,7 @@ pub struct Run<'exp, 'reg> {
 #[derive(Debug)]
 struct RunEntry<'reg> {
     run_id: u64,
+    status: RunStatus,
     attachments: Vec<StoredDescriptor<'reg>>,
     trace: Option<StoredDescriptor<'reg>>,
     solves: Vec<SolveEntry<'reg>>,
@@ -284,6 +383,12 @@ impl<'reg> Experiment<'reg> {
             crate::bail!("Run {} has already been registered", run.run_id);
         }
         state.runs.insert(run.run_id, run);
+        if let Err(error) = state.autosave_checkpoint(self.registry) {
+            tracing::warn!(
+                error = %error,
+                "Failed to publish Experiment autosave checkpoint after Run close"
+            );
+        }
         Ok(())
     }
 
@@ -378,6 +483,7 @@ impl<'reg> SealedExperiment<'reg> {
                 run.run_id(),
                 RunEntry {
                     run_id: run.run_id(),
+                    status: run.status().clone(),
                     attachments: run.attachments().to_vec(),
                     trace: run.trace().cloned(),
                     solves,

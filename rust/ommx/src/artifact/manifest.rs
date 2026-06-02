@@ -81,6 +81,17 @@ impl LocalRegistryHandle {
             LocalRegistryHandleInner::Temp(temp) => temp.registry(),
         }
     }
+
+    /// Read a blob referenced by an owned OCI descriptor from this registry.
+    ///
+    /// Dynamic-lifetime handles store raw [`Descriptor`] values internally
+    /// because they cannot carry `StoredDescriptor<'reg>` lifetimes. This
+    /// method revalidates the descriptor against the backing Local Registry
+    /// before reading the blob bytes.
+    pub fn get_blob_dyn(&self, descriptor: &Descriptor) -> Result<Vec<u8>> {
+        let descriptor = self.registry().stored_descriptor(descriptor.clone())?;
+        self.registry().get_blob(&descriptor)
+    }
 }
 
 /// Runtime-owned artifact handle for dynamic runtimes.
@@ -218,7 +229,7 @@ impl LocalArtifactDyn {
     }
 
     pub fn get_blob(&self, descriptor: &Descriptor) -> Result<Vec<u8>> {
-        self.as_local_artifact().get_blob_by_descriptor(descriptor)
+        self.registry_handle.get_blob_dyn(descriptor)
     }
 
     pub fn save(&self, output: &Path) -> crate::Result<()> {
@@ -377,15 +388,7 @@ impl<'reg> LocalArtifact<'reg> {
             "Descriptor {} is not stored in this LocalArtifact's Local Registry",
             descriptor.digest()
         );
-        let bytes = self.registry.blobs().read_bytes(descriptor.digest())?;
-        ensure!(
-            bytes.len() as u64 == descriptor.size(),
-            "Descriptor size mismatch for {}: descriptor={}, actual={}",
-            descriptor.digest(),
-            descriptor.size(),
-            bytes.len()
-        );
-        Ok(bytes)
+        self.registry.get_blob(descriptor)
     }
 
     pub(crate) fn get_blob_by_descriptor(&self, descriptor: &Descriptor) -> Result<Vec<u8>> {
@@ -848,7 +851,10 @@ pub(crate) fn anonymous_artifact_image_name(registry_id: &str) -> Result<ImageRe
         .with_context(|| "Failed to synthesise anonymous artifact image name")
 }
 
-pub(crate) fn anonymous_local_image_name(registry_id: &str, repository: &str) -> Result<ImageRef> {
+pub(crate) fn anonymous_local_repository_key(
+    registry_id: &str,
+    repository: &str,
+) -> Result<String> {
     anyhow::ensure!(
         !repository.is_empty()
             && repository
@@ -868,6 +874,11 @@ pub(crate) fn anonymous_local_image_name(registry_id: &str, repository: &str) ->
         "Anonymous artifact registry id must be at least {} lowercase hex chars; got {prefix:?}",
         ANONYMOUS_REGISTRY_ID_HOST_LEN,
     );
+    Ok(format!("{prefix}.ommx.local/{repository}"))
+}
+
+pub(crate) fn anonymous_local_image_name(registry_id: &str, repository: &str) -> Result<ImageRef> {
+    let repository_key = anonymous_local_repository_key(registry_id, repository)?;
     let stamp = chrono::Local::now().format("%Y%m%dT%H%M%S");
     let nonce: String = uuid::Uuid::new_v4()
         .simple()
@@ -875,8 +886,9 @@ pub(crate) fn anonymous_local_image_name(registry_id: &str, repository: &str) ->
         .chars()
         .take(ANONYMOUS_TAG_NONCE_HEX_LEN)
         .collect();
-    ImageRef::parse(&format!("{prefix}.ommx.local/{repository}:{stamp}-{nonce}"))
-        .with_context(|| format!("Invalid anonymous local image name for registry {prefix}"))
+    ImageRef::parse(&format!("{repository_key}:{stamp}-{nonce}")).with_context(|| {
+        format!("Invalid anonymous local image name for registry {repository_key}")
+    })
 }
 
 /// True iff `name` (the `host/path` portion of an OCI ref) matches the

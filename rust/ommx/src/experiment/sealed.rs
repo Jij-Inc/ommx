@@ -4,7 +4,7 @@ use super::attachment::attachment_name;
 use super::config::{ExperimentConfig, ExperimentConfigSolve, LayerRef};
 use super::parameter::{RunParameterCell, RunParameterTable};
 use super::{
-    SealedExperiment, EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_STATUS_FINISHED,
+    ExperimentStatus, RunStatus, SealedExperiment, EXPERIMENT_CONFIG_MEDIA_TYPE,
     RUN_PARAMETERS_MEDIA_TYPE,
 };
 use crate::artifact::local_registry::StoredDescriptor;
@@ -16,7 +16,26 @@ use std::collections::BTreeMap;
 impl<'reg> SealedExperiment<'reg> {
     /// Reconstruct a sealed Experiment from a committed Experiment Artifact.
     pub fn from_artifact(artifact: LocalArtifact<'reg>) -> Result<Self> {
-        let config = load_experiment_config(&artifact)?;
+        Self::from_artifact_with_allowed_statuses(artifact, &[ExperimentStatus::Finished])
+    }
+
+    /// Reconstruct a checkpoint Experiment from a committed Artifact.
+    pub(crate) fn from_checkpoint_artifact(artifact: LocalArtifact<'reg>) -> Result<Self> {
+        Self::from_artifact_with_allowed_statuses(
+            artifact,
+            &[
+                ExperimentStatus::Draft,
+                ExperimentStatus::Failed,
+                ExperimentStatus::Interrupted,
+            ],
+        )
+    }
+
+    fn from_artifact_with_allowed_statuses(
+        artifact: LocalArtifact<'reg>,
+        allowed_statuses: &[ExperimentStatus],
+    ) -> Result<Self> {
+        let (config, status) = load_experiment_config(&artifact, allowed_statuses)?;
         let layers = artifact.layers()?;
 
         let attachments = decode_attachments(&layers, config.attachments, "experiment")?;
@@ -26,11 +45,14 @@ impl<'reg> SealedExperiment<'reg> {
                 decode_attachments(&layers, run.attachments, &format!("run {}", run.run_id))?;
             let trace = decode_trace(&layers, run.trace, run.run_id)?;
             let solves = decode_solves(&layers, run.run_id, run.solves)?;
+            let status = RunStatus::from_config(&run.status)
+                .with_context(|| format!("Invalid Run {} status", run.run_id))?;
             if runs
                 .insert(
                     run.run_id,
                     SealedRun {
                         run_id: run.run_id,
+                        status,
                         attachments,
                         trace,
                         solves,
@@ -45,6 +67,7 @@ impl<'reg> SealedExperiment<'reg> {
         validate_run_parameters_reference_config_runs(&run_parameters, &runs)?;
 
         Ok(Self {
+            status,
             artifact,
             attachments,
             runs,
@@ -54,6 +77,10 @@ impl<'reg> SealedExperiment<'reg> {
 
     pub fn image_name(&self) -> &ImageRef {
         self.artifact.image_name()
+    }
+
+    pub fn status(&self) -> &ExperimentStatus {
+        &self.status
     }
 
     pub fn experiment_attachments(&self) -> &[StoredDescriptor<'reg>] {
@@ -77,6 +104,7 @@ impl<'reg> SealedExperiment<'reg> {
 #[derive(Debug, Clone)]
 pub struct SealedRun<'reg> {
     run_id: u64,
+    status: RunStatus,
     attachments: Vec<StoredDescriptor<'reg>>,
     trace: Option<StoredDescriptor<'reg>>,
     solves: Vec<Solve<'reg>>,
@@ -85,6 +113,10 @@ pub struct SealedRun<'reg> {
 impl<'reg> SealedRun<'reg> {
     pub fn run_id(&self) -> u64 {
         self.run_id
+    }
+
+    pub fn status(&self) -> &RunStatus {
+        &self.status
     }
 
     pub fn attachments(&self) -> &[StoredDescriptor<'reg>] {
@@ -131,7 +163,10 @@ impl<'reg> Solve<'reg> {
     }
 }
 
-fn load_experiment_config(artifact: &LocalArtifact<'_>) -> Result<ExperimentConfig> {
+fn load_experiment_config(
+    artifact: &LocalArtifact<'_>,
+    allowed_statuses: &[ExperimentStatus],
+) -> Result<(ExperimentConfig, ExperimentStatus)> {
     let config = artifact.stored_config()?;
     if config.media_type() != &MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()) {
         crate::bail!(
@@ -143,14 +178,20 @@ fn load_experiment_config(artifact: &LocalArtifact<'_>) -> Result<ExperimentConf
     let bytes = artifact.get_blob(&config)?;
     let config = serde_json::from_slice::<ExperimentConfig>(&bytes)
         .context("Failed to decode Experiment config")?;
-    if config.status != EXPERIMENT_STATUS_FINISHED {
+    let status = ExperimentStatus::from_config(&config.status)?;
+    if !allowed_statuses.contains(&status) {
+        let expected = allowed_statuses
+            .iter()
+            .map(ExperimentStatus::as_str)
+            .collect::<Vec<_>>()
+            .join(" or ");
         crate::bail!(
             "Experiment config status is {}, expected {}",
-            config.status,
-            EXPERIMENT_STATUS_FINISHED
+            status,
+            expected
         );
     }
-    Ok(config)
+    Ok((config, status))
 }
 
 fn decode_attachments<'reg>(

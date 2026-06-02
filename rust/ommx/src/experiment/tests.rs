@@ -3,12 +3,17 @@
 use super::config::{ExperimentConfig, ExperimentConfigRun, LayerRef};
 use super::UnsealedExperimentState;
 use super::{
-    AttachmentLogger, Experiment, ExperimentDyn, Name, ParameterValue, SealedExperiment, Trace,
-    ANN_ATTACHMENT_NAME, ANN_RUN_ID, ANN_SPACE, EXPERIMENT_CONFIG_MEDIA_TYPE,
-    EXPERIMENT_STATUS_FINISHED, RUN_PARAMETERS_MEDIA_TYPE,
+    AttachmentLogger, Experiment, ExperimentDyn, ExperimentStatus, Name, ParameterValue,
+    SealedExperiment, Trace, ANN_ATTACHMENT_NAME, ANN_EXPERIMENT_RECOVERY,
+    ANN_EXPERIMENT_REQUESTED_IMAGE, ANN_EXPERIMENT_STATUS, ANN_RUN_ID, ANN_SPACE,
+    EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_STATUS_DRAFT, EXPERIMENT_STATUS_FAILED,
+    EXPERIMENT_STATUS_FINISHED, EXPERIMENT_STATUS_INTERRUPTED, RUN_PARAMETERS_MEDIA_TYPE,
+    RUN_STATUS_FAILED, RUN_STATUS_FINISHED, RUN_STATUS_INTERRUPTED,
 };
 use crate::artifact::local_registry::{StoredDescriptor, UnsealedArtifact};
-use crate::artifact::{media_types, AsArtifact, ImageRef, LocalArtifact, LocalRegistryHandle};
+use crate::artifact::{
+    media_types, AsArtifact, ImageRef, LocalArtifact, LocalArtifactDyn, LocalRegistryHandle,
+};
 use crate::{Evaluate, Function, Instance, Sense};
 use oci_spec::image::{Descriptor, MediaType};
 use serde_json::json;
@@ -190,6 +195,7 @@ fn trace_is_config_referenced_manifest_layer() {
         assert_eq!(trace.media_type(), &media_types::trace_otlp_protobuf());
         assert_eq!(layer_annotation(trace, ANN_ATTACHMENT_NAME), None);
         let loaded = SealedExperiment::from_artifact(artifact).unwrap();
+        assert_eq!(loaded.status(), &ExperimentStatus::Finished);
         assert!(loaded.run(0).unwrap().trace().is_some());
         Ok(())
     });
@@ -599,6 +605,7 @@ fn log_finished_solve_result_materializes_solve_entry_with_layer_refs() {
             serde_json::from_slice(&blob_bytes(&artifact, &config)).unwrap();
         assert_eq!(config_json["attachments"], json!([]));
         assert_eq!(config_json["run_parameters"], json!(2));
+        assert_eq!(config_json["runs"][0]["status"], json!(RUN_STATUS_FINISHED));
         assert_eq!(config_json["runs"][0]["attachments"], json!([]));
         assert_eq!(config_json["runs"][0]["solves"][0]["solve_id"], json!(0));
         assert_eq!(config_json["runs"][0]["solves"][0]["input"], json!(0));
@@ -813,6 +820,7 @@ fn loaded_experiment_rejects_config_run_attachment_not_listed_in_layers() {
         attachments: Vec::new(),
         runs: vec![ExperimentConfigRun {
             run_id: 0,
+            status: RUN_STATUS_FINISHED.to_string(),
             attachments: vec![LayerRef(1)],
             trace: None,
             solves: Vec::new(),
@@ -979,6 +987,7 @@ fn commit_returns_sealed_experiment() {
         }
 
         let sealed = experiment.commit().unwrap();
+        assert_eq!(sealed.status(), &ExperimentStatus::Finished);
         let artifact = sealed.artifact();
         let config = artifact.stored_config().unwrap();
         let config_json: serde_json::Value =
@@ -1073,6 +1082,7 @@ fn experiment_dyn_keeps_temp_registry_alive_for_derived_artifacts() {
     drop(experiment);
 
     let loaded = ExperimentDyn::from_artifact(artifact).unwrap();
+    assert_eq!(loaded.experiment_status(), Some(ExperimentStatus::Finished));
     let cells = loaded.run_parameter_cells().unwrap();
     assert_eq!(cells.len(), 1);
     assert_eq!(cells[0].run_id, 0);
@@ -1171,6 +1181,230 @@ fn experiment_dyn_marks_commit_failure_explicitly() {
 }
 
 #[test]
+fn experiment_dyn_publishes_failed_checkpoint() {
+    let registry_handle = LocalRegistryHandle::temp().unwrap();
+    let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:will-fail").unwrap();
+    let experiment =
+        ExperimentDyn::with_registry_handle(registry_handle.clone(), image_name.clone()).unwrap();
+    experiment.log_json("dataset", json!("miplib2017")).unwrap();
+    {
+        let mut run = experiment.run().unwrap();
+        run.log_parameter("solver", "scip").unwrap();
+        run.finish().unwrap();
+    }
+
+    experiment
+        .commit_failed_checkpoint("ValueError: failed")
+        .unwrap();
+
+    assert_eq!(experiment.state_name(), "failed");
+    assert_eq!(experiment.image_name().unwrap(), image_name);
+    assert!(registry_handle
+        .registry()
+        .resolve_image_name(&image_name)
+        .unwrap()
+        .is_none());
+    let checkpoint_image_name = registry_handle
+        .registry()
+        .experiment_checkpoint_image_name(&image_name)
+        .unwrap();
+    let checkpoint = LocalArtifactDyn::open_in_registry_handle(
+        registry_handle.clone(),
+        checkpoint_image_name.clone(),
+    )
+    .unwrap();
+    assert_eq!(checkpoint.image_name(), &checkpoint_image_name);
+
+    let annotations = checkpoint.annotations().unwrap();
+    assert_eq!(
+        annotations.get(ANN_EXPERIMENT_STATUS).map(String::as_str),
+        Some(EXPERIMENT_STATUS_FAILED)
+    );
+    assert_eq!(
+        annotations.get(ANN_EXPERIMENT_RECOVERY).map(String::as_str),
+        Some("true")
+    );
+    let requested_image_name = image_name.to_string();
+    assert_eq!(
+        annotations.get(ANN_EXPERIMENT_REQUESTED_IMAGE),
+        Some(&requested_image_name)
+    );
+
+    let checkpoint_artifact = checkpoint.as_local_artifact();
+    let config = experiment_config(&checkpoint_artifact);
+    assert_eq!(config.status, EXPERIMENT_STATUS_FAILED);
+    let err = SealedExperiment::from_artifact(checkpoint_artifact)
+        .expect_err("failed checkpoint must not load as finished experiments");
+    assert!(err.to_string().contains("status is failed"));
+}
+
+#[test]
+fn experiment_dyn_recovers_failed_artifact_with_requested_image_name() {
+    let registry_handle = LocalRegistryHandle::temp().unwrap();
+    let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:failed-run").unwrap();
+    let experiment =
+        ExperimentDyn::with_registry_handle(registry_handle.clone(), image_name.clone()).unwrap();
+    {
+        let mut run = experiment.run().unwrap();
+        run.log_parameter("solver", "scip").unwrap();
+        run.finish_failed().unwrap();
+    }
+    experiment
+        .commit_failed_checkpoint("RuntimeError: solve failed")
+        .unwrap();
+    let checkpoint_image_name = registry_handle
+        .registry()
+        .experiment_checkpoint_image_name(&image_name)
+        .unwrap();
+    let checkpoint = LocalArtifactDyn::open_in_registry_handle(
+        registry_handle.clone(),
+        checkpoint_image_name.clone(),
+    )
+    .unwrap();
+    assert_eq!(checkpoint.image_name(), &checkpoint_image_name);
+
+    let recovered = ExperimentDyn::restore_from_checkpoint_in_registry_handle(
+        registry_handle,
+        image_name.clone(),
+    )
+    .unwrap();
+    assert!(recovered.is_unsealed());
+    assert_eq!(recovered.image_name().unwrap(), image_name);
+    {
+        let mut run = recovered.run().unwrap();
+        assert_eq!(run.run_id().unwrap(), 1);
+        run.log_parameter("solver", "highs").unwrap();
+        run.finish().unwrap();
+    }
+    let artifact = recovered.commit().unwrap();
+    assert_eq!(artifact.image_name(), &image_name);
+
+    let child_runs = recovered.runs().unwrap();
+    assert_eq!(child_runs.len(), 2);
+    assert_eq!(child_runs[0].status().as_str(), RUN_STATUS_FAILED);
+    assert_eq!(child_runs[1].status().as_str(), RUN_STATUS_FINISHED);
+}
+
+#[test]
+fn experiment_dyn_autosaves_on_run_close_and_recovers_with_requested_image_name() {
+    let registry_handle = LocalRegistryHandle::temp().unwrap();
+    let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:notebook").unwrap();
+    let experiment =
+        ExperimentDyn::with_registry_handle(registry_handle.clone(), image_name.clone()).unwrap();
+    let checkpoint_image_name = registry_handle
+        .registry()
+        .experiment_checkpoint_image_name(&image_name)
+        .unwrap();
+    assert!(registry_handle
+        .registry()
+        .resolve_image_name(&checkpoint_image_name)
+        .unwrap()
+        .is_none());
+
+    {
+        let mut run = experiment.run().unwrap();
+        run.log_parameter("solver", "scip").unwrap();
+        run.finish().unwrap();
+    }
+
+    let autosave = LocalArtifactDyn::open_in_registry_handle(
+        registry_handle.clone(),
+        checkpoint_image_name.clone(),
+    )
+    .expect("Run close should publish an autosave checkpoint");
+    assert_eq!(autosave.image_name(), &checkpoint_image_name);
+    let annotations = autosave.annotations().unwrap();
+    assert_eq!(
+        annotations.get(ANN_EXPERIMENT_STATUS).map(String::as_str),
+        Some(EXPERIMENT_STATUS_DRAFT)
+    );
+    assert_eq!(
+        annotations.get(ANN_EXPERIMENT_RECOVERY).map(String::as_str),
+        Some("true")
+    );
+    assert_eq!(
+        annotations.get(ANN_EXPERIMENT_REQUESTED_IMAGE),
+        Some(&image_name.to_string())
+    );
+
+    let config = experiment_config(&autosave.as_local_artifact());
+    assert_eq!(config.status, EXPERIMENT_STATUS_DRAFT);
+    assert_eq!(config.runs.len(), 1);
+    assert_eq!(config.runs[0].status, RUN_STATUS_FINISHED);
+    assert_eq!(experiment.runs().unwrap().len(), 1);
+    assert_eq!(experiment.run_parameter_cells().unwrap().len(), 1);
+    let err = SealedExperiment::from_artifact(autosave.as_local_artifact())
+        .expect_err("autosave checkpoint must not load as a finished experiment");
+    assert!(err.to_string().contains("status is draft"));
+
+    let recovered = ExperimentDyn::restore_from_checkpoint_in_registry_handle(
+        registry_handle,
+        image_name.clone(),
+    )
+    .unwrap();
+    assert!(recovered.is_unsealed());
+    assert_eq!(recovered.image_name().unwrap(), image_name);
+    {
+        let mut run = recovered.run().unwrap();
+        assert_eq!(run.run_id().unwrap(), 1);
+        run.log_parameter("solver", "highs").unwrap();
+        run.finish().unwrap();
+    }
+
+    let artifact = recovered.commit().unwrap();
+    assert_eq!(artifact.image_name(), &image_name);
+    let child_runs = recovered.runs().unwrap();
+    assert_eq!(child_runs.len(), 2);
+    assert_eq!(child_runs[0].status().as_str(), RUN_STATUS_FINISHED);
+    assert_eq!(child_runs[1].status().as_str(), RUN_STATUS_FINISHED);
+}
+
+#[test]
+fn experiment_dyn_marks_keyboard_interrupt_checkpoint_separately() {
+    let registry_handle = LocalRegistryHandle::temp().unwrap();
+    let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:interrupt").unwrap();
+    let experiment =
+        ExperimentDyn::with_registry_handle(registry_handle.clone(), image_name.clone()).unwrap();
+    {
+        let mut run = experiment.run().unwrap();
+        run.log_parameter("solver", "scip").unwrap();
+        run.finish_interrupted().unwrap();
+    }
+
+    let draft_checkpoint_image_name = registry_handle
+        .registry()
+        .experiment_checkpoint_image_name(&image_name)
+        .unwrap();
+    let autosave = LocalArtifactDyn::open_in_registry_handle(
+        registry_handle.clone(),
+        draft_checkpoint_image_name,
+    )
+    .unwrap();
+    let autosave_config = experiment_config(&autosave.as_local_artifact());
+    assert_eq!(autosave_config.status, EXPERIMENT_STATUS_DRAFT);
+    assert_eq!(autosave_config.runs[0].status, RUN_STATUS_INTERRUPTED);
+
+    experiment
+        .commit_interrupted_checkpoint("KeyboardInterrupt")
+        .unwrap();
+    let checkpoint_image_name = registry_handle
+        .registry()
+        .experiment_checkpoint_image_name(&image_name)
+        .unwrap();
+    let checkpoint =
+        LocalArtifactDyn::open_in_registry_handle(registry_handle.clone(), checkpoint_image_name)
+            .unwrap();
+    let annotations = checkpoint.annotations().unwrap();
+    assert_eq!(
+        annotations.get(ANN_EXPERIMENT_STATUS).map(String::as_str),
+        Some(EXPERIMENT_STATUS_INTERRUPTED)
+    );
+    let config = experiment_config(&checkpoint.as_local_artifact());
+    assert_eq!(config.status, EXPERIMENT_STATUS_INTERRUPTED);
+    assert_eq!(config.runs[0].status, RUN_STATUS_INTERRUPTED);
+}
+
+#[test]
 fn experiment_dyn_rename_before_commit_changes_publish_ref() {
     let registry_handle = LocalRegistryHandle::temp().unwrap();
     let experiment =
@@ -1194,6 +1428,56 @@ fn experiment_dyn_rename_before_commit_changes_publish_ref() {
         .resolve_image_name(artifact.image_name())
         .unwrap()
         .is_some());
+}
+
+#[test]
+fn experiment_dyn_rename_moves_autosave_checkpoint_ref() {
+    let registry_handle = LocalRegistryHandle::temp().unwrap();
+    let old_image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/rename-autosave:old").unwrap();
+    let new_image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/rename-autosave:new").unwrap();
+    let experiment =
+        ExperimentDyn::with_registry_handle(registry_handle.clone(), old_image_name.clone())
+            .unwrap();
+    {
+        let mut run = experiment.run().unwrap();
+        run.log_parameter("solver", "scip").unwrap();
+        run.finish().unwrap();
+    }
+
+    let old_checkpoint_image_name = registry_handle
+        .registry()
+        .experiment_checkpoint_image_name(&old_image_name)
+        .unwrap();
+    assert!(registry_handle
+        .registry()
+        .resolve_image_name(&old_checkpoint_image_name)
+        .unwrap()
+        .is_some());
+
+    experiment.rename(new_image_name.clone()).unwrap();
+
+    let new_checkpoint_image_name = registry_handle
+        .registry()
+        .experiment_checkpoint_image_name(&new_image_name)
+        .unwrap();
+    assert!(registry_handle
+        .registry()
+        .resolve_image_name(&old_checkpoint_image_name)
+        .unwrap()
+        .is_none());
+    assert!(registry_handle
+        .registry()
+        .resolve_image_name(&new_checkpoint_image_name)
+        .unwrap()
+        .is_some());
+
+    let recovered = ExperimentDyn::restore_from_checkpoint_in_registry_handle(
+        registry_handle,
+        new_image_name.clone(),
+    )
+    .unwrap();
+    assert_eq!(recovered.image_name().unwrap(), new_image_name);
+    assert_eq!(recovered.run_parameter_cells().unwrap().len(), 1);
 }
 
 #[test]

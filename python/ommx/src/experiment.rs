@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use oci_spec::image::{Descriptor, MediaType};
 use pyo3::{
+    exceptions::PyKeyboardInterrupt,
     prelude::*,
     types::{PyBool, PyBytes, PyDict, PyFloat, PyInt, PyString, PyType, PyTypeMethods},
 };
@@ -12,6 +13,7 @@ use std::{
 
 use crate::pandas::{raw_entries_to_dataframe, PyDataFrame};
 use crate::{PyArtifact, PyDescriptor};
+use ommx::artifact::local_registry::{LocalRegistry, StoredDescriptor};
 use ommx::artifact::AsArtifact;
 use ommx::experiment::AttachmentLogger;
 
@@ -21,14 +23,16 @@ use ommx::experiment::AttachmentLogger;
 /// A collection of optimization experiment records stored as one OMMX Artifact.
 ///
 /// An `Experiment` owns experiment-level attachments and a sequence of
-/// finished `Run` objects. Each `Run` can store scalar run parameters,
+/// closed `Run` records. Each `Run` can store scalar run parameters,
 /// run-level attachments, and zero or more `Solve` records.
 ///
 /// Newly created experiments are unsealed. Call `commit()` to write the
 /// experiment into the local registry as an OMMX Artifact. After commit, the
 /// same object can be used as a read-only view of the committed artifact.
 /// `with Experiment(...)` commits on normal exit if the experiment is still
-/// unsealed, and does not auto-commit on exception.
+/// unsealed. On exception it does not advance the success ref; instead it
+/// tries to publish a failed checkpoint under a local `checkpoint:`
+/// ref.
 ///
 /// Use experiment-level attachments for shared context such as dataset or
 /// source-problem metadata. Use `Run.log_parameter(...)` for scalar values
@@ -124,6 +128,23 @@ impl PyExperiment {
         })
     }
 
+    /// Restore an unsealed Experiment from its checkpoint.
+    ///
+    /// Pass the original requested Experiment image name, not the generated
+    /// checkpoint ref. This accepts checkpoint statuses such as `draft`,
+    /// `failed`, or `interrupted`, and returns a new unsealed Experiment whose
+    /// image name is the original requested Experiment image name recorded in
+    /// the checkpoint metadata.
+    #[staticmethod]
+    pub fn restore_from_checkpoint(py: Python<'_>, image_name: &str) -> Result<Self> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let image_name = ommx::artifact::ImageRef::parse(image_name)?;
+        Ok(Self {
+            inner: ommx::experiment::ExperimentDyn::restore_from_checkpoint(image_name)?,
+            store_trace: false,
+        })
+    }
+
     /// Import an Experiment Artifact from a `.ommx` OCI archive file (or an OCI
     /// Image Layout directory).
     ///
@@ -193,10 +214,23 @@ impl PyExperiment {
         exc_value: Option<&Bound<'_, PyAny>>,
         traceback: Option<&Bound<'_, PyAny>>,
     ) -> Result<bool> {
-        let _ = (exc_value, traceback);
-        if exc_type.is_none() && self.inner.is_unsealed() {
+        if exc_type.is_some() && self.inner.is_unsealed() {
+            let reason = python_exception_reason(exc_type, exc_value);
+            let checkpoint = if is_keyboard_interrupt(py, exc_type)? {
+                self.inner.commit_interrupted_checkpoint(reason)
+            } else {
+                self.inner.commit_failed_checkpoint(reason)
+            };
+            if let Err(error) = checkpoint {
+                tracing::warn!(
+                    error = %error,
+                    "Failed to publish Experiment checkpoint during exception exit"
+                );
+            }
+        } else if self.inner.is_unsealed() {
             self.commit_inner(py)?;
         }
+        let _ = traceback;
         Ok(false)
     }
 
@@ -276,8 +310,9 @@ impl PyExperiment {
     /// media types are returned as raw `bytes`.
     pub fn get_attachment<'py>(&self, py: Python<'py>, name: &str) -> Result<Bound<'py, PyAny>> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let (artifact, descriptor) = self.find_attachment(name)?;
-        decode_attachment(py, &artifact, &descriptor)
+        let descriptor = self.find_attachment(name)?;
+        let registry_handle = self.inner.registry_handle();
+        decode_attachment(py, registry_handle.registry(), &descriptor)
     }
 
     /// Read a JSON experiment-level attachment by name.
@@ -286,15 +321,17 @@ impl PyExperiment {
     /// `application/json`.
     pub fn get_json<'py>(&self, py: Python<'py>, name: &str) -> Result<Bound<'py, PyAny>> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let (artifact, descriptor) = self.find_attachment(name)?;
-        decode_json_attachment(py, &artifact, &descriptor)
+        let descriptor = self.find_attachment(name)?;
+        let registry_handle = self.inner.registry_handle();
+        decode_json_attachment(py, registry_handle.registry(), &descriptor)
     }
 
     /// Read an Instance experiment-level attachment by name.
     pub fn get_instance(&self, py: Python<'_>, name: &str) -> Result<crate::Instance> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let (artifact, descriptor) = self.find_attachment(name)?;
-        decode_instance_attachment(&artifact, &descriptor)
+        let descriptor = self.find_attachment(name)?;
+        let registry_handle = self.inner.registry_handle();
+        decode_instance_attachment(registry_handle.registry(), &descriptor)
     }
 
     /// Read a ParametricInstance experiment-level attachment by name.
@@ -304,44 +341,53 @@ impl PyExperiment {
         name: &str,
     ) -> Result<crate::ParametricInstance> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let (artifact, descriptor) = self.find_attachment(name)?;
-        decode_parametric_instance_attachment(&artifact, &descriptor)
+        let descriptor = self.find_attachment(name)?;
+        let registry_handle = self.inner.registry_handle();
+        decode_parametric_instance_attachment(registry_handle.registry(), &descriptor)
     }
 
     /// Read a Solution experiment-level attachment by name.
     pub fn get_solution(&self, py: Python<'_>, name: &str) -> Result<crate::Solution> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let (artifact, descriptor) = self.find_attachment(name)?;
-        decode_solution_attachment(&artifact, &descriptor)
+        let descriptor = self.find_attachment(name)?;
+        let registry_handle = self.inner.registry_handle();
+        decode_solution_attachment(registry_handle.registry(), &descriptor)
     }
 
     /// Read a SampleSet experiment-level attachment by name.
     pub fn get_sample_set(&self, py: Python<'_>, name: &str) -> Result<crate::SampleSet> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let (artifact, descriptor) = self.find_attachment(name)?;
-        decode_sample_set_attachment(&artifact, &descriptor)
+        let descriptor = self.find_attachment(name)?;
+        let registry_handle = self.inner.registry_handle();
+        decode_sample_set_attachment(registry_handle.registry(), &descriptor)
     }
 
     /// Read raw bytes of an experiment-level attachment by name.
     pub fn get_blob<'py>(&self, py: Python<'py>, name: &str) -> Result<Bound<'py, PyBytes>> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let (artifact, descriptor) = self.find_attachment(name)?;
-        Ok(PyBytes::new(py, &artifact.get_blob(&descriptor)?))
+        let descriptor = self.find_attachment(name)?;
+        let registry_handle = self.inner.registry_handle();
+        Ok(PyBytes::new(
+            py,
+            &registry_handle.registry().get_blob(&descriptor)?,
+        ))
     }
 
     #[getter]
-    /// Finished runs in insertion order.
+    /// Closed runs in insertion order.
     pub fn runs(&self) -> Result<Vec<PySealedRun>> {
-        let artifact = self.inner.artifact()?;
-        Ok(self
-            .inner
-            .runs()?
-            .into_iter()
-            .map(|run| PySealedRun {
-                run,
-                artifact: artifact.clone(),
-            })
-            .collect())
+        let runs = self.inner.runs()?;
+        Ok(runs.into_iter().map(|run| PySealedRun { run }).collect())
+    }
+
+    #[getter]
+    /// Experiment config status for a committed Experiment.
+    ///
+    /// Returns `None` for an unsealed Experiment.
+    pub fn status(&self) -> Option<String> {
+        self.inner
+            .experiment_status()
+            .map(|status| status.to_string())
     }
 
     #[getter]
@@ -354,8 +400,8 @@ impl PyExperiment {
 
     /// Start a new Run in this unsealed Experiment.
     ///
-    /// The returned `Run` must be finished before `commit()`. Use it as a
-    /// context manager to finish it automatically on normal exit:
+    /// The returned `Run` must be closed before `commit()`. Use it as a
+    /// context manager to close it automatically on normal or exceptional exit:
     ///
     /// ```python
     /// with experiment.run() as run:
@@ -429,7 +475,7 @@ impl PyExperiment {
 
     /// Commit this unsealed Experiment into the local registry.
     ///
-    /// All open runs must be finished before committing. The returned
+    /// All open runs must be closed before committing. The returned
     /// `Artifact` can be saved as a `.ommx` archive or passed to
     /// `Experiment.from_artifact`. After commit, this object becomes a
     /// read-only view of the committed Experiment.
@@ -440,7 +486,7 @@ impl PyExperiment {
     /// Wide DataFrame of run parameters, indexed by `run_id`.
     ///
     /// Run parameters are scalar values logged with `Run.log_parameter`.
-    /// Completed runs with no parameters are still present as index rows.
+    /// Closed runs with no parameters are still present as index rows.
     /// Adapter options recorded by `Run.log_solve` are solve metadata and do
     /// not appear in this table.
     pub fn run_parameters_df<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDataFrame>> {
@@ -499,14 +545,10 @@ impl PyExperiment {
         Ok(PyArtifact::new(self.inner.commit()?))
     }
 
-    fn find_attachment(
-        &self,
-        name: &str,
-    ) -> Result<(ommx::artifact::LocalArtifactDyn, Descriptor)> {
-        let artifact = self.inner.artifact()?;
+    fn find_attachment(&self, name: &str) -> Result<StoredDescriptor<'_>> {
         for descriptor in self.inner.experiment_attachments()? {
             if attachment_name(&descriptor) == Some(name) {
-                return Ok((artifact, Descriptor::from(descriptor)));
+                return Ok(descriptor);
             }
         }
         anyhow::bail!("Experiment attachment `{name}` not found")
@@ -526,6 +568,39 @@ fn set_current_span_run_id(py: Python<'_>, run_id: u64) -> Result<()> {
     let span = trace.call_method0("get_current_span")?;
     span.call_method1("set_attribute", ("ommx.run.id", run_id))?;
     Ok(())
+}
+
+fn python_exception_reason(
+    exc_type: Option<&Bound<'_, PyAny>>,
+    exc_value: Option<&Bound<'_, PyAny>>,
+) -> String {
+    let type_name = exc_type
+        .and_then(|value| value.getattr("__name__").ok())
+        .and_then(|value| value.extract::<String>().ok())
+        .unwrap_or_else(|| "exception".to_string());
+    match exc_value.and_then(|value| value.str().ok()) {
+        Some(value) => {
+            let message = value.to_string_lossy();
+            if message.is_empty() {
+                type_name
+            } else {
+                format!("{type_name}: {message}")
+            }
+        }
+        None => type_name,
+    }
+}
+
+fn is_keyboard_interrupt(py: Python<'_>, exc_type: Option<&Bound<'_, PyAny>>) -> Result<bool> {
+    let Some(exc_type) = exc_type else {
+        return Ok(false);
+    };
+    let Ok(exc_type) = exc_type.extract::<Py<PyType>>() else {
+        return Ok(false);
+    };
+    Ok(exc_type
+        .bind(py)
+        .is_subclass(&py.get_type::<PyKeyboardInterrupt>())?)
 }
 
 fn close_python_context_manager(
@@ -561,8 +636,8 @@ fn attachment_annotations(descriptor: &Descriptor) -> std::collections::HashMap<
 }
 
 fn attachment_blob(
-    artifact: &ommx::artifact::LocalArtifactDyn,
-    descriptor: &Descriptor,
+    registry: &LocalRegistry,
+    descriptor: &StoredDescriptor<'_>,
     expected_media_type: Option<&str>,
 ) -> Result<Vec<u8>> {
     if let Some(expected) = expected_media_type {
@@ -571,18 +646,18 @@ fn attachment_blob(
             anyhow::bail!("Expected media type '{expected}', got '{actual}'");
         }
     }
-    artifact.get_blob(descriptor)
+    registry.get_blob(descriptor)
 }
 
 fn decode_attachment<'py>(
     py: Python<'py>,
-    artifact: &ommx::artifact::LocalArtifactDyn,
-    descriptor: &Descriptor,
+    registry: &LocalRegistry,
+    descriptor: &StoredDescriptor<'_>,
 ) -> Result<Bound<'py, PyAny>> {
     match descriptor.media_type().as_ref() {
-        "application/json" => decode_json_attachment(py, artifact, descriptor),
+        "application/json" => decode_json_attachment(py, registry, descriptor),
         ommx::artifact::media_types::V1_INSTANCE_MEDIA_TYPE => {
-            let instance = decode_instance_attachment(artifact, descriptor)?;
+            let instance = decode_instance_attachment(registry, descriptor)?;
             Ok(instance
                 .into_pyobject(py)?
                 .into_any()
@@ -590,7 +665,7 @@ fn decode_attachment<'py>(
                 .into_bound(py))
         }
         ommx::artifact::media_types::V1_PARAMETRIC_INSTANCE_MEDIA_TYPE => {
-            let instance = decode_parametric_instance_attachment(artifact, descriptor)?;
+            let instance = decode_parametric_instance_attachment(registry, descriptor)?;
             Ok(instance
                 .into_pyobject(py)?
                 .into_any()
@@ -598,7 +673,7 @@ fn decode_attachment<'py>(
                 .into_bound(py))
         }
         ommx::artifact::media_types::V1_SOLUTION_MEDIA_TYPE => {
-            let solution = decode_solution_attachment(artifact, descriptor)?;
+            let solution = decode_solution_attachment(registry, descriptor)?;
             Ok(solution
                 .into_pyobject(py)?
                 .into_any()
@@ -606,33 +681,33 @@ fn decode_attachment<'py>(
                 .into_bound(py))
         }
         ommx::artifact::media_types::V1_SAMPLE_SET_MEDIA_TYPE => {
-            let sample_set = decode_sample_set_attachment(artifact, descriptor)?;
+            let sample_set = decode_sample_set_attachment(registry, descriptor)?;
             Ok(sample_set
                 .into_pyobject(py)?
                 .into_any()
                 .unbind()
                 .into_bound(py))
         }
-        _ => Ok(PyBytes::new(py, &attachment_blob(artifact, descriptor, None)?).into_any()),
+        _ => Ok(PyBytes::new(py, &attachment_blob(registry, descriptor, None)?).into_any()),
     }
 }
 
 fn decode_json_attachment<'py>(
     py: Python<'py>,
-    artifact: &ommx::artifact::LocalArtifactDyn,
-    descriptor: &Descriptor,
+    registry: &LocalRegistry,
+    descriptor: &StoredDescriptor<'_>,
 ) -> Result<Bound<'py, PyAny>> {
-    let blob = attachment_blob(artifact, descriptor, Some("application/json"))?;
+    let blob = attachment_blob(registry, descriptor, Some("application/json"))?;
     let json = py.import("json")?;
     Ok(json.call_method1("loads", (PyBytes::new(py, &blob),))?)
 }
 
 fn decode_instance_attachment(
-    artifact: &ommx::artifact::LocalArtifactDyn,
-    descriptor: &Descriptor,
+    registry: &LocalRegistry,
+    descriptor: &StoredDescriptor<'_>,
 ) -> Result<crate::Instance> {
     let blob = attachment_blob(
-        artifact,
+        registry,
         descriptor,
         Some(ommx::artifact::media_types::V1_INSTANCE_MEDIA_TYPE),
     )?;
@@ -643,11 +718,11 @@ fn decode_instance_attachment(
 }
 
 fn decode_parametric_instance_attachment(
-    artifact: &ommx::artifact::LocalArtifactDyn,
-    descriptor: &Descriptor,
+    registry: &LocalRegistry,
+    descriptor: &StoredDescriptor<'_>,
 ) -> Result<crate::ParametricInstance> {
     let blob = attachment_blob(
-        artifact,
+        registry,
         descriptor,
         Some(ommx::artifact::media_types::V1_PARAMETRIC_INSTANCE_MEDIA_TYPE),
     )?;
@@ -658,11 +733,11 @@ fn decode_parametric_instance_attachment(
 }
 
 fn decode_solution_attachment(
-    artifact: &ommx::artifact::LocalArtifactDyn,
-    descriptor: &Descriptor,
+    registry: &LocalRegistry,
+    descriptor: &StoredDescriptor<'_>,
 ) -> Result<crate::Solution> {
     let blob = attachment_blob(
-        artifact,
+        registry,
         descriptor,
         Some(ommx::artifact::media_types::V1_SOLUTION_MEDIA_TYPE),
     )?;
@@ -673,11 +748,11 @@ fn decode_solution_attachment(
 }
 
 fn decode_sample_set_attachment(
-    artifact: &ommx::artifact::LocalArtifactDyn,
-    descriptor: &Descriptor,
+    registry: &LocalRegistry,
+    descriptor: &StoredDescriptor<'_>,
 ) -> Result<crate::SampleSet> {
     let blob = attachment_blob(
-        artifact,
+        registry,
         descriptor,
         Some(ommx::artifact::media_types::V1_SAMPLE_SET_MEDIA_TYPE),
     )?;
@@ -699,8 +774,8 @@ fn decode_sample_set_attachment(
 ///
 /// Runs are usually created with `Experiment.run()` and used as context
 /// managers. On normal context-manager exit the run is finished and added
-/// to the parent experiment. On exception the run is abandoned. A run
-/// becomes immutable once it is finished.
+/// to the parent experiment. On exception the run is closed as failed and
+/// added with its partial state. A run becomes immutable once it is closed.
 pub struct PyRun {
     state: PyRunState,
     store_trace: bool,
@@ -807,7 +882,25 @@ impl PyRun {
                     return Err(error);
                 }
                 if exc_type.is_some() {
-                    run.abandon();
+                    if self.store_trace {
+                        if let Err(error) = store_trace_result(py, &mut run, trace_result) {
+                            tracing::warn!(
+                                error = %error,
+                                "Failed to store Run trace during exception exit"
+                            );
+                        }
+                    }
+                    let finish_result = if is_keyboard_interrupt(py, exc_type)? {
+                        run.finish_interrupted()
+                    } else {
+                        run.finish_failed()
+                    };
+                    if let Err(error) = finish_result {
+                        tracing::warn!(
+                            error = %error,
+                            "Failed to close Run during exception exit"
+                        );
+                    }
                     return Ok(false);
                 }
                 if self.store_trace {
@@ -956,8 +1049,9 @@ impl PyRun {
     /// Finish this run and append it to the parent Experiment.
     ///
     /// After this method returns, the run handle can no longer be used. The
-    /// context manager calls this automatically on normal exit and abandons
-    /// the run on exception.
+    /// context manager calls this automatically on normal exit. On exception,
+    /// the context manager closes the run as failed or interrupted with its
+    /// partial state.
     pub fn finish(&mut self) -> Result<()> {
         if self.store_trace {
             anyhow::bail!(
@@ -1183,13 +1277,12 @@ impl pyo3_stub_gen::PyStubType for ParameterValueInput {
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust", name = "SealedRun")]
-/// Immutable view of a finished Run in a committed Experiment.
+/// Immutable view of a closed Run in an Experiment.
 ///
 /// `SealedRun` exposes run-level attachments by name and the sequence of
 /// `Solve` records created by `Run.log_solve`.
 pub struct PySealedRun {
     run: ommx::experiment::SealedRunDyn,
-    artifact: ommx::artifact::LocalArtifactDyn,
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
@@ -1199,6 +1292,12 @@ impl PySealedRun {
     /// Integer identifier of this run within its Experiment.
     pub fn run_id(&self) -> u64 {
         self.run.run_id()
+    }
+
+    #[getter]
+    /// Run lifecycle status: `"finished"`, `"failed"`, or `"interrupted"`.
+    pub fn status(&self) -> String {
+        self.run.status().to_string()
     }
 
     #[getter]
@@ -1233,21 +1332,24 @@ impl PySealedRun {
     pub fn get_attachment<'py>(&self, py: Python<'py>, name: &str) -> Result<Bound<'py, PyAny>> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let descriptor = self.find_attachment(name)?;
-        decode_attachment(py, &self.artifact, &descriptor)
+        let registry_handle = self.run.registry_handle();
+        decode_attachment(py, registry_handle.registry(), &descriptor)
     }
 
     /// Read a JSON run-level attachment by name.
     pub fn get_json<'py>(&self, py: Python<'py>, name: &str) -> Result<Bound<'py, PyAny>> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let descriptor = self.find_attachment(name)?;
-        decode_json_attachment(py, &self.artifact, &descriptor)
+        let registry_handle = self.run.registry_handle();
+        decode_json_attachment(py, registry_handle.registry(), &descriptor)
     }
 
     /// Read an Instance run-level attachment by name.
     pub fn get_instance(&self, py: Python<'_>, name: &str) -> Result<crate::Instance> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let descriptor = self.find_attachment(name)?;
-        decode_instance_attachment(&self.artifact, &descriptor)
+        let registry_handle = self.run.registry_handle();
+        decode_instance_attachment(registry_handle.registry(), &descriptor)
     }
 
     /// Read a ParametricInstance run-level attachment by name.
@@ -1258,28 +1360,35 @@ impl PySealedRun {
     ) -> Result<crate::ParametricInstance> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let descriptor = self.find_attachment(name)?;
-        decode_parametric_instance_attachment(&self.artifact, &descriptor)
+        let registry_handle = self.run.registry_handle();
+        decode_parametric_instance_attachment(registry_handle.registry(), &descriptor)
     }
 
     /// Read a Solution run-level attachment by name.
     pub fn get_solution(&self, py: Python<'_>, name: &str) -> Result<crate::Solution> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let descriptor = self.find_attachment(name)?;
-        decode_solution_attachment(&self.artifact, &descriptor)
+        let registry_handle = self.run.registry_handle();
+        decode_solution_attachment(registry_handle.registry(), &descriptor)
     }
 
     /// Read a SampleSet run-level attachment by name.
     pub fn get_sample_set(&self, py: Python<'_>, name: &str) -> Result<crate::SampleSet> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let descriptor = self.find_attachment(name)?;
-        decode_sample_set_attachment(&self.artifact, &descriptor)
+        let registry_handle = self.run.registry_handle();
+        decode_sample_set_attachment(registry_handle.registry(), &descriptor)
     }
 
     /// Read raw bytes of a run-level attachment by name.
     pub fn get_blob<'py>(&self, py: Python<'py>, name: &str) -> Result<Bound<'py, PyBytes>> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let descriptor = self.find_attachment(name)?;
-        Ok(PyBytes::new(py, &self.artifact.get_blob(&descriptor)?))
+        let registry_handle = self.run.registry_handle();
+        Ok(PyBytes::new(
+            py,
+            &registry_handle.registry().get_blob(&descriptor)?,
+        ))
     }
 
     #[getter]
@@ -1293,7 +1402,8 @@ impl PySealedRun {
         let Some(descriptor) = self.run.trace()? else {
             return Ok(None);
         };
-        let blob = self.artifact.get_blob(&descriptor)?;
+        let registry_handle = self.run.registry_handle();
+        let blob = registry_handle.registry().get_blob(&descriptor)?;
         let trace_result = py.import("ommx.tracing")?.getattr("TraceResult")?;
         Ok(Some(trace_result.call_method1(
             "from_otlp_protobuf",
@@ -1309,8 +1419,9 @@ impl PySealedRun {
 
     pub fn __repr__(&self) -> String {
         format!(
-            "SealedRun(run_id={}, attachments={}, solves={})",
+            "SealedRun(run_id={}, status='{}', attachments={}, solves={})",
             self.run_id(),
+            self.status(),
             self.run.attachment_count(),
             self.run.solves().len(),
         )
@@ -1318,10 +1429,10 @@ impl PySealedRun {
 }
 
 impl PySealedRun {
-    fn find_attachment(&self, name: &str) -> Result<Descriptor> {
+    fn find_attachment(&self, name: &str) -> Result<StoredDescriptor<'_>> {
         for descriptor in self.run.attachments()? {
             if attachment_name(&descriptor) == Some(name) {
-                return Ok(Descriptor::from(descriptor));
+                return Ok(descriptor);
             }
         }
         anyhow::bail!("Run {} attachment `{name}` not found", self.run.run_id())

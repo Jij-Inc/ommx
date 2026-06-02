@@ -19,6 +19,8 @@ pub struct ExperimentConfig {
 #[non_exhaustive]
 pub struct ExperimentConfigRun {
     pub run_id: u64,
+    #[serde(default = "default_run_status")]
+    pub status: String,
     pub attachments: Vec<LayerRef>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub trace: Option<LayerRef>,
@@ -39,4 +41,8 @@ pub struct ExperimentConfigSolve {
 
 fn default_adapter_options() -> String {
     "{}".to_string()
+}
+
+fn default_run_status() -> String {
+    "finished".to_string()
 }

@@ -13,6 +13,7 @@ use std::str::FromStr;
 use std::sync::OnceLock;
 
 static DEFAULT_LOCAL_REGISTRY: OnceLock<LocalRegistry> = OnceLock::new();
+const EXPERIMENT_CHECKPOINT_REPOSITORY: &str = "checkpoint";
 
 /// OCI descriptor whose referenced bytes are known to exist in the
 /// referenced Local Registry's BlobStore.
@@ -223,6 +224,23 @@ impl LocalRegistry {
         &self.blobs
     }
 
+    pub fn get_blob(&self, descriptor: &StoredDescriptor<'_>) -> Result<Vec<u8>> {
+        ensure!(
+            descriptor.is_stored_in(self),
+            "Descriptor {} is not stored in this Local Registry",
+            descriptor.digest()
+        );
+        let bytes = self.blobs.read_bytes(descriptor.digest())?;
+        ensure!(
+            bytes.len() as u64 == descriptor.size(),
+            "Descriptor size mismatch for {}: descriptor={}, actual={}",
+            descriptor.digest(),
+            descriptor.size(),
+            bytes.len()
+        );
+        Ok(bytes)
+    }
+
     pub fn import_legacy_ref(&self, image_name: &ImageRef) -> Result<OciDirImport> {
         import_legacy_local_registry_ref(&self.index, &self.blobs, &self.root, image_name)
     }
@@ -269,6 +287,30 @@ impl LocalRegistry {
         let registry_id = self.index.registry_id()?;
         crate::artifact::anonymous_local_image_name(&registry_id, "experiment")
             .with_context(|| "Failed to synthesise anonymous experiment image name")
+    }
+
+    /// Deterministic local ref for an Experiment checkpoint artifact.
+    ///
+    /// Format:
+    /// `<registry-id8>.ommx.local/checkpoint:<sha256-requested-image-name>`.
+    /// Checkpoint artifacts are separate from the requested Experiment ref so
+    /// autosave and recovery materialization never advance the success tag.
+    pub(crate) fn experiment_checkpoint_image_name(
+        &self,
+        requested_image_name: &ImageRef,
+    ) -> Result<ImageRef> {
+        let registry_id = self.index.registry_id()?;
+        let repository_key = crate::artifact::anonymous_local_repository_key(
+            &registry_id,
+            EXPERIMENT_CHECKPOINT_REPOSITORY,
+        )?;
+        let digest = sha256_digest(requested_image_name.to_string().as_bytes());
+        let tag = digest
+            .strip_prefix("sha256:")
+            .expect("sha256_digest returns a sha256-prefixed digest");
+        ImageRef::parse(&format!("{repository_key}:{tag}")).with_context(|| {
+            format!("Failed to derive experiment checkpoint image name for {requested_image_name}")
+        })
     }
 
     /// List every SQLite ref whose `(name, reference)` matches the
@@ -380,6 +422,12 @@ impl LocalRegistry {
             "Sealed artifact descriptor belongs to a different Local Registry"
         );
         self.index.replace_image_ref(image_name, &sealed_artifact.0)
+    }
+
+    /// Delete a local manifest ref. Content-addressed blobs are not removed.
+    pub(crate) fn delete_manifest_ref(&self, image_name: &ImageRef) -> Result<bool> {
+        self.index
+            .delete_ref(&image_name.repository_key(), image_name.reference())
     }
 
     /// Validate that the manifest carries the OMMX `artifactType`.
