@@ -18,32 +18,58 @@ Logging methods such as {py:meth}`~ommx.experiment.Experiment.log_json` and {py:
 
 A successful {py:meth}`~ommx.experiment.Experiment.commit` writes the Experiment config and root manifest, then publishes the requested image reference in SQLite. Publishing a ref does not rewrite payload blobs. This ordering means a process can leave behind blob files that are not reachable from any manifest or ref; Local Registry GC handles that case.
 
-## Context Managers Are Recovery Boundaries
+## Run Contexts and Experiment Commit
 
-Use both Experiment and Run objects as context managers.
+Use `Run` objects as context managers. A Run is one trial, and closing it is
+the recovery boundary that records the trial status and publishes a draft
+checkpoint.
+
+An Experiment does not have to be a context manager. In notebooks, a typical
+workflow keeps one Experiment open across multiple cells: run one trial,
+inspect plots and tables, decide the next condition, run another trial, and
+commit explicitly when the human workflow is finished.
 
 ```python
 from ommx.experiment import Experiment
 
 image_name = "ghcr.io/example/team/experiment:baseline"
 
-with Experiment(image_name) as experiment:
-    experiment.log_json("dataset", {"name": "demo"})
-    with experiment.run() as run:
-        run.log_parameter("capacity", 47)
+experiment = Experiment(image_name)
+experiment.log_json("dataset", {"name": "demo"})
+
+with experiment.run() as run:
+    run.log_parameter("capacity", 47)
+
+# Inspect results, make plots, and decide the next condition.
+
+with experiment.run() as run:
+    run.log_parameter("capacity", 64)
+
+artifact = experiment.commit()
 ```
 
-The context-manager exits define what is recoverable.
+For batch scripts where all Runs are known in advance, `with Experiment(...)`
+is a convenience: normal exit calls `commit()`, and exceptional exit publishes
+a failed or interrupted checkpoint instead of advancing the successful image
+reference.
 
-| Event | Stored state |
+| Operation or event | Stored state |
 |---|---|
 | `Run` exits normally | The Run is recorded with status `"finished"` and a best-effort draft checkpoint is published. |
 | `Run` exits with an exception | The Run is recorded with status `"failed"` or `"interrupted"` and a best-effort draft checkpoint is published. The exception still propagates. |
-| `Experiment` exits normally | The final Experiment is committed, the requested image reference is published, and any local checkpoint for that Experiment is removed. |
-| `Experiment` exits with an exception | The requested successful image reference is not advanced. A checkpoint Experiment is published with status `"failed"` or `"interrupted"`. |
-| The process is killed before an open `Run` exits | Payload blobs written by that open Run may exist, but they are not part of recoverable Run state. Recovery starts from the latest checkpoint produced by a closed Run or by Experiment exception handling. |
+| `experiment.commit()` succeeds | The final Experiment is committed, the requested image reference is published, and any local checkpoint for that Experiment is removed. |
+| `with Experiment(...)` exits normally | Equivalent to calling `commit()` at the end of the block. |
+| `with Experiment(...)` exits with an exception | The requested successful image reference is not advanced. A checkpoint Experiment is published with status `"failed"` or `"interrupted"`. |
+| A notebook kernel or process dies after a Run has closed but before `commit()` | Recovery starts from the latest draft checkpoint produced by a closed Run. |
+| A notebook kernel or process dies before an open `Run` exits | Payload blobs written by that open Run may exist, but they are not part of recoverable Run state. Recovery starts from the latest checkpoint before that Run. |
 
 `KeyboardInterrupt` is recorded as `"interrupted"` for both Run and Experiment status. Other exceptions are recorded as `"failed"`.
+
+If you do not use Experiment as a context manager, exceptions outside a Run do
+not automatically publish a failed Experiment checkpoint. The usual interactive
+workflow relies on closed-Run draft checkpoints during exploration and an
+explicit {py:meth}`~ommx.experiment.Experiment.commit` when the Experiment is
+ready to publish.
 
 ## Restoring a Checkpoint
 
@@ -54,14 +80,22 @@ from ommx.experiment import Experiment
 
 image_name = "ghcr.io/example/team/experiment:baseline"
 
-with Experiment.restore_from_checkpoint(image_name) as experiment:
-    with experiment.run() as run:
-        run.log_parameter("capacity", 64)
+experiment = Experiment.restore_from_checkpoint(image_name)
+
+with experiment.run() as run:
+    run.log_parameter("capacity", 64)
+
+artifact = experiment.commit()
 ```
 
 Checkpoint refs are internal Local Registry refs derived from the original image name. They are intentionally not exposed as normal Artifact handles, so keep the original image name if you want to resume.
 
-Restoration returns an uncommitted Experiment. On normal exit, it commits to the original requested image reference and removes the checkpoint. If the restored Experiment fails again, OMMX publishes a new failed or interrupted checkpoint instead of advancing the successful image reference.
+Restoration returns an uncommitted Experiment, so it can be kept open across
+notebook cells just like a newly created Experiment. Calling `commit()` publishes
+the original requested image reference and removes the checkpoint. If the
+restored Experiment is used as a context manager and fails again, OMMX publishes
+a new failed or interrupted checkpoint instead of advancing the successful image
+reference.
 
 ## Reachability After Failure
 

@@ -18,32 +18,59 @@ Experiment のデータは 3 つの層に分かれて保存されます。
 
 正常に {py:meth}`~ommx.experiment.Experiment.commit` すると、Experiment config と root manifest が書かれ、requested image reference が SQLite に publish されます。ref の publish は payload blob を書き直しません。この順序のため、process が途中で終了すると、どの manifest や ref からも到達できない blob file が残ることがあります。そのような blob は Local Registry GC の対象になります。
 
-## Context manager が復帰の境界になる
+## Run context と Experiment commit
 
-Experiment と Run はどちらも context manager として使ってください。
+`Run` は context manager として使ってください。Run は 1 つの試行であり、
+Run を close することが、その試行の status を記録し draft checkpoint を
+publish する復帰境界になります。
+
+一方、Experiment は必ずしも context manager として使う必要はありません。
+notebook では、1 つの Experiment を複数 cell にまたがって開いたままにするのが
+自然な workflow です。1 つの Run を実行し、その結果を可視化・考察し、
+次の条件を決めて別の Run を開始し、人間の workflow が終わった時点で明示的に
+commit します。
 
 ```python
 from ommx.experiment import Experiment
 
 image_name = "ghcr.io/example/team/experiment:baseline"
 
-with Experiment(image_name) as experiment:
-    experiment.log_json("dataset", {"name": "demo"})
-    with experiment.run() as run:
-        run.log_parameter("capacity", 47)
+experiment = Experiment(image_name)
+experiment.log_json("dataset", {"name": "demo"})
+
+with experiment.run() as run:
+    run.log_parameter("capacity", 47)
+
+# 結果を確認し、plot し、次の条件を決める。
+
+with experiment.run() as run:
+    run.log_parameter("capacity", 64)
+
+artifact = experiment.commit()
 ```
 
-context manager の exit が、何を復帰可能な状態として残すかを決めます。
+すべての Run があらかじめ決まっている batch script では、
+`with Experiment(...)` は便利な書き方です。正常終了時には `commit()` を呼び、
+例外終了時には成功用の image reference を進めず failed または interrupted
+checkpoint を publish します。
 
-| Event | 保存される状態 |
+| 操作または event | 保存される状態 |
 |---|---|
 | `Run` が正常終了する | Run は status `"finished"` として記録され、best-effort に draft checkpoint が publish されます。 |
 | `Run` が例外で終了する | Run は status `"failed"` または `"interrupted"` として記録され、best-effort に draft checkpoint が publish されます。例外はそのまま伝播します。 |
-| `Experiment` が正常終了する | final Experiment が commit され、requested image reference が publish されます。その Experiment の local checkpoint があれば削除されます。 |
-| `Experiment` が例外で終了する | 成功用の requested image reference は進みません。status `"failed"` または `"interrupted"` の checkpoint Experiment が publish されます。 |
-| open `Run` の exit 前に process が kill される | その open Run が書いた payload blob は存在する可能性がありますが、復帰可能な Run state には含まれません。復帰地点は、close 済み Run または Experiment 例外処理が作った最新 checkpoint です。 |
+| `experiment.commit()` が成功する | final Experiment が commit され、requested image reference が publish されます。その Experiment の local checkpoint があれば削除されます。 |
+| `with Experiment(...)` が正常終了する | block 末尾で `commit()` を呼ぶのと同じです。 |
+| `with Experiment(...)` が例外で終了する | 成功用の requested image reference は進みません。status `"failed"` または `"interrupted"` の checkpoint Experiment が publish されます。 |
+| Run close 後、`commit()` 前に notebook kernel または process が終了する | close 済み Run が作った最新 draft checkpoint から復帰します。 |
+| open `Run` の exit 前に notebook kernel または process が終了する | その open Run が書いた payload blob は存在する可能性がありますが、復帰可能な Run state には含まれません。復帰地点は、その Run より前の最新 checkpoint です。 |
 
 `KeyboardInterrupt` は Run / Experiment ともに `"interrupted"` として記録されます。それ以外の例外は `"failed"` として記録されます。
+
+Experiment を context manager として使わない場合、Run の外側で起きた例外は
+failed Experiment checkpoint を自動 publish しません。通常の interactive workflow
+では、探索中は close 済み Run が作る draft checkpoint によって復帰可能性を確保し、
+Experiment を公開できる状態になった時点で明示的に
+{py:meth}`~ommx.experiment.Experiment.commit` します。
 
 ## Checkpoint から復帰する
 
@@ -54,14 +81,22 @@ from ommx.experiment import Experiment
 
 image_name = "ghcr.io/example/team/experiment:baseline"
 
-with Experiment.restore_from_checkpoint(image_name) as experiment:
-    with experiment.run() as run:
-        run.log_parameter("capacity", 64)
+experiment = Experiment.restore_from_checkpoint(image_name)
+
+with experiment.run() as run:
+    run.log_parameter("capacity", 64)
+
+artifact = experiment.commit()
 ```
 
 checkpoint ref は元の image name から導出される internal Local Registry ref です。通常の Artifact handle としては公開されないため、復帰したい Experiment では元の image name を保持してください。
 
-restore された Experiment は未 commit の Experiment です。正常終了すれば元の requested image reference に commit され、checkpoint は削除されます。restore 後の Experiment が再び失敗した場合は、成功用の image reference を進めず、新しい failed または interrupted checkpoint が publish されます。
+restore された Experiment は未 commit の Experiment なので、新しく作った
+Experiment と同じように notebook cell をまたいで開いておけます。`commit()` を
+呼ぶと元の requested image reference に publish され、checkpoint は削除されます。
+restore 後の Experiment を context manager として使い、そこで再び失敗した場合は、
+成功用の image reference を進めず、新しい failed または interrupted checkpoint が
+publish されます。
 
 ## 失敗後の到達可能性
 
