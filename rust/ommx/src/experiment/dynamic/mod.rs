@@ -68,7 +68,7 @@ enum ExperimentDynLifecycle {
     Failed {
         image_name: ImageRef,
         reason: String,
-        recovery_artifact: Option<LocalArtifactDyn>,
+        checkpoint_artifact: Option<LocalArtifactDyn>,
     },
 }
 
@@ -292,12 +292,12 @@ impl ExperimentDyn {
         Self::from_artifact(LocalArtifactDyn::load(image_name)?)
     }
 
-    pub fn load_recovery(image_name: crate::artifact::ImageRef) -> Result<Self> {
+    pub fn restore_from_checkpoint(image_name: crate::artifact::ImageRef) -> Result<Self> {
         let registry_handle = LocalRegistryHandle::shared_default()?;
-        Self::load_recovery_in_registry_handle(registry_handle, image_name)
+        Self::restore_from_checkpoint_in_registry_handle(registry_handle, image_name)
     }
 
-    pub fn load_recovery_in_registry_handle(
+    pub fn restore_from_checkpoint_in_registry_handle(
         registry_handle: LocalRegistryHandle,
         image_name: crate::artifact::ImageRef,
     ) -> Result<Self> {
@@ -305,30 +305,12 @@ impl ExperimentDyn {
             registry_handle,
             &image_name,
             &[
+                super::EXPERIMENT_STATUS_DRAFT,
                 super::EXPERIMENT_STATUS_FAILED,
                 super::EXPERIMENT_STATUS_INTERRUPTED,
             ],
-            "recovery",
         )?;
-        Self::from_recovery_artifact(artifact)
-    }
-
-    pub fn load_autosave(image_name: crate::artifact::ImageRef) -> Result<Self> {
-        let registry_handle = LocalRegistryHandle::shared_default()?;
-        Self::load_autosave_in_registry_handle(registry_handle, image_name)
-    }
-
-    pub fn load_autosave_in_registry_handle(
-        registry_handle: LocalRegistryHandle,
-        image_name: crate::artifact::ImageRef,
-    ) -> Result<Self> {
-        let artifact = checkpoint_artifact(
-            registry_handle,
-            &image_name,
-            &[super::EXPERIMENT_STATUS_DRAFT],
-            "autosave",
-        )?;
-        Self::from_autosave_artifact(artifact)
+        Self::restore_from_checkpoint_artifact(artifact)
     }
 
     pub fn import_archive(path: &Path) -> Result<Self> {
@@ -340,14 +322,10 @@ impl ExperimentDyn {
         Self::from_sealed_state(sealed)
     }
 
-    pub fn from_recovery_artifact(artifact: LocalArtifactDyn) -> Result<Self> {
-        let sealed = SealedExperimentDynState::from_recovery_artifact(artifact.clone())?;
-        let requested_image_name = recovery_requested_image_name(&artifact)?;
-        Self::from_recovery_sealed_state(sealed, requested_image_name)
-    }
-
-    pub fn from_autosave_artifact(artifact: LocalArtifactDyn) -> Result<Self> {
-        Self::from_recovery_artifact(artifact)
+    fn restore_from_checkpoint_artifact(artifact: LocalArtifactDyn) -> Result<Self> {
+        let sealed = SealedExperimentDynState::from_checkpoint_artifact(artifact.clone())?;
+        let requested_image_name = checkpoint_requested_image_name(&artifact)?;
+        Self::from_checkpoint_sealed_state(sealed, requested_image_name)
     }
 
     fn from_sealed_state(sealed: SealedExperimentDynState) -> Result<Self> {
@@ -361,7 +339,7 @@ impl ExperimentDyn {
         })
     }
 
-    fn from_recovery_sealed_state(
+    fn from_checkpoint_sealed_state(
         sealed: SealedExperimentDynState,
         image_name: ImageRef,
     ) -> Result<Self> {
@@ -417,20 +395,6 @@ impl ExperimentDyn {
                 .clone()),
             ExperimentDynLifecycle::Sealed(sealed) => Ok(sealed.image_name().clone()),
             ExperimentDynLifecycle::Failed { image_name, .. } => Ok(image_name.clone()),
-        }
-    }
-
-    pub fn autosave_image_name(&self) -> Option<ImageRef> {
-        let dyn_state = lock_experiment_state(&self.state);
-        match &dyn_state.lifecycle {
-            ExperimentDynLifecycle::Unsealed { state, .. } => state.as_ref().and_then(|state| {
-                dyn_state
-                    .registry_handle
-                    .registry()
-                    .experiment_checkpoint_image_name(&state.image_name)
-                    .ok()
-            }),
-            ExperimentDynLifecycle::Sealed(_) | ExperimentDynLifecycle::Failed { .. } => None,
         }
     }
 
@@ -547,7 +511,7 @@ impl ExperimentDyn {
                 dyn_state.lifecycle = ExperimentDynLifecycle::Failed {
                     image_name,
                     reason,
-                    recovery_artifact: None,
+                    checkpoint_artifact: None,
                 };
                 return Err(error);
             }
@@ -559,7 +523,7 @@ impl ExperimentDyn {
                 dyn_state.lifecycle = ExperimentDynLifecycle::Failed {
                     image_name,
                     reason,
-                    recovery_artifact: None,
+                    checkpoint_artifact: None,
                 };
                 return Err(error);
             }
@@ -568,22 +532,15 @@ impl ExperimentDyn {
         Ok(artifact)
     }
 
-    pub fn commit_failed_recovery(&self, reason: impl Into<String>) -> Result<LocalArtifactDyn> {
-        self.commit_recovery(reason, super::EXPERIMENT_STATUS_FAILED)
+    pub fn commit_failed_checkpoint(&self, reason: impl Into<String>) -> Result<()> {
+        self.commit_checkpoint(reason, super::EXPERIMENT_STATUS_FAILED)
     }
 
-    pub fn commit_interrupted_recovery(
-        &self,
-        reason: impl Into<String>,
-    ) -> Result<LocalArtifactDyn> {
-        self.commit_recovery(reason, super::EXPERIMENT_STATUS_INTERRUPTED)
+    pub fn commit_interrupted_checkpoint(&self, reason: impl Into<String>) -> Result<()> {
+        self.commit_checkpoint(reason, super::EXPERIMENT_STATUS_INTERRUPTED)
     }
 
-    fn commit_recovery(
-        &self,
-        reason: impl Into<String>,
-        status: &'static str,
-    ) -> Result<LocalArtifactDyn> {
+    fn commit_checkpoint(&self, reason: impl Into<String>, status: &'static str) -> Result<()> {
         let reason = reason.into();
         let mut dyn_state = lock_experiment_state(&self.state);
         let registry_handle = dyn_state.registry_handle.clone();
@@ -594,7 +551,7 @@ impl ExperimentDyn {
         if *open_runs != 0 {
             tracing::warn!(
                 open_runs = *open_runs,
-                "Publishing Experiment recovery artifact while Run handle(s) are still open; open-run local state is not included"
+                "Publishing Experiment checkpoint while Run handle(s) are still open; open-run local state is not included"
             );
         }
         let state = state
@@ -602,7 +559,7 @@ impl ExperimentDyn {
             .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
         let image_name = state.image_name.clone();
         let artifact = match state
-            .commit_recovery(registry_handle.registry(), status)
+            .commit_checkpoint(registry_handle.registry(), status)
             .and_then(|artifact| {
                 LocalArtifactDyn::open_in_registry_handle(
                     registry_handle.clone(),
@@ -611,13 +568,11 @@ impl ExperimentDyn {
             }) {
             Ok(artifact) => artifact,
             Err(error) => {
-                let recovery_error = error.to_string();
+                let checkpoint_error = error.to_string();
                 dyn_state.lifecycle = ExperimentDynLifecycle::Failed {
                     image_name,
-                    reason: format!(
-                        "{reason}; failed to publish recovery artifact: {recovery_error}"
-                    ),
-                    recovery_artifact: None,
+                    reason: format!("{reason}; failed to publish checkpoint: {checkpoint_error}"),
+                    checkpoint_artifact: None,
                 };
                 return Err(error);
             }
@@ -625,23 +580,9 @@ impl ExperimentDyn {
         dyn_state.lifecycle = ExperimentDynLifecycle::Failed {
             image_name,
             reason,
-            recovery_artifact: Some(artifact.clone()),
+            checkpoint_artifact: Some(artifact),
         };
-        Ok(artifact)
-    }
-
-    pub fn recovery_artifact(&self) -> Option<LocalArtifactDyn> {
-        match &lock_experiment_state(&self.state).lifecycle {
-            ExperimentDynLifecycle::Failed {
-                recovery_artifact, ..
-            } => recovery_artifact.clone(),
-            ExperimentDynLifecycle::Unsealed { .. } | ExperimentDynLifecycle::Sealed(_) => None,
-        }
-    }
-
-    pub fn recovery_image_name(&self) -> Option<ImageRef> {
-        self.recovery_artifact()
-            .map(|artifact| artifact.image_name().clone())
+        Ok(())
     }
 
     pub fn artifact(&self) -> Result<LocalArtifactDyn> {
@@ -664,11 +605,11 @@ impl ExperimentDyn {
                     state.attachments.clone()
                 }
                 ExperimentDynLifecycle::Failed {
-                    recovery_artifact: Some(artifact),
+                    checkpoint_artifact: Some(artifact),
                     ..
                 } => {
                     let sealed =
-                        SealedExperimentDynState::from_recovery_artifact(artifact.clone())?;
+                        SealedExperimentDynState::from_checkpoint_artifact(artifact.clone())?;
                     sealed.attachments.clone()
                 }
                 lifecycle => return bail_not_sealed(lifecycle),
@@ -691,10 +632,10 @@ impl ExperimentDyn {
                 ))
             }
             ExperimentDynLifecycle::Failed {
-                recovery_artifact: Some(artifact),
+                checkpoint_artifact: Some(artifact),
                 ..
             } => Ok(
-                SealedExperimentDynState::from_recovery_artifact(artifact.clone())?
+                SealedExperimentDynState::from_checkpoint_artifact(artifact.clone())?
                     .runs
                     .values()
                     .cloned()
@@ -715,10 +656,10 @@ impl ExperimentDyn {
                 Ok(unsealed_run_parameter_cells(state.runs.values()))
             }
             ExperimentDynLifecycle::Failed {
-                recovery_artifact: Some(artifact),
+                checkpoint_artifact: Some(artifact),
                 ..
             } => Ok(
-                SealedExperimentDynState::from_recovery_artifact(artifact.clone())?
+                SealedExperimentDynState::from_checkpoint_artifact(artifact.clone())?
                     .run_parameters
                     .cells(),
             ),
@@ -752,13 +693,13 @@ impl UnsealedExperimentDynState {
         self.into_unsealed_state(registry)?.commit(registry)
     }
 
-    fn commit_recovery<'reg>(
+    fn commit_checkpoint<'reg>(
         self,
         registry: &'reg LocalRegistry,
         status: &'static str,
     ) -> Result<LocalArtifact<'reg>> {
         self.into_unsealed_state(registry)?
-            .commit_recovery(registry, status)
+            .commit_checkpoint(registry, status)
     }
 
     fn autosave_checkpoint<'reg>(
@@ -867,9 +808,9 @@ impl SealedExperimentDynState {
         )
     }
 
-    fn from_recovery_artifact(artifact: LocalArtifactDyn) -> Result<Self> {
+    fn from_checkpoint_artifact(artifact: LocalArtifactDyn) -> Result<Self> {
         Self::from_sealed_experiment(
-            SealedExperiment::from_recovery_artifact(artifact.clone().as_local_artifact())?,
+            SealedExperiment::from_checkpoint_artifact(artifact.clone().as_local_artifact())?,
             artifact,
         )
     }
@@ -1035,7 +976,7 @@ fn unsealed_run_parameter_cells<'a>(
     .collect()
 }
 
-fn recovery_requested_image_name(artifact: &LocalArtifactDyn) -> Result<ImageRef> {
+fn checkpoint_requested_image_name(artifact: &LocalArtifactDyn) -> Result<ImageRef> {
     let annotations = artifact.annotations()?;
     let requested = annotations
         .get(ANN_EXPERIMENT_REQUESTED_IMAGE)
@@ -1055,14 +996,13 @@ fn checkpoint_artifact(
     registry_handle: LocalRegistryHandle,
     requested_image_name: &ImageRef,
     accepted_statuses: &[&str],
-    checkpoint_kind: &str,
 ) -> Result<LocalArtifactDyn> {
     let checkpoint_image_name = registry_handle
         .registry()
         .experiment_checkpoint_image_name(requested_image_name)?;
     let requested_image_name = requested_image_name.to_string();
     let missing_checkpoint_message = format!(
-        "No Experiment {checkpoint_kind} checkpoint found for requested image \
+        "No Experiment checkpoint found for requested image \
          {requested_image_name} at {checkpoint_image_name}"
     );
     let artifact =
@@ -1074,26 +1014,24 @@ fn checkpoint_artifact(
             .get(super::ANN_EXPERIMENT_RECOVERY)
             .map(String::as_str)
             == Some("true"),
-        "Experiment {checkpoint_kind} checkpoint {checkpoint_image_name} is missing recovery marker"
+        "Experiment checkpoint {checkpoint_image_name} is missing recovery marker"
     );
     ensure!(
         annotations
             .get(ANN_EXPERIMENT_REQUESTED_IMAGE)
             .map(String::as_str)
             == Some(requested_image_name.as_str()),
-        "Experiment {checkpoint_kind} checkpoint {checkpoint_image_name} does not belong to requested image {requested_image_name}"
+        "Experiment checkpoint {checkpoint_image_name} does not belong to requested image {requested_image_name}"
     );
     let status = annotations
         .get(super::ANN_EXPERIMENT_STATUS)
         .map(String::as_str)
         .ok_or_else(|| {
-            anyhow::anyhow!(
-                "Experiment {checkpoint_kind} checkpoint {checkpoint_image_name} is missing status"
-            )
+            anyhow::anyhow!("Experiment checkpoint {checkpoint_image_name} is missing status")
         })?;
     ensure!(
         accepted_statuses.contains(&status),
-        "Experiment {checkpoint_kind} checkpoint {checkpoint_image_name} has status {status}"
+        "Experiment checkpoint {checkpoint_image_name} has status {status}"
     );
     Ok(artifact)
 }

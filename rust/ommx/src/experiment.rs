@@ -129,6 +129,12 @@ impl RunStatus {
     }
 }
 
+impl std::fmt::Display for RunStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 /// A mutable, unsealed experiment session. See the [module documentation](self).
 #[derive(Debug)]
 pub struct Experiment<'reg> {
@@ -308,12 +314,6 @@ impl<'reg> Experiment<'reg> {
     /// to when committed.
     pub fn image_name(&self) -> ImageRef {
         self.lock_state().image_name.clone()
-    }
-
-    /// Rolling local checkpoint ref used by Run-close autosave.
-    pub fn autosave_image_name(&self) -> Result<ImageRef> {
-        let image_name = self.lock_state().image_name.clone();
-        self.registry.experiment_checkpoint_image_name(&image_name)
     }
 
     /// Start a new [`Run`]. Each run gets a fresh 0-based `run_id`.

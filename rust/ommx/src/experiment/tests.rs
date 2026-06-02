@@ -1178,7 +1178,7 @@ fn experiment_dyn_marks_commit_failure_explicitly() {
 }
 
 #[test]
-fn experiment_dyn_publishes_failed_recovery_artifact() {
+fn experiment_dyn_publishes_failed_checkpoint() {
     let registry_handle = LocalRegistryHandle::temp().unwrap();
     let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:will-fail").unwrap();
     let experiment =
@@ -1190,8 +1190,8 @@ fn experiment_dyn_publishes_failed_recovery_artifact() {
         run.finish().unwrap();
     }
 
-    let recovery = experiment
-        .commit_failed_recovery("ValueError: failed")
+    experiment
+        .commit_failed_checkpoint("ValueError: failed")
         .unwrap();
 
     assert_eq!(experiment.state_name(), "failed");
@@ -1205,14 +1205,14 @@ fn experiment_dyn_publishes_failed_recovery_artifact() {
         .registry()
         .experiment_checkpoint_image_name(&image_name)
         .unwrap();
-    assert_eq!(recovery.image_name(), &checkpoint_image_name);
-    assert_eq!(
-        experiment.recovery_image_name().unwrap(),
-        recovery.image_name().clone()
-    );
-    assert!(experiment.recovery_artifact().is_some());
+    let checkpoint = LocalArtifactDyn::open_in_registry_handle(
+        registry_handle.clone(),
+        checkpoint_image_name.clone(),
+    )
+    .unwrap();
+    assert_eq!(checkpoint.image_name(), &checkpoint_image_name);
 
-    let annotations = recovery.annotations().unwrap();
+    let annotations = checkpoint.annotations().unwrap();
     assert_eq!(
         annotations.get(ANN_EXPERIMENT_STATUS).map(String::as_str),
         Some(EXPERIMENT_STATUS_FAILED)
@@ -1227,11 +1227,11 @@ fn experiment_dyn_publishes_failed_recovery_artifact() {
         Some(&requested_image_name)
     );
 
-    let recovery_artifact = recovery.as_local_artifact();
-    let config = experiment_config(&recovery_artifact);
+    let checkpoint_artifact = checkpoint.as_local_artifact();
+    let config = experiment_config(&checkpoint_artifact);
     assert_eq!(config.status, EXPERIMENT_STATUS_FAILED);
-    let err = SealedExperiment::from_artifact(recovery_artifact)
-        .expect_err("failed recovery artifacts must not load as finished experiments");
+    let err = SealedExperiment::from_artifact(checkpoint_artifact)
+        .expect_err("failed checkpoint must not load as finished experiments");
     assert!(err.to_string().contains("status is failed"));
 }
 
@@ -1246,18 +1246,25 @@ fn experiment_dyn_recovers_failed_artifact_with_requested_image_name() {
         run.log_parameter("solver", "scip").unwrap();
         run.finish_failed().unwrap();
     }
-    let recovery = experiment
-        .commit_failed_recovery("RuntimeError: solve failed")
+    experiment
+        .commit_failed_checkpoint("RuntimeError: solve failed")
         .unwrap();
     let checkpoint_image_name = registry_handle
         .registry()
         .experiment_checkpoint_image_name(&image_name)
         .unwrap();
-    assert_eq!(recovery.image_name(), &checkpoint_image_name);
+    let checkpoint = LocalArtifactDyn::open_in_registry_handle(
+        registry_handle.clone(),
+        checkpoint_image_name.clone(),
+    )
+    .unwrap();
+    assert_eq!(checkpoint.image_name(), &checkpoint_image_name);
 
-    let recovered =
-        ExperimentDyn::load_recovery_in_registry_handle(registry_handle, image_name.clone())
-            .unwrap();
+    let recovered = ExperimentDyn::restore_from_checkpoint_in_registry_handle(
+        registry_handle,
+        image_name.clone(),
+    )
+    .unwrap();
     assert!(recovered.is_unsealed());
     assert_eq!(recovered.image_name().unwrap(), image_name);
     {
@@ -1285,11 +1292,9 @@ fn experiment_dyn_autosaves_on_run_close_and_recovers_with_requested_image_name(
         .registry()
         .experiment_checkpoint_image_name(&image_name)
         .unwrap();
-    let autosave_image_name = experiment.autosave_image_name().unwrap();
-    assert_eq!(autosave_image_name, checkpoint_image_name);
     assert!(registry_handle
         .registry()
-        .resolve_image_name(&autosave_image_name)
+        .resolve_image_name(&checkpoint_image_name)
         .unwrap()
         .is_none());
 
@@ -1301,10 +1306,10 @@ fn experiment_dyn_autosaves_on_run_close_and_recovers_with_requested_image_name(
 
     let autosave = LocalArtifactDyn::open_in_registry_handle(
         registry_handle.clone(),
-        autosave_image_name.clone(),
+        checkpoint_image_name.clone(),
     )
     .expect("Run close should publish an autosave checkpoint");
-    assert_eq!(autosave.image_name(), &autosave_image_name);
+    assert_eq!(autosave.image_name(), &checkpoint_image_name);
     let annotations = autosave.annotations().unwrap();
     assert_eq!(
         annotations.get(ANN_EXPERIMENT_STATUS).map(String::as_str),
@@ -1329,9 +1334,11 @@ fn experiment_dyn_autosaves_on_run_close_and_recovers_with_requested_image_name(
         .expect_err("autosave checkpoint must not load as a finished experiment");
     assert!(err.to_string().contains("status is draft"));
 
-    let recovered =
-        ExperimentDyn::load_autosave_in_registry_handle(registry_handle, image_name.clone())
-            .unwrap();
+    let recovered = ExperimentDyn::restore_from_checkpoint_in_registry_handle(
+        registry_handle,
+        image_name.clone(),
+    )
+    .unwrap();
     assert!(recovered.is_unsealed());
     assert_eq!(recovered.image_name().unwrap(), image_name);
     {
@@ -1350,7 +1357,7 @@ fn experiment_dyn_autosaves_on_run_close_and_recovers_with_requested_image_name(
 }
 
 #[test]
-fn experiment_dyn_marks_keyboard_interrupt_recovery_separately() {
+fn experiment_dyn_marks_keyboard_interrupt_checkpoint_separately() {
     let registry_handle = LocalRegistryHandle::temp().unwrap();
     let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:interrupt").unwrap();
     let experiment =
@@ -1361,26 +1368,35 @@ fn experiment_dyn_marks_keyboard_interrupt_recovery_separately() {
         run.finish_interrupted().unwrap();
     }
 
-    let autosave_image_name = registry_handle
+    let draft_checkpoint_image_name = registry_handle
         .registry()
         .experiment_checkpoint_image_name(&image_name)
         .unwrap();
-    let autosave =
-        LocalArtifactDyn::open_in_registry_handle(registry_handle.clone(), autosave_image_name)
-            .unwrap();
+    let autosave = LocalArtifactDyn::open_in_registry_handle(
+        registry_handle.clone(),
+        draft_checkpoint_image_name,
+    )
+    .unwrap();
     let autosave_config = experiment_config(&autosave.as_local_artifact());
     assert_eq!(autosave_config.status, EXPERIMENT_STATUS_DRAFT);
     assert_eq!(autosave_config.runs[0].status, RUN_STATUS_INTERRUPTED);
 
-    let recovery = experiment
-        .commit_interrupted_recovery("KeyboardInterrupt")
+    experiment
+        .commit_interrupted_checkpoint("KeyboardInterrupt")
         .unwrap();
-    let annotations = recovery.annotations().unwrap();
+    let checkpoint_image_name = registry_handle
+        .registry()
+        .experiment_checkpoint_image_name(&image_name)
+        .unwrap();
+    let checkpoint =
+        LocalArtifactDyn::open_in_registry_handle(registry_handle.clone(), checkpoint_image_name)
+            .unwrap();
+    let annotations = checkpoint.annotations().unwrap();
     assert_eq!(
         annotations.get(ANN_EXPERIMENT_STATUS).map(String::as_str),
         Some(EXPERIMENT_STATUS_INTERRUPTED)
     );
-    let config = experiment_config(&recovery.as_local_artifact());
+    let config = experiment_config(&checkpoint.as_local_artifact());
     assert_eq!(config.status, EXPERIMENT_STATUS_INTERRUPTED);
     assert_eq!(config.runs[0].status, RUN_STATUS_INTERRUPTED);
 }
@@ -1429,10 +1445,6 @@ fn experiment_dyn_rename_moves_autosave_checkpoint_ref() {
         .registry()
         .experiment_checkpoint_image_name(&old_image_name)
         .unwrap();
-    assert_eq!(
-        experiment.autosave_image_name().unwrap(),
-        old_checkpoint_image_name
-    );
     assert!(registry_handle
         .registry()
         .resolve_image_name(&old_checkpoint_image_name)
@@ -1445,10 +1457,6 @@ fn experiment_dyn_rename_moves_autosave_checkpoint_ref() {
         .registry()
         .experiment_checkpoint_image_name(&new_image_name)
         .unwrap();
-    assert_eq!(
-        experiment.autosave_image_name().unwrap(),
-        new_checkpoint_image_name
-    );
     assert!(registry_handle
         .registry()
         .resolve_image_name(&old_checkpoint_image_name)
@@ -1460,9 +1468,11 @@ fn experiment_dyn_rename_moves_autosave_checkpoint_ref() {
         .unwrap()
         .is_some());
 
-    let recovered =
-        ExperimentDyn::load_autosave_in_registry_handle(registry_handle, new_image_name.clone())
-            .unwrap();
+    let recovered = ExperimentDyn::restore_from_checkpoint_in_registry_handle(
+        registry_handle,
+        new_image_name.clone(),
+    )
+    .unwrap();
     assert_eq!(recovered.image_name().unwrap(), new_image_name);
     assert_eq!(recovered.run_parameter_cells().unwrap().len(), 1);
 }

@@ -295,7 +295,7 @@ impl LocalRegistry {
     /// `<registry-id8>.ommx.local/checkpoint:<sha256-requested-image-name>`.
     /// Checkpoint artifacts are separate from the requested Experiment ref so
     /// autosave and recovery materialization never advance the success tag.
-    pub fn experiment_checkpoint_image_name(
+    pub(crate) fn experiment_checkpoint_image_name(
         &self,
         requested_image_name: &ImageRef,
     ) -> Result<ImageRef> {

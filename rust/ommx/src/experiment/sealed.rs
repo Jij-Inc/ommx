@@ -20,8 +20,8 @@ impl<'reg> SealedExperiment<'reg> {
         Self::from_artifact_with_allowed_statuses(artifact, &[EXPERIMENT_STATUS_FINISHED])
     }
 
-    /// Reconstruct a recovery/checkpoint Experiment from a committed Artifact.
-    pub fn from_recovery_artifact(artifact: LocalArtifact<'reg>) -> Result<Self> {
+    /// Reconstruct a checkpoint Experiment from a committed Artifact.
+    pub(crate) fn from_checkpoint_artifact(artifact: LocalArtifact<'reg>) -> Result<Self> {
         Self::from_artifact_with_allowed_statuses(
             artifact,
             &[

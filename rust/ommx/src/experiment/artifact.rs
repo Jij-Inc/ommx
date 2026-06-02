@@ -36,21 +36,21 @@ impl<'reg> UnsealedExperimentState<'reg> {
         Ok(artifact)
     }
 
-    /// Consume the unsealed experiment state and publish a recovery
-    /// artifact under a reserved local ref.
-    pub(super) fn commit_recovery(
+    /// Consume the unsealed experiment state and publish a checkpoint
+    /// manifest under a reserved local ref.
+    pub(super) fn commit_checkpoint(
         self,
         registry: &'reg LocalRegistry,
         status: &'static str,
     ) -> Result<LocalArtifact<'reg>> {
         let requested_image_name = self.image_name.clone();
-        let recovery_image_name =
+        let checkpoint_image_name =
             registry.experiment_checkpoint_image_name(&requested_image_name)?;
         let annotations = checkpoint_annotations(status, &requested_image_name);
 
         self.publish_as(
             registry,
-            recovery_image_name,
+            checkpoint_image_name,
             status,
             annotations,
             RefPublishMode::Replace,

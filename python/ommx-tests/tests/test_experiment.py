@@ -1,4 +1,4 @@
-import hashlib
+import uuid
 from typing import Any, ClassVar, cast
 
 import pandas as pd
@@ -36,8 +36,8 @@ def _trace_span_count(trace: TraceResult, name: str) -> int:
     return sum(span.name == name for span in trace.spans)
 
 
-def _checkpoint_suffix(image_name: str) -> str:
-    return "/checkpoint:" + hashlib.sha256(image_name.encode()).hexdigest()
+def _image_name(label: str) -> str:
+    return f"example.com/ommx-tests/{label}:{uuid.uuid4().hex}"
 
 
 def _single_trace_span(trace: TraceResult, name: str):
@@ -153,10 +153,11 @@ def test_temp_registry_lives_with_artifact_after_experiment_drop():
     assert df.loc[0, "solver"] == "scip"
 
 
-def test_experiment_context_publishes_recovery_artifact_on_exception():
+def test_experiment_context_restores_failed_checkpoint_on_exception():
+    image_name = _image_name("exception-checkpoint")
     experiments: list[Experiment] = []
     with pytest.raises(ValueError):
-        with Experiment.with_temp_local_registry() as experiment:
+        with Experiment(image_name) as experiment:
             experiments.append(experiment)
             with experiment.run() as run:
                 run.log_parameter("solver", "scip")
@@ -165,24 +166,10 @@ def test_experiment_context_publishes_recovery_artifact_on_exception():
     experiment = experiments[0]
     with pytest.raises(RuntimeError, match="commit has failed"):
         experiment.artifact
-    assert experiment.recovery_image_name is not None
-    assert experiment.recovery_image_name.endswith(_checkpoint_suffix(experiment.image_name))
 
-    recovery_artifact = experiment.recovery_artifact
-    assert recovery_artifact is not None
-    assert recovery_artifact.image_name == experiment.recovery_image_name
-    assert recovery_artifact.annotations["org.ommx.experiment.status"] == "failed"
-    assert recovery_artifact.annotations["org.ommx.experiment.recovery"] == "true"
-    assert (
-        recovery_artifact.annotations["org.ommx.experiment.requested_image"]
-        == experiment.image_name
-    )
-    with pytest.raises(RuntimeError, match="status is failed"):
-        Experiment.from_artifact(recovery_artifact)
-
-    resumed = Experiment.from_recovery_artifact(recovery_artifact)
+    resumed = Experiment.restore_from_checkpoint(image_name)
     assert resumed.status is None
-    assert resumed.image_name == experiment.image_name
+    assert resumed.image_name == image_name
     with resumed:
         with resumed.run() as run:
             assert run.run_id == 1
@@ -191,21 +178,18 @@ def test_experiment_context_publishes_recovery_artifact_on_exception():
     assert list(resumed.run_parameters_df().index) == [0, 1]
 
 
-def test_recovery_artifact_keeps_failed_run_and_can_be_forked():
-    experiments: list[Experiment] = []
+def test_checkpoint_keeps_failed_run_and_can_be_restored():
+    image_name = _image_name("failed-run-checkpoint")
     with pytest.raises(RuntimeError, match="solve failed"):
-        with Experiment.with_temp_local_registry() as experiment:
-            experiments.append(experiment)
+        with Experiment(image_name) as experiment:
             with experiment.run() as run:
                 run.log_parameter("solver", "scip")
                 run.log_json("before-failure", {"step": 1})
                 raise RuntimeError("solve failed")
 
-    recovery_artifact = experiments[0].recovery_artifact
-    assert recovery_artifact is not None
-    resumed = Experiment.from_recovery_artifact(recovery_artifact)
+    resumed = Experiment.restore_from_checkpoint(image_name)
     assert resumed.status is None
-    assert resumed.image_name == experiments[0].image_name
+    assert resumed.image_name == image_name
     assert resumed.runs[0].get_json("before-failure") == {"step": 1}
     assert resumed.run_parameters_df().loc[0, "solver"] == "scip"
     with resumed:
@@ -220,11 +204,8 @@ def test_recovery_artifact_keeps_failed_run_and_can_be_forked():
     assert list(resumed.run_parameters_df().index) == [0, 1]
 
 
-def test_run_close_updates_live_state_and_autosave_image_name():
+def test_run_close_updates_live_state():
     experiment = Experiment.with_temp_local_registry()
-    autosave_image_name = experiment.autosave_image_name
-    assert autosave_image_name is not None
-    assert autosave_image_name.endswith(_checkpoint_suffix(experiment.image_name))
 
     with experiment.run() as run:
         run.log_parameter("solver", "scip")
@@ -235,23 +216,15 @@ def test_run_close_updates_live_state_and_autosave_image_name():
     assert experiment.run_parameters_df().loc[0, "solver"] == "scip"
 
 
-def test_keyboard_interrupt_records_interrupted_run_and_recovery():
-    experiments: list[Experiment] = []
+def test_keyboard_interrupt_records_interrupted_run_and_checkpoint():
+    image_name = _image_name("keyboard-interrupt-checkpoint")
     with pytest.raises(KeyboardInterrupt):
-        with Experiment.with_temp_local_registry() as experiment:
-            experiments.append(experiment)
+        with Experiment(image_name) as experiment:
             with experiment.run() as run:
                 run.log_parameter("solver", "scip")
                 raise KeyboardInterrupt
 
-    experiment = experiments[0]
-    recovery_artifact = experiment.recovery_artifact
-    assert recovery_artifact is not None
-    assert recovery_artifact.annotations["org.ommx.experiment.status"] == "interrupted"
-    with pytest.raises(RuntimeError, match="status is interrupted"):
-        Experiment.from_artifact(recovery_artifact)
-
-    resumed = Experiment.from_recovery_artifact(recovery_artifact)
+    resumed = Experiment.restore_from_checkpoint(image_name)
     with resumed:
         pass
     assert [run.status for run in resumed.runs] == ["interrupted"]
