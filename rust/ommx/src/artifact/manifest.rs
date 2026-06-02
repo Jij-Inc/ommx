@@ -81,6 +81,17 @@ impl LocalRegistryHandle {
             LocalRegistryHandleInner::Temp(temp) => temp.registry(),
         }
     }
+
+    /// Read a blob referenced by an owned OCI descriptor from this registry.
+    ///
+    /// Dynamic-lifetime handles store raw [`Descriptor`] values internally
+    /// because they cannot carry `StoredDescriptor<'reg>` lifetimes. This
+    /// method revalidates the descriptor against the backing Local Registry
+    /// before reading the blob bytes.
+    pub fn get_blob_dyn(&self, descriptor: &Descriptor) -> Result<Vec<u8>> {
+        let descriptor = self.registry().stored_descriptor(descriptor.clone())?;
+        self.registry().get_blob(&descriptor)
+    }
 }
 
 /// Runtime-owned artifact handle for dynamic runtimes.
@@ -218,7 +229,7 @@ impl LocalArtifactDyn {
     }
 
     pub fn get_blob(&self, descriptor: &Descriptor) -> Result<Vec<u8>> {
-        self.as_local_artifact().get_blob_by_descriptor(descriptor)
+        self.registry_handle.get_blob_dyn(descriptor)
     }
 
     pub fn save(&self, output: &Path) -> crate::Result<()> {
@@ -377,15 +388,7 @@ impl<'reg> LocalArtifact<'reg> {
             "Descriptor {} is not stored in this LocalArtifact's Local Registry",
             descriptor.digest()
         );
-        let bytes = self.registry.blobs().read_bytes(descriptor.digest())?;
-        ensure!(
-            bytes.len() as u64 == descriptor.size(),
-            "Descriptor size mismatch for {}: descriptor={}, actual={}",
-            descriptor.digest(),
-            descriptor.size(),
-            bytes.len()
-        );
-        Ok(bytes)
+        self.registry.get_blob(descriptor)
     }
 
     pub(crate) fn get_blob_by_descriptor(&self, descriptor: &Descriptor) -> Result<Vec<u8>> {

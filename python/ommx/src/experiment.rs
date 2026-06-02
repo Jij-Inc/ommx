@@ -13,6 +13,7 @@ use std::{
 
 use crate::pandas::{raw_entries_to_dataframe, PyDataFrame};
 use crate::{PyArtifact, PyDescriptor};
+use ommx::artifact::local_registry::{LocalRegistry, StoredDescriptor};
 use ommx::artifact::AsArtifact;
 use ommx::experiment::AttachmentLogger;
 
@@ -349,8 +350,9 @@ impl PyExperiment {
     /// media types are returned as raw `bytes`.
     pub fn get_attachment<'py>(&self, py: Python<'py>, name: &str) -> Result<Bound<'py, PyAny>> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let (artifact, descriptor) = self.find_attachment(name)?;
-        decode_attachment(py, &artifact, &descriptor)
+        let descriptor = self.find_attachment(name)?;
+        let registry_handle = self.inner.registry_handle();
+        decode_attachment(py, registry_handle.registry(), &descriptor)
     }
 
     /// Read a JSON experiment-level attachment by name.
@@ -359,15 +361,17 @@ impl PyExperiment {
     /// `application/json`.
     pub fn get_json<'py>(&self, py: Python<'py>, name: &str) -> Result<Bound<'py, PyAny>> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let (artifact, descriptor) = self.find_attachment(name)?;
-        decode_json_attachment(py, &artifact, &descriptor)
+        let descriptor = self.find_attachment(name)?;
+        let registry_handle = self.inner.registry_handle();
+        decode_json_attachment(py, registry_handle.registry(), &descriptor)
     }
 
     /// Read an Instance experiment-level attachment by name.
     pub fn get_instance(&self, py: Python<'_>, name: &str) -> Result<crate::Instance> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let (artifact, descriptor) = self.find_attachment(name)?;
-        decode_instance_attachment(&artifact, &descriptor)
+        let descriptor = self.find_attachment(name)?;
+        let registry_handle = self.inner.registry_handle();
+        decode_instance_attachment(registry_handle.registry(), &descriptor)
     }
 
     /// Read a ParametricInstance experiment-level attachment by name.
@@ -377,46 +381,43 @@ impl PyExperiment {
         name: &str,
     ) -> Result<crate::ParametricInstance> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let (artifact, descriptor) = self.find_attachment(name)?;
-        decode_parametric_instance_attachment(&artifact, &descriptor)
+        let descriptor = self.find_attachment(name)?;
+        let registry_handle = self.inner.registry_handle();
+        decode_parametric_instance_attachment(registry_handle.registry(), &descriptor)
     }
 
     /// Read a Solution experiment-level attachment by name.
     pub fn get_solution(&self, py: Python<'_>, name: &str) -> Result<crate::Solution> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let (artifact, descriptor) = self.find_attachment(name)?;
-        decode_solution_attachment(&artifact, &descriptor)
+        let descriptor = self.find_attachment(name)?;
+        let registry_handle = self.inner.registry_handle();
+        decode_solution_attachment(registry_handle.registry(), &descriptor)
     }
 
     /// Read a SampleSet experiment-level attachment by name.
     pub fn get_sample_set(&self, py: Python<'_>, name: &str) -> Result<crate::SampleSet> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let (artifact, descriptor) = self.find_attachment(name)?;
-        decode_sample_set_attachment(&artifact, &descriptor)
+        let descriptor = self.find_attachment(name)?;
+        let registry_handle = self.inner.registry_handle();
+        decode_sample_set_attachment(registry_handle.registry(), &descriptor)
     }
 
     /// Read raw bytes of an experiment-level attachment by name.
     pub fn get_blob<'py>(&self, py: Python<'py>, name: &str) -> Result<Bound<'py, PyBytes>> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let (artifact, descriptor) = self.find_attachment(name)?;
-        Ok(PyBytes::new(py, &artifact.get_blob(&descriptor)?))
+        let descriptor = self.find_attachment(name)?;
+        let registry_handle = self.inner.registry_handle();
+        Ok(PyBytes::new(
+            py,
+            &registry_handle.registry().get_blob(&descriptor)?,
+        ))
     }
 
     #[getter]
     /// Closed runs in insertion order.
     pub fn runs(&self) -> Result<Vec<PySealedRun>> {
         let runs = self.inner.runs()?;
-        if runs.is_empty() {
-            return Ok(Vec::new());
-        }
-        let artifact = self.view_artifact()?;
-        Ok(runs
-            .into_iter()
-            .map(|run| PySealedRun {
-                run,
-                artifact: artifact.clone(),
-            })
-            .collect())
+        Ok(runs.into_iter().map(|run| PySealedRun { run }).collect())
     }
 
     #[getter]
@@ -618,21 +619,13 @@ impl PyExperiment {
         Ok(PyArtifact::new(self.inner.commit()?))
     }
 
-    fn find_attachment(
-        &self,
-        name: &str,
-    ) -> Result<(ommx::artifact::LocalArtifactDyn, Descriptor)> {
-        let artifact = self.view_artifact()?;
+    fn find_attachment(&self, name: &str) -> Result<StoredDescriptor<'_>> {
         for descriptor in self.inner.experiment_attachments()? {
             if attachment_name(&descriptor) == Some(name) {
-                return Ok((artifact, Descriptor::from(descriptor)));
+                return Ok(descriptor);
             }
         }
         anyhow::bail!("Experiment attachment `{name}` not found")
-    }
-
-    fn view_artifact(&self) -> Result<ommx::artifact::LocalArtifactDyn> {
-        self.inner.view_artifact()
     }
 }
 
@@ -717,8 +710,8 @@ fn attachment_annotations(descriptor: &Descriptor) -> std::collections::HashMap<
 }
 
 fn attachment_blob(
-    artifact: &ommx::artifact::LocalArtifactDyn,
-    descriptor: &Descriptor,
+    registry: &LocalRegistry,
+    descriptor: &StoredDescriptor<'_>,
     expected_media_type: Option<&str>,
 ) -> Result<Vec<u8>> {
     if let Some(expected) = expected_media_type {
@@ -727,18 +720,18 @@ fn attachment_blob(
             anyhow::bail!("Expected media type '{expected}', got '{actual}'");
         }
     }
-    artifact.get_blob(descriptor)
+    registry.get_blob(descriptor)
 }
 
 fn decode_attachment<'py>(
     py: Python<'py>,
-    artifact: &ommx::artifact::LocalArtifactDyn,
-    descriptor: &Descriptor,
+    registry: &LocalRegistry,
+    descriptor: &StoredDescriptor<'_>,
 ) -> Result<Bound<'py, PyAny>> {
     match descriptor.media_type().as_ref() {
-        "application/json" => decode_json_attachment(py, artifact, descriptor),
+        "application/json" => decode_json_attachment(py, registry, descriptor),
         ommx::artifact::media_types::V1_INSTANCE_MEDIA_TYPE => {
-            let instance = decode_instance_attachment(artifact, descriptor)?;
+            let instance = decode_instance_attachment(registry, descriptor)?;
             Ok(instance
                 .into_pyobject(py)?
                 .into_any()
@@ -746,7 +739,7 @@ fn decode_attachment<'py>(
                 .into_bound(py))
         }
         ommx::artifact::media_types::V1_PARAMETRIC_INSTANCE_MEDIA_TYPE => {
-            let instance = decode_parametric_instance_attachment(artifact, descriptor)?;
+            let instance = decode_parametric_instance_attachment(registry, descriptor)?;
             Ok(instance
                 .into_pyobject(py)?
                 .into_any()
@@ -754,7 +747,7 @@ fn decode_attachment<'py>(
                 .into_bound(py))
         }
         ommx::artifact::media_types::V1_SOLUTION_MEDIA_TYPE => {
-            let solution = decode_solution_attachment(artifact, descriptor)?;
+            let solution = decode_solution_attachment(registry, descriptor)?;
             Ok(solution
                 .into_pyobject(py)?
                 .into_any()
@@ -762,33 +755,33 @@ fn decode_attachment<'py>(
                 .into_bound(py))
         }
         ommx::artifact::media_types::V1_SAMPLE_SET_MEDIA_TYPE => {
-            let sample_set = decode_sample_set_attachment(artifact, descriptor)?;
+            let sample_set = decode_sample_set_attachment(registry, descriptor)?;
             Ok(sample_set
                 .into_pyobject(py)?
                 .into_any()
                 .unbind()
                 .into_bound(py))
         }
-        _ => Ok(PyBytes::new(py, &attachment_blob(artifact, descriptor, None)?).into_any()),
+        _ => Ok(PyBytes::new(py, &attachment_blob(registry, descriptor, None)?).into_any()),
     }
 }
 
 fn decode_json_attachment<'py>(
     py: Python<'py>,
-    artifact: &ommx::artifact::LocalArtifactDyn,
-    descriptor: &Descriptor,
+    registry: &LocalRegistry,
+    descriptor: &StoredDescriptor<'_>,
 ) -> Result<Bound<'py, PyAny>> {
-    let blob = attachment_blob(artifact, descriptor, Some("application/json"))?;
+    let blob = attachment_blob(registry, descriptor, Some("application/json"))?;
     let json = py.import("json")?;
     Ok(json.call_method1("loads", (PyBytes::new(py, &blob),))?)
 }
 
 fn decode_instance_attachment(
-    artifact: &ommx::artifact::LocalArtifactDyn,
-    descriptor: &Descriptor,
+    registry: &LocalRegistry,
+    descriptor: &StoredDescriptor<'_>,
 ) -> Result<crate::Instance> {
     let blob = attachment_blob(
-        artifact,
+        registry,
         descriptor,
         Some(ommx::artifact::media_types::V1_INSTANCE_MEDIA_TYPE),
     )?;
@@ -799,11 +792,11 @@ fn decode_instance_attachment(
 }
 
 fn decode_parametric_instance_attachment(
-    artifact: &ommx::artifact::LocalArtifactDyn,
-    descriptor: &Descriptor,
+    registry: &LocalRegistry,
+    descriptor: &StoredDescriptor<'_>,
 ) -> Result<crate::ParametricInstance> {
     let blob = attachment_blob(
-        artifact,
+        registry,
         descriptor,
         Some(ommx::artifact::media_types::V1_PARAMETRIC_INSTANCE_MEDIA_TYPE),
     )?;
@@ -814,11 +807,11 @@ fn decode_parametric_instance_attachment(
 }
 
 fn decode_solution_attachment(
-    artifact: &ommx::artifact::LocalArtifactDyn,
-    descriptor: &Descriptor,
+    registry: &LocalRegistry,
+    descriptor: &StoredDescriptor<'_>,
 ) -> Result<crate::Solution> {
     let blob = attachment_blob(
-        artifact,
+        registry,
         descriptor,
         Some(ommx::artifact::media_types::V1_SOLUTION_MEDIA_TYPE),
     )?;
@@ -829,11 +822,11 @@ fn decode_solution_attachment(
 }
 
 fn decode_sample_set_attachment(
-    artifact: &ommx::artifact::LocalArtifactDyn,
-    descriptor: &Descriptor,
+    registry: &LocalRegistry,
+    descriptor: &StoredDescriptor<'_>,
 ) -> Result<crate::SampleSet> {
     let blob = attachment_blob(
-        artifact,
+        registry,
         descriptor,
         Some(ommx::artifact::media_types::V1_SAMPLE_SET_MEDIA_TYPE),
     )?;
@@ -1363,7 +1356,6 @@ impl pyo3_stub_gen::PyStubType for ParameterValueInput {
 /// `Solve` records created by `Run.log_solve`.
 pub struct PySealedRun {
     run: ommx::experiment::SealedRunDyn,
-    artifact: ommx::artifact::LocalArtifactDyn,
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
@@ -1417,21 +1409,24 @@ impl PySealedRun {
     pub fn get_attachment<'py>(&self, py: Python<'py>, name: &str) -> Result<Bound<'py, PyAny>> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let descriptor = self.find_attachment(name)?;
-        decode_attachment(py, &self.artifact, &descriptor)
+        let registry_handle = self.run.registry_handle();
+        decode_attachment(py, registry_handle.registry(), &descriptor)
     }
 
     /// Read a JSON run-level attachment by name.
     pub fn get_json<'py>(&self, py: Python<'py>, name: &str) -> Result<Bound<'py, PyAny>> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let descriptor = self.find_attachment(name)?;
-        decode_json_attachment(py, &self.artifact, &descriptor)
+        let registry_handle = self.run.registry_handle();
+        decode_json_attachment(py, registry_handle.registry(), &descriptor)
     }
 
     /// Read an Instance run-level attachment by name.
     pub fn get_instance(&self, py: Python<'_>, name: &str) -> Result<crate::Instance> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let descriptor = self.find_attachment(name)?;
-        decode_instance_attachment(&self.artifact, &descriptor)
+        let registry_handle = self.run.registry_handle();
+        decode_instance_attachment(registry_handle.registry(), &descriptor)
     }
 
     /// Read a ParametricInstance run-level attachment by name.
@@ -1442,28 +1437,35 @@ impl PySealedRun {
     ) -> Result<crate::ParametricInstance> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let descriptor = self.find_attachment(name)?;
-        decode_parametric_instance_attachment(&self.artifact, &descriptor)
+        let registry_handle = self.run.registry_handle();
+        decode_parametric_instance_attachment(registry_handle.registry(), &descriptor)
     }
 
     /// Read a Solution run-level attachment by name.
     pub fn get_solution(&self, py: Python<'_>, name: &str) -> Result<crate::Solution> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let descriptor = self.find_attachment(name)?;
-        decode_solution_attachment(&self.artifact, &descriptor)
+        let registry_handle = self.run.registry_handle();
+        decode_solution_attachment(registry_handle.registry(), &descriptor)
     }
 
     /// Read a SampleSet run-level attachment by name.
     pub fn get_sample_set(&self, py: Python<'_>, name: &str) -> Result<crate::SampleSet> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let descriptor = self.find_attachment(name)?;
-        decode_sample_set_attachment(&self.artifact, &descriptor)
+        let registry_handle = self.run.registry_handle();
+        decode_sample_set_attachment(registry_handle.registry(), &descriptor)
     }
 
     /// Read raw bytes of a run-level attachment by name.
     pub fn get_blob<'py>(&self, py: Python<'py>, name: &str) -> Result<Bound<'py, PyBytes>> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let descriptor = self.find_attachment(name)?;
-        Ok(PyBytes::new(py, &self.artifact.get_blob(&descriptor)?))
+        let registry_handle = self.run.registry_handle();
+        Ok(PyBytes::new(
+            py,
+            &registry_handle.registry().get_blob(&descriptor)?,
+        ))
     }
 
     #[getter]
@@ -1477,7 +1479,8 @@ impl PySealedRun {
         let Some(descriptor) = self.run.trace()? else {
             return Ok(None);
         };
-        let blob = self.artifact.get_blob(&descriptor)?;
+        let registry_handle = self.run.registry_handle();
+        let blob = registry_handle.registry().get_blob(&descriptor)?;
         let trace_result = py.import("ommx.tracing")?.getattr("TraceResult")?;
         Ok(Some(trace_result.call_method1(
             "from_otlp_protobuf",
@@ -1503,10 +1506,10 @@ impl PySealedRun {
 }
 
 impl PySealedRun {
-    fn find_attachment(&self, name: &str) -> Result<Descriptor> {
+    fn find_attachment(&self, name: &str) -> Result<StoredDescriptor<'_>> {
         for descriptor in self.run.attachments()? {
             if attachment_name(&descriptor) == Some(name) {
-                return Ok(Descriptor::from(descriptor));
+                return Ok(descriptor);
             }
         }
         anyhow::bail!("Run {} attachment `{name}` not found", self.run.run_id())

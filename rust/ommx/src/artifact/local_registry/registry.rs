@@ -223,6 +223,23 @@ impl LocalRegistry {
         &self.blobs
     }
 
+    pub fn get_blob(&self, descriptor: &StoredDescriptor<'_>) -> Result<Vec<u8>> {
+        ensure!(
+            descriptor.is_stored_in(self),
+            "Descriptor {} is not stored in this Local Registry",
+            descriptor.digest()
+        );
+        let bytes = self.blobs.read_bytes(descriptor.digest())?;
+        ensure!(
+            bytes.len() as u64 == descriptor.size(),
+            "Descriptor size mismatch for {}: descriptor={}, actual={}",
+            descriptor.digest(),
+            descriptor.size(),
+            bytes.len()
+        );
+        Ok(bytes)
+    }
+
     pub fn import_legacy_ref(&self, image_name: &ImageRef) -> Result<OciDirImport> {
         import_legacy_local_registry_ref(&self.index, &self.blobs, &self.root, image_name)
     }

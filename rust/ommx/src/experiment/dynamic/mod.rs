@@ -77,7 +77,6 @@ struct UnsealedExperimentDynState {
     image_name: ImageRef,
     autosave_image_name: ImageRef,
     autosave_published: bool,
-    base_artifact: Option<LocalArtifactDyn>,
     subject: Option<Descriptor>,
     attachments: Vec<Descriptor>,
     runs: BTreeMap<u64, RunEntryDyn>,
@@ -151,6 +150,10 @@ impl SealedRunDyn {
 
     pub fn status(&self) -> &RunStatus {
         &self.status
+    }
+
+    pub fn registry_handle(&self) -> LocalRegistryHandle {
+        self.registry_handle.clone()
     }
 
     pub fn attachments(&self) -> Result<Vec<StoredDescriptor<'_>>> {
@@ -276,7 +279,6 @@ impl ExperimentDyn {
                         image_name,
                         autosave_image_name,
                         autosave_published: false,
-                        base_artifact: None,
                         subject: None,
                         attachments: Vec::new(),
                         runs: BTreeMap::new(),
@@ -287,6 +289,10 @@ impl ExperimentDyn {
                 registry_handle,
             })),
         })
+    }
+
+    pub fn registry_handle(&self) -> LocalRegistryHandle {
+        self.registry_handle.clone()
     }
 
     pub fn load(image_name: crate::artifact::ImageRef) -> Result<Self> {
@@ -605,34 +611,6 @@ impl ExperimentDyn {
             return bail_not_sealed(&dyn_state.lifecycle);
         };
         Ok(sealed.artifact.clone())
-    }
-
-    pub fn view_artifact(&self) -> Result<LocalArtifactDyn> {
-        let dyn_state = lock_experiment_state(&self.state);
-        match &dyn_state.lifecycle {
-            ExperimentDynLifecycle::Sealed(sealed) => Ok(sealed.artifact.clone()),
-            ExperimentDynLifecycle::Unsealed { state, .. } => {
-                let state = state
-                    .as_ref()
-                    .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
-                if state.autosave_published {
-                    return LocalArtifactDyn::open_in_registry_handle(
-                        dyn_state.registry_handle.clone(),
-                        state.autosave_image_name.clone(),
-                    );
-                }
-                state.base_artifact.clone().ok_or_else(|| {
-                    anyhow::anyhow!("Experiment has not been committed or autosaved yet")
-                })
-            }
-            ExperimentDynLifecycle::Failed {
-                recovery_artifact: Some(artifact),
-                ..
-            } => Ok(artifact.clone()),
-            ExperimentDynLifecycle::Failed { reason, .. } => {
-                crate::bail!("Experiment commit has failed: {reason}")
-            }
-        }
     }
 
     pub fn experiment_attachments(&self) -> Result<Vec<StoredDescriptor<'_>>> {
@@ -963,7 +941,6 @@ impl SealedExperimentDynState {
                 .registry()
                 .synthesize_autosave_experiment_image_name()?,
             autosave_published: false,
-            base_artifact: Some(self.artifact.clone()),
             subject,
             attachments: self.attachments.clone(),
             next_run_id: next_run_id(runs.keys().copied())?,
