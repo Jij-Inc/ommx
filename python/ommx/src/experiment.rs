@@ -30,9 +30,15 @@ use ommx::experiment::AttachmentLogger;
 /// experiment into the local registry as an OMMX Artifact. After commit, the
 /// same object can be used as a read-only view of the committed artifact.
 /// `with Experiment(...)` commits on normal exit if the experiment is still
-/// unsealed. On exception it does not advance the success ref; instead it
-/// tries to publish a failed checkpoint under a local `checkpoint:`
-/// ref.
+/// unsealed. On exception it does not advance the successful Experiment image
+/// reference; instead it tries to publish a local checkpoint with status
+/// `"failed"` or `"interrupted"`.
+///
+/// Logging APIs store payload bytes in the Local Registry immediately. The
+/// final commit writes an Experiment config and manifest that make those
+/// payloads reachable as one immutable Artifact. A closed `Run` also publishes
+/// a best-effort `"draft"` checkpoint so a later process can resume from the
+/// latest closed Run with `Experiment.restore_from_checkpoint(...)`.
 ///
 /// Use experiment-level attachments for shared context such as dataset or
 /// source-problem metadata. Use `Run.log_parameter(...)` for scalar values
@@ -134,7 +140,8 @@ impl PyExperiment {
     /// checkpoint ref. This accepts checkpoint statuses such as `draft`,
     /// `failed`, or `interrupted`, and returns a new unsealed Experiment whose
     /// image name is the original requested Experiment image name recorded in
-    /// the checkpoint metadata.
+    /// the checkpoint metadata. Checkpoint Artifact handles and checkpoint
+    /// image names are not part of the public API.
     #[staticmethod]
     pub fn restore_from_checkpoint(py: Python<'_>, image_name: &str) -> Result<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
@@ -177,7 +184,10 @@ impl PyExperiment {
     /// The parent Experiment is not modified. Existing Attachments, Runs,
     /// Solves, and Run parameters are carried into the child Experiment.
     /// When the child is committed, its Artifact manifest records the parent
-    /// manifest descriptor as OCI `subject`.
+    /// manifest descriptor as OCI `subject`. The child reuses payload blobs
+    /// already present in the Local Registry; forking creates a new manifest
+    /// but does not duplicate unchanged Instance, Solution, or Attachment
+    /// bytes.
     ///
     /// If `image_name` is omitted, OMMX generates an anonymous local
     /// Experiment name for the child. The returned Experiment can be used as
@@ -407,6 +417,12 @@ impl PyExperiment {
     /// with experiment.run() as run:
     ///     run.log_parameter("capacity", 47)
     /// ```
+    ///
+    /// Closing a Run records its status as `"finished"`, `"failed"`, or
+    /// `"interrupted"` and publishes a best-effort draft checkpoint for the
+    /// parent Experiment. Payloads written by an open Run before it is closed
+    /// are stored in the Local Registry but are not recoverable through a
+    /// checkpoint until the Run is closed.
     pub fn run(&self) -> Result<PyRun> {
         Ok(PyRun {
             state: PyRunState::Open {
@@ -478,7 +494,9 @@ impl PyExperiment {
     /// All open runs must be closed before committing. The returned
     /// `Artifact` can be saved as a `.ommx` archive or passed to
     /// `Experiment.from_artifact`. After commit, this object becomes a
-    /// read-only view of the committed Experiment.
+    /// read-only view of the committed Experiment. A successful commit
+    /// publishes the requested image reference and removes any local checkpoint
+    /// for that Experiment when present.
     pub fn commit(&mut self, py: Python<'_>) -> Result<PyArtifact> {
         self.commit_inner(py)
     }
@@ -775,7 +793,8 @@ fn decode_sample_set_attachment(
 /// Runs are usually created with `Experiment.run()` and used as context
 /// managers. On normal context-manager exit the run is finished and added
 /// to the parent experiment. On exception the run is closed as failed and
-/// added with its partial state. A run becomes immutable once it is closed.
+/// added with its partial state. `KeyboardInterrupt` is recorded separately as
+/// `"interrupted"`. A run becomes immutable once it is closed.
 pub struct PyRun {
     state: PyRunState,
     store_trace: bool,
@@ -1280,7 +1299,9 @@ impl pyo3_stub_gen::PyStubType for ParameterValueInput {
 /// Immutable view of a closed Run in an Experiment.
 ///
 /// `SealedRun` exposes run-level attachments by name and the sequence of
-/// `Solve` records created by `Run.log_solve`.
+/// `Solve` records created by `Run.log_solve`. The `status` property is
+/// `"finished"`, `"failed"`, or `"interrupted"` depending on how the Run was
+/// closed.
 pub struct PySealedRun {
     run: ommx::experiment::SealedRunDyn,
 }

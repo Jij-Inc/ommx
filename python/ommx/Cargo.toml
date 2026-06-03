@@ -6,6 +6,7 @@ name = "_ommx_rust"
 # The version of Python package `ommx` is determined in `pyproject.toml`. This version is only for build-time information.
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 
 # This crate itself is not released to crates.io.

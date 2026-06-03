@@ -33,6 +33,26 @@ assert experiment.image_name == image_name
 
 Successful `commit()` still publishes only the requested image reference and removes the local checkpoint when present. Checkpoint Artifact handles and checkpoint image names are intentionally not exposed in the Python API; users restore by remembering the original Experiment image name.
 
+### 🆕 Local Registry cleanup ([#919](https://github.com/Jij-Inc/ommx/pull/919))
+
+The `ommx` CLI now provides Local Registry maintenance commands for the SQLite-backed Artifact registry. Use `ommx gc` to report blobs that are unreachable from SQLite refs, including Experiment checkpoint refs. The command protects recently written unreachable blobs with a grace period so active Experiment writes are not deleted accidentally.
+
+Destructive cleanup commands report by default and mutate the registry only when `--delete` is passed:
+
+```bash
+ommx prune-anonymous
+ommx gc
+ommx prune-anonymous --delete
+ommx gc --delete
+```
+
+Normal reports show counts and sizes rather than raw digests. Pass `--show-digests` when low-level diagnostics are needed.
+
+The same cleanup operations are also exposed from the Python SDK as
+{func}`ommx.artifact.prune_anonymous` and {func}`ommx.artifact.gc`. These
+functions are report-only by default, mutate the registry with `delete=True`,
+and return structured report objects for notebook and script use.
+
 ## 3.0.0 Alpha 4
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0a4-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0a4)
@@ -49,8 +69,8 @@ Alongside this storage model and the new `Experiment` API, the old `ArtifactBuil
 - `ArtifactBuilder.new_archive_unnamed` → {func}`ArtifactDraft.new_anonymous <ommx.artifact.ArtifactDraft.new_anonymous>` + `Artifact.save(path)`. In v2, an unnamed archive literally had no image name and was read back as `None`. In v3, an anonymous Artifact gets an automatically generated `<registry-id8>.ommx.local/anonymous:<timestamp>-<nonce>` image name from the Local Registry, so it can still be saved, loaded again, and cleaned up.
 - {func}`Artifact.load_archive <ommx.artifact.Artifact.load_archive>` raises a migration error pointing at the two replacement methods: {func}`Artifact.import_archive <ommx.artifact.Artifact.import_archive>` (imports the archive into the user's persistent SQLite Local Registry — the v3 successor with registry-write semantics) and {func}`Artifact.inspect_archive <ommx.artifact.Artifact.inspect_archive>` (side-effect-free read of the manifest + layer descriptors, returns a new {class}`ArchiveManifest <ommx.artifact.ArchiveManifest>` view). v2's `load_archive` opened archives in place with no registry side effect, so the rename makes the semantic shift explicit instead of silently writing into the registry on upgrade. `import_archive` accepts v2 archives produced by `ArtifactBuilder.new_archive_unnamed` (no `org.opencontainers.image.ref.name` annotation) by synthesizing an anonymous name on the fly; `inspect_archive` reads such archives back with `ArchiveManifest.image_name = None` (no registry context for synthesis).
 - CLI `ommx push <archive>` and `ommx push <oci-dir>` removed — load into the registry first, then push by image name.
-- New CLI `ommx artifact prune-anonymous [--dry-run]` bulk-cleans accumulated anonymous-commit entries.
-- `ommx.get_image_dir(...)` and the CLI `ommx image-dir <name>` subcommand are removed. The return value was a v2 disk-cache path (`<root>/<image_name>/<tag>/`) that no longer corresponds to any v3 storage location — the SQLite Local Registry stores blobs content-addressed and refs in SQLite — so pointing users at it was actively misleading. Existing v2 caches still migrate via `ommx artifact import`.
+- New CLI `ommx prune-anonymous [--delete]` reports accumulated anonymous-commit entries by default and removes them only when `--delete` is passed.
+- `ommx.get_image_dir(...)` and the CLI `ommx image-dir <name>` subcommand are removed. The return value was a v2 disk-cache path (`<root>/<image_name>/<tag>/`) that no longer corresponds to any v3 storage location — the SQLite Local Registry stores blobs content-addressed and refs in SQLite — so pointing users at it was actively misleading. Existing v2 caches still migrate via `ommx import-legacy`.
 
 See the [Python SDK v2→v3 Migration Guide §13](https://github.com/Jij-Inc/ommx/blob/main/PYTHON_SDK_MIGRATION_GUIDE.md#13-artifact-api-archive-becomes-an-exchange-format) for the full before/after code and migration checklist.
 

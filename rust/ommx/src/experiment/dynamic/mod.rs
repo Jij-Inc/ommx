@@ -199,18 +199,7 @@ impl SolveDyn {
             descriptor.media_type(),
             media_types::V1_INSTANCE_MEDIA_TYPE
         );
-        let bytes = self
-            .registry_handle
-            .registry()
-            .blobs()
-            .read_bytes(descriptor.digest())?;
-        ensure!(
-            bytes.len() as u64 == descriptor.size(),
-            "Descriptor size mismatch for {}: descriptor={}, actual={}",
-            descriptor.digest(),
-            descriptor.size(),
-            bytes.len()
-        );
+        let bytes = self.registry_handle.registry().get_blob(&descriptor)?;
         Instance::from_bytes(&bytes)
     }
 
@@ -229,18 +218,7 @@ impl SolveDyn {
             descriptor.media_type(),
             media_types::V1_SOLUTION_MEDIA_TYPE
         );
-        let bytes = self
-            .registry_handle
-            .registry()
-            .blobs()
-            .read_bytes(descriptor.digest())?;
-        ensure!(
-            bytes.len() as u64 == descriptor.size(),
-            "Descriptor size mismatch for {}: descriptor={}, actual={}",
-            descriptor.digest(),
-            descriptor.size(),
-            bytes.len()
-        );
+        let bytes = self.registry_handle.registry().get_blob(&descriptor)?;
         Solution::from_bytes(&bytes)
     }
 

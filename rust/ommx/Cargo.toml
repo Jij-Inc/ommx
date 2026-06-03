@@ -4,6 +4,7 @@ name = "ommx"
 # Inherit from workspace setting
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 readme.workspace = true
 
@@ -42,6 +43,7 @@ derive_more.workspace = true
 directories.workspace = true
 docker_credential = { workspace = true, optional = true }
 flate2.workspace = true
+filetime.workspace = true
 fnv.workspace = true
 futures-util = { workspace = true, optional = true }
 getset.workspace = true

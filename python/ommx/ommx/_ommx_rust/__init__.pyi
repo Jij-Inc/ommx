@@ -16,6 +16,7 @@ from typing import TypeAlias
 
 __all__ = [
     "AdditionalCapability",
+    "AnonymousArtifactRef",
     "ArchiveDescriptor",
     "ArchiveManifest",
     "Artifact",
@@ -36,6 +37,11 @@ __all__ = [
     "EvaluatedNamedFunction",
     "Experiment",
     "Function",
+    "GcBlob",
+    "GcInvalidManifest",
+    "GcMissingBlob",
+    "GcReport",
+    "GcRoot",
     "IndicatorConstraint",
     "Instance",
     "InstanceDescription",
@@ -51,6 +57,7 @@ __all__ = [
     "Polynomial",
     "Provenance",
     "ProvenanceKind",
+    "PruneAnonymousReport",
     "Quadratic",
     "Relaxation",
     "RemovedConstraint",
@@ -74,10 +81,12 @@ __all__ = [
     "ToFunction",
     "ToSamples",
     "ToState",
+    "gc",
     "get_default_atol",
     "get_images",
     "get_local_registry_root",
     "miplib2017_instance_annotations",
+    "prune_anonymous",
     "qplib_instance_annotations",
     "set_default_atol",
     "set_local_registry_root",
@@ -110,6 +119,36 @@ ToState: TypeAlias = (
     | collections.abc.Mapping[int, float]
     | collections.abc.Iterable[tuple[int, float]]
 )
+
+@typing.final
+class AnonymousArtifactRef:
+    r"""
+    Anonymous Artifact ref matched by {func}`prune_anonymous`.
+    """
+    @property
+    def image_name(self) -> builtins.str: ...
+    @property
+    def name(self) -> builtins.str: ...
+    @property
+    def reference(self) -> builtins.str: ...
+    @property
+    def digest(self) -> builtins.str:
+        r"""
+        Manifest digest pointed to by this anonymous ref.
+        """
+    @property
+    def size(self) -> builtins.int:
+        r"""
+        Manifest size in bytes.
+        """
+    @property
+    def media_type(self) -> builtins.str: ...
+    @property
+    def updated_at(self) -> builtins.str:
+        r"""
+        SQLite ref update timestamp, stored as an RFC3339 string.
+        """
+    def __repr__(self) -> builtins.str: ...
 
 @typing.final
 class ArchiveDescriptor:
@@ -480,7 +519,7 @@ class ArtifactDraft:
         collision-free regardless of clock resolution. Use
         `Artifact.image_name` to read the synthesized name back. The
         `.local` mDNS TLD prevents an accidental push from leaking to
-        a real remote registry. Use `ommx artifact prune-anonymous`
+        a real remote registry. Use `ommx prune-anonymous`
         to clean accumulated entries.
 
         The timestamp is the **caller's local time** with no timezone
@@ -1698,9 +1737,15 @@ class Experiment:
     experiment into the local registry as an OMMX Artifact. After commit, the
     same object can be used as a read-only view of the committed artifact.
     `with Experiment(...)` commits on normal exit if the experiment is still
-    unsealed. On exception it does not advance the success ref; instead it
-    tries to publish a failed checkpoint under a local `checkpoint:`
-    ref.
+    unsealed. On exception it does not advance the successful Experiment image
+    reference; instead it tries to publish a local checkpoint with status
+    `"failed"` or `"interrupted"`.
+
+    Logging APIs store payload bytes in the Local Registry immediately. The
+    final commit writes an Experiment config and manifest that make those
+    payloads reachable as one immutable Artifact. A closed `Run` also publishes
+    a best-effort `"draft"` checkpoint so a later process can resume from the
+    latest closed Run with `Experiment.restore_from_checkpoint(...)`.
 
     Use experiment-level attachments for shared context such as dataset or
     source-problem metadata. Use `Run.log_parameter(...)` for scalar values
@@ -1826,7 +1871,8 @@ class Experiment:
         checkpoint ref. This accepts checkpoint statuses such as `draft`,
         `failed`, or `interrupted`, and returns a new unsealed Experiment whose
         image name is the original requested Experiment image name recorded in
-        the checkpoint metadata.
+        the checkpoint metadata. Checkpoint Artifact handles and checkpoint
+        image names are not part of the public API.
         """
     @staticmethod
     def import_archive(path: builtins.str | os.PathLike | pathlib.Path) -> Experiment:
@@ -1858,7 +1904,10 @@ class Experiment:
         The parent Experiment is not modified. Existing Attachments, Runs,
         Solves, and Run parameters are carried into the child Experiment.
         When the child is committed, its Artifact manifest records the parent
-        manifest descriptor as OCI `subject`.
+        manifest descriptor as OCI `subject`. The child reuses payload blobs
+        already present in the Local Registry; forking creates a new manifest
+        but does not duplicate unchanged Instance, Solution, or Attachment
+        bytes.
 
         If `image_name` is omitted, OMMX generates an anonymous local
         Experiment name for the child. The returned Experiment can be used as
@@ -1959,6 +2008,12 @@ class Experiment:
         with experiment.run() as run:
             run.log_parameter("capacity", 47)
         ```
+
+        Closing a Run records its status as `"finished"`, `"failed"`, or
+        `"interrupted"` and publishes a best-effort draft checkpoint for the
+        parent Experiment. Payloads written by an open Run before it is closed
+        are stored in the Local Registry but are not recoverable through a
+        checkpoint until the Run is closed.
         """
     def log_attachment(
         self, name: builtins.str, media_type: builtins.str, bytes: bytes
@@ -2001,7 +2056,9 @@ class Experiment:
         All open runs must be closed before committing. The returned
         `Artifact` can be saved as a `.ommx` archive or passed to
         `Experiment.from_artifact`. After commit, this object becomes a
-        read-only view of the committed Experiment.
+        read-only view of the committed Experiment. A successful commit
+        publishes the requested image reference and removes any local checkpoint
+        for that Experiment when present.
         """
     def run_parameters_df(self) -> pandas.DataFrame:
         r"""
@@ -2226,6 +2283,141 @@ class Function:
 
         Returns a Constraint where (other - self) <= 0.
         """
+
+@typing.final
+class GcBlob:
+    r"""
+    Blob entry reported by Local Registry GC.
+    """
+    @property
+    def digest(self) -> builtins.str:
+        r"""
+        Blob digest, for example `sha256:...`.
+        """
+    @property
+    def size(self) -> builtins.int:
+        r"""
+        Blob size in bytes.
+        """
+    @property
+    def modified_at_unix_seconds(self) -> typing.Optional[builtins.float]:
+        r"""
+        Blob modification time as Unix timestamp seconds, or `None` if unavailable.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class GcInvalidManifest:
+    r"""
+    Reachable manifest blob that could not be parsed as an OCI Image Manifest.
+    """
+    @property
+    def digest(self) -> builtins.str: ...
+    @property
+    def referenced_by(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def kind(self) -> builtins.str:
+        r"""
+        Reference edge kind: `"ref_manifest"`, `"subject"`, or `"protected_digest"`.
+        """
+    @property
+    def error(self) -> builtins.str: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class GcMissingBlob:
+    r"""
+    Blob referenced by a reachable manifest but missing from the Local Registry.
+    """
+    @property
+    def digest(self) -> builtins.str: ...
+    @property
+    def referenced_by(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def kind(self) -> builtins.str:
+        r"""
+        Reference edge kind: `"ref_manifest"`, `"config"`, `"layer"`, `"subject"`, or `"protected_digest"`.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class GcReport:
+    r"""
+    Report returned by {func}`gc`.
+    """
+    @property
+    def root(self) -> pathlib.Path:
+        r"""
+        Local Registry root inspected by this GC pass.
+        """
+    @property
+    def delete_applied(self) -> builtins.bool:
+        r"""
+        `True` when {func}`gc` was called with `delete=True`.
+        """
+    @property
+    def roots(self) -> builtins.list[GcRoot]: ...
+    @property
+    def reachable_blobs(self) -> builtins.list[GcBlob]: ...
+    @property
+    def orphan_candidates(self) -> builtins.list[GcBlob]: ...
+    @property
+    def deferred_blobs(self) -> builtins.list[GcBlob]: ...
+    @property
+    def missing_blobs(self) -> builtins.list[GcMissingBlob]: ...
+    @property
+    def invalid_manifests(self) -> builtins.list[GcInvalidManifest]: ...
+    @property
+    def deleted_blobs(self) -> builtins.list[GcBlob]:
+        r"""
+        Blobs actually unlinked when `delete=True`; empty in dry-run mode.
+        """
+    @property
+    def skipped_blobs(self) -> builtins.list[GcBlob]:
+        r"""
+        Candidate blobs skipped because they became too new before deletion.
+        """
+    @property
+    def reachable_size(self) -> builtins.int: ...
+    @property
+    def orphan_candidate_size(self) -> builtins.int: ...
+    @property
+    def deferred_size(self) -> builtins.int: ...
+    @property
+    def deleted_size(self) -> builtins.int: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class GcRoot:
+    r"""
+    Root that made blobs reachable during Local Registry GC.
+    """
+    @property
+    def kind(self) -> builtins.str:
+        r"""
+        Root kind: `"ref"` or `"protected_digest"`.
+        """
+    @property
+    def name(self) -> typing.Optional[builtins.str]:
+        r"""
+        Repository/name portion of the ref, or `None` for protected digests.
+        """
+    @property
+    def reference(self) -> typing.Optional[builtins.str]:
+        r"""
+        Tag/reference portion of the ref, or `None` for protected digests.
+        """
+    @property
+    def digest(self) -> builtins.str:
+        r"""
+        Root manifest or protected digest.
+        """
+    @property
+    def image_name(self) -> typing.Optional[builtins.str]:
+        r"""
+        Full image ref for `"ref"` roots, or `None` for protected digests.
+        """
+    def __repr__(self) -> builtins.str: ...
 
 @typing.final
 class IndicatorConstraint:
@@ -4949,6 +5141,30 @@ class Provenance:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class PruneAnonymousReport:
+    r"""
+    Report returned by {func}`prune_anonymous`.
+    """
+    @property
+    def root(self) -> pathlib.Path:
+        r"""
+        Local Registry root inspected by this prune pass.
+        """
+    @property
+    def delete_applied(self) -> builtins.bool:
+        r"""
+        `True` when {func}`prune_anonymous` was called with `delete=True`.
+        """
+    @property
+    def refs(self) -> builtins.list[AnonymousArtifactRef]:
+        r"""
+        Candidate refs in dry-run mode, or removed refs when `delete=True`.
+        """
+    @property
+    def count(self) -> builtins.int: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class Quadratic:
     r"""
     Quadratic function of decision variables.
@@ -5229,7 +5445,8 @@ class Run:
     Runs are usually created with `Experiment.run()` and used as context
     managers. On normal context-manager exit the run is finished and added
     to the parent experiment. On exception the run is closed as failed and
-    added with its partial state. A run becomes immutable once it is closed.
+    added with its partial state. `KeyboardInterrupt` is recorded separately as
+    `"interrupted"`. A run becomes immutable once it is closed.
     """
     @property
     def run_id(self) -> builtins.int:
@@ -5878,7 +6095,9 @@ class SealedRun:
     Immutable view of a closed Run in an Experiment.
 
     `SealedRun` exposes run-level attachments by name and the sequence of
-    `Solve` records created by `Run.log_solve`.
+    `Solve` records created by `Run.log_solve`. The `status` property is
+    `"finished"`, `"failed"`, or `"interrupted"` depending on how the Run was
+    closed.
     """
     @property
     def run_id(self) -> builtins.int:
@@ -6671,6 +6890,28 @@ class Sense(enum.Enum):
     def __repr__(self) -> builtins.str: ...
     def __str__(self) -> builtins.str: ...
 
+def gc(
+    *,
+    root: typing.Optional[builtins.str | os.PathLike | pathlib.Path] = None,
+    delete: builtins.bool = False,
+    grace_period: builtins.str = "24h",
+) -> GcReport:
+    r"""
+    Report or delete Local Registry blobs unreachable from SQLite refs.
+
+    This is the Python SDK equivalent of `ommx gc`. It is a dry-run by
+    default. Pass `delete=True` to unlink orphan candidates. The `grace_period`
+    string accepts the same `s`, `m`, `h`, and `d` suffixes as the CLI.
+
+    ```python
+    >>> from ommx.artifact import gc
+    >>> report = gc()
+    >>> report.delete_applied
+    False
+
+    ```
+    """
+
 def get_default_atol() -> builtins.float: ...
 def get_images() -> builtins.list[builtins.str]:
     r"""
@@ -6687,6 +6928,27 @@ def get_local_registry_root() -> pathlib.Path:
 def miplib2017_instance_annotations() -> builtins.dict[
     builtins.str, builtins.dict[builtins.str, builtins.str]
 ]: ...
+def prune_anonymous(
+    *,
+    root: typing.Optional[builtins.str | os.PathLike | pathlib.Path] = None,
+    delete: builtins.bool = False,
+) -> PruneAnonymousReport:
+    r"""
+    Report or delete anonymous Artifact refs in the Local Registry.
+
+    This is the Python SDK equivalent of `ommx prune-anonymous`.
+    It only removes SQLite refs when `delete=True`; manifest and payload blobs
+    are left for {func}`gc` to reclaim if they become unreachable.
+
+    ```python
+    >>> from ommx.artifact import prune_anonymous
+    >>> report = prune_anonymous()
+    >>> report.delete_applied
+    False
+
+    ```
+    """
+
 def qplib_instance_annotations() -> builtins.dict[
     builtins.str, builtins.dict[builtins.str, builtins.str]
 ]: ...

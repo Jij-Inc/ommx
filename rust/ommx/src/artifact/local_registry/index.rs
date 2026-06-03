@@ -1,4 +1,5 @@
-use super::{now_rfc3339, validate_digest, RefRecord, RefUpdate, SQLITE_INDEX_FILE_NAME};
+use super::{now_rfc3339, RefRecord, RefUpdate, SQLITE_INDEX_FILE_NAME};
+use crate::artifact::digest::validate_digest;
 use crate::artifact::ImageRef;
 use anyhow::{bail, ensure, Context, Result};
 use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, MediaType};
@@ -22,8 +23,8 @@ const SQLITE_BUSY_TIMEOUT: Duration = Duration::from_secs(30);
 ///
 /// This store is the concurrency-safe equivalent of an OCI `index.json`:
 /// it stores refs and their target manifest descriptors. Content bytes
-/// live in [`super::FileBlobStore`], and manifests / layers are read
-/// from that CAS by descriptor digest instead of being cached here.
+/// live in the Local Registry content-addressed storage, and manifests / layers are
+/// read from that CAS by descriptor digest instead of being cached here.
 ///
 /// `rusqlite::Connection` is `Send` but `!Sync`, so it lives behind a
 /// [`Mutex`] here. That makes [`SqliteIndexStore`] (and the enclosing
@@ -84,6 +85,7 @@ impl SqliteIndexStore {
         }
     }
 
+    #[cfg(test)]
     pub fn schema_version(&self) -> Result<i64> {
         self.lock()
             .pragma_query_value(None, "user_version", |row| row.get(0))
