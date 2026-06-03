@@ -3,6 +3,7 @@ name = "protogen"
 
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 
 # This crate is only for developing in this repository
