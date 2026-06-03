@@ -1,4 +1,4 @@
-use super::{sha256_digest, validate_digest};
+use crate::artifact::digest::{sha256_digest, validate_digest};
 use anyhow::{ensure, Context, Result};
 use filetime::FileTime;
 use oci_spec::image::Digest;
@@ -13,26 +13,26 @@ use std::{
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]
-pub(in crate::artifact::local_registry) struct BlobRecord {
-    pub(in crate::artifact::local_registry) digest: Digest,
-    pub(in crate::artifact::local_registry) size: u64,
-    pub(in crate::artifact::local_registry) modified: Option<SystemTime>,
+pub struct BlobRecord {
+    pub digest: Digest,
+    pub size: u64,
+    pub modified: Option<SystemTime>,
 }
 
 #[derive(Debug, Clone)]
-pub(in crate::artifact::local_registry) struct FileBlobStore {
+pub struct FileBlobStore {
     root: PathBuf,
 }
 
 impl FileBlobStore {
-    pub(in crate::artifact::local_registry) fn new(root: impl Into<PathBuf>) -> Result<Self> {
+    pub fn new(root: impl Into<PathBuf>) -> Result<Self> {
         let root = root.into();
         fs::create_dir_all(&root)
             .with_context(|| format!("Failed to create blob store {}", root.display()))?;
         Ok(Self { root })
     }
 
-    pub(in crate::artifact::local_registry) fn put_bytes(&self, bytes: &[u8]) -> Result<Digest> {
+    pub fn put_bytes(&self, bytes: &[u8]) -> Result<Digest> {
         let digest = Digest::from_str(&sha256_digest(bytes)).context("Failed to parse digest")?;
         let path = self.path_for_digest(&digest)?;
         if let Some(parent) = path.parent() {
@@ -48,10 +48,7 @@ impl FileBlobStore {
         Ok(digest)
     }
 
-    pub(in crate::artifact::local_registry) fn read_bytes(
-        &self,
-        digest: &Digest,
-    ) -> Result<Vec<u8>> {
+    pub fn read_bytes(&self, digest: &Digest) -> Result<Vec<u8>> {
         let path = self.path_for_digest(digest)?;
         let bytes =
             fs::read(&path).with_context(|| format!("Failed to read blob {}", path.display()))?;
@@ -62,21 +59,18 @@ impl FileBlobStore {
         Ok(bytes)
     }
 
-    pub(in crate::artifact::local_registry) fn exists(&self, digest: &Digest) -> Result<bool> {
+    pub fn exists(&self, digest: &Digest) -> Result<bool> {
         Ok(self.path_for_digest(digest)?.exists())
     }
 
-    pub(in crate::artifact::local_registry) fn size(&self, digest: &Digest) -> Result<u64> {
+    pub fn size(&self, digest: &Digest) -> Result<u64> {
         let path = self.path_for_digest(digest)?;
         Ok(fs::metadata(&path)
             .with_context(|| format!("Failed to read blob metadata {}", path.display()))?
             .len())
     }
 
-    pub(in crate::artifact::local_registry) fn blob_record(
-        &self,
-        digest: &Digest,
-    ) -> Result<Option<BlobRecord>> {
+    pub fn blob_record(&self, digest: &Digest) -> Result<Option<BlobRecord>> {
         let path = self.path_for_digest(digest)?;
         let metadata = match fs::metadata(&path) {
             Ok(metadata) => metadata,
@@ -93,7 +87,7 @@ impl FileBlobStore {
         }))
     }
 
-    pub(in crate::artifact::local_registry) fn touch_blob(&self, digest: &Digest) -> Result<()> {
+    pub fn touch_blob(&self, digest: &Digest) -> Result<()> {
         let path = self.path_for_digest(digest)?;
         let metadata = fs::metadata(&path)
             .with_context(|| format!("Failed to read blob metadata {}", path.display()))?;
@@ -105,7 +99,7 @@ impl FileBlobStore {
         touch_existing_blob(&path, digest.as_ref())
     }
 
-    pub(in crate::artifact::local_registry) fn list_blobs(&self) -> Result<Vec<BlobRecord>> {
+    pub fn list_blobs(&self) -> Result<Vec<BlobRecord>> {
         let mut out = Vec::new();
         if !self.root.exists() {
             return Ok(out);
@@ -158,7 +152,7 @@ impl FileBlobStore {
         Ok(out)
     }
 
-    pub(in crate::artifact::local_registry) fn delete_blob(&self, digest: &Digest) -> Result<bool> {
+    pub fn delete_blob(&self, digest: &Digest) -> Result<bool> {
         let path = self.path_for_digest(digest)?;
         match fs::remove_file(&path) {
             Ok(()) => Ok(true),

@@ -1,4 +1,5 @@
-use super::{now_rfc3339, validate_digest, RefRecord, RefUpdate, SQLITE_INDEX_FILE_NAME};
+use super::{now_rfc3339, RefRecord, RefUpdate, SQLITE_INDEX_FILE_NAME};
+use crate::artifact::digest::validate_digest;
 use crate::artifact::ImageRef;
 use anyhow::{bail, ensure, Context, Result};
 use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, MediaType};

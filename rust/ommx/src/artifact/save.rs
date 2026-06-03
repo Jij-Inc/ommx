@@ -8,7 +8,7 @@
 //! written verbatim, so the manifest digest is byte-identical across
 //! the source registry and the produced archive — importing the
 //! archive back via
-//! [`super::local_registry::import_oci_archive`] round-trips to the
+//! [`super::local_registry::LocalRegistry::import_oci_archive`] round-trips to the
 //! same digest.
 //!
 //! Memory shape: each blob is read into a `Vec<u8>` and streamed

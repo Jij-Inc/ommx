@@ -1,7 +1,4 @@
-use super::{
-    BlobRecord, FileBlobStore, LegacyImportReport, OciDirImport, RefUpdate, SqliteIndexStore,
-    FILE_BLOB_STORE_DIR_NAME,
-};
+use super::{RefUpdate, SqliteIndexStore};
 use crate::artifact::{media_types, sha256_digest, stable_json_bytes, ImageRef};
 use anyhow::{ensure, Context, Result};
 use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, ImageManifest, MediaType};
@@ -11,8 +8,20 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::OnceLock;
 
+mod blob;
+mod gc;
+mod import;
+
+use blob::{BlobRecord, FileBlobStore};
+pub use gc::{
+    GcBlob, GcDeleteReport, GcInvalidManifest, GcMissingBlob, GcOptions, GcReferenceKind, GcReport,
+    GcRoot,
+};
+pub use import::{ArchiveInspectView, LegacyImportReport, OciDirImport, OciDirRef};
+
 static DEFAULT_LOCAL_REGISTRY: OnceLock<LocalRegistry> = OnceLock::new();
 const EXPERIMENT_CHECKPOINT_REPOSITORY: &str = "checkpoint";
+const FILE_BLOB_STORE_DIR_NAME: &str = "blobs";
 
 /// OCI descriptor whose referenced bytes are known to exist in the
 /// referenced Local Registry.
@@ -35,6 +44,11 @@ pub struct StoredDescriptor<'reg> {
 }
 
 impl StoredDescriptor<'_> {
+    /// Check registry-instance identity for crate-internal artifact handles.
+    ///
+    /// This is crate-visible because `LocalArtifact` and Experiment state live
+    /// in sibling top-level modules but still need to enforce the Local Registry
+    /// capability invariant before reading or publishing blobs.
     pub(crate) fn is_stored_in(&self, registry: &LocalRegistry) -> bool {
         // This intentionally checks registry-instance identity. Two
         // LocalRegistry values may point at the same on-disk root, but a
@@ -66,6 +80,9 @@ impl From<StoredDescriptor<'_>> for Descriptor {
 ///
 /// The inner descriptor is stored in this registry, and it is known to
 /// be the root manifest descriptor produced by [`LocalRegistry::seal_artifact`].
+/// Crate-visible because `artifact` / `experiment` publish flows live outside
+/// the `local_registry` module while the sealed descriptor invariant belongs
+/// to `LocalRegistry`.
 #[derive(Debug, Clone)]
 pub(crate) struct SealedArtifact<'reg>(StoredDescriptor<'reg>);
 
@@ -83,6 +100,11 @@ impl SealedArtifact<'_> {
     }
 }
 
+/// Unsealed artifact payload prepared by crate-internal artifact builders.
+///
+/// This remains crate-visible so top-level `artifact` / `experiment` modules
+/// can assemble config/layer descriptors while `LocalRegistry` remains the only
+/// module that seals them into a root manifest blob.
 #[derive(Debug, Clone)]
 pub(crate) struct UnsealedArtifact<'reg> {
     artifact_type: MediaType,
@@ -93,6 +115,10 @@ pub(crate) struct UnsealedArtifact<'reg> {
 }
 
 impl<'reg> UnsealedArtifact<'reg> {
+    /// Build an unsealed manifest payload from registry-owned descriptors.
+    ///
+    /// Crate-visible for `artifact` / `experiment` builders; sealing and
+    /// manifest validation still happen only through `LocalRegistry`.
     pub(crate) fn new(
         artifact_type: MediaType,
         config: StoredDescriptor<'reg>,
@@ -109,6 +135,10 @@ impl<'reg> UnsealedArtifact<'reg> {
         }
     }
 
+    /// Consume the payload into an OCI Image Manifest for registry sealing.
+    ///
+    /// Crate-visible only to keep the type self-contained for tests and
+    /// registry-owned sealing; external callers should use artifact builders.
     pub(crate) fn into_oci_image_manifest(self) -> Result<ImageManifest> {
         let config: Descriptor = self.config.into();
         let mut builder = oci_spec::image::ImageManifestBuilder::default()
@@ -236,22 +266,6 @@ impl LocalRegistry {
         Ok(bytes)
     }
 
-    pub fn import_legacy_ref(&self, image_name: &ImageRef) -> Result<OciDirImport> {
-        self.import_legacy_ref_from(&self.root, image_name)
-    }
-
-    pub fn replace_legacy_ref(&self, image_name: &ImageRef) -> Result<OciDirImport> {
-        self.replace_legacy_ref_from(&self.root, image_name)
-    }
-
-    pub fn import_legacy_layout(&self) -> Result<LegacyImportReport> {
-        self.import_legacy_layout_from(&self.root)
-    }
-
-    pub fn replace_legacy_layout(&self) -> Result<LegacyImportReport> {
-        self.replace_legacy_layout_from(&self.root)
-    }
-
     pub fn resolve_image_name(&self, image_name: &ImageRef) -> Result<Option<Digest>> {
         self.index.resolve_image_name(image_name)
     }
@@ -290,6 +304,8 @@ impl LocalRegistry {
     /// `<registry-id8>.ommx.local/checkpoint:<sha256-requested-image-name>`.
     /// Checkpoint artifacts are separate from the requested Experiment ref so
     /// autosave and recovery materialization never advance the success tag.
+    /// Crate-visible because Experiment state is a sibling top-level module,
+    /// while checkpoint refs are part of the Local Registry naming scheme.
     pub(crate) fn experiment_checkpoint_image_name(
         &self,
         requested_image_name: &ImageRef,
@@ -357,6 +373,8 @@ impl LocalRegistry {
     /// does not re-validate dependency blob existence. It serializes
     /// and stores only the root manifest blob, yielding its root
     /// [`SealedArtifact`].
+    /// Crate-visible because artifact builders live in sibling modules; the
+    /// sealing invariant and manifest byte ownership stay inside the registry.
     pub(crate) fn seal_artifact<'reg>(
         &'reg self,
         artifact: UnsealedArtifact<'reg>,
@@ -373,7 +391,8 @@ impl LocalRegistry {
     /// Publish a sealed root manifest descriptor under an image ref.
     ///
     /// This is an IndexStore operation only. It does not write payload
-    /// blobs or manifest bytes.
+    /// blobs or manifest bytes. Crate-visible for sibling artifact /
+    /// experiment commit paths that already hold a [`SealedArtifact`].
     pub(crate) fn publish_manifest_ref(
         &self,
         image_name: &ImageRef,
@@ -390,7 +409,7 @@ impl LocalRegistry {
     ///
     /// This is used when adding another local name for an existing artifact.
     /// It is an IndexStore operation only: no payload blobs or manifest bytes
-    /// are rewritten.
+    /// are rewritten. Crate-visible for `LocalArtifact::tag_as`.
     pub(crate) fn publish_stored_manifest_ref(
         &self,
         image_name: &ImageRef,
@@ -406,7 +425,8 @@ impl LocalRegistry {
     /// Replace the ref target with a sealed root manifest descriptor.
     ///
     /// This is an IndexStore operation only. It does not write payload
-    /// blobs or manifest bytes.
+    /// blobs or manifest bytes. Crate-visible for sibling artifact /
+    /// experiment commit paths that already hold a [`SealedArtifact`].
     pub(crate) fn replace_manifest_ref(
         &self,
         image_name: &ImageRef,
@@ -420,46 +440,62 @@ impl LocalRegistry {
     }
 
     /// Delete a local manifest ref. Content-addressed blobs are not removed.
+    /// Crate-visible for Experiment checkpoint cleanup; GC handles blob removal.
     pub(crate) fn delete_manifest_ref(&self, image_name: &ImageRef) -> Result<bool> {
         self.index
             .delete_ref(&image_name.repository_key(), image_name.reference())
     }
 
-    pub(crate) fn store_blob_bytes(&self, bytes: &[u8]) -> Result<Digest> {
+    fn store_blob_bytes(&self, bytes: &[u8]) -> Result<Digest> {
         self.blobs.put_bytes(bytes)
     }
 
+    /// Read a raw blob by digest for crate-internal artifact materialization.
+    ///
+    /// Public callers read through [`LocalRegistry::get_blob`] with a
+    /// [`StoredDescriptor`]. This digest-only form is crate-visible for
+    /// manifest parsing, save/push, and GC traversal across top-level modules.
     pub(crate) fn read_blob(&self, digest: &Digest) -> Result<Vec<u8>> {
         self.blobs.read_bytes(digest)
     }
 
+    /// Check raw blob presence for crate-internal import / test guards.
+    ///
+    /// This remains crate-visible because remote pull and artifact tests need to
+    /// distinguish a present SQLite ref from a missing manifest blob.
     pub(crate) fn contains_blob(&self, digest: &Digest) -> Result<bool> {
         self.blobs.exists(digest)
     }
 
+    /// Read raw blob size when promoting an OCI descriptor to a registry-owned
+    /// [`StoredDescriptor`] across top-level artifact / experiment modules.
     pub(crate) fn blob_size(&self, digest: &Digest) -> Result<u64> {
         self.blobs.size(digest)
     }
 
+    /// Touch a raw blob's mtime for crate-internal ref-preservation flows.
+    ///
+    /// The public API does not expose mtime management; this is used when
+    /// registry-owned manifest closures are re-tagged.
     pub(crate) fn touch_blob(&self, digest: &Digest) -> Result<()> {
         self.blobs.touch_blob(digest)
     }
 
-    pub(in crate::artifact::local_registry) fn blob_record(
-        &self,
-        digest: &Digest,
-    ) -> Result<Option<BlobRecord>> {
+    fn blob_record(&self, digest: &Digest) -> Result<Option<BlobRecord>> {
         self.blobs.blob_record(digest)
     }
 
-    pub(in crate::artifact::local_registry) fn list_blob_records(&self) -> Result<Vec<BlobRecord>> {
+    fn list_blob_records(&self) -> Result<Vec<BlobRecord>> {
         self.blobs.list_blobs()
     }
 
-    pub(in crate::artifact::local_registry) fn delete_blob(&self, digest: &Digest) -> Result<bool> {
+    fn delete_blob(&self, digest: &Digest) -> Result<bool> {
         self.blobs.delete_blob(digest)
     }
 
+    /// Build a registry-owned manifest descriptor from a stored manifest digest.
+    ///
+    /// Crate-visible for `LocalArtifact` handles and Experiment subject links.
     pub(crate) fn stored_manifest_descriptor(
         &self,
         manifest_digest: &Digest,
@@ -474,6 +510,10 @@ impl LocalRegistry {
         self.stored_descriptor(descriptor)
     }
 
+    /// Touch every blob reachable from a manifest, including subject manifests.
+    ///
+    /// Crate-visible for `LocalArtifact::tag_as`; the traversal is registry
+    /// internal so callers do not pass BLOB protection lists around.
     pub(crate) fn touch_manifest_closure(
         &self,
         manifest_digest: &Digest,
@@ -535,6 +575,8 @@ impl LocalRegistry {
     /// Store bytes as an OCI layer descriptor in this registry's
     /// content-addressed blob. The descriptor carries the supplied media type
     /// and annotations, and its digest / size are derived from `bytes`.
+    /// Crate-visible for Experiment and artifact attachment builders that live
+    /// outside the `local_registry` module.
     pub(crate) fn store_layer_blob(
         &self,
         media_type: MediaType,
@@ -554,7 +596,7 @@ impl LocalRegistry {
     }
 
     /// Serialize `value` as JSON and store it as an OCI layer blob in
-    /// this registry.
+    /// this registry. Crate-visible for Experiment trace/checkpoint layers.
     pub(crate) fn store_json_layer_blob(
         &self,
         media_type: MediaType,
@@ -566,7 +608,8 @@ impl LocalRegistry {
     }
 
     /// Serialize `value` as JSON and store it as a generic OCI blob
-    /// descriptor without layer annotations.
+    /// descriptor without layer annotations. Crate-visible for Experiment
+    /// config blobs created outside the `local_registry` module.
     pub(crate) fn store_json_blob(
         &self,
         media_type: MediaType,
@@ -585,7 +628,9 @@ impl LocalRegistry {
     }
 
     /// Store a descriptor's bytes as a content-addressed blob and
-    /// verify the concrete bytes match the descriptor.
+    /// verify the concrete bytes match the descriptor. Crate-visible for
+    /// artifact builders and imports that must return a [`StoredDescriptor`]
+    /// while keeping the raw filesystem CAS private.
     pub(crate) fn store_blob(
         &self,
         descriptor: Descriptor,
@@ -612,7 +657,9 @@ impl LocalRegistry {
     }
 
     /// Verify that the blob referenced by `descriptor` exists in this
-    /// registry and promote it to a [`StoredDescriptor`].
+    /// registry and promote it to a [`StoredDescriptor`]. Crate-visible for
+    /// `LocalArtifact` and Experiment recovery paths that store descriptors
+    /// durably and revalidate them on use.
     pub(crate) fn stored_descriptor(&self, descriptor: Descriptor) -> Result<StoredDescriptor<'_>> {
         let size = self.blob_size(descriptor.digest())?;
         ensure!(

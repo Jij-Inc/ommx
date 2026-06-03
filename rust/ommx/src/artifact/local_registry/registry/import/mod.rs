@@ -33,8 +33,10 @@
 //!   canonical ref store. Feature-gated behind `remote-artifact` since
 //!   it is the only network-touching path in `local_registry`.
 
-pub mod archive;
-pub mod legacy;
-pub mod oci_dir;
+mod archive;
+mod oci_dir;
 #[cfg(feature = "remote-artifact")]
-pub mod remote;
+mod remote;
+
+pub use archive::ArchiveInspectView;
+pub use oci_dir::{LegacyImportReport, OciDirImport, OciDirRef};

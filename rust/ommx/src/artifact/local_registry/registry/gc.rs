@@ -1,4 +1,5 @@
-use super::{BlobRecord, LocalRegistry, RefRecord};
+use super::super::RefRecord;
+use super::{BlobRecord, LocalRegistry};
 use anyhow::{Context, Result};
 use oci_spec::image::{Descriptor, Digest, ImageManifest};
 use std::{

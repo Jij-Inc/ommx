@@ -383,12 +383,11 @@ fn imports_legacy_local_registry_explicitly() -> Result<()> {
     let legacy_dir = LocalRegistry::legacy_ref_path_in(&legacy_registry_root, &image_name);
     build_test_oci_dir(legacy_dir, image_name.clone())?;
 
-    let registry_root = dir.path().join("registry-v3");
-    let registry = LocalRegistry::open(&registry_root)?;
+    let registry = LocalRegistry::open(&legacy_registry_root)?;
     let index_store = registry.index();
 
     assert!(index_store.resolve_image_name(&image_name)?.is_none());
-    let report = registry.import_legacy_layout_from(&legacy_registry_root)?;
+    let report = registry.import_legacy_layout()?;
     assert_eq!(
         report,
         LegacyImportReport {
@@ -403,7 +402,7 @@ fn imports_legacy_local_registry_explicitly() -> Result<()> {
         .resolve_image_name(&image_name)?
         .context("Legacy local registry ref was not imported")?;
     assert_eq!(
-        registry.import_legacy_layout_from(&legacy_registry_root)?,
+        registry.import_legacy_layout()?,
         LegacyImportReport {
             scanned_dirs: 1,
             imported_dirs: 0,
@@ -458,11 +457,10 @@ fn imports_legacy_docker_hub_short_name_via_normalisation_shim() -> Result<()> {
         .build()?;
     builder.finish(manifest)?;
 
-    let registry_root = dir.path().join("registry-v3");
-    let registry = LocalRegistry::open(&registry_root)?;
+    let registry = LocalRegistry::open(&legacy_registry_root)?;
     let index_store = registry.index();
 
-    let report = registry.import_legacy_layout_from(&legacy_registry_root)?;
+    let report = registry.import_legacy_layout()?;
     assert_eq!(report.imported_dirs, 1, "v2 dir must import cleanly");
 
     // The canonical SQLite key is `(docker.io/library/alpine, latest)`;
@@ -496,13 +494,12 @@ fn import_legacy_local_registry_keeps_existing_ref_on_conflict() -> Result<()> {
     build_test_oci_dir(legacy_dir.clone(), image_name.clone())?;
     let legacy_manifest_digest = OciDirRef::read(&legacy_dir)?.manifest_digest;
 
-    let registry_root = dir.path().join("registry-v3");
-    let registry = LocalRegistry::open(&registry_root)?;
+    let registry = LocalRegistry::open(&legacy_registry_root)?;
     let index_store = registry.index();
     let existing_digest = put_test_manifest_ref(&registry, &image_name, b"existing-manifest")?;
     assert_ne!(existing_digest, legacy_manifest_digest);
 
-    let report = registry.import_legacy_layout_from(&legacy_registry_root)?;
+    let report = registry.import_legacy_layout()?;
     assert_eq!(
         report,
         LegacyImportReport {
@@ -530,13 +527,12 @@ fn import_legacy_local_registry_replaces_existing_ref_when_requested() -> Result
     build_test_oci_dir(legacy_dir.clone(), image_name.clone())?;
     let legacy_manifest_digest = OciDirRef::read(&legacy_dir)?.manifest_digest;
 
-    let registry_root = dir.path().join("registry-v3");
-    let registry = LocalRegistry::open(&registry_root)?;
+    let registry = LocalRegistry::open(&legacy_registry_root)?;
     let index_store = registry.index();
     let existing_digest = put_test_manifest_ref(&registry, &image_name, b"existing-manifest")?;
     assert_ne!(existing_digest, legacy_manifest_digest);
 
-    let report = registry.replace_legacy_layout_from(&legacy_registry_root)?;
+    let report = registry.replace_legacy_layout()?;
     assert_eq!(
         report,
         LegacyImportReport {
@@ -1050,7 +1046,13 @@ fn concurrent_blob_writes_publish_one_complete_blob() -> Result<()> {
             let bytes = bytes.clone();
             std::thread::spawn(move || -> Result<Digest> {
                 let registry = LocalRegistry::open(root)?;
-                registry.store_blob_bytes(&bytes)
+                let digest = Digest::from_str(&sha256_digest(&bytes))?;
+                let descriptor = DescriptorBuilder::default()
+                    .media_type(MediaType::Other("application/octet-stream".to_string()))
+                    .digest(digest)
+                    .size(bytes.len() as u64)
+                    .build()?;
+                Ok(registry.store_blob(descriptor, &bytes)?.digest().clone())
             })
         })
         .collect();
@@ -1305,12 +1307,18 @@ fn pull_image_does_not_short_circuit_when_manifest_blob_is_missing() -> Result<(
     let dir = tempfile::tempdir()?;
     let registry = LocalRegistry::open(dir.path())?;
     let image_name = ImageRef::parse("does-not-resolve.invalid/jij-inc/ommx/demo:blob-missing")?;
-    let local_artifact =
-        build_test_local_artifact(&registry, &image_name, b"step-c-blob-corruption")?;
 
-    // Simulate corruption: remove the manifest blob while keeping the SQLite ref intact.
-    let manifest_digest = local_artifact.manifest_digest().clone();
-    assert!(registry.delete_blob(&manifest_digest)?);
+    // Simulate corruption: the SQLite ref exists, but its manifest digest
+    // has no corresponding CAS blob in the Local Registry.
+    let missing_manifest = b"missing manifest blob";
+    let missing_descriptor = DescriptorBuilder::default()
+        .media_type(MediaType::ImageManifest)
+        .digest(Digest::from_str(&sha256_digest(missing_manifest))?)
+        .size(missing_manifest.len() as u64)
+        .build()?;
+    registry
+        .index()
+        .replace_image_ref(&image_name, &missing_descriptor)?;
 
     let result = registry.pull_image(&image_name);
     assert!(
@@ -1478,8 +1486,9 @@ fn put_test_manifest_ref(
 }
 
 fn put_test_manifest(registry: &LocalRegistry, bytes: &[u8]) -> Result<Descriptor> {
-    let digest = registry.store_blob_bytes(bytes)?;
-    test_manifest_descriptor_with_digest(digest, bytes.len() as u64)
+    let descriptor = test_manifest_descriptor(bytes)?;
+    registry.store_blob(descriptor.clone(), bytes)?;
+    Ok(descriptor)
 }
 
 fn test_manifest_descriptor(bytes: &[u8]) -> Result<Descriptor> {

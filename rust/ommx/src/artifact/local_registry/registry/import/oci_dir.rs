@@ -21,9 +21,9 @@
 //! in the sibling [`super::legacy`] module and uses this module's
 //! primitives.
 
-use super::super::{
-    sha256_digest, LocalRegistry, RefUpdate, ValidatedDigest, OCI_IMAGE_REF_NAME_ANNOTATION,
-};
+use super::super::super::{RefUpdate, OCI_IMAGE_REF_NAME_ANNOTATION};
+use super::super::LocalRegistry;
+use crate::artifact::digest::{sha256_digest, ValidatedDigest};
 use crate::artifact::{media_types, ImageRef};
 use anyhow::{ensure, Context, Result};
 use oci_spec::image::{Descriptor, Digest, ImageIndex, ImageManifest, MediaType, OciLayout};
@@ -31,6 +31,9 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
+
+mod legacy;
+pub use legacy::LegacyImportReport;
 
 /// Identity of an OCI Image Layout directory entry: the manifest
 /// digest preserved from `index.json`, plus the OCI image ref name
@@ -100,19 +103,19 @@ impl OciDirImport {
 /// in [`super::legacy`] which aggregates per-directory outcomes into a
 /// single `LegacyImportReport`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum RefConflictHandling {
+enum RefConflictHandling {
     Error,
     Return,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum RefWriteMode {
+enum RefWriteMode {
     Publish,
     Replace,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum RefSelection<'a> {
+enum RefSelection<'a> {
     SourceOrAnonymous,
     Explicit(&'a ImageRef),
 }
@@ -139,7 +142,7 @@ struct OciDirEntry {
     image_config: (Descriptor, Vec<u8>),
 }
 
-pub(super) struct ImportedOciDirRef {
+struct ImportedOciDirRef {
     manifest_digest: Digest,
     image_name: ImageRef,
 }
@@ -177,7 +180,7 @@ impl LocalRegistry {
         Ok(OciDirImport::from_inner(ref_info, ref_update))
     }
 
-    pub(in crate::artifact::local_registry) fn import_oci_dir_as_ref(
+    fn import_oci_dir_as_ref(
         &self,
         oci_dir_root: impl AsRef<Path>,
         image_name: &ImageRef,
@@ -191,7 +194,7 @@ impl LocalRegistry {
         Ok(OciDirImport::from_inner(ref_info, ref_update))
     }
 
-    pub(super) fn replace_oci_dir_as_ref_inner(
+    fn replace_oci_dir_as_ref_inner(
         &self,
         oci_dir_root: impl AsRef<Path>,
         image_name: &ImageRef,
@@ -207,7 +210,7 @@ impl LocalRegistry {
 
     /// Unified implementation used by public OCI-dir import and by the v2
     /// batch import in [`super::legacy`].
-    pub(super) fn import_oci_dir_inner(
+    fn import_oci_dir_inner(
         &self,
         oci_dir_root: impl AsRef<Path>,
         ref_selection: RefSelection<'_>,

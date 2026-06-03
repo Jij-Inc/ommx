@@ -10,10 +10,10 @@
 //! the OCI distribution-spec shape: `registry()` returns the joined
 //! `host[:port]` form verbatim, mirroring
 //! [`oci_spec::distribution::Reference::registry`]. The legacy v2
-//! disk-cache layout helpers live in
-//! [`local_registry::import::legacy`](super::local_registry::import::legacy),
-//! not here — v3 storage is SQLite + content-addressed blobs, not a
-//! path-tree keyed by image name.
+//! disk-cache layout compatibility entry point is
+//! [`LocalRegistry::legacy_ref_path_in`](super::local_registry::LocalRegistry::legacy_ref_path_in),
+//! not an `ImageRef` method — v3 storage is SQLite + content-addressed
+//! blobs, not a path-tree keyed by image name.
 
 use anyhow::{Context, Result};
 use oci_spec::distribution::Reference;

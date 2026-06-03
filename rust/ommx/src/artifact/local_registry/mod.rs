@@ -7,20 +7,20 @@
 //!
 //! Two distinct layers live here:
 //!
-//! - **Storage** — `index` / `blob` / `types` / `registry`.
+//! - **Storage** — `index` / `types` / `registry`.
 //!   The SQLite + filesystem CAS that owns v3 local state, plus the
 //!   shared row / ref-update types. [`LocalRegistry`] glues the two stores
 //!   into a single addressable unit and contains the publish primitive
 //!   used by higher-level commit implementations.
-//! - **Import** — `import`. Boundary code that reads external content
-//!   in its native form and writes it through [`LocalRegistry`].
-//!   Currently `import::oci_dir` (a single OCI Image Layout directory)
-//!   and `import::legacy` (a v2 OMMX local registry path/tag tree of
-//!   such directories). All imports are identity-preserving: manifest
-//!   bytes and digest are stored verbatim. Reformatting an Image
-//!   Manifest into an Artifact Manifest is a separate explicit
-//!   `convert` operation that produces a new artifact under a new
-//!   digest / new ref, intentionally not a side effect of import.
+//! - **Import** — [`LocalRegistry`] methods that read external content
+//!   in its native form and write it through the registry. This includes
+//!   a single OCI Image Layout directory, a `.ommx` archive, remote OCI
+//!   pulls, and a v2 OMMX local registry path/tag tree. All imports are
+//!   identity-preserving: manifest bytes and digest are stored verbatim.
+//!   Reformatting an Image Manifest into an Artifact Manifest is a
+//!   separate explicit `convert` operation that produces a new artifact
+//!   under a new digest / new ref, intentionally not a side effect of
+//!   import.
 //!
 //! Terminology used in this module:
 //!
@@ -68,9 +68,6 @@
 //!   Payload blobs are stored eagerly; if a descriptor is kept in
 //!   unsealed state for a future commit, it is already stored.
 
-mod blob;
-mod gc;
-mod import;
 mod index;
 mod registry;
 mod types;
@@ -81,21 +78,15 @@ mod tests;
 use chrono::Utc;
 
 pub use crate::artifact::digest::sha256_digest;
-pub(in crate::artifact::local_registry) use crate::artifact::digest::{
-    validate_digest, ValidatedDigest,
-};
-pub(in crate::artifact::local_registry) use blob::{BlobRecord, FileBlobStore};
-pub use gc::{
-    GcBlob, GcDeleteReport, GcInvalidManifest, GcMissingBlob, GcOptions, GcReferenceKind, GcReport,
-    GcRoot,
-};
-pub use import::archive::ArchiveInspectView;
-pub use import::legacy::LegacyImportReport;
-pub use import::oci_dir::{OciDirImport, OciDirRef};
 pub use index::SqliteIndexStore;
+// Crate-visible only because the top-level `artifact` and `experiment`
+// modules construct registry-owned manifests; it is not part of the public API.
 pub(crate) use registry::UnsealedArtifact;
-pub use registry::{LocalRegistry, StoredDescriptor, TempLocalRegistry};
-pub(in crate::artifact::local_registry) use types::FILE_BLOB_STORE_DIR_NAME;
+pub use registry::{
+    ArchiveInspectView, GcBlob, GcDeleteReport, GcInvalidManifest, GcMissingBlob, GcOptions,
+    GcReferenceKind, GcReport, GcRoot, LegacyImportReport, LocalRegistry, OciDirImport, OciDirRef,
+    StoredDescriptor, TempLocalRegistry,
+};
 pub use types::{RefRecord, RefUpdate, OCI_IMAGE_REF_NAME_ANNOTATION, SQLITE_INDEX_FILE_NAME};
 
 fn now_rfc3339() -> String {

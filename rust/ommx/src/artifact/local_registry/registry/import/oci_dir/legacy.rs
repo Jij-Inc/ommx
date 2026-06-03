@@ -3,7 +3,7 @@
 //! The OMMX v2 local registry stores each `(image_name, tag)` as a
 //! standalone OCI Image Layout directory under
 //! `<root>/<image_name_path>/<tag>/`. v3 replaces this layout with the
-//! SQLite-backed `LocalRegistry` (see [`super::registry`]), but
+//! SQLite-backed [`LocalRegistry`], but
 //! existing v2 caches must remain readable via an explicit one-shot
 //! import.
 //!
@@ -25,8 +25,9 @@
 //! **not** v2-specific and lives in [`super::oci_dir`]; this module just
 //! drives that lower layer with v2-aware bookkeeping.
 
-use super::super::{LocalRegistry, RefUpdate};
-use super::oci_dir::{OciDirImport, OciDirRef, RefConflictHandling, RefSelection, RefWriteMode};
+use super::super::super::super::RefUpdate;
+use super::super::super::LocalRegistry;
+use super::{OciDirImport, OciDirRef, RefConflictHandling, RefSelection, RefWriteMode};
 use crate::artifact::ImageRef;
 use anyhow::{ensure, Context, Result};
 use std::{
@@ -70,7 +71,23 @@ impl LocalRegistry {
         Self::legacy_ref_path_in(self.root(), image_name)
     }
 
-    pub(crate) fn import_legacy_ref_from(
+    pub fn import_legacy_ref(&self, image_name: &ImageRef) -> Result<OciDirImport> {
+        self.import_legacy_ref_from(self.root(), image_name)
+    }
+
+    pub fn replace_legacy_ref(&self, image_name: &ImageRef) -> Result<OciDirImport> {
+        self.replace_legacy_ref_from(self.root(), image_name)
+    }
+
+    pub fn import_legacy_layout(&self) -> Result<LegacyImportReport> {
+        self.import_legacy_layout_from(self.root())
+    }
+
+    pub fn replace_legacy_layout(&self) -> Result<LegacyImportReport> {
+        self.replace_legacy_layout_from(self.root())
+    }
+
+    fn import_legacy_ref_from(
         &self,
         legacy_registry_root: impl AsRef<Path>,
         image_name: &ImageRef,
@@ -79,7 +96,7 @@ impl LocalRegistry {
         self.import_oci_dir_as_ref(legacy_path, image_name)
     }
 
-    pub(crate) fn replace_legacy_ref_from(
+    fn replace_legacy_ref_from(
         &self,
         legacy_registry_root: impl AsRef<Path>,
         image_name: &ImageRef,
@@ -88,14 +105,14 @@ impl LocalRegistry {
         self.replace_oci_dir_as_ref_inner(legacy_path, image_name)
     }
 
-    pub(crate) fn import_legacy_layout_from(
+    fn import_legacy_layout_from(
         &self,
         legacy_registry_root: impl AsRef<Path>,
     ) -> Result<LegacyImportReport> {
         LegacyImport::run(self, legacy_registry_root.as_ref(), RefWriteMode::Publish)
     }
 
-    pub(crate) fn replace_legacy_layout_from(
+    fn replace_legacy_layout_from(
         &self,
         legacy_registry_root: impl AsRef<Path>,
     ) -> Result<LegacyImportReport> {
@@ -270,7 +287,7 @@ impl<'reg, 'root> LegacyImport<'reg, 'root> {
     }
 }
 
-pub(in crate::artifact::local_registry) fn legacy_local_registry_path(
+fn legacy_local_registry_path(
     legacy_registry_root: impl AsRef<Path>,
     image_name: &ImageRef,
 ) -> PathBuf {
@@ -296,7 +313,7 @@ pub(in crate::artifact::local_registry) fn legacy_local_registry_path(
 /// import path is unaffected. Switching to a percent-encoded layout
 /// would invalidate existing v2 caches on disk, so the legacy
 /// encoding is preserved.
-pub(crate) fn image_ref_as_path(image_name: &ImageRef) -> PathBuf {
+fn image_ref_as_path(image_name: &ImageRef) -> PathBuf {
     let reference = image_name.reference().replace(':', "__");
     // v2 disk layout encodes `host:port` as `host__port`. Split out
     // the port from the canonical `host[:port]` form at the call
@@ -314,7 +331,7 @@ pub(crate) fn image_ref_as_path(image_name: &ImageRef) -> PathBuf {
 /// path shape doesn't match the encoding, so a stray directory
 /// inside the legacy local registry root surfaces a clear error
 /// during import rather than producing a corrupted ref.
-pub(crate) fn image_ref_from_path(path: &Path) -> Result<ImageRef> {
+fn image_ref_from_path(path: &Path) -> Result<ImageRef> {
     let components = path
         .components()
         .map(|c| {

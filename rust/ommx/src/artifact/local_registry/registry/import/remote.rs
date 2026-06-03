@@ -34,7 +34,8 @@
 //! is, and because this is the only place in `local_registry` that
 //! touches the network.
 
-use super::super::{LocalRegistry, RefUpdate};
+use super::super::super::RefUpdate;
+use super::super::LocalRegistry;
 use super::oci_dir::OciDirImport;
 use crate::artifact::{
     media_types, remote_transport::RemoteTransport, ImageRef, OCI_IMAGE_MANIFEST_MEDIA_TYPE,

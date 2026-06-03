@@ -26,10 +26,10 @@
 //! A crash between blob writes and ref publish leaves orphan CAS bytes
 //! recoverable by GC; the SQLite index never stores a manifest / layer cache.
 
-use super::super::{
-    sha256_digest, LocalRegistry, RefUpdate, ValidatedDigest, OCI_IMAGE_REF_NAME_ANNOTATION,
-};
+use super::super::super::{RefUpdate, OCI_IMAGE_REF_NAME_ANNOTATION};
+use super::super::LocalRegistry;
 use super::oci_dir::OciDirImport;
+use crate::artifact::digest::{sha256_digest, ValidatedDigest};
 use crate::artifact::{media_types, ImageRef};
 use anyhow::{Context, Result};
 use oci_spec::image::{Descriptor, Digest, ImageIndex, ImageManifest, MediaType, OciLayout};
