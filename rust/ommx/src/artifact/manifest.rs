@@ -14,7 +14,7 @@ use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, ImageManifest, Medi
 use prost::Message;
 use serde::Serialize;
 use std::{
-    collections::HashMap,
+    collections::{BTreeSet, HashMap},
     path::Path,
     str::FromStr,
     sync::{Arc, OnceLock},
@@ -418,6 +418,7 @@ impl<'reg> LocalArtifact<'reg> {
     /// handle whose `image_name` is the new reference.
     pub fn tag_as(&self, image_name: ImageRef) -> Result<Self> {
         let manifest = self.stored_manifest_descriptor()?;
+        self.touch_manifest_closure(manifest.digest(), &mut BTreeSet::new())?;
         let ref_update = self
             .registry
             .publish_stored_manifest_ref(&image_name, &manifest)?;
@@ -427,6 +428,39 @@ impl<'reg> LocalArtifact<'reg> {
             image_name,
             self.manifest_digest.clone(),
         ))
+    }
+
+    fn touch_manifest_closure(
+        &self,
+        manifest_digest: &Digest,
+        visited: &mut BTreeSet<String>,
+    ) -> Result<()> {
+        if !visited.insert(manifest_digest.as_ref().to_string()) {
+            return Ok(());
+        }
+        self.registry.blobs().touch_blob(manifest_digest)?;
+        let bytes = self
+            .registry
+            .blobs()
+            .read_bytes(manifest_digest)
+            .with_context(|| format!("Failed to read manifest blob {manifest_digest}"))?;
+        let manifest: ImageManifest = serde_json::from_slice(&bytes)
+            .with_context(|| format!("Failed to parse OCI image manifest {manifest_digest}"))?;
+
+        self.touch_descriptor_blob(manifest.config())?;
+        for layer in manifest.layers() {
+            self.touch_descriptor_blob(layer)?;
+        }
+        if let Some(subject) = manifest.subject() {
+            let subject = self.registry.stored_descriptor(subject.clone())?;
+            self.touch_manifest_closure(subject.digest(), visited)?;
+        }
+        Ok(())
+    }
+
+    fn touch_descriptor_blob(&self, descriptor: &Descriptor) -> Result<()> {
+        let descriptor = self.registry.stored_descriptor(descriptor.clone())?;
+        self.registry.blobs().touch_blob(descriptor.digest())
     }
 }
 

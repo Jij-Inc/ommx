@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use std::time::{Duration, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// Build a tiny single-layer artifact in a fresh temp SQLite registry,
 /// save it to `archive_path` via the v3 native save writer, and drop
@@ -962,6 +962,52 @@ fn local_artifact_subject_round_trips() -> Result<()> {
 }
 
 #[test]
+fn local_artifact_tag_as_touches_reachable_blob_closure() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let parent_image = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:tag-parent")?;
+    let parent = build_test_local_artifact(&registry, &parent_image, b"tag-parent-layer")?;
+    let parent_manifest = parent.stored_manifest_descriptor()?;
+    let parent_manifest_digest = parent.manifest_digest().clone();
+    let parent_config_digest = parent.stored_config()?.digest().clone();
+    let parent_layer_digest = parent.layers()?[0].digest().clone();
+    registry.delete_manifest_ref(&parent_image)?;
+
+    let child_image = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:tag-child")?;
+    let mut child_builder = ArtifactDraft::with_registry(&registry, child_image);
+    let child_layer = child_builder.add_layer_bytes(
+        MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
+        b"tag-child-layer".to_vec(),
+        HashMap::new(),
+    )?;
+    child_builder.set_subject(parent_manifest.into());
+    let child = child_builder.commit()?;
+    let child_manifest_digest = child.manifest_digest().clone();
+    let child_config_digest = child.stored_config()?.digest().clone();
+    let child_layer_digest = child_layer.digest().clone();
+
+    let old_mtime = filetime::FileTime::from_unix_time(1, 0);
+    let touched_digests = [
+        parent_manifest_digest,
+        parent_config_digest,
+        parent_layer_digest,
+        child_manifest_digest,
+        child_config_digest,
+        child_layer_digest,
+    ];
+    for digest in &touched_digests {
+        set_blob_mtime(&registry, digest, old_mtime)?;
+    }
+
+    child.tag_as(ImageRef::parse("ghcr.io/jij-inc/ommx/demo:tag-alias")?)?;
+
+    for digest in &touched_digests {
+        assert_blob_modified_after(&registry, digest, UNIX_EPOCH + Duration::from_secs(1))?;
+    }
+    Ok(())
+}
+
+#[test]
 fn imports_legacy_v2_oci_dir_with_ommx_config_blob() -> Result<()> {
     // v2 SDK can produce Image Manifests whose `config` blob is an
     // OMMX-specific `application/org.ommx.v1.config+json` (instead of
@@ -1515,6 +1561,33 @@ fn stored_layer_descriptors(artifact: &LocalArtifact<'_>) -> Result<Vec<Descript
         .into_iter()
         .map(Descriptor::from)
         .collect())
+}
+
+fn set_blob_mtime(
+    registry: &LocalRegistry,
+    digest: &Digest,
+    modified: filetime::FileTime,
+) -> Result<()> {
+    let path = registry.blobs().path_for_digest(digest)?;
+    filetime::set_file_mtime(&path, modified)
+        .with_context(|| format!("Failed to set mtime for blob {digest}"))
+}
+
+fn assert_blob_modified_after(
+    registry: &LocalRegistry,
+    digest: &Digest,
+    threshold: SystemTime,
+) -> Result<()> {
+    let path = registry.blobs().path_for_digest(digest)?;
+    let modified = std::fs::metadata(&path)
+        .with_context(|| format!("Failed to read blob metadata {}", path.display()))?
+        .modified()
+        .with_context(|| format!("Failed to read blob mtime {}", path.display()))?;
+    assert!(
+        modified > threshold,
+        "blob {digest} should have been touched after {threshold:?}, got {modified:?}",
+    );
+    Ok(())
 }
 
 fn blob_list_contains(blobs: &[GcBlob], digest: &Digest) -> bool {
