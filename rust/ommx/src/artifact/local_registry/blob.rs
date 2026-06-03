@@ -171,7 +171,7 @@ impl FileBlobStore {
         }
     }
 
-    pub fn path_for_digest(&self, digest: &Digest) -> Result<PathBuf> {
+    fn path_for_digest(&self, digest: &Digest) -> Result<PathBuf> {
         Ok(self
             .root
             .join(digest.algorithm().as_ref())
