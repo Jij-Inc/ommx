@@ -12,7 +12,7 @@ mod blob;
 mod gc;
 mod import;
 
-use blob::{BlobRecord, FileBlobStore};
+use blob::{BlobRecord, DeleteBlobOutcome, FileBlobStore};
 pub use gc::{
     GcBlob, GcDeleteReport, GcInvalidManifest, GcMissingBlob, GcOptions, GcReferenceKind, GcReport,
     GcRoot,
@@ -481,16 +481,16 @@ impl LocalRegistry {
         self.blobs.touch_blob(digest)
     }
 
-    fn blob_record(&self, digest: &Digest) -> Result<Option<BlobRecord>> {
-        self.blobs.blob_record(digest)
-    }
-
     fn list_blob_records(&self) -> Result<Vec<BlobRecord>> {
         self.blobs.list_blobs()
     }
 
-    fn delete_blob(&self, digest: &Digest) -> Result<bool> {
-        self.blobs.delete_blob(digest)
+    fn delete_blob_if_older_than(
+        &self,
+        digest: &Digest,
+        cutoff: std::time::SystemTime,
+    ) -> Result<DeleteBlobOutcome> {
+        self.blobs.delete_blob_if_older_than(digest, cutoff)
     }
 
     /// Build a registry-owned manifest descriptor from a stored manifest digest.

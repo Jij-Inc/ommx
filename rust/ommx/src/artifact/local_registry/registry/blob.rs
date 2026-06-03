@@ -3,8 +3,7 @@ use anyhow::{ensure, Context, Result};
 use filetime::FileTime;
 use oci_spec::image::Digest;
 use std::{
-    fs,
-    fs::OpenOptions,
+    fs::{self, File, OpenOptions},
     io::{ErrorKind, Write},
     path::{Path, PathBuf},
     str::FromStr,
@@ -12,11 +11,20 @@ use std::{
 };
 use uuid::Uuid;
 
+const BLOB_STORE_LOCK_FILE_NAME: &str = ".lock";
+
 #[derive(Debug, Clone)]
 pub struct BlobRecord {
     pub digest: Digest,
     pub size: u64,
     pub modified: Option<SystemTime>,
+}
+
+#[derive(Debug, Clone)]
+pub enum DeleteBlobOutcome {
+    Deleted(BlobRecord),
+    Kept(BlobRecord),
+    Missing,
 }
 
 #[derive(Debug, Clone)]
@@ -40,11 +48,17 @@ impl FileBlobStore {
                 .with_context(|| format!("Failed to create {}", parent.display()))?;
         }
         if path.exists() {
-            verify_existing_blob(&path, bytes, digest.as_ref())?;
-            touch_existing_blob(&path, digest.as_ref())?;
-        } else {
-            self.write_blob_atomically(bytes, &digest, &path)?;
+            let _lock = self.lock_store()?;
+            if path.exists() {
+                verify_existing_blob(&path, bytes, digest.as_ref())?;
+                touch_existing_blob(&path, digest.as_ref())?;
+                return Ok(digest);
+            }
         }
+
+        let temp_path = self.write_temp_blob(bytes, &digest)?;
+        let _lock = self.lock_store()?;
+        self.publish_temp_blob(&temp_path, bytes, &digest, &path)?;
         Ok(digest)
     }
 
@@ -70,24 +84,8 @@ impl FileBlobStore {
             .len())
     }
 
-    pub fn blob_record(&self, digest: &Digest) -> Result<Option<BlobRecord>> {
-        let path = self.path_for_digest(digest)?;
-        let metadata = match fs::metadata(&path) {
-            Ok(metadata) => metadata,
-            Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
-            Err(error) => {
-                return Err(error)
-                    .with_context(|| format!("Failed to read blob metadata {}", path.display()));
-            }
-        };
-        Ok(Some(BlobRecord {
-            digest: digest.clone(),
-            size: metadata.len(),
-            modified: metadata.modified().ok(),
-        }))
-    }
-
     pub fn touch_blob(&self, digest: &Digest) -> Result<()> {
+        let _lock = self.lock_store()?;
         let path = self.path_for_digest(digest)?;
         let metadata = fs::metadata(&path)
             .with_context(|| format!("Failed to read blob metadata {}", path.display()))?;
@@ -152,11 +150,39 @@ impl FileBlobStore {
         Ok(out)
     }
 
-    pub fn delete_blob(&self, digest: &Digest) -> Result<bool> {
+    pub fn delete_blob_if_older_than(
+        &self,
+        digest: &Digest,
+        cutoff: SystemTime,
+    ) -> Result<DeleteBlobOutcome> {
+        let _lock = self.lock_store()?;
         let path = self.path_for_digest(digest)?;
+        let metadata = match fs::metadata(&path) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == ErrorKind::NotFound => {
+                return Ok(DeleteBlobOutcome::Missing);
+            }
+            Err(error) => {
+                return Err(error)
+                    .with_context(|| format!("Failed to read blob metadata {}", path.display()));
+            }
+        };
+        ensure!(
+            metadata.is_file(),
+            "Blob path is not a file for {digest}: {}",
+            path.display()
+        );
+        let record = BlobRecord {
+            digest: digest.clone(),
+            size: metadata.len(),
+            modified: metadata.modified().ok(),
+        };
+        if !record.is_older_than(cutoff) {
+            return Ok(DeleteBlobOutcome::Kept(record));
+        }
         match fs::remove_file(&path) {
-            Ok(()) => Ok(true),
-            Err(error) if error.kind() == ErrorKind::NotFound => Ok(false),
+            Ok(()) => Ok(DeleteBlobOutcome::Deleted(record)),
+            Err(error) if error.kind() == ErrorKind::NotFound => Ok(DeleteBlobOutcome::Missing),
             Err(error) => {
                 Err(error).with_context(|| format!("Failed to delete blob {}", path.display()))
             }
@@ -170,7 +196,7 @@ impl FileBlobStore {
             .join(digest.digest()))
     }
 
-    fn write_blob_atomically(&self, bytes: &[u8], digest: &Digest, path: &Path) -> Result<()> {
+    fn write_temp_blob(&self, bytes: &[u8], digest: &Digest) -> Result<PathBuf> {
         let temp_path = self.temp_path_for_digest(digest)?;
         let mut temp_file = OpenOptions::new()
             .write(true)
@@ -184,15 +210,27 @@ impl FileBlobStore {
             .sync_all()
             .with_context(|| format!("Failed to sync temporary blob {}", temp_path.display()))?;
         drop(temp_file);
+        Ok(temp_path)
+    }
 
+    fn publish_temp_blob(
+        &self,
+        temp_path: &Path,
+        bytes: &[u8],
+        digest: &Digest,
+        path: &Path,
+    ) -> Result<()> {
         match fs::hard_link(&temp_path, path) {
             Ok(()) => {
+                let result = touch_existing_blob(path, digest.as_ref());
                 let _ = fs::remove_file(&temp_path);
-                Ok(())
+                result
             }
             Err(error) if error.kind() == ErrorKind::AlreadyExists => {
+                let result = verify_existing_blob(path, bytes, digest.as_ref())
+                    .and_then(|()| touch_existing_blob(path, digest.as_ref()));
                 let _ = fs::remove_file(&temp_path);
-                verify_existing_blob(path, bytes, digest.as_ref())
+                result
             }
             Err(error) => {
                 let _ = fs::remove_file(&temp_path);
@@ -215,6 +253,35 @@ impl FileBlobStore {
             .and_then(|name| name.to_str())
             .context("Blob digest path has no file name")?;
         Ok(path.with_file_name(format!(".{encoded}.{}.tmp", Uuid::new_v4())))
+    }
+
+    fn lock_store(&self) -> Result<FileBlobStoreLock> {
+        let lock_path = self.root.join(BLOB_STORE_LOCK_FILE_NAME);
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(&lock_path)
+            .with_context(|| format!("Failed to open blob store lock {}", lock_path.display()))?;
+        file.lock()
+            .with_context(|| format!("Failed to lock blob store {}", lock_path.display()))?;
+        Ok(FileBlobStoreLock { file })
+    }
+}
+
+impl BlobRecord {
+    fn is_older_than(&self, cutoff: SystemTime) -> bool {
+        self.modified.is_some_and(|modified| modified < cutoff)
+    }
+}
+
+struct FileBlobStoreLock {
+    file: File,
+}
+
+impl Drop for FileBlobStoreLock {
+    fn drop(&mut self) {
+        let _ = self.file.unlock();
     }
 }
 

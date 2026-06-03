@@ -1,5 +1,5 @@
 use super::super::RefRecord;
-use super::{BlobRecord, LocalRegistry};
+use super::{BlobRecord, DeleteBlobOutcome, LocalRegistry};
 use anyhow::{Context, Result};
 use oci_spec::image::{Descriptor, Digest, ImageManifest};
 use std::{
@@ -90,8 +90,8 @@ impl GcReport {
 pub struct GcDeleteReport {
     pub report: GcReport,
     pub deleted_blobs: Vec<GcBlob>,
-    /// Blobs that were candidates during mark but became too new to
-    /// delete when rechecked immediately before unlink.
+    /// Blobs that were candidates during mark but were not old enough to
+    /// delete when rechecked atomically with unlink.
     pub skipped_blobs: Vec<GcBlob>,
 }
 
@@ -173,18 +173,21 @@ impl LocalRegistry {
 
     pub fn gc(&self, options: &GcOptions) -> Result<GcDeleteReport> {
         let report = self.gc_report(options)?;
+        let Some(delete_cutoff) = SystemTime::now().checked_sub(options.grace_period) else {
+            let skipped_blobs = report.orphan_candidates.clone();
+            return Ok(GcDeleteReport {
+                report,
+                deleted_blobs: Vec::new(),
+                skipped_blobs,
+            });
+        };
         let mut deleted_blobs = Vec::new();
         let mut skipped_blobs = Vec::new();
         for candidate in &report.orphan_candidates {
-            let Some(record) = self.blob_record(&candidate.digest)? else {
-                continue;
-            };
-            if !record.is_past_grace_period(SystemTime::now(), options.grace_period) {
-                skipped_blobs.push(GcBlob::from(record));
-                continue;
-            }
-            if self.delete_blob(&record.digest)? {
-                deleted_blobs.push(GcBlob::from(record));
+            match self.delete_blob_if_older_than(&candidate.digest, delete_cutoff)? {
+                DeleteBlobOutcome::Deleted(record) => deleted_blobs.push(GcBlob::from(record)),
+                DeleteBlobOutcome::Kept(record) => skipped_blobs.push(GcBlob::from(record)),
+                DeleteBlobOutcome::Missing => {}
             }
         }
         Ok(GcDeleteReport {
