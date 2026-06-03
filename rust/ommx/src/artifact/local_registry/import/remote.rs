@@ -3,7 +3,7 @@
 //! ## Implementation shape
 //!
 //! Single network-to-SQLite pass through
-//! [`super::super::super::remote_transport::RemoteTransport`]:
+//! `remote_transport::RemoteTransport`:
 //!
 //! 1. Pre-pull SQLite check short-circuits the network fetch when the
 //!    registry already resolves `image_name` to a manifest digest **and**
@@ -17,7 +17,7 @@
 //!    `Unchanged` that would surface as an opaque `get_blob` failure
 //!    later. Same cache-hit semantics the v2-era legacy dir cache
 //!    offered, expressed against the canonical SQLite ref store.
-//! 2. Open a [`RemoteTransport`], authenticate for `Pull`, fetch the
+//! 2. Open a `RemoteTransport`, authenticate for `Pull`, fetch the
 //!    manifest bytes verbatim, then walk the manifest's config +
 //!    layer descriptors. Each blob is pulled into memory and written
 //!    to the registry. The manifest is stored last so it sits behind
@@ -30,7 +30,7 @@
 //! v3 has no on-disk OCI Image Layout intermediate for pulls — SQLite
 //! plus registry-owned CAS files are the sole post-import home of the bytes.
 //!
-//! Feature-gated behind `remote-artifact` because the [`RemoteTransport`]
+//! Feature-gated behind `remote-artifact` because the `RemoteTransport`
 //! is, and because this is the only place in `local_registry` that
 //! touches the network.
 
@@ -52,7 +52,7 @@ impl LocalRegistry {
     /// the method returns [`OciDirImport`] with [`RefUpdate::Unchanged`].
     ///
     /// Otherwise the manifest and each blob are pulled through
-    /// [`RemoteTransport`] straight into the registry, and a SQLite transaction
+    /// `RemoteTransport` straight into the registry, and a SQLite transaction
     /// publishes the ref descriptor. There is no on-disk OCI Image Layout
     /// intermediate.
     pub fn pull_image(&self, image_name: &ImageRef) -> Result<OciDirImport> {

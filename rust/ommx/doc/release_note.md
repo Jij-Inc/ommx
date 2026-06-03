@@ -340,11 +340,11 @@ disk-cache local registry layout (`<root>/<image_name>/<tag>/`). The
 v3 SQLite Local Registry stores blobs content-addressed and refs in
 SQLite, so per-image directory paths are no longer a v3 concept.
 The path-shape helpers have moved off `ImageRef` and into
-`local_registry::import::legacy` as `pub(crate)` functions; only the
-higher-level
-[`legacy_local_registry_path`](crate::artifact::local_registry::legacy_local_registry_path)
-remains `pub`, used by `ommx import-legacy` and the CLI's
-v2-only migration hint. The previously public `get_image_dir` /
+`local_registry::import::legacy` as internal functions; the public
+v2-path compatibility entry point is now
+[`LocalRegistry::legacy_ref_path_in`](crate::artifact::local_registry::LocalRegistry::legacy_ref_path_in),
+used by `ommx import-legacy` and the CLI's v2-only migration hint.
+The previously public `get_image_dir` /
 `image_dir` functions and the `ommx image-dir` CLI subcommand are
 removed — their return value no longer corresponded to any v3
 storage location.

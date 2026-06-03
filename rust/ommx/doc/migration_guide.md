@@ -732,9 +732,9 @@ exports a `.ommx` file. Constructors:
       path (`<root>/<image_name>/<tag>/`) that no longer corresponds
       to anything in the v3 SQLite Local Registry. The v2 → v3
       migration check that previously read this path moves to
-      `ommx::artifact::local_registry::legacy_local_registry_path`,
-      which is the only `pub` entry point that still computes the
-      v2-shaped path (used internally by `ommx import-legacy`).
+      `ommx::artifact::local_registry::LocalRegistry::legacy_ref_path_in`,
+      which is the public compatibility entry point that still computes
+      the v2-shaped path for migration checks.
       The `ommx image-dir <name>` CLI subcommand and the Python
       `ommx.get_image_dir` function are removed for the same
       reason — pointing users at a path that is unrelated to v3
