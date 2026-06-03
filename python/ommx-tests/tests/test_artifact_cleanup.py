@@ -36,7 +36,7 @@ def test_prune_anonymous_reports_and_deletes_refs():
     assert image_name not in {ref.image_name for ref in after.refs}
 
 
-def test_gc_reports_unreachable_blobs_after_prune():
+def test_gc_reports_and_deletes_unreachable_blobs_after_prune():
     payload = f"gc-target-{uuid.uuid4()}".encode()
     draft = ArtifactDraft.new_anonymous()
     descriptor = draft.add_layer("application/octet-stream", payload, {})
@@ -49,3 +49,11 @@ def test_gc_reports_unreachable_blobs_after_prune():
     assert dry_run.delete_applied is False
     assert descriptor.digest in {blob.digest for blob in dry_run.orphan_candidates}
     assert dry_run.deleted_blobs == []
+
+    deleted = gc(delete=True, grace_period="0s")
+    assert deleted.delete_applied is True
+    assert descriptor.digest in {blob.digest for blob in deleted.deleted_blobs}
+    assert deleted.deleted_size >= descriptor.size
+
+    after = gc(grace_period="0s")
+    assert descriptor.digest not in {blob.digest for blob in after.orphan_candidates}

@@ -277,10 +277,27 @@ impl LocalRegistry {
         })
     }
 
-    pub fn gc(&self, _options: &GcOptions) -> Result<GcDeleteReport> {
-        unimplemented!(
-            "Local Registry GC delete is not implemented yet; run gc_report or `ommx gc` without --delete"
-        )
+    pub fn gc(&self, options: &GcOptions) -> Result<GcDeleteReport> {
+        let report = self.gc_report(options)?;
+        let mut deleted_blobs = Vec::new();
+        let mut skipped_blobs = Vec::new();
+        for candidate in &report.orphan_candidates {
+            let Some(record) = self.blobs().blob_record(&candidate.digest)? else {
+                continue;
+            };
+            if !is_past_grace_period(&record, SystemTime::now(), options.grace_period) {
+                skipped_blobs.push(GcBlob::from(record));
+                continue;
+            }
+            if self.blobs().delete_blob(&record.digest)? {
+                deleted_blobs.push(GcBlob::from(record));
+            }
+        }
+        Ok(GcDeleteReport {
+            report,
+            deleted_blobs,
+            skipped_blobs,
+        })
     }
 
     fn read_gc_manifest(&self, item: &ManifestToVisit) -> Result<Option<ImageManifest>> {

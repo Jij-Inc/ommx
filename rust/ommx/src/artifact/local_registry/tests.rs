@@ -172,20 +172,7 @@ fn gc_report_walks_subject_chain_from_live_ref() -> Result<()> {
 }
 
 #[test]
-#[should_panic(expected = "Local Registry GC delete is not implemented yet")]
-fn gc_delete_is_unimplemented() {
-    let dir = tempfile::tempdir().unwrap();
-    let registry = LocalRegistry::open(dir.path()).unwrap();
-    registry
-        .gc(&GcOptions {
-            grace_period: Duration::ZERO,
-            ..GcOptions::default()
-        })
-        .unwrap();
-}
-
-#[test]
-fn gc_report_keeps_reachable_blobs_when_candidates_exist() -> Result<()> {
+fn gc_deletes_only_orphan_candidates() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let registry = LocalRegistry::open(dir.path())?;
     let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:gc-delete")?;
@@ -196,16 +183,15 @@ fn gc_report_keeps_reachable_blobs_when_candidates_exist() -> Result<()> {
         b"delete-me",
         HashMap::new(),
     )?;
+    let orphan_digest = orphan.digest().clone();
 
-    let report = registry.gc_report(&GcOptions {
+    let result = registry.gc(&GcOptions {
         grace_period: Duration::ZERO,
         ..GcOptions::default()
     })?;
 
-    assert!(blob_list_contains(
-        &report.orphan_candidates,
-        orphan.digest()
-    ));
+    assert!(blob_list_contains(&result.deleted_blobs, &orphan_digest));
+    assert!(!registry.blobs().exists(&orphan_digest)?);
     assert!(registry.blobs().exists(&reachable_layer)?);
     Ok(())
 }
