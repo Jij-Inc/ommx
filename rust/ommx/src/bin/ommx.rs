@@ -6,7 +6,8 @@ use ommx::artifact::{
     fetch_remote_manifest, get_local_registry_root,
     local_registry::{
         import_oci_archive, import_oci_dir, inspect_archive, legacy_local_registry_path,
-        oci_dir_ref, pull_image, GcBlob, GcDeleteReport, GcOptions, GcReport, LocalRegistry,
+        oci_dir_ref, parse_gc_duration, pull_image, GcBlob, GcDeleteReport, GcOptions, GcReport,
+        LocalRegistry,
     },
     ImageRef, LocalArtifact,
 };
@@ -632,38 +633,6 @@ fn handle_gc(
         );
     }
     Ok(())
-}
-
-fn parse_gc_duration(input: &str) -> std::result::Result<Duration, String> {
-    if input.is_empty() {
-        return Err("duration must not be empty".to_string());
-    }
-    let (number, unit) = match input.as_bytes().last().copied() {
-        Some(b's' | b'm' | b'h' | b'd') => (&input[..input.len() - 1], input.as_bytes().last()),
-        Some(b'0'..=b'9') => (input, None),
-        _ => {
-            return Err(format!(
-                "invalid duration suffix in {input:?}; use s, m, h, or d"
-            ))
-        }
-    };
-    let value = number
-        .parse::<u64>()
-        .map_err(|_| format!("invalid duration value in {input:?}"))?;
-    let seconds = match unit.copied() {
-        Some(b's') | None => value,
-        Some(b'm') => value
-            .checked_mul(60)
-            .ok_or_else(|| format!("duration is too large: {input}"))?,
-        Some(b'h') => value
-            .checked_mul(60 * 60)
-            .ok_or_else(|| format!("duration is too large: {input}"))?,
-        Some(b'd') => value
-            .checked_mul(24 * 60 * 60)
-            .ok_or_else(|| format!("duration is too large: {input}"))?,
-        _ => unreachable!("duration unit was filtered above"),
-    };
-    Ok(Duration::from_secs(seconds))
 }
 
 fn print_gc_delete_report(registry: &LocalRegistry, result: &GcDeleteReport, show_digests: bool) {

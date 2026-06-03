@@ -16,6 +16,7 @@ from typing import TypeAlias
 
 __all__ = [
     "AdditionalCapability",
+    "AnonymousArtifactRef",
     "ArchiveDescriptor",
     "ArchiveManifest",
     "Artifact",
@@ -36,6 +37,11 @@ __all__ = [
     "EvaluatedNamedFunction",
     "Experiment",
     "Function",
+    "GcBlob",
+    "GcInvalidManifest",
+    "GcMissingBlob",
+    "GcReport",
+    "GcRoot",
     "IndicatorConstraint",
     "Instance",
     "InstanceDescription",
@@ -51,6 +57,7 @@ __all__ = [
     "Polynomial",
     "Provenance",
     "ProvenanceKind",
+    "PruneAnonymousReport",
     "Quadratic",
     "Relaxation",
     "RemovedConstraint",
@@ -74,10 +81,12 @@ __all__ = [
     "ToFunction",
     "ToSamples",
     "ToState",
+    "gc",
     "get_default_atol",
     "get_images",
     "get_local_registry_root",
     "miplib2017_instance_annotations",
+    "prune_anonymous",
     "qplib_instance_annotations",
     "set_default_atol",
     "set_local_registry_root",
@@ -110,6 +119,36 @@ ToState: TypeAlias = (
     | collections.abc.Mapping[int, float]
     | collections.abc.Iterable[tuple[int, float]]
 )
+
+@typing.final
+class AnonymousArtifactRef:
+    r"""
+    Anonymous Artifact ref matched by {func}`prune_anonymous`.
+    """
+    @property
+    def image_name(self) -> builtins.str: ...
+    @property
+    def name(self) -> builtins.str: ...
+    @property
+    def reference(self) -> builtins.str: ...
+    @property
+    def digest(self) -> builtins.str:
+        r"""
+        Manifest digest pointed to by this anonymous ref.
+        """
+    @property
+    def size(self) -> builtins.int:
+        r"""
+        Manifest size in bytes.
+        """
+    @property
+    def media_type(self) -> builtins.str: ...
+    @property
+    def updated_at(self) -> builtins.str:
+        r"""
+        SQLite ref update timestamp, stored as an RFC3339 string.
+        """
+    def __repr__(self) -> builtins.str: ...
 
 @typing.final
 class ArchiveDescriptor:
@@ -2244,6 +2283,141 @@ class Function:
 
         Returns a Constraint where (other - self) <= 0.
         """
+
+@typing.final
+class GcBlob:
+    r"""
+    Blob entry reported by Local Registry GC.
+    """
+    @property
+    def digest(self) -> builtins.str:
+        r"""
+        Blob digest, for example `sha256:...`.
+        """
+    @property
+    def size(self) -> builtins.int:
+        r"""
+        Blob size in bytes.
+        """
+    @property
+    def modified_at_unix_seconds(self) -> typing.Optional[builtins.float]:
+        r"""
+        Blob modification time as Unix timestamp seconds, or `None` if unavailable.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class GcInvalidManifest:
+    r"""
+    Reachable manifest blob that could not be parsed as an OCI Image Manifest.
+    """
+    @property
+    def digest(self) -> builtins.str: ...
+    @property
+    def referenced_by(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def kind(self) -> builtins.str:
+        r"""
+        Reference edge kind: `"ref_manifest"`, `"subject"`, or `"protected_digest"`.
+        """
+    @property
+    def error(self) -> builtins.str: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class GcMissingBlob:
+    r"""
+    Blob referenced by a reachable manifest but missing from the BlobStore.
+    """
+    @property
+    def digest(self) -> builtins.str: ...
+    @property
+    def referenced_by(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def kind(self) -> builtins.str:
+        r"""
+        Reference edge kind: `"ref_manifest"`, `"config"`, `"layer"`, `"subject"`, or `"protected_digest"`.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class GcReport:
+    r"""
+    Report returned by {func}`gc`.
+    """
+    @property
+    def root(self) -> pathlib.Path:
+        r"""
+        Local Registry root inspected by this GC pass.
+        """
+    @property
+    def delete_applied(self) -> builtins.bool:
+        r"""
+        `True` when {func}`gc` was called with `delete=True`.
+        """
+    @property
+    def roots(self) -> builtins.list[GcRoot]: ...
+    @property
+    def reachable_blobs(self) -> builtins.list[GcBlob]: ...
+    @property
+    def orphan_candidates(self) -> builtins.list[GcBlob]: ...
+    @property
+    def deferred_blobs(self) -> builtins.list[GcBlob]: ...
+    @property
+    def missing_blobs(self) -> builtins.list[GcMissingBlob]: ...
+    @property
+    def invalid_manifests(self) -> builtins.list[GcInvalidManifest]: ...
+    @property
+    def deleted_blobs(self) -> builtins.list[GcBlob]:
+        r"""
+        Blobs actually unlinked when `delete=True`; empty in dry-run mode.
+        """
+    @property
+    def skipped_blobs(self) -> builtins.list[GcBlob]:
+        r"""
+        Candidate blobs skipped because they became too new before deletion.
+        """
+    @property
+    def reachable_size(self) -> builtins.int: ...
+    @property
+    def orphan_candidate_size(self) -> builtins.int: ...
+    @property
+    def deferred_size(self) -> builtins.int: ...
+    @property
+    def deleted_size(self) -> builtins.int: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class GcRoot:
+    r"""
+    Root that made blobs reachable during Local Registry GC.
+    """
+    @property
+    def kind(self) -> builtins.str:
+        r"""
+        Root kind: `"ref"` or `"protected_digest"`.
+        """
+    @property
+    def name(self) -> typing.Optional[builtins.str]:
+        r"""
+        Repository/name portion of the ref, or `None` for protected digests.
+        """
+    @property
+    def reference(self) -> typing.Optional[builtins.str]:
+        r"""
+        Tag/reference portion of the ref, or `None` for protected digests.
+        """
+    @property
+    def digest(self) -> builtins.str:
+        r"""
+        Root manifest or protected digest.
+        """
+    @property
+    def image_name(self) -> typing.Optional[builtins.str]:
+        r"""
+        Full image ref for `"ref"` roots, or `None` for protected digests.
+        """
+    def __repr__(self) -> builtins.str: ...
 
 @typing.final
 class IndicatorConstraint:
@@ -4967,6 +5141,30 @@ class Provenance:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class PruneAnonymousReport:
+    r"""
+    Report returned by {func}`prune_anonymous`.
+    """
+    @property
+    def root(self) -> pathlib.Path:
+        r"""
+        Local Registry root inspected by this prune pass.
+        """
+    @property
+    def delete_applied(self) -> builtins.bool:
+        r"""
+        `True` when {func}`prune_anonymous` was called with `delete=True`.
+        """
+    @property
+    def refs(self) -> builtins.list[AnonymousArtifactRef]:
+        r"""
+        Candidate refs in dry-run mode, or removed refs when `delete=True`.
+        """
+    @property
+    def count(self) -> builtins.int: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class Quadratic:
     r"""
     Quadratic function of decision variables.
@@ -6692,6 +6890,28 @@ class Sense(enum.Enum):
     def __repr__(self) -> builtins.str: ...
     def __str__(self) -> builtins.str: ...
 
+def gc(
+    *,
+    root: typing.Optional[builtins.str | os.PathLike | pathlib.Path] = None,
+    delete: builtins.bool = False,
+    grace_period: builtins.str = "24h",
+) -> GcReport:
+    r"""
+    Report or delete Local Registry blobs unreachable from SQLite refs.
+
+    This is the Python SDK equivalent of `ommx gc`. It is a dry-run by
+    default. Pass `delete=True` to unlink orphan candidates. The `grace_period`
+    string accepts the same `s`, `m`, `h`, and `d` suffixes as the CLI.
+
+    ```python
+    >>> from ommx.artifact import gc
+    >>> report = gc()
+    >>> report.delete_applied
+    False
+
+    ```
+    """
+
 def get_default_atol() -> builtins.float: ...
 def get_images() -> builtins.list[builtins.str]:
     r"""
@@ -6708,6 +6928,27 @@ def get_local_registry_root() -> pathlib.Path:
 def miplib2017_instance_annotations() -> builtins.dict[
     builtins.str, builtins.dict[builtins.str, builtins.str]
 ]: ...
+def prune_anonymous(
+    *,
+    root: typing.Optional[builtins.str | os.PathLike | pathlib.Path] = None,
+    delete: builtins.bool = False,
+) -> PruneAnonymousReport:
+    r"""
+    Report or delete anonymous Artifact refs in the Local Registry.
+
+    This is the Python SDK equivalent of `ommx prune-anonymous`.
+    It only removes SQLite refs when `delete=True`; manifest and payload blobs
+    are left for {func}`gc` to reclaim if they become unreachable.
+
+    ```python
+    >>> from ommx.artifact import prune_anonymous
+    >>> report = prune_anonymous()
+    >>> report.delete_applied
+    False
+
+    ```
+    """
+
 def qplib_instance_annotations() -> builtins.dict[
     builtins.str, builtins.dict[builtins.str, builtins.str]
 ]: ...

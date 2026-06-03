@@ -7,6 +7,110 @@
       "items": [
         {
           "kind": "Class",
+          "name": "AnonymousArtifactRef",
+          "doc": "Anonymous Artifact ref matched by {func}`prune_anonymous`.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "digest",
+              "doc": "Manifest digest pointed to by this anonymous ref.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "image_name",
+              "doc": "",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "media_type",
+              "doc": "",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "name",
+              "doc": "",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "reference",
+              "doc": "",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "size",
+              "doc": "Manifest size in bytes.",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "updated_at",
+              "doc": "SQLite ref update timestamp, stored as an RFC3339 string.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
           "name": "ArchiveDescriptor",
           "doc": "Descriptor value read from an OCI archive manifest without importing it.",
           "bases": [],
@@ -1691,6 +1795,747 @@
           "deprecated": null
         },
         {
+          "kind": "Class",
+          "name": "GcBlob",
+          "doc": "Blob entry reported by Local Registry GC.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "digest",
+              "doc": "Blob digest, for example `sha256:...`.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "modified_at_unix_seconds",
+              "doc": "Blob modification time as Unix timestamp seconds, or `None` if unavailable.",
+              "type_": {
+                "display": "Optional[float]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "float",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "size",
+              "doc": "Blob size in bytes.",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "GcInvalidManifest",
+          "doc": "Reachable manifest blob that could not be parsed as an OCI Image Manifest.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "digest",
+              "doc": "",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "error",
+              "doc": "",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "kind",
+              "doc": "Reference edge kind: `\"ref_manifest\"`, `\"subject\"`, or `\"protected_digest\"`.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "referenced_by",
+              "doc": "",
+              "type_": {
+                "display": "Optional[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "GcMissingBlob",
+          "doc": "Blob referenced by a reachable manifest but missing from the BlobStore.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "digest",
+              "doc": "",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "kind",
+              "doc": "Reference edge kind: `\"ref_manifest\"`, `\"config\"`, `\"layer\"`, `\"subject\"`, or `\"protected_digest\"`.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "referenced_by",
+              "doc": "",
+              "type_": {
+                "display": "Optional[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "GcReport",
+          "doc": "Report returned by {func}`gc`.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "deferred_blobs",
+              "doc": "",
+              "type_": {
+                "display": "list[_ommx_rust.GcBlob]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "GcBlob",
+                    "link_target": {
+                      "fqn": "ommx.artifact.GcBlob",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "deferred_size",
+              "doc": "",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "delete_applied",
+              "doc": "`True` when {func}`gc` was called with `delete=True`.",
+              "type_": {
+                "display": "bool",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "deleted_blobs",
+              "doc": "Blobs actually unlinked when `delete=True`; empty in dry-run mode.",
+              "type_": {
+                "display": "list[_ommx_rust.GcBlob]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "GcBlob",
+                    "link_target": {
+                      "fqn": "ommx.artifact.GcBlob",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "deleted_size",
+              "doc": "",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "invalid_manifests",
+              "doc": "",
+              "type_": {
+                "display": "list[_ommx_rust.GcInvalidManifest]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "GcInvalidManifest",
+                    "link_target": {
+                      "fqn": "ommx.artifact.GcInvalidManifest",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "missing_blobs",
+              "doc": "",
+              "type_": {
+                "display": "list[_ommx_rust.GcMissingBlob]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "GcMissingBlob",
+                    "link_target": {
+                      "fqn": "ommx.artifact.GcMissingBlob",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "orphan_candidate_size",
+              "doc": "",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "orphan_candidates",
+              "doc": "",
+              "type_": {
+                "display": "list[_ommx_rust.GcBlob]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "GcBlob",
+                    "link_target": {
+                      "fqn": "ommx.artifact.GcBlob",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "reachable_blobs",
+              "doc": "",
+              "type_": {
+                "display": "list[_ommx_rust.GcBlob]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "GcBlob",
+                    "link_target": {
+                      "fqn": "ommx.artifact.GcBlob",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "reachable_size",
+              "doc": "",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "root",
+              "doc": "Local Registry root inspected by this GC pass.",
+              "type_": {
+                "display": "Path",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "roots",
+              "doc": "",
+              "type_": {
+                "display": "list[_ommx_rust.GcRoot]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "GcRoot",
+                    "link_target": {
+                      "fqn": "ommx.artifact.GcRoot",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "skipped_blobs",
+              "doc": "Candidate blobs skipped because they became too new before deletion.",
+              "type_": {
+                "display": "list[_ommx_rust.GcBlob]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "GcBlob",
+                    "link_target": {
+                      "fqn": "ommx.artifact.GcBlob",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "GcRoot",
+          "doc": "Root that made blobs reachable during Local Registry GC.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "digest",
+              "doc": "Root manifest or protected digest.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "image_name",
+              "doc": "Full image ref for `\"ref\"` roots, or `None` for protected digests.",
+              "type_": {
+                "display": "Optional[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "kind",
+              "doc": "Root kind: `\"ref\"` or `\"protected_digest\"`.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "name",
+              "doc": "Repository/name portion of the ref, or `None` for protected digests.",
+              "type_": {
+                "display": "Optional[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "reference",
+              "doc": "Tag/reference portion of the ref, or `None` for protected digests.",
+              "type_": {
+                "display": "Optional[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "PruneAnonymousReport",
+          "doc": "Report returned by {func}`prune_anonymous`.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "count",
+              "doc": "",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "delete_applied",
+              "doc": "`True` when {func}`prune_anonymous` was called with `delete=True`.",
+              "type_": {
+                "display": "bool",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "refs",
+              "doc": "Candidate refs in dry-run mode, or removed refs when `delete=True`.",
+              "type_": {
+                "display": "list[_ommx_rust.AnonymousArtifactRef]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "AnonymousArtifactRef",
+                    "link_target": {
+                      "fqn": "ommx.artifact.AnonymousArtifactRef",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "root",
+              "doc": "Local Registry root inspected by this prune pass.",
+              "type_": {
+                "display": "Path",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Function",
+          "name": "gc",
+          "doc": "Report or delete Local Registry blobs unreachable from SQLite refs.\n\nThis is the Python SDK equivalent of `ommx gc`. It is a dry-run by\ndefault. Pass `delete=True` to unlink orphan candidates. The `grace_period`\nstring accepts the same `s`, `m`, `h`, and `d` suffixes as the CLI.\n\n```python\n>>> from ommx.artifact import gc\n>>> report = gc()\n>>> report.delete_applied\nFalse\n\n```",
+          "signatures": [
+            {
+              "parameters": [
+                {
+                  "name": "root",
+                  "type_": {
+                    "display": "Optional[str | PathLike | Path]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "str | PathLike | Path",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "PathLike",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Path",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "default": {
+                    "kind": "Simple",
+                    "value": "None"
+                  }
+                },
+                {
+                  "name": "delete",
+                  "type_": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  },
+                  "default": {
+                    "kind": "Simple",
+                    "value": "False"
+                  }
+                },
+                {
+                  "name": "grace_period",
+                  "type_": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  "default": {
+                    "kind": "Simple",
+                    "value": "'24h'"
+                  }
+                }
+              ],
+              "return_type": {
+                "display": "GcReport",
+                "link_target": {
+                  "fqn": "ommx.artifact.GcReport",
+                  "doc_module": "ommx.artifact",
+                  "kind": "Class",
+                  "attribute": null
+                },
+                "children": []
+              }
+            }
+          ],
+          "is_async": false,
+          "deprecated": null
+        },
+        {
           "kind": "Function",
           "name": "get_images",
           "doc": "Get all image names stored in the local registry.\n\nReturns a list of image names (as strings) found in the local registry.",
@@ -1723,6 +2568,75 @@
               "return_type": {
                 "display": "Path",
                 "link_target": null,
+                "children": []
+              }
+            }
+          ],
+          "is_async": false,
+          "deprecated": null
+        },
+        {
+          "kind": "Function",
+          "name": "prune_anonymous",
+          "doc": "Report or delete anonymous Artifact refs in the Local Registry.\n\nThis is the Python SDK equivalent of `ommx prune-anonymous`.\nIt only removes SQLite refs when `delete=True`; manifest and payload blobs\nare left for {func}`gc` to reclaim if they become unreachable.\n\n```python\n>>> from ommx.artifact import prune_anonymous\n>>> report = prune_anonymous()\n>>> report.delete_applied\nFalse\n\n```",
+          "signatures": [
+            {
+              "parameters": [
+                {
+                  "name": "root",
+                  "type_": {
+                    "display": "Optional[str | PathLike | Path]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "str | PathLike | Path",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "PathLike",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Path",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "default": {
+                    "kind": "Simple",
+                    "value": "None"
+                  }
+                },
+                {
+                  "name": "delete",
+                  "type_": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  },
+                  "default": {
+                    "kind": "Simple",
+                    "value": "False"
+                  }
+                }
+              ],
+              "return_type": {
+                "display": "PruneAnonymousReport",
+                "link_target": {
+                  "fqn": "ommx.artifact.PruneAnonymousReport",
+                  "doc_module": "ommx.artifact",
+                  "kind": "Class",
+                  "attribute": null
+                },
                 "children": []
               }
             }
@@ -27904,13 +28818,22 @@
     }
   },
   "export_map": {
+    "ommx.artifact.AnonymousArtifactRef": "ommx.artifact",
     "ommx.artifact.ArchiveDescriptor": "ommx.artifact",
     "ommx.artifact.ArchiveManifest": "ommx.artifact",
     "ommx.artifact.Artifact": "ommx.artifact",
     "ommx.artifact.ArtifactDraft": "ommx.artifact",
     "ommx.artifact.Descriptor": "ommx.artifact",
+    "ommx.artifact.GcBlob": "ommx.artifact",
+    "ommx.artifact.GcInvalidManifest": "ommx.artifact",
+    "ommx.artifact.GcMissingBlob": "ommx.artifact",
+    "ommx.artifact.GcReport": "ommx.artifact",
+    "ommx.artifact.GcRoot": "ommx.artifact",
+    "ommx.artifact.PruneAnonymousReport": "ommx.artifact",
+    "ommx.artifact.gc": "ommx.artifact",
     "ommx.artifact.get_images": "ommx.artifact",
     "ommx.artifact.get_local_registry_root": "ommx.artifact",
+    "ommx.artifact.prune_anonymous": "ommx.artifact",
     "ommx.artifact.set_local_registry_root": "ommx.artifact",
     "ommx.experiment.Experiment": "ommx.experiment",
     "ommx.experiment.Run": "ommx.experiment",

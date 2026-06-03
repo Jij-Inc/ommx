@@ -135,6 +135,22 @@ ommx prune-anonymous --delete
 ommx gc --delete
 ```
 
+同じ操作は Python SDK からも実行できます。Python API は整形済みの CLI output ではなく、
+structured report を返します。
+
+```python
+from ommx.artifact import gc, prune_anonymous
+
+prune_report = prune_anonymous()
+gc_report = gc()
+
+prune_deleted = prune_anonymous(delete=True)
+gc_deleted = gc(delete=True)
+```
+
+default 以外の Local Registry を調べる場合は `root=...`、GC の grace period を
+変える場合は `grace_period="2h"` を指定します。
+
 一時的な Artifact build や名前なし archive import から anonymous Artifact ref が残っている場合は、先に {command}`ommx prune-anonymous` を実行します。この command は該当する SQLite refs だけを削除し、blob は unlink しません。その blob は、他の ref から到達できなければ {command}`ommx gc` で回収可能になります。
 
 {command}`ommx gc` は mark-sweep を行います。

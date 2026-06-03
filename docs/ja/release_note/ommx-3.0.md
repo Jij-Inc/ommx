@@ -33,7 +33,7 @@ assert experiment.image_name == image_name
 
 正常に `commit()` された場合は、これまで通り requested image reference だけが publish され、残っている local checkpoint は削除されます。checkpoint Artifact handle や checkpoint image name は Python API には公開せず、ユーザーは元の Experiment image name を覚えておいて復帰します。
 
-### 🆕 Local Registry cleanup CLI ([#919](https://github.com/Jij-Inc/ommx/pull/919))
+### 🆕 Local Registry cleanup ([#919](https://github.com/Jij-Inc/ommx/pull/919))
 
 SQLite-backed Artifact registry をメンテナンスするための Local Registry cleanup command を `ommx` CLI に追加しました。`ommx gc` は Experiment checkpoint refs を含む SQLite refs から到達できない blob を report します。active Experiment write を誤って削除しないよう、grace period より新しい unreachable blob は保護されます。
 
@@ -47,6 +47,11 @@ ommx gc --delete
 ```
 
 通常の report は raw digest ではなく件数とサイズを表示します。低レベルの診断が必要な場合は `--show-digests` を指定してください。
+
+同じ cleanup 操作は Python SDK からも
+{func}`ommx.artifact.prune_anonymous` と {func}`ommx.artifact.gc` として
+呼べます。どちらもデフォルトでは report-only で、`delete=True` 指定時だけ
+registry を変更し、notebook や script で扱いやすい structured report object を返します。
 
 ## 3.0.0 Alpha 4
 

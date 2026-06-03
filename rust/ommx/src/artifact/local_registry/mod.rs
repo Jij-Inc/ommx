@@ -84,8 +84,8 @@ pub use crate::artifact::digest::sha256_digest;
 pub(crate) use crate::artifact::digest::{validate_digest, ValidatedDigest};
 pub use blob::{BlobRecord, FileBlobStore};
 pub use gc::{
-    GcBlob, GcDeleteReport, GcInvalidManifest, GcMissingBlob, GcOptions, GcReferenceKind, GcReport,
-    GcRoot,
+    parse_gc_duration, GcBlob, GcDeleteReport, GcInvalidManifest, GcMissingBlob, GcOptions,
+    GcReferenceKind, GcReport, GcRoot,
 };
 pub use import::archive::{import_oci_archive, inspect_archive, ArchiveInspectView};
 pub use import::legacy::{

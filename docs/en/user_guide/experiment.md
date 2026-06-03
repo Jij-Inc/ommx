@@ -133,6 +133,22 @@ ommx prune-anonymous --delete
 ommx gc --delete
 ```
 
+The same operations are available from the Python SDK. Python returns
+structured reports instead of formatted CLI output.
+
+```python
+from ommx.artifact import gc, prune_anonymous
+
+prune_report = prune_anonymous()
+gc_report = gc()
+
+prune_deleted = prune_anonymous(delete=True)
+gc_deleted = gc(delete=True)
+```
+
+Use `root=...` to inspect a non-default Local Registry and
+`grace_period="2h"` to override the GC grace period.
+
 Use {command}`ommx prune-anonymous` first when you have anonymous Artifact refs from temporary Artifact builds or unnamed archive imports. This command only removes matching SQLite refs; it does not unlink blobs. Those blobs become reclaimable by {command}`ommx gc` if no other ref reaches them.
 
 {command}`ommx gc` performs a mark-sweep pass:
