@@ -220,20 +220,20 @@ impl FileBlobStore {
         digest: &Digest,
         path: &Path,
     ) -> Result<()> {
-        match fs::hard_link(&temp_path, path) {
+        match fs::hard_link(temp_path, path) {
             Ok(()) => {
                 let result = touch_existing_blob(path, digest.as_ref());
-                let _ = fs::remove_file(&temp_path);
+                let _ = fs::remove_file(temp_path);
                 result
             }
             Err(error) if error.kind() == ErrorKind::AlreadyExists => {
                 let result = verify_existing_blob(path, bytes, digest.as_ref())
                     .and_then(|()| touch_existing_blob(path, digest.as_ref()));
-                let _ = fs::remove_file(&temp_path);
+                let _ = fs::remove_file(temp_path);
                 result
             }
             Err(error) => {
-                let _ = fs::remove_file(&temp_path);
+                let _ = fs::remove_file(temp_path);
                 Err(error).with_context(|| {
                     format!(
                         "Failed to publish blob {} from {} to {}",
