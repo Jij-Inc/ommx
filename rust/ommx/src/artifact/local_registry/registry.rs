@@ -1,12 +1,11 @@
 use super::{
-    import_legacy_local_registry, import_legacy_local_registry_ref, replace_legacy_local_registry,
-    replace_legacy_local_registry_ref, FileBlobStore, LegacyImportReport, OciDirImport, RefUpdate,
-    SqliteIndexStore,
+    BlobRecord, FileBlobStore, LegacyImportReport, OciDirImport, RefUpdate, SqliteIndexStore,
+    FILE_BLOB_STORE_DIR_NAME,
 };
 use crate::artifact::{media_types, sha256_digest, stable_json_bytes, ImageRef};
 use anyhow::{ensure, Context, Result};
 use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, ImageManifest, MediaType};
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -16,7 +15,7 @@ static DEFAULT_LOCAL_REGISTRY: OnceLock<LocalRegistry> = OnceLock::new();
 const EXPERIMENT_CHECKPOINT_REPOSITORY: &str = "checkpoint";
 
 /// OCI descriptor whose referenced bytes are known to exist in the
-/// referenced Local Registry's BlobStore.
+/// referenced Local Registry.
 ///
 /// This is an OMMX / Local Registry invariant, not an invariant of
 /// [`oci_spec::image::Descriptor`] itself. Values are created only by
@@ -38,9 +37,9 @@ pub struct StoredDescriptor<'reg> {
 impl StoredDescriptor<'_> {
     pub(crate) fn is_stored_in(&self, registry: &LocalRegistry) -> bool {
         // This intentionally checks registry-instance identity. Two
-        // LocalRegistry values may point at the same on-disk SQLite /
-        // BlobStore root, but a StoredDescriptor is only proven stored
-        // for the instance that created or verified it.
+        // LocalRegistry values may point at the same on-disk root, but a
+        // StoredDescriptor is only proven stored for the instance that created
+        // or verified it.
         std::ptr::eq(self.registry, registry)
     }
 
@@ -181,7 +180,7 @@ impl LocalRegistry {
     pub fn open(root: impl Into<PathBuf>) -> Result<Self> {
         let root = root.into();
         let index = SqliteIndexStore::open_in_registry_root(&root)?;
-        let blobs = FileBlobStore::open_in_registry_root(&root)?;
+        let blobs = FileBlobStore::new(root.join(FILE_BLOB_STORE_DIR_NAME))?;
         Ok(Self { root, index, blobs })
     }
 
@@ -220,17 +219,13 @@ impl LocalRegistry {
         &self.index
     }
 
-    pub fn blobs(&self) -> &FileBlobStore {
-        &self.blobs
-    }
-
     pub fn get_blob(&self, descriptor: &StoredDescriptor<'_>) -> Result<Vec<u8>> {
         ensure!(
             descriptor.is_stored_in(self),
             "Descriptor {} is not stored in this Local Registry",
             descriptor.digest()
         );
-        let bytes = self.blobs.read_bytes(descriptor.digest())?;
+        let bytes = self.read_blob(descriptor.digest())?;
         ensure!(
             bytes.len() as u64 == descriptor.size(),
             "Descriptor size mismatch for {}: descriptor={}, actual={}",
@@ -242,19 +237,19 @@ impl LocalRegistry {
     }
 
     pub fn import_legacy_ref(&self, image_name: &ImageRef) -> Result<OciDirImport> {
-        import_legacy_local_registry_ref(&self.index, &self.blobs, &self.root, image_name)
+        self.import_legacy_ref_from(&self.root, image_name)
     }
 
     pub fn replace_legacy_ref(&self, image_name: &ImageRef) -> Result<OciDirImport> {
-        replace_legacy_local_registry_ref(&self.index, &self.blobs, &self.root, image_name)
+        self.replace_legacy_ref_from(&self.root, image_name)
     }
 
     pub fn import_legacy_layout(&self) -> Result<LegacyImportReport> {
-        import_legacy_local_registry(&self.index, &self.blobs, &self.root)
+        self.import_legacy_layout_from(&self.root)
     }
 
     pub fn replace_legacy_layout(&self) -> Result<LegacyImportReport> {
-        replace_legacy_local_registry(&self.index, &self.blobs, &self.root)
+        self.replace_legacy_layout_from(&self.root)
     }
 
     pub fn resolve_image_name(&self, image_name: &ImageRef) -> Result<Option<Digest>> {
@@ -355,7 +350,7 @@ impl LocalRegistry {
         Ok(refs)
     }
 
-    /// Seal an unsealed OMMX Artifact manifest into the BlobStore.
+    /// Seal an unsealed OMMX Artifact manifest into the Local Registry.
     ///
     /// The manifest's config/layers are represented as
     /// [`StoredDescriptor`] before this method is called, so sealing
@@ -430,6 +425,86 @@ impl LocalRegistry {
             .delete_ref(&image_name.repository_key(), image_name.reference())
     }
 
+    pub(crate) fn store_blob_bytes(&self, bytes: &[u8]) -> Result<Digest> {
+        self.blobs.put_bytes(bytes)
+    }
+
+    pub(crate) fn read_blob(&self, digest: &Digest) -> Result<Vec<u8>> {
+        self.blobs.read_bytes(digest)
+    }
+
+    pub(crate) fn contains_blob(&self, digest: &Digest) -> Result<bool> {
+        self.blobs.exists(digest)
+    }
+
+    pub(crate) fn blob_size(&self, digest: &Digest) -> Result<u64> {
+        self.blobs.size(digest)
+    }
+
+    pub(crate) fn touch_blob(&self, digest: &Digest) -> Result<()> {
+        self.blobs.touch_blob(digest)
+    }
+
+    pub(in crate::artifact::local_registry) fn blob_record(
+        &self,
+        digest: &Digest,
+    ) -> Result<Option<BlobRecord>> {
+        self.blobs.blob_record(digest)
+    }
+
+    pub(in crate::artifact::local_registry) fn list_blob_records(&self) -> Result<Vec<BlobRecord>> {
+        self.blobs.list_blobs()
+    }
+
+    pub(in crate::artifact::local_registry) fn delete_blob(&self, digest: &Digest) -> Result<bool> {
+        self.blobs.delete_blob(digest)
+    }
+
+    pub(crate) fn stored_manifest_descriptor(
+        &self,
+        manifest_digest: &Digest,
+    ) -> Result<StoredDescriptor<'_>> {
+        let size = self.blob_size(manifest_digest)?;
+        let descriptor = DescriptorBuilder::default()
+            .media_type(MediaType::ImageManifest)
+            .digest(manifest_digest.clone())
+            .size(size)
+            .build()
+            .context("Failed to build manifest descriptor")?;
+        self.stored_descriptor(descriptor)
+    }
+
+    pub(crate) fn touch_manifest_closure(
+        &self,
+        manifest_digest: &Digest,
+        visited: &mut BTreeSet<String>,
+    ) -> Result<()> {
+        if !visited.insert(manifest_digest.as_ref().to_string()) {
+            return Ok(());
+        }
+        self.touch_blob(manifest_digest)?;
+        let bytes = self
+            .read_blob(manifest_digest)
+            .with_context(|| format!("Failed to read manifest blob {manifest_digest}"))?;
+        let manifest: ImageManifest = serde_json::from_slice(&bytes)
+            .with_context(|| format!("Failed to parse OCI image manifest {manifest_digest}"))?;
+
+        self.touch_descriptor_blob(manifest.config())?;
+        for layer in manifest.layers() {
+            self.touch_descriptor_blob(layer)?;
+        }
+        if let Some(subject) = manifest.subject() {
+            let subject = self.stored_descriptor(subject.clone())?;
+            self.touch_manifest_closure(subject.digest(), visited)?;
+        }
+        Ok(())
+    }
+
+    fn touch_descriptor_blob(&self, descriptor: &Descriptor) -> Result<()> {
+        let descriptor = self.stored_descriptor(descriptor.clone())?;
+        self.touch_blob(descriptor.digest())
+    }
+
     /// Validate that the manifest carries the OMMX `artifactType`.
     fn validate_manifest(manifest: &ImageManifest) -> Result<()> {
         let artifact_type = manifest
@@ -458,8 +533,8 @@ impl LocalRegistry {
     }
 
     /// Store bytes as an OCI layer descriptor in this registry's
-    /// BlobStore. The descriptor carries the supplied media type and
-    /// annotations, and its digest / size are derived from `bytes`.
+    /// content-addressed blob. The descriptor carries the supplied media type
+    /// and annotations, and its digest / size are derived from `bytes`.
     pub(crate) fn store_layer_blob(
         &self,
         media_type: MediaType,
@@ -516,7 +591,7 @@ impl LocalRegistry {
         descriptor: Descriptor,
         bytes: &[u8],
     ) -> Result<StoredDescriptor<'_>> {
-        let digest = self.blobs.put_bytes(bytes)?;
+        let digest = self.store_blob_bytes(bytes)?;
         ensure!(
             &digest == descriptor.digest(),
             "Descriptor digest mismatch: descriptor={}, actual={}",
@@ -539,7 +614,7 @@ impl LocalRegistry {
     /// Verify that the blob referenced by `descriptor` exists in this
     /// registry and promote it to a [`StoredDescriptor`].
     pub(crate) fn stored_descriptor(&self, descriptor: Descriptor) -> Result<StoredDescriptor<'_>> {
-        let size = self.blobs.size(descriptor.digest())?;
+        let size = self.blob_size(descriptor.digest())?;
         ensure!(
             size == descriptor.size(),
             "Descriptor size mismatch for {}: descriptor={}, actual={}",

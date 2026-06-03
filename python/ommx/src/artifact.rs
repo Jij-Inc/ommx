@@ -148,7 +148,7 @@ impl PyArtifact {
     #[staticmethod]
     pub fn inspect_archive(py: Python<'_>, path: PathBuf) -> Result<PyArchiveManifest> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let view = ommx::artifact::local_registry::inspect_archive(&path)?;
+        let view = ommx::artifact::local_registry::ArchiveInspectView::read(&path)?;
         Ok(PyArchiveManifest::from(view))
     }
 
@@ -751,7 +751,7 @@ impl PyGcRoot {
     }
 }
 
-/// Blob referenced by a reachable manifest but missing from the BlobStore.
+/// Blob referenced by a reachable manifest but missing from the Local Registry.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust", name = "GcMissingBlob")]
@@ -1649,7 +1649,7 @@ pub fn gc(
     let _guard = crate::TRACING.attach_parent_context(py);
     let registry = open_cleanup_registry(root)?;
     let registry_root = registry.root().to_path_buf();
-    let grace_period = ommx::artifact::local_registry::parse_gc_duration(grace_period)
+    let grace_period = ommx::artifact::local_registry::GcOptions::parse_grace_period(grace_period)
         .map_err(|error| anyhow::anyhow!(error))?;
     let options = ommx::artifact::local_registry::GcOptions {
         grace_period,

@@ -34,8 +34,7 @@ impl AttachmentSpace {
 /// OCI layer media type for JSON attachment payloads.
 const JSON_MEDIA_TYPE: &str = "application/json";
 
-/// Write `bytes` to the registry's BlobStore and build the in-memory
-/// Attachment descriptor.
+/// Write `bytes` to the registry and build the in-memory Attachment descriptor.
 pub fn store_attachment_descriptor<'reg>(
     registry: &'reg LocalRegistry,
     space: AttachmentSpace,

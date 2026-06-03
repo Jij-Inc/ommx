@@ -34,22 +34,6 @@ fn save_test_archive(
 }
 
 #[test]
-fn file_blob_store_round_trip() -> Result<()> {
-    let dir = tempfile::tempdir()?;
-    let store = FileBlobStore::open(dir.path().join("blobs"))?;
-    let digest = store.put_bytes(b"hello")?;
-
-    assert_eq!(
-        digest.as_ref(),
-        "sha256:2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
-    );
-    assert!(store.exists(&digest)?);
-    assert_eq!(store.read_bytes(&digest)?, b"hello");
-    assert!(Digest::from_str("sha256:../../outside").is_err());
-    Ok(())
-}
-
-#[test]
 fn gc_report_marks_unreachable_old_blobs_as_orphan_candidates() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let registry = LocalRegistry::open(dir.path())?;
@@ -173,8 +157,8 @@ fn gc_deletes_only_orphan_candidates() -> Result<()> {
     })?;
 
     assert!(blob_list_contains(&result.deleted_blobs, &orphan_digest));
-    assert!(!registry.blobs().exists(&orphan_digest)?);
-    assert!(registry.blobs().exists(&reachable_layer)?);
+    assert!(!registry.contains_blob(&orphan_digest)?);
+    assert!(registry.contains_blob(&reachable_layer)?);
     Ok(())
 }
 
@@ -220,11 +204,11 @@ fn sqlite_index_store_round_trip() -> Result<()> {
 fn concurrent_keep_existing_ref_publish_keeps_one_digest() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let root = dir.path().join("registry-v3");
-    let index_store = SqliteIndexStore::open_in_registry_root(&root)?;
-    let blob_store = FileBlobStore::open_in_registry_root(&root)?;
+    let registry = LocalRegistry::open(&root)?;
+    let index_store = registry.index();
     let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:race")?;
-    let first_descriptor = put_test_manifest(&index_store, &blob_store, b"first-manifest")?;
-    let second_descriptor = put_test_manifest(&index_store, &blob_store, b"second-manifest")?;
+    let first_descriptor = put_test_manifest(&registry, b"first-manifest")?;
+    let second_descriptor = put_test_manifest(&registry, b"second-manifest")?;
     let first_digest = first_descriptor.digest().clone();
     let second_digest = second_descriptor.digest().clone();
     assert_ne!(first_digest, second_digest);
@@ -275,14 +259,14 @@ fn imports_oci_dir_into_sqlite_registry_preserving_image_manifest() -> Result<()
     let layer = build_test_oci_dir(legacy_dir.clone(), image_name.clone())?;
     // The legacy import path must preserve the manifest digest and bytes,
     // so capture the legacy digest up front and assert identity is intact.
-    let expected_digest = oci_dir_ref(&legacy_dir)?.manifest_digest;
+    let expected_digest = OciDirRef::read(&legacy_dir)?.manifest_digest;
 
     let registry_root = dir.path().join("registry-v3");
-    let index_store = SqliteIndexStore::open_in_registry_root(&registry_root)?;
-    let blob_store = FileBlobStore::open_in_registry_root(&registry_root)?;
+    let registry = LocalRegistry::open(&registry_root)?;
+    let index_store = registry.index();
 
     // Snapshot the original legacy manifest bytes so we can assert
-    // byte-for-byte equality with what ends up in the v3 BlobStore.
+    // byte-for-byte equality with what ends up in the v3 registry.
     let (legacy_algorithm, legacy_encoded) = expected_digest
         .as_ref()
         .split_once(':')
@@ -294,24 +278,24 @@ fn imports_oci_dir_into_sqlite_registry_preserving_image_manifest() -> Result<()
             .join(legacy_encoded),
     )?;
 
-    let imported = import_oci_dir(&index_store, &blob_store, &legacy_dir)?;
+    let imported = registry.import_oci_dir(&legacy_dir)?;
 
-    assert_eq!(imported.image_name, Some(image_name.clone()));
+    assert_eq!(imported.image_name, image_name.clone());
     assert_eq!(imported.manifest_digest, expected_digest);
     assert_eq!(
         index_store.resolve_image_name(&image_name)?,
         Some(imported.manifest_digest.clone())
     );
-    assert!(blob_store.exists(&imported.manifest_digest)?);
-    assert!(blob_store.exists(layer.digest())?);
+    assert!(registry.contains_blob(&imported.manifest_digest)?);
+    assert!(registry.contains_blob(layer.digest())?);
 
-    // Strict identity: the manifest bytes the v3 BlobStore returns must
+    // Strict identity: the manifest bytes the v3 registry returns must
     // be exactly the bytes that lived in the legacy OCI dir. Digest
     // equality already implies this for SHA-256, but a direct check
     // catches any future regression where import accidentally rebuilds
     // / re-serialises the manifest.
     assert_eq!(
-        blob_store.read_bytes(&imported.manifest_digest)?,
+        registry.read_blob(&imported.manifest_digest)?,
         legacy_manifest_bytes
     );
 
@@ -325,11 +309,10 @@ fn imports_oci_dir_into_sqlite_registry_preserving_image_manifest() -> Result<()
         legacy_manifest_bytes.len() as u64
     );
     assert_eq!(
-        blob_store.read_bytes(layer.digest())?.len() as u64,
+        registry.read_blob(layer.digest())?.len() as u64,
         layer.size()
     );
 
-    let registry = LocalRegistry::open(&registry_root)?;
     let artifact = LocalArtifact::open_in_registry(&registry, image_name)?;
     // LocalArtifact must dispatch on the stored manifest media type and
     // surface the legacy Image Manifest's layer descriptors through the
@@ -368,9 +351,9 @@ fn imports_oci_dir_preserves_index_descriptor_annotations() -> Result<()> {
     builder.finish(manifest)?;
 
     let registry_root = dir.path().join("registry");
-    let index_store = SqliteIndexStore::open_in_registry_root(&registry_root)?;
-    let blob_store = FileBlobStore::open_in_registry_root(&registry_root)?;
-    import_oci_dir(&index_store, &blob_store, &oci_dir)?;
+    let registry = LocalRegistry::open(&registry_root)?;
+    let index_store = registry.index();
+    registry.import_oci_dir(&oci_dir)?;
 
     let descriptor = index_store
         .resolve_image_descriptor(&image_name)?
@@ -397,15 +380,15 @@ fn imports_legacy_local_registry_explicitly() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let legacy_registry_root = dir.path().join("legacy-registry");
     let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:v2")?;
-    let legacy_dir = legacy_local_registry_path(&legacy_registry_root, &image_name);
+    let legacy_dir = LocalRegistry::legacy_ref_path_in(&legacy_registry_root, &image_name);
     build_test_oci_dir(legacy_dir, image_name.clone())?;
 
     let registry_root = dir.path().join("registry-v3");
-    let index_store = SqliteIndexStore::open_in_registry_root(&registry_root)?;
-    let blob_store = FileBlobStore::open_in_registry_root(&registry_root)?;
+    let registry = LocalRegistry::open(&registry_root)?;
+    let index_store = registry.index();
 
     assert!(index_store.resolve_image_name(&image_name)?.is_none());
-    let report = import_legacy_local_registry(&index_store, &blob_store, &legacy_registry_root)?;
+    let report = registry.import_legacy_layout_from(&legacy_registry_root)?;
     assert_eq!(
         report,
         LegacyImportReport {
@@ -420,7 +403,7 @@ fn imports_legacy_local_registry_explicitly() -> Result<()> {
         .resolve_image_name(&image_name)?
         .context("Legacy local registry ref was not imported")?;
     assert_eq!(
-        import_legacy_local_registry(&index_store, &blob_store, &legacy_registry_root)?,
+        registry.import_legacy_layout_from(&legacy_registry_root)?,
         LegacyImportReport {
             scanned_dirs: 1,
             imported_dirs: 0,
@@ -429,7 +412,7 @@ fn imports_legacy_local_registry_explicitly() -> Result<()> {
             replaced_refs: 0
         }
     );
-    assert!(blob_store.exists(&imported_digest)?);
+    assert!(registry.contains_blob(&imported_digest)?);
     Ok(())
 }
 
@@ -476,10 +459,10 @@ fn imports_legacy_docker_hub_short_name_via_normalisation_shim() -> Result<()> {
     builder.finish(manifest)?;
 
     let registry_root = dir.path().join("registry-v3");
-    let index_store = SqliteIndexStore::open_in_registry_root(&registry_root)?;
-    let blob_store = FileBlobStore::open_in_registry_root(&registry_root)?;
+    let registry = LocalRegistry::open(&registry_root)?;
+    let index_store = registry.index();
 
-    let report = import_legacy_local_registry(&index_store, &blob_store, &legacy_registry_root)?;
+    let report = registry.import_legacy_layout_from(&legacy_registry_root)?;
     assert_eq!(report.imported_dirs, 1, "v2 dir must import cleanly");
 
     // The canonical SQLite key is `(docker.io/library/alpine, latest)`;
@@ -509,18 +492,17 @@ fn import_legacy_local_registry_keeps_existing_ref_on_conflict() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let legacy_registry_root = dir.path().join("legacy-registry");
     let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:conflict")?;
-    let legacy_dir = legacy_local_registry_path(&legacy_registry_root, &image_name);
+    let legacy_dir = LocalRegistry::legacy_ref_path_in(&legacy_registry_root, &image_name);
     build_test_oci_dir(legacy_dir.clone(), image_name.clone())?;
-    let legacy_manifest_digest = oci_dir_ref(&legacy_dir)?.manifest_digest;
+    let legacy_manifest_digest = OciDirRef::read(&legacy_dir)?.manifest_digest;
 
     let registry_root = dir.path().join("registry-v3");
-    let index_store = SqliteIndexStore::open_in_registry_root(&registry_root)?;
-    let blob_store = FileBlobStore::open_in_registry_root(&registry_root)?;
-    let existing_digest =
-        put_test_manifest_ref(&index_store, &blob_store, &image_name, b"existing-manifest")?;
+    let registry = LocalRegistry::open(&registry_root)?;
+    let index_store = registry.index();
+    let existing_digest = put_test_manifest_ref(&registry, &image_name, b"existing-manifest")?;
     assert_ne!(existing_digest, legacy_manifest_digest);
 
-    let report = import_legacy_local_registry(&index_store, &blob_store, &legacy_registry_root)?;
+    let report = registry.import_legacy_layout_from(&legacy_registry_root)?;
     assert_eq!(
         report,
         LegacyImportReport {
@@ -535,7 +517,7 @@ fn import_legacy_local_registry_keeps_existing_ref_on_conflict() -> Result<()> {
         index_store.resolve_image_name(&image_name)?,
         Some(existing_digest)
     );
-    assert!(!blob_store.exists(&legacy_manifest_digest)?);
+    assert!(!registry.contains_blob(&legacy_manifest_digest)?);
     Ok(())
 }
 
@@ -544,18 +526,17 @@ fn import_legacy_local_registry_replaces_existing_ref_when_requested() -> Result
     let dir = tempfile::tempdir()?;
     let legacy_registry_root = dir.path().join("legacy-registry");
     let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:replace")?;
-    let legacy_dir = legacy_local_registry_path(&legacy_registry_root, &image_name);
+    let legacy_dir = LocalRegistry::legacy_ref_path_in(&legacy_registry_root, &image_name);
     build_test_oci_dir(legacy_dir.clone(), image_name.clone())?;
-    let legacy_manifest_digest = oci_dir_ref(&legacy_dir)?.manifest_digest;
+    let legacy_manifest_digest = OciDirRef::read(&legacy_dir)?.manifest_digest;
 
     let registry_root = dir.path().join("registry-v3");
-    let index_store = SqliteIndexStore::open_in_registry_root(&registry_root)?;
-    let blob_store = FileBlobStore::open_in_registry_root(&registry_root)?;
-    let existing_digest =
-        put_test_manifest_ref(&index_store, &blob_store, &image_name, b"existing-manifest")?;
+    let registry = LocalRegistry::open(&registry_root)?;
+    let index_store = registry.index();
+    let existing_digest = put_test_manifest_ref(&registry, &image_name, b"existing-manifest")?;
     assert_ne!(existing_digest, legacy_manifest_digest);
 
-    let report = replace_legacy_local_registry(&index_store, &blob_store, &legacy_registry_root)?;
+    let report = registry.replace_legacy_layout_from(&legacy_registry_root)?;
     assert_eq!(
         report,
         LegacyImportReport {
@@ -570,7 +551,7 @@ fn import_legacy_local_registry_replaces_existing_ref_when_requested() -> Result
         index_store.resolve_image_name(&image_name)?,
         Some(legacy_manifest_digest.clone())
     );
-    assert!(blob_store.exists(&legacy_manifest_digest)?);
+    assert!(registry.contains_blob(&legacy_manifest_digest)?);
     Ok(())
 }
 
@@ -578,7 +559,7 @@ fn import_legacy_local_registry_replaces_existing_ref_when_requested() -> Result
 fn local_registry_imports_legacy_refs_when_requested() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:v3")?;
-    let legacy_dir = legacy_local_registry_path(dir.path(), &image_name);
+    let legacy_dir = LocalRegistry::legacy_ref_path_in(dir.path(), &image_name);
     build_test_oci_dir(legacy_dir, image_name.clone())?;
 
     let registry = LocalRegistry::open(dir.path())?;
@@ -596,7 +577,7 @@ fn local_registry_imports_legacy_refs_when_requested() -> Result<()> {
     let imported_digest = registry
         .resolve_image_name(&image_name)?
         .context("Legacy local registry ref was not imported")?;
-    assert!(registry.blobs().exists(&imported_digest)?);
+    assert!(registry.contains_blob(&imported_digest)?);
     assert_eq!(
         registry
             .index()
@@ -620,7 +601,7 @@ fn local_registry_builds_native_image_manifest_with_artifact_type() -> Result<()
         .resolve_image_name(&image_name)?
         .context("Published ref is missing")?;
     assert_eq!(&manifest_digest, artifact.manifest_digest());
-    let manifest_bytes = registry.blobs().read_bytes(&manifest_digest)?;
+    let manifest_bytes = registry.read_blob(&manifest_digest)?;
     let manifest: oci_spec::image::ImageManifest = serde_json::from_slice(&manifest_bytes)?;
     let layer = manifest
         .layers()
@@ -682,9 +663,7 @@ fn local_registry_builds_native_image_manifest_with_artifact_type() -> Result<()
         artifact.get_blob(&config)?,
         media_types::OCI_EMPTY_CONFIG_BYTES
     );
-    assert!(registry
-        .blobs()
-        .exists(&Digest::from_str(media_types::OCI_EMPTY_CONFIG_DIGEST)?)?);
+    assert!(registry.contains_blob(&Digest::from_str(media_types::OCI_EMPTY_CONFIG_DIGEST)?)?);
     Ok(())
 }
 
@@ -708,7 +687,7 @@ fn local_registry_build_publish_skips_conflicting_manifest() -> Result<()> {
     // The builder writes non-manifest blobs before asking the registry
     // to publish the manifest. On conflict, the ref is left unchanged,
     // but already-stored CAS bytes may remain for later GC.
-    assert!(registry.blobs().exists(second_blob.digest())?);
+    assert!(registry.contains_blob(second_blob.digest())?);
     Ok(())
 }
 
@@ -776,7 +755,7 @@ fn concurrent_legacy_imports_are_idempotent() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let root = dir.path().to_path_buf();
     let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:parallel")?;
-    let legacy_dir = legacy_local_registry_path(&root, &image_name);
+    let legacy_dir = LocalRegistry::legacy_ref_path_in(&root, &image_name);
     build_test_oci_dir(legacy_dir, image_name.clone())?;
 
     let handles: Vec<_> = (0..2)
@@ -827,7 +806,7 @@ fn concurrent_legacy_imports_are_idempotent() -> Result<()> {
     let imported_digest = registry
         .resolve_image_name(&image_name)?
         .context("Legacy local registry ref was not imported")?;
-    assert!(registry.blobs().exists(&imported_digest)?);
+    assert!(registry.contains_blob(&imported_digest)?);
     Ok(())
 }
 
@@ -841,16 +820,15 @@ fn import_oci_dir_surfaces_ref_update() -> Result<()> {
     build_test_oci_dir(legacy_dir.clone(), image_name.clone())?;
 
     let registry_root = dir.path().join("registry-v3");
-    let index_store = SqliteIndexStore::open_in_registry_root(&registry_root)?;
-    let blob_store = FileBlobStore::open_in_registry_root(&registry_root)?;
+    let registry = LocalRegistry::open(&registry_root)?;
 
-    let first = import_oci_dir(&index_store, &blob_store, &legacy_dir)?;
-    assert_eq!(first.image_name.as_ref(), Some(&image_name));
-    assert!(matches!(first.ref_update, Some(RefUpdate::Inserted)));
+    let first = registry.import_oci_dir(&legacy_dir)?;
+    assert_eq!(&first.image_name, &image_name);
+    assert!(matches!(first.ref_update, RefUpdate::Inserted));
 
-    let second = import_oci_dir(&index_store, &blob_store, &legacy_dir)?;
+    let second = registry.import_oci_dir(&legacy_dir)?;
     assert_eq!(second.manifest_digest, first.manifest_digest);
-    assert!(matches!(second.ref_update, Some(RefUpdate::Unchanged)));
+    assert!(matches!(second.ref_update, RefUpdate::Unchanged));
     Ok(())
 }
 
@@ -860,24 +838,19 @@ fn local_registry_replace_legacy_ref_replaces_existing() -> Result<()> {
     // legacy digest and the outcome is Replaced { previous }.
     let dir = tempfile::tempdir()?;
     let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:rwp")?;
-    let legacy_dir = legacy_local_registry_path(dir.path(), &image_name);
+    let legacy_dir = LocalRegistry::legacy_ref_path_in(dir.path(), &image_name);
     build_test_oci_dir(legacy_dir.clone(), image_name.clone())?;
-    let legacy_manifest_digest = oci_dir_ref(&legacy_dir)?.manifest_digest;
+    let legacy_manifest_digest = OciDirRef::read(&legacy_dir)?.manifest_digest;
 
     let registry = LocalRegistry::open(dir.path())?;
-    let existing_digest = put_test_manifest_ref(
-        registry.index(),
-        registry.blobs(),
-        &image_name,
-        b"prior-manifest",
-    )?;
+    let existing_digest = put_test_manifest_ref(&registry, &image_name, b"prior-manifest")?;
     assert_ne!(existing_digest, legacy_manifest_digest);
 
     let import = registry.replace_legacy_ref(&image_name)?;
     assert_eq!(import.manifest_digest, legacy_manifest_digest);
     assert!(matches!(
         import.ref_update,
-        Some(RefUpdate::Replaced { ref previous_manifest_digest })
+        RefUpdate::Replaced { ref previous_manifest_digest }
             if previous_manifest_digest == &existing_digest
     ));
     assert_eq!(
@@ -950,7 +923,7 @@ fn imports_legacy_v2_oci_dir_with_ommx_config_blob() -> Result<()> {
     // the v3 draft's OCI 1.1 empty descriptor). v3 import / read must
     // preserve such manifests verbatim: parse-time check is artifactType
     // only (no config-shape requirement), and the config blob lands in
-    // the BlobStore.
+    // the registry.
     let dir = tempfile::tempdir()?;
     let legacy_dir = dir.path().join("v2-legacy");
     let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:v2-config")?;
@@ -959,22 +932,20 @@ fn imports_legacy_v2_oci_dir_with_ommx_config_blob() -> Result<()> {
         build_test_oci_dir_with_v2_config(legacy_dir.clone(), image_name.clone(), v2_config_bytes)?;
 
     let registry_root = dir.path().join("registry-v3");
-    let index_store = SqliteIndexStore::open_in_registry_root(&registry_root)?;
-    let blob_store = FileBlobStore::open_in_registry_root(&registry_root)?;
-    let imported = import_oci_dir(&index_store, &blob_store, &legacy_dir)?;
+    let registry = LocalRegistry::open(&registry_root)?;
+    let imported = registry.import_oci_dir(&legacy_dir)?;
 
-    assert_eq!(imported.image_name, Some(image_name.clone()));
-    assert!(blob_store.exists(&imported.manifest_digest)?);
-    assert!(blob_store.exists(layer_descriptor.digest())?);
+    assert_eq!(imported.image_name, image_name.clone());
+    assert!(registry.contains_blob(&imported.manifest_digest)?);
+    assert!(registry.contains_blob(layer_descriptor.digest())?);
 
-    // OMMX-specific config blob is preserved in the BlobStore.
+    // OMMX-specific config blob is preserved in the registry.
     let config_digest = config_descriptor.digest();
-    assert!(blob_store.exists(config_digest)?);
-    assert_eq!(blob_store.read_bytes(config_digest)?, v2_config_bytes);
+    assert!(registry.contains_blob(config_digest)?);
+    assert_eq!(registry.read_blob(config_digest)?, v2_config_bytes);
 
     // LocalArtifact reads the legacy manifest (parse-time check is on
     // artifactType only, so the OMMX-specific config is not rejected).
-    let registry = LocalRegistry::open(&registry_root)?;
     let artifact = LocalArtifact::open_in_registry(&registry, image_name)?;
     assert_eq!(
         artifact.get_manifest()?.media_type(),
@@ -995,9 +966,9 @@ fn rejects_import_of_deprecated_artifact_manifest_layout() -> Result<()> {
     build_test_oci_dir_with_artifact_manifest(&oci_dir, &image_name, b"art-instance")?;
 
     let registry_root = dir.path().join("registry-v3");
-    let index_store = SqliteIndexStore::open_in_registry_root(&registry_root)?;
-    let blob_store = FileBlobStore::open_in_registry_root(&registry_root)?;
-    let err = import_oci_dir(&index_store, &blob_store, &oci_dir)
+    let registry = LocalRegistry::open(&registry_root)?;
+    let err = registry
+        .import_oci_dir(&oci_dir)
         .expect_err("Artifact Manifest import must error");
     let message = format!("{err:#}");
     assert!(
@@ -1070,7 +1041,7 @@ fn concurrent_publish_different_digests_keeps_one_winner() -> Result<()> {
 #[test]
 fn concurrent_blob_writes_publish_one_complete_blob() -> Result<()> {
     let dir = tempfile::tempdir()?;
-    let root = dir.path().join("blobs");
+    let root = dir.path().join("registry");
     let bytes = b"parallel blob".to_vec();
 
     let handles: Vec<_> = (0..4)
@@ -1078,8 +1049,8 @@ fn concurrent_blob_writes_publish_one_complete_blob() -> Result<()> {
             let root = root.clone();
             let bytes = bytes.clone();
             std::thread::spawn(move || -> Result<Digest> {
-                let store = FileBlobStore::open(root)?;
-                store.put_bytes(&bytes)
+                let registry = LocalRegistry::open(root)?;
+                registry.store_blob_bytes(&bytes)
             })
         })
         .collect();
@@ -1091,8 +1062,8 @@ fn concurrent_blob_writes_publish_one_complete_blob() -> Result<()> {
 
     let digest = Digest::from_str(&sha256_digest(&bytes))?;
     assert!(records.iter().all(|record| record == &digest));
-    let store = FileBlobStore::open(&root)?;
-    assert_eq!(store.read_bytes(&digest)?, bytes);
+    let registry = LocalRegistry::open(&root)?;
+    assert_eq!(registry.read_blob(&digest)?, bytes);
     Ok(())
 }
 
@@ -1114,14 +1085,15 @@ fn import_oci_archive_surfaces_digest_conflict_for_same_ref() -> Result<()> {
     let archive_path_b = dir.path().join("b.ommx");
     save_test_archive(&archive_path_b, image_name.clone(), b"archive-B".to_vec())?;
 
-    let outcome_a = import_oci_archive(&registry, &archive_path_a)?;
+    let outcome_a = registry.import_oci_archive(&archive_path_a)?;
     let digest_a = outcome_a.manifest_digest.clone();
 
     // Stale legacy dir would silently shadow archive B's bytes. The
     // fix re-extracts B over the legacy path, so the second import sees
     // B's digest and surfaces a ref conflict against A under default
     // publish semantics.
-    let err = import_oci_archive(&registry, &archive_path_b)
+    let err = registry
+        .import_oci_archive(&archive_path_b)
         .expect_err("second import with a different manifest digest must surface a conflict");
     let msg = err.to_string();
     assert!(
@@ -1145,7 +1117,7 @@ fn import_oci_archive_does_not_leave_legacy_dir_behind() -> Result<()> {
     // path `registry.root().join(image_name.as_path())` must not
     // exist. The archive's staging tempdir is created under the
     // registry root and dropped before the function returns; SQLite +
-    // FileBlobStore are the sole post-import home.
+    // registry-owned CAS files are the sole post-import home.
     let dir = tempfile::tempdir()?;
     let registry = LocalRegistry::open(dir.path())?;
     let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:no-legacy-dir")?;
@@ -1156,13 +1128,10 @@ fn import_oci_archive_does_not_leave_legacy_dir_behind() -> Result<()> {
         b"step-c-payload".to_vec(),
     )?;
 
-    let outcome = import_oci_archive(&registry, &archive_path)?;
-    assert_eq!(outcome.image_name.as_ref(), Some(&image_name));
+    let outcome = registry.import_oci_archive(&archive_path)?;
+    assert_eq!(&outcome.image_name, &image_name);
 
-    let v2_path = crate::artifact::local_registry::import::legacy::legacy_local_registry_path(
-        registry.root(),
-        &image_name,
-    );
+    let v2_path = registry.legacy_ref_path(&image_name);
     assert!(
         !v2_path.exists(),
         "legacy v2 OCI dir must not be promoted under registry root, but {} exists",
@@ -1231,12 +1200,8 @@ fn import_oci_archive_synthesizes_anonymous_name_for_unnamed_input() -> Result<(
     // Now the test: import the unnamed archive and assert the
     // returned ref is a synthesized anonymous name (no original ref
     // annotation to preserve).
-    let outcome = import_oci_archive(&registry, &unnamed_archive)?;
-    let synthesized = outcome
-        .image_name
-        .as_ref()
-        .expect("import must synthesize a name for unnamed archives");
-    let synthesized_str = synthesized.to_string();
+    let outcome = registry.import_oci_archive(&unnamed_archive)?;
+    let synthesized_str = outcome.image_name.to_string();
     let (repo, tag) = synthesized_str
         .rsplit_once(':')
         .expect("synthesized image name must include a tag");
@@ -1293,8 +1258,8 @@ fn import_oci_archive_normalizes_dot_slash_prefixed_entries() -> Result<()> {
         dst_tar.finish()?;
     }
 
-    let outcome = import_oci_archive(&registry, &dot_archive)?;
-    assert_eq!(outcome.image_name.as_ref(), Some(&image_name));
+    let outcome = registry.import_oci_archive(&dot_archive)?;
+    assert_eq!(&outcome.image_name, &image_name);
     Ok(())
 }
 
@@ -1315,11 +1280,11 @@ fn pull_image_short_circuits_when_ref_is_present_with_blob() -> Result<()> {
         build_test_local_artifact(&registry, &image_name, b"step-c-pull-short-circuit")?;
     let expected_digest = local_artifact.manifest_digest().clone();
 
-    let outcome = super::import::remote::pull_image(&registry, &image_name)?;
-    assert_eq!(outcome.image_name.as_ref(), Some(&image_name));
+    let outcome = registry.pull_image(&image_name)?;
+    assert_eq!(&outcome.image_name, &image_name);
     assert_eq!(outcome.manifest_digest, expected_digest);
     assert!(
-        matches!(outcome.ref_update, Some(RefUpdate::Unchanged)),
+        matches!(outcome.ref_update, RefUpdate::Unchanged),
         "expected RefUpdate::Unchanged on SQLite-hit short-circuit, got {:?}",
         outcome.ref_update,
     );
@@ -1330,7 +1295,7 @@ fn pull_image_short_circuits_when_ref_is_present_with_blob() -> Result<()> {
 #[test]
 fn pull_image_does_not_short_circuit_when_manifest_blob_is_missing() -> Result<()> {
     // P1 guard from Codex review: if the SQLite ref resolves but the
-    // manifest blob is missing from the FileBlobStore (registry
+    // manifest blob is missing from the registry (registry
     // corruption, manual deletion, interrupted import), `pull_image`
     // must fall through to a fresh pull rather than return a stale
     // `Unchanged`. We can't run the fall-through path without a real
@@ -1343,12 +1308,11 @@ fn pull_image_does_not_short_circuit_when_manifest_blob_is_missing() -> Result<(
     let local_artifact =
         build_test_local_artifact(&registry, &image_name, b"step-c-blob-corruption")?;
 
-    // Simulate corruption: remove the manifest blob file under the
-    // FileBlobStore while keeping the SQLite ref intact.
+    // Simulate corruption: remove the manifest blob while keeping the SQLite ref intact.
     let manifest_digest = local_artifact.manifest_digest().clone();
-    assert!(registry.blobs().delete_blob(&manifest_digest)?);
+    assert!(registry.delete_blob(&manifest_digest)?);
 
-    let result = super::import::remote::pull_image(&registry, &image_name);
+    let result = registry.pull_image(&image_name);
     assert!(
         result.is_err(),
         "pull_image must fall through to a remote pull when the manifest blob is \
@@ -1388,7 +1352,7 @@ fn local_artifact_save_round_trip_preserves_layers() -> Result<()> {
     // and would fail loudly if the bytes drifted — so the digest
     // returned here is exactly the saved bytes' digest.
     let expected_manifest_digest = local_artifact.manifest_digest().clone();
-    let view = crate::artifact::local_registry::inspect_archive(&archive_path)?;
+    let view = ArchiveInspectView::read(&archive_path)?;
     assert_eq!(
         view.manifest_digest, expected_manifest_digest,
         "save() must write manifest bytes verbatim (digest must round-trip)",
@@ -1502,22 +1466,19 @@ fn blob_list_contains(blobs: &[GcBlob], digest: &Digest) -> bool {
 }
 
 fn put_test_manifest_ref(
-    index_store: &SqliteIndexStore,
-    blob_store: &FileBlobStore,
+    registry: &LocalRegistry,
     image_name: &ImageRef,
     bytes: &[u8],
 ) -> Result<Digest> {
-    let descriptor = put_test_manifest(index_store, blob_store, bytes)?;
-    index_store.replace_image_ref(image_name, &descriptor)?;
+    let descriptor = put_test_manifest(registry, bytes)?;
+    registry
+        .index()
+        .replace_image_ref(image_name, &descriptor)?;
     Ok(descriptor.digest().clone())
 }
 
-fn put_test_manifest(
-    _index_store: &SqliteIndexStore,
-    blob_store: &FileBlobStore,
-    bytes: &[u8],
-) -> Result<Descriptor> {
-    let digest = blob_store.put_bytes(bytes)?;
+fn put_test_manifest(registry: &LocalRegistry, bytes: &[u8]) -> Result<Descriptor> {
+    let digest = registry.store_blob_bytes(bytes)?;
     test_manifest_descriptor_with_digest(digest, bytes.len() as u64)
 }
 

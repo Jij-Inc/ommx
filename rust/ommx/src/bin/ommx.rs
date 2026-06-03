@@ -5,9 +5,7 @@ use oci_spec::image::ImageManifest;
 use ommx::artifact::{
     fetch_remote_manifest, get_local_registry_root,
     local_registry::{
-        import_oci_archive, import_oci_dir, inspect_archive, legacy_local_registry_path,
-        oci_dir_ref, parse_gc_duration, pull_image, GcBlob, GcDeleteReport, GcOptions, GcReport,
-        LocalRegistry,
+        ArchiveInspectView, GcBlob, GcDeleteReport, GcOptions, GcReport, LocalRegistry, OciDirRef,
     },
     ImageRef, LocalArtifact,
 };
@@ -115,7 +113,7 @@ enum Command {
         delete: bool,
 
         /// Keep unreachable blobs newer than this duration. Accepts s, m, h, d suffixes.
-        #[clap(long, default_value = "24h", value_parser = parse_gc_duration)]
+        #[clap(long, default_value = "24h", value_parser = GcOptions::parse_grace_period)]
         grace_period: Duration,
 
         /// Show blob digests in GC detail output.
@@ -209,7 +207,7 @@ enum ArtifactCommand {
         delete: bool,
 
         /// Keep unreachable blobs newer than this duration. Accepts s, m, h, d suffixes.
-        #[clap(long, default_value = "24h", value_parser = parse_gc_duration)]
+        #[clap(long, default_value = "24h", value_parser = GcOptions::parse_grace_period)]
         grace_period: Duration,
 
         /// Show blob digests in GC detail output.
@@ -269,7 +267,7 @@ impl ImageRefOrPath {
             // `oci_dir_ref`) and load the manifest blob directly from
             // disk. Avoids importing into SQLite for a read-only op.
             ImageRefOrPath::OciDir(path) => {
-                let dir_ref = oci_dir_ref(path)?;
+                let dir_ref = OciDirRef::read(path)?;
                 let manifest_blob_path = path
                     .join("blobs")
                     .join(dir_ref.manifest_digest.algorithm().as_ref())
@@ -292,7 +290,7 @@ impl ImageRefOrPath {
             // `Artifact.import_archive(file)` is the side-effecting
             // import path; `ommx inspect <archive>` should not mutate
             // the user's registry.
-            ImageRefOrPath::OciArchive(path) => inspect_archive(path)?.manifest,
+            ImageRefOrPath::OciArchive(path) => ArchiveInspectView::read(path)?.manifest,
             // `parse` only routes a ref to `Local` when SQLite resolves
             // it, so `LocalArtifact::open` should always succeed here;
             // if it doesn't, surface the SQLite-side migration message.
@@ -324,7 +322,7 @@ impl ImageRefOrPath {
 /// pre-v3 artifact. Returns `Ok(())` when no legacy dir is present,
 /// letting callers proceed with their normal remote / local fallback.
 fn migration_hint_if_legacy_only(name: &ImageRef) -> Result<()> {
-    if legacy_local_registry_path(get_local_registry_root(), name).exists() {
+    if LocalRegistry::legacy_ref_path_in(get_local_registry_root(), name).exists() {
         bail!(
             "{name} exists only in the legacy local registry directory. \
              Run `ommx import-legacy` once to migrate it into the v3 \
@@ -485,11 +483,11 @@ fn handle_push(image_name_or_path: &str) -> Result<()> {
 }
 
 fn handle_pull(image_name: &str) -> Result<()> {
-    // Route remote pull through `local_registry::pull_image` so the
+    // Route remote pull through `LocalRegistry::pull_image` so the
     // freshly pulled artifact lands in the v3 SQLite registry.
     let name = ImageRef::parse(image_name)?;
     let registry = std::sync::Arc::new(LocalRegistry::open_default()?);
-    pull_image(&registry, &name)?;
+    registry.pull_image(&name)?;
     Ok(())
 }
 
@@ -503,9 +501,9 @@ fn handle_import(path: &Path) -> Result<()> {
         std::fs::metadata(path).with_context(|| format!("Failed to stat {}", path.display()))?;
     let registry = std::sync::Arc::new(LocalRegistry::open_default()?);
     if metadata.is_dir() {
-        import_oci_dir(registry.index(), registry.blobs(), path)?;
+        registry.import_oci_dir(path)?;
     } else if metadata.is_file() {
-        import_oci_archive(&registry, path)?;
+        registry.import_oci_archive(path)?;
     } else {
         bail!(
             "Path is neither a directory nor a regular file: {}",

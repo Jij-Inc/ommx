@@ -4,7 +4,7 @@
 //! registry: the empty config blob and every layer blob are read via
 //! their descriptors and pushed through the
 //! [`super::remote_transport::RemoteTransport`] wrapper, then the
-//! verbatim manifest bytes (as digest-addressed in the BlobStore) are
+//! verbatim manifest bytes (as digest-addressed in the Local Registry) are
 //! published with `application/vnd.oci.image.manifest.v1+json` as the
 //! Content-Type. No intermediate on-disk OCI directory is materialised.
 //!

@@ -1940,7 +1940,7 @@
         {
           "kind": "Class",
           "name": "GcMissingBlob",
-          "doc": "Blob referenced by a reachable manifest but missing from the BlobStore.",
+          "doc": "Blob referenced by a reachable manifest but missing from the Local Registry.",
           "bases": [],
           "methods": [
             {

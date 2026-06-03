@@ -11,8 +11,8 @@
 //! and commit materialises them as a typed column-oriented aggregate
 //! run-parameter layer instead of individual Attachments.
 //!
-//! Each `log_*` call writes its payload to the Local Registry's
-//! content-addressed BlobStore immediately, keeping only
+//! Each `log_*` call writes its payload to the Local Registry immediately,
+//! keeping only
 //! [`crate::artifact::local_registry::StoredDescriptor`] values in
 //! memory. Until commit, the experiment is unsealed: some or all
 //! component blobs may already be stored, but no root manifest has been

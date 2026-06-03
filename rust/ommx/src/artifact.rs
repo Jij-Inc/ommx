@@ -10,7 +10,7 @@
 //!   described bytes exist in any OMMX Local Registry.
 //! - **Stored** is a Local Registry storage invariant. A
 //!   [`local_registry::StoredDescriptor`] means the descriptor's digest
-//!   has corresponding bytes in that Local Registry's BlobStore. It
+//!   has corresponding bytes in that Local Registry. It
 //!   does not mean "this call wrote the bytes"; an already-present CAS
 //!   blob satisfies the same invariant.
 //! - **Unsealed** is the data-model state of a multi-blob object whose
@@ -27,9 +27,8 @@
 //! - **Draft** is an API lifecycle term for a mutable SDK-side object
 //!   being edited by the caller. [`ArtifactDraft`] owns unsealed
 //!   artifact state.
-//! - **Store** is the Local Registry / BlobStore operation that writes
-//!   bytes as a content-addressed blob and yields a
-//!   `StoredDescriptor`.
+//! - **Store** is the Local Registry operation that writes bytes as a
+//!   content-addressed blob and yields a `StoredDescriptor`.
 //! - **Seal** is the data-model operation that creates and stores the
 //!   root manifest blob for unsealed state, yielding the root
 //!   `StoredDescriptor`. It does not update a ref.
@@ -163,7 +162,7 @@ pub fn ghcr(org: &str, repo: &str, name: &str, tag: &str) -> Result<ImageRef> {
 /// without populating the v3 SQLite Local Registry. Used by CLI
 /// `ommx inspect <remote-ref>` so the user can read what is on the
 /// other side of a ref without committing to a full pull. For the
-/// full pull-into-registry flow use [`local_registry::pull_image`].
+/// full pull-into-registry flow use [`local_registry::LocalRegistry::pull_image`].
 ///
 /// Credentials are resolved by `remote_transport::RemoteTransport`'s
 /// three-tier chain (env override → `~/.docker/config.json` →
@@ -191,9 +190,9 @@ pub fn get_images() -> Result<Vec<ImageRef>> {
 }
 
 // v3 artifact entry points:
-//   - Archive ingest: `local_registry::import_oci_archive(path)`
-//   - OCI Image Layout directory ingest: `local_registry::import_oci_dir(path)`
-//   - Remote pull into SQLite: `local_registry::pull_image(name)`
+//   - Archive ingest: `LocalRegistry::import_oci_archive(path)`
+//   - OCI Image Layout directory ingest: `LocalRegistry::import_oci_dir(path)`
+//   - Remote pull into SQLite: `LocalRegistry::pull_image(name)`
 //   - Commit into SQLite: `ArtifactDraft::new(...)?.commit()`
 //   - Export to archive file: `LocalArtifact::save(path)`
 // Image-ref parsing for these entry points goes through [`ImageRef`].

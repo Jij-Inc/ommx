@@ -158,10 +158,10 @@ fn runs_can_be_open_concurrently_and_write_back_on_close() {
     });
 }
 
-/// `log_*` writes the payload to the BlobStore immediately, before any
+/// `log_*` writes the payload to the Local Registry immediately, before any
 /// commit advances a public ref.
 #[test]
-fn log_writes_blob_to_blobstore_immediately() {
+fn log_writes_blob_to_registry_immediately() {
     with_temp_experiment(|experiment| {
         {
             let mut run = experiment.run().unwrap();
@@ -174,7 +174,7 @@ fn log_writes_blob_to_blobstore_immediately() {
             assert_eq!(run.attachments.len(), 1);
             run.attachments[0].digest().clone()
         });
-        assert!(experiment.registry.blobs().exists(&digest).unwrap());
+        assert!(experiment.registry.contains_blob(&digest).unwrap());
         Ok(())
     });
 }
@@ -240,13 +240,7 @@ fn log_json_encodes_hash_maps_stably() {
             state
                 .attachments
                 .iter()
-                .map(|descriptor| {
-                    experiment
-                        .registry
-                        .blobs()
-                        .read_bytes(descriptor.digest())
-                        .unwrap()
-                })
+                .map(|descriptor| experiment.registry.read_blob(descriptor.digest()).unwrap())
                 .collect::<Vec<_>>()
         });
         assert_eq!(bytes.len(), 2);
@@ -1046,7 +1040,7 @@ fn named_experiment_uses_requested_image_name() {
 }
 
 /// Dropping a run handle without closing it does not write its local
-/// state back to the experiment. BlobStore payloads written before the
+/// state back to the experiment. Registry payloads written before the
 /// drop may remain as orphan blobs until GC.
 #[test]
 fn dropping_unclosed_run_does_not_write_back() {

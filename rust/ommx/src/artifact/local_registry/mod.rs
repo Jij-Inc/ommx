@@ -1,7 +1,7 @@
 //! v3 OMMX Local Registry.
 //!
-//! The Local Registry stores artifact bytes as content-addressed blobs
-//! in [`FileBlobStore`]. [`SqliteIndexStore`] is the concurrency-safe
+//! The Local Registry stores artifact bytes in a filesystem-backed
+//! content-addressed store. [`SqliteIndexStore`] is the concurrency-safe
 //! equivalent of OCI `index.json`: it stores refs and their target
 //! manifest descriptors, not a cache of blobs, manifests, or layers.
 //!
@@ -31,7 +31,7 @@
 //!   described bytes are present in this registry.
 //! - [`StoredDescriptor`] is an OCI descriptor plus the Local Registry
 //!   invariant that the described blob exists in this registry's
-//!   BlobStore. The invariant is existence in the registry, not
+//!   content-addressed storage. The invariant is existence in the registry, not
 //!   authorship by the current call.
 //! - **Unsealed** is the state of a multi-blob object whose component
 //!   blobs may already be represented by [`StoredDescriptor`]s, but
@@ -44,8 +44,8 @@
 //!
 //! Operation terms:
 //!
-//! - **Store** belongs to [`FileBlobStore`] / [`LocalRegistry`]. It
-//!   writes bytes as a content-addressed blob and yields a
+//! - **Store** belongs to [`LocalRegistry`]. It writes bytes as a
+//!   content-addressed blob and yields a
 //!   [`StoredDescriptor`] after digest / size verification.
 //! - **Seal** stores the root manifest blob for unsealed state and
 //!   yields a `SealedArtifact`. It does not write
@@ -81,30 +81,22 @@ mod tests;
 use chrono::Utc;
 
 pub use crate::artifact::digest::sha256_digest;
-pub(crate) use crate::artifact::digest::{validate_digest, ValidatedDigest};
-pub use blob::{BlobRecord, FileBlobStore};
+pub(in crate::artifact::local_registry) use crate::artifact::digest::{
+    validate_digest, ValidatedDigest,
+};
+pub(in crate::artifact::local_registry) use blob::{BlobRecord, FileBlobStore};
 pub use gc::{
-    parse_gc_duration, GcBlob, GcDeleteReport, GcInvalidManifest, GcMissingBlob, GcOptions,
-    GcReferenceKind, GcReport, GcRoot,
+    GcBlob, GcDeleteReport, GcInvalidManifest, GcMissingBlob, GcOptions, GcReferenceKind, GcReport,
+    GcRoot,
 };
-pub use import::archive::{import_oci_archive, inspect_archive, ArchiveInspectView};
-pub use import::legacy::{
-    import_legacy_local_registry, import_legacy_local_registry_ref, legacy_local_registry_path,
-    replace_legacy_local_registry, replace_legacy_local_registry_ref, LegacyImportReport,
-};
-pub use import::oci_dir::{
-    import_oci_dir, import_oci_dir_as_ref, oci_dir_image_name, oci_dir_ref, replace_oci_dir,
-    replace_oci_dir_as_ref, OciDirImport, OciDirRef,
-};
-#[cfg(feature = "remote-artifact")]
-pub use import::remote::pull_image;
+pub use import::archive::ArchiveInspectView;
+pub use import::legacy::LegacyImportReport;
+pub use import::oci_dir::{OciDirImport, OciDirRef};
 pub use index::SqliteIndexStore;
 pub(crate) use registry::UnsealedArtifact;
 pub use registry::{LocalRegistry, StoredDescriptor, TempLocalRegistry};
-pub use types::{
-    RefRecord, RefUpdate, FILE_BLOB_STORE_DIR_NAME, OCI_IMAGE_REF_NAME_ANNOTATION,
-    SQLITE_INDEX_FILE_NAME,
-};
+pub(in crate::artifact::local_registry) use types::FILE_BLOB_STORE_DIR_NAME;
+pub use types::{RefRecord, RefUpdate, OCI_IMAGE_REF_NAME_ANNOTATION, SQLITE_INDEX_FILE_NAME};
 
 fn now_rfc3339() -> String {
     Utc::now().to_rfc3339()

@@ -15,8 +15,8 @@
 //! through the tar writer; the writer itself is `BufWriter<File>`. A
 //! 200 MB layer therefore peaks at ~200 MB resident memory during the
 //! save. A streaming variant that copies blobs out of
-//! [`super::FileBlobStore`] via `std::io::copy` (the `FileBlobStore`
-//! already keeps each blob in its own file) would replace the
+//! the Local Registry via `std::io::copy` (the registry already
+//! keeps each blob in its own file) would replace the
 //! `Vec<u8>` allocation with a fixed 64 KB copy buffer; left as a
 //! future refinement.
 
@@ -169,7 +169,7 @@ fn append_blob_entry<W: Write>(
 }
 
 /// Cross-check a CAS blob's recorded size against what the manifest
-/// descriptor claims so a corrupted BlobStore surfaces here instead of
+/// descriptor claims so corrupted local registry content surfaces here instead of
 /// producing a silently mis-tagged archive.
 fn verify_blob(descriptor: &Descriptor, actual_size: usize, kind: &str) -> crate::Result<()> {
     crate::ensure!(

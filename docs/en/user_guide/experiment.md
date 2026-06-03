@@ -10,7 +10,7 @@ Experiment data is written in three layers.
 
 | Layer | Stored as | Role |
 |---|---|---|
-| Blob | Content-addressed files in the Local Registry BlobStore | Payload bytes for attachments, Instances, Solutions, run parameters, configs, and manifests |
+| Blob | Content-addressed files in the Local Registry | Payload bytes for attachments, Instances, Solutions, run parameters, configs, and manifests |
 | Manifest | An OCI Image Manifest blob | The list of blobs that make one immutable OMMX Artifact |
 | Ref | SQLite rows in the Local Registry index | The name or checkpoint pointer that makes a manifest reachable |
 
@@ -18,7 +18,7 @@ In this page, **publish** means updating a Local Registry ref so it points to
 an already-written manifest. This is a local SQLite operation. It does not mean
 pushing an Artifact to a remote container registry.
 
-Logging methods such as {py:meth}`~ommx.experiment.Experiment.log_json` and {py:meth}`~ommx.experiment.Run.log_solve` write payload bytes to the BlobStore immediately. OMMX does not wait until the final commit to write all bytes. If the same content is already present, the existing CAS blob is reused and its modification time is touched so recent active writes remain protected by GC grace periods.
+Logging methods such as {py:meth}`~ommx.experiment.Experiment.log_json` and {py:meth}`~ommx.experiment.Run.log_solve` write payload bytes to the Local Registry immediately. OMMX does not wait until the final commit to write all bytes. If the same content is already present, the existing CAS blob is reused and its modification time is touched so recent active writes remain protected by GC grace periods.
 
 A successful {py:meth}`~ommx.experiment.Experiment.commit` writes the Experiment config and root manifest, then publishes the requested image reference in SQLite. Publishing a ref does not rewrite payload blobs. This ordering means a process can leave behind blob files that are not reachable from any manifest or ref; Local Registry GC handles that case.
 
@@ -115,7 +115,7 @@ Local Registry cleanup is based on reachability from SQLite refs.
 | Blobs written by a process that died before manifest/ref publication | No | `ommx gc` reports them as orphan candidates after the grace period. |
 | Blobs written by a currently active process | Usually no until a checkpoint or commit exists | `ommx gc` defers them while they are newer than the grace period. |
 
-OMMX does not store an orphan table in SQLite. Orphans are computed during each GC report by walking refs and manifests, then comparing that reachable set with the files in the BlobStore.
+OMMX does not store an orphan table in SQLite. Orphans are computed during each GC report by walking refs and manifests, then comparing that reachable set with the CAS files in the Local Registry.
 
 ## Cleanup Workflow
 

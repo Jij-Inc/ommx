@@ -9,28 +9,24 @@
 //!
 //! This module owns only the **v2-shape-specific** helpers:
 //!
-//! - the path computation `<root>/<image_name>` ([`legacy_local_registry_path`]),
+//! - the path computation `<root>/<image_name>`,
 //!   backed by the v2 disk-cache encoding [`image_ref_as_path`] /
 //!   [`image_ref_from_path`] (`__` substituted for `:`),
 //! - the recursive scan of a v2 root for `oci-layout`-bearing dirs
-//!   ([`gather_legacy_oci_dirs`]),
+//!   owned by [`LegacyImport`],
 //! - per-entry name resolution that reconciles the on-disk path with the
 //!   manifest's `org.opencontainers.image.ref.name` annotation
-//!   ([`legacy_import_image_name`]),
-//! - the batch entry points that turn a v2 root into a series of
-//!   identity-preserving imports ([`import_legacy_local_registry`] and
-//!   the `replace_*` / `_ref` variants), and the aggregated
+//!   owned by [`LegacyImport`],
+//! - the [`LocalRegistry`] methods that turn a v2 root into a series of
+//!   identity-preserving imports, and the aggregated
 //!   [`LegacyImportReport`].
 //!
 //! Reading and importing one OCI Image Layout directory in isolation is
 //! **not** v2-specific and lives in [`super::oci_dir`]; this module just
 //! drives that lower layer with v2-aware bookkeeping.
 
-use super::super::{FileBlobStore, RefUpdate, SqliteIndexStore};
-use super::oci_dir::{
-    import_oci_dir_as_ref, import_oci_dir_inner, oci_dir_image_name, oci_dir_ref,
-    replace_oci_dir_as_ref, OciDirImport, RefConflictHandling, RefWriteMode,
-};
+use super::super::{LocalRegistry, RefUpdate};
+use super::oci_dir::{OciDirImport, OciDirRef, RefConflictHandling, RefSelection, RefWriteMode};
 use crate::artifact::ImageRef;
 use anyhow::{ensure, Context, Result};
 use std::{
@@ -38,7 +34,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-/// Aggregate outcome of an [`import_legacy_local_registry`] run.
+/// Aggregate outcome of a Local Registry legacy import run.
 ///
 /// `#[non_exhaustive]` so future counters (e.g. orphan-blob discovery
 /// during the v2 sweep, byte counts) can be added without breaking
@@ -65,129 +61,216 @@ impl LegacyImportReport {
     }
 }
 
-pub fn import_legacy_local_registry_ref(
-    index_store: &SqliteIndexStore,
-    blob_store: &FileBlobStore,
-    legacy_registry_root: impl AsRef<Path>,
-    image_name: &ImageRef,
-) -> Result<OciDirImport> {
-    let legacy_path = legacy_local_registry_path(legacy_registry_root, image_name);
-    import_oci_dir_as_ref(index_store, blob_store, legacy_path, image_name)
+impl LocalRegistry {
+    pub fn legacy_ref_path_in(root: impl AsRef<Path>, image_name: &ImageRef) -> PathBuf {
+        legacy_local_registry_path(root, image_name)
+    }
+
+    pub fn legacy_ref_path(&self, image_name: &ImageRef) -> PathBuf {
+        Self::legacy_ref_path_in(self.root(), image_name)
+    }
+
+    pub(crate) fn import_legacy_ref_from(
+        &self,
+        legacy_registry_root: impl AsRef<Path>,
+        image_name: &ImageRef,
+    ) -> Result<OciDirImport> {
+        let legacy_path = legacy_local_registry_path(legacy_registry_root, image_name);
+        self.import_oci_dir_as_ref(legacy_path, image_name)
+    }
+
+    pub(crate) fn replace_legacy_ref_from(
+        &self,
+        legacy_registry_root: impl AsRef<Path>,
+        image_name: &ImageRef,
+    ) -> Result<OciDirImport> {
+        let legacy_path = legacy_local_registry_path(legacy_registry_root, image_name);
+        self.replace_oci_dir_as_ref_inner(legacy_path, image_name)
+    }
+
+    pub(crate) fn import_legacy_layout_from(
+        &self,
+        legacy_registry_root: impl AsRef<Path>,
+    ) -> Result<LegacyImportReport> {
+        LegacyImport::run(self, legacy_registry_root.as_ref(), RefWriteMode::Publish)
+    }
+
+    pub(crate) fn replace_legacy_layout_from(
+        &self,
+        legacy_registry_root: impl AsRef<Path>,
+    ) -> Result<LegacyImportReport> {
+        LegacyImport::run(self, legacy_registry_root.as_ref(), RefWriteMode::Replace)
+    }
 }
 
-pub fn replace_legacy_local_registry_ref(
-    index_store: &SqliteIndexStore,
-    blob_store: &FileBlobStore,
-    legacy_registry_root: impl AsRef<Path>,
-    image_name: &ImageRef,
-) -> Result<OciDirImport> {
-    let legacy_path = legacy_local_registry_path(legacy_registry_root, image_name);
-    replace_oci_dir_as_ref(index_store, blob_store, legacy_path, image_name)
-}
-
-pub fn import_legacy_local_registry(
-    index_store: &SqliteIndexStore,
-    blob_store: &FileBlobStore,
-    legacy_registry_root: impl AsRef<Path>,
-) -> Result<LegacyImportReport> {
-    import_legacy_local_registry_inner(
-        index_store,
-        blob_store,
-        legacy_registry_root,
-        RefWriteMode::Publish,
-    )
-}
-
-pub fn replace_legacy_local_registry(
-    index_store: &SqliteIndexStore,
-    blob_store: &FileBlobStore,
-    legacy_registry_root: impl AsRef<Path>,
-) -> Result<LegacyImportReport> {
-    import_legacy_local_registry_inner(
-        index_store,
-        blob_store,
-        legacy_registry_root,
-        RefWriteMode::Replace,
-    )
-}
-
-fn import_legacy_local_registry_inner(
-    index_store: &SqliteIndexStore,
-    blob_store: &FileBlobStore,
-    legacy_registry_root: impl AsRef<Path>,
+struct LegacyImport<'reg, 'root> {
+    registry: &'reg LocalRegistry,
+    legacy_registry_root: &'root Path,
     write_mode: RefWriteMode,
-) -> Result<LegacyImportReport> {
-    let legacy_registry_root = legacy_registry_root.as_ref();
-    let legacy_dirs = gather_legacy_oci_dirs(legacy_registry_root)?;
-    let mut report = LegacyImportReport::empty(legacy_dirs.len());
+    report: LegacyImportReport,
+}
 
-    for legacy_dir in &legacy_dirs {
-        let image_name = legacy_import_image_name(legacy_registry_root, legacy_dir)?;
-        let dir_ref = oci_dir_ref(legacy_dir)?;
-        let existing_manifest_digest = index_store.resolve_image_name(&image_name)?;
+impl<'reg, 'root> LegacyImport<'reg, 'root> {
+    fn run(
+        registry: &'reg LocalRegistry,
+        legacy_registry_root: &'root Path,
+        write_mode: RefWriteMode,
+    ) -> Result<LegacyImportReport> {
+        let legacy_dirs = Self::gather_oci_dirs(legacy_registry_root)?;
+        let mut import = Self {
+            registry,
+            legacy_registry_root,
+            write_mode,
+            report: LegacyImportReport::empty(legacy_dirs.len()),
+        };
+        for legacy_dir in &legacy_dirs {
+            import.import_dir(legacy_dir)?;
+        }
+        Ok(import.report)
+    }
+
+    fn import_dir(&mut self, legacy_dir: &Path) -> Result<()> {
+        let image_name = self.image_name(legacy_dir)?;
+        let dir_ref = OciDirRef::read(legacy_dir)?;
+        let existing_manifest_digest = self.registry.index().resolve_image_name(&image_name)?;
 
         match existing_manifest_digest {
-            None => {
-                let (_, ref_update) = import_oci_dir_inner(
-                    index_store,
-                    blob_store,
-                    legacy_dir,
-                    Some(&image_name),
-                    write_mode,
-                    RefConflictHandling::Return,
-                )
-                .with_context(|| {
-                    format!(
-                        "Failed to import legacy local registry entry {}",
-                        legacy_dir.display()
-                    )
-                })?;
-                record_import_ref_update(&mut report, ref_update);
-            }
+            None => self.import_missing_ref(legacy_dir, &image_name),
             Some(existing) if existing == dir_ref.manifest_digest => {
-                let (_, ref_update) = import_oci_dir_inner(
-                    index_store,
-                    blob_store,
-                    legacy_dir,
-                    Some(&image_name),
-                    write_mode,
-                    RefConflictHandling::Return,
-                )
-                .with_context(|| {
-                    format!(
-                        "Failed to verify imported legacy local registry entry {}",
-                        legacy_dir.display()
-                    )
-                })?;
-                record_import_ref_update(&mut report, ref_update);
+                self.verify_existing_ref(legacy_dir, &image_name)
             }
-            Some(_) if write_mode == RefWriteMode::Publish => {
-                report.conflicted_dirs += 1;
+            Some(_) if self.write_mode == RefWriteMode::Publish => {
+                self.report.conflicted_dirs += 1;
+                Ok(())
             }
-            Some(_) => {
-                let (_, ref_update) = import_oci_dir_inner(
-                    index_store,
-                    blob_store,
-                    legacy_dir,
-                    Some(&image_name),
-                    RefWriteMode::Replace,
-                    RefConflictHandling::Return,
+            Some(_) => self.replace_existing_ref(legacy_dir, &image_name),
+        }
+    }
+
+    fn import_missing_ref(&mut self, legacy_dir: &Path, image_name: &ImageRef) -> Result<()> {
+        let (_, ref_update) = self
+            .registry
+            .import_oci_dir_inner(
+                legacy_dir,
+                RefSelection::Explicit(image_name),
+                self.write_mode,
+                RefConflictHandling::Return,
+            )
+            .with_context(|| {
+                format!(
+                    "Failed to import legacy local registry entry {}",
+                    legacy_dir.display()
                 )
-                .with_context(|| {
-                    format!(
-                        "Failed to replace legacy local registry entry {}",
-                        legacy_dir.display()
-                    )
-                })?;
-                record_import_ref_update(&mut report, ref_update);
+            })?;
+        self.record_ref_update(ref_update);
+        Ok(())
+    }
+
+    fn verify_existing_ref(&mut self, legacy_dir: &Path, image_name: &ImageRef) -> Result<()> {
+        let (_, ref_update) = self
+            .registry
+            .import_oci_dir_inner(
+                legacy_dir,
+                RefSelection::Explicit(image_name),
+                self.write_mode,
+                RefConflictHandling::Return,
+            )
+            .with_context(|| {
+                format!(
+                    "Failed to verify imported legacy local registry entry {}",
+                    legacy_dir.display()
+                )
+            })?;
+        self.record_ref_update(ref_update);
+        Ok(())
+    }
+
+    fn replace_existing_ref(&mut self, legacy_dir: &Path, image_name: &ImageRef) -> Result<()> {
+        let (_, ref_update) = self
+            .registry
+            .import_oci_dir_inner(
+                legacy_dir,
+                RefSelection::Explicit(image_name),
+                RefWriteMode::Replace,
+                RefConflictHandling::Return,
+            )
+            .with_context(|| {
+                format!(
+                    "Failed to replace legacy local registry entry {}",
+                    legacy_dir.display()
+                )
+            })?;
+        self.record_ref_update(ref_update);
+        Ok(())
+    }
+
+    fn gather_oci_dirs(root: &Path) -> Result<Vec<PathBuf>> {
+        if !root.exists() {
+            return Ok(Vec::new());
+        }
+
+        let mut dirs = Vec::new();
+        Self::gather_oci_dirs_inner(root, &mut dirs)?;
+        Ok(dirs)
+    }
+
+    fn gather_oci_dirs_inner(dir: &Path, dirs: &mut Vec<PathBuf>) -> Result<()> {
+        for entry in
+            fs::read_dir(dir).with_context(|| format!("Failed to read {}", dir.display()))?
+        {
+            let entry = entry?;
+            let path = entry.path();
+            if !path.is_dir() {
+                continue;
+            }
+            if path.join("oci-layout").exists() {
+                dirs.push(path);
+            } else {
+                Self::gather_oci_dirs_inner(&path, dirs)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn image_name(&self, legacy_dir: &Path) -> Result<ImageRef> {
+        let annotated = OciDirRef::image_name(legacy_dir)?;
+        let path_name = legacy_dir
+            .strip_prefix(self.legacy_registry_root)
+            .ok()
+            .and_then(|relative| image_ref_from_path(relative).ok());
+
+        match (annotated, path_name) {
+            (Some(annotated), Some(path_name)) => {
+                ensure!(
+                    annotated == path_name,
+                    "Legacy local registry ref mismatch: path={}, annotation={}",
+                    path_name,
+                    annotated
+                );
+                Ok(annotated)
+            }
+            (Some(annotated), None) => Ok(annotated),
+            (None, Some(path_name)) => Ok(path_name),
+            (None, None) => {
+                anyhow::bail!(
+                    "Cannot infer image name for legacy local registry entry {}",
+                    legacy_dir.display()
+                )
             }
         }
     }
 
-    Ok(report)
+    fn record_ref_update(&mut self, update: RefUpdate) {
+        match update {
+            RefUpdate::Inserted => self.report.imported_dirs += 1,
+            RefUpdate::Unchanged => self.report.verified_dirs += 1,
+            RefUpdate::Replaced { .. } => self.report.replaced_refs += 1,
+            RefUpdate::Conflicted { .. } => self.report.conflicted_dirs += 1,
+        }
+    }
 }
 
-pub fn legacy_local_registry_path(
+pub(in crate::artifact::local_registry) fn legacy_local_registry_path(
     legacy_registry_root: impl AsRef<Path>,
     image_name: &ImageRef,
 ) -> PathBuf {
@@ -254,73 +337,6 @@ pub(crate) fn image_ref_from_path(path: &Path) -> Result<ImageRef> {
         .with_context(|| format!("Missing tag prefix in path: {}", path.display()))?
         .replace("__", ":");
     ImageRef::from_repository_and_reference(&format!("{registry}/{name}"), &last)
-}
-
-fn gather_legacy_oci_dirs(root: &Path) -> Result<Vec<PathBuf>> {
-    if !root.exists() {
-        return Ok(Vec::new());
-    }
-
-    let mut dirs = Vec::new();
-    gather_legacy_oci_dirs_inner(root, &mut dirs)?;
-    Ok(dirs)
-}
-
-fn gather_legacy_oci_dirs_inner(dir: &Path, dirs: &mut Vec<PathBuf>) -> Result<()> {
-    for entry in fs::read_dir(dir).with_context(|| format!("Failed to read {}", dir.display()))? {
-        let entry = entry?;
-        let path = entry.path();
-        if !path.is_dir() {
-            continue;
-        }
-        if path.join("oci-layout").exists() {
-            dirs.push(path);
-        } else {
-            gather_legacy_oci_dirs_inner(&path, dirs)?;
-        }
-    }
-    Ok(())
-}
-
-fn legacy_import_image_name(legacy_registry_root: &Path, legacy_dir: &Path) -> Result<ImageRef> {
-    let annotated = oci_dir_image_name(legacy_dir)?;
-    let path_name = legacy_dir
-        .strip_prefix(legacy_registry_root)
-        .ok()
-        .and_then(|relative| image_ref_from_path(relative).ok());
-
-    match (annotated, path_name) {
-        (Some(annotated), Some(path_name)) => {
-            ensure!(
-                annotated == path_name,
-                "Legacy local registry ref mismatch: path={}, annotation={}",
-                path_name,
-                annotated
-            );
-            Ok(annotated)
-        }
-        (Some(annotated), None) => Ok(annotated),
-        (None, Some(path_name)) => Ok(path_name),
-        (None, None) => {
-            anyhow::bail!(
-                "Cannot infer image name for legacy local registry entry {}",
-                legacy_dir.display()
-            )
-        }
-    }
-}
-
-fn record_import_ref_update(report: &mut LegacyImportReport, update: Option<RefUpdate>) {
-    // The legacy batch import always passes an explicit `image_name`
-    // to `import_oci_dir_inner`, so the inner function always writes
-    // a ref and the outcome is always `Some(_)`.
-    let Some(update) = update else { return };
-    match update {
-        RefUpdate::Inserted => report.imported_dirs += 1,
-        RefUpdate::Unchanged => report.verified_dirs += 1,
-        RefUpdate::Replaced { .. } => report.replaced_refs += 1,
-        RefUpdate::Conflicted { .. } => report.conflicted_dirs += 1,
-    }
 }
 
 #[cfg(test)]

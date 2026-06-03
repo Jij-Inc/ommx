@@ -2327,7 +2327,7 @@ class GcInvalidManifest:
 @typing.final
 class GcMissingBlob:
     r"""
-    Blob referenced by a reachable manifest but missing from the BlobStore.
+    Blob referenced by a reachable manifest but missing from the Local Registry.
     """
     @property
     def digest(self) -> builtins.str: ...

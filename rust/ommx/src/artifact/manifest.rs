@@ -30,10 +30,10 @@ use url::Url;
 ///
 /// The parsed manifest is memoised in an `Arc<OnceLock<LocalManifest>>`
 /// so repeated calls to [`Self::layers`] / [`Self::annotations`] /
-/// [`Self::subject`] do not re-read the manifest blob from the
-/// `BlobStore`, requery the `IndexStore`, and re-parse the JSON each
-/// time. Clones of the artifact share the same cell, so any clone that
-/// reads the manifest first warms it for the rest.
+/// [`Self::subject`] do not re-read the manifest blob, requery the
+/// registry index, and re-parse the JSON each time. Clones of the artifact
+/// share the same cell, so any clone that reads the manifest first warms it
+/// for the rest.
 #[derive(Debug, Clone)]
 pub struct LocalArtifact<'reg> {
     registry: &'reg LocalRegistry,
@@ -121,34 +121,9 @@ impl LocalArtifactDyn {
         let registry = registry_handle.registry();
 
         let image_name = if path.is_file() {
-            let outcome = super::local_registry::import_oci_archive(registry, path)?;
-            outcome.image_name.ok_or_else(|| {
-                anyhow::anyhow!(
-                    "import_oci_archive returned no image_name despite synthesizing on \
-                     unnamed input; this is a bug in the OMMX SDK; please report it."
-                )
-            })?
+            registry.import_oci_archive(path)?.image_name
         } else if path.is_dir() {
-            let image_name = match super::local_registry::oci_dir_image_name(path)? {
-                Some(name) => name,
-                None => {
-                    let synthesized = registry.synthesize_anonymous_image_name()?;
-                    tracing::info!(
-                        "OCI dir at {} has no `org.opencontainers.image.ref.name` \
-                         annotation; importing under synthesized anonymous name \
-                         {synthesized}",
-                        path.display(),
-                    );
-                    synthesized
-                }
-            };
-            super::local_registry::import_oci_dir_as_ref(
-                registry.index(),
-                registry.blobs(),
-                path,
-                &image_name,
-            )?;
-            image_name
+            registry.import_oci_dir(path)?.image_name
         } else {
             bail!("Path must be a file or a directory")
         };
@@ -165,7 +140,7 @@ impl LocalArtifactDyn {
     #[cfg(feature = "remote-artifact")]
     pub fn load(image_name: ImageRef) -> Result<Self> {
         let registry_handle = LocalRegistryHandle::shared_default()?;
-        super::local_registry::pull_image(registry_handle.registry(), &image_name)?;
+        registry_handle.registry().pull_image(&image_name)?;
         Self::open_in_registry_handle(registry_handle, image_name)
     }
 
@@ -346,8 +321,8 @@ impl<'reg> LocalArtifact<'reg> {
     ///
     /// The first successful call populates a shared `OnceLock`; later
     /// calls (and clones of `self`) reuse the cached value without
-    /// touching the `BlobStore` / `IndexStore`. Failed reads are not
-    /// cached, so transient errors retry on the next call.
+    /// touching the Local Registry again. Failed reads are not cached,
+    /// so transient errors retry on the next call.
     pub fn get_manifest(&self) -> Result<&LocalManifest> {
         if let Some(cached) = self.manifest_cache.get() {
             return Ok(cached);
@@ -357,7 +332,7 @@ impl<'reg> LocalArtifact<'reg> {
     }
 
     fn read_manifest_uncached(&self) -> Result<LocalManifest> {
-        let bytes = self.registry.blobs().read_bytes(&self.manifest_digest)?;
+        let bytes = self.registry.read_blob(&self.manifest_digest)?;
         LocalManifest::parse(&bytes)
     }
 
@@ -397,18 +372,12 @@ impl<'reg> LocalArtifact<'reg> {
     }
 
     pub(crate) fn read_blob_by_digest(&self, digest: &Digest) -> Result<Vec<u8>> {
-        self.registry.blobs().read_bytes(digest)
+        self.registry.read_blob(digest)
     }
 
     pub(crate) fn stored_manifest_descriptor(&self) -> Result<StoredDescriptor<'reg>> {
-        let size = self.registry.blobs().size(&self.manifest_digest)?;
-        let descriptor = DescriptorBuilder::default()
-            .media_type(MediaType::ImageManifest)
-            .digest(self.manifest_digest.clone())
-            .size(size)
-            .build()
-            .context("Failed to build manifest descriptor")?;
-        self.registry.stored_descriptor(descriptor)
+        self.registry
+            .stored_manifest_descriptor(&self.manifest_digest)
     }
 
     /// Publish this artifact under another local image reference.
@@ -418,7 +387,8 @@ impl<'reg> LocalArtifact<'reg> {
     /// handle whose `image_name` is the new reference.
     pub fn tag_as(&self, image_name: ImageRef) -> Result<Self> {
         let manifest = self.stored_manifest_descriptor()?;
-        self.touch_manifest_closure(manifest.digest(), &mut BTreeSet::new())?;
+        self.registry
+            .touch_manifest_closure(manifest.digest(), &mut BTreeSet::new())?;
         let ref_update = self
             .registry
             .publish_stored_manifest_ref(&image_name, &manifest)?;
@@ -428,39 +398,6 @@ impl<'reg> LocalArtifact<'reg> {
             image_name,
             self.manifest_digest.clone(),
         ))
-    }
-
-    fn touch_manifest_closure(
-        &self,
-        manifest_digest: &Digest,
-        visited: &mut BTreeSet<String>,
-    ) -> Result<()> {
-        if !visited.insert(manifest_digest.as_ref().to_string()) {
-            return Ok(());
-        }
-        self.registry.blobs().touch_blob(manifest_digest)?;
-        let bytes = self
-            .registry
-            .blobs()
-            .read_bytes(manifest_digest)
-            .with_context(|| format!("Failed to read manifest blob {manifest_digest}"))?;
-        let manifest: ImageManifest = serde_json::from_slice(&bytes)
-            .with_context(|| format!("Failed to parse OCI image manifest {manifest_digest}"))?;
-
-        self.touch_descriptor_blob(manifest.config())?;
-        for layer in manifest.layers() {
-            self.touch_descriptor_blob(layer)?;
-        }
-        if let Some(subject) = manifest.subject() {
-            let subject = self.registry.stored_descriptor(subject.clone())?;
-            self.touch_manifest_closure(subject.digest(), visited)?;
-        }
-        Ok(())
-    }
-
-    fn touch_descriptor_blob(&self, descriptor: &Descriptor) -> Result<()> {
-        let descriptor = self.registry.stored_descriptor(descriptor.clone())?;
-        self.registry.blobs().touch_blob(descriptor.digest())
     }
 }
 

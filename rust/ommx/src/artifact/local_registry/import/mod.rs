@@ -1,11 +1,10 @@
 //! Import paths that bring external content into the v3 Local Registry.
 //!
 //! The v3 Local Registry stores everything as content-addressed blobs
-//! in [`super::FileBlobStore`] plus index records in
-//! [`super::SqliteIndexStore`]; it does **not** store anything in OCI
-//! Image Layout format. This module hosts the boundary code that reads
-//! external sources in their native format and writes them through the
-//! registry's [`super::LocalRegistry`] facade.
+//! plus index records in [`super::SqliteIndexStore`]; it does **not**
+//! store anything in OCI Image Layout format. This module hosts the
+//! boundary code that reads external sources in their native format and
+//! writes them through the registry's [`super::LocalRegistry`] facade.
 //!
 //! Currently exposed sources:
 //!
@@ -21,12 +20,12 @@
 //!   a [`legacy::LegacyImportReport`].
 //! - [`archive`] — `.ommx` OCI archive ingest via the native v3
 //!   tar streamer. Walks the archive entries once, writes each
-//!   `blobs/sha256/<digest>` blob straight into [`super::FileBlobStore`]
+//!   `blobs/sha256/<digest>` blob through [`super::LocalRegistry`]
 //!   (which recomputes sha256 and asserts it matches the tar path),
 //!   buffers `oci-layout` + `index.json` in memory for the post-pass
 //!   parse, and emits a single SQLite transaction that publishes the
 //!   manifest + ref. No on-disk OCI Image Layout cache is produced —
-//!   SQLite + `FileBlobStore` are the sole post-import home.
+//!   SQLite + registry-owned CAS files are the sole post-import home.
 //! - [`remote`] — remote OCI registry pull via [`oci_client`]. A
 //!   pre-pull SQLite check short-circuits the network fetch when the
 //!   registry already resolves the requested ref, replacing the v2-era
