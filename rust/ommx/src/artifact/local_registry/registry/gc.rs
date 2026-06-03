@@ -219,7 +219,7 @@ impl<'reg> GcTraversal<'reg> {
             missing_blobs: Vec::new(),
             invalid_manifests: Vec::new(),
         };
-        for ref_record in registry.index().list_refs(None)? {
+        for ref_record in registry.index.list_refs(None)? {
             traversal.add_ref_root(ref_record);
         }
         for digest in &options.protected_digests {

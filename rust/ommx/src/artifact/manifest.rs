@@ -557,7 +557,7 @@ impl<'reg> ArtifactDraft<'reg> {
     /// rare in practice; if one still occurs, commit surfaces it as a
     /// normal ref conflict.
     pub fn new_anonymous_in_registry(registry: &'reg LocalRegistry) -> Result<Self> {
-        let registry_id = registry.index().registry_id()?;
+        let registry_id = registry.registry_id()?;
         let image_name = anonymous_artifact_image_name(&registry_id)?;
         Ok(Self::with_registry(registry, image_name))
     }

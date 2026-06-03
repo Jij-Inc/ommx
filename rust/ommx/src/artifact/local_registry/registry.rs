@@ -1,4 +1,5 @@
-use super::{RefUpdate, SqliteIndexStore};
+use super::index::SqliteIndexStore;
+use super::RefUpdate;
 use crate::artifact::{media_types, sha256_digest, stable_json_bytes, ImageRef};
 use anyhow::{ensure, Context, Result};
 use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, ImageManifest, MediaType};
@@ -245,10 +246,6 @@ impl LocalRegistry {
         &self.root
     }
 
-    pub fn index(&self) -> &SqliteIndexStore {
-        &self.index
-    }
-
     pub fn get_blob(&self, descriptor: &StoredDescriptor<'_>) -> Result<Vec<u8>> {
         ensure!(
             descriptor.is_stored_in(self),
@@ -268,6 +265,14 @@ impl LocalRegistry {
 
     pub fn resolve_image_name(&self, image_name: &ImageRef) -> Result<Option<Digest>> {
         self.index.resolve_image_name(image_name)
+    }
+
+    /// Per-registry stable identifier used to derive anonymous local refs.
+    ///
+    /// Crate-visible because top-level artifact builders construct anonymous
+    /// names, while the identifier itself is Local Registry metadata.
+    pub(crate) fn registry_id(&self) -> Result<String> {
+        self.index.registry_id()
     }
 
     /// Synthesize a fresh anonymous image name keyed to this
@@ -332,8 +337,7 @@ impl LocalRegistry {
     /// must match — a substring check on the suffix alone would
     /// over-match a human-pushed ref against a real mDNS host like
     /// `myhost.ommx.local/anonymous:v1`. Returned in
-    /// `(name, reference)` order to match
-    /// [`SqliteIndexStore::list_refs`].
+    /// `(name, reference)` order to match the SQLite index order.
     pub fn list_anonymous_artifact_refs(
         &self,
     ) -> Result<Vec<crate::artifact::local_registry::RefRecord>> {
@@ -364,6 +368,15 @@ impl LocalRegistry {
             self.index.delete_ref(&r.name, &r.reference)?;
         }
         Ok(refs)
+    }
+
+    /// List every image ref stored in this registry.
+    pub fn list_image_refs(&self) -> Result<Vec<ImageRef>> {
+        self.index
+            .list_refs(None)?
+            .into_iter()
+            .map(|r| ImageRef::from_repository_and_reference(&r.name, &r.reference))
+            .collect()
     }
 
     /// Seal an unsealed OMMX Artifact manifest into the Local Registry.

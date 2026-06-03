@@ -1,7 +1,7 @@
 //! v3 OMMX Local Registry.
 //!
 //! The Local Registry stores artifact bytes in a filesystem-backed
-//! content-addressed store. [`SqliteIndexStore`] is the concurrency-safe
+//! content-addressed store. Its SQLite index is the concurrency-safe
 //! equivalent of OCI `index.json`: it stores refs and their target
 //! manifest descriptors, not a cache of blobs, manifests, or layers.
 //!
@@ -39,7 +39,7 @@
 //!   still being constructed as a whole.
 //! - **Sealed** is the state after the root manifest blob has been
 //!   stored and represented by `SealedArtifact`.
-//! - **Published** is the state where [`SqliteIndexStore`] records a
+//! - **Published** is the state where the SQLite index records a
 //!   ref pointing at a `SealedArtifact`.
 //!
 //! Operation terms:
@@ -49,10 +49,10 @@
 //!   [`StoredDescriptor`] after digest / size verification.
 //! - **Seal** stores the root manifest blob for unsealed state and
 //!   yields a `SealedArtifact`. It does not write
-//!   [`SqliteIndexStore`].
+//!   the SQLite index.
 //! - **Publish** belongs to the registry index. Publishing records that
 //!   a ref points at a sealed root manifest descriptor in
-//!   [`SqliteIndexStore`]. It succeeds for a new ref or an idempotent
+//!   the SQLite index. It succeeds for a new ref or an idempotent
 //!   same-digest ref, and reports a conflict when the ref already
 //!   points at a different digest. It does not write payload blobs.
 //! - **Replace** also belongs to the registry index. Replacing moves a
@@ -78,7 +78,6 @@ mod tests;
 use chrono::Utc;
 
 pub use crate::artifact::digest::sha256_digest;
-pub use index::SqliteIndexStore;
 // Crate-visible only because the top-level `artifact` and `experiment`
 // modules construct registry-owned manifests; it is not part of the public API.
 pub(crate) use registry::UnsealedArtifact;

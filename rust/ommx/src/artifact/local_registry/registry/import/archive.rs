@@ -2,7 +2,7 @@
 //!
 //! A native tar reader writes blobs straight into the registry's
 //! content-addressed storage and publishes the manifest + ref through
-//! [`super::super::SqliteIndexStore`]. There is no on-disk OCI Image
+//! the registry's SQLite index. There is no on-disk OCI Image
 //! Layout intermediate — SQLite + registry-owned CAS files are the sole
 //! post-import home of the bytes.
 //!
@@ -228,7 +228,7 @@ impl LocalRegistry {
         let image_name = match image_name_from_index_descriptor(index_descriptor)? {
             Some(name) => name,
             None => {
-                let registry_id = self.index().registry_id()?;
+                let registry_id = self.index.registry_id()?;
                 let synthesized = crate::artifact::anonymous_artifact_image_name(&registry_id)?;
                 tracing::info!(
                     "OCI archive at {} has no `org.opencontainers.image.ref.name` \
@@ -283,7 +283,7 @@ impl LocalRegistry {
         }
 
         let ref_update = self
-            .index()
+            .index
             .publish_image_ref(&image_name, index_descriptor)?;
         // Public entry point: surface a ref conflict as `Err`. Callers
         // that need batch / report-style handling (e.g. legacy import)

@@ -85,6 +85,7 @@ impl SqliteIndexStore {
         }
     }
 
+    #[cfg(test)]
     pub fn schema_version(&self) -> Result<i64> {
         self.lock()
             .pragma_query_value(None, "user_version", |row| row.get(0))

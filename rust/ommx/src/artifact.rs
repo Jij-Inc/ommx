@@ -181,12 +181,7 @@ pub fn fetch_remote_manifest(image_name: &ImageRef) -> Result<ImageManifest> {
 pub fn get_images() -> Result<Vec<ImageRef>> {
     let root = get_local_registry_root();
     let registry = local_registry::LocalRegistry::open(root)?;
-    registry
-        .index()
-        .list_refs(None)?
-        .into_iter()
-        .map(|r| ImageRef::from_repository_and_reference(&r.name, &r.reference))
-        .collect()
+    registry.list_image_refs()
 }
 
 // v3 artifact entry points:

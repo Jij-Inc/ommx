@@ -228,9 +228,8 @@ impl LocalRegistry {
         // writers still get a consistent outcome; this is purely a fast
         // path for the common single-writer case.
         if write_mode == RefWriteMode::Publish {
-            if let Some(existing_descriptor) = self
-                .index()
-                .resolve_image_descriptor(&effective_image_name)?
+            if let Some(existing_descriptor) =
+                self.index.resolve_image_descriptor(&effective_image_name)?
             {
                 if existing_descriptor.digest() != entry.manifest_descriptor.digest() {
                     if conflict_handling == RefConflictHandling::Error {
@@ -268,10 +267,10 @@ impl LocalRegistry {
 
         let ref_update = match write_mode {
             RefWriteMode::Publish => self
-                .index()
+                .index
                 .publish_image_ref(&effective_image_name, &entry.manifest_descriptor)?,
             RefWriteMode::Replace => self
-                .index()
+                .index
                 .replace_image_ref(&effective_image_name, &entry.manifest_descriptor)?,
         };
         if let RefUpdate::Conflicted {

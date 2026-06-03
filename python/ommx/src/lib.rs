@@ -318,13 +318,15 @@ types. `Run.log_solve(...)` calls an `ommx.adapter.SolverAdapter`, stores the
 original input instance and returned solution, and records adapter keyword
 arguments as solve metadata rather than run parameters.
 
-`Experiment` and `Run` are context managers. On normal exit a run is finished
-and the experiment is committed if it is still unsealed; on exception an open
-run is closed as failed or interrupted and the experiment publishes a
-checkpoint instead of advancing the success ref. A committed experiment is
-read-only. To add runs to a committed experiment, create a child session with
-`Experiment.fork(...)`. Use `Experiment.rename(...)` to choose or update the
-local registry image reference before saving or pushing.
+Use `Run` as a context manager so closing the block records whether that trial
+finished, failed, or was interrupted. `Experiment` may also be used as a
+context manager for batch scripts, but interactive workflows often keep one
+Experiment open across notebook cells and call `commit()` explicitly after
+reviewing the closed runs. On exceptional `with Experiment(...)` exit, OMMX
+publishes a checkpoint instead of advancing the success ref. A committed
+experiment is read-only. To add runs to a committed experiment, create a child
+session with `Experiment.fork(...)`. Use `Experiment.rename(...)` to choose or
+update the local registry image reference before saving or pushing.
 "#
 );
 

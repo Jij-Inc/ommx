@@ -1,7 +1,7 @@
 //! Import paths that bring external content into the v3 Local Registry.
 //!
 //! The v3 Local Registry stores everything as content-addressed blobs
-//! plus index records in [`super::SqliteIndexStore`]; it does **not**
+//! plus SQLite index records; it does **not**
 //! store anything in OCI Image Layout format. This module hosts the
 //! boundary code that reads external sources in their native format and
 //! writes them through the registry's [`super::LocalRegistry`] facade.

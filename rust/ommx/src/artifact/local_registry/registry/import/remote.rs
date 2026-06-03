@@ -7,7 +7,7 @@
 //!
 //! 1. Pre-pull SQLite check short-circuits the network fetch when the
 //!    registry already resolves `image_name` to a manifest digest **and**
-//!    the manifest blob is present in the registry.
+//!    the manifest, config, and layer blobs are present in the registry.
 //!    The method returns an [`OciDirImport`] with
 //!    [`super::super::RefUpdate::Unchanged`] without touching the
 //!    network. The blob-presence probe distinguishes a healthy hit from
@@ -48,9 +48,10 @@ use std::str::FromStr;
 impl LocalRegistry {
     /// Pull `image_name` from its remote registry into this Local Registry.
     ///
-    /// If the registry already resolves `image_name` to a manifest digest
-    /// whose blob is present in the registry, the network fetch is skipped and
-    /// the method returns [`OciDirImport`] with [`RefUpdate::Unchanged`].
+    /// If the registry already resolves `image_name` to a manifest whose
+    /// config and layer blobs are also present in the registry, the network
+    /// fetch is skipped and the method returns [`OciDirImport`] with
+    /// [`RefUpdate::Unchanged`].
     ///
     /// Otherwise the manifest and each blob are pulled through
     /// `RemoteTransport` straight into the registry, and a SQLite transaction
@@ -113,7 +114,7 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
 
         let ref_update = self
             .registry
-            .index()
+            .index
             .publish_image_ref(self.image_name, &manifest_descriptor)?;
         self.reject_conflicting_ref(&ref_update)?;
 
@@ -125,11 +126,15 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
     }
 
     fn cached_ref(&self) -> Result<Option<OciDirImport>> {
-        let Some(manifest_digest) = self.registry.index().resolve_image_name(self.image_name)?
+        let Some(manifest_descriptor) = self
+            .registry
+            .index
+            .resolve_image_descriptor(self.image_name)?
         else {
             return Ok(None);
         };
-        if self.registry.contains_blob(&manifest_digest)? {
+        let manifest_digest = manifest_descriptor.digest().clone();
+        if self.cached_manifest_closure_is_present(&manifest_descriptor)? {
             return Ok(Some(OciDirImport {
                 manifest_digest,
                 image_name: self.image_name.clone(),
@@ -137,12 +142,63 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
             }));
         }
         tracing::warn!(
-            "SQLite ref resolves {} → {manifest_digest}, but the manifest \
-             blob is missing from the registry; falling through to a fresh remote \
-             pull to repopulate the registry",
+            "SQLite ref resolves {} → {manifest_digest}, but the manifest closure \
+             is incomplete in the registry; falling through to a fresh remote pull \
+             to repopulate the registry",
             self.image_name,
         );
         Ok(None)
+    }
+
+    fn cached_manifest_closure_is_present(&self, manifest_descriptor: &Descriptor) -> Result<bool> {
+        let manifest_digest = manifest_descriptor.digest();
+        if !self.registry.contains_blob(manifest_digest)? {
+            return Ok(false);
+        }
+        let manifest_size = self.registry.blob_size(manifest_digest)?;
+        if manifest_size != manifest_descriptor.size() {
+            tracing::warn!(
+                "SQLite ref resolves {} → {}, but the manifest blob size is {}; \
+                 expected {}",
+                self.image_name,
+                manifest_digest,
+                manifest_size,
+                manifest_descriptor.size(),
+            );
+            return Ok(false);
+        }
+
+        let manifest_bytes = self.registry.read_blob(manifest_digest)?;
+        let manifest: ImageManifest = serde_json::from_slice(&manifest_bytes)
+            .with_context(|| format!("Failed to parse cached manifest {manifest_digest}"))?;
+        Self::ensure_ommx_image_manifest(&manifest)?;
+
+        if !self.cached_descriptor_blob_is_present(manifest.config())? {
+            return Ok(false);
+        }
+        for layer in manifest.layers() {
+            if !self.cached_descriptor_blob_is_present(layer)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+
+    fn cached_descriptor_blob_is_present(&self, descriptor: &Descriptor) -> Result<bool> {
+        if !self.registry.contains_blob(descriptor.digest())? {
+            return Ok(false);
+        }
+        let size = self.registry.blob_size(descriptor.digest())?;
+        if size != descriptor.size() {
+            tracing::warn!(
+                "Cached blob {} has size {}; expected {}",
+                descriptor.digest(),
+                size,
+                descriptor.size(),
+            );
+            return Ok(false);
+        }
+        Ok(true)
     }
 
     /// Validate that the remote manifest is an OCI Image Manifest carrying

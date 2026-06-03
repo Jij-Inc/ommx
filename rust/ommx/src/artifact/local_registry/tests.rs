@@ -1,3 +1,4 @@
+use super::index::SqliteIndexStore;
 use super::*;
 use crate::artifact::{
     media_types, ArtifactDraft, ImageRef, LocalArtifact, LocalManifest,
@@ -31,6 +32,10 @@ fn save_test_archive(
     let local = builder.commit()?;
     local.save(archive_path)?;
     Ok(())
+}
+
+fn open_test_index(registry: &LocalRegistry) -> Result<SqliteIndexStore> {
+    SqliteIndexStore::open_in_registry_root(registry.root())
 }
 
 #[test]
@@ -205,7 +210,7 @@ fn concurrent_keep_existing_ref_publish_keeps_one_digest() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let root = dir.path().join("registry-v3");
     let registry = LocalRegistry::open(&root)?;
-    let index_store = registry.index();
+    let index_store = open_test_index(&registry)?;
     let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:race")?;
     let first_descriptor = put_test_manifest(&registry, b"first-manifest")?;
     let second_descriptor = put_test_manifest(&registry, b"second-manifest")?;
@@ -263,7 +268,7 @@ fn imports_oci_dir_into_sqlite_registry_preserving_image_manifest() -> Result<()
 
     let registry_root = dir.path().join("registry-v3");
     let registry = LocalRegistry::open(&registry_root)?;
-    let index_store = registry.index();
+    let index_store = open_test_index(&registry)?;
 
     // Snapshot the original legacy manifest bytes so we can assert
     // byte-for-byte equality with what ends up in the v3 registry.
@@ -352,7 +357,7 @@ fn imports_oci_dir_preserves_index_descriptor_annotations() -> Result<()> {
 
     let registry_root = dir.path().join("registry");
     let registry = LocalRegistry::open(&registry_root)?;
-    let index_store = registry.index();
+    let index_store = open_test_index(&registry)?;
     registry.import_oci_dir(&oci_dir)?;
 
     let descriptor = index_store
@@ -384,7 +389,7 @@ fn imports_legacy_local_registry_explicitly() -> Result<()> {
     build_test_oci_dir(legacy_dir, image_name.clone())?;
 
     let registry = LocalRegistry::open(&legacy_registry_root)?;
-    let index_store = registry.index();
+    let index_store = open_test_index(&registry)?;
 
     assert!(index_store.resolve_image_name(&image_name)?.is_none());
     let report = registry.import_legacy_layout()?;
@@ -458,7 +463,7 @@ fn imports_legacy_docker_hub_short_name_via_normalisation_shim() -> Result<()> {
     builder.finish(manifest)?;
 
     let registry = LocalRegistry::open(&legacy_registry_root)?;
-    let index_store = registry.index();
+    let index_store = open_test_index(&registry)?;
 
     let report = registry.import_legacy_layout()?;
     assert_eq!(report.imported_dirs, 1, "v2 dir must import cleanly");
@@ -495,7 +500,7 @@ fn import_legacy_local_registry_keeps_existing_ref_on_conflict() -> Result<()> {
     let legacy_manifest_digest = OciDirRef::read(&legacy_dir)?.manifest_digest;
 
     let registry = LocalRegistry::open(&legacy_registry_root)?;
-    let index_store = registry.index();
+    let index_store = open_test_index(&registry)?;
     let existing_digest = put_test_manifest_ref(&registry, &image_name, b"existing-manifest")?;
     assert_ne!(existing_digest, legacy_manifest_digest);
 
@@ -528,7 +533,7 @@ fn import_legacy_local_registry_replaces_existing_ref_when_requested() -> Result
     let legacy_manifest_digest = OciDirRef::read(&legacy_dir)?.manifest_digest;
 
     let registry = LocalRegistry::open(&legacy_registry_root)?;
-    let index_store = registry.index();
+    let index_store = open_test_index(&registry)?;
     let existing_digest = put_test_manifest_ref(&registry, &image_name, b"existing-manifest")?;
     assert_ne!(existing_digest, legacy_manifest_digest);
 
@@ -574,9 +579,9 @@ fn local_registry_imports_legacy_refs_when_requested() -> Result<()> {
         .resolve_image_name(&image_name)?
         .context("Legacy local registry ref was not imported")?;
     assert!(registry.contains_blob(&imported_digest)?);
+    let index_store = open_test_index(&registry)?;
     assert_eq!(
-        registry
-            .index()
+        index_store
             .resolve_image_descriptor(&image_name)?
             .context("Legacy local registry descriptor was not imported")?
             .digest(),
@@ -604,8 +609,8 @@ fn local_registry_builds_native_image_manifest_with_artifact_type() -> Result<()
         .first()
         .context("Published layer is missing")?;
 
-    let manifest_descriptor = registry
-        .index()
+    let index_store = open_test_index(&registry)?;
+    let manifest_descriptor = index_store
         .resolve_image_descriptor(&image_name)?
         .context("Published manifest descriptor is missing")?;
     assert_eq!(manifest_descriptor.media_type(), &MediaType::ImageManifest);
@@ -1316,14 +1321,65 @@ fn pull_image_does_not_short_circuit_when_manifest_blob_is_missing() -> Result<(
         .digest(Digest::from_str(&sha256_digest(missing_manifest))?)
         .size(missing_manifest.len() as u64)
         .build()?;
-    registry
-        .index()
-        .replace_image_ref(&image_name, &missing_descriptor)?;
+    open_test_index(&registry)?.replace_image_ref(&image_name, &missing_descriptor)?;
 
     let result = registry.pull_image(&image_name);
     assert!(
         result.is_err(),
         "pull_image must fall through to a remote pull when the manifest blob is \
+         missing; the unreachable host should surface as Err, but got {:?}",
+        result,
+    );
+    Ok(())
+}
+
+#[cfg(feature = "remote-artifact")]
+#[test]
+fn pull_image_does_not_short_circuit_when_payload_blob_is_missing() -> Result<()> {
+    // The cache hit path must require the manifest payload closure, not only
+    // the root manifest blob. Otherwise `Artifact.load` can return a local
+    // handle that later fails when a layer/config blob is read.
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let image_name = ImageRef::parse("does-not-resolve.invalid/jij-inc/ommx/demo:payload-missing")?;
+
+    let config_descriptor = DescriptorBuilder::default()
+        .media_type(MediaType::EmptyJSON)
+        .digest(Digest::from_str(media_types::OCI_EMPTY_CONFIG_DIGEST)?)
+        .size(media_types::OCI_EMPTY_CONFIG_BYTES.len() as u64)
+        .build()?;
+    registry.store_blob(
+        config_descriptor.clone(),
+        media_types::OCI_EMPTY_CONFIG_BYTES,
+    )?;
+
+    let missing_layer_bytes = b"missing cached layer";
+    let missing_layer = DescriptorBuilder::default()
+        .media_type(MediaType::Other(
+            media_types::V1_INSTANCE_MEDIA_TYPE.to_string(),
+        ))
+        .digest(Digest::from_str(&sha256_digest(missing_layer_bytes))?)
+        .size(missing_layer_bytes.len() as u64)
+        .build()?;
+    let manifest = ImageManifestBuilder::default()
+        .schema_version(2_u32)
+        .artifact_type(media_types::v1_artifact())
+        .config(config_descriptor)
+        .layers(vec![missing_layer])
+        .build()?;
+    let manifest_bytes = serde_json::to_vec(&manifest)?;
+    let manifest_descriptor = DescriptorBuilder::default()
+        .media_type(MediaType::ImageManifest)
+        .digest(Digest::from_str(&sha256_digest(&manifest_bytes))?)
+        .size(manifest_bytes.len() as u64)
+        .build()?;
+    registry.store_blob(manifest_descriptor.clone(), &manifest_bytes)?;
+    open_test_index(&registry)?.replace_image_ref(&image_name, &manifest_descriptor)?;
+
+    let result = registry.pull_image(&image_name);
+    assert!(
+        result.is_err(),
+        "pull_image must fall through to a remote pull when a payload blob is \
          missing; the unreachable host should surface as Err, but got {:?}",
         result,
     );
@@ -1479,9 +1535,7 @@ fn put_test_manifest_ref(
     bytes: &[u8],
 ) -> Result<Digest> {
     let descriptor = put_test_manifest(registry, bytes)?;
-    registry
-        .index()
-        .replace_image_ref(image_name, &descriptor)?;
+    open_test_index(registry)?.replace_image_ref(image_name, &descriptor)?;
     Ok(descriptor.digest().clone())
 }
 

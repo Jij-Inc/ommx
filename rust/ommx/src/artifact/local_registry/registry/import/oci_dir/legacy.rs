@@ -149,7 +149,7 @@ impl<'reg, 'root> LegacyImport<'reg, 'root> {
     fn import_dir(&mut self, legacy_dir: &Path) -> Result<()> {
         let image_name = self.image_name(legacy_dir)?;
         let dir_ref = OciDirRef::read(legacy_dir)?;
-        let existing_manifest_digest = self.registry.index().resolve_image_name(&image_name)?;
+        let existing_manifest_digest = self.registry.index.resolve_image_name(&image_name)?;
 
         match existing_manifest_digest {
             None => self.import_missing_ref(legacy_dir, &image_name),
