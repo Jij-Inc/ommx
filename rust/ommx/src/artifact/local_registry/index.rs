@@ -505,17 +505,7 @@ fn parse_annotations_json(
 }
 
 fn media_type_from_string(media_type: String) -> MediaType {
-    if media_type == MediaType::ImageManifest.to_string() {
-        MediaType::ImageManifest
-    } else if media_type == MediaType::ImageIndex.to_string() {
-        MediaType::ImageIndex
-    } else if media_type == MediaType::EmptyJSON.to_string() {
-        MediaType::EmptyJSON
-    } else if media_type == MediaType::ArtifactManifest.to_string() {
-        MediaType::ArtifactManifest
-    } else {
-        MediaType::Other(media_type)
-    }
+    MediaType::from(media_type.as_str())
 }
 
 fn read_u64(row: &rusqlite::Row<'_>, idx: usize) -> rusqlite::Result<u64> {

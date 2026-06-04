@@ -45,6 +45,17 @@ pub struct StoredDescriptor<'reg> {
 }
 
 impl StoredDescriptor<'_> {
+    /// Ensure this descriptor has the expected OCI media type before a typed
+    /// decoder reads its blob.
+    pub fn ensure_media_type(&self, expected: &MediaType) -> Result<()> {
+        let actual = self.media_type();
+        ensure!(
+            actual == expected,
+            "Expected media type '{expected}', got '{actual}'"
+        );
+        Ok(())
+    }
+
     /// Check registry-instance identity for crate-internal artifact handles.
     ///
     /// This is crate-visible because `LocalArtifact` and Experiment state live

@@ -53,7 +53,7 @@ pub fn store_attachment_descriptor<'reg>(
 }
 
 pub fn json_media_type() -> MediaType {
-    MediaType::Other(JSON_MEDIA_TYPE.to_string())
+    MediaType::from(JSON_MEDIA_TYPE)
 }
 
 pub fn encode_json(name: &str, value: impl serde::Serialize) -> Result<Vec<u8>> {

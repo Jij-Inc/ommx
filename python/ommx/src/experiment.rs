@@ -397,12 +397,7 @@ impl PyExperiment {
         let _guard = crate::TRACING.attach_parent_context(py);
         let descriptor = self.find_attachment(name)?;
         let registry_handle = self.inner.registry_handle();
-        let blob = attachment_blob(
-            registry_handle.registry(),
-            &descriptor,
-            Some(&codec.media_type(py)?),
-        )?;
-        codec.decode(py, &blob)
+        codec.decode_from_descriptor(py, registry_handle.registry(), &descriptor)
     }
 
     #[getter]
@@ -467,7 +462,7 @@ impl PyExperiment {
         AttachmentLogger::log_attachment(
             &self.inner,
             name,
-            MediaType::Other(media_type.to_string()),
+            MediaType::from(media_type),
             bytes.as_bytes(),
         )
     }
@@ -499,7 +494,7 @@ impl PyExperiment {
         AttachmentLogger::log_attachment(
             &self.inner,
             name,
-            MediaType::Other("application/json".to_string()),
+            MediaType::from("application/json"),
             blob,
         )
     }
@@ -692,30 +687,18 @@ fn attachment_annotations(descriptor: &Descriptor) -> std::collections::HashMap<
         .unwrap_or_default()
 }
 
-fn attachment_blob(
-    registry: &LocalRegistry,
-    descriptor: &StoredDescriptor<'_>,
-    expected_media_type: Option<&str>,
-) -> Result<Vec<u8>> {
-    if let Some(expected) = expected_media_type {
-        let actual = descriptor.media_type().to_string();
-        if actual != expected {
-            anyhow::bail!("Expected media type '{expected}', got '{actual}'");
-        }
-    }
-    registry.get_blob(descriptor)
-}
-
 pub struct AttachmentCodecInput(Py<PyType>);
 
 impl AttachmentCodecInput {
-    fn media_type(&self, py: Python<'_>) -> Result<String> {
-        self.0
+    fn media_type(&self, py: Python<'_>) -> Result<MediaType> {
+        let media_type: String = self
+            .0
             .bind(py)
             .getattr("media_type")
             .context("Attachment codec class must define `media_type`")?
             .extract()
-            .context("Attachment codec `media_type` must be a string")
+            .context("Attachment codec `media_type` must be a string")?;
+        Ok(MediaType::from(media_type.as_str()))
     }
 
     fn encode(&self, py: Python<'_>, value: &AttachmentPayload) -> Result<EncodedAttachment> {
@@ -728,10 +711,7 @@ impl AttachmentCodecInput {
             .context("Attachment codec `encode(...)` failed")?
             .extract()
             .context("Attachment codec `encode(...)` must return bytes")?;
-        Ok(EncodedAttachment {
-            media_type: MediaType::Other(media_type),
-            bytes,
-        })
+        Ok(EncodedAttachment { media_type, bytes })
     }
 
     fn decode(&self, py: Python<'_>, blob: &[u8]) -> Result<AttachmentPayload> {
@@ -741,6 +721,18 @@ impl AttachmentCodecInput {
             .call_method1("decode", (PyBytes::new(py, blob),))
             .context("Attachment codec `decode(...)` failed")?;
         Ok(AttachmentPayload(value.unbind()))
+    }
+
+    fn decode_from_descriptor(
+        &self,
+        py: Python<'_>,
+        registry: &LocalRegistry,
+        descriptor: &StoredDescriptor<'_>,
+    ) -> Result<AttachmentPayload> {
+        let expected = self.media_type(py)?;
+        descriptor.ensure_media_type(&expected)?;
+        let blob = registry.get_blob(descriptor)?;
+        self.decode(py, &blob)
     }
 }
 
@@ -851,7 +843,7 @@ fn decode_attachment<'py>(
                 .unbind()
                 .into_bound(py))
         }
-        _ => Ok(PyBytes::new(py, &attachment_blob(registry, descriptor, None)?).into_any()),
+        _ => Ok(PyBytes::new(py, &registry.get_blob(descriptor)?).into_any()),
     }
 }
 
@@ -860,7 +852,9 @@ fn decode_json_attachment<'py>(
     registry: &LocalRegistry,
     descriptor: &StoredDescriptor<'_>,
 ) -> Result<Bound<'py, PyAny>> {
-    let blob = attachment_blob(registry, descriptor, Some("application/json"))?;
+    let expected = MediaType::from("application/json");
+    descriptor.ensure_media_type(&expected)?;
+    let blob = registry.get_blob(descriptor)?;
     let json = py.import("json")?;
     Ok(json.call_method1("loads", (PyBytes::new(py, &blob),))?)
 }
@@ -869,11 +863,9 @@ fn decode_instance_attachment(
     registry: &LocalRegistry,
     descriptor: &StoredDescriptor<'_>,
 ) -> Result<crate::Instance> {
-    let blob = attachment_blob(
-        registry,
-        descriptor,
-        Some(ommx::artifact::media_types::V1_INSTANCE_MEDIA_TYPE),
-    )?;
+    let expected = ommx::artifact::media_types::v1_instance();
+    descriptor.ensure_media_type(&expected)?;
+    let blob = registry.get_blob(descriptor)?;
     Ok(crate::Instance {
         inner: ommx::Instance::from_bytes(&blob)?,
         annotations: attachment_annotations(descriptor),
@@ -884,11 +876,9 @@ fn decode_parametric_instance_attachment(
     registry: &LocalRegistry,
     descriptor: &StoredDescriptor<'_>,
 ) -> Result<crate::ParametricInstance> {
-    let blob = attachment_blob(
-        registry,
-        descriptor,
-        Some(ommx::artifact::media_types::V1_PARAMETRIC_INSTANCE_MEDIA_TYPE),
-    )?;
+    let expected = ommx::artifact::media_types::v1_parametric_instance();
+    descriptor.ensure_media_type(&expected)?;
+    let blob = registry.get_blob(descriptor)?;
     Ok(crate::ParametricInstance {
         inner: ommx::ParametricInstance::from_bytes(&blob)?,
         annotations: attachment_annotations(descriptor),
@@ -899,11 +889,9 @@ fn decode_solution_attachment(
     registry: &LocalRegistry,
     descriptor: &StoredDescriptor<'_>,
 ) -> Result<crate::Solution> {
-    let blob = attachment_blob(
-        registry,
-        descriptor,
-        Some(ommx::artifact::media_types::V1_SOLUTION_MEDIA_TYPE),
-    )?;
+    let expected = ommx::artifact::media_types::v1_solution();
+    descriptor.ensure_media_type(&expected)?;
+    let blob = registry.get_blob(descriptor)?;
     Ok(crate::Solution {
         inner: ommx::Solution::from_bytes(&blob)?,
         annotations: attachment_annotations(descriptor),
@@ -914,11 +902,9 @@ fn decode_sample_set_attachment(
     registry: &LocalRegistry,
     descriptor: &StoredDescriptor<'_>,
 ) -> Result<crate::SampleSet> {
-    let blob = attachment_blob(
-        registry,
-        descriptor,
-        Some(ommx::artifact::media_types::V1_SAMPLE_SET_MEDIA_TYPE),
-    )?;
+    let expected = ommx::artifact::media_types::v1_sample_set();
+    descriptor.ensure_media_type(&expected)?;
+    let blob = registry.get_blob(descriptor)?;
     Ok(crate::SampleSet {
         inner: ommx::SampleSet::from_bytes(&blob)?,
         annotations: attachment_annotations(descriptor),
@@ -1117,7 +1103,7 @@ impl PyRun {
         AttachmentLogger::log_attachment(
             self.as_open_mut()?,
             name,
-            MediaType::Other(media_type.to_string()),
+            MediaType::from(media_type),
             bytes.as_bytes(),
         )
     }
@@ -1156,7 +1142,7 @@ impl PyRun {
         AttachmentLogger::log_attachment(
             self.as_open_mut()?,
             name,
-            MediaType::Other("application/json".to_string()),
+            MediaType::from("application/json"),
             blob,
         )
     }
@@ -1594,12 +1580,7 @@ impl PySealedRun {
         let _guard = crate::TRACING.attach_parent_context(py);
         let descriptor = self.find_attachment(name)?;
         let registry_handle = self.run.registry_handle();
-        let blob = attachment_blob(
-            registry_handle.registry(),
-            &descriptor,
-            Some(&codec.media_type(py)?),
-        )?;
-        codec.decode(py, &blob)
+        codec.decode_from_descriptor(py, registry_handle.registry(), &descriptor)
     }
 
     #[getter]
