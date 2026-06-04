@@ -388,16 +388,12 @@ impl PyExperiment {
     /// The codec class must provide `media_type`, `encode(value) -> bytes`,
     /// and `decode(bytes) -> object`. This method validates the stored media
     /// type against the codec before decoding.
-    #[gen_stub(override_return_type(
-        type_repr = "attachments.T",
-        imports = ("ommx.experiment.attachments")
-    ))]
-    pub fn get_with_codec<'py>(
+    pub fn get_with_codec(
         &self,
-        py: Python<'py>,
+        py: Python<'_>,
         codec: AttachmentCodecInput,
         name: &str,
-    ) -> Result<Bound<'py, PyAny>> {
+    ) -> Result<AttachmentPayload> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let descriptor = self.find_attachment(name)?;
         let registry_handle = self.inner.registry_handle();
@@ -486,7 +482,7 @@ impl PyExperiment {
         py: Python<'_>,
         codec: AttachmentCodecInput,
         name: &str,
-        value: AttachmentPayloadInput,
+        value: AttachmentPayload,
     ) -> Result<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let attachment = codec.encode_attachment(py, &value)?;
@@ -731,17 +727,19 @@ impl AttachmentCodecInput {
             .context("Attachment codec `encode(...)` must return bytes")
     }
 
-    fn decode<'py>(&self, py: Python<'py>, blob: &[u8]) -> Result<Bound<'py, PyAny>> {
-        self.0
+    fn decode(&self, py: Python<'_>, blob: &[u8]) -> Result<AttachmentPayload> {
+        let value = self
+            .0
             .bind(py)
             .call_method1("decode", (PyBytes::new(py, blob),))
-            .context("Attachment codec `decode(...)` failed")
+            .context("Attachment codec `decode(...)` failed")?;
+        Ok(AttachmentPayload(value.unbind()))
     }
 
     fn encode_attachment(
         &self,
         py: Python<'_>,
-        value: &AttachmentPayloadInput,
+        value: &AttachmentPayload,
     ) -> Result<EncodedAttachment> {
         let media_type = self.media_type(py)?;
         let bytes = self.encode(py, &value.0.bind(py))?;
@@ -752,9 +750,9 @@ impl AttachmentCodecInput {
     }
 }
 
-pub struct AttachmentPayloadInput(Py<PyAny>);
+pub struct AttachmentPayload(Py<PyAny>);
 
-impl<'py> FromPyObject<'_, 'py> for AttachmentPayloadInput {
+impl<'py> FromPyObject<'_, 'py> for AttachmentPayload {
     type Error = PyErr;
 
     fn extract(ob: pyo3::Borrowed<'_, 'py, PyAny>) -> PyResult<Self> {
@@ -762,7 +760,17 @@ impl<'py> FromPyObject<'_, 'py> for AttachmentPayloadInput {
     }
 }
 
-impl pyo3_stub_gen::PyStubType for AttachmentPayloadInput {
+impl<'py> pyo3::IntoPyObject<'py> for AttachmentPayload {
+    type Target = PyAny;
+    type Output = Bound<'py, PyAny>;
+    type Error = std::convert::Infallible;
+
+    fn into_pyobject(self, py: Python<'py>) -> std::result::Result<Self::Output, Self::Error> {
+        Ok(self.0.into_bound(py))
+    }
+}
+
+impl pyo3_stub_gen::PyStubType for AttachmentPayload {
     fn type_input() -> pyo3_stub_gen::TypeInfo {
         pyo3_stub_gen::TypeInfo {
             name: "attachments.T".to_string(),
@@ -1130,7 +1138,7 @@ impl PyRun {
         py: Python<'_>,
         codec: AttachmentCodecInput,
         name: &str,
-        value: AttachmentPayloadInput,
+        value: AttachmentPayload,
     ) -> Result<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
         self.ensure_store_trace_context_started()?;
@@ -1583,16 +1591,12 @@ impl PySealedRun {
     /// The codec class must provide `media_type`, `encode(value) -> bytes`,
     /// and `decode(bytes) -> object`. This method validates the stored media
     /// type against the codec before decoding.
-    #[gen_stub(override_return_type(
-        type_repr = "attachments.T",
-        imports = ("ommx.experiment.attachments")
-    ))]
-    pub fn get_with_codec<'py>(
+    pub fn get_with_codec(
         &self,
-        py: Python<'py>,
+        py: Python<'_>,
         codec: AttachmentCodecInput,
         name: &str,
-    ) -> Result<Bound<'py, PyAny>> {
+    ) -> Result<AttachmentPayload> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let descriptor = self.find_attachment(name)?;
         let registry_handle = self.run.registry_handle();
