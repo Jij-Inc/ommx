@@ -103,23 +103,24 @@ def test_run_attachment_codec_rejects_media_type_mismatch():
 
 
 def test_experiment_file_attachment_round_trip(tmp_path):
-    source = tmp_path / "source.txt"
-    source.write_text("hello\n", encoding="utf-8")
+    source = tmp_path / "source.png"
+    payload = b"\x89PNG\r\n\x1a\n"
+    source.write_bytes(payload)
 
     with Experiment.with_temp_local_registry() as experiment:
         experiment.log_file("source-file", source)
 
     loaded = Experiment.from_artifact(experiment.artifact)
     descriptor = _attachment_by_name(loaded.experiment_attachments, "source-file")
-    assert descriptor.media_type == "text/plain"
-    assert descriptor.annotations[_ATTACHMENT_FILENAME] == "source.txt"
-    assert loaded.get_blob("source-file") == b"hello\n"
+    assert descriptor.media_type == "image/png"
+    assert descriptor.annotations[_ATTACHMENT_FILENAME] == "source.png"
+    assert loaded.get_blob("source-file") == payload
 
     output_dir = tmp_path / "restored"
     output_dir.mkdir()
     output_path = loaded.write_attachment("source-file", output_dir)
-    assert output_path == output_dir / "source.txt"
-    assert output_path.read_text(encoding="utf-8") == "hello\n"
+    assert output_path == output_dir / "source.png"
+    assert output_path.read_bytes() == payload
 
     with pytest.raises(Exception, match="already exists"):
         loaded.write_attachment("source-file", output_dir)

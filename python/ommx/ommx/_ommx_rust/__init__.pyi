@@ -2063,7 +2063,7 @@ class Experiment:
         Attach an existing filesystem file in the experiment space.
 
         The file bytes are copied into the Local Registry immediately. If
-        `media_type` is omitted, Python's `mimetypes.guess_type` is used and
+        `media_type` is omitted, the Rust SDK infers it from file contents and
         unknown types fall back to `application/octet-stream`. The original
         source path is not stored; only a basename for later export is stored
         as attachment metadata.
@@ -5548,7 +5548,7 @@ class Run:
         Attach an existing filesystem file in this run.
 
         The file bytes are copied into the Local Registry immediately. If
-        `media_type` is omitted, Python's `mimetypes.guess_type` is used and
+        `media_type` is omitted, the Rust SDK infers it from file contents and
         unknown types fall back to `application/octet-stream`. The original
         source path is not stored; only a basename for later export is stored
         as attachment metadata.

@@ -75,11 +75,13 @@ pi = ParametricInstance.from_components(
 
 ```python
 import io
+from pathlib import Path
 
 experiment.log_file("input-spreadsheet", "input.xlsx")
 
 spreadsheet_file = io.BytesIO(loaded_experiment.get_blob("input-spreadsheet"))
 # `spreadsheet_file` はbinary file-like objectを受け取るライブラリに渡せる。
+Path("restored").mkdir(parents=True, exist_ok=True)
 loaded_experiment.write_attachment("input-spreadsheet", "restored/input.xlsx")
 ```
 

@@ -3322,7 +3322,7 @@
             },
             {
               "name": "log_file",
-              "doc": "Attach an existing filesystem file in the experiment space.\n\nThe file bytes are copied into the Local Registry immediately. If\n`media_type` is omitted, Python's `mimetypes.guess_type` is used and\nunknown types fall back to `application/octet-stream`. The original\nsource path is not stored; only a basename for later export is stored\nas attachment metadata.",
+              "doc": "Attach an existing filesystem file in the experiment space.\n\nThe file bytes are copied into the Local Registry immediately. If\n`media_type` is omitted, the Rust SDK infers it from file contents and\nunknown types fall back to `application/octet-stream`. The original\nsource path is not stored; only a basename for later export is stored\nas attachment metadata.",
               "signatures": [
                 {
                   "parameters": [
@@ -4191,7 +4191,7 @@
             },
             {
               "name": "log_file",
-              "doc": "Attach an existing filesystem file in this run.\n\nThe file bytes are copied into the Local Registry immediately. If\n`media_type` is omitted, Python's `mimetypes.guess_type` is used and\nunknown types fall back to `application/octet-stream`. The original\nsource path is not stored; only a basename for later export is stored\nas attachment metadata.",
+              "doc": "Attach an existing filesystem file in this run.\n\nThe file bytes are copied into the Local Registry immediately. If\n`media_type` is omitted, the Rust SDK infers it from file contents and\nunknown types fall back to `application/octet-stream`. The original\nsource path is not stored; only a basename for later export is stored\nas attachment metadata.",
               "signatures": [
                 {
                   "parameters": [

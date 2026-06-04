@@ -3,12 +3,12 @@
 use super::config::{ExperimentConfig, ExperimentConfigRun, LayerRef};
 use super::UnsealedExperimentState;
 use super::{
-    AttachmentLogger, Experiment, ExperimentDyn, ExperimentStatus, Name, ParameterValue,
-    SealedExperiment, Trace, ANN_ATTACHMENT_NAME, ANN_EXPERIMENT_RECOVERY,
+    AttachmentLogger, Experiment, ExperimentDyn, ExperimentStatus, FileAttachment, Name,
+    ParameterValue, SealedExperiment, Trace, ANN_ATTACHMENT_NAME, ANN_EXPERIMENT_RECOVERY,
     ANN_EXPERIMENT_REQUESTED_IMAGE, ANN_EXPERIMENT_STATUS, ANN_RUN_ID, ANN_SPACE,
-    EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_STATUS_DRAFT, EXPERIMENT_STATUS_FAILED,
-    EXPERIMENT_STATUS_FINISHED, EXPERIMENT_STATUS_INTERRUPTED, RUN_PARAMETERS_MEDIA_TYPE,
-    RUN_STATUS_FAILED, RUN_STATUS_FINISHED, RUN_STATUS_INTERRUPTED,
+    ATTACHMENT_FILENAME_ANNOTATION, EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_STATUS_DRAFT,
+    EXPERIMENT_STATUS_FAILED, EXPERIMENT_STATUS_FINISHED, EXPERIMENT_STATUS_INTERRUPTED,
+    RUN_PARAMETERS_MEDIA_TYPE, RUN_STATUS_FAILED, RUN_STATUS_FINISHED, RUN_STATUS_INTERRUPTED,
 };
 use crate::artifact::local_registry::{StoredDescriptor, UnsealedArtifact};
 use crate::artifact::{
@@ -18,6 +18,7 @@ use crate::{Evaluate, Function, Instance, Sense};
 use oci_spec::image::{Descriptor, MediaType};
 use serde_json::json;
 use std::collections::{BTreeMap, HashMap};
+use std::fs;
 
 fn with_temp_experiment<T>(f: impl FnOnce(Experiment<'_>) -> anyhow::Result<T>) -> T {
     Experiment::with_temp_local_registry(Name::Anonymous, f).unwrap()
@@ -29,6 +30,26 @@ fn with_unsealed_state<T>(
 ) -> T {
     let state = experiment.state.lock().expect("experiment state lock");
     f(&state)
+}
+
+#[test]
+fn file_attachment_infers_media_type_from_content() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("source.png");
+    let bytes = b"\x89PNG\r\n\x1a\n";
+    fs::write(&path, bytes).unwrap();
+
+    let attachment = FileAttachment::from_path(&path, None, None).unwrap();
+    let (media_type, stored_bytes, annotations) = attachment.into_parts();
+
+    assert_eq!(media_type.to_string(), "image/png");
+    assert_eq!(stored_bytes, bytes);
+    assert_eq!(
+        annotations
+            .get(ATTACHMENT_FILENAME_ANNOTATION)
+            .map(String::as_str),
+        Some("source.png")
+    );
 }
 
 fn layer_annotation(layer: &Descriptor, key: &str) -> Option<String> {

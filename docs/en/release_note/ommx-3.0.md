@@ -84,7 +84,7 @@ The stored descriptor media type is validated before decoding, so using the wron
 
 ### 🆕 File attachments for Experiments ([#922](https://github.com/Jij-Inc/ommx/pull/922))
 
-{class}`~ommx.experiment.Experiment` and {class}`~ommx.experiment.Run` can now attach files that were produced outside OMMX. Use `log_file` to copy an existing file into the Experiment Artifact. OMMX stores the file bytes as an attachment blob, records the original basename for later export, and uses an explicitly provided media type or Python's extension-based `mimetypes.guess_type` fallback.
+{class}`~ommx.experiment.Experiment` and {class}`~ommx.experiment.Run` can now attach files that were produced outside OMMX. Use `log_file` to copy an existing file into the Experiment Artifact. OMMX stores the file bytes as an attachment blob, records the original basename for later export, and uses an explicitly provided media type or Rust SDK content-based inference with an `application/octet-stream` fallback.
 
 Committed experiment and run views now also provide `write_attachment` to restore an attachment blob back to disk. For libraries that accept a binary file-like object, wrap the existing `get_blob` result with `io.BytesIO`.
 

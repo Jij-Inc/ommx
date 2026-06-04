@@ -84,7 +84,7 @@ decode の前に保存済み descriptor の media type を検証するため、a
 
 ### 🆕 Experiment へのファイル添付 ([#922](https://github.com/Jij-Inc/ommx/pull/922))
 
-{class}`~ommx.experiment.Experiment` と {class}`~ommx.experiment.Run` に、OMMX の外で作られた既存ファイルを添付できるようになりました。`log_file` は指定されたファイルを Experiment Artifact の attachment blob としてコピーします。後から復元できるよう元ファイルの basename を metadata として保存し、media type は明示指定された値、または Python の `mimetypes.guess_type` による拡張子ベースの推定値を使います。
+{class}`~ommx.experiment.Experiment` と {class}`~ommx.experiment.Run` に、OMMX の外で作られた既存ファイルを添付できるようになりました。`log_file` は指定されたファイルを Experiment Artifact の attachment blob としてコピーします。後から復元できるよう元ファイルの basename を metadata として保存し、media type は明示指定された値、または Rust SDK の content-based inference による推定値を使います。推定できない場合は `application/octet-stream` に fallback します。
 
 commit 済み Experiment / Run の読み取りビューには、attachment blob を実ファイルとして書き戻す `write_attachment` も追加しました。binary file-like object を受け取るライブラリに渡したい場合は、既存の `get_blob` の戻り値を `io.BytesIO` で包んで使えます。
 

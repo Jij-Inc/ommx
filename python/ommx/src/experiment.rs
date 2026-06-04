@@ -1,4 +1,4 @@
-use anyhow::{ensure, Context, Result};
+use anyhow::{Context, Result};
 use oci_spec::image::{Descriptor, MediaType};
 use pyo3::{
     exceptions::PyKeyboardInterrupt,
@@ -7,15 +7,17 @@ use pyo3::{
 };
 use std::{
     collections::{btree_map::Entry, BTreeMap, HashMap},
-    fs, mem,
-    path::{Path, PathBuf},
+    mem,
+    path::PathBuf,
 };
 
 use crate::pandas::{raw_entries_to_dataframe, PyDataFrame};
 use crate::{PyArtifact, PyDescriptor};
 use ommx::artifact::local_registry::{LocalRegistry, StoredDescriptor};
 use ommx::artifact::AsArtifact;
-use ommx::experiment::AttachmentLogger;
+use ommx::experiment::{
+    attachment_name, write_attachment_descriptor, AttachmentLogger, FileAttachment,
+};
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
@@ -496,7 +498,7 @@ impl PyExperiment {
     /// Attach an existing filesystem file in the experiment space.
     ///
     /// The file bytes are copied into the Local Registry immediately. If
-    /// `media_type` is omitted, Python's `mimetypes.guess_type` is used and
+    /// `media_type` is omitted, the Rust SDK infers it from file contents and
     /// unknown types fall back to `application/octet-stream`. The original
     /// source path is not stored; only a basename for later export is stored
     /// as attachment metadata.
@@ -510,9 +512,9 @@ impl PyExperiment {
         filename: Option<&str>,
     ) -> Result<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let media_type = file_media_type(py, &path, media_type)?;
-        let bytes = read_attachment_file(&path)?;
-        let annotations = file_attachment_annotations(&path, filename)?;
+        let attachment =
+            FileAttachment::from_path(&path, media_type.map(MediaType::from), filename)?;
+        let (media_type, bytes, annotations) = attachment.into_parts();
         AttachmentLogger::log_attachment(&self.inner, name, media_type, bytes, annotations)
     }
 
@@ -725,142 +727,12 @@ fn close_python_context_manager(
     Ok(())
 }
 
-const ANN_ATTACHMENT_NAME: &str = "org.ommx.attachment.name";
-const ANN_ATTACHMENT_FILENAME: &str = "org.ommx.attachment.filename";
-const DEFAULT_FILE_MEDIA_TYPE: &str = "application/octet-stream";
-
-fn attachment_name(descriptor: &Descriptor) -> Option<&str> {
-    descriptor
-        .annotations()
-        .as_ref()
-        .and_then(|annotations| annotations.get(ANN_ATTACHMENT_NAME))
-        .map(String::as_str)
-}
-
-fn attachment_filename(descriptor: &Descriptor) -> Option<&str> {
-    descriptor
-        .annotations()
-        .as_ref()
-        .and_then(|annotations| annotations.get(ANN_ATTACHMENT_FILENAME))
-        .map(String::as_str)
-}
-
 fn attachment_annotations(descriptor: &Descriptor) -> std::collections::HashMap<String, String> {
     descriptor
         .annotations()
         .as_ref()
         .cloned()
         .unwrap_or_default()
-}
-
-fn read_attachment_file(path: &Path) -> Result<Vec<u8>> {
-    let metadata = fs::metadata(path)
-        .with_context(|| format!("Failed to inspect attachment file `{}`", path.display()))?;
-    ensure!(
-        metadata.is_file(),
-        "Attachment path `{}` is not a regular file",
-        path.display()
-    );
-    fs::read(path).with_context(|| format!("Failed to read attachment file `{}`", path.display()))
-}
-
-fn file_media_type(py: Python<'_>, path: &Path, media_type: Option<&str>) -> Result<MediaType> {
-    if let Some(media_type) = media_type {
-        return Ok(MediaType::from(media_type));
-    }
-
-    let mimetypes = py.import("mimetypes")?;
-    let guessed = mimetypes.call_method1("guess_type", (path.to_string_lossy().as_ref(),))?;
-    let (media_type, _encoding): (Option<String>, Option<String>) = guessed.extract()?;
-    Ok(MediaType::from(
-        media_type.as_deref().unwrap_or(DEFAULT_FILE_MEDIA_TYPE),
-    ))
-}
-
-fn file_attachment_annotations(
-    path: &Path,
-    filename: Option<&str>,
-) -> Result<HashMap<String, String>> {
-    let filename = match filename {
-        Some(filename) => filename.to_string(),
-        None => path
-            .file_name()
-            .and_then(|filename| filename.to_str())
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "Attachment file `{}` does not have a valid UTF-8 filename",
-                    path.display()
-                )
-            })?
-            .to_string(),
-    };
-    validate_attachment_filename(&filename)?;
-
-    let mut annotations = HashMap::new();
-    annotations.insert(ANN_ATTACHMENT_FILENAME.to_string(), filename);
-    Ok(annotations)
-}
-
-fn validate_attachment_filename(filename: &str) -> Result<()> {
-    ensure!(
-        !filename.is_empty(),
-        "Attachment filename must not be empty"
-    );
-    ensure!(
-        !filename.contains('/') && !filename.contains('\\'),
-        "Attachment filename must be a basename, not a path"
-    );
-    ensure!(
-        filename != "." && filename != "..",
-        "Attachment filename must not be `.` or `..`"
-    );
-    Ok(())
-}
-
-fn write_attachment_descriptor(
-    registry: &LocalRegistry,
-    descriptor: &StoredDescriptor<'_>,
-    name: &str,
-    path: PathBuf,
-    overwrite: bool,
-) -> Result<PathBuf> {
-    let output_path = attachment_output_path(descriptor, name, path);
-    if output_path.exists() && !overwrite {
-        anyhow::bail!(
-            "Attachment destination `{}` already exists",
-            output_path.display()
-        );
-    }
-
-    let blob = registry.get_blob(descriptor)?;
-    fs::write(&output_path, blob)
-        .with_context(|| format!("Failed to write attachment to `{}`", output_path.display()))?;
-    Ok(output_path)
-}
-
-fn attachment_output_path(descriptor: &StoredDescriptor<'_>, name: &str, path: PathBuf) -> PathBuf {
-    if path.is_dir() {
-        path.join(attachment_export_filename(descriptor, name))
-    } else {
-        path
-    }
-}
-
-fn attachment_export_filename(descriptor: &Descriptor, name: &str) -> String {
-    attachment_filename(descriptor)
-        .and_then(safe_attachment_filename)
-        .or_else(|| safe_attachment_filename(name))
-        .unwrap_or_else(|| "attachment".to_string())
-}
-
-fn safe_attachment_filename(filename: &str) -> Option<String> {
-    let candidate = filename.rsplit('/').next().unwrap_or(filename);
-    let candidate = candidate.rsplit('\\').next().unwrap_or(candidate);
-    if candidate.is_empty() || candidate == "." || candidate == ".." {
-        None
-    } else {
-        Some(candidate.to_string())
-    }
 }
 
 pub struct AttachmentCodecInput(Py<PyType>);
@@ -1288,7 +1160,7 @@ impl PyRun {
     /// Attach an existing filesystem file in this run.
     ///
     /// The file bytes are copied into the Local Registry immediately. If
-    /// `media_type` is omitted, Python's `mimetypes.guess_type` is used and
+    /// `media_type` is omitted, the Rust SDK infers it from file contents and
     /// unknown types fall back to `application/octet-stream`. The original
     /// source path is not stored; only a basename for later export is stored
     /// as attachment metadata.
@@ -1303,9 +1175,9 @@ impl PyRun {
     ) -> Result<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
         self.ensure_store_trace_context_started()?;
-        let media_type = file_media_type(py, &path, media_type)?;
-        let bytes = read_attachment_file(&path)?;
-        let annotations = file_attachment_annotations(&path, filename)?;
+        let attachment =
+            FileAttachment::from_path(&path, media_type.map(MediaType::from), filename)?;
+        let (media_type, bytes, annotations) = attachment.into_parts();
         AttachmentLogger::log_attachment(self.as_open_mut()?, name, media_type, bytes, annotations)
     }
 

@@ -75,11 +75,13 @@ If the payload already exists as a file, attach that file directly instead. `log
 
 ```python
 import io
+from pathlib import Path
 
 experiment.log_file("input-spreadsheet", "input.xlsx")
 
 spreadsheet_file = io.BytesIO(loaded_experiment.get_blob("input-spreadsheet"))
 # Pass `spreadsheet_file` to a library that accepts a binary file-like object.
+Path("restored").mkdir(parents=True, exist_ok=True)
 loaded_experiment.write_attachment("input-spreadsheet", "restored/input.xlsx")
 ```
 

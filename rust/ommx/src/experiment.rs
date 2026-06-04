@@ -74,6 +74,11 @@ mod sealed;
 #[cfg(test)]
 mod tests;
 
+pub use attachment::{
+    attachment_filename, attachment_name, detect_file_media_type, write_attachment_descriptor,
+    FileAttachment, ATTACHMENT_FILENAME_ANNOTATION, ATTACHMENT_NAME_ANNOTATION,
+    DEFAULT_FILE_MEDIA_TYPE,
+};
 pub use dynamic::{ExperimentDyn, RunDyn, SealedRunDyn, SolveDyn};
 pub use logging::AttachmentLogger;
 pub use parameter::{ParameterValue, RunParameterCell};
