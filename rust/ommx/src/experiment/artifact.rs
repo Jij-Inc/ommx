@@ -237,9 +237,5 @@ fn store_aggregate_json_layer<'reg>(
     media_type: &str,
     value: &impl serde::Serialize,
 ) -> Result<StoredDescriptor<'reg>> {
-    registry.store_json_layer_blob(
-        MediaType::Other(media_type.to_string()),
-        value,
-        Default::default(),
-    )
+    registry.store_json_layer_blob(MediaType::from(media_type), value, Default::default())
 }

@@ -383,6 +383,23 @@ impl PyExperiment {
         ))
     }
 
+    /// Read an experiment-level attachment by name and decode it with a codec.
+    ///
+    /// The codec class must provide `media_type`, `encode(value) -> bytes`,
+    /// and `decode(bytes) -> object`. This method validates the stored media
+    /// type against the codec before decoding.
+    pub fn get_with_codec(
+        &self,
+        py: Python<'_>,
+        codec: AttachmentCodecInput,
+        name: &str,
+    ) -> Result<AttachmentPayload> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let descriptor = self.find_attachment(name)?;
+        let registry_handle = self.inner.registry_handle();
+        codec.decode_from_descriptor(py, registry_handle.registry(), &descriptor)
+    }
+
     #[getter]
     /// Closed runs in insertion order.
     pub fn runs(&self) -> Result<Vec<PySealedRun>> {
@@ -445,9 +462,26 @@ impl PyExperiment {
         AttachmentLogger::log_attachment(
             &self.inner,
             name,
-            MediaType::Other(media_type.to_string()),
+            MediaType::from(media_type),
             bytes.as_bytes(),
         )
+    }
+
+    /// Encode a Python object with an attachment codec and attach it in the experiment space.
+    ///
+    /// The codec class must provide `media_type`, `encode(value) -> bytes`,
+    /// and `decode(bytes) -> object`. OMMX owns only this protocol; concrete
+    /// codecs should live in the package that owns the payload type.
+    pub fn log_with_codec(
+        &mut self,
+        py: Python<'_>,
+        codec: AttachmentCodecInput,
+        name: &str,
+        value: AttachmentPayload,
+    ) -> Result<()> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let attachment = codec.encode(py, &value)?;
+        AttachmentLogger::log_attachment(&self.inner, name, attachment.media_type, attachment.bytes)
     }
 
     /// Attach a JSON-serializable value in the experiment space.
@@ -460,7 +494,7 @@ impl PyExperiment {
         AttachmentLogger::log_attachment(
             &self.inner,
             name,
-            MediaType::Other("application/json".to_string()),
+            MediaType::from("application/json"),
             blob,
         )
     }
@@ -653,18 +687,121 @@ fn attachment_annotations(descriptor: &Descriptor) -> std::collections::HashMap<
         .unwrap_or_default()
 }
 
-fn attachment_blob(
-    registry: &LocalRegistry,
-    descriptor: &StoredDescriptor<'_>,
-    expected_media_type: Option<&str>,
-) -> Result<Vec<u8>> {
-    if let Some(expected) = expected_media_type {
-        let actual = descriptor.media_type().to_string();
-        if actual != expected {
-            anyhow::bail!("Expected media type '{expected}', got '{actual}'");
+pub struct AttachmentCodecInput(Py<PyType>);
+
+impl AttachmentCodecInput {
+    fn media_type(&self, py: Python<'_>) -> Result<MediaType> {
+        let media_type: String = self
+            .0
+            .bind(py)
+            .getattr("media_type")
+            .context("Attachment codec class must define `media_type`")?
+            .extract()
+            .context("Attachment codec `media_type` must be a string")?;
+        Ok(MediaType::from(media_type.as_str()))
+    }
+
+    fn encode(&self, py: Python<'_>, value: &AttachmentPayload) -> Result<EncodedAttachment> {
+        let media_type = self.media_type(py)?;
+        let value = value.0.bind(py);
+        let bytes = self
+            .0
+            .bind(py)
+            .call_method1("encode", (value,))
+            .context("Attachment codec `encode(...)` failed")?
+            .extract()
+            .context("Attachment codec `encode(...)` must return bytes")?;
+        Ok(EncodedAttachment { media_type, bytes })
+    }
+
+    fn decode(&self, py: Python<'_>, blob: &[u8]) -> Result<AttachmentPayload> {
+        let value = self
+            .0
+            .bind(py)
+            .call_method1("decode", (PyBytes::new(py, blob),))
+            .context("Attachment codec `decode(...)` failed")?;
+        Ok(AttachmentPayload(value.unbind()))
+    }
+
+    fn decode_from_descriptor(
+        &self,
+        py: Python<'_>,
+        registry: &LocalRegistry,
+        descriptor: &StoredDescriptor<'_>,
+    ) -> Result<AttachmentPayload> {
+        let expected = self.media_type(py)?;
+        descriptor.ensure_media_type(&expected)?;
+        let blob = registry.get_blob(descriptor)?;
+        self.decode(py, &blob)
+    }
+}
+
+pub struct AttachmentPayload(Py<PyAny>);
+
+impl<'py> FromPyObject<'_, 'py> for AttachmentPayload {
+    type Error = PyErr;
+
+    fn extract(ob: pyo3::Borrowed<'_, 'py, PyAny>) -> PyResult<Self> {
+        Ok(Self(ob.to_owned().unbind()))
+    }
+}
+
+impl<'py> pyo3::IntoPyObject<'py> for AttachmentPayload {
+    type Target = PyAny;
+    type Output = Bound<'py, PyAny>;
+    type Error = std::convert::Infallible;
+
+    fn into_pyobject(self, py: Python<'py>) -> std::result::Result<Self::Output, Self::Error> {
+        Ok(self.0.into_bound(py))
+    }
+}
+
+impl pyo3_stub_gen::PyStubType for AttachmentPayload {
+    fn type_input() -> pyo3_stub_gen::TypeInfo {
+        pyo3_stub_gen::TypeInfo {
+            name: "attachments.T".to_string(),
+            source_module: None,
+            import: ["ommx.experiment.attachments".into()].into(),
+            type_refs: Default::default(),
         }
     }
-    registry.get_blob(descriptor)
+
+    fn type_output() -> pyo3_stub_gen::TypeInfo {
+        Self::type_input()
+    }
+}
+
+struct EncodedAttachment {
+    media_type: MediaType,
+    bytes: Vec<u8>,
+}
+
+impl<'py> FromPyObject<'_, 'py> for AttachmentCodecInput {
+    type Error = PyErr;
+
+    fn extract(ob: pyo3::Borrowed<'_, 'py, PyAny>) -> PyResult<Self> {
+        let codec = ob.extract::<Py<PyType>>().map_err(|_| {
+            pyo3::exceptions::PyTypeError::new_err(
+                "codec must be a class implementing ommx.experiment.attachments.AttachmentCodec",
+            )
+        })?;
+        Ok(Self(codec))
+    }
+}
+
+impl pyo3_stub_gen::PyStubType for AttachmentCodecInput {
+    fn type_input() -> pyo3_stub_gen::TypeInfo {
+        pyo3_stub_gen::TypeInfo {
+            name: "type[attachments.AttachmentCodec[attachments.T]]".to_string(),
+            source_module: None,
+            import: ["ommx.experiment.attachments".into()].into(),
+            type_refs: Default::default(),
+        }
+    }
+
+    fn type_output() -> pyo3_stub_gen::TypeInfo {
+        Self::type_input()
+    }
 }
 
 fn decode_attachment<'py>(
@@ -706,7 +843,7 @@ fn decode_attachment<'py>(
                 .unbind()
                 .into_bound(py))
         }
-        _ => Ok(PyBytes::new(py, &attachment_blob(registry, descriptor, None)?).into_any()),
+        _ => Ok(PyBytes::new(py, &registry.get_blob(descriptor)?).into_any()),
     }
 }
 
@@ -715,7 +852,9 @@ fn decode_json_attachment<'py>(
     registry: &LocalRegistry,
     descriptor: &StoredDescriptor<'_>,
 ) -> Result<Bound<'py, PyAny>> {
-    let blob = attachment_blob(registry, descriptor, Some("application/json"))?;
+    let expected = MediaType::from("application/json");
+    descriptor.ensure_media_type(&expected)?;
+    let blob = registry.get_blob(descriptor)?;
     let json = py.import("json")?;
     Ok(json.call_method1("loads", (PyBytes::new(py, &blob),))?)
 }
@@ -724,11 +863,9 @@ fn decode_instance_attachment(
     registry: &LocalRegistry,
     descriptor: &StoredDescriptor<'_>,
 ) -> Result<crate::Instance> {
-    let blob = attachment_blob(
-        registry,
-        descriptor,
-        Some(ommx::artifact::media_types::V1_INSTANCE_MEDIA_TYPE),
-    )?;
+    let expected = ommx::artifact::media_types::v1_instance();
+    descriptor.ensure_media_type(&expected)?;
+    let blob = registry.get_blob(descriptor)?;
     Ok(crate::Instance {
         inner: ommx::Instance::from_bytes(&blob)?,
         annotations: attachment_annotations(descriptor),
@@ -739,11 +876,9 @@ fn decode_parametric_instance_attachment(
     registry: &LocalRegistry,
     descriptor: &StoredDescriptor<'_>,
 ) -> Result<crate::ParametricInstance> {
-    let blob = attachment_blob(
-        registry,
-        descriptor,
-        Some(ommx::artifact::media_types::V1_PARAMETRIC_INSTANCE_MEDIA_TYPE),
-    )?;
+    let expected = ommx::artifact::media_types::v1_parametric_instance();
+    descriptor.ensure_media_type(&expected)?;
+    let blob = registry.get_blob(descriptor)?;
     Ok(crate::ParametricInstance {
         inner: ommx::ParametricInstance::from_bytes(&blob)?,
         annotations: attachment_annotations(descriptor),
@@ -754,11 +889,9 @@ fn decode_solution_attachment(
     registry: &LocalRegistry,
     descriptor: &StoredDescriptor<'_>,
 ) -> Result<crate::Solution> {
-    let blob = attachment_blob(
-        registry,
-        descriptor,
-        Some(ommx::artifact::media_types::V1_SOLUTION_MEDIA_TYPE),
-    )?;
+    let expected = ommx::artifact::media_types::v1_solution();
+    descriptor.ensure_media_type(&expected)?;
+    let blob = registry.get_blob(descriptor)?;
     Ok(crate::Solution {
         inner: ommx::Solution::from_bytes(&blob)?,
         annotations: attachment_annotations(descriptor),
@@ -769,11 +902,9 @@ fn decode_sample_set_attachment(
     registry: &LocalRegistry,
     descriptor: &StoredDescriptor<'_>,
 ) -> Result<crate::SampleSet> {
-    let blob = attachment_blob(
-        registry,
-        descriptor,
-        Some(ommx::artifact::media_types::V1_SAMPLE_SET_MEDIA_TYPE),
-    )?;
+    let expected = ommx::artifact::media_types::v1_sample_set();
+    descriptor.ensure_media_type(&expected)?;
+    let blob = registry.get_blob(descriptor)?;
     Ok(crate::SampleSet {
         inner: ommx::SampleSet::from_bytes(&blob)?,
         annotations: attachment_annotations(descriptor),
@@ -972,8 +1103,31 @@ impl PyRun {
         AttachmentLogger::log_attachment(
             self.as_open_mut()?,
             name,
-            MediaType::Other(media_type.to_string()),
+            MediaType::from(media_type),
             bytes.as_bytes(),
+        )
+    }
+
+    /// Encode a Python object with an attachment codec and attach it in this run.
+    ///
+    /// The codec class must provide `media_type`, `encode(value) -> bytes`,
+    /// and `decode(bytes) -> object`. OMMX owns only this protocol; concrete
+    /// codecs should live in the package that owns the payload type.
+    pub fn log_with_codec(
+        &mut self,
+        py: Python<'_>,
+        codec: AttachmentCodecInput,
+        name: &str,
+        value: AttachmentPayload,
+    ) -> Result<()> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        self.ensure_store_trace_context_started()?;
+        let attachment = codec.encode(py, &value)?;
+        AttachmentLogger::log_attachment(
+            self.as_open_mut()?,
+            name,
+            attachment.media_type,
+            attachment.bytes,
         )
     }
 
@@ -988,7 +1142,7 @@ impl PyRun {
         AttachmentLogger::log_attachment(
             self.as_open_mut()?,
             name,
-            MediaType::Other("application/json".to_string()),
+            MediaType::from("application/json"),
             blob,
         )
     }
@@ -1410,6 +1564,23 @@ impl PySealedRun {
             py,
             &registry_handle.registry().get_blob(&descriptor)?,
         ))
+    }
+
+    /// Read a run-level attachment by name and decode it with a codec.
+    ///
+    /// The codec class must provide `media_type`, `encode(value) -> bytes`,
+    /// and `decode(bytes) -> object`. This method validates the stored media
+    /// type against the codec before decoding.
+    pub fn get_with_codec(
+        &self,
+        py: Python<'_>,
+        codec: AttachmentCodecInput,
+        name: &str,
+    ) -> Result<AttachmentPayload> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let descriptor = self.find_attachment(name)?;
+        let registry_handle = self.run.registry_handle();
+        codec.decode_from_descriptor(py, registry_handle.registry(), &descriptor)
     }
 
     #[getter]

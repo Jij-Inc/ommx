@@ -7,6 +7,7 @@ import datetime
 import enum
 import numpy
 from ommx import adapter
+from ommx.experiment import attachments
 from ommx import tracing
 import os
 import pandas
@@ -1997,6 +1998,18 @@ class Experiment:
         r"""
         Read raw bytes of an experiment-level attachment by name.
         """
+    def get_with_codec(
+        self,
+        codec: type[attachments.AttachmentCodec[attachments.T]],
+        name: builtins.str,
+    ) -> attachments.T:
+        r"""
+        Read an experiment-level attachment by name and decode it with a codec.
+
+        The codec class must provide `media_type`, `encode(value) -> bytes`,
+        and `decode(bytes) -> object`. This method validates the stored media
+        type against the codec before decoding.
+        """
     def run(self) -> Run:
         r"""
         Start a new Run in this unsealed Experiment.
@@ -2023,6 +2036,19 @@ class Experiment:
 
         The `name` is stored as attachment metadata and is intended for
         humans. The bytes are stored as a layer in the committed artifact.
+        """
+    def log_with_codec(
+        self,
+        codec: type[attachments.AttachmentCodec[attachments.T]],
+        name: builtins.str,
+        value: attachments.T,
+    ) -> None:
+        r"""
+        Encode a Python object with an attachment codec and attach it in the experiment space.
+
+        The codec class must provide `media_type`, `encode(value) -> bytes`,
+        and `decode(bytes) -> object`. OMMX owns only this protocol; concrete
+        codecs should live in the package that owns the payload type.
         """
     def log_json(self, name: builtins.str, value: typing.Any) -> None:
         r"""
@@ -5479,6 +5505,19 @@ class Run:
         Use this for payloads that belong to this run but are not scalar run
         parameters, for example solver logs or derived files.
         """
+    def log_with_codec(
+        self,
+        codec: type[attachments.AttachmentCodec[attachments.T]],
+        name: builtins.str,
+        value: attachments.T,
+    ) -> None:
+        r"""
+        Encode a Python object with an attachment codec and attach it in this run.
+
+        The codec class must provide `media_type`, `encode(value) -> bytes`,
+        and `decode(bytes) -> object`. OMMX owns only this protocol; concrete
+        codecs should live in the package that owns the payload type.
+        """
     def log_json(self, name: builtins.str, value: typing.Any) -> None:
         r"""
         Attach a JSON-serializable value in this run.
@@ -6162,6 +6201,18 @@ class SealedRun:
     def get_blob(self, name: builtins.str) -> bytes:
         r"""
         Read raw bytes of a run-level attachment by name.
+        """
+    def get_with_codec(
+        self,
+        codec: type[attachments.AttachmentCodec[attachments.T]],
+        name: builtins.str,
+    ) -> attachments.T:
+        r"""
+        Read a run-level attachment by name and decode it with a codec.
+
+        The codec class must provide `media_type`, `encode(value) -> bytes`,
+        and `decode(bytes) -> object`. This method validates the stored media
+        type against the codec before decoding.
         """
     def __repr__(self) -> builtins.str: ...
 

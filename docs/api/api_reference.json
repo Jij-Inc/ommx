@@ -3152,6 +3152,53 @@
               "deprecated": null
             },
             {
+              "name": "get_with_codec",
+              "doc": "Read an experiment-level attachment by name and decode it with a codec.\n\nThe codec class must provide `media_type`, `encode(value) -> bytes`,\nand `decode(bytes) -> object`. This method validates the stored media\ntype against the codec before decoding.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "codec",
+                      "type_": {
+                        "display": "type[AttachmentCodec[T]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "AttachmentCodec[T]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "T",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "T",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "import_archive",
               "doc": "Import an Experiment Artifact from a `.ommx` OCI archive file (or an OCI\nImage Layout directory).\n\nThe archive is imported into the default Local Registry, matching\n{meth}`Artifact.import_archive`, and then interpreted as an\nExperiment. The imported artifact must contain an Experiment config.",
               "signatures": [
@@ -3432,6 +3479,62 @@
                       "name": "solution",
                       "type_": {
                         "display": "Solution",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "log_with_codec",
+              "doc": "Encode a Python object with an attachment codec and attach it in the experiment space.\n\nThe codec class must provide `media_type`, `encode(value) -> bytes`,\nand `decode(bytes) -> object`. OMMX owns only this protocol; concrete\ncodecs should live in the package that owns the payload type.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "codec",
+                      "type_": {
+                        "display": "type[AttachmentCodec[T]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "AttachmentCodec[T]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "T",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "value",
+                      "type_": {
+                        "display": "T",
                         "link_target": null,
                         "children": []
                       },
@@ -4216,6 +4319,62 @@
               ],
               "is_async": false,
               "deprecated": null
+            },
+            {
+              "name": "log_with_codec",
+              "doc": "Encode a Python object with an attachment codec and attach it in this run.\n\nThe codec class must provide `media_type`, `encode(value) -> bytes`,\nand `decode(bytes) -> object`. OMMX owns only this protocol; concrete\ncodecs should live in the package that owns the payload type.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "codec",
+                      "type_": {
+                        "display": "type[AttachmentCodec[T]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "AttachmentCodec[T]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "T",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "value",
+                      "type_": {
+                        "display": "T",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
             }
           ],
           "attributes": [
@@ -4429,6 +4588,53 @@
                   ],
                   "return_type": {
                     "display": "Solution",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "get_with_codec",
+              "doc": "Read a run-level attachment by name and decode it with a codec.\n\nThe codec class must provide `media_type`, `encode(value) -> bytes`,\nand `decode(bytes) -> object`. This method validates the stored media\ntype against the codec before decoding.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "codec",
+                      "type_": {
+                        "display": "type[AttachmentCodec[T]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "AttachmentCodec[T]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "T",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "T",
                     "link_target": null,
                     "children": []
                   }

@@ -69,10 +69,23 @@ pi = ParametricInstance.from_components(
 )
 ```
 
-If the original model was written in a modeling package, keep that source model as an Attachment as well. OMMX does not decode external modeler-specific payloads; it stores their bytes with the Media Type you provide. For a JijModeling `Problem`, serialize the problem with JijModeling and attach the protobuf bytes.
+If the original model was written in a modeling package, keep that source model as an Attachment as well. For external payload types, OMMX defines only the attachment codec protocol and the `log_with_codec` / `get_with_codec` methods that invoke it. The concrete codec should live in the package that owns the object type. This tutorial defines a temporary `ProblemCodec` for JijModeling `Problem`; JijModeling is expected to provide an equivalent codec in the future. Excel or spreadsheet payloads can follow the same pattern in the package that owns that file format.
 
 ```{code-cell} ipython3
 import jijmodeling as jm
+
+
+class ProblemCodec:
+  media_type = "application/vnd.jijmodeling.problem+protobuf"
+
+  @staticmethod
+  def encode(problem: jm.Problem) -> bytes:
+    return problem.to_protobuf()
+
+  @staticmethod
+  def decode(data: bytes) -> jm.Problem:
+    return jm.Problem.from_protobuf(data)
+
 
 @jm.Problem.define("Knapsack Problem", sense=jm.ProblemSense.MAXIMIZE)
 def jij_problem(problem: jm.DecoratedProblem):
@@ -90,8 +103,6 @@ def jij_problem(problem: jm.DecoratedProblem):
     "weight limit",
     jm.sum(w[i] * x[i] for i in N) <= W,
   )
-
-JIJMODELING_PROBLEM_MEDIA_TYPE = "application/vnd.jijmodeling.problem+protobuf"
 ```
 
 ## Run the Experiment
@@ -108,11 +119,11 @@ with Experiment() as experiment:
   # Store the model as experiment-level information.
   experiment.log_parametric_instance("instance", pi)
 
-  # Store the original JijModeling Problem as an opaque attachment.
-  experiment.log_attachment(
+  # Store the original JijModeling Problem through the temporary codec defined above.
+  experiment.log_with_codec(
+    ProblemCodec,
     "jijmodeling-problem",
-    JIJMODELING_PROBLEM_MEDIA_TYPE,
-    jij_problem.to_protobuf(),
+    jij_problem,
   )
 
   # This example does not need it, but model metadata can also be stored as JSON.
@@ -257,9 +268,11 @@ assert source_data == {
 pi = loaded_experiment.get_attachment("instance")
 assert isinstance(pi, ParametricInstance)
 
-# Unknown Media Types are returned as bytes, so decode them with the owner package.
-payload = loaded_experiment.get_attachment("jijmodeling-problem")
-restored_jij_problem = jm.Problem.from_protobuf(payload)
+# The codec validates the Media Type and decodes the original payload.
+restored_jij_problem = loaded_experiment.get_with_codec(
+    ProblemCodec,
+    "jijmodeling-problem",
+)
 assert restored_jij_problem.name == jij_problem.name
 ```
 
