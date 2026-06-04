@@ -4,8 +4,9 @@ use super::{ANN_ATTACHMENT_NAME, ANN_RUN_ID, ANN_SPACE};
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
 use anyhow::{ensure, Context, Result};
 use oci_spec::image::MediaType;
+use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     fs,
     path::{Path, PathBuf},
 };
@@ -43,25 +44,167 @@ impl AttachmentSpace {
         }
     }
 
-    fn descriptor_annotations(
-        self,
-        name: &str,
-        extra_annotations: HashMap<String, String>,
-    ) -> Result<HashMap<String, String>> {
+    fn descriptor_annotations(self, name: &str) -> HashMap<String, String> {
         let mut annotations = HashMap::new();
         annotations.insert(ANN_SPACE.to_string(), self.as_str().to_string());
         if let Some(run_id) = self.run_id() {
             annotations.insert(ANN_RUN_ID.to_string(), run_id.to_string());
         }
         annotations.insert(ANN_ATTACHMENT_NAME.to_string(), name.to_string());
-        for (key, value) in extra_annotations {
-            ensure!(
-                key != ANN_SPACE && key != ANN_RUN_ID && key != ANN_ATTACHMENT_NAME,
-                "Attachment annotation `{key}` is reserved"
-            );
-            annotations.insert(key, value);
+        annotations
+    }
+}
+
+/// Name-indexed attachment bindings for one Experiment or Run namespace.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AttachmentTable<D> {
+    /// Attachment name to stored descriptor reference.
+    entries: BTreeMap<String, D>,
+    /// Optional export filename metadata for file attachments.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    filenames: BTreeMap<String, String>,
+}
+
+impl<D> Default for AttachmentTable<D> {
+    fn default() -> Self {
+        Self {
+            entries: BTreeMap::new(),
+            filenames: BTreeMap::new(),
         }
-        Ok(annotations)
+    }
+}
+
+impl<D> AttachmentTable<D> {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    pub fn contains_key(&self, name: &str) -> bool {
+        self.entries.contains_key(name)
+    }
+
+    pub fn get(&self, name: &str) -> Option<&D> {
+        self.entries.get(name)
+    }
+
+    pub fn filename(&self, name: &str) -> Option<&str> {
+        self.filenames.get(name).map(String::as_str)
+    }
+
+    pub fn names(&self) -> impl Iterator<Item = &String> {
+        self.entries.keys()
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&String, &D)> {
+        self.entries.iter()
+    }
+
+    pub fn values(&self) -> impl Iterator<Item = &D> {
+        self.entries.values()
+    }
+
+    pub fn filenames(&self) -> impl Iterator<Item = (&String, &String)> {
+        self.filenames.iter()
+    }
+
+    pub fn insert(
+        &mut self,
+        name: impl Into<String>,
+        descriptor: D,
+        filename: Option<String>,
+    ) -> Result<()> {
+        let name = name.into();
+        ensure!(
+            !self.entries.contains_key(&name),
+            "Attachment `{name}` already exists"
+        );
+        if let Some(filename) = filename.as_deref() {
+            validate_attachment_filename(filename)?;
+        }
+
+        self.entries.insert(name.clone(), descriptor);
+        if let Some(filename) = filename {
+            self.filenames.insert(name, filename);
+        }
+        Ok(())
+    }
+
+    pub fn validate(&self, context: &str) -> Result<()> {
+        for (name, filename) in &self.filenames {
+            ensure!(
+                self.entries.contains_key(name),
+                "Attachment filename table in {context} references missing attachment `{name}`"
+            );
+            validate_attachment_filename(filename).with_context(|| {
+                format!("Invalid attachment filename for `{name}` in {context}")
+            })?;
+        }
+        Ok(())
+    }
+
+    pub fn try_map<E>(&self, mut f: impl FnMut(&D) -> Result<E>) -> Result<AttachmentTable<E>> {
+        let entries = self
+            .entries
+            .iter()
+            .map(|(name, descriptor)| Ok((name.clone(), f(descriptor)?)))
+            .collect::<Result<BTreeMap<_, _>>>()?;
+        Ok(AttachmentTable {
+            entries,
+            filenames: self.filenames.clone(),
+        })
+    }
+
+    pub fn try_map_owned<E>(self, mut f: impl FnMut(D) -> Result<E>) -> Result<AttachmentTable<E>> {
+        let entries = self
+            .entries
+            .into_iter()
+            .map(|(name, descriptor)| Ok((name, f(descriptor)?)))
+            .collect::<Result<BTreeMap<_, _>>>()?;
+        Ok(AttachmentTable {
+            entries,
+            filenames: self.filenames,
+        })
+    }
+
+    pub fn into_parts(self) -> (BTreeMap<String, D>, BTreeMap<String, String>) {
+        (self.entries, self.filenames)
+    }
+
+    /// Build a table from raw config maps; callers must validate before trusting it.
+    pub(crate) fn from_parts_unchecked(
+        entries: BTreeMap<String, D>,
+        filenames: BTreeMap<String, String>,
+    ) -> Self {
+        Self { entries, filenames }
+    }
+}
+
+impl<'reg> AttachmentTable<StoredDescriptor<'reg>> {
+    pub fn write_attachment(
+        &self,
+        name: &str,
+        path: impl AsRef<Path>,
+        overwrite: bool,
+    ) -> Result<PathBuf> {
+        let descriptor = self
+            .get(name)
+            .ok_or_else(|| anyhow::anyhow!("Attachment `{name}` not found"))?;
+        write_attachment_descriptor(
+            descriptor.registry(),
+            descriptor,
+            name,
+            self.filename(name),
+            path,
+            overwrite,
+        )
     }
 }
 
@@ -95,10 +238,8 @@ impl FileAttachment {
     }
 
     /// Consume this file attachment into parts accepted by [`AttachmentLogger`](super::AttachmentLogger).
-    pub fn into_parts(self) -> (MediaType, Vec<u8>, HashMap<String, String>) {
-        let mut annotations = HashMap::new();
-        annotations.insert(ATTACHMENT_FILENAME_ANNOTATION.to_string(), self.filename);
-        (self.media_type, self.bytes, annotations)
+    pub fn into_parts(self) -> (MediaType, Vec<u8>, String) {
+        (self.media_type, self.bytes, self.filename)
     }
 }
 
@@ -109,9 +250,8 @@ pub fn store_attachment_descriptor<'reg>(
     name: &str,
     media_type: MediaType,
     bytes: &[u8],
-    extra_annotations: HashMap<String, String>,
 ) -> Result<StoredDescriptor<'reg>> {
-    let annotations = space.descriptor_annotations(name, extra_annotations)?;
+    let annotations = space.descriptor_annotations(name);
     registry.store_layer_blob(media_type, bytes, annotations)
 }
 
@@ -153,14 +293,15 @@ pub fn detect_file_media_type(bytes: &[u8]) -> MediaType {
 /// If `path` names an existing directory, the attachment filename metadata is
 /// used inside that directory. Otherwise `path` is treated as the destination
 /// file path.
-pub fn write_attachment_descriptor(
+fn write_attachment_descriptor(
     registry: &LocalRegistry,
     descriptor: &StoredDescriptor<'_>,
     name: &str,
+    filename: Option<&str>,
     path: impl AsRef<Path>,
     overwrite: bool,
 ) -> Result<PathBuf> {
-    let output_path = attachment_output_path(descriptor, name, path.as_ref());
+    let output_path = attachment_output_path(descriptor, name, filename, path.as_ref());
     if output_path.exists() && !overwrite {
         crate::bail!(
             "Attachment destination `{}` already exists",
@@ -222,18 +363,24 @@ fn validate_attachment_filename(filename: &str) -> Result<()> {
 fn attachment_output_path(
     descriptor: &oci_spec::image::Descriptor,
     name: &str,
+    filename: Option<&str>,
     path: &Path,
 ) -> PathBuf {
     if path.is_dir() {
-        path.join(attachment_export_filename(descriptor, name))
+        path.join(attachment_export_filename(descriptor, name, filename))
     } else {
         path.to_path_buf()
     }
 }
 
-fn attachment_export_filename(descriptor: &oci_spec::image::Descriptor, name: &str) -> String {
-    attachment_filename(descriptor)
+fn attachment_export_filename(
+    descriptor: &oci_spec::image::Descriptor,
+    name: &str,
+    filename: Option<&str>,
+) -> String {
+    filename
         .and_then(safe_attachment_filename)
+        .or_else(|| attachment_filename(descriptor).and_then(safe_attachment_filename))
         .or_else(|| safe_attachment_filename(name))
         .unwrap_or_else(|| "attachment".to_string())
 }

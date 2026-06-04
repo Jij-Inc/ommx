@@ -1,6 +1,6 @@
 //! Read-only model reconstructed from a sealed Experiment Artifact.
 
-use super::attachment::attachment_name;
+use super::attachment::AttachmentTable;
 use super::config::{ExperimentConfig, ExperimentConfigSolve, LayerRef};
 use super::parameter::{RunParameterCell, RunParameterTable};
 use super::{
@@ -83,7 +83,7 @@ impl<'reg> SealedExperiment<'reg> {
         &self.status
     }
 
-    pub fn experiment_attachments(&self) -> &[StoredDescriptor<'reg>] {
+    pub fn experiment_attachments(&self) -> &AttachmentTable<StoredDescriptor<'reg>> {
         &self.attachments
     }
 
@@ -105,7 +105,7 @@ impl<'reg> SealedExperiment<'reg> {
 pub struct SealedRun<'reg> {
     run_id: u64,
     status: RunStatus,
-    attachments: Vec<StoredDescriptor<'reg>>,
+    attachments: AttachmentTable<StoredDescriptor<'reg>>,
     trace: Option<StoredDescriptor<'reg>>,
     solves: Vec<Solve<'reg>>,
 }
@@ -119,7 +119,7 @@ impl<'reg> SealedRun<'reg> {
         &self.status
     }
 
-    pub fn attachments(&self) -> &[StoredDescriptor<'reg>] {
+    pub fn attachments(&self) -> &AttachmentTable<StoredDescriptor<'reg>> {
         &self.attachments
     }
 
@@ -196,23 +196,22 @@ fn load_experiment_config(
 
 fn decode_attachments<'reg>(
     layers: &[StoredDescriptor<'reg>],
-    attachments: Vec<LayerRef>,
+    attachments: AttachmentTable<LayerRef>,
     attachment_context: &str,
-) -> Result<Vec<StoredDescriptor<'reg>>> {
-    let mut decoded = Vec::new();
-    for layer_ref in attachments {
+) -> Result<AttachmentTable<StoredDescriptor<'reg>>> {
+    attachments.validate(attachment_context)?;
+    let mut decoded = AttachmentTable::new();
+    let (entries, mut filenames) = attachments.into_parts();
+    for (name, layer_ref) in entries {
         let descriptor = resolve_layer(layers, layer_ref)
             .with_context(|| {
                 format!(
-                    "Failed to resolve {attachment_context} attachment LayerRef {}",
+                    "Failed to resolve {attachment_context} attachment `{name}` LayerRef {}",
                     layer_ref.0
                 )
             })?
             .clone();
-        if attachment_name(&descriptor).is_none() {
-            crate::bail!("Attachment descriptor in {attachment_context} is missing `org.ommx.attachment.name`");
-        }
-        decoded.push(descriptor);
+        decoded.insert(name.clone(), descriptor, filenames.remove(&name))?;
     }
     Ok(decoded)
 }

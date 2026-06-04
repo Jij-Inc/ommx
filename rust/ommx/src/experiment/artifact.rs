@@ -140,19 +140,13 @@ impl<'reg> UnsealedExperimentState<'reg> {
     ) -> Result<ExperimentConfig> {
         let attachments = self
             .attachments
-            .iter()
-            .cloned()
-            .map(|descriptor| layers.push(descriptor))
-            .collect::<Result<Vec<_>>>()?;
+            .try_map(|descriptor| layers.push(descriptor.clone()))?;
 
         let mut runs = Vec::new();
         for run in self.runs.values() {
             let attachments = run
                 .attachments
-                .iter()
-                .cloned()
-                .map(|descriptor| layers.push(descriptor))
-                .collect::<Result<Vec<_>>>()?;
+                .try_map(|descriptor| layers.push(descriptor.clone()))?;
             let trace = run
                 .trace
                 .clone()

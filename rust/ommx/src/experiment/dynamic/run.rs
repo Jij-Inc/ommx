@@ -1,7 +1,7 @@
 //! Dynamic-lifetime Run handle.
 
 use super::super::parameter::ParameterSet;
-use super::super::{AttachmentLogger, ParameterValue, RunStatus};
+use super::super::{AttachmentLogger, AttachmentTable, ParameterValue, RunStatus};
 use super::{
     bail_non_unsealed, lock_experiment_state, store_run_attachment_descriptor,
     store_solve_payload_descriptor, store_trace_descriptor, ExperimentDyn, ExperimentDynLifecycle,
@@ -11,7 +11,6 @@ use crate::artifact::media_types;
 use crate::{Instance, Solution};
 use anyhow::Result;
 use oci_spec::image::{Descriptor, MediaType};
-use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 /// Runtime-owned Run handle.
@@ -38,7 +37,7 @@ pub struct RunDyn {
 #[derive(Debug)]
 struct RunDynState {
     run_id: u64,
-    attachments: Vec<Descriptor>,
+    attachments: AttachmentTable<Descriptor>,
     trace: Option<Descriptor>,
     solves: Vec<SolveEntryDyn>,
     next_solve_id: u64,
@@ -69,7 +68,7 @@ impl RunDyn {
         Self {
             run_state: Some(RunDynState {
                 run_id,
-                attachments: Vec::new(),
+                attachments: AttachmentTable::new(),
                 trace: None,
                 solves: Vec::new(),
                 next_solve_id: 0,
@@ -245,26 +244,32 @@ impl RunDyn {
 }
 
 impl AttachmentLogger for &mut RunDyn {
-    fn log_attachment(
+    fn log_attachment_with_filename(
         self,
         name: &str,
         media_type: MediaType,
         bytes: impl AsRef<[u8]>,
-        annotations: HashMap<String, String>,
+        filename: Option<String>,
     ) -> Result<()> {
         let run_id = self.open()?.run_id;
+        if self.open()?.attachments.contains_key(name) {
+            crate::bail!("Attachment `{name}` already exists");
+        }
         let descriptor = {
             let dyn_state = lock_experiment_state(&self.experiment_state);
+            super::ensure_unsealed_for_attachment_write(&dyn_state)?;
+            let registry_handle = dyn_state.registry_handle.clone();
             store_run_attachment_descriptor(
-                &dyn_state,
+                registry_handle.registry(),
                 run_id,
                 name,
                 media_type,
                 bytes.as_ref(),
-                annotations,
             )?
         };
-        self.open_mut()?.attachments.push(descriptor);
+        self.open_mut()?
+            .attachments
+            .insert(name.to_string(), descriptor, filename)?;
         Ok(())
     }
 }

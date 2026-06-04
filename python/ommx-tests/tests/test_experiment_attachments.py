@@ -7,7 +7,6 @@ from ommx.artifact import Descriptor
 from ommx.experiment import Experiment
 
 _ATTACHMENT_NAME = "org.ommx.attachment.name"
-_ATTACHMENT_FILENAME = "org.ommx.attachment.filename"
 
 
 @dataclass(frozen=True)
@@ -113,7 +112,6 @@ def test_experiment_file_attachment_round_trip(tmp_path):
     loaded = Experiment.from_artifact(experiment.artifact)
     descriptor = _attachment_by_name(loaded.experiment_attachments, "source-file")
     assert descriptor.media_type == "image/png"
-    assert descriptor.annotations[_ATTACHMENT_FILENAME] == "source.png"
     assert loaded.get_blob("source-file") == payload
 
     output_dir = tmp_path / "restored"
@@ -144,8 +142,13 @@ def test_run_file_attachment_round_trip(tmp_path):
     run = loaded.runs[0]
     descriptor = _attachment_by_name(run.attachments, "solver-output")
     assert descriptor.media_type == "application/octet-stream"
-    assert descriptor.annotations[_ATTACHMENT_FILENAME] == "result.bin"
     assert run.get_blob("solver-output") == b"\x00solver-output"
+
+    output_dir = tmp_path / "restored"
+    output_dir.mkdir()
+    restored_path = run.write_attachment("solver-output", output_dir)
+    assert restored_path == output_dir / "result.bin"
+    assert restored_path.read_bytes() == b"\x00solver-output"
 
     output_path = tmp_path / "solver-output.copy"
     assert run.write_attachment("solver-output", output_path) == output_path

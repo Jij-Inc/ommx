@@ -17,8 +17,8 @@
 
 use super::attachment::{store_attachment_descriptor, AttachmentSpace};
 use super::{
-    allocate_next_run_id, next_run_id, AttachmentLogger, ExperimentStatus, Name, RunEntry,
-    RunParameterCell, RunStatus, SealedExperiment, UnsealedExperimentState,
+    allocate_next_run_id, next_run_id, AttachmentLogger, AttachmentTable, ExperimentStatus, Name,
+    RunEntry, RunParameterCell, RunStatus, SealedExperiment, UnsealedExperimentState,
     ANN_EXPERIMENT_REQUESTED_IMAGE,
 };
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
@@ -28,7 +28,7 @@ use crate::artifact::{
 use crate::{Instance, Solution};
 use anyhow::{ensure, Context, Result};
 use oci_spec::image::{Descriptor, MediaType};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -77,7 +77,7 @@ enum ExperimentDynLifecycle {
 struct UnsealedExperimentDynState {
     image_name: ImageRef,
     subject: Option<Descriptor>,
-    attachments: Vec<Descriptor>,
+    attachments: AttachmentTable<Descriptor>,
     runs: BTreeMap<u64, RunEntryDyn>,
     next_run_id: u64,
 }
@@ -86,7 +86,7 @@ struct UnsealedExperimentDynState {
 struct RunEntryDyn {
     run_id: u64,
     status: RunStatus,
-    attachments: Vec<Descriptor>,
+    attachments: AttachmentTable<Descriptor>,
     trace: Option<Descriptor>,
     solves: Vec<SolveEntryDyn>,
     parameters: super::parameter::ParameterSet,
@@ -105,7 +105,7 @@ pub(super) struct SolveEntryDyn {
 struct SealedExperimentDynState {
     status: ExperimentStatus,
     artifact: LocalArtifactDyn,
-    attachments: Vec<Descriptor>,
+    attachments: AttachmentTable<Descriptor>,
     runs: BTreeMap<u64, SealedRunDyn>,
     run_parameters: super::parameter::RunParameterTable,
 }
@@ -121,7 +121,7 @@ pub struct SealedRunDyn {
     registry_handle: LocalRegistryHandle,
     run_id: u64,
     status: RunStatus,
-    attachments: Vec<Descriptor>,
+    attachments: AttachmentTable<Descriptor>,
     trace: Option<Descriptor>,
     solves: Vec<SolveDyn>,
 }
@@ -155,8 +155,8 @@ impl SealedRunDyn {
         self.registry_handle.clone()
     }
 
-    pub fn attachments(&self) -> Result<Vec<StoredDescriptor<'_>>> {
-        stored_descriptors(self.registry_handle.registry(), self.attachments.clone())
+    pub fn attachments(&self) -> Result<AttachmentTable<StoredDescriptor<'_>>> {
+        stored_attachment_table(self.registry_handle.registry(), self.attachments.clone())
     }
 
     pub fn trace(&self) -> Result<Option<StoredDescriptor<'_>>> {
@@ -252,7 +252,7 @@ impl ExperimentDyn {
                     state: Some(UnsealedExperimentDynState {
                         image_name,
                         subject: None,
-                        attachments: Vec::new(),
+                        attachments: AttachmentTable::new(),
                         runs: BTreeMap::new(),
                         next_run_id: 0,
                     }),
@@ -442,28 +442,34 @@ impl ExperimentDyn {
 }
 
 impl AttachmentLogger for &ExperimentDyn {
-    fn log_attachment(
+    fn log_attachment_with_filename(
         self,
         name: &str,
         media_type: MediaType,
         bytes: impl AsRef<[u8]>,
-        annotations: HashMap<String, String>,
+        filename: Option<String>,
     ) -> Result<()> {
         let mut dyn_state = lock_experiment_state(&self.state);
-        let descriptor = store_experiment_attachment_descriptor(
-            &dyn_state,
-            name,
-            media_type,
-            bytes.as_ref(),
-            annotations,
-        )?;
+        ensure_unsealed_for_attachment_write(&dyn_state)?;
+        let registry_handle = dyn_state.registry_handle.clone();
         let ExperimentDynLifecycle::Unsealed { state, .. } = &mut dyn_state.lifecycle else {
             return bail_non_unsealed(&dyn_state.lifecycle);
         };
         let state = state
             .as_mut()
             .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
-        state.attachments.push(descriptor);
+        if state.attachments.contains_key(name) {
+            crate::bail!("Attachment `{name}` already exists");
+        }
+        let descriptor = store_experiment_attachment_descriptor(
+            registry_handle.registry(),
+            name,
+            media_type,
+            bytes.as_ref(),
+        )?;
+        state
+            .attachments
+            .insert(name.to_string(), descriptor, filename)?;
         Ok(())
     }
 }
@@ -578,7 +584,7 @@ impl ExperimentDyn {
         Ok(sealed.artifact.clone())
     }
 
-    pub fn experiment_attachments(&self) -> Result<Vec<StoredDescriptor<'_>>> {
+    pub fn experiment_attachments(&self) -> Result<AttachmentTable<StoredDescriptor<'_>>> {
         let attachments = {
             let dyn_state = lock_experiment_state(&self.state);
             match &dyn_state.lifecycle {
@@ -600,7 +606,7 @@ impl ExperimentDyn {
                 lifecycle => return bail_not_sealed(lifecycle),
             }
         };
-        stored_descriptors(self.registry_handle.registry(), attachments)
+        stored_attachment_table(self.registry_handle.registry(), attachments)
     }
 
     pub fn runs(&self) -> Result<Vec<SealedRunDyn>> {
@@ -702,7 +708,7 @@ impl UnsealedExperimentDynState {
         Ok(UnsealedExperimentState {
             image_name: self.image_name.clone(),
             subject: self.subject.clone(),
-            attachments: stored_descriptors(registry, self.attachments.clone())?,
+            attachments: stored_attachment_table(registry, self.attachments.clone())?,
             runs: self
                 .runs
                 .iter()
@@ -712,7 +718,10 @@ impl UnsealedExperimentDynState {
                         RunEntry {
                             run_id: run.run_id,
                             status: run.status.clone(),
-                            attachments: stored_descriptors(registry, run.attachments.clone())?,
+                            attachments: stored_attachment_table(
+                                registry,
+                                run.attachments.clone(),
+                            )?,
                             trace: run
                                 .trace
                                 .clone()
@@ -747,7 +756,7 @@ impl UnsealedExperimentDynState {
         Ok(UnsealedExperimentState {
             image_name: self.image_name,
             subject: self.subject,
-            attachments: stored_descriptors(registry, self.attachments)?,
+            attachments: stored_attachment_table(registry, self.attachments)?,
             runs: self
                 .runs
                 .into_iter()
@@ -757,7 +766,7 @@ impl UnsealedExperimentDynState {
                         RunEntry {
                             run_id: run.run_id,
                             status: run.status,
-                            attachments: stored_descriptors(registry, run.attachments)?,
+                            attachments: stored_attachment_table(registry, run.attachments)?,
                             trace: run
                                 .trace
                                 .map(|descriptor| registry.stored_descriptor(descriptor))
@@ -807,7 +816,7 @@ impl SealedExperimentDynState {
         let registry_handle = artifact.registry_handle();
         let status = *sealed.status();
         let (attachments, runs, run_parameters) = {
-            let attachments = descriptors(sealed.experiment_attachments());
+            let attachments = descriptor_attachment_table(sealed.experiment_attachments());
             let runs = sealed
                 .runs()
                 .map(|run| {
@@ -817,7 +826,7 @@ impl SealedExperimentDynState {
                             registry_handle: registry_handle.clone(),
                             run_id: run.run_id(),
                             status: run.status().clone(),
-                            attachments: descriptors(run.attachments()),
+                            attachments: descriptor_attachment_table(run.attachments()),
                             trace: run.trace().cloned().map(Descriptor::from),
                             solves: run
                                 .solves()
@@ -911,12 +920,19 @@ impl SealedExperimentDynState {
     }
 }
 
-fn descriptors(attachments: &[StoredDescriptor<'_>]) -> Vec<Descriptor> {
-    attachments
-        .iter()
-        .cloned()
-        .map(Descriptor::from)
-        .collect::<Vec<_>>()
+fn descriptor_attachment_table(
+    attachments: &AttachmentTable<StoredDescriptor<'_>>,
+) -> AttachmentTable<Descriptor> {
+    AttachmentTable::from_parts_unchecked(
+        attachments
+            .iter()
+            .map(|(name, descriptor)| (name.clone(), Descriptor::from(descriptor.clone())))
+            .collect(),
+        attachments
+            .filenames()
+            .map(|(name, filename)| (name.clone(), filename.clone()))
+            .collect(),
+    )
 }
 
 fn unsealed_run_views<'a>(
@@ -1021,14 +1037,11 @@ fn checkpoint_artifact(
     Ok(artifact)
 }
 
-fn stored_descriptors<'reg>(
+fn stored_attachment_table<'reg>(
     registry: &'reg LocalRegistry,
-    attachments: Vec<Descriptor>,
-) -> Result<Vec<StoredDescriptor<'reg>>> {
-    attachments
-        .into_iter()
-        .map(|descriptor| registry.stored_descriptor(descriptor))
-        .collect()
+    attachments: AttachmentTable<Descriptor>,
+) -> Result<AttachmentTable<StoredDescriptor<'reg>>> {
+    attachments.try_map_owned(|descriptor| registry.stored_descriptor(descriptor))
 }
 
 fn lock_experiment_state(state: &Mutex<ExperimentDynState>) -> MutexGuard<'_, ExperimentDynState> {
@@ -1042,40 +1055,34 @@ fn lock_experiment_state(state: &Mutex<ExperimentDynState>) -> MutexGuard<'_, Ex
 }
 
 fn store_experiment_attachment_descriptor(
-    state: &ExperimentDynState,
+    registry: &LocalRegistry,
     name: &str,
     media_type: MediaType,
     bytes: &[u8],
-    extra_annotations: HashMap<String, String>,
 ) -> Result<Descriptor> {
-    ensure_unsealed_for_attachment_write(state)?;
     let descriptor = store_attachment_descriptor(
-        state.registry_handle.registry(),
+        registry,
         AttachmentSpace::Experiment,
         name,
         media_type,
         bytes,
-        extra_annotations,
     )?;
     Ok(Descriptor::from(descriptor))
 }
 
 fn store_run_attachment_descriptor(
-    state: &ExperimentDynState,
+    registry: &LocalRegistry,
     run_id: u64,
     name: &str,
     media_type: MediaType,
     bytes: &[u8],
-    extra_annotations: HashMap<String, String>,
 ) -> Result<Descriptor> {
-    ensure_unsealed_for_attachment_write(state)?;
     let descriptor = store_attachment_descriptor(
-        state.registry_handle.registry(),
+        registry,
         AttachmentSpace::Run(run_id),
         name,
         media_type,
         bytes,
-        extra_annotations,
     )?;
     Ok(Descriptor::from(descriptor))
 }

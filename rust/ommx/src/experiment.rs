@@ -75,9 +75,8 @@ mod sealed;
 mod tests;
 
 pub use attachment::{
-    attachment_filename, attachment_name, detect_file_media_type, write_attachment_descriptor,
-    FileAttachment, ATTACHMENT_FILENAME_ANNOTATION, ATTACHMENT_NAME_ANNOTATION,
-    DEFAULT_FILE_MEDIA_TYPE,
+    attachment_filename, attachment_name, detect_file_media_type, AttachmentTable, FileAttachment,
+    ATTACHMENT_FILENAME_ANNOTATION, ATTACHMENT_NAME_ANNOTATION, DEFAULT_FILE_MEDIA_TYPE,
 };
 pub use dynamic::{ExperimentDyn, RunDyn, SealedRunDyn, SolveDyn};
 pub use logging::AttachmentLogger;
@@ -90,7 +89,7 @@ use anyhow::Result;
 use attachment::{store_attachment_descriptor, AttachmentSpace};
 use oci_spec::image::MediaType;
 use parameter::ParameterSet;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::sync::{Mutex, MutexGuard};
 
 // --- Artifact mapping constants ---------------------------------------------
@@ -214,7 +213,7 @@ pub struct Experiment<'reg> {
 pub struct SealedExperiment<'reg> {
     status: ExperimentStatus,
     artifact: LocalArtifact<'reg>,
-    attachments: Vec<StoredDescriptor<'reg>>,
+    attachments: AttachmentTable<StoredDescriptor<'reg>>,
     runs: BTreeMap<u64, sealed::SealedRun<'reg>>,
     run_parameters: parameter::RunParameterTable,
 }
@@ -282,7 +281,7 @@ impl From<ImageRef> for Name {
 pub struct Run<'exp, 'reg> {
     experiment: &'exp Experiment<'reg>,
     run_id: u64,
-    attachments: Vec<StoredDescriptor<'reg>>,
+    attachments: AttachmentTable<StoredDescriptor<'reg>>,
     trace: Option<StoredDescriptor<'reg>>,
     solves: Vec<SolveEntry<'reg>>,
     next_solve_id: u64,
@@ -300,7 +299,7 @@ pub struct Run<'exp, 'reg> {
 struct RunEntry<'reg> {
     run_id: u64,
     status: RunStatus,
-    attachments: Vec<StoredDescriptor<'reg>>,
+    attachments: AttachmentTable<StoredDescriptor<'reg>>,
     trace: Option<StoredDescriptor<'reg>>,
     solves: Vec<SolveEntry<'reg>>,
     parameters: ParameterSet,
@@ -328,7 +327,7 @@ struct UnsealedExperimentState<'reg> {
     /// a root Experiment and `Some` for a forked child Experiment.
     subject: Option<oci_spec::image::Descriptor>,
     /// Experiment-space attachments.
-    attachments: Vec<StoredDescriptor<'reg>>,
+    attachments: AttachmentTable<StoredDescriptor<'reg>>,
     runs: BTreeMap<u64, RunEntry<'reg>>,
     next_run_id: u64,
 }
@@ -369,7 +368,7 @@ impl<'reg> Experiment<'reg> {
             state: Mutex::new(UnsealedExperimentState {
                 image_name,
                 subject: None,
-                attachments: Vec::new(),
+                attachments: AttachmentTable::new(),
                 runs: BTreeMap::new(),
                 next_run_id: 0,
             }),
@@ -389,7 +388,7 @@ impl<'reg> Experiment<'reg> {
         Ok(Run {
             experiment: self,
             run_id,
-            attachments: Vec::new(),
+            attachments: AttachmentTable::new(),
             trace: None,
             solves: Vec::new(),
             next_solve_id: 0,
@@ -441,23 +440,27 @@ impl<'reg> Experiment<'reg> {
 }
 
 impl<'reg> AttachmentLogger for &Experiment<'reg> {
-    fn log_attachment(
+    fn log_attachment_with_filename(
         self,
         name: &str,
         media_type: MediaType,
         bytes: impl AsRef<[u8]>,
-        annotations: HashMap<String, String>,
+        filename: Option<String>,
     ) -> Result<()> {
+        let mut state = self.lock_state();
+        if state.attachments.contains_key(name) {
+            crate::bail!("Attachment `{name}` already exists");
+        }
         let descriptor = store_attachment_descriptor(
             self.registry,
             AttachmentSpace::Experiment,
             name,
             media_type,
             bytes.as_ref(),
-            annotations,
         )?;
-        let mut state = self.lock_state();
-        state.attachments.push(descriptor);
+        state
+            .attachments
+            .insert(name.to_string(), descriptor, filename)?;
         Ok(())
     }
 }
@@ -506,7 +509,7 @@ impl<'reg> SealedExperiment<'reg> {
                 RunEntry {
                     run_id: run.run_id(),
                     status: run.status().clone(),
-                    attachments: run.attachments().to_vec(),
+                    attachments: run.attachments().clone(),
                     trace: run.trace().cloned(),
                     solves,
                     parameters,

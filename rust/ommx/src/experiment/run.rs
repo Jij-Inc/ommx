@@ -6,7 +6,6 @@ use crate::artifact::media_types;
 use crate::{Instance, Solution};
 use anyhow::Result;
 use oci_spec::image::MediaType;
-use std::collections::HashMap;
 
 impl<'exp, 'reg> Run<'exp, 'reg> {
     /// This run's 0-based id within the experiment.
@@ -131,22 +130,25 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
 }
 
 impl<'exp, 'reg> AttachmentLogger for &mut Run<'exp, 'reg> {
-    fn log_attachment(
+    fn log_attachment_with_filename(
         self,
         name: &str,
         media_type: MediaType,
         bytes: impl AsRef<[u8]>,
-        annotations: HashMap<String, String>,
+        filename: Option<String>,
     ) -> Result<()> {
+        if self.attachments.contains_key(name) {
+            crate::bail!("Attachment `{name}` already exists");
+        }
         let descriptor = store_attachment_descriptor(
             self.experiment.registry,
             AttachmentSpace::Run(self.run_id),
             name,
             media_type,
             bytes.as_ref(),
-            annotations,
         )?;
-        self.attachments.push(descriptor);
+        self.attachments
+            .insert(name.to_string(), descriptor, filename)?;
         Ok(())
     }
 }

@@ -3,12 +3,12 @@
 use super::config::{ExperimentConfig, ExperimentConfigRun, LayerRef};
 use super::UnsealedExperimentState;
 use super::{
-    AttachmentLogger, Experiment, ExperimentDyn, ExperimentStatus, FileAttachment, Name,
-    ParameterValue, SealedExperiment, Trace, ANN_ATTACHMENT_NAME, ANN_EXPERIMENT_RECOVERY,
+    AttachmentLogger, AttachmentTable, Experiment, ExperimentDyn, ExperimentStatus, FileAttachment,
+    Name, ParameterValue, SealedExperiment, Trace, ANN_ATTACHMENT_NAME, ANN_EXPERIMENT_RECOVERY,
     ANN_EXPERIMENT_REQUESTED_IMAGE, ANN_EXPERIMENT_STATUS, ANN_RUN_ID, ANN_SPACE,
-    ATTACHMENT_FILENAME_ANNOTATION, EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_STATUS_DRAFT,
-    EXPERIMENT_STATUS_FAILED, EXPERIMENT_STATUS_FINISHED, EXPERIMENT_STATUS_INTERRUPTED,
-    RUN_PARAMETERS_MEDIA_TYPE, RUN_STATUS_FAILED, RUN_STATUS_FINISHED, RUN_STATUS_INTERRUPTED,
+    EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_STATUS_DRAFT, EXPERIMENT_STATUS_FAILED,
+    EXPERIMENT_STATUS_FINISHED, EXPERIMENT_STATUS_INTERRUPTED, RUN_PARAMETERS_MEDIA_TYPE,
+    RUN_STATUS_FAILED, RUN_STATUS_FINISHED, RUN_STATUS_INTERRUPTED,
 };
 use crate::artifact::local_registry::{StoredDescriptor, UnsealedArtifact};
 use crate::artifact::{
@@ -40,16 +40,11 @@ fn file_attachment_infers_media_type_from_content() {
     fs::write(&path, bytes).unwrap();
 
     let attachment = FileAttachment::from_path(&path, None, None).unwrap();
-    let (media_type, stored_bytes, annotations) = attachment.into_parts();
+    let (media_type, stored_bytes, filename) = attachment.into_parts();
 
     assert_eq!(media_type.to_string(), "image/png");
     assert_eq!(stored_bytes, bytes);
-    assert_eq!(
-        annotations
-            .get(ATTACHMENT_FILENAME_ANNOTATION)
-            .map(String::as_str),
-        Some("source.png")
-    );
+    assert_eq!(filename, "source.png");
 }
 
 fn layer_annotation(layer: &Descriptor, key: &str) -> Option<String> {
@@ -93,6 +88,16 @@ fn experiment_config(artifact: &LocalArtifact<'_>) -> ExperimentConfig {
 
 fn blob_bytes(artifact: &LocalArtifact<'_>, descriptor: &StoredDescriptor<'_>) -> Vec<u8> {
     artifact.get_blob(descriptor).unwrap()
+}
+
+fn attachment_refs(
+    entries: impl IntoIterator<Item = (&'static str, LayerRef)>,
+) -> AttachmentTable<LayerRef> {
+    let mut table = AttachmentTable::new();
+    for (name, layer_ref) in entries {
+        table.insert(name.to_string(), layer_ref, None).unwrap();
+    }
+    table
 }
 
 /// `run()` hands out fresh 0-based ids; `finish()` consumes the run
@@ -193,7 +198,7 @@ fn log_writes_blob_to_registry_immediately() {
         let digest = with_unsealed_state(&experiment, |state| {
             let run = state.runs.get(&0).unwrap();
             assert_eq!(run.attachments.len(), 1);
-            run.attachments[0].digest().clone()
+            run.attachments.get("solver").unwrap().digest().clone()
         });
         assert!(experiment.registry.contains_blob(&digest).unwrap());
         Ok(())
@@ -223,6 +228,48 @@ fn trace_is_config_referenced_manifest_layer() {
 }
 
 #[test]
+fn duplicate_attachment_names_are_rejected_per_namespace() {
+    with_temp_experiment(|experiment| {
+        experiment.log_json("dataset", json!("first")).unwrap();
+        let err = experiment
+            .log_json("dataset", json!("second"))
+            .expect_err("duplicate experiment attachment names must be rejected");
+        assert!(err.to_string().contains("already exists"));
+
+        {
+            let mut run = experiment.run().unwrap();
+            run.log_json("candidate", json!("first")).unwrap();
+            let err = run
+                .log_json("candidate", json!("second"))
+                .expect_err("duplicate run attachment names must be rejected");
+            assert!(err.to_string().contains("already exists"));
+            run.finish().unwrap();
+        }
+
+        {
+            let mut run = experiment.run().unwrap();
+            run.log_json("candidate", json!("same name in another run"))
+                .unwrap();
+            run.finish().unwrap();
+        }
+
+        let loaded = experiment.commit().unwrap();
+        assert!(loaded.experiment_attachments().contains_key("dataset"));
+        assert!(loaded
+            .run(0)
+            .unwrap()
+            .attachments()
+            .contains_key("candidate"));
+        assert!(loaded
+            .run(1)
+            .unwrap()
+            .attachments()
+            .contains_key("candidate"));
+        Ok(())
+    });
+}
+
+#[test]
 fn run_rejects_second_trace() {
     with_temp_experiment(|experiment| {
         let mut run = experiment.run().unwrap();
@@ -234,6 +281,39 @@ fn run_rejects_second_trace() {
             .expect_err("a Run can store at most one trace");
 
         assert!(err.to_string().contains("already has a trace"));
+        Ok(())
+    });
+}
+
+#[test]
+fn file_attachment_filename_is_stored_in_config_table() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("source.json");
+    fs::write(&path, br#"{"ok":true}"#).unwrap();
+
+    with_temp_experiment(|experiment| {
+        let attachment = FileAttachment::from_path(
+            &path,
+            Some(MediaType::from("application/json")),
+            Some("input.json"),
+        )
+        .unwrap();
+        let (media_type, bytes, filename) = attachment.into_parts();
+        AttachmentLogger::log_attachment_with_filename(
+            &experiment,
+            "source-file",
+            media_type,
+            bytes,
+            Some(filename),
+        )
+        .unwrap();
+
+        let artifact = experiment.commit().unwrap().into_artifact();
+        let config = experiment_config(&artifact);
+        assert_eq!(
+            config.attachments.filename("source-file"),
+            Some("input.json")
+        );
         Ok(())
     });
 }
@@ -260,7 +340,7 @@ fn log_json_encodes_hash_maps_stably() {
         let bytes = with_unsealed_state(&experiment, |state| {
             state
                 .attachments
-                .iter()
+                .values()
                 .map(|descriptor| experiment.registry.read_blob(descriptor.digest()).unwrap())
                 .collect::<Vec<_>>()
         });
@@ -436,20 +516,18 @@ fn loaded_experiment_reads_attachments_and_run_parameters() {
         let artifact = experiment.commit().unwrap().into_artifact();
         let loaded = SealedExperiment::from_artifact(artifact.clone()).unwrap();
 
-        assert!(loaded
-            .experiment_attachments()
-            .iter()
-            .any(
-                |attachment| layer_annotation(attachment, ANN_ATTACHMENT_NAME).as_deref()
-                    == Some("dataset")
-                    && attachment.media_type() == &MediaType::Other("application/json".into())
-            ));
+        let dataset = loaded.experiment_attachments().get("dataset").unwrap();
+        assert_eq!(
+            dataset.media_type(),
+            &MediaType::Other("application/json".into())
+        );
         let run0 = loaded.run(0).expect("run 0 must be reconstructed");
         assert_eq!(run0.run_id(), 0);
-        assert!(run0.attachments().iter().any(|attachment| {
-            layer_annotation(attachment, ANN_ATTACHMENT_NAME).as_deref() == Some("candidate")
-                && attachment.media_type() == &MediaType::Other("application/json".into())
-        }));
+        let candidate = run0.attachments().get("candidate").unwrap();
+        assert_eq!(
+            candidate.media_type(),
+            &MediaType::Other("application/json".into())
+        );
         let run1 = loaded.run(1).expect("run 1 must be reconstructed");
         assert_eq!(run1.run_id(), 1);
         assert!(run1.attachments().is_empty());
@@ -555,13 +633,7 @@ fn sealed_experiment_fork_creates_child_with_parent_subject_and_next_run_id() {
             &parent_trace_digest
         );
         assert!(loaded.run(1).unwrap().trace().is_some());
-        assert!(loaded
-            .experiment_attachments()
-            .iter()
-            .any(
-                |attachment| layer_annotation(attachment, ANN_ATTACHMENT_NAME).as_deref()
-                    == Some("dataset")
-            ));
+        assert!(loaded.experiment_attachments().contains_key("dataset"));
         let run0 = loaded.run(0).unwrap();
         assert_eq!(run0.solves().len(), 1);
         let run1 = loaded.run(1).unwrap();
@@ -618,10 +690,13 @@ fn log_finished_solve_result_materializes_solve_entry_with_layer_refs() {
         let config = artifact.stored_config().unwrap();
         let config_json: serde_json::Value =
             serde_json::from_slice(&blob_bytes(&artifact, &config)).unwrap();
-        assert_eq!(config_json["attachments"], json!([]));
+        assert_eq!(config_json["attachments"], json!({ "entries": {} }));
         assert_eq!(config_json["run_parameters"], json!(2));
         assert_eq!(config_json["runs"][0]["status"], json!(RUN_STATUS_FINISHED));
-        assert_eq!(config_json["runs"][0]["attachments"], json!([]));
+        assert_eq!(
+            config_json["runs"][0]["attachments"],
+            json!({ "entries": {} })
+        );
         assert_eq!(config_json["runs"][0]["solves"][0]["solve_id"], json!(0));
         assert_eq!(config_json["runs"][0]["solves"][0]["input"], json!(0));
         assert_eq!(config_json["runs"][0]["solves"][0]["output"], json!(1));
@@ -668,7 +743,7 @@ fn loaded_experiment_rejects_non_finished_status() {
         .unwrap();
     let config = ExperimentConfig {
         status: "crashed".to_string(),
-        attachments: Vec::new(),
+        attachments: AttachmentTable::new(),
         runs: Vec::new(),
         run_parameters: LayerRef(0),
     };
@@ -719,7 +794,7 @@ fn loaded_experiment_rejects_config_attachment_not_listed_in_layers() {
         .unwrap();
     let config = ExperimentConfig {
         status: EXPERIMENT_STATUS_FINISHED.to_string(),
-        attachments: vec![LayerRef(1)],
+        attachments: attachment_refs([("outside", LayerRef(1))]),
         runs: Vec::new(),
         run_parameters: LayerRef(0),
     };
@@ -746,16 +821,19 @@ fn loaded_experiment_rejects_config_attachment_not_listed_in_layers() {
         .expect_err("config must not reference attachments outside artifact layers");
     assert!(err
         .to_string()
-        .contains("Failed to resolve experiment attachment LayerRef 1"));
+        .contains("Failed to resolve experiment attachment `outside` LayerRef 1"));
 }
 
 #[test]
-fn loaded_experiment_uses_manifest_layer_metadata_for_attachment_refs() {
+fn loaded_experiment_uses_config_table_for_attachment_names() {
     let temp = crate::artifact::local_registry::TempLocalRegistry::new().unwrap();
     let registry = temp.registry();
     let mut manifest_annotations = HashMap::new();
     manifest_annotations.insert(ANN_SPACE.to_string(), "experiment".to_string());
-    manifest_annotations.insert(ANN_ATTACHMENT_NAME.to_string(), "listed".to_string());
+    manifest_annotations.insert(
+        ANN_ATTACHMENT_NAME.to_string(),
+        "descriptor-name".to_string(),
+    );
     let listed_attachment = registry
         .store_layer_blob(
             MediaType::Other("application/json".to_string()),
@@ -773,7 +851,7 @@ fn loaded_experiment_uses_manifest_layer_metadata_for_attachment_refs() {
         .unwrap();
     let config = ExperimentConfig {
         status: EXPERIMENT_STATUS_FINISHED.to_string(),
-        attachments: vec![LayerRef(0)],
+        attachments: attachment_refs([("config-name", LayerRef(0))]),
         runs: Vec::new(),
         run_parameters: LayerRef(1),
     };
@@ -798,14 +876,67 @@ fn loaded_experiment_uses_manifest_layer_metadata_for_attachment_refs() {
         LocalArtifact::from_parts(registry, image_name, sealed_artifact.digest().clone());
 
     let sealed = SealedExperiment::from_artifact(artifact).unwrap();
+    assert!(sealed.experiment_attachments().contains_key("config-name"));
     assert_eq!(
         layer_annotation(
-            &Descriptor::from(sealed.experiment_attachments()[0].clone()),
+            &Descriptor::from(
+                sealed
+                    .experiment_attachments()
+                    .get("config-name")
+                    .unwrap()
+                    .clone()
+            ),
             ANN_ATTACHMENT_NAME
         )
         .as_deref(),
-        Some("listed")
+        Some("descriptor-name")
     );
+}
+
+#[test]
+fn loaded_experiment_rejects_filename_without_attachment_entry() {
+    let temp = crate::artifact::local_registry::TempLocalRegistry::new().unwrap();
+    let registry = temp.registry();
+    let run_parameters = registry
+        .store_json_layer_blob(
+            MediaType::Other(RUN_PARAMETERS_MEDIA_TYPE.to_string()),
+            &json!({ "columns": {} }),
+            HashMap::new(),
+        )
+        .unwrap();
+    let config = ExperimentConfig {
+        status: EXPERIMENT_STATUS_FINISHED.to_string(),
+        attachments: AttachmentTable::from_parts_unchecked(
+            BTreeMap::new(),
+            BTreeMap::from([("missing".to_string(), "missing.txt".to_string())]),
+        ),
+        runs: Vec::new(),
+        run_parameters: LayerRef(0),
+    };
+    let config_descriptor = registry
+        .store_json_blob(
+            MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()),
+            &config,
+        )
+        .unwrap();
+    let unsealed = UnsealedArtifact::new(
+        MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
+        config_descriptor,
+        vec![run_parameters],
+        None,
+        HashMap::new(),
+    );
+    let sealed_artifact = registry.seal_artifact(unsealed).unwrap();
+    let image_name =
+        ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:invalid-filename-table").unwrap();
+    let artifact =
+        LocalArtifact::from_parts(registry, image_name, sealed_artifact.digest().clone());
+
+    let err = SealedExperiment::from_artifact(artifact)
+        .expect_err("filename table must reference existing attachments only");
+    assert!(err
+        .to_string()
+        .contains("filename table in experiment references missing attachment `missing`"));
 }
 
 #[test]
@@ -832,11 +963,11 @@ fn loaded_experiment_rejects_config_run_attachment_not_listed_in_layers() {
         .unwrap();
     let config = ExperimentConfig {
         status: EXPERIMENT_STATUS_FINISHED.to_string(),
-        attachments: Vec::new(),
+        attachments: AttachmentTable::new(),
         runs: vec![ExperimentConfigRun {
             run_id: 0,
             status: RUN_STATUS_FINISHED.to_string(),
-            attachments: vec![LayerRef(1)],
+            attachments: attachment_refs([("outside", LayerRef(1))]),
             trace: None,
             solves: Vec::new(),
         }],
@@ -865,7 +996,7 @@ fn loaded_experiment_rejects_config_run_attachment_not_listed_in_layers() {
         .expect_err("config must not reference run attachments outside artifact layers");
     assert!(err
         .to_string()
-        .contains("Failed to resolve run 0 attachment LayerRef 1"));
+        .contains("Failed to resolve run 0 attachment `outside` LayerRef 1"));
 }
 
 #[test]
@@ -881,7 +1012,7 @@ fn loaded_experiment_rejects_run_parameters_not_listed_in_layers() {
         .unwrap();
     let config = ExperimentConfig {
         status: EXPERIMENT_STATUS_FINISHED.to_string(),
-        attachments: Vec::new(),
+        attachments: AttachmentTable::new(),
         runs: Vec::new(),
         run_parameters: LayerRef(0),
     };
