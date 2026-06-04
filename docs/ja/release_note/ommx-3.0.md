@@ -90,6 +90,7 @@ commit 済み Experiment / Run の読み取りビューには、attachment blob 
 
 ```python
 import io
+from pathlib import Path
 
 from ommx.experiment import Experiment
 
@@ -98,6 +99,7 @@ with Experiment.with_temp_local_registry() as experiment:
 
 loaded = Experiment.from_artifact(experiment.artifact)
 spreadsheet_file = io.BytesIO(loaded.get_blob("input-spreadsheet"))
+Path("restored").mkdir(parents=True, exist_ok=True)
 loaded.write_attachment("input-spreadsheet", "restored/input.xlsx")
 ```
 

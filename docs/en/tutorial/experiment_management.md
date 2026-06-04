@@ -69,6 +69,10 @@ pi = ParametricInstance.from_components(
 )
 ```
 
+### Attachable Data Formats
+
+The {py:class}`~ommx.v1.ParametricInstance` above is the OMMX-form mathematical model passed to solvers. To make the experiment easier to inspect later, you can also attach surrounding data such as the original modeling object or input files to the Experiment.
+
 If the original model was written in a modeling package, keep that source model as an Attachment as well. For external payload types, OMMX defines only the attachment codec protocol and the `log_with_codec` / `get_with_codec` methods that invoke it. The concrete codec should live in the package that owns the object type. This tutorial defines a temporary `ProblemCodec` for JijModeling `Problem`; JijModeling is expected to provide an equivalent codec in the future.
 
 If the payload already exists as a file, attach that file directly instead. `log_file` copies the file bytes into the Experiment, and later readers can use `get_blob` to read the bytes or `write_attachment` to restore the file to disk. This is the usual path for Excel workbooks, solver logs, generated plots, and other files produced outside OMMX.
