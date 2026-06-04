@@ -4,14 +4,18 @@ use super::attachment::AttachmentTable;
 use super::config::{ExperimentConfig, ExperimentConfigSolve, LayerRef};
 use super::parameter::{RunParameterCell, RunParameterTable};
 use super::{
-    ExperimentStatus, RunStatus, SealedExperiment, EXPERIMENT_CONFIG_MEDIA_TYPE,
+    ExperimentStatus, RunStatus, SealedExperiment, Trace, EXPERIMENT_CONFIG_MEDIA_TYPE,
     RUN_PARAMETERS_MEDIA_TYPE,
 };
 use crate::artifact::local_registry::StoredDescriptor;
 use crate::artifact::{media_types, ImageRef, LocalArtifact};
+use crate::{Instance, ParametricInstance, SampleSet, Solution};
 use anyhow::{Context, Result};
 use oci_spec::image::{Descriptor, MediaType};
-use std::collections::BTreeMap;
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+};
 
 impl<'reg> SealedExperiment<'reg> {
     /// Reconstruct a sealed Experiment from a committed Experiment Artifact.
@@ -83,8 +87,51 @@ impl<'reg> SealedExperiment<'reg> {
         &self.status
     }
 
-    pub fn experiment_attachments(&self) -> &AttachmentTable<StoredDescriptor<'reg>> {
+    /// Internal descriptor table used when sealed state is forked or converted
+    /// into a dynamic view. Public attachment access remains name-based.
+    pub(crate) fn attachment_table(&self) -> &AttachmentTable<StoredDescriptor<'reg>> {
         &self.attachments
+    }
+
+    pub fn attachment_names(&self) -> impl Iterator<Item = &str> {
+        self.attachments.names().map(String::as_str)
+    }
+
+    pub fn contains_attachment(&self, name: &str) -> bool {
+        self.attachments.contains_key(name)
+    }
+
+    pub fn attachment_media_type(&self, name: &str) -> Result<MediaType> {
+        self.attachments.media_type(name)
+    }
+
+    pub fn attachment_blob(&self, name: &str) -> Result<Vec<u8>> {
+        self.attachments.blob(name)
+    }
+
+    pub fn attachment_instance(&self, name: &str) -> Result<Instance> {
+        self.attachments.instance(name)
+    }
+
+    pub fn attachment_parametric_instance(&self, name: &str) -> Result<ParametricInstance> {
+        self.attachments.parametric_instance(name)
+    }
+
+    pub fn attachment_solution(&self, name: &str) -> Result<Solution> {
+        self.attachments.solution(name)
+    }
+
+    pub fn attachment_sample_set(&self, name: &str) -> Result<SampleSet> {
+        self.attachments.sample_set(name)
+    }
+
+    pub fn write_attachment(
+        &self,
+        name: &str,
+        path: impl AsRef<Path>,
+        overwrite: bool,
+    ) -> Result<PathBuf> {
+        self.attachments.write_attachment(name, path, overwrite)
     }
 
     pub fn runs(&self) -> impl Iterator<Item = &SealedRun<'reg>> {
@@ -119,12 +166,65 @@ impl<'reg> SealedRun<'reg> {
         &self.status
     }
 
-    pub fn attachments(&self) -> &AttachmentTable<StoredDescriptor<'reg>> {
+    /// Internal descriptor table used when sealed state is forked or converted
+    /// into a dynamic view. Public attachment access remains name-based.
+    pub(crate) fn attachment_table(&self) -> &AttachmentTable<StoredDescriptor<'reg>> {
         &self.attachments
     }
 
-    pub fn trace(&self) -> Option<&StoredDescriptor<'reg>> {
+    pub fn attachment_names(&self) -> impl Iterator<Item = &str> {
+        self.attachments.names().map(String::as_str)
+    }
+
+    pub fn contains_attachment(&self, name: &str) -> bool {
+        self.attachments.contains_key(name)
+    }
+
+    pub fn attachment_media_type(&self, name: &str) -> Result<MediaType> {
+        self.attachments.media_type(name)
+    }
+
+    pub fn attachment_blob(&self, name: &str) -> Result<Vec<u8>> {
+        self.attachments.blob(name)
+    }
+
+    pub fn attachment_instance(&self, name: &str) -> Result<Instance> {
+        self.attachments.instance(name)
+    }
+
+    pub fn attachment_parametric_instance(&self, name: &str) -> Result<ParametricInstance> {
+        self.attachments.parametric_instance(name)
+    }
+
+    pub fn attachment_solution(&self, name: &str) -> Result<Solution> {
+        self.attachments.solution(name)
+    }
+
+    pub fn attachment_sample_set(&self, name: &str) -> Result<SampleSet> {
+        self.attachments.sample_set(name)
+    }
+
+    pub fn write_attachment(
+        &self,
+        name: &str,
+        path: impl AsRef<Path>,
+        overwrite: bool,
+    ) -> Result<PathBuf> {
+        self.attachments.write_attachment(name, path, overwrite)
+    }
+
+    /// Internal trace descriptor used when sealed state is forked or converted
+    /// into a dynamic view. Public trace access returns the opaque payload.
+    pub(crate) fn trace_descriptor(&self) -> Option<&StoredDescriptor<'reg>> {
         self.trace.as_ref()
+    }
+
+    pub fn trace(&self) -> Result<Option<Trace>> {
+        let Some(descriptor) = &self.trace else {
+            return Ok(None);
+        };
+        let bytes = descriptor.registry().get_blob(descriptor)?;
+        Ok(Some(Trace::from_bytes(bytes)))
     }
 
     pub fn solves(&self) -> &[Solve<'reg>] {
@@ -146,12 +246,28 @@ impl<'reg> Solve<'reg> {
         self.solve_id
     }
 
-    pub fn input(&self) -> &StoredDescriptor<'reg> {
+    /// Internal input descriptor used when sealed state is forked or converted
+    /// into a dynamic view. Public solve access returns typed payloads.
+    pub(crate) fn input_descriptor(&self) -> &StoredDescriptor<'reg> {
         &self.input
     }
 
-    pub fn output(&self) -> &StoredDescriptor<'reg> {
+    /// Internal output descriptor used when sealed state is forked or converted
+    /// into a dynamic view. Public solve access returns typed payloads.
+    pub(crate) fn output_descriptor(&self) -> &StoredDescriptor<'reg> {
         &self.output
+    }
+
+    pub fn input_instance(&self) -> Result<Instance> {
+        self.input.ensure_media_type(&media_types::v1_instance())?;
+        let bytes = self.input.registry().get_blob(&self.input)?;
+        Instance::from_bytes(&bytes)
+    }
+
+    pub fn output_solution(&self) -> Result<Solution> {
+        self.output.ensure_media_type(&media_types::v1_solution())?;
+        let bytes = self.output.registry().get_blob(&self.output)?;
+        Solution::from_bytes(&bytes)
     }
 
     pub fn adapter(&self) -> &str {

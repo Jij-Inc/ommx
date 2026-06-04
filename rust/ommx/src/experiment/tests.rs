@@ -222,7 +222,7 @@ fn trace_is_config_referenced_manifest_layer() {
         assert_eq!(layer_annotation(trace, ANN_ATTACHMENT_NAME), None);
         let loaded = SealedExperiment::from_artifact(artifact).unwrap();
         assert_eq!(loaded.status(), &ExperimentStatus::Finished);
-        assert!(loaded.run(0).unwrap().trace().is_some());
+        assert!(loaded.run(0).unwrap().trace().unwrap().is_some());
         Ok(())
     });
 }
@@ -254,17 +254,9 @@ fn duplicate_attachment_names_are_rejected_per_namespace() {
         }
 
         let loaded = experiment.commit().unwrap();
-        assert!(loaded.experiment_attachments().contains_key("dataset"));
-        assert!(loaded
-            .run(0)
-            .unwrap()
-            .attachments()
-            .contains_key("candidate"));
-        assert!(loaded
-            .run(1)
-            .unwrap()
-            .attachments()
-            .contains_key("candidate"));
+        assert!(loaded.contains_attachment("dataset"));
+        assert!(loaded.run(0).unwrap().contains_attachment("candidate"));
+        assert!(loaded.run(1).unwrap().contains_attachment("candidate"));
         Ok(())
     });
 }
@@ -516,21 +508,19 @@ fn loaded_experiment_reads_attachments_and_run_parameters() {
         let artifact = experiment.commit().unwrap().into_artifact();
         let loaded = SealedExperiment::from_artifact(artifact.clone()).unwrap();
 
-        let dataset = loaded.experiment_attachments().get("dataset").unwrap();
         assert_eq!(
-            dataset.media_type(),
-            &MediaType::Other("application/json".into())
+            loaded.attachment_media_type("dataset").unwrap(),
+            MediaType::Other("application/json".into())
         );
         let run0 = loaded.run(0).expect("run 0 must be reconstructed");
         assert_eq!(run0.run_id(), 0);
-        let candidate = run0.attachments().get("candidate").unwrap();
         assert_eq!(
-            candidate.media_type(),
-            &MediaType::Other("application/json".into())
+            run0.attachment_media_type("candidate").unwrap(),
+            MediaType::Other("application/json".into())
         );
         let run1 = loaded.run(1).expect("run 1 must be reconstructed");
         assert_eq!(run1.run_id(), 1);
-        assert!(run1.attachments().is_empty());
+        assert_eq!(run1.attachment_names().count(), 0);
 
         let mut cells = loaded.run_parameter_cells();
         cells.sort_by(|left, right| (left.run_id, &left.name).cmp(&(right.run_id, &right.name)));
@@ -591,7 +581,7 @@ fn sealed_experiment_fork_creates_child_with_parent_subject_and_next_run_id() {
         let parent_trace_digest = parent
             .run(0)
             .unwrap()
-            .trace()
+            .trace_descriptor()
             .expect("parent run has trace")
             .digest()
             .clone();
@@ -629,11 +619,11 @@ fn sealed_experiment_fork_creates_child_with_parent_subject_and_next_run_id() {
 
         let loaded = SealedExperiment::from_artifact(child_artifact).unwrap();
         assert_eq!(
-            loaded.run(0).unwrap().trace().unwrap().digest(),
+            loaded.run(0).unwrap().trace_descriptor().unwrap().digest(),
             &parent_trace_digest
         );
-        assert!(loaded.run(1).unwrap().trace().is_some());
-        assert!(loaded.experiment_attachments().contains_key("dataset"));
+        assert!(loaded.run(1).unwrap().trace().unwrap().is_some());
+        assert!(loaded.contains_attachment("dataset"));
         let run0 = loaded.run(0).unwrap();
         assert_eq!(run0.solves().len(), 1);
         let run1 = loaded.run(1).unwrap();
@@ -711,17 +701,15 @@ fn log_finished_solve_result_materializes_solve_entry_with_layer_refs() {
 
         let loaded = SealedExperiment::from_artifact(artifact.clone()).unwrap();
         let run = loaded.run(0).unwrap();
-        assert!(run.attachments().is_empty());
+        assert_eq!(run.attachment_names().count(), 0);
         let solve = &run.solves()[0];
         assert_eq!(solve.solve_id(), 0);
-        assert_eq!(solve.input().media_type(), &media_types::v1_instance());
-        assert_eq!(solve.output().media_type(), &media_types::v1_solution());
         assert_eq!(
-            artifact.get_blob(solve.input()).unwrap(),
+            solve.input_instance().unwrap().to_bytes(),
             instance.to_bytes()
         );
         assert_eq!(
-            artifact.get_blob(solve.output()).unwrap(),
+            solve.output_solution().unwrap().to_bytes(),
             solution.to_bytes()
         );
         assert_eq!(solve.adapter(), "dummy.Adapter");
@@ -875,20 +863,11 @@ fn loaded_experiment_uses_config_table_for_attachment_names() {
     let artifact =
         LocalArtifact::from_parts(registry, image_name, sealed_artifact.digest().clone());
 
+    let layers = artifact.layers().unwrap();
     let sealed = SealedExperiment::from_artifact(artifact).unwrap();
-    assert!(sealed.experiment_attachments().contains_key("config-name"));
+    assert!(sealed.contains_attachment("config-name"));
     assert_eq!(
-        layer_annotation(
-            &Descriptor::from(
-                sealed
-                    .experiment_attachments()
-                    .get("config-name")
-                    .unwrap()
-                    .clone()
-            ),
-            ANN_ATTACHMENT_NAME
-        )
-        .as_deref(),
+        layer_annotation(layer_from_ref(&layers, LayerRef(0)), ANN_ATTACHMENT_NAME).as_deref(),
         Some("descriptor-name")
     );
 }
@@ -1676,7 +1655,7 @@ fn experiment_dyn_save_writes_committed_archive() {
     );
 
     let loaded = ExperimentDyn::import_archive(&archive_path).unwrap();
-    assert_eq!(loaded.experiment_attachments().unwrap().len(), 1);
+    assert_eq!(loaded.attachment_names().unwrap().len(), 1);
 }
 
 #[cfg(feature = "remote-artifact")]

@@ -236,6 +236,16 @@ impl Trace {
             bytes: bytes.into(),
         }
     }
+
+    /// Encoded trace bytes.
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.bytes
+    }
+
+    /// Consume the trace and return its encoded bytes.
+    pub fn into_bytes(self) -> Vec<u8> {
+        self.bytes
+    }
 }
 
 /// User-facing name policy for a new Experiment.
@@ -498,8 +508,8 @@ impl<'reg> SealedExperiment<'reg> {
                 .iter()
                 .map(|solve| SolveEntry {
                     solve_id: solve.solve_id(),
-                    input: solve.input().clone(),
-                    output: solve.output().clone(),
+                    input: solve.input_descriptor().clone(),
+                    output: solve.output_descriptor().clone(),
                     adapter: solve.adapter().to_string(),
                     adapter_options: solve.adapter_options().to_string(),
                 })
@@ -509,8 +519,8 @@ impl<'reg> SealedExperiment<'reg> {
                 RunEntry {
                     run_id: run.run_id(),
                     status: run.status().clone(),
-                    attachments: run.attachments().clone(),
-                    trace: run.trace().cloned(),
+                    attachments: run.attachment_table().clone(),
+                    trace: run.trace_descriptor().cloned(),
                     solves,
                     parameters,
                 },

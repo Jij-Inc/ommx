@@ -155,7 +155,7 @@ impl SealedRunDyn {
         self.registry_handle.clone()
     }
 
-    pub fn attachments(&self) -> Result<AttachmentTable<StoredDescriptor<'_>>> {
+    fn attachment_table(&self) -> Result<AttachmentTable<StoredDescriptor<'_>>> {
         stored_attachment_table(self.registry_handle.registry(), self.attachments.clone())
     }
 
@@ -164,31 +164,31 @@ impl SealedRunDyn {
     }
 
     pub fn attachment_media_type(&self, name: &str) -> Result<MediaType> {
-        self.attachments()?.media_type(name)
+        self.attachment_table()?.media_type(name)
     }
 
     pub fn attachment_annotations(&self, name: &str) -> Result<HashMap<String, String>> {
-        self.attachments()?.annotations(name)
+        self.attachment_table()?.annotations(name)
     }
 
     pub fn attachment_blob(&self, name: &str) -> Result<Vec<u8>> {
-        self.attachments()?.blob(name)
+        self.attachment_table()?.blob(name)
     }
 
     pub fn attachment_instance(&self, name: &str) -> Result<Instance> {
-        self.attachments()?.instance(name)
+        self.attachment_table()?.instance(name)
     }
 
     pub fn attachment_parametric_instance(&self, name: &str) -> Result<ParametricInstance> {
-        self.attachments()?.parametric_instance(name)
+        self.attachment_table()?.parametric_instance(name)
     }
 
     pub fn attachment_solution(&self, name: &str) -> Result<Solution> {
-        self.attachments()?.solution(name)
+        self.attachment_table()?.solution(name)
     }
 
     pub fn attachment_sample_set(&self, name: &str) -> Result<SampleSet> {
-        self.attachments()?.sample_set(name)
+        self.attachment_table()?.sample_set(name)
     }
 
     pub fn write_attachment(
@@ -197,10 +197,11 @@ impl SealedRunDyn {
         path: impl AsRef<Path>,
         overwrite: bool,
     ) -> Result<std::path::PathBuf> {
-        self.attachments()?.write_attachment(name, path, overwrite)
+        self.attachment_table()?
+            .write_attachment(name, path, overwrite)
     }
 
-    pub fn trace(&self) -> Result<Option<StoredDescriptor<'_>>> {
+    fn trace_descriptor(&self) -> Result<Option<StoredDescriptor<'_>>> {
         self.trace
             .clone()
             .map(|descriptor| {
@@ -209,6 +210,14 @@ impl SealedRunDyn {
                     .stored_descriptor(descriptor)
             })
             .transpose()
+    }
+
+    pub fn trace(&self) -> Result<Option<super::Trace>> {
+        let Some(descriptor) = self.trace_descriptor()? else {
+            return Ok(None);
+        };
+        let bytes = self.registry_handle.registry().get_blob(&descriptor)?;
+        Ok(Some(super::Trace::from_bytes(bytes)))
     }
 
     pub fn attachment_count(&self) -> usize {
@@ -225,14 +234,23 @@ impl SolveDyn {
         self.solve_id
     }
 
-    pub fn input(&self) -> Result<StoredDescriptor<'_>> {
+    fn input_descriptor(&self) -> Result<StoredDescriptor<'_>> {
         self.registry_handle
             .registry()
             .stored_descriptor(self.input.clone())
     }
 
+    pub fn input_annotations(&self) -> Result<HashMap<String, String>> {
+        Ok(self
+            .input_descriptor()?
+            .annotations()
+            .as_ref()
+            .cloned()
+            .unwrap_or_default())
+    }
+
     pub fn input_instance(&self) -> Result<Instance> {
-        let descriptor = self.input()?;
+        let descriptor = self.input_descriptor()?;
         ensure!(
             descriptor.media_type().to_string() == media_types::V1_INSTANCE_MEDIA_TYPE,
             "Solve {} input has media type '{}', expected '{}'",
@@ -244,14 +262,23 @@ impl SolveDyn {
         Instance::from_bytes(&bytes)
     }
 
-    pub fn output(&self) -> Result<StoredDescriptor<'_>> {
+    fn output_descriptor(&self) -> Result<StoredDescriptor<'_>> {
         self.registry_handle
             .registry()
             .stored_descriptor(self.output.clone())
     }
 
+    pub fn output_annotations(&self) -> Result<HashMap<String, String>> {
+        Ok(self
+            .output_descriptor()?
+            .annotations()
+            .as_ref()
+            .cloned()
+            .unwrap_or_default())
+    }
+
     pub fn output_solution(&self) -> Result<Solution> {
-        let descriptor = self.output()?;
+        let descriptor = self.output_descriptor()?;
         ensure!(
             descriptor.media_type().to_string() == media_types::V1_SOLUTION_MEDIA_TYPE,
             "Solve {} output has media type '{}', expected '{}'",
@@ -625,7 +652,7 @@ impl ExperimentDyn {
         Ok(sealed.artifact.clone())
     }
 
-    pub fn experiment_attachments(&self) -> Result<AttachmentTable<StoredDescriptor<'_>>> {
+    fn experiment_attachment_table(&self) -> Result<AttachmentTable<StoredDescriptor<'_>>> {
         let attachments = {
             let dyn_state = lock_experiment_state(&self.state);
             match &dyn_state.lifecycle {
@@ -651,35 +678,40 @@ impl ExperimentDyn {
     }
 
     pub fn attachment_names(&self) -> Result<Vec<String>> {
-        Ok(self.experiment_attachments()?.names().cloned().collect())
+        Ok(self
+            .experiment_attachment_table()?
+            .names()
+            .cloned()
+            .collect())
     }
 
     pub fn attachment_media_type(&self, name: &str) -> Result<MediaType> {
-        self.experiment_attachments()?.media_type(name)
+        self.experiment_attachment_table()?.media_type(name)
     }
 
     pub fn attachment_annotations(&self, name: &str) -> Result<HashMap<String, String>> {
-        self.experiment_attachments()?.annotations(name)
+        self.experiment_attachment_table()?.annotations(name)
     }
 
     pub fn attachment_blob(&self, name: &str) -> Result<Vec<u8>> {
-        self.experiment_attachments()?.blob(name)
+        self.experiment_attachment_table()?.blob(name)
     }
 
     pub fn attachment_instance(&self, name: &str) -> Result<Instance> {
-        self.experiment_attachments()?.instance(name)
+        self.experiment_attachment_table()?.instance(name)
     }
 
     pub fn attachment_parametric_instance(&self, name: &str) -> Result<ParametricInstance> {
-        self.experiment_attachments()?.parametric_instance(name)
+        self.experiment_attachment_table()?
+            .parametric_instance(name)
     }
 
     pub fn attachment_solution(&self, name: &str) -> Result<Solution> {
-        self.experiment_attachments()?.solution(name)
+        self.experiment_attachment_table()?.solution(name)
     }
 
     pub fn attachment_sample_set(&self, name: &str) -> Result<SampleSet> {
-        self.experiment_attachments()?.sample_set(name)
+        self.experiment_attachment_table()?.sample_set(name)
     }
 
     pub fn write_attachment(
@@ -688,7 +720,7 @@ impl ExperimentDyn {
         path: impl AsRef<Path>,
         overwrite: bool,
     ) -> Result<std::path::PathBuf> {
-        self.experiment_attachments()?
+        self.experiment_attachment_table()?
             .write_attachment(name, path, overwrite)
     }
 
@@ -899,7 +931,7 @@ impl SealedExperimentDynState {
         let registry_handle = artifact.registry_handle();
         let status = *sealed.status();
         let (attachments, runs, run_parameters) = {
-            let attachments = descriptor_attachment_table(sealed.experiment_attachments());
+            let attachments = descriptor_attachment_table(sealed.attachment_table());
             let runs = sealed
                 .runs()
                 .map(|run| {
@@ -909,16 +941,16 @@ impl SealedExperimentDynState {
                             registry_handle: registry_handle.clone(),
                             run_id: run.run_id(),
                             status: run.status().clone(),
-                            attachments: descriptor_attachment_table(run.attachments()),
-                            trace: run.trace().cloned().map(Descriptor::from),
+                            attachments: descriptor_attachment_table(run.attachment_table()),
+                            trace: run.trace_descriptor().cloned().map(Descriptor::from),
                             solves: run
                                 .solves()
                                 .iter()
                                 .map(|solve| SolveDyn {
                                     registry_handle: registry_handle.clone(),
                                     solve_id: solve.solve_id(),
-                                    input: Descriptor::from(solve.input().clone()),
-                                    output: Descriptor::from(solve.output().clone()),
+                                    input: Descriptor::from(solve.input_descriptor().clone()),
+                                    output: Descriptor::from(solve.output_descriptor().clone()),
                                     adapter: solve.adapter().to_string(),
                                     adapter_options: solve.adapter_options().to_string(),
                                 })

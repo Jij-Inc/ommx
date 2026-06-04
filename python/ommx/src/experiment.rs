@@ -1619,15 +1619,13 @@ impl PySealedRun {
     /// Stored trace for this run, or `None` when this run was recorded without trace storage.
     pub fn trace<'py>(&self, py: Python<'py>) -> Result<Option<Bound<'py, PyAny>>> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let Some(descriptor) = self.run.trace()? else {
+        let Some(trace) = self.run.trace()? else {
             return Ok(None);
         };
-        let registry_handle = self.run.registry_handle();
-        let blob = registry_handle.registry().get_blob(&descriptor)?;
         let trace_result = py.import("ommx.tracing")?.getattr("TraceResult")?;
         Ok(Some(trace_result.call_method1(
             "from_otlp_protobuf",
-            (PyBytes::new(py, &blob),),
+            (PyBytes::new(py, trace.as_bytes()),),
         )?))
     }
 
@@ -1670,28 +1668,18 @@ impl PySolve {
     #[getter]
     /// Input `Instance` passed to the solver.
     pub fn input(&self) -> Result<crate::Instance> {
-        let descriptor = self.0.input()?;
         Ok(crate::Instance {
             inner: self.0.input_instance()?,
-            annotations: descriptor
-                .annotations()
-                .as_ref()
-                .cloned()
-                .unwrap_or_default(),
+            annotations: self.0.input_annotations()?,
         })
     }
 
     #[getter]
     /// Output `Solution` returned by the solver.
     pub fn output(&self) -> Result<crate::Solution> {
-        let descriptor = self.0.output()?;
         Ok(crate::Solution {
             inner: self.0.output_solution()?,
-            annotations: descriptor
-                .annotations()
-                .as_ref()
-                .cloned()
-                .unwrap_or_default(),
+            annotations: self.0.output_annotations()?,
         })
     }
 
