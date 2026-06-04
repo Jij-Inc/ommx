@@ -11,6 +11,8 @@ pub struct LayerRef(pub u32);
 #[non_exhaustive]
 pub struct ExperimentConfig {
     pub status: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub requested_image_name: Option<String>,
     pub attachments: AttachmentTable<LayerRef>,
     pub runs: Vec<ExperimentConfigRun>,
     pub run_parameters: LayerRef,

@@ -10,16 +10,14 @@
 //! Dynamic state stores plain OCI [`Descriptor`] values internally
 //! because it cannot store [`StoredDescriptor`] values whose lifetime is
 //! tied to the registry reference inside the same owned handle. This is
-//! an internal representation detail: public accessors that expose
-//! registry-backed descriptors promote those raw descriptors through
-//! `LocalRegistry::stored_descriptor` before returning them, restoring
-//! the Local Registry storage invariant at the API boundary.
+//! an internal representation detail: public accessors promote those raw
+//! descriptors before decoding typed payloads or writing attachment files.
 
 use super::attachment::{store_attachment_descriptor, AttachmentSpace};
+use super::config::ExperimentConfig;
 use super::{
     allocate_next_run_id, next_run_id, AttachmentLogger, AttachmentTable, ExperimentStatus, Name,
     RunEntry, RunParameterCell, RunStatus, SealedExperiment, UnsealedExperimentState,
-    ANN_EXPERIMENT_REQUESTED_IMAGE,
 };
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
 use crate::artifact::{
@@ -1093,19 +1091,12 @@ fn unsealed_run_parameter_cells<'a>(
 }
 
 fn checkpoint_requested_image_name(artifact: &LocalArtifactDyn) -> Result<ImageRef> {
-    let annotations = artifact.annotations()?;
-    let requested = annotations
-        .get(ANN_EXPERIMENT_REQUESTED_IMAGE)
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "Experiment checkpoint Artifact is missing {ANN_EXPERIMENT_REQUESTED_IMAGE} annotation"
-            )
-        })?;
-    ImageRef::parse(requested).with_context(|| {
-        format!(
-            "Invalid {ANN_EXPERIMENT_REQUESTED_IMAGE} annotation on Experiment checkpoint Artifact"
-        )
-    })
+    let config = checkpoint_experiment_config(artifact)?;
+    let requested = config.requested_image_name.ok_or_else(|| {
+        anyhow::anyhow!("Experiment checkpoint config is missing requested_image_name")
+    })?;
+    ImageRef::parse(&requested)
+        .with_context(|| "Invalid requested_image_name in Experiment checkpoint config")
 }
 
 fn checkpoint_artifact(
@@ -1124,32 +1115,32 @@ fn checkpoint_artifact(
     let artifact =
         LocalArtifactDyn::open_in_registry_handle(registry_handle, checkpoint_image_name.clone())
             .with_context(|| missing_checkpoint_message)?;
-    let annotations = artifact.annotations()?;
+    let config = checkpoint_experiment_config(&artifact)?;
     ensure!(
-        annotations
-            .get(super::ANN_EXPERIMENT_RECOVERY)
-            .map(String::as_str)
-            == Some("true"),
-        "Experiment checkpoint {checkpoint_image_name} is missing checkpoint marker"
-    );
-    ensure!(
-        annotations
-            .get(ANN_EXPERIMENT_REQUESTED_IMAGE)
-            .map(String::as_str)
+        config.requested_image_name.as_deref()
             == Some(requested_image_name.as_str()),
         "Experiment checkpoint {checkpoint_image_name} does not belong to requested image {requested_image_name}"
     );
-    let status = annotations
-        .get(super::ANN_EXPERIMENT_STATUS)
-        .map(String::as_str)
-        .ok_or_else(|| {
-            anyhow::anyhow!("Experiment checkpoint {checkpoint_image_name} is missing status")
-        })?;
     ensure!(
-        accepted_statuses.contains(&status),
-        "Experiment checkpoint {checkpoint_image_name} has status {status}"
+        accepted_statuses.contains(&config.status.as_str()),
+        "Experiment checkpoint {checkpoint_image_name} has status {}",
+        config.status
     );
     Ok(artifact)
+}
+
+fn checkpoint_experiment_config(artifact: &LocalArtifactDyn) -> Result<ExperimentConfig> {
+    let artifact = artifact.as_local_artifact();
+    let config = artifact.stored_config()?;
+    ensure!(
+        config.media_type() == &MediaType::Other(super::EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()),
+        "Experiment checkpoint config media type is {}, expected {}",
+        config.media_type(),
+        super::EXPERIMENT_CONFIG_MEDIA_TYPE
+    );
+    let bytes = artifact.get_blob(&config)?;
+    serde_json::from_slice::<ExperimentConfig>(&bytes)
+        .context("Failed to decode Experiment checkpoint config")
 }
 
 fn stored_attachment_table<'reg>(

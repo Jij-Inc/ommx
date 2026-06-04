@@ -102,9 +102,6 @@ const EXPERIMENT_STATUS_INTERRUPTED: &str = "interrupted";
 const ANN_SPACE: &str = "org.ommx.experiment.space";
 const ANN_RUN_ID: &str = "org.ommx.experiment.run_id";
 const ANN_ATTACHMENT_NAME: &str = "org.ommx.attachment.name";
-const ANN_EXPERIMENT_STATUS: &str = "org.ommx.experiment.status";
-const ANN_EXPERIMENT_RECOVERY: &str = "org.ommx.experiment.recovery";
-const ANN_EXPERIMENT_REQUESTED_IMAGE: &str = "org.ommx.experiment.requested_image";
 
 const RUN_PARAMETERS_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment.run-parameters+json";
 const EXPERIMENT_CONFIG_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment.config+json";

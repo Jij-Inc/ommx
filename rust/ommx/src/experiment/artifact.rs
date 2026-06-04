@@ -10,7 +10,6 @@ use crate::artifact::local_registry::{
 use crate::artifact::{media_types, ImageRef, LocalArtifact};
 use anyhow::Result;
 use oci_spec::image::MediaType;
-use std::collections::HashMap;
 
 impl<'reg> UnsealedExperimentState<'reg> {
     /// Consume the unsealed experiment state and commit it as one
@@ -22,7 +21,7 @@ impl<'reg> UnsealedExperimentState<'reg> {
             registry,
             image_name.clone(),
             super::EXPERIMENT_STATUS_FINISHED,
-            HashMap::new(),
+            None,
             RefPublishMode::Publish,
         )?;
         let checkpoint_image_name = registry.experiment_checkpoint_image_name(&image_name)?;
@@ -46,13 +45,12 @@ impl<'reg> UnsealedExperimentState<'reg> {
         let requested_image_name = self.image_name.clone();
         let checkpoint_image_name =
             registry.experiment_checkpoint_image_name(&requested_image_name)?;
-        let annotations = checkpoint_annotations(status, &requested_image_name);
 
         self.publish_as(
             registry,
             checkpoint_image_name,
             status,
-            annotations,
+            Some(&requested_image_name),
             RefPublishMode::Replace,
         )
     }
@@ -64,12 +62,11 @@ impl<'reg> UnsealedExperimentState<'reg> {
         registry: &'reg LocalRegistry,
     ) -> Result<LocalArtifact<'reg>> {
         let image_name = registry.experiment_checkpoint_image_name(&self.image_name)?;
-        let annotations = checkpoint_annotations(super::EXPERIMENT_STATUS_DRAFT, &self.image_name);
         let artifact = self.publish_as(
             registry,
             image_name,
             super::EXPERIMENT_STATUS_DRAFT,
-            annotations,
+            Some(&self.image_name),
             RefPublishMode::Replace,
         )?;
         Ok(artifact)
@@ -80,12 +77,13 @@ impl<'reg> UnsealedExperimentState<'reg> {
         registry: &'reg LocalRegistry,
         image_name: ImageRef,
         status: &str,
-        annotations: HashMap<String, String>,
+        requested_image_name: Option<&ImageRef>,
         publish_mode: RefPublishMode,
     ) -> Result<LocalArtifact<'reg>> {
         let run_parameters = self.run_parameter_descriptor(registry)?;
         let mut layers = LayerTable::default();
-        let config = self.experiment_config(&mut layers, run_parameters, status)?;
+        let config =
+            self.experiment_config(&mut layers, run_parameters, status, requested_image_name)?;
         let config_descriptor = registry.store_json_blob(
             MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()),
             &config,
@@ -95,7 +93,7 @@ impl<'reg> UnsealedExperimentState<'reg> {
             config_descriptor,
             layers.into_layers(),
             self.subject.clone(),
-            annotations,
+            Default::default(),
         );
         let sealed_artifact = registry.seal_artifact(artifact)?;
         let ref_update = match publish_mode {
@@ -137,6 +135,7 @@ impl<'reg> UnsealedExperimentState<'reg> {
         layers: &mut LayerTable<'reg>,
         run_parameters: StoredDescriptor<'reg>,
         status: &str,
+        requested_image_name: Option<&ImageRef>,
     ) -> Result<ExperimentConfig> {
         let attachments = self
             .attachments
@@ -173,6 +172,7 @@ impl<'reg> UnsealedExperimentState<'reg> {
 
         Ok(ExperimentConfig {
             status: status.to_string(),
+            requested_image_name: requested_image_name.map(ToString::to_string),
             attachments,
             runs,
             run_parameters: layers.push(run_parameters)?,
@@ -184,23 +184,6 @@ impl<'reg> UnsealedExperimentState<'reg> {
 enum RefPublishMode {
     Publish,
     Replace,
-}
-
-fn checkpoint_annotations(
-    status: &str,
-    requested_image_name: &ImageRef,
-) -> HashMap<String, String> {
-    HashMap::from([
-        (super::ANN_EXPERIMENT_STATUS.to_string(), status.to_string()),
-        (
-            super::ANN_EXPERIMENT_RECOVERY.to_string(),
-            "true".to_string(),
-        ),
-        (
-            super::ANN_EXPERIMENT_REQUESTED_IMAGE.to_string(),
-            requested_image_name.to_string(),
-        ),
-    ])
 }
 
 #[derive(Default)]

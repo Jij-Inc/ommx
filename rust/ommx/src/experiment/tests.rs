@@ -4,8 +4,7 @@ use super::config::{ExperimentConfig, ExperimentConfigRun, LayerRef};
 use super::UnsealedExperimentState;
 use super::{
     AttachmentLogger, AttachmentTable, Experiment, ExperimentDyn, ExperimentStatus, FileAttachment,
-    Name, ParameterValue, SealedExperiment, Trace, ANN_ATTACHMENT_NAME, ANN_EXPERIMENT_RECOVERY,
-    ANN_EXPERIMENT_REQUESTED_IMAGE, ANN_EXPERIMENT_STATUS, ANN_RUN_ID, ANN_SPACE,
+    Name, ParameterValue, SealedExperiment, Trace, ANN_ATTACHMENT_NAME, ANN_RUN_ID, ANN_SPACE,
     EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_STATUS_DRAFT, EXPERIMENT_STATUS_FAILED,
     EXPERIMENT_STATUS_FINISHED, EXPERIMENT_STATUS_INTERRUPTED, RUN_PARAMETERS_MEDIA_TYPE,
     RUN_STATUS_FAILED, RUN_STATUS_FINISHED, RUN_STATUS_INTERRUPTED,
@@ -731,6 +730,7 @@ fn loaded_experiment_rejects_non_finished_status() {
         .unwrap();
     let config = ExperimentConfig {
         status: "crashed".to_string(),
+        requested_image_name: None,
         attachments: AttachmentTable::new(),
         runs: Vec::new(),
         run_parameters: LayerRef(0),
@@ -782,6 +782,7 @@ fn loaded_experiment_rejects_config_attachment_not_listed_in_layers() {
         .unwrap();
     let config = ExperimentConfig {
         status: EXPERIMENT_STATUS_FINISHED.to_string(),
+        requested_image_name: None,
         attachments: attachment_refs([("outside", LayerRef(1))]),
         runs: Vec::new(),
         run_parameters: LayerRef(0),
@@ -839,6 +840,7 @@ fn loaded_experiment_uses_config_table_for_attachment_names() {
         .unwrap();
     let config = ExperimentConfig {
         status: EXPERIMENT_STATUS_FINISHED.to_string(),
+        requested_image_name: None,
         attachments: attachment_refs([("config-name", LayerRef(0))]),
         runs: Vec::new(),
         run_parameters: LayerRef(1),
@@ -885,6 +887,7 @@ fn loaded_experiment_rejects_filename_without_attachment_entry() {
         .unwrap();
     let config = ExperimentConfig {
         status: EXPERIMENT_STATUS_FINISHED.to_string(),
+        requested_image_name: None,
         attachments: AttachmentTable::from_parts_unchecked(
             BTreeMap::new(),
             BTreeMap::from([("missing".to_string(), "missing.txt".to_string())]),
@@ -942,6 +945,7 @@ fn loaded_experiment_rejects_config_run_attachment_not_listed_in_layers() {
         .unwrap();
     let config = ExperimentConfig {
         status: EXPERIMENT_STATUS_FINISHED.to_string(),
+        requested_image_name: None,
         attachments: AttachmentTable::new(),
         runs: vec![ExperimentConfigRun {
             run_id: 0,
@@ -991,6 +995,7 @@ fn loaded_experiment_rejects_run_parameters_not_listed_in_layers() {
         .unwrap();
     let config = ExperimentConfig {
         status: EXPERIMENT_STATUS_FINISHED.to_string(),
+        requested_image_name: None,
         attachments: AttachmentTable::new(),
         runs: Vec::new(),
         run_parameters: LayerRef(0),
@@ -1340,24 +1345,12 @@ fn experiment_dyn_publishes_failed_checkpoint() {
     .unwrap();
     assert_eq!(checkpoint.image_name(), &checkpoint_image_name);
 
-    let annotations = checkpoint.annotations().unwrap();
-    assert_eq!(
-        annotations.get(ANN_EXPERIMENT_STATUS).map(String::as_str),
-        Some(EXPERIMENT_STATUS_FAILED)
-    );
-    assert_eq!(
-        annotations.get(ANN_EXPERIMENT_RECOVERY).map(String::as_str),
-        Some("true")
-    );
-    let requested_image_name = image_name.to_string();
-    assert_eq!(
-        annotations.get(ANN_EXPERIMENT_REQUESTED_IMAGE),
-        Some(&requested_image_name)
-    );
+    assert!(checkpoint.annotations().unwrap().is_empty());
 
     let checkpoint_artifact = checkpoint.as_local_artifact();
     let config = experiment_config(&checkpoint_artifact);
     assert_eq!(config.status, EXPERIMENT_STATUS_FAILED);
+    assert_eq!(config.requested_image_name, Some(image_name.to_string()));
     let err = SealedExperiment::from_artifact(checkpoint_artifact)
         .expect_err("failed checkpoint must not load as finished experiments");
     assert!(err.to_string().contains("status is failed"));
@@ -1438,22 +1431,11 @@ fn experiment_dyn_autosaves_on_run_close_and_recovers_with_requested_image_name(
     )
     .expect("Run close should publish an autosave checkpoint");
     assert_eq!(autosave.image_name(), &checkpoint_image_name);
-    let annotations = autosave.annotations().unwrap();
-    assert_eq!(
-        annotations.get(ANN_EXPERIMENT_STATUS).map(String::as_str),
-        Some(EXPERIMENT_STATUS_DRAFT)
-    );
-    assert_eq!(
-        annotations.get(ANN_EXPERIMENT_RECOVERY).map(String::as_str),
-        Some("true")
-    );
-    assert_eq!(
-        annotations.get(ANN_EXPERIMENT_REQUESTED_IMAGE),
-        Some(&image_name.to_string())
-    );
+    assert!(autosave.annotations().unwrap().is_empty());
 
     let config = experiment_config(&autosave.as_local_artifact());
     assert_eq!(config.status, EXPERIMENT_STATUS_DRAFT);
+    assert_eq!(config.requested_image_name, Some(image_name.to_string()));
     assert_eq!(config.runs.len(), 1);
     assert_eq!(config.runs[0].status, RUN_STATUS_FINISHED);
     assert_eq!(experiment.runs().unwrap().len(), 1);
@@ -1519,13 +1501,10 @@ fn experiment_dyn_marks_keyboard_interrupt_checkpoint_separately() {
     let checkpoint =
         LocalArtifactDyn::open_in_registry_handle(registry_handle.clone(), checkpoint_image_name)
             .unwrap();
-    let annotations = checkpoint.annotations().unwrap();
-    assert_eq!(
-        annotations.get(ANN_EXPERIMENT_STATUS).map(String::as_str),
-        Some(EXPERIMENT_STATUS_INTERRUPTED)
-    );
+    assert!(checkpoint.annotations().unwrap().is_empty());
     let config = experiment_config(&checkpoint.as_local_artifact());
     assert_eq!(config.status, EXPERIMENT_STATUS_INTERRUPTED);
+    assert_eq!(config.requested_image_name, Some(image_name.to_string()));
     assert_eq!(config.runs[0].status, RUN_STATUS_INTERRUPTED);
 }
 
