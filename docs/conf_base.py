@@ -110,6 +110,8 @@ autoapi_ignore = [
     "**/ommx/artifact/**",
     "**/ommx/experiment/**",
     "**/ommx/_ommx_rust/**",
+    "**/.pyodide_build/**",
+    "**/node_modules/pyodide/**",
     "**/pywasmcross/**",
 ]
 autoapi_add_toctree_entry = False
