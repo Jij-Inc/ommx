@@ -485,7 +485,7 @@ impl PyExperiment {
         value: AttachmentPayload,
     ) -> Result<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let attachment = codec.encode_attachment(py, &value)?;
+        let attachment = codec.encode(py, &value)?;
         AttachmentLogger::log_attachment(&self.inner, name, attachment.media_type, attachment.bytes)
     }
 
@@ -718,13 +718,20 @@ impl AttachmentCodecInput {
             .context("Attachment codec `media_type` must be a string")
     }
 
-    fn encode(&self, py: Python<'_>, value: &Bound<'_, PyAny>) -> Result<Vec<u8>> {
-        self.0
+    fn encode(&self, py: Python<'_>, value: &AttachmentPayload) -> Result<EncodedAttachment> {
+        let media_type = self.media_type(py)?;
+        let value = value.0.bind(py);
+        let bytes = self
+            .0
             .bind(py)
             .call_method1("encode", (value,))
             .context("Attachment codec `encode(...)` failed")?
             .extract()
-            .context("Attachment codec `encode(...)` must return bytes")
+            .context("Attachment codec `encode(...)` must return bytes")?;
+        Ok(EncodedAttachment {
+            media_type: MediaType::Other(media_type),
+            bytes,
+        })
     }
 
     fn decode(&self, py: Python<'_>, blob: &[u8]) -> Result<AttachmentPayload> {
@@ -734,19 +741,6 @@ impl AttachmentCodecInput {
             .call_method1("decode", (PyBytes::new(py, blob),))
             .context("Attachment codec `decode(...)` failed")?;
         Ok(AttachmentPayload(value.unbind()))
-    }
-
-    fn encode_attachment(
-        &self,
-        py: Python<'_>,
-        value: &AttachmentPayload,
-    ) -> Result<EncodedAttachment> {
-        let media_type = self.media_type(py)?;
-        let bytes = self.encode(py, &value.0.bind(py))?;
-        Ok(EncodedAttachment {
-            media_type: MediaType::Other(media_type),
-            bytes,
-        })
     }
 }
 
@@ -1142,7 +1136,7 @@ impl PyRun {
     ) -> Result<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
         self.ensure_store_trace_context_started()?;
-        let attachment = codec.encode_attachment(py, &value)?;
+        let attachment = codec.encode(py, &value)?;
         AttachmentLogger::log_attachment(
             self.as_open_mut()?,
             name,
