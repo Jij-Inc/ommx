@@ -74,9 +74,12 @@ pi = ParametricInstance.from_components(
 一方で、payload がすでにファイルとして存在するなら、そのファイルを直接添付します。`log_file` はファイルのbytesをExperimentにコピーします。後から読む側では、bytesとして読む `get_blob` か、実ファイルとして復元する `write_attachment` を使えます。Excel workbook、solver log、生成したplotなど、OMMXの外で作られたファイルにはこの経路を使うのが自然です。
 
 ```python
+import io
+
 experiment.log_file("input-spreadsheet", "input.xlsx")
 
-data = loaded_experiment.get_blob("input-spreadsheet")
+spreadsheet_file = io.BytesIO(loaded_experiment.get_blob("input-spreadsheet"))
+# `spreadsheet_file` はbinary file-like objectを受け取るライブラリに渡せる。
 loaded_experiment.write_attachment("input-spreadsheet", "restored/input.xlsx")
 ```
 

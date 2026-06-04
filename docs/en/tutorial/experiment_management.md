@@ -74,9 +74,12 @@ If the original model was written in a modeling package, keep that source model 
 If the payload already exists as a file, attach that file directly instead. `log_file` copies the file bytes into the Experiment, and later readers can use `get_blob` to read the bytes or `write_attachment` to restore the file to disk. This is the usual path for Excel workbooks, solver logs, generated plots, and other files produced outside OMMX.
 
 ```python
+import io
+
 experiment.log_file("input-spreadsheet", "input.xlsx")
 
-data = loaded_experiment.get_blob("input-spreadsheet")
+spreadsheet_file = io.BytesIO(loaded_experiment.get_blob("input-spreadsheet"))
+# Pass `spreadsheet_file` to a library that accepts a binary file-like object.
 loaded_experiment.write_attachment("input-spreadsheet", "restored/input.xlsx")
 ```
 
