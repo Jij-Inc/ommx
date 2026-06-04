@@ -119,7 +119,7 @@ with Experiment() as experiment:
   # Store the model as experiment-level information.
   experiment.log_parametric_instance("instance", pi)
 
-  # Store the original JijModeling Problem through the codec provided by JijModeling.
+  # Store the original JijModeling Problem through the temporary codec defined above.
   experiment.log_with_codec(
     ProblemCodec,
     "jijmodeling-problem",
