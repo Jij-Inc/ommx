@@ -1998,24 +1998,6 @@ class Experiment:
         r"""
         Read raw bytes of an experiment-level attachment by name.
         """
-    def open_attachment(
-        self,
-        name: builtins.str,
-        mode: builtins.str = "rb",
-        *,
-        encoding: typing.Optional[builtins.str] = None,
-        errors: typing.Optional[builtins.str] = None,
-        newline: typing.Optional[builtins.str] = None,
-        expected_media_type: typing.Optional[builtins.str] = None,
-    ) -> typing.BinaryIO | typing.TextIO:
-        r"""
-        Open an experiment-level attachment as a read-only file-like object.
-
-        Binary mode (`"rb"`) returns an `io.BytesIO`; text modes (`"r"` or
-        `"rt"`) return an `io.TextIOWrapper`. Write, append, exclusive-create,
-        and update modes are not supported because attachments are immutable
-        blobs.
-        """
     def write_attachment(
         self,
         name: builtins.str,
@@ -6267,24 +6249,6 @@ class SealedRun:
     def get_blob(self, name: builtins.str) -> bytes:
         r"""
         Read raw bytes of a run-level attachment by name.
-        """
-    def open_attachment(
-        self,
-        name: builtins.str,
-        mode: builtins.str = "rb",
-        *,
-        encoding: typing.Optional[builtins.str] = None,
-        errors: typing.Optional[builtins.str] = None,
-        newline: typing.Optional[builtins.str] = None,
-        expected_media_type: typing.Optional[builtins.str] = None,
-    ) -> typing.BinaryIO | typing.TextIO:
-        r"""
-        Open a run-level attachment as a read-only file-like object.
-
-        Binary mode (`"rb"`) returns an `io.BytesIO`; text modes (`"r"` or
-        `"rt"`) return an `io.TextIOWrapper`. Write, append, exclusive-create,
-        and update modes are not supported because attachments are immutable
-        blobs.
         """
     def write_attachment(
         self,

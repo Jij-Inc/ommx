@@ -71,13 +71,13 @@ pi = ParametricInstance.from_components(
 
 元のモデルをモデリング用パッケージで記述している場合は、そのソースモデルもAttachmentとして保存しておくと後から参照できます。外部パッケージが所有する型について、OMMXはAttachment CodecのProtocolと、それを呼び出す `log_with_codec` / `get_with_codec` メソッドだけを定義します。具体的なCodecはその型を所有するパッケージ側で提供します。このチュートリアルではJijModeling `Problem` 用の一時的な `ProblemCodec` を定義して使います。同等のCodecは将来的にJijModeling本体で提供される予定です。
 
-一方で、payload がすでにファイルとして存在するなら、そのファイルを直接添付します。`log_file` はファイルのbytesをExperimentにコピーします。後から読む側では、Pythonのfile-like objectとして扱う `open_attachment` か、実ファイルとして復元する `write_attachment` を使えます。Excel workbook、solver log、生成したplotなど、OMMXの外で作られたファイルにはこの経路を使うのが自然です。
+一方で、payload がすでにファイルとして存在するなら、そのファイルを直接添付します。`log_file` はファイルのbytesをExperimentにコピーします。後から読む側では、bytesとして読む `get_blob` か、実ファイルとして復元する `write_attachment` を使えます。Excel workbook、solver log、生成したplotなど、OMMXの外で作られたファイルにはこの経路を使うのが自然です。
 
 ```python
 experiment.log_file("input-spreadsheet", "input.xlsx")
 
-with loaded_experiment.open_attachment("input-spreadsheet") as file:
-  data = file.read()
+data = loaded_experiment.get_blob("input-spreadsheet")
+loaded_experiment.write_attachment("input-spreadsheet", "restored/input.xlsx")
 ```
 
 ```{code-cell} ipython3

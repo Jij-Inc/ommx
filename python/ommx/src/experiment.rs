@@ -383,42 +383,6 @@ impl PyExperiment {
         ))
     }
 
-    /// Open an experiment-level attachment as a read-only file-like object.
-    ///
-    /// Binary mode (`"rb"`) returns an `io.BytesIO`; text modes (`"r"` or
-    /// `"rt"`) return an `io.TextIOWrapper`. Write, append, exclusive-create,
-    /// and update modes are not supported because attachments are immutable
-    /// blobs.
-    #[pyo3(signature = (name, mode = "rb", *, encoding = None, errors = None, newline = None, expected_media_type = None))]
-    #[gen_stub(override_return_type(
-        type_repr = "typing.BinaryIO | typing.TextIO",
-        imports = ("typing")
-    ))]
-    pub fn open_attachment<'py>(
-        &self,
-        py: Python<'py>,
-        name: &str,
-        mode: &str,
-        encoding: Option<&str>,
-        errors: Option<&str>,
-        newline: Option<&str>,
-        expected_media_type: Option<&str>,
-    ) -> Result<Bound<'py, PyAny>> {
-        let _guard = crate::TRACING.attach_parent_context(py);
-        let descriptor = self.find_attachment(name)?;
-        let registry_handle = self.inner.registry_handle();
-        open_attachment_descriptor(
-            py,
-            registry_handle.registry(),
-            &descriptor,
-            mode,
-            encoding,
-            errors,
-            newline,
-            expected_media_type,
-        )
-    }
-
     /// Write an experiment-level attachment to a filesystem path.
     ///
     /// If `path` names an existing directory, the attachment filename stored
@@ -844,98 +808,6 @@ fn validate_attachment_filename(filename: &str) -> Result<()> {
         "Attachment filename must not be `.` or `..`"
     );
     Ok(())
-}
-
-enum AttachmentOpenMode {
-    Binary,
-    Text,
-}
-
-fn parse_attachment_open_mode(mode: &str) -> Result<AttachmentOpenMode> {
-    let mut has_read = false;
-    let mut has_binary = false;
-    let mut has_text = false;
-
-    for ch in mode.chars() {
-        match ch {
-            'r' => {
-                ensure!(!has_read, "Attachment open mode contains duplicate `r`");
-                has_read = true;
-            }
-            'b' => {
-                ensure!(!has_binary, "Attachment open mode contains duplicate `b`");
-                has_binary = true;
-            }
-            't' => {
-                ensure!(!has_text, "Attachment open mode contains duplicate `t`");
-                has_text = true;
-            }
-            'w' | 'a' | 'x' | '+' => {
-                anyhow::bail!("Attachment open mode must be read-only; use `rb`, `r`, or `rt`")
-            }
-            _ => anyhow::bail!("Unsupported attachment open mode `{mode}`; use `rb`, `r`, or `rt`"),
-        }
-    }
-
-    ensure!(
-        has_read,
-        "Attachment open mode must include `r`; use `rb`, `r`, or `rt`"
-    );
-    ensure!(
-        !(has_binary && has_text),
-        "Attachment open mode must not include both `b` and `t`"
-    );
-
-    if has_binary {
-        Ok(AttachmentOpenMode::Binary)
-    } else {
-        Ok(AttachmentOpenMode::Text)
-    }
-}
-
-fn open_attachment_descriptor<'py>(
-    py: Python<'py>,
-    registry: &LocalRegistry,
-    descriptor: &StoredDescriptor<'_>,
-    mode: &str,
-    encoding: Option<&str>,
-    errors: Option<&str>,
-    newline: Option<&str>,
-    expected_media_type: Option<&str>,
-) -> Result<Bound<'py, PyAny>> {
-    if let Some(expected_media_type) = expected_media_type {
-        descriptor.ensure_media_type(&MediaType::from(expected_media_type))?;
-    }
-
-    let mode = parse_attachment_open_mode(mode)?;
-    let blob = registry.get_blob(descriptor)?;
-    let io = py.import("io")?;
-    let bytes_io = io.getattr("BytesIO")?.call1((PyBytes::new(py, &blob),))?;
-
-    match mode {
-        AttachmentOpenMode::Binary => {
-            ensure!(
-                encoding.is_none() && errors.is_none() && newline.is_none(),
-                "`encoding`, `errors`, and `newline` are only valid in text attachment mode"
-            );
-            Ok(bytes_io)
-        }
-        AttachmentOpenMode::Text => {
-            let kwargs = PyDict::new(py);
-            if let Some(encoding) = encoding {
-                kwargs.set_item("encoding", encoding)?;
-            }
-            if let Some(errors) = errors {
-                kwargs.set_item("errors", errors)?;
-            }
-            if let Some(newline) = newline {
-                kwargs.set_item("newline", newline)?;
-            }
-            Ok(io
-                .getattr("TextIOWrapper")?
-                .call((bytes_io,), Some(&kwargs))?)
-        }
-    }
 }
 
 fn write_attachment_descriptor(
@@ -1886,42 +1758,6 @@ impl PySealedRun {
             py,
             &registry_handle.registry().get_blob(&descriptor)?,
         ))
-    }
-
-    /// Open a run-level attachment as a read-only file-like object.
-    ///
-    /// Binary mode (`"rb"`) returns an `io.BytesIO`; text modes (`"r"` or
-    /// `"rt"`) return an `io.TextIOWrapper`. Write, append, exclusive-create,
-    /// and update modes are not supported because attachments are immutable
-    /// blobs.
-    #[pyo3(signature = (name, mode = "rb", *, encoding = None, errors = None, newline = None, expected_media_type = None))]
-    #[gen_stub(override_return_type(
-        type_repr = "typing.BinaryIO | typing.TextIO",
-        imports = ("typing")
-    ))]
-    pub fn open_attachment<'py>(
-        &self,
-        py: Python<'py>,
-        name: &str,
-        mode: &str,
-        encoding: Option<&str>,
-        errors: Option<&str>,
-        newline: Option<&str>,
-        expected_media_type: Option<&str>,
-    ) -> Result<Bound<'py, PyAny>> {
-        let _guard = crate::TRACING.attach_parent_context(py);
-        let descriptor = self.find_attachment(name)?;
-        let registry_handle = self.run.registry_handle();
-        open_attachment_descriptor(
-            py,
-            registry_handle.registry(),
-            &descriptor,
-            mode,
-            encoding,
-            errors,
-            newline,
-            expected_media_type,
-        )
     }
 
     /// Write a run-level attachment to a filesystem path.
