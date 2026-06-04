@@ -1998,6 +1998,38 @@ class Experiment:
         r"""
         Read raw bytes of an experiment-level attachment by name.
         """
+    def open_attachment(
+        self,
+        name: builtins.str,
+        mode: builtins.str = "rb",
+        *,
+        encoding: typing.Optional[builtins.str] = None,
+        errors: typing.Optional[builtins.str] = None,
+        newline: typing.Optional[builtins.str] = None,
+        expected_media_type: typing.Optional[builtins.str] = None,
+    ) -> typing.BinaryIO | typing.TextIO:
+        r"""
+        Open an experiment-level attachment as a read-only file-like object.
+
+        Binary mode (`"rb"`) returns an `io.BytesIO`; text modes (`"r"` or
+        `"rt"`) return an `io.TextIOWrapper`. Write, append, exclusive-create,
+        and update modes are not supported because attachments are immutable
+        blobs.
+        """
+    def write_attachment(
+        self,
+        name: builtins.str,
+        path: builtins.str | os.PathLike | pathlib.Path,
+        *,
+        overwrite: builtins.bool = False,
+    ) -> pathlib.Path:
+        r"""
+        Write an experiment-level attachment to a filesystem path.
+
+        If `path` names an existing directory, the attachment filename stored
+        by `log_file` is used inside that directory. Otherwise `path` is
+        treated as the destination file path.
+        """
     def get_with_codec(
         self,
         codec: type[attachments.AttachmentCodec[attachments.T]],
@@ -2036,6 +2068,23 @@ class Experiment:
 
         The `name` is stored as attachment metadata and is intended for
         humans. The bytes are stored as a layer in the committed artifact.
+        """
+    def log_file(
+        self,
+        name: builtins.str,
+        path: builtins.str | os.PathLike | pathlib.Path,
+        media_type: typing.Optional[builtins.str] = None,
+        *,
+        filename: typing.Optional[builtins.str] = None,
+    ) -> None:
+        r"""
+        Attach an existing filesystem file in the experiment space.
+
+        The file bytes are copied into the Local Registry immediately. If
+        `media_type` is omitted, Python's `mimetypes.guess_type` is used and
+        unknown types fall back to `application/octet-stream`. The original
+        source path is not stored; only a basename for later export is stored
+        as attachment metadata.
         """
     def log_with_codec(
         self,
@@ -5505,6 +5554,23 @@ class Run:
         Use this for payloads that belong to this run but are not scalar run
         parameters, for example solver logs or derived files.
         """
+    def log_file(
+        self,
+        name: builtins.str,
+        path: builtins.str | os.PathLike | pathlib.Path,
+        media_type: typing.Optional[builtins.str] = None,
+        *,
+        filename: typing.Optional[builtins.str] = None,
+    ) -> None:
+        r"""
+        Attach an existing filesystem file in this run.
+
+        The file bytes are copied into the Local Registry immediately. If
+        `media_type` is omitted, Python's `mimetypes.guess_type` is used and
+        unknown types fall back to `application/octet-stream`. The original
+        source path is not stored; only a basename for later export is stored
+        as attachment metadata.
+        """
     def log_with_codec(
         self,
         codec: type[attachments.AttachmentCodec[attachments.T]],
@@ -6201,6 +6267,38 @@ class SealedRun:
     def get_blob(self, name: builtins.str) -> bytes:
         r"""
         Read raw bytes of a run-level attachment by name.
+        """
+    def open_attachment(
+        self,
+        name: builtins.str,
+        mode: builtins.str = "rb",
+        *,
+        encoding: typing.Optional[builtins.str] = None,
+        errors: typing.Optional[builtins.str] = None,
+        newline: typing.Optional[builtins.str] = None,
+        expected_media_type: typing.Optional[builtins.str] = None,
+    ) -> typing.BinaryIO | typing.TextIO:
+        r"""
+        Open a run-level attachment as a read-only file-like object.
+
+        Binary mode (`"rb"`) returns an `io.BytesIO`; text modes (`"r"` or
+        `"rt"`) return an `io.TextIOWrapper`. Write, append, exclusive-create,
+        and update modes are not supported because attachments are immutable
+        blobs.
+        """
+    def write_attachment(
+        self,
+        name: builtins.str,
+        path: builtins.str | os.PathLike | pathlib.Path,
+        *,
+        overwrite: builtins.bool = False,
+    ) -> pathlib.Path:
+        r"""
+        Write a run-level attachment to a filesystem path.
+
+        If `path` names an existing directory, the attachment filename stored
+        by `log_file` is used inside that directory. Otherwise `path` is
+        treated as the destination file path.
         """
     def get_with_codec(
         self,

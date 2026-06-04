@@ -2,7 +2,7 @@
 
 use super::{ANN_ATTACHMENT_NAME, ANN_RUN_ID, ANN_SPACE};
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
-use anyhow::Result;
+use anyhow::{ensure, Result};
 use oci_spec::image::MediaType;
 use std::collections::HashMap;
 
@@ -42,12 +42,38 @@ pub fn store_attachment_descriptor<'reg>(
     media_type: MediaType,
     bytes: &[u8],
 ) -> Result<StoredDescriptor<'reg>> {
+    store_attachment_descriptor_with_annotations(
+        registry,
+        space,
+        name,
+        media_type,
+        bytes,
+        HashMap::new(),
+    )
+}
+
+/// Write `bytes` to the registry and build the in-memory Attachment descriptor.
+pub fn store_attachment_descriptor_with_annotations<'reg>(
+    registry: &'reg LocalRegistry,
+    space: AttachmentSpace,
+    name: &str,
+    media_type: MediaType,
+    bytes: &[u8],
+    extra_annotations: HashMap<String, String>,
+) -> Result<StoredDescriptor<'reg>> {
     let mut annotations = HashMap::new();
     annotations.insert(ANN_SPACE.to_string(), space.as_str().to_string());
     if let Some(run_id) = space.run_id() {
         annotations.insert(ANN_RUN_ID.to_string(), run_id.to_string());
     }
     annotations.insert(ANN_ATTACHMENT_NAME.to_string(), name.to_string());
+    for (key, value) in extra_annotations {
+        ensure!(
+            key != ANN_SPACE && key != ANN_RUN_ID && key != ANN_ATTACHMENT_NAME,
+            "Attachment annotation `{key}` is reserved"
+        );
+        annotations.insert(key, value);
+    }
 
     registry.store_layer_blob(media_type, bytes, annotations)
 }

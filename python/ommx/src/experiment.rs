@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{ensure, Context, Result};
 use oci_spec::image::{Descriptor, MediaType};
 use pyo3::{
     exceptions::PyKeyboardInterrupt,
@@ -6,9 +6,9 @@ use pyo3::{
     types::{PyBool, PyBytes, PyDict, PyFloat, PyInt, PyString, PyType, PyTypeMethods},
 };
 use std::{
-    collections::{btree_map::Entry, BTreeMap},
-    mem,
-    path::PathBuf,
+    collections::{btree_map::Entry, BTreeMap, HashMap},
+    fs, mem,
+    path::{Path, PathBuf},
 };
 
 use crate::pandas::{raw_entries_to_dataframe, PyDataFrame};
@@ -383,6 +383,67 @@ impl PyExperiment {
         ))
     }
 
+    /// Open an experiment-level attachment as a read-only file-like object.
+    ///
+    /// Binary mode (`"rb"`) returns an `io.BytesIO`; text modes (`"r"` or
+    /// `"rt"`) return an `io.TextIOWrapper`. Write, append, exclusive-create,
+    /// and update modes are not supported because attachments are immutable
+    /// blobs.
+    #[pyo3(signature = (name, mode = "rb", *, encoding = None, errors = None, newline = None, expected_media_type = None))]
+    #[gen_stub(override_return_type(
+        type_repr = "typing.BinaryIO | typing.TextIO",
+        imports = ("typing")
+    ))]
+    pub fn open_attachment<'py>(
+        &self,
+        py: Python<'py>,
+        name: &str,
+        mode: &str,
+        encoding: Option<&str>,
+        errors: Option<&str>,
+        newline: Option<&str>,
+        expected_media_type: Option<&str>,
+    ) -> Result<Bound<'py, PyAny>> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let descriptor = self.find_attachment(name)?;
+        let registry_handle = self.inner.registry_handle();
+        open_attachment_descriptor(
+            py,
+            registry_handle.registry(),
+            &descriptor,
+            mode,
+            encoding,
+            errors,
+            newline,
+            expected_media_type,
+        )
+    }
+
+    /// Write an experiment-level attachment to a filesystem path.
+    ///
+    /// If `path` names an existing directory, the attachment filename stored
+    /// by `log_file` is used inside that directory. Otherwise `path` is
+    /// treated as the destination file path.
+    #[pyo3(signature = (name, path, *, overwrite = false))]
+    pub fn write_attachment(
+        &self,
+        py: Python<'_>,
+        name: &str,
+        path: PathBuf,
+        overwrite: bool,
+    ) -> Result<PathBuf> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let descriptor = self.find_attachment(name)?;
+        let registry_handle = self.inner.registry_handle();
+        write_attachment_descriptor(
+            registry_handle.registry(),
+            &descriptor,
+            name,
+            path,
+            overwrite,
+        )
+    }
+
     /// Read an experiment-level attachment by name and decode it with a codec.
     ///
     /// The codec class must provide `media_type`, `encode(value) -> bytes`,
@@ -465,6 +526,30 @@ impl PyExperiment {
             MediaType::from(media_type),
             bytes.as_bytes(),
         )
+    }
+
+    /// Attach an existing filesystem file in the experiment space.
+    ///
+    /// The file bytes are copied into the Local Registry immediately. If
+    /// `media_type` is omitted, Python's `mimetypes.guess_type` is used and
+    /// unknown types fall back to `application/octet-stream`. The original
+    /// source path is not stored; only a basename for later export is stored
+    /// as attachment metadata.
+    #[pyo3(signature = (name, path, media_type = None, *, filename = None))]
+    pub fn log_file(
+        &mut self,
+        py: Python<'_>,
+        name: &str,
+        path: PathBuf,
+        media_type: Option<&str>,
+        filename: Option<&str>,
+    ) -> Result<()> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let media_type = file_media_type(py, &path, media_type)?;
+        let bytes = read_attachment_file(&path)?;
+        let annotations = file_attachment_annotations(&path, filename)?;
+        self.inner
+            .log_attachment_with_annotations(name, media_type, bytes, annotations)
     }
 
     /// Encode a Python object with an attachment codec and attach it in the experiment space.
@@ -670,6 +755,8 @@ fn close_python_context_manager(
 }
 
 const ANN_ATTACHMENT_NAME: &str = "org.ommx.attachment.name";
+const ANN_ATTACHMENT_FILENAME: &str = "org.ommx.attachment.filename";
+const DEFAULT_FILE_MEDIA_TYPE: &str = "application/octet-stream";
 
 fn attachment_name(descriptor: &Descriptor) -> Option<&str> {
     descriptor
@@ -679,12 +766,222 @@ fn attachment_name(descriptor: &Descriptor) -> Option<&str> {
         .map(String::as_str)
 }
 
+fn attachment_filename(descriptor: &Descriptor) -> Option<&str> {
+    descriptor
+        .annotations()
+        .as_ref()
+        .and_then(|annotations| annotations.get(ANN_ATTACHMENT_FILENAME))
+        .map(String::as_str)
+}
+
 fn attachment_annotations(descriptor: &Descriptor) -> std::collections::HashMap<String, String> {
     descriptor
         .annotations()
         .as_ref()
         .cloned()
         .unwrap_or_default()
+}
+
+fn read_attachment_file(path: &Path) -> Result<Vec<u8>> {
+    let metadata = fs::metadata(path)
+        .with_context(|| format!("Failed to inspect attachment file `{}`", path.display()))?;
+    ensure!(
+        metadata.is_file(),
+        "Attachment path `{}` is not a regular file",
+        path.display()
+    );
+    fs::read(path).with_context(|| format!("Failed to read attachment file `{}`", path.display()))
+}
+
+fn file_media_type(py: Python<'_>, path: &Path, media_type: Option<&str>) -> Result<MediaType> {
+    if let Some(media_type) = media_type {
+        return Ok(MediaType::from(media_type));
+    }
+
+    let mimetypes = py.import("mimetypes")?;
+    let guessed = mimetypes.call_method1("guess_type", (path.to_string_lossy().as_ref(),))?;
+    let (media_type, _encoding): (Option<String>, Option<String>) = guessed.extract()?;
+    Ok(MediaType::from(
+        media_type.as_deref().unwrap_or(DEFAULT_FILE_MEDIA_TYPE),
+    ))
+}
+
+fn file_attachment_annotations(
+    path: &Path,
+    filename: Option<&str>,
+) -> Result<HashMap<String, String>> {
+    let filename = match filename {
+        Some(filename) => filename.to_string(),
+        None => path
+            .file_name()
+            .and_then(|filename| filename.to_str())
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Attachment file `{}` does not have a valid UTF-8 filename",
+                    path.display()
+                )
+            })?
+            .to_string(),
+    };
+    validate_attachment_filename(&filename)?;
+
+    let mut annotations = HashMap::new();
+    annotations.insert(ANN_ATTACHMENT_FILENAME.to_string(), filename);
+    Ok(annotations)
+}
+
+fn validate_attachment_filename(filename: &str) -> Result<()> {
+    ensure!(
+        !filename.is_empty(),
+        "Attachment filename must not be empty"
+    );
+    ensure!(
+        !filename.contains('/') && !filename.contains('\\'),
+        "Attachment filename must be a basename, not a path"
+    );
+    ensure!(
+        filename != "." && filename != "..",
+        "Attachment filename must not be `.` or `..`"
+    );
+    Ok(())
+}
+
+enum AttachmentOpenMode {
+    Binary,
+    Text,
+}
+
+fn parse_attachment_open_mode(mode: &str) -> Result<AttachmentOpenMode> {
+    let mut has_read = false;
+    let mut has_binary = false;
+    let mut has_text = false;
+
+    for ch in mode.chars() {
+        match ch {
+            'r' => {
+                ensure!(!has_read, "Attachment open mode contains duplicate `r`");
+                has_read = true;
+            }
+            'b' => {
+                ensure!(!has_binary, "Attachment open mode contains duplicate `b`");
+                has_binary = true;
+            }
+            't' => {
+                ensure!(!has_text, "Attachment open mode contains duplicate `t`");
+                has_text = true;
+            }
+            'w' | 'a' | 'x' | '+' => {
+                anyhow::bail!("Attachment open mode must be read-only; use `rb`, `r`, or `rt`")
+            }
+            _ => anyhow::bail!("Unsupported attachment open mode `{mode}`; use `rb`, `r`, or `rt`"),
+        }
+    }
+
+    ensure!(
+        has_read,
+        "Attachment open mode must include `r`; use `rb`, `r`, or `rt`"
+    );
+    ensure!(
+        !(has_binary && has_text),
+        "Attachment open mode must not include both `b` and `t`"
+    );
+
+    if has_binary {
+        Ok(AttachmentOpenMode::Binary)
+    } else {
+        Ok(AttachmentOpenMode::Text)
+    }
+}
+
+fn open_attachment_descriptor<'py>(
+    py: Python<'py>,
+    registry: &LocalRegistry,
+    descriptor: &StoredDescriptor<'_>,
+    mode: &str,
+    encoding: Option<&str>,
+    errors: Option<&str>,
+    newline: Option<&str>,
+    expected_media_type: Option<&str>,
+) -> Result<Bound<'py, PyAny>> {
+    if let Some(expected_media_type) = expected_media_type {
+        descriptor.ensure_media_type(&MediaType::from(expected_media_type))?;
+    }
+
+    let mode = parse_attachment_open_mode(mode)?;
+    let blob = registry.get_blob(descriptor)?;
+    let io = py.import("io")?;
+    let bytes_io = io.getattr("BytesIO")?.call1((PyBytes::new(py, &blob),))?;
+
+    match mode {
+        AttachmentOpenMode::Binary => {
+            ensure!(
+                encoding.is_none() && errors.is_none() && newline.is_none(),
+                "`encoding`, `errors`, and `newline` are only valid in text attachment mode"
+            );
+            Ok(bytes_io)
+        }
+        AttachmentOpenMode::Text => {
+            let kwargs = PyDict::new(py);
+            if let Some(encoding) = encoding {
+                kwargs.set_item("encoding", encoding)?;
+            }
+            if let Some(errors) = errors {
+                kwargs.set_item("errors", errors)?;
+            }
+            if let Some(newline) = newline {
+                kwargs.set_item("newline", newline)?;
+            }
+            Ok(io
+                .getattr("TextIOWrapper")?
+                .call((bytes_io,), Some(&kwargs))?)
+        }
+    }
+}
+
+fn write_attachment_descriptor(
+    registry: &LocalRegistry,
+    descriptor: &StoredDescriptor<'_>,
+    name: &str,
+    path: PathBuf,
+    overwrite: bool,
+) -> Result<PathBuf> {
+    let output_path = attachment_output_path(descriptor, name, path);
+    if output_path.exists() && !overwrite {
+        anyhow::bail!(
+            "Attachment destination `{}` already exists",
+            output_path.display()
+        );
+    }
+
+    let blob = registry.get_blob(descriptor)?;
+    fs::write(&output_path, blob)
+        .with_context(|| format!("Failed to write attachment to `{}`", output_path.display()))?;
+    Ok(output_path)
+}
+
+fn attachment_output_path(descriptor: &StoredDescriptor<'_>, name: &str, path: PathBuf) -> PathBuf {
+    if path.is_dir() {
+        path.join(attachment_export_filename(descriptor, name))
+    } else {
+        path
+    }
+}
+
+fn attachment_export_filename(descriptor: &Descriptor, name: &str) -> String {
+    attachment_filename(descriptor)
+        .and_then(safe_attachment_filename)
+        .or_else(|| safe_attachment_filename(name))
+        .unwrap_or_else(|| "attachment".to_string())
+}
+
+fn safe_attachment_filename(filename: &str) -> Option<String> {
+    let candidate = filename.rsplit('/').next().unwrap_or(filename);
+    let candidate = candidate.rsplit('\\').next().unwrap_or(candidate);
+    if candidate.is_empty() || candidate == "." || candidate == ".." {
+        None
+    } else {
+        Some(candidate.to_string())
+    }
 }
 
 pub struct AttachmentCodecInput(Py<PyType>);
@@ -1106,6 +1403,31 @@ impl PyRun {
             MediaType::from(media_type),
             bytes.as_bytes(),
         )
+    }
+
+    /// Attach an existing filesystem file in this run.
+    ///
+    /// The file bytes are copied into the Local Registry immediately. If
+    /// `media_type` is omitted, Python's `mimetypes.guess_type` is used and
+    /// unknown types fall back to `application/octet-stream`. The original
+    /// source path is not stored; only a basename for later export is stored
+    /// as attachment metadata.
+    #[pyo3(signature = (name, path, media_type = None, *, filename = None))]
+    pub fn log_file(
+        &mut self,
+        py: Python<'_>,
+        name: &str,
+        path: PathBuf,
+        media_type: Option<&str>,
+        filename: Option<&str>,
+    ) -> Result<()> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        self.ensure_store_trace_context_started()?;
+        let media_type = file_media_type(py, &path, media_type)?;
+        let bytes = read_attachment_file(&path)?;
+        let annotations = file_attachment_annotations(&path, filename)?;
+        self.as_open_mut()?
+            .log_attachment_with_annotations(name, media_type, bytes, annotations)
     }
 
     /// Encode a Python object with an attachment codec and attach it in this run.
@@ -1564,6 +1886,67 @@ impl PySealedRun {
             py,
             &registry_handle.registry().get_blob(&descriptor)?,
         ))
+    }
+
+    /// Open a run-level attachment as a read-only file-like object.
+    ///
+    /// Binary mode (`"rb"`) returns an `io.BytesIO`; text modes (`"r"` or
+    /// `"rt"`) return an `io.TextIOWrapper`. Write, append, exclusive-create,
+    /// and update modes are not supported because attachments are immutable
+    /// blobs.
+    #[pyo3(signature = (name, mode = "rb", *, encoding = None, errors = None, newline = None, expected_media_type = None))]
+    #[gen_stub(override_return_type(
+        type_repr = "typing.BinaryIO | typing.TextIO",
+        imports = ("typing")
+    ))]
+    pub fn open_attachment<'py>(
+        &self,
+        py: Python<'py>,
+        name: &str,
+        mode: &str,
+        encoding: Option<&str>,
+        errors: Option<&str>,
+        newline: Option<&str>,
+        expected_media_type: Option<&str>,
+    ) -> Result<Bound<'py, PyAny>> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let descriptor = self.find_attachment(name)?;
+        let registry_handle = self.run.registry_handle();
+        open_attachment_descriptor(
+            py,
+            registry_handle.registry(),
+            &descriptor,
+            mode,
+            encoding,
+            errors,
+            newline,
+            expected_media_type,
+        )
+    }
+
+    /// Write a run-level attachment to a filesystem path.
+    ///
+    /// If `path` names an existing directory, the attachment filename stored
+    /// by `log_file` is used inside that directory. Otherwise `path` is
+    /// treated as the destination file path.
+    #[pyo3(signature = (name, path, *, overwrite = false))]
+    pub fn write_attachment(
+        &self,
+        py: Python<'_>,
+        name: &str,
+        path: PathBuf,
+        overwrite: bool,
+    ) -> Result<PathBuf> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let descriptor = self.find_attachment(name)?;
+        let registry_handle = self.run.registry_handle();
+        write_attachment_descriptor(
+            registry_handle.registry(),
+            &descriptor,
+            name,
+            path,
+            overwrite,
+        )
     }
 
     /// Read a run-level attachment by name and decode it with a codec.

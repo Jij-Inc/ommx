@@ -3321,6 +3321,93 @@
               "deprecated": null
             },
             {
+              "name": "log_file",
+              "doc": "Attach an existing filesystem file in the experiment space.\n\nThe file bytes are copied into the Local Registry immediately. If\n`media_type` is omitted, Python's `mimetypes.guess_type` is used and\nunknown types fall back to `application/octet-stream`. The original\nsource path is not stored; only a basename for later export is stored\nas attachment metadata.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "path",
+                      "type_": {
+                        "display": "str | PathLike | Path",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "PathLike",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Path",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "media_type",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "filename",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "log_instance",
               "doc": "Attach an Instance in the experiment space.",
               "signatures": [
@@ -3552,6 +3639,127 @@
               "deprecated": null
             },
             {
+              "name": "open_attachment",
+              "doc": "Open an experiment-level attachment as a read-only file-like object.\n\nBinary mode (`\"rb\"`) returns an `io.BytesIO`; text modes (`\"r\"` or\n`\"rt\"`) return an `io.TextIOWrapper`. Write, append, exclusive-create,\nand update modes are not supported because attachments are immutable\nblobs.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "mode",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "'rb'"
+                      }
+                    },
+                    {
+                      "name": "encoding",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "errors",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "newline",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "expected_media_type",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "BinaryIO | TextIO",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "BinaryIO",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "TextIO",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "push",
               "doc": "Push this committed Experiment Artifact to its remote registry.\n\nUse `rename(...)` first when an anonymous or local-only experiment\nshould be published under a remote container image reference.\n\nRaises an error if the Experiment has not been committed yet.",
               "signatures": [
@@ -3748,6 +3956,69 @@
                       "kind": "Class",
                       "attribute": null
                     },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "write_attachment",
+              "doc": "Write an experiment-level attachment to a filesystem path.\n\nIf `path` names an existing directory, the attachment filename stored\nby `log_file` is used inside that directory. Otherwise `path` is\ntreated as the destination file path.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "path",
+                      "type_": {
+                        "display": "str | PathLike | Path",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "PathLike",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Path",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "overwrite",
+                      "type_": {
+                        "display": "bool",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "False"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Path",
+                    "link_target": null,
                     "children": []
                   }
                 }
@@ -4027,6 +4298,93 @@
                         "children": []
                       },
                       "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "log_file",
+              "doc": "Attach an existing filesystem file in this run.\n\nThe file bytes are copied into the Local Registry immediately. If\n`media_type` is omitted, Python's `mimetypes.guess_type` is used and\nunknown types fall back to `application/octet-stream`. The original\nsource path is not stored; only a basename for later export is stored\nas attachment metadata.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "path",
+                      "type_": {
+                        "display": "str | PathLike | Path",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "PathLike",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Path",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "media_type",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "filename",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
                     }
                   ],
                   "return_type": {
@@ -4635,6 +4993,190 @@
                   ],
                   "return_type": {
                     "display": "T",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "open_attachment",
+              "doc": "Open a run-level attachment as a read-only file-like object.\n\nBinary mode (`\"rb\"`) returns an `io.BytesIO`; text modes (`\"r\"` or\n`\"rt\"`) return an `io.TextIOWrapper`. Write, append, exclusive-create,\nand update modes are not supported because attachments are immutable\nblobs.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "mode",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "'rb'"
+                      }
+                    },
+                    {
+                      "name": "encoding",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "errors",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "newline",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "expected_media_type",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "BinaryIO | TextIO",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "BinaryIO",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "TextIO",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "write_attachment",
+              "doc": "Write a run-level attachment to a filesystem path.\n\nIf `path` names an existing directory, the attachment filename stored\nby `log_file` is used inside that directory. Otherwise `path` is\ntreated as the destination file path.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "path",
+                      "type_": {
+                        "display": "str | PathLike | Path",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "PathLike",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Path",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "overwrite",
+                      "type_": {
+                        "display": "bool",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "False"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Path",
                     "link_target": null,
                     "children": []
                   }

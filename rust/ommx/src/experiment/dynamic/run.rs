@@ -11,6 +11,7 @@ use crate::artifact::media_types;
 use crate::{Instance, Solution};
 use anyhow::Result;
 use oci_spec::image::{Descriptor, MediaType};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 /// Runtime-owned Run handle.
@@ -241,6 +242,34 @@ impl RunDyn {
             .as_mut()
             .ok_or_else(|| anyhow::anyhow!("Run has already been finished"))
     }
+
+    /// Attach arbitrary bytes with additional descriptor annotations.
+    ///
+    /// This is used by language bindings for payloads such as files that have
+    /// attachment-specific metadata in addition to the required attachment
+    /// name and space annotations.
+    pub fn log_attachment_with_annotations(
+        &mut self,
+        name: &str,
+        media_type: MediaType,
+        bytes: impl AsRef<[u8]>,
+        annotations: HashMap<String, String>,
+    ) -> Result<()> {
+        let run_id = self.open()?.run_id;
+        let descriptor = {
+            let dyn_state = lock_experiment_state(&self.experiment_state);
+            store_run_attachment_descriptor(
+                &dyn_state,
+                run_id,
+                name,
+                media_type,
+                bytes.as_ref(),
+                annotations,
+            )?
+        };
+        self.open_mut()?.attachments.push(descriptor);
+        Ok(())
+    }
 }
 
 impl AttachmentLogger for &mut RunDyn {
@@ -250,13 +279,7 @@ impl AttachmentLogger for &mut RunDyn {
         media_type: MediaType,
         bytes: impl AsRef<[u8]>,
     ) -> Result<()> {
-        let run_id = self.open()?.run_id;
-        let descriptor = {
-            let dyn_state = lock_experiment_state(&self.experiment_state);
-            store_run_attachment_descriptor(&dyn_state, run_id, name, media_type, bytes.as_ref())?
-        };
-        self.open_mut()?.attachments.push(descriptor);
-        Ok(())
+        self.log_attachment_with_annotations(name, media_type, bytes, HashMap::new())
     }
 }
 

@@ -15,7 +15,7 @@
 //! `LocalRegistry::stored_descriptor` before returning them, restoring
 //! the Local Registry storage invariant at the API boundary.
 
-use super::attachment::{store_attachment_descriptor, AttachmentSpace};
+use super::attachment::{store_attachment_descriptor_with_annotations, AttachmentSpace};
 use super::{
     allocate_next_run_id, next_run_id, AttachmentLogger, ExperimentStatus, Name, RunEntry,
     RunParameterCell, RunStatus, SealedExperiment, UnsealedExperimentState,
@@ -28,7 +28,7 @@ use crate::artifact::{
 use crate::{Instance, Solution};
 use anyhow::{ensure, Context, Result};
 use oci_spec::image::{Descriptor, MediaType};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -448,9 +448,31 @@ impl AttachmentLogger for &ExperimentDyn {
         media_type: MediaType,
         bytes: impl AsRef<[u8]>,
     ) -> Result<()> {
+        self.log_attachment_with_annotations(name, media_type, bytes, HashMap::new())
+    }
+}
+
+impl ExperimentDyn {
+    /// Attach arbitrary bytes with additional descriptor annotations.
+    ///
+    /// This is used by language bindings for payloads such as files that have
+    /// attachment-specific metadata in addition to the required attachment
+    /// name and space annotations.
+    pub fn log_attachment_with_annotations(
+        &self,
+        name: &str,
+        media_type: MediaType,
+        bytes: impl AsRef<[u8]>,
+        annotations: HashMap<String, String>,
+    ) -> Result<()> {
         let mut dyn_state = lock_experiment_state(&self.state);
-        let descriptor =
-            store_experiment_attachment_descriptor(&dyn_state, name, media_type, bytes.as_ref())?;
+        let descriptor = store_experiment_attachment_descriptor(
+            &dyn_state,
+            name,
+            media_type,
+            bytes.as_ref(),
+            annotations,
+        )?;
         let ExperimentDynLifecycle::Unsealed { state, .. } = &mut dyn_state.lifecycle else {
             return bail_non_unsealed(&dyn_state.lifecycle);
         };
@@ -460,9 +482,7 @@ impl AttachmentLogger for &ExperimentDyn {
         state.attachments.push(descriptor);
         Ok(())
     }
-}
 
-impl ExperimentDyn {
     pub fn commit(&self) -> Result<LocalArtifactDyn> {
         let mut dyn_state = lock_experiment_state(&self.state);
         let (state, open_runs) = match &mut dyn_state.lifecycle {
@@ -1040,14 +1060,16 @@ fn store_experiment_attachment_descriptor(
     name: &str,
     media_type: MediaType,
     bytes: &[u8],
+    extra_annotations: HashMap<String, String>,
 ) -> Result<Descriptor> {
     ensure_unsealed_for_attachment_write(state)?;
-    let descriptor = store_attachment_descriptor(
+    let descriptor = store_attachment_descriptor_with_annotations(
         state.registry_handle.registry(),
         AttachmentSpace::Experiment,
         name,
         media_type,
         bytes,
+        extra_annotations,
     )?;
     Ok(Descriptor::from(descriptor))
 }
@@ -1058,14 +1080,16 @@ fn store_run_attachment_descriptor(
     name: &str,
     media_type: MediaType,
     bytes: &[u8],
+    extra_annotations: HashMap<String, String>,
 ) -> Result<Descriptor> {
     ensure_unsealed_for_attachment_write(state)?;
-    let descriptor = store_attachment_descriptor(
+    let descriptor = store_attachment_descriptor_with_annotations(
         state.registry_handle.registry(),
         AttachmentSpace::Run(run_id),
         name,
         media_type,
         bytes,
+        extra_annotations,
     )?;
     Ok(Descriptor::from(descriptor))
 }

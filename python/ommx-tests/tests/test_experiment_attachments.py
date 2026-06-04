@@ -7,6 +7,7 @@ from ommx.artifact import Descriptor
 from ommx.experiment import Experiment
 
 _ATTACHMENT_NAME = "org.ommx.attachment.name"
+_ATTACHMENT_FILENAME = "org.ommx.attachment.filename"
 
 
 @dataclass(frozen=True)
@@ -99,3 +100,78 @@ def test_run_attachment_codec_rejects_media_type_mismatch():
     loaded = Experiment.from_artifact(experiment.artifact)
     with pytest.raises(Exception, match="Expected media type"):
         loaded.runs[0].get_with_codec(WrongMediaTypeCodec, "typed-payload")
+
+
+def test_experiment_file_attachment_round_trip(tmp_path):
+    source = tmp_path / "source.txt"
+    source.write_text("hello\n", encoding="utf-8")
+
+    with Experiment.with_temp_local_registry() as experiment:
+        experiment.log_file("source-file", source)
+
+    loaded = Experiment.from_artifact(experiment.artifact)
+    descriptor = _attachment_by_name(loaded.experiment_attachments, "source-file")
+    assert descriptor.media_type == "text/plain"
+    assert descriptor.annotations[_ATTACHMENT_FILENAME] == "source.txt"
+    assert loaded.get_blob("source-file") == b"hello\n"
+
+    with loaded.open_attachment("source-file") as file:
+        assert file.read() == b"hello\n"
+    with loaded.open_attachment("source-file", "r", encoding="utf-8") as file:
+        assert file.read() == "hello\n"
+
+    output_dir = tmp_path / "restored"
+    output_dir.mkdir()
+    output_path = loaded.write_attachment("source-file", output_dir)
+    assert output_path == output_dir / "source.txt"
+    assert output_path.read_text(encoding="utf-8") == "hello\n"
+
+    with pytest.raises(Exception, match="already exists"):
+        loaded.write_attachment("source-file", output_dir)
+    loaded.write_attachment("source-file", output_dir, overwrite=True)
+
+
+def test_experiment_open_attachment_rejects_write_mode_and_media_type_mismatch(
+    tmp_path,
+):
+    source = tmp_path / "source.txt"
+    source.write_text("hello\n", encoding="utf-8")
+
+    with Experiment.with_temp_local_registry() as experiment:
+        experiment.log_file("source-file", source)
+
+    loaded = Experiment.from_artifact(experiment.artifact)
+    with pytest.raises(Exception, match="read-only"):
+        loaded.open_attachment("source-file", "wb")
+    with pytest.raises(Exception, match="Expected media type"):
+        loaded.open_attachment(
+            "source-file", expected_media_type="application/octet-stream"
+        )
+
+
+def test_run_file_attachment_round_trip(tmp_path):
+    source = tmp_path / "solver-output.bin"
+    source.write_bytes(b"\x00solver-output")
+
+    with Experiment.with_temp_local_registry() as experiment:
+        with experiment.run() as run:
+            run.log_file(
+                "solver-output",
+                source,
+                media_type="application/octet-stream",
+                filename="result.bin",
+            )
+
+    loaded = Experiment.from_artifact(experiment.artifact)
+    run = loaded.runs[0]
+    descriptor = _attachment_by_name(run.attachments, "solver-output")
+    assert descriptor.media_type == "application/octet-stream"
+    assert descriptor.annotations[_ATTACHMENT_FILENAME] == "result.bin"
+    assert run.get_blob("solver-output") == b"\x00solver-output"
+
+    with run.open_attachment("solver-output") as file:
+        assert file.read() == b"\x00solver-output"
+
+    output_path = tmp_path / "solver-output.copy"
+    assert run.write_attachment("solver-output", output_path) == output_path
+    assert output_path.read_bytes() == b"\x00solver-output"
