@@ -242,14 +242,11 @@ impl RunDyn {
             .as_mut()
             .ok_or_else(|| anyhow::anyhow!("Run has already been finished"))
     }
+}
 
-    /// Attach arbitrary bytes with additional descriptor annotations.
-    ///
-    /// This is used by language bindings for payloads such as files that have
-    /// attachment-specific metadata in addition to the required attachment
-    /// name and space annotations.
-    pub fn log_attachment_with_annotations(
-        &mut self,
+impl AttachmentLogger for &mut RunDyn {
+    fn log_attachment(
+        self,
         name: &str,
         media_type: MediaType,
         bytes: impl AsRef<[u8]>,
@@ -269,17 +266,6 @@ impl RunDyn {
         };
         self.open_mut()?.attachments.push(descriptor);
         Ok(())
-    }
-}
-
-impl AttachmentLogger for &mut RunDyn {
-    fn log_attachment(
-        self,
-        name: &str,
-        media_type: MediaType,
-        bytes: impl AsRef<[u8]>,
-    ) -> Result<()> {
-        self.log_attachment_with_annotations(name, media_type, bytes, HashMap::new())
     }
 }
 

@@ -6,6 +6,7 @@ use crate::artifact::media_types;
 use crate::{Instance, Solution};
 use anyhow::Result;
 use oci_spec::image::MediaType;
+use std::collections::HashMap;
 
 impl<'exp, 'reg> Run<'exp, 'reg> {
     /// This run's 0-based id within the experiment.
@@ -135,6 +136,7 @@ impl<'exp, 'reg> AttachmentLogger for &mut Run<'exp, 'reg> {
         name: &str,
         media_type: MediaType,
         bytes: impl AsRef<[u8]>,
+        annotations: HashMap<String, String>,
     ) -> Result<()> {
         let descriptor = store_attachment_descriptor(
             self.experiment.registry,
@@ -142,6 +144,7 @@ impl<'exp, 'reg> AttachmentLogger for &mut Run<'exp, 'reg> {
             name,
             media_type,
             bytes.as_ref(),
+            annotations,
         )?;
         self.attachments.push(descriptor);
         Ok(())

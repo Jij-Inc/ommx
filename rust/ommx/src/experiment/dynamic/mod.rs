@@ -15,7 +15,7 @@
 //! `LocalRegistry::stored_descriptor` before returning them, restoring
 //! the Local Registry storage invariant at the API boundary.
 
-use super::attachment::{store_attachment_descriptor_with_annotations, AttachmentSpace};
+use super::attachment::{store_attachment_descriptor, AttachmentSpace};
 use super::{
     allocate_next_run_id, next_run_id, AttachmentLogger, ExperimentStatus, Name, RunEntry,
     RunParameterCell, RunStatus, SealedExperiment, UnsealedExperimentState,
@@ -447,22 +447,6 @@ impl AttachmentLogger for &ExperimentDyn {
         name: &str,
         media_type: MediaType,
         bytes: impl AsRef<[u8]>,
-    ) -> Result<()> {
-        self.log_attachment_with_annotations(name, media_type, bytes, HashMap::new())
-    }
-}
-
-impl ExperimentDyn {
-    /// Attach arbitrary bytes with additional descriptor annotations.
-    ///
-    /// This is used by language bindings for payloads such as files that have
-    /// attachment-specific metadata in addition to the required attachment
-    /// name and space annotations.
-    pub fn log_attachment_with_annotations(
-        &self,
-        name: &str,
-        media_type: MediaType,
-        bytes: impl AsRef<[u8]>,
         annotations: HashMap<String, String>,
     ) -> Result<()> {
         let mut dyn_state = lock_experiment_state(&self.state);
@@ -482,7 +466,9 @@ impl ExperimentDyn {
         state.attachments.push(descriptor);
         Ok(())
     }
+}
 
+impl ExperimentDyn {
     pub fn commit(&self) -> Result<LocalArtifactDyn> {
         let mut dyn_state = lock_experiment_state(&self.state);
         let (state, open_runs) = match &mut dyn_state.lifecycle {
@@ -1063,7 +1049,7 @@ fn store_experiment_attachment_descriptor(
     extra_annotations: HashMap<String, String>,
 ) -> Result<Descriptor> {
     ensure_unsealed_for_attachment_write(state)?;
-    let descriptor = store_attachment_descriptor_with_annotations(
+    let descriptor = store_attachment_descriptor(
         state.registry_handle.registry(),
         AttachmentSpace::Experiment,
         name,
@@ -1083,7 +1069,7 @@ fn store_run_attachment_descriptor(
     extra_annotations: HashMap<String, String>,
 ) -> Result<Descriptor> {
     ensure_unsealed_for_attachment_write(state)?;
-    let descriptor = store_attachment_descriptor_with_annotations(
+    let descriptor = store_attachment_descriptor(
         state.registry_handle.registry(),
         AttachmentSpace::Run(run_id),
         name,

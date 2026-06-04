@@ -489,6 +489,7 @@ impl PyExperiment {
             name,
             MediaType::from(media_type),
             bytes.as_bytes(),
+            HashMap::new(),
         )
     }
 
@@ -512,8 +513,7 @@ impl PyExperiment {
         let media_type = file_media_type(py, &path, media_type)?;
         let bytes = read_attachment_file(&path)?;
         let annotations = file_attachment_annotations(&path, filename)?;
-        self.inner
-            .log_attachment_with_annotations(name, media_type, bytes, annotations)
+        AttachmentLogger::log_attachment(&self.inner, name, media_type, bytes, annotations)
     }
 
     /// Encode a Python object with an attachment codec and attach it in the experiment space.
@@ -530,7 +530,13 @@ impl PyExperiment {
     ) -> Result<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let attachment = codec.encode(py, &value)?;
-        AttachmentLogger::log_attachment(&self.inner, name, attachment.media_type, attachment.bytes)
+        AttachmentLogger::log_attachment(
+            &self.inner,
+            name,
+            attachment.media_type,
+            attachment.bytes,
+            HashMap::new(),
+        )
     }
 
     /// Attach a JSON-serializable value in the experiment space.
@@ -545,6 +551,7 @@ impl PyExperiment {
             name,
             MediaType::from("application/json"),
             blob,
+            HashMap::new(),
         )
     }
 
@@ -1274,6 +1281,7 @@ impl PyRun {
             name,
             MediaType::from(media_type),
             bytes.as_bytes(),
+            HashMap::new(),
         )
     }
 
@@ -1298,8 +1306,7 @@ impl PyRun {
         let media_type = file_media_type(py, &path, media_type)?;
         let bytes = read_attachment_file(&path)?;
         let annotations = file_attachment_annotations(&path, filename)?;
-        self.as_open_mut()?
-            .log_attachment_with_annotations(name, media_type, bytes, annotations)
+        AttachmentLogger::log_attachment(self.as_open_mut()?, name, media_type, bytes, annotations)
     }
 
     /// Encode a Python object with an attachment codec and attach it in this run.
@@ -1322,6 +1329,7 @@ impl PyRun {
             name,
             attachment.media_type,
             attachment.bytes,
+            HashMap::new(),
         )
     }
 
@@ -1338,6 +1346,7 @@ impl PyRun {
             name,
             MediaType::from("application/json"),
             blob,
+            HashMap::new(),
         )
     }
 

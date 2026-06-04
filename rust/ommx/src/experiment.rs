@@ -85,7 +85,7 @@ use anyhow::Result;
 use attachment::{store_attachment_descriptor, AttachmentSpace};
 use oci_spec::image::MediaType;
 use parameter::ParameterSet;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::{Mutex, MutexGuard};
 
 // --- Artifact mapping constants ---------------------------------------------
@@ -441,6 +441,7 @@ impl<'reg> AttachmentLogger for &Experiment<'reg> {
         name: &str,
         media_type: MediaType,
         bytes: impl AsRef<[u8]>,
+        annotations: HashMap<String, String>,
     ) -> Result<()> {
         let descriptor = store_attachment_descriptor(
             self.registry,
@@ -448,6 +449,7 @@ impl<'reg> AttachmentLogger for &Experiment<'reg> {
             name,
             media_type,
             bytes.as_ref(),
+            annotations,
         )?;
         let mut state = self.lock_state();
         state.attachments.push(descriptor);
