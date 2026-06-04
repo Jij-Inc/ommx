@@ -3,10 +3,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from ommx.artifact import Descriptor
 from ommx.experiment import Experiment
-
-_ATTACHMENT_NAME = "org.ommx.attachment.name"
 
 
 @dataclass(frozen=True)
@@ -41,13 +38,6 @@ class WrongMediaTypeCodec:
         return ToyPayloadCodec.decode(data)
 
 
-def _attachment_by_name(attachments: list[Descriptor], name: str) -> Descriptor:
-    for attachment in attachments:
-        if attachment.annotations[_ATTACHMENT_NAME] == name:
-            return attachment
-    raise AssertionError(f"attachment {name!r} not found")
-
-
 def test_experiment_attachment_codec_round_trip():
     expected = ToyPayload(label="experiment", value=7)
 
@@ -57,8 +47,8 @@ def test_experiment_attachment_codec_round_trip():
     loaded = Experiment.from_artifact(experiment.artifact)
     assert loaded.get_with_codec(ToyPayloadCodec, "typed-payload") == expected
 
-    descriptor = _attachment_by_name(loaded.experiment_attachments, "typed-payload")
-    assert descriptor.media_type == ToyPayloadCodec.media_type
+    assert loaded.attachment_names == ["typed-payload"]
+    assert loaded.attachment_media_type("typed-payload") == ToyPayloadCodec.media_type
     assert loaded.get_blob("typed-payload") == ToyPayloadCodec.encode(expected)
 
 
@@ -73,8 +63,8 @@ def test_run_attachment_codec_round_trip():
     run = loaded.runs[0]
     assert run.get_with_codec(ToyPayloadCodec, "typed-payload") == expected
 
-    descriptor = _attachment_by_name(run.attachments, "typed-payload")
-    assert descriptor.media_type == ToyPayloadCodec.media_type
+    assert run.attachment_names == ["typed-payload"]
+    assert run.attachment_media_type("typed-payload") == ToyPayloadCodec.media_type
     assert run.get_blob("typed-payload") == ToyPayloadCodec.encode(expected)
 
 
@@ -110,8 +100,8 @@ def test_experiment_file_attachment_round_trip(tmp_path):
         experiment.log_file("source-file", source)
 
     loaded = Experiment.from_artifact(experiment.artifact)
-    descriptor = _attachment_by_name(loaded.experiment_attachments, "source-file")
-    assert descriptor.media_type == "image/png"
+    assert loaded.attachment_names == ["source-file"]
+    assert loaded.attachment_media_type("source-file") == "image/png"
     assert loaded.get_blob("source-file") == payload
 
     output_dir = tmp_path / "restored"
@@ -140,8 +130,8 @@ def test_run_file_attachment_round_trip(tmp_path):
 
     loaded = Experiment.from_artifact(experiment.artifact)
     run = loaded.runs[0]
-    descriptor = _attachment_by_name(run.attachments, "solver-output")
-    assert descriptor.media_type == "application/octet-stream"
+    assert run.attachment_names == ["solver-output"]
+    assert run.attachment_media_type("solver-output") == "application/octet-stream"
     assert run.get_blob("solver-output") == b"\x00solver-output"
 
     output_dir = tmp_path / "restored"

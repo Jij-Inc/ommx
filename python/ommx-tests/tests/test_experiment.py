@@ -12,15 +12,8 @@ from ommx.v1 import Instance, Solution
 
 from conftest import get_test_exporter
 
-_ATTACHMENT_NAME = "org.ommx.attachment.name"
-
-
 def _df_snap(df: pd.DataFrame) -> str:
     return df.to_string(na_rep="<NA>")
-
-
-def _attachment_names(attachments) -> set[str]:
-    return {attachment.annotations[_ATTACHMENT_NAME] for attachment in attachments}
 
 
 def _require_trace(trace: TraceResult | None) -> TraceResult:
@@ -72,18 +65,18 @@ def test_view_run_parameters_from_committed_artifact(snapshot):
 
     artifact = experiment.artifact
     loaded = Experiment.from_artifact(artifact)
-    assert _attachment_names(loaded.experiment_attachments) == {"dataset"}
+    assert set(loaded.attachment_names) == {"dataset"}
     assert loaded.attachment_names == ["dataset"]
     assert loaded.get_json("dataset") == {"name": "miplib2017"}
     assert loaded.get_attachment("dataset") == {"name": "miplib2017"}
     runs = {run.run_id: run for run in loaded.runs}
     assert set(runs) == {0, 1, 2}
-    assert _attachment_names(runs[0].attachments) == {"candidate"}
+    assert set(runs[0].attachment_names) == {"candidate"}
     assert runs[0].attachment_names == ["candidate"]
     assert runs[0].get_json("candidate") == {"formulation": "a"}
     assert runs[0].get_attachment("candidate") == {"formulation": "a"}
-    assert runs[1].attachments == []
-    assert runs[2].attachments == []
+    assert runs[1].attachment_names == []
+    assert runs[2].attachment_names == []
     df = loaded.run_parameters_df()
 
     assert _df_snap(df) == snapshot
@@ -107,7 +100,7 @@ def test_create_experiment_run_attachments_and_commit(snapshot):
 
     artifact = experiment.commit()
     loaded = Experiment.from_artifact(artifact)
-    assert _attachment_names(loaded.experiment_attachments) == {
+    assert set(loaded.attachment_names) == {
         "dataset",
         "raw-config",
     }
@@ -117,7 +110,7 @@ def test_create_experiment_run_attachments_and_commit(snapshot):
         loaded.get_json("raw-config")
     runs = {run.run_id: run for run in loaded.runs}
     assert set(runs) == {0}
-    assert _attachment_names(runs[0].attachments) == {"candidate", "solver-log"}
+    assert set(runs[0].attachment_names) == {"candidate", "solver-log"}
     assert runs[0].get_attachment("solver-log") == b"solved"
     assert runs[0].get_blob("solver-log") == b"solved"
     with pytest.raises(RuntimeError, match="Expected media type"):
@@ -239,7 +232,7 @@ def test_store_trace_records_run_scope_in_artifact():
     artifact = experiment.commit()
 
     loaded = Experiment.from_artifact(artifact)
-    assert _attachment_names(loaded.experiment_attachments) == {"dataset"}
+    assert set(loaded.attachment_names) == {"dataset"}
 
     trace = _require_trace(loaded.runs[0].trace)
     names = _trace_span_names(trace)
@@ -594,7 +587,7 @@ def test_log_solve_logs_input_solution_and_adapter_options():
     artifact = experiment.commit()
     loaded = Experiment.from_artifact(artifact)
     runs = {run.run_id: run for run in loaded.runs}
-    assert runs[0].attachments == []
+    assert runs[0].attachment_names == []
     assert [solve.solve_id for solve in runs[0].solves] == [0, 1]
 
     first_solve = runs[0].solves[0]

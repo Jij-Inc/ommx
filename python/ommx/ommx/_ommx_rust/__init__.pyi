@@ -1763,7 +1763,7 @@ class Experiment:
     ...         run.log_json("scenario", {"capacity": 10})
     >>> len(exp.runs)
     1
-    >>> len(exp.experiment_attachments)
+    >>> len(exp.attachment_names)
     1
     >>> exp.run_parameters_df().to_dict()
     {'capacity': {0: 10}}
@@ -1781,15 +1781,6 @@ class Experiment:
     def image_name(self) -> builtins.str:
         r"""
         OCI image reference used to store this Experiment in a local registry.
-        """
-    @property
-    def experiment_attachments(self) -> builtins.list[Descriptor]:
-        r"""
-        Low-level descriptors for experiment-level attachments.
-
-        Prefer `attachment_names`, `get_attachment`, or typed methods such as
-        `get_json` and `get_instance` when working from Python. This descriptor
-        view is kept for low-level Artifact inspection.
         """
     @property
     def attachment_names(self) -> builtins.list[builtins.str]:
@@ -1961,6 +1952,10 @@ class Experiment:
         should be published under a remote container image reference.
 
         Raises an error if the Experiment has not been committed yet.
+        """
+    def attachment_media_type(self, name: builtins.str) -> builtins.str:
+        r"""
+        OCI media type of an experiment-level attachment.
         """
     def get_attachment(self, name: builtins.str) -> typing.Any:
         r"""
@@ -6197,15 +6192,6 @@ class SealedRun:
         Run lifecycle status: `"finished"`, `"failed"`, or `"interrupted"`.
         """
     @property
-    def attachments(self) -> builtins.list[Descriptor]:
-        r"""
-        Low-level descriptors for run-level attachments.
-
-        Prefer `attachment_names`, `get_attachment`, or typed methods such as
-        `get_json` and `get_instance` when working from Python. This descriptor
-        view is kept for low-level Artifact inspection.
-        """
-    @property
     def attachment_names(self) -> builtins.list[builtins.str]:
         r"""
         Names of run-level attachments.
@@ -6219,6 +6205,10 @@ class SealedRun:
     def solves(self) -> builtins.list[Solve]:
         r"""
         Solve records logged in this run, ordered by `solve_id`.
+        """
+    def attachment_media_type(self, name: builtins.str) -> builtins.str:
+        r"""
+        OCI media type of a run-level attachment.
         """
     def get_attachment(self, name: builtins.str) -> typing.Any:
         r"""

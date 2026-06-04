@@ -25,10 +25,10 @@ use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
 use crate::artifact::{
     media_types, AsArtifact, ImageRef, LocalArtifact, LocalArtifactDyn, LocalRegistryHandle,
 };
-use crate::{Instance, Solution};
+use crate::{Instance, ParametricInstance, SampleSet, Solution};
 use anyhow::{ensure, Context, Result};
 use oci_spec::image::{Descriptor, MediaType};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -157,6 +157,47 @@ impl SealedRunDyn {
 
     pub fn attachments(&self) -> Result<AttachmentTable<StoredDescriptor<'_>>> {
         stored_attachment_table(self.registry_handle.registry(), self.attachments.clone())
+    }
+
+    pub fn attachment_names(&self) -> Vec<String> {
+        self.attachments.names().cloned().collect()
+    }
+
+    pub fn attachment_media_type(&self, name: &str) -> Result<MediaType> {
+        self.attachments()?.media_type(name)
+    }
+
+    pub fn attachment_annotations(&self, name: &str) -> Result<HashMap<String, String>> {
+        self.attachments()?.annotations(name)
+    }
+
+    pub fn attachment_blob(&self, name: &str) -> Result<Vec<u8>> {
+        self.attachments()?.blob(name)
+    }
+
+    pub fn attachment_instance(&self, name: &str) -> Result<Instance> {
+        self.attachments()?.instance(name)
+    }
+
+    pub fn attachment_parametric_instance(&self, name: &str) -> Result<ParametricInstance> {
+        self.attachments()?.parametric_instance(name)
+    }
+
+    pub fn attachment_solution(&self, name: &str) -> Result<Solution> {
+        self.attachments()?.solution(name)
+    }
+
+    pub fn attachment_sample_set(&self, name: &str) -> Result<SampleSet> {
+        self.attachments()?.sample_set(name)
+    }
+
+    pub fn write_attachment(
+        &self,
+        name: &str,
+        path: impl AsRef<Path>,
+        overwrite: bool,
+    ) -> Result<std::path::PathBuf> {
+        self.attachments()?.write_attachment(name, path, overwrite)
     }
 
     pub fn trace(&self) -> Result<Option<StoredDescriptor<'_>>> {
@@ -607,6 +648,48 @@ impl ExperimentDyn {
             }
         };
         stored_attachment_table(self.registry_handle.registry(), attachments)
+    }
+
+    pub fn attachment_names(&self) -> Result<Vec<String>> {
+        Ok(self.experiment_attachments()?.names().cloned().collect())
+    }
+
+    pub fn attachment_media_type(&self, name: &str) -> Result<MediaType> {
+        self.experiment_attachments()?.media_type(name)
+    }
+
+    pub fn attachment_annotations(&self, name: &str) -> Result<HashMap<String, String>> {
+        self.experiment_attachments()?.annotations(name)
+    }
+
+    pub fn attachment_blob(&self, name: &str) -> Result<Vec<u8>> {
+        self.experiment_attachments()?.blob(name)
+    }
+
+    pub fn attachment_instance(&self, name: &str) -> Result<Instance> {
+        self.experiment_attachments()?.instance(name)
+    }
+
+    pub fn attachment_parametric_instance(&self, name: &str) -> Result<ParametricInstance> {
+        self.experiment_attachments()?.parametric_instance(name)
+    }
+
+    pub fn attachment_solution(&self, name: &str) -> Result<Solution> {
+        self.experiment_attachments()?.solution(name)
+    }
+
+    pub fn attachment_sample_set(&self, name: &str) -> Result<SampleSet> {
+        self.experiment_attachments()?.sample_set(name)
+    }
+
+    pub fn write_attachment(
+        &self,
+        name: &str,
+        path: impl AsRef<Path>,
+        overwrite: bool,
+    ) -> Result<std::path::PathBuf> {
+        self.experiment_attachments()?
+            .write_attachment(name, path, overwrite)
     }
 
     pub fn runs(&self) -> Result<Vec<SealedRunDyn>> {

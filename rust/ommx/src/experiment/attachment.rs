@@ -2,6 +2,8 @@
 
 use super::{ANN_ATTACHMENT_NAME, ANN_RUN_ID, ANN_SPACE};
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
+use crate::artifact::media_types;
+use crate::{Instance, ParametricInstance, SampleSet, Solution};
 use anyhow::{ensure, Context, Result};
 use oci_spec::image::MediaType;
 use serde::{Deserialize, Serialize};
@@ -188,6 +190,53 @@ impl<D> AttachmentTable<D> {
 }
 
 impl<'reg> AttachmentTable<StoredDescriptor<'reg>> {
+    fn attachment(&self, name: &str) -> Result<&StoredDescriptor<'reg>> {
+        self.get(name)
+            .ok_or_else(|| anyhow::anyhow!("Attachment `{name}` not found"))
+    }
+
+    pub fn media_type(&self, name: &str) -> Result<MediaType> {
+        Ok(self.attachment(name)?.media_type().clone())
+    }
+
+    pub fn annotations(&self, name: &str) -> Result<HashMap<String, String>> {
+        Ok(self
+            .attachment(name)?
+            .annotations()
+            .as_ref()
+            .cloned()
+            .unwrap_or_default())
+    }
+
+    pub fn ensure_media_type(&self, name: &str, expected: &MediaType) -> Result<()> {
+        self.attachment(name)?.ensure_media_type(expected)
+    }
+
+    pub fn blob(&self, name: &str) -> Result<Vec<u8>> {
+        let descriptor = self.attachment(name)?;
+        descriptor.registry().get_blob(descriptor)
+    }
+
+    pub fn instance(&self, name: &str) -> Result<Instance> {
+        self.ensure_media_type(name, &media_types::v1_instance())?;
+        Instance::from_bytes(&self.blob(name)?)
+    }
+
+    pub fn parametric_instance(&self, name: &str) -> Result<ParametricInstance> {
+        self.ensure_media_type(name, &media_types::v1_parametric_instance())?;
+        ParametricInstance::from_bytes(&self.blob(name)?)
+    }
+
+    pub fn solution(&self, name: &str) -> Result<Solution> {
+        self.ensure_media_type(name, &media_types::v1_solution())?;
+        Solution::from_bytes(&self.blob(name)?)
+    }
+
+    pub fn sample_set(&self, name: &str) -> Result<SampleSet> {
+        self.ensure_media_type(name, &media_types::v1_sample_set())?;
+        SampleSet::from_bytes(&self.blob(name)?)
+    }
+
     pub fn write_attachment(
         &self,
         name: &str,
