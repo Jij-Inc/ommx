@@ -53,6 +53,56 @@ The same cleanup operations are also exposed from the Python SDK as
 functions are report-only by default, mutate the registry with `delete=True`,
 and return structured report objects for notebook and script use.
 
+### 🆕 Typed attachment codecs for Experiments ([#921](https://github.com/Jij-Inc/ommx/pull/921))
+
+The new {class}`ommx.experiment.attachments.AttachmentCodec` protocol lets packages that own Python payload types define how those values are stored as Experiment attachments. A codec class provides a media type plus `encode` / `decode` methods, and OMMX calls it through `log_with_codec` and `get_with_codec` on both Experiment-level and Run-level attachments.
+
+```python
+from ommx.experiment import Experiment
+
+
+class TextCodec:
+    media_type = "text/plain"
+
+    @staticmethod
+    def encode(value: str) -> bytes:
+        return value.encode()
+
+    @staticmethod
+    def decode(data: bytes) -> str:
+        return data.decode()
+
+
+with Experiment.with_temp_local_registry() as experiment:
+    experiment.log_with_codec(TextCodec, "note", "created outside OMMX")
+
+loaded = Experiment.from_artifact(experiment.artifact)
+assert loaded.get_with_codec(TextCodec, "note") == "created outside OMMX"
+```
+
+The stored descriptor media type is validated before decoding, so using the wrong codec for an attachment fails before the codec's `decode` method is called.
+
+### 🆕 File attachments for Experiments ([#922](https://github.com/Jij-Inc/ommx/pull/922))
+
+{class}`~ommx.experiment.Experiment` and {class}`~ommx.experiment.Run` can now attach files that were produced outside OMMX. Use `log_file` to copy an existing file into the Experiment Artifact. OMMX stores the file bytes as an attachment blob, records the original basename for later export, and uses an explicitly provided media type or Rust SDK content-based inference with an `application/octet-stream` fallback.
+
+Committed experiment and run views now also provide `write_attachment` to restore an attachment blob back to disk. For libraries that accept a binary file-like object, wrap the existing `get_blob` result with `io.BytesIO`.
+
+```python
+import io
+from pathlib import Path
+
+from ommx.experiment import Experiment
+
+with Experiment.with_temp_local_registry() as experiment:
+    experiment.log_file("input-spreadsheet", "input.xlsx")
+
+loaded = Experiment.from_artifact(experiment.artifact)
+spreadsheet_file = io.BytesIO(loaded.get_blob("input-spreadsheet"))
+Path("restored").mkdir(parents=True, exist_ok=True)
+loaded.write_attachment("input-spreadsheet", "restored/input.xlsx")
+```
+
 ## 3.0.0 Alpha 4
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0a4-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0a4)

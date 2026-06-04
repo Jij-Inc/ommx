@@ -3321,6 +3321,93 @@
               "deprecated": null
             },
             {
+              "name": "log_file",
+              "doc": "Attach an existing filesystem file in the experiment space.\n\nThe file bytes are copied into the Local Registry immediately. If\n`media_type` is omitted, the Rust SDK infers it from file contents and\nunknown types fall back to `application/octet-stream`. The original\nsource path is not stored; only a basename for later export is stored\nas attachment metadata.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "path",
+                      "type_": {
+                        "display": "str | PathLike | Path",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "PathLike",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Path",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "media_type",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "filename",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "log_instance",
               "doc": "Attach an Instance in the experiment space.",
               "signatures": [
@@ -3754,6 +3841,69 @@
               ],
               "is_async": false,
               "deprecated": null
+            },
+            {
+              "name": "write_attachment",
+              "doc": "Write an experiment-level attachment to a filesystem path.\n\nIf `path` names an existing directory, the attachment filename stored\nby `log_file` is used inside that directory. Otherwise `path` is\ntreated as the destination file path.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "path",
+                      "type_": {
+                        "display": "str | PathLike | Path",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "PathLike",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Path",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "overwrite",
+                      "type_": {
+                        "display": "bool",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "False"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Path",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
             }
           ],
           "attributes": [
@@ -4027,6 +4177,93 @@
                         "children": []
                       },
                       "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "log_file",
+              "doc": "Attach an existing filesystem file in this run.\n\nThe file bytes are copied into the Local Registry immediately. If\n`media_type` is omitted, the Rust SDK infers it from file contents and\nunknown types fall back to `application/octet-stream`. The original\nsource path is not stored; only a basename for later export is stored\nas attachment metadata.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "path",
+                      "type_": {
+                        "display": "str | PathLike | Path",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "PathLike",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Path",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "media_type",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "filename",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
                     }
                   ],
                   "return_type": {
@@ -4635,6 +4872,69 @@
                   ],
                   "return_type": {
                     "display": "T",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "write_attachment",
+              "doc": "Write a run-level attachment to a filesystem path.\n\nIf `path` names an existing directory, the attachment filename stored\nby `log_file` is used inside that directory. Otherwise `path` is\ntreated as the destination file path.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "path",
+                      "type_": {
+                        "display": "str | PathLike | Path",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "PathLike",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Path",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "overwrite",
+                      "type_": {
+                        "display": "bool",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "False"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Path",
                     "link_target": null,
                     "children": []
                   }

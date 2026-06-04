@@ -49,6 +49,7 @@ futures-util = { workspace = true, optional = true }
 getset.workspace = true
 http = { workspace = true, optional = true }
 indexmap.workspace = true
+infer.workspace = true
 itertools.workspace = true
 katexit.workspace = true
 maplit.workspace = true

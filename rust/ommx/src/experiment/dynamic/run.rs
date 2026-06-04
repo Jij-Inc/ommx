@@ -11,6 +11,7 @@ use crate::artifact::media_types;
 use crate::{Instance, Solution};
 use anyhow::Result;
 use oci_spec::image::{Descriptor, MediaType};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 /// Runtime-owned Run handle.
@@ -249,11 +250,19 @@ impl AttachmentLogger for &mut RunDyn {
         name: &str,
         media_type: MediaType,
         bytes: impl AsRef<[u8]>,
+        annotations: HashMap<String, String>,
     ) -> Result<()> {
         let run_id = self.open()?.run_id;
         let descriptor = {
             let dyn_state = lock_experiment_state(&self.experiment_state);
-            store_run_attachment_descriptor(&dyn_state, run_id, name, media_type, bytes.as_ref())?
+            store_run_attachment_descriptor(
+                &dyn_state,
+                run_id,
+                name,
+                media_type,
+                bytes.as_ref(),
+                annotations,
+            )?
         };
         self.open_mut()?.attachments.push(descriptor);
         Ok(())

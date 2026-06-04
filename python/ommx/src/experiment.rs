@@ -6,7 +6,7 @@ use pyo3::{
     types::{PyBool, PyBytes, PyDict, PyFloat, PyInt, PyString, PyType, PyTypeMethods},
 };
 use std::{
-    collections::{btree_map::Entry, BTreeMap},
+    collections::{btree_map::Entry, BTreeMap, HashMap},
     mem,
     path::PathBuf,
 };
@@ -15,7 +15,9 @@ use crate::pandas::{raw_entries_to_dataframe, PyDataFrame};
 use crate::{PyArtifact, PyDescriptor};
 use ommx::artifact::local_registry::{LocalRegistry, StoredDescriptor};
 use ommx::artifact::AsArtifact;
-use ommx::experiment::AttachmentLogger;
+use ommx::experiment::{
+    attachment_name, write_attachment_descriptor, AttachmentLogger, FileAttachment,
+};
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
@@ -383,6 +385,31 @@ impl PyExperiment {
         ))
     }
 
+    /// Write an experiment-level attachment to a filesystem path.
+    ///
+    /// If `path` names an existing directory, the attachment filename stored
+    /// by `log_file` is used inside that directory. Otherwise `path` is
+    /// treated as the destination file path.
+    #[pyo3(signature = (name, path, *, overwrite = false))]
+    pub fn write_attachment(
+        &self,
+        py: Python<'_>,
+        name: &str,
+        path: PathBuf,
+        overwrite: bool,
+    ) -> Result<PathBuf> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let descriptor = self.find_attachment(name)?;
+        let registry_handle = self.inner.registry_handle();
+        write_attachment_descriptor(
+            registry_handle.registry(),
+            &descriptor,
+            name,
+            path,
+            overwrite,
+        )
+    }
+
     /// Read an experiment-level attachment by name and decode it with a codec.
     ///
     /// The codec class must provide `media_type`, `encode(value) -> bytes`,
@@ -464,7 +491,31 @@ impl PyExperiment {
             name,
             MediaType::from(media_type),
             bytes.as_bytes(),
+            HashMap::new(),
         )
+    }
+
+    /// Attach an existing filesystem file in the experiment space.
+    ///
+    /// The file bytes are copied into the Local Registry immediately. If
+    /// `media_type` is omitted, the Rust SDK infers it from file contents and
+    /// unknown types fall back to `application/octet-stream`. The original
+    /// source path is not stored; only a basename for later export is stored
+    /// as attachment metadata.
+    #[pyo3(signature = (name, path, media_type = None, *, filename = None))]
+    pub fn log_file(
+        &mut self,
+        py: Python<'_>,
+        name: &str,
+        path: PathBuf,
+        media_type: Option<&str>,
+        filename: Option<&str>,
+    ) -> Result<()> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let attachment =
+            FileAttachment::from_path(&path, media_type.map(MediaType::from), filename)?;
+        let (media_type, bytes, annotations) = attachment.into_parts();
+        AttachmentLogger::log_attachment(&self.inner, name, media_type, bytes, annotations)
     }
 
     /// Encode a Python object with an attachment codec and attach it in the experiment space.
@@ -481,7 +532,13 @@ impl PyExperiment {
     ) -> Result<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let attachment = codec.encode(py, &value)?;
-        AttachmentLogger::log_attachment(&self.inner, name, attachment.media_type, attachment.bytes)
+        AttachmentLogger::log_attachment(
+            &self.inner,
+            name,
+            attachment.media_type,
+            attachment.bytes,
+            HashMap::new(),
+        )
     }
 
     /// Attach a JSON-serializable value in the experiment space.
@@ -496,6 +553,7 @@ impl PyExperiment {
             name,
             MediaType::from("application/json"),
             blob,
+            HashMap::new(),
         )
     }
 
@@ -667,16 +725,6 @@ fn close_python_context_manager(
             .call_method1("__exit__", (exc_type, exc_value, traceback))?;
     }
     Ok(())
-}
-
-const ANN_ATTACHMENT_NAME: &str = "org.ommx.attachment.name";
-
-fn attachment_name(descriptor: &Descriptor) -> Option<&str> {
-    descriptor
-        .annotations()
-        .as_ref()
-        .and_then(|annotations| annotations.get(ANN_ATTACHMENT_NAME))
-        .map(String::as_str)
 }
 
 fn attachment_annotations(descriptor: &Descriptor) -> std::collections::HashMap<String, String> {
@@ -1105,7 +1153,32 @@ impl PyRun {
             name,
             MediaType::from(media_type),
             bytes.as_bytes(),
+            HashMap::new(),
         )
+    }
+
+    /// Attach an existing filesystem file in this run.
+    ///
+    /// The file bytes are copied into the Local Registry immediately. If
+    /// `media_type` is omitted, the Rust SDK infers it from file contents and
+    /// unknown types fall back to `application/octet-stream`. The original
+    /// source path is not stored; only a basename for later export is stored
+    /// as attachment metadata.
+    #[pyo3(signature = (name, path, media_type = None, *, filename = None))]
+    pub fn log_file(
+        &mut self,
+        py: Python<'_>,
+        name: &str,
+        path: PathBuf,
+        media_type: Option<&str>,
+        filename: Option<&str>,
+    ) -> Result<()> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        self.ensure_store_trace_context_started()?;
+        let attachment =
+            FileAttachment::from_path(&path, media_type.map(MediaType::from), filename)?;
+        let (media_type, bytes, annotations) = attachment.into_parts();
+        AttachmentLogger::log_attachment(self.as_open_mut()?, name, media_type, bytes, annotations)
     }
 
     /// Encode a Python object with an attachment codec and attach it in this run.
@@ -1128,6 +1201,7 @@ impl PyRun {
             name,
             attachment.media_type,
             attachment.bytes,
+            HashMap::new(),
         )
     }
 
@@ -1144,6 +1218,7 @@ impl PyRun {
             name,
             MediaType::from("application/json"),
             blob,
+            HashMap::new(),
         )
     }
 
@@ -1564,6 +1639,31 @@ impl PySealedRun {
             py,
             &registry_handle.registry().get_blob(&descriptor)?,
         ))
+    }
+
+    /// Write a run-level attachment to a filesystem path.
+    ///
+    /// If `path` names an existing directory, the attachment filename stored
+    /// by `log_file` is used inside that directory. Otherwise `path` is
+    /// treated as the destination file path.
+    #[pyo3(signature = (name, path, *, overwrite = false))]
+    pub fn write_attachment(
+        &self,
+        py: Python<'_>,
+        name: &str,
+        path: PathBuf,
+        overwrite: bool,
+    ) -> Result<PathBuf> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let descriptor = self.find_attachment(name)?;
+        let registry_handle = self.run.registry_handle();
+        write_attachment_descriptor(
+            registry_handle.registry(),
+            &descriptor,
+            name,
+            path,
+            overwrite,
+        )
     }
 
     /// Read a run-level attachment by name and decode it with a codec.

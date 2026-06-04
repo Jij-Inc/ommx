@@ -28,7 +28,7 @@ use crate::artifact::{
 use crate::{Instance, Solution};
 use anyhow::{ensure, Context, Result};
 use oci_spec::image::{Descriptor, MediaType};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -447,10 +447,16 @@ impl AttachmentLogger for &ExperimentDyn {
         name: &str,
         media_type: MediaType,
         bytes: impl AsRef<[u8]>,
+        annotations: HashMap<String, String>,
     ) -> Result<()> {
         let mut dyn_state = lock_experiment_state(&self.state);
-        let descriptor =
-            store_experiment_attachment_descriptor(&dyn_state, name, media_type, bytes.as_ref())?;
+        let descriptor = store_experiment_attachment_descriptor(
+            &dyn_state,
+            name,
+            media_type,
+            bytes.as_ref(),
+            annotations,
+        )?;
         let ExperimentDynLifecycle::Unsealed { state, .. } = &mut dyn_state.lifecycle else {
             return bail_non_unsealed(&dyn_state.lifecycle);
         };
@@ -1040,6 +1046,7 @@ fn store_experiment_attachment_descriptor(
     name: &str,
     media_type: MediaType,
     bytes: &[u8],
+    extra_annotations: HashMap<String, String>,
 ) -> Result<Descriptor> {
     ensure_unsealed_for_attachment_write(state)?;
     let descriptor = store_attachment_descriptor(
@@ -1048,6 +1055,7 @@ fn store_experiment_attachment_descriptor(
         name,
         media_type,
         bytes,
+        extra_annotations,
     )?;
     Ok(Descriptor::from(descriptor))
 }
@@ -1058,6 +1066,7 @@ fn store_run_attachment_descriptor(
     name: &str,
     media_type: MediaType,
     bytes: &[u8],
+    extra_annotations: HashMap<String, String>,
 ) -> Result<Descriptor> {
     ensure_unsealed_for_attachment_write(state)?;
     let descriptor = store_attachment_descriptor(
@@ -1066,6 +1075,7 @@ fn store_run_attachment_descriptor(
         name,
         media_type,
         bytes,
+        extra_annotations,
     )?;
     Ok(Descriptor::from(descriptor))
 }
