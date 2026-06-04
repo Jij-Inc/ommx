@@ -53,6 +53,54 @@ ommx gc --delete
 呼べます。どちらもデフォルトでは report-only で、`delete=True` 指定時だけ
 registry を変更し、notebook や script で扱いやすい structured report object を返します。
 
+### 🆕 Experiment Attachment の型付き Codec ([#921](https://github.com/Jij-Inc/ommx/pull/921))
+
+新しい {class}`ommx.experiment.attachments.AttachmentCodec` protocol により、Python payload 型を所有するパッケージ側で、その値を Experiment attachment として保存・復元する方法を定義できるようになりました。Codec class は media type と `encode` / `decode` を提供し、OMMX は Experiment-level / Run-level の `log_with_codec` と `get_with_codec` からそれを呼び出します。
+
+```python
+from ommx.experiment import Experiment
+
+
+class TextCodec:
+    media_type = "text/plain"
+
+    @staticmethod
+    def encode(value: str) -> bytes:
+        return value.encode()
+
+    @staticmethod
+    def decode(data: bytes) -> str:
+        return data.decode()
+
+
+with Experiment.with_temp_local_registry() as experiment:
+    experiment.log_with_codec(TextCodec, "note", "created outside OMMX")
+
+loaded = Experiment.from_artifact(experiment.artifact)
+assert loaded.get_with_codec(TextCodec, "note") == "created outside OMMX"
+```
+
+decode の前に保存済み descriptor の media type を検証するため、attachment に対して誤った Codec を使った場合は、その Codec の `decode` が呼ばれる前にエラーになります。
+
+### 🆕 Experiment へのファイル添付 ([#922](https://github.com/Jij-Inc/ommx/pull/922))
+
+{class}`~ommx.experiment.Experiment` と {class}`~ommx.experiment.Run` に、OMMX の外で作られた既存ファイルを添付できるようになりました。`log_file` は指定されたファイルを Experiment Artifact の attachment blob としてコピーします。後から復元できるよう元ファイルの basename を metadata として保存し、media type は明示指定された値、または Python の `mimetypes.guess_type` による拡張子ベースの推定値を使います。
+
+commit 済み Experiment / Run の読み取りビューには、attachment blob を実ファイルとして書き戻す `write_attachment` も追加しました。binary file-like object を受け取るライブラリに渡したい場合は、既存の `get_blob` の戻り値を `io.BytesIO` で包んで使えます。
+
+```python
+import io
+
+from ommx.experiment import Experiment
+
+with Experiment.with_temp_local_registry() as experiment:
+    experiment.log_file("input-spreadsheet", "input.xlsx")
+
+loaded = Experiment.from_artifact(experiment.artifact)
+spreadsheet_file = io.BytesIO(loaded.get_blob("input-spreadsheet"))
+loaded.write_attachment("input-spreadsheet", "restored/input.xlsx")
+```
+
 ## 3.0.0 Alpha 4
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0a4-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0a4)
