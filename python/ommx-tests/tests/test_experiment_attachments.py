@@ -17,16 +17,18 @@ class ToyPayload:
 class ToyPayloadCodec:
     media_type = "application/vnd.ommx-tests.toy-payload+json"
 
-    def serialize(self, value: ToyPayload) -> bytes:
+    @staticmethod
+    def encode(value: ToyPayload) -> bytes:
         payload = {"label": value.label, "value": value.value}
         return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
 
-    def deserialize(self, data: bytes) -> ToyPayload:
+    @staticmethod
+    def decode(data: bytes) -> ToyPayload:
         payload = json.loads(data.decode())
         return ToyPayload(label=payload["label"], value=payload["value"])
 
 
-_TOY_CODEC: AttachmentCodec[ToyPayload] = ToyPayloadCodec()
+_TOY_CODEC: type[AttachmentCodec[ToyPayload]] = ToyPayloadCodec
 
 
 def _attachment_by_name(attachments: list[Descriptor], name: str) -> Descriptor:
@@ -40,14 +42,14 @@ def test_experiment_attachment_codec_round_trip():
     expected = ToyPayload(label="experiment", value=7)
 
     with Experiment.with_temp_local_registry() as experiment:
-        experiment.log_with_codec("typed-payload", expected, _TOY_CODEC)
+        experiment.log_with_codec(_TOY_CODEC, "typed-payload", expected)
 
     loaded = Experiment.from_artifact(experiment.artifact)
-    assert loaded.get_with_codec("typed-payload", _TOY_CODEC) == expected
+    assert loaded.get_with_codec(_TOY_CODEC, "typed-payload") == expected
 
     descriptor = _attachment_by_name(loaded.experiment_attachments, "typed-payload")
     assert descriptor.media_type == _TOY_CODEC.media_type
-    assert loaded.get_blob("typed-payload") == _TOY_CODEC.serialize(expected)
+    assert loaded.get_blob("typed-payload") == _TOY_CODEC.encode(expected)
 
 
 def test_run_attachment_codec_round_trip():
@@ -55,12 +57,12 @@ def test_run_attachment_codec_round_trip():
 
     with Experiment.with_temp_local_registry() as experiment:
         with experiment.run() as run:
-            run.log_with_codec("typed-payload", expected, _TOY_CODEC)
+            run.log_with_codec(_TOY_CODEC, "typed-payload", expected)
 
     loaded = Experiment.from_artifact(experiment.artifact)
     run = loaded.runs[0]
-    assert run.get_with_codec("typed-payload", _TOY_CODEC) == expected
+    assert run.get_with_codec(_TOY_CODEC, "typed-payload") == expected
 
     descriptor = _attachment_by_name(run.attachments, "typed-payload")
     assert descriptor.media_type == _TOY_CODEC.media_type
-    assert run.get_blob("typed-payload") == _TOY_CODEC.serialize(expected)
+    assert run.get_blob("typed-payload") == _TOY_CODEC.encode(expected)

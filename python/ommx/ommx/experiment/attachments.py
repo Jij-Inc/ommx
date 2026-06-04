@@ -2,7 +2,7 @@
 
 OMMX stores Experiment attachments as media-typed bytes. Provider packages
 that own richer Python objects can implement :class:`AttachmentCodec` to define
-how those objects are serialized into attachment bytes and deserialized back.
+how those objects are encoded into attachment bytes and decoded back.
 """
 
 from __future__ import annotations
@@ -20,17 +20,17 @@ class AttachmentCodec(Protocol[T]):
     not in OMMX.
     """
 
-    @property
-    def media_type(self) -> str:
-        """OCI media type used for this attachment payload."""
+    media_type: str
+    """OCI media type used for this attachment payload."""
+
+    @staticmethod
+    def encode(value: T, /) -> bytes:
+        """Encode a Python object to attachment bytes."""
         ...
 
-    def serialize(self, value: T, /) -> bytes:
-        """Serialize a Python object to attachment bytes."""
-        ...
-
-    def deserialize(self, data: bytes, /) -> T:
-        """Deserialize attachment bytes back to a Python object."""
+    @staticmethod
+    def decode(data: bytes, /) -> T:
+        """Decode attachment bytes back to a Python object."""
         ...
 
 

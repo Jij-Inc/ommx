@@ -3153,31 +3153,37 @@
             },
             {
               "name": "get_with_codec",
-              "doc": "Read an experiment-level attachment by name and deserialize it with a codec.\n\nThe codec must provide `media_type`, `serialize(value) -> bytes`, and\n`deserialize(bytes) -> object`. This method validates the stored media\ntype against the codec before deserializing.",
+              "doc": "Read an experiment-level attachment by name and decode it with a codec.\n\nThe codec class must provide `media_type`, `encode(value) -> bytes`,\nand `decode(bytes) -> object`. This method validates the stored media\ntype against the codec before decoding.",
               "signatures": [
                 {
                   "parameters": [
+                    {
+                      "name": "codec",
+                      "type_": {
+                        "display": "type[AttachmentCodec[T]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "AttachmentCodec[T]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "T",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": null
+                    },
                     {
                       "name": "name",
                       "type_": {
                         "display": "str",
                         "link_target": null,
                         "children": []
-                      },
-                      "default": null
-                    },
-                    {
-                      "name": "codec",
-                      "type_": {
-                        "display": "AttachmentCodec[T]",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "T",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
                       },
                       "default": null
                     }
@@ -3491,10 +3497,31 @@
             },
             {
               "name": "log_with_codec",
-              "doc": "Serialize a Python object with an attachment codec and attach it in the experiment space.\n\nThe codec must provide `media_type`, `serialize(value) -> bytes`, and\n`deserialize(bytes) -> object`. OMMX owns only this protocol; concrete\ncodecs should live in the package that owns the payload type.",
+              "doc": "Encode a Python object with an attachment codec and attach it in the experiment space.\n\nThe codec class must provide `media_type`, `encode(value) -> bytes`,\nand `decode(bytes) -> object`. OMMX owns only this protocol; concrete\ncodecs should live in the package that owns the payload type.",
               "signatures": [
                 {
                   "parameters": [
+                    {
+                      "name": "codec",
+                      "type_": {
+                        "display": "type[AttachmentCodec[T]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "AttachmentCodec[T]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "T",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": null
+                    },
                     {
                       "name": "name",
                       "type_": {
@@ -3510,21 +3537,6 @@
                         "display": "T",
                         "link_target": null,
                         "children": []
-                      },
-                      "default": null
-                    },
-                    {
-                      "name": "codec",
-                      "type_": {
-                        "display": "AttachmentCodec[T]",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "T",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
                       },
                       "default": null
                     }
@@ -4310,10 +4322,31 @@
             },
             {
               "name": "log_with_codec",
-              "doc": "Serialize a Python object with an attachment codec and attach it in this run.\n\nThe codec must provide `media_type`, `serialize(value) -> bytes`, and\n`deserialize(bytes) -> object`. OMMX owns only this protocol; concrete\ncodecs should live in the package that owns the payload type.",
+              "doc": "Encode a Python object with an attachment codec and attach it in this run.\n\nThe codec class must provide `media_type`, `encode(value) -> bytes`,\nand `decode(bytes) -> object`. OMMX owns only this protocol; concrete\ncodecs should live in the package that owns the payload type.",
               "signatures": [
                 {
                   "parameters": [
+                    {
+                      "name": "codec",
+                      "type_": {
+                        "display": "type[AttachmentCodec[T]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "AttachmentCodec[T]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "T",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": null
+                    },
                     {
                       "name": "name",
                       "type_": {
@@ -4329,21 +4362,6 @@
                         "display": "T",
                         "link_target": null,
                         "children": []
-                      },
-                      "default": null
-                    },
-                    {
-                      "name": "codec",
-                      "type_": {
-                        "display": "AttachmentCodec[T]",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "T",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
                       },
                       "default": null
                     }
@@ -4580,31 +4598,37 @@
             },
             {
               "name": "get_with_codec",
-              "doc": "Read a run-level attachment by name and deserialize it with a codec.\n\nThe codec must provide `media_type`, `serialize(value) -> bytes`, and\n`deserialize(bytes) -> object`. This method validates the stored media\ntype against the codec before deserializing.",
+              "doc": "Read a run-level attachment by name and decode it with a codec.\n\nThe codec class must provide `media_type`, `encode(value) -> bytes`,\nand `decode(bytes) -> object`. This method validates the stored media\ntype against the codec before decoding.",
               "signatures": [
                 {
                   "parameters": [
+                    {
+                      "name": "codec",
+                      "type_": {
+                        "display": "type[AttachmentCodec[T]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "AttachmentCodec[T]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "T",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": null
+                    },
                     {
                       "name": "name",
                       "type_": {
                         "display": "str",
                         "link_target": null,
                         "children": []
-                      },
-                      "default": null
-                    },
-                    {
-                      "name": "codec",
-                      "type_": {
-                        "display": "AttachmentCodec[T]",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "T",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
                       },
                       "default": null
                     }

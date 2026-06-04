@@ -69,11 +69,23 @@ pi = ParametricInstance.from_components(
 )
 ```
 
-If the original model was written in a modeling package, keep that source model as an Attachment as well. For external payload types, OMMX defines only the attachment codec protocol and the `log_with_codec` / `get_with_codec` methods that invoke it. The concrete codec should live in the package that owns the object type. JijModeling is expected to provide a codec for `Problem`, so the same source model can be saved and restored without OMMX depending on JijModeling. Excel or spreadsheet payloads can follow the same pattern in the package that owns that file format.
+If the original model was written in a modeling package, keep that source model as an Attachment as well. For external payload types, OMMX defines only the attachment codec protocol and the `log_with_codec` / `get_with_codec` methods that invoke it. The concrete codec should live in the package that owns the object type. This tutorial defines a temporary `ProblemCodec` for JijModeling `Problem`; JijModeling is expected to provide an equivalent codec in the future. Excel or spreadsheet payloads can follow the same pattern in the package that owns that file format.
 
 ```{code-cell} ipython3
 import jijmodeling as jm
-from jijmodeling.experimental.ommx import problem_attachment_codec
+
+
+class ProblemCodec:
+  media_type = "application/vnd.jijmodeling.problem+protobuf"
+
+  @staticmethod
+  def encode(problem: jm.Problem) -> bytes:
+    return problem.to_protobuf()
+
+  @staticmethod
+  def decode(data: bytes) -> jm.Problem:
+    return jm.Problem.from_protobuf(data)
+
 
 @jm.Problem.define("Knapsack Problem", sense=jm.ProblemSense.MAXIMIZE)
 def jij_problem(problem: jm.DecoratedProblem):
@@ -109,9 +121,9 @@ with Experiment() as experiment:
 
   # Store the original JijModeling Problem through the codec provided by JijModeling.
   experiment.log_with_codec(
+    ProblemCodec,
     "jijmodeling-problem",
     jij_problem,
-    problem_attachment_codec,
   )
 
   # This example does not need it, but model metadata can also be stored as JSON.
@@ -256,10 +268,10 @@ assert source_data == {
 pi = loaded_experiment.get_attachment("instance")
 assert isinstance(pi, ParametricInstance)
 
-# The codec validates the Media Type and deserializes the original payload.
+# The codec validates the Media Type and decodes the original payload.
 restored_jij_problem = loaded_experiment.get_with_codec(
+    ProblemCodec,
     "jijmodeling-problem",
-    problem_attachment_codec,
 )
 assert restored_jij_problem.name == jij_problem.name
 ```

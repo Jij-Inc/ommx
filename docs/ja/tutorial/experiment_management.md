@@ -69,11 +69,23 @@ pi = ParametricInstance.from_components(
 )
 ```
 
-元のモデルをモデリング用パッケージで記述している場合は、そのソースモデルもAttachmentとして保存しておくと後から参照できます。外部パッケージが所有する型について、OMMXはAttachment CodecのProtocolと、それを呼び出す `log_with_codec` / `get_with_codec` メソッドだけを定義します。具体的なCodecはその型を所有するパッケージ側で提供します。JijModelingは `Problem` 用のCodecを提供してくれる予定なので、OMMXがJijModelingに依存することなく、同じソースモデルを保存して読み戻せます。Excelやspreadsheetのpayloadも同じように、そのファイル形式を扱うパッケージ側でCodecを提供できます。
+元のモデルをモデリング用パッケージで記述している場合は、そのソースモデルもAttachmentとして保存しておくと後から参照できます。外部パッケージが所有する型について、OMMXはAttachment CodecのProtocolと、それを呼び出す `log_with_codec` / `get_with_codec` メソッドだけを定義します。具体的なCodecはその型を所有するパッケージ側で提供します。このチュートリアルではJijModeling `Problem` 用の一時的な `ProblemCodec` を定義して使います。同等のCodecは将来的にJijModeling本体で提供される予定です。Excelやspreadsheetのpayloadも同じように、そのファイル形式を扱うパッケージ側でCodecを提供できます。
 
 ```{code-cell} ipython3
 import jijmodeling as jm
-from jijmodeling.experimental.ommx import problem_attachment_codec
+
+
+class ProblemCodec:
+  media_type = "application/vnd.jijmodeling.problem+protobuf"
+
+  @staticmethod
+  def encode(problem: jm.Problem) -> bytes:
+    return problem.to_protobuf()
+
+  @staticmethod
+  def decode(data: bytes) -> jm.Problem:
+    return jm.Problem.from_protobuf(data)
+
 
 @jm.Problem.define("Knapsack Problem", sense=jm.ProblemSense.MAXIMIZE)
 def jij_problem(problem: jm.DecoratedProblem):
@@ -109,9 +121,9 @@ with Experiment() as experiment:
 
   # 元のJijModeling ProblemをJijModelingが提供するCodec経由で保存する。
   experiment.log_with_codec(
+    ProblemCodec,
     "jijmodeling-problem",
     jij_problem,
-    problem_attachment_codec,
   )
 
   # 今回は必要ないが、モデルの情報をJSONで保存することもできる。
@@ -256,10 +268,10 @@ assert source_data == {
 pi = loaded_experiment.get_attachment("instance")
 assert isinstance(pi, ParametricInstance)
 
-# CodecがMedia Typeを検証し、元のpayloadへdeserializeして返す
+# CodecがMedia Typeを検証し、元のpayloadへdecodeして返す
 restored_jij_problem = loaded_experiment.get_with_codec(
+    ProblemCodec,
     "jijmodeling-problem",
-    problem_attachment_codec,
 )
 assert restored_jij_problem.name == jij_problem.name
 ```
