@@ -383,6 +383,36 @@ impl PyExperiment {
         ))
     }
 
+    /// Read an experiment-level attachment by name and deserialize it with a codec.
+    ///
+    /// The codec must provide `media_type`, `serialize(value) -> bytes`, and
+    /// `deserialize(bytes) -> object`. This method validates the stored media
+    /// type against the codec before deserializing.
+    #[gen_stub(override_return_type(
+        type_repr = "attachments.T",
+        imports = ("ommx.experiment.attachments")
+    ))]
+    pub fn get_with_codec<'py>(
+        &self,
+        py: Python<'py>,
+        name: &str,
+        #[gen_stub(override_type(
+            type_repr = "attachments.AttachmentCodec[attachments.T]",
+            imports = ("ommx.experiment.attachments")
+        ))]
+        codec: &Bound<'py, PyAny>,
+    ) -> Result<Bound<'py, PyAny>> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let descriptor = self.find_attachment(name)?;
+        let registry_handle = self.inner.registry_handle();
+        let blob = attachment_blob(
+            registry_handle.registry(),
+            &descriptor,
+            Some(&codec_media_type(codec)?),
+        )?;
+        codec_deserialize(py, codec, &blob)
+    }
+
     #[getter]
     /// Closed runs in insertion order.
     pub fn runs(&self) -> Result<Vec<PySealedRun>> {
@@ -448,6 +478,32 @@ impl PyExperiment {
             MediaType::Other(media_type.to_string()),
             bytes.as_bytes(),
         )
+    }
+
+    /// Serialize a Python object with an attachment codec and attach it in the experiment space.
+    ///
+    /// The codec must provide `media_type`, `serialize(value) -> bytes`, and
+    /// `deserialize(bytes) -> object`. OMMX owns only this protocol; concrete
+    /// codecs should live in the package that owns the payload type.
+    pub fn log_with_codec(
+        &mut self,
+        py: Python<'_>,
+        name: &str,
+        #[gen_stub(override_type(
+            type_repr = "attachments.T",
+            imports = ("ommx.experiment.attachments")
+        ))]
+        value: &Bound<PyAny>,
+        #[gen_stub(override_type(
+            type_repr = "attachments.AttachmentCodec[attachments.T]",
+            imports = ("ommx.experiment.attachments")
+        ))]
+        codec: &Bound<PyAny>,
+    ) -> Result<()> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let media_type = codec_media_type(codec)?;
+        let bytes = codec_serialize(codec, value)?;
+        AttachmentLogger::log_attachment(&self.inner, name, MediaType::Other(media_type), bytes)
     }
 
     /// Attach a JSON-serializable value in the experiment space.
@@ -665,6 +721,32 @@ fn attachment_blob(
         }
     }
     registry.get_blob(descriptor)
+}
+
+fn codec_media_type(codec: &Bound<'_, PyAny>) -> Result<String> {
+    codec
+        .getattr("media_type")
+        .context("Attachment codec must define `media_type`")?
+        .extract()
+        .context("Attachment codec `media_type` must be a string")
+}
+
+fn codec_serialize(codec: &Bound<'_, PyAny>, value: &Bound<'_, PyAny>) -> Result<Vec<u8>> {
+    codec
+        .call_method1("serialize", (value,))
+        .context("Attachment codec `serialize(...)` failed")?
+        .extract()
+        .context("Attachment codec `serialize(...)` must return bytes")
+}
+
+fn codec_deserialize<'py>(
+    py: Python<'py>,
+    codec: &Bound<'py, PyAny>,
+    blob: &[u8],
+) -> Result<Bound<'py, PyAny>> {
+    codec
+        .call_method1("deserialize", (PyBytes::new(py, blob),))
+        .context("Attachment codec `deserialize(...)` failed")
 }
 
 fn decode_attachment<'py>(
@@ -974,6 +1056,38 @@ impl PyRun {
             name,
             MediaType::Other(media_type.to_string()),
             bytes.as_bytes(),
+        )
+    }
+
+    /// Serialize a Python object with an attachment codec and attach it in this run.
+    ///
+    /// The codec must provide `media_type`, `serialize(value) -> bytes`, and
+    /// `deserialize(bytes) -> object`. OMMX owns only this protocol; concrete
+    /// codecs should live in the package that owns the payload type.
+    pub fn log_with_codec(
+        &mut self,
+        py: Python<'_>,
+        name: &str,
+        #[gen_stub(override_type(
+            type_repr = "attachments.T",
+            imports = ("ommx.experiment.attachments")
+        ))]
+        value: &Bound<PyAny>,
+        #[gen_stub(override_type(
+            type_repr = "attachments.AttachmentCodec[attachments.T]",
+            imports = ("ommx.experiment.attachments")
+        ))]
+        codec: &Bound<PyAny>,
+    ) -> Result<()> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        self.ensure_store_trace_context_started()?;
+        let media_type = codec_media_type(codec)?;
+        let bytes = codec_serialize(codec, value)?;
+        AttachmentLogger::log_attachment(
+            self.as_open_mut()?,
+            name,
+            MediaType::Other(media_type),
+            bytes,
         )
     }
 
@@ -1410,6 +1524,36 @@ impl PySealedRun {
             py,
             &registry_handle.registry().get_blob(&descriptor)?,
         ))
+    }
+
+    /// Read a run-level attachment by name and deserialize it with a codec.
+    ///
+    /// The codec must provide `media_type`, `serialize(value) -> bytes`, and
+    /// `deserialize(bytes) -> object`. This method validates the stored media
+    /// type against the codec before deserializing.
+    #[gen_stub(override_return_type(
+        type_repr = "attachments.T",
+        imports = ("ommx.experiment.attachments")
+    ))]
+    pub fn get_with_codec<'py>(
+        &self,
+        py: Python<'py>,
+        name: &str,
+        #[gen_stub(override_type(
+            type_repr = "attachments.AttachmentCodec[attachments.T]",
+            imports = ("ommx.experiment.attachments")
+        ))]
+        codec: &Bound<'py, PyAny>,
+    ) -> Result<Bound<'py, PyAny>> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let descriptor = self.find_attachment(name)?;
+        let registry_handle = self.run.registry_handle();
+        let blob = attachment_blob(
+            registry_handle.registry(),
+            &descriptor,
+            Some(&codec_media_type(codec)?),
+        )?;
+        codec_deserialize(py, codec, &blob)
     }
 
     #[getter]

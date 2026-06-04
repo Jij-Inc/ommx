@@ -69,10 +69,11 @@ pi = ParametricInstance.from_components(
 )
 ```
 
-元のモデルをモデリング用パッケージで記述している場合は、そのソースモデルもAttachmentとして保存しておくと後から参照できます。OMMXは外部モデラー固有のペイロードを解釈せず、渡されたbytesとMedia Typeをそのまま保存します。JijModelingの `Problem` の場合は、JijModelingでProblemをシリアライズして、そのprotobuf bytesを添付します。
+元のモデルをモデリング用パッケージで記述している場合は、そのソースモデルもAttachmentとして保存しておくと後から参照できます。外部パッケージが所有する型について、OMMXはAttachment CodecのProtocolと、それを呼び出す `log_with_codec` / `get_with_codec` メソッドだけを定義します。具体的なCodecはその型を所有するパッケージ側で提供します。JijModelingは `Problem` 用のCodecを提供してくれる予定なので、OMMXがJijModelingに依存することなく、同じソースモデルを保存して読み戻せます。Excelやspreadsheetのpayloadも同じように、そのファイル形式を扱うパッケージ側でCodecを提供できます。
 
 ```{code-cell} ipython3
 import jijmodeling as jm
+from jijmodeling.experimental.ommx import problem_attachment_codec
 
 @jm.Problem.define("Knapsack Problem", sense=jm.ProblemSense.MAXIMIZE)
 def jij_problem(problem: jm.DecoratedProblem):
@@ -90,8 +91,6 @@ def jij_problem(problem: jm.DecoratedProblem):
     "重量制限",
     jm.sum(w[i] * x[i] for i in N) <= W,
   )
-
-JIJMODELING_PROBLEM_MEDIA_TYPE = "application/vnd.jijmodeling.problem+protobuf"
 ```
 
 ## 実験する
@@ -108,11 +107,11 @@ with Experiment() as experiment:
   # 上で作ったモデルをExperimentの情報として保存する。
   experiment.log_parametric_instance("instance", pi)
 
-  # 元のJijModeling ProblemをopaqueなAttachmentとして保存する。
-  experiment.log_attachment(
+  # 元のJijModeling ProblemをJijModelingが提供するCodec経由で保存する。
+  experiment.log_with_codec(
     "jijmodeling-problem",
-    JIJMODELING_PROBLEM_MEDIA_TYPE,
-    jij_problem.to_protobuf(),
+    jij_problem,
+    problem_attachment_codec,
   )
 
   # 今回は必要ないが、モデルの情報をJSONで保存することもできる。
@@ -257,9 +256,11 @@ assert source_data == {
 pi = loaded_experiment.get_attachment("instance")
 assert isinstance(pi, ParametricInstance)
 
-# OMMXが知らないMedia Typeはbytesとして返るので、所有元のパッケージでdecodeする
-payload = loaded_experiment.get_attachment("jijmodeling-problem")
-restored_jij_problem = jm.Problem.from_protobuf(payload)
+# CodecがMedia Typeを検証し、元のpayloadへdeserializeして返す
+restored_jij_problem = loaded_experiment.get_with_codec(
+    "jijmodeling-problem",
+    problem_attachment_codec,
+)
 assert restored_jij_problem.name == jij_problem.name
 ```
 
