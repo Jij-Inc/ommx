@@ -1,18 +1,19 @@
 //! Dynamic-lifetime Run handle.
 
+use super::super::attachment::read_file_attachment;
 use super::super::parameter::ParameterSet;
-use super::super::{AttachmentLogger, ParameterValue, RunStatus};
+use super::super::{AttachmentLogger, AttachmentTable, ParameterValue, RunStatus};
 use super::{
     bail_non_unsealed, lock_experiment_state, store_run_attachment_descriptor,
     store_solve_payload_descriptor, store_trace_descriptor, ExperimentDyn, ExperimentDynLifecycle,
     ExperimentDynState, RunEntryDyn, SolveEntryDyn,
 };
-use crate::artifact::media_types;
+use crate::artifact::{media_types, InstanceAnnotations, SolutionAnnotations};
 use crate::{Instance, Solution};
 use anyhow::Result;
 use oci_spec::image::{Descriptor, MediaType};
-use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use std::{collections::HashMap, path::Path};
 
 /// Runtime-owned Run handle.
 ///
@@ -38,7 +39,7 @@ pub struct RunDyn {
 #[derive(Debug)]
 struct RunDynState {
     run_id: u64,
-    attachments: Vec<Descriptor>,
+    attachments: AttachmentTable<Descriptor>,
     trace: Option<Descriptor>,
     solves: Vec<SolveEntryDyn>,
     next_solve_id: u64,
@@ -69,7 +70,7 @@ impl RunDyn {
         Self {
             run_state: Some(RunDynState {
                 run_id,
-                attachments: Vec::new(),
+                attachments: AttachmentTable::new(),
                 trace: None,
                 solves: Vec::new(),
                 next_solve_id: 0,
@@ -96,7 +97,9 @@ impl RunDyn {
     pub fn log_finished_solve_result(
         &mut self,
         input: &Instance,
+        input_annotations: InstanceAnnotations,
         output: &Solution,
+        output_annotations: SolutionAnnotations,
         adapter: String,
         adapter_options: String,
     ) -> Result<u64> {
@@ -108,11 +111,13 @@ impl RunDyn {
                     &dyn_state,
                     media_types::v1_instance(),
                     &input.to_bytes(),
+                    input_annotations.into_inner(),
                 )?,
                 store_solve_payload_descriptor(
                     &dyn_state,
                     media_types::v1_solution(),
                     &output.to_bytes(),
+                    output_annotations.into_inner(),
                 )?,
             )
         };
@@ -252,19 +257,51 @@ impl AttachmentLogger for &mut RunDyn {
         bytes: impl AsRef<[u8]>,
         annotations: HashMap<String, String>,
     ) -> Result<()> {
-        let run_id = self.open()?.run_id;
+        if self.open()?.attachments.contains_key(name) {
+            crate::bail!("Attachment `{name}` already exists");
+        }
         let descriptor = {
             let dyn_state = lock_experiment_state(&self.experiment_state);
+            super::ensure_unsealed_for_attachment_write(&dyn_state)?;
+            let registry_handle = dyn_state.registry_handle.clone();
             store_run_attachment_descriptor(
-                &dyn_state,
-                run_id,
-                name,
+                registry_handle.registry(),
                 media_type,
                 bytes.as_ref(),
                 annotations,
             )?
         };
-        self.open_mut()?.attachments.push(descriptor);
+        self.open_mut()?
+            .attachments
+            .insert(name.to_string(), descriptor, None)?;
+        Ok(())
+    }
+
+    fn log_file(
+        self,
+        name: &str,
+        path: impl AsRef<Path>,
+        media_type: Option<MediaType>,
+        filename: Option<&str>,
+    ) -> Result<()> {
+        let (media_type, bytes, filename) = read_file_attachment(path, media_type, filename)?;
+        if self.open()?.attachments.contains_key(name) {
+            crate::bail!("Attachment `{name}` already exists");
+        }
+        let descriptor = {
+            let dyn_state = lock_experiment_state(&self.experiment_state);
+            super::ensure_unsealed_for_attachment_write(&dyn_state)?;
+            let registry_handle = dyn_state.registry_handle.clone();
+            store_run_attachment_descriptor(
+                registry_handle.registry(),
+                media_type,
+                bytes.as_ref(),
+                HashMap::new(),
+            )?
+        };
+        self.open_mut()?
+            .attachments
+            .insert(name.to_string(), descriptor, Some(filename))?;
         Ok(())
     }
 }

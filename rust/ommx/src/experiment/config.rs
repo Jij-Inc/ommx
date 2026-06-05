@@ -1,5 +1,6 @@
 //! Serialized Experiment structure stored in the OCI config blob.
 
+use super::attachment::AttachmentTable;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -10,7 +11,9 @@ pub struct LayerRef(pub u32);
 #[non_exhaustive]
 pub struct ExperimentConfig {
     pub status: String,
-    pub attachments: Vec<LayerRef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub requested_image_name: Option<String>,
+    pub attachments: AttachmentTable<LayerRef>,
     pub runs: Vec<ExperimentConfigRun>,
     pub run_parameters: LayerRef,
 }
@@ -21,7 +24,7 @@ pub struct ExperimentConfigRun {
     pub run_id: u64,
     #[serde(default = "default_run_status")]
     pub status: String,
-    pub attachments: Vec<LayerRef>,
+    pub attachments: AttachmentTable<LayerRef>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub trace: Option<LayerRef>,
     #[serde(default)]

@@ -64,7 +64,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 #[derive(Clone)]
 pub struct Instance {
     pub(crate) inner: ommx::Instance,
-    pub(crate) annotations: HashMap<String, String>,
+    pub(crate) annotations: ommx::artifact::InstanceAnnotations,
 }
 
 crate::annotations::impl_instance_annotations!(Instance, "org.ommx.v1.instance");
@@ -77,7 +77,7 @@ impl Instance {
         let _guard = crate::TRACING.attach_parent_context(py);
         Ok(Self {
             inner: ommx::Instance::from_bytes(bytes.as_bytes())?,
-            annotations: HashMap::new(),
+            annotations: ommx::artifact::InstanceAnnotations::default(),
         })
     }
 
@@ -233,7 +233,7 @@ impl Instance {
 
         Ok(Self {
             inner,
-            annotations: HashMap::new(),
+            annotations: ommx::artifact::InstanceAnnotations::default(),
         })
     }
 
@@ -907,7 +907,7 @@ impl Instance {
     pub fn as_parametric_instance(&self) -> ParametricInstance {
         ParametricInstance {
             inner: self.inner.clone().into(),
-            annotations: HashMap::new(),
+            annotations: ommx::artifact::ParametricInstanceAnnotations::default(),
         }
     }
 
@@ -963,7 +963,7 @@ impl Instance {
         let parametric_instance = self.inner.clone().penalty_method()?;
         Ok(ParametricInstance {
             inner: parametric_instance,
-            annotations: HashMap::new(),
+            annotations: ommx::artifact::ParametricInstanceAnnotations::default(),
         })
     }
 
@@ -1028,7 +1028,7 @@ impl Instance {
         let parametric_instance = self.inner.clone().uniform_penalty_method()?;
         Ok(ParametricInstance {
             inner: parametric_instance,
-            annotations: HashMap::new(),
+            annotations: ommx::artifact::ParametricInstanceAnnotations::default(),
         })
     }
 
@@ -1090,7 +1090,7 @@ impl Instance {
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
         Ok(Solution {
             inner: solution,
-            annotations: HashMap::new(),
+            annotations: ommx::artifact::SolutionAnnotations::default(),
         })
     }
 
@@ -1173,7 +1173,7 @@ impl Instance {
         };
         Ok(SampleSet {
             inner: self.inner.evaluate_samples(&samples.0, atol)?,
-            annotations: HashMap::new(),
+            annotations: ommx::artifact::SampleSetAnnotations::default(),
         })
     }
 
@@ -2508,7 +2508,7 @@ impl Instance {
         let instance = ommx::mps::load(path)?;
         Ok(Self {
             inner: instance,
-            annotations: HashMap::new(),
+            annotations: ommx::artifact::InstanceAnnotations::default(),
         })
     }
 
@@ -2525,7 +2525,7 @@ impl Instance {
         let instance = ommx::qplib::load(path)?;
         Ok(Self {
             inner: instance,
-            annotations: HashMap::new(),
+            annotations: ommx::artifact::InstanceAnnotations::default(),
         })
     }
 

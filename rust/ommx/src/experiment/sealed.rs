@@ -1,17 +1,22 @@
 //! Read-only model reconstructed from a sealed Experiment Artifact.
 
-use super::attachment::attachment_name;
-use super::config::{ExperimentConfig, ExperimentConfigSolve, LayerRef};
+use super::artifact::ExperimentArtifactView;
+use super::attachment::AttachmentTable;
+use super::config::{ExperimentConfigSolve, LayerRef};
 use super::parameter::{RunParameterCell, RunParameterTable};
-use super::{
-    ExperimentStatus, RunStatus, SealedExperiment, EXPERIMENT_CONFIG_MEDIA_TYPE,
-    RUN_PARAMETERS_MEDIA_TYPE,
-};
+use super::{ExperimentStatus, RunStatus, SealedExperiment, Trace, RUN_PARAMETERS_MEDIA_TYPE};
 use crate::artifact::local_registry::StoredDescriptor;
-use crate::artifact::{media_types, ImageRef, LocalArtifact};
+use crate::artifact::{
+    media_types, ImageRef, InstanceAnnotations, LocalArtifact, ParametricInstanceAnnotations,
+    SampleSetAnnotations, SolutionAnnotations,
+};
+use crate::{Instance, ParametricInstance, SampleSet, Solution};
 use anyhow::{Context, Result};
 use oci_spec::image::{Descriptor, MediaType};
-use std::collections::BTreeMap;
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+};
 
 impl<'reg> SealedExperiment<'reg> {
     /// Reconstruct a sealed Experiment from a committed Experiment Artifact.
@@ -35,7 +40,20 @@ impl<'reg> SealedExperiment<'reg> {
         artifact: LocalArtifact<'reg>,
         allowed_statuses: &[ExperimentStatus],
     ) -> Result<Self> {
-        let (config, status) = load_experiment_config(&artifact, allowed_statuses)?;
+        let config = ExperimentArtifactView::new(&artifact).config()?;
+        let status = ExperimentStatus::from_config(&config.status)?;
+        if !allowed_statuses.contains(&status) {
+            let expected = allowed_statuses
+                .iter()
+                .map(ExperimentStatus::as_str)
+                .collect::<Vec<_>>()
+                .join(" or ");
+            crate::bail!(
+                "Experiment config status is {}, expected {}",
+                status,
+                expected
+            );
+        }
         let layers = artifact.layers()?;
 
         let attachments = decode_attachments(&layers, config.attachments, "experiment")?;
@@ -83,8 +101,54 @@ impl<'reg> SealedExperiment<'reg> {
         &self.status
     }
 
-    pub fn experiment_attachments(&self) -> &[StoredDescriptor<'reg>] {
+    /// Internal descriptor table used when sealed state is forked or converted
+    /// into a dynamic view. Public attachment access remains name-based.
+    pub(crate) fn attachment_table(&self) -> &AttachmentTable<StoredDescriptor<'reg>> {
         &self.attachments
+    }
+
+    pub fn attachment_names(&self) -> impl Iterator<Item = &str> {
+        self.attachments.names()
+    }
+
+    pub fn contains_attachment(&self, name: &str) -> bool {
+        self.attachments.contains_key(name)
+    }
+
+    pub fn attachment_media_type(&self, name: &str) -> Result<MediaType> {
+        self.attachments.media_type(name)
+    }
+
+    pub fn attachment_blob(&self, name: &str) -> Result<Vec<u8>> {
+        self.attachments.blob(name)
+    }
+
+    pub fn attachment_instance(&self, name: &str) -> Result<(Instance, InstanceAnnotations)> {
+        self.attachments.instance(name)
+    }
+
+    pub fn attachment_parametric_instance(
+        &self,
+        name: &str,
+    ) -> Result<(ParametricInstance, ParametricInstanceAnnotations)> {
+        self.attachments.parametric_instance(name)
+    }
+
+    pub fn attachment_solution(&self, name: &str) -> Result<(Solution, SolutionAnnotations)> {
+        self.attachments.solution(name)
+    }
+
+    pub fn attachment_sample_set(&self, name: &str) -> Result<(SampleSet, SampleSetAnnotations)> {
+        self.attachments.sample_set(name)
+    }
+
+    pub fn write_attachment(
+        &self,
+        name: &str,
+        path: impl AsRef<Path>,
+        overwrite: bool,
+    ) -> Result<PathBuf> {
+        self.attachments.write_attachment(name, path, overwrite)
     }
 
     pub fn runs(&self) -> impl Iterator<Item = &SealedRun<'reg>> {
@@ -105,7 +169,7 @@ impl<'reg> SealedExperiment<'reg> {
 pub struct SealedRun<'reg> {
     run_id: u64,
     status: RunStatus,
-    attachments: Vec<StoredDescriptor<'reg>>,
+    attachments: AttachmentTable<StoredDescriptor<'reg>>,
     trace: Option<StoredDescriptor<'reg>>,
     solves: Vec<Solve<'reg>>,
 }
@@ -119,12 +183,68 @@ impl<'reg> SealedRun<'reg> {
         &self.status
     }
 
-    pub fn attachments(&self) -> &[StoredDescriptor<'reg>] {
+    /// Internal descriptor table used when sealed state is forked or converted
+    /// into a dynamic view. Public attachment access remains name-based.
+    pub(crate) fn attachment_table(&self) -> &AttachmentTable<StoredDescriptor<'reg>> {
         &self.attachments
     }
 
-    pub fn trace(&self) -> Option<&StoredDescriptor<'reg>> {
+    pub fn attachment_names(&self) -> impl Iterator<Item = &str> {
+        self.attachments.names()
+    }
+
+    pub fn contains_attachment(&self, name: &str) -> bool {
+        self.attachments.contains_key(name)
+    }
+
+    pub fn attachment_media_type(&self, name: &str) -> Result<MediaType> {
+        self.attachments.media_type(name)
+    }
+
+    pub fn attachment_blob(&self, name: &str) -> Result<Vec<u8>> {
+        self.attachments.blob(name)
+    }
+
+    pub fn attachment_instance(&self, name: &str) -> Result<(Instance, InstanceAnnotations)> {
+        self.attachments.instance(name)
+    }
+
+    pub fn attachment_parametric_instance(
+        &self,
+        name: &str,
+    ) -> Result<(ParametricInstance, ParametricInstanceAnnotations)> {
+        self.attachments.parametric_instance(name)
+    }
+
+    pub fn attachment_solution(&self, name: &str) -> Result<(Solution, SolutionAnnotations)> {
+        self.attachments.solution(name)
+    }
+
+    pub fn attachment_sample_set(&self, name: &str) -> Result<(SampleSet, SampleSetAnnotations)> {
+        self.attachments.sample_set(name)
+    }
+
+    pub fn write_attachment(
+        &self,
+        name: &str,
+        path: impl AsRef<Path>,
+        overwrite: bool,
+    ) -> Result<PathBuf> {
+        self.attachments.write_attachment(name, path, overwrite)
+    }
+
+    /// Internal trace descriptor used when sealed state is forked or converted
+    /// into a dynamic view. Public trace access returns the opaque payload.
+    pub(crate) fn trace_descriptor(&self) -> Option<&StoredDescriptor<'reg>> {
         self.trace.as_ref()
+    }
+
+    pub fn trace(&self) -> Result<Option<Trace>> {
+        let Some(descriptor) = &self.trace else {
+            return Ok(None);
+        };
+        let bytes = descriptor.registry().get_blob(descriptor)?;
+        Ok(Some(Trace::from_bytes(bytes)))
     }
 
     pub fn solves(&self) -> &[Solve<'reg>] {
@@ -146,12 +266,34 @@ impl<'reg> Solve<'reg> {
         self.solve_id
     }
 
-    pub fn input(&self) -> &StoredDescriptor<'reg> {
+    /// Internal input descriptor used when sealed state is forked or converted
+    /// into a dynamic view. Public solve access returns typed payloads.
+    pub(crate) fn input_descriptor(&self) -> &StoredDescriptor<'reg> {
         &self.input
     }
 
-    pub fn output(&self) -> &StoredDescriptor<'reg> {
+    /// Internal output descriptor used when sealed state is forked or converted
+    /// into a dynamic view. Public solve access returns typed payloads.
+    pub(crate) fn output_descriptor(&self) -> &StoredDescriptor<'reg> {
         &self.output
+    }
+
+    pub fn input_instance(&self) -> Result<(Instance, InstanceAnnotations)> {
+        self.input.ensure_media_type(&media_types::v1_instance())?;
+        let bytes = self.input.registry().get_blob(&self.input)?;
+        Ok((
+            Instance::from_bytes(&bytes)?,
+            InstanceAnnotations::from_descriptor(&self.input),
+        ))
+    }
+
+    pub fn output_solution(&self) -> Result<(Solution, SolutionAnnotations)> {
+        self.output.ensure_media_type(&media_types::v1_solution())?;
+        let bytes = self.output.registry().get_blob(&self.output)?;
+        Ok((
+            Solution::from_bytes(&bytes)?,
+            SolutionAnnotations::from_descriptor(&self.output),
+        ))
     }
 
     pub fn adapter(&self) -> &str {
@@ -163,58 +305,21 @@ impl<'reg> Solve<'reg> {
     }
 }
 
-fn load_experiment_config(
-    artifact: &LocalArtifact<'_>,
-    allowed_statuses: &[ExperimentStatus],
-) -> Result<(ExperimentConfig, ExperimentStatus)> {
-    let config = artifact.stored_config()?;
-    if config.media_type() != &MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()) {
-        crate::bail!(
-            "Experiment config media type is {}, expected {}",
-            config.media_type(),
-            EXPERIMENT_CONFIG_MEDIA_TYPE
-        );
-    }
-    let bytes = artifact.get_blob(&config)?;
-    let config = serde_json::from_slice::<ExperimentConfig>(&bytes)
-        .context("Failed to decode Experiment config")?;
-    let status = ExperimentStatus::from_config(&config.status)?;
-    if !allowed_statuses.contains(&status) {
-        let expected = allowed_statuses
-            .iter()
-            .map(ExperimentStatus::as_str)
-            .collect::<Vec<_>>()
-            .join(" or ");
-        crate::bail!(
-            "Experiment config status is {}, expected {}",
-            status,
-            expected
-        );
-    }
-    Ok((config, status))
-}
-
 fn decode_attachments<'reg>(
     layers: &[StoredDescriptor<'reg>],
-    attachments: Vec<LayerRef>,
+    attachments: AttachmentTable<LayerRef>,
     attachment_context: &str,
-) -> Result<Vec<StoredDescriptor<'reg>>> {
-    let mut decoded = Vec::new();
-    for layer_ref in attachments {
-        let descriptor = resolve_layer(layers, layer_ref)
+) -> Result<AttachmentTable<StoredDescriptor<'reg>>> {
+    attachments.try_map(|name, layer_ref| {
+        Ok(resolve_layer(layers, *layer_ref)
             .with_context(|| {
                 format!(
-                    "Failed to resolve {attachment_context} attachment LayerRef {}",
+                    "Failed to resolve {attachment_context} attachment `{name}` LayerRef {}",
                     layer_ref.0
                 )
             })?
-            .clone();
-        if attachment_name(&descriptor).is_none() {
-            crate::bail!("Attachment descriptor in {attachment_context} is missing `org.ommx.attachment.name`");
-        }
-        decoded.push(descriptor);
-    }
-    Ok(decoded)
+            .clone())
+    })
 }
 
 fn decode_trace<'reg>(

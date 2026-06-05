@@ -1,12 +1,12 @@
 //! Experiment / Run handles and run lifecycle.
 
-use super::attachment::{store_attachment_descriptor, AttachmentSpace};
+use super::attachment::{read_file_attachment, store_attachment_descriptor};
 use super::{AttachmentLogger, ParameterValue, Run, RunEntry, RunStatus, SolveEntry, Trace};
-use crate::artifact::media_types;
+use crate::artifact::{media_types, InstanceAnnotations, SolutionAnnotations};
 use crate::{Instance, Solution};
 use anyhow::Result;
 use oci_spec::image::MediaType;
-use std::collections::HashMap;
+use std::{collections::HashMap, path::Path};
 
 impl<'exp, 'reg> Run<'exp, 'reg> {
     /// This run's 0-based id within the experiment.
@@ -36,7 +36,9 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
     pub fn log_finished_solve_result(
         &mut self,
         input: &Instance,
+        input_annotations: InstanceAnnotations,
         output: &Solution,
+        output_annotations: SolutionAnnotations,
         adapter: String,
         adapter_options: String,
     ) -> Result<u64> {
@@ -45,12 +47,12 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
         let input = self.experiment.registry.store_layer_blob(
             media_types::v1_instance(),
             &input.to_bytes(),
-            Default::default(),
+            input_annotations.into_inner(),
         )?;
         let output = self.experiment.registry.store_layer_blob(
             media_types::v1_solution(),
             &output.to_bytes(),
-            Default::default(),
+            output_annotations.into_inner(),
         )?;
         self.solves.push(SolveEntry {
             solve_id,
@@ -138,15 +140,39 @@ impl<'exp, 'reg> AttachmentLogger for &mut Run<'exp, 'reg> {
         bytes: impl AsRef<[u8]>,
         annotations: HashMap<String, String>,
     ) -> Result<()> {
+        if self.attachments.contains_key(name) {
+            crate::bail!("Attachment `{name}` already exists");
+        }
         let descriptor = store_attachment_descriptor(
             self.experiment.registry,
-            AttachmentSpace::Run(self.run_id),
-            name,
             media_type,
             bytes.as_ref(),
             annotations,
         )?;
-        self.attachments.push(descriptor);
+        self.attachments
+            .insert(name.to_string(), descriptor, None)?;
+        Ok(())
+    }
+
+    fn log_file(
+        self,
+        name: &str,
+        path: impl AsRef<Path>,
+        media_type: Option<MediaType>,
+        filename: Option<&str>,
+    ) -> Result<()> {
+        let (media_type, bytes, filename) = read_file_attachment(path, media_type, filename)?;
+        if self.attachments.contains_key(name) {
+            crate::bail!("Attachment `{name}` already exists");
+        }
+        let descriptor = store_attachment_descriptor(
+            self.experiment.registry,
+            media_type,
+            bytes.as_ref(),
+            HashMap::new(),
+        )?;
+        self.attachments
+            .insert(name.to_string(), descriptor, Some(filename))?;
         Ok(())
     }
 }

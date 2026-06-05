@@ -48,7 +48,7 @@
 //!
 //! let mut run = exp.run()?;
 //! run.log_parameter("solver", "scip")?;
-//! run.log_instance("candidate", &instance)?;
+//! run.log_instance("candidate", &instance, Default::default())?;
 //! run.finish()?;
 //!
 //! let artifact = exp.commit()?.into_artifact();
@@ -74,11 +74,7 @@ mod sealed;
 #[cfg(test)]
 mod tests;
 
-pub use attachment::{
-    attachment_filename, attachment_name, detect_file_media_type, write_attachment_descriptor,
-    FileAttachment, ATTACHMENT_FILENAME_ANNOTATION, ATTACHMENT_NAME_ANNOTATION,
-    DEFAULT_FILE_MEDIA_TYPE,
-};
+pub use attachment::{detect_file_media_type, AttachmentTable, DEFAULT_FILE_MEDIA_TYPE};
 pub use dynamic::{ExperimentDyn, RunDyn, SealedRunDyn, SolveDyn};
 pub use logging::AttachmentLogger;
 pub use parameter::{ParameterValue, RunParameterCell};
@@ -86,12 +82,15 @@ pub use sealed::{SealedRun, Solve};
 
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor, TempLocalRegistry};
 use crate::artifact::{ImageRef, LocalArtifact};
-use anyhow::Result;
-use attachment::{store_attachment_descriptor, AttachmentSpace};
+use anyhow::{Context, Result};
+use attachment::{read_file_attachment, store_attachment_descriptor};
 use oci_spec::image::MediaType;
 use parameter::ParameterSet;
-use std::collections::{BTreeMap, HashMap};
 use std::sync::{Mutex, MutexGuard};
+use std::{
+    collections::{BTreeMap, HashMap},
+    path::Path,
+};
 
 // --- Artifact mapping constants ---------------------------------------------
 
@@ -99,13 +98,6 @@ const EXPERIMENT_STATUS_FINISHED: &str = "finished";
 const EXPERIMENT_STATUS_DRAFT: &str = "draft";
 const EXPERIMENT_STATUS_FAILED: &str = "failed";
 const EXPERIMENT_STATUS_INTERRUPTED: &str = "interrupted";
-
-const ANN_SPACE: &str = "org.ommx.experiment.space";
-const ANN_RUN_ID: &str = "org.ommx.experiment.run_id";
-const ANN_ATTACHMENT_NAME: &str = "org.ommx.attachment.name";
-const ANN_EXPERIMENT_STATUS: &str = "org.ommx.experiment.status";
-const ANN_EXPERIMENT_RECOVERY: &str = "org.ommx.experiment.recovery";
-const ANN_EXPERIMENT_REQUESTED_IMAGE: &str = "org.ommx.experiment.requested_image";
 
 const RUN_PARAMETERS_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment.run-parameters+json";
 const EXPERIMENT_CONFIG_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment.config+json";
@@ -214,7 +206,7 @@ pub struct Experiment<'reg> {
 pub struct SealedExperiment<'reg> {
     status: ExperimentStatus,
     artifact: LocalArtifact<'reg>,
-    attachments: Vec<StoredDescriptor<'reg>>,
+    attachments: AttachmentTable<StoredDescriptor<'reg>>,
     runs: BTreeMap<u64, sealed::SealedRun<'reg>>,
     run_parameters: parameter::RunParameterTable,
 }
@@ -236,6 +228,16 @@ impl Trace {
         Self {
             bytes: bytes.into(),
         }
+    }
+
+    /// Encoded trace bytes.
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.bytes
+    }
+
+    /// Consume the trace and return its encoded bytes.
+    pub fn into_bytes(self) -> Vec<u8> {
+        self.bytes
     }
 }
 
@@ -282,7 +284,7 @@ impl From<ImageRef> for Name {
 pub struct Run<'exp, 'reg> {
     experiment: &'exp Experiment<'reg>,
     run_id: u64,
-    attachments: Vec<StoredDescriptor<'reg>>,
+    attachments: AttachmentTable<StoredDescriptor<'reg>>,
     trace: Option<StoredDescriptor<'reg>>,
     solves: Vec<SolveEntry<'reg>>,
     next_solve_id: u64,
@@ -300,7 +302,7 @@ pub struct Run<'exp, 'reg> {
 struct RunEntry<'reg> {
     run_id: u64,
     status: RunStatus,
-    attachments: Vec<StoredDescriptor<'reg>>,
+    attachments: AttachmentTable<StoredDescriptor<'reg>>,
     trace: Option<StoredDescriptor<'reg>>,
     solves: Vec<SolveEntry<'reg>>,
     parameters: ParameterSet,
@@ -328,7 +330,7 @@ struct UnsealedExperimentState<'reg> {
     /// a root Experiment and `Some` for a forked child Experiment.
     subject: Option<oci_spec::image::Descriptor>,
     /// Experiment-space attachments.
-    attachments: Vec<StoredDescriptor<'reg>>,
+    attachments: AttachmentTable<StoredDescriptor<'reg>>,
     runs: BTreeMap<u64, RunEntry<'reg>>,
     next_run_id: u64,
 }
@@ -369,7 +371,7 @@ impl<'reg> Experiment<'reg> {
             state: Mutex::new(UnsealedExperimentState {
                 image_name,
                 subject: None,
-                attachments: Vec::new(),
+                attachments: AttachmentTable::new(),
                 runs: BTreeMap::new(),
                 next_run_id: 0,
             }),
@@ -389,7 +391,7 @@ impl<'reg> Experiment<'reg> {
         Ok(Run {
             experiment: self,
             run_id,
-            attachments: Vec::new(),
+            attachments: AttachmentTable::new(),
             trace: None,
             solves: Vec::new(),
             next_solve_id: 0,
@@ -448,16 +450,41 @@ impl<'reg> AttachmentLogger for &Experiment<'reg> {
         bytes: impl AsRef<[u8]>,
         annotations: HashMap<String, String>,
     ) -> Result<()> {
-        let descriptor = store_attachment_descriptor(
-            self.registry,
-            AttachmentSpace::Experiment,
-            name,
-            media_type,
-            bytes.as_ref(),
-            annotations,
-        )?;
-        let mut state = self.lock_state();
-        state.attachments.push(descriptor);
+        {
+            let state = self.lock_state();
+            if state.attachments.contains_key(name) {
+                crate::bail!("Attachment `{name}` already exists");
+            }
+        }
+        let descriptor =
+            store_attachment_descriptor(self.registry, media_type, bytes.as_ref(), annotations)?;
+        self.lock_state()
+            .attachments
+            .insert(name.to_string(), descriptor, None)
+            .with_context(|| format!("Failed to register attachment `{name}`"))?;
+        Ok(())
+    }
+
+    fn log_file(
+        self,
+        name: &str,
+        path: impl AsRef<Path>,
+        media_type: Option<MediaType>,
+        filename: Option<&str>,
+    ) -> Result<()> {
+        let (media_type, bytes, filename) = read_file_attachment(path, media_type, filename)?;
+        {
+            let state = self.lock_state();
+            if state.attachments.contains_key(name) {
+                crate::bail!("Attachment `{name}` already exists");
+            }
+        }
+        let descriptor =
+            store_attachment_descriptor(self.registry, media_type, bytes.as_ref(), HashMap::new())?;
+        self.lock_state()
+            .attachments
+            .insert(name.to_string(), descriptor, Some(filename))
+            .with_context(|| format!("Failed to register attachment `{name}`"))?;
         Ok(())
     }
 }
@@ -495,8 +522,8 @@ impl<'reg> SealedExperiment<'reg> {
                 .iter()
                 .map(|solve| SolveEntry {
                     solve_id: solve.solve_id(),
-                    input: solve.input().clone(),
-                    output: solve.output().clone(),
+                    input: solve.input_descriptor().clone(),
+                    output: solve.output_descriptor().clone(),
                     adapter: solve.adapter().to_string(),
                     adapter_options: solve.adapter_options().to_string(),
                 })
@@ -506,8 +533,8 @@ impl<'reg> SealedExperiment<'reg> {
                 RunEntry {
                     run_id: run.run_id(),
                     status: run.status().clone(),
-                    attachments: run.attachments().to_vec(),
-                    trace: run.trace().cloned(),
+                    attachments: run.attachment_table().clone(),
+                    trace: run.trace_descriptor().cloned(),
                     solves,
                     parameters,
                 },

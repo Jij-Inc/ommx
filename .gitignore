@@ -54,4 +54,6 @@ node_modules/
 !.claude/CLAUDE.md
 
 # Codex
-.agents/
+.agents/*
+!.agents/skills/
+!.agents/skills/**

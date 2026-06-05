@@ -1142,7 +1142,7 @@ impl PyArtifact {
         let blob = descriptor.read_blob_from(&self.inner)?;
         Ok(crate::Instance {
             inner: ommx::Instance::from_bytes(&blob)?,
-            annotations: descriptor.annotations(),
+            annotations: descriptor.annotations().into(),
         })
     }
 
@@ -1151,7 +1151,7 @@ impl PyArtifact {
         let blob = descriptor.read_blob_from(&self.inner)?;
         Ok(crate::Solution {
             inner: ommx::Solution::from_bytes(&blob)?,
-            annotations: descriptor.annotations(),
+            annotations: descriptor.annotations().into(),
         })
     }
 
@@ -1163,7 +1163,7 @@ impl PyArtifact {
         let blob = descriptor.read_blob_from(&self.inner)?;
         Ok(crate::ParametricInstance {
             inner: ommx::ParametricInstance::from_bytes(&blob)?,
-            annotations: descriptor.annotations(),
+            annotations: descriptor.annotations().into(),
         })
     }
 
@@ -1172,7 +1172,7 @@ impl PyArtifact {
         let blob = descriptor.read_blob_from(&self.inner)?;
         Ok(crate::SampleSet {
             inner: ommx::SampleSet::from_bytes(&blob)?,
-            annotations: descriptor.annotations(),
+            annotations: descriptor.annotations().into(),
         })
     }
 
@@ -1395,7 +1395,7 @@ impl PyArtifactDraft {
         self.0.add_layer(
             "application/org.ommx.v1.instance",
             &blob,
-            instance.annotations.clone(),
+            instance.annotations.clone().into_inner(),
         )
     }
 
@@ -1410,7 +1410,7 @@ impl PyArtifactDraft {
         self.0.add_layer(
             "application/org.ommx.v1.parametric-instance",
             &blob,
-            instance.annotations.clone(),
+            instance.annotations.clone().into_inner(),
         )
     }
 
@@ -1425,7 +1425,7 @@ impl PyArtifactDraft {
         self.0.add_layer(
             "application/org.ommx.v1.solution",
             &blob,
-            solution.annotations.clone(),
+            solution.annotations.clone().into_inner(),
         )
     }
 
@@ -1440,7 +1440,7 @@ impl PyArtifactDraft {
         self.0.add_layer(
             "application/org.ommx.v1.sample-set",
             &blob,
-            sample_set.annotations.clone(),
+            sample_set.annotations.clone().into_inner(),
         )
     }
 

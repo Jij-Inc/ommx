@@ -12,15 +12,9 @@ from ommx.v1 import Instance, Solution
 
 from conftest import get_test_exporter
 
-_ATTACHMENT_NAME = "org.ommx.attachment.name"
-
 
 def _df_snap(df: pd.DataFrame) -> str:
     return df.to_string(na_rep="<NA>")
-
-
-def _attachment_names(attachments) -> set[str]:
-    return {attachment.annotations[_ATTACHMENT_NAME] for attachment in attachments}
 
 
 def _require_trace(trace: TraceResult | None) -> TraceResult:
@@ -72,18 +66,18 @@ def test_view_run_parameters_from_committed_artifact(snapshot):
 
     artifact = experiment.artifact
     loaded = Experiment.from_artifact(artifact)
-    assert _attachment_names(loaded.experiment_attachments) == {"dataset"}
+    assert set(loaded.attachment_names) == {"dataset"}
     assert loaded.attachment_names == ["dataset"]
     assert loaded.get_json("dataset") == {"name": "miplib2017"}
     assert loaded.get_attachment("dataset") == {"name": "miplib2017"}
     runs = {run.run_id: run for run in loaded.runs}
     assert set(runs) == {0, 1, 2}
-    assert _attachment_names(runs[0].attachments) == {"candidate"}
+    assert set(runs[0].attachment_names) == {"candidate"}
     assert runs[0].attachment_names == ["candidate"]
     assert runs[0].get_json("candidate") == {"formulation": "a"}
     assert runs[0].get_attachment("candidate") == {"formulation": "a"}
-    assert runs[1].attachments == []
-    assert runs[2].attachments == []
+    assert runs[1].attachment_names == []
+    assert runs[2].attachment_names == []
     df = loaded.run_parameters_df()
 
     assert _df_snap(df) == snapshot
@@ -107,7 +101,7 @@ def test_create_experiment_run_attachments_and_commit(snapshot):
 
     artifact = experiment.commit()
     loaded = Experiment.from_artifact(artifact)
-    assert _attachment_names(loaded.experiment_attachments) == {
+    assert set(loaded.attachment_names) == {
         "dataset",
         "raw-config",
     }
@@ -117,7 +111,7 @@ def test_create_experiment_run_attachments_and_commit(snapshot):
         loaded.get_json("raw-config")
     runs = {run.run_id: run for run in loaded.runs}
     assert set(runs) == {0}
-    assert _attachment_names(runs[0].attachments) == {"candidate", "solver-log"}
+    assert set(runs[0].attachment_names) == {"candidate", "solver-log"}
     assert runs[0].get_attachment("solver-log") == b"solved"
     assert runs[0].get_blob("solver-log") == b"solved"
     with pytest.raises(RuntimeError, match="Expected media type"):
@@ -125,6 +119,26 @@ def test_create_experiment_run_attachments_and_commit(snapshot):
     df = loaded.run_parameters_df()
 
     assert _df_snap(df) == snapshot
+
+
+def test_typed_attachment_user_annotations_round_trip():
+    instance = Instance.empty()
+    instance.add_user_annotation("source", "experiment")
+    solution = instance.evaluate({})
+    solution.add_user_annotation("source", "run")
+
+    with Experiment.with_temp_local_registry() as experiment:
+        experiment.log_instance("instance", instance)
+        with experiment.run() as run:
+            run.log_solution("solution", solution)
+
+    loaded = Experiment.from_artifact(experiment.artifact)
+
+    loaded_instance = loaded.get_instance("instance")
+    assert loaded_instance.get_user_annotation("source") == "experiment"
+
+    loaded_solution = loaded.runs[0].get_solution("solution")
+    assert loaded_solution.get_user_annotation("source") == "run"
 
 
 def test_commit_rejects_open_run():
@@ -239,7 +253,7 @@ def test_store_trace_records_run_scope_in_artifact():
     artifact = experiment.commit()
 
     loaded = Experiment.from_artifact(artifact)
-    assert _attachment_names(loaded.experiment_attachments) == {"dataset"}
+    assert set(loaded.attachment_names) == {"dataset"}
 
     trace = _require_trace(loaded.runs[0].trace)
     names = _trace_span_names(trace)
@@ -265,12 +279,7 @@ def test_store_trace_records_log_solve_scope_in_artifact():
         def decode(self, data: Any) -> Solution:
             raise NotImplementedError
 
-    instance = Instance.from_components(
-        decision_variables=[],
-        objective=0,
-        constraints={},
-        sense=Instance.MINIMIZE,
-    )
+    instance = Instance.empty()
 
     with Experiment.with_temp_local_registry(store_trace=True) as experiment:
         with experiment.run() as run:
@@ -544,7 +553,9 @@ def test_log_solve_logs_input_solution_and_adapter_options():
         @classmethod
         def solve(cls, ommx_instance: Instance, **kwargs: object) -> Solution:
             cls.seen_kwargs.append(kwargs)
-            return ommx_instance.evaluate({})
+            solution = ommx_instance.evaluate({})
+            solution.add_user_annotation("adapter", "dummy")
+            return solution
 
         @property
         def solver_input(self) -> Any:
@@ -553,12 +564,8 @@ def test_log_solve_logs_input_solution_and_adapter_options():
         def decode(self, data: Any) -> Solution:
             raise NotImplementedError
 
-    instance = Instance.from_components(
-        decision_variables=[],
-        objective=0,
-        constraints={},
-        sense=Instance.MINIMIZE,
-    )
+    instance = Instance.empty()
+    instance.add_user_annotation("source", "solve-input")
     experiment = Experiment.with_temp_local_registry()
     DummyAdapter.seen_kwargs = []
 
@@ -594,12 +601,14 @@ def test_log_solve_logs_input_solution_and_adapter_options():
     artifact = experiment.commit()
     loaded = Experiment.from_artifact(artifact)
     runs = {run.run_id: run for run in loaded.runs}
-    assert runs[0].attachments == []
+    assert runs[0].attachment_names == []
     assert [solve.solve_id for solve in runs[0].solves] == [0, 1]
 
     first_solve = runs[0].solves[0]
     assert isinstance(first_solve.input, Instance)
+    assert first_solve.input.get_user_annotation("source") == "solve-input"
     assert isinstance(first_solve.output, Solution)
+    assert first_solve.output.get_user_annotation("adapter") == "dummy"
     assert first_solve.output.feasible
     assert str(first_solve.adapter).endswith("DummyAdapter")
     assert isinstance(first_solve.adapter_options, dict)
@@ -639,12 +648,7 @@ def test_failed_run_preserves_completed_solves_after_adapter_exception():
         def decode(self, data: Any) -> Solution:
             raise NotImplementedError
 
-    instance = Instance.from_components(
-        decision_variables=[],
-        objective=0,
-        constraints={},
-        sense=Instance.MINIMIZE,
-    )
+    instance = Instance.empty()
     experiment = Experiment.with_temp_local_registry()
     FailingThirdAdapter.calls = 0
 
@@ -671,12 +675,7 @@ def test_log_solve_rejects_non_solver_adapter():
         def solve(cls, ommx_instance: Instance) -> Solution:
             return ommx_instance.evaluate({})
 
-    instance = Instance.from_components(
-        decision_variables=[],
-        objective=0,
-        constraints={},
-        sense=Instance.MINIMIZE,
-    )
+    instance = Instance.empty()
     experiment = Experiment.with_temp_local_registry()
 
     with experiment.run() as run:
@@ -700,12 +699,7 @@ def test_log_solve_rejects_non_json_kwargs_before_solving():
         def decode(self, data: Any) -> Solution:
             raise NotImplementedError
 
-    instance = Instance.from_components(
-        decision_variables=[],
-        objective=0,
-        constraints={},
-        sense=Instance.MINIMIZE,
-    )
+    instance = Instance.empty()
     experiment = Experiment.with_temp_local_registry()
     DummyAdapter.called = False
 

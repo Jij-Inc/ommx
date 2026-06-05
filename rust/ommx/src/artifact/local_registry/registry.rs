@@ -69,6 +69,11 @@ impl StoredDescriptor<'_> {
         std::ptr::eq(self.registry, registry)
     }
 
+    /// Crate-internal Experiment helpers need the proven registry to read blobs.
+    pub(crate) fn registry(&self) -> &LocalRegistry {
+        self.registry
+    }
+
     fn into_inner(self) -> Descriptor {
         self.descriptor
     }

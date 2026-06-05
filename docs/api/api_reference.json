@@ -1635,7 +1635,7 @@
         {
           "kind": "Class",
           "name": "Descriptor",
-          "doc": "Descriptor of a blob stored in the local registry.\n\n`PyDescriptor` intentionally does not carry a `LocalRegistryHandle`.\nIt is a lightweight descriptor view returned by registry-owning\nobjects such as `Artifact` / `Experiment`. The blob can only be read\nby passing this value back to one of those owner objects, whose handle\nkeeps temporary registries alive. If a descriptor outlives every\nowner of its temporary registry, it is just inert metadata and cannot\nbe used to access bytes.",
+          "doc": "Descriptor of a blob stored in the local registry.\n\n`PyDescriptor` intentionally does not carry a `LocalRegistryHandle`.\nIt is a lightweight descriptor view returned by registry-owning\n`Artifact` objects. The blob can only be read\nby passing this value back to one of those owner objects, whose handle\nkeeps temporary registries alive. If a descriptor outlives every\nowner of its temporary registry, it is just inert metadata and cannot\nbe used to access bytes.",
           "bases": [],
           "methods": [
             {
@@ -2697,7 +2697,7 @@
         {
           "kind": "Class",
           "name": "Experiment",
-          "doc": "A collection of optimization experiment records stored as one OMMX Artifact.\n\nAn `Experiment` owns experiment-level attachments and a sequence of\nclosed `Run` records. Each `Run` can store scalar run parameters,\nrun-level attachments, and zero or more `Solve` records.\n\nNewly created experiments are unsealed. Call `commit()` to write the\nexperiment into the local registry as an OMMX Artifact. After commit, the\nsame object can be used as a read-only view of the committed artifact.\n`with Experiment(...)` commits on normal exit if the experiment is still\nunsealed. On exception it does not advance the successful Experiment image\nreference; instead it tries to publish a local checkpoint with status\n`\"failed\"` or `\"interrupted\"`.\n\nLogging APIs store payload bytes in the Local Registry immediately. The\nfinal commit writes an Experiment config and manifest that make those\npayloads reachable as one immutable Artifact. A closed `Run` also publishes\na best-effort `\"draft\"` checkpoint so a later process can resume from the\nlatest closed Run with `Experiment.restore_from_checkpoint(...)`.\n\nUse experiment-level attachments for shared context such as dataset or\nsource-problem metadata. Use `Run.log_parameter(...)` for scalar values\nthat should appear in `run_parameters_df()`, and use run attachments or\n`Run.log_solve(...)` for payloads that belong to a specific run.\n\nExample:\n\n>>> from ommx.experiment import Experiment\n>>> with Experiment.with_temp_local_registry() as exp:\n...     exp.log_json(\"dataset\", {\"name\": \"demo\"})\n...     with exp.run() as run:\n...         run.log_parameter(\"capacity\", 10)\n...         run.log_json(\"scenario\", {\"capacity\": 10})\n>>> len(exp.runs)\n1\n>>> len(exp.experiment_attachments)\n1\n>>> exp.run_parameters_df().to_dict()\n{'capacity': {0: 10}}\n\nIf the experiment has only one run, open the experiment and the run in\none `with` statement. On normal exit, the run is finished first and then\nthe experiment is committed:\n\n>>> with Experiment() as exp, exp.run() as run:  # doctest: +SKIP\n...     solution = run.log_solve(adapter, instance, time_limit=10.0)\n>>> exp.rename(\"ghcr.io/container/name:latest\")  # doctest: +SKIP\n>>> exp.push()  # doctest: +SKIP",
+          "doc": "A collection of optimization experiment records stored as one OMMX Artifact.\n\nAn `Experiment` owns experiment-level attachments and a sequence of\nclosed `Run` records. Each `Run` can store scalar run parameters,\nrun-level attachments, and zero or more `Solve` records.\n\nNewly created experiments are unsealed. Call `commit()` to write the\nexperiment into the local registry as an OMMX Artifact. After commit, the\nsame object can be used as a read-only view of the committed artifact.\n`with Experiment(...)` commits on normal exit if the experiment is still\nunsealed. On exception it does not advance the successful Experiment image\nreference; instead it tries to publish a local checkpoint with status\n`\"failed\"` or `\"interrupted\"`.\n\nLogging APIs store payload bytes in the Local Registry immediately. The\nfinal commit writes an Experiment config and manifest that make those\npayloads reachable as one immutable Artifact. A closed `Run` also publishes\na best-effort `\"draft\"` checkpoint so a later process can resume from the\nlatest closed Run with `Experiment.restore_from_checkpoint(...)`.\n\nUse experiment-level attachments for shared context such as dataset or\nsource-problem metadata. Use `Run.log_parameter(...)` for scalar values\nthat should appear in `run_parameters_df()`, and use run attachments or\n`Run.log_solve(...)` for payloads that belong to a specific run.\n\nExample:\n\n>>> from ommx.experiment import Experiment\n>>> with Experiment.with_temp_local_registry() as exp:\n...     exp.log_json(\"dataset\", {\"name\": \"demo\"})\n...     with exp.run() as run:\n...         run.log_parameter(\"capacity\", 10)\n...         run.log_json(\"scenario\", {\"capacity\": 10})\n>>> len(exp.runs)\n1\n>>> len(exp.attachment_names)\n1\n>>> exp.run_parameters_df().to_dict()\n{'capacity': {0: 10}}\n\nIf the experiment has only one run, open the experiment and the run in\none `with` statement. On normal exit, the run is finished first and then\nthe experiment is committed:\n\n>>> with Experiment() as exp, exp.run() as run:  # doctest: +SKIP\n...     solution = run.log_solve(adapter, instance, time_limit=10.0)\n>>> exp.rename(\"ghcr.io/container/name:latest\")  # doctest: +SKIP\n>>> exp.push()  # doctest: +SKIP",
           "bases": [],
           "methods": [
             {
@@ -2850,6 +2850,32 @@
               "signatures": [
                 {
                   "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "attachment_media_type",
+              "doc": "OCI media type of an experiment-level attachment.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
                   "return_type": {
                     "display": "str",
                     "link_target": null,
@@ -3941,28 +3967,6 @@
               "is_readonly": true
             },
             {
-              "name": "experiment_attachments",
-              "doc": "Low-level descriptors for experiment-level attachments.\n\nPrefer `attachment_names`, `get_attachment`, or typed methods such as\n`get_json` and `get_instance` when working from Python. This descriptor\nview is kept for low-level Artifact inspection.",
-              "type_": {
-                "display": "list[_ommx_rust.Descriptor]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "Descriptor",
-                    "link_target": {
-                      "fqn": "ommx.artifact.Descriptor",
-                      "doc_module": "ommx.artifact",
-                      "kind": "Class",
-                      "attribute": null
-                    },
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
               "name": "image_name",
               "doc": "OCI image reference used to store this Experiment in a local registry.",
               "type_": {
@@ -4652,6 +4656,32 @@
               "deprecated": null
             },
             {
+              "name": "attachment_media_type",
+              "doc": "OCI media type of a run-level attachment.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "get_attachment",
               "doc": "Read a run-level attachment by name.\n\nThe returned Python object is decoded from the attachment media type.",
               "signatures": [
@@ -4955,28 +4985,6 @@
                   {
                     "display": "str",
                     "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "attachments",
-              "doc": "Low-level descriptors for run-level attachments.\n\nPrefer `attachment_names`, `get_attachment`, or typed methods such as\n`get_json` and `get_instance` when working from Python. This descriptor\nview is kept for low-level Artifact inspection.",
-              "type_": {
-                "display": "list[_ommx_rust.Descriptor]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "Descriptor",
-                    "link_target": {
-                      "fqn": "ommx.artifact.Descriptor",
-                      "doc_module": "ommx.artifact",
-                      "kind": "Class",
-                      "attribute": null
-                    },
                     "children": []
                   }
                 ]
