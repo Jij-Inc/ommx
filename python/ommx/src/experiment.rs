@@ -1454,7 +1454,7 @@ impl SolverAdapterInput {
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust", name = "DiagnosticCollector")]
 pub struct PyDiagnosticCollector {
-    diagnostics: Vec<Py<PyAny>>,
+    diagnostics: Vec<DiagnosticReport>,
 }
 
 impl PyDiagnosticCollector {
@@ -1470,7 +1470,7 @@ impl PyDiagnosticCollector {
         let mut packed_items = Vec::new();
         let mut python_types = Vec::new();
         for diagnostic in &self.diagnostics {
-            let diagnostic = diagnostic.bind(py);
+            let diagnostic = diagnostic.as_bound(py);
             let type_name = python_type_name(diagnostic)?;
             let data = dataclasses
                 .call_method1("asdict", (diagnostic,))
@@ -1515,32 +1515,70 @@ impl PyDiagnosticCollector {
     }
 
     #[getter]
-    #[gen_stub(override_return_type(
-        type_repr = "builtins.list[typing.Any]",
-        imports = ("builtins", "typing")
-    ))]
-    pub fn diagnostics<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyList>> {
-        let diagnostics = self
-            .diagnostics
+    pub fn diagnostics(&self, py: Python<'_>) -> Vec<DiagnosticReport> {
+        self.diagnostics
             .iter()
             .map(|diagnostic| diagnostic.clone_ref(py))
-            .collect::<Vec<_>>();
-        Ok(PyList::new(py, diagnostics)?)
+            .collect()
     }
 
-    pub fn record(&mut self, py: Python<'_>, diagnostic: Py<PyAny>) -> PyResult<()> {
-        let diagnostic_ref = diagnostic.bind(py);
+    pub fn record(&mut self, diagnostic: DiagnosticReport) {
+        self.diagnostics.push(diagnostic);
+    }
+}
+
+pub struct DiagnosticReport(Py<PyAny>);
+
+impl DiagnosticReport {
+    fn as_bound<'py>(&self, py: Python<'py>) -> &Bound<'py, PyAny> {
+        self.0.bind(py)
+    }
+
+    fn clone_ref(&self, py: Python<'_>) -> Self {
+        Self(self.0.clone_ref(py))
+    }
+}
+
+impl<'py> FromPyObject<'_, 'py> for DiagnosticReport {
+    type Error = PyErr;
+
+    fn extract(ob: pyo3::Borrowed<'_, 'py, PyAny>) -> PyResult<Self> {
+        let py = ob.py();
         let is_dataclass: bool = py
             .import("dataclasses")?
-            .call_method1("is_dataclass", (diagnostic_ref,))?
+            .call_method1("is_dataclass", (&ob,))?
             .extract()?;
-        if !is_dataclass || diagnostic_ref.is_instance_of::<PyType>() {
+        if !is_dataclass || ob.is_instance_of::<PyType>() {
             return Err(pyo3::exceptions::PyTypeError::new_err(
                 "diagnostic must be a dataclass instance",
             ));
         }
-        self.diagnostics.push(diagnostic);
-        Ok(())
+        Ok(Self(ob.to_owned().unbind()))
+    }
+}
+
+impl<'py> pyo3::IntoPyObject<'py> for DiagnosticReport {
+    type Target = PyAny;
+    type Output = Bound<'py, PyAny>;
+    type Error = std::convert::Infallible;
+
+    fn into_pyobject(self, py: Python<'py>) -> std::result::Result<Self::Output, Self::Error> {
+        Ok(self.0.into_bound(py))
+    }
+}
+
+impl pyo3_stub_gen::PyStubType for DiagnosticReport {
+    fn type_input() -> pyo3_stub_gen::TypeInfo {
+        pyo3_stub_gen::TypeInfo {
+            name: "adapter.DiagnosticReport".to_string(),
+            source_module: None,
+            import: ["ommx.adapter".into()].into(),
+            type_refs: Default::default(),
+        }
+    }
+
+    fn type_output() -> pyo3_stub_gen::TypeInfo {
+        Self::type_input()
     }
 }
 
