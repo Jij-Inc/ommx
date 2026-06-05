@@ -656,6 +656,7 @@ def test_log_solve_records_adapter_diagnostics():
             cls.seen_kwargs.append(kwargs)
             assert diagnostics is not None
             diagnostics.record(DummyDiagnostic(status="terminated", bound=math.inf))
+            diagnostics.record(DummyDiagnostic(status="bounded", bound=-math.inf))
             return ommx_instance.evaluate({})
 
         @property
@@ -680,8 +681,17 @@ def test_log_solve_records_adapter_diagnostics():
     solve = loaded.runs[0].solves[0]
 
     assert solve.adapter_options == {"time_limit": 1.5}
-    assert solve.diagnostics == (DummyDiagnostic(status="terminated", bound=math.inf),)
-    assert math.isinf(solve.diagnostics[0].bound)
+    assert solve.diagnostics == (
+        {"status": "terminated", "bound": math.inf},
+        {"status": "bounded", "bound": -math.inf},
+    )
+    diagnostics = solve.get_diagnostics(model=DummyDiagnostic)
+    assert diagnostics == (
+        DummyDiagnostic(status="terminated", bound=math.inf),
+        DummyDiagnostic(status="bounded", bound=-math.inf),
+    )
+    assert math.isinf(diagnostics[0].bound)
+    assert math.isinf(diagnostics[1].bound)
 
 
 def test_failed_run_preserves_completed_solves_after_adapter_exception():

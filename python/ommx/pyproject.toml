@@ -33,6 +33,7 @@ dependencies = [
   # a known source of footguns for users who only ever see the feature
   # error out at ``%load_ext`` time.
   "ipython>=7.0.0",
+  "msgpack>=1.0.0, <2.0.0",
   "numpy>=1.23.0, <3.0.0",
   "opentelemetry-exporter-otlp-proto-common>=1.20.0",
   "opentelemetry-proto>=1.20.0",

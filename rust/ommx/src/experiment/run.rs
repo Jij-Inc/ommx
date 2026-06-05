@@ -52,7 +52,7 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
             output_annotations,
             adapter,
             adapter_options,
-            Vec::new(),
+            None,
         )
     }
 
@@ -64,7 +64,7 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
         output_annotations: SolutionAnnotations,
         adapter: String,
         adapter_options: String,
-        diagnostics: Vec<SolveDiagnosticPayload>,
+        diagnostics: Option<SolveDiagnosticPayload>,
     ) -> Result<u64> {
         let solve_id = self.next_solve_id;
         self.next_solve_id += 1;
@@ -79,7 +79,6 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
             output_annotations.into_inner(),
         )?;
         let diagnostics = diagnostics
-            .into_iter()
             .map(|diagnostic| {
                 self.experiment.registry.store_layer_blob(
                     diagnostic.media_type,
@@ -87,7 +86,7 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
                     diagnostic.annotations,
                 )
             })
-            .collect::<Result<Vec<_>>>()?;
+            .transpose()?;
         self.solves.push(SolveEntry {
             solve_id,
             input,

@@ -172,7 +172,7 @@ struct SolveEntryDyn {
     output: Descriptor,
     adapter: String,
     adapter_options: String,
-    diagnostics: Vec<Descriptor>,
+    diagnostics: Option<Descriptor>,
 }
 
 #[derive(Debug, Clone)]
@@ -214,7 +214,7 @@ pub struct SolveDyn {
     output: Descriptor,
     adapter: String,
     adapter_options: String,
-    diagnostics: Vec<Descriptor>,
+    diagnostics: Option<Descriptor>,
 }
 
 impl SealedRunDyn {
@@ -356,18 +356,16 @@ impl SolveDyn {
         ))
     }
 
-    pub fn diagnostic_blobs(&self) -> Result<Vec<Vec<u8>>> {
-        self.diagnostics
-            .iter()
-            .map(|descriptor| {
-                let descriptor = self
-                    .registry_handle
-                    .registry()
-                    .stored_descriptor(descriptor.clone())?;
-                descriptor.ensure_media_type(&media_types::python_pickle())?;
-                self.registry_handle.registry().get_blob(&descriptor)
-            })
-            .collect()
+    pub fn diagnostic_blob(&self) -> Result<Option<Vec<u8>>> {
+        let Some(descriptor) = &self.diagnostics else {
+            return Ok(None);
+        };
+        let descriptor = self
+            .registry_handle
+            .registry()
+            .stored_descriptor(descriptor.clone())?;
+        descriptor.ensure_media_type(&media_types::diagnostic_msgpack())?;
+        Ok(Some(self.registry_handle.registry().get_blob(&descriptor)?))
     }
 
     pub fn adapter(&self) -> &str {
@@ -994,12 +992,11 @@ impl UnsealedExperimentDynState {
                                         adapter_options: solve.adapter_options.clone(),
                                         diagnostics: solve
                                             .diagnostics
-                                            .iter()
-                                            .cloned()
+                                            .clone()
                                             .map(|descriptor| {
                                                 registry.stored_descriptor(descriptor)
                                             })
-                                            .collect::<Result<Vec<_>>>()?,
+                                            .transpose()?,
                                     })
                                 })
                                 .collect::<Result<Vec<_>>>()?,
@@ -1050,11 +1047,10 @@ impl UnsealedExperimentDynState {
                                         adapter_options: solve.adapter_options,
                                         diagnostics: solve
                                             .diagnostics
-                                            .into_iter()
                                             .map(|descriptor| {
                                                 registry.stored_descriptor(descriptor)
                                             })
-                                            .collect::<Result<Vec<_>>>()?,
+                                            .transpose()?,
                                     })
                                 })
                                 .collect::<Result<Vec<_>>>()?,
@@ -1113,11 +1109,9 @@ impl SealedExperimentDynState {
                                     adapter: solve.adapter().to_string(),
                                     adapter_options: solve.adapter_options().to_string(),
                                     diagnostics: solve
-                                        .diagnostic_descriptors()
-                                        .iter()
+                                        .diagnostic_descriptor()
                                         .cloned()
-                                        .map(Descriptor::from)
-                                        .collect(),
+                                        .map(Descriptor::from),
                                 })
                                 .collect(),
                         },

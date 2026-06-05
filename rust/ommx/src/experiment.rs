@@ -315,7 +315,7 @@ struct SolveEntry<'reg> {
     output: StoredDescriptor<'reg>,
     adapter: String,
     adapter_options: String,
-    diagnostics: Vec<StoredDescriptor<'reg>>,
+    diagnostics: Option<StoredDescriptor<'reg>>,
 }
 
 #[derive(Debug, Clone)]
@@ -548,7 +548,7 @@ impl<'reg> SealedExperiment<'reg> {
                     output: solve.output_descriptor().clone(),
                     adapter: solve.adapter().to_string(),
                     adapter_options: solve.adapter_options().to_string(),
-                    diagnostics: solve.diagnostic_descriptors().to_vec(),
+                    diagnostics: solve.diagnostic_descriptor().cloned(),
                 })
                 .collect();
             runs.insert(

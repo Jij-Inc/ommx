@@ -1280,9 +1280,9 @@ impl PyRun {
         )?;
         let diagnostics = diagnostics_collector
             .as_ref()
-            .map(|collector| pickle_diagnostics(py, collector.bind(py)))
+            .map(|collector| pack_diagnostics(py, collector.bind(py)))
             .transpose()?
-            .unwrap_or_default();
+            .flatten();
         let solve_id = self
             .as_open_mut()?
             .log_finished_solve_result_with_diagnostics(
@@ -1521,28 +1521,49 @@ fn reject_reserved_log_solve_kwargs(kwargs: Option<&Bound<PyDict>>) -> Result<()
     Ok(())
 }
 
-fn pickle_diagnostics(
+fn pack_diagnostics(
     py: Python<'_>,
     collector: &Bound<'_, PyAny>,
-) -> Result<Vec<SolveDiagnosticPayload>> {
-    let pickle = py.import("pickle")?;
+) -> Result<Option<SolveDiagnosticPayload>> {
+    let dataclasses = py.import("dataclasses")?;
+    let msgpack = py.import("msgpack")?;
     let diagnostics = collector.getattr("diagnostics")?;
-    let mut payloads = Vec::new();
+    let mut packed_items = Vec::new();
+    let mut python_types = Vec::new();
     for diagnostic in diagnostics.try_iter()? {
         let diagnostic = diagnostic?;
-        let bytes: Vec<u8> = pickle.call_method1("dumps", (&diagnostic,))?.extract()?;
-        let mut annotations = HashMap::new();
-        annotations.insert(
-            "org.ommx.diagnostic.python_type".to_string(),
-            python_type_name(&diagnostic)?,
-        );
-        payloads.push(SolveDiagnosticPayload::new(
-            media_types::python_pickle(),
-            bytes,
-            annotations,
-        ));
+        let type_name = python_type_name(&diagnostic)?;
+        let data = dataclasses
+            .call_method1("asdict", (&diagnostic,))
+            .with_context(|| {
+                format!("Adapter diagnostic `{type_name}` must be a dataclass instance")
+            })?;
+        packed_items.push(data);
+        python_types.push(type_name);
     }
-    Ok(payloads)
+    if packed_items.is_empty() {
+        return Ok(None);
+    }
+    let diagnostics = PyTuple::new(py, packed_items)?;
+    let kwargs = PyDict::new(py);
+    kwargs.set_item("use_bin_type", true)?;
+    let bytes: Vec<u8> = msgpack
+        .call_method("packb", (&diagnostics,), Some(&kwargs))?
+        .extract()?;
+    let mut annotations = HashMap::new();
+    annotations.insert(
+        "org.ommx.diagnostic.python_type".to_string(),
+        "builtins.tuple".to_string(),
+    );
+    annotations.insert(
+        "org.ommx.diagnostic.python_element_types".to_string(),
+        python_types.join(","),
+    );
+    Ok(Some(SolveDiagnosticPayload::new(
+        media_types::diagnostic_msgpack(),
+        bytes,
+        annotations,
+    )))
 }
 
 fn python_type_name(value: &Bound<'_, PyAny>) -> Result<String> {
@@ -1825,21 +1846,69 @@ impl PySolve {
     }
 
     #[getter]
+    #[pyo3(name = "diagnostics")]
     #[gen_stub(override_return_type(
         type_repr = "builtins.tuple[typing.Any, ...]",
         imports = ("builtins", "typing")
     ))]
     /// Adapter-defined diagnostics recorded during this solve.
-    pub fn diagnostics<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyTuple>> {
-        let pickle = py.import("pickle")?;
-        let mut diagnostics = Vec::new();
-        for blob in self.0.diagnostic_blobs()? {
-            diagnostics.push(pickle.call_method1("loads", (PyBytes::new(py, &blob),))?);
+    pub fn diagnostics_property<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyTuple>> {
+        unpack_diagnostics(py, &self.0)
+    }
+
+    #[pyo3(signature = (*, model = None))]
+    #[gen_stub(override_return_type(
+        type_repr = "builtins.tuple[typing.Any, ...]",
+        imports = ("builtins", "typing")
+    ))]
+    /// Adapter-defined diagnostics recorded during this solve.
+    ///
+    /// By default this returns the MessagePack-decoded payload as normal
+    /// Python objects. Pass a dataclass type such as
+    /// `model=SCIPTerminationReport` to reconstruct each diagnostic with
+    /// `model(**data)`.
+    pub fn get_diagnostics<'py>(
+        &self,
+        py: Python<'py>,
+        model: Option<&Bound<'py, PyAny>>,
+    ) -> Result<Bound<'py, PyTuple>> {
+        let diagnostics = unpack_diagnostics(py, &self.0)?;
+        let Some(model) = model else {
+            return Ok(diagnostics);
+        };
+
+        let mut typed = Vec::new();
+        for diagnostic in diagnostics.iter() {
+            let data = diagnostic.cast::<PyDict>().map_err(|_| {
+                anyhow::anyhow!(
+                    "Solve diagnostics payload must decode to dict values when model is provided"
+                )
+            })?;
+            typed.push(model.call((), Some(data))?);
         }
-        Ok(PyTuple::new(py, diagnostics)?)
+        Ok(PyTuple::new(py, typed)?)
     }
 
     pub fn __repr__(&self) -> String {
         format!("Solve(solve_id={})", self.solve_id())
     }
+}
+
+fn unpack_diagnostics<'py>(
+    py: Python<'py>,
+    solve: &ommx::experiment::SolveDyn,
+) -> Result<Bound<'py, PyTuple>> {
+    let Some(blob) = solve.diagnostic_blob()? else {
+        let diagnostics: Vec<Bound<'py, PyAny>> = Vec::new();
+        return Ok(PyTuple::new(py, diagnostics)?);
+    };
+    let msgpack = py.import("msgpack")?;
+    let kwargs = PyDict::new(py);
+    kwargs.set_item("raw", false)?;
+    let decoded = msgpack.call_method("unpackb", (PyBytes::new(py, &blob),), Some(&kwargs))?;
+    let mut diagnostics = Vec::new();
+    for diagnostic in decoded.try_iter()? {
+        diagnostics.push(diagnostic?);
+    }
+    Ok(PyTuple::new(py, diagnostics)?)
 }

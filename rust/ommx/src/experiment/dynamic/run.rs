@@ -112,7 +112,7 @@ impl RunDyn {
             output_annotations,
             adapter,
             adapter_options,
-            Vec::new(),
+            None,
         )
     }
 
@@ -124,7 +124,7 @@ impl RunDyn {
         output_annotations: SolutionAnnotations,
         adapter: String,
         adapter_options: String,
-        diagnostics: Vec<SolveDiagnosticPayload>,
+        diagnostics: Option<SolveDiagnosticPayload>,
     ) -> Result<u64> {
         let solve_id = self.open()?.next_solve_id;
         let (input, output, diagnostics) = {
@@ -142,7 +142,6 @@ impl RunDyn {
                 output_annotations.into_inner(),
             )?;
             let diagnostics = diagnostics
-                .into_iter()
                 .map(|diagnostic| {
                     store_solve_payload_descriptor(
                         &dyn_state,
@@ -151,7 +150,7 @@ impl RunDyn {
                         diagnostic.annotations,
                     )
                 })
-                .collect::<Result<Vec<_>>>()?;
+                .transpose()?;
             (input, output, diagnostics)
         };
         let state = self.open_mut()?;

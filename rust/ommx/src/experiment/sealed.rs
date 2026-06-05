@@ -259,7 +259,7 @@ pub struct Solve<'reg> {
     output: StoredDescriptor<'reg>,
     adapter: String,
     adapter_options: String,
-    diagnostics: Vec<StoredDescriptor<'reg>>,
+    diagnostics: Option<StoredDescriptor<'reg>>,
 }
 
 impl<'reg> Solve<'reg> {
@@ -279,8 +279,8 @@ impl<'reg> Solve<'reg> {
         &self.output
     }
 
-    pub(crate) fn diagnostic_descriptors(&self) -> &[StoredDescriptor<'reg>] {
-        &self.diagnostics
+    pub(crate) fn diagnostic_descriptor(&self) -> Option<&StoredDescriptor<'reg>> {
+        self.diagnostics.as_ref()
     }
 
     pub fn input_instance(&self) -> Result<(Instance, InstanceAnnotations)> {
@@ -382,7 +382,6 @@ fn decode_solves<'reg>(
             adapter_options: solve.adapter_options,
             diagnostics: solve
                 .diagnostics
-                .into_iter()
                 .map(|layer_ref| {
                     let descriptor = resolve_layer(layers, layer_ref)
                         .with_context(|| {
@@ -392,13 +391,13 @@ fn decode_solves<'reg>(
                             )
                         })?
                         .clone();
-                    validate_layer_media_type(&descriptor, &media_types::python_pickle())
+                    validate_layer_media_type(&descriptor, &media_types::diagnostic_msgpack())
                         .with_context(|| {
                             format!("Invalid Run {run_id} Solve {} diagnostic", solve.solve_id)
                         })?;
-                    Ok(descriptor)
+                    Ok::<StoredDescriptor<'reg>, anyhow::Error>(descriptor)
                 })
-                .collect::<Result<Vec<_>>>()?,
+                .transpose()?,
         });
     }
     Ok(decoded)
