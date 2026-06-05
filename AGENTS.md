@@ -47,6 +47,12 @@ OMMX (Open Mathematical prograMming eXchange) is an open ecosystem for mathemati
 - **Python SDK**: v3.0.0 alpha — all `ommx.v1` types are direct Rust re-exports via PyO3, protobuf Python dependency removed
 - **Rust SDK**: v3 Stage Pattern — constraints are generic over lifecycle stages (`Created`, `Removed`, `Evaluated`, `Sampled`)
 
+### Versioning
+- Rust SDK and Python SDK versions are managed independently.
+- Python solver adapter packages under `python/ommx-*-adapter/` share the same version as the main Python `ommx` package.
+- Use `task rust:set-version -- <version>` for Rust SDK version changes.
+- Use `task python:set-version -- <version>` for Python SDK version changes; it updates the main Python `ommx` package and adapter package versions together.
+
 Migration guides:
 - `PYTHON_SDK_MIGRATION_GUIDE.md` — v1→v2 and v2→v3
 - `rust/ommx/doc/migration_guide.md` — v3 Stage Pattern (rendered as `ommx::doc::migration_guide` on docs.rs)
