@@ -1,11 +1,9 @@
-import json
-
 import pytest
 
 from ommx.adapter import DiagnosticCollector
 from ommx.v1 import Instance, DecisionVariable, Solution
 
-from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
+from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter, SCIPTerminationReport
 
 
 def test_solution_optimality():
@@ -35,24 +33,23 @@ def test_solve_records_termination_diagnostics():
     solution = OMMXPySCIPOptAdapter.solve(instance, diagnostics=collector)
 
     assert solution.optimality == Solution.OPTIMAL
+    (diagnostic,) = collector.diagnostics
+    assert isinstance(diagnostic, SCIPTerminationReport)
+    report = diagnostic
+    assert report.status == "optimal"
+    assert report.objective_value == pytest.approx(5.0)
+    assert report.gap == pytest.approx(0.0)
+    assert report.solution_count >= 1
+    assert report.node_count >= 0
+    assert isinstance(report.pyscipopt_version, str)
+    assert isinstance(report.scip_version, str)
+
     (entry,) = collector.entries
     assert entry.name == "solver/scip/termination-report"
     assert entry.media_type == "application/json"
     assert entry.annotations == {
+        "org.ommx.diagnostic.kind": "termination_report",
+        "org.ommx.diagnostic.schema": "org.ommx.solver.scip.termination-report.v1",
         "org.ommx.solver.name": "scip",
-        "org.ommx.solver.diagnostic.kind": "termination_report",
-        "org.ommx.solver.diagnostic.schema": (
-            "org.ommx.solver.scip.termination-report.v1"
-        ),
     }
-    report = json.loads(entry.data)
-    assert report["schema"] == "org.ommx.solver.scip.termination-report.v1"
-    assert report["solver"] == "scip"
-    assert report["adapter"] == "ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter"
-    assert report["status"] == "optimal"
-    assert report["objective_value"] == pytest.approx(5.0)
-    assert report["gap"] == pytest.approx(0.0)
-    assert report["solution_count"] >= 1
-    assert report["node_count"] >= 0
-    assert isinstance(report["pyscipopt_version"], str)
-    assert isinstance(report["scip_version"], str)
+    assert entry.decode_as(SCIPTerminationReport) == report
