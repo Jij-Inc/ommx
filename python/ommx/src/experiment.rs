@@ -3,7 +3,9 @@ use oci_spec::image::MediaType;
 use pyo3::{
     exceptions::PyKeyboardInterrupt,
     prelude::*,
-    types::{PyBool, PyBytes, PyDict, PyFloat, PyInt, PyList, PyString, PyType, PyTypeMethods},
+    types::{
+        PyBool, PyBytes, PyDict, PyFloat, PyInt, PyList, PyModule, PyString, PyType, PyTypeMethods,
+    },
 };
 use std::{
     collections::{btree_map::Entry, BTreeMap, HashMap},
@@ -1465,44 +1467,7 @@ impl PyDiagnosticCollector {
     }
 
     fn pack(&self, py: Python<'_>) -> Result<Option<SolveDiagnosticPayload>> {
-        let dataclasses = py.import("dataclasses")?;
-        let msgpack = py.import("msgpack")?;
-        let mut packed_items = Vec::new();
-        let mut python_types = Vec::new();
-        for diagnostic in &self.diagnostics {
-            let diagnostic = diagnostic.as_bound(py);
-            let type_name = python_type_name(diagnostic)?;
-            let data = dataclasses
-                .call_method1("asdict", (diagnostic,))
-                .with_context(|| {
-                    format!("Adapter diagnostic `{type_name}` must be a dataclass instance")
-                })?;
-            packed_items.push(data);
-            python_types.push(type_name);
-        }
-        if packed_items.is_empty() {
-            return Ok(None);
-        }
-        let diagnostics = PyList::new(py, packed_items)?;
-        let kwargs = PyDict::new(py);
-        kwargs.set_item("use_bin_type", true)?;
-        let bytes: Vec<u8> = msgpack
-            .call_method("packb", (&diagnostics,), Some(&kwargs))?
-            .extract()?;
-        let mut annotations = HashMap::new();
-        annotations.insert(
-            "org.ommx.diagnostic.python_type".to_string(),
-            "builtins.list".to_string(),
-        );
-        annotations.insert(
-            "org.ommx.diagnostic.python_element_types".to_string(),
-            python_types.join(","),
-        );
-        Ok(Some(SolveDiagnosticPayload::new(
-            media_types::diagnostic_msgpack(),
-            bytes,
-            annotations,
-        )))
+        DiagnosticReport::pack_reports(py, &self.diagnostics)
     }
 }
 
@@ -1536,6 +1501,61 @@ impl DiagnosticReport {
 
     fn clone_ref(&self, py: Python<'_>) -> Self {
         Self(self.0.clone_ref(py))
+    }
+
+    fn as_msgpack_item<'py>(
+        &self,
+        py: Python<'py>,
+        dataclasses: &Bound<'py, PyModule>,
+    ) -> Result<(Bound<'py, PyAny>, String)> {
+        let diagnostic = self.as_bound(py);
+        let type_name = python_type_name(diagnostic)?;
+        let data = dataclasses
+            .call_method1("asdict", (diagnostic,))
+            .with_context(|| {
+                format!("Adapter diagnostic `{type_name}` must be a dataclass instance")
+            })?;
+        Ok((data, type_name))
+    }
+
+    fn pack_reports(
+        py: Python<'_>,
+        reports: &[DiagnosticReport],
+    ) -> Result<Option<SolveDiagnosticPayload>> {
+        if reports.is_empty() {
+            return Ok(None);
+        }
+
+        let dataclasses = py.import("dataclasses")?;
+        let msgpack = py.import("msgpack")?;
+        let mut packed_items = Vec::new();
+        let mut python_types = Vec::new();
+        for report in reports {
+            let (data, type_name) = report.as_msgpack_item(py, &dataclasses)?;
+            packed_items.push(data);
+            python_types.push(type_name);
+        }
+
+        let diagnostics = PyList::new(py, packed_items)?;
+        let kwargs = PyDict::new(py);
+        kwargs.set_item("use_bin_type", true)?;
+        let bytes: Vec<u8> = msgpack
+            .call_method("packb", (&diagnostics,), Some(&kwargs))?
+            .extract()?;
+        let mut annotations = HashMap::new();
+        annotations.insert(
+            "org.ommx.diagnostic.python_type".to_string(),
+            "builtins.list".to_string(),
+        );
+        annotations.insert(
+            "org.ommx.diagnostic.python_element_types".to_string(),
+            python_types.join(","),
+        );
+        Ok(Some(SolveDiagnosticPayload::new(
+            media_types::diagnostic_msgpack(),
+            bytes,
+            annotations,
+        )))
     }
 }
 
