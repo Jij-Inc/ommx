@@ -47,9 +47,14 @@ class SCIPTerminationReport:
 
     @classmethod
     def from_model(cls, model: pyscipopt.Model) -> SCIPTerminationReport:
+        status = str(model.getStatus())
+        if status == "unknown":
+            raise OMMXPySCIPOptAdapterError(
+                "The model may not be optimized. [status: unknown]"
+            )
         solution_count = int(model.getNSols())
         return cls(
-            status=str(model.getStatus()),
+            status=status,
             primal_bound=model.getPrimalbound(),
             dual_bound=model.getDualbound(),
             gap=model.getGap(),

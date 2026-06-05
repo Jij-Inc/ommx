@@ -7,6 +7,7 @@ from ommx.adapter import DiagnosticCollector, UnboundedDetected
 from ommx.v1 import Instance, DecisionVariable, Solution
 
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter, SCIPTerminationReport
+from ommx_pyscipopt_adapter.exception import OMMXPySCIPOptAdapterError
 
 
 def test_solution_optimality():
@@ -107,3 +108,20 @@ def test_scip_termination_report_preserves_non_finite_bounds():
     assert report.dual_bound < 0
     assert math.isnan(report.gap)
     assert report.objective_value is None
+
+
+def test_scip_termination_report_rejects_unoptimized_model():
+    class FakeModel:
+        def getStatus(self) -> str:
+            return "unknown"
+
+        def getNSols(self) -> int:
+            raise AssertionError(
+                "from_model should reject unknown before reading solve results"
+            )
+
+    with pytest.raises(
+        OMMXPySCIPOptAdapterError,
+        match=r"The model may not be optimized\. \[status: unknown\]",
+    ):
+        SCIPTerminationReport.from_model(cast(Any, FakeModel()))
