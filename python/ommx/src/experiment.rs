@@ -14,7 +14,7 @@ use std::{
 use crate::pandas::{raw_entries_to_dataframe, PyDataFrame};
 use crate::PyArtifact;
 use ommx::artifact::AsArtifact;
-use ommx::experiment::{AttachmentLogger, FileAttachment};
+use ommx::experiment::AttachmentLogger;
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
@@ -477,9 +477,13 @@ impl PyExperiment {
         filename: Option<&str>,
     ) -> Result<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let attachment =
-            FileAttachment::from_path(&path, media_type.map(MediaType::from), filename)?;
-        AttachmentLogger::log_file(&self.inner, name, attachment)
+        AttachmentLogger::log_file(
+            &self.inner,
+            name,
+            &path,
+            media_type.map(MediaType::from),
+            filename,
+        )
     }
 
     /// Encode a Python object with an attachment codec and attach it in the experiment space.
@@ -1133,9 +1137,13 @@ impl PyRun {
     ) -> Result<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
         self.ensure_store_trace_context_started()?;
-        let attachment =
-            FileAttachment::from_path(&path, media_type.map(MediaType::from), filename)?;
-        AttachmentLogger::log_file(self.as_open_mut()?, name, attachment)
+        AttachmentLogger::log_file(
+            self.as_open_mut()?,
+            name,
+            &path,
+            media_type.map(MediaType::from),
+            filename,
+        )
     }
 
     /// Encode a Python object with an attachment codec and attach it in this run.

@@ -13,12 +13,11 @@
 //! an internal representation detail: public accessors promote those raw
 //! descriptors before decoding typed payloads or writing attachment files.
 
-use super::attachment::store_attachment_descriptor;
+use super::attachment::{read_file_attachment, store_attachment_descriptor};
 use super::config::ExperimentConfig;
 use super::{
-    allocate_next_run_id, next_run_id, AttachmentLogger, AttachmentTable, ExperimentStatus,
-    FileAttachment, Name, RunEntry, RunParameterCell, RunStatus, SealedExperiment,
-    UnsealedExperimentState,
+    allocate_next_run_id, next_run_id, AttachmentLogger, AttachmentTable, ExperimentStatus, Name,
+    RunEntry, RunParameterCell, RunStatus, SealedExperiment, UnsealedExperimentState,
 };
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
 use crate::artifact::{
@@ -528,8 +527,14 @@ impl AttachmentLogger for &ExperimentDyn {
         Ok(())
     }
 
-    fn log_file(self, name: &str, attachment: FileAttachment) -> Result<()> {
-        let (media_type, bytes, filename) = attachment.into_parts();
+    fn log_file(
+        self,
+        name: &str,
+        path: impl AsRef<Path>,
+        media_type: Option<MediaType>,
+        filename: Option<&str>,
+    ) -> Result<()> {
+        let (media_type, bytes, filename) = read_file_attachment(path, media_type, filename)?;
         let mut dyn_state = lock_experiment_state(&self.state);
         ensure_unsealed_for_attachment_write(&dyn_state)?;
         let registry_handle = dyn_state.registry_handle.clone();

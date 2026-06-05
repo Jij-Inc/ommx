@@ -218,38 +218,6 @@ impl<'reg> AttachmentTable<StoredDescriptor<'reg>> {
 /// OCI layer media type for JSON attachment payloads.
 const JSON_MEDIA_TYPE: &str = "application/json";
 
-/// A filesystem file prepared as an Experiment attachment payload.
-#[derive(Debug, Clone)]
-pub struct FileAttachment {
-    media_type: MediaType,
-    bytes: Vec<u8>,
-    filename: String,
-}
-
-impl FileAttachment {
-    /// Read a local file and prepare its bytes, media type, and export filename metadata.
-    pub fn from_path(
-        path: impl AsRef<Path>,
-        media_type: Option<MediaType>,
-        filename: Option<&str>,
-    ) -> Result<Self> {
-        let path = path.as_ref();
-        let bytes = read_attachment_file(path)?;
-        let media_type = media_type.unwrap_or_else(|| detect_file_media_type(&bytes));
-        let filename = file_attachment_filename(path, filename)?;
-        Ok(Self {
-            media_type,
-            bytes,
-            filename,
-        })
-    }
-
-    /// Consume this file attachment into parts accepted by [`AttachmentLogger`](super::AttachmentLogger).
-    pub fn into_parts(self) -> (MediaType, Vec<u8>, String) {
-        (self.media_type, self.bytes, self.filename)
-    }
-}
-
 /// Write `bytes` to the registry and build the in-memory Attachment descriptor.
 pub(crate) fn store_attachment_descriptor<'reg>(
     registry: &'reg LocalRegistry,
@@ -274,6 +242,18 @@ pub fn detect_file_media_type(bytes: &[u8]) -> MediaType {
     infer::get(bytes)
         .map(|kind| MediaType::from(kind.mime_type()))
         .unwrap_or_else(|| MediaType::from(DEFAULT_FILE_MEDIA_TYPE))
+}
+
+pub(crate) fn read_file_attachment(
+    path: impl AsRef<Path>,
+    media_type: Option<MediaType>,
+    filename: Option<&str>,
+) -> Result<(MediaType, Vec<u8>, String)> {
+    let path = path.as_ref();
+    let bytes = read_attachment_file(path)?;
+    let media_type = media_type.unwrap_or_else(|| detect_file_media_type(&bytes));
+    let filename = file_attachment_filename(path, filename)?;
+    Ok((media_type, bytes, filename))
 }
 
 /// Write an attachment blob to a filesystem path.

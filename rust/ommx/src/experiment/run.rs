@@ -1,14 +1,12 @@
 //! Experiment / Run handles and run lifecycle.
 
-use super::attachment::store_attachment_descriptor;
-use super::{
-    AttachmentLogger, FileAttachment, ParameterValue, Run, RunEntry, RunStatus, SolveEntry, Trace,
-};
+use super::attachment::{read_file_attachment, store_attachment_descriptor};
+use super::{AttachmentLogger, ParameterValue, Run, RunEntry, RunStatus, SolveEntry, Trace};
 use crate::artifact::{media_types, InstanceAnnotations, SolutionAnnotations};
 use crate::{Instance, Solution};
 use anyhow::Result;
 use oci_spec::image::MediaType;
-use std::collections::HashMap;
+use std::{collections::HashMap, path::Path};
 
 impl<'exp, 'reg> Run<'exp, 'reg> {
     /// This run's 0-based id within the experiment.
@@ -156,8 +154,14 @@ impl<'exp, 'reg> AttachmentLogger for &mut Run<'exp, 'reg> {
         Ok(())
     }
 
-    fn log_file(self, name: &str, attachment: FileAttachment) -> Result<()> {
-        let (media_type, bytes, filename) = attachment.into_parts();
+    fn log_file(
+        self,
+        name: &str,
+        path: impl AsRef<Path>,
+        media_type: Option<MediaType>,
+        filename: Option<&str>,
+    ) -> Result<()> {
+        let (media_type, bytes, filename) = read_file_attachment(path, media_type, filename)?;
         if self.attachments.contains_key(name) {
             crate::bail!("Attachment `{name}` already exists");
         }

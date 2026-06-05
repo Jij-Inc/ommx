@@ -75,7 +75,7 @@ mod sealed;
 mod tests;
 
 pub(crate) use attachment::AttachmentTable;
-pub use attachment::{detect_file_media_type, FileAttachment, DEFAULT_FILE_MEDIA_TYPE};
+pub use attachment::{detect_file_media_type, DEFAULT_FILE_MEDIA_TYPE};
 pub use dynamic::{ExperimentDyn, RunDyn, SealedRunDyn, SolveDyn};
 pub use logging::AttachmentLogger;
 pub use parameter::{ParameterValue, RunParameterCell};
@@ -84,11 +84,14 @@ pub use sealed::{SealedRun, Solve};
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor, TempLocalRegistry};
 use crate::artifact::{ImageRef, LocalArtifact};
 use anyhow::Result;
-use attachment::store_attachment_descriptor;
+use attachment::{read_file_attachment, store_attachment_descriptor};
 use oci_spec::image::MediaType;
 use parameter::ParameterSet;
-use std::collections::{BTreeMap, HashMap};
 use std::sync::{Mutex, MutexGuard};
+use std::{
+    collections::{BTreeMap, HashMap},
+    path::Path,
+};
 
 // --- Artifact mapping constants ---------------------------------------------
 
@@ -460,8 +463,14 @@ impl<'reg> AttachmentLogger for &Experiment<'reg> {
         Ok(())
     }
 
-    fn log_file(self, name: &str, attachment: FileAttachment) -> Result<()> {
-        let (media_type, bytes, filename) = attachment.into_parts();
+    fn log_file(
+        self,
+        name: &str,
+        path: impl AsRef<Path>,
+        media_type: Option<MediaType>,
+        filename: Option<&str>,
+    ) -> Result<()> {
+        let (media_type, bytes, filename) = read_file_attachment(path, media_type, filename)?;
         let mut state = self.lock_state();
         if state.attachments.contains_key(name) {
             crate::bail!("Attachment `{name}` already exists");

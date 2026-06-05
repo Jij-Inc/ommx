@@ -3,11 +3,10 @@
 use super::config::{ExperimentConfig, ExperimentConfigRun, LayerRef};
 use super::UnsealedExperimentState;
 use super::{
-    AttachmentLogger, AttachmentTable, Experiment, ExperimentDyn, ExperimentStatus, FileAttachment,
-    Name, ParameterValue, SealedExperiment, Trace, EXPERIMENT_CONFIG_MEDIA_TYPE,
-    EXPERIMENT_STATUS_DRAFT, EXPERIMENT_STATUS_FAILED, EXPERIMENT_STATUS_FINISHED,
-    EXPERIMENT_STATUS_INTERRUPTED, RUN_PARAMETERS_MEDIA_TYPE, RUN_STATUS_FAILED,
-    RUN_STATUS_FINISHED, RUN_STATUS_INTERRUPTED,
+    AttachmentLogger, AttachmentTable, Experiment, ExperimentDyn, ExperimentStatus, Name,
+    ParameterValue, SealedExperiment, Trace, EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_STATUS_DRAFT,
+    EXPERIMENT_STATUS_FAILED, EXPERIMENT_STATUS_FINISHED, EXPERIMENT_STATUS_INTERRUPTED,
+    RUN_PARAMETERS_MEDIA_TYPE, RUN_STATUS_FAILED, RUN_STATUS_FINISHED, RUN_STATUS_INTERRUPTED,
 };
 use crate::artifact::local_registry::{StoredDescriptor, UnsealedArtifact};
 use crate::artifact::{
@@ -38,12 +37,22 @@ fn file_attachment_infers_media_type_from_content() {
     let bytes = b"\x89PNG\r\n\x1a\n";
     fs::write(&path, bytes).unwrap();
 
-    let attachment = FileAttachment::from_path(&path, None, None).unwrap();
-    let (media_type, stored_bytes, filename) = attachment.into_parts();
+    with_temp_experiment(|experiment| {
+        AttachmentLogger::log_file(&experiment, "source-file", &path, None, None).unwrap();
 
-    assert_eq!(media_type.to_string(), "image/png");
-    assert_eq!(stored_bytes, bytes);
-    assert_eq!(filename, "source.png");
+        let artifact = experiment.commit().unwrap().into_artifact();
+        let layers = artifact.layers().unwrap();
+        let config = experiment_config(&artifact);
+        let source_file = layer_from_ref(&layers, *config.attachments.get("source-file").unwrap());
+
+        assert_eq!(source_file.media_type().to_string(), "image/png");
+        assert_eq!(blob_bytes(&artifact, source_file), bytes);
+        assert_eq!(
+            config.attachments.filename("source-file"),
+            Some("source.png")
+        );
+        Ok(())
+    });
 }
 
 fn layer_from_ref<'a, 'reg>(
@@ -257,13 +266,14 @@ fn file_attachment_filename_is_stored_in_config_table() {
     fs::write(&path, br#"{"ok":true}"#).unwrap();
 
     with_temp_experiment(|experiment| {
-        let attachment = FileAttachment::from_path(
+        AttachmentLogger::log_file(
+            &experiment,
+            "source-file",
             &path,
             Some(MediaType::from("application/json")),
             Some("input.json"),
         )
         .unwrap();
-        AttachmentLogger::log_file(&experiment, "source-file", attachment).unwrap();
 
         let artifact = experiment.commit().unwrap().into_artifact();
         let config = experiment_config(&artifact);

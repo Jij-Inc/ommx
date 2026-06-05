@@ -1,7 +1,8 @@
 //! Dynamic-lifetime Run handle.
 
+use super::super::attachment::read_file_attachment;
 use super::super::parameter::ParameterSet;
-use super::super::{AttachmentLogger, AttachmentTable, FileAttachment, ParameterValue, RunStatus};
+use super::super::{AttachmentLogger, AttachmentTable, ParameterValue, RunStatus};
 use super::{
     bail_non_unsealed, lock_experiment_state, store_run_attachment_descriptor,
     store_solve_payload_descriptor, store_trace_descriptor, ExperimentDyn, ExperimentDynLifecycle,
@@ -11,8 +12,8 @@ use crate::artifact::{media_types, InstanceAnnotations, SolutionAnnotations};
 use crate::{Instance, Solution};
 use anyhow::Result;
 use oci_spec::image::{Descriptor, MediaType};
-use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use std::{collections::HashMap, path::Path};
 
 /// Runtime-owned Run handle.
 ///
@@ -276,8 +277,14 @@ impl AttachmentLogger for &mut RunDyn {
         Ok(())
     }
 
-    fn log_file(self, name: &str, attachment: FileAttachment) -> Result<()> {
-        let (media_type, bytes, filename) = attachment.into_parts();
+    fn log_file(
+        self,
+        name: &str,
+        path: impl AsRef<Path>,
+        media_type: Option<MediaType>,
+        filename: Option<&str>,
+    ) -> Result<()> {
+        let (media_type, bytes, filename) = read_file_attachment(path, media_type, filename)?;
         if self.open()?.attachments.contains_key(name) {
             crate::bail!("Attachment `{name}` already exists");
         }

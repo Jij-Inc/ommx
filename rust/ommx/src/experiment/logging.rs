@@ -7,9 +7,9 @@ use crate::artifact::{
 use crate::{Instance, ParametricInstance, SampleSet, Solution};
 use anyhow::Result;
 use oci_spec::image::MediaType;
-use std::collections::HashMap;
+use std::{collections::HashMap, path::Path};
 
-use super::attachment::{encode_json, json_media_type, FileAttachment};
+use super::attachment::{encode_json, json_media_type};
 
 /// A handle that can log attachment payloads into an Experiment space.
 ///
@@ -29,7 +29,13 @@ pub trait AttachmentLogger: Sized {
     ) -> Result<()>;
 
     /// Attach an existing filesystem file with export filename metadata.
-    fn log_file(self, name: &str, attachment: FileAttachment) -> Result<()>;
+    fn log_file(
+        self,
+        name: &str,
+        path: impl AsRef<Path>,
+        media_type: Option<MediaType>,
+        filename: Option<&str>,
+    ) -> Result<()>;
 
     /// Attach a JSON-serialisable value.
     fn log_json(self, name: &str, value: impl serde::Serialize) -> Result<()> {
