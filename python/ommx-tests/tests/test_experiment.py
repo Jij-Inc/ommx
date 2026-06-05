@@ -69,8 +69,7 @@ def _assert_no_experiment_annotations(artifact) -> None:
     )
     for layer in artifact.layers:
         assert not any(
-            key.startswith(EXPERIMENT_ANNOTATION_PREFIXES)
-            for key in layer.annotations
+            key.startswith(EXPERIMENT_ANNOTATION_PREFIXES) for key in layer.annotations
         )
 
 
