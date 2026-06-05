@@ -1,6 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import ClassVar, Optional
+from typing import Optional
 
 import pyscipopt
 import math
@@ -8,9 +8,7 @@ import math
 from opentelemetry import trace
 
 from ommx.adapter import (
-    DiagnosticEntry,
     DiagnosticsSink,
-    JsonObject,
     SolverAdapter,
     InfeasibleDetected,
     UnboundedDetected,
@@ -31,12 +29,6 @@ from .exception import OMMXPySCIPOptAdapterError
 
 _tracer = trace.get_tracer("ommx.adapter.pyscipopt")
 
-_SCIP_TERMINATION_REPORT_SCHEMA = "org.ommx.solver.scip.termination-report.v1"
-_SCIP_TERMINATION_REPORT_NAME = "solver/scip/termination-report"
-_SCIP_TERMINATION_REPORT_KIND = "termination_report"
-_SCIP_SOLVER_NAME = "scip"
-_ADAPTER_NAME = "ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter"
-
 
 def _finite_float_or_none(value: float) -> float | None:
     value = float(value)
@@ -48,10 +40,6 @@ def _finite_float_or_none(value: float) -> float | None:
 @dataclass(frozen=True, slots=True)
 class SCIPTerminationReport:
     """Post-solve termination summary produced by SCIP."""
-
-    SCHEMA: ClassVar[str] = _SCIP_TERMINATION_REPORT_SCHEMA
-    NAME: ClassVar[str] = _SCIP_TERMINATION_REPORT_NAME
-    KIND: ClassVar[str] = _SCIP_TERMINATION_REPORT_KIND
 
     status: str
     primal_bound: float | None
@@ -84,91 +72,11 @@ class SCIPTerminationReport:
             pyscipopt_version=getattr(pyscipopt, "__version__", None),
         )
 
-    def to_json(self) -> JsonObject:
-        return {
-            "adapter": _ADAPTER_NAME,
-            "dual_bound": self.dual_bound,
-            "gap": self.gap,
-            "node_count": self.node_count,
-            "objective_value": self.objective_value,
-            "primal_bound": self.primal_bound,
-            "pyscipopt_version": self.pyscipopt_version,
-            "schema": self.SCHEMA,
-            "scip_version": self.scip_version,
-            "solution_count": self.solution_count,
-            "solver": _SCIP_SOLVER_NAME,
-            "solving_time_sec": self.solving_time_sec,
-            "status": self.status,
-        }
-
-    @classmethod
-    def from_json(cls, data: JsonObject) -> SCIPTerminationReport:
-        schema = _required_str(data, "schema")
-        if schema != cls.SCHEMA:
-            msg = (
-                f"SCIP termination report schema is {schema!r}, expected {cls.SCHEMA!r}"
-            )
-            raise ValueError(msg)
-        return cls(
-            status=_required_str(data, "status"),
-            primal_bound=_optional_float(data, "primal_bound"),
-            dual_bound=_optional_float(data, "dual_bound"),
-            gap=_optional_float(data, "gap"),
-            objective_value=_optional_float(data, "objective_value"),
-            node_count=_required_int(data, "node_count"),
-            solution_count=_required_int(data, "solution_count"),
-            solving_time_sec=_optional_float(data, "solving_time_sec"),
-            scip_version=_required_str(data, "scip_version"),
-            pyscipopt_version=_optional_str(data, "pyscipopt_version"),
-        )
-
-    def to_entry(self) -> DiagnosticEntry:
-        return DiagnosticEntry.from_json_diagnostic(
-            self,
-            annotations={"org.ommx.solver.name": _SCIP_SOLVER_NAME},
-        )
-
 
 def _record_scip_termination_report(
     model: pyscipopt.Model, diagnostics: DiagnosticsSink
 ) -> None:
     diagnostics.record(SCIPTerminationReport.from_model(model))
-
-
-def _required_str(data: JsonObject, key: str) -> str:
-    value = data.get(key)
-    if not isinstance(value, str):
-        msg = f"SCIP termination report `{key}` must be a string"
-        raise TypeError(msg)
-    return value
-
-
-def _optional_str(data: JsonObject, key: str) -> str | None:
-    value = data.get(key)
-    if value is None:
-        return None
-    if not isinstance(value, str):
-        msg = f"SCIP termination report `{key}` must be a string or null"
-        raise TypeError(msg)
-    return value
-
-
-def _required_int(data: JsonObject, key: str) -> int:
-    value = data.get(key)
-    if isinstance(value, bool) or not isinstance(value, int):
-        msg = f"SCIP termination report `{key}` must be an integer"
-        raise TypeError(msg)
-    return value
-
-
-def _optional_float(data: JsonObject, key: str) -> float | None:
-    value = data.get(key)
-    if value is None:
-        return None
-    if isinstance(value, bool) or not isinstance(value, int | float):
-        msg = f"SCIP termination report `{key}` must be a number or null"
-        raise TypeError(msg)
-    return float(value)
 
 
 class OMMXPySCIPOptAdapter(SolverAdapter):

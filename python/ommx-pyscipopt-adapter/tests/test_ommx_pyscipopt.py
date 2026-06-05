@@ -43,13 +43,4 @@ def test_solve_records_termination_diagnostics():
     assert report.node_count >= 0
     assert isinstance(report.pyscipopt_version, str)
     assert isinstance(report.scip_version, str)
-
-    (entry,) = collector.entries
-    assert entry.name == "solver/scip/termination-report"
-    assert entry.media_type == "application/json"
-    assert entry.annotations == {
-        "org.ommx.diagnostic.kind": "termination_report",
-        "org.ommx.diagnostic.schema": "org.ommx.solver.scip.termination-report.v1",
-        "org.ommx.solver.name": "scip",
-    }
-    assert entry.decode_as(SCIPTerminationReport) == report
+    assert report.solving_time_sec is None or report.solving_time_sec >= 0.0
