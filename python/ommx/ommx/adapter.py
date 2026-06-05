@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, ClassVar, Protocol, runtime_checkable
+from typing import Any, ClassVar, Protocol, runtime_checkable
 
+from ommx._ommx_rust import DiagnosticCollector as DiagnosticCollector
 from ommx.v1 import Instance, Solution, SampleSet, AdditionalCapability
 
 
@@ -24,22 +25,6 @@ class DiagnosticsSink(Protocol):
 
     def record(self, diagnostic: DiagnosticReport) -> None:
         """Record one adapter-defined dataclass diagnostic report."""
-
-
-if TYPE_CHECKING:
-
-    class DiagnosticCollector:
-        """In-memory diagnostics sink for direct adapter calls."""
-
-        def __init__(self) -> None: ...
-
-        @property
-        def diagnostics(self) -> list[DiagnosticReport]: ...
-
-        def record(self, diagnostic: DiagnosticReport) -> None: ...
-
-else:
-    from ommx._ommx_rust import DiagnosticCollector as DiagnosticCollector
 
 
 class SolverAdapter(ABC):
