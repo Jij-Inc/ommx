@@ -315,7 +315,7 @@ class Artifact:
 
         ```python
         >>> artifact = Artifact.import_archive("data/random_lp_instance.ommx")
-        >>> print(artifact.image_name)  # doctest: +SKIP
+        >>> print(artifact.image_name)
         ghcr.io/jij-inc/ommx/random_lp_instance:...
 
         ```
