@@ -3,7 +3,7 @@ from typing import Any, cast
 
 import pytest
 
-from ommx.adapter import DiagnosticCollector
+from ommx.adapter import DiagnosticCollector, UnboundedDetected
 from ommx.v1 import Instance, DecisionVariable, Solution
 
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter, SCIPTerminationReport
@@ -47,6 +47,24 @@ def test_solve_records_termination_diagnostics():
     assert isinstance(report.pyscipopt_version, str)
     assert isinstance(report.scip_version, str)
     assert report.solving_time_sec >= 0.0
+
+
+def test_solve_records_termination_diagnostics_before_decode_errors():
+    x = DecisionVariable.integer(1, lower=0)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        constraints={},
+        sense=Instance.MAXIMIZE,
+    )
+    collector = DiagnosticCollector()
+
+    with pytest.raises(UnboundedDetected):
+        OMMXPySCIPOptAdapter.solve(instance, diagnostics=collector)
+
+    (diagnostic,) = collector.diagnostics
+    assert isinstance(diagnostic, SCIPTerminationReport)
+    assert diagnostic.status == "unbounded"
 
 
 def test_scip_termination_report_preserves_non_finite_bounds():

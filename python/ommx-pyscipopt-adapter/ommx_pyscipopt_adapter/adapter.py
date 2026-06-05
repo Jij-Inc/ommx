@@ -8,7 +8,7 @@ import pyscipopt
 from opentelemetry import trace
 
 from ommx.adapter import (
-    DiagnosticCollector,
+    DiagnosticsSink,
     SolverAdapter,
     InfeasibleDetected,
     UnboundedDetected,
@@ -103,7 +103,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         ommx_instance: Instance,
         *,
         initial_state: Optional[ToState] = None,
-        diagnostics: DiagnosticCollector | None = None,
+        diagnostics: DiagnosticsSink | None = None,
     ) -> Solution:
         """
         Solve the given ommx.v1.Instance using PySCIPopt, returning an ommx.v1.Solution.
@@ -198,9 +198,9 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             model = adapter.solver_input
             with _tracer.start_as_current_span("call"):
                 model.optimize()
-            solution = adapter.decode(model)
             if diagnostics is not None:
                 diagnostics.record(SCIPTerminationReport.from_model(model))
+            solution = adapter.decode(model)
             return solution
 
     @property

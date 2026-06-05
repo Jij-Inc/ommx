@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Protocol
 
 from ommx.v1 import Instance, Solution, SampleSet, AdditionalCapability
 
@@ -10,6 +10,13 @@ SolverInput = Any
 SolverOutput = Any
 SamplerInput = Any
 SamplerOutput = Any
+
+
+class DiagnosticsSink(Protocol):
+    """Receiver for adapter-defined diagnostics emitted during a solve."""
+
+    def record(self, diagnostic: object) -> None:
+        """Record one adapter-defined diagnostic object."""
 
 
 class DiagnosticCollector:
