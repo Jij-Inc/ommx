@@ -99,17 +99,15 @@ Run `task -l` to see all available commands.
 - `ommx.v1` is the public Python API surface re-exported from `ommx._ommx_rust`.
 - Prefer `ommx.v1` imports in user-facing Python code, examples, tests, and adapters unless the change is specifically about binding internals.
 
+### Rust Module Boundaries
+- When writing or reviewing Rust module structure, item visibility, or public API exposure, use `.agents/skills/rust-module-boundary/SKILL.md`.
+- Prefer expressing ownership with module structure; visibility should follow the domain owner and invariant boundary.
+
 ## Review Perspectives
 
 ### Domain Responsibility Analysis
 - At the start of every review, use `.agents/skills/domain-responsibility-review/SKILL.md`.
 - First restate the global OMMX domain semantics, then identify each domain invariant, confirm where it is explicitly represented, and verify that no operation can break it.
-
-### Rust Module Visibility
-- Prefer expressing ownership with module structure.
-- Inside a module boundary, use `pub` only for the intended API and plain `fn` for private implementation details.
-- Avoid `pub(super)` and `pub(in ...)`; if they seem necessary, first reconsider whether the module hierarchy should change.
-- `pub(crate)` is acceptable when an item must cross top-level module boundaries, but add a short comment or documentation explaining why that crate-wide visibility is needed.
 
 ### Rust SDK Artifact API Boundaries
 - Treat new public Rust artifact APIs as SDK commitments, not just convenient access to registry or manifest internals.
