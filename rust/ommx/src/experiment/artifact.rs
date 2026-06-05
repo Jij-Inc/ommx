@@ -17,16 +17,16 @@ use oci_spec::image::MediaType;
 /// [`ExperimentConfig`] with [`EXPERIMENT_CONFIG_MEDIA_TYPE`]. The config
 /// type itself remains a serialized schema, and sealed / dynamic models
 /// only ask this boundary to decode that schema from an artifact.
-pub(super) struct ExperimentArtifactView<'a, 'reg> {
+pub struct ExperimentArtifactView<'a, 'reg> {
     artifact: &'a LocalArtifact<'reg>,
 }
 
 impl<'a, 'reg> ExperimentArtifactView<'a, 'reg> {
-    pub(super) fn new(artifact: &'a LocalArtifact<'reg>) -> Self {
+    pub fn new(artifact: &'a LocalArtifact<'reg>) -> Self {
         Self { artifact }
     }
 
-    pub(super) fn config(&self) -> Result<ExperimentConfig> {
+    pub fn config(&self) -> Result<ExperimentConfig> {
         let config = self.artifact.stored_config()?;
         if config.media_type() != &MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()) {
             crate::bail!(
@@ -67,7 +67,7 @@ impl<'reg> UnsealedExperimentState<'reg> {
 
     /// Consume the unsealed experiment state and publish a checkpoint
     /// manifest under a reserved local ref.
-    pub(super) fn commit_checkpoint(
+    pub fn commit_checkpoint(
         self,
         registry: &'reg LocalRegistry,
         status: &'static str,
@@ -87,7 +87,7 @@ impl<'reg> UnsealedExperimentState<'reg> {
 
     /// Publish or update the rolling autosave checkpoint for this
     /// unsealed Experiment state.
-    pub(super) fn autosave_checkpoint(
+    pub fn autosave_checkpoint(
         &mut self,
         registry: &'reg LocalRegistry,
     ) -> Result<LocalArtifact<'reg>> {

@@ -160,12 +160,12 @@ struct RunEntryDyn {
 }
 
 #[derive(Debug)]
-pub(super) struct SolveEntryDyn {
-    pub(super) solve_id: u64,
-    pub(super) input: Descriptor,
-    pub(super) output: Descriptor,
-    pub(super) adapter: String,
-    pub(super) adapter_options: String,
+struct SolveEntryDyn {
+    solve_id: u64,
+    input: Descriptor,
+    output: Descriptor,
+    adapter: String,
+    adapter_options: String,
 }
 
 #[derive(Debug, Clone)]
