@@ -1,4 +1,7 @@
 from dataclasses import dataclass
+from typing import Any, cast
+
+import pytest
 
 from ommx.adapter import DiagnosticCollector
 
@@ -30,3 +33,13 @@ def test_diagnostic_collector_does_not_require_serialization_hooks():
     collector.record(report)
 
     assert collector.diagnostics == (report,)
+
+
+def test_diagnostic_collector_requires_dataclass_instance():
+    collector = DiagnosticCollector()
+
+    with pytest.raises(TypeError, match="dataclass instance"):
+        collector.record(cast(Any, object()))
+
+    with pytest.raises(TypeError, match="dataclass instance"):
+        collector.record(cast(Any, DummyReport))

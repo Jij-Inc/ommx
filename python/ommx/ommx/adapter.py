@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, ClassVar, Protocol
+from dataclasses import is_dataclass
+from typing import Any, ClassVar, Protocol, runtime_checkable
 
 from ommx.v1 import Instance, Solution, SampleSet, AdditionalCapability
 
@@ -12,24 +13,33 @@ SamplerInput = Any
 SamplerOutput = Any
 
 
+@runtime_checkable
+class DiagnosticReport(Protocol):
+    """Adapter diagnostic report convertible with ``dataclasses.asdict``."""
+
+    __dataclass_fields__: ClassVar[dict[str, Any]]
+
+
 class DiagnosticsSink(Protocol):
     """Receiver for adapter-defined diagnostics emitted during a solve."""
 
-    def record(self, diagnostic: object) -> None:
-        """Record one adapter-defined diagnostic object."""
+    def record(self, diagnostic: DiagnosticReport) -> None:
+        """Record one adapter-defined dataclass diagnostic report."""
 
 
 class DiagnosticCollector:
     """In-memory diagnostics sink for direct adapter calls."""
 
     def __init__(self) -> None:
-        self._diagnostics: list[object] = []
+        self._diagnostics: list[DiagnosticReport] = []
 
     @property
-    def diagnostics(self) -> tuple[object, ...]:
+    def diagnostics(self) -> tuple[DiagnosticReport, ...]:
         return tuple(self._diagnostics)
 
-    def record(self, diagnostic: object) -> None:
+    def record(self, diagnostic: DiagnosticReport) -> None:
+        if not is_dataclass(diagnostic) or isinstance(diagnostic, type):
+            raise TypeError("diagnostic must be a dataclass instance")
         self._diagnostics.append(diagnostic)
 
 
