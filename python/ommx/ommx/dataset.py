@@ -9,39 +9,39 @@ def miplib2017(name: str) -> v1.Instance:
     Load a MIPLIB 2017 instance as OMMX Artifact.
 
     >>> from ommx.dataset import miplib2017
-    >>> instance = miplib2017("air05")  # doctest: +SKIP
+    >>> instance = miplib2017("air05")
 
     Common annotations
 
-    >>> instance.title  # doctest: +SKIP
+    >>> instance.title
     'air05'
-    >>> instance.authors  # doctest: +SKIP
+    >>> instance.authors
     ['G. Astfalk']
-    >>> instance.license  # doctest: +SKIP
+    >>> instance.license
     'CC-BY-SA-4.0'
-    >>> instance.num_variables  # doctest: +SKIP
+    >>> instance.num_variables
     7195
-    >>> instance.num_constraints  # doctest: +SKIP
+    >>> instance.num_constraints
     426
 
     MIPLIB-specific annotations are stored with `org.ommx.miplib.*` keys.
 
-    >>> instance.annotations["org.ommx.miplib.binaries"]  # doctest: +SKIP
+    >>> instance.annotations["org.ommx.miplib.binaries"]
     '7195'
-    >>> instance.annotations["org.ommx.miplib.integers"]  # doctest: +SKIP
+    >>> instance.annotations["org.ommx.miplib.integers"]
     '0'
-    >>> instance.annotations["org.ommx.miplib.continuous"]  # doctest: +SKIP
+    >>> instance.annotations["org.ommx.miplib.continuous"]
     '0'
-    >>> instance.annotations["org.ommx.miplib.non_zero"]  # doctest: +SKIP
+    >>> instance.annotations["org.ommx.miplib.non_zero"]
     '52121'
 
-    >>> instance.annotations["org.ommx.miplib.status"]  # doctest: +SKIP
+    >>> instance.annotations["org.ommx.miplib.status"]
     'easy'
-    >>> instance.annotations["org.ommx.miplib.objective"]  # doctest: +SKIP
+    >>> instance.annotations["org.ommx.miplib.objective"]
     '26374'
-    >>> instance.annotations["org.ommx.miplib.url"]  # doctest: +SKIP
+    >>> instance.annotations["org.ommx.miplib.url"]
     'https://miplib.zib.de/instance_details_air05.html'
-    >>> instance.annotations["org.ommx.miplib.tags"]  # doctest: +SKIP
+    >>> instance.annotations["org.ommx.miplib.tags"]
     'benchmark,binary,benchmark_suitable,set_partitioning'
 
     """
@@ -69,34 +69,34 @@ def qplib(tag: str) -> v1.Instance:
     Load a QPLIB instance as OMMX Artifact.
 
     >>> from ommx.dataset import qplib
-    >>> instance = qplib("0018")  # doctest: +SKIP
+    >>> instance = qplib("0018")
 
     Common annotations
 
-    >>> instance.title  # doctest: +SKIP
+    >>> instance.title
     'QPLIB_0018'
-    >>> instance.authors  # doctest: +SKIP
+    >>> instance.authors
     ['Andrea Scozzari']
-    >>> instance.license  # doctest: +SKIP
+    >>> instance.license
     'CC-BY-4.0'
-    >>> instance.num_variables  # doctest: +SKIP
+    >>> instance.num_variables
     50
-    >>> instance.num_constraints  # doctest: +SKIP
+    >>> instance.num_constraints
     2
 
     QPLIB-specific annotations are stored with `org.ommx.qplib.*` keys.
 
-    >>> instance.annotations["org.ommx.qplib.nvars"]  # doctest: +SKIP
+    >>> instance.annotations["org.ommx.qplib.nvars"]
     '50'
-    >>> instance.annotations["org.ommx.qplib.ncons"]  # doctest: +SKIP
+    >>> instance.annotations["org.ommx.qplib.ncons"]
     '1'
-    >>> instance.annotations["org.ommx.qplib.objtype"]  # doctest: +SKIP
+    >>> instance.annotations["org.ommx.qplib.objtype"]
     'quadratic'
-    >>> instance.annotations["org.ommx.qplib.objcurvature"]  # doctest: +SKIP
+    >>> instance.annotations["org.ommx.qplib.objcurvature"]
     'indefinite'
-    >>> instance.annotations["org.ommx.qplib.probtype"]  # doctest: +SKIP
+    >>> instance.annotations["org.ommx.qplib.probtype"]
     'QCL'
-    >>> instance.annotations["org.ommx.qplib.url"]  # doctest: +SKIP
+    >>> instance.annotations["org.ommx.qplib.url"]
     'http://qplib.zib.de/QPLIB_0018.html'
 
     """

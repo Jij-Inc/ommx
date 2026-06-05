@@ -27,8 +27,8 @@ use crate::{PyArchiveDescriptor, PyDescriptor};
 /// (instances, solutions, sample sets, etc.) as layers.
 ///
 /// ```python
-/// >>> artifact = Artifact.load("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")  # doctest: +SKIP
-/// >>> print(artifact.image_name)  # doctest: +SKIP
+/// >>> artifact = Artifact.load("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")
+/// >>> print(artifact.image_name)
 /// ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f
 ///
 /// ```
@@ -157,7 +157,7 @@ impl PyArtifact {
     /// If the image is not found in local registry, it will try to pull from remote registry.
     ///
     /// ```python
-    /// >>> artifact = Artifact.load("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")  # doctest: +SKIP
+    /// >>> artifact = Artifact.load("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")
     /// >>> print(artifact.image_name)
     /// ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f
     ///
