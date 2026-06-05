@@ -28,6 +28,7 @@ Use this skill at the start of every review. The goal is to review code shape th
    - Look for operations that can create invalid states, bypass validation, duplicate the source of truth, expose internal descriptors, or let callers mutate state outside the owner boundary.
    - Check load/restore paths as carefully as write paths; persisted config and runtime state must preserve the same invariants.
    - Check dynamic and sealed views against the same domain model.
+   - Check lock scopes against domain ownership: keep mutexes only around the shared state protected by that owner, and move slow I/O, registry writes, or storage writes outside the lock when the final owner mutation can still enforce the invariant.
 
 5. Write findings in domain terms.
    - Lead each finding with the broken responsibility or invariant.
@@ -41,4 +42,5 @@ Use this skill at the start of every review. The goal is to review code shape th
 - Which invariants are required by each domain object or boundary?
 - Are those invariants explicitly represented or validated?
 - Which operations can bypass the owner or invalidate the invariant?
+- Are mutex or lock scopes limited to the protected domain state, with slow I/O or persistence kept outside when possible?
 - Do sealed, dynamic, persisted, and Python-facing paths preserve the same model?
