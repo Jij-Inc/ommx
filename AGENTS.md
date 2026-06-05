@@ -101,6 +101,10 @@ Run `task -l` to see all available commands.
 
 ## Review Perspectives
 
+### Domain Responsibility Analysis
+- At the start of every review, use `.agents/skills/domain-responsibility-review/SKILL.md`.
+- First restate the global OMMX domain semantics, then identify each domain invariant, confirm where it is explicitly represented, and verify that no operation can break it.
+
 ### Rust Module Visibility
 - Prefer expressing ownership with module structure.
 - Inside a module boundary, use `pub` only for the intended API and plain `fn` for private implementation details.
