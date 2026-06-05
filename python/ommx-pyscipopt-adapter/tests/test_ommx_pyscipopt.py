@@ -1,3 +1,6 @@
+import math
+from typing import Any, cast
+
 import pytest
 
 from ommx.adapter import DiagnosticCollector
@@ -43,4 +46,46 @@ def test_solve_records_termination_diagnostics():
     assert report.node_count >= 0
     assert isinstance(report.pyscipopt_version, str)
     assert isinstance(report.scip_version, str)
-    assert report.solving_time_sec is None or report.solving_time_sec >= 0.0
+    assert report.solving_time_sec >= 0.0
+
+
+def test_scip_termination_report_preserves_non_finite_bounds():
+    class FakeModel:
+        def getNSols(self) -> int:
+            return 0
+
+        def getStatus(self) -> str:
+            return "infeasible"
+
+        def getPrimalbound(self) -> float:
+            return math.inf
+
+        def getDualbound(self) -> float:
+            return -math.inf
+
+        def getGap(self) -> float:
+            return math.nan
+
+        def getNNodes(self) -> int:
+            return 0
+
+        def getSolvingTime(self) -> float:
+            return 1.25
+
+        def getMajorVersion(self) -> int:
+            return 9
+
+        def getMinorVersion(self) -> int:
+            return 2
+
+        def getTechVersion(self) -> int:
+            return 1
+
+    report = SCIPTerminationReport.from_model(cast(Any, FakeModel()))
+
+    assert math.isinf(report.primal_bound)
+    assert report.primal_bound > 0
+    assert math.isinf(report.dual_bound)
+    assert report.dual_bound < 0
+    assert math.isnan(report.gap)
+    assert report.objective_value is None

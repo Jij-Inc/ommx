@@ -1,9 +1,9 @@
 from __future__ import annotations
+import math
 from dataclasses import dataclass
 from typing import Optional
 
 import pyscipopt
-import math
 
 from opentelemetry import trace
 
@@ -30,11 +30,8 @@ from .exception import OMMXPySCIPOptAdapterError
 _tracer = trace.get_tracer("ommx.adapter.pyscipopt")
 
 
-def _finite_float_or_none(value: float) -> float | None:
-    value = float(value)
-    if math.isfinite(value):
-        return value
-    return None
+def _scip_float(value: float) -> float:
+    return float(value)
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,13 +39,13 @@ class SCIPTerminationReport:
     """Post-solve termination summary produced by SCIP."""
 
     status: str
-    primal_bound: float | None
-    dual_bound: float | None
-    gap: float | None
+    primal_bound: float
+    dual_bound: float
+    gap: float
     objective_value: float | None
     node_count: int
     solution_count: int
-    solving_time_sec: float | None
+    solving_time_sec: float
     scip_version: str
     pyscipopt_version: str | None
 
@@ -57,15 +54,15 @@ class SCIPTerminationReport:
         solution_count = int(model.getNSols())
         return cls(
             status=str(model.getStatus()),
-            primal_bound=_finite_float_or_none(model.getPrimalbound()),
-            dual_bound=_finite_float_or_none(model.getDualbound()),
-            gap=_finite_float_or_none(model.getGap()),
-            objective_value=(
-                _finite_float_or_none(model.getObjVal()) if solution_count > 0 else None
-            ),
+            primal_bound=_scip_float(model.getPrimalbound()),
+            dual_bound=_scip_float(model.getDualbound()),
+            gap=_scip_float(model.getGap()),
+            objective_value=_scip_float(model.getObjVal())
+            if solution_count > 0
+            else None,
             node_count=int(model.getNNodes()),
             solution_count=solution_count,
-            solving_time_sec=_finite_float_or_none(model.getSolvingTime()),
+            solving_time_sec=_scip_float(model.getSolvingTime()),
             scip_version=(
                 f"{model.getMajorVersion()}.{model.getMinorVersion()}.{model.getTechVersion()}"
             ),
