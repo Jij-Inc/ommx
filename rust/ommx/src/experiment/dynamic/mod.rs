@@ -180,9 +180,9 @@ struct SealedExperimentDynState {
 /// Runtime-owned sealed Run view.
 ///
 /// `SealedRunDyn` stores raw attachment descriptors internally because
-/// it cannot borrow the registry through a Rust lifetime. Methods such
-/// as [`Self::attachments`] use the stored registry handle to verify and
-/// promote them to [`StoredDescriptor`] before exposing them.
+/// it cannot borrow the registry through a Rust lifetime. Attachment
+/// accessors use the stored registry handle to verify and promote them
+/// to [`StoredDescriptor`] before exposing them.
 #[derive(Debug, Clone)]
 pub struct SealedRunDyn {
     registry_handle: LocalRegistryHandle,
@@ -196,9 +196,9 @@ pub struct SealedRunDyn {
 /// Runtime-owned Solve view.
 ///
 /// The input and output are stored as raw descriptors in the dynamic
-/// state, but [`Self::input`] and [`Self::output`] never expose those raw
-/// values. They re-check the referenced blobs against the associated
-/// Local Registry and return [`StoredDescriptor`] values.
+/// state, but public solve accessors never expose those raw values. They
+/// re-check the referenced blobs against the associated Local Registry
+/// and return decoded payloads.
 #[derive(Debug, Clone)]
 pub struct SolveDyn {
     registry_handle: LocalRegistryHandle,
