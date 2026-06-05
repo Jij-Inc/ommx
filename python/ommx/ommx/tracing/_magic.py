@@ -26,7 +26,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional, Tuple
 
 from ._capture import capture_trace
-from ._render import render_cell_output_html
+from ._render import render_html
+from ._result import TraceResult
 
 
 if TYPE_CHECKING:  # pragma: no cover - type hints only
@@ -34,6 +35,15 @@ if TYPE_CHECKING:  # pragma: no cover - type hints only
 
 
 _CELL_ROOT_SPAN_NAME = "ommx_trace_cell"
+
+
+def _render_cell_output_html(
+    result: TraceResult,
+    *,
+    download_filename: str = "ommx_trace.json",
+) -> str:
+    """HTML blob for ``display(HTML(...))`` from the cell magic."""
+    return render_html(result, download_filename=download_filename)
 
 
 def run_cell_with_trace(
@@ -93,7 +103,7 @@ def run_cell_with_trace(
             # spec's intent for this flag.
             root.record_exception(cell_exc, escaped=True)
 
-    return render_cell_output_html(trace_result.spans), cell_exc
+    return _render_cell_output_html(trace_result), cell_exc
 
 
 def register_magic(shell: "InteractiveShell") -> None:

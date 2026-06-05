@@ -1,17 +1,19 @@
 //! Dynamic-lifetime Run handle.
 
+use super::super::attachment::read_file_attachment;
 use super::super::parameter::ParameterSet;
-use super::super::{AttachmentLogger, ParameterValue};
+use super::super::{AttachmentLogger, AttachmentTable, ParameterValue, RunStatus};
 use super::{
     bail_non_unsealed, lock_experiment_state, store_run_attachment_descriptor,
-    store_solve_payload_descriptor, ExperimentDyn, ExperimentDynLifecycle, ExperimentDynState,
-    RunEntryDyn, SolveEntryDyn,
+    store_solve_payload_descriptor, store_trace_descriptor, ExperimentDyn, ExperimentDynLifecycle,
+    ExperimentDynState, RunEntryDyn, SolveEntryDyn,
 };
-use crate::artifact::media_types;
+use crate::artifact::{media_types, InstanceAnnotations, SolutionAnnotations};
 use crate::{Instance, Solution};
 use anyhow::Result;
 use oci_spec::image::{Descriptor, MediaType};
 use std::sync::{Arc, Mutex};
+use std::{collections::HashMap, path::Path};
 
 /// Runtime-owned Run handle.
 ///
@@ -37,7 +39,8 @@ pub struct RunDyn {
 #[derive(Debug)]
 struct RunDynState {
     run_id: u64,
-    attachments: Vec<Descriptor>,
+    attachments: AttachmentTable<Descriptor>,
+    trace: Option<Descriptor>,
     solves: Vec<SolveEntryDyn>,
     next_solve_id: u64,
     parameters: ParameterSet,
@@ -67,7 +70,8 @@ impl RunDyn {
         Self {
             run_state: Some(RunDynState {
                 run_id,
-                attachments: Vec::new(),
+                attachments: AttachmentTable::new(),
+                trace: None,
                 solves: Vec::new(),
                 next_solve_id: 0,
                 parameters: ParameterSet::new(),
@@ -93,7 +97,9 @@ impl RunDyn {
     pub fn log_finished_solve_result(
         &mut self,
         input: &Instance,
+        input_annotations: InstanceAnnotations,
         output: &Solution,
+        output_annotations: SolutionAnnotations,
         adapter: String,
         adapter_options: String,
     ) -> Result<u64> {
@@ -105,11 +111,13 @@ impl RunDyn {
                     &dyn_state,
                     media_types::v1_instance(),
                     &input.to_bytes(),
+                    input_annotations.into_inner(),
                 )?,
                 store_solve_payload_descriptor(
                     &dyn_state,
                     media_types::v1_solution(),
                     &output.to_bytes(),
+                    output_annotations.into_inner(),
                 )?,
             )
         };
@@ -125,8 +133,22 @@ impl RunDyn {
         Ok(solve_id)
     }
 
+    pub fn store_trace(&mut self, trace: super::super::Trace) -> Result<()> {
+        let state = self.open()?;
+        if state.trace.is_some() {
+            crate::bail!("Run {} already has a trace", state.run_id);
+        }
+        let descriptor = {
+            let dyn_state = lock_experiment_state(&self.experiment_state);
+            store_trace_descriptor(&dyn_state, trace)?
+        };
+        self.open_mut()?.trace = Some(descriptor);
+        Ok(())
+    }
+
     pub fn finish(mut self) -> Result<()> {
         let mut dyn_state = lock_experiment_state(&self.experiment_state);
+        let registry_handle = dyn_state.registry_handle.clone();
         let ExperimentDynLifecycle::Unsealed { state, open_runs } = &mut dyn_state.lifecycle else {
             return bail_non_unsealed(&dyn_state.lifecycle);
         };
@@ -145,12 +167,66 @@ impl RunDyn {
             run.run_id,
             RunEntryDyn {
                 run_id: run.run_id,
+                status: RunStatus::Finished,
                 attachments: run.attachments,
+                trace: run.trace,
                 solves: run.solves,
                 parameters: run.parameters,
             },
         );
         decrement_open_runs(open_runs);
+        if let Err(error) = state.autosave_checkpoint(registry_handle.registry()) {
+            tracing::warn!(
+                error = %error,
+                "Failed to publish Experiment autosave checkpoint after Run close"
+            );
+        }
+        Ok(())
+    }
+
+    pub fn finish_failed(self) -> Result<()> {
+        self.finish_with_status(RunStatus::Failed)
+    }
+
+    pub fn finish_interrupted(self) -> Result<()> {
+        self.finish_with_status(RunStatus::Interrupted)
+    }
+
+    fn finish_with_status(mut self, status: RunStatus) -> Result<()> {
+        let mut dyn_state = lock_experiment_state(&self.experiment_state);
+        let registry_handle = dyn_state.registry_handle.clone();
+        let ExperimentDynLifecycle::Unsealed { state, open_runs } = &mut dyn_state.lifecycle else {
+            return bail_non_unsealed(&dyn_state.lifecycle);
+        };
+        let state = state
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("Parent Experiment has already been committed"))?;
+        let run = self
+            .run_state
+            .take()
+            .ok_or_else(|| anyhow::anyhow!("Run has already been finished"))?;
+        if state.runs.contains_key(&run.run_id) {
+            decrement_open_runs(open_runs);
+            crate::bail!("Run {} has already been registered", run.run_id);
+        }
+        state.runs.insert(
+            run.run_id,
+            RunEntryDyn {
+                run_id: run.run_id,
+                status,
+                attachments: run.attachments,
+                trace: run.trace,
+                solves: run.solves,
+                parameters: run.parameters,
+            },
+        );
+        decrement_open_runs(open_runs);
+        if let Err(error) = state.autosave_checkpoint(registry_handle.registry()) {
+            tracing::warn!(
+                error = %error,
+                "Failed to publish Experiment autosave checkpoint after Run close"
+            );
+        }
         Ok(())
     }
 
@@ -179,13 +255,53 @@ impl AttachmentLogger for &mut RunDyn {
         name: &str,
         media_type: MediaType,
         bytes: impl AsRef<[u8]>,
+        annotations: HashMap<String, String>,
     ) -> Result<()> {
-        let run_id = self.open()?.run_id;
+        if self.open()?.attachments.contains_key(name) {
+            crate::bail!("Attachment `{name}` already exists");
+        }
         let descriptor = {
             let dyn_state = lock_experiment_state(&self.experiment_state);
-            store_run_attachment_descriptor(&dyn_state, run_id, name, media_type, bytes.as_ref())?
+            super::ensure_unsealed_for_attachment_write(&dyn_state)?;
+            let registry_handle = dyn_state.registry_handle.clone();
+            store_run_attachment_descriptor(
+                registry_handle.registry(),
+                media_type,
+                bytes.as_ref(),
+                annotations,
+            )?
         };
-        self.open_mut()?.attachments.push(descriptor);
+        self.open_mut()?
+            .attachments
+            .insert(name.to_string(), descriptor, None)?;
+        Ok(())
+    }
+
+    fn log_file(
+        self,
+        name: &str,
+        path: impl AsRef<Path>,
+        media_type: Option<MediaType>,
+        filename: Option<&str>,
+    ) -> Result<()> {
+        let (media_type, bytes, filename) = read_file_attachment(path, media_type, filename)?;
+        if self.open()?.attachments.contains_key(name) {
+            crate::bail!("Attachment `{name}` already exists");
+        }
+        let descriptor = {
+            let dyn_state = lock_experiment_state(&self.experiment_state);
+            super::ensure_unsealed_for_attachment_write(&dyn_state)?;
+            let registry_handle = dyn_state.registry_handle.clone();
+            store_run_attachment_descriptor(
+                registry_handle.registry(),
+                media_type,
+                bytes.as_ref(),
+                HashMap::new(),
+            )?
+        };
+        self.open_mut()?
+            .attachments
+            .insert(name.to_string(), descriptor, Some(filename))?;
         Ok(())
     }
 }

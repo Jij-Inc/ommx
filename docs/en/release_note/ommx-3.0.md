@@ -8,6 +8,148 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+## 3.0.0 Alpha 5
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0a5-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0a5)
+
+See the GitHub Release above for full details. The following summarizes the main changes. This is a pre-release version. APIs may change before the final release.
+
+### 🆕 Run-scoped Experiment trace storage ([#910](https://github.com/Jij-Inc/ommx/pull/910), [#916](https://github.com/Jij-Inc/ommx/pull/916))
+
+{class}`~ommx.experiment.Experiment`, {meth}`~ommx.experiment.Experiment.with_temp_local_registry`, and {meth}`~ommx.experiment.Experiment.fork` now accept `store_trace=True`. When enabled, each `with experiment.run()` context captures the OpenTelemetry spans emitted inside that Run and stores one trace on the closed {class}`~ommx.experiment.SealedRun`. The stored trace is returned as {class}`~ommx.tracing.TraceResult` from {attr}`~ommx.experiment.SealedRun.trace`, and is carried through commit, load, and fork.
+
+See [Tracing and Profiling](../user_guide/tracing.ipynb) for the full tracing workflow, renderers, and OpenTelemetry setup notes.
+
+```python
+from ommx.experiment import Experiment
+from ommx.tracing import render_text_tree
+from ommx_highs_adapter import OMMXHighsAdapter
+
+with Experiment.with_temp_local_registry(store_trace=True) as experiment:
+    with experiment.run() as run:
+        run.log_solve(OMMXHighsAdapter, instance)
+
+loaded = Experiment.from_artifact(experiment.artifact)
+trace = loaded.runs[0].trace
+if trace is not None:
+    print(render_text_tree(trace))
+```
+
+The stored payload is OTLP protobuf, so {class}`~ommx.tracing.TraceResult` now owns the exported request, exposes flattened `spans`, and can round-trip with `otlp_protobuf()` / `from_otlp_protobuf()`. Text and Chrome trace renderers also use domain-oriented span names such as `Run`, `solve`, `convert`, `call`, and `decode`, and surface instrumentation scope while hiding debug-only source attributes.
+
+### ⚠ Experiment attachments are now name-indexed ([#924](https://github.com/Jij-Inc/ommx/pull/924))
+
+Experiment and Run attachments are now stored as name-indexed tables in the Experiment config. The public Python API is name-oriented: use `attachment_names`, `attachment_media_type(name)`, `get_attachment(name)`, the typed getters such as `get_json(name)` and `get_instance(name)`, `get_blob(name)`, `get_with_codec(...)`, and `write_attachment(...)`.
+
+```python
+loaded = Experiment.from_artifact(experiment.artifact)
+
+for name in loaded.attachment_names:
+    print(name, loaded.attachment_media_type(name))
+    value = loaded.get_attachment(name)
+```
+
+Descriptor-oriented attachment views from earlier 3.0 alphas, including `Experiment.experiment_attachments` and `SealedRun.attachments`, are removed. Registry-backed descriptors remain internal so attachment names, media types, file export names, and checkpoint metadata stay in the Experiment config instead of descriptor annotations.
+
+### 🆕 Experiment checkpoints and restore from interrupted sessions ([#917](https://github.com/Jij-Inc/ommx/pull/917))
+
+{class}`~ommx.experiment.Experiment` now publishes local checkpoints for partial experiment state. Closing a {class}`~ommx.experiment.Run` writes a best-effort draft checkpoint, and exiting an Experiment with an exception writes a failed or interrupted checkpoint instead of advancing the successful Experiment image reference. Closed Runs keep their attachments, solves, traces, and run parameters, including Runs closed as `"failed"` or `"interrupted"` after exceptions such as `KeyboardInterrupt`.
+
+See [Experiment Recovery and Cleanup](../user_guide/experiment.md) for Run close boundaries, checkpoint restoration, and Local Registry cleanup behavior.
+
+Use {meth}`~ommx.experiment.Experiment.restore_from_checkpoint` with the original Experiment image name to resume from the latest checkpoint:
+
+```python
+from ommx.experiment import Experiment
+
+image_name = "ghcr.io/example/team/experiment:notebook"
+
+try:
+    with Experiment(image_name) as experiment:
+        with experiment.run() as run:
+            run.log_parameter("solver", "highs")
+            raise KeyboardInterrupt
+except KeyboardInterrupt:
+    pass
+
+experiment = Experiment.restore_from_checkpoint(image_name)
+assert experiment.image_name == image_name
+```
+
+Successful `commit()` still publishes only the requested image reference and removes the local checkpoint when present. Checkpoint Artifact handles and checkpoint image names are intentionally not exposed in the Python API; users restore by remembering the original Experiment image name.
+
+### 🆕 Local Registry cleanup ([#919](https://github.com/Jij-Inc/ommx/pull/919))
+
+The `ommx` CLI now provides Local Registry maintenance commands for the SQLite-backed Artifact registry. Use `ommx gc` to report blobs that are unreachable from SQLite refs, including Experiment checkpoint refs. The command protects recently written unreachable blobs with a grace period so active Experiment writes are not deleted accidentally.
+
+Destructive cleanup commands report by default and mutate the registry only when `--delete` is passed:
+
+```bash
+ommx prune-anonymous
+ommx gc
+ommx prune-anonymous --delete
+ommx gc --delete
+```
+
+Normal reports show counts and sizes rather than raw digests. Pass `--show-digests` when low-level diagnostics are needed.
+
+The same cleanup operations are also exposed from the Python SDK as
+{func}`ommx.artifact.prune_anonymous` and {func}`ommx.artifact.gc`. These
+functions are report-only by default, mutate the registry with `delete=True`,
+and return structured report objects for notebook and script use.
+
+### 🆕 Typed attachment codecs for Experiments ([#921](https://github.com/Jij-Inc/ommx/pull/921))
+
+The new {class}`ommx.experiment.attachments.AttachmentCodec` protocol lets packages that own Python payload types define how those values are stored as Experiment attachments. A codec class provides a media type plus `encode` / `decode` methods, and OMMX calls it through `log_with_codec` and `get_with_codec` on both Experiment-level and Run-level attachments.
+
+See the {ref}`Attachable Data Formats <experiment-management-attachable-data-formats>` section of the Experiment management tutorial for a JijModeling `Problem` codec example.
+
+```python
+from ommx.experiment import Experiment
+
+
+class TextCodec:
+    media_type = "text/plain"
+
+    @staticmethod
+    def encode(value: str) -> bytes:
+        return value.encode()
+
+    @staticmethod
+    def decode(data: bytes) -> str:
+        return data.decode()
+
+
+with Experiment.with_temp_local_registry() as experiment:
+    experiment.log_with_codec(TextCodec, "note", "created outside OMMX")
+
+loaded = Experiment.from_artifact(experiment.artifact)
+assert loaded.get_with_codec(TextCodec, "note") == "created outside OMMX"
+```
+
+The stored attachment media type is validated before decoding, so using the wrong codec for an attachment fails before the codec's `decode` method is called.
+
+### 🆕 File attachments for Experiments ([#922](https://github.com/Jij-Inc/ommx/pull/922))
+
+{class}`~ommx.experiment.Experiment` and {class}`~ommx.experiment.Run` can now attach files that were produced outside OMMX. Use `log_file` to copy an existing file into the Experiment Artifact. OMMX stores the file bytes as an attachment blob, records the original basename for later export, and uses an explicitly provided media type or Rust SDK content-based inference with an `application/octet-stream` fallback.
+
+Committed experiment and run views now also provide `write_attachment` to restore an attachment blob back to disk. For libraries that accept a binary file-like object, wrap the existing `get_blob` result with `io.BytesIO`.
+
+```python
+import io
+from pathlib import Path
+
+from ommx.experiment import Experiment
+
+with Experiment.with_temp_local_registry() as experiment:
+    experiment.log_file("input-spreadsheet", "input.xlsx")
+
+loaded = Experiment.from_artifact(experiment.artifact)
+spreadsheet_file = io.BytesIO(loaded.get_blob("input-spreadsheet"))
+Path("restored").mkdir(parents=True, exist_ok=True)
+loaded.write_attachment("input-spreadsheet", "restored/input.xlsx")
+```
+
 ## 3.0.0 Alpha 4
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0a4-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0a4)
@@ -24,8 +166,8 @@ Alongside this storage model and the new `Experiment` API, the old `ArtifactBuil
 - `ArtifactBuilder.new_archive_unnamed` → {func}`ArtifactDraft.new_anonymous <ommx.artifact.ArtifactDraft.new_anonymous>` + `Artifact.save(path)`. In v2, an unnamed archive literally had no image name and was read back as `None`. In v3, an anonymous Artifact gets an automatically generated `<registry-id8>.ommx.local/anonymous:<timestamp>-<nonce>` image name from the Local Registry, so it can still be saved, loaded again, and cleaned up.
 - {func}`Artifact.load_archive <ommx.artifact.Artifact.load_archive>` raises a migration error pointing at the two replacement methods: {func}`Artifact.import_archive <ommx.artifact.Artifact.import_archive>` (imports the archive into the user's persistent SQLite Local Registry — the v3 successor with registry-write semantics) and {func}`Artifact.inspect_archive <ommx.artifact.Artifact.inspect_archive>` (side-effect-free read of the manifest + layer descriptors, returns a new {class}`ArchiveManifest <ommx.artifact.ArchiveManifest>` view). v2's `load_archive` opened archives in place with no registry side effect, so the rename makes the semantic shift explicit instead of silently writing into the registry on upgrade. `import_archive` accepts v2 archives produced by `ArtifactBuilder.new_archive_unnamed` (no `org.opencontainers.image.ref.name` annotation) by synthesizing an anonymous name on the fly; `inspect_archive` reads such archives back with `ArchiveManifest.image_name = None` (no registry context for synthesis).
 - CLI `ommx push <archive>` and `ommx push <oci-dir>` removed — load into the registry first, then push by image name.
-- New CLI `ommx artifact prune-anonymous [--dry-run]` bulk-cleans accumulated anonymous-commit entries.
-- `ommx.get_image_dir(...)` and the CLI `ommx image-dir <name>` subcommand are removed. The return value was a v2 disk-cache path (`<root>/<image_name>/<tag>/`) that no longer corresponds to any v3 storage location — the SQLite Local Registry stores blobs content-addressed and refs in SQLite — so pointing users at it was actively misleading. Existing v2 caches still migrate via `ommx artifact import`.
+- New CLI `ommx prune-anonymous [--delete]` reports accumulated anonymous-commit entries by default and removes them only when `--delete` is passed.
+- `ommx.get_image_dir(...)` and the CLI `ommx image-dir <name>` subcommand are removed. The return value was a v2 disk-cache path (`<root>/<image_name>/<tag>/`) that no longer corresponds to any v3 storage location — the SQLite Local Registry stores blobs content-addressed and refs in SQLite — so pointing users at it was actively misleading. Existing v2 caches still migrate via `ommx import-legacy`.
 
 See the [Python SDK v2→v3 Migration Guide §13](https://github.com/Jij-Inc/ommx/blob/main/PYTHON_SDK_MIGRATION_GUIDE.md#13-artifact-api-archive-becomes-an-exchange-format) for the full before/after code and migration checklist.
 
@@ -187,7 +329,7 @@ Two entry points ship under `ommx.tracing`:
 - **`%%ommx_trace`** — a Jupyter cell magic that renders a per-cell span tree and a Chrome Trace JSON download link
 - **`capture_trace` / `@traced`** — a context manager and decorator for the same workflow from regular Python scripts, tests, and CI
 
-See [Tracing and Profiling](../user_guide/tracing.md) for the full walkthrough, configuring your own `TracerProvider`, and troubleshooting.
+See [Tracing and Profiling](../user_guide/tracing.ipynb) for the full walkthrough, configuring your own `TracerProvider`, and troubleshooting.
 
 ### 🆕 Tracing spans in solver/sampler adapters ([#833](https://github.com/Jij-Inc/ommx/pull/833))
 
@@ -207,13 +349,13 @@ Each adapter uses its own tracer name, so runs from different solvers are easy t
 | `ommx-openjij-adapter` | `ommx.adapter.openjij` | `convert` / `sample` / `decode` |
 
 ```python
-from ommx.tracing import capture_trace
+from ommx.tracing import capture_trace, render_text_tree
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
 with capture_trace() as trace:
     solution = OMMXPySCIPOptAdapter.solve(instance)
 
-print(trace.text_tree())  # shows convert / solve / decode with durations
+print(render_text_tree(trace))  # shows convert / solve / decode with durations
 ```
 
 Spans are emitted through the standard OpenTelemetry API, so they are a no-op when no `TracerProvider` is installed — there is no runtime cost for users who do not opt in.

@@ -10,7 +10,7 @@
 //!   described bytes exist in any OMMX Local Registry.
 //! - **Stored** is a Local Registry storage invariant. A
 //!   [`local_registry::StoredDescriptor`] means the descriptor's digest
-//!   has corresponding bytes in that Local Registry's BlobStore. It
+//!   has corresponding bytes in that Local Registry. It
 //!   does not mean "this call wrote the bytes"; an already-present CAS
 //!   blob satisfies the same invariant.
 //! - **Unsealed** is the data-model state of a multi-blob object whose
@@ -27,9 +27,8 @@
 //! - **Draft** is an API lifecycle term for a mutable SDK-side object
 //!   being edited by the caller. [`ArtifactDraft`] owns unsealed
 //!   artifact state.
-//! - **Store** is the Local Registry / BlobStore operation that writes
-//!   bytes as a content-addressed blob and yields a
-//!   `StoredDescriptor`.
+//! - **Store** is the Local Registry operation that writes bytes as a
+//!   content-addressed blob and yields a `StoredDescriptor`.
 //! - **Seal** is the data-model operation that creates and stores the
 //!   root manifest blob for unsealed state, yielding the root
 //!   `StoredDescriptor`. It does not update a ref.
@@ -67,7 +66,9 @@ pub use config::*;
 pub use digest::sha256_digest;
 pub use image_ref::ImageRef;
 pub(crate) use manifest::stable_json_bytes;
-pub(crate) use manifest::{anonymous_artifact_image_name, anonymous_local_image_name};
+pub(crate) use manifest::{
+    anonymous_artifact_image_name, anonymous_local_image_name, anonymous_local_repository_key,
+};
 pub use manifest::{
     is_anonymous_artifact_ref_name, is_anonymous_artifact_tag, ArtifactDraft, AsArtifact,
     LocalArtifact, LocalArtifactDyn, LocalManifest, LocalRegistryHandle,
@@ -99,7 +100,7 @@ pub fn set_local_registry_root(path: impl Into<PathBuf>) -> Result<()> {
             path.display()
         )
     })?;
-    tracing::info!("Local registry root set via API: {}", path.display());
+    tracing::debug!("Local registry root configured via API: {}", path.display());
     Ok(())
 }
 
@@ -117,8 +118,8 @@ pub fn get_local_registry_root() -> &'static Path {
         // Try environment variable first
         let path = if let Ok(custom_dir) = env::var("OMMX_LOCAL_REGISTRY_ROOT") {
             let path = PathBuf::from(custom_dir);
-            tracing::info!(
-                "Local registry root initialized from OMMX_LOCAL_REGISTRY_ROOT: {}",
+            tracing::debug!(
+                "Local registry root resolved from OMMX_LOCAL_REGISTRY_ROOT: {}",
                 path.display()
             );
             path
@@ -127,8 +128,8 @@ pub fn get_local_registry_root() -> &'static Path {
                 .expect("Failed to get project directories")
                 .data_dir()
                 .to_path_buf();
-            tracing::info!(
-                "Local registry root initialized to default: {}",
+            tracing::debug!(
+                "Local registry root resolved to default: {}",
                 path.display()
             );
             path
@@ -161,7 +162,7 @@ pub fn ghcr(org: &str, repo: &str, name: &str, tag: &str) -> Result<ImageRef> {
 /// without populating the v3 SQLite Local Registry. Used by CLI
 /// `ommx inspect <remote-ref>` so the user can read what is on the
 /// other side of a ref without committing to a full pull. For the
-/// full pull-into-registry flow use [`local_registry::pull_image`].
+/// full pull-into-registry flow use [`local_registry::LocalRegistry::pull_image`].
 ///
 /// Credentials are resolved by `remote_transport::RemoteTransport`'s
 /// three-tier chain (env override → `~/.docker/config.json` →
@@ -180,18 +181,13 @@ pub fn fetch_remote_manifest(image_name: &ImageRef) -> Result<ImageManifest> {
 pub fn get_images() -> Result<Vec<ImageRef>> {
     let root = get_local_registry_root();
     let registry = local_registry::LocalRegistry::open(root)?;
-    registry
-        .index()
-        .list_refs(None)?
-        .into_iter()
-        .map(|r| ImageRef::from_repository_and_reference(&r.name, &r.reference))
-        .collect()
+    registry.list_image_refs()
 }
 
 // v3 artifact entry points:
-//   - Archive ingest: `local_registry::import_oci_archive(path)`
-//   - OCI Image Layout directory ingest: `local_registry::import_oci_dir(path)`
-//   - Remote pull into SQLite: `local_registry::pull_image(name)`
+//   - Archive ingest: `LocalRegistry::import_oci_archive(path)`
+//   - OCI Image Layout directory ingest: `LocalRegistry::import_oci_dir(path)`
+//   - Remote pull into SQLite: `LocalRegistry::pull_image(name)`
 //   - Commit into SQLite: `ArtifactDraft::new(...)?.commit()`
 //   - Export to archive file: `LocalArtifact::save(path)`
 // Image-ref parsing for these entry points goes through [`ImageRef`].

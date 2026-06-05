@@ -1,20 +1,83 @@
-"""Render a collected trace as a text tree and a Chrome Trace JSON blob.
-
-Both renderers take a ``list[ReadableSpan]`` and are independent of the
-cell-magic plumbing — :func:`render_text_tree` is useful from a plain REPL
-as well, and the JSON writer is what backs the download link surfaced by
-the magic's HTML output.
-"""
+"""Render a completed :class:`TraceResult` as text or Chrome Trace JSON."""
 
 from __future__ import annotations
 
 import base64
 import html
 import json
-from typing import Dict, Iterable, List, Optional, Sequence, Set
+from collections.abc import Sequence
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Union
 
-from opentelemetry.sdk.trace import ReadableSpan
-from opentelemetry.trace.status import StatusCode
+from opentelemetry.proto.common.v1.common_pb2 import AnyValue
+from opentelemetry.proto.trace.v1.trace_pb2 import Span as ProtoSpan
+from opentelemetry.proto.trace.v1.trace_pb2 import Status as ProtoStatus
+
+if TYPE_CHECKING:  # pragma: no cover - type hints only
+    from ._result import TraceResult
+
+
+# ---------------------------------------------------------------------------
+# OTLP protobuf helpers
+# ---------------------------------------------------------------------------
+
+
+def _attributes_from_proto(attributes: Sequence[Any]) -> dict[str, Any]:
+    return {
+        str(attribute.key): _attribute_value_from_proto(attribute.value)
+        for attribute in attributes
+    }
+
+
+def _attribute_value_from_proto(value: AnyValue) -> Any:
+    field = value.WhichOneof("value")
+    if field == "string_value":
+        return value.string_value
+    if field == "bool_value":
+        return value.bool_value
+    if field == "int_value":
+        return value.int_value
+    if field == "double_value":
+        return value.double_value
+    if field == "array_value":
+        return [_attribute_value_from_proto(item) for item in value.array_value.values]
+    if field == "kvlist_value":
+        return _attributes_from_proto(value.kvlist_value.values)
+    if field == "bytes_value":
+        return bytes(value.bytes_value)
+    return None
+
+
+def _id_from_bytes(value: bytes) -> int:
+    return int.from_bytes(value, byteorder="big") if value else 0
+
+
+def _span_id(span: ProtoSpan) -> int:
+    return _id_from_bytes(span.span_id)
+
+
+def _parent_span_id(span: ProtoSpan) -> int | None:
+    return _id_from_bytes(span.parent_span_id) if span.parent_span_id else None
+
+
+def _optional_int(value: int) -> int | None:
+    return value or None
+
+
+def _start_time(span: ProtoSpan) -> int | None:
+    return _optional_int(span.start_time_unix_nano)
+
+
+def _end_time(span: ProtoSpan) -> int | None:
+    return _optional_int(span.end_time_unix_nano)
+
+
+def _span_records(result: TraceResult):
+    for resource_span in result.request.resource_spans:
+        for scope_span in resource_span.scope_spans:
+            scope_name = scope_span.scope.name or None
+            for span in scope_span.spans:
+                yield span, scope_name
 
 
 # ---------------------------------------------------------------------------
@@ -22,16 +85,18 @@ from opentelemetry.trace.status import StatusCode
 # ---------------------------------------------------------------------------
 
 
-def _duration_ms(span: ReadableSpan) -> float:
+def _duration_ms(span: ProtoSpan) -> float:
     """Return the span's duration in milliseconds.
 
     Open spans (which should not reach the renderer, but we still want
     to survive them) have ``end_time is None`` — report ``0.0`` instead
     of crashing.
     """
-    if span.start_time is None or span.end_time is None:
+    start_time = _start_time(span)
+    end_time = _end_time(span)
+    if start_time is None or end_time is None:
         return 0.0
-    return (span.end_time - span.start_time) / 1_000_000.0
+    return (end_time - start_time) / 1_000_000.0
 
 
 def _format_duration(ms: float) -> str:
@@ -42,7 +107,7 @@ def _format_duration(ms: float) -> str:
     return f"{ms * 1000:.1f} µs"
 
 
-def _status_marker(span: ReadableSpan) -> str:
+def _status_marker(span: ProtoSpan) -> str:
     """Return ``" [ERROR]"`` when the span recorded a failure, else ``""``.
 
     OTel sets ``Status(ERROR)`` on spans whose context manager saw an
@@ -51,25 +116,25 @@ def _status_marker(span: ReadableSpan) -> str:
     obvious which leaf failed when the user re-reads a trace for a
     crashed block.
     """
-    status = getattr(span, "status", None)
-    if status is not None and status.status_code == StatusCode.ERROR:
+    if span.status.code == ProtoStatus.STATUS_CODE_ERROR:
         return " [ERROR]"
     return ""
 
 
-def _interesting_attributes(span: ReadableSpan) -> str:
+def _interesting_attributes(span: ProtoSpan) -> str:
     """Subset of attributes worth showing inline in the tree node.
 
     Filters out the ``tracing`` crate's bookkeeping keys (``busy_ns``,
     ``idle_ns``, ``thread.id``, ``code.*``) that are noise for human
     consumers. Everything else is fair game.
     """
-    if not span.attributes:
+    attributes = _attributes_from_proto(span.attributes)
+    if not attributes:
         return ""
-    skip = {"busy_ns", "idle_ns", "thread.id"}
+    skip = {"busy_ns", "idle_ns", "target", "thread.id"}
     pairs = [
         f"{k}={v!r}"
-        for k, v in span.attributes.items()
+        for k, v in attributes.items()
         if k not in skip and not k.startswith("code.")
     ]
     if not pairs:
@@ -77,55 +142,62 @@ def _interesting_attributes(span: ReadableSpan) -> str:
     return " [" + ", ".join(pairs) + "]"
 
 
+def _scope_label(scope_name: str | None) -> str:
+    if not scope_name:
+        return ""
+    return f" {{scope={scope_name}}}"
+
+
 # ---------------------------------------------------------------------------
 # Text tree
 # ---------------------------------------------------------------------------
 
 
-def render_text_tree(spans: Sequence[ReadableSpan]) -> str:
-    """Render ``spans`` as a nested ASCII tree, one root per top-level span.
+def render_text_tree(result: TraceResult) -> str:
+    """Render ``result`` as a nested ASCII tree, one root per top-level span.
 
     The tree preserves parent→child relationships as recorded by OTel.
     Siblings are sorted by start time so the output reflects execution
     order.
     """
-    if not spans:
+    records = list(_span_records(result))
+    if not records:
         return "(no spans)"
+    spans = [span for span, _scope_name in records]
+    scope_names = {
+        _span_id(span): scope_name
+        for span, scope_name in records
+        if scope_name is not None
+    }
 
-    span_ids: Set[int] = set()
-    children: Dict[Optional[int], List[ReadableSpan]] = {}
+    span_ids: set[int] = set()
+    children: dict[int | None, list[ProtoSpan]] = {}
     for span in spans:
-        ctx = span.context
-        if ctx is None:
-            continue
-        span_ids.add(ctx.span_id)
-        parent_id = span.parent.span_id if span.parent is not None else None
-        children.setdefault(parent_id, []).append(span)
+        span_ids.add(_span_id(span))
+        children.setdefault(_parent_span_id(span), []).append(span)
 
     # A span's parent may not be in `spans` (e.g. the cell root was created
     # outside the collected set). Treat those as roots too so we never drop
     # branches on the floor.
-    roots: List[ReadableSpan] = []
+    roots: list[ProtoSpan] = []
     for parent_id, kids in children.items():
         if parent_id is None or parent_id not in span_ids:
             roots.extend(kids)
-    roots.sort(key=lambda s: s.start_time or 0)
+    roots.sort(key=lambda s: _start_time(s) or 0)
 
-    lines: List[str] = []
+    lines: list[str] = []
 
-    def walk(span: ReadableSpan, prefix: str, is_last: bool) -> None:
+    def walk(span: ProtoSpan, prefix: str, is_last: bool) -> None:
         marker = "└── " if is_last else "├── "
         lines.append(
             f"{prefix}{marker}{span.name} "
             f"({_format_duration(_duration_ms(span))})"
+            f"{_scope_label(scope_names.get(_span_id(span)))}"
             f"{_status_marker(span)}"
             f"{_interesting_attributes(span)}"
         )
-        ctx = span.context
-        if ctx is None:
-            return
-        kids = children.get(ctx.span_id, [])
-        kids.sort(key=lambda s: s.start_time or 0)
+        kids = children.get(_span_id(span), [])
+        kids.sort(key=lambda s: _start_time(s) or 0)
         next_prefix = prefix + ("    " if is_last else "│   ")
         for i, kid in enumerate(kids):
             walk(kid, next_prefix, i == len(kids) - 1)
@@ -134,6 +206,29 @@ def render_text_tree(spans: Sequence[ReadableSpan]) -> str:
         walk(root, "", i == len(roots) - 1)
 
     return "\n".join(lines)
+
+
+def render_html(
+    result: TraceResult,
+    *,
+    download_filename: str = "ommx_trace.json",
+) -> str:
+    """Render ``result`` as notebook HTML with a Chrome Trace download link."""
+    tree = html.escape(render_text_tree(result))
+    payload = chrome_trace_json(result)
+    b64 = base64.b64encode(payload.encode("utf-8")).decode("ascii")
+    data_url = f"data:application/json;base64,{b64}"
+    size_kb = len(payload) / 1024
+    # ``quote=True`` escapes both ``"`` and ``'`` for HTML attributes.
+    safe_filename = html.escape(download_filename, quote=True)
+    return (
+        '<div class="ommx-trace">'
+        f"<pre>{tree}</pre>"
+        f'<p><a href="{data_url}" download="{safe_filename}">'
+        f"Download Chrome Trace JSON ({size_kb:.1f} KB)"
+        "</a> — open in Perfetto, speedscope, or <code>chrome://tracing</code>.</p>"
+        "</div>"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -150,22 +245,26 @@ def _attribute_to_json(value) -> object:
     return str(value)
 
 
-def to_chrome_trace(spans: Iterable[ReadableSpan]) -> dict:
-    """Convert a list of OTel spans to the Chrome Trace Event Format.
+def to_chrome_trace(result: TraceResult) -> dict:
+    """Convert ``result`` to Chrome Trace Event Format.
 
     Uses complete-duration events (``ph: "X"``) with ``ts``/``dur`` in
     microseconds, which is what Perfetto, speedscope, and
     ``chrome://tracing`` all consume. The per-span ``args`` dict carries
     OTel attributes so they show up in tool tooltips.
     """
-    events: List[dict] = []
-    for span in spans:
-        if span.start_time is None or span.end_time is None:
+    events: list[dict] = []
+    for span, scope_name in _span_records(result):
+        start_time = _start_time(span)
+        end_time = _end_time(span)
+        if start_time is None or end_time is None:
             continue
-        ts_us = span.start_time // 1_000
-        dur_us = max((span.end_time - span.start_time) // 1_000, 1)
-        attrs = span.attributes or {}
-        args = {k: _attribute_to_json(v) for k, v in attrs.items()}
+        ts_us = start_time // 1_000
+        dur_us = max((end_time - start_time) // 1_000, 1)
+        attributes = _attributes_from_proto(span.attributes)
+        args = {k: _attribute_to_json(v) for k, v in attributes.items()}
+        if scope_name is not None:
+            args["otel.scope.name"] = scope_name
         # All events are placed on a single logical thread for the MVP
         # renderer. ``tracing``-crate spans carry a ``thread.id``
         # attribute; surfacing it as ``tid`` would let Perfetto /
@@ -174,7 +273,7 @@ def to_chrome_trace(spans: Iterable[ReadableSpan]) -> dict:
         events.append(
             {
                 "name": span.name,
-                "cat": "ommx",
+                "cat": scope_name or "ommx",
                 "ph": "X",
                 "ts": ts_us,
                 "dur": dur_us,
@@ -187,42 +286,16 @@ def to_chrome_trace(spans: Iterable[ReadableSpan]) -> dict:
     return {"traceEvents": events, "displayTimeUnit": "ms"}
 
 
-def chrome_trace_json(spans: Iterable[ReadableSpan]) -> str:
-    return json.dumps(to_chrome_trace(spans))
+def chrome_trace_json(result: TraceResult) -> str:
+    return json.dumps(to_chrome_trace(result))
 
 
-# ---------------------------------------------------------------------------
-# HTML glue for the cell magic
-# ---------------------------------------------------------------------------
+def save_chrome_trace(result: TraceResult, path: Union[str, Path]) -> None:
+    """Write ``result`` as Chrome Trace JSON to ``path``.
 
-
-def render_cell_output_html(
-    spans: Sequence[ReadableSpan],
-    *,
-    download_filename: str = "ommx_trace.json",
-) -> str:
-    """HTML blob for ``display(HTML(...))`` from :mod:`_magic`.
-
-    Renders the text tree inside a ``<pre>`` and attaches a download link
-    pointing at a base64 data URL of the Chrome Trace JSON. This keeps
-    the magic dependency-free — no ipywidgets, no assets.
+    Overwrites any existing file. The UTF-8 encoding matches the JSON
+    spec and is what Perfetto / speedscope / ``chrome://tracing`` all accept.
     """
-    tree = html.escape(render_text_tree(spans))
-    payload = chrome_trace_json(spans)
-    b64 = base64.b64encode(payload.encode("utf-8")).decode("ascii")
-    data_url = f"data:application/json;base64,{b64}"
-    size_kb = len(payload) / 1024
-    # ``quote=True`` escapes both ``"`` and ``'`` — essential when the
-    # value lands inside an HTML attribute where an un-escaped quote
-    # would terminate the attribute and allow injection. Cell magic
-    # callers currently pass a literal default, but the parameter is
-    # public, so harden it anyway.
-    safe_filename = html.escape(download_filename, quote=True)
-    return (
-        '<div class="ommx-trace">'
-        f"<pre>{tree}</pre>"
-        f'<p><a href="{data_url}" download="{safe_filename}">'
-        f"Download Chrome Trace JSON ({size_kb:.1f} KB)"
-        "</a> — open in Perfetto, speedscope, or <code>chrome://tracing</code>.</p>"
-        "</div>"
-    )
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(chrome_trace_json(result), encoding="utf-8")

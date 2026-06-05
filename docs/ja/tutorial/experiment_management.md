@@ -48,50 +48,80 @@ w = [11, 25, 20, 35, 10, 33]  # 各アイテムの重さ
 N = len(v)
 
 x = [
-  DecisionVariable.binary(
-      id=i,
-      name="x",
-      subscripts=[i],
-  )
-  for i in range(N)
+    DecisionVariable.binary(
+        id=i,
+        name="x",
+        subscripts=[i],
+    )
+    for i in range(N)
 ]
 
 capacity = Parameter(N, name="capacity")
 
 pi = ParametricInstance.from_components(
-  decision_variables=x,
-  parameters=[capacity],
-  objective=sum(v[i] * x[i] for i in range(N)),
-  constraints={
-      0: (sum(w[i] * x[i] for i in range(N)) <= capacity).add_name("重量制限")
-  },
-  sense=Instance.MAXIMIZE,
+    decision_variables=x,
+    parameters=[capacity],
+    objective=sum(v[i] * x[i] for i in range(N)),
+    constraints={
+        0: (sum(w[i] * x[i] for i in range(N)) <= capacity).add_name("重量制限")
+    },
+    sense=Instance.MAXIMIZE,
 )
 ```
 
-元のモデルをモデリング用パッケージで記述している場合は、そのソースモデルもAttachmentとして保存しておくと後から参照できます。OMMXは外部モデラー固有のペイロードを解釈せず、渡されたbytesとMedia Typeをそのまま保存します。JijModelingの `Problem` の場合は、JijModelingでProblemをシリアライズして、そのprotobuf bytesを添付します。
+(experiment-management-attachable-data-formats)=
+### 添付できるデータ形式
+
+上で作った {py:class}`~ommx.v1.ParametricInstance` がソルバーに渡すOMMX形式の数理モデルです。実験を後から見直すためには、このOMMXモデルに加えて、元のモデリング用オブジェクトや入力ファイルなどもExperimentに添付しておくと便利です。
+
+元のモデルをモデリング用パッケージで記述している場合は、そのソースモデルもAttachmentとして保存しておくと後から参照できます。外部パッケージが所有する型について、OMMXはAttachment CodecのProtocolと、それを呼び出す `log_with_codec` / `get_with_codec` メソッドだけを定義します。具体的なCodecはその型を所有するパッケージ側で提供します。このチュートリアルではJijModeling `Problem` 用の一時的な `ProblemCodec` を定義して使います。同等のCodecは将来的にJijModeling本体で提供される予定です。
 
 ```{code-cell} ipython3
 import jijmodeling as jm
 
+
+class ProblemCodec:
+    media_type = "application/vnd.jijmodeling.problem+protobuf"
+
+    @staticmethod
+    def encode(problem: jm.Problem) -> bytes:
+        return problem.to_protobuf()
+
+    @staticmethod
+    def decode(data: bytes) -> jm.Problem:
+        return jm.Problem.from_protobuf(data)
+
+
 @jm.Problem.define("Knapsack Problem", sense=jm.ProblemSense.MAXIMIZE)
 def jij_problem(problem: jm.DecoratedProblem):
-  N = problem.Length(description="アイテム数")
-  W = problem.Float(description="耐荷重")
-  w = problem.Float(shape=N, description="各アイテムの重さ")
-  v = problem.Float(shape=N, description="各アイテムの価値")
-  x = problem.BinaryVar(
-    shape=N,
-    description="アイテム i をナップサックに入れるときのみ x_i=1",
-  )
+    N = problem.Length(description="アイテム数")
+    W = problem.Float(description="耐荷重")
+    w = problem.Float(shape=N, description="各アイテムの重さ")
+    v = problem.Float(shape=N, description="各アイテムの価値")
+    x = problem.BinaryVar(
+        shape=N,
+        description="アイテム i をナップサックに入れるときのみ x_i=1",
+    )
 
-  problem += jm.sum(v[i] * x[i] for i in N)
-  problem += problem.Constraint(
-    "重量制限",
-    jm.sum(w[i] * x[i] for i in N) <= W,
-  )
+    problem += jm.sum(v[i] * x[i] for i in N)
+    problem += problem.Constraint(
+        "重量制限",
+        jm.sum(w[i] * x[i] for i in N) <= W,
+    )
+```
 
-JIJMODELING_PROBLEM_MEDIA_TYPE = "application/vnd.jijmodeling.problem+protobuf"
+一方で、payload がすでにファイルとして存在するなら、そのファイルを直接添付します。`log_file` はファイルのbytesをExperimentにコピーします。後から読む側では、bytesとして読む `get_blob` か、実ファイルとして復元する `write_attachment` を使えます。Excel workbook、solver log、生成したplotなど、OMMXの外で作られたファイルにはこの経路を使うのが自然です。
+
+```python
+import io
+from pathlib import Path
+
+experiment.log_file("input-spreadsheet", "input.xlsx")
+
+spreadsheet_file = io.BytesIO(loaded_experiment.get_blob("input-spreadsheet"))
+# `spreadsheet_file` はbinary file-like objectを受け取るライブラリに渡せる。
+Path("restored").mkdir(parents=True, exist_ok=True)
+loaded_experiment.write_attachment("input-spreadsheet", "restored/input.xlsx")
 ```
 
 ## 実験する
@@ -104,51 +134,48 @@ from ommx_highs_adapter import OMMXHighsAdapter
 
 # 実験を開始する。名前を指定しないと自動的に名前が割り当てられる
 with Experiment() as experiment:
+    # 上で作ったモデルをExperimentの情報として保存する。
+    experiment.log_parametric_instance("instance", pi)
 
-  # 上で作ったモデルをExperimentの情報として保存する。
-  experiment.log_parametric_instance("instance", pi)
+    # 元のJijModeling Problemを上で定義した一時的なCodec経由で保存する。
+    experiment.log_with_codec(
+        ProblemCodec,
+        "jijmodeling-problem",
+        jij_problem,
+    )
 
-  # 元のJijModeling ProblemをopaqueなAttachmentとして保存する。
-  experiment.log_attachment(
-    "jijmodeling-problem",
-    JIJMODELING_PROBLEM_MEDIA_TYPE,
-    jij_problem.to_protobuf(),
-  )
+    # 今回は必要ないが、モデルの情報をJSONで保存することもできる。
+    experiment.log_json(
+        "source-data",
+        {
+            "description": "knapsack demo",
+            "values": v,
+            "weights": w,
+        },
+    )
 
-  # 今回は必要ないが、モデルの情報をJSONで保存することもできる。
-  experiment.log_json(
-    "source-data",
-    {
-      "description": "knapsack demo",
-      "values": v,
-      "weights": w,
-    },
-  )
+    # 容量の異なる2つのRunを作る
+    for c in [47, 56]:
+        # モデルのパラメータを具体的な値で置き換える
+        instance = pi.with_parameters({capacity.id: c})
 
-  # 容量の異なる2つのRunを作る
-  for c in [47, 56]:
+        # Runを開始する。Runは初期化と終了処理を伴うので、with文で囲むのが推奨される。
+        with experiment.run() as run:
+            # Runの比較パラメータとしてcapacityを記録する。
+            run.log_parameter("capacity", c)
 
-    # モデルのパラメータを具体的な値で置き換える
-    instance = pi.with_parameters({capacity.id: c})
+            # HiGHS Adapterを呼び出して解く。入力Instanceと出力Solutionは自動的に保存される。
+            solution = run.log_solve(OMMXHighsAdapter, instance, verbose=False)
 
-    # Runを開始する。Runは初期化と終了処理を伴うので、with文で囲むのが推奨される。
-    with experiment.run() as run:
+            # 解けていることを確認
+            assert solution.feasible
 
-      # Runの比較パラメータとしてcapacityを記録する。
-      run.log_parameter("capacity", c)
+            # Runの比較パラメータとして目的関数値も記録する。
+            run.log_parameter("objective", solution.objective)
 
-      # HiGHS Adapterを呼び出して解く。入力Instanceと出力Solutionは自動的に保存される。
-      solution = run.log_solve(OMMXHighsAdapter, instance, verbose=False)
+            # withブロックを抜けるとRunの終了処理が行われる
 
-      # 解けていることを確認
-      assert solution.feasible
-
-      # Runの比較パラメータとして目的関数値も記録する。
-      run.log_parameter("objective", solution.objective)
-
-      # withブロックを抜けるとRunの終了処理が行われる
-
-  # experimentのwithブロックを抜けるとExperimentの終了処理が行われる。
+    # experimentのwithブロックを抜けるとExperimentの終了処理が行われる。
 ```
 
 実験の途中で保存されたデータはすべてOMMXの *Local Registry* に保存されます。
@@ -232,7 +259,7 @@ loaded_experiment.run_parameters_df()
 
 ```text
         capacity  objective
-run_id 
+run_id
      0        47         41
      1        56         49
 ```
@@ -243,23 +270,29 @@ Experiment単位で保存したAttachmentは名前で確認し、必要なもの
 
 ```{code-cell} ipython3
 # 保存したAttachmentの名前を確認する
-assert loaded_experiment.attachment_names == ["instance", "jijmodeling-problem", "source-data"]
+assert loaded_experiment.attachment_names == [
+    "instance",
+    "jijmodeling-problem",
+    "source-data",
+]
 
 # JSONとして保存したデータを取り出す
 source_data = loaded_experiment.get_json("source-data")
 assert source_data == {
-  "description": "knapsack demo",
-  "values": v,
-  "weights": w,
+    "description": "knapsack demo",
+    "values": v,
+    "weights": w,
 }
 
 # get_attachmentはMedia Typeを見て適切に変換してくれる
 pi = loaded_experiment.get_attachment("instance")
 assert isinstance(pi, ParametricInstance)
 
-# OMMXが知らないMedia Typeはbytesとして返るので、所有元のパッケージでdecodeする
-payload = loaded_experiment.get_attachment("jijmodeling-problem")
-restored_jij_problem = jm.Problem.from_protobuf(payload)
+# CodecがMedia Typeを検証し、元のpayloadへdecodeして返す
+restored_jij_problem = loaded_experiment.get_with_codec(
+    ProblemCodec,
+    "jijmodeling-problem",
+)
 assert restored_jij_problem.name == jij_problem.name
 ```
 
@@ -267,37 +300,39 @@ assert restored_jij_problem.name == jij_problem.name
 
 Runの一覧は {py:attr}`~ommx.experiment.Experiment.runs` から確認できます。終了済みのRunが作成順に並び、それぞれのRunに紐づくAttachmentとSolveを確認できます。
 
+trace storageを有効にして記録したRunでは、{py:attr}`~ommx.experiment.SealedRun.trace` から保存済みのRunトレースを取得できます。これは発展的な機能なので、詳細は {ref}`experiment-run-trace-storage` を参照してください。
+
 ```{code-cell} ipython3
 from typing import Any
 from ommx.v1 import Solution
 
 for run in loaded_experiment.runs:
-  # Runには実行順にIDが振られる
-  assert run.run_id in [0, 1]
+    # Runには実行順にIDが振られる
+    assert run.run_id in [0, 1]
 
-  # 今回はRun単位のAttachmentは保存していないので、Attachmentの数は0のはず
-  assert len(run.attachment_names) == 0
+    # 今回はRun単位のAttachmentは保存していないので、Attachmentの数は0のはず
+    assert len(run.attachment_names) == 0
 
-  # 1回しかSolveしていないので、Solveの数は1のはず
-  assert len(run.solves) == 1
-  solve = run.solves[0]
+    # 1回しかSolveしていないので、Solveの数は1のはず
+    assert len(run.solves) == 1
+    solve = run.solves[0]
 
-  # Solveにも実行順にIDが振られるが、今回はRunごとに1回しかSolveしていないので、Solve IDは0のはず
-  assert solve.solve_id == 0
+    # Solveにも実行順にIDが振られるが、今回はRunごとに1回しかSolveしていないので、Solve IDは0のはず
+    assert solve.solve_id == 0
 
-  # 実行したAdapterの名前
-  assert solve.adapter.endswith("OMMXHighsAdapter")
+    # 実行したAdapterの名前
+    assert solve.adapter.endswith("OMMXHighsAdapter")
 
-  # 入力と出力をロードする
-  input: Instance = solve.input
-  output: Solution = solve.output
+    # 入力と出力をロードする
+    input: Instance = solve.input
+    output: Solution = solve.output
 
-  # ナップザック問題は解けているはず
-  assert output.feasible
+    # ナップザック問題は解けているはず
+    assert output.feasible
 
-  # Adapterに渡したオプションもロードする
-  options: dict[str, Any] = solve.adapter_options
-  assert "verbose" in options and options["verbose"] == False
+    # Adapterに渡したオプションもロードする
+    options: dict[str, Any] = solve.adapter_options
+    assert "verbose" in options and options["verbose"] == False
 ```
 
 ## 実験をForkする

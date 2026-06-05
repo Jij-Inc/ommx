@@ -11,8 +11,8 @@
 //! and commit materialises them as a typed column-oriented aggregate
 //! run-parameter layer instead of individual Attachments.
 //!
-//! Each `log_*` call writes its payload to the Local Registry's
-//! content-addressed BlobStore immediately, keeping only
+//! Each `log_*` call writes its payload to the Local Registry immediately,
+//! keeping only
 //! [`crate::artifact::local_registry::StoredDescriptor`] values in
 //! memory. Until commit, the experiment is unsealed: some or all
 //! component blobs may already be stored, but no root manifest has been
@@ -21,6 +21,21 @@
 //! references those already-stored blobs. The registry-level operation
 //! that updates the image ref is publish; the Experiment-level
 //! operation remains commit.
+//!
+//! Closing a [`Run`] publishes a best-effort draft checkpoint for the
+//! parent Experiment. A successful [`Experiment::commit`] publishes the
+//! requested Experiment image reference and removes the local checkpoint
+//! when present. Failed or interrupted Python context-manager exits are
+//! represented as checkpoint Experiments with `failed` or `interrupted`
+//! status; callers resume through the original requested image name
+//! rather than through a checkpoint Artifact handle.
+//!
+//! Forking a sealed Experiment creates a new unsealed child Experiment.
+//! The child manifest records the parent manifest as its OCI `subject`,
+//! while existing payload blobs remain shared through the Local
+//! Registry's content-addressed storage. Local Registry GC treats live
+//! refs, checkpoint refs, and traversed subject manifests as roots, so
+//! payloads reachable from kept parent Experiments are retained.
 //!
 //! ```ignore
 //! use ommx::artifact::ImageRef;
@@ -33,7 +48,7 @@
 //!
 //! let mut run = exp.run()?;
 //! run.log_parameter("solver", "scip")?;
-//! run.log_instance("candidate", &instance)?;
+//! run.log_instance("candidate", &instance, Default::default())?;
 //! run.finish()?;
 //!
 //! let artifact = exp.commit()?.into_artifact();
@@ -59,6 +74,7 @@ mod sealed;
 #[cfg(test)]
 mod tests;
 
+pub use attachment::{detect_file_media_type, AttachmentTable, DEFAULT_FILE_MEDIA_TYPE};
 pub use dynamic::{ExperimentDyn, RunDyn, SealedRunDyn, SolveDyn};
 pub use logging::AttachmentLogger;
 pub use parameter::{ParameterValue, RunParameterCell};
@@ -66,25 +82,116 @@ pub use sealed::{SealedRun, Solve};
 
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor, TempLocalRegistry};
 use crate::artifact::{ImageRef, LocalArtifact};
-use anyhow::Result;
-use attachment::{store_attachment_descriptor, AttachmentSpace};
+use anyhow::{Context, Result};
+use attachment::{read_file_attachment, store_attachment_descriptor};
 use oci_spec::image::MediaType;
 use parameter::ParameterSet;
-use std::collections::BTreeMap;
 use std::sync::{Mutex, MutexGuard};
+use std::{
+    collections::{BTreeMap, HashMap},
+    path::Path,
+};
 
 // --- Artifact mapping constants ---------------------------------------------
 
 const EXPERIMENT_STATUS_FINISHED: &str = "finished";
-
-const ANN_SPACE: &str = "org.ommx.experiment.space";
-const ANN_RUN_ID: &str = "org.ommx.experiment.run_id";
-const ANN_LAYER: &str = "org.ommx.experiment.layer";
-const ANN_ATTACHMENT_NAME: &str = "org.ommx.attachment.name";
+const EXPERIMENT_STATUS_DRAFT: &str = "draft";
+const EXPERIMENT_STATUS_FAILED: &str = "failed";
+const EXPERIMENT_STATUS_INTERRUPTED: &str = "interrupted";
 
 const RUN_PARAMETERS_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment.run-parameters+json";
 const EXPERIMENT_CONFIG_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment.config+json";
-const LAYER_KIND_RUN_PARAMETERS: &str = "run-parameters";
+
+const RUN_STATUS_FINISHED: &str = "finished";
+const RUN_STATUS_FAILED: &str = "failed";
+const RUN_STATUS_INTERRUPTED: &str = "interrupted";
+
+/// Lifecycle status of a sealed Experiment Artifact.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExperimentStatus {
+    /// The Experiment was committed successfully.
+    Finished,
+    /// The Experiment is an uncommitted checkpoint with closed Run state.
+    Draft,
+    /// The Experiment exited with an exception and retained partial state.
+    Failed,
+    /// The Experiment was interrupted by the user and retained partial state.
+    Interrupted,
+}
+
+impl ExperimentStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Finished => EXPERIMENT_STATUS_FINISHED,
+            Self::Draft => EXPERIMENT_STATUS_DRAFT,
+            Self::Failed => EXPERIMENT_STATUS_FAILED,
+            Self::Interrupted => EXPERIMENT_STATUS_INTERRUPTED,
+        }
+    }
+
+    fn from_config(status: &str) -> Result<Self> {
+        match status {
+            EXPERIMENT_STATUS_FINISHED => Ok(Self::Finished),
+            EXPERIMENT_STATUS_DRAFT => Ok(Self::Draft),
+            EXPERIMENT_STATUS_FAILED => Ok(Self::Failed),
+            EXPERIMENT_STATUS_INTERRUPTED => Ok(Self::Interrupted),
+            _ => {
+                crate::bail!(
+                    "Experiment status is {status}, expected {EXPERIMENT_STATUS_FINISHED}, \
+                     {EXPERIMENT_STATUS_DRAFT}, {EXPERIMENT_STATUS_FAILED}, or \
+                     {EXPERIMENT_STATUS_INTERRUPTED}"
+                )
+            }
+        }
+    }
+}
+
+impl std::fmt::Display for ExperimentStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Lifecycle status of a closed Run recorded in an Experiment.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RunStatus {
+    /// The Run context exited normally or was explicitly finished.
+    Finished,
+    /// The Run context exited with an exception and retained partial state.
+    Failed,
+    /// The Run context was interrupted by the user and retained partial state.
+    Interrupted,
+}
+
+impl RunStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Finished => RUN_STATUS_FINISHED,
+            Self::Failed => RUN_STATUS_FAILED,
+            Self::Interrupted => RUN_STATUS_INTERRUPTED,
+        }
+    }
+
+    fn from_config(status: &str) -> Result<Self> {
+        match status {
+            RUN_STATUS_FINISHED => Ok(Self::Finished),
+            RUN_STATUS_FAILED => Ok(Self::Failed),
+            RUN_STATUS_INTERRUPTED => Ok(Self::Interrupted),
+            _ => {
+                crate::bail!(
+                    "Run status is {status}, expected {RUN_STATUS_FINISHED}, \
+                     {RUN_STATUS_FAILED}, or {RUN_STATUS_INTERRUPTED}"
+                )
+            }
+        }
+    }
+}
+
+impl std::fmt::Display for RunStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
 
 /// A mutable, unsealed experiment session. See the [module documentation](self).
 #[derive(Debug)]
@@ -97,10 +204,41 @@ pub struct Experiment<'reg> {
 /// written and published.
 #[derive(Debug, Clone)]
 pub struct SealedExperiment<'reg> {
+    status: ExperimentStatus,
     artifact: LocalArtifact<'reg>,
-    attachments: Vec<StoredDescriptor<'reg>>,
+    attachments: AttachmentTable<StoredDescriptor<'reg>>,
     runs: BTreeMap<u64, sealed::SealedRun<'reg>>,
     run_parameters: parameter::RunParameterTable,
+}
+
+/// Opaque Run trace payload.
+///
+/// The Rust SDK does not decode, validate, or interpret OpenTelemetry
+/// spans. `Trace` is a storage boundary type: it marks a byte payload as
+/// a Run trace payload, while producers and renderers such as the
+/// Python SDK own the concrete OpenTelemetry encoding.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Trace {
+    bytes: Vec<u8>,
+}
+
+impl Trace {
+    /// Build a trace payload from encoded trace bytes.
+    pub fn from_bytes(bytes: impl Into<Vec<u8>>) -> Self {
+        Self {
+            bytes: bytes.into(),
+        }
+    }
+
+    /// Encoded trace bytes.
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.bytes
+    }
+
+    /// Consume the trace and return its encoded bytes.
+    pub fn into_bytes(self) -> Vec<u8> {
+        self.bytes
+    }
 }
 
 /// User-facing name policy for a new Experiment.
@@ -146,7 +284,8 @@ impl From<ImageRef> for Name {
 pub struct Run<'exp, 'reg> {
     experiment: &'exp Experiment<'reg>,
     run_id: u64,
-    attachments: Vec<StoredDescriptor<'reg>>,
+    attachments: AttachmentTable<StoredDescriptor<'reg>>,
+    trace: Option<StoredDescriptor<'reg>>,
     solves: Vec<SolveEntry<'reg>>,
     next_solve_id: u64,
     parameters: ParameterSet,
@@ -162,7 +301,9 @@ pub struct Run<'exp, 'reg> {
 #[derive(Debug)]
 struct RunEntry<'reg> {
     run_id: u64,
-    attachments: Vec<StoredDescriptor<'reg>>,
+    status: RunStatus,
+    attachments: AttachmentTable<StoredDescriptor<'reg>>,
+    trace: Option<StoredDescriptor<'reg>>,
     solves: Vec<SolveEntry<'reg>>,
     parameters: ParameterSet,
 }
@@ -189,7 +330,7 @@ struct UnsealedExperimentState<'reg> {
     /// a root Experiment and `Some` for a forked child Experiment.
     subject: Option<oci_spec::image::Descriptor>,
     /// Experiment-space attachments.
-    attachments: Vec<StoredDescriptor<'reg>>,
+    attachments: AttachmentTable<StoredDescriptor<'reg>>,
     runs: BTreeMap<u64, RunEntry<'reg>>,
     next_run_id: u64,
 }
@@ -230,7 +371,7 @@ impl<'reg> Experiment<'reg> {
             state: Mutex::new(UnsealedExperimentState {
                 image_name,
                 subject: None,
-                attachments: Vec::new(),
+                attachments: AttachmentTable::new(),
                 runs: BTreeMap::new(),
                 next_run_id: 0,
             }),
@@ -250,7 +391,8 @@ impl<'reg> Experiment<'reg> {
         Ok(Run {
             experiment: self,
             run_id,
-            attachments: Vec::new(),
+            attachments: AttachmentTable::new(),
+            trace: None,
             solves: Vec::new(),
             next_solve_id: 0,
             parameters: ParameterSet::new(),
@@ -263,6 +405,12 @@ impl<'reg> Experiment<'reg> {
             crate::bail!("Run {} has already been registered", run.run_id);
         }
         state.runs.insert(run.run_id, run);
+        if let Err(error) = state.autosave_checkpoint(self.registry) {
+            tracing::warn!(
+                error = %error,
+                "Failed to publish Experiment autosave checkpoint after Run close"
+            );
+        }
         Ok(())
     }
 
@@ -300,16 +448,43 @@ impl<'reg> AttachmentLogger for &Experiment<'reg> {
         name: &str,
         media_type: MediaType,
         bytes: impl AsRef<[u8]>,
+        annotations: HashMap<String, String>,
     ) -> Result<()> {
-        let descriptor = store_attachment_descriptor(
-            self.registry,
-            AttachmentSpace::Experiment,
-            name,
-            media_type,
-            bytes.as_ref(),
-        )?;
-        let mut state = self.lock_state();
-        state.attachments.push(descriptor);
+        {
+            let state = self.lock_state();
+            if state.attachments.contains_key(name) {
+                crate::bail!("Attachment `{name}` already exists");
+            }
+        }
+        let descriptor =
+            store_attachment_descriptor(self.registry, media_type, bytes.as_ref(), annotations)?;
+        self.lock_state()
+            .attachments
+            .insert(name.to_string(), descriptor, None)
+            .with_context(|| format!("Failed to register attachment `{name}`"))?;
+        Ok(())
+    }
+
+    fn log_file(
+        self,
+        name: &str,
+        path: impl AsRef<Path>,
+        media_type: Option<MediaType>,
+        filename: Option<&str>,
+    ) -> Result<()> {
+        let (media_type, bytes, filename) = read_file_attachment(path, media_type, filename)?;
+        {
+            let state = self.lock_state();
+            if state.attachments.contains_key(name) {
+                crate::bail!("Attachment `{name}` already exists");
+            }
+        }
+        let descriptor =
+            store_attachment_descriptor(self.registry, media_type, bytes.as_ref(), HashMap::new())?;
+        self.lock_state()
+            .attachments
+            .insert(name.to_string(), descriptor, Some(filename))
+            .with_context(|| format!("Failed to register attachment `{name}`"))?;
         Ok(())
     }
 }
@@ -347,8 +522,8 @@ impl<'reg> SealedExperiment<'reg> {
                 .iter()
                 .map(|solve| SolveEntry {
                     solve_id: solve.solve_id(),
-                    input: solve.input().clone(),
-                    output: solve.output().clone(),
+                    input: solve.input_descriptor().clone(),
+                    output: solve.output_descriptor().clone(),
                     adapter: solve.adapter().to_string(),
                     adapter_options: solve.adapter_options().to_string(),
                 })
@@ -357,7 +532,9 @@ impl<'reg> SealedExperiment<'reg> {
                 run.run_id(),
                 RunEntry {
                     run_id: run.run_id(),
-                    attachments: run.attachments().to_vec(),
+                    status: run.status().clone(),
+                    attachments: run.attachment_table().clone(),
+                    trace: run.trace_descriptor().cloned(),
                     solves,
                     parameters,
                 },

@@ -10,7 +10,7 @@ use pyo3::{
     types::{PyBytes, PyDict, PyTuple},
     Bound,
 };
-use std::collections::{BTreeSet, HashMap};
+use std::collections::BTreeSet;
 
 /// Idiomatic wrapper of `ommx.v1.Solution` protobuf message.
 ///
@@ -20,7 +20,7 @@ use std::collections::{BTreeSet, HashMap};
 #[derive(Clone)]
 pub struct Solution {
     pub(crate) inner: ommx::Solution,
-    pub(crate) annotations: HashMap<String, String>,
+    pub(crate) annotations: ommx::artifact::SolutionAnnotations,
 }
 
 crate::annotations::impl_solution_annotations!(Solution, "org.ommx.v1.solution");
@@ -33,7 +33,7 @@ impl Solution {
         let _guard = crate::TRACING.attach_parent_context(bytes.py());
         Ok(Self {
             inner: ommx::Solution::from_bytes(bytes.as_bytes())?,
-            annotations: HashMap::new(),
+            annotations: ommx::artifact::SolutionAnnotations::default(),
         })
     }
 

@@ -81,7 +81,7 @@ def qplib(tag: str) -> v1.Instance:
     'CC-BY-4.0'
     >>> instance.num_variables
     50
-    >>> instance.num_constraints  # QPLIB counts l <= f(x) <= u as 1, OMMX counts as 2
+    >>> instance.num_constraints
     2
 
     QPLIB-specific annotations are stored with `org.ommx.qplib.*` keys.

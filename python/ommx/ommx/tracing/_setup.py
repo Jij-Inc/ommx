@@ -1,4 +1,4 @@
-"""Lazy setup of the OTel pipeline for the cell magic.
+"""Lazy setup of the OTel pipeline for OMMX trace capture.
 
 ``opentelemetry-sdk`` is a hard runtime dependency of ``ommx``, so we
 can import the SDK at the top level. The function below is still called
@@ -14,31 +14,29 @@ from typing import Optional
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider as SdkTracerProvider
 
-from ._collector import _CellSpanCollector
+from ._collector import _TraceSpanCollector
 
 
-_COLLECTOR: Optional[_CellSpanCollector] = None
+_COLLECTOR: Optional[_TraceSpanCollector] = None
 _LOCK = threading.Lock()
 
 
-def ensure_collector_installed() -> _CellSpanCollector:
-    """Install the cell-trace collector onto the active ``TracerProvider``.
+def ensure_collector_installed() -> _TraceSpanCollector:
+    """Install the OMMX trace collector onto the active ``TracerProvider``.
 
     Behavior:
 
-    * If the global provider already supports ``add_span_processor``
-      (i.e. it's an SDK provider, or something compatible), attach a
+    * If the global provider is an SDK ``TracerProvider``, attach a
       collector to it. Existing processors are undisturbed.
-    * If the global provider does not support ``add_span_processor``
-      (e.g. the default ``ProxyTracerProvider`` from a fresh notebook),
-      install an SDK provider. OpenTelemetry only honours the *first*
-      ``set_tracer_provider`` call, so after the attempt we re-read the
-      global and fail with a helpful message if we still don't have
-      something we can attach to.
+    * If the global provider is the default ``ProxyTracerProvider`` from a
+      fresh notebook, install an SDK provider. OpenTelemetry only honours
+      the *first* ``set_tracer_provider`` call, so after the attempt we
+      re-read the global and fail with a helpful message if an incompatible
+      non-SDK provider was already active.
 
-    The collector instance is cached so repeated magic invocations in the
-    same session reuse a single collector (no per-cell processor
-    accumulation on the provider).
+    The collector instance is cached so repeated captures in the same
+    session reuse a single collector (no processor accumulation on the
+    provider).
     """
     global _COLLECTOR
     with _LOCK:
@@ -60,11 +58,11 @@ def ensure_collector_installed() -> _CellSpanCollector:
                     "OpenTelemetry refuses to replace the global "
                     "TracerProvider once set. Install "
                     "``opentelemetry.sdk.trace.TracerProvider`` yourself "
-                    "before loading this extension, or clear the existing "
-                    "provider."
+                    "before loading this extension, or restart the process "
+                    "or notebook kernel."
                 )
 
-        collector = _CellSpanCollector()
+        collector = _TraceSpanCollector()
         provider.add_span_processor(collector)
         _COLLECTOR = collector
         return collector

@@ -27,8 +27,7 @@
 
 use anyhow::Result;
 use ommx::artifact::{
-    local_registry::{import_oci_archive, pull_image, LocalRegistry},
-    media_types, ArtifactDraft, ImageRef, LocalArtifact,
+    local_registry::LocalRegistry, media_types, ArtifactDraft, ImageRef, LocalArtifact,
 };
 use serial_test::serial;
 use std::collections::HashMap;
@@ -377,7 +376,7 @@ fn push_oci_archive_via_load_then_push() -> Result<()> {
     // exchange format" model exactly.
     let receiver_dir = tempfile::tempdir()?;
     let receiver = Arc::new(LocalRegistry::open(receiver_dir.path())?);
-    import_oci_archive(&receiver, &archive_path)?;
+    receiver.import_oci_archive(&archive_path)?;
     let receiver_local = LocalArtifact::open_in_registry(receiver.as_ref(), image_name)?;
     receiver_local.push()
 }
@@ -415,8 +414,8 @@ fn pull_image_round_trips_through_anonymous_registry() -> Result<()> {
     // Pull into a fresh receiver-side SQLite registry tempdir.
     let receiver_dir = tempfile::tempdir()?;
     let receiver = Arc::new(LocalRegistry::open(receiver_dir.path())?);
-    let outcome = pull_image(&receiver, &image_name)?;
-    assert_eq!(outcome.image_name.as_ref(), Some(&image_name));
+    let outcome = receiver.pull_image(&image_name)?;
+    assert_eq!(&outcome.image_name, &image_name);
 
     // The pulled artifact must be the same artifact: same manifest
     // digest, same single layer, same layer bytes. Failure on any of

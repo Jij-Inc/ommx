@@ -10,24 +10,25 @@
 //! Dynamic state stores plain OCI [`Descriptor`] values internally
 //! because it cannot store [`StoredDescriptor`] values whose lifetime is
 //! tied to the registry reference inside the same owned handle. This is
-//! an internal representation detail: public accessors that expose
-//! registry-backed descriptors promote those raw descriptors through
-//! `LocalRegistry::stored_descriptor` before returning them, restoring
-//! the Local Registry storage invariant at the API boundary.
+//! an internal representation detail: public accessors promote those raw
+//! descriptors before decoding typed payloads or writing attachment files.
 
-use super::attachment::{store_attachment_descriptor, AttachmentSpace};
+use super::artifact::ExperimentArtifactView;
+use super::attachment::{read_file_attachment, store_attachment_descriptor};
+use super::config::ExperimentConfig;
 use super::{
-    allocate_next_run_id, next_run_id, AttachmentLogger, Name, RunEntry, RunParameterCell,
-    SealedExperiment, UnsealedExperimentState,
+    allocate_next_run_id, next_run_id, AttachmentLogger, AttachmentTable, ExperimentStatus, Name,
+    RunEntry, RunParameterCell, RunStatus, SealedExperiment, UnsealedExperimentState,
 };
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
 use crate::artifact::{
-    media_types, AsArtifact, ImageRef, LocalArtifact, LocalArtifactDyn, LocalRegistryHandle,
+    media_types, AsArtifact, ImageRef, InstanceAnnotations, LocalArtifact, LocalArtifactDyn,
+    LocalRegistryHandle, ParametricInstanceAnnotations, SampleSetAnnotations, SolutionAnnotations,
 };
-use crate::{Instance, Solution};
-use anyhow::{ensure, Result};
+use crate::{Instance, ParametricInstance, SampleSet, Solution};
+use anyhow::{ensure, Context, Result};
 use oci_spec::image::{Descriptor, MediaType};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -68,14 +69,88 @@ enum ExperimentDynLifecycle {
     Failed {
         image_name: ImageRef,
         reason: String,
+        checkpoint_artifact: Option<LocalArtifactDyn>,
     },
+}
+
+#[derive(Debug)]
+struct ExperimentCheckpoint {
+    artifact: LocalArtifactDyn,
+    config: ExperimentConfig,
+}
+
+impl ExperimentCheckpoint {
+    fn open(
+        registry_handle: LocalRegistryHandle,
+        requested_image_name: &ImageRef,
+        accepted_statuses: &[&str],
+    ) -> Result<Self> {
+        let checkpoint_image_name = registry_handle
+            .registry()
+            .experiment_checkpoint_image_name(requested_image_name)?;
+        let requested_image_name = requested_image_name.to_string();
+        let missing_checkpoint_message = format!(
+            "No Experiment checkpoint found for requested image \
+             {requested_image_name} at {checkpoint_image_name}"
+        );
+        let artifact =
+            LocalArtifactDyn::open_in_registry_handle(registry_handle, checkpoint_image_name)
+                .with_context(|| missing_checkpoint_message)?;
+        let checkpoint = Self::from_artifact(artifact)?;
+        checkpoint.ensure_requested_image_name(&requested_image_name)?;
+        checkpoint.ensure_status(accepted_statuses)?;
+        Ok(checkpoint)
+    }
+
+    fn from_artifact(artifact: LocalArtifactDyn) -> Result<Self> {
+        let local_artifact = artifact.as_local_artifact();
+        let config = ExperimentArtifactView::new(&local_artifact).config()?;
+        Ok(Self { artifact, config })
+    }
+
+    fn requested_image_name(&self) -> Result<ImageRef> {
+        let requested = self.config.requested_image_name.as_ref().ok_or_else(|| {
+            anyhow::anyhow!("Experiment checkpoint config is missing requested_image_name")
+        })?;
+        ImageRef::parse(requested)
+            .with_context(|| "Invalid requested_image_name in Experiment checkpoint config")
+    }
+
+    fn ensure_requested_image_name(&self, requested_image_name: &str) -> Result<()> {
+        let Some(actual_requested_image_name) = self.config.requested_image_name.as_deref() else {
+            crate::bail!(
+                "Experiment checkpoint {} is missing requested_image_name",
+                self.artifact.image_name()
+            );
+        };
+        ensure!(
+            actual_requested_image_name == requested_image_name,
+            "Experiment checkpoint {} belongs to requested image {actual_requested_image_name}, not {requested_image_name}",
+            self.artifact.image_name(),
+        );
+        Ok(())
+    }
+
+    fn ensure_status(&self, accepted_statuses: &[&str]) -> Result<()> {
+        ensure!(
+            accepted_statuses.contains(&self.config.status.as_str()),
+            "Experiment checkpoint {} has status {}",
+            self.artifact.image_name(),
+            self.config.status
+        );
+        Ok(())
+    }
+
+    fn into_artifact(self) -> LocalArtifactDyn {
+        self.artifact
+    }
 }
 
 #[derive(Debug)]
 struct UnsealedExperimentDynState {
     image_name: ImageRef,
     subject: Option<Descriptor>,
-    attachments: Vec<Descriptor>,
+    attachments: AttachmentTable<Descriptor>,
     runs: BTreeMap<u64, RunEntryDyn>,
     next_run_id: u64,
 }
@@ -83,24 +158,27 @@ struct UnsealedExperimentDynState {
 #[derive(Debug)]
 struct RunEntryDyn {
     run_id: u64,
-    attachments: Vec<Descriptor>,
+    status: RunStatus,
+    attachments: AttachmentTable<Descriptor>,
+    trace: Option<Descriptor>,
     solves: Vec<SolveEntryDyn>,
     parameters: super::parameter::ParameterSet,
 }
 
 #[derive(Debug)]
-pub(super) struct SolveEntryDyn {
-    pub(super) solve_id: u64,
-    pub(super) input: Descriptor,
-    pub(super) output: Descriptor,
-    pub(super) adapter: String,
-    pub(super) adapter_options: String,
+struct SolveEntryDyn {
+    solve_id: u64,
+    input: Descriptor,
+    output: Descriptor,
+    adapter: String,
+    adapter_options: String,
 }
 
 #[derive(Debug, Clone)]
 struct SealedExperimentDynState {
+    status: ExperimentStatus,
     artifact: LocalArtifactDyn,
-    attachments: Vec<Descriptor>,
+    attachments: AttachmentTable<Descriptor>,
     runs: BTreeMap<u64, SealedRunDyn>,
     run_parameters: super::parameter::RunParameterTable,
 }
@@ -108,23 +186,25 @@ struct SealedExperimentDynState {
 /// Runtime-owned sealed Run view.
 ///
 /// `SealedRunDyn` stores raw attachment descriptors internally because
-/// it cannot borrow the registry through a Rust lifetime. Methods such
-/// as [`Self::attachments`] use the stored registry handle to verify and
-/// promote them to [`StoredDescriptor`] before exposing them.
+/// it cannot borrow the registry through a Rust lifetime. Attachment
+/// accessors use the stored registry handle to verify and promote them
+/// to [`StoredDescriptor`] before exposing them.
 #[derive(Debug, Clone)]
 pub struct SealedRunDyn {
     registry_handle: LocalRegistryHandle,
     run_id: u64,
-    attachments: Vec<Descriptor>,
+    status: RunStatus,
+    attachments: AttachmentTable<Descriptor>,
+    trace: Option<Descriptor>,
     solves: Vec<SolveDyn>,
 }
 
 /// Runtime-owned Solve view.
 ///
 /// The input and output are stored as raw descriptors in the dynamic
-/// state, but [`Self::input`] and [`Self::output`] never expose those raw
-/// values. They re-check the referenced blobs against the associated
-/// Local Registry and return [`StoredDescriptor`] values.
+/// state, but public solve accessors never expose those raw values. They
+/// re-check the referenced blobs against the associated Local Registry
+/// and return decoded payloads.
 #[derive(Debug, Clone)]
 pub struct SolveDyn {
     registry_handle: LocalRegistryHandle,
@@ -140,8 +220,80 @@ impl SealedRunDyn {
         self.run_id
     }
 
-    pub fn attachments(&self) -> Result<Vec<StoredDescriptor<'_>>> {
-        stored_descriptors(self.registry_handle.registry(), self.attachments.clone())
+    pub fn status(&self) -> &RunStatus {
+        &self.status
+    }
+
+    pub fn registry_handle(&self) -> LocalRegistryHandle {
+        self.registry_handle.clone()
+    }
+
+    fn attachment_table(&self) -> Result<AttachmentTable<StoredDescriptor<'_>>> {
+        self.attachments.clone().try_map_owned(|descriptor| {
+            self.registry_handle
+                .registry()
+                .stored_descriptor(descriptor)
+        })
+    }
+
+    pub fn attachment_names(&self) -> Vec<String> {
+        self.attachments.names().map(ToOwned::to_owned).collect()
+    }
+
+    pub fn attachment_media_type(&self, name: &str) -> Result<MediaType> {
+        self.attachment_table()?.media_type(name)
+    }
+
+    pub fn attachment_blob(&self, name: &str) -> Result<Vec<u8>> {
+        self.attachment_table()?.blob(name)
+    }
+
+    pub fn attachment_instance(&self, name: &str) -> Result<(Instance, InstanceAnnotations)> {
+        self.attachment_table()?.instance(name)
+    }
+
+    pub fn attachment_parametric_instance(
+        &self,
+        name: &str,
+    ) -> Result<(ParametricInstance, ParametricInstanceAnnotations)> {
+        self.attachment_table()?.parametric_instance(name)
+    }
+
+    pub fn attachment_solution(&self, name: &str) -> Result<(Solution, SolutionAnnotations)> {
+        self.attachment_table()?.solution(name)
+    }
+
+    pub fn attachment_sample_set(&self, name: &str) -> Result<(SampleSet, SampleSetAnnotations)> {
+        self.attachment_table()?.sample_set(name)
+    }
+
+    pub fn write_attachment(
+        &self,
+        name: &str,
+        path: impl AsRef<Path>,
+        overwrite: bool,
+    ) -> Result<std::path::PathBuf> {
+        self.attachment_table()?
+            .write_attachment(name, path, overwrite)
+    }
+
+    fn trace_descriptor(&self) -> Result<Option<StoredDescriptor<'_>>> {
+        self.trace
+            .clone()
+            .map(|descriptor| {
+                self.registry_handle
+                    .registry()
+                    .stored_descriptor(descriptor)
+            })
+            .transpose()
+    }
+
+    pub fn trace(&self) -> Result<Option<super::Trace>> {
+        let Some(descriptor) = self.trace_descriptor()? else {
+            return Ok(None);
+        };
+        let bytes = self.registry_handle.registry().get_blob(&descriptor)?;
+        Ok(Some(super::Trace::from_bytes(bytes)))
     }
 
     pub fn attachment_count(&self) -> usize {
@@ -158,14 +310,14 @@ impl SolveDyn {
         self.solve_id
     }
 
-    pub fn input(&self) -> Result<StoredDescriptor<'_>> {
+    fn input_descriptor(&self) -> Result<StoredDescriptor<'_>> {
         self.registry_handle
             .registry()
             .stored_descriptor(self.input.clone())
     }
 
-    pub fn input_instance(&self) -> Result<Instance> {
-        let descriptor = self.input()?;
+    pub fn input_instance(&self) -> Result<(Instance, InstanceAnnotations)> {
+        let descriptor = self.input_descriptor()?;
         ensure!(
             descriptor.media_type().to_string() == media_types::V1_INSTANCE_MEDIA_TYPE,
             "Solve {} input has media type '{}', expected '{}'",
@@ -173,29 +325,21 @@ impl SolveDyn {
             descriptor.media_type(),
             media_types::V1_INSTANCE_MEDIA_TYPE
         );
-        let bytes = self
-            .registry_handle
-            .registry()
-            .blobs()
-            .read_bytes(descriptor.digest())?;
-        ensure!(
-            bytes.len() as u64 == descriptor.size(),
-            "Descriptor size mismatch for {}: descriptor={}, actual={}",
-            descriptor.digest(),
-            descriptor.size(),
-            bytes.len()
-        );
-        Instance::from_bytes(&bytes)
+        let bytes = self.registry_handle.registry().get_blob(&descriptor)?;
+        Ok((
+            Instance::from_bytes(&bytes)?,
+            InstanceAnnotations::from_descriptor(&descriptor),
+        ))
     }
 
-    pub fn output(&self) -> Result<StoredDescriptor<'_>> {
+    fn output_descriptor(&self) -> Result<StoredDescriptor<'_>> {
         self.registry_handle
             .registry()
             .stored_descriptor(self.output.clone())
     }
 
-    pub fn output_solution(&self) -> Result<Solution> {
-        let descriptor = self.output()?;
+    pub fn output_solution(&self) -> Result<(Solution, SolutionAnnotations)> {
+        let descriptor = self.output_descriptor()?;
         ensure!(
             descriptor.media_type().to_string() == media_types::V1_SOLUTION_MEDIA_TYPE,
             "Solve {} output has media type '{}', expected '{}'",
@@ -203,19 +347,11 @@ impl SolveDyn {
             descriptor.media_type(),
             media_types::V1_SOLUTION_MEDIA_TYPE
         );
-        let bytes = self
-            .registry_handle
-            .registry()
-            .blobs()
-            .read_bytes(descriptor.digest())?;
-        ensure!(
-            bytes.len() as u64 == descriptor.size(),
-            "Descriptor size mismatch for {}: descriptor={}, actual={}",
-            descriptor.digest(),
-            descriptor.size(),
-            bytes.len()
-        );
-        Solution::from_bytes(&bytes)
+        let bytes = self.registry_handle.registry().get_blob(&descriptor)?;
+        Ok((
+            Solution::from_bytes(&bytes)?,
+            SolutionAnnotations::from_descriptor(&descriptor),
+        ))
     }
 
     pub fn adapter(&self) -> &str {
@@ -248,7 +384,7 @@ impl ExperimentDyn {
                     state: Some(UnsealedExperimentDynState {
                         image_name,
                         subject: None,
-                        attachments: Vec::new(),
+                        attachments: AttachmentTable::new(),
                         runs: BTreeMap::new(),
                         next_run_id: 0,
                     }),
@@ -259,8 +395,33 @@ impl ExperimentDyn {
         })
     }
 
+    pub fn registry_handle(&self) -> LocalRegistryHandle {
+        self.registry_handle.clone()
+    }
+
     pub fn load(image_name: crate::artifact::ImageRef) -> Result<Self> {
         Self::from_artifact(LocalArtifactDyn::load(image_name)?)
+    }
+
+    pub fn restore_from_checkpoint(image_name: crate::artifact::ImageRef) -> Result<Self> {
+        let registry_handle = LocalRegistryHandle::shared_default()?;
+        Self::restore_from_checkpoint_in_registry_handle(registry_handle, image_name)
+    }
+
+    pub fn restore_from_checkpoint_in_registry_handle(
+        registry_handle: LocalRegistryHandle,
+        image_name: crate::artifact::ImageRef,
+    ) -> Result<Self> {
+        let checkpoint = ExperimentCheckpoint::open(
+            registry_handle,
+            &image_name,
+            &[
+                super::EXPERIMENT_STATUS_DRAFT,
+                super::EXPERIMENT_STATUS_FAILED,
+                super::EXPERIMENT_STATUS_INTERRUPTED,
+            ],
+        )?;
+        Self::restore_from_checkpoint_state(checkpoint)
     }
 
     pub fn import_archive(path: &Path) -> Result<Self> {
@@ -269,11 +430,40 @@ impl ExperimentDyn {
 
     pub fn from_artifact(artifact: LocalArtifactDyn) -> Result<Self> {
         let sealed = SealedExperimentDynState::from_artifact(artifact)?;
+        Self::from_sealed_state(sealed)
+    }
+
+    fn restore_from_checkpoint_state(checkpoint: ExperimentCheckpoint) -> Result<Self> {
+        let requested_image_name = checkpoint.requested_image_name()?;
+        let sealed =
+            SealedExperimentDynState::from_checkpoint_artifact(checkpoint.into_artifact())?;
+        Self::from_checkpoint_sealed_state(sealed, requested_image_name)
+    }
+
+    fn from_sealed_state(sealed: SealedExperimentDynState) -> Result<Self> {
         let registry_handle = sealed.registry_handle();
         Ok(Self {
             registry_handle: registry_handle.clone(),
             state: Arc::new(Mutex::new(ExperimentDynState {
                 lifecycle: ExperimentDynLifecycle::Sealed(sealed),
+                registry_handle,
+            })),
+        })
+    }
+
+    fn from_checkpoint_sealed_state(
+        sealed: SealedExperimentDynState,
+        image_name: ImageRef,
+    ) -> Result<Self> {
+        let registry_handle = sealed.registry_handle();
+        let state = sealed.create_forked_child_state(image_name)?;
+        Ok(Self {
+            registry_handle: registry_handle.clone(),
+            state: Arc::new(Mutex::new(ExperimentDynState {
+                lifecycle: ExperimentDynLifecycle::Unsealed {
+                    state: Some(state),
+                    open_runs: 0,
+                },
                 registry_handle,
             })),
         })
@@ -322,12 +512,38 @@ impl ExperimentDyn {
 
     pub fn rename(&self, image_name: crate::artifact::ImageRef) -> Result<()> {
         let mut dyn_state = lock_experiment_state(&self.state);
+        let registry_handle = dyn_state.registry_handle.clone();
         match &mut dyn_state.lifecycle {
             ExperimentDynLifecycle::Unsealed { state, .. } => {
                 let state = state
                     .as_mut()
                     .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
+                let old_image_name = state.image_name.clone();
+                let old_checkpoint_image_name = registry_handle
+                    .registry()
+                    .experiment_checkpoint_image_name(&old_image_name)?;
                 state.image_name = image_name;
+                match registry_handle
+                    .registry()
+                    .delete_manifest_ref(&old_checkpoint_image_name)
+                {
+                    Ok(true) => {
+                        if let Err(error) = state.autosave_checkpoint(registry_handle.registry()) {
+                            tracing::warn!(
+                                error = %error,
+                                "Failed to publish Experiment autosave checkpoint after rename"
+                            );
+                        }
+                    }
+                    Ok(false) => {}
+                    Err(error) => {
+                        tracing::warn!(
+                            error = %error,
+                            checkpoint_image_name = %old_checkpoint_image_name,
+                            "Failed to remove Experiment checkpoint ref after rename"
+                        );
+                    }
+                }
                 Ok(())
             }
             ExperimentDynLifecycle::Sealed(sealed) => sealed.rename(image_name),
@@ -340,6 +556,13 @@ impl ExperimentDyn {
             ExperimentDynLifecycle::Unsealed { .. } => "unsealed",
             ExperimentDynLifecycle::Sealed(_) => "sealed",
             ExperimentDynLifecycle::Failed { .. } => "failed",
+        }
+    }
+
+    pub fn experiment_status(&self) -> Option<ExperimentStatus> {
+        match &lock_experiment_state(&self.state).lifecycle {
+            ExperimentDynLifecycle::Sealed(sealed) => Some(sealed.status),
+            ExperimentDynLifecycle::Unsealed { .. } | ExperimentDynLifecycle::Failed { .. } => None,
         }
     }
 
@@ -357,17 +580,83 @@ impl AttachmentLogger for &ExperimentDyn {
         name: &str,
         media_type: MediaType,
         bytes: impl AsRef<[u8]>,
+        annotations: HashMap<String, String>,
     ) -> Result<()> {
+        let registry_handle = {
+            let dyn_state = lock_experiment_state(&self.state);
+            ensure_unsealed_for_attachment_write(&dyn_state)?;
+            let ExperimentDynLifecycle::Unsealed {
+                state: Some(state), ..
+            } = &dyn_state.lifecycle
+            else {
+                return bail_non_unsealed(&dyn_state.lifecycle);
+            };
+            if state.attachments.contains_key(name) {
+                crate::bail!("Attachment `{name}` already exists");
+            }
+            dyn_state.registry_handle.clone()
+        };
+        let descriptor = store_experiment_attachment_descriptor(
+            registry_handle.registry(),
+            media_type,
+            bytes.as_ref(),
+            annotations,
+        )?;
         let mut dyn_state = lock_experiment_state(&self.state);
-        let descriptor =
-            store_experiment_attachment_descriptor(&dyn_state, name, media_type, bytes.as_ref())?;
+        ensure_unsealed_for_attachment_write(&dyn_state)?;
         let ExperimentDynLifecycle::Unsealed { state, .. } = &mut dyn_state.lifecycle else {
             return bail_non_unsealed(&dyn_state.lifecycle);
         };
         let state = state
             .as_mut()
             .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
-        state.attachments.push(descriptor);
+        state
+            .attachments
+            .insert(name.to_string(), descriptor, None)
+            .with_context(|| format!("Failed to register attachment `{name}`"))?;
+        Ok(())
+    }
+
+    fn log_file(
+        self,
+        name: &str,
+        path: impl AsRef<Path>,
+        media_type: Option<MediaType>,
+        filename: Option<&str>,
+    ) -> Result<()> {
+        let (media_type, bytes, filename) = read_file_attachment(path, media_type, filename)?;
+        let registry_handle = {
+            let dyn_state = lock_experiment_state(&self.state);
+            ensure_unsealed_for_attachment_write(&dyn_state)?;
+            let ExperimentDynLifecycle::Unsealed {
+                state: Some(state), ..
+            } = &dyn_state.lifecycle
+            else {
+                return bail_non_unsealed(&dyn_state.lifecycle);
+            };
+            if state.attachments.contains_key(name) {
+                crate::bail!("Attachment `{name}` already exists");
+            }
+            dyn_state.registry_handle.clone()
+        };
+        let descriptor = store_experiment_attachment_descriptor(
+            registry_handle.registry(),
+            media_type,
+            bytes.as_ref(),
+            HashMap::new(),
+        )?;
+        let mut dyn_state = lock_experiment_state(&self.state);
+        ensure_unsealed_for_attachment_write(&dyn_state)?;
+        let ExperimentDynLifecycle::Unsealed { state, .. } = &mut dyn_state.lifecycle else {
+            return bail_non_unsealed(&dyn_state.lifecycle);
+        };
+        let state = state
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
+        state
+            .attachments
+            .insert(name.to_string(), descriptor, Some(filename))
+            .with_context(|| format!("Failed to register attachment `{name}`"))?;
         Ok(())
     }
 }
@@ -397,7 +686,11 @@ impl ExperimentDyn {
             Ok(artifact) => artifact,
             Err(error) => {
                 let reason = error.to_string();
-                dyn_state.lifecycle = ExperimentDynLifecycle::Failed { image_name, reason };
+                dyn_state.lifecycle = ExperimentDynLifecycle::Failed {
+                    image_name,
+                    reason,
+                    checkpoint_artifact: None,
+                };
                 return Err(error);
             }
         };
@@ -405,12 +698,69 @@ impl ExperimentDyn {
             Ok(sealed) => sealed,
             Err(error) => {
                 let reason = error.to_string();
-                dyn_state.lifecycle = ExperimentDynLifecycle::Failed { image_name, reason };
+                dyn_state.lifecycle = ExperimentDynLifecycle::Failed {
+                    image_name,
+                    reason,
+                    checkpoint_artifact: None,
+                };
                 return Err(error);
             }
         };
         dyn_state.lifecycle = ExperimentDynLifecycle::Sealed(sealed);
         Ok(artifact)
+    }
+
+    pub fn commit_failed_checkpoint(&self, reason: impl Into<String>) -> Result<()> {
+        self.commit_checkpoint(reason, super::EXPERIMENT_STATUS_FAILED)
+    }
+
+    pub fn commit_interrupted_checkpoint(&self, reason: impl Into<String>) -> Result<()> {
+        self.commit_checkpoint(reason, super::EXPERIMENT_STATUS_INTERRUPTED)
+    }
+
+    fn commit_checkpoint(&self, reason: impl Into<String>, status: &'static str) -> Result<()> {
+        let reason = reason.into();
+        let mut dyn_state = lock_experiment_state(&self.state);
+        let registry_handle = dyn_state.registry_handle.clone();
+        let (state, open_runs) = match &mut dyn_state.lifecycle {
+            ExperimentDynLifecycle::Unsealed { state, open_runs } => (state, open_runs),
+            lifecycle => return bail_non_unsealed(lifecycle),
+        };
+        if *open_runs != 0 {
+            tracing::warn!(
+                open_runs = *open_runs,
+                "Publishing Experiment checkpoint while Run handle(s) are still open; open-run local state is not included"
+            );
+        }
+        let state = state
+            .take()
+            .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
+        let image_name = state.image_name.clone();
+        let artifact = match state
+            .commit_checkpoint(registry_handle.registry(), status)
+            .and_then(|artifact| {
+                LocalArtifactDyn::open_in_registry_handle(
+                    registry_handle.clone(),
+                    artifact.image_name().clone(),
+                )
+            }) {
+            Ok(artifact) => artifact,
+            Err(error) => {
+                let checkpoint_error = error.to_string();
+                dyn_state.lifecycle = ExperimentDynLifecycle::Failed {
+                    image_name,
+                    reason: format!("{reason}; failed to publish checkpoint: {checkpoint_error}"),
+                    checkpoint_artifact: None,
+                };
+                return Err(error);
+            }
+        };
+        dyn_state.lifecycle = ExperimentDynLifecycle::Failed {
+            image_name,
+            reason,
+            checkpoint_artifact: Some(artifact),
+        };
+        Ok(())
     }
 
     pub fn artifact(&self) -> Result<LocalArtifactDyn> {
@@ -421,31 +771,128 @@ impl ExperimentDyn {
         Ok(sealed.artifact.clone())
     }
 
-    pub fn experiment_attachments(&self) -> Result<Vec<StoredDescriptor<'_>>> {
+    fn experiment_attachment_table(&self) -> Result<AttachmentTable<StoredDescriptor<'_>>> {
         let attachments = {
             let dyn_state = lock_experiment_state(&self.state);
-            let ExperimentDynLifecycle::Sealed(sealed) = &dyn_state.lifecycle else {
-                return bail_not_sealed(&dyn_state.lifecycle);
-            };
-            sealed.attachments.clone()
+            match &dyn_state.lifecycle {
+                ExperimentDynLifecycle::Sealed(sealed) => sealed.attachments.clone(),
+                ExperimentDynLifecycle::Unsealed { state, .. } => {
+                    let state = state
+                        .as_ref()
+                        .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
+                    state.attachments.clone()
+                }
+                ExperimentDynLifecycle::Failed {
+                    checkpoint_artifact: Some(artifact),
+                    ..
+                } => {
+                    let sealed =
+                        SealedExperimentDynState::from_checkpoint_artifact(artifact.clone())?;
+                    sealed.attachments.clone()
+                }
+                lifecycle => return bail_not_sealed(lifecycle),
+            }
         };
-        stored_descriptors(self.registry_handle.registry(), attachments)
+        attachments.try_map_owned(|descriptor| {
+            self.registry_handle
+                .registry()
+                .stored_descriptor(descriptor)
+        })
+    }
+
+    pub fn attachment_names(&self) -> Result<Vec<String>> {
+        Ok(self
+            .experiment_attachment_table()?
+            .names()
+            .map(ToOwned::to_owned)
+            .collect())
+    }
+
+    pub fn attachment_media_type(&self, name: &str) -> Result<MediaType> {
+        self.experiment_attachment_table()?.media_type(name)
+    }
+
+    pub fn attachment_blob(&self, name: &str) -> Result<Vec<u8>> {
+        self.experiment_attachment_table()?.blob(name)
+    }
+
+    pub fn attachment_instance(&self, name: &str) -> Result<(Instance, InstanceAnnotations)> {
+        self.experiment_attachment_table()?.instance(name)
+    }
+
+    pub fn attachment_parametric_instance(
+        &self,
+        name: &str,
+    ) -> Result<(ParametricInstance, ParametricInstanceAnnotations)> {
+        self.experiment_attachment_table()?
+            .parametric_instance(name)
+    }
+
+    pub fn attachment_solution(&self, name: &str) -> Result<(Solution, SolutionAnnotations)> {
+        self.experiment_attachment_table()?.solution(name)
+    }
+
+    pub fn attachment_sample_set(&self, name: &str) -> Result<(SampleSet, SampleSetAnnotations)> {
+        self.experiment_attachment_table()?.sample_set(name)
+    }
+
+    pub fn write_attachment(
+        &self,
+        name: &str,
+        path: impl AsRef<Path>,
+        overwrite: bool,
+    ) -> Result<std::path::PathBuf> {
+        self.experiment_attachment_table()?
+            .write_attachment(name, path, overwrite)
     }
 
     pub fn runs(&self) -> Result<Vec<SealedRunDyn>> {
         let dyn_state = lock_experiment_state(&self.state);
-        let ExperimentDynLifecycle::Sealed(sealed) = &dyn_state.lifecycle else {
-            return bail_not_sealed(&dyn_state.lifecycle);
-        };
-        Ok(sealed.runs.values().cloned().collect())
+        match &dyn_state.lifecycle {
+            ExperimentDynLifecycle::Sealed(sealed) => Ok(sealed.runs.values().cloned().collect()),
+            ExperimentDynLifecycle::Unsealed { state, .. } => {
+                let state = state
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
+                Ok(unsealed_run_views(
+                    &dyn_state.registry_handle,
+                    state.runs.values(),
+                ))
+            }
+            ExperimentDynLifecycle::Failed {
+                checkpoint_artifact: Some(artifact),
+                ..
+            } => Ok(
+                SealedExperimentDynState::from_checkpoint_artifact(artifact.clone())?
+                    .runs
+                    .values()
+                    .cloned()
+                    .collect(),
+            ),
+            lifecycle => bail_not_sealed(lifecycle),
+        }
     }
 
     pub fn run_parameter_cells(&self) -> Result<Vec<RunParameterCell>> {
         let dyn_state = lock_experiment_state(&self.state);
-        let ExperimentDynLifecycle::Sealed(sealed) = &dyn_state.lifecycle else {
-            return bail_not_sealed(&dyn_state.lifecycle);
-        };
-        Ok(sealed.run_parameters.cells())
+        match &dyn_state.lifecycle {
+            ExperimentDynLifecycle::Sealed(sealed) => Ok(sealed.run_parameters.cells()),
+            ExperimentDynLifecycle::Unsealed { state, .. } => {
+                let state = state
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
+                Ok(unsealed_run_parameter_cells(state.runs.values()))
+            }
+            ExperimentDynLifecycle::Failed {
+                checkpoint_artifact: Some(artifact),
+                ..
+            } => Ok(
+                SealedExperimentDynState::from_checkpoint_artifact(artifact.clone())?
+                    .run_parameters
+                    .cells(),
+            ),
+            lifecycle => bail_not_sealed(lifecycle),
+        }
     }
 }
 
@@ -474,6 +921,73 @@ impl UnsealedExperimentDynState {
         self.into_unsealed_state(registry)?.commit(registry)
     }
 
+    fn commit_checkpoint<'reg>(
+        self,
+        registry: &'reg LocalRegistry,
+        status: &'static str,
+    ) -> Result<LocalArtifact<'reg>> {
+        self.into_unsealed_state(registry)?
+            .commit_checkpoint(registry, status)
+    }
+
+    fn autosave_checkpoint<'reg>(
+        &mut self,
+        registry: &'reg LocalRegistry,
+    ) -> Result<LocalArtifact<'reg>> {
+        let mut state = self.as_unsealed_state(registry)?;
+        state.autosave_checkpoint(registry)
+    }
+
+    fn as_unsealed_state<'reg>(
+        &self,
+        registry: &'reg LocalRegistry,
+    ) -> Result<UnsealedExperimentState<'reg>> {
+        Ok(UnsealedExperimentState {
+            image_name: self.image_name.clone(),
+            subject: self.subject.clone(),
+            attachments: self
+                .attachments
+                .clone()
+                .try_map_owned(|descriptor| registry.stored_descriptor(descriptor))?,
+            runs: self
+                .runs
+                .iter()
+                .map(|(run_id, run)| {
+                    Ok((
+                        *run_id,
+                        RunEntry {
+                            run_id: run.run_id,
+                            status: run.status.clone(),
+                            attachments: run.attachments.clone().try_map_owned(|descriptor| {
+                                registry.stored_descriptor(descriptor)
+                            })?,
+                            trace: run
+                                .trace
+                                .clone()
+                                .map(|descriptor| registry.stored_descriptor(descriptor))
+                                .transpose()?,
+                            solves: run
+                                .solves
+                                .iter()
+                                .map(|solve| {
+                                    Ok(super::SolveEntry {
+                                        solve_id: solve.solve_id,
+                                        input: registry.stored_descriptor(solve.input.clone())?,
+                                        output: registry.stored_descriptor(solve.output.clone())?,
+                                        adapter: solve.adapter.clone(),
+                                        adapter_options: solve.adapter_options.clone(),
+                                    })
+                                })
+                                .collect::<Result<Vec<_>>>()?,
+                            parameters: run.parameters.clone(),
+                        },
+                    ))
+                })
+                .collect::<Result<BTreeMap<_, _>>>()?,
+            next_run_id: self.next_run_id,
+        })
+    }
+
     fn into_unsealed_state<'reg>(
         self,
         registry: &'reg LocalRegistry,
@@ -481,7 +995,9 @@ impl UnsealedExperimentDynState {
         Ok(UnsealedExperimentState {
             image_name: self.image_name,
             subject: self.subject,
-            attachments: stored_descriptors(registry, self.attachments)?,
+            attachments: self
+                .attachments
+                .try_map_owned(|descriptor| registry.stored_descriptor(descriptor))?,
             runs: self
                 .runs
                 .into_iter()
@@ -490,7 +1006,14 @@ impl UnsealedExperimentDynState {
                         run_id,
                         RunEntry {
                             run_id: run.run_id,
-                            attachments: stored_descriptors(registry, run.attachments)?,
+                            status: run.status,
+                            attachments: run.attachments.try_map_owned(|descriptor| {
+                                registry.stored_descriptor(descriptor)
+                            })?,
+                            trace: run
+                                .trace
+                                .map(|descriptor| registry.stored_descriptor(descriptor))
+                                .transpose()?,
                             solves: run
                                 .solves
                                 .into_iter()
@@ -516,10 +1039,27 @@ impl UnsealedExperimentDynState {
 
 impl SealedExperimentDynState {
     fn from_artifact(artifact: LocalArtifactDyn) -> Result<Self> {
+        Self::from_sealed_experiment(
+            SealedExperiment::from_artifact(artifact.clone().as_local_artifact())?,
+            artifact,
+        )
+    }
+
+    fn from_checkpoint_artifact(artifact: LocalArtifactDyn) -> Result<Self> {
+        Self::from_sealed_experiment(
+            SealedExperiment::from_checkpoint_artifact(artifact.clone().as_local_artifact())?,
+            artifact,
+        )
+    }
+
+    fn from_sealed_experiment(
+        sealed: SealedExperiment<'_>,
+        artifact: LocalArtifactDyn,
+    ) -> Result<Self> {
         let registry_handle = artifact.registry_handle();
+        let status = *sealed.status();
         let (attachments, runs, run_parameters) = {
-            let sealed = SealedExperiment::from_artifact(artifact.as_local_artifact())?;
-            let attachments = descriptors(sealed.experiment_attachments());
+            let attachments = descriptor_attachment_table(sealed.attachment_table());
             let runs = sealed
                 .runs()
                 .map(|run| {
@@ -528,15 +1068,17 @@ impl SealedExperimentDynState {
                         SealedRunDyn {
                             registry_handle: registry_handle.clone(),
                             run_id: run.run_id(),
-                            attachments: descriptors(run.attachments()),
+                            status: run.status().clone(),
+                            attachments: descriptor_attachment_table(run.attachment_table()),
+                            trace: run.trace_descriptor().cloned().map(Descriptor::from),
                             solves: run
                                 .solves()
                                 .iter()
                                 .map(|solve| SolveDyn {
                                     registry_handle: registry_handle.clone(),
                                     solve_id: solve.solve_id(),
-                                    input: Descriptor::from(solve.input().clone()),
-                                    output: Descriptor::from(solve.output().clone()),
+                                    input: Descriptor::from(solve.input_descriptor().clone()),
+                                    output: Descriptor::from(solve.output_descriptor().clone()),
                                     adapter: solve.adapter().to_string(),
                                     adapter_options: solve.adapter_options().to_string(),
                                 })
@@ -549,6 +1091,7 @@ impl SealedExperimentDynState {
             (attachments, runs, run_parameters)
         };
         Ok(Self {
+            status,
             artifact,
             attachments,
             runs,
@@ -592,7 +1135,9 @@ impl SealedExperimentDynState {
                 run.run_id,
                 RunEntryDyn {
                     run_id: run.run_id,
+                    status: run.status.clone(),
                     attachments: run.attachments.clone(),
+                    trace: run.trace.clone(),
                     solves,
                     parameters,
                 },
@@ -618,22 +1163,54 @@ impl SealedExperimentDynState {
     }
 }
 
-fn descriptors(attachments: &[StoredDescriptor<'_>]) -> Vec<Descriptor> {
+fn descriptor_attachment_table(
+    attachments: &AttachmentTable<StoredDescriptor<'_>>,
+) -> AttachmentTable<Descriptor> {
     attachments
-        .iter()
-        .cloned()
-        .map(Descriptor::from)
-        .collect::<Vec<_>>()
+        .try_map(|_, descriptor| Ok(Descriptor::from(descriptor.clone())))
+        .expect("converting StoredDescriptor to Descriptor should not fail")
 }
 
-fn stored_descriptors<'reg>(
-    registry: &'reg LocalRegistry,
-    attachments: Vec<Descriptor>,
-) -> Result<Vec<StoredDescriptor<'reg>>> {
-    attachments
-        .into_iter()
-        .map(|descriptor| registry.stored_descriptor(descriptor))
-        .collect()
+fn unsealed_run_views<'a>(
+    registry_handle: &LocalRegistryHandle,
+    runs: impl Iterator<Item = &'a RunEntryDyn>,
+) -> Vec<SealedRunDyn> {
+    runs.map(|run| SealedRunDyn {
+        registry_handle: registry_handle.clone(),
+        run_id: run.run_id,
+        status: run.status.clone(),
+        attachments: run.attachments.clone(),
+        trace: run.trace.clone(),
+        solves: run
+            .solves
+            .iter()
+            .map(|solve| SolveDyn {
+                registry_handle: registry_handle.clone(),
+                solve_id: solve.solve_id,
+                input: solve.input.clone(),
+                output: solve.output.clone(),
+                adapter: solve.adapter.clone(),
+                adapter_options: solve.adapter_options.clone(),
+            })
+            .collect(),
+    })
+    .collect()
+}
+
+fn unsealed_run_parameter_cells<'a>(
+    runs: impl Iterator<Item = &'a RunEntryDyn>,
+) -> Vec<RunParameterCell> {
+    runs.flat_map(|run| {
+        run.parameters
+            .iter()
+            .map(|(name, value)| RunParameterCell {
+                run_id: run.run_id,
+                name: name.clone(),
+                value: value.clone(),
+            })
+            .collect::<Vec<_>>()
+    })
+    .collect()
 }
 
 fn lock_experiment_state(state: &Mutex<ExperimentDynState>) -> MutexGuard<'_, ExperimentDynState> {
@@ -647,37 +1224,22 @@ fn lock_experiment_state(state: &Mutex<ExperimentDynState>) -> MutexGuard<'_, Ex
 }
 
 fn store_experiment_attachment_descriptor(
-    state: &ExperimentDynState,
-    name: &str,
+    registry: &LocalRegistry,
     media_type: MediaType,
     bytes: &[u8],
+    annotations: HashMap<String, String>,
 ) -> Result<Descriptor> {
-    ensure_unsealed_for_attachment_write(state)?;
-    let descriptor = store_attachment_descriptor(
-        state.registry_handle.registry(),
-        AttachmentSpace::Experiment,
-        name,
-        media_type,
-        bytes,
-    )?;
+    let descriptor = store_attachment_descriptor(registry, media_type, bytes, annotations)?;
     Ok(Descriptor::from(descriptor))
 }
 
 fn store_run_attachment_descriptor(
-    state: &ExperimentDynState,
-    run_id: u64,
-    name: &str,
+    registry: &LocalRegistry,
     media_type: MediaType,
     bytes: &[u8],
+    annotations: HashMap<String, String>,
 ) -> Result<Descriptor> {
-    ensure_unsealed_for_attachment_write(state)?;
-    let descriptor = store_attachment_descriptor(
-        state.registry_handle.registry(),
-        AttachmentSpace::Run(run_id),
-        name,
-        media_type,
-        bytes,
-    )?;
+    let descriptor = store_attachment_descriptor(registry, media_type, bytes, annotations)?;
     Ok(Descriptor::from(descriptor))
 }
 
@@ -685,13 +1247,24 @@ fn store_solve_payload_descriptor(
     state: &ExperimentDynState,
     media_type: MediaType,
     bytes: &[u8],
+    annotations: HashMap<String, String>,
 ) -> Result<Descriptor> {
     ensure_unsealed_for_attachment_write(state)?;
     let descriptor =
         state
             .registry_handle
             .registry()
-            .store_layer_blob(media_type, bytes, Default::default())?;
+            .store_layer_blob(media_type, bytes, annotations)?;
+    Ok(Descriptor::from(descriptor))
+}
+
+fn store_trace_descriptor(state: &ExperimentDynState, trace: super::Trace) -> Result<Descriptor> {
+    let super::Trace { bytes } = trace;
+    let descriptor = state.registry_handle.registry().store_layer_blob(
+        media_types::trace_otlp_protobuf(),
+        &bytes,
+        Default::default(),
+    )?;
     Ok(Descriptor::from(descriptor))
 }
 

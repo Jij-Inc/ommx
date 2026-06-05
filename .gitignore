@@ -32,6 +32,7 @@ python/**/*.so
 
 # JupyterBook, Sphinx
 _build/
+autoapi/
 
 # Protobuf document
 proto/protobuf.html
@@ -53,5 +54,6 @@ node_modules/
 !.claude/CLAUDE.md
 
 # Codex
-.agents/
-AGENTS.md
+.agents/*
+!.agents/skills/
+!.agents/skills/**

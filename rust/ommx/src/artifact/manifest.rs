@@ -14,7 +14,7 @@ use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, ImageManifest, Medi
 use prost::Message;
 use serde::Serialize;
 use std::{
-    collections::HashMap,
+    collections::{BTreeSet, HashMap},
     path::Path,
     str::FromStr,
     sync::{Arc, OnceLock},
@@ -30,10 +30,10 @@ use url::Url;
 ///
 /// The parsed manifest is memoised in an `Arc<OnceLock<LocalManifest>>`
 /// so repeated calls to [`Self::layers`] / [`Self::annotations`] /
-/// [`Self::subject`] do not re-read the manifest blob from the
-/// `BlobStore`, requery the `IndexStore`, and re-parse the JSON each
-/// time. Clones of the artifact share the same cell, so any clone that
-/// reads the manifest first warms it for the rest.
+/// [`Self::subject`] do not re-read the manifest blob, requery the
+/// registry index, and re-parse the JSON each time. Clones of the artifact
+/// share the same cell, so any clone that reads the manifest first warms it
+/// for the rest.
 #[derive(Debug, Clone)]
 pub struct LocalArtifact<'reg> {
     registry: &'reg LocalRegistry,
@@ -81,6 +81,17 @@ impl LocalRegistryHandle {
             LocalRegistryHandleInner::Temp(temp) => temp.registry(),
         }
     }
+
+    /// Read a blob referenced by an owned OCI descriptor from this registry.
+    ///
+    /// Dynamic-lifetime handles store raw [`Descriptor`] values internally
+    /// because they cannot carry `StoredDescriptor<'reg>` lifetimes. This
+    /// method revalidates the descriptor against the backing Local Registry
+    /// before reading the blob bytes.
+    pub fn get_blob_dyn(&self, descriptor: &Descriptor) -> Result<Vec<u8>> {
+        let descriptor = self.registry().stored_descriptor(descriptor.clone())?;
+        self.registry().get_blob(&descriptor)
+    }
 }
 
 /// Runtime-owned artifact handle for dynamic runtimes.
@@ -110,34 +121,9 @@ impl LocalArtifactDyn {
         let registry = registry_handle.registry();
 
         let image_name = if path.is_file() {
-            let outcome = super::local_registry::import_oci_archive(registry, path)?;
-            outcome.image_name.ok_or_else(|| {
-                anyhow::anyhow!(
-                    "import_oci_archive returned no image_name despite synthesizing on \
-                     unnamed input; this is a bug in the OMMX SDK; please report it."
-                )
-            })?
+            registry.import_oci_archive(path)?.image_name
         } else if path.is_dir() {
-            let image_name = match super::local_registry::oci_dir_image_name(path)? {
-                Some(name) => name,
-                None => {
-                    let synthesized = registry.synthesize_anonymous_image_name()?;
-                    tracing::info!(
-                        "OCI dir at {} has no `org.opencontainers.image.ref.name` \
-                         annotation; importing under synthesized anonymous name \
-                         {synthesized}",
-                        path.display(),
-                    );
-                    synthesized
-                }
-            };
-            super::local_registry::import_oci_dir_as_ref(
-                registry.index(),
-                registry.blobs(),
-                path,
-                &image_name,
-            )?;
-            image_name
+            registry.import_oci_dir(path)?.image_name
         } else {
             bail!("Path must be a file or a directory")
         };
@@ -154,7 +140,7 @@ impl LocalArtifactDyn {
     #[cfg(feature = "remote-artifact")]
     pub fn load(image_name: ImageRef) -> Result<Self> {
         let registry_handle = LocalRegistryHandle::shared_default()?;
-        super::local_registry::pull_image(registry_handle.registry(), &image_name)?;
+        registry_handle.registry().pull_image(&image_name)?;
         Self::open_in_registry_handle(registry_handle, image_name)
     }
 
@@ -177,7 +163,7 @@ impl LocalArtifactDyn {
                 format!(
                     "Artifact not found in the SQLite-backed local registry: {image_name}. \
                          If this artifact exists in the legacy OCI directory local registry, \
-                         run `ommx artifact import` once, then retry."
+                         run `ommx import-legacy` once, then retry."
                 )
             })?;
         Ok(Self {
@@ -218,7 +204,7 @@ impl LocalArtifactDyn {
     }
 
     pub fn get_blob(&self, descriptor: &Descriptor) -> Result<Vec<u8>> {
-        self.as_local_artifact().get_blob_by_descriptor(descriptor)
+        self.registry_handle.get_blob_dyn(descriptor)
     }
 
     pub fn save(&self, output: &Path) -> crate::Result<()> {
@@ -300,7 +286,7 @@ impl<'reg> LocalArtifact<'reg> {
             format!(
                 "Artifact not found in the SQLite-backed local registry: {image_name}. \
                  If this artifact exists in the legacy OCI directory local registry, \
-                 run `ommx artifact import` once, then retry."
+                 run `ommx import-legacy` once, then retry."
             )
         })
     }
@@ -335,8 +321,8 @@ impl<'reg> LocalArtifact<'reg> {
     ///
     /// The first successful call populates a shared `OnceLock`; later
     /// calls (and clones of `self`) reuse the cached value without
-    /// touching the `BlobStore` / `IndexStore`. Failed reads are not
-    /// cached, so transient errors retry on the next call.
+    /// touching the Local Registry again. Failed reads are not cached,
+    /// so transient errors retry on the next call.
     pub fn get_manifest(&self) -> Result<&LocalManifest> {
         if let Some(cached) = self.manifest_cache.get() {
             return Ok(cached);
@@ -346,7 +332,7 @@ impl<'reg> LocalArtifact<'reg> {
     }
 
     fn read_manifest_uncached(&self) -> Result<LocalManifest> {
-        let bytes = self.registry.blobs().read_bytes(&self.manifest_digest)?;
+        let bytes = self.registry.read_blob(&self.manifest_digest)?;
         LocalManifest::parse(&bytes)
     }
 
@@ -377,15 +363,7 @@ impl<'reg> LocalArtifact<'reg> {
             "Descriptor {} is not stored in this LocalArtifact's Local Registry",
             descriptor.digest()
         );
-        let bytes = self.registry.blobs().read_bytes(descriptor.digest())?;
-        ensure!(
-            bytes.len() as u64 == descriptor.size(),
-            "Descriptor size mismatch for {}: descriptor={}, actual={}",
-            descriptor.digest(),
-            descriptor.size(),
-            bytes.len()
-        );
-        Ok(bytes)
+        self.registry.get_blob(descriptor)
     }
 
     pub(crate) fn get_blob_by_descriptor(&self, descriptor: &Descriptor) -> Result<Vec<u8>> {
@@ -394,18 +372,12 @@ impl<'reg> LocalArtifact<'reg> {
     }
 
     pub(crate) fn read_blob_by_digest(&self, digest: &Digest) -> Result<Vec<u8>> {
-        self.registry.blobs().read_bytes(digest)
+        self.registry.read_blob(digest)
     }
 
     pub(crate) fn stored_manifest_descriptor(&self) -> Result<StoredDescriptor<'reg>> {
-        let size = self.registry.blobs().size(&self.manifest_digest)?;
-        let descriptor = DescriptorBuilder::default()
-            .media_type(MediaType::ImageManifest)
-            .digest(self.manifest_digest.clone())
-            .size(size)
-            .build()
-            .context("Failed to build manifest descriptor")?;
-        self.registry.stored_descriptor(descriptor)
+        self.registry
+            .stored_manifest_descriptor(&self.manifest_digest)
     }
 
     /// Publish this artifact under another local image reference.
@@ -415,6 +387,8 @@ impl<'reg> LocalArtifact<'reg> {
     /// handle whose `image_name` is the new reference.
     pub fn tag_as(&self, image_name: ImageRef) -> Result<Self> {
         let manifest = self.stored_manifest_descriptor()?;
+        self.registry
+            .touch_manifest_closure(manifest.digest(), &mut BTreeSet::new())?;
         let ref_update = self
             .registry
             .publish_stored_manifest_ref(&image_name, &manifest)?;
@@ -574,7 +548,7 @@ impl<'reg> ArtifactDraft<'reg> {
     /// [`LocalRegistry`] is first created and persisted in its SQLite
     /// metadata, so anonymous artifacts from the same registry share
     /// a prefix and can be told apart from artifacts imported from
-    /// another registry. Use `ommx artifact prune-anonymous` to clean
+    /// another registry. Use `ommx prune-anonymous` to clean
     /// accumulated entries.
     ///
     /// Anonymous artifacts are designed to be transient and unique by
@@ -583,7 +557,7 @@ impl<'reg> ArtifactDraft<'reg> {
     /// rare in practice; if one still occurs, commit surfaces it as a
     /// normal ref conflict.
     pub fn new_anonymous_in_registry(registry: &'reg LocalRegistry) -> Result<Self> {
-        let registry_id = registry.index().registry_id()?;
+        let registry_id = registry.registry_id()?;
         let image_name = anonymous_artifact_image_name(&registry_id)?;
         Ok(Self::with_registry(registry, image_name))
     }
@@ -784,7 +758,7 @@ fn ensure_ommx_image_manifest(manifest: &ImageManifest) -> Result<()> {
 /// registry-id prefix is randomised per registry, so filtering
 /// anonymous artifacts uses
 /// `name.ends_with(ANONYMOUS_ARTIFACT_REF_NAME_SUFFIX)`.
-/// `ommx artifact prune-anonymous` cleans entries from every prefix
+/// `ommx prune-anonymous` cleans entries from every prefix
 /// in the registry, not just the host's own.
 ///
 /// The hostname segment `.ommx.local` deliberately uses the `.local`
@@ -848,7 +822,10 @@ pub(crate) fn anonymous_artifact_image_name(registry_id: &str) -> Result<ImageRe
         .with_context(|| "Failed to synthesise anonymous artifact image name")
 }
 
-pub(crate) fn anonymous_local_image_name(registry_id: &str, repository: &str) -> Result<ImageRef> {
+pub(crate) fn anonymous_local_repository_key(
+    registry_id: &str,
+    repository: &str,
+) -> Result<String> {
     anyhow::ensure!(
         !repository.is_empty()
             && repository
@@ -868,6 +845,11 @@ pub(crate) fn anonymous_local_image_name(registry_id: &str, repository: &str) ->
         "Anonymous artifact registry id must be at least {} lowercase hex chars; got {prefix:?}",
         ANONYMOUS_REGISTRY_ID_HOST_LEN,
     );
+    Ok(format!("{prefix}.ommx.local/{repository}"))
+}
+
+pub(crate) fn anonymous_local_image_name(registry_id: &str, repository: &str) -> Result<ImageRef> {
+    let repository_key = anonymous_local_repository_key(registry_id, repository)?;
     let stamp = chrono::Local::now().format("%Y%m%dT%H%M%S");
     let nonce: String = uuid::Uuid::new_v4()
         .simple()
@@ -875,8 +857,9 @@ pub(crate) fn anonymous_local_image_name(registry_id: &str, repository: &str) ->
         .chars()
         .take(ANONYMOUS_TAG_NONCE_HEX_LEN)
         .collect();
-    ImageRef::parse(&format!("{prefix}.ommx.local/{repository}:{stamp}-{nonce}"))
-        .with_context(|| format!("Invalid anonymous local image name for registry {prefix}"))
+    ImageRef::parse(&format!("{repository_key}:{stamp}-{nonce}")).with_context(|| {
+        format!("Invalid anonymous local image name for registry {repository_key}")
+    })
 }
 
 /// True iff `name` (the `host/path` portion of an OCI ref) matches the
@@ -993,7 +976,7 @@ mod tests {
     /// must together accept only ref / tag pairs that
     /// [`anonymous_artifact_image_name`] would generate, and reject
     /// substring-match false positives a naive `ends_with` would let
-    /// through (the failure mode `ommx artifact prune-anonymous`
+    /// through (the failure mode `ommx prune-anonymous`
     /// would otherwise have on a human-pushed
     /// `myhost.ommx.local/anonymous:v1`).
     #[test]

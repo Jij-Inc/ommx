@@ -11,7 +11,7 @@ use pyo3::{
     types::{PyBytes, PyDict, PyTuple},
     Bound, PyResult, Python,
 };
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 
 /// The output of sampling-based optimization algorithms, e.g. simulated annealing (SA).
 ///
@@ -85,7 +85,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 #[derive(Clone)]
 pub struct SampleSet {
     pub(crate) inner: ommx::SampleSet,
-    pub(crate) annotations: HashMap<String, String>,
+    pub(crate) annotations: ommx::artifact::SampleSetAnnotations,
 }
 
 crate::annotations::impl_solution_annotations!(SampleSet, "org.ommx.v1.sample-set");
@@ -98,7 +98,7 @@ impl SampleSet {
         let _guard = crate::TRACING.attach_parent_context(bytes.py());
         Ok(Self {
             inner: ommx::SampleSet::from_bytes(bytes.as_bytes())?,
-            annotations: HashMap::new(),
+            annotations: ommx::artifact::SampleSetAnnotations::default(),
         })
     }
 
@@ -115,7 +115,7 @@ impl SampleSet {
             .ok_or_else(|| anyhow::anyhow!("Unknown sample ID: {}", sample_id.into_inner()))?;
         Ok(Solution {
             inner: solution,
-            annotations: HashMap::new(),
+            annotations: ommx::artifact::SolutionAnnotations::default(),
         })
     }
 
@@ -171,7 +171,7 @@ impl SampleSet {
     pub fn best_feasible(&self) -> Result<Solution> {
         Ok(Solution {
             inner: self.inner.best_feasible()?,
-            annotations: HashMap::new(),
+            annotations: ommx::artifact::SolutionAnnotations::default(),
         })
     }
 
@@ -179,7 +179,7 @@ impl SampleSet {
     pub fn best_feasible_relaxed(&self) -> Result<Solution> {
         Ok(Solution {
             inner: self.inner.best_feasible_relaxed()?,
-            annotations: HashMap::new(),
+            annotations: ommx::artifact::SolutionAnnotations::default(),
         })
     }
 

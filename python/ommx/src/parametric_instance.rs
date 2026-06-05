@@ -16,7 +16,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 #[derive(Clone)]
 pub struct ParametricInstance {
     pub(crate) inner: ommx::ParametricInstance,
-    pub(crate) annotations: HashMap<String, String>,
+    pub(crate) annotations: ommx::artifact::ParametricInstanceAnnotations,
 }
 
 crate::annotations::impl_instance_annotations!(
@@ -33,7 +33,7 @@ impl ParametricInstance {
         let inner = ommx::ParametricInstance::from_bytes(bytes.as_bytes())?;
         Ok(Self {
             inner,
-            annotations: HashMap::new(),
+            annotations: ommx::artifact::ParametricInstanceAnnotations::default(),
         })
     }
 
@@ -193,7 +193,7 @@ impl ParametricInstance {
 
         Ok(Self {
             inner,
-            annotations: HashMap::new(),
+            annotations: ommx::artifact::ParametricInstanceAnnotations::default(),
         })
     }
 
@@ -223,7 +223,7 @@ impl ParametricInstance {
         let instance = self.inner.clone().with_parameters(v1_params)?;
         Ok(Instance {
             inner: instance,
-            annotations: HashMap::new(),
+            annotations: ommx::artifact::InstanceAnnotations::default(),
         })
     }
 

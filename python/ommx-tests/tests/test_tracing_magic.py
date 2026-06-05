@@ -7,9 +7,9 @@ The magic is supposed to:
    ``pyo3-tracing-opentelemetry``).
 3. Render a text tree and attach a Chrome Trace JSON download link.
 
-These tests exercise the collector and renderers directly for focused
-unit coverage, then drive the full magic through an ``IPython`` shell
-to verify the integration end-to-end.
+These tests exercise the collector and magic-specific HTML wrapper for
+focused unit coverage, then drive the full magic through an
+``IPython`` shell to verify the integration end-to-end.
 
 The session-scoped ``TracerProvider`` installed by :mod:`conftest` is
 reused throughout: OTel refuses to swap providers once set, so tests
@@ -27,15 +27,9 @@ import urllib.parse
 import pytest
 from opentelemetry import trace
 
-from ommx.tracing import _setup
-from ommx.tracing._collector import _CellSpanCollector
-from ommx.tracing._magic import run_cell_with_trace
-from ommx.tracing._render import (
-    chrome_trace_json,
-    render_cell_output_html,
-    render_text_tree,
-    to_chrome_trace,
-)
+from ommx.tracing import TraceResult, _setup
+from ommx.tracing._collector import _TraceSpanCollector
+from ommx.tracing._magic import _render_cell_output_html, run_cell_with_trace
 
 from conftest import get_test_provider
 
@@ -50,7 +44,7 @@ from conftest import get_test_provider
 # The collector only retains spans for traces opened via ``begin_capture``,
 # so between-test state only lives inside ``_active_traces`` /
 # ``_spans_by_trace`` — both cleared in the fixture below.
-_SESSION_COLLECTOR: _CellSpanCollector | None = None
+_SESSION_COLLECTOR: _TraceSpanCollector | None = None
 
 
 @pytest.fixture
@@ -60,13 +54,13 @@ def cell_collector():
     Points ``_setup._COLLECTOR`` at the shared instance so
     ``ensure_collector_installed()`` (called indirectly by
     ``capture_trace`` / ``run_cell_with_trace``) returns it unchanged
-    rather than creating a fresh ``_CellSpanCollector`` + attaching a
+    rather than creating a fresh ``_TraceSpanCollector`` + attaching a
     new ``SpanProcessor`` every test. Without that, processors would
     pile up across the suite.
     """
     global _SESSION_COLLECTOR
     if _SESSION_COLLECTOR is None:
-        _SESSION_COLLECTOR = _CellSpanCollector()
+        _SESSION_COLLECTOR = _TraceSpanCollector()
         get_test_provider().add_span_processor(_SESSION_COLLECTOR)
     _setup._COLLECTOR = _SESSION_COLLECTOR
     _SESSION_COLLECTOR.shutdown()  # drop state from previous test
@@ -77,7 +71,7 @@ def cell_collector():
         _setup._COLLECTOR = None
 
 
-def _run_and_collect(collector: _CellSpanCollector, cell_fn):
+def _run_and_collect(collector: _TraceSpanCollector, cell_fn):
     """Run ``cell_fn`` under a root span, using ``begin/end_capture``."""
     tracer = trace.get_tracer("ommx-tracing-magic-test")
     with tracer.start_as_current_span("root") as root:
@@ -156,86 +150,24 @@ def test_collector_is_threadsafe(cell_collector):
 
 
 # ---------------------------------------------------------------------------
-# Renderers
+# Cell HTML
 # ---------------------------------------------------------------------------
 
 
-def test_render_text_tree_reflects_nesting(cell_collector):
-    """Children appear indented under their parent, not as siblings."""
-
-    def cell(tracer):
-        with tracer.start_as_current_span("outer"):
-            with tracer.start_as_current_span("inner"):
-                pass
-
-    spans = _run_and_collect(cell_collector, cell)
-    tree = render_text_tree(spans)
-
-    outer_line = next(line for line in tree.splitlines() if "outer" in line)
-    inner_line = next(line for line in tree.splitlines() if "inner" in line)
-    outer_indent = len(outer_line) - len(outer_line.lstrip())
-    inner_indent = len(inner_line) - len(inner_line.lstrip())
-    assert inner_indent > outer_indent
+def _trace_result_with_span(name: str = "work") -> TraceResult:
+    result = TraceResult()
+    span = result.request.resource_spans.add().scope_spans.add().spans.add()
+    span.name = name
+    span.span_id = (1).to_bytes(8, byteorder="big")
+    span.start_time_unix_nano = 1_000_000_000
+    span.end_time_unix_nano = 1_001_000_000
+    return result
 
 
-def test_render_text_tree_handles_empty():
-    assert render_text_tree([]) == "(no spans)"
-
-
-def test_chrome_trace_is_valid_json_with_X_events(cell_collector):
-    """Chrome-trace JSON must parse, every event has ``ph: 'X'``, and
-    durations are in microseconds (positive integers)."""
-
-    def cell(tracer):
-        with tracer.start_as_current_span("work") as span:
-            span.set_attribute("batch_size", 42)
-
-    spans = _run_and_collect(cell_collector, cell)
-    payload = chrome_trace_json(spans)
-    parsed = json.loads(payload)
-
-    assert parsed["displayTimeUnit"] == "ms"
-    events = parsed["traceEvents"]
-    # Two events: the synthetic ``root`` and the inner ``work`` span.
-    assert {e["name"] for e in events} == {"root", "work"}
-    for ev in events:
-        assert ev["ph"] == "X"
-        assert isinstance(ev["ts"], int) and ev["ts"] > 0
-        assert isinstance(ev["dur"], int) and ev["dur"] >= 1
-
-    work = next(e for e in events if e["name"] == "work")
-    assert work["args"]["batch_size"] == 42
-
-
-def test_chrome_trace_skips_open_spans():
-    """Spans without an ``end_time`` must be omitted — they would emit a
-    zero-duration event and confuse Perfetto."""
-    from typing import cast
-
-    from opentelemetry.sdk.trace import ReadableSpan
-
-    class _Fake:
-        name = "still_running"
-        start_time = 1_000_000_000
-        end_time = None
-        attributes: dict = {}
-
-    # The renderer only touches ``start_time``/``end_time``/``attributes``/
-    # ``name``; a duck-typed stand-in is enough. Cast through ``ReadableSpan``
-    # to keep pyright quiet without materializing a full span.
-    result = to_chrome_trace([cast(ReadableSpan, _Fake())])
-    assert result["traceEvents"] == []
-
-
-def test_cell_html_contains_download_link(cell_collector):
+def test_cell_html_contains_download_link():
     """The HTML blob must carry a base64 data URL the browser can download."""
-
-    def cell(tracer):
-        with tracer.start_as_current_span("work"):
-            pass
-
-    spans = _run_and_collect(cell_collector, cell)
-    html = render_cell_output_html(spans, download_filename="cell.json")
+    result = _trace_result_with_span()
+    html = _render_cell_output_html(result, download_filename="cell.json")
 
     assert "<pre>" in html
     assert 'download="cell.json"' in html
@@ -252,7 +184,10 @@ def test_cell_html_contains_download_link(cell_collector):
 def test_cell_html_escapes_download_filename_for_attribute():
     """A filename containing a quote must not break out of the
     ``download`` attribute — otherwise arbitrary HTML could be injected."""
-    html = render_cell_output_html([], download_filename='"><script>alert(1)</script>')
+    html = _render_cell_output_html(
+        TraceResult(),
+        download_filename='"><script>alert(1)</script>',
+    )
     assert "<script>" not in html
     # Raw quote must not terminate the attribute prematurely.
     assert 'download=""><script>' not in html
@@ -293,7 +228,7 @@ def test_ensure_collector_does_not_replace_existing_processors():
         get_test_provider().force_flush()
         assert any(s.name == "verify" for s in exporter.spans), (
             "The pre-existing session exporter stopped receiving spans "
-            "after the cell collector was attached."
+            "after the trace collector was attached."
         )
     finally:
         _setup.reset_for_testing()

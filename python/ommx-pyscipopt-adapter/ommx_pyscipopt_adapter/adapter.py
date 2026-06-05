@@ -205,14 +205,16 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                     ...
                 ommx.adapter.UnboundedDetected: Model was unbounded
         """
-        adapter = cls(ommx_instance, initial_state=initial_state)
-        model = adapter.solver_input
-        with _tracer.start_as_current_span("solve"):
-            model.optimize()
-        solution = adapter.decode(model)
-        if diagnostics is not None:
-            _record_scip_termination_report(model, diagnostics)
-        return solution
+        with _tracer.start_as_current_span("solve") as span:
+            span.set_attribute("adapter", f"{cls.__module__}.{cls.__qualname__}")
+            adapter = cls(ommx_instance, initial_state=initial_state)
+            model = adapter.solver_input
+            with _tracer.start_as_current_span("call"):
+                model.optimize()
+            solution = adapter.decode(model)
+            if diagnostics is not None:
+                _record_scip_termination_report(model, diagnostics)
+            return solution
 
     @property
     def solver_input(self) -> pyscipopt.Model:

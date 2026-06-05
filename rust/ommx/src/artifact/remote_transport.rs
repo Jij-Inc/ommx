@@ -20,8 +20,8 @@
 //! digest the registry computes and the digest we store locally agree
 //! byte-for-byte; `pull_blob_to_vec` collects a blob into a `Vec<u8>`
 //! over `oci-client`'s streaming reader. Layer-blob streaming straight
-//! into [`super::local_registry::FileBlobStore`] is a future refinement
-//! once `FileBlobStore` grows an `AsyncWrite`-compatible put path.
+//! into the Local Registry is a future refinement once that
+//! store grows an `AsyncWrite`-compatible put path.
 //!
 //! Credentials are resolved by [`resolve_auth`] in a three-tier chain:
 //! `OMMX_BASIC_AUTH_*` env override → `~/.docker/config.json`
@@ -107,7 +107,7 @@ impl RemoteTransport {
 
     /// Push a single blob to the registry. The caller passes the
     /// pre-computed digest (which the SQLite Local Registry already
-    /// stores as the BlobStore key), so the registry-side digest can be
+    /// stores as the Local Registry key), so the registry-side digest can be
     /// validated without re-hashing. `bytes` is moved into
     /// `oci_client::Client::push_blob` (which takes `Vec<u8>` by
     /// value) so blobs the caller already owns don't get cloned.
@@ -184,9 +184,9 @@ impl RemoteTransport {
     ///
     /// `oci_client::Client::pull_blob_stream` skips the digest
     /// verification that `pull_blob` does on the streaming reader; the
-    /// caller writes the bytes into
-    /// [`super::local_registry::FileBlobStore`] which re-derives sha256
-    /// during `put_bytes` and then asserts the result matches the
+    /// caller writes the bytes into the Local Registry,
+    /// which re-derives sha256 during `put_bytes` and then asserts the
+    /// result matches the
     /// expected digest, so the registry-side digest is enforced exactly
     /// once at the storage boundary rather than twice in network and
     /// store layers.

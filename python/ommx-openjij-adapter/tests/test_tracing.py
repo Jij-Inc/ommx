@@ -17,9 +17,10 @@ def test_sample_emits_convert_sample_decode_spans():
     with capture_trace() as result:
         OMMXOpenJijSAAdapter.sample(instance, num_reads=1, seed=0)
 
-    names = [s.name for s in result.spans]
-    assert "convert" in names
+    names = [span.name for span in result.spans]
     assert "sample" in names
+    assert "convert" in names
+    assert "call" in names
     assert "decode" in names
 
 
@@ -36,7 +37,8 @@ def test_solve_emits_convert_sample_decode_spans():
     with capture_trace() as result:
         OMMXOpenJijSAAdapter.solve(instance, num_reads=1, seed=0)
 
-    names = [s.name for s in result.spans]
-    assert "convert" in names
+    names = [span.name for span in result.spans]
     assert "sample" in names
+    assert "convert" in names
+    assert "call" in names
     assert "decode" in names

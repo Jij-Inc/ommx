@@ -27,7 +27,7 @@ macro_rules! impl_instance_annotations {
             /// to modify annotations.
             #[getter]
             pub fn annotations(&self) -> std::collections::HashMap<String, String> {
-                self.annotations.clone()
+                self.annotations.clone().into_inner()
             }
 
             #[setter]
@@ -35,7 +35,7 @@ macro_rules! impl_instance_annotations {
                 &mut self,
                 annotations: std::collections::HashMap<String, String>,
             ) {
-                self.annotations = annotations;
+                self.annotations = annotations.into();
             }
 
             #[pyo3(signature = (key, value, *, annotation_namespace = "org.ommx.user."))]
@@ -233,7 +233,7 @@ macro_rules! impl_solution_annotations {
             /// to modify annotations.
             #[getter]
             pub fn annotations(&self) -> std::collections::HashMap<String, String> {
-                self.annotations.clone()
+                self.annotations.clone().into_inner()
             }
 
             #[setter]
@@ -241,7 +241,7 @@ macro_rules! impl_solution_annotations {
                 &mut self,
                 annotations: std::collections::HashMap<String, String>,
             ) {
-                self.annotations = annotations;
+                self.annotations = annotations.into();
             }
 
             #[pyo3(signature = (key, value, *, annotation_namespace = "org.ommx.user."))]

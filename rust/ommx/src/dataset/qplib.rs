@@ -1,8 +1,6 @@
 use crate::{
     artifact::{
-        ghcr,
-        local_registry::{pull_image, LocalRegistry},
-        media_types, InstanceAnnotations, LocalArtifact,
+        ghcr, local_registry::LocalRegistry, media_types, InstanceAnnotations, LocalArtifact,
     },
     v1::Instance,
 };
@@ -293,7 +291,7 @@ pub fn load(tag: &str) -> Result<(Instance, InstanceAnnotations)> {
 
     let image_name = ghcr("Jij-Inc", "ommx", "qplib", tag)?;
     let registry = LocalRegistry::shared_default()?;
-    pull_image(registry, &image_name)?;
+    registry.pull_image(&image_name)?;
     let artifact = LocalArtifact::open_in_registry(registry, image_name)?;
     let layers = artifact.layers()?;
     let mut instance_layers = layers

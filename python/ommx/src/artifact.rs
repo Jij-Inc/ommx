@@ -1,6 +1,10 @@
 use anyhow::{bail, Result};
 use pyo3::{prelude::*, types::PyBytes};
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::HashMap,
+    path::PathBuf,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use crate::{PyArchiveDescriptor, PyDescriptor};
 
@@ -48,6 +52,13 @@ impl PyArtifact {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl PyArtifact {
+    /// Media type of an Experiment Run trace encoded as OTLP protobuf.
+    #[classattr]
+    #[pyo3(name = "TRACE_OTLP_PROTOBUF_MEDIA_TYPE")]
+    fn trace_otlp_protobuf_media_type() -> &'static str {
+        ommx::artifact::media_types::TRACE_OTLP_PROTOBUF_MEDIA_TYPE
+    }
+
     /// Import an artifact from a `.ommx` OCI archive file (or an OCI
     /// Image Layout directory) into the user's v3 SQLite Local Registry,
     /// and return a handle to the imported registry entry.
@@ -137,7 +148,7 @@ impl PyArtifact {
     #[staticmethod]
     pub fn inspect_archive(py: Python<'_>, path: PathBuf) -> Result<PyArchiveManifest> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let view = ommx::artifact::local_registry::inspect_archive(&path)?;
+        let view = ommx::artifact::local_registry::ArchiveInspectView::read(&path)?;
         Ok(PyArchiveManifest::from(view))
     }
 
@@ -606,13 +617,532 @@ impl PyArchiveManifest {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Local Registry cleanup reports
+// ---------------------------------------------------------------------------
+
+/// Blob entry reported by Local Registry GC.
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
+#[pyclass]
+#[pyo3(module = "ommx._ommx_rust", name = "GcBlob")]
+#[derive(Debug, Clone)]
+pub struct PyGcBlob {
+    digest: String,
+    size: u64,
+    modified_at_unix_seconds: Option<f64>,
+}
+
+impl From<ommx::artifact::local_registry::GcBlob> for PyGcBlob {
+    fn from(value: ommx::artifact::local_registry::GcBlob) -> Self {
+        Self {
+            digest: value.digest.to_string(),
+            size: value.size,
+            modified_at_unix_seconds: value.modified.and_then(system_time_to_unix_seconds),
+        }
+    }
+}
+
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
+#[pymethods]
+impl PyGcBlob {
+    /// Blob digest, for example `sha256:...`.
+    #[getter]
+    pub fn digest(&self) -> String {
+        self.digest.clone()
+    }
+
+    /// Blob size in bytes.
+    #[getter]
+    pub fn size(&self) -> u64 {
+        self.size
+    }
+
+    /// Blob modification time as Unix timestamp seconds, or `None` if unavailable.
+    #[getter]
+    pub fn modified_at_unix_seconds(&self) -> Option<f64> {
+        self.modified_at_unix_seconds
+    }
+
+    pub fn __repr__(&self) -> String {
+        format!("GcBlob(digest={:?}, size={})", self.digest, self.size)
+    }
+}
+
+/// Root that made blobs reachable during Local Registry GC.
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
+#[pyclass]
+#[pyo3(module = "ommx._ommx_rust", name = "GcRoot")]
+#[derive(Debug, Clone)]
+pub struct PyGcRoot {
+    kind: String,
+    name: Option<String>,
+    reference: Option<String>,
+    digest: String,
+}
+
+impl From<ommx::artifact::local_registry::GcRoot> for PyGcRoot {
+    fn from(value: ommx::artifact::local_registry::GcRoot) -> Self {
+        match value {
+            ommx::artifact::local_registry::GcRoot::Ref {
+                name,
+                reference,
+                digest,
+            } => Self {
+                kind: "ref".to_string(),
+                name: Some(name),
+                reference: Some(reference),
+                digest: digest.to_string(),
+            },
+            ommx::artifact::local_registry::GcRoot::ProtectedDigest { digest } => Self {
+                kind: "protected_digest".to_string(),
+                name: None,
+                reference: None,
+                digest: digest.to_string(),
+            },
+        }
+    }
+}
+
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
+#[pymethods]
+impl PyGcRoot {
+    /// Root kind: `"ref"` or `"protected_digest"`.
+    #[getter]
+    pub fn kind(&self) -> String {
+        self.kind.clone()
+    }
+
+    /// Repository/name portion of the ref, or `None` for protected digests.
+    #[getter]
+    pub fn name(&self) -> Option<String> {
+        self.name.clone()
+    }
+
+    /// Tag/reference portion of the ref, or `None` for protected digests.
+    #[getter]
+    pub fn reference(&self) -> Option<String> {
+        self.reference.clone()
+    }
+
+    /// Root manifest or protected digest.
+    #[getter]
+    pub fn digest(&self) -> String {
+        self.digest.clone()
+    }
+
+    /// Full image ref for `"ref"` roots, or `None` for protected digests.
+    #[getter]
+    pub fn image_name(&self) -> Option<String> {
+        Some(format!(
+            "{}:{}",
+            self.name.as_ref()?,
+            self.reference.as_ref()?
+        ))
+    }
+
+    pub fn __repr__(&self) -> String {
+        match self.image_name() {
+            Some(image_name) => format!(
+                "GcRoot(kind={:?}, image_name={:?}, digest={:?})",
+                self.kind, image_name, self.digest
+            ),
+            None => format!("GcRoot(kind={:?}, digest={:?})", self.kind, self.digest),
+        }
+    }
+}
+
+/// Blob referenced by a reachable manifest but missing from the Local Registry.
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
+#[pyclass]
+#[pyo3(module = "ommx._ommx_rust", name = "GcMissingBlob")]
+#[derive(Debug, Clone)]
+pub struct PyGcMissingBlob {
+    digest: String,
+    referenced_by: Option<String>,
+    kind: String,
+}
+
+impl From<ommx::artifact::local_registry::GcMissingBlob> for PyGcMissingBlob {
+    fn from(value: ommx::artifact::local_registry::GcMissingBlob) -> Self {
+        Self {
+            digest: value.digest.to_string(),
+            referenced_by: value.referenced_by.map(|d| d.to_string()),
+            kind: gc_reference_kind_name(value.kind).to_string(),
+        }
+    }
+}
+
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
+#[pymethods]
+impl PyGcMissingBlob {
+    #[getter]
+    pub fn digest(&self) -> String {
+        self.digest.clone()
+    }
+
+    #[getter]
+    pub fn referenced_by(&self) -> Option<String> {
+        self.referenced_by.clone()
+    }
+
+    /// Reference edge kind: `"ref_manifest"`, `"config"`, `"layer"`, `"subject"`, or `"protected_digest"`.
+    #[getter]
+    pub fn kind(&self) -> String {
+        self.kind.clone()
+    }
+
+    pub fn __repr__(&self) -> String {
+        format!(
+            "GcMissingBlob(digest={:?}, referenced_by={:?}, kind={:?})",
+            self.digest, self.referenced_by, self.kind
+        )
+    }
+}
+
+/// Reachable manifest blob that could not be parsed as an OCI Image Manifest.
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
+#[pyclass]
+#[pyo3(module = "ommx._ommx_rust", name = "GcInvalidManifest")]
+#[derive(Debug, Clone)]
+pub struct PyGcInvalidManifest {
+    digest: String,
+    referenced_by: Option<String>,
+    kind: String,
+    error: String,
+}
+
+impl From<ommx::artifact::local_registry::GcInvalidManifest> for PyGcInvalidManifest {
+    fn from(value: ommx::artifact::local_registry::GcInvalidManifest) -> Self {
+        Self {
+            digest: value.digest.to_string(),
+            referenced_by: value.referenced_by.map(|d| d.to_string()),
+            kind: gc_reference_kind_name(value.kind).to_string(),
+            error: value.error,
+        }
+    }
+}
+
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
+#[pymethods]
+impl PyGcInvalidManifest {
+    #[getter]
+    pub fn digest(&self) -> String {
+        self.digest.clone()
+    }
+
+    #[getter]
+    pub fn referenced_by(&self) -> Option<String> {
+        self.referenced_by.clone()
+    }
+
+    /// Reference edge kind: `"ref_manifest"`, `"subject"`, or `"protected_digest"`.
+    #[getter]
+    pub fn kind(&self) -> String {
+        self.kind.clone()
+    }
+
+    #[getter]
+    pub fn error(&self) -> String {
+        self.error.clone()
+    }
+
+    pub fn __repr__(&self) -> String {
+        format!(
+            "GcInvalidManifest(digest={:?}, referenced_by={:?}, kind={:?}, error={:?})",
+            self.digest, self.referenced_by, self.kind, self.error
+        )
+    }
+}
+
+/// Report returned by {func}`gc`.
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
+#[pyclass]
+#[pyo3(module = "ommx._ommx_rust", name = "GcReport")]
+#[derive(Debug, Clone)]
+pub struct PyGcReport {
+    root: PathBuf,
+    delete_applied: bool,
+    roots: Vec<PyGcRoot>,
+    reachable_blobs: Vec<PyGcBlob>,
+    orphan_candidates: Vec<PyGcBlob>,
+    deferred_blobs: Vec<PyGcBlob>,
+    missing_blobs: Vec<PyGcMissingBlob>,
+    invalid_manifests: Vec<PyGcInvalidManifest>,
+    deleted_blobs: Vec<PyGcBlob>,
+    skipped_blobs: Vec<PyGcBlob>,
+}
+
+impl PyGcReport {
+    fn from_report(
+        root: PathBuf,
+        report: ommx::artifact::local_registry::GcReport,
+        delete_applied: bool,
+        deleted_blobs: Vec<ommx::artifact::local_registry::GcBlob>,
+        skipped_blobs: Vec<ommx::artifact::local_registry::GcBlob>,
+    ) -> Self {
+        Self {
+            root,
+            delete_applied,
+            roots: report.roots.into_iter().map(PyGcRoot::from).collect(),
+            reachable_blobs: report
+                .reachable_blobs
+                .into_iter()
+                .map(PyGcBlob::from)
+                .collect(),
+            orphan_candidates: report
+                .orphan_candidates
+                .into_iter()
+                .map(PyGcBlob::from)
+                .collect(),
+            deferred_blobs: report
+                .deferred_blobs
+                .into_iter()
+                .map(PyGcBlob::from)
+                .collect(),
+            missing_blobs: report
+                .missing_blobs
+                .into_iter()
+                .map(PyGcMissingBlob::from)
+                .collect(),
+            invalid_manifests: report
+                .invalid_manifests
+                .into_iter()
+                .map(PyGcInvalidManifest::from)
+                .collect(),
+            deleted_blobs: deleted_blobs.into_iter().map(PyGcBlob::from).collect(),
+            skipped_blobs: skipped_blobs.into_iter().map(PyGcBlob::from).collect(),
+        }
+    }
+
+    fn total_size(blobs: &[PyGcBlob]) -> u64 {
+        blobs.iter().map(|blob| blob.size).sum()
+    }
+}
+
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
+#[pymethods]
+impl PyGcReport {
+    /// Local Registry root inspected by this GC pass.
+    #[getter]
+    pub fn root(&self) -> PathBuf {
+        self.root.clone()
+    }
+
+    /// `True` when {func}`gc` was called with `delete=True`.
+    #[getter]
+    pub fn delete_applied(&self) -> bool {
+        self.delete_applied
+    }
+
+    #[getter]
+    pub fn roots(&self) -> Vec<PyGcRoot> {
+        self.roots.clone()
+    }
+
+    #[getter]
+    pub fn reachable_blobs(&self) -> Vec<PyGcBlob> {
+        self.reachable_blobs.clone()
+    }
+
+    #[getter]
+    pub fn orphan_candidates(&self) -> Vec<PyGcBlob> {
+        self.orphan_candidates.clone()
+    }
+
+    #[getter]
+    pub fn deferred_blobs(&self) -> Vec<PyGcBlob> {
+        self.deferred_blobs.clone()
+    }
+
+    #[getter]
+    pub fn missing_blobs(&self) -> Vec<PyGcMissingBlob> {
+        self.missing_blobs.clone()
+    }
+
+    #[getter]
+    pub fn invalid_manifests(&self) -> Vec<PyGcInvalidManifest> {
+        self.invalid_manifests.clone()
+    }
+
+    /// Blobs actually unlinked when `delete=True`; empty in dry-run mode.
+    #[getter]
+    pub fn deleted_blobs(&self) -> Vec<PyGcBlob> {
+        self.deleted_blobs.clone()
+    }
+
+    /// Candidate blobs skipped because they became too new before deletion.
+    #[getter]
+    pub fn skipped_blobs(&self) -> Vec<PyGcBlob> {
+        self.skipped_blobs.clone()
+    }
+
+    #[getter]
+    pub fn reachable_size(&self) -> u64 {
+        Self::total_size(&self.reachable_blobs)
+    }
+
+    #[getter]
+    pub fn orphan_candidate_size(&self) -> u64 {
+        Self::total_size(&self.orphan_candidates)
+    }
+
+    #[getter]
+    pub fn deferred_size(&self) -> u64 {
+        Self::total_size(&self.deferred_blobs)
+    }
+
+    #[getter]
+    pub fn deleted_size(&self) -> u64 {
+        Self::total_size(&self.deleted_blobs)
+    }
+
+    pub fn __repr__(&self) -> String {
+        format!(
+            "GcReport(root={:?}, delete_applied={}, roots={}, reachable_blobs={}, orphan_candidates={}, deferred_blobs={}, deleted_blobs={})",
+            self.root.display().to_string(),
+            self.delete_applied,
+            self.roots.len(),
+            self.reachable_blobs.len(),
+            self.orphan_candidates.len(),
+            self.deferred_blobs.len(),
+            self.deleted_blobs.len()
+        )
+    }
+}
+
+/// Anonymous Artifact ref matched by {func}`prune_anonymous`.
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
+#[pyclass]
+#[pyo3(module = "ommx._ommx_rust", name = "AnonymousArtifactRef")]
+#[derive(Debug, Clone)]
+pub struct PyAnonymousArtifactRef {
+    image_name: String,
+    name: String,
+    reference: String,
+    digest: String,
+    size: u64,
+    media_type: String,
+    updated_at: String,
+}
+
+impl PyAnonymousArtifactRef {
+    fn from_ref_record(record: ommx::artifact::local_registry::RefRecord) -> Result<Self> {
+        let image_name = format!("{}:{}", record.name, record.reference);
+        Ok(Self {
+            image_name,
+            name: record.name,
+            reference: record.reference,
+            digest: record.descriptor.digest().to_string(),
+            size: record.descriptor.size(),
+            media_type: record.descriptor.media_type().to_string(),
+            updated_at: record.updated_at,
+        })
+    }
+}
+
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
+#[pymethods]
+impl PyAnonymousArtifactRef {
+    #[getter]
+    pub fn image_name(&self) -> String {
+        self.image_name.clone()
+    }
+
+    #[getter]
+    pub fn name(&self) -> String {
+        self.name.clone()
+    }
+
+    #[getter]
+    pub fn reference(&self) -> String {
+        self.reference.clone()
+    }
+
+    /// Manifest digest pointed to by this anonymous ref.
+    #[getter]
+    pub fn digest(&self) -> String {
+        self.digest.clone()
+    }
+
+    /// Manifest size in bytes.
+    #[getter]
+    pub fn size(&self) -> u64 {
+        self.size
+    }
+
+    #[getter]
+    pub fn media_type(&self) -> String {
+        self.media_type.clone()
+    }
+
+    /// SQLite ref update timestamp, stored as an RFC3339 string.
+    #[getter]
+    pub fn updated_at(&self) -> String {
+        self.updated_at.clone()
+    }
+
+    pub fn __repr__(&self) -> String {
+        format!(
+            "AnonymousArtifactRef(image_name={:?}, digest={:?})",
+            self.image_name, self.digest
+        )
+    }
+}
+
+/// Report returned by {func}`prune_anonymous`.
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
+#[pyclass]
+#[pyo3(module = "ommx._ommx_rust", name = "PruneAnonymousReport")]
+#[derive(Debug, Clone)]
+pub struct PyPruneAnonymousReport {
+    root: PathBuf,
+    delete_applied: bool,
+    refs: Vec<PyAnonymousArtifactRef>,
+}
+
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
+#[pymethods]
+impl PyPruneAnonymousReport {
+    /// Local Registry root inspected by this prune pass.
+    #[getter]
+    pub fn root(&self) -> PathBuf {
+        self.root.clone()
+    }
+
+    /// `True` when {func}`prune_anonymous` was called with `delete=True`.
+    #[getter]
+    pub fn delete_applied(&self) -> bool {
+        self.delete_applied
+    }
+
+    /// Candidate refs in dry-run mode, or removed refs when `delete=True`.
+    #[getter]
+    pub fn refs(&self) -> Vec<PyAnonymousArtifactRef> {
+        self.refs.clone()
+    }
+
+    #[getter]
+    pub fn count(&self) -> usize {
+        self.refs.len()
+    }
+
+    pub fn __repr__(&self) -> String {
+        format!(
+            "PruneAnonymousReport(root={:?}, delete_applied={}, refs={})",
+            self.root.display().to_string(),
+            self.delete_applied,
+            self.refs.len()
+        )
+    }
+}
+
 impl PyArtifact {
     fn get_instance_inner(&mut self, descriptor: &PyDescriptor) -> Result<crate::Instance> {
         assert_media_type(descriptor, "application/org.ommx.v1.instance")?;
         let blob = descriptor.read_blob_from(&self.inner)?;
         Ok(crate::Instance {
             inner: ommx::Instance::from_bytes(&blob)?,
-            annotations: descriptor.annotations(),
+            annotations: descriptor.annotations().into(),
         })
     }
 
@@ -621,7 +1151,7 @@ impl PyArtifact {
         let blob = descriptor.read_blob_from(&self.inner)?;
         Ok(crate::Solution {
             inner: ommx::Solution::from_bytes(&blob)?,
-            annotations: descriptor.annotations(),
+            annotations: descriptor.annotations().into(),
         })
     }
 
@@ -633,7 +1163,7 @@ impl PyArtifact {
         let blob = descriptor.read_blob_from(&self.inner)?;
         Ok(crate::ParametricInstance {
             inner: ommx::ParametricInstance::from_bytes(&blob)?,
-            annotations: descriptor.annotations(),
+            annotations: descriptor.annotations().into(),
         })
     }
 
@@ -642,7 +1172,7 @@ impl PyArtifact {
         let blob = descriptor.read_blob_from(&self.inner)?;
         Ok(crate::SampleSet {
             inner: ommx::SampleSet::from_bytes(&blob)?,
-            annotations: descriptor.annotations(),
+            annotations: descriptor.annotations().into(),
         })
     }
 
@@ -785,7 +1315,7 @@ impl PyArtifactDraft {
     /// collision-free regardless of clock resolution. Use
     /// `Artifact.image_name` to read the synthesized name back. The
     /// `.local` mDNS TLD prevents an accidental push from leaking to
-    /// a real remote registry. Use `ommx artifact prune-anonymous`
+    /// a real remote registry. Use `ommx prune-anonymous`
     /// to clean accumulated entries.
     ///
     /// The timestamp is the **caller's local time** with no timezone
@@ -865,7 +1395,7 @@ impl PyArtifactDraft {
         self.0.add_layer(
             "application/org.ommx.v1.instance",
             &blob,
-            instance.annotations.clone(),
+            instance.annotations.clone().into_inner(),
         )
     }
 
@@ -880,7 +1410,7 @@ impl PyArtifactDraft {
         self.0.add_layer(
             "application/org.ommx.v1.parametric-instance",
             &blob,
-            instance.annotations.clone(),
+            instance.annotations.clone().into_inner(),
         )
     }
 
@@ -895,7 +1425,7 @@ impl PyArtifactDraft {
         self.0.add_layer(
             "application/org.ommx.v1.solution",
             &blob,
-            solution.annotations.clone(),
+            solution.annotations.clone().into_inner(),
         )
     }
 
@@ -910,7 +1440,7 @@ impl PyArtifactDraft {
         self.0.add_layer(
             "application/org.ommx.v1.sample-set",
             &blob,
-            sample_set.annotations.clone(),
+            sample_set.annotations.clone().into_inner(),
         )
     }
 
@@ -1055,6 +1585,97 @@ fn build_annotations(
 // Module-level functions
 // ---------------------------------------------------------------------------
 
+/// Report or delete anonymous Artifact refs in the Local Registry.
+///
+/// This is the Python SDK equivalent of `ommx prune-anonymous`.
+/// It only removes SQLite refs when `delete=True`; manifest and payload blobs
+/// are left for {func}`gc` to reclaim if they become unreachable.
+///
+/// ```python
+/// >>> from ommx.artifact import prune_anonymous
+/// >>> report = prune_anonymous()
+/// >>> report.delete_applied
+/// False
+///
+/// ```
+#[pyo3_stub_gen::derive::gen_stub_pyfunction]
+#[pyfunction]
+#[pyo3(signature = (*, root = None, delete = false))]
+pub fn prune_anonymous(
+    py: Python<'_>,
+    root: Option<PathBuf>,
+    delete: bool,
+) -> Result<PyPruneAnonymousReport> {
+    let _guard = crate::TRACING.attach_parent_context(py);
+    let registry = open_cleanup_registry(root)?;
+    let registry_root = registry.root().to_path_buf();
+    let refs = if delete {
+        registry.prune_anonymous_artifact_refs()?
+    } else {
+        registry.list_anonymous_artifact_refs()?
+    };
+    Ok(PyPruneAnonymousReport {
+        root: registry_root,
+        delete_applied: delete,
+        refs: refs
+            .into_iter()
+            .map(PyAnonymousArtifactRef::from_ref_record)
+            .collect::<Result<Vec<_>>>()?,
+    })
+}
+
+/// Report or delete Local Registry blobs unreachable from SQLite refs.
+///
+/// This is the Python SDK equivalent of `ommx gc`. It is a dry-run by
+/// default. Pass `delete=True` to unlink orphan candidates. The `grace_period`
+/// string accepts the same `s`, `m`, `h`, and `d` suffixes as the CLI.
+///
+/// ```python
+/// >>> from ommx.artifact import gc
+/// >>> report = gc()
+/// >>> report.delete_applied
+/// False
+///
+/// ```
+#[pyo3_stub_gen::derive::gen_stub_pyfunction]
+#[pyfunction]
+#[pyo3(signature = (*, root = None, delete = false, grace_period = "24h"))]
+pub fn gc(
+    py: Python<'_>,
+    root: Option<PathBuf>,
+    delete: bool,
+    grace_period: &str,
+) -> Result<PyGcReport> {
+    let _guard = crate::TRACING.attach_parent_context(py);
+    let registry = open_cleanup_registry(root)?;
+    let registry_root = registry.root().to_path_buf();
+    let grace_period = ommx::artifact::local_registry::GcOptions::parse_grace_period(grace_period)
+        .map_err(|error| anyhow::anyhow!(error))?;
+    let options = ommx::artifact::local_registry::GcOptions {
+        grace_period,
+        ..Default::default()
+    };
+    if delete {
+        let result = registry.gc(&options)?;
+        Ok(PyGcReport::from_report(
+            registry_root,
+            result.report,
+            true,
+            result.deleted_blobs,
+            result.skipped_blobs,
+        ))
+    } else {
+        let report = registry.gc_report(&options)?;
+        Ok(PyGcReport::from_report(
+            registry_root,
+            report,
+            false,
+            Vec::new(),
+            Vec::new(),
+        ))
+    }
+}
+
 /// Get the current OMMX Local Registry root path.
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
@@ -1089,4 +1710,29 @@ pub fn set_local_registry_root(path: PathBuf) -> Result<()> {
 pub fn get_images() -> Result<Vec<String>> {
     let images = ommx::artifact::get_images()?;
     Ok(images.into_iter().map(|img| img.to_string()).collect())
+}
+
+fn open_cleanup_registry(
+    root: Option<PathBuf>,
+) -> Result<ommx::artifact::local_registry::LocalRegistry> {
+    match root {
+        Some(root) => ommx::artifact::local_registry::LocalRegistry::open(root),
+        None => ommx::artifact::local_registry::LocalRegistry::open_default(),
+    }
+}
+
+fn system_time_to_unix_seconds(time: SystemTime) -> Option<f64> {
+    time.duration_since(UNIX_EPOCH)
+        .ok()
+        .map(|duration| duration.as_secs_f64())
+}
+
+fn gc_reference_kind_name(kind: ommx::artifact::local_registry::GcReferenceKind) -> &'static str {
+    match kind {
+        ommx::artifact::local_registry::GcReferenceKind::RefManifest => "ref_manifest",
+        ommx::artifact::local_registry::GcReferenceKind::ProtectedDigest => "protected_digest",
+        ommx::artifact::local_registry::GcReferenceKind::Config => "config",
+        ommx::artifact::local_registry::GcReferenceKind::Layer => "layer",
+        ommx::artifact::local_registry::GcReferenceKind::Subject => "subject",
+    }
 }

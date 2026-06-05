@@ -8,7 +8,7 @@ use std::collections::HashMap;
 ///
 /// `PyDescriptor` intentionally does not carry a `LocalRegistryHandle`.
 /// It is a lightweight descriptor view returned by registry-owning
-/// objects such as `Artifact` / `Experiment`. The blob can only be read
+/// `Artifact` objects. The blob can only be read
 /// by passing this value back to one of those owner objects, whose handle
 /// keeps temporary registries alive. If a descriptor outlives every
 /// owner of its temporary registry, it is just inert metadata and cannot
