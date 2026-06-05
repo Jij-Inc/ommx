@@ -64,12 +64,6 @@ class SCIPTerminationReport:
         )
 
 
-def _record_scip_termination_report(
-    model: pyscipopt.Model, diagnostics: DiagnosticsSink
-) -> None:
-    diagnostics.record(SCIPTerminationReport.from_model(model))
-
-
 class OMMXPySCIPOptAdapter(SolverAdapter):
     SUPPORTS_DIAGNOSTICS = True
     ADDITIONAL_CAPABILITIES = frozenset(
@@ -206,7 +200,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                 model.optimize()
             solution = adapter.decode(model)
             if diagnostics is not None:
-                _record_scip_termination_report(model, diagnostics)
+                diagnostics.record(SCIPTerminationReport.from_model(model))
             return solution
 
     @property
