@@ -13,6 +13,7 @@
 //! an internal representation detail: public accessors promote those raw
 //! descriptors before decoding typed payloads or writing attachment files.
 
+use super::artifact::ExperimentArtifactView;
 use super::attachment::{read_file_attachment, store_attachment_descriptor};
 use super::config::ExperimentConfig;
 use super::{
@@ -70,6 +71,73 @@ enum ExperimentDynLifecycle {
         reason: String,
         checkpoint_artifact: Option<LocalArtifactDyn>,
     },
+}
+
+#[derive(Debug)]
+struct ExperimentCheckpoint {
+    artifact: LocalArtifactDyn,
+    config: ExperimentConfig,
+}
+
+impl ExperimentCheckpoint {
+    fn open(
+        registry_handle: LocalRegistryHandle,
+        requested_image_name: &ImageRef,
+        accepted_statuses: &[&str],
+    ) -> Result<Self> {
+        let checkpoint_image_name = registry_handle
+            .registry()
+            .experiment_checkpoint_image_name(requested_image_name)?;
+        let requested_image_name = requested_image_name.to_string();
+        let missing_checkpoint_message = format!(
+            "No Experiment checkpoint found for requested image \
+             {requested_image_name} at {checkpoint_image_name}"
+        );
+        let artifact =
+            LocalArtifactDyn::open_in_registry_handle(registry_handle, checkpoint_image_name)
+                .with_context(|| missing_checkpoint_message)?;
+        let checkpoint = Self::from_artifact(artifact)?;
+        checkpoint.ensure_requested_image_name(&requested_image_name)?;
+        checkpoint.ensure_status(accepted_statuses)?;
+        Ok(checkpoint)
+    }
+
+    fn from_artifact(artifact: LocalArtifactDyn) -> Result<Self> {
+        let local_artifact = artifact.as_local_artifact();
+        let config = ExperimentArtifactView::new(&local_artifact).config()?;
+        Ok(Self { artifact, config })
+    }
+
+    fn requested_image_name(&self) -> Result<ImageRef> {
+        let requested = self.config.requested_image_name.as_ref().ok_or_else(|| {
+            anyhow::anyhow!("Experiment checkpoint config is missing requested_image_name")
+        })?;
+        ImageRef::parse(requested)
+            .with_context(|| "Invalid requested_image_name in Experiment checkpoint config")
+    }
+
+    fn ensure_requested_image_name(&self, requested_image_name: &str) -> Result<()> {
+        ensure!(
+            self.config.requested_image_name.as_deref() == Some(requested_image_name),
+            "Experiment checkpoint {} does not belong to requested image {requested_image_name}",
+            self.artifact.image_name()
+        );
+        Ok(())
+    }
+
+    fn ensure_status(&self, accepted_statuses: &[&str]) -> Result<()> {
+        ensure!(
+            accepted_statuses.contains(&self.config.status.as_str()),
+            "Experiment checkpoint {} has status {}",
+            self.artifact.image_name(),
+            self.config.status
+        );
+        Ok(())
+    }
+
+    fn into_artifact(self) -> LocalArtifactDyn {
+        self.artifact
+    }
 }
 
 #[derive(Debug)]
@@ -155,7 +223,11 @@ impl SealedRunDyn {
     }
 
     fn attachment_table(&self) -> Result<AttachmentTable<StoredDescriptor<'_>>> {
-        stored_attachment_table(self.registry_handle.registry(), self.attachments.clone())
+        self.attachments.clone().try_map_owned(|descriptor| {
+            self.registry_handle
+                .registry()
+                .stored_descriptor(descriptor)
+        })
     }
 
     pub fn attachment_names(&self) -> Vec<String> {
@@ -334,7 +406,7 @@ impl ExperimentDyn {
         registry_handle: LocalRegistryHandle,
         image_name: crate::artifact::ImageRef,
     ) -> Result<Self> {
-        let artifact = checkpoint_artifact(
+        let checkpoint = ExperimentCheckpoint::open(
             registry_handle,
             &image_name,
             &[
@@ -343,7 +415,7 @@ impl ExperimentDyn {
                 super::EXPERIMENT_STATUS_INTERRUPTED,
             ],
         )?;
-        Self::restore_from_checkpoint_artifact(artifact)
+        Self::restore_from_checkpoint_state(checkpoint)
     }
 
     pub fn import_archive(path: &Path) -> Result<Self> {
@@ -355,9 +427,10 @@ impl ExperimentDyn {
         Self::from_sealed_state(sealed)
     }
 
-    fn restore_from_checkpoint_artifact(artifact: LocalArtifactDyn) -> Result<Self> {
-        let sealed = SealedExperimentDynState::from_checkpoint_artifact(artifact.clone())?;
-        let requested_image_name = checkpoint_requested_image_name(&artifact)?;
+    fn restore_from_checkpoint_state(checkpoint: ExperimentCheckpoint) -> Result<Self> {
+        let requested_image_name = checkpoint.requested_image_name()?;
+        let sealed =
+            SealedExperimentDynState::from_checkpoint_artifact(checkpoint.into_artifact())?;
         Self::from_checkpoint_sealed_state(sealed, requested_image_name)
     }
 
@@ -692,7 +765,11 @@ impl ExperimentDyn {
                 lifecycle => return bail_not_sealed(lifecycle),
             }
         };
-        stored_attachment_table(self.registry_handle.registry(), attachments)
+        attachments.try_map_owned(|descriptor| {
+            self.registry_handle
+                .registry()
+                .stored_descriptor(descriptor)
+        })
     }
 
     pub fn attachment_names(&self) -> Result<Vec<String>> {
@@ -840,7 +917,10 @@ impl UnsealedExperimentDynState {
         Ok(UnsealedExperimentState {
             image_name: self.image_name.clone(),
             subject: self.subject.clone(),
-            attachments: stored_attachment_table(registry, self.attachments.clone())?,
+            attachments: self
+                .attachments
+                .clone()
+                .try_map_owned(|descriptor| registry.stored_descriptor(descriptor))?,
             runs: self
                 .runs
                 .iter()
@@ -850,10 +930,9 @@ impl UnsealedExperimentDynState {
                         RunEntry {
                             run_id: run.run_id,
                             status: run.status.clone(),
-                            attachments: stored_attachment_table(
-                                registry,
-                                run.attachments.clone(),
-                            )?,
+                            attachments: run.attachments.clone().try_map_owned(|descriptor| {
+                                registry.stored_descriptor(descriptor)
+                            })?,
                             trace: run
                                 .trace
                                 .clone()
@@ -888,7 +967,9 @@ impl UnsealedExperimentDynState {
         Ok(UnsealedExperimentState {
             image_name: self.image_name,
             subject: self.subject,
-            attachments: stored_attachment_table(registry, self.attachments)?,
+            attachments: self
+                .attachments
+                .try_map_owned(|descriptor| registry.stored_descriptor(descriptor))?,
             runs: self
                 .runs
                 .into_iter()
@@ -898,7 +979,9 @@ impl UnsealedExperimentDynState {
                         RunEntry {
                             run_id: run.run_id,
                             status: run.status,
-                            attachments: stored_attachment_table(registry, run.attachments)?,
+                            attachments: run.attachments.try_map_owned(|descriptor| {
+                                registry.stored_descriptor(descriptor)
+                            })?,
                             trace: run
                                 .trace
                                 .map(|descriptor| registry.stored_descriptor(descriptor))
@@ -1100,66 +1183,6 @@ fn unsealed_run_parameter_cells<'a>(
             .collect::<Vec<_>>()
     })
     .collect()
-}
-
-fn checkpoint_requested_image_name(artifact: &LocalArtifactDyn) -> Result<ImageRef> {
-    let config = checkpoint_experiment_config(artifact)?;
-    let requested = config.requested_image_name.ok_or_else(|| {
-        anyhow::anyhow!("Experiment checkpoint config is missing requested_image_name")
-    })?;
-    ImageRef::parse(&requested)
-        .with_context(|| "Invalid requested_image_name in Experiment checkpoint config")
-}
-
-fn checkpoint_artifact(
-    registry_handle: LocalRegistryHandle,
-    requested_image_name: &ImageRef,
-    accepted_statuses: &[&str],
-) -> Result<LocalArtifactDyn> {
-    let checkpoint_image_name = registry_handle
-        .registry()
-        .experiment_checkpoint_image_name(requested_image_name)?;
-    let requested_image_name = requested_image_name.to_string();
-    let missing_checkpoint_message = format!(
-        "No Experiment checkpoint found for requested image \
-         {requested_image_name} at {checkpoint_image_name}"
-    );
-    let artifact =
-        LocalArtifactDyn::open_in_registry_handle(registry_handle, checkpoint_image_name.clone())
-            .with_context(|| missing_checkpoint_message)?;
-    let config = checkpoint_experiment_config(&artifact)?;
-    ensure!(
-        config.requested_image_name.as_deref()
-            == Some(requested_image_name.as_str()),
-        "Experiment checkpoint {checkpoint_image_name} does not belong to requested image {requested_image_name}"
-    );
-    ensure!(
-        accepted_statuses.contains(&config.status.as_str()),
-        "Experiment checkpoint {checkpoint_image_name} has status {}",
-        config.status
-    );
-    Ok(artifact)
-}
-
-fn checkpoint_experiment_config(artifact: &LocalArtifactDyn) -> Result<ExperimentConfig> {
-    let artifact = artifact.as_local_artifact();
-    let config = artifact.stored_config()?;
-    ensure!(
-        config.media_type() == &MediaType::Other(super::EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()),
-        "Experiment checkpoint config media type is {}, expected {}",
-        config.media_type(),
-        super::EXPERIMENT_CONFIG_MEDIA_TYPE
-    );
-    let bytes = artifact.get_blob(&config)?;
-    serde_json::from_slice::<ExperimentConfig>(&bytes)
-        .context("Failed to decode Experiment checkpoint config")
-}
-
-fn stored_attachment_table<'reg>(
-    registry: &'reg LocalRegistry,
-    attachments: AttachmentTable<Descriptor>,
-) -> Result<AttachmentTable<StoredDescriptor<'reg>>> {
-    attachments.try_map_owned(|descriptor| registry.stored_descriptor(descriptor))
 }
 
 fn lock_experiment_state(state: &Mutex<ExperimentDynState>) -> MutexGuard<'_, ExperimentDynState> {

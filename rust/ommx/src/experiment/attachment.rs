@@ -42,6 +42,17 @@ impl<D> AttachmentTable<D> {
         Self::default()
     }
 
+    pub(crate) fn from_entries<N>(entries: impl IntoIterator<Item = (N, D)>) -> Result<Self>
+    where
+        N: Into<String>,
+    {
+        let mut table = Self::new();
+        for (name, descriptor) in entries {
+            table.insert(name, descriptor, None)?;
+        }
+        Ok(table)
+    }
+
     pub(crate) fn len(&self) -> usize {
         self.entries.len()
     }
@@ -101,39 +112,28 @@ impl<D> AttachmentTable<D> {
         &self,
         mut f: impl FnMut(&str, &D) -> Result<E>,
     ) -> Result<AttachmentTable<E>> {
-        let entries = self
-            .entries
-            .iter()
-            .map(|(name, descriptor)| Ok((name.clone(), f(name, descriptor)?)))
-            .collect::<Result<BTreeMap<_, _>>>()?;
-        Ok(AttachmentTable {
-            entries,
-            filenames: self.filenames.clone(),
-        })
+        let mut table = AttachmentTable::from_entries(
+            self.entries
+                .iter()
+                .map(|(name, descriptor)| Ok((name.clone(), f(name, descriptor)?)))
+                .collect::<Result<Vec<_>>>()?,
+        )?;
+        table.filenames = self.filenames.clone();
+        Ok(table)
     }
 
     pub(crate) fn try_map_owned<E>(
         self,
         mut f: impl FnMut(D) -> Result<E>,
     ) -> Result<AttachmentTable<E>> {
-        let entries = self
-            .entries
-            .into_iter()
-            .map(|(name, descriptor)| Ok((name, f(descriptor)?)))
-            .collect::<Result<BTreeMap<_, _>>>()?;
-        Ok(AttachmentTable {
-            entries,
-            filenames: self.filenames,
-        })
-    }
-
-    /// Build a table from raw config maps; callers must validate before trusting it.
-    #[cfg(test)]
-    pub(crate) fn from_parts_unchecked(
-        entries: BTreeMap<String, D>,
-        filenames: BTreeMap<String, String>,
-    ) -> Self {
-        Self { entries, filenames }
+        let mut table = AttachmentTable::from_entries(
+            self.entries
+                .into_iter()
+                .map(|(name, descriptor)| Ok((name, f(descriptor)?)))
+                .collect::<Result<Vec<_>>>()?,
+        )?;
+        table.filenames = self.filenames;
+        Ok(table)
     }
 }
 

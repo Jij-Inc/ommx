@@ -1,12 +1,10 @@
 //! Read-only model reconstructed from a sealed Experiment Artifact.
 
+use super::artifact::ExperimentArtifactView;
 use super::attachment::AttachmentTable;
-use super::config::{ExperimentConfig, ExperimentConfigSolve, LayerRef};
+use super::config::{ExperimentConfigSolve, LayerRef};
 use super::parameter::{RunParameterCell, RunParameterTable};
-use super::{
-    ExperimentStatus, RunStatus, SealedExperiment, Trace, EXPERIMENT_CONFIG_MEDIA_TYPE,
-    RUN_PARAMETERS_MEDIA_TYPE,
-};
+use super::{ExperimentStatus, RunStatus, SealedExperiment, Trace, RUN_PARAMETERS_MEDIA_TYPE};
 use crate::artifact::local_registry::StoredDescriptor;
 use crate::artifact::{
     media_types, ImageRef, InstanceAnnotations, LocalArtifact, ParametricInstanceAnnotations,
@@ -42,7 +40,20 @@ impl<'reg> SealedExperiment<'reg> {
         artifact: LocalArtifact<'reg>,
         allowed_statuses: &[ExperimentStatus],
     ) -> Result<Self> {
-        let (config, status) = load_experiment_config(&artifact, allowed_statuses)?;
+        let config = ExperimentArtifactView::new(&artifact).config()?;
+        let status = ExperimentStatus::from_config(&config.status)?;
+        if !allowed_statuses.contains(&status) {
+            let expected = allowed_statuses
+                .iter()
+                .map(ExperimentStatus::as_str)
+                .collect::<Vec<_>>()
+                .join(" or ");
+            crate::bail!(
+                "Experiment config status is {}, expected {}",
+                status,
+                expected
+            );
+        }
         let layers = artifact.layers()?;
 
         let attachments = decode_attachments(&layers, config.attachments, "experiment")?;
@@ -292,37 +303,6 @@ impl<'reg> Solve<'reg> {
     pub fn adapter_options(&self) -> &str {
         &self.adapter_options
     }
-}
-
-fn load_experiment_config(
-    artifact: &LocalArtifact<'_>,
-    allowed_statuses: &[ExperimentStatus],
-) -> Result<(ExperimentConfig, ExperimentStatus)> {
-    let config = artifact.stored_config()?;
-    if config.media_type() != &MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()) {
-        crate::bail!(
-            "Experiment config media type is {}, expected {}",
-            config.media_type(),
-            EXPERIMENT_CONFIG_MEDIA_TYPE
-        );
-    }
-    let bytes = artifact.get_blob(&config)?;
-    let config = serde_json::from_slice::<ExperimentConfig>(&bytes)
-        .context("Failed to decode Experiment config")?;
-    let status = ExperimentStatus::from_config(&config.status)?;
-    if !allowed_statuses.contains(&status) {
-        let expected = allowed_statuses
-            .iter()
-            .map(ExperimentStatus::as_str)
-            .collect::<Vec<_>>()
-            .join(" or ");
-        crate::bail!(
-            "Experiment config status is {}, expected {}",
-            status,
-            expected
-        );
-    }
-    Ok((config, status))
 }
 
 fn decode_attachments<'reg>(

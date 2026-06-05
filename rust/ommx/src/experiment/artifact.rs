@@ -8,8 +8,38 @@ use crate::artifact::local_registry::{
     LocalRegistry, RefUpdate, StoredDescriptor, UnsealedArtifact,
 };
 use crate::artifact::{media_types, ImageRef, LocalArtifact};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use oci_spec::image::MediaType;
+
+/// Persistence boundary for the Experiment Artifact layout.
+///
+/// This view owns the knowledge that the OCI config blob contains an
+/// [`ExperimentConfig`] with [`EXPERIMENT_CONFIG_MEDIA_TYPE`]. The config
+/// type itself remains a serialized schema, and sealed / dynamic models
+/// only ask this boundary to decode that schema from an artifact.
+pub(super) struct ExperimentArtifactView<'a, 'reg> {
+    artifact: &'a LocalArtifact<'reg>,
+}
+
+impl<'a, 'reg> ExperimentArtifactView<'a, 'reg> {
+    pub(super) fn new(artifact: &'a LocalArtifact<'reg>) -> Self {
+        Self { artifact }
+    }
+
+    pub(super) fn config(&self) -> Result<ExperimentConfig> {
+        let config = self.artifact.stored_config()?;
+        if config.media_type() != &MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()) {
+            crate::bail!(
+                "Experiment config media type is {}, expected {}",
+                config.media_type(),
+                EXPERIMENT_CONFIG_MEDIA_TYPE
+            );
+        }
+        let bytes = self.artifact.get_blob(&config)?;
+        serde_json::from_slice::<ExperimentConfig>(&bytes)
+            .context("Failed to decode Experiment config")
+    }
+}
 
 impl<'reg> UnsealedExperimentState<'reg> {
     /// Consume the unsealed experiment state and commit it as one

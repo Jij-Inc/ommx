@@ -73,16 +73,6 @@ fn blob_bytes(artifact: &LocalArtifact<'_>, descriptor: &StoredDescriptor<'_>) -
     artifact.get_blob(descriptor).unwrap()
 }
 
-fn attachment_refs(
-    entries: impl IntoIterator<Item = (&'static str, LayerRef)>,
-) -> AttachmentTable<LayerRef> {
-    let mut table = AttachmentTable::new();
-    for (name, layer_ref) in entries {
-        table.insert(name.to_string(), layer_ref, None).unwrap();
-    }
-    table
-}
-
 /// `run()` hands out fresh 0-based ids; `finish()` consumes the run
 /// handle and registers the closed run.
 #[test]
@@ -759,7 +749,7 @@ fn loaded_experiment_rejects_config_attachment_not_listed_in_layers() {
     let config = ExperimentConfig {
         status: EXPERIMENT_STATUS_FINISHED.to_string(),
         requested_image_name: None,
-        attachments: attachment_refs([("outside", LayerRef(1))]),
+        attachments: AttachmentTable::from_entries([("outside", LayerRef(1))]).unwrap(),
         runs: Vec::new(),
         run_parameters: LayerRef(0),
     };
@@ -816,7 +806,7 @@ fn loaded_experiment_uses_config_table_for_attachment_names() {
     let config = ExperimentConfig {
         status: EXPERIMENT_STATUS_FINISHED.to_string(),
         requested_image_name: None,
-        attachments: attachment_refs([("config-name", LayerRef(0))]),
+        attachments: AttachmentTable::from_entries([("config-name", LayerRef(0))]).unwrap(),
         runs: Vec::new(),
         run_parameters: LayerRef(1),
     };
@@ -864,16 +854,17 @@ fn loaded_experiment_rejects_filename_without_attachment_entry() {
             HashMap::new(),
         )
         .unwrap();
-    let config = ExperimentConfig {
-        status: EXPERIMENT_STATUS_FINISHED.to_string(),
-        requested_image_name: None,
-        attachments: AttachmentTable::from_parts_unchecked(
-            BTreeMap::new(),
-            BTreeMap::from([("missing".to_string(), "missing.txt".to_string())]),
-        ),
-        runs: Vec::new(),
-        run_parameters: LayerRef(0),
-    };
+    let config = json!({
+        "status": EXPERIMENT_STATUS_FINISHED,
+        "attachments": {
+            "entries": {},
+            "filenames": {
+                "missing": "missing.txt",
+            },
+        },
+        "runs": [],
+        "run_parameters": 0,
+    });
     let config_descriptor = registry
         .store_json_blob(
             MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()),
@@ -925,7 +916,7 @@ fn loaded_experiment_rejects_config_run_attachment_not_listed_in_layers() {
         runs: vec![ExperimentConfigRun {
             run_id: 0,
             status: RUN_STATUS_FINISHED.to_string(),
-            attachments: attachment_refs([("outside", LayerRef(1))]),
+            attachments: AttachmentTable::from_entries([("outside", LayerRef(1))]).unwrap(),
             trace: None,
             solves: Vec::new(),
         }],
