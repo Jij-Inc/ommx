@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, ClassVar, Protocol, TypeAlias
+from typing import Any, ClassVar
 
 from ommx.v1 import Instance, Solution, SampleSet, AdditionalCapability
 
@@ -10,27 +10,19 @@ SolverInput = Any
 SolverOutput = Any
 SamplerInput = Any
 SamplerOutput = Any
-Diagnostic: TypeAlias = object
-
-
-class DiagnosticsSink(Protocol):
-    """Protocol consumed by adapters that can emit diagnostics."""
-
-    def record(self, diagnostic: Diagnostic) -> None:
-        """Record one adapter-defined diagnostic object."""
 
 
 class DiagnosticCollector:
     """In-memory diagnostics sink for direct adapter calls."""
 
     def __init__(self) -> None:
-        self._diagnostics: list[Diagnostic] = []
+        self._diagnostics: list[object] = []
 
     @property
-    def diagnostics(self) -> tuple[Diagnostic, ...]:
+    def diagnostics(self) -> tuple[object, ...]:
         return tuple(self._diagnostics)
 
-    def record(self, diagnostic: Diagnostic) -> None:
+    def record(self, diagnostic: object) -> None:
         self._diagnostics.append(diagnostic)
 
 
