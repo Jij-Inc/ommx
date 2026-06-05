@@ -1,11 +1,12 @@
 //! Experiment / Run handles and run lifecycle.
 
-use super::attachment::{store_attachment_descriptor, AttachmentSpace};
+use super::attachment::store_attachment_descriptor;
 use super::{AttachmentLogger, ParameterValue, Run, RunEntry, RunStatus, SolveEntry, Trace};
 use crate::artifact::media_types;
 use crate::{Instance, Solution};
 use anyhow::Result;
 use oci_spec::image::MediaType;
+use std::collections::HashMap;
 
 impl<'exp, 'reg> Run<'exp, 'reg> {
     /// This run's 0-based id within the experiment.
@@ -142,10 +143,9 @@ impl<'exp, 'reg> AttachmentLogger for &mut Run<'exp, 'reg> {
         }
         let descriptor = store_attachment_descriptor(
             self.experiment.registry,
-            AttachmentSpace::Run(self.run_id),
-            name,
             media_type,
             bytes.as_ref(),
+            HashMap::new(),
         )?;
         self.attachments
             .insert(name.to_string(), descriptor, filename)?;

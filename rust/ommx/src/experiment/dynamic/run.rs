@@ -8,9 +8,10 @@ use super::{
     ExperimentDynState, RunEntryDyn, SolveEntryDyn,
 };
 use crate::artifact::media_types;
-use crate::{Instance, Solution};
+use crate::{Instance, ParametricInstance, SampleSet, Solution};
 use anyhow::Result;
 use oci_spec::image::{Descriptor, MediaType};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 /// Runtime-owned Run handle.
@@ -92,10 +93,94 @@ impl RunDyn {
         self.open_mut()?.parameters.insert(name, value)
     }
 
+    #[doc(hidden)]
+    pub fn log_instance_with_payload_annotations(
+        &mut self,
+        name: &str,
+        instance: &Instance,
+        payload_annotations: HashMap<String, String>,
+    ) -> Result<()> {
+        self.log_attachment_with_payload_annotations(
+            name,
+            media_types::v1_instance(),
+            instance.to_bytes(),
+            None,
+            payload_annotations,
+        )
+    }
+
+    #[doc(hidden)]
+    pub fn log_solution_with_payload_annotations(
+        &mut self,
+        name: &str,
+        solution: &Solution,
+        payload_annotations: HashMap<String, String>,
+    ) -> Result<()> {
+        self.log_attachment_with_payload_annotations(
+            name,
+            media_types::v1_solution(),
+            solution.to_bytes(),
+            None,
+            payload_annotations,
+        )
+    }
+
+    #[doc(hidden)]
+    pub fn log_parametric_instance_with_payload_annotations(
+        &mut self,
+        name: &str,
+        pi: &ParametricInstance,
+        payload_annotations: HashMap<String, String>,
+    ) -> Result<()> {
+        self.log_attachment_with_payload_annotations(
+            name,
+            media_types::v1_parametric_instance(),
+            pi.to_bytes(),
+            None,
+            payload_annotations,
+        )
+    }
+
+    #[doc(hidden)]
+    pub fn log_sample_set_with_payload_annotations(
+        &mut self,
+        name: &str,
+        sample_set: &SampleSet,
+        payload_annotations: HashMap<String, String>,
+    ) -> Result<()> {
+        self.log_attachment_with_payload_annotations(
+            name,
+            media_types::v1_sample_set(),
+            sample_set.to_bytes(),
+            None,
+            payload_annotations,
+        )
+    }
+
     pub fn log_finished_solve_result(
         &mut self,
         input: &Instance,
         output: &Solution,
+        adapter: String,
+        adapter_options: String,
+    ) -> Result<u64> {
+        self.log_finished_solve_result_with_payload_annotations(
+            input,
+            HashMap::new(),
+            output,
+            HashMap::new(),
+            adapter,
+            adapter_options,
+        )
+    }
+
+    #[doc(hidden)]
+    pub fn log_finished_solve_result_with_payload_annotations(
+        &mut self,
+        input: &Instance,
+        input_payload_annotations: HashMap<String, String>,
+        output: &Solution,
+        output_payload_annotations: HashMap<String, String>,
         adapter: String,
         adapter_options: String,
     ) -> Result<u64> {
@@ -107,11 +192,13 @@ impl RunDyn {
                     &dyn_state,
                     media_types::v1_instance(),
                     &input.to_bytes(),
+                    input_payload_annotations,
                 )?,
                 store_solve_payload_descriptor(
                     &dyn_state,
                     media_types::v1_solution(),
                     &output.to_bytes(),
+                    output_payload_annotations,
                 )?,
             )
         };
@@ -251,7 +338,25 @@ impl AttachmentLogger for &mut RunDyn {
         bytes: impl AsRef<[u8]>,
         filename: Option<String>,
     ) -> Result<()> {
-        let run_id = self.open()?.run_id;
+        self.log_attachment_with_payload_annotations(
+            name,
+            media_type,
+            bytes,
+            filename,
+            HashMap::new(),
+        )
+    }
+}
+
+impl RunDyn {
+    fn log_attachment_with_payload_annotations(
+        &mut self,
+        name: &str,
+        media_type: MediaType,
+        bytes: impl AsRef<[u8]>,
+        filename: Option<String>,
+        payload_annotations: HashMap<String, String>,
+    ) -> Result<()> {
         if self.open()?.attachments.contains_key(name) {
             crate::bail!("Attachment `{name}` already exists");
         }
@@ -261,10 +366,9 @@ impl AttachmentLogger for &mut RunDyn {
             let registry_handle = dyn_state.registry_handle.clone();
             store_run_attachment_descriptor(
                 registry_handle.registry(),
-                run_id,
-                name,
                 media_type,
                 bytes.as_ref(),
+                payload_annotations,
             )?
         };
         self.open_mut()?

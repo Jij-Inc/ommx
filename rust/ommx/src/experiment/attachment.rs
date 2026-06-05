@@ -1,6 +1,5 @@
 //! Experiment and run scoped Attachment descriptor helpers.
 
-use super::{ANN_ATTACHMENT_NAME, ANN_RUN_ID, ANN_SPACE};
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
 use crate::artifact::media_types;
 use crate::{Instance, ParametricInstance, SampleSet, Solution};
@@ -13,49 +12,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-/// Descriptor annotation key storing the human attachment name.
-pub const ATTACHMENT_NAME_ANNOTATION: &str = ANN_ATTACHMENT_NAME;
-
-/// Descriptor annotation key storing the filename used when exporting a file attachment.
-pub const ATTACHMENT_FILENAME_ANNOTATION: &str = "org.ommx.attachment.filename";
-
 /// Fallback media type when file content cannot be identified.
 pub const DEFAULT_FILE_MEDIA_TYPE: &str = "application/octet-stream";
-
-/// The storage space an Attachment descriptor belongs to.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AttachmentSpace {
-    /// Shared by the whole experiment (dataset, source problem, ...).
-    Experiment,
-    /// Owned by a single run.
-    Run(u64),
-}
-
-impl AttachmentSpace {
-    fn as_str(self) -> &'static str {
-        match self {
-            AttachmentSpace::Experiment => "experiment",
-            AttachmentSpace::Run(_) => "run",
-        }
-    }
-
-    fn run_id(self) -> Option<u64> {
-        match self {
-            AttachmentSpace::Experiment => None,
-            AttachmentSpace::Run(run_id) => Some(run_id),
-        }
-    }
-
-    fn descriptor_annotations(self, name: &str) -> HashMap<String, String> {
-        let mut annotations = HashMap::new();
-        annotations.insert(ANN_SPACE.to_string(), self.as_str().to_string());
-        if let Some(run_id) = self.run_id() {
-            annotations.insert(ANN_RUN_ID.to_string(), run_id.to_string());
-        }
-        annotations.insert(ANN_ATTACHMENT_NAME.to_string(), name.to_string());
-        annotations
-    }
-}
 
 /// Name-indexed attachment bindings for one Experiment or Run namespace.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -199,7 +157,7 @@ impl<'reg> AttachmentTable<StoredDescriptor<'reg>> {
         Ok(self.attachment(name)?.media_type().clone())
     }
 
-    pub fn annotations(&self, name: &str) -> Result<HashMap<String, String>> {
+    pub(crate) fn payload_annotations(&self, name: &str) -> Result<HashMap<String, String>> {
         Ok(self
             .attachment(name)?
             .annotations()
@@ -295,13 +253,11 @@ impl FileAttachment {
 /// Write `bytes` to the registry and build the in-memory Attachment descriptor.
 pub fn store_attachment_descriptor<'reg>(
     registry: &'reg LocalRegistry,
-    space: AttachmentSpace,
-    name: &str,
     media_type: MediaType,
     bytes: &[u8],
+    payload_annotations: HashMap<String, String>,
 ) -> Result<StoredDescriptor<'reg>> {
-    let annotations = space.descriptor_annotations(name);
-    registry.store_layer_blob(media_type, bytes, annotations)
+    registry.store_layer_blob(media_type, bytes, payload_annotations)
 }
 
 pub fn json_media_type() -> MediaType {
@@ -311,23 +267,6 @@ pub fn json_media_type() -> MediaType {
 pub fn encode_json(name: &str, value: impl serde::Serialize) -> Result<Vec<u8>> {
     crate::artifact::stable_json_bytes(&value)
         .map_err(|e| crate::error!("Failed to encode JSON attachment `{name}`: {e}"))
-}
-
-pub fn attachment_name(descriptor: &oci_spec::image::Descriptor) -> Option<&str> {
-    descriptor
-        .annotations()
-        .as_ref()
-        .and_then(|annotations| annotations.get(ANN_ATTACHMENT_NAME))
-        .map(String::as_str)
-}
-
-/// Return the export filename recorded for a file attachment.
-pub fn attachment_filename(descriptor: &oci_spec::image::Descriptor) -> Option<&str> {
-    descriptor
-        .annotations()
-        .as_ref()
-        .and_then(|annotations| annotations.get(ATTACHMENT_FILENAME_ANNOTATION))
-        .map(String::as_str)
 }
 
 /// Detect the media type of file contents using magic bytes.
@@ -350,7 +289,7 @@ fn write_attachment_descriptor(
     path: impl AsRef<Path>,
     overwrite: bool,
 ) -> Result<PathBuf> {
-    let output_path = attachment_output_path(descriptor, name, filename, path.as_ref());
+    let output_path = attachment_output_path(name, filename, path.as_ref());
     if output_path.exists() && !overwrite {
         crate::bail!(
             "Attachment destination `{}` already exists",
@@ -409,27 +348,17 @@ fn validate_attachment_filename(filename: &str) -> Result<()> {
     Ok(())
 }
 
-fn attachment_output_path(
-    descriptor: &oci_spec::image::Descriptor,
-    name: &str,
-    filename: Option<&str>,
-    path: &Path,
-) -> PathBuf {
+fn attachment_output_path(name: &str, filename: Option<&str>, path: &Path) -> PathBuf {
     if path.is_dir() {
-        path.join(attachment_export_filename(descriptor, name, filename))
+        path.join(attachment_export_filename(name, filename))
     } else {
         path.to_path_buf()
     }
 }
 
-fn attachment_export_filename(
-    descriptor: &oci_spec::image::Descriptor,
-    name: &str,
-    filename: Option<&str>,
-) -> String {
+fn attachment_export_filename(name: &str, filename: Option<&str>) -> String {
     filename
         .and_then(safe_attachment_filename)
-        .or_else(|| attachment_filename(descriptor).and_then(safe_attachment_filename))
         .or_else(|| safe_attachment_filename(name))
         .unwrap_or_else(|| "attachment".to_string())
 }

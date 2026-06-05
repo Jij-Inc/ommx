@@ -321,10 +321,10 @@ impl PyExperiment {
     /// Read an Instance experiment-level attachment by name.
     pub fn get_instance(&self, py: Python<'_>, name: &str) -> Result<crate::Instance> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        Ok(crate::Instance {
-            inner: self.inner.attachment_instance(name)?,
-            annotations: self.inner.attachment_annotations(name)?,
-        })
+        let (inner, annotations) = self
+            .inner
+            .attachment_instance_with_payload_annotations(name)?;
+        Ok(crate::Instance { inner, annotations })
     }
 
     /// Read a ParametricInstance experiment-level attachment by name.
@@ -334,28 +334,28 @@ impl PyExperiment {
         name: &str,
     ) -> Result<crate::ParametricInstance> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        Ok(crate::ParametricInstance {
-            inner: self.inner.attachment_parametric_instance(name)?,
-            annotations: self.inner.attachment_annotations(name)?,
-        })
+        let (inner, annotations) = self
+            .inner
+            .attachment_parametric_instance_with_payload_annotations(name)?;
+        Ok(crate::ParametricInstance { inner, annotations })
     }
 
     /// Read a Solution experiment-level attachment by name.
     pub fn get_solution(&self, py: Python<'_>, name: &str) -> Result<crate::Solution> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        Ok(crate::Solution {
-            inner: self.inner.attachment_solution(name)?,
-            annotations: self.inner.attachment_annotations(name)?,
-        })
+        let (inner, annotations) = self
+            .inner
+            .attachment_solution_with_payload_annotations(name)?;
+        Ok(crate::Solution { inner, annotations })
     }
 
     /// Read a SampleSet experiment-level attachment by name.
     pub fn get_sample_set(&self, py: Python<'_>, name: &str) -> Result<crate::SampleSet> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        Ok(crate::SampleSet {
-            inner: self.inner.attachment_sample_set(name)?,
-            annotations: self.inner.attachment_annotations(name)?,
-        })
+        let (inner, annotations) = self
+            .inner
+            .attachment_sample_set_with_payload_annotations(name)?;
+        Ok(crate::SampleSet { inner, annotations })
     }
 
     /// Read raw bytes of an experiment-level attachment by name.
@@ -530,7 +530,11 @@ impl PyExperiment {
 
     /// Attach an Instance in the experiment space.
     pub fn log_instance(&mut self, name: &str, instance: &crate::Instance) -> Result<()> {
-        AttachmentLogger::log_instance(&self.inner, name, &instance.inner)
+        self.inner.log_instance_with_payload_annotations(
+            name,
+            &instance.inner,
+            instance.annotations.clone(),
+        )
     }
 
     /// Attach an ParametricInstance in the experiment space.
@@ -539,17 +543,29 @@ impl PyExperiment {
         name: &str,
         pi: &crate::ParametricInstance,
     ) -> Result<()> {
-        AttachmentLogger::log_parametric_instance(&self.inner, name, &pi.inner)
+        self.inner.log_parametric_instance_with_payload_annotations(
+            name,
+            &pi.inner,
+            pi.annotations.clone(),
+        )
     }
 
     /// Attach a Solution in the experiment space.
     pub fn log_solution(&mut self, name: &str, solution: &crate::Solution) -> Result<()> {
-        AttachmentLogger::log_solution(&self.inner, name, &solution.inner)
+        self.inner.log_solution_with_payload_annotations(
+            name,
+            &solution.inner,
+            solution.annotations.clone(),
+        )
     }
 
     /// Attach a SampleSet in the experiment space.
     pub fn log_sample_set(&mut self, name: &str, sample_set: &crate::SampleSet) -> Result<()> {
-        AttachmentLogger::log_sample_set(&self.inner, name, &sample_set.inner)
+        self.inner.log_sample_set_with_payload_annotations(
+            name,
+            &sample_set.inner,
+            sample_set.annotations.clone(),
+        )
     }
 
     /// Commit this unsealed Experiment into the local registry.
@@ -825,40 +841,42 @@ fn decode_experiment_attachment<'py>(
 ) -> Result<Bound<'py, PyAny>> {
     match experiment.attachment_media_type(name)?.as_ref() {
         "application/json" => decode_json_blob(py, &experiment.attachment_blob(name)?),
-        ommx::artifact::media_types::V1_INSTANCE_MEDIA_TYPE => Ok(crate::Instance {
-            inner: experiment.attachment_instance(name)?,
-            annotations: experiment.attachment_annotations(name)?,
+        ommx::artifact::media_types::V1_INSTANCE_MEDIA_TYPE => {
+            let (inner, annotations) =
+                experiment.attachment_instance_with_payload_annotations(name)?;
+            Ok(crate::Instance { inner, annotations }
+                .into_pyobject(py)?
+                .into_any()
+                .unbind()
+                .into_bound(py))
         }
-        .into_pyobject(py)?
-        .into_any()
-        .unbind()
-        .into_bound(py)),
         ommx::artifact::media_types::V1_PARAMETRIC_INSTANCE_MEDIA_TYPE => {
-            Ok(crate::ParametricInstance {
-                inner: experiment.attachment_parametric_instance(name)?,
-                annotations: experiment.attachment_annotations(name)?,
-            }
-            .into_pyobject(py)?
-            .into_any()
-            .unbind()
-            .into_bound(py))
+            let (inner, annotations) =
+                experiment.attachment_parametric_instance_with_payload_annotations(name)?;
+            Ok(crate::ParametricInstance { inner, annotations }
+                .into_pyobject(py)?
+                .into_any()
+                .unbind()
+                .into_bound(py))
         }
-        ommx::artifact::media_types::V1_SOLUTION_MEDIA_TYPE => Ok(crate::Solution {
-            inner: experiment.attachment_solution(name)?,
-            annotations: experiment.attachment_annotations(name)?,
+        ommx::artifact::media_types::V1_SOLUTION_MEDIA_TYPE => {
+            let (inner, annotations) =
+                experiment.attachment_solution_with_payload_annotations(name)?;
+            Ok(crate::Solution { inner, annotations }
+                .into_pyobject(py)?
+                .into_any()
+                .unbind()
+                .into_bound(py))
         }
-        .into_pyobject(py)?
-        .into_any()
-        .unbind()
-        .into_bound(py)),
-        ommx::artifact::media_types::V1_SAMPLE_SET_MEDIA_TYPE => Ok(crate::SampleSet {
-            inner: experiment.attachment_sample_set(name)?,
-            annotations: experiment.attachment_annotations(name)?,
+        ommx::artifact::media_types::V1_SAMPLE_SET_MEDIA_TYPE => {
+            let (inner, annotations) =
+                experiment.attachment_sample_set_with_payload_annotations(name)?;
+            Ok(crate::SampleSet { inner, annotations }
+                .into_pyobject(py)?
+                .into_any()
+                .unbind()
+                .into_bound(py))
         }
-        .into_pyobject(py)?
-        .into_any()
-        .unbind()
-        .into_bound(py)),
         _ => Ok(PyBytes::new(py, &experiment.attachment_blob(name)?).into_any()),
     }
 }
@@ -870,40 +888,39 @@ fn decode_run_attachment<'py>(
 ) -> Result<Bound<'py, PyAny>> {
     match run.attachment_media_type(name)?.as_ref() {
         "application/json" => decode_json_blob(py, &run.attachment_blob(name)?),
-        ommx::artifact::media_types::V1_INSTANCE_MEDIA_TYPE => Ok(crate::Instance {
-            inner: run.attachment_instance(name)?,
-            annotations: run.attachment_annotations(name)?,
+        ommx::artifact::media_types::V1_INSTANCE_MEDIA_TYPE => {
+            let (inner, annotations) = run.attachment_instance_with_payload_annotations(name)?;
+            Ok(crate::Instance { inner, annotations }
+                .into_pyobject(py)?
+                .into_any()
+                .unbind()
+                .into_bound(py))
         }
-        .into_pyobject(py)?
-        .into_any()
-        .unbind()
-        .into_bound(py)),
         ommx::artifact::media_types::V1_PARAMETRIC_INSTANCE_MEDIA_TYPE => {
-            Ok(crate::ParametricInstance {
-                inner: run.attachment_parametric_instance(name)?,
-                annotations: run.attachment_annotations(name)?,
-            }
-            .into_pyobject(py)?
-            .into_any()
-            .unbind()
-            .into_bound(py))
+            let (inner, annotations) =
+                run.attachment_parametric_instance_with_payload_annotations(name)?;
+            Ok(crate::ParametricInstance { inner, annotations }
+                .into_pyobject(py)?
+                .into_any()
+                .unbind()
+                .into_bound(py))
         }
-        ommx::artifact::media_types::V1_SOLUTION_MEDIA_TYPE => Ok(crate::Solution {
-            inner: run.attachment_solution(name)?,
-            annotations: run.attachment_annotations(name)?,
+        ommx::artifact::media_types::V1_SOLUTION_MEDIA_TYPE => {
+            let (inner, annotations) = run.attachment_solution_with_payload_annotations(name)?;
+            Ok(crate::Solution { inner, annotations }
+                .into_pyobject(py)?
+                .into_any()
+                .unbind()
+                .into_bound(py))
         }
-        .into_pyobject(py)?
-        .into_any()
-        .unbind()
-        .into_bound(py)),
-        ommx::artifact::media_types::V1_SAMPLE_SET_MEDIA_TYPE => Ok(crate::SampleSet {
-            inner: run.attachment_sample_set(name)?,
-            annotations: run.attachment_annotations(name)?,
+        ommx::artifact::media_types::V1_SAMPLE_SET_MEDIA_TYPE => {
+            let (inner, annotations) = run.attachment_sample_set_with_payload_annotations(name)?;
+            Ok(crate::SampleSet { inner, annotations }
+                .into_pyobject(py)?
+                .into_any()
+                .unbind()
+                .into_bound(py))
         }
-        .into_pyobject(py)?
-        .into_any()
-        .unbind()
-        .into_bound(py)),
         _ => Ok(PyBytes::new(py, &run.attachment_blob(name)?).into_any()),
     }
 }
@@ -1181,7 +1198,11 @@ impl PyRun {
     /// with the returned solution.
     pub fn log_instance(&mut self, name: &str, instance: &crate::Instance) -> Result<()> {
         self.ensure_store_trace_context_started()?;
-        AttachmentLogger::log_instance(self.as_open_mut()?, name, &instance.inner)
+        self.as_open_mut()?.log_instance_with_payload_annotations(
+            name,
+            &instance.inner,
+            instance.annotations.clone(),
+        )
     }
 
     /// Attach a ParametricInstance in this run.
@@ -1191,7 +1212,12 @@ impl PyRun {
         pi: &crate::ParametricInstance,
     ) -> Result<()> {
         self.ensure_store_trace_context_started()?;
-        AttachmentLogger::log_parametric_instance(self.as_open_mut()?, name, &pi.inner)
+        self.as_open_mut()?
+            .log_parametric_instance_with_payload_annotations(
+                name,
+                &pi.inner,
+                pi.annotations.clone(),
+            )
     }
 
     /// Attach a Solution in this run.
@@ -1201,13 +1227,21 @@ impl PyRun {
     /// with the input instance.
     pub fn log_solution(&mut self, name: &str, solution: &crate::Solution) -> Result<()> {
         self.ensure_store_trace_context_started()?;
-        AttachmentLogger::log_solution(self.as_open_mut()?, name, &solution.inner)
+        self.as_open_mut()?.log_solution_with_payload_annotations(
+            name,
+            &solution.inner,
+            solution.annotations.clone(),
+        )
     }
 
     /// Attach a SampleSet in this run.
     pub fn log_sample_set(&mut self, name: &str, sample_set: &crate::SampleSet) -> Result<()> {
         self.ensure_store_trace_context_started()?;
-        AttachmentLogger::log_sample_set(self.as_open_mut()?, name, &sample_set.inner)
+        self.as_open_mut()?.log_sample_set_with_payload_annotations(
+            name,
+            &sample_set.inner,
+            sample_set.annotations.clone(),
+        )
     }
 
     /// Solve an Instance with an OMMX SolverAdapter and log a Solve entry.
@@ -1236,12 +1270,16 @@ impl PyRun {
         let adapter_name = adapter.name(py)?;
         let adapter_options = dump_kwargs(py, kwargs)?;
         let solution = adapter.solve(py, instance, kwargs)?;
-        let solve_id = self.as_open_mut()?.log_finished_solve_result(
-            &instance.inner,
-            &solution.inner,
-            adapter_name,
-            adapter_options,
-        )?;
+        let solve_id = self
+            .as_open_mut()?
+            .log_finished_solve_result_with_payload_annotations(
+                &instance.inner,
+                instance.annotations.clone(),
+                &solution.inner,
+                solution.annotations.clone(),
+                adapter_name,
+                adapter_options,
+            )?;
         tracing::info!(solve_id, "ommx.solve.recorded");
         Ok(solution)
     }
@@ -1532,10 +1570,10 @@ impl PySealedRun {
     /// Read an Instance run-level attachment by name.
     pub fn get_instance(&self, py: Python<'_>, name: &str) -> Result<crate::Instance> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        Ok(crate::Instance {
-            inner: self.run.attachment_instance(name)?,
-            annotations: self.run.attachment_annotations(name)?,
-        })
+        let (inner, annotations) = self
+            .run
+            .attachment_instance_with_payload_annotations(name)?;
+        Ok(crate::Instance { inner, annotations })
     }
 
     /// Read a ParametricInstance run-level attachment by name.
@@ -1545,28 +1583,28 @@ impl PySealedRun {
         name: &str,
     ) -> Result<crate::ParametricInstance> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        Ok(crate::ParametricInstance {
-            inner: self.run.attachment_parametric_instance(name)?,
-            annotations: self.run.attachment_annotations(name)?,
-        })
+        let (inner, annotations) = self
+            .run
+            .attachment_parametric_instance_with_payload_annotations(name)?;
+        Ok(crate::ParametricInstance { inner, annotations })
     }
 
     /// Read a Solution run-level attachment by name.
     pub fn get_solution(&self, py: Python<'_>, name: &str) -> Result<crate::Solution> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        Ok(crate::Solution {
-            inner: self.run.attachment_solution(name)?,
-            annotations: self.run.attachment_annotations(name)?,
-        })
+        let (inner, annotations) = self
+            .run
+            .attachment_solution_with_payload_annotations(name)?;
+        Ok(crate::Solution { inner, annotations })
     }
 
     /// Read a SampleSet run-level attachment by name.
     pub fn get_sample_set(&self, py: Python<'_>, name: &str) -> Result<crate::SampleSet> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        Ok(crate::SampleSet {
-            inner: self.run.attachment_sample_set(name)?,
-            annotations: self.run.attachment_annotations(name)?,
-        })
+        let (inner, annotations) = self
+            .run
+            .attachment_sample_set_with_payload_annotations(name)?;
+        Ok(crate::SampleSet { inner, annotations })
     }
 
     /// Read raw bytes of a run-level attachment by name.
@@ -1668,19 +1706,15 @@ impl PySolve {
     #[getter]
     /// Input `Instance` passed to the solver.
     pub fn input(&self) -> Result<crate::Instance> {
-        Ok(crate::Instance {
-            inner: self.0.input_instance()?,
-            annotations: self.0.input_annotations()?,
-        })
+        let (inner, annotations) = self.0.input_instance_with_payload_annotations()?;
+        Ok(crate::Instance { inner, annotations })
     }
 
     #[getter]
     /// Output `Solution` returned by the solver.
     pub fn output(&self) -> Result<crate::Solution> {
-        Ok(crate::Solution {
-            inner: self.0.output_solution()?,
-            annotations: self.0.output_annotations()?,
-        })
+        let (inner, annotations) = self.0.output_solution_with_payload_annotations()?;
+        Ok(crate::Solution { inner, annotations })
     }
 
     #[getter]

@@ -13,7 +13,7 @@
 //! an internal representation detail: public accessors promote those raw
 //! descriptors before decoding typed payloads or writing attachment files.
 
-use super::attachment::{store_attachment_descriptor, AttachmentSpace};
+use super::attachment::store_attachment_descriptor;
 use super::config::ExperimentConfig;
 use super::{
     allocate_next_run_id, next_run_id, AttachmentLogger, AttachmentTable, ExperimentStatus, Name,
@@ -165,10 +165,6 @@ impl SealedRunDyn {
         self.attachment_table()?.media_type(name)
     }
 
-    pub fn attachment_annotations(&self, name: &str) -> Result<HashMap<String, String>> {
-        self.attachment_table()?.annotations(name)
-    }
-
     pub fn attachment_blob(&self, name: &str) -> Result<Vec<u8>> {
         self.attachment_table()?.blob(name)
     }
@@ -177,16 +173,55 @@ impl SealedRunDyn {
         self.attachment_table()?.instance(name)
     }
 
+    #[doc(hidden)]
+    pub fn attachment_instance_with_payload_annotations(
+        &self,
+        name: &str,
+    ) -> Result<(Instance, HashMap<String, String>)> {
+        let table = self.attachment_table()?;
+        Ok((table.instance(name)?, table.payload_annotations(name)?))
+    }
+
     pub fn attachment_parametric_instance(&self, name: &str) -> Result<ParametricInstance> {
         self.attachment_table()?.parametric_instance(name)
+    }
+
+    #[doc(hidden)]
+    pub fn attachment_parametric_instance_with_payload_annotations(
+        &self,
+        name: &str,
+    ) -> Result<(ParametricInstance, HashMap<String, String>)> {
+        let table = self.attachment_table()?;
+        Ok((
+            table.parametric_instance(name)?,
+            table.payload_annotations(name)?,
+        ))
     }
 
     pub fn attachment_solution(&self, name: &str) -> Result<Solution> {
         self.attachment_table()?.solution(name)
     }
 
+    #[doc(hidden)]
+    pub fn attachment_solution_with_payload_annotations(
+        &self,
+        name: &str,
+    ) -> Result<(Solution, HashMap<String, String>)> {
+        let table = self.attachment_table()?;
+        Ok((table.solution(name)?, table.payload_annotations(name)?))
+    }
+
     pub fn attachment_sample_set(&self, name: &str) -> Result<SampleSet> {
         self.attachment_table()?.sample_set(name)
+    }
+
+    #[doc(hidden)]
+    pub fn attachment_sample_set_with_payload_annotations(
+        &self,
+        name: &str,
+    ) -> Result<(SampleSet, HashMap<String, String>)> {
+        let table = self.attachment_table()?;
+        Ok((table.sample_set(name)?, table.payload_annotations(name)?))
     }
 
     pub fn write_attachment(
@@ -238,15 +273,6 @@ impl SolveDyn {
             .stored_descriptor(self.input.clone())
     }
 
-    pub fn input_annotations(&self) -> Result<HashMap<String, String>> {
-        Ok(self
-            .input_descriptor()?
-            .annotations()
-            .as_ref()
-            .cloned()
-            .unwrap_or_default())
-    }
-
     pub fn input_instance(&self) -> Result<Instance> {
         let descriptor = self.input_descriptor()?;
         ensure!(
@@ -260,19 +286,31 @@ impl SolveDyn {
         Instance::from_bytes(&bytes)
     }
 
+    #[doc(hidden)]
+    pub fn input_instance_with_payload_annotations(
+        &self,
+    ) -> Result<(Instance, HashMap<String, String>)> {
+        let descriptor = self.input_descriptor()?;
+        let annotations = descriptor
+            .annotations()
+            .as_ref()
+            .cloned()
+            .unwrap_or_default();
+        ensure!(
+            descriptor.media_type().to_string() == media_types::V1_INSTANCE_MEDIA_TYPE,
+            "Solve {} input has media type '{}', expected '{}'",
+            self.solve_id,
+            descriptor.media_type(),
+            media_types::V1_INSTANCE_MEDIA_TYPE
+        );
+        let bytes = self.registry_handle.registry().get_blob(&descriptor)?;
+        Ok((Instance::from_bytes(&bytes)?, annotations))
+    }
+
     fn output_descriptor(&self) -> Result<StoredDescriptor<'_>> {
         self.registry_handle
             .registry()
             .stored_descriptor(self.output.clone())
-    }
-
-    pub fn output_annotations(&self) -> Result<HashMap<String, String>> {
-        Ok(self
-            .output_descriptor()?
-            .annotations()
-            .as_ref()
-            .cloned()
-            .unwrap_or_default())
     }
 
     pub fn output_solution(&self) -> Result<Solution> {
@@ -286,6 +324,27 @@ impl SolveDyn {
         );
         let bytes = self.registry_handle.registry().get_blob(&descriptor)?;
         Solution::from_bytes(&bytes)
+    }
+
+    #[doc(hidden)]
+    pub fn output_solution_with_payload_annotations(
+        &self,
+    ) -> Result<(Solution, HashMap<String, String>)> {
+        let descriptor = self.output_descriptor()?;
+        let annotations = descriptor
+            .annotations()
+            .as_ref()
+            .cloned()
+            .unwrap_or_default();
+        ensure!(
+            descriptor.media_type().to_string() == media_types::V1_SOLUTION_MEDIA_TYPE,
+            "Solve {} output has media type '{}', expected '{}'",
+            self.solve_id,
+            descriptor.media_type(),
+            media_types::V1_SOLUTION_MEDIA_TYPE
+        );
+        let bytes = self.registry_handle.registry().get_blob(&descriptor)?;
+        Ok((Solution::from_bytes(&bytes)?, annotations))
     }
 
     pub fn adapter(&self) -> &str {
@@ -515,6 +574,25 @@ impl AttachmentLogger for &ExperimentDyn {
         bytes: impl AsRef<[u8]>,
         filename: Option<String>,
     ) -> Result<()> {
+        self.log_attachment_with_payload_annotations(
+            name,
+            media_type,
+            bytes,
+            filename,
+            HashMap::new(),
+        )
+    }
+}
+
+impl ExperimentDyn {
+    fn log_attachment_with_payload_annotations(
+        &self,
+        name: &str,
+        media_type: MediaType,
+        bytes: impl AsRef<[u8]>,
+        filename: Option<String>,
+        payload_annotations: HashMap<String, String>,
+    ) -> Result<()> {
         let mut dyn_state = lock_experiment_state(&self.state);
         ensure_unsealed_for_attachment_write(&dyn_state)?;
         let registry_handle = dyn_state.registry_handle.clone();
@@ -529,18 +607,80 @@ impl AttachmentLogger for &ExperimentDyn {
         }
         let descriptor = store_experiment_attachment_descriptor(
             registry_handle.registry(),
-            name,
             media_type,
             bytes.as_ref(),
+            payload_annotations,
         )?;
         state
             .attachments
             .insert(name.to_string(), descriptor, filename)?;
         Ok(())
     }
-}
 
-impl ExperimentDyn {
+    #[doc(hidden)]
+    pub fn log_instance_with_payload_annotations(
+        &self,
+        name: &str,
+        instance: &Instance,
+        payload_annotations: HashMap<String, String>,
+    ) -> Result<()> {
+        self.log_attachment_with_payload_annotations(
+            name,
+            media_types::v1_instance(),
+            instance.to_bytes(),
+            None,
+            payload_annotations,
+        )
+    }
+
+    #[doc(hidden)]
+    pub fn log_parametric_instance_with_payload_annotations(
+        &self,
+        name: &str,
+        pi: &ParametricInstance,
+        payload_annotations: HashMap<String, String>,
+    ) -> Result<()> {
+        self.log_attachment_with_payload_annotations(
+            name,
+            media_types::v1_parametric_instance(),
+            pi.to_bytes(),
+            None,
+            payload_annotations,
+        )
+    }
+
+    #[doc(hidden)]
+    pub fn log_solution_with_payload_annotations(
+        &self,
+        name: &str,
+        solution: &Solution,
+        payload_annotations: HashMap<String, String>,
+    ) -> Result<()> {
+        self.log_attachment_with_payload_annotations(
+            name,
+            media_types::v1_solution(),
+            solution.to_bytes(),
+            None,
+            payload_annotations,
+        )
+    }
+
+    #[doc(hidden)]
+    pub fn log_sample_set_with_payload_annotations(
+        &self,
+        name: &str,
+        sample_set: &SampleSet,
+        payload_annotations: HashMap<String, String>,
+    ) -> Result<()> {
+        self.log_attachment_with_payload_annotations(
+            name,
+            media_types::v1_sample_set(),
+            sample_set.to_bytes(),
+            None,
+            payload_annotations,
+        )
+    }
+
     pub fn commit(&self) -> Result<LocalArtifactDyn> {
         let mut dyn_state = lock_experiment_state(&self.state);
         let (state, open_runs) = match &mut dyn_state.lifecycle {
@@ -687,10 +827,6 @@ impl ExperimentDyn {
         self.experiment_attachment_table()?.media_type(name)
     }
 
-    pub fn attachment_annotations(&self, name: &str) -> Result<HashMap<String, String>> {
-        self.experiment_attachment_table()?.annotations(name)
-    }
-
     pub fn attachment_blob(&self, name: &str) -> Result<Vec<u8>> {
         self.experiment_attachment_table()?.blob(name)
     }
@@ -699,17 +835,56 @@ impl ExperimentDyn {
         self.experiment_attachment_table()?.instance(name)
     }
 
+    #[doc(hidden)]
+    pub fn attachment_instance_with_payload_annotations(
+        &self,
+        name: &str,
+    ) -> Result<(Instance, HashMap<String, String>)> {
+        let table = self.experiment_attachment_table()?;
+        Ok((table.instance(name)?, table.payload_annotations(name)?))
+    }
+
     pub fn attachment_parametric_instance(&self, name: &str) -> Result<ParametricInstance> {
         self.experiment_attachment_table()?
             .parametric_instance(name)
+    }
+
+    #[doc(hidden)]
+    pub fn attachment_parametric_instance_with_payload_annotations(
+        &self,
+        name: &str,
+    ) -> Result<(ParametricInstance, HashMap<String, String>)> {
+        let table = self.experiment_attachment_table()?;
+        Ok((
+            table.parametric_instance(name)?,
+            table.payload_annotations(name)?,
+        ))
     }
 
     pub fn attachment_solution(&self, name: &str) -> Result<Solution> {
         self.experiment_attachment_table()?.solution(name)
     }
 
+    #[doc(hidden)]
+    pub fn attachment_solution_with_payload_annotations(
+        &self,
+        name: &str,
+    ) -> Result<(Solution, HashMap<String, String>)> {
+        let table = self.experiment_attachment_table()?;
+        Ok((table.solution(name)?, table.payload_annotations(name)?))
+    }
+
     pub fn attachment_sample_set(&self, name: &str) -> Result<SampleSet> {
         self.experiment_attachment_table()?.sample_set(name)
+    }
+
+    #[doc(hidden)]
+    pub fn attachment_sample_set_with_payload_annotations(
+        &self,
+        name: &str,
+    ) -> Result<(SampleSet, HashMap<String, String>)> {
+        let table = self.experiment_attachment_table()?;
+        Ok((table.sample_set(name)?, table.payload_annotations(name)?))
     }
 
     pub fn write_attachment(
@@ -1162,34 +1337,21 @@ fn lock_experiment_state(state: &Mutex<ExperimentDynState>) -> MutexGuard<'_, Ex
 
 fn store_experiment_attachment_descriptor(
     registry: &LocalRegistry,
-    name: &str,
     media_type: MediaType,
     bytes: &[u8],
+    payload_annotations: HashMap<String, String>,
 ) -> Result<Descriptor> {
-    let descriptor = store_attachment_descriptor(
-        registry,
-        AttachmentSpace::Experiment,
-        name,
-        media_type,
-        bytes,
-    )?;
+    let descriptor = store_attachment_descriptor(registry, media_type, bytes, payload_annotations)?;
     Ok(Descriptor::from(descriptor))
 }
 
 fn store_run_attachment_descriptor(
     registry: &LocalRegistry,
-    run_id: u64,
-    name: &str,
     media_type: MediaType,
     bytes: &[u8],
+    payload_annotations: HashMap<String, String>,
 ) -> Result<Descriptor> {
-    let descriptor = store_attachment_descriptor(
-        registry,
-        AttachmentSpace::Run(run_id),
-        name,
-        media_type,
-        bytes,
-    )?;
+    let descriptor = store_attachment_descriptor(registry, media_type, bytes, payload_annotations)?;
     Ok(Descriptor::from(descriptor))
 }
 
@@ -1197,13 +1359,14 @@ fn store_solve_payload_descriptor(
     state: &ExperimentDynState,
     media_type: MediaType,
     bytes: &[u8],
+    payload_annotations: HashMap<String, String>,
 ) -> Result<Descriptor> {
     ensure_unsealed_for_attachment_write(state)?;
-    let descriptor =
-        state
-            .registry_handle
-            .registry()
-            .store_layer_blob(media_type, bytes, Default::default())?;
+    let descriptor = state.registry_handle.registry().store_layer_blob(
+        media_type,
+        bytes,
+        payload_annotations,
+    )?;
     Ok(Descriptor::from(descriptor))
 }
 

@@ -12,6 +12,13 @@ from ommx.v1 import Instance, Solution
 
 from conftest import get_test_exporter
 
+
+EXPERIMENT_ANNOTATION_PREFIXES = (
+    "org.ommx.experiment.",
+    "org.ommx.attachment.",
+)
+
+
 def _df_snap(df: pd.DataFrame) -> str:
     return df.to_string(na_rep="<NA>")
 
@@ -33,6 +40,15 @@ def _image_name(label: str) -> str:
     return f"example.com/ommx-tests/{label}:{uuid.uuid4().hex}"
 
 
+def _empty_instance() -> Instance:
+    return Instance.from_components(
+        decision_variables=[],
+        objective=0,
+        constraints={},
+        sense=Instance.MINIMIZE,
+    )
+
+
 def _single_trace_span(trace: TraceResult, name: str):
     spans = [span for span in trace.spans if span.name == name]
     assert len(spans) == 1
@@ -45,6 +61,17 @@ def _span_string_attributes(span) -> dict[str, str]:
         for attribute in span.attributes
         if attribute.value.WhichOneof("value") == "string_value"
     }
+
+
+def _assert_no_experiment_annotations(artifact) -> None:
+    assert not any(
+        key.startswith(EXPERIMENT_ANNOTATION_PREFIXES) for key in artifact.annotations
+    )
+    for layer in artifact.layers:
+        assert not any(
+            key.startswith(EXPERIMENT_ANNOTATION_PREFIXES)
+            for key in layer.annotations
+        )
 
 
 def test_view_run_parameters_from_committed_artifact(snapshot):
@@ -118,6 +145,44 @@ def test_create_experiment_run_attachments_and_commit(snapshot):
     df = loaded.run_parameters_df()
 
     assert _df_snap(df) == snapshot
+
+
+def test_experiment_does_not_emit_management_annotations():
+    with Experiment.with_temp_local_registry() as experiment:
+        experiment.log_json("dataset", {"name": "miplib2017"})
+        with experiment.run() as run:
+            run.log_json("candidate", {"formulation": "a"})
+            run.log_parameter("solver", "scip")
+
+    _assert_no_experiment_annotations(experiment.artifact)
+
+
+def test_typed_attachment_user_annotations_round_trip():
+    instance = _empty_instance()
+    instance.add_user_annotation("source", "experiment")
+    solution = instance.evaluate({})
+    solution.add_user_annotation("source", "run")
+
+    with Experiment.with_temp_local_registry() as experiment:
+        experiment.log_instance("instance", instance)
+        with experiment.run() as run:
+            run.log_solution("solution", solution)
+
+    loaded = Experiment.from_artifact(experiment.artifact)
+
+    loaded_instance = loaded.get_instance("instance")
+    assert loaded_instance.get_user_annotation("source") == "experiment"
+    assert not any(
+        key.startswith(EXPERIMENT_ANNOTATION_PREFIXES)
+        for key in loaded_instance.annotations
+    )
+
+    loaded_solution = loaded.runs[0].get_solution("solution")
+    assert loaded_solution.get_user_annotation("source") == "run"
+    assert not any(
+        key.startswith(EXPERIMENT_ANNOTATION_PREFIXES)
+        for key in loaded_solution.annotations
+    )
 
 
 def test_commit_rejects_open_run():
@@ -537,7 +602,9 @@ def test_log_solve_logs_input_solution_and_adapter_options():
         @classmethod
         def solve(cls, ommx_instance: Instance, **kwargs: object) -> Solution:
             cls.seen_kwargs.append(kwargs)
-            return ommx_instance.evaluate({})
+            solution = ommx_instance.evaluate({})
+            solution.add_user_annotation("adapter", "dummy")
+            return solution
 
         @property
         def solver_input(self) -> Any:
@@ -552,6 +619,7 @@ def test_log_solve_logs_input_solution_and_adapter_options():
         constraints={},
         sense=Instance.MINIMIZE,
     )
+    instance.add_user_annotation("source", "solve-input")
     experiment = Experiment.with_temp_local_registry()
     DummyAdapter.seen_kwargs = []
 
@@ -592,7 +660,9 @@ def test_log_solve_logs_input_solution_and_adapter_options():
 
     first_solve = runs[0].solves[0]
     assert isinstance(first_solve.input, Instance)
+    assert first_solve.input.get_user_annotation("source") == "solve-input"
     assert isinstance(first_solve.output, Solution)
+    assert first_solve.output.get_user_annotation("adapter") == "dummy"
     assert first_solve.output.feasible
     assert str(first_solve.adapter).endswith("DummyAdapter")
     assert isinstance(first_solve.adapter_options, dict)

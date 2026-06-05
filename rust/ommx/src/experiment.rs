@@ -75,8 +75,7 @@ mod sealed;
 mod tests;
 
 pub use attachment::{
-    attachment_filename, attachment_name, detect_file_media_type, AttachmentTable, FileAttachment,
-    ATTACHMENT_FILENAME_ANNOTATION, ATTACHMENT_NAME_ANNOTATION, DEFAULT_FILE_MEDIA_TYPE,
+    detect_file_media_type, AttachmentTable, FileAttachment, DEFAULT_FILE_MEDIA_TYPE,
 };
 pub use dynamic::{ExperimentDyn, RunDyn, SealedRunDyn, SolveDyn};
 pub use logging::AttachmentLogger;
@@ -86,10 +85,10 @@ pub use sealed::{SealedRun, Solve};
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor, TempLocalRegistry};
 use crate::artifact::{ImageRef, LocalArtifact};
 use anyhow::Result;
-use attachment::{store_attachment_descriptor, AttachmentSpace};
+use attachment::store_attachment_descriptor;
 use oci_spec::image::MediaType;
 use parameter::ParameterSet;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::{Mutex, MutexGuard};
 
 // --- Artifact mapping constants ---------------------------------------------
@@ -98,10 +97,6 @@ const EXPERIMENT_STATUS_FINISHED: &str = "finished";
 const EXPERIMENT_STATUS_DRAFT: &str = "draft";
 const EXPERIMENT_STATUS_FAILED: &str = "failed";
 const EXPERIMENT_STATUS_INTERRUPTED: &str = "interrupted";
-
-const ANN_SPACE: &str = "org.ommx.experiment.space";
-const ANN_RUN_ID: &str = "org.ommx.experiment.run_id";
-const ANN_ATTACHMENT_NAME: &str = "org.ommx.attachment.name";
 
 const RUN_PARAMETERS_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment.run-parameters+json";
 const EXPERIMENT_CONFIG_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment.config+json";
@@ -458,13 +453,8 @@ impl<'reg> AttachmentLogger for &Experiment<'reg> {
         if state.attachments.contains_key(name) {
             crate::bail!("Attachment `{name}` already exists");
         }
-        let descriptor = store_attachment_descriptor(
-            self.registry,
-            AttachmentSpace::Experiment,
-            name,
-            media_type,
-            bytes.as_ref(),
-        )?;
+        let descriptor =
+            store_attachment_descriptor(self.registry, media_type, bytes.as_ref(), HashMap::new())?;
         state
             .attachments
             .insert(name.to_string(), descriptor, filename)?;
